@@ -94,7 +94,26 @@ identity.
 `using alias = coins;` borrows the same root. Aliases introduce no query, reset or
 independence assumption. `coins.draw()` is ordered protocol work: its result is
 available only at the service owner, and an unused result does not remove the
-query. Services cannot enter ordinary types, aggregate fields, messages, local
+query.
+
+```text
+protocol Query<N: nat> roles(P, V)() using(coins: Random<E> @V) -> (p: index @P) {
+  let position = coins.index<N>();
+  let p = send V -> P(position);
+  return (p = p);
+}
+```
+
+`coins.index<N>()` samples UniformIndex(N): an `index` uniform on `[0, N)` under
+the [installed sampler's premise](../runtime/services.md#uniformindex-realization).
+`N` is a static natural, such as `pow2(K)`, and is fixed before sampling. A closed
+`N` must be a power of two from 1 through 2^63; a generic `N` is checked when its
+body closes. The service field must satisfy `zkc::random::IndexRandomness`, either
+as a closed fact or through an explicit assumption. The result is available only
+at the service owner and the query is ordered like `draw()`. It emits a
+`data.index` constant immediately followed by a `protocol.query` with method
+`index`; source correspondence compares both. Other distributions, runtime
+bounds and rejection sampling are not source methods. Services cannot enter ordinary types, aggregate fields, messages, local
 functions or return values. An application supplies its managed bindings after
 its data arguments, in declared service order. Each field and mapped owner must
 match. Repeating a binding passes the same reference to both ports.

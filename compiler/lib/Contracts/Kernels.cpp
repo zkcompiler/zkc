@@ -56,9 +56,13 @@ Error checkParametersImpl(StringRef key, llvm::ArrayRef<std::string> parameters,
       return error("interactive-kernel-parameters");
     return Error::success();
   }
-  if (validator == ParameterValidator::NativeOrigin)
-    return checkNativeOrigin(parameters.front(),
-                             key.ends_with(".challenge") ? "query" : "message");
+  if (validator == ParameterValidator::NativeOrigin) {
+    if (key.ends_with(".challenge"))
+      return checkNativeOrigin(parameters.front(), "query", "draw");
+    if (key.ends_with(".index"))
+      return checkNativeOrigin(parameters.front(), "query", "index");
+    return checkNativeOrigin(parameters.front(), "message");
+  }
   for (const auto &parameter : parameters) {
     StringRef n = parameter;
     auto code = (validator == ParameterValidator::FieldLiteral ||

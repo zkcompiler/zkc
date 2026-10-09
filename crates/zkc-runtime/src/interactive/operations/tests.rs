@@ -311,6 +311,7 @@ fn independent_history_classification_matches_installed_inventory() {
     // Native-only contracts have no portable Lean source interpretation. Keep
     // the shared portable inventory unchanged and enumerate this extension.
     let native = "transcript.native.indexed.challenge 1
+transcript.native.indexed.index 1
 transcript.native.indexed.observe.data 1
 ring.point 0
 ring.rows 0

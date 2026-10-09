@@ -534,12 +534,26 @@ class Comparator {
         result = Values(actual->getResults());
       } else if (auto *query = std::get_if<ServiceQuery>(&op.action)) {
         const auto &port = source.services[query->service.index];
-        auto *actual = next(block, cursor, op.span, "protocol.query",
-                            services[query->service.index], 1);
+        SmallVector<mlir::Value> operands{services[query->service.index]};
+        if (query->bound) {
+          if (!query->bound->isClosed())
+            return fail("index domain is not closed");
+          auto *bound = next(block, cursor, op.span, "data.index", {}, 1);
+          if (!bound)
+            return false;
+          if (!attributes(*bound, {"value"}) ||
+              !string(*bound, "value",
+                      std::to_string(query->bound->closedValue())) ||
+              !types(bound->getResultTypes(), leaves))
+            return fail("index query domain differs");
+          operands.push_back(bound->getResult(0));
+        }
+        auto *actual =
+            next(block, cursor, op.span, "protocol.query", operands, 1);
         if (!actual)
           return false;
         if (!attributes(*actual, {"method", "owner", "site"}) ||
-            !string(*actual, "method", "draw") ||
+            !string(*actual, "method", query->bound ? "index" : "draw") ||
             !string(*actual, "owner", decl.roles[port.owner]) ||
             !string(*actual, "site", site))
           return fail("managed query method, owner or occurrence differs");

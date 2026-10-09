@@ -38,7 +38,8 @@ additionally checks supplied polynomial or public-coin requirements.
 `protocol-proof`, `protocol-construct-proof`, and `protocol-check-proof` use
 the native proof policy, descriptor and deployment schemas. Unknown tags and
 malformed records refuse. Transcript construction uses
-indexed origin templates, `transcript.native.indexed.challenge` and typed
+indexed origin templates, `transcript.native.indexed.challenge`,
+`transcript.native.indexed.index` and typed
 `transcript.native.indexed.observe.data`; loops and flat protocols share this
 model. An empty suite selects an authored proof without constructed transcripts.
 `protocol-export` emits a checked physical `zkc.program/0` artifact.

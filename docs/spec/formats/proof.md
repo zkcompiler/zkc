@@ -206,7 +206,7 @@ inputs. All are explicitly authorized for public invocation binding. `service`
 is the original validator service input index. An empty suite and service with
 an empty draw list selects authored execution without a transcript. Otherwise
 both a supported suite and the selected service are required, with one through
-64 draws. Selectors use prepared static occurrence sites; native labels retain
+64 draws. A draw pair selects either a `draw` or an `index` query of that service. Selectors use prepared static occurrence sites; native labels retain
 original authored paths. No timing or security premise follows from selecting
 this policy.
 
@@ -214,12 +214,17 @@ The immutable compiler descriptor is:
 
 ```text
 ["zkc.native-proof-descriptor/0", policy, "zkc.native-origin/0",
- [[event_kind, origin_hex], ...],
+ [event, ...],
  [[validator, original_port, logical_type, codec], ...],
  [[message_origin_hex, logical_type, codec], ...]]
+event = ["query", origin_hex] | ["index", origin_hex, bound] | ["message", origin_hex]
 ```
 
-Events and messages follow original source order. Public ports follow original
+`query` is a field challenge and `index` a UniformIndex transition; their origins
+name the service methods `draw` and `index` respectively. `bound` is the canonical
+decimal power of two from 1 through 2^63 that the transition absorbs. A reader
+refuses any other row width, a noncanonical or invalid bound, and a kind whose
+origin method differs. Events and messages follow original source order. Public ports follow original
 input order. The descriptor includes the complete selected logical policy,
 origin tag, event labels and nominal wire codecs. Candidate implementation
 names and generated helper symbols are absent. The descriptor is encoded with

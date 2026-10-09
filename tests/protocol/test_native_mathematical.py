@@ -26,6 +26,7 @@ NATIVE_CASES = [
     ('native_entry_completion', 'native_entry_completion'),
     ('native_relation_bindings', 'native_relation_bindings'),
     ('native_domains', 'native_domains'),
+    ('native_index_sampling', 'native_index_sampling'),
     ('native_composition', 'native_composition'),
     ('native_setups', 'native_setups'),
     ('native_composed_state', 'native_composed_state'),

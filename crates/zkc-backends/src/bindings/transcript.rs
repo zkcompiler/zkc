@@ -42,6 +42,12 @@ fn derive(
         return None;
     }
     let t = suite(binding)?;
+    // Only the octic suite installs the UniformIndex byte sampler.
+    if binding.contract == "transcript.native.indexed.index"
+        && t.suite != Identity::Merlin3KoalaBearExt8
+    {
+        return None;
+    }
     let ports = support::ports(binding, selection, t.provider)?;
     support::materialize(row, t.domain.field, ports, |kind| {
         if kind == Type::Transcript {

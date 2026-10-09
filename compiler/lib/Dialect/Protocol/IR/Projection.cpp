@@ -86,7 +86,7 @@ struct MetadataVerifier {
       return refuse(record, "invalid inserted transcript helper");
     auto &body = function.getBody().front();
     Operation *transition = nullptr;
-    Value coordinates;
+    Value coordinates, bound;
     SmallVector<Value> indices;
     for (auto &op : body) {
       if (failed(charge(1)))
@@ -115,6 +115,18 @@ struct MetadataVerifier {
       if (!isa<plan::ExecuteKernelOp>(op) &&
           op.getName().getStringRef() != protocol::boundOperationName(contract))
         return refuse(record, "invalid inserted transcript helper");
+      // A UniformIndex helper first materializes its static domain.
+      if (contract == "index.constant" && !bound && !coordinates &&
+          op.getNumOperands() == 0 && op.getNumResults() == 1) {
+        auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
+        auto value = parameters && parameters.size() == 1
+                         ? dyn_cast<StringAttr>(parameters[0])
+                         : StringAttr();
+        if (!value || !protocol::parseUniformIndexBound(value.getValue()))
+          return refuse(record, "invalid inserted transcript helper");
+        bound = op.getResult(0);
+        continue;
+      }
       if (contract == "indices.empty" && !coordinates &&
           op.getNumOperands() == 0 && op.getNumResults() == 1) {
         coordinates = op.getResult(0);
@@ -127,13 +139,15 @@ struct MetadataVerifier {
         coordinates = op.getResult(0);
         continue;
       }
+      bool index = contract == "transcript.native.indexed.index";
       if ((contract != "transcript.native.indexed.challenge" &&
-           contract != "transcript.native.indexed.observe.data") ||
-          !coordinates)
+           contract != "transcript.native.indexed.observe.data" && !index) ||
+          !coordinates || index != bool(bound))
         return refuse(record, "invalid inserted transcript helper");
-      unsigned ordinary = contract.ends_with(".challenge") ? 1 : 2;
+      unsigned ordinary = contract.ends_with(".observe.data") ? 2 : 1;
       {
-        if (op.getNumOperands() != ordinary + 1 ||
+        if (op.getNumOperands() != ordinary + unsigned(index) + 1 ||
+            (index && op.getOperand(1) != bound) ||
             op.getOperands().back() != coordinates ||
             body.getNumArguments() != ordinary + indices.size() ||
             !llvm::equal(op.getOperands().take_front(ordinary),
@@ -932,7 +946,7 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
             return refuse(&op, "duplicate or empty participant occurrence");
         if (auto query = dyn_cast<protocol_ir::ParticipantQueryOp>(op)) {
           auto ports = participant->getAttrOfType<ArrayAttr>("service_ports");
-          StringRef field;
+          std::optional<protocol::ServiceMethod> method;
           bool found =
               ports && any_of(ports, [&](Attribute item) {
                 auto port = dyn_cast<ArrayAttr>(item);
@@ -941,13 +955,25 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
                 auto contract = dyn_cast<StringAttr>(port[1]);
                 if (!contract)
                   return false;
-                field = protocol::randomServiceField(contract.getValue());
-                return !field.empty();
+                method = protocol::serviceMethod(contract.getValue(),
+                                                 query.getMethod());
+                return method.has_value();
               });
-          if (!found || query.getMethod() != "draw" || query.getNumOperands() ||
+          auto spelling = [](Type type) {
+            auto logical = protocol::encodeBoundType(type, false);
+            if (!logical) {
+              consumeError(logical.takeError());
+              return std::string();
+            }
+            return logical->spelling();
+          };
+          if (!found || query.getNumOperands() != method->inputs.size() ||
               query.getNumResults() != 1 ||
-              query.getResult(0).getType() !=
-                  algebra::FieldType::get(unit.getContext(), field))
+              spelling(query.getResult(0).getType()) != method->output ||
+              any_of(zip(query.getInputs(), method->inputs), [&](auto pair) {
+                return spelling(std::get<0>(pair).getType()) !=
+                       std::get<1>(pair);
+              }))
             return refuse(query, "unsupported managed service query");
         }
       }

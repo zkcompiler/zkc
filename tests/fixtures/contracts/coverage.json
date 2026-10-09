@@ -162,7 +162,8 @@
       "fixed_vector.to_vector"
     ],
     "transcript": [
-      "transcript.native.indexed.challenge"
+      "transcript.native.indexed.challenge",
+      "transcript.native.indexed.index"
     ],
     "array": [
       "field_array.from_vector",

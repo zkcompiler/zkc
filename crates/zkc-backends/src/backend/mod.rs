@@ -279,17 +279,21 @@ impl Backend for NativeBackend {
             FrameKind::Entry | FrameKind::Loop { .. }
         ) || !invocation.frame.services().contains(invocation.port)
             || crate::services::support(invocation.port.contract, invocation.method).is_none()
-            || !arguments.is_empty()
             || invocation.max_output_bytes < 512
         {
             return Err(crate::refused("service-query-context"));
         }
         self.core.policy.output(512, invocation.max_output_bytes)?;
-        self.services
+        let services = self
+            .services
             .as_ref()
-            .ok_or_else(|| crate::refused("service-bindings"))?
-            .draw(&invocation.port.name)
-            .map(|value| vec![value])
+            .ok_or_else(|| crate::refused("service-bindings"))?;
+        match (invocation.method, arguments) {
+            ("draw", []) => services.draw(&invocation.port.name),
+            ("index", [Value::Index(bound)]) => services.index(&invocation.port.name, *bound),
+            _ => Err(crate::refused("service-query-context")),
+        }
+        .map(|value| vec![value])
     }
     fn reject_service_reply(
         &mut self,

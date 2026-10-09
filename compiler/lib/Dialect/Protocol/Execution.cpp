@@ -231,7 +231,7 @@ class ExecutionModelReader {
                                                 results(op, env)}});
       } else if (auto query =
                      dyn_cast<zkc::protocol_ir::ParticipantQueryOp>(op)) {
-        StringRef field;
+        std::optional<protocol::ServiceMethod> method;
         auto participant =
             query->getParentOfType<zkc::protocol_ir::ParticipantOp>();
         if (participant)
@@ -241,25 +241,34 @@ class ExecutionModelReader {
               auto port = dyn_cast<ArrayAttr>(item);
               if (port && port.size() == 3 && port[0] == query.getPortAttr())
                 if (auto contract = dyn_cast<StringAttr>(port[1]))
-                  field = protocol::randomServiceField(contract.getValue());
+                  method = protocol::serviceMethod(contract.getValue(),
+                                                   query.getMethod());
             }
-        auto logical = protocol::parseBoundType("field:" + field.str(), false);
-        std::string expected;
-        if (logical) {
-          if (physical) {
-            auto selected = protocol::defaultRepresentation(*logical);
-            if (selected)
-              expected = selected->spelling();
-            else
-              llvm::consumeError(selected.takeError());
-          } else
-            expected = logical->spelling();
-        } else
-          llvm::consumeError(logical.takeError());
-        if (local || expected.empty() ||
-            !attributes(op, {"site", "port", "method"}) ||
+        auto expected = [&](StringRef spelling) -> std::string {
+          auto logical = protocol::parseBoundType(spelling, false);
+          if (!logical) {
+            llvm::consumeError(logical.takeError());
+            return {};
+          }
+          if (!physical)
+            return logical->spelling();
+          auto selected = protocol::defaultRepresentation(*logical);
+          if (!selected) {
+            llvm::consumeError(selected.takeError());
+            return {};
+          }
+          return selected->spelling();
+        };
+        if (local || !method || !attributes(op, {"site", "port", "method"}) ||
             op->getNumResults() != 1 ||
-            type(op->getResult(0).getType()) != expected) {
+            query.getInputs().size() != method->inputs.size() ||
+            expected(method->output).empty() ||
+            type(op->getResult(0).getType()) != expected(method->output) ||
+            any_of(zip(query.getInputs(), method->inputs), [&](auto pair) {
+              auto spelling = expected(std::get<1>(pair));
+              return spelling.empty() ||
+                     type(std::get<0>(pair).getType()) != spelling;
+            })) {
           fail("service-query-context");
           return {};
         }

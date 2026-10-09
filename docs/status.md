@@ -73,7 +73,14 @@ Setup input associations and authorized incoming PCS values follow the
 [setup contract](spec/formats/messages.md#application-authorized-setups).
 The protocol retains an explicit verifier-key-consuming terminal check.
 
-Registered services cover four RNG distributions/providers. Arbitrary user-defined
+Registered services cover four RNG distributions/providers. Each offers field
+`draw`; the KoalaBear octic service also offers [UniformIndex](spec/runtime/services.md#uniformindex-realization)
+sampling over a static power-of-two domain (`coins.index<N>()`), interactively and
+as a typed [derived transcript transition](spec/ir/construction.md#uniformindex-transitions)
+under its Merlin suite. Other fields, runtime or non-power-of-two bounds,
+out-of-domain and rejection sampling, and retries are not supported. Tests check
+prover/verifier agreement and an independent replay of the framing; they make no
+uniformity or Fiat–Shamir security claim. Arbitrary user-defined
 request/reply service families remain an extension. Domain and kernel contributions
 require their own implementation and installation. Constant-time MSM and diagonal
 contractions are supported; automatic contraction selection is an explicit

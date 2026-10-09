@@ -205,6 +205,8 @@ constexpr ContractRow contractRows[] = {
      Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
     {"transcript.native.indexed.observe.data",
      Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
+    // Only the octic merlin suite grants IndexTranscript.
+    {"transcript.native.indexed.index", Plonky3, Compatibility::Transcript},
     {"field_array.from_vector", Arkworks, Compatibility::Nominal,
      "bls12-381.fr"},
     {"field_array.at", Arkworks, Compatibility::Nominal, "bls12-381.fr"},

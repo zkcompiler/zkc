@@ -126,6 +126,12 @@ test = false
 bench = false
 
 [[bin]]
+name = "native_index_sampling"
+path = "src/native_index_sampling.rs"
+test = false
+bench = false
+
+[[bin]]
 name = "native_entry_completion"
 path = "src/native_entry_completion.rs"
 test = false

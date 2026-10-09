@@ -1,5 +1,6 @@
 #include "BodyCheck.h"
 #include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/Services.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -22,6 +23,8 @@ std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
     return signature->resultType();
   }
   if (expr.kind == K::MethodCall) {
+    if (expr.text == "index")
+      return Type(Type::Kind::Index);
     auto root = service(syntax.expressions[expr.children.front()]);
     return root ? std::optional<Type>(body.services[root->index].field)
                 : std::nullopt;
@@ -153,17 +156,49 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
   } else if (expr.kind == K::Intrinsic) {
     result = intrinsic(expr, depth);
   } else if (expr.kind == K::MethodCall) {
-    if (!protocol() || owner || expr.text != "draw" ||
-        expr.children.size() != 1) {
+    bool index = expr.text == "index";
+    if (!protocol() || owner || (expr.text != "draw" && !index) ||
+        expr.children.size() != 1 ||
+        expr.arguments.size() != (index ? 1u : 0u)) {
       fail("source.service",
-           "managed query requires service.draw() in protocol mode", expr.span);
+           "managed query requires service.draw() or service.index<N>() in "
+           "protocol mode",
+           expr.span);
       return {};
     }
     auto root = service(syntax.expressions[expr.children.front()]);
     if (!root)
       return {};
     const auto &port = body.services[root->index];
-    result = emit(ServiceQuery{*root}, port.field, {port.owner}, expr.span);
+    if (!index) {
+      result =
+          emit(ServiceQuery{*root, {}}, port.field, {port.owner}, expr.span);
+    } else {
+      // UniformIndex uses the installed bit sampler, which is distinct from
+      // reducing a field element; the field must grant IndexRandomness.
+      if (!checker.types.entails(
+              &decl,
+              CapabilityBound{"IndexRandomness", {port.field}, expr.span},
+              "source.service"))
+        return {};
+      auto bound = checker.type(decl, expr.arguments.front());
+      if (!bound)
+        return {};
+      if (bound->kind != T::Natural) {
+        fail("source.service", "index domain must be a static natural",
+             expr.span);
+        return {};
+      }
+      if (bound->dimension.isClosed() &&
+          !protocol::uniformIndexBound(bound->dimension.closedValue())) {
+        fail("source.service",
+             "index domain must be a power of two no greater than 2^63",
+             expr.span);
+        return {};
+      }
+      result = emit(ServiceQuery{*root, bound->dimension}, Type(T::Index),
+                    {port.owner}, expr.span);
+    }
   } else if (expr.kind == K::Name) {
     auto found = bindings.find(expr.text);
     if (found == bindings.end()) {

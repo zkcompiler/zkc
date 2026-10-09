@@ -265,6 +265,7 @@ pub enum AttributeRule {
     AssetIdentity,
     NativeMessageTemplate,
     NativeChallengeTemplate,
+    NativeIndexTemplate,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KernelSignature<T = Type> {

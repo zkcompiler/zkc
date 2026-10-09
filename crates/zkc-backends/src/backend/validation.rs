@@ -362,13 +362,18 @@ impl Core {
             AttributeRule::RistrettoDecimal if i.attributes.len() == 1 => {
                 crate::parse_ristretto_decimal(&i.attributes[0])?;
             }
-            AttributeRule::NativeMessageTemplate | AttributeRule::NativeChallengeTemplate => {
-                let kind = if signature.attributes == AttributeRule::NativeMessageTemplate {
-                    "message"
+            AttributeRule::NativeMessageTemplate => {
+                zkc_runtime::logical::native_origin_template(i.attributes, "message")
+                    .map_err(|_| refused("kernel-attributes"))?;
+            }
+            // The query's source method separates field and index transitions.
+            AttributeRule::NativeChallengeTemplate | AttributeRule::NativeIndexTemplate => {
+                let method = if signature.attributes == AttributeRule::NativeIndexTemplate {
+                    "index"
                 } else {
-                    "query"
+                    "draw"
                 };
-                zkc_runtime::logical::native_origin_template(i.attributes, kind)
+                zkc_runtime::logical::native_query_template(i.attributes, method)
                     .map_err(|_| refused("kernel-attributes"))?;
             }
 

@@ -22,6 +22,23 @@ int main() {
       !refuses(checkParameters("transcript.native.indexed.observe.data",
                                {*indexed})))
     return 1;
+  // A field challenge and a UniformIndex transition name different methods.
+  auto index = encodeNativeOriginTemplate(
+      "main", {{"repeat", "main", "rounds"}},
+      {"query", "Round", "sample", "input_2",
+       "random.koala-bear.ext8-binomial3/0", "index", "V"});
+  if (!index) {
+    errs() << toString(index.takeError());
+    return 1;
+  }
+  if (refuses(checkParameters("transcript.native.indexed.index", {*index})) ||
+      !refuses(
+          checkParameters("transcript.native.indexed.index", {*indexed})) ||
+      !refuses(
+          checkParameters("transcript.native.indexed.challenge", {*index})) ||
+      refuses(checkNativeOrigin(*index, "query")) ||
+      !refuses(checkNativeOrigin(*index, "query", "draw")))
+    return 1;
   for (size_t end = 0; end < indexed->size(); ++end)
     if (!refuses(
             checkNativeOrigin(StringRef(*indexed).take_front(end), "query")))

@@ -304,24 +304,41 @@ class Admission {
       if (const auto *query = instruction.get<program::ServiceQuery>()) {
         if (local || !target || !def.services.count(query->port))
           return fail("service-query-context");
-        if (query->method != "draw" || !query->inputs.empty())
+        auto method =
+            serviceMethod(def.services.at(query->port), query->method);
+        if (!method || query->inputs.size() != method->inputs.size())
           return fail("service-query-signature");
-        auto field = parseBoundType(
-            "field:" + randomServiceField(def.services.at(query->port)).str(),
-            false);
-        if (!field) {
-          consumeError(field.takeError());
-          return fail("service-query-signature");
-        }
-        if (physical) {
-          auto selected = defaultRepresentation(*field);
-          if (!selected) {
-            consumeError(selected.takeError());
-            return fail("service-query-signature");
+        auto port = [&](StringRef spelling) -> std::optional<Port> {
+          auto logical = parseBoundType(spelling, false);
+          if (!logical) {
+            consumeError(logical.takeError());
+            return {};
           }
-          field = std::move(selected);
+          if (physical) {
+            auto selected = defaultRepresentation(*logical);
+            if (!selected) {
+              consumeError(selected.takeError());
+              return {};
+            }
+            logical = std::move(selected);
+          }
+          return Port{logical->spelling()};
+        };
+        std::vector<Port> inputs, expected;
+        for (const auto &spelling : method->inputs) {
+          auto p = port(spelling);
+          if (!p)
+            return fail("service-query-signature");
+          expected.push_back(*p);
         }
-        if (!bind(query->outputs, {{field->spelling()}}, env))
+        auto output = port(method->output);
+        if (!output)
+          return fail("service-query-signature");
+        if (!operands(query->inputs, env, inputs, consumed))
+          return false;
+        if (inputs != expected)
+          return fail("service-query-signature");
+        if (!bind(query->outputs, {*output}, env))
           return false;
       } else if (const auto *literal =
                      instruction.get<program::BooleanConstant>()) {

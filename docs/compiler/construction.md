@@ -39,8 +39,10 @@ is empty. It preserves original IR and returns a complete strict policy.
 callers retain exact occurrence selection.
 
 Construction adds internal transcript input/results, removes the selected
-validator service, and rewrites the admitted challenge deliveries. It introduces
-no participant data ports. Hosts receive authorized public values for root
+validator service, and rewrites the admitted challenge deliveries. A selected
+`index` query becomes a [UniformIndex transition](../spec/ir/construction.md#uniformindex-transitions)
+whose helper materializes the source's constant bound, so both roles absorb the
+same deployment-fixed domain. It introduces no participant data ports. Hosts receive authorized public values for root
 initialization and compare shared values with participant inputs.
 
 An independent postcondition reads actual observations, challenge delivery,

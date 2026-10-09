@@ -151,6 +151,18 @@ class TranscriptCorrespondence {
     auto &block = function.getBody().front();
     Operation *cursor = &block.front();
     SmallVector<Value> operands(block.getArguments().take_front(data));
+    if (event.bound) {
+      // The static domain is materialized inside the helper, so both roles
+      // absorb the same bound and no role-supplied value can replace it.
+      if (!event.query ||
+          !kernel(cursor, "index.constant", {}, {},
+                  {std::to_string(*event.bound)}) ||
+          cursor->getNumResults() != 1 ||
+          cursor->getResult(0).getType() != event.payload)
+        return false;
+      operands.push_back(cursor->getResult(0));
+      cursor = cursor->getNextNode();
+    }
     {
       if (!kernel(cursor, "indices.empty", {}, {}, {}))
         return false;
@@ -169,9 +181,10 @@ class TranscriptCorrespondence {
       consumeError(logical.takeError());
       return false;
     }
-    std::string contract = event.query
-                               ? "transcript.native.indexed.challenge"
-                               : "transcript.native.indexed.observe.data";
+    std::string contract =
+        !event.query  ? "transcript.native.indexed.observe.data"
+        : event.bound ? "transcript.native.indexed.index"
+                      : "transcript.native.indexed.challenge";
     SmallVector<std::string> arguments{policy.suite};
     if (!event.query)
       arguments.push_back(logical->spelling());

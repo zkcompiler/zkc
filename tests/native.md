@@ -41,6 +41,7 @@ or external prover/verifier compatibility.
 | Mathematics and changing state | [Composition](../compiler/test/native_composition.py), [carried state](../compiler/test/native_composed_state.py), [nested data](../compiler/test/native_nested_data.py) |
 | Relation identity and terminals | [Relation bindings](../compiler/test/native_relation_bindings.py) |
 | Proof messages and construction | [Structured proofs](../compiler/test/native_structured_proofs.py), [iteration](../compiler/test/native_iterated_proofs.py), [authored transcripts](../compiler/test/native_authored_transcripts.py) |
+| UniformIndex sampling | [Source, formation and construction](../compiler/test/native_index_sampling.py), [independent transcript replay](../crates/zkc-test-drivers/src/native_index_sampling.rs), [spot-check client](protocol/test_index_sampling.py) |
 | Retry and completion | [Attempt lifecycle](../compiler/test/native_attempts.py), [participant completion](../compiler/test/native_entry_completion.py) |
 | Retained storage and logical work | [Proof-scale openings](protocol/test_retained_storage.py), [native ledgers](../crates/zkc-backends/tests/retained_storage.rs), [Runner ledgers](../crates/zkc-runtime/src/interactive/tests/storage.rs) |
 

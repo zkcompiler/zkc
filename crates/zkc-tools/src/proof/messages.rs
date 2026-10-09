@@ -35,15 +35,33 @@ impl<'a> MessageLayout<'a> {
         let mut observed_messages = 0;
         let mut wire_origins = Vec::new();
         for row in list(&descriptor[3])? {
-            let row = array(row, 2)?;
-            let (kind, origin) = (text(&row[0])?, text(&row[1])?);
-            let bytes = logical::native_origin_template(&[origin.into()], kind)
-                .map_err(|e| e.to_string())?;
+            // ["query", origin] draws a field challenge; ["index", origin,
+            // bound] draws UniformIndex(bound); ["message", origin] observes.
+            let row = list(row)?;
+            let kind = text(row.first().ok_or("artifact-record")?)?;
+            if row.len() != if kind == "index" { 3 } else { 2 } {
+                return Err("artifact-record".into());
+            }
+            let bound = if kind == "index" {
+                Some(
+                    logical::uniform_index_bound(text(&row[2])?)
+                        .map_err(|_| "native-proof-index-bound")?,
+                )
+            } else {
+                None
+            };
+            let origin = text(&row[1])?;
+            let query = kind == "query" || kind == "index";
+            let bytes = logical::native_origin_template(
+                &[origin.into()],
+                if query { "query" } else { kind },
+            )
+            .map_err(|e| e.to_string())?;
             let record = logical::decode_tree(&bytes).map_err(|e| e.to_string())?;
             if record[1].as_str() != Some(entry) || !origins.insert(origin) {
                 return Err("native-proof-origin-map".into());
             }
-            if kind == "query" {
+            if query {
                 queries += 1;
                 if record[4][4]
                     .as_str()
@@ -52,7 +70,7 @@ impl<'a> MessageLayout<'a> {
                     != suite
                         .and_then(|s| LogicalType::parse(&format!("transcript:{s}")).ok())
                         .and_then(|t| t.identity().scalar_field())
-                    || record[4][5].as_str() != Some("draw")
+                    || record[4][5].as_str() != Some(if bound.is_some() { "index" } else { "draw" })
                     || record[4][6].as_str() != Some(validator)
                 {
                     return Err("native-proof-query-origin".into());
@@ -81,6 +99,7 @@ impl<'a> MessageLayout<'a> {
             };
             let contract = match kind {
                 "query" => "transcript.native.indexed.challenge".to_owned(),
+                "index" => "transcript.native.indexed.index".to_owned(),
                 "message" => "transcript.native.indexed.observe.data".to_owned(),
                 _ => return Err("native-proof-event".into()),
             };
@@ -89,6 +108,7 @@ impl<'a> MessageLayout<'a> {
                     contract,
                     origin: origin.into(),
                     payload,
+                    bound,
                 });
             }
         }

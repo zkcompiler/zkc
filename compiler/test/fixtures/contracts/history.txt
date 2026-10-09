@@ -119,6 +119,7 @@ sequence.empty 0
 sequence.length 0
 table.relayout 0
 transcript.native.indexed.challenge 1
+transcript.native.indexed.index 1
 transcript.native.indexed.observe.data 1
 vector.add 0
 vector.append 0

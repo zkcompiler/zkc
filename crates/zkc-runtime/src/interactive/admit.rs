@@ -277,7 +277,12 @@ fn attributes(
             Ok(())
         }
         AttributeRule::NativeChallengeTemplate
-            if crate::logical::native_origin_template(attrs, "query").is_ok() =>
+            if crate::logical::native_query_template(attrs, "draw").is_ok() =>
+        {
+            Ok(())
+        }
+        AttributeRule::NativeIndexTemplate
+            if crate::logical::native_query_template(attrs, "index").is_ok() =>
         {
             Ok(())
         }

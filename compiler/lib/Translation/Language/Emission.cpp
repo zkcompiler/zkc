@@ -519,10 +519,24 @@ class Emitter {
         result = Values(actual->getResults());
       } else if (auto *query = std::get_if<ServiceQuery>(&op.action)) {
         const auto &port = source.services[query->service.index];
+        SmallVector<mlir::Value> operands{services[query->service.index]};
+        if (query->bound) {
+          // The static domain becomes the query's constant bound operand.
+          if (!query->bound->isClosed()) {
+            failure = error("source.service", "index domain is not closed");
+            return false;
+          }
+          auto *bound = make(
+              "data.index", resultTypes, {},
+              {text("value", std::to_string(query->bound->closedValue()))});
+          if (!bound)
+            return false;
+          operands.push_back(bound->getResult(0));
+        }
         auto *actual =
-            make("protocol.query", resultTypes, services[query->service.index],
-                 {text("method", "draw"), text("owner", decl.roles[port.owner]),
-                  text("site", site)});
+            make("protocol.query", resultTypes, operands,
+                 {text("method", query->bound ? "index" : "draw"),
+                  text("owner", decl.roles[port.owner]), text("site", site)});
         if (!actual)
           return false;
         result = Values(actual->getResults());

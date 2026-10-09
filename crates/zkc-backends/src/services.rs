@@ -16,6 +16,25 @@ pub(crate) fn support(
     use zkc_runtime::interactive::{
         Identity, LogicalType, PhysicalType, Representation, ServiceSignature, ServiceSupport, Type,
     };
+    if method == "index" {
+        // UniformIndex(bound) is installed only for the octic field's root,
+        // whose RNG supplies the uniform words the masked sampler requires.
+        if contract != ServiceContract::RandomExtensionField {
+            return None;
+        }
+        let index = PhysicalType::new(
+            LogicalType::new(Type::Index, Identity::None).ok()?,
+            Representation::Index,
+        )
+        .ok()?;
+        return Some(ServiceSupport {
+            signature: ServiceSignature {
+                inputs: vec![index.clone()],
+                outputs: vec![index],
+            },
+            max_retained_bytes: 512,
+        });
+    }
     if method != "draw" {
         return None;
     }
@@ -303,6 +322,14 @@ impl ServiceLease {
             resources.draw_managed(&self.owner, token)
         })
     }
+    /// UniformIndex(bound). An invalid bound is refused before the registry
+    /// marks the root, so the refused request consumes and poisons nothing.
+    pub(crate) fn index(&self, reference: &ServiceReference, bound: u64) -> Result<Value> {
+        crate::sampling::index_bound(bound)?;
+        self.transition(reference, |resources, token| {
+            resources.draw_managed_index(&self.owner, token, bound)
+        })
+    }
     fn transition(
         &self,
         reference: &ServiceReference,
@@ -407,6 +434,16 @@ impl ServiceBindings {
             .ok_or_else(|| refused("service-lease"))?
             .draw(reference)
     }
+    pub(crate) fn index(&self, port: &str, bound: u64) -> Result<Value> {
+        let reference = self
+            .ports
+            .get(port)
+            .ok_or_else(|| refused("service-port"))?;
+        self.lease
+            .as_ref()
+            .ok_or_else(|| refused("service-lease"))?
+            .index(reference, bound)
+    }
     pub(crate) fn poison(&self, port: &str) {
         if let (Some(lease), Some(reference)) = (&self.lease, self.ports.get(port)) {
             lease.poison(reference);
@@ -478,6 +515,45 @@ mod tests {
             drop(lease);
             registry.retire(&root).unwrap();
         }
+    }
+    #[test]
+    fn index_queries_refuse_invalid_bounds_before_consumption() {
+        assert!(support(ServiceContract::RandomExtensionField, "index").is_some());
+        for contract in [
+            ServiceContract::RandomBls12381Field,
+            ServiceContract::RandomBn254Field,
+            ServiceContract::RandomRistrettoField,
+        ] {
+            assert!(support(contract, "index").is_none());
+            assert!(contract.signature("index").is_none());
+        }
+        let registry = registry();
+        let root = registry
+            .issue_random_for("Alice", ServiceContract::RandomExtensionField, 2)
+            .unwrap();
+        let lease = registry
+            .acquire("Alice", std::slice::from_ref(&root))
+            .unwrap();
+        for bound in [0, 3, 6, u64::MAX] {
+            assert_eq!(
+                lease.index(&root, bound).unwrap_err().code,
+                "refused:query-bound"
+            );
+        }
+        let untouched = registry.observe(&root).unwrap();
+        assert!(!untouched.poisoned);
+        assert_eq!(untouched.state.unwrap().draw_count, 0);
+        for bound in [1, 1 << 63] {
+            let Value::Index(position) = lease.index(&root, bound).unwrap() else {
+                panic!("index reply");
+            };
+            assert!(position < bound);
+        }
+        // A consuming failure, unlike a refused request, poisons the root.
+        assert!(lease.index(&root, 8).is_err());
+        let exhausted = registry.observe(&root).unwrap();
+        assert!(exhausted.poisoned);
+        assert_eq!(exhausted.state.unwrap().draw_count, 3);
     }
     #[test]
     fn aliases_share_successors_distinct_roots_keep_their_own_tapes() {

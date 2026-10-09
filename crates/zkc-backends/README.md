@@ -93,8 +93,9 @@ replace canonical decoding, setup authorization or invocation-wide capacity.
 Shared backing is charged in full. Matrix kernels retain their local sparse
 nonzero limit; native transport also enforces the current aggregate data limit.
 
-Generated transcripts use only `transcript.native.indexed.observe.data` and
-`transcript.native.indexed.challenge`. Explicit templates and coordinates encode
+Generated transcripts use only `transcript.native.indexed.observe.data`,
+`transcript.native.indexed.challenge` and, for the octic Merlin suite,
+`transcript.native.indexed.index`. Explicit templates and coordinates encode
 `zkc.native-origin/0`; executor frame names do not enter these occurrences.
 Generic observations accept the current native message-data grammar, including
 supported cross-domain data. Merlin and Spongefish suites own their exact

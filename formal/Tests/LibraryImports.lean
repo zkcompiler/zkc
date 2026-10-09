@@ -110,6 +110,7 @@ import Zkc.Probability.FramedMask
 import Zkc.Probability.Iteration
 import Zkc.Probability.Observation
 import Zkc.Probability.ProductTape
+import Zkc.Probability.UniformIndex
 import Zkc.Probability.UniformTape
 import Zkc.Properties.Judgment
 import Zkc.Protocols.AlgebraicRounds.BlockEvaluation

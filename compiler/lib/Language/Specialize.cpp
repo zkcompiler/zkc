@@ -243,6 +243,20 @@ llvm::Error specialize(std::vector<Declaration> &declarations, Work &work,
             return false;
           height = std::max(height, heights.at(instance->index) + 1);
           call->callee = *instance;
+        } else if (auto *query = std::get_if<ServiceQuery>(&op.action);
+                   query && query->bound) {
+          Type bound(Type::Kind::Natural);
+          bound.dimension = *query->bound;
+          bound.symbolic = !query->bound->isClosed();
+          if (!closeType(bound, bindings, op.span))
+            return false;
+          if (!protocol::uniformIndexBound(bound.dimension.closedValue()))
+            return types.fail(
+                "source.service",
+                "selected index domain must be a power of two no greater "
+                "than 2^63",
+                op.span);
+          query->bound = bound.dimension;
         } else if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
           Type maximum(Type::Kind::Natural);
           maximum.dimension = repeat->maximum;

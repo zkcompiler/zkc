@@ -523,6 +523,9 @@ void installedBindings() {
             : sort == "Field" && (operation.name == "pairing.check" ||
                                   operation.name == "pairing.apply")
                 ? "bn254.fr"
+            : sort == "Transcript" &&
+                    operation.name == "transcript.native.indexed.index"
+                ? "merlin3.koala-bear.ext8-binomial3.rejection31le/0"
             : sort == "Nat" ? "4"
             : sort == "Field" &&
                     (twoAdic ||

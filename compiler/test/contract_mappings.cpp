@@ -41,6 +41,7 @@ constexpr ExpectedMapping expected[] = {
      "crypto.exec.indexed_transcript_challenge"},
     {"transcript.native.indexed.observe.data",
      "crypto.exec.indexed_transcript_observe_data"},
+    {"transcript.native.indexed.index", "crypto.exec.indexed_transcript_index"},
     {"field_array.at", "algebra.exec.field_array_at"},
     {"field_array.from_vector", "algebra.exec.field_array_from_vector"},
     {"fixed_vector.from_vector", "algebra.exec.fixed_vector_from_vector"},

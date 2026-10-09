@@ -1,0 +1,61 @@
+module sample;
+domain E = field("koala-bear.ext8-binomial3");
+domain Rows = commitment("rows.merkle-keccak256.koala-bear.ext8-binomial3/0");
+type Vector<F: Field> = builtin("vector", F);
+type Root = builtin("commitment", Rows);
+type Path = builtin("proof", Rows);
+type Opening = builtin("opening_state", Rows);
+
+math fn both(a: bool, b: bool) -> bool { return intrinsic("bool.and", a, b); }
+fn commit(values: Vector<E>) -> (Root, Opening) {
+  let tree = kernel<Rows>("oracle.commit", values, 1);
+  return (tree.0, tree.1);
+}
+fn open(opening: Opening, position: index) -> (Vector<E>, Path) {
+  let opened = kernel<Rows>("oracle.open", opening, position);
+  return (opened.0, opened.1);
+}
+// V compares the opened row with its own copy and authenticates it against the
+// received root, both at the position V sampled.
+fn check<N: nat>(expected: Vector<E>, root: Root, position: index,
+                 row: Vector<E>, path: Path) -> bool {
+  let leaf = kernel<E>("vector.slice", expected, position, 1);
+  let authentic = kernel<Rows>("oracle.check", root, 1, index<N>(), position,
+                               row, path);
+  return both(kernel<E>("vector.equal", leaf, row), authentic);
+}
+fn accept() -> bool { return true; }
+
+// Each round commits P's N-row vector, samples one uniform position in
+// [0, N) at V and checks P's opening at that position. N must be a power of
+// two; V's own vector must have N rows.
+protocol SpotCheck<N: nat, Max: nat> roles(P, V)
+    (values: Vector<E> @P, expected: Vector<E> @V, rounds: index @(P,V))
+    using(coins: Random<E> @V) -> (accepted: bool @V) {
+  let checked = repeat roles(P,V)(i < rounds, max Max)
+      carry(done = rounds @V) capture(values, expected) using(coins) {
+    local P let tree = commit(values);
+    let root = send P -> V(tree.0);
+    let position = coins.index<N>();
+    let at = send V -> P(position);
+    local P let opened = open(tree.1, at);
+    let row = send P -> V(opened.0);
+    let path = send P -> V(opened.1);
+    local V let ok = check<N>(expected, root, position, row, path);
+    guard @V ok;
+    yield (done = done);
+  };
+  local V let accepted = accept();
+  return (accepted = accepted);
+}
+
+entry Proof = SpotCheck<pow2(3), 4> {
+  prover P;
+  verifier V;
+  public { expected, rounds };
+  accept accepted;
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {
+    derive coins;
+  }
+}
+entry Interactive = SpotCheck<pow2(3), 4>;

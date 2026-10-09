@@ -274,3 +274,83 @@ fn excessive_work_budget_refuses_before_leasing_and_retains_backend_custody() {
         );
     }
 }
+
+/// A carrier whose UniformIndex bound arrives as data. Formation fixes source
+/// bounds as constants; this supplied program exercises the runtime refusal.
+fn index_program(contract: &str, inputs: serde_json::Value) -> Vec<u8> {
+    serde_json::to_vec(&json!([
+        "zkc.program/0",
+        [],
+        [],
+        [[
+            "participant",
+            "alice",
+            "root",
+            "Alice",
+            [["n", "index@native.index/0"]],
+            ["index@native.index/0"],
+            [
+                ["query", "pick", "rng", "index", inputs, ["x"]],
+                ["return", ["x"]]
+            ],
+            [["rng", contract, "1"]]
+        ]],
+        [["entry", "main", [["Alice", "alice"]]]]
+    ]))
+    .unwrap()
+}
+
+#[test]
+fn index_queries_have_one_bound_and_refuse_invalid_bounds_before_consumption() {
+    let octic = SERVICES[3].1;
+    let backend = native();
+    let index = PhysicalType::parse("index@native.index/0").unwrap();
+    let support = backend
+        .service_support(ServiceContract::RandomExtensionField, "index")
+        .unwrap();
+    assert_eq!(support.signature.inputs, std::slice::from_ref(&index));
+    assert_eq!(support.signature.outputs, [index]);
+    admit_supplied(&index_program(octic, json!(["n"])), &backend).unwrap();
+    for (contract, inputs, code) in [
+        (SERVICES[0].1, json!(["n"]), ErrorCode::Type),
+        (octic, json!([]), ErrorCode::Signature),
+        (octic, json!(["n", "n"]), ErrorCode::Signature),
+    ] {
+        let error = admit_supplied(&index_program(contract, inputs), &backend).unwrap_err();
+        assert_eq!(error.code, code, "{contract}: {}", error.detail);
+    }
+    for (bound, accepted) in [(8u64, true), (1, true), (6, false), (0, false)] {
+        let registry = ServiceRegistry::new(Policy::default());
+        let root = registry
+            .issue_random_for("Alice", ServiceContract::RandomExtensionField, 3)
+            .unwrap();
+        let backend = native()
+            .with_services(registry.clone(), [("rng".into(), root.clone())].into())
+            .unwrap();
+        let admitted = admit_supplied(&index_program(octic, json!(["n"])), &backend).unwrap();
+        let mut runner = Runner::new(
+            &admitted,
+            "main",
+            "Alice",
+            "session",
+            backend,
+            vec![Value::Index(bound)],
+        )
+        .unwrap_or_else(|e| panic!("{}", e.error));
+        let Action::Query(query) = runner.poll() else {
+            panic!("query cut");
+        };
+        runner.execute_query(&query.cut).unwrap();
+        let observed = registry.observe(&root);
+        match runner.poll() {
+            Action::Returned(values) if accepted => {
+                assert!(matches!(values.as_slice(), [Value::Index(x)] if *x < bound));
+            }
+            Action::Stopped(_) if !accepted => {}
+            other => panic!("bound {bound}: {other:?}"),
+        }
+        let observed = observed.unwrap();
+        assert!(!observed.poisoned, "bound {bound}");
+        assert_eq!(observed.state.unwrap().draw_count, u64::from(accepted));
+    }
+}

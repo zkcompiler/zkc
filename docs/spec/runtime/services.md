@@ -12,27 +12,52 @@ Installed contracts are `random.bls12-381.fr/0`, `random.bn254.fr/0`,
 These four RNG distributions/providers are the complete registered service
 surface. Arbitrary user-defined request/reply families require a future extension.
 Each has method `draw`, no arguments, and one result in its named field under
-that field's default representation. KoalaBear base has no installed random
+that field's default representation. A contract whose field has the catalog
+fact `IndexRandomness` also has method `index`; currently this is only
+`random.koala-bear.ext8-binomial3/0`. KoalaBear base has no installed random
 service. The contract fixes the distribution signature; it does not authenticate
 a root or prove an independence law. A reference is an entry input with exactly one owner. Several inputs may
 refer to the same root. Copying a reference preserves identity and does not copy,
 reset or fork its state. Dropping a reference does not retire its root.
 
-The admitted operation is:
+The admitted operations are:
 
 ```mlir
 %x = "protocol.query"(%rng) {method="draw", owner="Alice", site="challenge"}
   : (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">
+%n = "data.index"() {value="32"} : () -> ui64
+%i = "protocol.query"(%octic, %n) {method="index", owner="Alice", site="position"}
+  : (!protocol.service_ref<"random.koala-bear.ext8-binomial3/0">, ui64) -> ui64
 ```
 
-It draws one field element and changes the root's state. Its result is available
-only to the owner. A query is an ordered occurrence even when its reply is unused.
-It shares the conservative default read/write effect resource with communication
-and guards, so CSE and DCE cannot merge or remove draws.
+`draw` draws one field element. `index` draws one sample of UniformIndex(N),
+whose ideal distribution is uniform on `[0, N)`. Its single data operand must be
+defined by a `data.index` constant whose canonical decimal value N is a power of
+two from 1 through 2^63; the domain is therefore fixed before sampling and cannot
+be chosen by a received value or other runtime data. Each query changes the
+root's state. Its result is available only to the owner. A query is an ordered
+occurrence even when its reply is unused. It shares the conservative default
+read/write effect resource with communication and guards, so CSE and DCE cannot
+merge or remove draws.
+
+### UniformIndex realization
+
+The installed sampler obtains 64 provider bytes, reads the first eight as a
+little-endian unsigned 64-bit word `w` and returns `w mod N`, equivalently the low
+`log2(N)` bits of `w`. If `w` is uniform on `[0, 2^64)`, each result has exactly
+`2^64 / N` preimages, so the result is exactly uniform; there is no rejection,
+retry or exhaustion event. Whether the provider bytes are uniform is a premise of
+that provider (operating-system entropy here, the transcript suite under a
+[derived construction](../ir/construction.md#uniformindex-transitions)), not a
+property a test establishes. Low bits of a field element are a different
+distribution and do not realize this method; for an odd prime they are biased
+even at a power-of-two N.
 
 References are used directly by queries. They cannot be selected, restricted,
 passed to mathematical helpers, exchanged, returned, or bound as statement data.
-Static [protocol applications](../ir/composition.md) pass existing references with exact contracts and mapped owners. These contracts have no data arguments and exactly one field reply. Dynamic
+Static [protocol applications](../ir/composition.md) pass existing references with exact contracts and mapped owners. `draw` has no data arguments and exactly one field reply;
+`index` has its static bound and exactly one index reply. Other distributions,
+general bounds, rejection or retry sampling, dynamic
 reference results, ownership transfer,
 asynchronous providers and other service contracts require explicit extensions.
 
@@ -63,6 +88,10 @@ The root has five fields. Every participant record has an eighth field containin
 service rows `[name, contract, input_index]`, where the index is a canonical
 nonnegative decimal string. Participants without services use an empty list.
 A query record is `["query", site, port, method, data_inputs, data_outputs]`.
+An `index` record has one data input, the bound computed by the participant's
+preceding local work, and one `index` output. The carrier does not repeat the
+common IR's constant-bound rule; execution refuses an invalid bound before
+consumption as described below.
 Bounded participant loops may contain queries. Participant calls, static
 parameters and family selectors remain outside this contract.
 
@@ -115,8 +144,9 @@ contract. Metadata alone cannot authorize a live resource; port binding and
 current lease checks still apply.
 
 Before consumption, the runner checks its output count/retained-byte capacity
-against the backend's conservative reply bound. A preflight refusal consumes
-nothing. A trusted service backend must keep signatures and bounds stable,
+against the backend's conservative reply bound. The native backend also refuses
+an `index` bound that is not a power of two (`query-bound`) before the registry
+marks the root. A preflight refusal consumes nothing and does not poison the root. A trusted service backend must keep signatures and bounds stable,
 validate requests before consumption, and preserve completed state on error.
 It must poison the affected root when a reply fails validation or binding after
 consumption, through `reject_service_reply`.

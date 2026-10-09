@@ -400,6 +400,33 @@ impl Resources {
         Ok((value, next))
     }
 
+    /// UniformIndex(bound) from the transcript. Invalid bounds refuse before
+    /// the state is consumed. The bound is absorbed after the occurrence and
+    /// before squeezing; the 64 squeezed bytes use the installed sampler.
+    pub fn transcript_index(
+        &mut self,
+        f: &Frame,
+        t: &Capability,
+        origin: &[u8],
+        bound: u64,
+    ) -> Result<(Value, Capability)> {
+        if t.identity != Identity::Merlin3KoalaBearExt8 {
+            return Err(refused("transcript-suite"));
+        }
+        crate::sampling::index_bound(bound)?;
+        let slot = self.consume(f, t, Type::Transcript)?;
+        let State::Transcript(transcript, _) = &mut slot.state else {
+            unreachable!("validated kind")
+        };
+        transcript.append_message(b"origin", origin);
+        transcript.append_message(b"bound", &bound.to_le_bytes());
+        let mut bytes = [0; 64];
+        transcript.challenge_bytes(b"index", &mut bytes);
+        let mut next = t.clone();
+        next.generation = slot.generation;
+        Ok((Value::Index(crate::sampling::index(&bytes, bound)?), next))
+    }
+
     pub fn draw_index(
         &mut self,
         f: &Frame,
@@ -976,6 +1003,36 @@ impl Resources {
             return Err(refused("service-owner"));
         }
         Self::draw_value_slot(Self::consume_slot(slot)?, t)
+    }
+    /// Managed UniformIndex(bound). The caller has already refused invalid
+    /// bounds, so a failure here is a consuming failure of this root.
+    pub(crate) fn draw_managed_index(
+        &mut self,
+        owner: &str,
+        t: &Capability,
+        bound: u64,
+    ) -> Result<(Value, Capability)> {
+        use rand::RngCore;
+        if !self.frames.is_empty() {
+            return Err(refused("service-resource-context"));
+        }
+        self.validate(t, Type::Rng)?;
+        let slot = self.slots.get_mut(&t.id).expect("validated root");
+        if !matches!(&slot.domain, Custody::Service(actual) if actual == owner) {
+            return Err(refused("service-owner"));
+        }
+        if !matches!(slot.state, State::ExtensionRng(_)) {
+            return Err(refused("query-rng"));
+        }
+        let slot = Self::consume_slot(slot)?;
+        let State::ExtensionRng(rng) = &mut slot.state else {
+            unreachable!("checked state")
+        };
+        let mut bytes = [0; 64];
+        rng.fill_bytes(&mut bytes);
+        let mut next = t.clone();
+        next.generation = slot.generation;
+        Ok((Value::Index(crate::sampling::index(&bytes, bound)?), next))
     }
     pub fn commit_nonce(&mut self, f: &Frame, t: &Capability) -> Result<(Scalar, Capability)> {
         if t.identity != Identity::Bls12381Fr {
