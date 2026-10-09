@@ -227,8 +227,8 @@ int main() {
                        "field(\"koala-bear.ext8-binomial3\")"),
                {product()}));
     auto branches = rewrite(source(), "return kernel<T>(\"ring.point\", v; A);",
-                            "return if true capture(v) { yield v; } else {"
-                            " yield kernel<T>(\"ring.point\", v; A); };");
+                            "return if true { v } else {"
+                            " kernel<T>(\"ring.point\", v; A) };");
     refuses(close(branches, {extension}), "source.asset-carrier");
   });
   cases.run("projections are the derived facts of the asset sort", [] {
@@ -297,8 +297,8 @@ int main() {
              {"(v: Vector<F>@E)", "(v: builtin(\"vector\", Product)@E)",
               "source.builtin"},
              {"where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1 {\n  "
-              "local",
-              "where Copy(A) {\n  local", "source.permission"},
+              "let",
+              "where Copy(A) {\n  let", "source.permission"},
              {"protocol Run<A: Ring>", "protocol Run<A: Ring + Copy>",
               "source.permission"},
              {"fn has_length", "struct Holder { x: Product }\nfn has_length",
@@ -365,18 +365,25 @@ int main() {
                   {product()}),
             "source.asset-reference");
   });
-  cases.run("generic bounds over projections need explicit caller bounds", [] {
-    refuses(check(source("", "Run<Product>", ""), {product()}), "source.bound");
-    refuses(check(source("", "Run<Product>",
-                         "where 1 <= A::Outputs, A::Outputs <= 1"),
-                  {product()}),
-            "source.bound");
-    take(check(source("", "Run<Product>",
-                      "where 1 <= A::Outputs, A::Outputs <= 1, 2 <= A::Inputs"),
-               {product()}));
-    refuses(close(source(), {twoOutputs()}), "source.bound");
-    refuses(close(source(), {constant()}), "source.bound");
-  });
+  cases.run(
+      "projected bounds are inferred or checked against an explicit contract",
+      [] {
+        take(check(source("", "Run<Product>", ""), {product()}));
+        refuses(close(source("", "Run<Product>", ""), {constant()}),
+                "source.bound");
+        refuses(check(source("", "Run<Product>", "where ()"), {product()}),
+                "source.bound");
+        refuses(check(source("", "Run<Product>",
+                             "where 1 <= A::Outputs, A::Outputs <= 1"),
+                      {product()}),
+                "source.bound");
+        take(check(
+            source("", "Run<Product>",
+                   "where 1 <= A::Outputs, A::Outputs <= 1, 2 <= A::Inputs"),
+            {product()}));
+        refuses(close(source(), {twoOutputs()}), "source.bound");
+        refuses(close(source(), {constant()}), "source.bound");
+      });
   cases.run("the Sumcheck library rejects arenas outside its premise", [] {
     auto library = file(ZKC_SUMCHECK_LIBRARY);
     auto client = file(ZKC_EXPRESSION_SUMCHECK_PROJECT "/main.zkc");
