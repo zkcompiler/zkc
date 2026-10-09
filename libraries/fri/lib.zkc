@@ -108,7 +108,8 @@ fn configured<F: Field, LogSize: nat, Rounds: nat, Queries: nat>(
 // a caller bind this low-degree test to its own polynomial-opening equations.
 pub protocol LowDegree<C: Commitment, LogSize: nat, TerminalLog: nat,
                        Rounds: nat, Queries: nat> roles(P,V)
-    (word: Vector<C::ValueField> @P, shift: C::ValueField @(P,V),
+    (word: Vector<C::ValueField> @P, prover_shift: C::ValueField @P,
+     verifier_shift: C::ValueField @V,
      round_count: index @(P,V), query_count: index @(P,V),
      coins: Random<C::ValueField> @V)
     -> (accepted: bool @V, positionsP: Positions @P,
@@ -120,14 +121,14 @@ pub protocol LowDegree<C: Commitment, LogSize: nat, TerminalLog: nat,
       zkc::oracle::VectorCommitment(C),
       1 <= Rounds, TerminalLog+Rounds+1 <= LogSize, 1 <= Queries {
   let schedule_ok @V = configured<C::ValueField,LogSize,Rounds,Queries>(
-    shift, round_count, query_count);
+    verifier_shift, round_count, query_count);
   require @V schedule_ok;
   let initial_sizeP @P = natural<pow2(LogSize)>();
   let initial_sizeV @V = natural<pow2(LogSize)>();
-  let input_ok @P = shape<C::ValueField,LogSize>(word, shift);
+  let input_ok @P = shape<C::ValueField,LogSize>(word, prover_shift);
   require @P input_ok;
   let mut current = word;
-  let mut current_shift = shift;
+  let mut current_shift = prover_shift;
   let mut roots @V = root_list<C>();
   let mut states @P = opening_list<C>();
   let mut betas @V = empty<C::ValueField>();
@@ -168,7 +169,7 @@ pub protocol LowDegree<C: Commitment, LogSize: nat, TerminalLog: nat,
     let mut atV = positionV;
     let mut sizeP = initial_sizeP;
     let mut sizeV = initial_sizeV;
-    let mut query_shift = shift;
+    let mut query_shift = verifier_shift;
     let mut expected: C::ValueField @V = 0;
     for round in 0..round_count roles(P,V) max Rounds {
       let halfP @P = halve(sizeP);

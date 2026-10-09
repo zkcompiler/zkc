@@ -5,7 +5,7 @@ domain Rows = commitment("rows.merkle-keccak256.koala-bear.ext8-binomial3/0");
 protocol Fri roles(P,V)(word: Vector<E> @P, shift: E @(P,V), round_count: index @(P,V),
     query_count: index @(P,V), coins: Random<E> @V)
     -> (accepted: bool @V) {
-  let (accepted, _, _, _) = LowDegree<Rows,5,0,3,8>(word, shift, round_count, query_count, coins);
+  let (accepted, _, _, _) = LowDegree<Rows,5,0,3,8>(word, shift, shift, round_count, query_count, coins);
   return (accepted = accepted);
 }
 entry Run = Fri;

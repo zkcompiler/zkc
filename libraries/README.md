@@ -76,8 +76,10 @@ nor a security theorem for hidden tables.
 
 ### FRI
 
-`LowDegree` takes a prover word, a shared nonzero coset shift, shared round and
-query counts, and verifier randomness. It requires a two-adic field of odd
+`LowDegree` takes a prover word, nonzero coset shifts at P and V, shared round and
+query counts, and verifier randomness. Honest execution uses the same shift at
+both roles; separate arguments allow callers to derive it locally. V checks
+against its own shift. It requires a two-adic field of odd
 characteristic, a row commitment scheme and bounded index sampling. For
 `N = 2^LogSize` and `r = Rounds`, the tested degree bound is
 `degree < 2^(TerminalLog + r)`. At least one fold and one query are required;
