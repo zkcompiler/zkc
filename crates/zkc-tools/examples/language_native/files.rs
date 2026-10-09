@@ -77,11 +77,40 @@ pub(super) fn setups(
         format!("--setups={authority_file}"),
         "--allow-header-only".into(),
     ];
-    let produced = entry::cli::run("prove", &args);
+    let produced = zkc_tools::cli::run("prove", &args);
     assert_eq!(produced["status"], "produced", "{produced}");
     args[2] = verifier_file;
-    let checked = entry::cli::run("verify", &args);
+    let checked = zkc_tools::cli::run("verify", &args);
     assert_eq!(checked["status"], "accepted", "{checked}");
+    // Output setup preparation precedes private-key loading when results are
+    // requested. Repairing the first failure exposes the independent input pin.
+    let valid: Json =
+        serde_json::from_slice(&std::fs::read(directory.join("cli-producer.json")).unwrap())
+            .unwrap();
+    let mut bad = valid.clone();
+    bad["setups"]["first"] = json!("00");
+    bad["inputs"]["pk0"]["sha256"] = json!("00".repeat(32));
+    let results = directory.join("cli-precedence-results.json");
+    std::fs::write(&results, b"previous results").unwrap();
+    let previous_proof = std::fs::read(&proof).unwrap();
+    let mut check_args = args.clone();
+    check_args.push(format!("--results={}", results.display()));
+    for code in ["invalid-encoding", "key-mismatch"] {
+        check_args[2] = save(directory, "cli-precedence-inputs.json", &bad);
+        let refused = zkc_tools::cli::run("prove", &check_args);
+        assert_eq!(refused["code"], code, "{refused}");
+        assert_eq!(refused["phase"], "inputs");
+        assert_eq!(std::fs::read(&proof).unwrap(), previous_proof);
+        assert_eq!(std::fs::read(&results).unwrap(), b"previous results");
+        bad["setups"] = valid["setups"].clone();
+    }
+    check_args[2] = save(directory, "cli-precedence-inputs.json", &valid);
+    let repaired = zkc_tools::cli::run("prove", &check_args);
+    assert_eq!(repaired["status"], "produced", "{repaired}");
+    assert_eq!(
+        repaired["publication"]["published"],
+        json!(["proof", "results"])
+    );
     producer_values
         .as_object_mut()
         .unwrap()
@@ -97,8 +126,8 @@ pub(super) fn setups(
     );
     let package = directory.join("pcs-setup-Run.entry");
     let bytes = std::fs::read(&package).unwrap();
-    let result = entry::cli::run(
-        "run-entry",
+    let result = zkc_tools::cli::run(
+        "run",
         &[
             package.to_string_lossy().into_owned(),
             hex(&Sha256::digest(bytes)),
@@ -110,7 +139,7 @@ pub(super) fn setups(
     let mut wrong: Json = serde_json::from_slice(&std::fs::read(&authority_file).unwrap()).unwrap();
     wrong["keys"]["first"] = json!("00".repeat(32));
     std::fs::write(&authority_file, wrong.to_string()).unwrap();
-    let refused = entry::cli::run("verify", &args);
+    let refused = zkc_tools::cli::run("verify", &args);
     assert_eq!(refused["code"], "key-mismatch", "{refused}");
     wrong["keys"]["first"] = json!(hex(&authority.keys["first"]));
     std::fs::write(&authority_file, wrong.to_string()).unwrap();

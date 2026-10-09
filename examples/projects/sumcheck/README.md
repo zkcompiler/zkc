@@ -30,7 +30,7 @@ zkc verify sumcheck.entry EXPECTED_SHA256 examples/projects/sumcheck/verifier.js
 same public table, claim and round count. No private inputs are needed for this
 public example. The [Entry guide](../../../docs/language/entries.md) explains
 request encoding and limits. Compiling `example::Interactive` and passing
-[interactive.json](interactive.json) to `run-entry` exercises both live roles.
+[interactive.json](interactive.json) to `run` exercises both live roles.
 
 The source and CLI tests check both successful execution and changed claims,
 insufficient rounds, actual transcript messages and proof truncation. These are

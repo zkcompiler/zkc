@@ -93,7 +93,7 @@ pub fn root(envelope: &Json, input: &Json) -> Vec<u8> {
         .map(|(v, p)| json!([v[0], v[1], p[2], v[2]]))
         .collect::<Vec<_>>();
     tree(&json!([
-        "zkc.native-proof-binding/4",
+        "zkc.native-proof-binding/5",
         "sha256",
         "zkc.native-origin/2",
         envelope[1],
@@ -102,9 +102,6 @@ pub fn root(envelope: &Json, input: &Json) -> Vec<u8> {
         policy[3],
         envelope[2],
         public,
-        input[3],
-        [],
-        [],
-        []
+        input[3]
     ]))
 }

@@ -11,12 +11,21 @@ use zkc_runtime::interactive::{
 /// PCS temporary allocation is bounded indirectly by rank, not reserved here.
 #[derive(Clone, Copy, Debug)]
 pub struct Policy {
+    /// Maximum number of multilinear variables (table length is 2^arity).
     pub max_arity: usize,
+    /// Per-object numerical element ceiling, also used by nested data planners.
+    /// Individual kernels can enforce smaller hard ceilings.
     pub max_table_elements: usize,
+    /// Bytes in one wire value or bounded input frame, not cumulative traffic.
     pub max_wire_bytes: usize,
+    /// Conservative per-value/allocation payload bytes; no global RSS reservation.
     pub max_value_bytes: usize,
+    /// PCS setup work measured as arity * 2^arity, not allocated bytes.
     pub max_setup_cells: usize,
+    /// Simultaneously occupied authoritative resource slots in each store.
+    /// Cloned handles consume no extra slot; retiring a root releases its slot.
     pub max_capabilities: usize,
+    /// Per-object group element ceiling, additionally capped by individual kernels.
     pub max_groups: usize,
 }
 impl Default for Policy {
@@ -200,24 +209,23 @@ impl Value {
         512
     }
 
-    /// Visit only active leaves, preserving their exact capability handles.
-    pub(crate) fn active_leaves(&self) -> Vec<&Self> {
-        fn visit<'a>(v: &'a Value, out: &mut Vec<&'a Value>) {
-            if let Value::Sequence(v) = v {
-                for p in v.elements() {
-                    visit(p, out);
-                }
-            } else if let Value::Variant(v) = v {
-                for p in v.payload() {
-                    visit(p, out);
-                }
-            } else {
-                out.push(v);
-            }
+    /// Borrow active leaves in declaration order, stopping at the first error.
+    /// No handle is cloned or cached; consumers authenticate live authority.
+    pub(crate) fn visit_active_leaves<E>(
+        &self,
+        visit: &mut impl FnMut(&Self) -> std::result::Result<(), E>,
+    ) -> std::result::Result<(), E> {
+        match self {
+            Self::Sequence(value) => value
+                .elements()
+                .iter()
+                .try_for_each(|v| v.visit_active_leaves(visit)),
+            Self::Variant(value) => value
+                .payload()
+                .iter()
+                .try_for_each(|v| v.visit_active_leaves(visit)),
+            _ => visit(self),
         }
-        let mut out = Vec::new();
-        visit(self, &mut out);
-        out
     }
 
     pub fn ty(&self) -> Type {
@@ -714,9 +722,6 @@ impl RuntimeValue for Value {
         Ok(Self::Index(index))
     }
 
-    fn type_name(&self) -> &str {
-        self.ty().name()
-    }
     fn physical_type(&self) -> PhysicalType {
         if let Self::Sequence(value) = self {
             return value.physical_type().clone();
@@ -952,5 +957,85 @@ mod admission_size_tests {
         }
         assert!(Value::wire_retained_bytes_bound(Type::ProverKey, 0, &policy).is_err());
         assert!(Value::wire_retained_bytes_bound(Type::Table, usize::MAX, &policy).is_err());
+    }
+}
+
+#[cfg(test)]
+mod custody_traversal_tests {
+    use super::*;
+    use serde_json::json;
+    use zkc_runtime::interactive::Backend;
+
+    fn pack(name: &str, values: Vec<Value>) -> Value {
+        let types: Vec<_> = values
+            .iter()
+            .map(|v| v.physical_type().logical().spelling())
+            .collect();
+        let logical = LogicalType::parse(&zkc_test_support::variants::logical(
+            name,
+            json!([["inactive", []], ["active", types]]),
+        ))
+        .unwrap();
+        Value::pack_variant(logical.variant_descriptor().unwrap().clone(), 1, values).unwrap()
+    }
+
+    #[test]
+    fn active_borrowed_traversal_preserves_order_short_circuit_and_live_authority() {
+        let mut native = crate::NativeBackend::new(
+            Policy::default(),
+            crate::EntryPolicy::new(crate::Domain::new("P", "s", "main", None), None),
+            Default::default(),
+        )
+        .unwrap();
+        let rng = native
+            .issue_rng_for(
+                Identity::Bls12381Fr,
+                crate::Domain::new("P", "s", "main", None),
+                1,
+            )
+            .unwrap();
+        let token = rng.capability().unwrap().clone();
+        let sequence = Value::Sequence(
+            crate::Sequence::new(
+                LogicalType::parse("index").unwrap(),
+                vec![Value::Index(1), Value::Index(2)],
+                &Policy::default(),
+            )
+            .unwrap(),
+        );
+        let value = pack(
+            "Outer",
+            vec![pack("Inner", vec![sequence, rng]), Value::Index(3)],
+        );
+        let mut visited = Vec::new();
+        let error = value
+            .visit_active_leaves(&mut |leaf| {
+                if let Value::Index(index) = leaf {
+                    visited.push(*index);
+                    if *index == 2 {
+                        return Err("stop");
+                    }
+                } else {
+                    panic!("visited past the first refusal");
+                }
+                Ok(())
+            })
+            .unwrap_err();
+        assert_eq!(error, "stop");
+        assert_eq!(visited, [1, 2]);
+        let mut visited = Vec::new();
+        value
+            .visit_active_leaves(&mut |leaf| {
+                native.validate_value(leaf)?;
+                visited.push(leaf.ty());
+                Ok::<_, zkc_runtime::interactive::BackendError>(())
+            })
+            .unwrap();
+        assert_eq!(visited, [Type::Index, Type::Index, Type::Rng, Type::Index]);
+        native.retire(&token).unwrap();
+        let error = value
+            .visit_active_leaves(&mut |leaf| native.validate_value(leaf))
+            .unwrap_err();
+        assert_eq!(error.code, "refused:capability-unissued");
     }
 }

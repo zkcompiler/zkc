@@ -10,11 +10,13 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Commitment, OpeningState],
             AttributeRule::None,
         ),
-    ),
+    )
+    .implemented_by(&["arkworks/pcs.commit"]),
     Contract::selectable(
         "pcs.open",
         (&[OpeningState, Point], &[Field, Proof], AttributeRule::None),
-    ),
+    )
+    .implemented_by(&["arkworks/pcs.open"]),
     Contract::selectable(
         "pcs.check",
         (
@@ -22,11 +24,13 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Bool],
             AttributeRule::None,
         ),
-    ),
+    )
+    .implemented_by(&["arkworks/pcs.check"]),
     Contract::selectable(
         "pcs.equal",
         (&[Commitment, Commitment], &[Bool], AttributeRule::None),
-    ),
+    )
+    .implemented_by(&["arkworks/pcs.equal"]),
 ];
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
@@ -35,7 +39,6 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
 
     contracts: CONTRACTS,
     resolve,
-    providers: &["arkworks"],
     select: support::select_nominal,
 };
 

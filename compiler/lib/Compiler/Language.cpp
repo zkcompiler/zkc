@@ -343,7 +343,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
     auto selected = compiled->policy;
     selected.draws.clear();
     if (!descriptor || descriptor->size() != 6 ||
-        (*deployment)[0].getAsString() != "zkc.native-proof/4" ||
+        (*deployment)[0].getAsString() != "zkc.native-proof/5" ||
         (*deployment)[1].getAsString() != original.identity() ||
         encodeNativeProofPolicy(selected) !=
             encodeNativeProofPolicy(selection) ||

@@ -23,7 +23,7 @@ relation Assets and installed mathematical kernels.
 Language emits mathematical MLIR. The `protocol` profile carries joint structure
 and participant availability. Projection forms independent `participant`
 programs; `exec` makes demanded computation explicit; `physical` selects admitted
-representations and kernels. The result is `zkc.program/1`.
+representations and kernels. The result is `zkc.program/2`.
 
 Entry packages, native proof deployments and joint bundles give that executable
 different application interfaces. All use the Rust Runner and installed backend

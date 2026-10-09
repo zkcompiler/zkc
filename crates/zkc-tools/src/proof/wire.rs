@@ -44,11 +44,11 @@ impl ProofWriter {
     }
     /// A host can lower the buffer ceiling, including the framing header.
     pub fn with_limit(expected_binding: &[u8; 32], limit: usize) -> Result<Self, FormatError> {
-        if limit < HEADER_BYTES {
+        if !(HEADER_BYTES..=MAX_PROOF_BYTES).contains(&limit) {
             return Err(FormatError::Limit);
         }
         let mut writer = Self::new(expected_binding);
-        writer.limit = limit.min(MAX_PROOF_BYTES);
+        writer.limit = limit;
         Ok(writer)
     }
     pub fn message(&mut self, payload: &[u8]) -> Result<(), FormatError> {
@@ -145,6 +145,10 @@ mod tests {
     fn lowered_writer_limit_includes_header_and_refuses_before_buffer_extension() {
         assert!(matches!(
             ProofWriter::with_limit(&[0; 32], 39),
+            Err(FormatError::Limit)
+        ));
+        assert!(matches!(
+            ProofWriter::with_limit(&[0; 32], MAX_PROOF_BYTES + 1),
             Err(FormatError::Limit)
         ));
         let mut writer = ProofWriter::with_limit(&[0; 32], 49).unwrap();

@@ -56,35 +56,31 @@ impl Registry {
     }
     fn family(
         &mut self,
-        providers: &[&str],
-        contracts: &'static [&'static str],
+        implementations: &'static [(&'static str, &'static str)],
         signature: Signature,
         handler: Handler,
     ) -> Result<()> {
-        for provider in providers {
-            for &contract in contracts {
-                self.insert(
-                    format!("{provider}/{contract}"),
-                    Implementation {
-                        contract,
-                        signature,
-                        handler,
-                    },
-                )?;
-            }
+        for &(identity, contract) in implementations {
+            self.insert(
+                identity.into(),
+                Implementation {
+                    contract,
+                    signature,
+                    handler,
+                },
+            )?;
         }
         Ok(())
     }
     fn shaped(
         &mut self,
-        providers: &[&str],
         contracts: &'static [crate::bindings::Contract],
         handler: Handler,
     ) -> Result<()> {
         for row in contracts {
-            for provider in providers {
+            for implementation in row.implementations {
                 self.insert(
-                    format!("{provider}/{}", row.name),
+                    (*implementation).into(),
                     Implementation {
                         contract: row.name,
                         signature: Signature::Shaped(row, crate::bindings::Selection::Default),
@@ -151,87 +147,58 @@ pub(super) fn installed() -> Result<&'static Registry> {
     REGISTRY
         .get_or_init(|| {
             let mut r = Registry::default();
-            let providers = &["arkworks", "dalek", "plonky3", "spongefish"];
-            r.shaped(&["arkworks"], super::execute::CONTRACTS, basic)?;
-            r.shaped(
-                &["arkworks", "dalek", "plonky3"],
-                crate::kernels::arithmetic::CONTRACTS,
-                arithmetic,
-            )?;
-            r.shaped(
-                &["arkworks"],
-                crate::kernels::conversions::CONTRACTS,
-                conversions,
-            )?;
-            r.shaped(
-                &["arkworks", "dalek"],
-                crate::kernels::curve::CONTRACTS,
-                curve,
-            )?;
-            r.shaped(providers, crate::kernels::resources::CONTRACTS, resources)?;
-            r.shaped(
-                &["arkworks", "plonky3"],
-                crate::plonky3::numerical::CONTRACTS,
-                numerical,
-            )?;
+            r.shaped(super::execute::CONTRACTS, basic)?;
+            r.shaped(crate::kernels::arithmetic::CONTRACTS, arithmetic)?;
+            r.shaped(crate::kernels::conversions::CONTRACTS, conversions)?;
+            r.shaped(crate::kernels::curve::CONTRACTS, curve)?;
+            r.shaped(crate::kernels::resources::CONTRACTS, resources)?;
+            r.shaped(crate::plonky3::numerical::CONTRACTS, numerical)?;
             r.family(
-                &["native"],
-                crate::kernels::indices::OPERATIONS,
+                crate::kernels::indices::IMPLEMENTATIONS,
                 Signature::Custom(crate::kernels::indices::signature),
                 indices,
             )?;
             r.family(
-                &["native"],
-                crate::external_kernels::OPERATIONS,
+                crate::external_kernels::IMPLEMENTATIONS,
                 Signature::Custom(crate::external_kernels::signature),
                 external,
             )?;
             r.family(
-                &["plonky3"],
-                crate::oracle::OPERATIONS,
+                crate::oracle::IMPLEMENTATIONS,
                 Signature::Custom(crate::oracle::signature),
                 oracle,
             )?;
             r.family(
-                &["arkworks"],
-                crate::field_array::OPERATIONS,
+                crate::field_array::IMPLEMENTATIONS,
                 Signature::Custom(crate::field_array::signature),
                 field_array,
             )?;
             r.family(
-                &["native"],
-                crate::sequence::OPERATIONS,
+                crate::sequence::IMPLEMENTATIONS,
                 Signature::Custom(crate::sequence::signature),
                 sequence,
             )?;
             r.family(
-                &["plonky3"],
-                crate::fixed_vector::OPERATIONS,
+                crate::fixed_vector::IMPLEMENTATIONS,
                 Signature::Custom(crate::fixed_vector::signature),
                 fixed_vector,
             )?;
             r.family(
-                &["logical"],
                 &[
-                    "resource_unit.create",
-                    "resource_unit.pass",
-                    "resource_unit.consume",
+                    ("logical/resource_unit.create", "resource_unit.create"),
+                    ("logical/resource_unit.pass", "resource_unit.pass"),
+                    ("logical/resource_unit.consume", "resource_unit.consume"),
                 ],
                 Signature::Custom(super::resource_unit::signature),
                 super::resource_unit::execute,
             )?;
             r.family(
-                &["arkworks"],
-                super::execute::SPECIAL_OPERATIONS,
+                super::execute::SPECIAL_IMPLEMENTATIONS,
                 Signature::Custom(crate::bindings::table::relayout),
                 basic,
             )?;
-            r.shaped(
-                &["plonky3"],
-                crate::kernels::arithmetic::EMBEDDINGS,
-                arithmetic,
-            )?;
-            r.shaped(&["arkworks"], crate::kernels::curve::PAIRINGS, curve)?;
+            r.shaped(crate::kernels::arithmetic::EMBEDDINGS, arithmetic)?;
+            r.shaped(crate::kernels::curve::PAIRINGS, curve)?;
             for row in alternatives() {
                 r.alternative(row)?;
             }

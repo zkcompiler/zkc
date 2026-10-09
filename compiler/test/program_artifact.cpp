@@ -62,6 +62,39 @@ int main() {
     require(program::encode(checked) == program::encode(original),
             "verified artifact changed on return");
   });
+  cases.run("current program shape retains actual arguments", [&] {
+    auto artifact = program::encode(original);
+    auto &root = *artifact.getAsArray();
+    require(root.size() == 5 && root[0].getAsString() == "zkc.program/2",
+            "wrong current root grammar");
+    auto &participant = *root[3].getAsArray()->front().getAsArray();
+    require(participant.size() == 8 &&
+                participant[4].getAsArray()->size() ==
+                    original.participants.front().arguments.size(),
+            "actual participant arguments were lost");
+  });
+  cases.run("old tag refuses independently of root arity", [&] {
+    auto artifact = program::encode(original);
+    (*artifact.getAsArray())[0] = "zkc.program/1";
+    refuses(program::decode(artifact), "interactive-format");
+  });
+  cases.run("retired physical stage slot refuses under current tag", [&] {
+    auto artifact = program::encode(original);
+    auto &root = *artifact.getAsArray();
+    root.insert(root.begin() + 2, "physical");
+    refuses(program::decode(artifact), "interactive-shape");
+  });
+  cases.run("complete retired program grammar has no reader", [&] {
+    auto artifact = program::encode(original);
+    auto &root = *artifact.getAsArray();
+    for (auto &value : *root[3].getAsArray()) {
+      auto &participant = *value.getAsArray();
+      participant.insert(participant.begin() + 4, llvm::json::Array{});
+    }
+    root.insert(root.begin() + 2, "physical");
+    root[0] = "zkc.program/1";
+    refuses(program::decode(artifact), "interactive-format");
+  });
   cases.run("unexpanded local.apply is internal to mathematical locals", [&] {
     auto candidate = original;
     auto &function = calculation(candidate);
@@ -72,7 +105,7 @@ int main() {
   });
   cases.run("program codecs require defined callable bodies", [&] {
     auto json = program::encode(original);
-    auto &functions = *(*json.getAsArray())[3].getAsArray();
+    auto &functions = *(*json.getAsArray())[2].getAsArray();
     (*functions.front().getAsArray())[4] = "external";
     auto decoded = program::decode(json);
     require(!decoded, "undefined callable passed the physical decoder");
@@ -88,7 +121,7 @@ int main() {
               // exceed the encoded-size ceiling.
               for (char value : {'x', '\b', '\f'}) {
                 auto json = program::encode(original);
-                auto &functions = *(*json.getAsArray())[3].getAsArray();
+                auto &functions = *(*json.getAsArray())[2].getAsArray();
                 (*functions.front().getAsArray())[1] =
                     std::string(value == 'x' ? 1048576 : 174763, value);
                 refuses(program::decode(json), "source-limit");
@@ -220,18 +253,18 @@ int main() {
               "hostile release missed its admission boundary");
     }
   });
-  cases.run("program parameters are refused even without service ports", [&] {
+  cases.run("retired participant parameter slot refuses even when empty", [&] {
     auto artifact = program::encode(original);
     auto &participant =
-        *(*artifact.getAsArray())[4].getAsArray()->front().getAsArray();
-    participant[4] = llvm::json::Array{llvm::json::Array{"n", "4"}};
-    refuses(program::decode(artifact), "interactive-shape");
+        *(*artifact.getAsArray())[3].getAsArray()->front().getAsArray();
+    participant.insert(participant.begin() + 4, llvm::json::Array{});
+    refuses(program::decode(artifact), "interactive-record");
   });
   cases.run("participant composition opcode is not in the carrier", [&] {
     auto artifact = program::encode(original);
     auto &participant =
-        *(*artifact.getAsArray())[4].getAsArray()->front().getAsArray();
-    participant[7].getAsArray()->insert(participant[7].getAsArray()->begin(),
+        *(*artifact.getAsArray())[3].getAsArray()->front().getAsArray();
+    participant[6].getAsArray()->insert(participant[6].getAsArray()->begin(),
                                         llvm::json::Array{"call", "invoke", "p",
                                                           llvm::json::Array{},
                                                           llvm::json::Array{}});

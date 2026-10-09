@@ -13,7 +13,7 @@ defines the semantic obligations beyond formation.
 | Whole `protocol.module` | Profile rules, declaration closure, role availability, resources and control obligations |
 | Relation assets/declarations | Canonical R1CS/AIR structure, exact identities, typed purposes and conflicts |
 | Projection and later profiles | Required metadata, participant structure, executable readiness and physical bindings |
-| Checked export | Complete verified physical IR and an admitted `zkc.program/1` model |
+| Checked export | Complete verified physical IR and an admitted `zkc.program/2` model |
 | Source-relative preservation | An explicit comparison against the retained input at the selected transformation boundary |
 
 Standalone operation validity does not imply a valid complete program. External
@@ -30,7 +30,7 @@ use by a root verifier does not recursively invoke export. Reading an executable
 model alone does not establish mathematical or projection invariants.
 
 Mathematical profiles retain native SSA until realization. The serialized
-`zkc.program/1` boundary is physical-only. Relation adapters use
+`zkc.program/2` boundary is physical-only. Relation adapters use
 [Relations.h](../../compiler/include/zkc/Translation/Relations.h); relation
 attribute reading belongs to the core dialect so transformations need not link
 Translation. Register required dialects/interfaces before parsing native programs.
@@ -43,7 +43,7 @@ text. Callers inspect identifiers without parsing message prose. Metadata is not
 proof data or artifact identity; ordinary MLIR errors need not have a native code.
 
 Component checks enforce source ownership and dependency direction. Installed IR,
-Translation, Transforms and NativeCompiler consumers exercise their declared
+Translation, Transforms and Compiler consumers exercise their declared
 public APIs. Native mutation tests cover actual types, operands, effects and
 retained interfaces. These are implementation controls, not a universal native
 refinement or protocol-security theorem.

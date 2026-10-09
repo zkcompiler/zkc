@@ -6,19 +6,22 @@ Usage: zkc COMMAND [ARGUMENTS]
 
 Commands:
   compile                   Compile .zkc source to an authenticated Entry package
-  run-entry                 Run a source Entry package with named inputs
+  run                       Run a source Entry package with named inputs
   prove                     Produce a proof from a source Entry package
   verify                    Verify a proof using independent named public inputs
   bindings                  Generate Rust data bindings pinned to an Entry package
   run-bundle                Execute an authenticated native run bundle
-  produce-native-proof      Produce a proof from a pinned native deployment
-  validate-native-proof     Verify a proof with a pinned native deployment
+  prove-bundle              Produce a proof from a pinned native deployment
+  verify-bundle             Verify a proof with a pinned native deployment
 
 Options:
   -h, --help                Show this help
   --version                 Show the package version
 
 Use 'zkc COMMAND --help' for arguments. Compile .zkc sources with zkc compile; use zkc-compile for direct IR.
+File inputs must be bounded regular files. Output aliases and symlink destinations refuse.
+All outputs are encoded/staged before per-file atomic replacement; partial publication is reported.
+Oversized capacity requests refuse instead of being clamped.
 Start in a prepared checkout with 'just demo'; see docs/getting-started.md.
 ";
 
@@ -34,8 +37,8 @@ fn command_help(command: &str) -> Option<&'static str> {
              Generate named Rust data structures and an admission helper.\n\
              Execution uses the common Entry Host; protocol algorithms are not emitted.\n",
         ),
-        "run-entry" => Some(
-            "Usage: zkc run-entry PACKAGE EXPECTED_SHA256 INPUTS [--setups=AUTHORITY] [--capacity=LIMITS] [--results=FILE]\n\n\
+        "run" => Some(
+            "Usage: zkc run PACKAGE EXPECTED_SHA256 INPUTS [--setups=AUTHORITY] [--capacity=LIMITS] [--results=FILE]\n\n\
              INPUTS is a named zkc.entry-run/1 request. Results are opt-in file output.\n",
         ),
         "prove" | "verify" => Some(
@@ -51,11 +54,12 @@ fn command_help(command: &str) -> Option<&'static str> {
              All roles are prepared before execution resources are issued.\n\
              Completed execution does not interpret protocol acceptance outputs.\n",
         ),
-        "produce-native-proof" | "validate-native-proof" => Some(
-            "Usage: zkc produce-native-proof|validate-native-proof DEPLOYMENT EXPECTED_SHA256 INPUTS PROOF [--setups=AUTHORITY] [--attempts=POLICY] [--capacity=LIMITS]\n\n\
+        "prove-bundle" | "verify-bundle" => Some(
+            "Usage: zkc prove-bundle|verify-bundle DEPLOYMENT EXPECTED_SHA256 INPUTS PROOF [--setups=AUTHORITY] [--attempts=POLICY] [--capacity=LIMITS] [--allow-header-only]\n\n\
              DEPLOYMENT is zkc-compile protocol-proof output.\n\
              EXPECTED_SHA256 authenticates those exact file bytes and must come\n\
              from trusted compilation or deployment configuration.\n\
+             Deployments without a compiler-derived transcript require --allow-header-only.\n\
              INPUTS supplies public bindings and one role's invocation values.\n\
              PROOF is atomically written by the producer and read by the validator.\n",
         ),
@@ -89,5 +93,49 @@ pub fn discover(args: &[String]) -> Option<i32> {
             })
         }
         _ => None,
+    }
+}
+
+/// Run a named command without process exit or printing. Reports omit proof payloads.
+pub fn run(command: &str, args: &[String]) -> serde_json::Value {
+    match command {
+        "compile" | "run" | "prove" | "verify" | "bindings" => {
+            crate::entry::cli::run(command, args)
+        }
+        "run-bundle" => crate::run::cli::run(args),
+        "prove-bundle" | "verify-bundle" => crate::proof::cli::run(command == "prove-bundle", args),
+        _ => serde_json::json!({"status":"refused", "phase":"arguments", "code":"unknown-command"}),
+    }
+}
+/// Successful exit requires the requested operation and all requested publications.
+pub fn succeeded(report: &serde_json::Value) -> bool {
+    if report["format"] == "zkc.bundle-result/1" {
+        report["status"] == "executed" && report["outcome"][0] == "completed"
+    } else {
+        crate::entry::cli::succeeded(report)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn bundle_commands_have_one_spelling() {
+        for name in [
+            "compile",
+            "run",
+            "prove",
+            "verify",
+            "bindings",
+            "run-bundle",
+            "prove-bundle",
+            "verify-bundle",
+        ] {
+            assert!(command_help(name).is_some());
+        }
+        for name in ["run-entry", "produce-native-proof", "validate-native-proof"] {
+            assert!(command_help(name).is_none());
+            assert_eq!(run(name, &[])["code"], "unknown-command");
+        }
     }
 }

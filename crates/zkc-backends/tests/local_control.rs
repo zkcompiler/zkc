@@ -59,16 +59,14 @@ fn candidate(ports: Json, outputs: Json, body: Json) -> Vec<u8> {
     }
     gather(&body, &mut bindings);
     serde_json::to_vec(&json!([
-        "zkc.program/1",
+        "zkc.program/2",
         bindings.into_values().collect::<Vec<_>>(),
-        "physical",
         [["function", "local", ports, outputs, body, ["local", []]]],
         [[
             "participant",
             "root",
             "instance",
             "P",
-            [],
             ports,
             outputs,
             [
@@ -359,40 +357,40 @@ fn malformed_dead_regions_and_affine_copy_are_rejected() {
     let backend = ark_backend(None);
     let mut cases = vec![];
     let mut v = good.clone();
-    v[3][0][4][0][7][0][5] = json!([["yield", ["r"]]]);
+    v[2][0][4][0][7][0][5] = json!([["yield", ["r"]]]);
     cases.push(v); // hidden free variable
     let mut v = good.clone();
-    v[3][0][4][0][6] = json!(["cond", "r"]);
+    v[2][0][4][0][6] = json!(["cond", "r"]);
     cases.push(v); // affine invariant
     let mut v = good.clone();
-    v[3][0][4][0][7][0][3] = json!(["current", "current"]);
+    v[2][0][4][0][7][0][3] = json!(["current", "current"]);
     cases.push(v);
     let mut v = good.clone();
-    v[3][0][4][0][7][0][5] = json!([["yield", []]]);
+    v[2][0][4][0][7][0][5] = json!([["yield", []]]);
     cases.push(v);
     let mut v = good.clone();
-    v[3][0][4][0][7][0][5] = json!([["return", ["current"]]]);
+    v[2][0][4][0][7][0][5] = json!([["return", ["current"]]]);
     cases.push(v);
     let mut v = good.clone();
-    v[3][0][4][0][7][0][5] = json!([
+    v[2][0][4][0][7][0][5] = json!([
         ["op", "draw", "random.draw", [], ["current"], ["v", "r2"]],
         ["yield", ["r2"]]
     ]);
     cases.push(v); // duplicate global site
     let mut v = good.clone();
-    v[3][0][4][0][7][0][4] = json!([
+    v[2][0][4][0][7][0][4] = json!([
         ["op", "draw", "random.draw", [], ["current"], ["v", "r2"]],
         ["yield", ["current"]]
     ]);
     cases.push(v);
     let mut v = good.clone();
-    v[3][0][4][1] = json!(["return", ["r"]]);
+    v[2][0][4][1] = json!(["return", ["r"]]);
     cases.push(v); // parent reuse after carried move
     let mut v = good.clone();
-    v[3][0][4][0][7][0][5] = json!([]);
+    v[2][0][4][0][7][0][5] = json!([]);
     cases.push(v);
     let mut v = good.clone();
-    v[3][0][4][0][7][0][5] = json!([
+    v[2][0][4][0][7][0][5] = json!([
         ["op", "unresolved", "missing", [], [], []],
         ["yield", ["current"]]
     ]);
@@ -481,7 +479,7 @@ fn finite_value_budget_refuses_region_entry_without_open_frame_leak() {
 #[test]
 fn local_control_is_not_admitted_in_protocol_body() {
     let mut value: Json = serde_json::from_slice(&choose()).unwrap();
-    value[4][0][7][0] = value[3][0][4][0].clone();
+    value[3][0][6][0] = value[2][0][4][0].clone();
     assert_eq!(
         admit_supplied(&serde_json::to_vec(&value).unwrap(), &ark_backend(None))
             .unwrap_err()
@@ -527,7 +525,7 @@ fn region_storage_release_keeps_ghost_charge_and_final_return_charge() {
     // Parent + local args + capture + temporary = 2048. A second temporary
     // cannot exploit physical release to evade the conservative semantic budget.
     let mut value: Json = serde_json::from_slice(&bytes).unwrap();
-    value[3][0][4][0][4]
+    value[2][0][4][0][4]
         .as_array_mut()
         .unwrap()
         .insert(2, json!(["op", "not2", "bool.not", [], ["b"], ["m"]]));

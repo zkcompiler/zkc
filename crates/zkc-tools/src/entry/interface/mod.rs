@@ -70,7 +70,7 @@ impl Interface {
             selected: checked.selected,
             types: checked.types,
             setups: checked.setups,
-            artifact: format!("{:x}", Sha256::digest(package.artifact().as_bytes())),
+            artifact: crate::host::inputs::hex(package.authenticated_artifact().identity()),
             options: package.options(),
         })
     }

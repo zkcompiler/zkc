@@ -177,10 +177,14 @@ numbers. Requirements are bounded to 1 MiB, nesting 64, 1–64 records, indices
 below 4096, and nonempty strings of at most 4096 bytes without NUL.
 Unknown/missing keys and duplicate record IDs or terminal targets refuse.
 Each list contains 1–32 distinct indices.
-The parser uses LLVM JSON semantics, including its handling of duplicate JSON
-members and integer-valued numbers. The authoritative requirement is the
-checker's typed canonical reserialization, echoed and hashed in its report.
-The raw input digest is audit information.
+Numeric values use canonical unsigned decimal integer tokens. Signs (including
+negative zero), leading zeros, decimal points and exponents refuse in scalar
+indices and index arrays. Duplicate decoded object keys refuse at every depth,
+including differently escaped spellings of the same key. Strings require valid
+UTF-8 and Unicode scalar escapes; unpaired UTF-16 surrogates refuse. Whitespace,
+object key order and equivalent string escapes preserve the typed requirement.
+The authoritative requirement is the checker's typed canonical reserialization,
+echoed and hashed in its report. The raw input digest records the supplied bytes.
 
 The retained original module defines one private, flat recipe from subject
 field scalars or positive static field arrays using MLE, polynomial constants,

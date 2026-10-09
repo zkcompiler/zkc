@@ -87,10 +87,10 @@ backend; attempts within that invocation retain its consumed work.
 
 ## Native framing and setup
 
-The `/4` proof profile and `zkc.program/1` admit sequences recursively over the
+The `/5` proof profile and `zkc.program/2` admit sequences recursively over the
 closed native message grammar. Keys, private state, affine data and unsupported
 provider leaves stay outside that grammar, including inactive alternatives and
-empty sequences. Host programmatic values and `/4` proof `wire` inputs use the
+empty sequences. Host programmatic values and `/5` proof `wire` inputs use the
 same exact physical types and codec. Existing older host formats retain their
 own closed constructors.
 

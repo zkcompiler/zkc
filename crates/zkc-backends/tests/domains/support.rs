@@ -179,9 +179,8 @@ pub fn program(
     }
     body.push(json!(["return", returns]));
     serde_json::to_vec(&json!([
-        "zkc.program/1",
+        "zkc.program/2",
         rows,
-        "physical",
         [[
             "function",
             "testfn",
@@ -195,7 +194,6 @@ pub fn program(
             "actor",
             "instance",
             "P",
-            [],
             ports,
             result_types,
             [

@@ -525,14 +525,13 @@ std::string installedCatalogIdentity() {
                                ? std::to_string(*parameters->fieldTerm)
                                : "none");
     }
-    detail::frame(value, protocol::operationEffect(kernel.key));
     rows.push_back(std::move(value));
   }
   for (const auto &service : protocol::randomServices)
     row({"service", service.contract, "draw", service.field});
   std::sort(rows.begin(), rows.end());
   std::string bytes;
-  detail::frame(bytes, "zkc.language-catalog/1");
+  detail::frame(bytes, "zkc.language-catalog/2");
   for (const auto &row : rows)
     detail::frame(bytes, row);
   return detail::digest(bytes);

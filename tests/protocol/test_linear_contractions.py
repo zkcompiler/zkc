@@ -53,14 +53,14 @@ def test_linear_contractions(toolchain, directory, journal, family, linear):
 
     candidate, program = export(
         "selected", f"--zkc-participant-pipeline=linear-contractions={str(linear).lower()}")
-    assert program[0] == "zkc.program/1"
+    assert program[0] == "zkc.program/2"
     bindings = {binding[0]: binding for binding in program[1]}
-    assert len(program[4]) == 1
-    participant = program[4][0]
+    assert len(program[3]) == 1
+    participant = program[3][0]
     assert participant[3] == "P"
-    assert [op[0] for op in participant[7]] == ["local", "return"]
-    call = participant[7][0]
-    function = next(function for function in program[3] if function[1] == call[2])
+    assert [op[0] for op in participant[6]] == ["local", "return"]
+    call = participant[6][0]
+    function = next(function for function in program[2] if function[1] == call[2])
     body = function[4]
     assert [op[0] for op in body] == ["op", "op", "op", "op", "return"]
     weighted, first, guard, second = body[:4]

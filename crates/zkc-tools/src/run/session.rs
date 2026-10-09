@@ -95,17 +95,35 @@ impl Default for RunLimits {
     }
 }
 impl RunLimits {
-    /// Effective host ceilings after applying installed hard bounds.
-    pub fn effective(mut self) -> Self {
-        let d = Self::default();
-        self.steps = self.steps.min(d.steps);
-        self.wire_bytes = self.wire_bytes.min(d.wire_bytes);
-        self.total_wire_bytes = self.total_wire_bytes.min(d.total_wire_bytes);
-        self.values.live_bytes = self.values.live_bytes.min(Limits::VALUE_BYTES);
-        self.values.total_bytes = self.values.total_bytes.min(Limits::TOTAL_VALUE_BYTES);
-        self.work.instructions = self.work.instructions.min(Limits::INSTRUCTIONS);
-        self.work.iterations = self.work.iterations.min(Limits::ITERATIONS);
-        self
+    /// Installed joint execution ceilings. Steps count dispatched occurrences,
+    /// wire_bytes bounds one message, and total_wire_bytes counts all messages.
+    /// Work and retained payload limits apply separately to each runner.
+    pub const HARD_MAX: Self = Self {
+        steps: 32768,
+        wire_bytes: 4096,
+        total_wire_bytes: 16 * 1024 * 1024,
+        values: ValueBudget {
+            live_bytes: Limits::VALUE_BYTES,
+            total_bytes: Limits::TOTAL_VALUE_BYTES,
+        },
+        work: WorkBudget {
+            instructions: Limits::INSTRUCTIONS,
+            iterations: Limits::ITERATIONS,
+        },
+    };
+    pub fn validate(&self) -> Result<(), Failure> {
+        let hard = Self::HARD_MAX;
+        if self.steps > hard.steps
+            || self.wire_bytes > hard.wire_bytes
+            || self.total_wire_bytes > hard.total_wire_bytes
+            || self.values.live_bytes > hard.values.live_bytes
+            || self.values.total_bytes > hard.values.total_bytes
+            || self.work.instructions > hard.work.instructions
+            || self.work.iterations > hard.work.iterations
+        {
+            return Err(Failure::new(FailureKind::Limit, "joint-limits"));
+        }
+        Ok(())
     }
 }
 pub struct RoleInput<B: Backend> {
@@ -172,7 +190,9 @@ pub fn run<B: WireBackend, H: Hooks<B>>(
     limits: RunLimits,
     hooks: &mut H,
 ) -> Result<Report<B>, StartError<B>> {
-    let limits = limits.effective();
+    if let Err(failure) = limits.validate() {
+        return Err(StartError { failure, inputs });
+    }
     let refuse = |kind, detail, inputs| {
         Err(StartError {
             failure: Failure::new(kind, detail),
@@ -217,9 +237,7 @@ pub fn run<B: WireBackend, H: Hooks<B>>(
     if slots.try_reserve_exact(inputs.len()).is_err()
         || rows.try_reserve_exact(inputs.len()).is_err()
         || backends.try_reserve_exact(inputs.len()).is_err()
-        || reached
-            .try_reserve_exact(limits.steps.min(RunLimits::default().steps))
-            .is_err()
+        || reached.try_reserve_exact(limits.steps).is_err()
     {
         return refuse(FailureKind::Limit, "report-allocation", inputs);
     }
@@ -842,16 +860,14 @@ mod contract_tests {
     }
     fn loop_bundle() -> Bundle {
         let candidate = json!([
-            "zkc.program/1",
+            "zkc.program/2",
             [],
-            "physical",
             [],
             [[
                 "participant",
                 "a",
                 "root",
                 "Alice",
-                [],
                 [["n", "index@native.index/1"]],
                 [],
                 [

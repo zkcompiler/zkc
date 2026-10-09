@@ -92,21 +92,26 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             &[Point],
             &[Vector],
             AttributeRule::None,
-        ),
-        field::operation("vector.to_point", &[Vector], &[Point], AttributeRule::None),
+        )
+        .implemented_by(&["arkworks/vector.from_point"]),
+        field::operation("vector.to_point", &[Vector], &[Point], AttributeRule::None)
+            .implemented_by(&["arkworks/vector.to_point"]),
         field::operation(
             "vector.from_table",
             &[Table],
             &[Vector],
             AttributeRule::None,
-        ),
-        field::operation("vector.to_table", &[Vector], &[Table], AttributeRule::None),
+        )
+        .implemented_by(&["arkworks/vector.from_table"]),
+        field::operation("vector.to_table", &[Vector], &[Table], AttributeRule::None)
+            .implemented_by(&["arkworks/vector.to_table"]),
         poly::operation(
             "poly.equality_weights",
             &[Point],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/poly.equality_weights"]),
     ]
 };
 

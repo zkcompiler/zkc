@@ -70,9 +70,11 @@ arena annotations. This does not validate upstream allocator internals.
 LeakSanitizer also requires an environment that permits thread inspection.
 
 Install checks use fresh prefixes and independently built CMake consumers.
-The installed SDK retains its dependency on the selected LLVM/MLIR installation;
-it does not bundle LLVM. Static and shared component changes need both linkage
-checks. Existing outputs can be selected with `ZKC_COMPILER_BIN` and
+Every installed SDK component requires the exact LLVM version used to build it.
+Support, Contracts, Program, Relation and Language discover and link without MLIR;
+IR and its dependent components additionally require MLIR and installed contribution
+dependencies. The SDK does not bundle these external dependencies. Static and
+shared component changes need both linkage checks. Existing outputs can be selected with `ZKC_COMPILER_BIN` and
 `ZKC_NATIVE_BIN` as described in [configuration](configuration.md).
 
 ## Packages and optional work

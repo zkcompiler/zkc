@@ -1,6 +1,6 @@
 # Structured proof boundaries
 
-Native proof policy `/4` permits one typed message to contain records,
+Native proof policy `/5` permits one typed message to contain records,
 alternatives and variable-length numeric data. It reuses nominal variants,
 dynamic field/group tensors and the ordinary interpreter. The exact contract is
 [structured native proof messages](../spec/profiles/compiler/structured-proof-messages.md).

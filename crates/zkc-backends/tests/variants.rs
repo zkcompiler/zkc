@@ -35,7 +35,7 @@ fn fixture(ports: Json, results: Json, body: Json) -> Json {
         .map(|(i, _)| format!("out{i}"))
         .collect::<Vec<_>>();
     json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [
             ["add", "field.add", ["bls12-381.fr"], "arkworks/field.add"],
             [
@@ -63,14 +63,12 @@ fn fixture(ports: Json, results: Json, body: Json) -> Json {
                 "logical/resource_unit.consume"
             ]
         ],
-        "physical",
         [["function", "Local", ports, results, body, ["Local", []]]],
         [[
             "participant",
             "root_P",
             "root",
             "P",
-            [],
             ports,
             results,
             [["local", "work", "Local", args, names], ["return", names]],
@@ -567,7 +565,7 @@ fn resource_unit_in_active_payload_survives_join_and_is_consumed_once() {
     assert!(out.unwrap().is_empty());
     assert_eq!(backend.active_frames(), 0);
     let mut duplicate = j.clone();
-    duplicate[3][0][4]
+    duplicate[2][0][4]
         .as_array_mut()
         .unwrap()
         .insert(4, json!(["op", "again", "consume", [], ["next"], []]));
@@ -608,22 +606,22 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
     for mutation in 0..10 {
         let mut j = base.clone();
         match mutation {
-            0 => j[3][0][4][1][4]
+            0 => j[2][0][4][1][4]
                 .as_array_mut()
                 .unwrap()
                 .pop()
                 .map(|_| ())
                 .unwrap(),
-            1 => j[3][0][4][1][4][1][0] = json!("a"),
-            2 => j[3][0][4][1][4][1][0] = json!("extra"),
-            3 => j[3][0][4][1][4][0][1] = json!([]),
-            4 => j[3][0][4][1][3] = json!([]), // arm cannot reach outside capture environment
-            5 => j[3][0][4][0][3] = json!("missing"),
-            6 => j[3][0][4][0][4] = json!([]),
-            8 => j[3][0][4][1][2] = json!("x"), // a field is not a variant to match on
-            9 => j[3][0][4][0][2] = json!(FIELD), // nor a type to construct
+            1 => j[2][0][4][1][4][1][0] = json!("a"),
+            2 => j[2][0][4][1][4][1][0] = json!("extra"),
+            3 => j[2][0][4][1][4][0][1] = json!([]),
+            4 => j[2][0][4][1][3] = json!([]), // arm cannot reach outside capture environment
+            5 => j[2][0][4][0][3] = json!("missing"),
+            6 => j[2][0][4][0][4] = json!([]),
+            8 => j[2][0][4][1][2] = json!("x"), // a field is not a variant to match on
+            9 => j[2][0][4][0][2] = json!(FIELD), // nor a type to construct
             _ => {
-                j[3][0][4][1][4][0][2] =
+                j[2][0][4][1][4][0][2] =
                     json!([["send", "leak", "tag", "V", "p"], ["yield", ["p"]]])
             }
         }
@@ -647,21 +645,21 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
         );
     }
     let mut entry = base.clone();
-    entry[4][0][5][0][1] = json!(ty);
+    entry[3][0][4][0][1] = json!(ty);
     let error = admit_supplied(&bytes(&entry), &backend).unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
         (ErrorCode::Signature, "operand type x")
     );
     let mut send = base.clone();
-    send[3][0][3] = json!([ty]);
-    send[3][0][4] = json!([["variant", "pack", ty, "a", ["x"], "v"], ["return", ["v"]]]);
-    send[4][0][7] = json!([
+    send[2][0][3] = json!([ty]);
+    send[2][0][4] = json!([["variant", "pack", ty, "a", ["x"], "v"], ["return", ["v"]]]);
+    send[3][0][6] = json!([
         ["local", "work", "Local", ["x"], ["v"]],
         ["send", "leak", "tag", "V", "v"],
         ["return", []]
     ]);
-    send[4][0][6] = json!([]);
+    send[3][0][5] = json!([]);
     // An immutable sum of native public data is a valid native message.
     assert!(admit_supplied(&bytes(&send), &backend).is_ok());
 }
@@ -788,7 +786,7 @@ fn resource_variant_transfers_through_local_function_ports() {
         json!([["guard", ["resource_unit:Slot.A"]], ["zero", []]]),
     );
     let mut j = fixture(json!([]), json!([UNIT]), json!([["return", []]]));
-    j[3] = json!([
+    j[2] = json!([
         [
             "function",
             "Make",
@@ -823,7 +821,7 @@ fn resource_variant_transfers_through_local_function_ports() {
             ["Use", []]
         ]
     ]);
-    j[4][0][7] = json!([
+    j[3][0][6] = json!([
         ["local", "make", "Make", [], ["v"]],
         ["local", "use", "Use", ["v"], ["g"]],
         ["return", ["g"]]
@@ -900,9 +898,9 @@ fn zero_trip_variant_carry_preserves_incoming_resource() {
         assert_eq!(backend.active_frames(), 0);
     }
     let mut capture = j.clone();
-    capture[3][0][4][1][5] = json!([]);
-    capture[3][0][4][1][6] = json!(["v"]);
-    capture[3][0][4][1][8] = json!([]);
+    capture[2][0][4][1][5] = json!([]);
+    capture[2][0][4][1][6] = json!(["v"]);
+    capture[2][0][4][1][8] = json!([]);
     let error = admit_supplied(&bytes(&capture), &ark_backend(None)).unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
@@ -919,14 +917,14 @@ fn wrong_nominal_same_layout_refuses() {
         json!([]),
         json!([["variant", "pack", a, "ok", ["x"], "v"], ["return", []]]),
     );
-    j[3][0][3] = json!([a]);
-    j[3][0][4][1] = json!(["return", ["v"]]);
+    j[2][0][3] = json!([a]);
+    j[2][0][4][1] = json!(["return", ["v"]]);
     // Retain the variant only as a local intermediate, with matching call
     // arity. The participant must not expose a variant at its output boundary.
-    j[4][0][7][0][4] = json!(["discarded"]);
+    j[3][0][6][0][4] = json!(["discarded"]);
     admit_supplied(&bytes(&j), &ark_backend(None)).unwrap();
 
-    j[3][0][3] = json!([b]);
+    j[2][0][3] = json!([b]);
     let error = admit_supplied(&bytes(&j), &ark_backend(None)).unwrap_err();
     assert_eq!(error.code, ErrorCode::Signature);
     assert_eq!(error.detail, "function-return-types: operand type v");
@@ -952,7 +950,7 @@ fn duplicate_affine_captures_refuse() {
         ]),
     );
     admit_supplied(&bytes(&j), &ark_backend(None)).unwrap();
-    j[3][0][4][1][3] = json!(["r", "r"]);
+    j[2][0][4][1][3] = json!(["r", "r"]);
     let error = admit_supplied(&bytes(&j), &ark_backend(None)).unwrap_err();
     assert_eq!(error.code, ErrorCode::Ssa);
     assert_eq!(
@@ -1008,7 +1006,7 @@ fn private_match_cannot_schedule_transcript_challenges() {
         "arkworks/transcript.native.indexed.challenge"
     ]));
     let mut outside_match = j.clone();
-    outside_match[3][0][4] = json!([j[3][0][4][1][4][0][2][0], ["return", []]]);
+    outside_match[2][0][4] = json!([j[2][0][4][1][4][0][2][0], ["return", []]]);
     admit_supplied(&bytes(&outside_match), &ark_backend(None)).unwrap();
     let error = admit_supplied(&bytes(&j), &ark_backend(None)).unwrap_err();
     assert_eq!(error.detail, "match-protocol-effect");

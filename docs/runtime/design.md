@@ -1,6 +1,6 @@
 # Runtime design
 
-`zkc-runtime` provides one Runner for the closed `zkc.program/1` executable.
+`zkc-runtime` provides one Runner for the closed `zkc.program/2` executable.
 It advances local computation and exposes communication/service cuts. Installed
 backends execute admitted operations with their exact type, effect, resource and
 representation contracts. Whole protocols remain visible in the program.
@@ -49,7 +49,7 @@ replaying consumed affine capabilities.
 
 ## Contracts and assurance
 
-The native proof contract uses `/4` for every admitted program shape.
+The native proof contract uses `/5` for every admitted program shape.
 [Entry inputs](../language/entries.md) and the Host registry authorize setups;
 an explicit verifier-key-consuming PCS check enforces the expected terminal key.
 The [setup contract](../spec/profiles/compiler/structured-proof-messages.md#application-authorized-setups)

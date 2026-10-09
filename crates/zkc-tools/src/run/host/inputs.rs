@@ -262,7 +262,11 @@ fn check_declaration(
     }
 }
 
-pub(super) fn prepare<'a>(host: &'a RunHost, request: &RunInputs) -> Result<PreparedRun<'a>> {
+pub(super) fn prepare<'a>(
+    host: &'a RunHost,
+    request: &RunInputs,
+    imports: &mut crate::host::setups::VerifierKeys,
+) -> Result<PreparedRun<'a>> {
     let session = &request.session;
     if !valid_identifier(session) {
         return Err("bundle-input-name".into());
@@ -297,13 +301,13 @@ pub(super) fn prepare<'a>(host: &'a RunHost, request: &RunInputs) -> Result<Prep
         }
     }
     let policy = host.limits.capacity.backend();
-    let mut admission = Admission::new(host.limits.capacity.loading());
+    let mut admission = Admission::new(host.limits.capacity.loading())?;
     // Charge setup scans before importing even receive-only material.
     for bytes in request.setups.values() {
         host.limits.capacity.check_wire(bytes.len())?;
         admission.work(bytes.len())?;
     }
-    let mut imports = crate::host::setups::VerifierKeys::new(policy.ark_bounds());
+    imports.check_bounds(policy.ark_bounds())?;
     let mut keys = BTreeMap::new();
     let mut material = BTreeMap::new();
     for (name, bytes) in &request.setups {

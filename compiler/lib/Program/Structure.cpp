@@ -191,15 +191,13 @@ class Structure {
         m.stage != Participants::Stage::Physical)
       fail("source-model-shape");
     return fields(
-        {text("zkc.program/1"), environment(m),
-         text(m.stage == Participants::Stage::Physical ? "physical"
-                                                       : "logical"),
+        {text("zkc.program/2"), environment(m),
          list(m.functions, [&](const auto &f) { return function(f); }),
          list(m.participants,
               [&](const Participant &p) {
                 auto bytes =
                     fields({text("participant"), text(p.name), text(p.instance),
-                            text(p.role), 2, parameters(p.arguments),
+                            text(p.role), parameters(p.arguments),
                             names(p.results), body(p.body)});
                 bytes = add(bytes,
                             1 + list(p.services, [&](const ServicePort &port) {

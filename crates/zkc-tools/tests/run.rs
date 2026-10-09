@@ -103,9 +103,8 @@ fn carrier() -> Json {
 }
 fn typed_carrier(ty: &str) -> Json {
     json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [],
-        "physical",
         [[
             "function",
             "id",
@@ -120,7 +119,6 @@ fn typed_carrier(ty: &str) -> Json {
                 "a",
                 "root",
                 "Alice",
-                [],
                 [["x", ty]],
                 [],
                 [
@@ -135,7 +133,6 @@ fn typed_carrier(ty: &str) -> Json {
                 "b",
                 "root",
                 "Bob",
-                [],
                 [],
                 [ty],
                 [
@@ -315,7 +312,7 @@ fn admission_refuses_coverage_group_and_envelope_mutations() {
     cases.push(x);
     let mut x = raw();
     let mut c = carrier();
-    c[4][1][7][0][2] = json!("other-schema");
+    c[3][1][6][0][2] = json!("other-schema");
     x["candidate"] = json!(c.to_string());
     cases.push(x);
     let mut x = raw();
@@ -387,9 +384,8 @@ fn outer_decoder_checks_duplicates_unknown_missing_and_bounds() {
 #[test]
 fn coherent_cross_role_reordering_remains_supplied_only() {
     let c = json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [],
-        "physical",
         [[
             "function",
             "id",
@@ -404,7 +400,6 @@ fn coherent_cross_role_reordering_remains_supplied_only() {
                 "a",
                 "root",
                 "Alice",
-                [],
                 [["x", BOOL]],
                 [BOOL],
                 [["local", "alice", "id", ["x"], ["y"]], ["return", ["y"]]],
@@ -415,7 +410,6 @@ fn coherent_cross_role_reordering_remains_supplied_only() {
                 "b",
                 "root",
                 "Bob",
-                [],
                 [["x", BOOL]],
                 [BOOL],
                 [["local", "bob", "id", ["x"], ["y"]], ["return", ["y"]]],
@@ -680,8 +674,8 @@ fn setup_failure_recovers_every_backend_and_cancels_entered_peer() {
 #[test]
 fn receive_retention_limit_is_an_accepted_stopping_completion() {
     let mut c = carrier();
-    c[4][0][7] = json!([["send", "message", "message", "Bob", "x"], ["return", []]]);
-    c[4][1][5] = json!([["unused", BOOL]]);
+    c[3][0][6] = json!([["send", "message", "message", "Bob", "x"], ["return", []]]);
+    c[3][1][4] = json!([["unused", BOOL]]);
     let mut x = raw();
     x["candidate"] = json!(c.to_string());
     x["steps"] = json!([
@@ -874,7 +868,6 @@ fn loop_bundle() -> Json {
                 symbol,
                 "root",
                 role,
-                [],
                 [["n", index]],
                 [],
                 [
@@ -894,9 +887,8 @@ fn loop_bundle() -> Json {
         })
         .collect();
     let candidate = json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [],
-        "physical",
         [],
         participants,
         [["entry", "main", [["Alice", "a"], ["Bob", "b"]]]]
@@ -1018,13 +1010,13 @@ fn structured_participant_admission_checks_every_nested_body() {
     ] {
         let mut raw = loop_bundle();
         let mut candidate: Json = serde_json::from_str(raw["candidate"].as_str().unwrap()).unwrap();
-        candidate[4][0][7][0][5] = body;
+        candidate[3][0][6][0][5] = body;
         raw["candidate"] = json!(candidate.to_string());
         assert!(matches!(admit(&raw), Err(BundleError::Candidate(_))));
     }
     let mut raw = loop_bundle();
     let mut candidate: Json = serde_json::from_str(raw["candidate"].as_str().unwrap()).unwrap();
-    candidate[4][0][7][0][2] = json!("1");
+    candidate[3][0][6][0][2] = json!("1");
     raw["candidate"] = json!(candidate.to_string());
     assert!(matches!(admit(&raw), Err(BundleError::Candidate(_))));
 }
@@ -1144,6 +1136,7 @@ fn current_formats_refuse_retired_and_unknown_tags() {
         "zkc.native-participants/1",
         "zkc.native-participants/2",
         "zkc.native-participants/3",
+        "zkc.program/1",
         "zkc.program/99",
     ] {
         let mut candidate = carrier();
@@ -1172,7 +1165,7 @@ fn current_formats_refuse_retired_and_unknown_tags() {
     }
     let mut candidate = carrier();
     candidate[0] = json!("zkc.participants/1");
-    for role in candidate[4].as_array_mut().unwrap() {
+    for role in candidate[3].as_array_mut().unwrap() {
         role.as_array_mut().unwrap().pop();
     }
     let mut raw = raw();
@@ -1189,16 +1182,16 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
 
     let vector = Value::Vector(vec![].into()).physical_type().spelling();
     let mut program = typed_carrier(&vector);
-    program[4][1][5] = json!([["accepted", BOOL]]);
-    program[4][1][6] = json!([BOOL]);
-    program[4][1][7][1] = json!(["return", ["accepted"]]);
+    program[3][1][4] = json!([["accepted", BOOL]]);
+    program[3][1][5] = json!([BOOL]);
+    program[3][1][6][1] = json!(["return", ["accepted"]]);
     NativeProofEntry::new(admit(&program), "main", "Alice", "Bob", 0, None, &[]).unwrap();
     let mut unsupported = program.clone();
     let polynomial = Value::Polynomial(vec![].into()).physical_type().spelling();
-    unsupported[3][0][2][0][1] = json!(&polynomial);
-    unsupported[3][0][3][0] = json!(&polynomial);
-    unsupported[4][0][5][0][1] = json!(&polynomial);
-    unsupported[4][1][7][0][5] = json!(&polynomial);
+    unsupported[2][0][2][0][1] = json!(&polynomial);
+    unsupported[2][0][3][0] = json!(&polynomial);
+    unsupported[3][0][4][0][1] = json!(&polynomial);
+    unsupported[3][1][6][0][5] = json!(&polynomial);
     assert_eq!(
         NativeProofEntry::new(admit(&unsupported), "main", "Alice", "Bob", 0, None, &[])
             .unwrap_err()
@@ -1207,12 +1200,12 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
     );
 
     let mut program = carrier();
-    for role in program[4].as_array_mut().unwrap() {
-        role[5]
+    for role in program[3].as_array_mut().unwrap() {
+        role[4]
             .as_array_mut()
             .unwrap()
             .push(json!(["n", "index@native.index/1"]));
-        role[7].as_array_mut().unwrap().insert(
+        role[6].as_array_mut().unwrap().insert(
             0,
             json!([
                 "loop",
@@ -1486,7 +1479,7 @@ fn structured_bundles_retain_fixed_width_send_checks() {
 }
 
 #[test]
-fn exact_pin_precedes_parsing_and_reports_effective_budgets() {
+fn exact_pin_precedes_parsing_and_limit_requests_are_not_clamped() {
     use sha2::{Digest, Sha256};
     let bytes = raw().to_string();
     let pin: [u8; 32] = Sha256::digest(bytes.as_bytes()).into();
@@ -1519,17 +1512,23 @@ fn exact_pin_precedes_parsing_and_reports_effective_budgets() {
     limits.work.instructions = 0;
     limits.values.live_bytes = usize::MAX;
     limits.values.total_bytes = usize::MAX;
+    let rejected = run(&admit(&raw()).unwrap(), "s", inputs(), limits, &mut NoHooks)
+        .err()
+        .unwrap();
+    assert_eq!(rejected.failure.kind, FailureKind::Limit);
+    assert_eq!(rejected.inputs.len(), 2);
+    assert!(
+        rejected
+            .inputs
+            .iter()
+            .all(|r| r.backend.enters == 0 && r.backend.leaves == 0)
+    );
+    assert_eq!(rejected.inputs[0].role, "Bob");
+    assert_eq!(rejected.inputs[1].values.len(), 1);
+    let mut limits = RunLimits::default();
+    limits.work.instructions = 0;
     let report = execute(&mut NoHooks, inputs(), limits);
-    assert_eq!(report.limits.steps, RunLimits::default().steps);
     assert_eq!(report.limits.work.instructions, 0);
-    assert_eq!(
-        report.limits.values.live_bytes,
-        ValueBudget::default().live_bytes
-    );
-    assert_eq!(
-        report.limits.values.total_bytes,
-        ValueBudget::default().total_bytes
-    );
     assert!(matches!(
         report.outcome,
         Outcome::ParticipantStopped { role: 0 }
@@ -1553,7 +1552,7 @@ fn exact_pin_precedes_parsing_and_reports_effective_budgets() {
 #[test]
 fn pure_partition_needs_distinct_anchors_and_changes_finite_cost() {
     let mut candidate = carrier();
-    let body = candidate[4][0][7].as_array_mut().unwrap();
+    let body = candidate[3][0][6].as_array_mut().unwrap();
     body.insert(1, json!(["local", "second", "id", ["y"], ["z"]]));
     body[2][4] = json!("z");
     let mut split = raw();

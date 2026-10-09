@@ -57,7 +57,6 @@ pub fn program(
             "participant_test",
             "instance",
             "P",
-            [],
             ports,
             results,
             [
@@ -271,14 +270,13 @@ pub fn participants(mut declarations: Json) -> Result<Vec<u8>, serde_json::Error
         f.as_array_mut().unwrap().push(json!([name, []]));
     }
     for p in declarations[1].as_array_mut().unwrap() {
-        ports(&mut p[5], 1);
-        results(&mut p[6]);
-        body(&mut p[7]);
+        ports(&mut p[4], 1);
+        results(&mut p[5]);
+        body(&mut p[6]);
     }
     serde_json::to_vec(&json!([
-        "zkc.program/1",
+        "zkc.program/2",
         bindings.into_values().collect::<Vec<_>>(),
-        "physical",
         declarations[0],
         declarations[1],
         declarations[2]

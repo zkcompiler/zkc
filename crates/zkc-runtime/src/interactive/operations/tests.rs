@@ -194,7 +194,6 @@ fn alternatives_require_a_logical_owner_after_complete_assembly() {
     static ALTERNATIVE: Contribution = Contribution {
         contracts: &[],
         resolve: support::field_signature,
-        providers: &[],
         select: default_ports,
         physical_only: false,
         physical_error: "binding-implementation",

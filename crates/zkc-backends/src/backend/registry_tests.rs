@@ -42,14 +42,13 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
     };
     let result_types = if returned.is_empty() { vec![] } else { outputs };
     let mut carrier = json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [[
             "b",
             binding.contract,
             binding.arguments,
             binding.implementation
         ]],
-        "physical",
         [[
             "function",
             "f",
@@ -66,7 +65,6 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             "actor",
             "instance",
             "P",
-            [],
             ports,
             result_types,
             [
@@ -92,14 +90,14 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             ["bls12-381.fr"],
             dot
         ]));
-        carrier[3][0][3] = json!(["field:bls12-381.fr@arkworks.fr/1"]);
-        carrier[3][0][4] = json!([
+        carrier[2][0][3] = json!(["field:bls12-381.fr@arkworks.fr/1"]);
+        carrier[2][0][4] = json!([
             ["op", "view", "b", [], ["a0", "a1"], ["view"]],
             ["op", "consume", "dot", [], ["a0", "view"], ["out"]],
             ["return", ["out"]]
         ]);
-        carrier[4][0][6] = carrier[3][0][3].clone();
-        carrier[4][0][7] = json!([
+        carrier[3][0][5] = carrier[2][0][3].clone();
+        carrier[3][0][6] = json!([
             ["local", "work", "f", ["a0", "a1"], ["out"]],
             ["return", ["out"]]
         ]);
@@ -116,14 +114,14 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             ["ristretto255.group"],
             msm
         ]));
-        carrier[3][0][3] = json!(["group:ristretto255.group@dalek.ristretto/1"]);
-        carrier[3][0][4] = json!([
+        carrier[2][0][3] = json!(["group:ristretto255.group@dalek.ristretto/1"]);
+        carrier[2][0][4] = json!([
             ["op", "view", "b", [], ["a0", "a1"], ["view"]],
             ["op", "consume", "msm", [], ["a0", "view"], ["out"]],
             ["return", ["out"]]
         ]);
-        carrier[4][0][6] = carrier[3][0][3].clone();
-        carrier[4][0][7] = json!([
+        carrier[3][0][5] = carrier[2][0][3].clone();
+        carrier[3][0][6] = json!([
             ["local", "work", "f", ["a0", "a1"], ["out"]],
             ["return", ["out"]]
         ]);
@@ -169,8 +167,7 @@ fn duplicate_implementation_owners_refuse_before_execution() {
     assert_eq!(
         registry
             .family(
-                &["plonky3"],
-                crate::fixed_vector::OPERATIONS,
+                crate::fixed_vector::IMPLEMENTATIONS,
                 Signature::Custom(crate::fixed_vector::signature),
                 fixed_vector
             )
@@ -718,16 +715,14 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
                 // A public wrong-kind wrapper must refuse there without panic.
                 let ty = value.physical_type().spelling();
                 let carrier = serde_json::to_vec(&json!([
-                    "zkc.program/1",
+                    "zkc.program/2",
                     [],
-                    "physical",
                     [],
                     [[
                         "participant",
                         "actor",
                         "instance",
                         "P",
-                        [],
                         [["arg", ty]],
                         [ty],
                         [["return", ["arg"]]],
@@ -1248,4 +1243,95 @@ fn collection_limits_follow_payload_storage() {
         crate::FixedVector::new(logical, vec![crate::KoalaBear::new(1); 64].into()).unwrap(),
     );
     native.validate_value(&fixed).unwrap();
+}
+
+#[test]
+fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_absent() {
+    use zkc_runtime::interactive::Backend;
+    let native = backend();
+    let runtime_rows = OperationBinding::installed_implementations().unwrap();
+    let backend_rows = native.installed_implementations();
+    assert_eq!(runtime_rows, backend_rows);
+    let arguments: &[&[&str]] = &[
+        &[],
+        &["bls12-381.fr"],
+        &["bn254.fr"],
+        &["ristretto255.scalar"],
+        &["koala-bear"],
+        &["koala-bear.ext8-binomial3"],
+        &["bls12-381.g1"],
+        &["bn254.g1"],
+        &["bn254.g2"],
+        &["bn254.gt"],
+        &["ristretto255.group"],
+        &["multilinear.kzg.bls12-381/1"],
+        &["rows.merkle-keccak256.koala-bear/1"],
+        &["rows.merkle-keccak256.koala-bear.ext8-binomial3/1"],
+        &["merlin3.bls12-381.fr64be/1"],
+        &["merlin3.ristretto255.scalar64le/1"],
+        &["merlin3.koala-bear.ext8-binomial3.rejection31le/1"],
+        &["spongefish0.7.4.keccak.bls12-381.fr64be/1"],
+        &["merlin3.bls12-381.fr64be/1", "field:bls12-381.fr"],
+        &[
+            "merlin3.ristretto255.scalar64le/1",
+            "field:ristretto255.scalar",
+        ],
+        &[
+            "merlin3.koala-bear.ext8-binomial3.rejection31le/1",
+            "field:koala-bear",
+        ],
+        &[
+            "spongefish0.7.4.keccak.bls12-381.fr64be/1",
+            "field:bls12-381.fr",
+        ],
+        &["bls12-381.fr", "2"],
+        &["koala-bear", "2"],
+        &["field:bls12-381.fr"],
+        &["Slot.A"],
+        &["bls12-381.fr", "arkworks.mle-lsb/1", "arkworks.mle-msb/1"],
+    ];
+    for (implementation, contract) in &backend_rows {
+        assert!(
+            arguments.iter().any(|args| {
+                let binding = binding(contract, args, implementation);
+                native
+                    .binding_signature(&binding)
+                    .is_some_and(|s| binding.signature().ok() == Some(s))
+            }),
+            "no independently admitted witness: {implementation}"
+        );
+    }
+    for (implementation, contract, args) in [
+        (
+            "spongefish/random.draw",
+            "random.draw",
+            vec!["bls12-381.fr"],
+        ),
+        (
+            "arkworks/random.index",
+            "random.index",
+            vec!["koala-bear.ext8-binomial3"],
+        ),
+        ("dalek/pairing.apply", "pairing.apply", vec!["bn254.fr"]),
+        (
+            "arkworks/field.embed",
+            "field.embed",
+            vec!["koala-bear.ext8-binomial3"],
+        ),
+        (
+            "dalek/vector.to_table",
+            "vector.to_table",
+            vec!["bls12-381.fr"],
+        ),
+        (
+            "dalek/poly.coset_evaluate",
+            "poly.coset_evaluate",
+            vec!["koala-bear"],
+        ),
+    ] {
+        assert!(!backend_rows.iter().any(|(name, _)| name == implementation));
+        let b = binding(contract, &args, implementation);
+        assert!(native.binding_signature(&b).is_none());
+        assert!(b.signature().is_err());
+    }
 }

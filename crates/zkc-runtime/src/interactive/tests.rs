@@ -102,14 +102,6 @@ impl Value for V {
         };
         PhysicalType::default_for(LogicalType::parse(logical).unwrap()).unwrap()
     }
-    fn type_name(&self) -> &str {
-        match self {
-            Self::Variant(..) => "variant",
-            Self::Bool(_) => "bool",
-            Self::Cap { .. } => "rng",
-            _ => "field",
-        }
-    }
     fn validate_serializable(&self) -> Result<(), BackendError> {
         match self {
             Self::Field(_) | Self::Bool(_) => Ok(()),
@@ -394,13 +386,13 @@ fn module(mut functions: Json, mut participants: Json, entries: Json) -> Json {
         }
     }
     for p in participants.as_array_mut().unwrap() {
-        for port in p[5].as_array_mut().unwrap() {
+        for port in p[4].as_array_mut().unwrap() {
             port[1] = json!(fixture_type(port[1].as_str().unwrap()));
         }
-        for ty in p[6].as_array_mut().unwrap() {
+        for ty in p[5].as_array_mut().unwrap() {
             *ty = json!(fixture_type(ty.as_str().unwrap()));
         }
-        fixture_body(&mut p[7]);
+        fixture_body(&mut p[6]);
     }
     let bindings: Vec<_> = [
         "field.constant",
@@ -432,14 +424,7 @@ fn module(mut functions: Json, mut participants: Json, entries: Json) -> Json {
         json!([key, key, args, format!("arkworks/{key}")])
     })
     .collect();
-    json!([
-        "zkc.program/1",
-        bindings,
-        "physical",
-        functions,
-        participants,
-        entries
-    ])
+    json!(["zkc.program/2", bindings, functions, participants, entries])
 }
 
 fn participant(
@@ -455,7 +440,6 @@ fn participant(
         symbol,
         instance,
         role,
-        [],
         inputs,
         outputs,
         body,
@@ -590,19 +574,19 @@ fn exact_tags_arities_names_and_limits() {
     j.as_array_mut().unwrap().push(json!([]));
     reject(&j, ErrorCode::Record);
     let mut j = identity();
-    j[4][0][1] = json!("bad/name");
+    j[3][0][1] = json!("bad/name");
     reject(&j, ErrorCode::Name);
     let mut j = identity();
-    j[4][0][1] = json!("é");
+    j[3][0][1] = json!("é");
     reject(&j, ErrorCode::Name);
     let mut j = identity();
-    j[4][0][1] = json!("x".repeat(129));
+    j[3][0][1] = json!("x".repeat(129));
     reject(&j, ErrorCode::Name);
     let mut j = identity();
-    j[4][0][7][0].as_array_mut().unwrap().push(json!([]));
+    j[3][0][6][0].as_array_mut().unwrap().push(json!([]));
     reject(&j, ErrorCode::Record);
     let mut j = identity();
-    j[4][0][7] = json!([["opaque", "anything"]]);
+    j[3][0][6] = json!([["opaque", "anything"]]);
     reject(&j, ErrorCode::Record);
     let huge = vec![b' '; Limits::ARTIFACT_BYTES + 1];
     assert_eq!(
@@ -618,32 +602,50 @@ fn exact_tags_arities_names_and_limits() {
     );
 }
 #[test]
-fn stage_binding_records_and_non_nominal_types_rejected() {
-    for stage in ["logical", "source", "Physical", ""] {
+fn retired_program_tag_stage_and_parameter_slot_are_distinct_refusals() {
+    // Old tag on the current shape must fail independently of old arities.
+    let mut old_tag = identity();
+    old_tag[0] = json!("zkc.program/1");
+    reject(&old_tag, ErrorCode::Record);
+    for stage in ["physical", "logical", "source", "Physical", ""] {
         let mut j = identity();
-        j[2] = json!(stage);
-        reject(&j, ErrorCode::Stage);
+        j.as_array_mut().unwrap().insert(2, json!(stage));
+        reject(&j, ErrorCode::Record);
     }
+    for parameters in [json!([]), json!([["n", "4"]])] {
+        let mut j = identity();
+        j[3][0].as_array_mut().unwrap().insert(4, parameters);
+        reject(&j, ErrorCode::Record);
+    }
+    // The complete retired grammar also refuses; no compatibility reader.
+    let mut old = identity();
+    old[3][0].as_array_mut().unwrap().insert(4, json!([]));
+    old.as_array_mut().unwrap().insert(2, json!("physical"));
+    old[0] = json!("zkc.program/1");
+    reject(&old, ErrorCode::Record);
+}
+#[test]
+fn binding_records_and_non_nominal_types_rejected() {
     let mut j = identity();
     j[1] = json!("caller.backend/1");
     reject(&j, ErrorCode::Record);
     for ty in ["opaque:Secret", "nonce", "custom", "arkworks.field"] {
         let mut j = identity();
-        j[4][0][5][0][1] = json!(ty);
+        j[3][0][4][0][1] = json!(ty);
         reject(&j, ErrorCode::Type);
     }
 }
 #[test]
 fn symbol_and_signature_admission() {
     let mut j = identity();
-    let duplicate = j[4][0].clone();
-    j[4].as_array_mut().unwrap().push(duplicate);
+    let duplicate = j[3][0].clone();
+    j[3].as_array_mut().unwrap().push(duplicate);
     reject(&j, ErrorCode::Symbol);
     let mut j = identity();
-    j[5][0][2][0][1] = json!("missing");
+    j[4][0][2][0][1] = json!("missing");
     reject(&j, ErrorCode::Symbol);
     let mut j = identity();
-    j[5][0][2][0][0] = json!("V");
+    j[4][0][2][0][0] = json!("V");
     reject(&j, ErrorCode::Role);
     let j = one(
         json!([add_fn()]),
@@ -701,7 +703,7 @@ fn installed_signatures_are_not_artifact_authority() {
         "arkworks/unknown",
     ] {
         let mut j = j.clone();
-        j[3][0][4][0][2] = json!(kernel);
+        j[2][0][4][0][2] = json!(kernel);
         reject(
             &j,
             if kernel.contains('/') {
@@ -742,12 +744,12 @@ fn exact_attributes_and_canonical_field_constants() {
         "52435875175126190479447740508185965837690552500527637822603658699938581184513",
     ] {
         let mut j = base.clone();
-        j[3][0][4][0][3] = json!([s]);
+        j[2][0][4][0][3] = json!([s]);
         reject(&j, ErrorCode::Attributes);
     }
     for attrs in [json!([]), json!(["1", "2"])] {
         let mut j = base.clone();
-        j[3][0][4][0][3] = attrs;
+        j[2][0][4][0][3] = attrs;
         reject(&j, ErrorCode::Attributes);
     }
     let mut j = one(
@@ -756,31 +758,31 @@ fn exact_attributes_and_canonical_field_constants() {
         json!([]),
         json!([["return", []]]),
     );
-    j[3][0][4][0][3] = json!(["0"]);
+    j[2][0][4][0][3] = json!(["0"]);
     reject(&j, ErrorCode::Attributes);
 }
 #[test]
 fn ssa_terminal_and_site_checks() {
     let mut j = identity();
-    j[4][0][7][0][1] = json!(["foreign"]);
+    j[3][0][6][0][1] = json!(["foreign"]);
     reject(&j, ErrorCode::Ssa);
     let mut j = identity();
-    j[4][0][5]
+    j[3][0][4]
         .as_array_mut()
         .unwrap()
         .push(json!(["x", fixture_type("field")]));
     reject(&j, ErrorCode::Ssa);
     let mut j = identity();
-    j[4][0][7]
+    j[3][0][6]
         .as_array_mut()
         .unwrap()
         .push(json!(["return", ["x"]]));
     reject(&j, ErrorCode::Terminal);
     let mut j = identity();
-    j[4][0][7] = json!([]);
+    j[3][0][6] = json!([]);
     reject(&j, ErrorCode::Terminal);
     let mut j = identity();
-    j[4][0][7][0][0] = json!("yield");
+    j[3][0][6][0][0] = json!("yield");
     reject(&j, ErrorCode::Terminal);
     let j = one(
         json!([add_fn()]),
@@ -794,8 +796,8 @@ fn ssa_terminal_and_site_checks() {
     );
     reject(&j, ErrorCode::Site);
     let mut j = j;
-    j[4][0][7][1][1] = json!("other");
-    j[4][0][7][1][4] = json!(["x"]);
+    j[3][0][6][1][1] = json!("other");
+    j[3][0][6][1][4] = json!(["x"]);
     reject(&j, ErrorCode::Ssa);
 }
 #[test]
@@ -976,7 +978,7 @@ fn malicious_private_public_disguise_rejected_at_both_message_edges() {
     assert!(matches!(v.deliver(packet), Err(RuntimeError::Backend(_))));
     assert!(matches!(v.poll(), Action::Receive(_)));
     let mut j = exchange();
-    j[4][0][5][0][1] = json!("rng");
+    j[3][0][4][0][1] = json!("rng");
     reject(&j, ErrorCode::Type);
 }
 
@@ -1225,16 +1227,14 @@ enum G {
 }
 impl Value for G {
     fn physical_type(&self) -> PhysicalType {
-        PhysicalType::parse(&fixture_type(self.type_name())).unwrap()
-    }
-    fn type_name(&self) -> &str {
-        match self {
+        PhysicalType::parse(&fixture_type(match self {
             Self::Scalar(_) => "field",
             Self::Group(_) => "group",
             Self::Groups(_) => "groups",
             Self::Nonce(_) => "nonce",
             Self::Bool(_) => "bool",
-        }
+        }))
+        .unwrap()
     }
     fn validate_serializable(&self) -> Result<(), BackendError> {
         if matches!(self, Self::Nonce(_)) {
@@ -1562,7 +1562,7 @@ fn closed_profile_participants_are_not_an_execution_format() {
         // different refusal from the one this is about. The three
         // profiles say the answer does not turn on which profile the record
         // names; they are not three different refusals.
-        candidate[0] = json!("zkc.program/1");
+        candidate[0] = json!("zkc.program/2");
         candidate[1] = json!(profile);
         reject(&candidate, ErrorCode::Record);
     }
@@ -1988,7 +1988,7 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
             format!("arkworks/{contract}")
         ]));
         let mut outside_match = j.clone();
-        outside_match[3][0][4] = json!([j[3][0][4][1][4][0][2][0], ["return", ["t2"]]]);
+        outside_match[2][0][4] = json!([j[2][0][4][1][4][0][2][0], ["return", ["t2"]]]);
         admitted(&outside_match);
         let error = admit_supplied(&bytes(&j), &Mock::new()).unwrap_err();
         assert_eq!(
@@ -2072,16 +2072,14 @@ fn program_ports_admit_copyable_variants_and_refuse_affine_payloads() {
     let logical = zkc_test_support::variants::logical("Local", json!([["empty", []]]));
     let ty = format!("{logical}@logical.variant/1");
     let mut program = json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [],
-        "physical",
         [],
         [[
             "participant",
             "p",
             "root",
             "P",
-            [],
             [["x", ty]],
             [ty],
             [["return", ["x"]]],
@@ -2095,8 +2093,8 @@ fn program_ports_admit_copyable_variants_and_refuse_affine_payloads() {
         json!([["empty", []], ["owned", ["rng:bls12-381.fr"]]]),
     );
     let affine = format!("{affine}@logical.variant/1");
-    program[4][0][5][0][1] = json!(affine);
-    program[4][0][6][0] = json!(affine);
+    program[3][0][4][0][1] = json!(affine);
+    program[3][0][5][0] = json!(affine);
     let error = admit_supplied(&bytes(&program), &Mock::new()).unwrap_err();
     assert_eq!(error.code, ErrorCode::Type);
     assert_eq!(error.detail, "variant-participant-boundary");

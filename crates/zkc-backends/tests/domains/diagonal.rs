@@ -94,7 +94,7 @@ fn dead_internal_views_release_after_all_consumers_without_requiring_a_codec() {
     for d in [false, true] {
         let (base, args) = fixture(d, true);
         let mut released = base.clone();
-        released[3][0][4]
+        released[2][0][4]
             .as_array_mut()
             .unwrap()
             .insert(3, json!(["release", ["diag", "a0", "a1", "a2", "a3"]]));
@@ -113,7 +113,7 @@ fn dead_internal_views_release_after_all_consumers_without_requiring_a_codec() {
         assert_eq!(state.outputs.len(), 3);
         assert_eq!(state.inner.active_frames(), 0);
         // Releasing between the two contractions cannot hide the second use.
-        let body = released[3][0][4].as_array_mut().unwrap();
+        let body = released[2][0][4].as_array_mut().unwrap();
         let release = body.remove(3);
         body.insert(2, release);
         assert!(
@@ -161,10 +161,10 @@ fn every_diagonal_use_and_all_function_boundaries_are_checked() {
         };
         // A valid first use must never mask a later incompatible use.
         let mut j = base.clone();
-        j[3][0][4][2][4] = json!(["diag", "diag"]); // weights and values in the same op
+        j[2][0][4][2][4] = json!(["diag", "diag"]); // weights and values in the same op
         check(j);
         let mut j = base.clone();
-        j[3][0][4][2][4] = json!(["diag", "a3"]); // weights slot
+        j[2][0][4][2][4] = json!(["diag", "a3"]); // weights slot
         check(j);
         let mut j = base.clone();
         j[1][1][3] = json!(if d {
@@ -174,7 +174,7 @@ fn every_diagonal_use_and_all_function_boundaries_are_checked() {
         });
         check(j); // dense consumer of a view
         let mut j = base.clone();
-        j[3][0][4][2] = json!(["op", "nested", "b0", [], ["a1", "diag"], ["out1"]]);
+        j[2][0][4][2] = json!(["op", "nested", "b0", [], ["a1", "diag"], ["out1"]]);
         check(j); // depth two
         let mut j = base.clone();
         j[1][1][2] = json!([if d {
@@ -189,18 +189,18 @@ fn every_diagonal_use_and_all_function_boundaries_are_checked() {
         } else {
             "vector:bls12-381.fr@arkworks.fr-diagonal/1"
         };
-        j[3][0][3] = json!([view]);
-        j[3][0][4][3] = json!(["return", ["diag"]]);
+        j[2][0][3] = json!([view]);
+        j[2][0][4][3] = json!(["return", ["diag"]]);
         check(j); // user-authored returned view, even after good consumers
         let mut j = base.clone();
-        j[3][0][2][2][1] = json!(view);
+        j[2][0][2][2][1] = json!(view);
         check(j); // function ingress
         let mut j = base.clone();
-        j[4][0][5][2][1] = json!(view);
+        j[3][0][4][2][1] = json!(view);
         check(j); // participant ingress
         let mut j = base.clone();
-        j[3][0][4][1][4][1] = json!("a2");
-        j[3][0][4][2][4][1] = json!("a2");
+        j[2][0][4][1][4][1] = json!("a2");
+        j[2][0][4][2][4][1] = json!("a2");
         j[1][1][3] = json!(if d {
             "dalek/curve.msm"
         } else {

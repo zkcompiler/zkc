@@ -106,7 +106,8 @@ impl<B: Backend> Runner<B> {
     }
 
     /// Enforce host work and value budgets inside local and administrative steps,
-    /// before execution starts.
+    /// before execution starts. Work budgets above the hard execution limits
+    /// refuse before initialization, retaining backend custody and zero usage.
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_budgets(
         admitted: &Admitted,
@@ -118,10 +119,15 @@ impl<B: Backend> Runner<B> {
         value_budget: ValueBudget,
         work_budget: WorkBudget,
     ) -> std::result::Result<Self, LoadError<B>> {
-        let work_budget = WorkBudget {
-            instructions: work_budget.instructions.min(Limits::INSTRUCTIONS),
-            iterations: work_budget.iterations.min(Limits::ITERATIONS),
-        };
+        if work_budget.instructions > Limits::INSTRUCTIONS
+            || work_budget.iterations > Limits::ITERATIONS
+        {
+            return Err(LoadError {
+                error: RuntimeError::Limit,
+                usage: Usage::default(),
+                backend,
+            });
+        }
         let root = Origin {
             session: session.to_owned(),
             entry: entry.to_owned(),
@@ -996,10 +1002,12 @@ impl<B: Backend> Runner<B> {
         let Some(Action::Query(query)) = self.pending.clone() else {
             unreachable!("checked query cut")
         };
-        let (signature, bound) = self
+        let support = self
             .backend
-            .service_signature(query.port.contract, &query.method)
+            .service_support(query.port.contract, &query.method)
             .ok_or_else(|| BackendError::new("service-unsupported"))?;
+        let signature = support.signature;
+        let bound = support.max_retained_bytes;
         let expected = query
             .port
             .contract

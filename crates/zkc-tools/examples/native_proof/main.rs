@@ -164,7 +164,8 @@ fn admitted_mutation_refuses(envelope: &Json, candidate: &Json, reason: &str) {
     // never accept a pin supplied by this candidate or by its proof producer.
     let bytes = repin(envelope, candidate);
     assert_eq!(
-        NativeDeployment::admit(&bytes, &digest(&bytes), Default::default()).unwrap_err(),
+        NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+            .unwrap_err(),
         reason
     );
 }
@@ -173,16 +174,16 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
     // Roles can implement identical transcript semantics with distinct helpers.
     let mut candidate = original.clone();
     let mut names = BTreeMap::new();
-    for mut function in original[3].as_array().unwrap().iter().cloned() {
+    for mut function in original[2].as_array().unwrap().iter().cloned() {
         let old = function[1].as_str().unwrap().to_owned();
         if old.starts_with("_transcript") {
             let name = format!("validator{old}");
             function[1] = json!(name);
             names.insert(old, name);
-            candidate[3].as_array_mut().unwrap().push(function);
+            candidate[2].as_array_mut().unwrap().push(function);
         }
     }
-    for instruction in candidate[4][1][7].as_array_mut().unwrap() {
+    for instruction in candidate[3][1][6].as_array_mut().unwrap() {
         if instruction[0] == "local"
             && let Some(name) = names.get(instruction[2].as_str().unwrap())
         {
@@ -191,8 +192,12 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
     }
     admit_supplied(&serde_json::to_vec(&candidate).unwrap(), &backend()).unwrap();
     let separate = repin(envelope, &candidate);
-    let separate =
-        NativeDeployment::admit(&separate, &digest(&separate), Default::default()).unwrap();
+    let separate = NativeDeployment::admit(
+        &separate,
+        &Sha256::digest(&separate).into(),
+        Default::default(),
+    )
+    .unwrap();
     let validated = separate.execute(input, Some(proof)).unwrap();
     cleaned(&validated);
     validated.outcome.unwrap();
@@ -200,7 +205,7 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
     // Keep SSA and affine state use valid while challenging before observing
     // the received commitment. Ordinary typing cannot establish this order.
     let mut candidate = original.clone();
-    let body = candidate[4][1][7].as_array_mut().unwrap();
+    let body = candidate[3][1][6].as_array_mut().unwrap();
     let observe = body
         .iter()
         .position(|i| i[0] == "local" && i[2].as_str().unwrap().starts_with("_transcript"))
@@ -215,21 +220,26 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
     body.insert(observe, challenge);
     admitted_mutation_refuses(envelope, &candidate, "native-proof-observation-order");
     let mut candidate = original.clone();
-    let body = candidate[4][1][7].as_array_mut().unwrap();
+    let body = candidate[3][1][6].as_array_mut().unwrap();
     let observe = body
         .iter_mut()
         .find(|i| i[0] == "local" && i[2].as_str().unwrap().starts_with("_transcript"))
         .unwrap();
     // Observe the public base instead of the actual received commitment.
-    observe[3][1] = original[4][1][5][0][0].clone();
+    observe[3][1] = original[3][1][4][0][0].clone();
     admitted_mutation_refuses(envelope, &candidate, "native-proof-observation-payload");
     let corrupted = repin(envelope, &candidate);
     assert_eq!(
-        NativeDeployment::admit(&corrupted, &digest(bytes), Default::default()).unwrap_err(),
+        NativeDeployment::admit(
+            &corrupted,
+            &Sha256::digest(bytes).into(),
+            Default::default()
+        )
+        .unwrap_err(),
         "native-proof-deployment-binding"
     );
     let mut candidate = original.clone();
-    let body = candidate[4][1][7].as_array_mut().unwrap();
+    let body = candidate[3][1][6].as_array_mut().unwrap();
     let i = body
         .iter()
         .rposition(|i| i[0] == "local" && i[2].as_str().unwrap().starts_with("_transcript"))
@@ -242,7 +252,7 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
         .unwrap() = removed[3][0].clone();
     admitted_mutation_refuses(envelope, &candidate, "native-proof-state-chain");
     let mut candidate = original.clone();
-    let body = candidate[4][1][7].as_array_mut().unwrap();
+    let body = candidate[3][1][6].as_array_mut().unwrap();
     let calls: Vec<_> = body
         .iter()
         .enumerate()
@@ -252,7 +262,7 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
     body[calls[3]][2] = body[calls[2]][2].clone();
     admitted_mutation_refuses(envelope, &candidate, "native-proof-state-chain");
     let mut candidate = original.clone();
-    let mut helper = candidate[3]
+    let mut helper = candidate[2]
         .as_array()
         .unwrap()
         .iter()
@@ -260,7 +270,7 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
         .unwrap()
         .clone();
     helper[1] = json!("unreachable_transition");
-    candidate[3].as_array_mut().unwrap().push(helper);
+    candidate[2].as_array_mut().unwrap().push(helper);
     admitted_mutation_refuses(envelope, &candidate, "native-proof-state-chain");
     // Retired contracts are no longer well-typed operations. Refuse them at
     // ordinary admission as well as at deployment admission, even after repinning.
@@ -282,7 +292,10 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
             admit_supplied(&serde_json::to_vec(&candidate).unwrap(), &backend()).unwrap_err();
         assert_eq!(error.code, zkc_runtime::interactive::ErrorCode::Signature);
         let bytes = repin(envelope, &candidate);
-        assert!(NativeDeployment::admit(&bytes, &digest(&bytes), Default::default()).is_err());
+        assert!(
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+                .is_err()
+        );
     }
 }
 fn envelope_mutations(envelope: &Json) {
@@ -321,7 +334,8 @@ fn envelope_mutations(envelope: &Json) {
         }
         let bytes = serde_json::to_vec(&changed).unwrap();
         assert_eq!(
-            NativeDeployment::admit(&bytes, &digest(&bytes), Default::default()).unwrap_err(),
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+                .unwrap_err(),
             expected
         );
     }
@@ -333,7 +347,8 @@ fn envelope_mutations(envelope: &Json) {
     changed[6][0][4][0][0] = json!("5");
     let bytes = serde_json::to_vec(&changed).unwrap();
     assert_eq!(
-        NativeDeployment::admit(&bytes, &digest(&bytes), Default::default()).unwrap_err(),
+        NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+            .unwrap_err(),
         "native-proof-shared-port-type"
     );
     // An unused private value is valid ordinary participant IR, but this proof
@@ -346,7 +361,7 @@ fn envelope_mutations(envelope: &Json) {
         .unwrap();
         let mut changed = envelope.clone();
         let mut candidate: Json = serde_json::from_str(envelope[4].as_str().unwrap()).unwrap();
-        let inputs = candidate[4][0][5].as_array_mut().unwrap();
+        let inputs = candidate[3][0][4].as_array_mut().unwrap();
         inputs.insert(inputs.len() - 1, json!(["unloadable", ty.spelling()]));
         changed[6][0][2]
             .as_array_mut()
@@ -355,9 +370,9 @@ fn envelope_mutations(envelope: &Json) {
         admitted_mutation_refuses(&changed, &candidate, "native-proof-role-input-type");
     }
     let mut candidate: Json = serde_json::from_str(envelope[4].as_str().unwrap()).unwrap();
-    let mut entry = candidate[5][0].clone();
+    let mut entry = candidate[4][0].clone();
     entry[1] = json!("other");
-    candidate[5].as_array_mut().unwrap().push(entry);
+    candidate[4].as_array_mut().unwrap().push(entry);
     admitted_mutation_refuses(envelope, &candidate, "native-proof-entry");
 }
 fn hostile(deployment: &NativeDeployment, envelope: &Json, p: &Json, v: &Json, proof: &[u8]) {
@@ -480,8 +495,9 @@ fn run(directory: &Path) {
         let name = case["name"].as_str().unwrap();
         let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-        let deployment = NativeDeployment::admit(&bytes, &digest(&bytes), Default::default())
-            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        let deployment =
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+                .unwrap_or_else(|e| panic!("{name}: {e}"));
         let (p, v) = (
             inputs(&envelope, case, true),
             inputs(&envelope, case, false),
@@ -552,8 +568,8 @@ fn run(directory: &Path) {
         }
         if name == "dleq_0" {
             let mut candidate: Json = serde_json::from_str(envelope[4].as_str().unwrap()).unwrap();
-            for participant in candidate[4].as_array_mut().unwrap() {
-                for instruction in participant[7].as_array_mut().unwrap() {
+            for participant in candidate[3].as_array_mut().unwrap() {
+                for instruction in participant[6].as_array_mut().unwrap() {
                     if instruction[0] == "send" || instruction[0] == "receive" {
                         for item in instruction.as_array_mut().unwrap().iter_mut().skip(1) {
                             if item == "commitment" {

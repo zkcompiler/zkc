@@ -7,9 +7,8 @@ use zkc_runtime::interactive::{Action, Runner, StopKind, ValueBudget, admit_supp
 
 fn candidate(value: bool) -> Json {
     json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [],
-        "physical",
         [[
             "function",
             "literal",
@@ -26,7 +25,6 @@ fn candidate(value: bool) -> Json {
             "root",
             "instance",
             "P",
-            [],
             [],
             ["bool@native.bool/1"],
             [
@@ -108,40 +106,40 @@ fn formats_shapes_context_and_names_are_independently_checked() {
         |value: Json| assert!(admit_supplied(&bytes(&value), &backend).is_err(), "{value}");
     let mut legacy = candidate(true);
     legacy[0] = json!("zkc.participants/1");
-    legacy[4][0].as_array_mut().unwrap().pop();
+    legacy[3][0].as_array_mut().unwrap().pop();
     refused(legacy);
     for literal in [json!("true"), json!(1), Json::Null, json!([]), json!({})] {
         let mut value = candidate(true);
-        value[3][0][4][0][3] = literal;
+        value[2][0][4][0][3] = literal;
         refused(value);
     }
     let mut value = candidate(true);
-    value[2] = json!("logical");
+    value.as_array_mut().unwrap().insert(2, json!("logical"));
     refused(value);
     let mut value = candidate(true);
-    value[3][0][4][0]
+    value[2][0][4][0]
         .as_array_mut()
         .unwrap()
         .push(json!("extra"));
     refused(value);
     let mut value = candidate(true);
-    value[3][0][4][0][1] = json!("");
+    value[2][0][4][0][1] = json!("");
     refused(value);
     let mut value = candidate(true);
-    value[3][0][4][0][2] = json!("bad/name");
+    value[2][0][4][0][2] = json!("bad/name");
     refused(value);
     let mut value = candidate(true);
-    let duplicate = value[3][0][4][0].clone();
-    value[3][0][4].as_array_mut().unwrap().insert(1, duplicate);
+    let duplicate = value[2][0][4][0].clone();
+    value[2][0][4].as_array_mut().unwrap().insert(1, duplicate);
     refused(value);
     let mut value = candidate(true);
-    value[4][0][7]
+    value[3][0][6]
         .as_array_mut()
         .unwrap()
         .insert(0, json!(["bool_constant", "root_literal", "v", true]));
     refused(value);
     let mut value = candidate(true);
-    value[3][0][3] = json!(["index@native.index/1"]);
+    value[2][0][3] = json!(["index@native.index/1"]);
     refused(value);
 }
 
@@ -150,9 +148,6 @@ struct WrongBoolean;
 impl zkc_runtime::interactive::Value for WrongBoolean {
     fn from_control_bool(_: bool) -> Result<Self, zkc_runtime::interactive::BackendError> {
         Ok(Self)
-    }
-    fn type_name(&self) -> &str {
-        "index"
     }
     fn physical_type(&self) -> zkc_runtime::interactive::PhysicalType {
         zkc_runtime::interactive::PhysicalType::parse("index@native.index/1").unwrap()
@@ -209,7 +204,7 @@ impl zkc_runtime::interactive::Backend for LiteralAdapter {
 #[test]
 fn unsupported_adapter_is_refused_before_any_prefix_and_rechecked_on_entry() {
     let mut value = candidate(true);
-    value[3].as_array_mut().unwrap().push(json!([
+    value[2].as_array_mut().unwrap().push(json!([
         "function",
         "prefix",
         [],
@@ -217,7 +212,7 @@ fn unsupported_adapter_is_refused_before_any_prefix_and_rechecked_on_entry() {
         [["return", []]],
         ["prefix", []]
     ]));
-    value[4][0][7]
+    value[3][0][6]
         .as_array_mut()
         .unwrap()
         .insert(0, json!(["local", "before", "prefix", [], []]));
@@ -270,7 +265,7 @@ fn a_false_adapter_promise_does_not_bypass_runtime_type_validation() {
 fn only_the_selected_nested_literal_executes() {
     for condition in [false, true] {
         let mut value = candidate(condition);
-        value[3][0][4] = json!([
+        value[2][0][4] = json!([
             ["bool_constant", "make", "condition", condition],
             [
                 "if",
@@ -310,8 +305,8 @@ fn only_the_selected_nested_literal_executes() {
 fn unused_literal_definitions_are_admitted_and_require_backend_support() {
     let mut value = candidate(true);
     // The endpoint never calls the retained literal function.
-    value[4][0][6] = json!([]);
-    value[4][0][7] = json!([["return", []]]);
+    value[3][0][5] = json!([]);
+    value[3][0][6] = json!([["return", []]]);
     assert!(
         admit_supplied(&bytes(&value), &ark_backend(None))
             .unwrap()
@@ -325,7 +320,7 @@ fn unused_literal_definitions_are_admitted_and_require_backend_support() {
     let error = admit_supplied(&bytes(&value), &adapter)
         .expect_err("unused literal still requires support");
     assert!(error.detail.contains("native-boolean-unsupported"));
-    value[3][0][4][0][3] = json!("malformed");
+    value[2][0][4][0][3] = json!("malformed");
     assert!(admit_supplied(&bytes(&value), &ark_backend(None)).is_err());
 }
 
@@ -336,7 +331,7 @@ fn native_endpoint_stops_are_not_local_stops() {
         json!(["incomplete", "end"]),
     ] {
         let mut value = candidate(true);
-        value[4][0][7] = json!([terminal]);
+        value[3][0][6] = json!([terminal]);
         let error = admit_supplied(&bytes(&value), &ark_backend(None))
             .err()
             .unwrap();
@@ -361,16 +356,14 @@ fn program_service_query_executes_and_releases_its_lease() {
         .unwrap();
     let field = "field:bls12-381.fr@arkworks.fr/1";
     let carrier = json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [],
-        "physical",
         [],
         [[
             "participant",
             "p",
             "root",
             "P",
-            [],
             [],
             [field],
             [
@@ -412,16 +405,14 @@ fn program_service_query_executes_and_releases_its_lease() {
 fn program_iteration_exhaustion_preserves_the_attempted_loop_coordinate() {
     use zkc_runtime::interactive::{PathElement, WorkBudget};
     let carrier = json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [],
-        "physical",
         [],
         [[
             "participant",
             "p",
             "root",
             "P",
-            [],
             [["n", "index@native.index/1"]],
             [],
             [

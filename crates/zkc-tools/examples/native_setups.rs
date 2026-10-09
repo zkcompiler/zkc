@@ -149,7 +149,7 @@ fn main() {
         .unwrap();
         let bytes = std::fs::read(dir.join(format!("{name}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-        let pin = hex(&Sha256::digest(&bytes));
+        let pin: [u8; 32] = Sha256::digest(&bytes).into();
         assert!(NativeDeployment::admit(&bytes, &pin, Default::default()).is_err());
         assert!(
             NativeDeployment::admit(

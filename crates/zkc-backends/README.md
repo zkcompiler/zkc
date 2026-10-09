@@ -24,6 +24,13 @@ request/reply service families. Attempts retain backend custody and completed
 resource effects. `retire` revokes an issued slot outside active frames without
 reusing its identity or refunding work.
 
+`Backend::service_support` returns `ServiceSupport`: an independently authored
+physical signature and `max_retained_bytes`, the conservative aggregate charge
+for one reply tuple. Native service shapes are defined in `services.rs`, without
+reusing the runtime's contract resolver. Admission compares the declarations;
+query preflight and reply validation enforce the bound. These installation facts
+do not authorize a root or replace live lease, generation and owner checks.
+
 ## Installed mathematics
 
 The Arkworks, Dalek and Plonky3 providers retain their nominal field, vector,
@@ -41,6 +48,22 @@ Ristretto MSM, diagonal contractions, table layouts and the independently
 implemented pairwise dot product remain selectable. No variable-time MSM
 public-operand authority is installed. Kernel-specific timing properties do not
 establish a timing guarantee for the entire runtime.
+
+Each contract row lists its actual default implementation names. Custom families
+list exact implementation/contract pairs. The inventory contains no inferred
+provider-by-contract combinations; nominal arguments still need the owner's
+signature checks. Runtime and backend rows remain independently authored.
+
+Private custody checks visit active variant payloads and sequence elements in
+declaration order without collecting a temporary leaf list. Each capability is
+authenticated against the current store; traversal retains neither authority
+nor a cached generation. Failed frame exits still clean up their views.
+
+`Policy` ceilings count per-object arity, elements, bytes, setup work and live
+resource slots. Setup work is `arity * 2^arity`. Sequence work counts
+`3 * (1 + expanded operand nodes)` per call, including repeated shared backing.
+External work adds hash calls, hashed bytes, permutations, observes and samples.
+These separate metrics do not bound global peak memory or wall-clock time.
 
 ## Native inputs and wire
 

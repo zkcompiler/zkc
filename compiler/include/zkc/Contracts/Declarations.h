@@ -101,7 +101,5 @@ struct ParameterContract {
   std::optional<unsigned> fieldTerm = {};
 };
 const ParameterContract *parameterContract(llvm::StringRef contract);
-/// The existing conservative envelope. It does not promise totality.
-llvm::StringRef operationEffect(llvm::StringRef contract);
 } // namespace zkc::protocol
 #endif

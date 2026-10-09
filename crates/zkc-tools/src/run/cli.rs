@@ -18,10 +18,12 @@ pub fn run(args: &[String]) -> Json {
                 return Err("bundle-option".into());
             }
             match name {
-                "--setups" => setups = SetupAuthority::parse(&read(path, 64 * 1024)?)?,
-                "--capacity" => limits.capacity = NativeCapacity::parse(&read(path, 4096)?)?,
+                "--setups" => setups = SetupAuthority::parse(&read_regular(path, 64 * 1024)?)?,
+                "--capacity" => {
+                    limits.capacity = NativeCapacity::parse(&read_regular(path, 4096)?)?
+                }
                 "--limits" => {
-                    let value = parse(&read(path, 4096)?, 4096)?;
+                    let value = parse(&read_regular(path, 4096)?, 4096)?;
                     let row = array(&value, 5)?;
                     if text(&row[0])? != "zkc.bundle-limits/1" {
                         return Err("bundle-limits-format".into());
@@ -32,25 +34,23 @@ pub fn run(args: &[String]) -> Json {
                     limits.message_bytes = size(&row[2])?;
                     limits.total_wire_bytes = size(&row[3])?;
                     limits.external_work = natural(&row[4])?;
-                    let hard = HostLimits::default();
-                    if limits.steps > hard.steps
-                        || limits.message_bytes > hard.message_bytes
-                        || limits.total_wire_bytes > hard.total_wire_bytes
-                        || limits.external_work > hard.external_work
-                    {
-                        return Err("bundle-limits".into());
-                    }
+                    limits.validate()?;
                 }
                 _ => return Err("bundle-option".into()),
             }
         }
         report["limits"] = limits.record();
         report["phase"] = json!("admission");
-        let host = RunHost::admit(&read(bundle, limits.bundle.bytes)?, &pin, limits, setups)?;
+        let host = RunHost::admit(
+            &read_regular(bundle, limits.bundle.bytes)?,
+            &pin,
+            limits,
+            setups,
+        )?;
         report["bundle_sha256"] = json!(host.identity());
         report["layout"] = host.layout();
         report["phase"] = json!("inputs");
-        let prepared = host.prepare(&read(inputs, INPUT_LIMIT)?)?;
+        let prepared = host.prepare(&read_regular(inputs, INPUT_LIMIT)?)?;
         report = prepared.execute().json();
         Ok(())
     })();

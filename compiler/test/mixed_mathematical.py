@@ -18,13 +18,13 @@ carrier = json.loads(commands.source('protocol-export', physical))
 (OUT / 'mixed.json').write_text(json.dumps(carrier))
 (OUT / 'mixed.source.mlir').write_text(source)
 (OUT / 'mixed.physical.mlir').write_text(physical)
-functions = {f[1]: f for f in carrier[3]}
-sender = next(p for p in carrier[4] if p[3] == 'P')
-receiver = next(p for p in carrier[4] if p[3] == 'V')
-assert [op[0] for op in sender[7]] == ['local'] * 5 + ['send', 'return']
-assert [op[1] for op in sender[7][:5]] == ['before_work', 'first_check', 'second_check', 'calculation_0', 'work']
-assert [op[0] for op in receiver[7]] == ['receive', 'return']
-for call in (sender[7][0], sender[7][3]):
+functions = {f[1]: f for f in carrier[2]}
+sender = next(p for p in carrier[3] if p[3] == 'P')
+receiver = next(p for p in carrier[3] if p[3] == 'V')
+assert [op[0] for op in sender[6]] == ['local'] * 5 + ['send', 'return']
+assert [op[1] for op in sender[6][:5]] == ['before_work', 'first_check', 'second_check', 'calculation_0', 'work']
+assert [op[0] for op in receiver[6]] == ['receive', 'return']
+for call in (sender[6][0], sender[6][3]):
     function = functions[call[2]]
     assert not any('resource' in str(port) or 'rng:' in str(port) for port in function[2:4])
 assert functions['work'][4][0][0] == 'if', 'math optimization changed authored control'

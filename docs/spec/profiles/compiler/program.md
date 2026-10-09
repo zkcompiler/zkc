@@ -4,7 +4,7 @@ This profile is the executable output of
 [closed mathematical protocols](mathematical-protocols.md). It uses the local
 control, binding, representation and affine-custody contracts of the existing
 participant machine, together with [service ports](native-services.md).
-The single current format, `zkc.program/1`, includes Boolean literals,
+The single current format, `zkc.program/2`, includes Boolean literals,
 [structured values and iteration](structured-iteration.md), and
 [structured message admission](structured-proof-messages.md).
 [Joint execution](run.md) supplies a bounded synchronous
@@ -19,15 +19,20 @@ copyable aggregates, empty arrays and dynamic messages share one executable
 contract. Physical selection produces the `physical` profile; no separate
 execution-contract property selects a second interpretation.
 
-The external tag is `zkc.program/1`, with the six-field root
-`[tag, bindings, "physical", functions, participants, entries]`. Function records
-retain their existing logical-origin field. Each participant has the service
-profile's ninth field: a list of `[name, contract, input_index]` service rows,
-including an empty list for participants without services. Indices are canonical
-nonnegative decimal strings. Entry maps and all existing instruction records
-retain their positional shapes. The reserved participant parameter array must
-be empty. The constant `"physical"` field and empty parameter slot are required
-parts of this closed grammar, not compatibility-reader branches.
+The external tag is `zkc.program/2`, with the five-field root
+`[tag, bindings, functions, participants, entries]`. Each participant has exactly
+eight fields:
+
+```text
+["participant", name, instance, role, arguments, results, body, services]
+```
+
+`arguments` contains the actual ordered `[name, physical_type]` ports. Function
+records retain their logical-origin definition and argument assignments. The
+`services` field contains `[name, contract, input_index]` rows, including an empty
+list for participants without services. Indices are canonical nonnegative
+decimal strings. Entry maps and instruction records retain their positional
+shapes. There is no serialized stage or reserved participant parameter slot.
 
 Only physical programs have an interchange encoding. A compiler may
 reconstruct a logical execution model internally to validate and select
@@ -36,8 +41,27 @@ representations. That internal check is not public serialization admission:
 logical program root. Public checked export runs full MLIR verification, including
 projection metadata and native type policy, before reconstructing the model.
 
-Only the exact `zkc.program/1` tag is admitted. No compatibility decoder or
+Only the exact `zkc.program/2` tag is admitted. No compatibility decoder or
 automatic tag conversion supplies another execution contract.
+Wrong tags or record arities refuse independently. See the
+[version and rebuild policy](../../../status.md#artifact-and-api-versions).
+
+## Local domain binding
+
+Local operation domain bytes are the compact UTF-8 JSON encoding of:
+
+```text
+["zkc.local-domain/3", origin, role, local_call_site_or_null,
+ [logical_definition, logical_arguments], operation_site,
+ [operation_contract, operation_arguments], attributes]
+```
+
+Logical argument assignments, operation arguments, attributes and the complete
+execution origin remain meaningful inputs. Physical implementation names are
+absent. This backend extension helper encodes admitted execution state; it does
+not issue resources or authorize a transition. Installed native kernels currently
+do not consume it. It has no external input reader and is separate from the
+native proof invocation binding.
 
 ## Data boundaries
 

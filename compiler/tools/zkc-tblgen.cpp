@@ -122,8 +122,6 @@ bool sameEnvelope(const Record *left, const Record *right) {
   const auto *rp = right->getValueAsDef("parameters");
   return name(left->getValueAsDef("stage")) ==
              name(right->getValueAsDef("stage")) &&
-         left->getValueAsString("effect") ==
-             right->getValueAsString("effect") &&
          left->getValueAsBit("commonGeneric") ==
              right->getValueAsBit("commonGeneric") &&
          name(lp) == name(rp) &&

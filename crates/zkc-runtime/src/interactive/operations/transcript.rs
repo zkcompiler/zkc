@@ -5,7 +5,14 @@ use Type::*;
 pub(super) const CONTRACTS: &[Contract] = &[
     Contract {
         alternatives: true,
-        ..Contract::custom("transcript.native.indexed.observe.data").history()
+        ..Contract::custom("transcript.native.indexed.observe.data")
+            .implemented_by(&[
+                "arkworks/transcript.native.indexed.observe.data",
+                "dalek/transcript.native.indexed.observe.data",
+                "plonky3/transcript.native.indexed.observe.data",
+                "spongefish/transcript.native.indexed.observe.data",
+            ])
+            .history()
     },
     Contract::new(
         "transcript.native.indexed.challenge",
@@ -15,6 +22,12 @@ pub(super) const CONTRACTS: &[Contract] = &[
             AttributeRule::NativeChallengeTemplate,
         ),
     )
+    .implemented_by(&[
+        "arkworks/transcript.native.indexed.challenge",
+        "dalek/transcript.native.indexed.challenge",
+        "plonky3/transcript.native.indexed.challenge",
+        "spongefish/transcript.native.indexed.challenge",
+    ])
     .history(),
 ];
 
@@ -22,7 +35,6 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
     contracts: CONTRACTS,
     resolve,
     select,
-    providers: &["arkworks", "dalek", "plonky3", "spongefish"],
     alternatives: &[],
     physical_error: "uninstalled operation binding",
     physical_only: false,

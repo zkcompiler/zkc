@@ -11,7 +11,7 @@ and closes a selected Entry. Translation emits a mathematical `protocol.module`.
 Preparation expands local applications and protocol applications; projection
 assigns actions and values to participants. Mathematical lowering produces the
 `exec` profile. Representation and kernel selection produce `physical` programs,
-exported as `zkc.program/1` for the generic participant runtime.
+exported as `zkc.program/2` for the generic participant runtime.
 
 ## Build and validate
 
@@ -36,12 +36,12 @@ additionally checks supplied polynomial or public-coin requirements.
 `protocol-public-coin`, `protocol-check-public-coin`, and
 `protocol-check-reductions` expose the corresponding analyses.
 `protocol-proof`, `protocol-construct-proof`, and `protocol-check-proof` retain
-the current native proof policy, descriptor and deployment `/4` only. Retired
-tags `/1` through `/3` and unknown tags refuse. Transcript construction uses
+the current native proof policy, descriptor and deployment `/5` only. Retired
+tags `/1` through `/4` and unknown tags refuse. Transcript construction uses
 indexed origin templates, `transcript.native.indexed.challenge` and typed
 `transcript.native.indexed.observe.data`; loops and flat protocols share this
 model. An empty suite selects an authored proof without constructed transcripts.
-`protocol-export` emits a checked physical `zkc.program/1` artifact.
+`protocol-export` emits a checked physical `zkc.program/2` artifact.
 
 Relation data commands retain R1CS import/export, normalization, inspection,
 matrices, evaluation, and native Sumcheck authoring (`relation-protocol` and
@@ -52,34 +52,79 @@ import/export, evaluation and polynomial planning. The isolated
 The `.pir` Frontend, finite table source/plan compiler, `protocol_exec`, old
 construction and claim adapters, source selectors, compatibility readers,
 `protocol-import`, old `protocol-compile`, and source benchmarks are removed.
-There is no JSON-program-to-MLIR importer. `protocol::exportProgram` returns checked typed Program records;
-`protocol::exportModule` returns the checked physical JSON carrier. Program codecs read only
-the native physical carrier. The reserved participant parameter array stays empty in
-`zkc.program/1`, preserving its wire format.
+There is no JSON-program-to-MLIR importer. `protocol::exportProgram` returns
+checked typed Program records; `protocol::exportModule` returns the checked
+physical JSON carrier. Program codecs read only
+`zkc.program/2`, the physical executable carrier. It has no stage field or reserved
+participant parameter slot; actual participant arguments remain explicit.
 
 ## Components and ownership
 
-| Installed component | Responsibility |
-| --- | --- |
-| `Zkc::Support` | Refusals, JSON, bounded input helpers and diagnostic spans |
-| `Zkc::Contracts` | Types, capabilities, operations, named bindings, representations and installed implementations |
-| `Zkc::Relation` | Pure R1CS/AIR data, normalization, evaluation and matrices |
-| `Zkc::Language` | Immutable `.zkc`/Asset capture, syntax, checking and Entry closure |
-| `Zkc::Program` | Shared participant records, native local-definition view, bounded codec and admission |
-| `Zkc::IR` | Dialects, mandatory profile verification, type adapters and interfaces |
-| `Zkc::Translation` | Language-to-math emission/comparison, relation ingress and checked program export |
-| `Zkc::Transforms` | Mathematical preparation/projection, local expansion, polynomial lowering and physical selection |
-| `Zkc::NativeCompiler` | Owned compilations, run/proof packaging, public-coin/polynomial checks and pass registration |
-| `Zkc::Driver` | CLI parsing and input loading |
-| `Zkc::Compiler` | Interface aggregate of NativeCompiler and Driver |
+| Installed component | Public header roots | Responsibility |
+| --- | --- | --- |
+| `Zkc::Support` | `Support/` | Refusals, JSON, bounded input helpers and diagnostic spans |
+| `Zkc::Contracts` | `Contracts/` | Types, capabilities, operations, named bindings, representations and installed implementations |
+| `Zkc::Relation` | `Relation/` | Pure R1CS/AIR data, normalization, evaluation and matrices |
+| `Zkc::Language` | `Language/` | Immutable `.zkc`/Asset capture, syntax, checking and Entry closure |
+| `Zkc::Program` | `Program/` | Shared participant records, native local-definition view, bounded codec and admission |
+| `Zkc::IR` | `Dialect/`, `Interfaces/` | Dialects, mandatory profile verification, type adapters and interfaces |
+| `Zkc::Translation` | `Translation/` | Language-to-math emission/comparison, relation ingress and checked program export |
+| `Zkc::Transforms` | `Transforms/`, `Target/` | Mathematical preparation/projection, local expansion, polynomial lowering and physical selection |
+| `Zkc::Compiler` | `Compiler/` | Owned compilations, run/proof packaging, public-coin/polynomial checks and pass registration |
+| `Zkc::Driver` | `Driver/` | CLI parsing and input loading |
 
-Language and Program compile and link as independent MLIR-free clients of
-Contracts. CMake package discovery still requires the selected LLVM/MLIR
-installation, including when requesting only these components. Language
-also depends on Relation. IR depends on Program and Relation; Transforms depends
-on IR; Translation depends on IR and Language; NativeCompiler depends on
-Transforms and Translation. No old `Protocol`, `Frontend`, `FrontendLoading`,
-`Claims`, `ClaimTranslation`, or `CompilerCore` component is installed.
+Header paths are relative to `zkc/`. C++ namespaces express semantic subjects;
+`zkc::protocol` spans several components and does not identify a link dependency.
+The `Tools` package component imports `Zkc::zkc-compile`, `Zkc::zkc-opt` and
+`Zkc::zkc-tblgen`; it has no `Zkc::Tools` library target.
+
+Support, Contracts, Relation, Language and Program discover, compile and link
+with LLVM alone. Language depends on Contracts and Relation; Program depends on
+Contracts. IR adds MLIR and depends on Program and Relation. Transforms depends
+on IR; Translation depends on IR and Language; Compiler depends on Transforms
+and Translation; Driver depends on Compiler. Compiler does not link CLI Driver.
+Tools imports Driver's dependency closure. There is no `NativeCompiler` component
+or Compiler interface aggregate. Retired `Protocol`, `Frontend`, `FrontendLoading`,
+`Claims`, `ClaimTranslation`, and `CompilerCore` components are not installed.
+
+### Installed package discovery
+
+Request the components the consumer uses. For an LLVM-only program client:
+
+```cmake
+find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS Program)
+add_executable(client main.cpp)
+target_link_libraries(client PRIVATE Zkc::Program)
+```
+
+This works with `CMAKE_DISABLE_FIND_PACKAGE_MLIR=TRUE`. A matching LLVM package
+is required: the exact LLVM version used to build the SDK is asserted even for
+LLVM-only requests. Native components additionally discover MLIR and installed
+contribution dependencies. The SDK retains these external installations rather
+than bundling them. Static and shared libraries use the same component contract;
+install into a fresh prefix and relocate the entire prefix together.
+
+Component names are case-sensitive. Unknown required components make discovery
+fail; optional unknown components report `ZkcCompiler_<component>_FOUND=FALSE`.
+Known optional native components also report false when MLIR or a contribution
+dependency is unavailable, while required LLVM-only components remain usable.
+Missing dependencies or incompatible LLVM/MLIR versions make the affected
+components unavailable. Required components make the package not found; `REQUIRED`
+package requests fail configuration. An explicit `LLVM_DIR` or `MLIR_DIR` is not
+silently replaced with another installation. Native discovery preserves upstream
+LLVM/MLIR build variables, including `MLIR_CMAKE_DIR` and `MLIR_TABLEGEN_EXE`, for
+external dialect consumers. Damaged installations remain errors.
+Without a component list, discovery requires `Compiler` and
+`Tools`, importing the complete SDK. Repeated requests can add components in the
+same CMake directory; they preserve existing imported targets and include paths.
+Requests cannot mix targets from different SDK installations or replace known
+components with caller-created targets. Consumers invoking installed generators
+explicitly request `Tools`.
+
+`OperationContracts` is a facet aggregate: initialize its fields directly when
+constructing records. Its former convenience factories are removed. Aggregate
+construction does not install an operation or validate its semantics; installed
+queries and contribution admission retain those responsibilities.
 
 `Program/Model.h` contains `zkc::program` records. `LocalDefinitions` is an internal
 structural view used to check mathematical local callables, with `LocalApply`

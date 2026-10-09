@@ -352,6 +352,37 @@ entry Demo=Run;)zkc");
     bytes.insert(1, "\"entr\\u0079\":\"sample::Demo\",");
     refuses(readInterface(original, bytes), "source.interface");
   });
+  for (StringRef token :
+       {"0.0", "0e0", "0E+0", "-0", "+0", "00", "0x0", "NaN"}) {
+    for (StringRef field : {"index", "offset", "native"}) {
+      cases.run(
+          "external " + field + " rejects numeric spelling " + token, [&] {
+            auto bytes = zkc::printJson(document());
+            std::string before = "\"" + field.str() + "\":";
+            if (field == "native")
+              before += '[';
+            before += '0';
+            auto at = bytes.find(before);
+            require(at != std::string::npos, "missing numeric test field");
+            bytes.replace(at + before.size() - 1, 1, token.str());
+            refuses(readInterface(original, bytes), "source.interface");
+          });
+    }
+  }
+  cases.run("canonical numbers escaped keys and boolean values stay accepted",
+            [] {
+              auto bytes = zkc::printJson(document());
+              auto at = bytes.find("\"index\"");
+              require(at != std::string::npos, "missing index test field");
+              bytes.replace(at, 7, "\"\\u0069ndex\"");
+              take(readInterface(original, bytes));
+            });
+  cases.run("scalar spelling limit precedes numeric spelling refusal", [] {
+    for (StringRef token :
+         {"12345678901", "00000000000", "0.000000000", "+1234567890"})
+      refuses(readInterface(original, "{\"index\":" + token.str() + "}"),
+              "source.limit");
+  });
   cases.run("multiple malformed fields return a refusal without aborting", [] {
     mutate([](auto &v) {
       auto &o = *v.getAsObject();

@@ -34,7 +34,7 @@ graphs.
 
 | Owner | Responsibility |
 |---|---|
-| `ZkcNativeCompiler` | Admit/capture source and policy; compose projection, construction checking, lowering and deployment assembly |
+| `ZkcCompiler` | Admit/capture source and policy; compose projection, construction checking, lowering and deployment assembly |
 | Protocol transforms | Rewrite selected queries/deliveries and thread generated role-local transcript calls; retain source origins and actual operand maps |
 | `protocol`, `local`, `crypto` | Existing roles/messages/services, ordered local programs/capabilities, and bound transcript kernels |
 | Shared compiler pipeline | `compileRun` and `compileNativeProof` share physical participant compilation |
@@ -110,10 +110,10 @@ operations or unrealized casts cannot slip through a partial conversion.
 
 ## Policy and formats
 
-`zkc.native-proof-policy/4` is the sole proof policy for flat programs, bounded
+`zkc.native-proof-policy/5` is the sole proof policy for flat programs, bounded
 loops, PCS, structured messages and authored execution. Deployment, descriptor,
-construction metadata and invocation binding also use `/4`. Every proof embeds
-`zkc.program/1`; joint execution uses `zkc.run/1`. This is one proof contract
+construction metadata and invocation binding also use `/5`. Every proof embeds
+`zkc.program/2`; joint execution uses `zkc.run/1`. This is one proof contract
 within the four IR profiles. Other proof versions have no compatibility reader.
 
 Generated transcripts use `transcript.native.indexed.challenge` and
@@ -258,8 +258,8 @@ absolute paths. With a mathematical source, policy and invocation inputs:
 
 ```sh
 zkc-compile protocol-proof protocol.mlir policy.json > deployment.json
-zkc produce-native-proof deployment.json TRUSTED_SHA256 producer.json proof.bin
-zkc validate-native-proof deployment.json TRUSTED_SHA256 validator.json proof.bin
+zkc prove-bundle deployment.json TRUSTED_SHA256 producer.json proof.bin
+zkc verify-bundle deployment.json TRUSTED_SHA256 validator.json proof.bin
 ```
 
 Obtain `TRUSTED_SHA256` from trusted compilation or deployment configuration.
@@ -284,8 +284,11 @@ in [Thaler's text](https://people.cs.georgetown.edu/jthaler/ProofsArgsAndZK.pdf)
 Repeated openings use ordinary immutable state; no second affine lifecycle is
 needed. The installed PCS requires positive arity and is nonhiding.
 
-`NativeDeployment::admit` in `zkc_tools::proof` takes independent
-deployment and setup authority. The Host imports canonical, fingerprint-checked
+`NativeDeployment::admit` in `zkc_tools::proof` takes an independently trusted
+32-byte deployment SHA-256 and setup authority. CLI adapters parse the digest's
+hex spelling; the typed API receives the bytes. Both proof CLI layers require
+`--allow-header-only` for authored deployments without a derived transcript. The
+Host imports canonical, fingerprint-checked
 public keys before PCS decoding and binds their full bytes in the invocation
 root. Prover material has a separate full-material pin. Each setup-bearing input
 has an authorized key association; peer metadata may select only a registry key.

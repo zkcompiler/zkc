@@ -39,7 +39,7 @@ repetition, vector kernels and an actual terminal evaluation.
 .zkc Language → mathematical MLIR
                  protocol → participant → exec → physical
                                                        ↓
-                                                 zkc.program/1
+                                                 zkc.program/2
                                                        ↓
                                      shared Rust Runner + installed kernels
                                         Entry / proof / joint Hosts

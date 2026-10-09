@@ -6,9 +6,8 @@ use zkc_runtime::interactive::{Runner, admit_supplied};
 fn fresh(role: &str) -> Runner<NativeBackend> {
     let boolean = "bool@native.bool/1";
     let bytes = serde_json::to_vec(&json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [],
-        "physical",
         [],
         [
             [
@@ -16,7 +15,6 @@ fn fresh(role: &str) -> Runner<NativeBackend> {
                 "p",
                 "root",
                 "P",
-                [],
                 [["x", boolean]],
                 [],
                 [["send", "message", "s", "V", "x"], ["return", []]],
@@ -27,7 +25,6 @@ fn fresh(role: &str) -> Runner<NativeBackend> {
                 "v",
                 "root",
                 "V",
-                [],
                 [],
                 [boolean],
                 [

@@ -8,9 +8,8 @@ fn fixture(logical: &str) -> (Vec<u8>, Json) {
         .unwrap()
         .spelling();
     let carrier = json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [],
-        "physical",
         [],
         [
             [
@@ -18,7 +17,6 @@ fn fixture(logical: &str) -> (Vec<u8>, Json) {
                 "a",
                 "root",
                 "Alice",
-                [],
                 [["x", ty]],
                 [ty],
                 [["return", ["x"]]],
@@ -29,7 +27,6 @@ fn fixture(logical: &str) -> (Vec<u8>, Json) {
                 "b",
                 "root",
                 "Bob",
-                [],
                 [["x", ty]],
                 [ty],
                 [["return", ["x"]]],
@@ -273,8 +270,8 @@ fn partial_managed_service_issuance_retires_unleased_roots() {
     let (raw, _) = fixture("bool");
     let mut outer: Json = serde_json::from_slice(&raw).unwrap();
     let mut candidate: Json = serde_json::from_str(outer["candidate"].as_str().unwrap()).unwrap();
-    for role in candidate[4].as_array_mut().unwrap() {
-        role[8] = json!([["coins", "random.bls12-381.fr/1", "0"]]);
+    for role in candidate[3].as_array_mut().unwrap() {
+        role[7] = json!([["coins", "random.bls12-381.fr/1", "0"]]);
     }
     outer["candidate"] = json!(candidate.to_string());
     let raw = outer.to_string();
@@ -306,14 +303,13 @@ fn partial_managed_service_issuance_retires_unleased_roots() {
 fn returned_unit_is_result_custody_not_a_cleanup_failure() {
     let ty = "resource_unit:Slot.A@logical.resource_unit/1";
     let candidate = json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [[
             "create",
             "resource_unit.create",
             ["Slot.A"],
             "logical/resource_unit.create"
         ]],
-        "physical",
         [[
             "function",
             "make",
@@ -327,7 +323,6 @@ fn returned_unit_is_result_custody_not_a_cleanup_failure() {
             "a",
             "root",
             "Alice",
-            [],
             [],
             [ty],
             [["local", "make", "make", [], ["u"]], ["return", ["u"]]],
@@ -344,7 +339,7 @@ fn returned_unit_is_result_custody_not_a_cleanup_failure() {
         ];
         let mut inputs = vec![json!(["Alice", [], []])];
         if stop_peer {
-            candidate[3].as_array_mut().unwrap().push(json!([
+            candidate[2].as_array_mut().unwrap().push(json!([
                 "function",
                 "reject",
                 [],
@@ -352,18 +347,17 @@ fn returned_unit_is_result_custody_not_a_cleanup_failure() {
                 [["stop", "stop", "reject"]],
                 ["reject", []]
             ]));
-            candidate[4].as_array_mut().unwrap().push(json!([
+            candidate[3].as_array_mut().unwrap().push(json!([
                 "participant",
                 "b",
                 "root",
                 "Bob",
                 [],
                 [],
-                [],
                 [["local", "reject", "reject", [], []], ["return", []]],
                 []
             ]));
-            candidate[5][0][2]
+            candidate[4][0][2]
                 .as_array_mut()
                 .unwrap()
                 .push(json!(["Bob", "b"]));
@@ -456,7 +450,7 @@ fn external_work_is_bounded_and_reported_by_the_installed_host() {
         .unwrap()
         .spelling();
     let candidate = json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [
             [
                 "init",
@@ -471,7 +465,6 @@ fn external_work_is_bounded_and_reported_by_the_installed_host() {
                 "native/external.openvm.sample"
             ]
         ],
-        "physical",
         [[
             "function",
             "draw",
@@ -489,7 +482,6 @@ fn external_work_is_bounded_and_reported_by_the_installed_host() {
             "a",
             "root",
             "Alice",
-            [],
             [],
             [indices, index],
             [
@@ -540,8 +532,8 @@ fn capability_reports_use_input_positions_with_interleaved_data() {
     let (raw, mut input) = fixture("rng:bls12-381.fr");
     let mut bundle: Json = serde_json::from_slice(&raw).unwrap();
     let mut candidate: Json = serde_json::from_str(bundle["candidate"].as_str().unwrap()).unwrap();
-    for role in candidate[4].as_array_mut().unwrap() {
-        role[5]
+    for role in candidate[3].as_array_mut().unwrap() {
+        role[4]
             .as_array_mut()
             .unwrap()
             .insert(0, json!(["unused", "bool@native.bool/1"]));
@@ -602,3 +594,80 @@ fn native_construction_failure_keeps_load_usage_and_retires_all_roles() {
 }
 
 mod typed;
+
+#[test]
+fn result_and_input_preparation_share_keys_but_recheck_authority_and_loading_quota() {
+    let limits = HostLimits::default();
+    let bounds = limits.capacity.backend().ark_bounds();
+    let keys = zkc_arkworks::Keys::setup_for_development(1, &bounds).unwrap();
+    let bytes = keys.verifier_key().to_bytes(&bounds).unwrap();
+    let pin = keys.verifier_key().metadata().key_id();
+    let authority = SetupAuthority {
+        keys: [("setup".into(), pin)].into(),
+        inputs: [
+            (("Alice".into(), 0), "setup".into()),
+            (("Bob".into(), 0), "setup".into()),
+        ]
+        .into(),
+    };
+    let material = [("setup".into(), bytes.clone())].into();
+    let mut imports = crate::host::setups::VerifierKeys::new(bounds);
+    let registry = crate::entry::files::output_setups_with(
+        &material,
+        &crate::entry::SetupAuthority {
+            keys: authority.keys.clone(),
+        },
+        limits.capacity,
+        &mut imports,
+    )
+    .unwrap();
+    assert!(registry.get(keys.verifier_key().metadata()).is_some());
+    let shared = imports.import(&bytes, pin, "canonical").unwrap();
+    let (raw, _) = fixture("verifier_key:multilinear.kzg.bls12-381/1");
+    let request = RunInputs {
+        session: "setup_reuse".into(),
+        roles: ["Alice", "Bob"]
+            .into_iter()
+            .map(|role| RoleInputs {
+                role: role.into(),
+                inputs: vec![InputValue::VerifierKey],
+                services: vec![],
+            })
+            .collect(),
+        setups: material,
+    };
+    let admitted = RunHost::admit(
+        &raw,
+        &Sha256::digest(&raw).into(),
+        limits,
+        authority.clone(),
+    )
+    .unwrap();
+    let plan = admitted.prepare_with(&request, &mut imports).unwrap();
+    assert!(!plan.loaded.is_empty());
+    for value in &plan.loaded {
+        let Value::VerifierKey(key) = value else {
+            panic!("expected prepared verifier key")
+        };
+        assert!(Arc::ptr_eq(key, &shared));
+    }
+    drop(plan);
+    let mut tight = limits;
+    tight.capacity.values.total_bytes = 0;
+    let limited =
+        RunHost::admit(&raw, &Sha256::digest(&raw).into(), tight, authority.clone()).unwrap();
+    assert_eq!(
+        limited.prepare_with(&request, &mut imports).err().unwrap(),
+        "artifact-input-work-limit"
+    );
+    let mut wrong = authority;
+    wrong.keys.get_mut("setup").unwrap()[0] ^= 1;
+    let unauthorized = RunHost::admit(&raw, &Sha256::digest(&raw).into(), limits, wrong).unwrap();
+    assert_eq!(
+        unauthorized
+            .prepare_with(&request, &mut imports)
+            .err()
+            .unwrap(),
+        "key-mismatch"
+    );
+}

@@ -239,29 +239,23 @@ class Decoder {
   Participants participants(const V &v) {
     Participants out;
 
-    const auto *r = array(v, 6);
+    const auto *r = array(v, 5);
     if (!r)
       return out;
-    std::string stage = string((*r)[2]);
-    if (stage != "logical" && stage != "physical")
-      fail("interactive-stage");
     out.stage = Participants::Stage::Physical;
-    if (stage != "physical")
-      fail("native-physical-required");
     environment(*r, out);
-    out.functions = list((*r)[3], [&](const V &x) { return function(x); });
-    out.participants = list((*r)[4], [&](const V &x) {
+    out.functions = list((*r)[2], [&](const V &x) { return function(x); });
+    out.participants = list((*r)[3], [&](const V &x) {
       Participant p;
 
-      if (const auto *r = record(x, "participant", 9)) {
+      if (const auto *r = record(x, "participant", 8)) {
         p.name = string((*r)[1]);
         p.instance = string((*r)[2]);
         p.role = string((*r)[3]);
-        array((*r)[4], 0);
-        p.arguments = this->parameters((*r)[5]);
-        p.results = names((*r)[6]);
-        p.body = body((*r)[7]);
-        p.services = list((*r)[8], [&](const V &v) {
+        p.arguments = this->parameters((*r)[4]);
+        p.results = names((*r)[5]);
+        p.body = body((*r)[6]);
+        p.services = list((*r)[7], [&](const V &v) {
           ServicePort port;
           if (const auto *row = array(v, 3)) {
             port.name = string((*row)[0]);
@@ -276,7 +270,7 @@ class Decoder {
       }
       return p;
     });
-    out.entries = list((*r)[5], [&](const V &x) {
+    out.entries = list((*r)[4], [&](const V &x) {
       ParticipantEntry e;
 
       if (const auto *r = record(x, "entry", 3)) {
@@ -294,7 +288,7 @@ public:
     if (!r || r->empty())
       return error("interactive-shape");
     auto tag = string((*r)[0]);
-    if (tag != "zkc.program/1")
+    if (tag != "zkc.program/2")
       return error("interactive-format");
     auto result = participants(v);
     if (!problem.empty())

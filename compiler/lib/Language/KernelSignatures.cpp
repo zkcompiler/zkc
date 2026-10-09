@@ -17,8 +17,7 @@ Semantics::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
     fail("source.kernel", "operation is not source authorable", span);
     return {};
   }
-  if (protocol::operationEffect(contract) != "local" ||
-      protocol::isHistoryTransition(contract) ||
+  if (protocol::isHistoryTransition(contract) ||
       protocol::samplingContract(contract)) {
     fail("source.kernel", "operation requires a managed effect interface",
          span);

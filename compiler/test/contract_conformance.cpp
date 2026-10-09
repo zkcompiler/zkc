@@ -1,6 +1,8 @@
 // Bounded observation of the actual Contracts APIs. No signature replicas.
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Implementations.h"
+#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "llvm/Support/JSON.h"
@@ -62,7 +64,8 @@ std::optional<size_t> envelope(StringRef line) {
   return quoted || depth ? std::nullopt : std::optional<size_t>(fields);
 }
 
-json::Object respond(StringRef line, Resolver resolve) {
+json::Object respond(StringRef line, Resolver resolve, bool attributeDrift,
+                     bool shareDrift) {
   auto fields = envelope(line);
   if (!fields)
     return refused();
@@ -93,6 +96,23 @@ json::Object respond(StringRef line, Resolver resolve) {
     }
     return json::Object{{"accepted", true}, {"canonical", type->spelling()}};
   }
+  if (request->size() == 1 && request->getString("native_policy")) {
+    auto type = parseBoundType(*request->getString("native_policy"), false);
+    if (!type) {
+      consumeError(type.takeError());
+      return refused();
+    }
+    auto policy = nativeTypePolicy(*type);
+    if (!policy)
+      return refused();
+    if (shareDrift && type->spelling() == "field:koala-bear")
+      policy->shared = !policy->shared;
+    return json::Object{{"accepted", true},
+                        {"share", policy->shared},
+                        {"affine", policy->affine},
+                        {"copy", duplicable(*type)},
+                        {"drop", discardable(*type)}};
+  }
   if (request->size() == 1) {
     auto text = request->getString("type");
     if (!text)
@@ -117,7 +137,9 @@ json::Object respond(StringRef line, Resolver resolve) {
   }
   const bool facetQuery =
       request->size() == 2 && request->getString("facets").has_value();
-  if (!facetQuery && request->size() != 4)
+  const bool attributeQuery =
+      request->size() == 5 && request->getArray("attributes");
+  if (!facetQuery && !attributeQuery && request->size() != 4)
     return refused();
   auto contract = request->getString(facetQuery ? "facets" : "contract");
   auto implementation = facetQuery ? std::optional<StringRef>("")
@@ -139,6 +161,24 @@ json::Object respond(StringRef line, Resolver resolve) {
   if (!signature) {
     consumeError(signature.takeError());
     return refused();
+  }
+  if (attributeQuery) {
+    std::vector<std::string> attributes;
+    for (const auto &attribute : *request->getArray("attributes")) {
+      auto value = attribute.getAsString();
+      if (!value)
+        return refused();
+      attributes.push_back(value->str());
+    }
+    // Deliberately perturb the value supplied to the real validator. No local
+    // attribute rule or expected outcome is substituted in this driver.
+    if (attributeDrift && binding.contract == "field.add")
+      attributes.push_back("0");
+    if (auto error = checkParameters(binding, attributes))
+      return json::Object{{"accepted", true},
+                          {"admitted", false},
+                          {"error", toString(std::move(error))}};
+    return json::Object{{"accepted", true}, {"admitted", true}};
   }
   if (facetQuery) {
     const auto *facets = operationContracts(binding.contract);
@@ -172,16 +212,25 @@ json::Object respond(StringRef line, Resolver resolve) {
 
 int main(int argc, char **argv) {
   Resolver resolve = resolveBinding;
+  bool attributeDrift = false, shareDrift = false;
   if (argc == 2 && StringRef(argv[1]) == "--divergent-logical-field-add")
     resolve = divergentLogicalResolver;
+  else if (argc == 2 &&
+           StringRef(argv[1]) == "--divergent-field-add-attributes")
+    attributeDrift = true;
+  else if (argc == 2 && StringRef(argv[1]) == "--divergent-field-share")
+    shareDrift = true;
   else if (argc != 1) {
-    errs() << "usage: contract-conformance [--divergent-logical-field-add]\n";
+    errs() << "usage: contract-conformance [--divergent-logical-field-add | "
+              "--divergent-field-add-attributes | --divergent-field-share]\n";
     return 2;
   }
   std::string line;
   bool oversized = false;
   auto emit = [&] {
-    outs() << json::Value(oversized ? refused() : respond(line, resolve))
+    outs() << json::Value(oversized ? refused()
+                                    : respond(line, resolve, attributeDrift,
+                                              shareDrift))
            << '\n';
     outs().flush();
     line.clear();

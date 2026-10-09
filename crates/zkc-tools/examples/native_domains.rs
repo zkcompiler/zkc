@@ -81,7 +81,7 @@ fn main() {
         let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
         let deployment =
-            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
                 .unwrap();
         check_suite_mutations(&envelope);
         for size in [0u64, 1, 7, 127] {
@@ -284,7 +284,7 @@ fn check_suite_mutations(envelope: &Json) {
     )));
     let bytes = serde_json::to_vec(&changed).unwrap();
     assert_eq!(
-        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+        NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
             .unwrap_err(),
         "native-proof-query-origin"
     );
@@ -293,7 +293,7 @@ fn check_suite_mutations(envelope: &Json) {
         old[0] = json!(format!("zkc.native-proof/{version}"));
         let bytes = serde_json::to_vec(&old).unwrap();
         assert_eq!(
-            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
                 .unwrap_err(),
             "native-proof-format"
         );

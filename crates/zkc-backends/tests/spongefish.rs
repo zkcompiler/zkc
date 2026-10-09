@@ -271,7 +271,7 @@ fn stale_handle_and_malformed_origin_do_not_create_a_successor() {
     assert!(Runner::new(&admitted, "main", "P", "session", b, vec![old]).is_err());
     let b = backend(Policy::default());
     let mut malformed: Json = serde_json::from_slice(&p).unwrap();
-    malformed[3][0][4][1][3] = json!(["Source", "site", "Schema", "P", "bad/frame"]);
+    malformed[2][0][4][1][3] = json!(["Source", "site", "Schema", "P", "bad/frame"]);
     assert!(admit_supplied(&serde_json::to_vec(&malformed).unwrap(), &b).is_err());
 }
 #[test]

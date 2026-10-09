@@ -143,11 +143,11 @@ fn exact_merlin_runner_match_and_session_role_invariance() {
             .unwrap();
         let old = tok.clone();
         let mut j: Json = serde_json::from_slice(&program1()).unwrap();
-        j[4][0][3] = json!(role);
-        j[5][0][2][0][0] = json!(role);
+        j[3][0][3] = json!(role);
+        j[4][0][2][0][0] = json!(role);
         // Generated names have no authority over the source challenge attrs.
-        j[3][0][1] = json!("generated_helper");
-        j[4][0][7][0][2] = json!("generated_helper");
+        j[2][0][1] = json!("generated_helper");
+        j[3][0][6][0][2] = json!("generated_helper");
         let admitted = admit_supplied(&serde_json::to_vec(&j).unwrap(), &backend).unwrap();
         let runner = Runner::new(&admitted, "main", role, session, backend, vec![tok, f(7)])
             .unwrap_or_else(|e| panic!("{}", e.error));
@@ -197,7 +197,7 @@ fn binding_value_origin_order_reset_and_budget_controls() {
             0 => root = tree(&json!(["other-root"])),
             1 => value = 8,
             2..=6 => {
-                let attrs = j[3][0][4][2][3][0].as_str().unwrap();
+                let attrs = j[2][0][4][2][3][0].as_str().unwrap();
                 let mut template = logical::decode_tree(&zkc_test_support::unhex(attrs)).unwrap();
                 let slot = [1, 2, 3, 4, 6][mutation - 2];
                 template[4][slot] = json!(match slot {
@@ -205,12 +205,12 @@ fn binding_value_origin_order_reset_and_budget_controls() {
                     4 => "random.ristretto255.scalar/1",
                     _ => "different",
                 });
-                j[3][0][4][2][3][0] = json!(zkc_test_support::hex(&tree(&template)));
+                j[2][0][4][2][3][0] = json!(zkc_test_support::hex(&tree(&template)));
             }
             7 => {
-                j[3][0][4][1] = challenge("t", "c", "t1");
-                j[3][0][4][2] = observe("after", "t1", "t2");
-                j[3][0][4][2][2] = json!(format!(
+                j[2][0][4][1] = challenge("t", "c", "t1");
+                j[2][0][4][2] = observe("after", "t1", "t2");
+                j[2][0][4][2][2] = json!(format!(
                     "observe_{}",
                     zkc_test_support::hex(b"field:bls12-381.fr")
                 ));
@@ -253,11 +253,11 @@ fn binding_value_origin_order_reset_and_budget_controls() {
 }
 fn nested() -> Vec<u8> {
     let mut j: Json = serde_json::from_slice(&program1()).unwrap();
-    j[4][0][5]
+    j[3][0][4]
         .as_array_mut()
         .unwrap()
         .push(json!(["n", "index@native.index/1"]));
-    j[3][0][2]
+    j[2][0][2]
         .as_array_mut()
         .unwrap()
         .push(json!(["iteration", "index@native.index/1"]));
@@ -267,8 +267,8 @@ fn nested() -> Vec<u8> {
         [],
         "native/indices.append"
     ]));
-    j[3][0][4][0][5] = json!(["empty_coordinates"]);
-    j[3][0][4].as_array_mut().unwrap().insert(
+    j[2][0][4][0][5] = json!(["empty_coordinates"]);
+    j[2][0][4].as_array_mut().unwrap().insert(
         1,
         json!([
             "op",
@@ -281,13 +281,13 @@ fn nested() -> Vec<u8> {
     );
     for index in [2, 3] {
         let mut template = logical::decode_tree(&zkc_test_support::unhex(
-            j[3][0][4][index][3][0].as_str().unwrap(),
+            j[2][0][4][index][3][0].as_str().unwrap(),
         ))
         .unwrap();
         template[2] = json!([["repeat", "Source", "rounds"]]);
-        j[3][0][4][index][3][0] = json!(zkc_test_support::hex(&tree(&template)));
+        j[2][0][4][index][3][0] = json!(zkc_test_support::hex(&tree(&template)));
     }
-    j[4][0][7] = json!([
+    j[3][0][6] = json!([
         [
             "loop",
             "rounds",
@@ -397,7 +397,7 @@ fn original_rng_remains_separate_and_transcript_is_affine() {
     out.unwrap();
     assert_eq!(backend.observe(token(&rng)).unwrap(), before);
     let mut j: Json = serde_json::from_slice(&program1()).unwrap();
-    j[3][0][4][2] = challenge("t", "c", "t2");
+    j[2][0][4][2] = challenge("t", "c", "t2");
     assert_eq!(
         admit_supplied(&serde_json::to_vec(&j).unwrap(), &backend)
             .unwrap_err()
@@ -405,7 +405,7 @@ fn original_rng_remains_separate_and_transcript_is_affine() {
         ErrorCode::Ssa
     );
     let mut j: Json = serde_json::from_slice(&program1()).unwrap();
-    j[3][0][4][1][3] = json!(["Source"]);
+    j[2][0][4][1][3] = json!(["Source"]);
     assert_eq!(
         admit_supplied(&serde_json::to_vec(&j).unwrap(), &backend)
             .unwrap_err()
@@ -709,10 +709,10 @@ fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
         for (index, bytes) in [(1, &message), (2, &query)] {
             let mut template = logical::decode_tree(bytes).unwrap();
             template[0] = json!("zkc.native-origin-template/1");
-            program[3][0][4][index][3] = json!([hex(&tree(&template))]);
+            program[2][0][4][index][3] = json!([hex(&tree(&template))]);
         }
-        program[4][0][3] = json!(role);
-        program[5][0][2][0][0] = json!(role);
+        program[3][0][3] = json!(role);
+        program[4][0][2][0][0] = json!(role);
         let admitted = admit_supplied(&serde_json::to_vec(&program).unwrap(), &backend).unwrap();
         let runner = Runner::new(
             &admitted,

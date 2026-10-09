@@ -264,7 +264,7 @@ for suite, identity in enumerate(('merlin3.bls12-381.fr64be/1',
             for released in (0, 1):
                 flags = ([] if simplified else ['--no-simplify']) + (['--release-storage'] if released else [])
                 deployment = commands.run([compiler, 'language-bundle', *args, *flags])
-                assert json.loads(deployment)[0] == 'zkc.native-proof/4'
+                assert json.loads(deployment)[0] == 'zkc.native-proof/5'
                 (OUT / f'source-proof-{suite}-{simplified}-{released}.json').write_text(deployment)
                 package = commands.run([compiler, 'language-package', *args, *flags])
                 assert json.loads(package)['artifact'] == deployment.removesuffix('\n')

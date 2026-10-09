@@ -84,13 +84,13 @@ pub fn check(
         .unwrap();
         let mut changed = envelope.clone();
         let mut candidate: Json = serde_json::from_str(envelope[4].as_str().unwrap()).unwrap();
-        let producer = candidate[4]
+        let producer = candidate[3]
             .as_array_mut()
             .unwrap()
             .iter_mut()
             .find(|p| p[3] == "P")
             .unwrap();
-        let inputs = producer[5].as_array_mut().unwrap();
+        let inputs = producer[4].as_array_mut().unwrap();
         inputs.insert(
             inputs.len() - usize::from(!authored),
             json!(["unloadable", ty.spelling()]),
@@ -112,17 +112,25 @@ pub fn check(
         let bytes = serde_json::to_vec(&changed).unwrap();
         if logical == nested {
             assert_eq!(
-                NativeDeployment::admit(&bytes, &digest(&bytes), authority(keys, authored))
-                    .unwrap_err(),
+                NativeDeployment::admit(
+                    &bytes,
+                    &Sha256::digest(&bytes).into(),
+                    authority(keys, authored)
+                )
+                .unwrap_err(),
                 "native-proof-key-authority"
             );
             let mut authorized = authority(keys, authored);
             authorized.inputs.insert(9, if authored { 2 } else { 6 });
-            NativeDeployment::admit(&bytes, &digest(&bytes), authorized).unwrap();
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), authorized).unwrap();
         } else {
             assert_eq!(
-                NativeDeployment::admit(&bytes, &digest(&bytes), authority(keys, authored))
-                    .unwrap_err(),
+                NativeDeployment::admit(
+                    &bytes,
+                    &Sha256::digest(&bytes).into(),
+                    authority(keys, authored)
+                )
+                .unwrap_err(),
                 "native-proof-role-input-type"
             );
         }

@@ -42,7 +42,6 @@ pub trait Value: Clone {
     fn from_control_index(_index: u64) -> Result<Self, BackendError> {
         Err(BackendError::new("local-control-index"))
     }
-    fn type_name(&self) -> &str;
     /// Intrinsic full type, derived from the admitted payload representation.
     fn physical_type(&self) -> PhysicalType;
     /// Validate the complete public representation, including nested contents.
@@ -144,7 +143,7 @@ impl Invocation<'_> {
     pub fn domain_bytes(&self) -> Vec<u8> {
         let binding = self.binding.declaration();
         serde_json::to_vec(&serde_json::json!([
-            "zkc.local-domain/2",
+            "zkc.local-domain/3",
             self.frame.origin.json(),
             self.frame.role,
             match &self.frame.kind {
@@ -157,8 +156,7 @@ impl Invocation<'_> {
             ],
             self.site,
             [binding.contract, serde_json::json!(binding.arguments)],
-            self.attributes,
-            []
+            self.attributes
         ]))
         .expect("string/array domain serialization cannot fail")
     }
@@ -198,13 +196,17 @@ pub trait Backend {
     fn supports_boolean_literals(&self) -> bool {
         false
     }
-    /// Installed method signature and conservative retained reply bytes.
+    /// Independently installed method shape and aggregate retained reply bound.
+    /// Author these from the implementation's actual supported values; echoing
+    /// ServiceContract::signature does not provide independent installation facts.
+    /// Keep them stable throughout admission and execution. Runtime checks both
+    /// the declaration and actual replies; service-root authority is separate.
     /// The default refuses native service admission.
-    fn service_signature(
+    fn service_support(
         &self,
         _contract: super::ServiceContract,
         _method: &str,
-    ) -> Option<(super::ServiceSignature, usize)> {
+    ) -> Option<super::ServiceSupport> {
         None
     }
     fn query(
@@ -316,7 +318,7 @@ mod domain_tests {
         .unwrap();
         let origin = LogicalOrigin {
             definition: "Add".into(),
-            arguments: vec![],
+            arguments: vec![("F".into(), "bls12-381.fr".into())],
         };
         let frame = frame("add");
         let bytes = Invocation {
@@ -329,17 +331,7 @@ mod domain_tests {
             max_output_bytes: 1,
         }
         .domain_bytes();
-        let expected = serde_json::json!([
-            "zkc.local-domain/2",
-            ["zkc.origin/2", "s", "main", "root", []],
-            "P",
-            "round",
-            ["Add", []],
-            "op",
-            ["field.add", ["bls12-381.fr"]],
-            [],
-            []
-        ]);
-        assert_eq!(bytes, serde_json::to_vec(&expected).unwrap());
+        let expected = br#"["zkc.local-domain/3",["zkc.origin/2","s","main","root",[]],"P","round",["Add",[["F","bls12-381.fr"]]],"op",["field.add",["bls12-381.fr"]],[]]"#;
+        assert_eq!(bytes, expected);
     }
 }

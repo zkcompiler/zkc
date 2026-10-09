@@ -1,6 +1,6 @@
 # Runtime and Hosts
 
-The Rust Runner executes `zkc.program/1` using installed kernels. Hosts add the
+The Rust Runner executes `zkc.program/2` using installed kernels. Hosts add the
 application boundary: authenticate an artifact, prepare inputs and setup, manage
 resources and limits, then report or publish the result. Entry, proof and joint
 execution share this Runner.

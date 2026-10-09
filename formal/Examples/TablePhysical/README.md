@@ -59,7 +59,7 @@ The `lower` command retains the Lean-only `zkc-table-physical-reference` profile
 The same checker/evaluator also accepts the retained `zkc-table-physical-plan`
 tag. Its former MLIR producer and Rust executor have been retired. Both formats
 use the same typed body and theorem; the tag does not extend the theorem to
-compiled Rust or the current `zkc.program/1` carrier.
+compiled Rust or the current `zkc.program/2` carrier.
 
 For a candidate carrying that plan tag, `admit` and `run-admitted` also accept
 the installed `table-round/1` profile and source certificate. `admit-entry` and

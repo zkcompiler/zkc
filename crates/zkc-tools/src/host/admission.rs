@@ -9,7 +9,7 @@ use zkc_backends::{NativeBackend, Policy, Value};
 use zkc_runtime::interactive::{Limits, PhysicalType, Type, Value as RuntimeValue};
 
 /// Per-bind ceilings for retained input bytes, value/operand count and
-/// cumulative loading work. Each is clamped to the existing runtime hard limit.
+/// cumulative loading work. Requests above the Host's installed loading ceilings refuse.
 /// Work charges wire bytes and retained estimates, including cache hits.
 #[derive(Clone, Copy, Debug)]
 pub struct LoadLimits {
@@ -154,14 +154,12 @@ pub(crate) struct Admission<'a> {
     work: usize,
 }
 impl<'a> Admission<'a> {
-    pub fn new(limits: LoadLimits) -> Self {
+    pub fn new(limits: LoadLimits) -> Result<Self> {
         let hard = LoadLimits::default();
-        let limits = LoadLimits {
-            bytes: limits.bytes.min(hard.bytes),
-            values: limits.values.min(hard.values),
-            work: limits.work.min(hard.work),
-        };
-        Self {
+        if limits.bytes > hard.bytes || limits.values > hard.values || limits.work > hard.work {
+            return Err("artifact-input-limits".into());
+        }
+        Ok(Self {
             limits,
             inputs: Vec::new(),
             pool_bytes: 0,
@@ -169,7 +167,7 @@ impl<'a> Admission<'a> {
             entry_bytes: 0,
             operands: 0,
             work: 0,
-        }
+        })
     }
     pub fn work(&mut self, amount: usize) -> Result<()> {
         add(
@@ -375,7 +373,7 @@ mod tests {
             first.prover_key().to_bytes(&policy.ark_bounds()).unwrap(),
         )
         .unwrap();
-        let mut plan = Admission::new(LoadLimits::default());
+        let mut plan = Admission::new(LoadLimits::default()).unwrap();
         for verifier in [first.verifier_key(), other.verifier_key()] {
             plan.add(Input::Key {
                 path: path.to_str().unwrap(),
@@ -402,14 +400,10 @@ mod tests {
             add(&mut total, 1, usize::MAX, "overflow").unwrap_err(),
             "overflow"
         );
-        let mut plan = Admission::new(LoadLimits {
+        assert!(matches!(Admission::new(LoadLimits {
             bytes: usize::MAX,
             values: usize::MAX,
             work: usize::MAX,
-        });
-        assert_eq!(
-            plan.work(usize::MAX).unwrap_err(),
-            "artifact-input-work-limit"
-        );
+        }), Err(code) if code == "artifact-input-limits"));
     }
 }

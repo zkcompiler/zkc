@@ -3,7 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use zkc_backends::has_native_wire;
 use zkc_runtime::interactive::{Admitted, Backend, ProgramAction, ProgramRole, admit_supplied};
 
-/// Hard defaults may be lowered by a host, never raised by a bundle.
+/// Structural admission ceilings. Every count is independent; bytes measure UTF-8
+/// or carrier bytes, depth counts containers, and nodes include object keys.
+/// Defaults equal installed hard maxima; oversized requests refuse.
 #[derive(Clone, Copy, Debug)]
 pub struct BundleLimits {
     pub bytes: usize,
@@ -16,29 +18,32 @@ pub struct BundleLimits {
 }
 impl Default for BundleLimits {
     fn default() -> Self {
-        Self {
-            bytes: 16 * 1024 * 1024,
-            candidate_bytes: 1024 * 1024,
-            roles: 1024,
-            steps: 32768,
-            depth: 256,
-            nodes: 250_000,
-            string_bytes: 4096,
-        }
+        Self::HARD_MAX
     }
 }
 impl BundleLimits {
-    pub fn effective(self) -> Self {
-        let d = Self::default();
-        Self {
-            bytes: self.bytes.min(d.bytes),
-            candidate_bytes: self.candidate_bytes.min(d.candidate_bytes),
-            roles: self.roles.min(d.roles),
-            steps: self.steps.min(d.steps),
-            depth: self.depth.min(d.depth),
-            nodes: self.nodes.min(d.nodes),
-            string_bytes: self.string_bytes.min(d.string_bytes),
+    pub const HARD_MAX: Self = Self {
+        bytes: 16 * 1024 * 1024,
+        candidate_bytes: 1024 * 1024,
+        roles: 1024,
+        steps: 32768,
+        depth: 256,
+        nodes: 250_000,
+        string_bytes: 4096,
+    };
+    pub fn validate(&self) -> Result<(), BundleError> {
+        let hard = Self::HARD_MAX;
+        if self.bytes > hard.bytes
+            || self.candidate_bytes > hard.candidate_bytes
+            || self.roles > hard.roles
+            || self.steps > hard.steps
+            || self.depth > hard.depth
+            || self.nodes > hard.nodes
+            || self.string_bytes > hard.string_bytes
+        {
+            return Err(BundleError::Limit);
         }
+        Ok(())
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -95,7 +100,8 @@ impl Bundle {
         backend: &B,
         limits: BundleLimits,
     ) -> Result<Self, BundleError> {
-        if bytes.len() > limits.effective().bytes {
+        limits.validate()?;
+        if bytes.len() > limits.bytes {
             return Err(BundleError::Limit);
         }
         let actual: [u8; 32] = Sha256::digest(bytes).into();
@@ -111,7 +117,8 @@ impl Bundle {
         backend: &B,
         limits: BundleLimits,
     ) -> Result<Self, BundleError> {
-        let raw = super::decode::bundle(bytes, limits.effective())?;
+        limits.validate()?;
+        let raw = super::decode::bundle(bytes, limits)?;
         if raw.format != "zkc.run/1" {
             return Err(BundleError::Format);
         }

@@ -125,8 +125,9 @@ fn run(directory: &Path) {
             standalone(directory, name, kind, &envelope, &bytes);
             continue;
         }
-        let deployment = NativeDeployment::admit(&bytes, &digest(&bytes), Default::default())
-            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        let deployment =
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+                .unwrap_or_else(|e| panic!("{name}: {e}"));
         // Reverse challenge delivery is observed but absent from proof bytes.
         // Its descriptor origin and full payload type must still match the
         // actual helper; a row count or common observer name is insufficient.
@@ -147,8 +148,12 @@ fn run(directory: &Path) {
             }
             changed[3] = json!(digest(&reference::tree(&changed[2])));
             let encoded = serde_json::to_vec(&changed).unwrap();
-            let error = NativeDeployment::admit(&encoded, &digest(&encoded), Default::default())
-                .expect_err("changed descriptor admitted");
+            let error = NativeDeployment::admit(
+                &encoded,
+                &Sha256::digest(&encoded).into(),
+                Default::default(),
+            )
+            .expect_err("changed descriptor admitted");
             assert!(
                 error.contains(if missing {
                     "native-proof-message-map"
@@ -174,11 +179,16 @@ fn run(directory: &Path) {
         renamed[3] = json!(digest(&reference::tree(&renamed[2])));
         let changed = serde_json::to_vec(&renamed).unwrap();
         assert_eq!(
-            NativeDeployment::admit(&changed, &digest(&changed), Default::default()).unwrap_err(),
+            NativeDeployment::admit(
+                &changed,
+                &Sha256::digest(&changed).into(),
+                Default::default()
+            )
+            .unwrap_err(),
             "native-proof-wire-map"
         );
         let original: Json = serde_json::from_str(envelope[4].as_str().unwrap()).unwrap();
-        assert_eq!(original[0], "zkc.program/1");
+        assert_eq!(original[0], "zkc.program/2");
         for (tag, count) in [(0, 0), (1, 0), (1, 1), (1, 4), (2, 0), (2, 1), (2, 7)] {
             let p = inputs(&envelope, true, tag, count);
             let v = inputs(&envelope, false, tag, count);
@@ -345,7 +355,8 @@ fn verify_reference(envelope: &Json, input: &Json, proof: &[u8], tag: usize, cou
 }
 
 fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: &[u8]) {
-    let deployment = NativeDeployment::admit(bytes, &digest(bytes), Default::default()).unwrap();
+    let deployment =
+        NativeDeployment::admit(bytes, &Sha256::digest(bytes).into(), Default::default()).unwrap();
     let (value, tag, body) = match kind {
         "vector" => (
             Value::Vector(vec![Scalar::from(7)].into()),
@@ -428,7 +439,12 @@ fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: 
     changed[3] = json!(digest(&reference::tree(&changed[2])));
     let changed = serde_json::to_vec(&changed).unwrap();
     assert_eq!(
-        NativeDeployment::admit(&changed, &digest(&changed), Default::default()).unwrap_err(),
+        NativeDeployment::admit(
+            &changed,
+            &Sha256::digest(&changed).into(),
+            Default::default()
+        )
+        .unwrap_err(),
         "native-proof-format"
     );
     for (suffix, data) in [

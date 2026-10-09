@@ -1,6 +1,7 @@
 #include "zkc/Transforms/Mathematical.h"
 #include "MathematicalSupport.h"
 #include "MathematicalValues.h"
+#include "PreparedProtocol.h"
 #include "ProtocolApplications.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IRMapping.h"
@@ -777,7 +778,7 @@ namespace {
 // Admit the original whole unit before expanding or erasing anything. Every
 // rewrite is confined to mathematical protocol bodies on an owned candidate;
 // executable local definitions will not be traversed by this optimization.
-OwningOpRef<ModuleOp> prepare(ModuleOp source, bool simplify = true) {
+OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify) {
   if (failed(verify(source)))
     return {};
   if (!llvm::hasSingleElement(*source.getBody())) {
@@ -839,6 +840,19 @@ OwningOpRef<ModuleOp> prepare(ModuleOp source, bool simplify = true) {
     return {};
   return candidate;
 }
+
+OwningOpRef<ModuleOp> projectPrepared(ModuleOp candidate) {
+  // Retain the actual prepared subject, including its role restrictions.
+  // Projection selects the permitted local component without mutating it.
+  auto output = Projector(candidate.getContext()).run(candidate);
+  if (!output || failed(verify(*output)) ||
+      failed(verifyAuthoredLocalsPreserved(&candidate.getBody()->front(),
+                                           &output->getBody()->front())) ||
+      failed(verifyProjectionPreserved(candidate, *output)))
+    return {};
+  return output;
+}
+
 struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PreparePass)
   PreparePass() = default;
@@ -854,7 +868,7 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   }
   void runOnOperation() final {
     auto source = getOperation();
-    auto candidate = prepare(source, simplify);
+    auto candidate = prepareSource(source, simplify);
     if (!candidate)
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
@@ -915,22 +929,54 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
   }
   void runOnOperation() final {
     auto source = getOperation();
-    auto candidate = prepare(source, simplify);
+    auto candidate = prepareSource(source, simplify);
     if (!candidate)
       return signalPassFailure();
-    // Retain the actual prepared subject, including its role restrictions.
-    // Projection selects the permitted local component without mutating it.
-    auto output = Projector(source.getContext()).run(*candidate);
-    if (!output || failed(verify(*output)) ||
-        failed(verifyAuthoredLocalsPreserved(&candidate->getBody()->front(),
-                                             &output->getBody()->front())) ||
-        failed(verifyProjectionPreserved(*candidate, *output)))
+    auto output = projectPrepared(*candidate);
+    if (!output)
       return signalPassFailure();
     source->setAttrs(output->getOperation()->getAttrs());
     source.getBodyRegion().takeBody(output->getBodyRegion());
   }
 };
 } // namespace
+
+std::optional<PreparedProtocol> PreparedProtocol::prepare(ModuleOp source) {
+  auto candidate = prepareSource(source, false);
+  if (!candidate)
+    return std::nullopt;
+  return PreparedProtocol(std::move(candidate));
+}
+
+OwningOpRef<ModuleOp> PreparedProtocol::snapshot() const {
+  return module ? OwningOpRef<ModuleOp>(cast<ModuleOp>(module.get()->clone()))
+                : OwningOpRef<ModuleOp>();
+}
+
+OwningOpRef<ModuleOp> PreparedProtocol::project(bool simplify) && {
+  auto prepared = std::move(module);
+  if (!prepared)
+    return {};
+  if (!simplify)
+    return projectPrepared(*prepared);
+  // Preparation has already checked the entire unsimplified source. Rewrite
+  // only a private copy, retaining that subject for the checked edge. Neither
+  // helpers nor applications need to be expanded a second time.
+  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(prepared->clone()));
+  auto unit =
+      cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+  for (auto program :
+       unit.getBody().front().getOps<protocol_ir::MathematicalOp>())
+    if (failed(simplifyCalculations(program)))
+      return {};
+  if (failed(verify(*candidate)) ||
+      failed(verifyProtocolPreparationPreserved(&prepared->getBody()->front(),
+                                                unit)) ||
+      failed(
+          verifyAuthoredLocalsPreserved(&prepared->getBody()->front(), unit)))
+    return {};
+  return projectPrepared(*candidate);
+}
 } // namespace zkc::mathematical
 
 std::unique_ptr<mlir::Pass>

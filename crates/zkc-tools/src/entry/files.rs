@@ -247,6 +247,8 @@ fn input(schema: &Schema, value: Json) -> Result<Value> {
 mod output;
 pub use output::{output_setups, proof_outputs, run_outputs};
 
+pub(crate) use output::output_setups_with;
+
 #[cfg(test)]
 mod tests {
     use super::*;

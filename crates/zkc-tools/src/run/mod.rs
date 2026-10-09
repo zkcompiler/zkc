@@ -17,5 +17,4 @@ pub use host::{
     HostLimits, HostReport, InputValue, NativeCapacity, PreparedRun, ProverMaterial, RoleInputs,
     RunHost, RunInputs, SetupAuthority,
 };
-mod cli;
-pub use cli::run as run_cli;
+pub(crate) mod cli;

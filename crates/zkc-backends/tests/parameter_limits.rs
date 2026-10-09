@@ -75,7 +75,7 @@ fn parameter_budget_does_not_relax_naturals_ports_or_kernel_arity() {
     let original: Json = serde_json::from_slice(&gather(false, &["0".into()])).unwrap();
     for slot in [4, 5] {
         let mut bad = original.clone();
-        bad[3][0][4][0][slot] = json!(vec!["a0"; Limits::PORTS + 1]);
+        bad[2][0][4][0][slot] = json!(vec!["a0"; Limits::PORTS + 1]);
         assert_eq!(
             admit_supplied(&serde_json::to_vec(&bad).unwrap(), &b)
                 .unwrap_err()
@@ -91,8 +91,8 @@ fn parameter_budget_does_not_relax_naturals_ports_or_kernel_arity() {
         let mut bad = original.clone();
         bad[1][0][1] = json!("vector.matvec");
         bad[1][0][3] = json!("arkworks/vector.matvec");
-        bad[3][0][4][0][3] = attrs;
-        bad[3][0][4][0][4] = json!(["a0", "a0"]);
+        bad[2][0][4][0][3] = attrs;
+        bad[2][0][4][0][4] = json!(["a0", "a0"]);
         assert_eq!(
             admit_supplied(&serde_json::to_vec(&bad).unwrap(), &b)
                 .unwrap_err()
@@ -101,7 +101,7 @@ fn parameter_budget_does_not_relax_naturals_ports_or_kernel_arity() {
         );
     }
     let mut bad = original;
-    bad[3][0][4][0][3] = json!([[]]);
+    bad[2][0][4][0][3] = json!([[]]);
     assert_eq!(
         admit_supplied(&serde_json::to_vec(&bad).unwrap(), &b)
             .unwrap_err()

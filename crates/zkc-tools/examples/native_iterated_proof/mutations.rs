@@ -12,7 +12,8 @@ fn refused(envelope: &Json, candidate: &Json, reason: &str) {
         .expect("mutation passes ordinary SSA/type/affine admission");
     let bytes = repin(envelope, candidate);
     assert_eq!(
-        NativeDeployment::admit(&bytes, &digest(&bytes), Default::default()).unwrap_err(),
+        NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+            .unwrap_err(),
         reason
     );
 }
@@ -31,7 +32,7 @@ pub fn nested(envelope: &Json, input: &Json, proof: &[u8]) {
     let original: Json = serde_json::from_str(envelope[4].as_str().unwrap()).unwrap();
     for duplicate in [false, true] {
         let mut candidate = original.clone();
-        let call = &mut candidate[4][1][7][0][5][2][5][1];
+        let call = &mut candidate[3][1][6][0][5][2][5][1];
         assert_eq!(call[0], "local");
         if duplicate {
             call[3][3] = call[3][2].clone();
@@ -41,14 +42,14 @@ pub fn nested(envelope: &Json, input: &Json, proof: &[u8]) {
         refused(envelope, &candidate, "native-proof-coordinate-operand");
     }
     let mut candidate = original.clone();
-    candidate[4][1][7][0][2][2] = json!("9");
+    candidate[3][1][6][0][2][2] = json!("9");
     refused(envelope, &candidate, "native-proof-loop-layout");
     let mut candidate = original.clone();
-    let public = candidate[4][1][5][1][0].clone();
-    candidate[4][1][7][0][5][2][5][1][3][1] = public;
+    let public = candidate[3][1][4][1][0].clone();
+    candidate[3][1][6][0][5][2][5][1][3][1] = public;
     refused(envelope, &candidate, "native-proof-observation-payload");
     let mut candidate = original.clone();
-    let helper = candidate[3]
+    let helper = candidate[2]
         .as_array_mut()
         .unwrap()
         .iter_mut()
@@ -57,7 +58,7 @@ pub fn nested(envelope: &Json, input: &Json, proof: &[u8]) {
     helper[4][1][4][1] = helper[2][1][0].clone();
     refused(envelope, &candidate, "native-proof-helper-coordinates");
     let mut candidate = original.clone();
-    let body = &mut candidate[4][1][7][0][5][2][5];
+    let body = &mut candidate[3][1][6][0][5][2][5];
     let removed = body.as_array_mut().unwrap().remove(1);
     replace(
         body,
@@ -67,7 +68,7 @@ pub fn nested(envelope: &Json, input: &Json, proof: &[u8]) {
     refused(envelope, &candidate, "native-proof-observation-order");
     // Generated helper symbols are implementation names, not origin bytes.
     let mut candidate = original.clone();
-    let names: Vec<_> = candidate[3]
+    let names: Vec<_> = candidate[2]
         .as_array()
         .unwrap()
         .iter()
@@ -81,7 +82,9 @@ pub fn nested(envelope: &Json, input: &Json, proof: &[u8]) {
         replace(&mut candidate, &name, &format!("renamed{name}"));
     }
     let bytes = repin(envelope, &candidate);
-    let deployment = NativeDeployment::admit(&bytes, &digest(&bytes), Default::default()).unwrap();
+    let deployment =
+        NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+            .unwrap();
     assert!(
         execute(&deployment, input, Some(proof), "nested")
             .outcome

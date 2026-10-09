@@ -20,9 +20,9 @@ source = '''module { "protocol.module"() ({
 physical = commands.verified(source, None, "--zkc-project-protocol",
                              "--zkc-lower-math", "--zkc-select-physical")
 original = json.loads(commands.source("protocol-export", physical))
-participant = original[4][0]
-participant[8] = [["rng", "random.bls12-381.fr/1", str(len(participant[5]))]]
-loop_index = next(i for i, row in enumerate(participant[7]) if row[0] == "loop")
+participant = original[3][0]
+participant[7] = [["rng", "random.bls12-381.fr/1", str(len(participant[4]))]]
+loop_index = next(i for i, row in enumerate(participant[6]) if row[0] == "loop")
 
 
 def check(program, code=None):
@@ -40,17 +40,17 @@ with case("canonical service index and maximum loop bound"):
 
 for label, mutate, code in [
     ("noncanonical service index",
-     lambda p: p[4][0][8][0].__setitem__(2, "03"), "service-port-index"),
+     lambda p: p[3][0][7][0].__setitem__(2, "03"), "service-port-index"),
     ("noncanonical loop bound",
-     lambda p: p[4][0][7][loop_index][2].__setitem__(2, "01"), "interactive-loop-count"),
+     lambda p: p[3][0][6][loop_index][2].__setitem__(2, "01"), "interactive-loop-count"),
     ("overmaximum loop bound",
-     lambda p: p[4][0][7][loop_index][2].__setitem__(2, "1048577"), "interactive-loop-count"),
+     lambda p: p[3][0][6][loop_index][2].__setitem__(2, "1048577"), "interactive-loop-count"),
     ("missing function origin slot",
-     lambda p: p[3][0].pop(), "interactive-record"),
+     lambda p: p[2][0].pop(), "interactive-record"),
     ("malformed function origin",
-     lambda p: p[3][0].__setitem__(5, []), "binding-logical-origin"),
+     lambda p: p[2][0].__setitem__(5, []), "binding-logical-origin"),
     ("overlimit input string",
-     lambda p: p[3][0].__setitem__(1, "x" * (1024 * 1024)), "byte-limit"),
+     lambda p: p[2][0].__setitem__(1, "x" * (1024 * 1024)), "byte-limit"),
 ]:
     with case(label):
         candidate = copy.deepcopy(original)
@@ -67,7 +67,7 @@ for depth, code in [(29, None), (30, "interactive-json-depth"), (65, "interactiv
             body = [["if", f"branch{level}", "x", ["x"], body,
                      [["yield", ["x"]]], [output]], ["yield", [output]]]
         body[-1][0] = "return"
-        candidate[3].append(["function", "nested", [["x", boolean]], [boolean],
+        candidate[2].append(["function", "nested", [["x", boolean]], [boolean],
                              body, ["nested", []]])
         check(candidate, code)
 

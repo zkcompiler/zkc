@@ -186,23 +186,44 @@ fn retain_driver_stop<T>(report: &mut NativeProofReport, result: &driver::Artifa
 impl NativeDeployment {
     /// `expected_sha256` must come from the application's trusted compilation or
     /// deployment configuration, independently of these supplied bytes and proof.
-    pub fn admit(bytes: &[u8], expected_sha256: &str, authority: SetupAuthority) -> Result<Self> {
+    pub fn admit(
+        bytes: &[u8],
+        expected_sha256: &[u8; 32],
+        authority: SetupAuthority,
+    ) -> Result<Self> {
         if bytes.len() > INPUT_LIMIT {
             return Err("native-proof-deployment-limit".into());
         }
-        digest(expected_sha256)?;
-        if hash(bytes) != expected_sha256 {
+        let identity: [u8; 32] = Sha256::digest(bytes).into();
+        if &identity != expected_sha256 {
             return Err("native-proof-deployment-binding".into());
         }
+        Self::admit_payload(bytes, &hex(expected_sha256), authority)
+    }
+    pub(crate) fn admit_artifact(
+        artifact: &crate::entry::AuthenticatedArtifact<'_>,
+        authority: SetupAuthority,
+    ) -> Result<Self> {
+        Self::admit_payload(artifact.bytes(), &hex(artifact.identity()), authority)
+    }
+    // The public loader checks the caller's deployment pin; the private view
+    // borrows exact artifact bytes from a Package captured against its caller's
+    // package pin. Callers own the independent trust in either pin. All structural
+    // checks remain here.
+    fn admit_payload(
+        bytes: &[u8],
+        expected_sha256: &str,
+        authority: SetupAuthority,
+    ) -> Result<Self> {
         let value = parse(bytes, INPUT_LIMIT)?;
         let envelope = array(&value, 9)?;
-        if text(&envelope[0])? != "zkc.native-proof/4" {
+        if text(&envelope[0])? != "zkc.native-proof/5" {
             return Err("native-proof-format".into());
         }
         let source = text(&envelope[1])?.to_owned();
         digest(&source)?;
         let descriptor = array(&envelope[2], 6)?;
-        if text(&descriptor[0])? != "zkc.native-proof-descriptor/4"
+        if text(&descriptor[0])? != "zkc.native-proof-descriptor/5"
             || text(&descriptor[2])? != "zkc.native-origin/2"
         {
             return Err("native-proof-descriptor".into());
@@ -290,7 +311,7 @@ impl NativeDeployment {
     }
     /// Select invocation capacity independently of deployment/proof bytes.
     pub fn with_capacity(mut self, capacity: NativeCapacity) -> Result<Self> {
-        capacity.check()?;
+        capacity.validate()?;
         self.capacity = capacity;
         Ok(self)
     }
@@ -441,6 +462,36 @@ impl NativeDeployment {
         mode: Mode<'_>,
         entropy: &Entropy,
     ) -> Result<NativeProofReport> {
+        let mut imports =
+            crate::host::setups::VerifierKeys::new(self.capacity.backend().ark_bounds());
+        self.execute_with_imports(request, mode, entropy, &mut imports)
+    }
+    pub(crate) fn execute_prepared(
+        &self,
+        input: &ProofInputs,
+        proof: Option<&[u8]>,
+        attempts: Option<&AttemptPolicy>,
+        imports: &mut crate::host::setups::VerifierKeys,
+    ) -> Result<NativeProofReport> {
+        let mode = if let Some(policy) = attempts {
+            Mode::Attempts(policy.check(self)?)
+        } else {
+            Mode::one_shot(proof)
+        };
+        self.execute_with_imports(
+            inputs::Request::Typed(input),
+            mode,
+            &Entropy::System,
+            imports,
+        )
+    }
+    fn execute_with_imports(
+        &self,
+        request: inputs::Request<'_>,
+        mode: Mode<'_>,
+        entropy: &Entropy,
+        imports: &mut crate::host::setups::VerifierKeys,
+    ) -> Result<NativeProofReport> {
         let (proof, attempts) = match mode {
             Mode::Prove => (None, None),
             Mode::Verify(proof) => (Some(proof), None),
@@ -469,7 +520,7 @@ impl NativeDeployment {
             planned,
             root,
             binding,
-        } = inputs::prepare(self, input, role, proof.is_none())?;
+        } = inputs::prepare(self, input, role, proof.is_none(), imports)?;
         let policy = self.capacity.backend();
         let transcript_budget = input.transcript_budget;
         let service_budgets = input.services.iter().copied();
@@ -772,87 +823,7 @@ impl NativeProofReport {
         report
     }
 }
-pub fn run(produce: bool, args: &[String]) -> Json {
-    let mut report =
-        json!({"format":"zkc.native-proof-run/1", "status":"refused", "phase":"admission"});
-    let result = (|| -> Result<()> {
-        let [
-            deployment_path,
-            expected_digest,
-            inputs_path,
-            proof_path,
-            options @ ..,
-        ] = args
-        else {
-            return Err("usage: produce-native-proof|validate-native-proof DEPLOYMENT EXPECTED_SHA256 INPUTS PROOF [--setups=AUTHORITY] [--attempts=POLICY] [--capacity=LIMITS]".into());
-        };
-        let mut authority = None;
-        let mut attempts = None;
-        let mut capacity = None;
-        for option in options {
-            if let Some(path) = option
-                .strip_prefix("--setups=")
-                .filter(|_| authority.is_none())
-            {
-                authority = Some(SetupAuthority::parse(&read(path, 64 * 1024)?)?);
-            } else if let Some(path) = option
-                .strip_prefix("--attempts=")
-                .filter(|_| produce && attempts.is_none())
-            {
-                attempts = Some(AttemptPolicy::parse(&read(path, 64 * 1024)?)?);
-            } else if let Some(path) = option
-                .strip_prefix("--capacity=")
-                .filter(|_| capacity.is_none())
-            {
-                capacity = Some(NativeCapacity::parse(&read(path, 4096)?)?);
-            } else {
-                return Err("native-proof-option".into());
-            }
-        }
-        let deployment = NativeDeployment::admit(
-            &read(deployment_path, INPUT_LIMIT)?,
-            expected_digest,
-            authority.unwrap_or_default(),
-        )?
-        .with_capacity(capacity.unwrap_or_default())?;
-        report["binding_scope"] = json!(if deployment.entry().transcript().is_some() {
-            "transcript"
-        } else {
-            "header"
-        });
-        report["capacity"] = deployment.capacity().record();
-        report["phase"] = json!("inputs");
-        let inputs = parse(&read(inputs_path, INPUT_LIMIT)?, INPUT_LIMIT)?;
-        let proof = if produce {
-            None
-        } else {
-            Some(read(proof_path, MAX_PROOF_BYTES)?)
-        };
-        let result = match attempts {
-            Some(policy) => deployment.execute_attempts(&inputs, &policy)?,
-            None => deployment.execute(&inputs, proof.as_deref())?,
-        };
-        report["phase"] = json!("execution");
-        report
-            .as_object_mut()
-            .unwrap()
-            .extend(result.diagnostics().as_object().unwrap().clone());
-        if produce {
-            report["proof_bytes"] = json!(result.outcome.as_ref().map_or(0, Vec::len));
-        }
-        let bytes = result.outcome?;
-        if produce {
-            crate::host::io::publish(proof_path, &bytes)?;
-        }
-        report["phase"] = json!("complete");
-        report["status"] = json!(if produce { "produced" } else { "accepted" });
-        Ok(())
-    })();
-    if let Err(error) = result {
-        report["code"] = json!(error);
-    }
-    report
-}
+pub(crate) mod cli;
 
 #[cfg(test)]
 mod tests;

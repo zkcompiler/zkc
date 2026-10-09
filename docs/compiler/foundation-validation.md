@@ -45,5 +45,5 @@ source-to-plan error. Unsupported cases and timeouts are not agreement.
 
 C++/Rust checks remain bounded native evidence. Lean source/direct-plan models
 have their own interpretations and proofs; no old correspondence result transfers
-to `zkc.program/1`. Native semantics and differential/formal connections remain
+to `zkc.program/2`. Native semantics and differential/formal connections remain
 separate work under [assurance](../assurance.md).

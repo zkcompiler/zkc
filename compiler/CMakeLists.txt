@@ -60,16 +60,16 @@ add_executable(zkc-opt tools/zkc-opt.cpp)
 foreach(tool zkc-compile zkc-opt)
   target_compile_definitions(${tool} PRIVATE ZKC_VERSION="${PROJECT_VERSION}")
 endforeach()
-target_link_libraries(zkc-opt PRIVATE ZkcNativeCompiler MLIRMlirOptMain)
+target_link_libraries(zkc-opt PRIVATE ZkcCompiler MLIRMlirOptMain)
 target_compile_options(zkc-opt PRIVATE -Wall -Wextra -Werror)
 
 include(CMakePackageConfigHelpers)
 # Keep installed tools usable with the selected external LLVM/MLIR package.
 set_target_properties(zkc-compile zkc-opt zkc-tblgen PROPERTIES
   INSTALL_RPATH_USE_LINK_PATH TRUE INSTALL_RPATH "$ORIGIN/../lib")
-install(TARGETS ${zkc_components} ZkcCompiler zkc-compile zkc-opt zkc-tblgen
-  EXPORT ZkcCompilerTargets
-  ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+include(cmake/InstallSDK.cmake)
+zkc_install_sdk(COMPONENTS ${zkc_components}
+  TOOLS zkc-compile zkc-opt zkc-tblgen)
 install(DIRECTORY include/zkc DESTINATION include FILES_MATCHING PATTERN "*.h" PATTERN "*.td" PATTERN "*.def")
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Contracts/Installation.td"
   DESTINATION include/zkc/Contracts)
@@ -83,14 +83,9 @@ foreach(header ${zkc_generated_headers})
   get_filename_component(directory "${header}" DIRECTORY)
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${header}" DESTINATION "${directory}")
 endforeach()
-install(EXPORT ZkcCompilerTargets NAMESPACE Zkc:: DESTINATION lib/cmake/ZkcCompiler)
-configure_package_config_file(cmake/ZkcCompilerConfig.cmake.in
-  "${CMAKE_CURRENT_BINARY_DIR}/ZkcCompilerConfig.cmake"
-  INSTALL_DESTINATION lib/cmake/ZkcCompiler)
 write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/ZkcCompilerConfigVersion.cmake"
   COMPATIBILITY ExactVersion)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ZkcCompilerConfig.cmake"
-  "${CMAKE_CURRENT_BINARY_DIR}/ZkcCompilerConfigVersion.cmake"
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ZkcCompilerConfigVersion.cmake"
   DESTINATION lib/cmake/ZkcCompiler)
 include(CTest)
 if(BUILD_TESTING)

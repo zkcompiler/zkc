@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(EnvelopeConsumer LANGUAGES C CXX)
-find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS IR Transforms)
+find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS IR Transforms Tools)
 option(EXPECT_ENVELOPE "Require the envelope contribution in this prefix" ON)
 add_executable(envelope-consumer main.cpp)
 target_link_libraries(envelope-consumer PRIVATE Zkc::Transforms MLIRParser)

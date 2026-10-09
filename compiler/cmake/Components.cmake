@@ -1,5 +1,5 @@
-# Each translation unit has one owner. ZkcCompiler is an interface aggregate;
-# it never recompiles component sources.
+# Each translation unit has one owner. Compiler owns compilation; Driver owns
+# CLI parsing and input loading.
 separate_arguments(zkc_llvm_definitions NATIVE_COMMAND "${LLVM_DEFINITIONS}")
 function(add_zkc_component name)
   add_library(Zkc${name} ${ARGN})
@@ -172,7 +172,7 @@ add_zkc_component(Transforms
   lib/Target/Catalog.cpp
   lib/Target/PhysicalPlan.cpp
 )
-add_zkc_component(NativeCompiler
+add_zkc_component(Compiler
   lib/Compiler/Language.cpp
   lib/Compiler/LanguagePackage.cpp
   lib/Compiler/LanguageInterface.cpp
@@ -228,23 +228,15 @@ mlir_target_link_libraries(ZkcIR PUBLIC
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
   MLIRPass MLIRTransforms MLIRTransformUtils)
-target_link_libraries(ZkcNativeCompiler PUBLIC ZkcTransforms ZkcTranslation)
-target_link_libraries(ZkcDriver PUBLIC ZkcNativeCompiler)
-mlir_target_link_libraries(ZkcNativeCompiler PUBLIC MLIRParser)
+target_link_libraries(ZkcCompiler PUBLIC ZkcTransforms ZkcTranslation)
+target_link_libraries(ZkcDriver PUBLIC ZkcCompiler)
+mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser)
 mlir_target_link_libraries(ZkcDriver PUBLIC MLIRParser)
-add_library(ZkcCompiler INTERFACE)
-add_library(Zkc::Compiler ALIAS ZkcCompiler)
-set_target_properties(ZkcCompiler PROPERTIES EXPORT_NAME Compiler)
-target_link_libraries(ZkcCompiler INTERFACE ZkcNativeCompiler ZkcDriver)
-# TableGen consumers query the aggregate's include root directly.
-target_include_directories(ZkcCompiler INTERFACE
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
-set(zkc_components ZkcSupport ZkcContracts ZkcLanguage ZkcRelation ZkcProgram ZkcIR ZkcTranslation ZkcTransforms ZkcNativeCompiler ZkcDriver)
+set(zkc_components ZkcSupport ZkcContracts ZkcLanguage ZkcRelation ZkcProgram ZkcIR ZkcTranslation ZkcTransforms ZkcCompiler ZkcDriver)
 
 # Record actual target properties for the fast dependency-boundary test.
 set(zkc_component_manifest "")
-foreach(component ${zkc_components} ZkcCompiler)
+foreach(component ${zkc_components})
   string(APPEND zkc_component_manifest
     "${component}|$<TARGET_PROPERTY:${component},LINK_LIBRARIES>|$<TARGET_PROPERTY:${component},INTERFACE_LINK_LIBRARIES>|$<TARGET_PROPERTY:${component},SOURCES>\n")
 endforeach()

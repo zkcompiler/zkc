@@ -182,8 +182,12 @@ fn key_attempts(directory: &Path, keys: &Keys) {
         let bytes =
             std::fs::read(directory.join(format!("key_attempt_{complete}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-        let deployment =
-            NativeDeployment::admit(&bytes, &digest(&bytes), authority(keys, true)).unwrap();
+        let deployment = NativeDeployment::admit(
+            &bytes,
+            &Sha256::digest(&bytes).into(),
+            authority(keys, true),
+        )
+        .unwrap();
         let producer = inputs(&envelope, "authored", keys, &path, true);
         let validator = inputs(&envelope, "authored", keys, &path, false);
         let expected = accepted(&deployment, &producer, None);
@@ -284,7 +288,7 @@ fn main() {
         let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
         assert!(
-            NativeDeployment::admit(&bytes, &digest(&bytes), Default::default())
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
                 .unwrap_err()
                 .contains("key-authority")
         );
@@ -296,7 +300,7 @@ fn main() {
             let key = &keys[&n];
             let deployment = NativeDeployment::admit(
                 &bytes,
-                &digest(&bytes),
+                &Sha256::digest(&bytes).into(),
                 authority(key, matches!(family, "authored" | "structured")),
             )
             .unwrap_or_else(|e| panic!("{name}: {e}"));

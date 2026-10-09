@@ -10,7 +10,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Commitment, OpeningState],
             AttributeRule::None,
         ),
-    ),
+    )
+    .implemented_by(&["plonky3/oracle.commit"]),
     Contract::new(
         "oracle.open",
         (
@@ -18,7 +19,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Vector, Proof],
             AttributeRule::None,
         ),
-    ),
+    )
+    .implemented_by(&["plonky3/oracle.open"]),
     Contract::new(
         "oracle.check",
         (
@@ -26,11 +28,13 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Bool],
             AttributeRule::None,
         ),
-    ),
+    )
+    .implemented_by(&["plonky3/oracle.check"]),
     Contract::new(
         "commitments.empty",
         (&[], &[Commitments], AttributeRule::None),
-    ),
+    )
+    .implemented_by(&["plonky3/commitments.empty"]),
     Contract::new(
         "commitments.append",
         (
@@ -38,19 +42,23 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Commitments],
             AttributeRule::None,
         ),
-    ),
+    )
+    .implemented_by(&["plonky3/commitments.append"]),
     Contract::new(
         "commitments.at",
         (&[Commitments, Index], &[Commitment], AttributeRule::None),
-    ),
+    )
+    .implemented_by(&["plonky3/commitments.at"]),
     Contract::new(
         "commitments.length",
         (&[Commitments], &[Index], AttributeRule::None),
-    ),
+    )
+    .implemented_by(&["plonky3/commitments.length"]),
     Contract::new(
         "opening_states.empty",
         (&[], &[OpeningStates], AttributeRule::None),
-    ),
+    )
+    .implemented_by(&["plonky3/opening_states.empty"]),
     Contract::new(
         "opening_states.append",
         (
@@ -58,7 +66,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[OpeningStates],
             AttributeRule::None,
         ),
-    ),
+    )
+    .implemented_by(&["plonky3/opening_states.append"]),
     Contract::new(
         "opening_states.at",
         (
@@ -66,11 +75,13 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[OpeningState],
             AttributeRule::None,
         ),
-    ),
+    )
+    .implemented_by(&["plonky3/opening_states.at"]),
     Contract::new(
         "opening_states.length",
         (&[OpeningStates], &[Index], AttributeRule::None),
-    ),
+    )
+    .implemented_by(&["plonky3/opening_states.length"]),
 ];
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
@@ -79,7 +90,6 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
 
     contracts: CONTRACTS,
     resolve,
-    providers: &["plonky3"],
     select: default_ports,
 };
 

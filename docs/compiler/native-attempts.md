@@ -112,8 +112,8 @@ with `target/release` on `PATH` and an authenticated deployment and invocation
 configuration.
 
 ```sh
-zkc produce-native-proof deployment.json TRUSTED_SHA256 producer.json proof.bin --attempts=attempts.json
-zkc validate-native-proof deployment.json TRUSTED_SHA256 validator.json proof.bin
+zkc prove-bundle deployment.json TRUSTED_SHA256 producer.json proof.bin --attempts=attempts.json
+zkc verify-bundle deployment.json TRUSTED_SHA256 validator.json proof.bin
 ```
 
 The application authenticates `attempts.json` alongside its deployment

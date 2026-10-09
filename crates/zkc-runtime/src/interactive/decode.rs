@@ -454,9 +454,9 @@ impl Decoder {
         Ok(body.into())
     }
     fn participant(&mut self, v: &Json) -> Result<Participant> {
-        let a = record(v, "participant", 9)?;
+        let a = record(v, "participant", 8)?;
         let services = {
-            list(&a[8], Limits::PORTS)?
+            list(&a[7], Limits::PORTS)?
                 .iter()
                 .map(|v| {
                     let port = array(v)?;
@@ -472,17 +472,14 @@ impl Decoder {
                 })
                 .collect::<Result<Vec<_>>>()?
         };
-        if !array(&a[4])?.is_empty() {
-            return Err(err(ErrorCode::Record, "program-parameters-unsupported"));
-        }
         Ok(Participant {
             services,
             symbol: name(&a[1])?,
             instance: name(&a[2])?,
             role: name(&a[3])?,
-            inputs: self.ports(&a[5])?,
-            outputs: self.types(&a[6])?,
-            body: self.body(&a[7], 0)?,
+            inputs: self.ports(&a[4])?,
+            outputs: self.types(&a[5])?,
+            body: self.body(&a[6], 0)?,
         })
     }
 }
@@ -491,13 +488,13 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
     let json: Json = serde_json::from_slice(bytes)
         .map_err(|_| err(ErrorCode::Json, "invalid JSON or trailing input"))?;
     let a = array(&json)?;
-    if a.len() != 6 {
+    if a.len() != 5 {
         return Err(err(ErrorCode::Record, "participant module arity"));
     }
     let mut bindings = BTreeMap::new();
     let mut binding_type_bytes = 0usize;
     match string(&a[0])? {
-        "zkc.program/1" => {
+        "zkc.program/2" => {
             for value in list(&a[1], Limits::DEFINITIONS)? {
                 let r = array(value)?;
                 if r.len() != 4 {
@@ -533,12 +530,6 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
         }
         _ => return Err(err(ErrorCode::Record, "unknown participant module format")),
     };
-    if string(&a[2])? != "physical" {
-        return Err(err(
-            ErrorCode::Stage,
-            "production admission requires physical stage",
-        ));
-    }
     let mut decoder = Decoder {
         bindings,
         instructions: 0,
@@ -547,7 +538,7 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
     };
     let (mut functions, mut participants, mut entries) =
         (BTreeMap::new(), BTreeMap::new(), BTreeMap::new());
-    for v in list(&a[3], Limits::DEFINITIONS)? {
+    for v in list(&a[2], Limits::DEFINITIONS)? {
         let f = decoder.function(v)?;
         insert(
             &mut functions,
@@ -556,7 +547,7 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
             ErrorCode::Symbol,
         )?;
     }
-    for v in list(&a[4], Limits::DEFINITIONS)? {
+    for v in list(&a[3], Limits::DEFINITIONS)? {
         let p = decoder.participant(v)?;
         insert(
             &mut participants,
@@ -565,7 +556,7 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
             ErrorCode::Symbol,
         )?;
     }
-    for v in list(&a[5], Limits::DEFINITIONS)? {
+    for v in list(&a[4], Limits::DEFINITIONS)? {
         let a = record(v, "entry", 3)?;
         let mut roles = BTreeMap::new();
         for (role, symbol) in pairs(&a[2])? {
@@ -617,9 +608,8 @@ mod tests {
             .map(|(i, t)| json!([format!("x{i}"), t]))
             .collect();
         serde_json::to_vec(&json!([
-            "zkc.program/1",
+            "zkc.program/2",
             [],
-            "physical",
             [[
                 "function",
                 "unused",
@@ -633,7 +623,6 @@ mod tests {
                 "p",
                 "root",
                 "P",
-                [],
                 [],
                 [],
                 [["return", []]],
@@ -695,7 +684,7 @@ mod tests {
         let bytes = serde_json::to_vec(&value).unwrap();
         assert!(bytes.len() < Limits::ARTIFACT_BYTES);
         physical(&bytes).unwrap();
-        value[3][0][2] = json!([["x", spelling]]);
+        value[2][0][2] = json!([["x", spelling]]);
         let error = physical(&serde_json::to_vec(&value).unwrap())
             .err()
             .unwrap();

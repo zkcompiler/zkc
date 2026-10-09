@@ -17,13 +17,13 @@ impl std::fmt::Display for ReadError {
         }
     }
 }
-pub(crate) fn read_bounded(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>, ReadError> {
-    read_from(std::fs::File::open(path).map_err(ReadError::Io)?, limit)
-}
 /// File-based adapters use regular files. Nonblocking open prevents a FIFO swap from
 /// hanging before descriptor validation. Symlinks resolve normally; the opened
 /// descriptor is checked and read once, so path changes cannot replace it.
 pub(crate) fn read_regular(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>, ReadError> {
+    read_from(open_regular(path)?, limit)
+}
+pub(crate) fn open_regular(path: impl AsRef<Path>) -> Result<std::fs::File, ReadError> {
     let mut options = std::fs::OpenOptions::new();
     options.read(true);
     #[cfg(unix)]
@@ -38,7 +38,7 @@ pub(crate) fn read_regular(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u
             "expected a regular file",
         )));
     }
-    read_from(file, limit)
+    Ok(file)
 }
 fn read_from(reader: impl Read, limit: usize) -> Result<Vec<u8>, ReadError> {
     let mut bytes = Vec::new();
@@ -50,23 +50,6 @@ fn read_from(reader: impl Read, limit: usize) -> Result<Vec<u8>, ReadError> {
         return Err(ReadError::Limit);
     }
     Ok(bytes)
-}
-
-/// Atomically replace one output file; execution itself is never retried here.
-pub(crate) fn publish(path: &str, bytes: &[u8]) -> Result<(), String> {
-    use std::io::Write;
-    let path = Path::new(path);
-    let parent = path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    let mut file = tempfile::NamedTempFile::new_in(parent).map_err(|_| "artifact-publish-io")?;
-    file.write_all(bytes).map_err(|_| "artifact-publish-io")?;
-    file.as_file()
-        .sync_all()
-        .map_err(|_| "artifact-publish-io")?;
-    file.persist(path).map_err(|_| "artifact-publish-io")?;
-    Ok(())
 }
 
 #[cfg(test)]

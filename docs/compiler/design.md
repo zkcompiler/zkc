@@ -17,7 +17,7 @@ Mandatory verifiers belong to IR and remain usable without compiler workflows.
 Translation owns Language emission/comparison, relation import and executable
 export. Program owns the MLIR-free executable structure, codec and admission.
 Transforms owns preparation, projection, demand lowering and representation
-selection. NativeCompiler composes these into complete Entry, bundle and proof
+selection. Compiler composes these into complete Entry, bundle and proof
 compilations; drivers only parse requests and publish results.
 
 ## Checking and invalidation

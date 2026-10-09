@@ -143,7 +143,7 @@ The supported native pipeline has bounded C++ preservation checks, independent
 Rust admission and execution tests. Its actual source semantics, artifact binding
 and runtime interpretation still need a native Lean connection. Existing Lean
 source, direct-plan and table theorems concern independent models; retiring their
-native consumers does not transfer those results to `zkc.program/1`.
+native consumers does not transfer those results to `zkc.program/2`.
 
 An independent reference computes expectations from original inputs and the
 selected semantic contract. It must not use the producer's transformation as its

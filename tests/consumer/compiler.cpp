@@ -123,7 +123,7 @@ int main(int argc, char **argv) {
   }
   if (bundle->getAsObject()->getString("format") != "zkc.run/1")
     return 9;
-  // Installed NativeCompiler exports both view APIs, retaining ordinary source
+  // Installed Compiler exports both view APIs, retaining ordinary source
   // admission even when a caller presents a compiled physical module.
   auto view = zkc::analyzePublicCoin(native->compilation.module(), "{}");
   if (view)
@@ -135,7 +135,7 @@ int main(int argc, char **argv) {
   llvm::consumeError(std::move(checked));
   zkc::NativeProofOptions proofOptions;
   proofOptions.policy =
-      R"(["zkc.native-proof-policy/4","main","P","V","0","","",[],[]])";
+      R"(["zkc.native-proof-policy/5","main","P","V","0","","",[],[]])";
   auto proof =
       zkc::compileNativeProof(R"(module { "protocol.module"() ({
     "protocol.func"() ({
@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
     llvm::consumeError(deployment.takeError());
     return 13;
   }
-  if ((*deployment->getAsArray())[0].getAsString() != "zkc.native-proof/4" ||
+  if ((*deployment->getAsArray())[0].getAsString() != "zkc.native-proof/5" ||
       mlir::failed(mlir::verify(proof->compilation.module())))
     return 14;
   auto proofEntry = zkc::language::closeEntry(*languageChecked, "m::Proof");

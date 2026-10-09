@@ -27,7 +27,7 @@ does not treat old reference checks as current execution evidence.
 | [References](sources.md) | Primary references behind these chapters, and the limits of what they establish |
 
 The supported execution path is `.zkc` Language → mathematical MLIR
-(`protocol`, `participant`, `exec`, `physical`) → `zkc.program/1` → common Rust
+(`protocol`, `participant`, `exec`, `physical`) → `zkc.program/2` → common Rust
 Runner and Entry/proof/run Hosts. Formal checking is optional and independent.
 A generated-code route would be separate future work with its own evidence.
 
@@ -36,7 +36,7 @@ A generated-code route would be separate future work with its own evidence.
 ```mermaid
 flowchart TD
   U[.zkc Language] --> M[Mathematical MLIR]
-  M --> C[zkc.program/1]
+  M --> C[zkc.program/2]
   C --> R[Common Rust Runner and Hosts]
   R --> B[Backend kernels and external primitives]
   B --> X[Actual execution and observations]

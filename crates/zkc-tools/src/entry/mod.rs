@@ -5,6 +5,7 @@
 //! is a compiler-checked subject, not an interpreter input for this host.
 mod decode;
 mod package;
+pub(crate) use package::AuthenticatedArtifact;
 pub use package::{CompileOptions, Package, PackageError};
 
 mod errors;
@@ -31,6 +32,6 @@ pub use proof::{
 
 pub mod files;
 
-pub mod cli;
+pub(crate) mod cli;
 
 pub mod bindings;

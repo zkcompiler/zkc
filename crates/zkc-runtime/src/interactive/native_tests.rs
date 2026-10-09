@@ -68,9 +68,6 @@ impl Value for V {
         Ok(Self::field())
     }
 
-    fn type_name(&self) -> &str {
-        "field"
-    }
     fn physical_type(&self) -> PhysicalType {
         self.ty.clone()
     }
@@ -127,9 +124,8 @@ fn program() -> Admitted {
 }
 fn program_with_type(field: &str) -> Admitted {
     let value = json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [],
-        "physical",
         [[
             "function",
             "id",
@@ -144,7 +140,6 @@ fn program_with_type(field: &str) -> Admitted {
                 "a",
                 "root",
                 "Alice",
-                [],
                 [["x", field]],
                 [],
                 [
@@ -159,7 +154,6 @@ fn program_with_type(field: &str) -> Admitted {
                 "b",
                 "root",
                 "Bob",
-                [],
                 [],
                 [field],
                 [
@@ -534,16 +528,14 @@ fn local_candidate(body: serde_json::Value) -> Admitted {
     let boolean = "bool@native.bool/1";
     let ports = json!([["lo", index], ["hi", index], ["flag", boolean]]);
     let carrier = json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [],
-        "physical",
         [["function", "f", ports, [index], body, ["f", []]]],
         [[
             "participant",
             "a",
             "root",
             "Alice",
-            [],
             ports,
             [],
             [
@@ -679,16 +671,14 @@ fn local_induction_rejects_a_backend_literal_with_the_wrong_type() {
 #[test]
 fn protocol_induction_rejects_a_backend_literal_with_the_wrong_type() {
     let carrier = json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [],
-        "physical",
         [],
         [[
             "participant",
             "a",
             "root",
             "Alice",
-            [],
             [["n", "index@native.index/1"]],
             [],
             [

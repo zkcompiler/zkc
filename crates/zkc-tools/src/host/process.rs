@@ -93,7 +93,7 @@ pub(crate) fn capture(
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use crate::host::io::{ReadError, read_bounded};
+    use crate::host::io::{ReadError, read_regular};
     use std::process::Output;
     fn run(script: &str, limit: usize, stderr: bool) -> Result<Output, Error> {
         let dir = tempfile::tempdir().unwrap();
@@ -105,7 +105,7 @@ mod tests {
             stderr,
         )?;
         let read = |path: &Path| {
-            read_bounded(path, limit).map_err(|error| match error {
+            read_regular(path, limit).map_err(|error| match error {
                 ReadError::Io(e) => Error::Io(e),
                 ReadError::Limit => Error::OutputLimit,
             })

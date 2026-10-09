@@ -290,11 +290,11 @@ rejects("IR cannot consume private mathematical transform helpers",
 rejects("IR cannot parse invocation input",
         root / "lib/Dialect/Protocol/IR/Projection.cpp",
         lambda text: '#include "mlir/Parser/Parser.h"\n' + text,
-        "parsing belongs to NativeCompiler or Driver")
+        "parsing belongs to Compiler or Driver")
 rejects("transforms cannot parse invocation input",
         root / "lib/Transforms/Algorithms.cpp",
         lambda text: '#include "mlir/Parser/Parser.h"\n' + text,
-        "parsing belongs to NativeCompiler or Driver")
+        "parsing belongs to Compiler or Driver")
 
 rejects("Program cannot depend on MLIR operations",
         root / "lib/Program/Admission.cpp",
@@ -317,3 +317,23 @@ rejects("Entry closure cannot acquire source syntax",
         root / "lib/Language/Specialize.cpp",
         lambda text: '#include "Internal.h"\n' + text,
         "semantic queries cannot depend on source checking")
+
+rejects("Compiler cannot acquire CLI headers",
+        root / "lib/Compiler/Compilation.cpp",
+        lambda text: '#include "zkc/Driver/Compiler.h"\n' + text,
+        "ZkcCompiler: upward include")
+rejects("Compiler cannot link Driver", manifest,
+        lambda text: text.replace("ZkcCompiler|", "ZkcCompiler|ZkcDriver;", 1),
+        "hidden private or extra interface dependencies")
+rejects("prepared protocol bridge cannot enter public Compiler headers",
+        root / "include/zkc/Compiler/Compilation.h",
+        lambda text: '#include "../../../lib/Transforms/PreparedProtocol.h"\n' + text,
+        "public header includes private implementation")
+rejects("Driver cannot directly use the prepared protocol bridge",
+        root / "lib/Driver/Compiler.cpp",
+        lambda text: '#include "../Transforms/PreparedProtocol.h"\n' + text,
+        "private component dependency")
+rejects("prepared protocol bridge grants no other private transform header",
+        root / "lib/Compiler/Compilation.cpp",
+        lambda text: '#include "../Transforms/MathematicalSupport.h"\n' + text,
+        "private component dependency")

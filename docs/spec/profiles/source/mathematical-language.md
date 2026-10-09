@@ -873,7 +873,7 @@ operation and operand graph.
 interface, toolchain identity and a bound diagnostic location map. It exposes no
 mutable original IR. The existing compiler receives those bytes and the selected
 protocol symbol. Run jobs emit `zkc.run/1`; proof jobs use native policy/deployment
-version 4. Both contain ordinary `zkc.program/1` participant programs.
+version 5. Both contain ordinary `zkc.program/2` participant programs.
 Every protocol in the selected closure passes target preparation.
 
 `zkc.language-interface/7` has exactly these JSON members: `format`, `capture`,
@@ -1016,9 +1016,22 @@ Object member order is immaterial for semantic interface comparison; admission o
 a published checked original requires canonical bytes. The original identity hashes exact MLIR bytes
 without debug locations under a fixed printing policy. The toolchain identity binds
 the installed catalog, compiler source build identity and actual LLVM/MLIR release.
+The catalog uses `zkc.language-catalog/2` length framing. Kernel rows contain
+their signatures and parameter contracts without a constant local-effect field.
+Source availability still requires an installed declaration at an admitted
+authoring stage, with all applicable semantic-facet and source-effect checks.
+Rebuild v0 interfaces and packages when this catalog identity changes; an old
+authenticated identity does not authorize a new catalog.
 These identify the checked environment; they are not an authenticity signature or
 security claim. The independent comparison binds generated coordinates to source
 spans; diagnostic paths do not affect capture or original identity.
+
+External interface JSON uses unique decoded object keys and canonical unsigned
+decimal numeric tokens. Signed, leading-zero, floating and exponent spellings
+refuse. Boolean and null tokens retain ordinary JSON grammar and remain subject
+to the interface schema. Lexical limits apply before schema admission. External
+input passes through the byte reader; an already decoded JSON value does not
+retain its original numeric spelling.
 
 ### Published Entry package
 
@@ -1227,7 +1240,7 @@ a compiler selected by an explicit path or absolute directories in the caller's
 trusted `PATH` (default
 `zkc-compile`), reports its resolved path and toolchain, captures its
 bounded package output and publishes exact bytes with their SHA-256. Existing
-packages require a caller-supplied expected digest for `run-entry`, `prove`,
+packages require a caller-supplied expected digest for `run`, `prove`,
 `verify` and `bindings`. No digest derived from candidate bytes authorizes them.
 
 A `zkc.entry-run/1` request has required `format`, `session` and `roles`, plus
@@ -1262,13 +1275,16 @@ key identities in hex. Authority is separate from invocation material.
 Diagnostics omit returned values and proof payloads. Explicit `--results` output
 uses `zkc.entry-outputs/1`, with `roles` for a run or `values` for a proof call.
 Serialization uses admitted native capacity, a 16 MiB whole-file limit and only
-installed Wire encodings for native leaves. A successful proof is published before
-optional result encoding and publication. Output destinations must differ from
-each other and all input/configuration paths, including referenced prover-key
-files and existing parent directory aliases. This configuration check does not
-isolate filesystem races. Each file is atomically replaced; a failure after one
-successful publication retains that fact and the execution report. No automatic retry
-follows a publication error. Success exit status requires complete execution,
+installed Wire encodings for native leaves. Every requested output is encoded and
+staged before publication. Preflight, encoding or staging failure preserves all
+existing destinations. The final publication order is proof, then optional results.
+Output destinations must differ from each other and all input/configuration paths,
+including referenced prover-key files, parent directory aliases and, on Unix,
+existing hardlinks. Symlink destinations refuse. The plan is rechecked before publication;
+this configuration check does not isolate filesystem races. On Unix, staged outputs have mode `0600`. Each file is atomically
+replaced. If a later replacement fails, the report identifies earlier publications
+and retains the execution report. This is not a multi-file transaction or a crash
+durability guarantee. No automatic retry follows a publication error. Success exit status requires complete execution,
 cleanup and requested publication.
 
 Generated Rust modules pin the exact package digest and delegate admission to the

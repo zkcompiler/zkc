@@ -15,7 +15,7 @@ for name, fixture in [('evaluate', 'recipe-evaluate'), ('constant', 'constant-su
             result = commands.source('protocol-bundle', source, *options)
             bundle = json.loads(result)
             assert bundle['format'] == 'zkc.run/1'
-            assert json.loads(bundle['candidate'])[0] == 'zkc.program/1'
+            assert json.loads(bundle['candidate'])[0] == 'zkc.program/2'
             (OUT / (name + suffix + '.bundle')).write_text(result)
         if 'maximum=8:i64' not in source:
             assert name in ('evaluate', 'data', 'traces')

@@ -271,16 +271,25 @@ pub(crate) fn apply(
     }
 }
 
-pub(crate) const OPERATIONS: &[&str] = &[
-    "external.monero.init",
-    "external.monero.hash",
-    "external.monero.update",
-    "external.openvm.init",
-    "external.openvm.observe",
-    "external.openvm.sample",
-    "external.openvm.sample_ext",
-    "external.openvm.sample_bits",
-    "external.openvm.check_witness",
+pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
+    ("native/external.monero.init", "external.monero.init"),
+    ("native/external.monero.hash", "external.monero.hash"),
+    ("native/external.monero.update", "external.monero.update"),
+    ("native/external.openvm.init", "external.openvm.init"),
+    ("native/external.openvm.observe", "external.openvm.observe"),
+    ("native/external.openvm.sample", "external.openvm.sample"),
+    (
+        "native/external.openvm.sample_ext",
+        "external.openvm.sample_ext",
+    ),
+    (
+        "native/external.openvm.sample_bits",
+        "external.openvm.sample_bits",
+    ),
+    (
+        "native/external.openvm.check_witness",
+        "external.openvm.check_witness",
+    ),
 ];
 
 #[cfg(test)]

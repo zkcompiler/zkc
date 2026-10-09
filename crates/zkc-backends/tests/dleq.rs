@@ -133,8 +133,8 @@ fn validator() -> Vec<u8> {
         &["ok", "t4"],
     ))
     .unwrap();
-    j[4][0][3] = json!("V");
-    j[5][0][2][0][0] = json!("V");
+    j[3][0][3] = json!("V");
+    j[4][0][2][0][0] = json!("V");
     serde_json::to_vec(&j).unwrap()
 }
 fn root(bases: &Value, publics: &Value, context: &str, backend: &NativeBackend) -> Vec<u8> {

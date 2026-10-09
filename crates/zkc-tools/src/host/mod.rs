@@ -4,6 +4,7 @@
 //! codes. Their prefixes do not determine this module's dependency direction.
 pub(crate) mod io;
 pub(crate) mod process;
+pub(crate) mod publication;
 
 pub(crate) mod admission;
 pub(crate) mod capacity;

@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPONENTS = ("ZkcSupport", "ZkcContracts", "ZkcLanguage", "ZkcRelation", "ZkcProgram", "ZkcIR", "ZkcTranslation", "ZkcTransforms", "ZkcNativeCompiler", "ZkcDriver")
+COMPONENTS = ("ZkcSupport", "ZkcContracts", "ZkcLanguage", "ZkcRelation", "ZkcProgram", "ZkcIR", "ZkcTranslation", "ZkcTransforms", "ZkcCompiler", "ZkcDriver")
 ALLOWED = {
     "ZkcLanguage": {"ZkcContracts", "ZkcRelation"},
     "ZkcSupport": {"LLVMSupport"},
@@ -14,8 +14,8 @@ ALLOWED = {
     "ZkcRelation": {"ZkcContracts"},
     "ZkcProgram": {"ZkcContracts"},
     "ZkcTransforms": {"ZkcIR", "MLIRPass", "MLIRTransforms", "MLIRTransformUtils"},
-    "ZkcNativeCompiler": {"ZkcTransforms", "ZkcTranslation", "MLIRParser"},
-    "ZkcDriver": {"ZkcNativeCompiler", "MLIRParser"},
+    "ZkcCompiler": {"ZkcTransforms", "ZkcTranslation", "MLIRParser"},
+    "ZkcDriver": {"ZkcCompiler", "MLIRParser"},
     "ZkcTranslation": {"ZkcIR", "ZkcLanguage"},
     "ZkcIR": {"ZkcProgram", "ZkcRelation", "MLIRIR", "MLIRControlFlowInterfaces", "MLIRSideEffectInterfaces", "MLIRInferTypeOpInterface", "MLIRFuncDialect", "MLIRFunctionInterfaces", "MLIRCallInterfaces", "MLIRArithDialect", "MLIRTensorDialect"},
 }
@@ -26,7 +26,7 @@ HEADER_ROOTS = {
     "ZkcRelation": [f"Relation/{name}.h" for name in ("R1CS", "AIR", "AIRPolynomial", "Matrices")],
     "ZkcProgram": ["Program"],
     "ZkcTransforms": ["Transforms", "Target"],
-    "ZkcNativeCompiler": [f"Compiler/{name}.h" for name in (
+    "ZkcCompiler": [f"Compiler/{name}.h" for name in (
         "Compilation", "Diagnostics", "Language", "LanguageInterface",
         "LanguagePackage", "LanguageInspection", "NativeProof", "Run",
         "PolynomialReduction", "PublicCoin", "Passes", "Pipelines")],
@@ -144,7 +144,7 @@ def main():
             source = (ROOT / source).resolve()
             assert source not in owners, f"{source} compiled by both {owners.get(source)} and {name}"
             owners[source] = name
-    assert set(targets) == set(COMPONENTS) | {"ZkcCompiler"}, "component manifest and ownership policy disagree"
+    assert set(targets) == set(COMPONENTS), "component manifest and ownership policy disagree"
     implementation = {path.resolve() for path in (ROOT / "lib").rglob("*.cpp")}
     assert set(owners) == implementation | set(extra_sources), f"unowned or nonexistent implementations: {set(owners) ^ (implementation | set(extra_sources))}"
     for source, owner in extra_sources.items():
@@ -157,7 +157,6 @@ def main():
         "lib/Transforms/MathLoweringVerification.cpp": "ZkcTransforms",
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
-    assert targets["ZkcCompiler"] == (set(), {"ZkcNativeCompiler", "ZkcDriver"}, []), "aggregate must not compile sources"
     private_headers = {
         "ZkcLanguage": {ROOT / f"lib/Language/{name}.h" for name in ("Internal", "State", "Semantics", "Checker", "BodyCheck")},
         "ZkcSupport": {ROOT / "lib/Support/Input.h"},
@@ -172,9 +171,10 @@ def main():
         ROOT / "lib/Conversion/Bindings.h", ROOT / "lib/Target/PhysicalPlan.h",
         ROOT / "lib/Transforms/MathematicalSupport.h",
         ROOT / "lib/Transforms/MathematicalValues.h",
+        ROOT / "lib/Transforms/PreparedProtocol.h",
         ROOT / "lib/Transforms/ProtocolApplications.h"
     }
-    private_headers["ZkcNativeCompiler"] = {
+    private_headers["ZkcCompiler"] = {
         ROOT / "lib/Compiler/CompilationState.h",
         ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",
         ROOT / "lib/Compiler/LanguageInterface.h",
@@ -207,7 +207,8 @@ def main():
     private = set().union(*private_headers.values())
     # Implementation bridges are explicit and uninstalled. Each grants only
     # the named header, never the rest of its owner's private implementation.
-    bridges = {("ZkcDriver", ROOT / "lib/Support/Input.h")}
+    bridges = {("ZkcDriver", ROOT / "lib/Support/Input.h"),
+               ("ZkcCompiler", ROOT / "lib/Transforms/PreparedProtocol.h")}
     assert not (ROOT / "include/zkc/Dialect/Builders.h").exists(), "raw builders belong to unsupported detail"
 
     def check_private_edge(component, path, target):
@@ -278,8 +279,8 @@ def main():
                     ), f"{name}: input loading belongs to Driver: {path}"
                 # Invocation owns in-memory MLIR parsing; Driver additionally
                 # owns command-line file loading. Lower layers consume IR.
-                if name not in ("ZkcNativeCompiler", "ZkcDriver"):
-                    assert not include.startswith("mlir/Parser/"), f"{name}: parsing belongs to NativeCompiler or Driver: {path}"
+                if name not in ("ZkcCompiler", "ZkcDriver"):
+                    assert not include.startswith("mlir/Parser/"), f"{name}: parsing belongs to Compiler or Driver: {path}"
                 if name == "ZkcIR":
                     assert not include.startswith(("mlir/Pass/", "mlir/Transforms/")), f"{name}: transformation dependency {include}"
                 elif "ZkcIR" not in closure(name):

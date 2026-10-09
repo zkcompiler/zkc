@@ -1,4 +1,4 @@
-"""Execute exact installed NativeCompiler bytes in independent runtime processes."""
+"""Execute exact installed Compiler bytes in independent runtime processes."""
 
 import argparse
 import hashlib
@@ -31,6 +31,12 @@ def main():
                 assert record["status"] == "refused" and record["code"] == refusal, record
             return record
 
+        for retired in ("run-entry", "produce-native-proof", "validate-native-proof"):
+            result = subprocess.run([args.runtime, retired], capture_output=True,
+                                    text=True, timeout=60)
+            assert result.returncode == 2 and "Unknown command" in result.stderr
+            assert not result.stdout
+
         bundle = work / "run.bundle"
         pin = hashlib.sha256(bundle.read_bytes()).hexdigest()
         inputs = write("bundle.json", ["zkc.bundle-inputs/1", "installed", [
@@ -46,26 +52,35 @@ def main():
             ["0", ["wire", "5a4b4356010501"]]], "", [], "0"])
         validator = write("validator.json", ["zkc.native-proof-inputs/1", [], [], "", [], "0"])
         proof = work / "proof.bin"
-        result = run("produce-native-proof", deployment, pin, producer, proof)
-        assert result["status"] == "produced"
-        result = run("validate-native-proof", deployment, pin, validator, proof)
-        assert result["status"] == "accepted"
+        proof.write_bytes(b"previous proof")
+        for command, request in [("prove-bundle", producer), ("verify-bundle", validator)]:
+            refused = run(command, deployment, pin, request, proof,
+                          refusal="native-proof-binding-policy")
+            assert refused["binding_scope"] == "header" and refused["phase"] == "admission"
+            assert proof.read_bytes() == b"previous proof"
+        result = run("prove-bundle", deployment, pin, producer, proof, "--allow-header-only")
+        assert result["status"] == "produced" and result["binding_scope"] == "header"
+        result = run("verify-bundle", deployment, pin, validator, proof, "--allow-header-only")
+        assert result["status"] == "accepted" and result["binding_scope"] == "header"
         for data, code in [(proof.read_bytes()[:-1], "proof-truncated"),
                            (proof.read_bytes() + b"x", "proof-trailing")]:
             malformed = work / "malformed.bin"
             malformed.write_bytes(data)
-            run("validate-native-proof", deployment, pin, validator, malformed, refusal=code)
-        run("validate-native-proof", deployment, "00" * 32, validator, proof,
-            refusal="native-proof-deployment-binding")
+            run("verify-bundle", deployment, pin, validator, malformed,
+                "--allow-header-only", refusal=code)
+        for options in [[], ["--allow-header-only"]]:
+            refused = run("verify-bundle", deployment, "00" * 32, validator, proof,
+                          *options, refusal="native-proof-deployment-binding")
+            assert "binding_scope" not in refused
         package = work / "run.entry"
         pin = hashlib.sha256(package.read_bytes()).hexdigest()
         inputs = write("named-run.json", {"format": "zkc.entry-run/1", "session": "installed",
             "roles": {"P": {"inputs": {"x": True}}}})
         outputs = work / "named-results.json"
-        result = run("run-entry", package, pin, inputs, f"--results={outputs}")
+        result = run("run", package, pin, inputs, f"--results={outputs}")
         assert result["status"] == "executed"
         assert json.loads(outputs.read_text())["roles"]["P"] == {"r": True}
-        run("run-entry", package, "00" * 32, inputs, refusal="entry-package-identity")
+        run("run", package, "00" * 32, inputs, refusal="entry-package-identity")
 
         package = work / "proof.entry"
         pin = hashlib.sha256(package.read_bytes()).hexdigest()

@@ -111,19 +111,19 @@ pub(crate) fn apply(
     Ok(vec![output])
 }
 
-pub(crate) const OPERATIONS: &[&str] = &[
-    "index.constant",
-    "index.add",
-    "index.sub",
-    "index.mul",
-    "index.div",
-    "index.mod",
-    "index.equal",
-    "index.less",
-    "indices.empty",
-    "indices.append",
-    "indices.at",
-    "indices.length",
+pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
+    ("native/index.constant", "index.constant"),
+    ("native/index.add", "index.add"),
+    ("native/index.sub", "index.sub"),
+    ("native/index.mul", "index.mul"),
+    ("native/index.div", "index.div"),
+    ("native/index.mod", "index.mod"),
+    ("native/index.equal", "index.equal"),
+    ("native/index.less", "index.less"),
+    ("native/indices.empty", "indices.empty"),
+    ("native/indices.append", "indices.append"),
+    ("native/indices.at", "indices.at"),
+    ("native/indices.length", "indices.length"),
 ];
 
 #[cfg(test)]

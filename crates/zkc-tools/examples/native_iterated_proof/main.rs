@@ -156,8 +156,9 @@ fn main() {
         let family = case["family"].as_str().unwrap();
         let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-        let deployment = NativeDeployment::admit(&bytes, &digest(&bytes), Default::default())
-            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        let deployment =
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+                .unwrap_or_else(|e| panic!("{name}: {e}"));
         let counts = case["count"]
             .as_u64()
             .map_or_else(|| vec![0, 1, 2, 3, 8], |n| vec![n]);

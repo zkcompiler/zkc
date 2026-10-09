@@ -1,6 +1,6 @@
 # Authored transcript boundaries
 
-Native `/4` deployments execute the existing external hash-chain and duplex
+Native `/5` deployments execute the existing external hash-chain and duplex
 operations through ordinary mathematical IR, local functions and the general
 interpreter. The [external construction specification](../spec/realization/external-constructions.md)
 owns their semantics. No new dialect, state type, host constructor or proof

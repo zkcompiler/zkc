@@ -49,7 +49,7 @@ fn encode(value: impl Serialize) -> Result<Vec<u8>> {
 // Outputs have already been admitted under their role's setup policy; encoding
 // here adds no setup authorization and issues no resources.
 fn backend(capacity: NativeCapacity, setups: zkc_backends::SetupRegistry) -> Result<NativeBackend> {
-    capacity.check()?;
+    capacity.validate()?;
     NativeBackend::new(
         capacity.backend(),
         zkc_backends::EntryPolicy::new(
@@ -67,12 +67,21 @@ pub fn output_setups(
     authority: &super::SetupAuthority,
     capacity: NativeCapacity,
 ) -> Result<zkc_backends::SetupRegistry> {
-    capacity.check()?;
+    let mut imports = crate::host::setups::VerifierKeys::new(capacity.backend().ark_bounds());
+    output_setups_with(material, authority, capacity, &mut imports)
+}
+pub(crate) fn output_setups_with(
+    material: &std::collections::BTreeMap<String, Vec<u8>>,
+    authority: &super::SetupAuthority,
+    capacity: NativeCapacity,
+    imports: &mut crate::host::setups::VerifierKeys,
+) -> Result<zkc_backends::SetupRegistry> {
+    capacity.validate()?;
+    imports.check_bounds(capacity.backend().ark_bounds())?;
     if material.len() != authority.keys.len() {
         return Err("entry-setup-material".into());
     }
     let policy = capacity.backend();
-    let mut imports = crate::host::setups::VerifierKeys::new(policy.ark_bounds());
     let mut keys = Vec::new();
     for (name, bytes) in material {
         capacity.check_wire(bytes.len())?;

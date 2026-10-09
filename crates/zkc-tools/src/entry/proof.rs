@@ -4,9 +4,8 @@ use super::{
     Interface, NamedValues, Package, RoleInputs, SetupAuthority, arguments, setups, value,
 };
 use crate::proof::{
-    AttemptPolicy, NativeCapacity, NativeDeployment, NativeProofReport, ProofInputs, hex,
+    AttemptPolicy, NativeCapacity, NativeDeployment, NativeProofReport, ProofInputs,
 };
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use zkc_backends::NativeBackend;
 
@@ -127,9 +126,8 @@ impl ProofEntry {
             return Err(E::new(P::Admission, "entry-proof-binding-policy"));
         }
         arguments::check_ports(&interface).map_err(|e| E::new(P::Interface, e))?;
-        let native = NativeDeployment::admit(
-            package.artifact().as_bytes(),
-            &hex(&Sha256::digest(package.artifact().as_bytes())),
+        let native = NativeDeployment::admit_artifact(
+            &package.authenticated_artifact(),
             setups::proof_authority(&interface, setups).map_err(|e| E::new(P::Authority, e))?,
         )
         .and_then(|n| n.with_capacity(options.capacity))
@@ -157,29 +155,10 @@ impl ProofEntry {
         self.scope
     }
     pub fn prove(&self, request: ProofRequest) -> EntryResult<ProofReport> {
-        if self.completion.is_some() {
-            return self.prove_attempts(request, AttemptOptions::default());
-        }
-        let inputs = self
-            .inputs(request, true)
-            .map_err(|e| E::new(P::Request, e))?;
-        Ok(self.report(
-            self.native
-                .execute_typed(&inputs, None)
-                .map_err(|e| E::new(P::Preparation, e))?,
-            true,
-        ))
+        self.execute(request, None, None)
     }
     pub fn verify(&self, request: ProofRequest, proof: &[u8]) -> EntryResult<ProofReport> {
-        let inputs = self
-            .inputs(request, false)
-            .map_err(|e| E::new(P::Request, e))?;
-        Ok(self.report(
-            self.native
-                .execute_typed(&inputs, Some(proof))
-                .map_err(|e| E::new(P::Preparation, e))?,
-            false,
-        ))
+        self.execute(request, Some(proof), None)
     }
     /// Use the Entry's completion result with explicit application authorization.
     /// The native controller retains actual providers and cumulative work.
@@ -188,30 +167,54 @@ impl ProofEntry {
         request: ProofRequest,
         options: AttemptOptions,
     ) -> EntryResult<ProofReport> {
-        let completion = self
-            .completion
-            .ok_or_else(|| E::new(P::Request, "entry-attempt-completion"))?;
-        let capacity = self.native.capacity();
-        let policy = AttemptPolicy {
-            completion,
-            // Source randomness enters through managed services; this source
-            // profile admits no affine RNG input/output constructors.
-            rng: Vec::new(),
-            limits: zkc_runtime::attempt::Limits {
-                attempts: options.count,
-                proof_bytes: options.proof_bytes,
-            },
-            work: capacity.work,
-            values: capacity.values,
+        self.execute(request, None, Some(options))
+    }
+    fn execute(
+        &self,
+        request: ProofRequest,
+        proof: Option<&[u8]>,
+        attempts: Option<AttemptOptions>,
+    ) -> EntryResult<ProofReport> {
+        let mut imports =
+            crate::host::setups::VerifierKeys::new(self.native.capacity().backend().ark_bounds());
+        self.execute_with(request, proof, attempts, &mut imports)
+    }
+    pub(crate) fn execute_with(
+        &self,
+        request: ProofRequest,
+        proof: Option<&[u8]>,
+        attempts: Option<AttemptOptions>,
+        imports: &mut crate::host::setups::VerifierKeys,
+    ) -> EntryResult<ProofReport> {
+        let producer = proof.is_none();
+        let attempts = if producer && (attempts.is_some() || self.completion.is_some()) {
+            let options = attempts.unwrap_or_default();
+            let completion = self
+                .completion
+                .ok_or_else(|| E::new(P::Request, "entry-attempt-completion"))?;
+            let capacity = self.native.capacity();
+            Some(AttemptPolicy {
+                completion,
+                // Source randomness enters through managed services; no affine RNG ports.
+                rng: Vec::new(),
+                limits: zkc_runtime::attempt::Limits {
+                    attempts: options.count,
+                    proof_bytes: options.proof_bytes,
+                },
+                work: capacity.work,
+                values: capacity.values,
+            })
+        } else {
+            None
         };
         let inputs = self
-            .inputs(request, true)
+            .inputs(request, producer)
             .map_err(|e| E::new(P::Request, e))?;
         Ok(self.report(
             self.native
-                .execute_attempts_typed(&inputs, &policy)
+                .execute_prepared(&inputs, proof, attempts.as_ref(), imports)
                 .map_err(|e| E::new(P::Preparation, e))?,
-            true,
+            producer,
         ))
     }
     fn inputs(&self, request: ProofRequest, producer: bool) -> Result<ProofInputs> {

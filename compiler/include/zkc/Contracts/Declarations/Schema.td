@@ -173,8 +173,6 @@ class ZKC_Operation<string value, list<ZKC_Term> terms,
   list<ZKC_Facet> facets = [];
   ZKC_Operation derivedCounterpart = ?;
   bit commonGeneric = 1;
-  // The closed local envelope preserves existing failure behavior.
-  string effect = "local";
 }
 class ZKC_TypeFamily<string value> : ZKC_TypeHead<value>;
 class ZKC_TypeFamilyCase<ZKC_TypeFamily f, ZKC_Type element, ZKC_Type result> : ZKC_Declaration {

@@ -12,7 +12,7 @@ interactive run from the repository root, with built tools on `PATH`:
 zkc compile --module=schnorr=examples/libraries/schnorr/lib.zkc \
   --module=example=examples/projects/schnorr/main.zkc \
   --entry=example::Interactive --output=schnorr.entry
-zkc run-entry schnorr.entry EXPECTED_SHA256 examples/projects/schnorr/interactive.json \
+zkc run schnorr.entry EXPECTED_SHA256 examples/projects/schnorr/interactive.json \
   --results=results.json
 ```
 

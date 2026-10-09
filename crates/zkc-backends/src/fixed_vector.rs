@@ -124,8 +124,11 @@ pub(crate) fn apply(
     Ok(vec![value])
 }
 
-pub(crate) const OPERATIONS: &[&str] = &[
-    "fixed_vector.from_vector",
-    "fixed_vector.to_vector",
-    "fixed_vector.dot",
+pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
+    (
+        "plonky3/fixed_vector.from_vector",
+        "fixed_vector.from_vector",
+    ),
+    ("plonky3/fixed_vector.to_vector", "fixed_vector.to_vector"),
+    ("plonky3/fixed_vector.dot", "fixed_vector.dot"),
 ];

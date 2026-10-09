@@ -28,7 +28,7 @@ hash of an incoming package does not authorize it. An authored proof job require
 For a run Entry, use:
 
 ```sh
-zkc run-entry run.entry EXPECTED_SHA256 inputs.json --results=results.json
+zkc run run.entry EXPECTED_SHA256 inputs.json --results=results.json
 ```
 
 Compilation accepts repeated `--module=NAME=FILE` and
@@ -98,7 +98,26 @@ proving also withholds a proof marked incomplete.
 `--capacity=FILE` selects the shared [native capacity](../compiler/mathematical-composition.md#application-capacity)
 limits. It does not change the proof's mathematical identity. The CLI uses default
 joint dispatch, total wire and external-work allowances; Rust applications can
-lower these further through `HostLimits` or `ProofOptions`.
+lower these further through `HostLimits` or `ProofOptions`. Oversized policy
+requests refuse; the Host does not silently clamp them. Zero remains an explicit
+allowance. `NativeCapacity::HARD_MAX`, `BundleLimits::HARD_MAX` and
+`RunLimits::HARD_MAX` expose installed ceilings independently of `Default`.
+
+| Joint execution allowance | Default and hard ceiling | Unit and scope |
+|---|---:|---|
+| Dispatches | 32,768 | Dynamic scheduled occurrences, including loop repetitions |
+| Message size | 4,096 | Canonical bytes per message |
+| Total wire | 16 MiB | Cumulative message bytes per run |
+| External work | 16,777,216 | Backend primitive work units per role |
+| Instructions | 1,000,000 | Per runner; cumulative across proof attempts |
+| Iterations | 100,000 | Per runner; cumulative across proof attempts |
+| Live values | 64 MiB | Retained payload charge per runner |
+| Allocated values | 256 MiB | Cumulative payload charge per runner |
+
+Proof framing separately has a 16 MiB ceiling; repeated proving permits at most
+`AttemptPolicy::MAX_ATTEMPTS` (1,024) trials. Loading, setup, numeric collections
+and backend scratch retain their own limits. These units do not establish one
+global peak-memory or elapsed-time bound.
 
 ## Setup material and authority
 
@@ -132,18 +151,44 @@ Use `--results=FILE` to publish returned logical values. Run files contain a
 `zkc.entry-outputs/1`. Encoding honors admitted native capacity and a 16 MiB whole
 file limit. Non-Wire private results cannot be serialized.
 
-Input and authority paths name bounded regular files; unconnected streams refuse.
+All configured input and authority paths name bounded regular files. Symlink
+inputs resolve to a regular descriptor; FIFOs, devices and other nonregular
+inputs refuse. Byte-slice APIs remain available for applications that own their
+transport. Compile sources and assets also require regular files, with capture
+limits enforced by the compiler.
+
 Output paths must differ from each other and all input/configuration paths,
-including referenced prover-key files. Each file is replaced atomically after
-successful execution and cleanup. The proof is published before optional result
-encoding and publication. If either result step fails, the report
-retains `proof_published: true` and the execution observations. Publication errors
-never cause an automatic rerun.
+including referenced prover-key files. Existing symlink outputs and nonregular
+destinations refuse. Canonical directory aliases and, on Unix, existing hardlink aliases
+also refuse. Destination parents must already exist. These are trusted
+configuration checks; concurrent hostile filesystem mutation is outside this
+contract.
+
+The Host encodes every requested output and writes and syncs all temporary files
+before replacing any destination. Preflight, encoding and staging failures leave
+prior files intact. On Unix, published files use mode `0600`, including replacements;
+previous destination permissions are not preserved. Publication atomically replaces
+each file, in order:
+proof followed by optional results. This is per-file publication, not a multi-file
+transaction. A later replacement can fail after the proof was published. The
+report retains `proof_published: true`, a `publication.published` list, the
+`publication.failed` output name, and execution observations. Staging refusal has
+an empty published list. Publication errors never trigger an automatic rerun;
+these operations do not promise crash durability of directory entries.
 
 ## Rust applications
 
-The common API is `entry::RunEntry` or `entry::ProofEntry` in `zkc-tools`. An
-immutable admitted handle can prepare independent calls. `RoleInputs`,
+The common API is `entry::RunEntry` or `entry::ProofEntry` in `zkc-tools`.
+Command dispatch and report exit-status checks live in `zkc_tools::cli`. Native
+positional artifacts use `run-bundle`, `prove-bundle` and `verify-bundle`; source
+Entry commands retain their named-input interface. An
+immutable admitted handle can prepare independent calls. A captured package owns
+its artifact bytes and identity; native structural admission and interface binding
+still run when creating the handle. Public raw-byte loaders continue to authenticate
+before parsing. Result-producing CLI calls reuse imported immutable verifier keys
+within one invocation, keyed by exact owned bytes, independent setup pins and
+fixed bounds. Each input retains its own quota and authority checks; this context
+never shares providers, attempt state or live capabilities. `RoleInputs`,
 `RunRequest` and `ProofRequest` hold invocation data; reports keep outcomes and
 cleanup even when no complete result exists. `RunReport::is_success` requires
 completed execution, successful cleanup and decoded outputs; `into_result` keeps

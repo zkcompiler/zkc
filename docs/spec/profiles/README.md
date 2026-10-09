@@ -44,7 +44,7 @@ a native correctness or security proof.
 | Compiler | [Structured iteration](compiler/structured-iteration.md) | Compact counted regions, role availability, affine carries and coordinated scheduling |
 | Compiler | [Polynomial recipes](compiler/polynomial-recipes.md) | Closed polynomial expressions, stable degree bounds and dynamic-arity realization |
 | Compiler | [Protocol composition](compiler/protocol-composition.md) | Static applications, role substitution, bounded expansion and residual-to-terminal bindings |
-| Compiler | [Structured proof messages](compiler/structured-proof-messages.md) | Complete typed frames, installed domains and authorized setups under proof policy `/4` |
+| Compiler | [Structured proof messages](compiler/structured-proof-messages.md) | Complete typed frames, installed domains and authorized setups under proof policy `/5` |
 | Compiler | [Nested data](compiler/nested-data.md) | Immutable sequences, ragged matrix frames, recursive permissions and cumulative bounds |
 | Compiler | [Local algorithms](compiler/local-algorithms.md) | Shared acyclic local calls, bound entailment, expansion and complete stopping; not equivalence to a separately charged call stack |
 | Compiler | [Conditional entry completion](compiler/entry-completion.md) | Owner-local return, affine continuation, nested cleanup, retained prefixes and bounded local termination |
@@ -57,7 +57,7 @@ These profiles describe independently formalized programs, analyses, protocols
 and experiments. Their model-specific formats and executable references are not
 additional native compiler or runtime paths. Correspondence applies to the exact
 Lean subjects and premises named by each page; it does not validate `.zkc` or
-`zkc.program/1`.
+`zkc.program/2`.
 
 | Group | Profile | Selected scope |
 |---|---|---|

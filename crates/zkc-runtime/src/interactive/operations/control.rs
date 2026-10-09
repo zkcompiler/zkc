@@ -3,10 +3,14 @@ use super::*;
 use Type::*;
 
 pub(super) const CONTRACTS: &[Contract] = &[
-    Contract::new("bool.and", (&[Bool, Bool], &[Bool], AttributeRule::None)),
-    Contract::new("bool.or", (&[Bool, Bool], &[Bool], AttributeRule::None)),
-    Contract::new("bool.not", (&[Bool], &[Bool], AttributeRule::None)),
-    Contract::new("control.require", (&[Bool], &[], AttributeRule::None)),
+    Contract::new("bool.and", (&[Bool, Bool], &[Bool], AttributeRule::None))
+        .implemented_by(&["arkworks/bool.and"]),
+    Contract::new("bool.or", (&[Bool, Bool], &[Bool], AttributeRule::None))
+        .implemented_by(&["arkworks/bool.or"]),
+    Contract::new("bool.not", (&[Bool], &[Bool], AttributeRule::None))
+        .implemented_by(&["arkworks/bool.not"]),
+    Contract::new("control.require", (&[Bool], &[], AttributeRule::None))
+        .implemented_by(&["arkworks/control.require"]),
 ];
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
@@ -15,6 +19,5 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
 
     contracts: CONTRACTS,
     resolve: index::resolve,
-    providers: &["arkworks"],
     select: default_ports,
 };

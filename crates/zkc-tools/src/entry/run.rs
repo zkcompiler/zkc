@@ -3,7 +3,6 @@
 use super::errors::{EntryError as E, EntryPhase as P, EntryResult};
 use super::{Interface, Package, SetupAuthority, Value, arguments, setups, value};
 use crate::run::{self as native, HostLimits, HostReport, Outcome, RunHost};
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 type Result<T> = std::result::Result<T, String>;
@@ -40,9 +39,8 @@ impl RunEntry {
             return Err(E::new(P::Admission, "entry-job-kind"));
         }
         arguments::check_ports(&interface).map_err(|e| E::new(P::Interface, e))?;
-        let native = RunHost::admit(
-            package.artifact().as_bytes(),
-            &Sha256::digest(package.artifact().as_bytes()).into(),
+        let native = RunHost::admit_artifact(
+            &package.authenticated_artifact(),
             limits,
             setups::run_authority(&interface, setups).map_err(|e| E::new(P::Authority, e))?,
         )
@@ -71,10 +69,20 @@ impl RunEntry {
     /// products are required even though they have no native operand. The plan
     /// owns all prepared input data and may outlive the consumed request.
     pub fn prepare(&self, request: RunRequest) -> EntryResult<PreparedRun<'_>> {
+        let mut imports = crate::host::setups::VerifierKeys::new(
+            self.native.limits().capacity.backend().ark_bounds(),
+        );
+        self.prepare_with(request, &mut imports)
+    }
+    pub(crate) fn prepare_with(
+        &self,
+        request: RunRequest,
+        imports: &mut crate::host::setups::VerifierKeys,
+    ) -> EntryResult<PreparedRun<'_>> {
         let inputs = self.inputs(request).map_err(|e| E::new(P::Request, e))?;
         let native = self
             .native
-            .prepare_typed(&inputs)
+            .prepare_with(&inputs, imports)
             .map_err(|e| E::new(P::Preparation, e))?;
         Ok(PreparedRun {
             interface: &self.interface,

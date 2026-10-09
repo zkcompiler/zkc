@@ -7,6 +7,40 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use zkc_runtime::interactive::ServiceContract;
 
+/// Native service shapes belong to the executing provider, independently of
+/// the runtime contract catalogue. These facts never authorize a root or lease.
+pub(crate) fn support(
+    contract: ServiceContract,
+    method: &str,
+) -> Option<zkc_runtime::interactive::ServiceSupport> {
+    use zkc_runtime::interactive::{
+        Identity, LogicalType, PhysicalType, Representation, ServiceSignature, ServiceSupport, Type,
+    };
+    if method != "draw" {
+        return None;
+    }
+    let (field, representation) = match contract {
+        ServiceContract::RandomBls12381Field => (Identity::Bls12381Fr, Representation::Fr),
+        ServiceContract::RandomBn254Field => (Identity::Bn254Fr, Representation::Bn254Fr),
+        ServiceContract::RandomRistrettoField => {
+            (Identity::Ristretto255Scalar, Representation::DalekScalar)
+        }
+        ServiceContract::RandomExtensionField => {
+            (Identity::KoalaBearExt8, Representation::KoalaBearExt8)
+        }
+    };
+    Some(ServiceSupport {
+        signature: ServiceSignature {
+            inputs: vec![],
+            outputs: vec![
+                PhysicalType::new(LogicalType::new(Type::Field, field).ok()?, representation)
+                    .ok()?,
+            ],
+        },
+        max_retained_bytes: 512,
+    })
+}
+
 struct Authority;
 struct LeaseIdentity;
 

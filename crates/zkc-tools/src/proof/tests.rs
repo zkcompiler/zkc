@@ -47,7 +47,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         body.push(json!(["bool_constant", "done", "done", true]));
         body.push(json!(["return", values]));
         let candidate = json!([
-            "zkc.program/1",
+            "zkc.program/2",
             [
                 [
                     "create",
@@ -62,7 +62,6 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     "logical/resource_unit.consume"
                 ]
             ],
-            "physical",
             [
                 ["function", "unit", [], outputs, body, ["unit", []]],
                 [
@@ -84,7 +83,6 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     "main",
                     "P",
                     [],
-                    [],
                     outputs,
                     [["local", "unit", "unit", [], values], ["return", values]],
                     []
@@ -94,7 +92,6 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     "verifier",
                     "main",
                     "V",
-                    [],
                     [],
                     ["bool@native.bool/1"],
                     [
@@ -108,9 +105,9 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         ])
         .to_string();
         let descriptor = json!([
-            "zkc.native-proof-descriptor/4",
+            "zkc.native-proof-descriptor/5",
             [
-                "zkc.native-proof-policy/4",
+                "zkc.native-proof-policy/5",
                 "main",
                 "P",
                 "V",
@@ -131,7 +128,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             json!([["1", "bool"]])
         };
         let deployment = json!([
-            "zkc.native-proof/4",
+            "zkc.native-proof/5",
             "0".repeat(64),
             descriptor,
             hash(&logical::encode_tree(&descriptor).unwrap()),
@@ -147,7 +144,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         .to_string();
         if handling == "consume" {
             let current: Json = serde_json::from_str(&deployment).unwrap();
-            for version in ["1", "2", "3", "5"] {
+            for version in ["1", "2", "3", "4", "6"] {
                 for (field, expected) in [
                     (0, "native-proof-format"),
                     (1, "native-proof-descriptor"),
@@ -162,9 +159,13 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     old[3] = json!(hash(&logical::encode_tree(&old[2]).unwrap()));
                     let bytes = serde_json::to_vec(&old).unwrap();
                     assert_eq!(
-                        NativeDeployment::admit(&bytes, &hash(&bytes), Default::default())
-                            .err()
-                            .unwrap(),
+                        NativeDeployment::admit(
+                            &bytes,
+                            &Sha256::digest(&bytes).into(),
+                            Default::default()
+                        )
+                        .err()
+                        .unwrap(),
                         expected
                     );
                 }
@@ -174,7 +175,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             old[3] = json!(hash(&logical::encode_tree(&old[2]).unwrap()));
             let bytes = serde_json::to_vec(&old).unwrap();
             assert_eq!(
-                NativeDeployment::admit(&bytes, &hash(&bytes), Default::default())
+                NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
                     .err()
                     .unwrap(),
                 "native-proof-descriptor"
@@ -182,7 +183,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         }
         let admitted = NativeDeployment::admit(
             deployment.as_bytes(),
-            &hash(deployment.as_bytes()),
+            &Sha256::digest(deployment.as_bytes()).into(),
             Default::default(),
         );
         if returned {
@@ -231,11 +232,60 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         let proof = report.outcome.unwrap();
         assert_eq!(proof.len(), 40);
         let request = inputs::decode(&deployment, &inputs, false).unwrap();
-        let prepared =
-            inputs::prepare(&deployment, &request, deployment.entry.validator(), false).unwrap();
+        let prepared = inputs::prepare(
+            &deployment,
+            &request,
+            deployment.entry.validator(),
+            false,
+            &mut crate::host::setups::VerifierKeys::new(deployment.capacity.backend().ark_bounds()),
+        )
+        .unwrap();
+        // Independently framed, frozen bytes: do not derive this expectation
+        // with logical::encode_tree or the Host's binding constructor.
+        let vector: Json = serde_json::from_str(include_str!(
+            "../../../zkc-test-support/fixtures/native-proof-binding.json"
+        ))
+        .unwrap();
+        assert_eq!(hex(&prepared.root), vector["encoded_hex"]);
+        assert_eq!(hash(&prepared.root), vector["sha256"]);
+        assert_eq!(
+            prepared.root.len(),
+            vector["bytes"].as_u64().unwrap() as usize
+        );
+        assert_eq!(hex(&proof[8..40]), vector["sha256"]);
         let mut root = logical::decode_tree(&prepared.root).unwrap();
-        assert_eq!(root[0], "zkc.native-proof-binding/4");
-        for version in ["1", "2", "3"] {
+        assert_eq!(root, vector["tree"]);
+        assert_eq!(root[0], "zkc.native-proof-binding/5");
+        let mut retired = proof.clone();
+        retired[8..40].copy_from_slice(&zkc_test_support::unhex(
+            vector["retired_binding"]["sha256"].as_str().unwrap(),
+        ));
+        assert_eq!(
+            deployment
+                .execute(&inputs, Some(&retired))
+                .unwrap()
+                .outcome
+                .unwrap_err(),
+            "proof-header"
+        );
+        // Even under the current tag the removed suffix is not equivalent.
+        let mut padded = root.clone();
+        padded
+            .as_array_mut()
+            .unwrap()
+            .extend([json!([]), json!([]), json!([])]);
+        let mut padded_proof = proof.clone();
+        padded_proof[8..40]
+            .copy_from_slice(&Sha256::digest(logical::encode_tree(&padded).unwrap()));
+        assert_eq!(
+            deployment
+                .execute(&inputs, Some(&padded_proof))
+                .unwrap()
+                .outcome
+                .unwrap_err(),
+            "proof-header"
+        );
+        for version in ["1", "2", "3", "4"] {
             root[0] = json!(format!("zkc.native-proof-binding/{version}"));
             let mut old = proof.clone();
             old[8..40].copy_from_slice(&Sha256::digest(logical::encode_tree(&root).unwrap()));

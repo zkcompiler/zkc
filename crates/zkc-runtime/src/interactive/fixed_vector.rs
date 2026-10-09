@@ -49,11 +49,12 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
     physical_only: false,
 
     contracts: &[
-        Contract::custom("fixed_vector.from_vector"),
-        Contract::custom("fixed_vector.to_vector"),
-        Contract::custom("fixed_vector.dot"),
+        Contract::custom("fixed_vector.from_vector")
+            .implemented_by(&["plonky3/fixed_vector.from_vector"]),
+        Contract::custom("fixed_vector.to_vector")
+            .implemented_by(&["plonky3/fixed_vector.to_vector"]),
+        Contract::custom("fixed_vector.dot").implemented_by(&["plonky3/fixed_vector.dot"]),
     ],
     resolve: |binding, _| signature(binding),
-    providers: &["plonky3"],
     select: super::operations::default_ports,
 };

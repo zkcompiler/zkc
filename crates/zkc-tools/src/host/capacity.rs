@@ -9,11 +9,17 @@ use zkc_runtime::interactive::{Limits, ValueBudget, WorkBudget};
 /// authority. Setup and provider-specific ceilings keep their existing owners.
 #[derive(Clone, Copy, Debug)]
 pub struct NativeCapacity {
+    /// Maximum elements in one numeric collection.
     pub elements: usize,
+    /// Maximum group elements in one collection.
     pub groups: usize,
+    /// Bytes in one canonical wire frame.
     pub wire_bytes: usize,
+    /// Retained bytes in one native value.
     pub value_bytes: usize,
+    /// Instructions and loop iterations per runner (cumulative for proof retries).
     pub work: WorkBudget,
+    /// Live retained payload and cumulative allocation charge, in bytes.
     pub values: ValueBudget,
 }
 impl Default for NativeCapacity {
@@ -30,15 +36,30 @@ impl Default for NativeCapacity {
     }
 }
 impl NativeCapacity {
-    pub(crate) fn check(&self) -> Result<()> {
-        if self.elements > 1 << 20
-            || self.groups > 32768
-            || self.wire_bytes > INPUT_LIMIT
-            || self.value_bytes > Limits::VALUE_BYTES
-            || self.work.instructions > Limits::INSTRUCTIONS
-            || self.work.iterations > Limits::ITERATIONS
-            || self.values.live_bytes > Limits::VALUE_BYTES
-            || self.values.total_bytes > Limits::TOTAL_VALUE_BYTES
+    /// Installed hard ceilings; defaults may be lower. These do not bound peak RSS.
+    pub const HARD_MAX: Self = Self {
+        elements: 1 << 20,
+        groups: 32768,
+        wire_bytes: INPUT_LIMIT,
+        value_bytes: Limits::VALUE_BYTES,
+        work: WorkBudget {
+            instructions: Limits::INSTRUCTIONS,
+            iterations: Limits::ITERATIONS,
+        },
+        values: ValueBudget {
+            live_bytes: Limits::VALUE_BYTES,
+            total_bytes: Limits::TOTAL_VALUE_BYTES,
+        },
+    };
+    pub fn validate(&self) -> Result<()> {
+        if self.elements > Self::HARD_MAX.elements
+            || self.groups > Self::HARD_MAX.groups
+            || self.wire_bytes > Self::HARD_MAX.wire_bytes
+            || self.value_bytes > Self::HARD_MAX.value_bytes
+            || self.work.instructions > Self::HARD_MAX.work.instructions
+            || self.work.iterations > Self::HARD_MAX.work.iterations
+            || self.values.live_bytes > Self::HARD_MAX.values.live_bytes
+            || self.values.total_bytes > Self::HARD_MAX.values.total_bytes
         {
             return Err("native-capacity-limit".into());
         }
@@ -104,7 +125,7 @@ impl NativeCapacity {
                 total_bytes: size(&values[1])?,
             },
         };
-        result.check()?;
+        result.validate()?;
         Ok(result)
     }
     pub(crate) fn wire(&self, value: &Json) -> Result<Vec<u8>> {

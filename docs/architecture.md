@@ -2,7 +2,7 @@
 
 zkc uses one compilation and execution model. `.zkc` Language emits mathematical
 MLIR, which passes through `protocol`, `participant`, `exec` and `physical`
-profiles and is exported as `zkc.program/1`. Entry packages, proof deployments
+profiles and is exported as `zkc.program/2`. Entry packages, proof deployments
 and joint bundles execute through the same Rust Runner and installed kernels.
 
 ## System map
@@ -14,7 +14,7 @@ explicit .zkc modules + Assets                 direct mathematical MLIR
                                                          ▼
                   protocol → participant → exec → physical
                                                          │
-                                                   zkc.program/1
+                                                   zkc.program/2
                                                          │
                           authenticated Entry / proof / joint Host
                                                          │
@@ -40,7 +40,7 @@ relation declarations and the bounded native R1CS adapter.
 | `participant` | Role-specific values, actual sends/receives, ordered actions and optional transcript construction |
 | `exec` | Demand-driven mathematical realization and explicit executable local calls |
 | `physical` | Admitted representations, installed kernels, conversions and storage handling |
-| `zkc.program/1` | Closed executable participant description admitted by C++ export and Rust loading |
+| `zkc.program/2` | Closed executable participant description admitted by C++ export and Rust loading |
 | Host package | Application-authorized identity, input/result layout, setup authority, execution limits and publication |
 
 The [pipeline](compiler/protocol-pipeline.md) explains the transitions. Each
@@ -61,7 +61,8 @@ judgment.
 | IR | `compiler/include/zkc/Dialect`: mathematical dialects, interfaces and mandatory profile verification |
 | Translation | `compiler/include/zkc/Translation`: Language emission/comparison, relation import and checked program export |
 | Transforms and Target | `compiler/include/zkc/Transforms` and `Target`: preparation, projection, realization and physical selection |
-| NativeCompiler | `compiler/include/zkc/Compiler`: composed compilation, Entry packages, bundles and proof deployments |
+| Compiler | `compiler/include/zkc/Compiler`: composed compilation, Entry packages, bundles and proof deployments |
+| Driver | `compiler/include/zkc/Driver`: command parsing and file I/O; links the Compiler API |
 | Rust runtime | [zkc-runtime](../crates/zkc-runtime/README.md): Runner, bounded work and resource custody |
 | Rust Hosts | [zkc-tools](../crates/zkc-tools/README.md): Entry, proof and joint invocation, authentication, preparation and reports |
 | Backend integration | [zkc-backends](../crates/zkc-backends/README.md): installed types, codecs, services and kernel dispatch |
@@ -70,7 +71,7 @@ judgment.
 The exported CMake components follow these responsibilities; the
 [compiler package](../compiler/README.md#components-and-ownership) owns the exact installed API.
 MLIR-free services sit below IR. Translation and Transforms depend on IR;
-NativeCompiler composes them. Driver code handles command-line I/O. Component
+Compiler composes them. Driver code handles command-line I/O. Component
 checks and installed consumers enforce this direction.
 
 ## Runtime and application authority
@@ -81,7 +82,7 @@ expected package digest. The Rust Host binds named inputs to the independently
 admitted program; it trusts the compiler publication for source correspondence.
 It does not interpret the retained MLIR.
 
-The single native proof policy `/4` covers flat, iterated, PCS and structured
+The single native proof policy `/5` covers flat, iterated, PCS and structured
 programs on the shared executable and Runner. [Proof compilation](compiler/native-proofs.md)
 owns construction within the participant profile. [Exact identity](runtime/artifact-identity.md)
 binds the authorized bytes and invocation context. No normalized identity policy
@@ -102,7 +103,7 @@ Lean models define complete execution, observations, conditional refinement and
 selected protocol experiments. Their direct plans, finite tables and source
 representations remain independent research subjects. They are not stages of
 the native compiler, and their executable correspondence results do not validate
-`zkc.program/1`. [Assurance](assurance.md) owns that distinction.
+`zkc.program/2`. [Assurance](assurance.md) owns that distinction.
 
 Extensions add ordinary mathematical operations, transparent local algorithms,
 protocol libraries or backend kernels at the appropriate owner. A whole-protocol

@@ -120,7 +120,8 @@ fn run(directory: &Path, case: &Json) {
     let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
     let envelope: Json = serde_json::from_slice(&bytes).unwrap();
     let deployment =
-        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default()).unwrap();
+        NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+            .unwrap();
     let producer = inputs(&envelope, true, fold);
     let validator = inputs(&envelope, false, fold);
     let p = policy(fold);
@@ -350,7 +351,7 @@ fn run(directory: &Path, case: &Json) {
             .unwrap();
         let bytes = std::fs::read(directory.join(format!("{base}.deployment"))).unwrap();
         let other =
-            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
                 .unwrap();
         assert!(
             other
@@ -534,7 +535,7 @@ fn variable_proofs(directory: &Path) {
         let bytes = std::fs::read(directory.join(format!("varying_{i}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
         let deployment =
-            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
                 .unwrap();
         let input = inputs(&envelope, true, true);
         let p = policy(true);
@@ -564,7 +565,8 @@ fn custody_controls(directory: &Path) {
     let bytes = std::fs::read(directory.join("swapped.deployment")).unwrap();
     let envelope: Json = serde_json::from_slice(&bytes).unwrap();
     let deployment =
-        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default()).unwrap();
+        NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+            .unwrap();
     let input = inputs(&envelope, true, true);
     let tapes = |values: &[u64]| {
         BTreeMap::from([
@@ -606,7 +608,8 @@ fn custody_controls(directory: &Path) {
     );
     let bytes = std::fs::read(directory.join("nonce.deployment")).unwrap();
     let deployment =
-        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default()).unwrap();
+        NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+            .unwrap();
     assert_eq!(
         deployment
             .execute_attempts_test(&Json::Null, &policy(false), BTreeMap::new())
@@ -618,7 +621,8 @@ fn custody_controls(directory: &Path) {
 fn empty_attempts(directory: &Path) {
     let bytes = std::fs::read(directory.join("empty.deployment")).unwrap();
     let deployment =
-        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default()).unwrap();
+        NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+            .unwrap();
     let codec = NativeBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "test", "main", None), None),
@@ -695,7 +699,7 @@ fn mixed_custody(directory: &Path) {
         let bytes = std::fs::read(directory.join(format!("mixed_{suite}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
         let deployment =
-            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
                 .unwrap();
         let producer = inputs(&envelope, true, true);
         let tapes = || {
@@ -783,7 +787,8 @@ fn abandonment(directory: &Path, name: &str, silent: bool) {
     let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
     let envelope: Json = serde_json::from_slice(&bytes).unwrap();
     let deployment =
-        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default()).unwrap();
+        NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+            .unwrap();
     if !silent {
         check_exit_mutations(&envelope);
     }
@@ -883,12 +888,12 @@ fn check_exit_mutations(envelope: &Json) {
         e[5] = json!(hex(&Sha256::digest(c.as_bytes())));
         e[4] = json!(c);
         let bytes = serde_json::to_vec(&e).unwrap();
-        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+        NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
             .unwrap_err()
     };
     for missing in [false, true] {
         let mut candidate = original.clone();
-        let body = candidate[4][0][7]
+        let body = candidate[3][0][6]
             .as_array_mut()
             .unwrap()
             .iter_mut()
@@ -920,7 +925,7 @@ fn check_exit_mutations(envelope: &Json) {
         assert_eq!(refuse(&candidate), error.to_string());
     }
     let mut candidate = original.clone();
-    let body = candidate[4][0][7]
+    let body = candidate[3][0][6]
         .as_array_mut()
         .unwrap()
         .iter_mut()

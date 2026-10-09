@@ -53,19 +53,19 @@ impl HostLimits {
             values: self.capacity.values,
             work: self.capacity.work,
         }
-        .effective()
     }
-    fn effective(mut self) -> Result<Self> {
-        self.capacity.check()?;
-        self.external_work = self
-            .external_work
-            .min(NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT);
-        self.bundle = self.bundle.effective();
-        let execution = self.execution();
-        self.steps = execution.steps;
-        self.message_bytes = execution.wire_bytes;
-        self.total_wire_bytes = execution.total_wire_bytes;
-        Ok(self)
+    /// Existing per-role external primitive work ceiling, independent of instructions.
+    pub const MAX_EXTERNAL_WORK_PER_ROLE: u64 = NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT;
+    /// Validate the requested values without silently changing application policy.
+    pub fn validate(&self) -> Result<()> {
+        self.capacity.validate()?;
+        self.bundle.validate().map_err(|e| e.to_string())?;
+        if self.external_work > Self::MAX_EXTERNAL_WORK_PER_ROLE
+            || self.execution().validate().is_err()
+        {
+            return Err("bundle-limits".into());
+        }
+        Ok(())
     }
     pub fn record(&self) -> Json {
         json!({"admission":{"bytes":self.bundle.bytes,"candidate_bytes":self.bundle.candidate_bytes,
@@ -90,8 +90,24 @@ impl RunHost {
         limits: HostLimits,
         authority: SetupAuthority,
     ) -> Result<Self> {
-        let limits = limits.effective()?;
-        let backend = NativeBackend::new(
+        let backend = Self::admission_backend(limits)?;
+        let bundle = Bundle::admit_pinned(bytes, expected_sha256, &backend, limits.bundle)
+            .map_err(|e| e.to_string())?;
+        Self::from_bundle(bundle, expected_sha256, limits, authority)
+    }
+    pub(crate) fn admit_artifact(
+        artifact: &crate::entry::AuthenticatedArtifact<'_>,
+        limits: HostLimits,
+        authority: SetupAuthority,
+    ) -> Result<Self> {
+        let backend = Self::admission_backend(limits)?;
+        let bundle =
+            Bundle::admit(artifact.bytes(), &backend, limits.bundle).map_err(|e| e.to_string())?;
+        Self::from_bundle(bundle, artifact.identity(), limits, authority)
+    }
+    fn admission_backend(limits: HostLimits) -> Result<NativeBackend> {
+        limits.validate()?;
+        NativeBackend::new(
             limits.capacity.backend(),
             EntryPolicy::new(
                 Domain::new("admission", "admission", "admission", None),
@@ -99,13 +115,18 @@ impl RunHost {
             ),
             Default::default(),
         )
-        .map_err(|e| e.to_string())?;
-        let bundle = Bundle::admit_pinned(bytes, expected_sha256, &backend, limits.bundle)
-            .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+    }
+    fn from_bundle(
+        bundle: Bundle,
+        identity: &[u8; 32],
+        limits: HostLimits,
+        authority: SetupAuthority,
+    ) -> Result<Self> {
         authority.check(&bundle)?;
         Ok(Self {
             bundle,
-            identity: hex(expected_sha256),
+            identity: hex(identity),
             limits,
             authority,
         })
@@ -139,7 +160,16 @@ impl RunHost {
     /// Native elements must satisfy the upstream cryptographic library invariants;
     /// unchecked scalar constructors are not an alternative to canonical decoding.
     pub fn prepare_typed(&self, request: &RunInputs) -> Result<PreparedRun<'_>> {
-        inputs::prepare(self, request)
+        let mut imports =
+            crate::host::setups::VerifierKeys::new(self.limits.capacity.backend().ark_bounds());
+        self.prepare_with(request, &mut imports)
+    }
+    pub(crate) fn prepare_with(
+        &self,
+        request: &RunInputs,
+        imports: &mut crate::host::setups::VerifierKeys,
+    ) -> Result<PreparedRun<'_>> {
+        inputs::prepare(self, request, imports)
     }
 }
 struct PreparedRole {

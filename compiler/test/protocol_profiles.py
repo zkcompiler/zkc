@@ -34,16 +34,18 @@ native = commands.verified(module('exec'))
 commands.source('protocol-export', native, refuses='native-physical-required')
 native = commands.verified(native, None, '--zkc-select-physical')
 carrier = json.loads(commands.source('protocol-export', native))
-assert carrier[0] == 'zkc.program/1'
-assert len(carrier[4][0]) == 9 and carrier[4][0][4] == []
+assert carrier[0] == 'zkc.program/2'
+assert len(carrier) == 5 and len(carrier[3][0]) == 8
 assert json.loads(canonical_program(commands, json.dumps(carrier))) == carrier
 for retired in ('zkc.participants/1', 'zkc.service-participants/1', 'zkc.native-participants/1',
-                'zkc.native-participants/2', 'zkc.native-participants/3', 'zkc.program/99'):
+                'zkc.native-participants/2', 'zkc.native-participants/3', 'zkc.program/1', 'zkc.program/99'):
     mutant = list(carrier)
     mutant[0] = retired
     canonical_program(commands, json.dumps(mutant), refuses='interactive-format')
-carrier[2] = 'logical'
-canonical_program(commands, json.dumps(carrier), refuses='native-physical-required')
+for stage in ('physical', 'logical'):
+    mutant = list(carrier)
+    mutant.insert(2, stage)
+    canonical_program(commands, json.dumps(mutant), refuses='interactive-shape')
 commands.verified(module('physical').replace('"protocol.finish"', '"protocol.incomplete"'), 'unregistered operation')
 commands.verified(module('physical').replace('"protocol.finish"() : () -> ()', '"local.stop"() {site="end", reason="reject"} : () -> ()'), 'interactive-callable-terminator')
 for retired in ('protocol-import', 'protocol-compile', 'protocol-prepare', 'protocol-resolve', 'import', 'compile', 'claim-check'):

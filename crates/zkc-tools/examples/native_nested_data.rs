@@ -229,7 +229,7 @@ fn main() {
         let family = case["family"].as_str().unwrap();
         let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-        let hash = hex(&Sha256::digest(&bytes));
+        let hash: [u8; 32] = Sha256::digest(&bytes).into();
         let deployment = if family == "batched-openings" {
             assert_eq!(
                 NativeDeployment::admit(&bytes, &hash, Default::default())

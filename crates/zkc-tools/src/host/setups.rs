@@ -35,26 +35,41 @@ pub(crate) fn check_input(value: &Value, key: &zkc_arkworks::VerifierKey) -> Res
 
 /// Authenticated imports within one invocation. Pins, full canonical bytes and
 /// fixed bounds participate in reuse; per-operand accounting stays with Admission.
-pub(crate) struct VerifierKeys<'a> {
+/// Canonical byte snapshots are owned: moving or mutating a source request cannot
+/// change an authenticated cache entry. This context ends with one invocation.
+pub(crate) struct VerifierKeys {
     bounds: zkc_arkworks::Bounds,
-    keys:
-        std::collections::BTreeMap<([u8; 32], &'a [u8]), std::sync::Arc<zkc_arkworks::VerifierKey>>,
+    keys: std::collections::BTreeMap<[u8; 32], Vec<ImportedVerifierKey>>,
 }
-impl<'a> VerifierKeys<'a> {
+struct ImportedVerifierKey {
+    bytes: Vec<u8>,
+    key: std::sync::Arc<zkc_arkworks::VerifierKey>,
+}
+impl VerifierKeys {
     pub fn new(bounds: zkc_arkworks::Bounds) -> Self {
         Self {
             bounds,
             keys: Default::default(),
         }
     }
+    pub(crate) fn check_bounds(&self, bounds: zkc_arkworks::Bounds) -> Result<()> {
+        if self.bounds != bounds {
+            return Err("native-setup-capacity".into());
+        }
+        Ok(())
+    }
     pub fn import(
         &mut self,
-        bytes: &'a [u8],
+        bytes: &[u8],
         pin: [u8; 32],
         canonical_error: &str,
     ) -> Result<std::sync::Arc<zkc_arkworks::VerifierKey>> {
-        if let Some(key) = self.keys.get(&(pin, bytes)) {
-            return Ok(key.clone());
+        if let Some(imported) = self
+            .keys
+            .get(&pin)
+            .and_then(|keys| keys.iter().find(|imported| imported.bytes == bytes))
+        {
+            return Ok(imported.key.clone());
         }
         let key = zkc_arkworks::VerifierKey::from_bytes(bytes, pin, &self.bounds)
             .map_err(|e| e.to_string())?;
@@ -62,7 +77,10 @@ impl<'a> VerifierKeys<'a> {
             return Err(canonical_error.into());
         }
         let key = std::sync::Arc::new(key);
-        self.keys.insert((pin, bytes), key.clone());
+        self.keys.entry(pin).or_default().push(ImportedVerifierKey {
+            bytes: bytes.to_vec(),
+            key: key.clone(),
+        });
         Ok(key)
     }
 }
@@ -88,5 +106,18 @@ mod tests {
         wrong_pin[0] ^= 1;
         assert!(imports.import(&bytes, wrong_pin, "canonical").is_err());
         assert!(imports.import(&changed, pin, "canonical").is_err());
+        let mut source = same_bytes.clone();
+        let owned = imports.import(&source, pin, "canonical").unwrap();
+        source.fill(0);
+        assert!(imports.import(&source, pin, "canonical").is_err());
+        assert!(std::sync::Arc::ptr_eq(
+            &owned,
+            &imports.import(&same_bytes, pin, "canonical").unwrap()
+        ));
+        assert!(
+            imports
+                .check_bounds(zkc_arkworks::Bounds::new(0, 0, 0, 0))
+                .is_err()
+        );
     }
 }

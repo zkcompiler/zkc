@@ -19,7 +19,7 @@ Do not put internal work identifiers in shipped APIs. A directory should have
 one responsibility; common utilities belong below their consumers.
 
 The [architecture owner map](../architecture.md#implementation-owners) identifies
-Language, Relation, Program, IR, Translation, Transforms, Target and NativeCompiler.
+Language, Relation, Program, IR, Translation, Transforms, Target and Compiler.
 The exact exported graph lives in the compiler's CMake manifest and
 [component reference](../../compiler/README.md#components-and-ownership). Runtime ownership is
 separate from compiler implementation selection. Source Assets and installed

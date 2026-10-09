@@ -75,6 +75,11 @@ Error preflight(StringRef bytes) {
         ++i;
       if (i - start > 10)
         return error("source.limit", "interface scalar limit exceeded");
+      auto token = bytes.slice(start, i);
+      if (token != "true" && token != "false" && token != "null" &&
+          ((token.size() > 1 && token.front() == '0') ||
+           !all_of(token, [](char digit) { return isDigit(digit); })))
+        return error("source.interface", "invalid interface numeric spelling");
     }
     if (nodes > 200000)
       return error("source.limit", "interface node limit exceeded");

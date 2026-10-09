@@ -45,6 +45,8 @@ pub(super) struct Plan {
     pub(super) policy: AttemptPolicy,
 }
 impl AttemptPolicy {
+    /// Maximum completed or discarded trials in one invocation.
+    pub const MAX_ATTEMPTS: u64 = 1024;
     /// Bounded array/string invocation format; parsing grants no deployment authority.
     pub fn parse(bytes: &[u8]) -> Result<Self> {
         let value = super::parse(bytes, 64 * 1024)?;
@@ -112,7 +114,7 @@ impl AttemptPolicy {
     }
     pub(super) fn check(&self, deployment: &NativeDeployment) -> Result<Plan> {
         if self.limits.attempts == 0
-            || self.limits.attempts > 1024
+            || self.limits.attempts > Self::MAX_ATTEMPTS
             || self.limits.proof_bytes > super::MAX_PROOF_BYTES
             || self.work.instructions > deployment.capacity.work.instructions
             || self.work.iterations > deployment.capacity.work.iterations

@@ -530,14 +530,13 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
             .unwrap(),
         );
         let program = json!([
-            "zkc.program/1",
+            "zkc.program/2",
             [[
                 "observe",
                 "transcript.native.indexed.observe.data",
                 ["merlin3.bls12-381.fr64be/1", ty],
                 "arkworks/transcript.native.indexed.observe.data"
             ]],
-            "physical",
             [[
                 "function",
                 "observer",
@@ -561,7 +560,6 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
                 "participant",
                 "main",
                 "P",
-                [],
                 inputs,
                 [t],
                 [

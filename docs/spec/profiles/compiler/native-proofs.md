@@ -8,9 +8,9 @@ proof; it does not require the producer, its witness, or its live resources.
 [Status](../../../status.md) records implementation coverage;
 [native proof compilation](../../../compiler/native-proofs.md) records the
 implementation and executable examples. The sole policy, deployment, descriptor,
-construction map and binding use `/4`; occurrences use `zkc.native-origin/2`.
+construction map and binding use `/5`; occurrences use `zkc.native-origin/2`.
 Flat programs, loops, PCS and structured messages share this contract and
-`zkc.program/1`. Other proof versions refuse without compatibility decoding.
+`zkc.program/2`. Other proof versions refuse without compatibility decoding.
 
 ## Program, construction and deployment
 
@@ -110,8 +110,7 @@ The executable carrier does not acquire a second relation-schema language: the
 source digest authenticates declaration identity and purposes, while its port
 maps and canonical public values bind the actual invocation. An application
 must pin the deployment and authorize configuration values independently.
-The reserved root arrays remain empty. No satisfaction, setup law or secrecy
-claim follows from declaration admission. Sending a witness as an explicit
+No satisfaction, setup law or secrecy claim follows from declaration admission. Sending a witness as an explicit
 message remains distinct from supplying it as a validator entry input.
 
 The two invocation hosts bind their own actual inputs. Cross-role equality is
@@ -334,7 +333,7 @@ carrier admission alone does not establish source correspondence. Original
 source service-port and draw-selector references are checked by the compiler;
 the host checks the constructed maps and event order in the pinned deployment.
 An affine external transcript value or unmapped resource input refuses. Copyable
-external construction state uses the ordinary `/4` data-input contract and
+external construction state uses the ordinary `/5` data-input contract and
 [authored transition rules](../../realization/external-constructions.md#authored-native-deployment).
 Authored execution
 has no generated transcripts and refuses authored validator transcript inputs.
@@ -644,7 +643,7 @@ meaning. The joint driver continues to use its separate count-agreement policy.
 The compiler's policy is an exact array (JSON spelling carries no identity):
 
 ```text
-["zkc.native-proof-policy/4", entry, producer, validator, acceptance,
+["zkc.native-proof-policy/5", entry, producer, validator, acceptance,
  suite, service, public_inputs, [[query_site, delivery_site], ...]]
 ```
 
@@ -661,7 +660,7 @@ this policy.
 The immutable compiler descriptor is:
 
 ```text
-["zkc.native-proof-descriptor/4", policy, "zkc.native-origin/2",
+["zkc.native-proof-descriptor/5", policy, "zkc.native-origin/2",
  [[event_kind, origin_hex], ...],
  [[validator, original_port, logical_type, codec], ...],
  [[message_origin_hex, logical_type, codec], ...]]
@@ -675,7 +674,7 @@ the bounded logical tree encoding when hashing or constructing an invocation
 root.
 
 A constructed projection interface adds a `construction` dictionary with
-`format = "zkc.native-construction/4"`, the logical `transcript` type,
+`format = "zkc.native-construction/5"`, the logical `transcript` type,
 `removed_services` (the original service index), and a complete actual `actions`
 map. All original interface fields, port lists and action records remain
 unchanged. Each participant appends exactly one transcript input and result;
@@ -695,7 +694,7 @@ definitions and metadata, ignoring locations.
 The owned `compileNativeProof` API and `protocol-proof` command return:
 
 ```text
-["zkc.native-proof/4", source_sha256,
+["zkc.native-proof/5", source_sha256,
  descriptor, descriptor_sha256,
  candidate_json, candidate_sha256,
  [[role, participant_symbol,
@@ -726,6 +725,20 @@ The inner descriptor/candidate digests are consistency checks; only the
 independently authenticated exact-file digest authorizes the deployment.
 The deployment and complete proof are each at most 16 MiB; the participant
 candidate is at most 1 MiB.
+
+The `zkc prove-bundle` and `verify-bundle` file adapters require bounded regular
+inputs, including deployment, invocation, authority, capacity, attempt-policy and
+verification proof files. An authored deployment without a derived transcript
+requires `--allow-header-only` on either command, matching named Entry calls.
+Its authenticated policy and reported `binding_scope` are checked before loading
+invocation values or proof bytes. This acknowledgement adds no cryptographic
+binding guarantee. Input symlinks may resolve to regular files. Producer output must differ from every configured input and referenced prover-key file,
+including parent-directory aliases and existing hardlinks on Unix. Symlink and nonregular
+output destinations refuse. The complete proof is encoded and staged before
+atomic replacement (mode `0600` on Unix); publication errors retain execution and publication details.
+These path checks protect configuration without isolating concurrent filesystem
+mutation. The byte-oriented Rust APIs remain independent of file transport.
+
 Structural limits such as event count and array width are independent ceilings;
 satisfying them does not guarantee that the candidate fits its encoded byte
 limit or that a particular invocation fits the host's wire, allocation and work
@@ -761,15 +774,15 @@ Budgets are explicit application caps and may be lower than the required work.
 The exact invocation root tree is:
 
 ```text
-["zkc.native-proof-binding/4", "sha256", "zkc.native-origin/2", source_sha256,
+["zkc.native-proof-binding/5", "sha256", "zkc.native-origin/2", source_sha256,
  entry, producer, validator, descriptor,
  [[validator, original_port, logical_type, canonical_wire_hex], ...],
- context_hex, [], [], []]
+ context_hex]
 ```
 
-The final three arrays reserve relation identities, verifier-key fingerprints
-and public configuration; they are empty in this profile. The full encoded root
-is absorbed at transcript initialization. Its SHA-256 digest is the expected
+The root has exactly ten fields. The full encoded root is absorbed at transcript
+initialization; changing these
+bytes changes the derived challenges. Its SHA-256 digest is the expected
 `ZKCPRF01` header. Physical candidates and lowering options are absent, allowing
 proof exchange between independently authenticated compilations of the same
 source/policy. Distinct source bytes, policies, public values or context change

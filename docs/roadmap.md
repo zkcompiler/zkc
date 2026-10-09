@@ -1,7 +1,7 @@
 # Roadmap
 
 Development extends one supported model: `.zkc` Language → mathematical MLIR →
-`zkc.program/1` → the shared Rust Runner and Entry/proof/joint Hosts.
+`zkc.program/2` → the shared Rust Runner and Entry/proof/joint Hosts.
 [Status](status.md) records existing support; this page orders further work.
 
 ## Strengthen the maintained path
@@ -39,7 +39,7 @@ separate treatment of retained provider state, failed work and adversarial trial
 
 The [public-coin profile](spec/profiles/compiler/public-coin.md) and
 [native proof contract](spec/profiles/compiler/native-proofs.md) remain the
-contract owners. Changes to the single `/4` policy must update compiler
+contract owners. Changes to the single `/5` policy must update compiler
 production, Host admission and controls together. Setup authority remains at
 Entry inputs and the Host registry, with explicit verifier-key-consuming PCS
 checks in the protocol.

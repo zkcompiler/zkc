@@ -14,7 +14,7 @@ mod resource_unit;
 mod sequence;
 mod services;
 mod structural;
-pub use services::{ServiceContract, ServicePort, ServiceSignature};
+pub use services::{ServiceContract, ServicePort, ServiceSignature, ServiceSupport};
 mod variant;
 pub use resource_unit::ResourceDomain;
 pub use structural::{

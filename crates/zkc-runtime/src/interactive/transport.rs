@@ -261,7 +261,8 @@ impl Default for ValueBudget {
     }
 }
 
-/// Host work ceilings for one runner. Values above the hard limits are clamped.
+/// Host work ceilings for one runner. Values above the hard limits are refused
+/// before entry initialization; zero is valid and permits no charged work.
 /// A session that reenters a participant can pass its remaining cumulative budget.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WorkBudget {

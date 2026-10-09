@@ -45,7 +45,7 @@ def test_library_entry_runs_and_independent_proofs(toolchain, journal, directory
     package, pin = build(toolchain, journal, directory, project, 'Interactive', flags)
     inputs = request(directory, 'interactive.json', read(project, 'interactive'))
     outputs = directory / 'outputs.json'
-    report = json.loads(journal.run([toolchain.runtime, 'run-entry', package, pin, inputs, f'--results={outputs}']))
+    report = json.loads(journal.run([toolchain.runtime, 'run', package, pin, inputs, f'--results={outputs}']))
     assert report['status'] == 'executed'
     assert json.loads(outputs.read_text())['roles']['V']['accepted'] is True
 

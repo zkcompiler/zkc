@@ -44,8 +44,9 @@ impl NativeBackend {
         self.core.check_entry_values(&role.inputs, values)
     }
 
-    /// Bound cumulative expanded-node traversal by sequence kernels. Previously
-    /// spent work survives frame cleanup and changes to the limit.
+    /// Bound cumulative sequence work: `3 * (1 + expanded operand nodes)` per
+    /// call. Shared subtrees count per occurrence.
+    /// Previously spent work survives frame cleanup and changes to the limit.
     pub fn with_sequence_work_limit(mut self, limit: u64) -> Self {
         self.sequence_work.limit = limit;
         self
@@ -90,6 +91,7 @@ impl NativeBackend {
     pub const DEFAULT_EXTERNAL_WORK_LIMIT: u64 = crate::external_kernels::DEFAULT_WORK_LIMIT;
 
     /// Set a total primitive-work cap before external construction execution.
+    /// One unit is one hash call, hashed byte, permutation, observe or sample.
     /// Work already consumed is retained; lowering a cap never refunds it.
     pub fn with_external_work_limit(mut self, limit: u64) -> Self {
         self.external_work.limit = limit;
@@ -239,12 +241,12 @@ impl Backend for NativeBackend {
         true
     }
     type Value = Value;
-    fn service_signature(
+    fn service_support(
         &self,
         contract: zkc_runtime::interactive::ServiceContract,
         method: &str,
-    ) -> Option<(zkc_runtime::interactive::ServiceSignature, usize)> {
-        contract.signature(method).map(|signature| (signature, 512))
+    ) -> Option<zkc_runtime::interactive::ServiceSupport> {
+        crate::services::support(contract, method)
     }
     fn query(
         &mut self,
@@ -257,11 +259,7 @@ impl Backend for NativeBackend {
             invocation.frame.kind(),
             FrameKind::Entry | FrameKind::Loop { .. }
         ) || !invocation.frame.services().contains(invocation.port)
-            || invocation
-                .port
-                .contract
-                .signature(invocation.method)
-                .is_none()
+            || crate::services::support(invocation.port.contract, invocation.method).is_none()
             || !arguments.is_empty()
             || invocation.max_output_bytes < 512
         {
@@ -333,7 +331,10 @@ impl Backend for NativeBackend {
         let signature = implementation
             .signature(i.binding.declaration())
             .ok_or_else(|| crate::refused("kernel-binding"))?;
-        if crate::sequence::OPERATIONS.contains(&i.binding.declaration().contract.as_str()) {
+        if crate::sequence::IMPLEMENTATIONS
+            .iter()
+            .any(|(_, contract)| *contract == i.binding.declaration().contract)
+        {
             self.sequence_work.charge(args)?;
         }
         self.core.invoke(i, args, &signature)?;

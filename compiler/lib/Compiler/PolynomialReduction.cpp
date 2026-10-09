@@ -11,7 +11,7 @@
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
-#include "zkc/Support/MLIRInput.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Translation/Relations.h"
@@ -69,13 +69,11 @@ bool name(const json::Object &object, StringRef key, std::string &value) {
   return true;
 }
 Expected<SmallVector<Requirement, 1>> parse(StringRef text) {
-  if (text.size() > 1024 * 1024 || !mlirNestingWithinLimit(text))
-    return error("polynomial-requirement-limit");
-  auto value = json::parse(text);
-  if (!value) {
-    consumeError(value.takeError());
-    return error("polynomial-requirement-format");
-  }
+  auto value =
+      parseNaturalJson(text, 1024 * 1024, 64, "polynomial-requirement-format",
+                       "polynomial-requirement-limit");
+  if (!value)
+    return value.takeError();
   auto *object = value->getAsObject();
   if (!object || !keys(*object, {"format", "requirements"}) ||
       object->getString("format") != "zkc.polynomial-requirements/1")

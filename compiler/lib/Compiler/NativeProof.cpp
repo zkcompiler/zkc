@@ -453,7 +453,7 @@ json::Value encodeNativeProofPolicy(const NativeProofPolicy &p) {
     inputs.push_back(std::to_string(port));
   for (const auto &[query, delivery] : p.draws)
     draws.push_back(json::Array{query, delivery});
-  return json::Array{"zkc.native-proof-policy/4",
+  return json::Array{"zkc.native-proof-policy/5",
                      p.entry,
                      p.producer,
                      p.validator,
@@ -472,7 +472,7 @@ Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
     return parsed.takeError();
   auto *a = parsed->getAsArray();
   if (!a || a->size() != 9 ||
-      (*a)[0].getAsString() != "zkc.native-proof-policy/4")
+      (*a)[0].getAsString() != "zkc.native-proof-policy/5")
     return error("native-proof-policy");
   NativeProofPolicy p;
   for (auto [i, target] : {std::pair{1u, &p.entry},
@@ -849,7 +849,7 @@ public:
     auto actions = rewrite(rewrite, original.getAs<ArrayAttr>("actions"));
     auto construction = builder.getDictionaryAttr(
         {builder.getNamedAttr(
-             "format", builder.getStringAttr("zkc.native-construction/4")),
+             "format", builder.getStringAttr("zkc.native-construction/5")),
          builder.getNamedAttr("transcript", TypeAttr::get(stateType)),
          builder.getNamedAttr("removed_services",
                               builder.getArrayAttr({builder.getI64IntegerAttr(
@@ -977,7 +977,7 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy) {
                                               admitted->events))
     return std::move(e);
   json::Value descriptor(json::Array{
-      "zkc.native-proof-descriptor/4", encodeNativeProofPolicy(policy),
+      "zkc.native-proof-descriptor/5", encodeNativeProofPolicy(policy),
       "zkc.native-origin/2", std::move(admitted->sequence),
       std::move(admitted->publicBindings), std::move(admitted->messages)});
   return NativeProofConstruction{std::move(candidate), std::move(descriptor),

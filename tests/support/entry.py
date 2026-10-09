@@ -24,7 +24,7 @@ class Entry:
             'roles': roles,
         })
         output = self.directory / f'{name}.outputs.json'
-        report = self.journal.json([self.tools.runtime, 'run-entry', self.package,
+        report = self.journal.json([self.tools.runtime, 'run', self.package,
                                    self.pin, request, f'--results={output}'], refuses=refuses)
         if refuses:
             assert report['status'] == 'refused'

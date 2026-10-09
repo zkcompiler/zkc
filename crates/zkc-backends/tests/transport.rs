@@ -61,7 +61,6 @@ fn independent_runners_exchange_only_bound_public_bytes_and_reject_bad_packets()
                 "prover",
                 "instance",
                 "P",
-                [],
                 [["pk", "prover_key"], ["t", "table"], ["p", "point"]],
                 [],
                 [
@@ -84,7 +83,6 @@ fn independent_runners_exchange_only_bound_public_bytes_and_reject_bad_packets()
                 "verifier",
                 "instance",
                 "V",
-                [],
                 [["vk", "verifier_key"], ["p", "point"]],
                 ["bool"],
                 [

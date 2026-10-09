@@ -2,12 +2,12 @@
 
 This chapter defines complete typed messages and setup authorization for the
 single [native proof contract](native-proofs.md). Flat messages, bounded repeats,
-PCS and nested data all use policy `/4`, `zkc.native-origin/2`, `ZKCPRF01` proof
+PCS and nested data all use policy `/5`, `zkc.native-origin/2`, `ZKCPRF01` proof
 framing and `zkc.native-proof-inputs/1` invocation records.
 
 ## Complete types
 
-`zkc.program/1` carries these values through the existing protocol, participant,
+`zkc.program/2` carries these values through the existing protocol, participant,
 exec and physical profiles. Proof admission independently checks message,
 input, key and control restrictions. Program admission alone grants no proof
 deployment authority or transport support in another Host.
@@ -199,7 +199,7 @@ distinct refusal boundaries.
 
 ## Transcript observation
 
-Derived `/4` construction uses one construction-only contract:
+Derived `/5` construction uses one construction-only contract:
 
 ```text
 transcript.native.indexed.observe.data<Suite, CompleteLogicalType>

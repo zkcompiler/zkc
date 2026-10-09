@@ -21,48 +21,6 @@ bool isHistoryTransition(llvm::StringRef key) {
   const auto *contracts = operationContracts(key);
   return contracts && contracts->history.has_value();
 }
-OperationContracts OperationContracts::replay() {
-  OperationContracts c;
-  c.publicReplay = true;
-  return c;
-}
-OperationContracts OperationContracts::guard() {
-  OperationContracts c;
-  c.acceptanceGuard = true;
-  return c;
-}
-OperationContracts OperationContracts::booleanConjunction() {
-  auto c = replay();
-  c.conjunction = true;
-  return c;
-}
-OperationContracts OperationContracts::transcriptObservation() {
-  OperationContracts c;
-  c.observation = ObservationContract{};
-  return c;
-}
-OperationContracts OperationContracts::diagonal() {
-  OperationContracts c;
-  c.diagonalMap = DiagonalMapContract{};
-  return c;
-}
-OperationContracts OperationContracts::contraction() {
-  OperationContracts c;
-  c.linearContraction = LinearContractionContract{};
-  return c;
-}
-OperationContracts OperationContracts::onCoset(CosetContract facet) {
-  OperationContracts c;
-  c.coset = facet;
-  return c;
-}
-OperationContracts OperationContracts::exactDomainValue(DomainValueRule rule,
-                                                        bool replay) {
-  OperationContracts c;
-  c.domainValue = DomainValueContract{rule};
-  c.publicReplay = replay;
-  return c;
-}
 const CosetConvention *cosetConvention(llvm::StringRef field) {
   // ark-bn254 0.6.0 Fr uses generator 5. Its maximal two-adic root is
   // 5^((r - 1) / 2^28); smaller roots are successive powers of two of it.
@@ -79,14 +37,6 @@ const CosetConvention *cosetConvention(llvm::StringRef field) {
   return field == "koala-bear" || field == "koala-bear.ext8-binomial3"
              ? &koala
              : nullptr;
-}
-OperationContracts OperationContracts::sample(RandomnessProvider provider,
-                                              SampleDomain domain,
-                                              std::optional<unsigned> bound,
-                                              llvm::StringRef counterpart) {
-  OperationContracts c;
-  c.sampling = SamplingContract{provider, domain, 0, 0, 1, bound, counterpart};
-  return c;
 }
 const OperationContracts *operationContracts(llvm::StringRef key) {
   const auto *kernel = findKernel(key);

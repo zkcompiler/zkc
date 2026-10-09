@@ -135,12 +135,12 @@ impl Backend for WithoutServices {
 struct InvalidReply(NativeBackend, bool);
 impl Backend for InvalidReply {
     type Value = Value;
-    fn service_signature(
+    fn service_support(
         &self,
         contract: zkc_runtime::interactive::ServiceContract,
         method: &str,
-    ) -> Option<(zkc_runtime::interactive::ServiceSignature, usize)> {
-        self.0.service_signature(contract, method)
+    ) -> Option<zkc_runtime::interactive::ServiceSupport> {
+        self.0.service_support(contract, method)
     }
     fn query(
         &mut self,
@@ -190,14 +190,14 @@ impl Backend for InvalidReply {
 struct ChangingSignature(NativeBackend, std::cell::Cell<bool>);
 impl Backend for ChangingSignature {
     type Value = Value;
-    fn service_signature(
+    fn service_support(
         &self,
         contract: zkc_runtime::interactive::ServiceContract,
         method: &str,
-    ) -> Option<(zkc_runtime::interactive::ServiceSignature, usize)> {
-        let mut declared = self.0.service_signature(contract, method)?;
+    ) -> Option<zkc_runtime::interactive::ServiceSupport> {
+        let mut declared = self.0.service_support(contract, method)?;
         if self.1.replace(true) {
-            declared.0.outputs = vec![Value::Bool(true).physical_type()];
+            declared.signature.outputs = vec![Value::Bool(true).physical_type()];
         }
         Some(declared)
     }
@@ -254,15 +254,15 @@ fn main() {
     // Independent native admission of malformed carriers, before any root exists.
     for case in 0..14 {
         let mut artifact: serde_json::Value = serde_json::from_slice(&single).unwrap();
-        let participant = &mut artifact[4][0];
+        let participant = &mut artifact[3][0];
         match case {
-            0 => participant[8][0][1] = "random.bls12-381.fr/2".into(),
-            1 => participant[8][0][2] = "1".into(),
-            2 => participant[7][0][2] = "missing".into(),
-            3 => participant[7][0][3] = "reset".into(),
-            4 => participant[7][0][5] = serde_json::json!([participant[8][0][0]]),
+            0 => participant[7][0][1] = "random.bls12-381.fr/2".into(),
+            1 => participant[7][0][2] = "1".into(),
+            2 => participant[6][0][2] = "missing".into(),
+            3 => participant[6][0][3] = "reset".into(),
+            4 => participant[6][0][5] = serde_json::json!([participant[7][0][0]]),
             5 => {
-                participant[5] = serde_json::Value::Array(
+                participant[4] = serde_json::Value::Array(
                     (0..1024)
                         .map(|i| serde_json::json!([format!("input_{i}"), "bool"]))
                         .collect(),
@@ -271,14 +271,14 @@ fn main() {
             6 => artifact[0] = "zkc.participants/1".into(),
             7 => {
                 participant.as_array_mut().unwrap().pop();
-                artifact[0] = "zkc.program/1".into();
+                artifact[0] = "zkc.program/2".into();
             }
-            8 => participant[8]
+            8 => participant[7]
                 .as_array_mut()
                 .unwrap()
                 .push(serde_json::json!(["other", "random.bls12-381.fr/1", "0"])),
-            9 => participant[5] = serde_json::json!([[participant[8][0][0], "bool"]]),
-            10 => participant[7].as_array_mut().unwrap().insert(
+            9 => participant[4] = serde_json::json!([[participant[7][0][0], "bool"]]),
+            10 => participant[6].as_array_mut().unwrap().insert(
                 0,
                 serde_json::json!([
                     "if",
@@ -291,14 +291,17 @@ fn main() {
                 ]),
             ),
             11 => {
-                let query = participant[7][0].clone();
-                participant[7] = serde_json::json!([
+                let query = participant[6][0].clone();
+                participant[6] = serde_json::json!([
                     ["loop", "loop", "1", [], [], [query, ["yield", []]], []],
                     ["return", []]
                 ]);
             }
-            12 => participant[4] = serde_json::json!([["n", "1"]]),
-            13 => participant[7]
+            12 => participant
+                .as_array_mut()
+                .unwrap()
+                .insert(4, serde_json::json!([])),
+            13 => participant[6]
                 .as_array_mut()
                 .unwrap()
                 .insert(0, serde_json::json!(["call", "call", "callee", [], []])),
@@ -312,7 +315,7 @@ fn main() {
     }
 
     let mut bad_local: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    bad_local[3][0][4].as_array_mut().unwrap().insert(
+    bad_local[2][0][4].as_array_mut().unwrap().insert(
         0,
         serde_json::json!(["query", "hidden", "service_0", "draw", [], ["out"]]),
     );
@@ -626,7 +629,7 @@ fn main() {
 
     // Failed service binding preserves affine inputs and backend custody.
     let mut artifact: serde_json::Value = serde_json::from_slice(&single).unwrap();
-    artifact[4][0][5] = serde_json::json!([["rng", "rng:bls12-381.fr@host.resource/1"]]);
+    artifact[3][0][4] = serde_json::json!([["rng", "rng:bls12-381.fr@host.resource/1"]]);
     let artifact = serde_json::to_vec(&artifact).unwrap();
     let mut native = backend("Alice", "affine_input");
     let input = native

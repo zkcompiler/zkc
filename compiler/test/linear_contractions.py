@@ -33,7 +33,7 @@ module {{ "protocol.module"() ({{
     for optimize in (False, True):
         ir = commands.verified(source, None, f'--zkc-participant-pipeline=linear-contractions={str(optimize).lower()}')
         program = json.loads(commands.source('protocol-export', ir))
-        assert program[0] == 'zkc.program/1'
+        assert program[0] == 'zkc.program/2'
         implementations = {binding[3] for binding in program[1]}
         expected = f'{provider}{"-diagonal" if optimize else ""}/{reduction}'
         assert expected in implementations, implementations

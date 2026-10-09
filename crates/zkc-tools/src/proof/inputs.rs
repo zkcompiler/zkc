@@ -136,6 +136,7 @@ pub(super) fn prepare(
     request: &ProofInputs,
     role: &EntryRole,
     producer: bool,
+    imports: &mut crate::host::setups::VerifierKeys,
 ) -> Result<Prepared> {
     let mapping = &host.maps[&role.role];
     if request.context.len() > CONTEXT_LIMIT {
@@ -171,7 +172,7 @@ pub(super) fn prepare(
         }
     }
     let policy = host.capacity.backend();
-    let mut admission = Admission::new(host.capacity.loading());
+    let mut admission = Admission::new(host.capacity.loading())?;
     for (input, port) in request.public.iter().zip(&host.public) {
         if port.logical.kind() == Type::VerifierKey {
             let InputValue::Wire(bytes) = input else {
@@ -185,7 +186,7 @@ pub(super) fn prepare(
         }
     }
     let mut root = json!([
-        "zkc.native-proof-binding/4",
+        "zkc.native-proof-binding/5",
         "sha256",
         host.descriptor[2],
         host.source,
@@ -194,10 +195,7 @@ pub(super) fn prepare(
         host.entry.validator().role,
         host.descriptor,
         [],
-        hex(&request.context),
-        [],
-        [],
-        []
+        hex(&request.context)
     ]);
     let mut root_size = logical::tree_size(&root).map_err(|e| e.to_string())?;
     if host.entry.transcript().is_some() {
@@ -205,7 +203,7 @@ pub(super) fn prepare(
     }
     // Import only independently pinned public keys. Even receive-only registry
     // material is charged; a proof header cannot extend this registry.
-    let mut imports = crate::host::setups::VerifierKeys::new(policy.ark_bounds());
+    imports.check_bounds(policy.ark_bounds())?;
     let mut keys = BTreeMap::new();
     let mut material = BTreeMap::new();
     let mut public_ids = BTreeMap::new();

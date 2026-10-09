@@ -1,5 +1,5 @@
 //! Bound recursive metadata before serde allocates its typed records. This is
-//! a lexical resource check; serde remains responsible for JSON syntax/UTF-8.
+//! a lexical resource and natural-number check; serde owns JSON syntax/UTF-8.
 use super::{InterfaceError, Result};
 
 pub(super) fn check(bytes: &[u8]) -> Result<()> {
@@ -8,6 +8,7 @@ pub(super) fn check(bytes: &[u8]) -> Result<()> {
     }
     let (mut depth, mut nodes, mut length) = (0usize, 0usize, 0usize);
     let (mut quoted, mut escaped, mut scalar) = (false, false, false);
+    let (mut numeric, mut leading_zero, mut invalid_number) = (false, false, false);
     for &b in bytes {
         if quoted {
             if !escaped && b == b'"' {
@@ -47,10 +48,17 @@ pub(super) fn check(bytes: &[u8]) -> Result<()> {
                     nodes += 1;
                     length = 0;
                     scalar = true;
+                    numeric = b.is_ascii_digit() || matches!(b, b'-' | b'+');
+                    leading_zero = b == b'0';
                 }
                 length += 1;
                 if length > 10 {
                     return Err(InterfaceError::Limit);
+                }
+                // Tagged-enum buffering can normalize -0 before typed decoding.
+                // Check the original token, retaining resource-limit precedence.
+                if numeric && (!b.is_ascii_digit() || leading_zero && length > 1) {
+                    invalid_number = true;
                 }
             }
         }
@@ -58,7 +66,7 @@ pub(super) fn check(bytes: &[u8]) -> Result<()> {
             return Err(InterfaceError::Limit);
         }
     }
-    if quoted || depth != 0 {
+    if quoted || depth != 0 || invalid_number {
         return Err(InterfaceError::Format);
     }
     Ok(())

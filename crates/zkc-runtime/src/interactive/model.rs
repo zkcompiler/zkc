@@ -1,7 +1,7 @@
 use super::{PhysicalType, ResolvedBinding};
 use std::{collections::BTreeMap, fmt, sync::Arc};
 
-/// Hard ceilings, shared by all admissions and executions. Callers cannot raise them.
+/// Admission and execution ceilings, plus explicitly documented policy defaults.
 pub struct Limits;
 impl Limits {
     pub const ARTIFACT_BYTES: usize = 1024 * 1024;
@@ -25,7 +25,9 @@ impl Limits {
     pub const INSTRUCTIONS: u64 = 1_000_000;
     pub const ITERATIONS: u64 = 100_000;
     pub const LIVE_VALUES: usize = 16_384;
+    /// Hard per-value ceiling and default live-value budget.
     pub const VALUE_BYTES: usize = 64 * 1024 * 1024;
+    /// Default cumulative retained-value budget; callers may configure another value.
     pub const TOTAL_VALUE_BYTES: usize = 256 * 1024 * 1024;
 }
 

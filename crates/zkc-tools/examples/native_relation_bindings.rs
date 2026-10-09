@@ -259,7 +259,7 @@ fn main() {
         let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
         let deployment =
-            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
                 .unwrap();
         let config_type = LogicalType::parse(envelope[2][4][0][2].as_str().unwrap()).unwrap();
         let data = |n, change| {

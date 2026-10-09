@@ -382,16 +382,16 @@ pub(crate) fn validate_hash_count(kind: Type, count: usize, policy: &Policy) -> 
     policy.vector_width(count, 32)
 }
 
-pub(crate) const OPERATIONS: &[&str] = &[
-    "oracle.commit",
-    "oracle.open",
-    "oracle.check",
-    "commitments.empty",
-    "commitments.append",
-    "commitments.at",
-    "commitments.length",
-    "opening_states.empty",
-    "opening_states.append",
-    "opening_states.at",
-    "opening_states.length",
+pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
+    ("plonky3/oracle.commit", "oracle.commit"),
+    ("plonky3/oracle.open", "oracle.open"),
+    ("plonky3/oracle.check", "oracle.check"),
+    ("plonky3/commitments.empty", "commitments.empty"),
+    ("plonky3/commitments.append", "commitments.append"),
+    ("plonky3/commitments.at", "commitments.at"),
+    ("plonky3/commitments.length", "commitments.length"),
+    ("plonky3/opening_states.empty", "opening_states.empty"),
+    ("plonky3/opening_states.append", "opening_states.append"),
+    ("plonky3/opening_states.at", "opening_states.at"),
+    ("plonky3/opening_states.length", "opening_states.length"),
 ];

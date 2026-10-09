@@ -131,9 +131,8 @@ public:
       report_fatal_error("native-physical-required: unchecked program");
 
     auto participants = list(m.participants, [&](const Participant &p) -> V {
-      A record{"participant",    p.name,      p.instance,
-               p.role,           A{},         parameters(p.arguments),
-               names(p.results), body(p.body)};
+      A record{"participant",           p.name,           p.instance,  p.role,
+               parameters(p.arguments), names(p.results), body(p.body)};
       record.push_back(list(p.services, [](const ServicePort &port) -> V {
         return A{port.name, port.contract, std::to_string(port.inputIndex)};
       }));
@@ -142,12 +141,9 @@ public:
     auto entries = list(m.entries, [&](const ParticipantEntry &e) -> V {
       return A{"entry", e.name, pairs(e.participants)};
     });
-    return A{"zkc.program/1",
-             environment(m),
-             "physical",
+    return A{"zkc.program/2", environment(m),
              list(m.functions, [&](const auto &f) { return function(f); }),
-             std::move(participants),
-             std::move(entries)};
+             std::move(participants), std::move(entries)};
   }
 };
 } // namespace

@@ -29,7 +29,7 @@ impl ProverMaterial {
         verifier: &VerifierKey,
         capacity: super::capacity::NativeCapacity,
     ) -> Result<Self> {
-        capacity.check()?;
+        capacity.validate()?;
         capacity.check_wire(bytes.len())?;
         let estimate =
             Value::key_retained_bytes(zkc_runtime::interactive::Type::ProverKey, verifier)
@@ -54,7 +54,7 @@ impl ProverMaterial {
         verifier: &VerifierKey,
         capacity: super::capacity::NativeCapacity,
     ) -> Result<Self> {
-        capacity.check()?;
+        capacity.validate()?;
         let bytes = super::inputs::read_regular(path, capacity.wire_bytes).map_err(|e| {
             if e == "artifact-byte-limit" {
                 "native-capacity-wire".into()

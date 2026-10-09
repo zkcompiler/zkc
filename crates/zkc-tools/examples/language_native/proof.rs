@@ -54,7 +54,7 @@ pub(super) fn run(directory: &Path) {
                 let envelope: Json = serde_json::from_slice(bytes).unwrap();
                 let deployment = NativeDeployment::admit(
                     bytes,
-                    &hex(&Sha256::digest(bytes)),
+                    &Sha256::digest(bytes).into(),
                     Default::default(),
                 )
                 .unwrap();
@@ -313,7 +313,7 @@ pub(super) fn run(directory: &Path) {
                 // producer runtime state is available to this invocation.
                 let verifier = NativeDeployment::admit(
                     bytes,
-                    &hex(&Sha256::digest(bytes)),
+                    &Sha256::digest(bytes).into(),
                     Default::default(),
                 )
                 .unwrap();

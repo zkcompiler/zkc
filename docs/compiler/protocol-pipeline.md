@@ -16,7 +16,7 @@ owns exact formation and projection rules.
 
 The `plan` dialect's physical data wrappers do not provide a separate table/plan
 executor. The [program profile](../spec/profiles/compiler/program.md) admits the
-closed physical artifact as `zkc.program/1`.
+closed physical artifact as `zkc.program/2`.
 
 ## Preparation and projection
 
@@ -50,7 +50,7 @@ conversions. Storage release respects copy/drop permissions and affine custody.
 
 Native proof construction analyzes the retained common program and rewrites
 unsimplified participant mathematics. It threads ordinary role-local transcript
-state through the same profiles. The single `/4`
+state through the same profiles. The single `/5`
 [proof contract](../spec/profiles/compiler/native-proofs.md) covers flat programs,
 loops, PCS and structured messages within the participant profile.
 

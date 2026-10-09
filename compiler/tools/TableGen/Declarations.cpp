@@ -292,8 +292,6 @@ void Model::validateOperation(const Record *op) {
   require(stage == "Source" || stage == "Construction" ||
               stage == "CompilerGenerated" || stage == "Physical",
           op, "unknown authoring stage");
-  require(op->getValueAsString("effect") == "local", op,
-          "unsupported effect envelope");
   auto scope = op->getValueAsListOfDefs("scope");
   require(scope.size() <= 128, op, "static scope limit");
   std::set<const Record *> available;
@@ -808,8 +806,7 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
   }
   os << "}; return values; }\n";
   os << "namespace {\nstruct OperationDeclaration { llvm::StringRef name; "
-        "AuthoringStage stage; ParameterContract parameters; "
-        "llvm::StringRef effect; };\n"
+        "AuthoringStage stage; ParameterContract parameters; };\n"
         "const OperationDeclaration *declaration(llvm::StringRef name) {\n"
         "static const OperationDeclaration values[] = {\n";
   for (const auto *op : m.operations) {
@@ -822,7 +819,7 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
     os << (field ? std::to_string(
                        termIndex(op->getValueAsListOfDefs("scope"), field))
                  : "std::nullopt")
-       << "}, " << quote(op->getValueAsString("effect")) << "},\n";
+       << "}},\n";
   }
   os << "}; for (const auto &v : values) if (v.name == name) return &v; return "
         "nullptr; }\n}\n"
@@ -830,10 +827,7 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
         "declaration(key); return d ? d->stage : "
         "AuthoringStage::CompilerGenerated; }\n"
         "const ParameterContract *parameterContract(llvm::StringRef key) { "
-        "auto *d = declaration(key); return d ? &d->parameters : nullptr; }\n"
-        "llvm::StringRef operationEffect(llvm::StringRef key) { "
-        "auto *d = declaration(key); return d ? d->effect : llvm::StringRef{}; "
-        "}\n";
+        "auto *d = declaration(key); return d ? &d->parameters : nullptr; }\n";
   os << "llvm::ArrayRef<SourceTypeExport> sourceTypeExports() {\nstatic const "
         "std::vector<SourceTypeExport> values = {\n";
   for (const auto *r : m.typeExports)
@@ -895,7 +889,7 @@ json::Array stringsJSON(ArrayRef<StringRef> values) {
   return result;
 }
 json::Object inventory(const Model &m) {
-  json::Object result{{"format", "zkc.contract-declarations/2"}};
+  json::Object result{{"format", "zkc.contract-declarations/3"}};
   json::Array sorts;
   for (const auto *sort : m.sorts)
     sorts.push_back(name(sort));
@@ -945,7 +939,6 @@ json::Object inventory(const Model &m) {
         {"name", name(op)},
         {"scope", std::move(terms)},
         {"stage", name(op->getValueAsDef("stage"))},
-        {"effect", op->getValueAsString("effect")},
         {"commonGeneric", op->getValueAsBit("commonGeneric")},
         {"parameters", json::Object{{"validator", name(p)},
                                     {"minimum", p->getValueAsInt("minimum")},

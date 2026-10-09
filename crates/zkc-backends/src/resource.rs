@@ -803,7 +803,7 @@ impl Resources {
         allowed: Option<&BTreeSet<u64>>,
     ) -> Result<BTreeSet<u64>> {
         let mut ids = BTreeSet::new();
-        for v in values.iter().flat_map(Value::active_leaves) {
+        let mut check = |v: &Value| {
             if let Some(t) = v.capability() {
                 self.validate(t, v.ty())?;
                 if !self.slot(t)?.domain.matches(f) {
@@ -816,6 +816,10 @@ impl Resources {
                     return Err(refused("capability-out-of-view"));
                 }
             }
+            Ok(())
+        };
+        for value in values {
+            value.visit_active_leaves(&mut check)?;
         }
         Ok(ids)
     }
@@ -875,18 +879,17 @@ impl Resources {
         let view = self.frames.pop().expect("top frame"); // Cleanup even on refusal.
         // A locally created logical permission can leave only through an explicit
         // affine result. Dropped units are retired; returned units enter the parent view.
-        let returned: BTreeSet<_> = if result.is_ok() && exit == FrameExit::Returned {
-            outputs
-                .iter()
-                .flat_map(Value::active_leaves)
-                .filter_map(|v| match v {
-                    Value::ResourceUnit(t) => Some(t.token.id),
-                    _ => None,
-                })
-                .collect()
-        } else {
-            BTreeSet::new()
-        };
+        let mut returned = BTreeSet::new();
+        if result.is_ok() && exit == FrameExit::Returned {
+            for value in outputs {
+                let Ok(()) = value.visit_active_leaves(&mut |v| {
+                    if let Value::ResourceUnit(t) = v {
+                        returned.insert(t.token.id);
+                    }
+                    Ok::<_, std::convert::Infallible>(())
+                });
+            }
+        }
         for id in view.slots {
             if self
                 .slots

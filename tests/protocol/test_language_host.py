@@ -105,10 +105,9 @@ def test_independent_named_proof_calls(toolchain, journal, directory, entry, sui
         write(producer, {'format': 'zkc.entry-proof/1', 'public': {}, 'inputs': {'done': True}, 'transcript_budget': 0})
         journal.run(proving, refuses='exhausted:resource-budget')
     write(producer, {'format': 'zkc.entry-proof/1', 'public': {}, 'inputs': {'done': True}})
-    failed_publication = json.loads(journal.run([*proving, f'--results={directory / "missing" / "results"}'], refuses='artifact-publish-io'))
-    assert failed_publication['proof_published']
-    assert failed_publication['phase'] == 'publication'
-    assert len(failed_publication['execution']['attempts']) == 1
+    failed_publication = json.loads(journal.run([*proving, f'--results={directory / "missing" / "results"}'], refuses='entry-output-path'))
+    assert failed_publication['phase'] == 'arguments' and 'execution' not in failed_publication
+    assert proof.read_bytes() == sentinel
 
 
 def test_named_run_defaults_and_private_result_files(toolchain, journal, directory):
@@ -117,7 +116,7 @@ def test_named_run_defaults_and_private_result_files(toolchain, journal, directo
                'roles': {'P': {'inputs': {'done': True}}, 'V': {'inputs': {}}}}
     inputs = write(directory / 'inputs.json', request)
     outputs = directory / 'outputs.json'
-    command = [toolchain.runtime, 'run-entry', package, pin, inputs, f'--results={outputs}']
+    command = [toolchain.runtime, 'run', package, pin, inputs, f'--results={outputs}']
     report = json.loads(journal.run(command))
     assert report['status'] == 'executed'
     values = json.loads(outputs.read_text())['roles']
@@ -152,7 +151,7 @@ def test_aggregate_file_roundtrip_and_schema_refusals(toolchain, journal, direct
         'P': {'inputs': {'payload': payload, 'empty': None}}, 'V': {'inputs': {}}}}
     inputs = write(directory / 'inputs.json', request)
     results = directory / 'results.json'
-    command = [toolchain.runtime, 'run-entry', package, pin, inputs, f'--results={results}']
+    command = [toolchain.runtime, 'run', package, pin, inputs, f'--results={results}']
     journal.run(command)
     outputs = json.loads(results.read_text())['roles']
     assert outputs['V'] == {'received': payload, 'empty': None}
@@ -320,7 +319,7 @@ def test_input_numbers_keep_their_json_shape(toolchain, journal, directory):
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
     request = {'format': 'zkc.entry-run/1', 'session': 'index_files', 'roles': {'P': {'inputs': {'n': 7}}}}
     inputs = write(directory / 'inputs.json', request)
-    command = [toolchain.runtime, 'run-entry', package, pin, inputs]
+    command = [toolchain.runtime, 'run', package, pin, inputs]
     journal.run(command)
     request['roles']['P']['inputs']['n'] = {'$serde_json::private::Number': '7'}
     write(inputs, request)
@@ -337,10 +336,10 @@ def test_file_jobs_refuse_unconnected_streams(toolchain, journal, directory):
     fifo = directory / 'fifo'
     os.mkfifo(fifo)
     # There is no writer. Refusal precedes any protocol resource issuance.
-    report = json.loads(journal.run([toolchain.runtime, 'run-entry', package, pin, fifo],
+    report = json.loads(journal.run([toolchain.runtime, 'run', package, pin, fifo],
                                    refuses='artifact-io', timeout=10))
     assert report['phase'] == 'inputs' and 'execution' not in report
-    journal.run([toolchain.runtime, 'run-entry', fifo, pin, fifo], refuses='artifact-io', timeout=10)
+    journal.run([toolchain.runtime, 'run', fifo, pin, fifo], refuses='artifact-io', timeout=10)
 
 
 def test_bindings_refuse_outputs_without_host_export(toolchain, journal, directory):
@@ -355,7 +354,7 @@ def test_bindings_refuse_outputs_without_host_export(toolchain, journal, directo
     journal.run([toolchain.runtime, 'bindings', package, pin, bindings],
                 refuses='entry-output-custody')
     assert bindings.read_bytes() == b'unchanged'
-    journal.run([toolchain.runtime, 'run-entry', package, pin, directory / 'unused'],
+    journal.run([toolchain.runtime, 'run', package, pin, directory / 'unused'],
                 refuses='entry-output-custody')
 
 
@@ -368,13 +367,11 @@ def test_compilation_preserves_the_selected_executable(toolchain, journal, direc
     alias = directory / 'compiler-link'
     alias.symlink_to(compiler)
     original = compiler.read_bytes()
-    for selected, output in [(compiler, compiler), (alias, compiler), (alias, alias)]:
+    for selected, output in [(compiler, compiler), (alias, compiler), (alias, alias),
+                             (compiler, alias)]:
         journal.run([toolchain.runtime, 'compile', f'--compiler={selected}',
                      f'--output={output}'], refuses='entry-output-path')
         assert compiler.read_bytes() == original and alias.is_symlink()
-    # Replacing an unselected final symlink would not overwrite the executable.
-    journal.run([toolchain.runtime, 'compile', f'--compiler={compiler}',
-                 f'--output={alias}'], refuses='entry-compilation')
 
 
 def test_compiler_failures_are_bounded_and_do_not_publish(toolchain, journal, directory):
@@ -446,7 +443,7 @@ def test_compiler_lookup_and_positional_arguments(toolchain, journal, directory)
         journal.run([*args, '--results=output.json'], refuses='entry-usage')
 
 
-def test_results_encoding_failure_keeps_successful_proof(toolchain, journal, directory):
+def test_results_encoding_failure_preserves_previous_files(toolchain, journal, directory):
     source = directory / 'source.zkc'
     source.write_text('''module sample;
 domain Fr=field("bls12-381.fr");
@@ -466,13 +463,17 @@ entry Demo=Run{prover P;verifier V;public{};accept accepted;construction authore
     results = directory / 'results.json'
     results.write_bytes(b'unchanged')
     baseline = json.loads(journal.run([toolchain.runtime, 'prove', package, pin, producer, proof, '--allow-header-only']))
+    accepted_proof = proof.read_bytes()
+    proof.write_bytes(b'existing proof')
     limits = baseline['capacity']
     limits[3] = '64'
     capacity = write(directory / 'capacity.json', limits)
     report = json.loads(journal.run([toolchain.runtime, 'prove', package, pin, producer, proof,
         '--allow-header-only', f'--capacity={capacity}', f'--results={results}'], refuses='entry-output-encoding'))
-    assert report['phase'] == 'results' and report['proof_published'] and report['proof_bytes'] == proof.stat().st_size
+    assert report['phase'] == 'results' and not report.get('proof_published', False)
+    assert proof.read_bytes() == b'existing proof'
     assert results.read_bytes() == b'unchanged'
+    proof.write_bytes(accepted_proof)
     journal.run([toolchain.runtime, 'verify', package, pin, verifier, proof, '--allow-header-only', f'--results={results}'])
     assert json.loads(results.read_text())['values']['accepted'] is True
 
@@ -489,7 +490,7 @@ def test_interface_publication_and_host_share_resource_boundaries(toolchain, jou
         'format': 'zkc.entry-run/1', 'session': 'bounded_interface',
         'roles': {'P': {'inputs': {f'a{i}': [None] * 1024 for i in range(7)}}},
     })
-    executed = json.loads(journal.run([toolchain.runtime, 'run-entry', package, pin, request]))
+    executed = json.loads(journal.run([toolchain.runtime, 'run', package, pin, request]))
     assert executed['status'] == 'executed'
     source.write_text(program(9))
     refused = directory / 'oversized.entry'

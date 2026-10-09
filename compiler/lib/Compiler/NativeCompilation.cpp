@@ -1,3 +1,4 @@
+#include "../Transforms/PreparedProtocol.h"
 #include "CompilationState.h"
 #include "NativeDeployment.h"
 #include "Run.h"
@@ -88,24 +89,21 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
       return diagnostics.failure(error("public-coin-interface"));
     publicCoin = std::move(*checked);
   }
-  PassManager pipeline(&result->context);
   // Freeze the source before helper expansion. Checked candidates are projected
   // without folding, checked once, and then lowered in this same invocation.
   std::optional<json::Value> correspondence;
   OwningOpRef<ModuleOp> original;
   if (options.polynomialRequirements)
     original = cast<ModuleOp>(result->module->getOperation()->clone());
-  pipeline.addPass(protocol::createPrepareProtocolPass(false));
-  if (failed(pipeline.run(*result->module)) || diagnostics.hasErrors())
+  auto preparation = mathematical::PreparedProtocol::prepare(*result->module);
+  if (!preparation || diagnostics.hasErrors())
     return diagnostics.failure();
-  auto prepared = OwningOpRef<ModuleOp>(
-      cast<ModuleOp>(result->module->getOperation()->clone()));
-  pipeline.clear();
-  pipeline.addPass(protocol::createProjectProtocolPass(
-      !options.polynomialRequirements && options.simplify));
-  if (failed(pipeline.run(*result->module)) || diagnostics.hasErrors())
+  auto prepared = preparation->snapshot();
+  result->module =
+      std::move(*preparation)
+          .project(!options.polynomialRequirements && options.simplify);
+  if (!result->module || diagnostics.hasErrors())
     return diagnostics.failure();
-  pipeline.clear();
   if (options.polynomialRequirements) {
     auto checked = checkPolynomialReductions(*original, *result->module,
                                              *options.polynomialRequirements);
@@ -195,6 +193,9 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
                      {"simplify", options.simplify},
                      {"release_storage", options.releaseStorage},
                      {"fix_polynomial_factors", options.fixPolynomialFactors}});
+    // Describe semantic pipeline stages with their public pass names. This is
+    // not a PassManager execution trace: preparation is implicit here, and
+    // projection consumes the privately owned prepared subject above.
     json::Array passes;
     passes.push_back("zkc-project-protocol");
     if (options.simplify)
@@ -312,7 +313,7 @@ compileNativeProof(StringRef text, StringRef filename,
     return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
   };
   json::Value deployment(json::Array{
-      "zkc.native-proof/4", digest(text), constructed->descriptor,
+      "zkc.native-proof/5", digest(text), constructed->descriptor,
       digest(*descriptorBytes), candidate, digest(candidate), std::move(maps),
       json::Array{options.simplify ? "true" : "false",
                   options.releaseStorage ? "true" : "false"},

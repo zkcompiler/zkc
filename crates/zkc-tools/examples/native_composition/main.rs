@@ -176,7 +176,7 @@ fn target(n: usize) -> Vec<Value> {
     ]
 }
 fn admit(bytes: &[u8], groups: usize) -> NativeDeployment {
-    NativeDeployment::admit(bytes, &hex(&Sha256::digest(bytes)), Default::default())
+    NativeDeployment::admit(bytes, &Sha256::digest(bytes).into(), Default::default())
         .unwrap()
         .with_capacity(NativeCapacity {
             groups,
@@ -367,7 +367,7 @@ fn main() {
                     }
                     let limited = NativeDeployment::admit(
                         &bytes,
-                        &hex(&Sha256::digest(&bytes)),
+                        &Sha256::digest(&bytes).into(),
                         Default::default(),
                     )
                     .unwrap()
@@ -422,7 +422,7 @@ fn main() {
             if family == "target-accumulation" && n == 16 {
                 let limited = NativeDeployment::admit(
                     &bytes,
-                    &hex(&Sha256::digest(&bytes)),
+                    &Sha256::digest(&bytes).into(),
                     Default::default(),
                 )
                 .unwrap()
@@ -458,7 +458,7 @@ fn main() {
 // arbitrary providers or schedules. Every successful probe must preserve bytes.
 fn capacity_boundaries(bytes: &[u8], producer: &Json, validator: &Json, proof: &[u8]) -> Vec<Json> {
     let mut boundaries = Vec::new();
-    let digest = hex(&Sha256::digest(bytes));
+    let digest: [u8; 32] = Sha256::digest(bytes).into();
     for kind in [
         "instructions",
         "iterations",

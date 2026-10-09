@@ -272,8 +272,8 @@ fn nested_program() -> Vec<u8> {
         &["next"],
     );
     let mut j: serde_json::Value = serde_json::from_slice(&raw).unwrap();
-    j[3][0][2] = json!([["a", "rng:bls12-381.fr@host.resource/1"]]);
-    j[4][0][7] = json!([
+    j[2][0][2] = json!([["a", "rng:bls12-381.fr@host.resource/1"]]);
+    j[3][0][6] = json!([
         [
             "loop",
             "outer",
@@ -401,12 +401,12 @@ fn non_top_exit_refusal_preserves_views_for_ordered_cleanup_without_resource_eff
         exit_order_probe: true,
     };
     let mut j: serde_json::Value = serde_json::from_slice(&nested_program()).unwrap();
-    j[4][0][6] = json!([
+    j[3][0][5] = json!([
         "rng:bls12-381.fr@host.resource/1",
         "rng:bls12-381.fr@host.resource/1"
     ]);
-    j[4][0][7][1] = json!(["return", ["out0", "b"]]);
-    j[3][0][4] = json!([["return", ["a"]]]);
+    j[3][0][6][1] = json!(["return", ["out0", "b"]]);
+    j[2][0][4] = json!([["return", ["a"]]]);
     let (out, p) = run(
         &serde_json::to_vec(&j).unwrap(),
         probe,
@@ -502,7 +502,6 @@ fn repeated_loop_iterations_pass_only_current_successor_handle() {
             "root",
             "instance",
             "P",
-            [],
             [["a", "rng"], ["count", "index"]],
             ["rng"],
             [

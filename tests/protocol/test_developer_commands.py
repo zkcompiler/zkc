@@ -27,8 +27,8 @@ def test_discovery_without_protocol_inputs(toolchain, directory, tool):
     assert not list(directory.iterdir()), "discovery should not create input or report files"
 
 
-@pytest.mark.parametrize("command", ["run-bundle", "produce-native-proof", "validate-native-proof",
-                                    "compile", "run-entry", "prove", "verify", "bindings"])
+@pytest.mark.parametrize("command", ["run-bundle", "prove-bundle", "verify-bundle",
+                                    "compile", "run", "prove", "verify", "bindings"])
 def test_runtime_command_help(toolchain, directory, command):
     result = run_process([toolchain.runtime, command, "--help"], cwd=directory,
                             capture_output=True, text=True, timeout=15)
@@ -43,12 +43,14 @@ def test_usage_and_execution_failures_remain_distinct(toolchain, directory):
 
     result = invoke()
     assert result.returncode == 2 and "Usage:" in result.stderr and not result.stdout
-    for args in [("unknown",), ("unknown", "--help"), ("unknown", "a", "b", "c", "d")]:
+    for args in [("unknown",), ("unknown", "--help"), ("unknown", "a", "b", "c", "d"),
+                 ("produce-native-proof", "--help"), ("validate-native-proof", "--help"),
+                 ("run-entry", "--help")]:
         result = invoke(*args)
         assert result.returncode == 2 and "Unknown command" in result.stderr
         assert not result.stdout
     # A real execution command still reports the existing machine-readable refusal.
-    result = invoke("run-entry", "missing.entry", "0" * 64, "inputs.json")
+    result = invoke("run", "missing.entry", "0" * 64, "inputs.json")
     assert result.returncode == 1
     report = json.loads(result.stdout)
     assert report["status"] == "refused" and report["code"]
@@ -96,5 +98,5 @@ def test_published_mathematical_walkthrough(marker, toolchain, directory, journa
                                  (proof, "native-proof-deployment-binding", "00" * 32)]:
         candidate = output / "invalid.bin"
         candidate.write_bytes(data)
-        journal.json([toolchain.runtime, "validate-native-proof", deployment, expected,
-                      output / "validator-inputs.json", candidate], refuses=code)
+        journal.json([toolchain.runtime, "verify-bundle", deployment, expected,
+                      output / "validator-inputs.json", candidate, "--allow-header-only"], refuses=code)

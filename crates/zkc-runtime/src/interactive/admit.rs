@@ -83,9 +83,10 @@ pub(crate) fn installed<B: Backend>(p: &Program, backend: &B) -> Result<()> {
         for port in &participant.services {
             let expected = port.contract.signature("draw").expect("installed method");
             if !backend
-                .service_signature(port.contract, "draw")
-                .is_some_and(|(signature, bytes)| {
-                    signature == expected && bytes <= Limits::VALUE_BYTES
+                .service_support(port.contract, "draw")
+                .is_some_and(|support| {
+                    support.signature == expected
+                        && support.max_retained_bytes <= Limits::VALUE_BYTES
                 })
             {
                 return Err(err(

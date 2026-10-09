@@ -247,10 +247,11 @@ int main() {
           "private immutable custody changed");
   check(!typePermissions("fixture_array"),
         "Type/Nat fixture installed in production");
-  check(operationEffect("unknown.call").empty(),
-        "unknown operation acquired an effect envelope");
+  check(!parameterContract("unknown.call") &&
+            authoringStage("unknown.call") == AuthoringStage::CompilerGenerated,
+        "unknown operation acquired a source declaration");
   for (const auto &kernel : kernels())
-    check(operationEffect(kernel.key) == "local", kernel.key);
+    check(parameterContract(kernel.key) != nullptr, kernel.key);
   auto unsupported = parseBoundType("fixture_array:anything", false);
   check(!unsupported, "generation-only constructor admitted");
   if (!unsupported)
@@ -297,7 +298,7 @@ int main() {
   // The generated structures must also satisfy the independent C++ checker.
   for (const auto &op : boundOperationContracts()) {
     success(checkStaticVocabulary(op.signature), op.name);
-    check(operationEffect(op.name) == "local", "local envelope lost");
+    check(parameterContract(op.name) != nullptr, "operation declaration lost");
     generic::Function function;
     function.signature = op.signature;
     generic::Call call;

@@ -53,7 +53,23 @@ pub struct Package {
     original: Arc<str>,
     interface: Arc<str>,
     artifact: Arc<str>,
+    artifact_identity: [u8; 32],
     options: CompileOptions,
+}
+/// A view can only originate from a captured Package. Its borrowed immutable
+/// bytes remain covered by the package pin; its digest is diagnostic identity,
+/// not a second source of authorization. No public raw-byte constructor exists.
+pub(crate) struct AuthenticatedArtifact<'a> {
+    bytes: &'a [u8],
+    identity: [u8; 32],
+}
+impl AuthenticatedArtifact<'_> {
+    pub(crate) fn bytes(&self) -> &[u8] {
+        self.bytes
+    }
+    pub(crate) fn identity(&self) -> &[u8; 32] {
+        &self.identity
+    }
 }
 impl Package {
     pub const MAX_BYTES: usize = PACKAGE_BYTES;
@@ -67,7 +83,7 @@ impl Package {
         expected_sha256: &[u8; 32],
         byte_limit: usize,
     ) -> Result<Self, PackageError> {
-        if bytes.len() > byte_limit.min(PACKAGE_BYTES) {
+        if byte_limit > PACKAGE_BYTES || bytes.len() > byte_limit {
             return Err(PackageError::Limit);
         }
         let identity: [u8; 32] = Sha256::digest(bytes).into();
@@ -91,6 +107,7 @@ impl Package {
             identity,
             original: frame.original.into(),
             interface: frame.interface.into(),
+            artifact_identity: Sha256::digest(frame.artifact.as_bytes()).into(),
             artifact: frame.artifact.into(),
             options: frame.options,
         })
@@ -109,6 +126,12 @@ impl Package {
     }
     pub fn artifact(&self) -> &str {
         &self.artifact
+    }
+    pub(crate) fn authenticated_artifact(&self) -> AuthenticatedArtifact<'_> {
+        AuthenticatedArtifact {
+            bytes: self.artifact.as_bytes(),
+            identity: self.artifact_identity,
+        }
     }
     pub fn options(&self) -> CompileOptions {
         self.options
@@ -146,6 +169,10 @@ mod tests {
         );
         assert_eq!(package.clone().identity(), package.identity());
         assert!(Package::capture(bytes.as_bytes(), package.identity(), bytes.len()).is_ok());
+        assert!(matches!(
+            Package::capture(bytes.as_bytes(), package.identity(), Package::MAX_BYTES + 1),
+            Err(PackageError::Limit)
+        ));
         assert!(matches!(
             Package::capture(bytes.as_bytes(), package.identity(), bytes.len() - 1),
             Err(PackageError::Limit)

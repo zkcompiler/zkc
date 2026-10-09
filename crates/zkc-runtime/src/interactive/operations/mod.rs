@@ -27,6 +27,7 @@ type PhysicalResolver =
 
 pub(super) struct Contract {
     name: &'static str,
+    implementations: &'static [&'static str],
     shape: Option<(&'static [Type], &'static [Type], AttributeRule)>,
     alternatives: bool,
     history: bool,
@@ -38,6 +39,7 @@ impl Contract {
     ) -> Self {
         Self {
             name,
+            implementations: &[],
             shape: Some(shape),
             alternatives: false,
             history: false,
@@ -55,10 +57,16 @@ impl Contract {
     pub(super) const fn custom(name: &'static str) -> Self {
         Self {
             name,
+            implementations: &[],
             shape: None,
             alternatives: false,
             history: false,
         }
+    }
+    /// Exact default owners, independent of domain applicability and alternatives.
+    pub(super) const fn implemented_by(mut self, implementations: &'static [&'static str]) -> Self {
+        self.implementations = implementations;
+        self
     }
     /// A transition of protocol-visible observation or sampling history.
     /// This facet does not imply purity, totality, or a sampling law.
@@ -103,7 +111,6 @@ impl Selection {
 pub(super) struct Contribution {
     pub(super) contracts: &'static [Contract],
     pub(super) resolve: LogicalResolver,
-    pub(super) providers: &'static [&'static str],
     pub(super) select: PhysicalResolver,
     pub(super) alternatives: &'static [Alternative],
     pub(super) physical_error: &'static str,
@@ -131,12 +138,8 @@ impl Registry {
                         "duplicate-logical-owner",
                     ));
                 }
-                for provider in contribution.providers {
-                    registry.install_physical(
-                        &format!("{provider}/{}", contract.name),
-                        contract.name,
-                        Selection::Default,
-                    )?;
+                for implementation in contract.implementations {
+                    registry.install_physical(implementation, contract.name, Selection::Default)?;
                 }
             }
             for alternative in contribution.alternatives {

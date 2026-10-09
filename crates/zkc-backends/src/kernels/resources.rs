@@ -11,18 +11,6 @@ pub(crate) fn apply(
     r: &mut Resources,
     key: &crate::SetupRegistry,
 ) -> Result<Vec<Value>> {
-    if !matches!(
-        name,
-        "random.index"
-            | "random.draw"
-            | "random.vector"
-            | "curve.commit"
-            | "curve.response"
-            | "transcript.native.indexed.challenge"
-            | "transcript.native.indexed.observe.data"
-    ) {
-        return Err(refused("kernel-operands"));
-    }
     use Value::*;
     match (name, args) {
         ("random.index", [Rng(t), Index(bound)]) => {
@@ -118,37 +106,62 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             &[],
             &[],
             AttributeRule::NativeMessageTemplate,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/transcript.native.indexed.observe.data",
+            "dalek/transcript.native.indexed.observe.data",
+            "plonky3/transcript.native.indexed.observe.data",
+            "spongefish/transcript.native.indexed.observe.data",
+        ]),
         transcript::challenge(
             "transcript.native.indexed.challenge",
             &[Transcript, Indices],
             &[Field, Transcript],
             AttributeRule::NativeChallengeTemplate,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/transcript.native.indexed.challenge",
+            "dalek/transcript.native.indexed.challenge",
+            "plonky3/transcript.native.indexed.challenge",
+            "spongefish/transcript.native.indexed.challenge",
+        ]),
         curve::operation(
             "curve.commit",
             &[Groups, Nonce],
             &[Groups, Nonce],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/curve.commit", "dalek/curve.commit"]),
         curve::operation(
             "curve.response",
             &[Field, Field, Nonce],
             &[Field],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/curve.response", "dalek/curve.response"]),
         random::operation(
             "random.index",
             &[Rng, Index],
             &[Index, Rng],
             AttributeRule::None,
-        ),
-        random::operation("random.draw", &[Rng], &[Field, Rng], AttributeRule::None),
+        )
+        .implemented_by(&["plonky3/random.index"]),
+        random::operation("random.draw", &[Rng], &[Field, Rng], AttributeRule::None)
+            .implemented_by(&[
+                "arkworks/random.draw",
+                "dalek/random.draw",
+                "plonky3/random.draw",
+            ]),
         random::operation(
             "random.vector",
             &[Rng],
             &[Vector, Rng],
             AttributeRule::NaturalIndex,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/random.vector",
+            "dalek/random.vector",
+            "plonky3/random.vector",
+        ]),
     ]
 };

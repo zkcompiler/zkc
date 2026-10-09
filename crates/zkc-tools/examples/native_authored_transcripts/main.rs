@@ -124,7 +124,7 @@ fn main() {
         let snapshot = case["snapshot"] == true;
         let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
         let deployment =
-            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+            NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
                 .unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
         if family == "prefix" {

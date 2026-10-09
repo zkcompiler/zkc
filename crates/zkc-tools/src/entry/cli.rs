@@ -5,7 +5,7 @@ use super::{
 use crate::{
     host::{
         inputs::{digest, hex, read_regular as read},
-        io::publish,
+        publication::Outputs,
     },
     run::HostLimits,
 };
@@ -48,7 +48,7 @@ impl Options {
                     options.proof.capacity = capacity;
                     options.run.capacity = capacity;
                 }
-                "--allow-header-only" if command != "run-entry" && value.is_empty() => {
+                "--allow-header-only" if command != "run" && value.is_empty() => {
                     options.proof.binding = BindingPolicy::AllowHeaderOnly
                 }
                 "--attempts" if command == "prove" => {
@@ -89,7 +89,7 @@ pub fn run(command: &str, args: &[String]) -> Json {
         {
             return Err("entry-usage".into());
         }
-        let (proof_path, flags) = if matches!(command, "run-entry" | "bindings") {
+        let (proof_path, flags) = if matches!(command, "run" | "bindings") {
             (None, rest)
         } else {
             let [proof, flags @ ..] = rest else {
@@ -119,7 +119,7 @@ pub fn run(command: &str, args: &[String]) -> Json {
             }
             outputs.extend(options.results.as_deref());
         }
-        protect_destinations(&outputs, &protected)?;
+        let mut destinations = Outputs::new(&outputs, &protected).map_err(output_error)?;
         report["setups"] = json!(
             options
                 .setups
@@ -136,12 +136,14 @@ pub fn run(command: &str, args: &[String]) -> Json {
         if command == "bindings" {
             let source = super::bindings::rust(&package)?;
             report["phase"] = json!("publication");
-            publish(inputs, source.as_bytes())?;
+            destinations
+                .publish(&[("bindings", source.as_bytes())], &mut report)
+                .map_err(output_error)?;
             report["status"] = json!("generated");
             report["phase"] = json!("complete");
             return Ok(());
         }
-        if command == "run-entry" {
+        if command == "run" {
             let host = RunEntry::admit(package, options.run, options.setups.clone())?;
             report["entry"] = json!(host.interface().entry());
             report["capacity"] = host.limits().capacity.record();
@@ -150,27 +152,36 @@ pub fn run(command: &str, args: &[String]) -> Json {
                 .interface()
                 .run_request(&read(inputs, files::MAX_REQUEST_BYTES)?)?;
             protect_materials(
-                &outputs,
+                &mut destinations,
                 request.roles.values().flat_map(|role| role.inputs.values()),
             )?;
+            let mut imports = crate::host::setups::VerifierKeys::new(
+                host.limits().capacity.backend().ark_bounds(),
+            );
             let output_setups = if options.results.is_some() {
-                files::output_setups(&request.setups, &options.setups, host.limits().capacity)?
+                files::output_setups_with(
+                    &request.setups,
+                    &options.setups,
+                    host.limits().capacity,
+                    &mut imports,
+                )?
             } else {
                 Default::default()
             };
-            let result = host.prepare(request)?.execute();
+            let result = host.prepare_with(request, &mut imports)?.execute();
             report["phase"] = json!("execution");
             report["execution"] = result.native.diagnostics();
             if let Some(error) = result.output_error {
                 return Err(error);
             }
             let outputs = result.outputs.ok_or("entry-run-incomplete")?;
-            if let Some(path) = options.results {
+            if options.results.is_some() {
                 report["phase"] = json!("results");
                 let encoded = files::run_outputs(&outputs, host.limits().capacity, output_setups)?;
                 report["phase"] = json!("publication");
-                publish(&path, &encoded)?;
-                report["results_published"] = json!(true);
+                destinations
+                    .publish(&[("results", &encoded)], &mut report)
+                    .map_err(output_error)?;
             }
             report["status"] = json!("executed");
         } else if command == "prove" || command == "verify" {
@@ -186,24 +197,27 @@ pub fn run(command: &str, args: &[String]) -> Json {
             let request = host
                 .interface()
                 .proof_request(&read(inputs, files::MAX_REQUEST_BYTES)?, producer)?;
-            protect_materials(&outputs, request.private.inputs.values())?;
+            protect_materials(&mut destinations, request.private.inputs.values())?;
+            let mut imports = crate::host::setups::VerifierKeys::new(
+                options.proof.capacity.backend().ark_bounds(),
+            );
             let output_setups = if options.results.is_some() {
-                files::output_setups(&request.setups, &options.setups, options.proof.capacity)?
+                files::output_setups_with(
+                    &request.setups,
+                    &options.setups,
+                    options.proof.capacity,
+                    &mut imports,
+                )?
             } else {
                 Default::default()
             };
-            let result = if producer {
-                if let Some(attempts) = options.attempts {
-                    host.prove_attempts(request, attempts)?
-                } else {
-                    host.prove(request)?
-                }
+            let proof = if producer {
+                None
             } else {
-                host.verify(
-                    request,
-                    &read(proof_path.unwrap(), crate::proof::MAX_PROOF_BYTES)?,
-                )?
+                Some(read(proof_path.unwrap(), crate::proof::MAX_PROOF_BYTES)?)
             };
+            let result =
+                host.execute_with(request, proof.as_deref(), options.attempts, &mut imports)?;
             report["phase"] = json!("execution");
             report["execution"] = result.native.diagnostics();
             if !result.is_success() {
@@ -212,23 +226,20 @@ pub fn run(command: &str, args: &[String]) -> Json {
                     .or_else(|| result.native.outcome.err())
                     .unwrap_or_else(|| "entry-proof-incomplete".into()));
             }
-            if producer {
-                report["phase"] = json!("publication");
-                publish(proof_path.unwrap(), result.native.outcome.as_ref().unwrap())?;
-                report["proof_bytes"] = json!(result.native.outcome.as_ref().unwrap().len());
-                report["proof_published"] = json!(true);
-            }
-            if let Some(path) = options.results {
-                report["phase"] = json!("results");
-                let values = files::proof_outputs(
-                    result.outputs.as_ref().unwrap(),
-                    options.proof.capacity,
-                    output_setups,
-                )?;
-                report["phase"] = json!("publication");
-                publish(&path, &values)?;
-                report["results_published"] = json!(true);
-            }
+            let proof = producer.then(|| result.native.outcome.as_ref().unwrap().as_slice());
+            publish_proof(&destinations, proof, &mut report, || {
+                options
+                    .results
+                    .as_ref()
+                    .map(|_| {
+                        files::proof_outputs(
+                            result.outputs.as_ref().unwrap(),
+                            options.proof.capacity,
+                            output_setups,
+                        )
+                    })
+                    .transpose()
+            })?;
             report["status"] = json!(if producer { "produced" } else { "accepted" });
         } else {
             return Err("entry-usage".into());
@@ -241,38 +252,41 @@ pub fn run(command: &str, args: &[String]) -> Json {
     }
     report
 }
-// Publication replaces the directory entry, including a final symlink. Resolve
-// the parent only, so aliases of the same destination refuse before execution.
-// This is a caller configuration check, not filesystem race isolation.
-fn destination(path: &str) -> Result<std::path::PathBuf> {
-    let path = std::path::absolute(path).map_err(|_| "entry-output-path")?;
-    let parent = path.parent().ok_or("entry-output-path")?;
-    let name = path.file_name().ok_or("entry-output-path")?;
-    Ok(parent
-        .canonicalize()
-        .unwrap_or_else(|_| parent.into())
-        .join(name))
-}
-fn protect_destinations(outputs: &[&str], inputs: &[&str]) -> Result<()> {
-    let mut selected = BTreeSet::new();
-    for output in outputs {
-        let output = destination(output)?;
-        if !selected.insert(output.clone()) {
-            return Err("entry-output-path".into());
-        }
-        for input in inputs {
-            if output == destination(input)?
-                || std::fs::canonicalize(input).ok().as_ref() == Some(&output)
-            {
-                return Err("entry-output-path".into());
-            }
-        }
+// Keep the encoding/publication boundary explicit and independently testable.
+fn publish_proof(
+    destinations: &Outputs,
+    proof: Option<&[u8]>,
+    report: &mut Json,
+    encode_results: impl FnOnce() -> Result<Option<Vec<u8>>>,
+) -> Result<()> {
+    report["phase"] = json!("results");
+    let values = encode_results()?;
+    let mut publications = Vec::new();
+    if let Some(proof) = proof {
+        report["proof_bytes"] = json!(proof.len());
+        publications.push(("proof", proof));
+    }
+    if let Some(values) = &values {
+        publications.push(("results", values.as_slice()));
+    }
+    if !publications.is_empty() {
+        report["phase"] = json!("publication");
+        destinations
+            .publish(&publications, report)
+            .map_err(output_error)?;
     }
     Ok(())
 }
+fn output_error(code: String) -> String {
+    if code == "artifact-output-path" {
+        "entry-output-path".into()
+    } else {
+        code
+    }
+}
 // Request decoding has bounded the value tree before this file-reference walk.
 fn protect_materials<'a>(
-    outputs: &[&str],
+    outputs: &mut Outputs,
     values: impl Iterator<Item = &'a super::Value>,
 ) -> Result<()> {
     use super::Value;
@@ -280,7 +294,7 @@ fn protect_materials<'a>(
     for value in values {
         match value {
             Value::Leaf(InputValue::ProverKeyFile { path, .. }) => {
-                protect_destinations(outputs, &[path])?
+                outputs.protect([path.as_str()]).map_err(output_error)?
             }
             Value::Tuple(values) | Value::Array(values) => {
                 protect_materials(outputs, values.iter())?
@@ -330,16 +344,18 @@ fn compile(args: &[String]) -> Json {
             }
         }
         let output = output.ok_or("entry-usage")?;
-        protect_destinations(&[output], &sources)?;
+        let mut destinations = Outputs::new(&[output], &sources).map_err(output_error)?;
+        for source in &sources {
+            crate::host::io::open_regular(source).map_err(|_| "artifact-io")?;
+        }
         let selected_compiler = resolve_compiler(compiler)?;
         let compiler_path = std::path::Path::new(compiler);
         if compiler_path.is_absolute() || compiler_path.components().count() > 1 {
-            protect_destinations(&[output], &[compiler])?;
+            destinations.protect([compiler]).map_err(output_error)?;
         }
-        protect_destinations(
-            &[output],
-            &[selected_compiler.to_str().ok_or("entry-compiler-io")?],
-        )?;
+        destinations
+            .protect([selected_compiler.to_str().ok_or("entry-compiler-io")?])
+            .map_err(output_error)?;
         let compiler = selected_compiler;
         report["compiler"] = json!(compiler);
         report["phase"] = json!("compilation");
@@ -384,7 +400,9 @@ fn compile(args: &[String]) -> Json {
         report["toolchain"] = json!(interface.toolchain());
         report["package_sha256"] = json!(hex(&pin));
         report["phase"] = json!("publication");
-        publish(output, &bytes)?;
+        destinations
+            .publish(&[("package", &bytes)], &mut report)
+            .map_err(output_error)?;
         report["status"] = json!("compiled");
         report["phase"] = json!("complete");
         Ok(())
@@ -428,4 +446,49 @@ fn resolve_compiler(name: &str) -> Result<std::path::PathBuf> {
         return path.canonicalize().map_err(|_| "entry-compiler-io".into());
     }
     Err("entry-compiler-missing".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn output_encoding_failure_preserves_existing_proof_and_results() {
+        let directory = tempfile::tempdir().unwrap();
+        let proof = directory.path().join("proof");
+        let results = directory.path().join("results");
+        std::fs::write(&proof, b"prior proof").unwrap();
+        std::fs::write(&results, b"prior results").unwrap();
+        let destinations =
+            Outputs::new(&[proof.to_str().unwrap(), results.to_str().unwrap()], &[]).unwrap();
+        let capacity = crate::proof::NativeCapacity {
+            wire_bytes: 0,
+            ..Default::default()
+        };
+        let values = [(
+            "field".into(),
+            zkc_backends::Value::Field(zkc_backends::Scalar::from(1)).into(),
+        )]
+        .into();
+        let mut report = json!({"status":"refused"});
+        let error = publish_proof(&destinations, Some(b"new proof"), &mut report, || {
+            files::proof_outputs(&values, capacity, Default::default()).map(Some)
+        })
+        .unwrap_err();
+        assert_eq!(error, "entry-output-encoding");
+        assert_eq!(report["phase"], "results");
+        assert_ne!(report["proof_published"], true);
+        assert_eq!(std::fs::read(&proof).unwrap(), b"prior proof");
+        assert_eq!(std::fs::read(&results).unwrap(), b"prior results");
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 2);
+        publish_proof(&destinations, Some(b"new proof"), &mut report, || {
+            Ok(Some(b"new results".to_vec()))
+        })
+        .unwrap();
+        assert_eq!(std::fs::read(&proof).unwrap(), b"new proof");
+        assert_eq!(std::fs::read(&results).unwrap(), b"new results");
+        assert_eq!(
+            report["publication"]["published"],
+            json!(["proof", "results"])
+        );
+    }
 }

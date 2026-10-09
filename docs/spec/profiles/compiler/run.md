@@ -46,7 +46,7 @@ bundle carries executable scheduling data. It adds no IR stage or dialect.
 ```json
 {
   "format": "zkc.run/1",
-  "candidate": "<exact zkc.program/1 JSON text>",
+  "candidate": "<exact zkc.program/2 JSON text>",
   "entry": "main",
   "roles": ["Alice", "Bob"],
   "steps": [
@@ -67,10 +67,10 @@ positional decoding, static typing, installed-kernel admission and immutable
 custody. `Admitted::program_entry` supplies the action layout and resolved send
 operand types; Tools does not decode participant instructions separately.
 
-Hard defaults are 16 MiB outer bytes, 1 MiB decoded candidate bytes, 1024 roles,
+Installed ceilings and defaults are 16 MiB outer bytes, 1 MiB decoded candidate bytes, 1024 roles,
 32768 static dispatch steps including returns, outer nesting 256, 250000 outer JSON nodes,
 and 4096 decoded UTF-8 bytes per ordinary string. A host may lower these through
-`BundleLimits`; higher requests are capped. Byte/depth/node limits precede JSON
+`BundleLimits`; higher requests refuse with `BundleError::Limit`. Byte/depth/node limits precede JSON
 parsing; bounded sequence and string visitors refuse oversized decoded fields
 before participant admission. These bounds and decoder reservation failures
 return `BundleError::Limit`, without interpreting parser diagnostic text.
@@ -107,7 +107,7 @@ or a source-correspondence certificate.
 
 ## Message admission
 
-`zkc.run/1` embeds exactly `zkc.program/1` and uses the compact schedule
+`zkc.run/1` embeds exactly `zkc.program/2` and uses the compact schedule
 contract below. Other bundle or embedded program tags refuse without fallback.
 The bundle admits each complete physical message type supported by the installed
 native codec, including the variable-size frames defined by
@@ -157,8 +157,7 @@ initial state; otherwise induction runs from zero to count minus one. Child loop
 frames borrow immutable captures from their parent; retained-value accounting
 charges the full retained bytes of each parent/child view, including shared
 backing, once per frame/iteration. The destination stores names, not another
-retained payload. This reduces the previous redundant loop-capture charge in
-the shared machine, including old carriers; resource-limit thresholds can change. Live service leases
+retained payload. Live service leases
 belong to the entry and survive inner frame return.
 
 Reports, transfer hooks and cancellation checks include the complete outer-to-inner
@@ -248,11 +247,14 @@ an API refusal preserves it. The report owns any payload still pending at exit.
 
 Default driver caps are 32768 dispatches, 4096 bytes per wire payload or hook
 replacement, and 16 MiB accumulated original plus replacement bytes. Hosts may
-lower these caps. The existing `ValueBudget` separately controls runner retention;
-the joint driver caps its effective values at the installed runtime defaults.
-`RunLimits.work` separately selects instruction/iteration ceilings. The lower
-level `Runner` API retains its own host-budget contract. `Report.limits` records
-the effective joint policy, rather than the caller's uncapped request.
+lower these caps. `ValueBudget` separately controls runner retention; the joint
+driver requires its live and cumulative charges to fit 64 MiB and 256 MiB.
+`RunLimits.work` separately selects instruction/iteration ceilings. Requests above
+any installed driver ceiling refuse before entry and preserve caller-owned inputs.
+`Report.limits` records the requested policy without silent clamping. The lower-level
+`Runner` refuses instruction/iteration allowances above its hard ceilings but
+permits configurable live and cumulative retained-value budgets. Its 64 MiB
+individual-value ceiling remains independent of those aggregate budgets.
 The driver reserves reached-step and result-port capacity before any entry.
 Cancellation includes the bounded host reason and can occur between send and
 receive; the committed message remains in the resulting report. This policy has no asynchronous queue or readiness
@@ -399,6 +401,9 @@ Each material entry must match its authorized identity and canonical encoding.
 Invocation key-file paths, budgets and session names require host authorization;
 this API is not a filesystem sandbox. A prover material fingerprint selects bytes;
 the authorized verifier key supplies setup authority.
+All configured CLI inputs, including bundle, invocation, authority, capacity and
+limit files, use bounded regular-file descriptors. Raw byte APIs retain explicit
+transport-independent ingress.
 Received PCS values select among the authorized registry keys using their native
 headers. The Host does not promise an independently pinned key at each receive
 site; applications must assess this registry-based authority contract.
@@ -408,9 +413,9 @@ The dispatch/wire file is
 `["zkc.bundle-limits/1", dispatches, message_bytes, total_wire_bytes, external_work_per_role]`.
 Defaults/hard ceilings are 32768 dispatched occurrences, 4096 bytes per message
 and 16 MiB cumulative native wire bytes, with 16777216 external-kernel work units
-per role. The API caps dispatch/wire requests;
-the CLI refuses requests above those ceilings. Capacity requests above installed
-bounds are refused. Reports retain the effective admission, capacity and execution
+per role. Both API and CLI refuse requests above these ceilings without clamping.
+Structural bundle and native-capacity requests likewise refuse above their own
+installed bounds. Reports retain the requested admission, capacity and execution
 limits. Per-runner instruction, iteration and retained-value budgets are
 separate from structural schedule size and runtime dispatch occurrences.
 

@@ -44,6 +44,34 @@ fn read_text(interface: &str) -> Result<Interface> {
 fn read(value: &Value) -> Result<Interface> {
     read_text(&value.to_string())
 }
+#[test]
+fn escaped_duplicate_keys_refuse_in_nested_objects_and_tagged_records() {
+    let original = document().to_string();
+    for key in [
+        "format", "kind", "public", "name", "custody", "native", "symbol",
+    ] {
+        let value = document();
+        fn first<'a>(v: &'a Value, key: &str) -> Option<&'a Value> {
+            match v {
+                Value::Object(map) => map
+                    .get(key)
+                    .or_else(|| map.values().find_map(|v| first(v, key))),
+                Value::Array(values) => values.iter().find_map(|v| first(v, key)),
+                _ => None,
+            }
+        }
+        let item = first(&value, key).unwrap();
+        let field = format!("\"{key}\":{item}");
+        let escaped = format!("\\u{:04x}{}", key.as_bytes()[0], &key[1..]);
+        let changed = original.replacen(&field, &format!("{field},\"{escaped}\":{item}"), 1);
+        assert_ne!(original, changed);
+        assert_eq!(
+            read_text(&changed).unwrap_err(),
+            InterfaceError::Format,
+            "{key}"
+        );
+    }
+}
 fn changed(path: &str, value: Value, error: InterfaceError) {
     let mut original = document();
     *original.pointer_mut(path).unwrap() = value;
@@ -63,6 +91,54 @@ fn complete_metadata_keeps_identity_job_and_leaf_types() {
     let mut run = document();
     run["job"] = json!({"kind":"run"});
     assert!(!read(&run).unwrap().is_proof());
+}
+#[test]
+fn external_interface_bytes_require_canonical_unsigned_integer_indices() {
+    let mut valid = document();
+    // Numeric-looking string contents, booleans and null keep their own grammar.
+    valid["toolchain"] = json!("quoted -0 +0 00 0.0 0e0 \"0\"");
+    assert!(read_text(&valid.to_string()).is_ok());
+    for path in [
+        "/protocols/0/inputs/0/index",
+        "/protocols/0/inputs/0/native/0",
+        "/protocols/0/clauses/0/subject/operands/0/port",
+        "/relations/0/inputs/0/native/0",
+        "/job/public/0",
+        "/job/acceptance/port",
+    ] {
+        let mut template = valid.clone();
+        *template.pointer_mut(path).unwrap() = json!("NUMBER_TOKEN");
+        let bytes = template.to_string();
+        assert!(
+            read_text(&bytes.replace("\"NUMBER_TOKEN\"", "0")).is_ok(),
+            "{path}"
+        );
+        for token in [
+            "-0",
+            "-1",
+            "+0",
+            "+1",
+            "00",
+            "01",
+            "0.0",
+            "1.0",
+            "0e0",
+            "1e0",
+            "0E+0",
+            "4294967296",
+        ] {
+            assert_eq!(
+                read_text(&bytes.replace("\"NUMBER_TOKEN\"", token)).map(|_| ()),
+                Err(InterfaceError::Format),
+                "{path}: {token}"
+            );
+        }
+        assert_eq!(
+            read_text(&bytes.replace("\"NUMBER_TOKEN\"", "10000000000")).unwrap_err(),
+            InterfaceError::Limit,
+            "scalar budget precedes schema decoding: {path}"
+        );
+    }
 }
 #[test]
 fn exact_objects_reject_extra_duplicate_missing_and_old_fields() {
@@ -308,6 +384,14 @@ fn recursive_and_lexical_limits_precede_unbounded_allocation() {
         Err(InterfaceError::Limit)
     );
     assert_eq!(preflight::check(b"12345678901"), Err(InterfaceError::Limit));
+    assert_eq!(
+        preflight::check(b"[-0,12345678901]"),
+        Err(InterfaceError::Limit)
+    );
+    assert_eq!(
+        preflight::check(format!("[-0,{}0{}]", "[".repeat(256), "]".repeat(256)).as_bytes()),
+        Err(InterfaceError::Limit)
+    );
     assert_eq!(preflight::check(b"{\"quoted\":\"[{}]\\\"\"}"), Ok(()));
     assert_eq!(
         preflight::check(&vec![b' '; 4 * 1024 * 1024 + 1]),

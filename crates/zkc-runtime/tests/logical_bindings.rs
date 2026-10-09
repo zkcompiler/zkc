@@ -669,9 +669,6 @@ fn relayout_is_a_physical_only_contract() {
 #[derive(Clone)]
 enum NoValue {}
 impl Value for NoValue {
-    fn type_name(&self) -> &str {
-        match *self {}
-    }
     fn physical_type(&self) -> PhysicalType {
         match *self {}
     }
@@ -701,16 +698,14 @@ impl Backend for NoBackend {
 
 fn carrier(b: &OperationBinding) -> serde_json::Value {
     json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [["op", b.contract, b.arguments, b.implementation]],
-        "physical",
         [],
         [[
             "participant",
             "Participant",
             "instance",
             "role",
-            [],
             [],
             [],
             [["return", []]],
@@ -764,7 +759,7 @@ fn production_decoder_requires_a_real_physical_selection() {
 fn production_admission_still_requires_backend_advertisement() {
     let b = binding("index.constant", &[], "native/index.constant");
     let mut value = carrier(&b);
-    value[3] = json!([[
+    value[2] = json!([[
         "function",
         "Constant",
         [],
@@ -816,7 +811,7 @@ fn logical_spelling_limit_excludes_the_outer_representation() {
         assert_eq!(error.code, ErrorCode::Representation);
         assert_eq!(error.detail, "unrepresented logical type");
         let mut value = carrier(&binding("index.constant", &[], "native/index.constant"));
-        value[3] = json!([[
+        value[2] = json!([[
             "function",
             "Identity",
             [["x", physical]],

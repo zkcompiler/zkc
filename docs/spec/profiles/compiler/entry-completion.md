@@ -42,7 +42,7 @@ syntactic final return is inferred.
 
 ## Executable record and control boundary
 
-Only `zkc.program/1` admits:
+Only `zkc.program/2` admits:
 
 ```text
 ["return_if", site, condition, entry_values, affine_continuations]

@@ -12,7 +12,7 @@ fn ty(domain: &str) -> String {
 }
 fn fixture(ports: Json, results: Json, body: Json, args: Json, names: Json) -> Json {
     json!([
-        "zkc.program/1",
+        "zkc.program/2",
         [
             [
                 "make",
@@ -33,14 +33,12 @@ fn fixture(ports: Json, results: Json, body: Json, args: Json, names: Json) -> J
                 "logical/resource_unit.consume"
             ]
         ],
-        "physical",
         [["function", "Local", ports, results, body, ["Local", []]]],
         [[
             "participant",
             "root_P",
             "root",
             "P",
-            [],
             ports,
             results,
             [["local", "work", "Local", args, names], ["return", names]],
@@ -180,7 +178,7 @@ fn create_pass_consume_and_host_alias_refusal() {
         "refused:capability-unissued"
     );
     // Independent source-like structural forgeries cannot acquire a copy permission.
-    dup[3][0][4] = json!([
+    dup[2][0][4] = json!([
         ["op", "use", "consume", [], ["a"], []],
         ["op", "again", "consume", [], ["a"], []],
         ["return", []]
@@ -197,8 +195,8 @@ fn create_pass_consume_and_host_alias_refusal() {
 fn duplicate_result_wrong_domain_codec_and_implementation_refused() {
     let backend = ark_backend(None);
     let mut bad = make();
-    bad[3][0][3] = json!([ty("Slot.A"), ty("Slot.A")]);
-    bad[3][0][4][1] = json!(["return", ["x", "x"]]);
+    bad[2][0][3] = json!([ty("Slot.A"), ty("Slot.A")]);
+    bad[2][0][4][1] = json!(["return", ["x", "x"]]);
     assert!(
         admit_supplied(&bytes(&bad), &backend)
             .unwrap_err()
@@ -206,7 +204,7 @@ fn duplicate_result_wrong_domain_codec_and_implementation_refused() {
             .contains("consumed operand")
     );
     let mut bad = make();
-    bad[3][0][3] = json!([ty("Slot.B")]);
+    bad[2][0][3] = json!([ty("Slot.B")]);
     refused_as(
         admit_supplied(&bytes(&bad), &backend),
         ErrorCode::Signature,
@@ -229,14 +227,14 @@ fn duplicate_result_wrong_domain_codec_and_implementation_refused() {
         "binding-implementation",
     );
     let mut bad = make();
-    bad[3][0][4][0][3] = json!(["bytes"]);
+    bad[2][0][4][0][3] = json!(["bytes"]);
     refused_as(
         admit_supplied(&bytes(&bad), &backend),
         ErrorCode::Attributes,
         "interactive-kernel-parameters: exact kernel attributes required",
     );
     let mut bad = make();
-    bad[4][0][7] = json!([
+    bad[3][0][6] = json!([
         ["local", "work", "Local", [], ["x"]],
         ["send", "wire", "unit", "V", "x"],
         ["return", ["x"]]
@@ -297,8 +295,8 @@ fn logical_permission_cannot_cross_role_or_escape_a_selected_branch() {
         json!(["a"]),
         json!([]),
     );
-    other[4][0][3] = json!("V");
-    other[5][0][2][0][0] = json!("V");
+    other[3][0][3] = json!("V");
+    other[4][0][2][0][0] = json!("V");
     let admitted = admit_supplied(&bytes(&other), &backend).unwrap();
     let error = Runner::new(
         &admitted,
@@ -352,7 +350,7 @@ fn logical_permission_cannot_cross_role_or_escape_a_selected_branch() {
         "refused:capability-stale"
     );
     // Both arms must check; the unselected arm cannot duplicate the capture.
-    program[3][0][4][0][5]
+    program[2][0][4][0][5]
         .as_array_mut()
         .unwrap()
         .insert(1, json!(["op", "reuse", "consume", [], ["a"], []]));

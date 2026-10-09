@@ -58,8 +58,8 @@ certificate and is not exported in participant JSON.
 
 ### Native carrier
 
-The current carrier is [the program format](program.md), `zkc.program/1`.
-The root has six fields. Every participant record has a ninth field containing
+The current carrier is [the program format](program.md), `zkc.program/2`.
+The root has five fields. Every participant record has an eighth field containing
 service rows `[name, contract, input_index]`, where the index is a canonical
 nonnegative decimal string. Participants without services use an empty list.
 A query record is `["query", site, port, method, data_inputs, data_outputs]`.
@@ -107,6 +107,12 @@ Polling exposes `Action::Query` containing the cut, port, contract, method,
 arguments and reply names/types. Polling alone has no service effect. The host
 must execute that exact cut; stale or altered cuts are refused. The host's port
 binding identifies the concrete root, which is never encoded into artifact text.
+
+At admission, `Backend::service_support` advertises an independently authored
+`ServiceSupport` with the complete method signature and aggregate conservative
+reply-byte bound. The runner compares that signature with its declared service
+contract. Metadata alone cannot authorize a live resource; port binding and
+current lease checks still apply.
 
 Before consumption, the runner checks its output count/retained-byte capacity
 against the backend's conservative reply bound. A preflight refusal consumes

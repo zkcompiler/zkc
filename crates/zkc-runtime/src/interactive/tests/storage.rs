@@ -23,9 +23,6 @@ struct Stored {
     index: Option<u64>,
 }
 impl Value for Stored {
-    fn type_name(&self) -> &str {
-        "field"
-    }
     fn control_index(&self) -> Result<u64, BackendError> {
         self.index
             .ok_or_else(|| BackendError::new("expected-index"))
@@ -439,7 +436,7 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
         (2, json!([]), ErrorCode::Record),
     ] {
         let mut candidate = program(false, None);
-        candidate[3][0][4]
+        candidate[2][0][4]
             .as_array_mut()
             .unwrap()
             .insert(position, json!(["release", names]));
@@ -451,7 +448,7 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
         );
     }
     let mut duplicate = program(true, None);
-    duplicate[3][0][4]
+    duplicate[2][0][4]
         .as_array_mut()
         .unwrap()
         .insert(3, json!(["release", ["a"]]));
@@ -462,8 +459,8 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
         ErrorCode::Ssa
     );
     let mut returned = program(true, None);
-    returned[3][0][3] = json!([fixture_type("field")]);
-    returned[3][0][4]
+    returned[2][0][3] = json!([fixture_type("field")]);
+    returned[2][0][4]
         .as_array_mut()
         .unwrap()
         .last_mut()
@@ -475,7 +472,7 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
         ErrorCode::Ssa
     );
     let mut rebound = program(true, None);
-    rebound[3][0][4][3][5] = json!(["a"]);
+    rebound[2][0][4][3][5] = json!(["a"]);
     assert_eq!(
         admit_supplied(&bytes(&rebound), &backend).unwrap_err().code,
         ErrorCode::Ssa
@@ -509,7 +506,7 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
         }
     }
     let mut control = program(false, None);
-    control[4][0][7]
+    control[3][0][6]
         .as_array_mut()
         .unwrap()
         .insert(0, json!(["release", ["a"]]));
@@ -518,10 +515,10 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
         ErrorCode::Record
     );
     let mut logical = program(true, None);
-    logical[2] = json!("logical");
+    logical.as_array_mut().unwrap().insert(2, json!("logical"));
     assert_eq!(
         admit_supplied(&bytes(&logical), &backend).unwrap_err().code,
-        ErrorCode::Stage
+        ErrorCode::Record
     );
 }
 
@@ -588,7 +585,7 @@ fn storage_release_after_affine_consumption_is_rejected() {
     );
     let backend = StorageBackend::new(1, None);
     admit_supplied(&bytes(&candidate), &backend).unwrap();
-    candidate[3][0][4]
+    candidate[2][0][4]
         .as_array_mut()
         .unwrap()
         .insert(1, json!(["release", ["r"]]));

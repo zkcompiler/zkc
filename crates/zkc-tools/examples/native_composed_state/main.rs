@@ -126,8 +126,8 @@ fn run(directory: &Path, case: &Json) {
     let fold = case["family"] == "fold";
     let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
     let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-    let d =
-        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default()).unwrap();
+    let d = NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+        .unwrap();
     for (n, coefficients, bases) in if fold {
         vec![
             (0, 0, 0),

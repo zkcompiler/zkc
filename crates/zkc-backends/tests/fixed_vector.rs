@@ -307,7 +307,7 @@ fn canonical_generic_origin_arguments_retain_types_and_naturals_without_authorit
         &["x".into()],
     );
     let mut carrier: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    carrier[3][0][5] = json!([
+    carrier[2][0][5] = json!([
         "Generic",
         [
             ["F", "koala-bear"],
@@ -331,7 +331,7 @@ fn canonical_generic_origin_arguments_retain_types_and_naturals_without_authorit
         "fixed_vector<bool,2>@plonky3.fixed-vector/1",
         "zkcv.fixed_vector.koala-bear/1",
     ] {
-        carrier[3][0][5][1][1][1] = json!(bad);
+        carrier[2][0][5][1][1][1] = json!(bad);
         let error = admit_supplied(
             &serde_json::to_vec(&carrier).unwrap(),
             &backend(Policy::default()),
@@ -341,7 +341,7 @@ fn canonical_generic_origin_arguments_retain_types_and_naturals_without_authorit
         assert_eq!(error.detail, "logical origin static identity");
     }
     // Even a canonical origin cannot change the independently resolved length.
-    carrier[3][0][5][1][1][1] = json!("3");
+    carrier[2][0][5][1][1][1] = json!("3");
     assert_eq!(
         run_program(
             backend(Policy::default()),

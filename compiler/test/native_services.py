@@ -24,12 +24,12 @@ def project(text, name):
 
 with case("queries survive optimization and split calculation segments"):
     carrier, logical = project(source, "services")
-    assert carrier[0] == "zkc.program/1"
-    alice = next(p for p in carrier[4] if p[3] == "Alice")
-    assert alice[8] == [["service_0", "random.bls12-381.fr/1", "0"], ["service_3", "random.bls12-381.fr/1", "3"]]
-    assert len(alice[5]) == 2
-    assert [op[1] for op in alice[7] if op[0] == "query"] == ["first_draw", "second_draw", "unused_draw"]
-    assert [op[0] for op in alice[7]] == ["local", "query", "query", "query", "local", "send", "return"]
+    assert carrier[0] == "zkc.program/2"
+    alice = next(p for p in carrier[3] if p[3] == "Alice")
+    assert alice[7] == [["service_0", "random.bls12-381.fr/1", "0"], ["service_3", "random.bls12-381.fr/1", "3"]]
+    assert len(alice[4]) == 2
+    assert [op[1] for op in alice[6] if op[0] == "query"] == ["first_draw", "second_draw", "unused_draw"]
+    assert [op[0] for op in alice[6]] == ["local", "query", "query", "query", "local", "send", "return"]
     assert "service_inputs = [0, 3]" in logical
     assert "selectors = [\"Alice\", \"Bob\"]" in logical
     assert "inputs = [1, 4]" in logical  # Statement common input indices.
@@ -61,12 +61,12 @@ with case("common service indices map to role-local ingress indices"):
       }) {sym_name="main", function_type=(!algebra.field<"bls12-381.fr">, !protocol.service_ref<"random.bls12-381.fr/1">) -> !algebra.field<"bls12-381.fr">, roles=["Alice", "Bob"], input_roles=[["Alice"], ["Bob"]], output_roles=[["Bob"]]} : () -> ()
     }) {profile=#protocol.profile<protocol>} : () -> () }'''
     shifted_carrier, shifted_ir = project(shifted, "shifted_service_index")
-    bob = next(p for p in shifted_carrier[4] if p[3] == "Bob")
-    assert bob[8] == [["service_0", "random.bls12-381.fr/1", "0"]]
+    bob = next(p for p in shifted_carrier[3] if p[3] == "Bob")
+    assert bob[7] == [["service_0", "random.bls12-381.fr/1", "0"]]
     assert 'service_inputs = [1]' in shifted_ir
     imported = canonical_program(commands, json.dumps(shifted_carrier))
     roundtrip = json.loads(imported)
-    assert next(p for p in roundtrip[4] if p[3] == "Bob")[8] == bob[8]
+    assert next(p for p in roundtrip[3] if p[3] == "Bob")[7] == bob[7]
 
 for name, old, new in [
     ("shared reference owner", 'input_roles=[["Alice"]', 'input_roles=[["Alice", "Bob"]'),
@@ -90,9 +90,9 @@ with case("old carrier refuses service records"):
     canonical_program(commands, json.dumps(old), refuses="interactive-format")
 
 for name, mutate, reason in [
-    ("unknown port", lambda c: next(p for p in c[4] if p[3] == "Alice")[7][2].__setitem__(2, "missing"), "service-query-context"),
-    ("service input index", lambda c: next(p for p in c[4] if p[3] == "Alice")[8][0].__setitem__(2, "100"), "service-port-interface"),
-    ("data service collision", lambda c: next(p for p in c[4] if p[3] == "Alice")[8][0].__setitem__(0, alice[5][0][0]), "service-port-interface"),
+    ("unknown port", lambda c: next(p for p in c[3] if p[3] == "Alice")[6][2].__setitem__(2, "missing"), "service-query-context"),
+    ("service input index", lambda c: next(p for p in c[3] if p[3] == "Alice")[7][0].__setitem__(2, "100"), "service-port-interface"),
+    ("data service collision", lambda c: next(p for p in c[3] if p[3] == "Alice")[7][0].__setitem__(0, alice[4][0][0]), "service-port-interface"),
 ]:
     with case(name):
         mutated = copy.deepcopy(carrier)
@@ -150,14 +150,14 @@ with case("references cannot be forwarded through helpers"):
 with case("old carrier refuses a query even without service records"):
     mutated = copy.deepcopy(carrier)
     mutated[0] = "zkc.participants/1"
-    for participant in mutated[4]:
+    for participant in mutated[3]:
         participant.pop()
     canonical_program(commands, json.dumps(mutated), refuses="interactive-format")
 
-with case("native participants refuse parameters"):
+with case("native participants refuse the retired empty parameter slot"):
     mutated = copy.deepcopy(carrier)
-    next(p for p in mutated[4] if p[3] == "Alice")[4] = [["n", "1"]]
-    canonical_program(commands, json.dumps(mutated), refuses="interactive-shape")
+    next(p for p in mutated[3] if p[3] == "Alice").insert(4, [])
+    canonical_program(commands, json.dumps(mutated), refuses="interactive-record")
 
 with case("service index MLIR attribute must have the admitted integer type"):
     bad = logical.replace('fr/1", 0]', 'fr/1", 18446744073709551616 : i128]')
@@ -181,12 +181,12 @@ for name, instruction, reason in [
 ]:
     with case(name):
         mutated = copy.deepcopy(carrier)
-        next(p for p in mutated[4] if p[3] == "Alice")[7].insert(0, instruction)
+        next(p for p in mutated[3] if p[3] == "Alice")[6].insert(0, instruction)
         canonical_program(commands, json.dumps(mutated), refuses=reason)
 
 with case("local functions cannot contain queries"):
     mutated = copy.deepcopy(carrier)
-    mutated[3][0][4].insert(0, ["query", "hidden", "service_0", "draw", [], ["out"]])
+    mutated[2][0][4].insert(0, ["query", "hidden", "service_0", "draw", [], ["out"]])
     canonical_program(commands, json.dumps(mutated), refuses="service-query-context")
 
 print(f"Native services: {counted()} cases; evidence: {OUT}")

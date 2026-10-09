@@ -346,7 +346,6 @@ fn state_passes_explicit_local_ports_and_can_be_borrowed_twice() {
             "root",
             "root_instance",
             "P",
-            [],
             [["s", "opening_state"], ["p", "point"]],
             ["field", "field"],
             [
@@ -368,9 +367,9 @@ fn state_passes_explicit_local_ports_and_can_be_borrowed_twice() {
     assert_eq!(backend.active_frames(), 0);
     // No parent variable can be fetched in a child whose port list omits it.
     let mut unpassed: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    unpassed[3][0][2] = json!([["p", "point:bls12-381.fr@arkworks.point/1"]]);
-    unpassed[4][0][7][0][3] = json!(["p"]);
-    unpassed[4][0][7][1][3] = json!(["p"]);
+    unpassed[2][0][2] = json!([["p", "point:bls12-381.fr@arkworks.point/1"]]);
+    unpassed[3][0][6][0][3] = json!(["p"]);
+    unpassed[3][0][6][1][3] = json!(["p"]);
     assert_eq!(
         admit_supplied(&serde_json::to_vec(&unpassed).unwrap(), &backend)
             .unwrap_err()
@@ -546,7 +545,7 @@ fn only_host_bound_actual_states_are_inputs_and_private_values_never_have_wire_t
         ]),
     ] {
         let mut artifact: serde_json::Value = serde_json::from_slice(&open_program()).unwrap();
-        artifact[4][0][7].as_array_mut().unwrap().insert(0, action);
+        artifact[3][0][6].as_array_mut().unwrap().insert(0, action);
         assert_eq!(
             admit_supplied(&serde_json::to_vec(&artifact).unwrap(), &backend)
                 .unwrap_err()

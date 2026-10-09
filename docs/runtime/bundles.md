@@ -84,7 +84,7 @@ prefixes do not identify an artifact-specific execution path.
 ## Independent proofs
 
 For noninteractive execution, use the compiler's selected transcript construction
-and the separate `produce-native-proof` and `validate-native-proof` processes,
+and the separate `prove-bundle` and `verify-bundle` processes,
 described in [native proof deployments](../compiler/native-proofs.md). A joint
 bundle is an interactive scheduling artifact, not the proof format. The installed
 joint host currently refuses transcript-typed entry inputs because it has no
@@ -98,7 +98,8 @@ binds its source interface to these same execution and proof boundaries.
 This minimal example returns a received Boolean as the selected validator decision.
 It exercises deployment and proof framing; it does not establish a cryptographic
 statement. Real protocols author their equations and guards in the same IR.
-The empty suite selects transcript-free execution under policy `/4`.
+The empty suite selects transcript-free execution under policy `/5`. Both commands
+explicitly acknowledge header-only binding with `--allow-header-only`.
 
 <!-- executable: native-proof -->
 ```sh
@@ -116,7 +117,7 @@ module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : () -> () }
 IR
 cat > "$work_dir/policy.json" <<'JSON'
-["zkc.native-proof-policy/4", "main", "P", "V", "0", "", "", [], []]
+["zkc.native-proof-policy/5", "main", "P", "V", "0", "", "", [], []]
 JSON
 "$compiler" protocol-proof "$work_dir/message.mlir" "$work_dir/policy.json" > "$work_dir/deployment.json"
 # Authorize these exact bytes from our own trusted compilation.
@@ -127,8 +128,8 @@ JSON
 cat > "$work_dir/validator-inputs.json" <<'JSON'
 ["zkc.native-proof-inputs/1", [], [], "", [], "0"]
 JSON
-"$native" produce-native-proof "$work_dir/deployment.json" "$pin" "$work_dir/producer-inputs.json" "$work_dir/proof.bin" > "$work_dir/producer.json"
-"$native" validate-native-proof "$work_dir/deployment.json" "$pin" "$work_dir/validator-inputs.json" "$work_dir/proof.bin" > "$work_dir/validator.json"
+"$native" prove-bundle "$work_dir/deployment.json" "$pin" "$work_dir/producer-inputs.json" "$work_dir/proof.bin" --allow-header-only > "$work_dir/producer.json"
+"$native" verify-bundle "$work_dir/deployment.json" "$pin" "$work_dir/validator-inputs.json" "$work_dir/proof.bin" --allow-header-only > "$work_dir/validator.json"
 cat "$work_dir/validator.json"
 printf 'Proof files: %s\n' "$work_dir"
 ```
