@@ -57,9 +57,11 @@ FailureOr<unsigned> recipeDegree(RecipeOp recipe) {
     return failure();
   }
   // The Ring view owns arithmetic degree propagation. Polynomial recipes retain
-  // their smaller realization ABI and declared (possibly loose) output bound.
+  // one carrier for their entire body, including unused expressions: their
+  // realization selects all primitive operations from that field.
   for (const auto &fact : expression->facts())
-    if (fact.degree > 16)
+    if (fact.field != cast<algebra::FieldType>(field).getDomain() ||
+        fact.degree > 16)
       return failure();
   if (expression->facts()[expression->outputs().back()].degree >
       uint64_t(declared.getInt()))
