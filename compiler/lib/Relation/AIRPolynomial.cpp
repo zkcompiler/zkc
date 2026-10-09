@@ -6,8 +6,7 @@
 using namespace llvm;
 namespace zkc::relation {
 
-Expected<AIRPolynomialAnalysis>
-analyzeAIRPolynomials(const AIR &air, AIRPolynomialParameters parameters) {
+Error checkAIRPolynomialParameters(AIRPolynomialParameters parameters) {
   const auto [height, domainSize, traceDegree] = parameters;
   if (!height || height > AIRPolynomialParameters::sizeLimit)
     return zkc::error("air-polynomial-height");
@@ -19,41 +18,59 @@ analyzeAIRPolynomials(const AIR &air, AIRPolynomialParameters parameters) {
   if (traceDegree < domainSize - 1 ||
       traceDegree > AIRPolynomialParameters::sizeLimit)
     return zkc::error("air-polynomial-trace-degree");
+  return Error::success();
+}
+
+AIRPolynomialConstraint scopedQuotientBound(AIRPolynomialParameters parameters,
+                                            uint32_t begin, uint32_t end,
+                                            uint32_t degree) {
+  AIRPolynomialConstraint bound;
+  bound.begin = begin;
+  bound.end = end;
+  const uint32_t activeRows = end - begin;
+  bound.selectorDegree = parameters.domainSize - activeRows;
+  bound.numeratorDegree = uint64_t(degree) * parameters.traceDegree;
+  if (bound.numeratorDegree >= activeRows)
+    bound.quotientDegree = bound.numeratorDegree - activeRows;
+  return bound;
+}
+
+Expected<AIRPolynomialAnalysis>
+analyzeAIRPolynomials(const AIR &air, AIRPolynomialParameters parameters) {
+  if (auto error = checkAIRPolynomialParameters(parameters))
+    return error;
+  const uint32_t height = parameters.height;
 
   AIRPolynomialAnalysis result{parameters, {}, {}, 0};
   std::set<AIRCell> reads;
   for (size_t i = 0; i < air.constraints().size(); ++i) {
     const auto &constraint = air.constraints()[i];
     const auto &fact = air.facts()[i];
-    AIRPolynomialConstraint bound;
-    bound.end = height;
+    uint32_t begin = 0, end = height;
     switch (constraint.scope.kind) {
     case AIRScopeKind::Every:
       break;
     case AIRScopeKind::First:
-      bound.end = 1;
+      end = 1;
       break;
     case AIRScopeKind::Last:
-      bound.begin = height - 1;
+      begin = height - 1;
       break;
     case AIRScopeKind::Transition:
-      bound.end = height > constraint.scope.lookahead
-                      ? height - constraint.scope.lookahead
-                      : 0;
+      end = height > constraint.scope.lookahead
+                ? height - constraint.scope.lookahead
+                : 0;
       break;
     }
-    if (bound.active() && uint64_t(bound.end - 1) + fact.maxOffset >= height)
+    if (begin != end && uint64_t(end - 1) + fact.maxOffset >= height)
       return zkc::error("air-window-out-of-range");
-    const uint32_t activeRows = bound.end - bound.begin;
-    bound.selectorDegree = domainSize - activeRows;
-    bound.numeratorDegree = uint64_t(fact.degree) * traceDegree;
-    if (bound.numeratorDegree >= activeRows)
-      bound.quotientDegree = bound.numeratorDegree - activeRows;
+    auto bound = scopedQuotientBound(parameters, begin, end, fact.degree);
     if (bound.active()) {
       reads.insert(fact.reads.begin(), fact.reads.end());
       if (bound.quotientDegree)
         result.quotientChunks = std::max(
-            result.quotientChunks, *bound.quotientDegree / domainSize + 1);
+            result.quotientChunks,
+            quotientChunkCount(*bound.quotientDegree, parameters.domainSize));
     }
     result.constraints.push_back(bound);
   }

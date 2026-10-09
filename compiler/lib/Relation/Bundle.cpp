@@ -739,7 +739,7 @@ Expected<Bundle> Bundle::create(std::vector<BundleSlot> publics,
   return result;
 }
 
-namespace {
+namespace bundle {
 StringRef authorityName(BundleAuthority authority) {
   switch (authority) {
   case BundleAuthority::Witness:
@@ -764,6 +764,9 @@ json::Value encodeHeight(const BundleHeight &height) {
   }
   llvm_unreachable("admitted height");
 }
+} // namespace bundle
+
+namespace {
 json::Value encodeLocality(const BundleLocality &locality) {
   if (!locality.local)
     return json::Array{"global"};

@@ -11,8 +11,10 @@ separate [staged program](#staged-challenge-dependent-programs).
 
 A bundle defines a [relation family](../relations.md#relation-families-and-instances).
 It does not select a domain, selector convention, quotient, commitment or proof
-protocol. Importing a bundle from an external system is a separate adequacy
-claim; structural identity is not semantic equivalence.
+protocol; a [polynomial view](#polynomial-view-of-one-table) of one table
+derives degree bounds under selected parameters without changing the relation.
+Importing a bundle from an external system is a separate adequacy claim;
+structural identity is not semantic equivalence.
 
 ## Compiler-visible table evaluation
 
@@ -62,6 +64,83 @@ missing, duplicate or mismatched assets (`relation-asset-missing`,
 decoded metadata, including derived per-output read facts, share a 32 MiB
 registry allowance (`relation-assets-bytes`). Named Entries combine this
 allowance with their Ring assets.
+
+## Polynomial view of one table
+
+A polynomial view interprets one **present table** of an admitted Bundle under
+the [finite-scope law](constraints.md#polynomial-interpretation-of-finite-scopes)
+of the finite AIR: every column of every group denotes an interpolation
+polynomial `T` of degree at most `trace_degree` over distinct domain points for
+the rows, a read at signed offset `k` denotes `T(g^k X)`, and an assertion on
+scope `S` requires its numerator to be divisible by the vanishing polynomial
+`Z_S` of the scope's rows. Degrees weigh every read one and every public slot
+zero, whatever the group's authority, exactly as the Bundle's facts do. For a
+cyclic table the view adds a native wrap rule, stated below, that the finite
+law and its formal model do not cover. The
+native analysis is `analyzeBundlePolynomials` in
+[`Relation/BundlePolynomial.h`](../../../compiler/include/zkc/Relation/BundlePolynomial.h).
+Its parameters `height`, `domain_size` and `trace_degree` and their law
+`1 <= height <= domain_size <= 2^24` and `domain_size - 1 <= trace_degree <=
+2^24` are shared with the finite AIR analysis (`air-polynomial-height`,
+`air-polynomial-domain-size`, `air-polynomial-trace-degree`).
+
+From the Bundle's retained facts, without materializing any row, the view
+derives:
+
+- every group's exact width, authority and field, with the sorted distinct
+  offsets its active assertions read;
+- the ordered binding list of the table arena, one entry per arena input.
+  Evaluating only active outputs requests exactly the bindings whose read or
+  public slot appears in the subject lists below; the others are never read;
+- the sorted distinct `(group, offset, column)` reads and the sorted public
+  slots of active assertions: the opening subjects, with their signed shifts;
+- per assertion its output, scope, read degree `d`, active rows `[begin, end)`
+  at the height, selector degree `domain_size - |S|`, numerator degree
+  `d * trace_degree`, and quotient degree `d * trace_degree - |S|` exactly
+  when the numerator degree reaches `|S|`; otherwise an exactly divisible
+  numerator must be zero. An empty scope is inactive: it imposes no quotient
+  and contributes no subject. The complement form
+  `numerator + selector - domain_size` agrees with the quotient degree;
+- the largest quotient degree over active assertions and the number of
+  coefficient blocks of length `domain_size` sufficient for each individual
+  active quotient, `floor(quotient_degree / domain_size) + 1`, and hence for
+  any linear combination of them. This is not a soundness claim about random
+  assertion batching;
+- the identity of the table arena. The arena itself stays borrowed from the
+  admitted Bundle: `bundlePolynomialArena` re-derives it and refuses a view of
+  another bundle or table (`bundle-polynomial-relation`).
+
+Checks run in this order: table index and carrier homogeneity as for the table
+evaluator, the parameter law, the table's height policy (`bundle-height`), the
+domain rule, and every assertion window at the height (`bundle-scope-height`,
+`bundle-window`). A finite read is defined only on its scope, so the shifted
+polynomial realizes it only there; a finite table may pad its domain beyond
+its height, which never adds active rows. A cyclic read wraps in the height
+domain, which `T(g^k X)` realizes on every row only when the row points are
+the whole subgroup of order `height`. A cyclic table therefore requires
+`domain_size = height`, a power of two at least 2 that the carrier's prime
+subfield admits as the order of a two-adic root (`bundle-polynomial-domain`).
+An unsupported domain or embedding refuses; nothing is reinterpreted silently.
+
+The selected initial profile is **two-adic natural**: `height = domain_size =
+n` for a power of two `n >= 2`, `trace_degree = n - 1`, and row `i` at the
+`i`-th power of the installed two-adic root of order `n`
+(`twoAdicPolynomialParameters`, `bundle-polynomial-two-adic`). Under it the
+selectors of `first`, `last` and `interior(0, 1)` have degrees `n - 1`,
+`n - 1` and `1`, the unnormalized complementary vanishing polynomials. Any
+other checked parameters are the general profile, which a later library may
+restrict; `interval` scopes are analyzed, but a verifier's evaluation of their
+vanishing polynomial is linear in the scope.
+
+The deterministic `zkc.relation-bundle-polynomial-analysis/0` encoding records
+these facts for adapters and source clients. A view of an optional table
+applies only when the instance makes it present. The view establishes no
+whole-Bundle interaction, presence, satisfaction, commitment, batching or
+proof claim. On a finite table, per-assertion divisibility is the
+[per-constraint law](constraints.md#polynomial-interpretation-of-finite-scopes)
+with its formal model. The cyclic wrap rule has no Lean model; its evidence is
+the bounded coefficient check of the recurrence fixture recorded in the
+[native validation map](../../../tests/native.md).
 
 ## Carrier
 

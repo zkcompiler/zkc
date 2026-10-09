@@ -182,7 +182,10 @@ scopes.
 [`Zkc.Relation.AIR.Polynomial`](../../../formal/Zkc/Relation/AIR/Polynomial.lean)
 mechanizes the per-constraint divisibility, shift and degree laws. These laws do
 not assert interpolation implementation correctness, FRI proximity, BCS
-soundness or hiding.
+soundness or hiding. The
+[bundle polynomial view](relation-bundles.md#polynomial-view-of-one-table)
+applies this law to finite bundle tables; for cyclic tables it adds a separate
+full-subgroup wrap rule that this law and its formal model do not cover.
 
 ## Binding and implementation scope
 

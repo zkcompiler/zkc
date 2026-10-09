@@ -219,3 +219,8 @@ add_zkc_test(relation_table_view Relation)
 add_test(NAME relation-table-view COMMAND zkc-relation_table_view-test
   "${PROJECT_SOURCE_DIR}/adapters/plonky3/fixtures/recurrence")
 set_tests_properties(relation-table-view PROPERTIES LABELS native)
+
+add_zkc_test(relation_bundle_polynomial Relation)
+add_test(NAME relation-bundle-polynomial COMMAND zkc-relation_bundle_polynomial-test
+  "${PROJECT_SOURCE_DIR}/adapters/plonky3/fixtures/recurrence")
+set_tests_properties(relation-bundle-polynomial PROPERTIES LABELS native)

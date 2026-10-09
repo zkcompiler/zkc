@@ -23,7 +23,7 @@ HEADER_ROOTS = {
     "ZkcLanguage": ["Language"],
     "ZkcSupport": ["Support"],
     "ZkcContracts": ["Contracts"],
-    "ZkcRelation": [f"Relation/{name}.h" for name in ("R1CS", "AIR", "AIRPolynomial", "Bundle", "Matrices")],
+    "ZkcRelation": [f"Relation/{name}.h" for name in ("R1CS", "AIR", "AIRPolynomial", "Bundle", "BundlePolynomial", "Matrices")],
     "ZkcProgram": ["Program"],
     "ZkcTransforms": ["Transforms", "Target"],
     "ZkcCompiler": [f"Compiler/{name}.h" for name in (

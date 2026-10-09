@@ -22,6 +22,8 @@ std::optional<int32_t> signedOffset(const llvm::json::Value &);
 std::string printOffset(int32_t);
 std::optional<std::string> string(const llvm::json::Value &);
 
+llvm::StringRef authorityName(BundleAuthority);
+llvm::json::Value encodeHeight(const BundleHeight &);
 llvm::Error checkScope(const BundleScope &);
 llvm::json::Value encodeScope(const BundleScope &);
 llvm::Expected<BundleScope> readScope(const llvm::json::Value &);
