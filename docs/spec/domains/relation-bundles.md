@@ -236,9 +236,12 @@ formation.
 
 A bundle or staged program is at most 8 MiB of canonical text with at most 256
 tables, 256 groups per table, 65,536 public slots, 4,096 channels, tuple arity
-64, local keys in [0,4096], and 4,096 checks per table. Supplied data carriers are at most 256 MiB of text
-and 2^22 base coordinates in total; admission computes that total from the
-declared heights, widths and element degrees before comparing data lengths.
+64, local keys in [0,4096], and 4,096 checks per table. Each supplied data carrier
+is at most 256 MiB of text. The base data have a combined budget of 2^22 base
+coordinates, including public slots; the staged assignment has a separate
+budget of 2^22 across all phases, including challenges and claims. Admission
+computes these totals from declared slots, heights, widths and element degrees
+before comparing group lengths.
 Before any value is parsed, admission also bounds
 the reference evaluation work, `height * (arena nodes + inputs + checks + 1)`
 summed over tables with checks, by 2^26, and the number of interaction

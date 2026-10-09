@@ -112,3 +112,174 @@ def test_exported_bundles_and_mutations_agree(toolchain, journal):
                 found = sorted([row, assertion] for _, assertion, row, value in cpp['result']['residuals']
                                if value != '0' and value != ['0'] * 8)
                 assert found == sorted(failures), (name, found, failures)
+
+
+def staged_case(extension=False):
+    """Two actual phases: y = alpha*x, then z = y+beta, with final claims."""
+    field = 'koala-bear.ext8-binomial3' if extension else 'koala-bear'
+    def scalar(n):
+        return [str(n), *(['0'] * 7)] if extension else str(n)
+    xs = [[str(n), '1', *(['0'] * 6)] for n in [1, 2, 3]] if extension else ['1', '2', '3']
+    alpha = ['2', *(['0'] * 6), '1'] if extension else '2'
+    # (n+X)(2+X^7) = (2n+3)+2X+nX^7, since X^8 = 3.
+    ys = [[str(2*n+3), '2', *(['0'] * 5), str(n)] for n in [1, 2, 3]] if extension else ['2', '4', '6']
+    zs = deepcopy(ys)
+    for i, y in enumerate(ys):
+        if extension:
+            zs[i][0] = str(int(y[0]) + 4)
+        else:
+            zs[i] = str(int(y) + 4)
+    minus = ['zkc.ring/0', [field, field],
+             [['input', 0], ['input', 1], ['neg', 1], ['add', 0, 2]], [3]]
+    bundle = ['zkc.relation-bundle/0', [['final', field]], [], [[
+        'trace', 'optional', ['fixed', 3], 'finite', [['x', 'witness', field, 1]],
+        minus, [['read', 0, '0', 0], ['public', 0]], [[0, ['last']]], []]]]
+    base = rebind([bundle, ['zkc.relation-configuration/0', '', [[None, []]]],
+                   ['zkc.relation-instance/0', '', [xs[-1]], [['present', None, []]]],
+                   ['zkc.relation-witness/0', '', [[xs]]]])
+    phases = []
+    for phase, op in [(1, 'mul'), (2, 'add')]:
+        arena = ['zkc.ring/0', [field] * 4, [
+            ['input', 0], ['input', 1], [op, 0, 1], ['neg', 2],
+            ['input', 2], ['add', 4, 3], ['input', 3], ['neg', 6], ['add', 4, 7]], [5, 8]]
+        phases.append([[[f'coin{phase}', field]], [[f'claim{phase}', field]], [[
+            [[f'aux{phase}', field, 1]], arena,
+            [['read', phase-1, 0, '0', 0], ['challenge', phase, 0],
+             ['read', phase, 0, '0', 0], ['claim', phase, 0]],
+            [[0, ['all']], [1, ['last']]]]]])
+    # Check the claims independently of rows: c1 = alpha*public, c2 = c1+beta.
+    global_arena = ['zkc.ring/0', [field] * 5, [
+        ['input', 0], ['input', 1], ['mul', 0, 1], ['neg', 2], ['input', 2],
+        ['add', 4, 3], ['input', 3], ['add', 4, 6], ['neg', 7],
+        ['input', 4], ['add', 9, 8]], [5, 10]]
+    staged = ['zkc.relation-staged/0', identity(bundle), phases,
+              [global_arena, [['public', 0], ['challenge', 1, 0], ['claim', 1, 0],
+                              ['challenge', 2, 0], ['claim', 2, 0]], [0, 1]], []]
+    assignment = ['zkc.relation-staged-assignment/0', identity(staged), [
+        [[alpha], [ys[-1]], [[ys]]], [[scalar(4)], [zs[-1]], [[zs]]]]]
+    return [*base, staged, assignment]
+
+
+def bind_staged(candidate):
+    for carrier in candidate[1:4]:
+        carrier[1] = identity(candidate[0])
+    candidate[4][1] = identity(candidate[0])
+    candidate[5][1] = identity(candidate[4])
+    return candidate
+
+
+def test_staged_assignments_agree(toolchain, journal):
+    cases = []
+    for extension in [False, True]:
+        original = staged_case(extension)
+        label = 'extension' if extension else 'base'
+        cases.append((f'{label}: two actual phases', original, True))
+        for name, part in [('challenge', 0), ('claim', 1), ('auxiliary row', 2)]:
+            changed = deepcopy(original)
+            values = changed[5][2][0][part]
+            if part == 2:
+                values = values[0][0]
+            if extension:
+                values[0][0] = str(int(values[0][0]) + 1)
+            else:
+                values[0] = str(int(values[0]) + 1)
+            cases.append((f'{label}: changed {name}', changed, False))
+        changed = deepcopy(original)
+        changed[5][2][0][0] = []
+        cases.append((f'{label}: missing challenge', changed, 'staged-slot-shape'))
+        changed = deepcopy(original)
+        changed[5][2][1][1].append(deepcopy(changed[5][2][1][1][0]))
+        cases.append((f'{label}: extra claim', changed, 'staged-slot-shape'))
+        changed = deepcopy(original)
+        changed[5][2][1][2][0][0].pop()
+        cases.append((f'{label}: auxiliary group shape', changed, 'bundle-group-shape'))
+        changed = deepcopy(original)
+        changed[4][2][0][2][0][2][1] = ['challenge', 2, 0]
+        cases.append((f'{label}: future challenge', bind_staged(changed), 'staged-phase-order'))
+        changed = deepcopy(original)
+        changed[4][2][0][2][0][2][2] = ['read', 2, 0, '0', 0]
+        cases.append((f'{label}: future auxiliary read', bind_staged(changed), 'staged-phase-order'))
+        changed = deepcopy(original)
+        changed[4][2][0][2][0][2][0] = ['read', 0, 0, '1', 0]
+        cases.append((f'{label}: undefined finite window', bind_staged(changed), 'bundle-window'))
+        changed = deepcopy(original)
+        changed[4][2][0][2][0][3][0][1] = ['interval', 0, 4]
+        cases.append((f'{label}: scope beyond actual height', bind_staged(changed), 'bundle-scope-height'))
+        changed = deepcopy(original)
+        changed[4][3][1][0] = ['read', 0, 0, '0', 0]
+        cases.append((f'{label}: global read', bind_staged(changed), 'staged-global-read'))
+        changed = deepcopy(original)
+        changed[5][1] = '0' * 64
+        cases.append((f'{label}: assignment identity', changed, 'staged-program'))
+        changed = deepcopy(original)
+        changed[2][3][0] = ['absent']
+        changed[3][2][0] = None
+        cases.append((f'{label}: unexpected absent-table data', changed, 'staged-presence'))
+        changed = deepcopy(changed)
+        for data in changed[5][2]:
+            data[2][0] = None
+        cases.append((f'{label}: absent table with global checks', changed, True))
+        # Premises are recorded obligations, not hidden assertions. The row
+        # residual is zero, so this nonzero premise is deliberately false.
+        changed = deepcopy(original)
+        changed[4][4] = [['nonzero', 1, 0, 0, ['all']],
+                         ['characteristic-exceeds', 'koala-bear', 2130706433]]
+        cases.append((f'{label}: premises remain assumptions', bind_staged(changed), True))
+
+    # A compact program may expand its output without any auxiliary data.
+    empty = ['zkc.ring/0', [], [], []]
+    for extension, count in [(False, 17), (True, 9)]:
+        field = 'koala-bear.ext8-binomial3' if extension else 'koala-bear'
+        constant = ['zkc.ring/0', [], [['constant', field, '0']], [0]]
+        bundle = ['zkc.relation-bundle/0', [], [], [[
+            'large', 'required', ['fixed', 65536], 'finite', [], empty, [], [], []]]]
+        original = rebind([bundle, ['zkc.relation-configuration/0', '', [[None, []]]],
+                           ['zkc.relation-instance/0', '', [], [['present', None, []]]],
+                           ['zkc.relation-witness/0', '', [[]]]])
+        staged = ['zkc.relation-staged/0', identity(bundle), [[[], [], [[
+            [], constant, [], [[0, ['all']]] * count]]]], [empty, [], []], []]
+        assignment = ['zkc.relation-staged-assignment/0', identity(staged), [[[], [], [[]]]]]
+        candidate = [*original, staged, assignment]
+        cases.append((f'{field}: staged result expansion', candidate, 'bundle-result-limit'))
+        changed = deepcopy(candidate)
+        changed[4][2][0][2][0][3] = [[0, ['first']]] * count
+        cases.append((f'{field}: scoped staged result', bind_staged(changed), True))
+        changed = deepcopy(candidate)
+        changed[4][2][0][2][0][3].pop()
+        changed[4][3] = [constant, [], [0]]
+        cases.append((f'{field}: global shares output budget', bind_staged(changed), 'bundle-result-limit'))
+        changed = deepcopy(candidate)
+        split = count // 2
+        changed[4][2][0][2][0][3] = [[0, ['all']]] * split
+        phase = deepcopy(changed[4][2][0])
+        phase[2][0][3] = [[0, ['all']]] * (count - split)
+        changed[4][2].append(phase)
+        changed[5][2].append([[], [], [[]]])
+        cases.append((f'{field}: phases share output budget', bind_staged(changed), 'bundle-result-limit'))
+
+    # Declared challenge slots count with auxiliary coordinates before group
+    # lengths or supplied values are traversed. This carrier stays tiny.
+    changed = deepcopy(candidate)
+    changed[0][3][0][2] = ['fixed', 1 << 20]
+    changed[4][2] = [[[['coin', 'koala-bear']], [], [[
+        [['aux', 'koala-bear', 4]], empty, [], []]]]]
+    changed[5][2] = [[['0'], [], [[[]]]]]
+    cases.append(('slots share staged coordinate budget', bind_staged(changed), 'bundle-data-limit'))
+
+    wire = ''.join(json.dumps(c, separators=(',', ':')) + '\n' for _, c, _ in cases)
+    replies = []
+    for executable in [toolchain.tool('compiler', 'test/zkc-relation_bundle_conformance-test'),
+                       toolchain.driver('relation_bundle_conformance')]:
+        replies.append([json.loads(row) for row in journal.run([executable], stdin=wire).splitlines()])
+    assert len(replies[0]) == len(replies[1]) == len(cases)
+    for (name, candidate, expected), cpp, rust in zip(cases, *replies):
+        assert cpp == rust, (name, cpp, rust)
+        if isinstance(expected, str):
+            assert cpp == {'accepted': False, 'error': expected}, (name, cpp)
+        else:
+            assert cpp['accepted'], (name, cpp)
+            assert cpp['result']['satisfied'], (name, cpp)
+            assert cpp['staged_result']['satisfied'] == expected, (name, cpp)
+            assert cpp['staged_identity'] == identity(candidate[4])
+            assert cpp['staged'] == candidate[4]
+            assert cpp['assignment'] == candidate[5]
