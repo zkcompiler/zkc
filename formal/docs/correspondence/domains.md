@@ -61,7 +61,12 @@ and `table_holds_iff` prove both directions of the relation, and `row_spec` and
 `table_spec` conclude the component's specification under its actual
 assumptions. They require a successful export (no lookup or interaction at any
 depth, in-range variables) and import, a nonempty trace of the exported width
-and one `Environment.data`. No native importer or evaluator is covered.
+and one `Environment.data`. `ZkcClean.component_ring` composes the expression law
+with `AIR.Expr.toRing_eval`, and `component_native_ring` states the emitted
+relation arena's ring trees under an explicit prime presentation. No native
+importer or evaluator is proved; the
+[native comparison](../../../tests/protocol/test_clean_air_conformance.py) is a
+checked comparison on fixed rows.
 
 `Zkc.Relation.Encoding.valid_iff`, `comp` and `terminal_sound` connect actual
 source/target families using both witness directions. The latter preserves the

@@ -92,8 +92,13 @@ cases.
 
 Use `nix develop .#formal`, then `just fetch-lean`, `just build-lean` and
 `just test-lean` for the independent package. `just test-lean-integration` checks
-the optional ArkLib integration; `just test-lean-fresh` rebuilds research packages
-without previous project/dependency objects. These can be expensive.
+the optional ArkLib integration. `just test-lean-clean` builds and audits the
+optional Clean integration and requires
+[its native control](fixtures/clean/air-control.json) to be the producer's
+current output; the [native comparison](protocol/test_clean_air_conformance.py)
+of that control runs in `just test-integration` without Lean.
+`just test-lean-fresh` rebuilds research packages without previous
+project/dependency objects. These can be expensive.
 
 Sandboxed optional packages are `.#formal`, `.#formal-checks`, `.#arklib` and
 `.#lean-toolchain-checks`. They are outside `nix flake check`'s native check graph.

@@ -46,6 +46,34 @@ def test_repeated_preparation_keeps_previous_reports(operation, monkeypatch, tmp
     assert all(any(path.is_relative_to(root) for root in roots) for path in outputs)
 
 
+@pytest.mark.parametrize("current", [True, False])
+def test_clean_integration_requires_the_committed_control(current, monkeypatch, tmp_path):
+    developer = load("developer", "scripts/develop.py")
+    fixture = tmp_path / "air-control.json"
+    fixture.write_text('{"format":"zkc.clean-air-control/0"}\n')
+    calls = []
+
+    def run(arguments, cwd=None, stdout=None):
+        calls.append((list(map(str, arguments)), cwd))
+        if stdout is not None:
+            stdout.write(fixture.read_text() if current else "{}\n")
+
+    monkeypatch.setattr(developer, "run", run)
+    monkeypatch.setattr(developer, "CLEAN_CONTROL", fixture)
+    monkeypatch.setattr(developer, "ROOT", tmp_path)
+    monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path / "reports"))
+    monkeypatch.setattr(sys, "argv", ["develop.py", "lean-clean"])
+    if current:
+        developer.main()
+    else:
+        with pytest.raises(ValueError, match="air-control.json is not the current Clean export"):
+            developer.main()
+    assert calls == [(["lake", "build"], developer.CLEAN),
+                     (["lake", "env", "lean", "--run", "TestsClean/Control.lean"], developer.CLEAN)]
+    root, = (tmp_path / "reports/runs").iterdir()
+    assert json.loads((root / "run.json").read_text())["status"] == ("pass" if current else "failed")
+
+
 @pytest.mark.parametrize("explicit", [False, True])
 def test_install_uses_empty_prefix_and_fresh_consumer(explicit, monkeypatch, tmp_path, native_config):
     developer = load("developer", "scripts/develop.py")

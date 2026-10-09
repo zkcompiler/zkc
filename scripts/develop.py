@@ -35,16 +35,34 @@ def configure(profile):
 
 def fetch_lean(deps):
     run([sys.executable, ROOT / "formal/cache_dependencies.py",
-         *(["--with-arklib"] if deps == "arklib" else []),
+         *([f"--with-{deps}"] if deps != "main" else []),
          "--output", reports_root() / f"formal/cache-{deps}.json"], cwd=ROOT / "formal")
+
+
+CLEAN = ROOT / "formal/integrations/clean"
+CLEAN_CONTROL = ROOT / "tests/fixtures/clean/air-control.json"
+
+
+def clean_integration():
+    """Build and audit the Clean package, then require the committed native
+    control to be exactly what its producer prints now."""
+    run(["lake", "build"], cwd=CLEAN)
+    output = reports_root() / "formal/clean-air-control.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w") as stream:
+        run(["lake", "env", "lean", "--run", "TestsClean/Control.lean"], cwd=CLEAN, stdout=stream)
+    if output.read_bytes() != CLEAN_CONTROL.read_bytes():
+        raise ValueError(f"{CLEAN_CONTROL.relative_to(ROOT)} is not the current Clean export; "
+                         f"review {output} and replace the fixture with it")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=["setup", "configure", "compiler", "rust", "test-drivers", "lean",
-                                             "fetch-lean", "lean-integration", "lean-fresh", "install", "install-domain", "clean-reports"])
+                                             "fetch-lean", "lean-integration", "lean-clean", "lean-fresh", "install",
+                                             "install-domain", "clean-reports"])
     parser.add_argument("--profile", default="release")
-    parser.add_argument("--deps", choices=["main", "arklib"], default="main")
+    parser.add_argument("--deps", choices=["main", "arklib", "clean"], default="main")
     parser.add_argument("--output")
     parser.add_argument("--base-build", help="install-domain: explicit base CMake build directory")
     parser.add_argument("--domain-build", help="install-domain: explicit envelope CMake build directory")
@@ -58,7 +76,8 @@ def main():
     # commands below consistently run at the repository root.
     if os.environ.get("CARGO_TARGET_DIR"):
         os.environ["CARGO_TARGET_DIR"] = str(Path(os.environ["CARGO_TARGET_DIR"]).resolve())
-    if args.operation not in {"setup", "fetch-lean", "lean-integration", "lean-fresh", "install", "install-domain"}:
+    if args.operation not in {"setup", "fetch-lean", "lean-integration", "lean-clean", "lean-fresh",
+                              "install", "install-domain"}:
         execute(args)
         return
     # Each operation owns a new root; children that require an absent target
@@ -95,8 +114,10 @@ def execute(args):
         run(["lake", "build"], cwd=ROOT / "formal/integrations/arklib")
         run([sys.executable, ROOT / "formal/checks/check_clients.py", "--with-arklib",
              "--output", reports_root() / "formal/clients-arklib"], cwd=ROOT / "formal")
+    elif args.operation == "lean-clean":
+        clean_integration()
     elif args.operation == "lean-fresh":
-        run([sys.executable, ROOT / "formal/reproduce.py", "--with-arklib",
+        run([sys.executable, ROOT / "formal/reproduce.py", "--with-arklib", "--with-clean",
              "--output", reports_root() / "formal/fresh"], cwd=ROOT / "formal")
     elif args.operation == "configure":
         configure(args.profile)

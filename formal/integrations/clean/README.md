@@ -7,18 +7,29 @@ against Clean's own definitions. The main `formal/` package has no Clean
 dependency. The package uses a local path dependency on main and exact pins.
 
 ```sh
+just test-lean-clean          # from the repository root: fetch, build, audit, control
 cd formal/integrations/clean
 lake build
+lake env lean --run TestsClean/Control.lean   # print the native comparison control
 ```
 
-The first build clones the pinned sources into `.lake/packages`. Fetch Mathlib's
-published objects there with `lake exe cache get`, or link those entries to an
-existing checkout of the same revisions. Do not run `lake update`: it would
-re-resolve the reviewed manifest.
+The first build clones the pinned sources into `.lake/packages`.
+`just fetch-lean clean` links the main package's sources there and fetches
+Mathlib's published objects; alternatively link those entries to an existing
+checkout of the same revisions. Do not run `lake update`: it would re-resolve the
+reviewed manifest. `just test-lean-clean` also requires
+[the committed control](../../../tests/fixtures/clean/air-control.json) to be
+byte-identical to the producer's output. `python3 reproduce.py --with-clean` in
+`formal/` rebuilds this package without prior Lean objects and makes the same
+comparison.
 
-`lake build` builds the library and its controls. [TestsClean.Audit](TestsClean/Audit.lean)
-audits every owned declaration with `Tools.DeclarationAudit` and records the axioms
-of the selected bridge and upstream declarations. Only `propext`,
+`lake build` builds the library and its controls. The generated
+[TestsClean.Audit](TestsClean/Audit.lean) (`checks/audit_imports.py`) audits
+every owned declaration with `Tools.DeclarationAudit`, whose dependency rule
+keeps `ZkcClean` free of tests, tools, examples and the ArkLib package and keeps
+the main library free of this package and Clean ([rule controls](TestsClean/AuditRules.lean)).
+[TestsClean.UpstreamStatus](TestsClean/UpstreamStatus.lean) records the axioms of
+the selected bridge and upstream declarations. Only `propext`,
 `Classical.choice` and `Quot.sound` are permitted in their transitive proof cones.
 
 ## Pins
@@ -68,12 +79,77 @@ semantics flattens them and the restriction is checked on the flattened list.
 | Same module: `constraintsHold_data`, `decode_export` | Constraints in the fragment do not read `Environment.data`; import of an exported artifact always succeeds | Successful export |
 | [Specification](ZkcClean/Specification.lean): `guarantees_of_export`, `table_guarantees_of_export` | `FullGuarantees` and `FullRequirements` (table `Guarantees` and `Requirements`) hold | Successful export: no interaction exists |
 | Same module: `row_spec`, `table_spec` | The zkc relation gives the component's `Spec` per row, and the table's `Spec` and `Requirements` | The component's actual `Assumptions`, which may constrain `Environment.data`; via upstream `Component.weakSoundness`, `Table.weakSoundness` |
+| [Native](ZkcClean/Native.lean): `export_ring`, `component_ring` | Each imported assertion's shared ring tree (`AIR.Expr.toRing`) evaluates to the upstream constraint's `Expression.eval`, in export order | Successful export and import; composes `export_expression` with `Zkc.Relation.AIR.Expr.toRing_eval` |
+| Same module: `native_ring`, `component_native_ring` | Output `j` of the emitted relation arena, read as a ring tree with residue literals and input `i` bound to column `i`, evaluates to upstream constraint `j` on the row | A `PrimePresentation`: Clean's `fromNat` is `Nat.cast` on a prime field of the presented size |
+| Same module: `no_presentation_of_not_prime` | A Clean field of non-prime size, such as a binary field, has no presentation | None |
 
 The theorems relate Lean terms: a Clean component, its exported artifact and the
 zkc relation decoded from that artifact. They do not prove a native importer,
-evaluator, DAG decoder or compiled execution, channel balance, a STARK reduction
-or Fiat-Shamir security. The Rust and C++ paths need their own checked artifact
-comparison or proved decoder before these statements describe them.
+evaluator, DAG decoder or compiled execution, channel balance, a STARK reduction,
+Fiat-Shamir security or VM adequacy. The native comparison below is a checked
+comparison on fixed rows, not a decoder theorem.
+
+## Native presentation and comparison
+
+An artifact carries Clean's canonical naturals (`FiniteField.val`). Native finite
+AIR and `zkc.ring/0` literals denote residues in a prime field, which is Clean's
+meaning only when `fromNat` is `Nat.cast`. `emitRelation` and `emitArena`
+therefore require a `PrimePresentation` and refuse any presentation outside the
+installed native fields (currently `koala-bear`), a different field size,
+noncanonical constants, out-of-range columns and native size limits. Clean's
+class also describes binary fields; they have no presentation and are not
+emitted. [Presentation](TestsClean/Presentation.lean) shows that a prime size is
+not enough: a lawful prime-size Clean field whose naturals are not residues
+passes import admission but has no presentation.
+
+[TestsClean.Control](TestsClean/Control.lean) is the producer. Run with
+`lake env lean --run`, Lean's interpreter evaluates the actual upstream
+definitions: `exportComponent`, Clean's witness generator
+(`FlatOperation.dynamicWitnesses`) for rows from input values, and
+`Expression.eval` of every upstream `Operations.constraints` expression for the
+source residuals. It refuses to print unless the zkc AIR model of the decoded
+export gives the same residuals on every row. The `zkc.clean-air-control/0`
+document holds, per component, the emitted `zkc.air.v0` relation and
+`zkc.ring/0` relation arena, the rows and their residuals and verdicts. Mutants
+are functions of the actual export (a changed constant, a changed column, a
+deleted assertion); each is emitted with its own relation and arena, and its
+residuals come from the zkc AIR model, not from Clean.
+The document is one canonical JSON line (sorted keys, no spaces) with exactly
+these members; the native tools refuse any other shape:
+
+```text
+{"format": "zkc.clean-air-control/0",
+ "source": {"repository": URL, "revision": COMMIT},
+ "presentation": {"field": "koala-bear", "modulus": "2130706433"},
+ "components": [{"name", "declaration",
+                 "rows": [{"name", "cells": [canonical decimal, ...]}],
+                 "subjects": [{"name": "export" first, then mutants,
+                               "reference": "clean" | "model",
+                               "relation": zkc.air.v0 object, "arena": zkc.ring/0 array,
+                               "rows": [{"residuals": [decimal, ...], "holds": bool}]}]}]}
+```
+
+[Mutations](TestsClean/Mutations.lean) proves that these mutations of the export
+are exactly the artifacts refuted in [Bits](TestsClean/Bits.lean), that each is
+still admitted and is not the export, and instantiates the ring-tree theorems.
+
+The [native comparison](../../../tests/protocol/test_clean_air_conformance.py)
+runs on the committed control. The C++ tool admits each relation with the
+native AIR reader and evaluates it with `AIR::evaluate`, requires each
+relation's and arena's native identity to be the digest of its emitted bytes,
+and derives one `AIR::expressionView` arena per assertion. The Rust driver
+admits every arena independently and evaluates it with the KoalaBear/Ext8
+`ring::rows` provider, scalar and packed, whose arithmetic schedule the ring
+kernels share. All must agree with the control's residuals. A mutant is admitted
+yet has a different identity and disagrees with Clean on the row of its kernel
+refutation. Python compares strings only.
+
+Trust boundary: control residuals come from Lean's interpreter evaluating
+upstream definitions, not from the kernel; kernel checks cover the fixed traces
+in Bits and the mutation equalities. The JSON emission, the C++ readers and
+`expressionView`, and the Rust reader and provider are tested on this control,
+not proved. The committed control is the current export only when
+`just test-lean-clean` (or the fresh reproduction) has been run.
 
 ## Controls
 
@@ -94,3 +170,6 @@ The controls use the KoalaBear field `F 2130706433`. Kernel evaluation
   subcircuit (`Addition8Full`), channel interactions (`add8`), an out-of-range
   variable that Clean would read as zero, and import of noncanonical constants,
   out-of-range columns or a different field size.
+- [Mutations](TestsClean/Mutations.lean) and
+  [Presentation](TestsClean/Presentation.lean): mutation provenance, mutation and
+  emission refusals, and the presentation contract, as described above.

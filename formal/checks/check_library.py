@@ -18,7 +18,15 @@ from support.lean_headers import HeaderParser  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INTEGRATION = ROOT / "integrations/arklib"
+# Optional packages: directory, owned module families and the external package
+# names that must never enter the main manifest.
+INTEGRATIONS = {
+    "arklib": (ROOT / "integrations/arklib", ("ZkcArkLib", "TestsArkLib"),
+               ("Arklib", "VCVio", "PolyFun")),
+    "clean": (ROOT / "integrations/clean", ("ZkcClean", "TestsClean"), ("Clean", "CompPoly")),
+}
+OWNERS = {family: directory for directory, families, _ in INTEGRATIONS.values()
+          for family in families}
 BOUNDARIES = {
     "family_and_iteration_realization": {
         "roots": ["Zkc.Realization.Family", "Zkc.Realization.Iteration"],
@@ -217,12 +225,12 @@ def check_boundary(name, boundary, parser):
                for prefix in boundary["forbidden"]):
             raise ValueError(f"{name}: forbidden dependency {module}")
         family = module.split(".")[0]
-        if family not in {"Zkc", "Tests", "ZkcArkLib", "TestsArkLib", "Examples", "Tools"}:
+        if family not in {"Zkc", "Tests", "Examples", "Tools", *OWNERS}:
             if family not in boundary["external"]:
                 raise ValueError(f"{name}: undeclared external dependency {module}")
             external.add(family)
             continue
-        root = INTEGRATION if family in {"ZkcArkLib", "TestsArkLib"} else ROOT
+        root = OWNERS.get(family, ROOT)
         path = root.joinpath(*module.split(".")).with_suffix(".lean")
         data = path.read_bytes()
         source = data.decode()
@@ -236,20 +244,21 @@ def check_boundary(name, boundary, parser):
             "direct_external_families": sorted(external)}
 
 
-def package_pins(main_only):
+def package_pins(integrations):
     main = json.loads((ROOT / "lake-manifest.json").read_text())
     pins = {entry["name"]: entry["rev"] for entry in main["packages"]}
-    if {"Arklib", "VCVio", "PolyFun"} & pins.keys():
+    if any(set(external) & pins.keys() for _, _, external in INTEGRATIONS.values()):
         raise ValueError("optional dependencies entered the main package")
-    if not main_only:
-        optional = json.loads((INTEGRATION / "lake-manifest.json").read_text())
+    for selected in integrations:
+        directory = INTEGRATIONS[selected][0]
+        optional = json.loads((directory / "lake-manifest.json").read_text())
         other = {entry["name"]: entry["rev"] for entry in optional["packages"]
                  if entry["type"] == "git"}
         for name, rev in pins.items():
             if other.get(name) != rev:
-                raise ValueError(f"incompatible shared dependency: {name}")
-        if (ROOT / "lean-toolchain").read_bytes() != (INTEGRATION / "lean-toolchain").read_bytes():
-            raise ValueError("incompatible main and integration Lean toolchains")
+                raise ValueError(f"incompatible shared dependency: {name} in {selected}")
+        if (ROOT / "lean-toolchain").read_bytes() != (directory / "lean-toolchain").read_bytes():
+            raise ValueError(f"incompatible main and {selected} integration Lean toolchains")
     return pins
 
 
@@ -260,14 +269,18 @@ def all_modules(root, family):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--main-only", action="store_true")
+    integrations = parser.add_mutually_exclusive_group()
+    integrations.add_argument("--main-only", action="store_true")
+    integrations.add_argument("--integration", action="append", choices=sorted(INTEGRATIONS),
+                              help="check only the named optional packages (default: all)")
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--lean", default="lean")
     selection.add_argument("--lake", help="select the header parser through Lake env lean")
     args = parser.parse_args()
-    pins = package_pins(args.main_only)
+    selected = [] if args.main_only else args.integration or sorted(INTEGRATIONS)
+    pins = package_pins(selected)
     boundaries = {name: value for name, value in BOUNDARIES.items()
-                  if not (args.main_only and name == "external_free_programs")}
+                  if not ("arklib" not in selected and name == "external_free_programs")}
     boundaries["source_and_module_contracts"] = {
         "roots": all_modules(ROOT, "Zkc/Source") + all_modules(ROOT, "Zkc/Modules"),
         "external": ["Init", "Lean", "Std", "Mathlib", "Aesop"],
@@ -276,13 +289,21 @@ def main():
     boundaries["complete_main_library"] = {
         "roots": ["Zkc"] + all_modules(ROOT, "Zkc"),
         "external": ["Init", "Lean", "Std", "Mathlib", "Aesop"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Tests", "TestsArkLib", "Examples", "Tools"],
+        "forbidden": ["Zkc.Compat", "ZkcArkLib", "ZkcClean", "Tests", "TestsArkLib", "TestsClean",
+                      "Examples", "Tools"],
     }
-    if not args.main_only:
+    if "arklib" in selected:
         boundaries["complete_optional_library"] = {
-            "roots": all_modules(INTEGRATION, "ZkcArkLib"),
+            "roots": all_modules(INTEGRATIONS["arklib"][0], "ZkcArkLib"),
             "external": ["Init", "Lean", "Std", "Mathlib", "Aesop", "ArkLib", "VCVio", "PolyFun"],
             "forbidden": ["Zkc.Compat", "Tests", "TestsArkLib", "Examples", "Tools"],
+        }
+    if "clean" in selected:
+        boundaries["complete_clean_library"] = {
+            "roots": all_modules(INTEGRATIONS["clean"][0], "ZkcClean"),
+            "external": ["Init", "Lean", "Std", "Mathlib", "Aesop", "Clean"],
+            "forbidden": ["Zkc.Compat", "Tests", "TestsArkLib", "TestsClean", "Examples", "Tools",
+                          "ZkcArkLib"],
         }
     with HeaderParser(args.lean, lake=args.lake) as headers:
         checked = {name: check_boundary(name, boundary, headers) for name, boundary in boundaries.items()}

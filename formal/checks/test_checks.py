@@ -491,6 +491,85 @@ class ClientToolControls(unittest.TestCase):
             self.assertEqual({key for key in inputs if inputs[key] != changed[key]}, {name})
 
 
+class CleanIntegrationControls(unittest.TestCase):
+    """The Clean package's sources, producer and committed control are inputs."""
+
+    def test_reproduction_hashes_the_package_and_its_control(self):
+        inputs = reproduce.build_inputs(ROOT, with_clean=True)
+        for name in ("integrations/clean/lake-manifest.json", "integrations/clean/ZkcClean/Native.lean",
+                     "integrations/clean/TestsClean/Control.lean", str(reproduce.CLEAN_CONTROL)):
+            self.assertIn(name, inputs)
+        self.assertNotIn(str(reproduce.CLEAN_CONTROL), reproduce.build_inputs(ROOT))
+
+    def test_producer_output_must_equal_the_control(self):
+        with tempfile.TemporaryDirectory() as directory:
+            expected = Path(directory) / "control.json"
+            expected.write_bytes(b'{"format":"zkc.clean-air-control/0"}\n')
+            for printed, status in ((expected.read_bytes(), "pass"), (b"{}\n", "fail")):
+                with self.subTest(status=status), patch.object(reproduce.subprocess, "run") as run:
+                    run.return_value = subprocess.CompletedProcess([], 0, printed)
+                    record = reproduce.clean_control("lake", Path(directory), expected,
+                                                     Path(directory) / "log", {})
+                    self.assertEqual(record["status"], status)
+                    self.assertEqual(run.call_args.args[0],
+                                     ["lake", "env", "lean", "--run", "TestsClean/Control.lean"])
+
+    def test_shared_sources_are_linked_once_with_one_revision(self):
+        def manifest(path, packages):
+            path.mkdir(parents=True, exist_ok=True)
+            (path / "lake-manifest.json").write_text(json.dumps({"packages": packages}))
+
+        def git(name, rev):
+            return {"type": "git", "name": name, "rev": rev, "url": f"https://example.invalid/{name}"}
+
+        zkc = {"type": "path", "name": "zkc", "dir": "../.."}
+        for clean_rev, failure in (("b", None), ("c", "incompatible shared dependency: CompPoly")):
+            with self.subTest(clean_rev=clean_rev), tempfile.TemporaryDirectory() as directory:
+                work = Path(directory) / "formal"
+                manifest(work, [git("mathlib", "a")])
+                manifest(work / reproduce.INTEGRATION, [zkc, git("mathlib", "a"), git("CompPoly", "b")])
+                manifest(work / reproduce.CLEAN, [zkc, git("mathlib", "a"), git("CompPoly", clean_rev),
+                                                  git("Clean", "d")])
+                made = []
+
+                def materialize(package, packages, caches):
+                    made.append(package["name"])
+                    (packages / package["name"]).mkdir()
+
+                with patch.object(reproduce, "materialize", side_effect=materialize):
+                    integrations = [reproduce.INTEGRATION, reproduce.CLEAN]
+                    if failure:
+                        with self.assertRaisesRegex(ValueError, failure):
+                            reproduce.prepare_dependencies(work, [], integrations)
+                        continue
+                    pins = reproduce.prepare_dependencies(work, [], integrations)
+                self.assertEqual(made, ["mathlib", "CompPoly", "Clean"])
+                self.assertEqual(pins, {"mathlib": "a", "CompPoly": "b", "Clean": "d"})
+                packages = work / reproduce.CLEAN / ".lake/packages"
+                self.assertEqual((packages / "CompPoly").resolve(),
+                                 (work / reproduce.INTEGRATION / ".lake/packages/CompPoly").resolve())
+                self.assertEqual((packages / "mathlib").resolve(), (work / ".lake/packages/mathlib").resolve())
+
+    def test_library_check_refuses_a_diverging_pin(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            clean = root / "integrations/clean"
+            clean.mkdir(parents=True)
+            (root / "lake-manifest.json").write_text(json.dumps(
+                {"packages": [{"type": "git", "name": "mathlib", "rev": "a"}]}))
+            (clean / "lake-manifest.json").write_text(json.dumps(
+                {"packages": [{"type": "git", "name": "mathlib", "rev": "b"}]}))
+            for path in (root, clean):
+                (path / "lean-toolchain").write_text("leanprover/lean4:v4.33.1\n")
+            integrations = {**check_library.INTEGRATIONS,
+                            "clean": (clean, ("ZkcClean", "TestsClean"), ("Clean", "CompPoly"))}
+            with patch.object(check_library, "ROOT", root), \
+                 patch.object(check_library, "INTEGRATIONS", integrations):
+                self.assertEqual(check_library.package_pins([]), {"mathlib": "a"})
+                with self.assertRaisesRegex(ValueError, "incompatible shared dependency: mathlib in clean"):
+                    check_library.package_pins(["clean"])
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lean", default=LEAN)

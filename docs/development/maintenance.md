@@ -41,7 +41,11 @@ own version rules.
 LLZK remains a generic optional relation adapter with a separate LLVM process.
 Do not link incompatible LLVM versions into the main compiler. Formal source
 builds, reached-axiom audits and optional ArkLib consumers retain their own scopes;
-they are not default native execution prerequisites.
+they are not default native execution prerequisites. `scripts/update-lean-pins.py`
+selects revisions from ArkLib only. The Clean integration's manifest must keep the
+main package's shared revisions and toolchain, which `formal/checks/check_library.py`
+checks; after a Lean or Mathlib change, update it by hand and rerun
+`just test-lean-clean`.
 
 ## Upgrade and validate
 

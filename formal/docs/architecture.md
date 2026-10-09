@@ -51,7 +51,7 @@ Logical areas are not separate repositories or independently versioned packages:
 | `Zkc.Polynomial` | Fixed mathematical objects, evaluation and concrete preparation consumers | Narrow Mathlib and semantic APIs; compilation modules additionally use Compiler |
 | `Zkc.Protocols` | Protocol-specific syntax, algorithms, property instances and compiler applications | The preceding library areas; never a dependency of generic library modules |
 | `integrations/arklib/ZkcArkLib` | Actual external correspondences and external-dependent proofs | Main library and declared external packages; never the reverse |
-| `integrations/clean/ZkcClean` | Export of a Clean flat AIR fragment into the finite AIR model | Main library and the pinned Clean package; never the reverse |
+| `integrations/clean/ZkcClean` | Export of a Clean flat AIR fragment into the finite AIR model, its ring trees and its prime-field native emission | Main library and the pinned Clean package; never the reverse |
 | `Tests`, `Examples`, tools | API clients, controls and maintenance | Library modules; never imported by library definitions |
 
 Directories organize concepts; the actual module graph determines dependencies.

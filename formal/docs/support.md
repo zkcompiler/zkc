@@ -473,8 +473,17 @@ holds iff Clean's `Operations.ConstraintsHold` holds on every row, or iff
 upstream `Table.Constraints` holds for a table of that width; and with the
 component's actual `Assumptions`, upstream `weakSoundness` yields its `Spec`.
 The channel-free fragment discharges `FullGuarantees`. Controls refute an
-altered constant, column index and deleted assertion. These are statements
-about Lean terms; native import, evaluation and DAG decoding are not covered.
+altered constant, column index and deleted assertion. `export_ring` and
+`component_ring` compose the expression law with
+`Zkc.Relation.AIR.Expr.toRing_eval`, so each imported assertion's shared ring
+tree evaluates to the upstream constraint. Under a `PrimePresentation` (Clean's
+`fromNat` is `Nat.cast`), `component_native_ring` gives the same for each output
+of the emitted relation arena read with residue literals; a field of non-prime
+size has no presentation. These are statements about Lean terms; native import,
+evaluation and DAG decoding are not proved. A
+[maintained comparison](../../tests/protocol/test_clean_air_conformance.py)
+checks native finite-AIR admission/evaluation and the Rust ring provider against
+the producer's residuals on fixed honest, invalid and mutated rows.
 
 ## External representation and schedule boundaries
 

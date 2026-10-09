@@ -42,6 +42,7 @@ just fetch-lean          # prepare the main package's pinned dependencies
 just build-lean          # lake build: every library and executable the package declares
 just test-lean           # the structural, tool and consumer checks over it
 just test-lean-integration   # the optional ArkLib package and its consumers
+just test-lean-clean         # the optional Clean package and its native control
 ```
 
 What `lake build` builds is `lakefile.toml`'s default targets, and
@@ -85,6 +86,9 @@ python3 reproduce.py --dependency-cache .lake/packages --output /tmp/zkc-main
 python3 reproduce.py --with-arklib --dependency-cache .lake/packages \
   --integration-dependency-cache integrations/arklib/.lake/packages \
   --output /tmp/zkc-with-arklib
+python3 reproduce.py --with-clean --dependency-cache .lake/packages \
+  --integration-dependency-cache integrations/clean/.lake/packages \
+  --output /tmp/zkc-with-clean
 ```
 
 The copied foundation builds without external package imports or prior objects.
