@@ -28,6 +28,25 @@ fn logical_restrict(values: &[Scalar], r: Scalar) -> Vec<Scalar> {
 }
 
 #[test]
+fn table_diagnostics_expose_shape_without_evaluations() {
+    let first = scalars(&[123456789, 987654321]);
+    let second = scalars(&[234567891, 876543219]);
+    for render in [
+        |values: &[Scalar]| format!("{:?}", Table::from_logical(values, &bounds()).unwrap()),
+        |values: &[Scalar]| {
+            format!(
+                "{:?}",
+                zkc_arkworks::MsbTable::from_logical(values, &bounds()).unwrap()
+            )
+        },
+    ] {
+        let diagnostic = render(&first);
+        assert!(diagnostic.contains("arity: 1"));
+        assert_eq!(diagnostic, render(&second));
+    }
+}
+
+#[test]
 fn scalar_codec_is_exact_and_does_not_reduce() {
     let modulus = Scalar::MODULUS.to_bytes_le();
     for value in [

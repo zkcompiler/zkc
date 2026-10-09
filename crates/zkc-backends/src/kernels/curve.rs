@@ -224,39 +224,35 @@ pub(crate) fn apply(
     args: &[Value],
     i: &Invocation<'_>,
     p: &Policy,
-) -> Option<Result<Vec<Value>>> {
+) -> Result<Vec<Value>> {
     if name == "pairing.apply" {
-        return Some((|| {
-            let [Value::Bn254G1(a), Value::Bn254G2(b)] = args else {
-                return Err(refused("kernel-operands"));
-            };
-            p.output(512, i.max_output_bytes)?;
-            // Bound pairing preparation scratch independently of the GT result.
-            p.output(32768, usize::MAX)?;
-            Ok(vec![Value::Bn254Gt(zkc_arkworks::bn254::pairing(a, b))])
-        })());
+        let [Value::Bn254G1(a), Value::Bn254G2(b)] = args else {
+            return Err(refused("kernel-operands"));
+        };
+        p.output(512, i.max_output_bytes)?;
+        // Bound pairing preparation scratch independently of the GT result.
+        p.output(32768, usize::MAX)?;
+        return Ok(vec![Value::Bn254Gt(zkc_arkworks::bn254::pairing(a, b))]);
     }
     if name == "pairing.check" {
-        return Some((|| {
-            let [Value::Bn254G1Vector(a), Value::Bn254G2Vector(b)] = args else {
-                return Err(refused("kernel-operands"));
-            };
-            equal_len(a.len(), b.len())?;
-            p.bn254_groups::<crate::Bn254G1>(a.len())?;
-            p.bn254_groups::<crate::Bn254G2>(b.len())?;
-            p.output(512, i.max_output_bytes)?;
-            // BN254 G2 preparations retain 91 line coefficients (three Fq2 each),
-            // plus G1 preparation and multi-Miller loop working vectors.
-            p.output(size(a.len(), 32768)?, usize::MAX)?;
-            Ok(vec![Value::Bool(
-                zkc_arkworks::bn254::pairing_check(a, b).map_err(crate::ark)?,
-            )])
-        })());
+        let [Value::Bn254G1Vector(a), Value::Bn254G2Vector(b)] = args else {
+            return Err(refused("kernel-operands"));
+        };
+        equal_len(a.len(), b.len())?;
+        p.bn254_groups::<crate::Bn254G1>(a.len())?;
+        p.bn254_groups::<crate::Bn254G2>(b.len())?;
+        p.output(512, i.max_output_bytes)?;
+        // BN254 G2 preparations retain 91 line coefficients (three Fq2 each),
+        // plus G1 preparation and multi-Miller loop working vectors.
+        p.output(size(a.len(), 32768)?, usize::MAX)?;
+        return Ok(vec![Value::Bool(
+            zkc_arkworks::bn254::pairing_check(a, b).map_err(crate::ark)?,
+        )]);
     }
     if !name.starts_with("curve.") || matches!(name, "curve.commit" | "curve.response") {
-        return None;
+        return Err(refused("kernel-operands"));
     }
-    Some(match field {
+    match field {
         Some(zkc_runtime::interactive::Identity::Bn254Fr) => {
             match i
                 .binding
@@ -278,7 +274,7 @@ pub(crate) fn apply(
             dense::<GroupPoint>(name, args, i, p)
         }
         _ => Err(refused("kernel-operands")),
-    })
+    }
 }
 fn dense<G: Group>(
     name: &str,

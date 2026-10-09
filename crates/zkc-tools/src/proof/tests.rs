@@ -1,4 +1,5 @@
 use super::*;
+mod admission;
 #[test]
 fn nested_wire_permission_is_exact() {
     for spelling in [

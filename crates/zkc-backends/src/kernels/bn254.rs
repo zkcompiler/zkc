@@ -26,7 +26,7 @@ pub(crate) fn apply(
     args: &[Value],
     i: &Invocation<'_>,
     p: &Policy,
-) -> Option<Result<Vec<Value>>> {
+) -> Result<Vec<Value>> {
     if field != Some(Identity::Bn254Fr)
         || !matches!(
             name,
@@ -39,9 +39,9 @@ pub(crate) fn apply(
                 | "poly.opening_quotient"
         )
     {
-        return None;
+        return Err(refused("kernel-operands"));
     }
-    Some(execute(name, args, i, p))
+    execute(name, args, i, p)
 }
 fn execute(name: &str, args: &[Value], i: &Invocation<'_>, p: &Policy) -> Result<Vec<Value>> {
     let arg = |n| args.get(n).ok_or_else(|| refused("kernel-operands"));

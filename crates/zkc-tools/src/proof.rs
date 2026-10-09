@@ -1,6 +1,8 @@
 //! Independent proof execution with an application-pinned deployment.
 mod attempts;
 mod inputs;
+mod interface;
+mod messages;
 pub use crate::host::capacity::NativeCapacity;
 pub use crate::host::material::ProverMaterial;
 pub use crate::host::request::InputValue;
@@ -26,8 +28,8 @@ use zkc_backends::{
 };
 use zkc_runtime::{
     interactive::{
-        EntryRole, Identity, LogicalType, NativeProofEntry, NativeTranscriptEvent, PhysicalType,
-        ProgramAction, Runner, Type, admit_supplied,
+        EntryRole, Identity, LogicalType, NativeProofEntry, PhysicalType, Runner, Type,
+        admit_supplied,
     },
     logical,
 };
@@ -155,22 +157,6 @@ fn input_kind(ty: &PhysicalType) -> Result<&'static str> {
     Err("native-proof-role-input-type".into())
 }
 
-fn ports(value: &Json, actual: &[PhysicalType]) -> Result<Vec<Port>> {
-    let mut ports = Vec::new();
-    if list(value)?.len() != actual.len() {
-        return Err("native-proof-port-map".into());
-    }
-    for (row, ty) in list(value)?.iter().zip(actual) {
-        let row = array(row, 2)?;
-        let original = index(&row[0])?;
-        let logical = LogicalType::parse(text(&row[1])?).map_err(|e| e.to_string())?;
-        if logical != ty.logical() || ports.last().is_some_and(|p: &Port| p.original >= original) {
-            return Err("native-proof-port-map".into());
-        }
-        ports.push(Port { original, logical });
-    }
-    Ok(ports)
-}
 fn backend(
     policy: Policy,
     role: &EntryRole,
@@ -236,41 +222,9 @@ impl NativeDeployment {
         {
             return Err("native-proof-choices".into());
         }
-        let policy = array(&descriptor[1], 9)?;
-        if text(&policy[0])? != "zkc.native-proof-policy/4" {
-            return Err("native-proof-policy".into());
-        }
-        let (entry, producer, validator) =
-            (text(&policy[1])?, text(&policy[2])?, text(&policy[3])?);
-        if producer == validator {
-            return Err("native-proof-interface".into());
-        }
-        let original_acceptance = index(&policy[4])?;
-        let suite = text(&policy[5])?;
-        let suite = (!suite.is_empty()).then_some(suite);
-        let draws = list(&policy[8])?;
-        if draws.len() > 64
-            || (suite.is_some() != !draws.is_empty())
-            || suite.is_some() != !text(&policy[6])?.is_empty()
-        {
-            return Err("native-proof-policy".into());
-        }
-        if suite.is_some() {
-            index(&policy[6])?;
-        }
-        let mut selected_sites = std::collections::BTreeSet::new();
-        for draw in draws {
-            for site in array(draw, 2)? {
-                let site = text(site)?;
-                if site.is_empty()
-                    || site.len() > 4096
-                    || !site.bytes().all(|b| (33..=126).contains(&b))
-                    || !selected_sites.insert(site)
-                {
-                    return Err("native-proof-policy".into());
-                }
-            }
-        }
+        let policy = interface::DeploymentPolicy::read(&descriptor[1])?;
+        let (entry, producer, validator) = (policy.entry, policy.producer, policy.validator);
+        let suite = policy.suite;
         let admitted = {
             let dummy = NativeBackend::new(
                 Policy::default(),
@@ -280,247 +234,13 @@ impl NativeDeployment {
             .map_err(|e| e.to_string())?;
             admit_supplied(candidate.as_bytes(), &dummy).map_err(|e| e.to_string())?
         };
-        let mut messages = BTreeMap::new();
-        for row in list(&descriptor[5])? {
-            let row = array(row, 3)?;
-            let origin = text(&row[0])?;
-            let ty = wire_type(text(&row[1])?, false)?;
-            if wire_codec(&ty).as_deref() != Some(text(&row[2])?)
-                || messages.insert(origin, ty).is_some()
-            {
-                return Err("native-proof-message-map".into());
-            }
-        }
-        let mut events = Vec::new();
-        let mut origins = std::collections::BTreeSet::new();
-        let mut queries = 0;
-        let mut observed_messages = 0;
-        let mut wire_origins = Vec::new();
-        for row in list(&descriptor[3])? {
-            let row = array(row, 2)?;
-            let (kind, origin) = (text(&row[0])?, text(&row[1])?);
-            let bytes = logical::native_origin_template(&[origin.into()], kind)
-                .map_err(|e| e.to_string())?;
-            let record = logical::decode_tree(&bytes).map_err(|e| e.to_string())?;
-            if record[1].as_str() != Some(entry) || !origins.insert(origin) {
-                return Err("native-proof-origin-map".into());
-            }
-            if kind == "query" {
-                queries += 1;
-                if record[4][4]
-                    .as_str()
-                    .and_then(|c| zkc_runtime::interactive::ServiceContract::parse(c).ok())
-                    .map(|c| c.field())
-                    != suite
-                        .and_then(|s| LogicalType::parse(&format!("transcript:{s}")).ok())
-                        .and_then(|t| t.identity().scalar_field())
-                    || record[4][5].as_str() != Some("draw")
-                    || record[4][6].as_str() != Some(validator)
-                {
-                    return Err("native-proof-query-origin".into());
-                }
-            } else {
-                observed_messages += 1;
-                if record[4][4].as_str() == Some(producer)
-                    && record[4][5].as_str() == Some(validator)
-                {
-                    wire_origins.push(origin);
-                } else if record[4][4].as_str() != Some(validator)
-                    || record[4][5].as_str() != Some(producer)
-                {
-                    return Err("native-proof-message-origin".into());
-                }
-            }
-            let payload = if kind == "message" {
-                Some(
-                    messages
-                        .get(origin)
-                        .ok_or("native-proof-message-map")?
-                        .clone(),
-                )
-            } else {
-                None
-            };
-            let contract = match kind {
-                "query" => "transcript.native.indexed.challenge".to_owned(),
-                "message" => "transcript.native.indexed.observe.data".to_owned(),
-                _ => return Err("native-proof-event".into()),
-            };
-            if suite.is_some() {
-                events.push(NativeTranscriptEvent {
-                    contract,
-                    origin: origin.into(),
-                    payload,
-                });
-            }
-        }
-        if queries != draws.len() || observed_messages != messages.len() || origins.len() > 2048 {
-            return Err("native-proof-event-map".into());
-        }
-        let wire_rows = list(&envelope[8])?;
-        if wire_rows.len() != wire_origins.len() {
-            return Err("native-proof-wire-map".into());
-        }
-        let mut wire_layout = Vec::new();
-        let mut wire_sites = std::collections::BTreeSet::new();
-        for (row, origin) in wire_rows.iter().zip(wire_origins) {
-            let row = array(row, 2)?;
-            let site = text(&row[1])?;
-            if text(&row[0])? != origin
-                || site.is_empty()
-                || site.len() > 4096
-                || !wire_sites.insert(site)
-            {
-                return Err("native-proof-wire-map".into());
-            }
-            wire_layout.push((
-                site,
-                messages.get(origin).ok_or("native-proof-message-map")?,
-            ));
-        }
-        for role in admitted.program_entry(entry).map_err(|e| e.to_string())? {
-            let actual: Vec<_> = role
-                .actions
-                .iter()
-                .filter_map(|action| match action {
-                    ProgramAction::Send {
-                        site, schema, ty, ..
-                    }
-                    | ProgramAction::Receive {
-                        site, schema, ty, ..
-                    } => Some((site, schema, ty)),
-                    _ => None,
-                })
-                .collect();
-            if actual.len() != wire_layout.len()
-                || actual.iter().zip(&wire_layout).any(
-                    |((site, schema, ty), (expected, logical))| {
-                        site.as_str() != *expected
-                            || schema.as_str() != *expected
-                            || ty.logical() != **logical
-                    },
-                )
-            {
-                return Err("native-proof-wire-map".into());
-            }
-        }
-        let roles = admitted.entry(entry).ok_or("native-proof-entry")?;
-        let mut acceptance = None;
-        let mut maps = BTreeMap::new();
-        for row in list(&envelope[6])? {
-            let row = array(row, 6)?;
-            let role_name = text(&row[0])?;
-            let role = roles
-                .iter()
-                .find(|r| r.role == role_name)
-                .ok_or("native-proof-role-map")?;
-            if role.participant != text(&row[1])? {
-                return Err("native-proof-role-map".into());
-            }
-            let extra = usize::from(suite.is_some());
-            if role.inputs.len() < extra || role.outputs.len() < extra {
-                return Err("native-proof-port-map".into());
-            }
-            let input_types = role.inputs[..role.inputs.len() - extra]
-                .iter()
-                .map(|(_, t)| t.clone())
-                .collect::<Vec<_>>();
-            let data = ports(&row[2], &input_types)?;
-            for ty in &input_types {
-                input_kind(ty)?;
-            }
-            let outputs = ports(&row[3], &role.outputs[..role.outputs.len() - extra])?;
-            // This host returns proof bytes and retires its issued roots. It
-            // has no caller-owned backend in which other affine outputs could
-            // remain live, unlike the general bundle host.
-            if role.outputs.iter().any(|ty| {
-                ty.is_affine() && !matches!(ty.kind(), Type::Rng | Type::Nonce | Type::Transcript)
-            }) {
-                return Err("native-proof-output-kind".into());
-            }
-            let service_rows = list(&row[4])?;
-            if service_rows.len() != role.services.len() {
-                return Err("native-proof-service-map".into());
-            }
-            let mut services = Vec::new();
-            for (row, service) in service_rows.iter().zip(&role.services) {
-                let row = array(row, 4)?;
-                let original = index(&row[0])?;
-                if text(&row[1])? != service.name
-                    || text(&row[2])? != service.contract.name()
-                    || index(&row[3])? != service.input_index
-                    || data.iter().any(|p| p.original == original)
-                    || services.contains(&original)
-                {
-                    return Err("native-proof-service-map".into());
-                }
-                services.push(original);
-            }
-            if role_name == validator {
-                let decision = index(&row[5])?;
-                if outputs
-                    .get(decision)
-                    .is_none_or(|p| p.original != original_acceptance)
-                {
-                    return Err("native-proof-acceptance-map".into());
-                }
-                acceptance = Some(decision);
-            } else if !text(&row[5])?.is_empty() {
-                return Err("native-proof-acceptance-map".into());
-            }
-            if maps
-                .insert(
-                    role_name.to_owned(),
-                    RoleMap {
-                        data,
-                        services,
-                        outputs,
-                    },
-                )
-                .is_some()
-            {
-                return Err("native-proof-role-map".into());
-            }
-        }
-        if maps.len() != 2 || !maps.contains_key(producer) || !maps.contains_key(validator) {
-            return Err("native-proof-role-map".into());
-        }
-        for port in &maps[producer].data {
-            if maps[validator]
-                .data
-                .iter()
-                .any(|other| other.original == port.original && other.logical != port.logical)
-            {
-                return Err("native-proof-shared-port-type".into());
-            }
-        }
-        let mut public = Vec::new();
-        for row in list(&descriptor[4])? {
-            let row = array(row, 4)?;
-            let original = index(&row[1])?;
-            let logical = wire_type(text(&row[2])?, true)?;
-            if text(&row[0])? != validator
-                || wire_codec(&logical).as_deref() != Some(text(&row[3])?)
-                || public.last().is_some_and(|p: &Port| p.original >= original)
-            {
-                return Err("native-proof-public-map".into());
-            }
-            public.push(Port { original, logical });
-        }
-        let required = &maps[validator].data;
-        let selected = list(&policy[7])?
-            .iter()
-            .map(index)
-            .collect::<Result<Vec<_>>>()?;
-        if public.len() != required.len()
-            || selected != public.iter().map(|p| p.original).collect::<Vec<_>>()
-            || public
-                .iter()
-                .zip(required)
-                .any(|(p, a)| p.original != a.original || p.logical != a.logical)
-        {
-            return Err("native-proof-public-map".into());
-        }
+        let messages = messages::MessageLayout::read(descriptor, &policy)?;
+        messages.check_wire(&envelope[8], &admitted, entry)?;
+        let interface::RoleInterface {
+            maps,
+            public,
+            acceptance,
+        } = interface::RoleInterface::read(&admitted, &policy, &envelope[6], &descriptor[4])?;
         let keys = public
             .iter()
             .filter(|p| p.logical.kind() == Type::VerifierKey)
@@ -529,6 +249,7 @@ impl NativeDeployment {
             p.logical.identity() == zkc_runtime::interactive::Identity::MultilinearKzgBls12381
                 || zkc_backends::requires_setup(p.logical.clone())
         }) || messages
+            .payload_types
             .values()
             .any(|t| zkc_backends::requires_setup(t.clone()));
         if keys > 64 || needs_key && keys == 0 {
@@ -551,7 +272,7 @@ impl NativeDeployment {
             validator,
             acceptance.ok_or("native-proof-acceptance-map")?,
             suite,
-            &events,
+            &messages.events,
         )
         .map_err(|e| e.to_string())?;
         Ok(Self {

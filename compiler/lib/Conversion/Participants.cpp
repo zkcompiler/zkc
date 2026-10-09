@@ -4,7 +4,6 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Protocol/Execution.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/LinearContraction.h"
@@ -25,11 +24,15 @@ lowerPhysical(ModuleOp module,
   module.getContext()->getOrLoadDialect<zkc::plan::PlanDialect>();
   if (failed(verify(module)))
     return failure();
-  auto candidate = readExecutionModel(module);
-  if (!candidate)
-    return diagnostics::emit(module.emitError(), candidate.takeError());
+  if (!llvm::hasSingleElement(*module.getBody()))
+    return diagnostics::emit(module.emitError(), "interactive-module-count");
   auto root =
-      cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
+      dyn_cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
+  if (!root || !zkc::protocol_ir::isExecutableProfile(root.getProfile()))
+    return diagnostics::emit(module.emitError(), "interactive-module");
+  // For executable profiles, ProtocolModuleOp::verifyRegions already reads
+  // and admits the execution model. Keep the wrapper/profile checks here
+  // without reconstructing and discarding the same admitted records.
   if (root.getProfile() != zkc::protocol_ir::Profile::Exec)
     return diagnostics::emit(root.emitError(), "interactive-physical-stage");
   OwningOpRef<ModuleOp> selected(cast<ModuleOp>(module->clone()));

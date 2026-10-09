@@ -164,184 +164,179 @@ pub(crate) fn apply(
     args: &[Value],
     invocation: &Invocation<'_>,
     policy: &Policy,
-) -> Option<Result<Vec<Value>>> {
+) -> Result<Vec<Value>> {
     if !name.starts_with("oracle.")
         && !name.starts_with("commitments.")
         && !name.starts_with("opening_states.")
     {
-        return None;
+        return Err(refused("kernel-operands"));
     }
-    Some((|| {
-        let domain = invocation
-            .binding
-            .declaration()
-            .arguments
-            .first()
-            .and_then(|s| Identity::parse(s).ok())
-            .and_then(Domain::from_identity)
-            .ok_or_else(|| refused("oracle-domain"))?;
-        let available = invocation.max_output_bytes;
-        let outputs = match (name, args) {
-            ("oracle.commit", [Value::KoalaBearVector(values), width])
-                if domain == Domain::Base =>
-            {
-                let s = shape(index(width)?, values.len(), policy)?;
-                let bytes = s.retained_bytes::<crate::KoalaBear>().map_err(failure)?;
-                policy.output(
-                    bytes
-                        .checked_add(512)
-                        .ok_or_else(|| exhausted("size-overflow"))?,
-                    available,
-                )?;
-                let (root, state) =
-                    tree::commit(values.to_vec(), s, policy.max_value_bytes).map_err(failure)?;
-                vec![
-                    Value::OracleRoot(domain, root),
-                    Value::OracleState(State::Base(Arc::new(state))),
-                ]
-            }
-            ("oracle.commit", [Value::KoalaBearExt8Vector(values), width])
-                if domain == Domain::Extension =>
-            {
-                let s = shape(index(width)?, values.len(), policy)?;
-                let bytes = s
-                    .retained_bytes::<crate::KoalaBearExt8>()
-                    .map_err(failure)?;
-                policy.output(
-                    bytes
-                        .checked_add(512)
-                        .ok_or_else(|| exhausted("size-overflow"))?,
-                    available,
-                )?;
-                let (root, state) =
-                    tree::commit(values.to_vec(), s, policy.max_value_bytes).map_err(failure)?;
-                vec![
-                    Value::OracleRoot(domain, root),
-                    Value::OracleState(State::Extension(Arc::new(state))),
-                ]
-            }
-            ("oracle.open", [Value::OracleState(state), at]) if state.domain() == domain => {
-                let at = index(at)?;
-                match state {
-                    State::Base(s) => {
-                        policy.output(
-                            size(s.shape().width(), 4)?
-                                .checked_add(size(s.shape().depth(), 32)?)
-                                .ok_or_else(|| exhausted("size-overflow"))?,
-                            available,
-                        )?;
-                        let (row, path) = s.open(at).map_err(failure)?;
-                        vec![
-                            Value::KoalaBearVector(row.into()),
-                            Value::OraclePath(domain, path.into()),
-                        ]
-                    }
-                    State::Extension(s) => {
-                        policy.output(
-                            size(s.shape().width(), 32)?
-                                .checked_add(size(s.shape().depth(), 32)?)
-                                .ok_or_else(|| exhausted("size-overflow"))?,
-                            available,
-                        )?;
-                        let (row, path) = s.open(at).map_err(failure)?;
-                        vec![
-                            Value::KoalaBearExt8Vector(row.into()),
-                            Value::OraclePath(domain, path.into()),
-                        ]
-                    }
+    let domain = invocation
+        .binding
+        .declaration()
+        .arguments
+        .first()
+        .and_then(|s| Identity::parse(s).ok())
+        .and_then(Domain::from_identity)
+        .ok_or_else(|| refused("oracle-domain"))?;
+    let available = invocation.max_output_bytes;
+    let outputs = match (name, args) {
+        ("oracle.commit", [Value::KoalaBearVector(values), width]) if domain == Domain::Base => {
+            let s = shape(index(width)?, values.len(), policy)?;
+            let bytes = s.retained_bytes::<crate::KoalaBear>().map_err(failure)?;
+            policy.output(
+                bytes
+                    .checked_add(512)
+                    .ok_or_else(|| exhausted("size-overflow"))?,
+                available,
+            )?;
+            let (root, state) =
+                tree::commit(values.to_vec(), s, policy.max_value_bytes).map_err(failure)?;
+            vec![
+                Value::OracleRoot(domain, root),
+                Value::OracleState(State::Base(Arc::new(state))),
+            ]
+        }
+        ("oracle.commit", [Value::KoalaBearExt8Vector(values), width])
+            if domain == Domain::Extension =>
+        {
+            let s = shape(index(width)?, values.len(), policy)?;
+            let bytes = s
+                .retained_bytes::<crate::KoalaBearExt8>()
+                .map_err(failure)?;
+            policy.output(
+                bytes
+                    .checked_add(512)
+                    .ok_or_else(|| exhausted("size-overflow"))?,
+                available,
+            )?;
+            let (root, state) =
+                tree::commit(values.to_vec(), s, policy.max_value_bytes).map_err(failure)?;
+            vec![
+                Value::OracleRoot(domain, root),
+                Value::OracleState(State::Extension(Arc::new(state))),
+            ]
+        }
+        ("oracle.open", [Value::OracleState(state), at]) if state.domain() == domain => {
+            let at = index(at)?;
+            match state {
+                State::Base(s) => {
+                    policy.output(
+                        size(s.shape().width(), 4)?
+                            .checked_add(size(s.shape().depth(), 32)?)
+                            .ok_or_else(|| exhausted("size-overflow"))?,
+                        available,
+                    )?;
+                    let (row, path) = s.open(at).map_err(failure)?;
+                    vec![
+                        Value::KoalaBearVector(row.into()),
+                        Value::OraclePath(domain, path.into()),
+                    ]
+                }
+                State::Extension(s) => {
+                    policy.output(
+                        size(s.shape().width(), 32)?
+                            .checked_add(size(s.shape().depth(), 32)?)
+                            .ok_or_else(|| exhausted("size-overflow"))?,
+                        available,
+                    )?;
+                    let (row, path) = s.open(at).map_err(failure)?;
+                    vec![
+                        Value::KoalaBearExt8Vector(row.into()),
+                        Value::OraclePath(domain, path.into()),
+                    ]
                 }
             }
-            (
-                "oracle.check",
-                [
-                    Value::OracleRoot(d, root),
-                    width,
-                    height,
-                    at,
-                    row,
-                    Value::OraclePath(p, path),
-                ],
-            ) if *d == domain && *p == domain => {
-                policy.output(512, available)?;
-                let (width, height, at) = (index(width)?, index(height)?, index(at)?);
-                let valid = match row {
-                    Value::KoalaBearVector(row) if domain == Domain::Base => {
-                        check(*root, width, height, at, row, path, policy)?
-                    }
-                    Value::KoalaBearExt8Vector(row) if domain == Domain::Extension => {
-                        check(*root, width, height, at, row, path, policy)?
-                    }
-                    _ => return Err(refused("oracle-operands")),
-                };
-                vec![Value::Bool(valid)]
-            }
-            ("commitments.empty", []) => {
-                policy.output(256, available)?;
-                vec![Value::OracleRoots(domain, Arc::from([]))]
-            }
-            ("opening_states.empty", []) => {
-                policy.output(256, available)?;
-                vec![Value::OracleStates(domain, Arc::from([]))]
-            }
-            ("commitments.append", [Value::OracleRoots(d, roots), Value::OracleRoot(r, root)])
-                if *d == domain && *r == domain =>
-            {
-                let len = roots
-                    .len()
-                    .checked_add(1)
-                    .ok_or_else(|| exhausted("size-overflow"))?;
-                policy.vector_width(len, 32)?;
-                policy.output(size(len, 32)?, available)?;
-                let mut result = crate::kernels::arithmetic::reserve(len)?;
-                result.extend_from_slice(roots);
-                result.push(*root);
-                vec![Value::OracleRoots(domain, result.into())]
-            }
-            (
-                "opening_states.append",
-                [Value::OracleStates(d, states), Value::OracleState(state)],
-            ) if *d == domain && state.domain() == domain => {
-                let len = states
-                    .len()
-                    .checked_add(1)
-                    .ok_or_else(|| exhausted("size-overflow"))?;
-                policy.vector_width(len, std::mem::size_of::<State>())?;
-                let bytes = states_bytes(states)?
-                    .checked_add(state.retained_bytes()?)
-                    .and_then(|n| n.checked_add(std::mem::size_of::<State>()))
-                    .ok_or_else(|| exhausted("size-overflow"))?;
-                policy.output(bytes, available)?;
-                let mut result = crate::kernels::arithmetic::reserve(len)?;
-                result.extend_from_slice(states);
-                result.push(state.clone());
-                vec![Value::OracleStates(domain, result.into())]
-            }
-            ("commitments.at", [Value::OracleRoots(d, roots), at]) if *d == domain => {
-                policy.output(512, available)?;
-                vec![Value::OracleRoot(
-                    domain,
-                    *roots
-                        .get(index(at)?)
-                        .ok_or_else(|| refused("oracle-coordinate"))?,
-                )]
-            }
-            ("opening_states.at", [Value::OracleStates(d, states), at]) if *d == domain => {
-                let state = states
+        }
+        (
+            "oracle.check",
+            [
+                Value::OracleRoot(d, root),
+                width,
+                height,
+                at,
+                row,
+                Value::OraclePath(p, path),
+            ],
+        ) if *d == domain && *p == domain => {
+            policy.output(512, available)?;
+            let (width, height, at) = (index(width)?, index(height)?, index(at)?);
+            let valid = match row {
+                Value::KoalaBearVector(row) if domain == Domain::Base => {
+                    check(*root, width, height, at, row, path, policy)?
+                }
+                Value::KoalaBearExt8Vector(row) if domain == Domain::Extension => {
+                    check(*root, width, height, at, row, path, policy)?
+                }
+                _ => return Err(refused("oracle-operands")),
+            };
+            vec![Value::Bool(valid)]
+        }
+        ("commitments.empty", []) => {
+            policy.output(256, available)?;
+            vec![Value::OracleRoots(domain, Arc::from([]))]
+        }
+        ("opening_states.empty", []) => {
+            policy.output(256, available)?;
+            vec![Value::OracleStates(domain, Arc::from([]))]
+        }
+        ("commitments.append", [Value::OracleRoots(d, roots), Value::OracleRoot(r, root)])
+            if *d == domain && *r == domain =>
+        {
+            let len = roots
+                .len()
+                .checked_add(1)
+                .ok_or_else(|| exhausted("size-overflow"))?;
+            policy.vector_width(len, 32)?;
+            policy.output(size(len, 32)?, available)?;
+            let mut result = crate::kernels::arithmetic::reserve(len)?;
+            result.extend_from_slice(roots);
+            result.push(*root);
+            vec![Value::OracleRoots(domain, result.into())]
+        }
+        ("opening_states.append", [Value::OracleStates(d, states), Value::OracleState(state)])
+            if *d == domain && state.domain() == domain =>
+        {
+            let len = states
+                .len()
+                .checked_add(1)
+                .ok_or_else(|| exhausted("size-overflow"))?;
+            policy.vector_width(len, std::mem::size_of::<State>())?;
+            let bytes = states_bytes(states)?
+                .checked_add(state.retained_bytes()?)
+                .and_then(|n| n.checked_add(std::mem::size_of::<State>()))
+                .ok_or_else(|| exhausted("size-overflow"))?;
+            policy.output(bytes, available)?;
+            let mut result = crate::kernels::arithmetic::reserve(len)?;
+            result.extend_from_slice(states);
+            result.push(state.clone());
+            vec![Value::OracleStates(domain, result.into())]
+        }
+        ("commitments.at", [Value::OracleRoots(d, roots), at]) if *d == domain => {
+            policy.output(512, available)?;
+            vec![Value::OracleRoot(
+                domain,
+                *roots
                     .get(index(at)?)
-                    .ok_or_else(|| refused("oracle-coordinate"))?;
-                policy.output(state.retained_bytes()?, available)?;
-                vec![Value::OracleState(state.clone())]
-            }
-            ("commitments.length", [Value::OracleRoots(d, roots)]) if *d == domain => {
-                vec![Value::Index(roots.len() as u64)]
-            }
-            ("opening_states.length", [Value::OracleStates(d, states)]) if *d == domain => {
-                vec![Value::Index(states.len() as u64)]
-            }
-            _ => return Err(refused("oracle-operands")),
-        };
-        Ok(outputs)
-    })())
+                    .ok_or_else(|| refused("oracle-coordinate"))?,
+            )]
+        }
+        ("opening_states.at", [Value::OracleStates(d, states), at]) if *d == domain => {
+            let state = states
+                .get(index(at)?)
+                .ok_or_else(|| refused("oracle-coordinate"))?;
+            policy.output(state.retained_bytes()?, available)?;
+            vec![Value::OracleState(state.clone())]
+        }
+        ("commitments.length", [Value::OracleRoots(d, roots)]) if *d == domain => {
+            vec![Value::Index(roots.len() as u64)]
+        }
+        ("opening_states.length", [Value::OracleStates(d, states)]) if *d == domain => {
+            vec![Value::Index(states.len() as u64)]
+        }
+        _ => return Err(refused("oracle-operands")),
+    };
+    Ok(outputs)
 }
 
 fn tag(domain: Domain, kind: Type) -> Option<u8> {

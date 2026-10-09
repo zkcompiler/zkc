@@ -537,14 +537,6 @@ impl<B: Backend> Runner<B> {
             let body = execution.body.clone();
             let instruction = &body[execution.pc];
             let origin = execution.frame.origin.clone();
-            // Structured control is crossed only by the explicit program
-            // control API, after the host has established count agreement.
-            if matches!(
-                instruction,
-                Instruction::Loop { .. } | Instruction::Yield(_) | Instruction::ReturnIf { .. }
-            ) {
-                return Err(BackendError::new("program-control-cut").into());
-            }
             match instruction {
                 Instruction::Query {
                     site,
@@ -624,13 +616,16 @@ impl<B: Backend> Runner<B> {
                         ty: ty.clone(),
                     }));
                 }
-                Instruction::Loop { .. } => self.start_loop(instruction)?,
-                Instruction::Yield(names) | Instruction::Return(names) => {
+                // Structured control is crossed only by the explicit program
+                // control API, under the Host's chosen coordination policy.
+                Instruction::Loop { .. } | Instruction::Yield(_) | Instruction::ReturnIf { .. } => {
+                    return Err(BackendError::new("program-control-cut").into());
+                }
+                Instruction::Return(names) => {
                     self.tick()?;
                     let values = self.values(names);
                     self.finish(values)?;
                 }
-                Instruction::ReturnIf { .. } => return Err(RuntimeError::WrongAction),
             }
         }
         Ok(())
@@ -969,7 +964,7 @@ impl<B: Backend> Runner<B> {
         ) {
             return Err(RuntimeError::WrongAction);
         }
-        let current = self.poll().cut().ok_or(RuntimeError::WrongAction)?;
+        let current = self.poll_ref().cut().ok_or(RuntimeError::WrongAction)?;
         if current.kind != kind {
             return Err(RuntimeError::WrongAction);
         }
@@ -1515,7 +1510,7 @@ impl<B: Backend> Runner<B> {
         ) {
             return Err(RuntimeError::WrongAction);
         }
-        let Action::Receive(request) = self.poll() else {
+        let Action::Receive(request) = self.poll_ref() else {
             return Err(RuntimeError::WrongAction);
         };
         if packet.envelope != request.envelope {
@@ -1524,7 +1519,8 @@ impl<B: Backend> Runner<B> {
         if packet.ty != request.ty {
             return Err(RuntimeError::Payload);
         }
-        self.validate(&packet.payload, request.ty, true)?;
+        let ty = request.ty.clone();
+        self.validate(&packet.payload, ty, true)?;
         self.can_retain(std::slice::from_ref(&packet.payload))?;
         if self.usage.instructions >= self.work_budget.instructions {
             return Err(RuntimeError::Limit);

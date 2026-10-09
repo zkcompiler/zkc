@@ -50,67 +50,65 @@ pub(crate) fn apply(
     attributes: &[String],
     policy: &Policy,
     available: usize,
-) -> Option<Result<Vec<Value>>> {
+) -> Result<Vec<Value>> {
     if !name.starts_with("index.") && !name.starts_with("indices.") {
-        return None;
+        return Err(refused("kernel-operands"));
     }
-    Some((|| {
-        use Value::{Bool, Index, Indices};
-        let output = match (name, args) {
-            ("index.constant", []) => Index(
-                attributes
-                    .first()
-                    .and_then(|n| n.parse::<u64>().ok().filter(|v| v.to_string() == *n))
-                    .filter(|_| attributes.len() == 1)
-                    .ok_or_else(|| refused("index-constant"))?,
-            ),
-            ("index.add", [Index(a), Index(b)]) => {
-                Index(a.checked_add(*b).ok_or_else(|| refused("index-overflow"))?)
-            }
-            ("index.sub", [Index(a), Index(b)]) => Index(
-                a.checked_sub(*b)
-                    .ok_or_else(|| refused("index-underflow"))?,
-            ),
-            ("index.mul", [Index(a), Index(b)]) => {
-                Index(a.checked_mul(*b).ok_or_else(|| refused("index-overflow"))?)
-            }
-            ("index.div", [Index(a), Index(b)]) => Index(
-                a.checked_div(*b)
-                    .ok_or_else(|| refused("index-zero-divisor"))?,
-            ),
-            ("index.mod", [Index(a), Index(b)]) => Index(
-                a.checked_rem(*b)
-                    .ok_or_else(|| refused("index-zero-divisor"))?,
-            ),
-            ("index.equal", [Index(a), Index(b)]) => Bool(a == b),
-            ("index.less", [Index(a), Index(b)]) => Bool(a < b),
-            ("indices.empty", []) => {
-                policy.output(size(0, 8)?, available)?;
-                Indices(Vec::new().into())
-            }
-            ("indices.append", [Indices(ns), Index(n)]) => {
-                let len = ns
-                    .len()
-                    .checked_add(1)
-                    .ok_or_else(|| exhausted("size-overflow"))?;
-                policy.vector_width(len, 8)?;
-                policy.output(size(len, 8)?, available)?;
-                let mut result = crate::kernels::arithmetic::reserve(len)?;
-                result.extend_from_slice(ns);
-                result.push(*n);
-                Indices(result.into())
-            }
-            ("indices.at", [Indices(ns), Index(n)]) => {
-                let n = usize::try_from(*n).map_err(|_| refused("index-bounds"))?;
-                Index(*ns.get(n).ok_or_else(|| refused("index-bounds"))?)
-            }
-            ("indices.length", [Indices(ns)]) => {
-                Index(u64::try_from(ns.len()).map_err(|_| exhausted("size-overflow"))?)
-            }
-            _ => return Err(refused("index-operands")),
-        };
-        Ok(vec![output])
-    })())
+    use Value::{Bool, Index, Indices};
+    let output = match (name, args) {
+        ("index.constant", []) => Index(
+            attributes
+                .first()
+                .and_then(|n| n.parse::<u64>().ok().filter(|v| v.to_string() == *n))
+                .filter(|_| attributes.len() == 1)
+                .ok_or_else(|| refused("index-constant"))?,
+        ),
+        ("index.add", [Index(a), Index(b)]) => {
+            Index(a.checked_add(*b).ok_or_else(|| refused("index-overflow"))?)
+        }
+        ("index.sub", [Index(a), Index(b)]) => Index(
+            a.checked_sub(*b)
+                .ok_or_else(|| refused("index-underflow"))?,
+        ),
+        ("index.mul", [Index(a), Index(b)]) => {
+            Index(a.checked_mul(*b).ok_or_else(|| refused("index-overflow"))?)
+        }
+        ("index.div", [Index(a), Index(b)]) => Index(
+            a.checked_div(*b)
+                .ok_or_else(|| refused("index-zero-divisor"))?,
+        ),
+        ("index.mod", [Index(a), Index(b)]) => Index(
+            a.checked_rem(*b)
+                .ok_or_else(|| refused("index-zero-divisor"))?,
+        ),
+        ("index.equal", [Index(a), Index(b)]) => Bool(a == b),
+        ("index.less", [Index(a), Index(b)]) => Bool(a < b),
+        ("indices.empty", []) => {
+            policy.output(size(0, 8)?, available)?;
+            Indices(Vec::new().into())
+        }
+        ("indices.append", [Indices(ns), Index(n)]) => {
+            let len = ns
+                .len()
+                .checked_add(1)
+                .ok_or_else(|| exhausted("size-overflow"))?;
+            policy.vector_width(len, 8)?;
+            policy.output(size(len, 8)?, available)?;
+            let mut result = crate::kernels::arithmetic::reserve(len)?;
+            result.extend_from_slice(ns);
+            result.push(*n);
+            Indices(result.into())
+        }
+        ("indices.at", [Indices(ns), Index(n)]) => {
+            let n = usize::try_from(*n).map_err(|_| refused("index-bounds"))?;
+            Index(*ns.get(n).ok_or_else(|| refused("index-bounds"))?)
+        }
+        ("indices.length", [Indices(ns)]) => {
+            Index(u64::try_from(ns.len()).map_err(|_| exhausted("size-overflow"))?)
+        }
+        _ => return Err(refused("index-operands")),
+    };
+    Ok(vec![output])
 }
 
 pub(crate) const OPERATIONS: &[&str] = &[
@@ -132,7 +130,7 @@ pub(crate) const OPERATIONS: &[&str] = &[
 mod tests {
     use super::*;
     fn run(name: &str, args: &[Value]) -> Result<Vec<Value>> {
-        apply(name, args, &[], &Policy::default(), usize::MAX).unwrap()
+        apply(name, args, &[], &Policy::default(), usize::MAX)
     }
     #[test]
     fn arithmetic_is_checked_not_modular() {
@@ -185,10 +183,6 @@ mod tests {
             ..p
         };
         assert!(backend(small).decode_native_value(&ty, &wire).is_err());
-        assert!(
-            apply("indices.append", &[ns, Value::Index(1)], &[], &p, 256)
-                .unwrap()
-                .is_err()
-        );
+        assert!(apply("indices.append", &[ns, Value::Index(1)], &[], &p, 256).is_err());
     }
 }

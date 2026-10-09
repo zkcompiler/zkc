@@ -248,9 +248,6 @@ fn field(i: &Invocation<'_>) -> Option<Identity> {
         .chain(&i.binding.signature().outputs)
         .find_map(|t| t.logical().identity().scalar_field())
 }
-fn required(result: Option<Result<Vec<Value>>>) -> Result<Vec<Value>> {
-    result.unwrap_or_else(|| Err(refused("kernel-operands")))
-}
 pub(crate) fn basic(
     b: &mut NativeBackend,
     i: &Invocation<'_>,
@@ -265,50 +262,45 @@ fn sequence(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result
     crate::sequence::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
 }
 fn arithmetic(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-    required(crate::kernels::arithmetic::apply(
+    crate::kernels::arithmetic::apply(
         &i.binding.declaration().contract,
         field(i),
         args,
         i,
         &b.core.policy,
-    ))
+    )
 }
 pub(crate) fn conversions(
     b: &mut NativeBackend,
     i: &Invocation<'_>,
     args: &[Value],
 ) -> Result<Vec<Value>> {
-    required(crate::kernels::conversions::apply(
-        &i.binding.declaration().contract,
-        args,
-        i,
-        &b.core.policy,
-    ))
+    crate::kernels::conversions::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
 }
 fn curve(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-    required(crate::kernels::curve::apply(
+    crate::kernels::curve::apply(
         &i.binding.declaration().contract,
         field(i),
         args,
         i,
         &b.core.policy,
-    ))
+    )
 }
 
 fn resources(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-    required(crate::kernels::resources::apply(
+    crate::kernels::resources::apply(
         &i.binding.declaration().contract,
         args,
         i,
         &b.core.policy,
         &mut b.core.resources,
         &b.core.setups,
-    ))
+    )
 }
 fn numerical(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     // One owner selects its typed specialization from the admitted closed ports.
     let name = &i.binding.declaration().contract;
-    required(if field(i) == Some(Identity::Bn254Fr) {
+    if field(i) == Some(Identity::Bn254Fr) {
         crate::kernels::bn254::apply(name, field(i), args, i, &b.core.policy)
     } else {
         crate::plonky3::numerical::apply(
@@ -319,41 +311,36 @@ fn numerical(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Resul
             &b.core.policy,
             &b.core.polynomial,
         )
-    })
+    }
 }
 fn indices(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-    required(crate::kernels::indices::apply(
+    crate::kernels::indices::apply(
         &i.binding.declaration().contract,
         args,
         i.attributes,
         &b.core.policy,
         i.max_output_bytes,
-    ))
+    )
 }
 fn external(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-    required(crate::external_kernels::apply(
+    crate::external_kernels::apply(
         &i.binding.declaration().contract,
         args,
         i.attributes,
         &b.core.policy,
         i.max_output_bytes,
         &mut b.external_work,
-    ))
+    )
 }
 fn oracle(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-    required(crate::oracle::apply(
-        &i.binding.declaration().contract,
-        args,
-        i,
-        &b.core.policy,
-    ))
+    crate::oracle::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
 }
 pub(crate) fn diagonal(
     b: &mut NativeBackend,
     i: &Invocation<'_>,
     args: &[Value],
 ) -> Result<Vec<Value>> {
-    required(crate::diagonal::apply(i, args, &b.core.policy))
+    crate::diagonal::apply(i, args, &b.core.policy)
 }
 
 pub(crate) fn pairwise(

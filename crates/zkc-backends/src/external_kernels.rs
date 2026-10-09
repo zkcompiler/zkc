@@ -156,121 +156,119 @@ pub(crate) fn apply(
     p: &Policy,
     available: usize,
     budget: &mut Budget,
-) -> Option<Result<Vec<Value>>> {
+) -> Result<Vec<Value>> {
     if !name.starts_with("external.") {
-        return None;
+        return Err(refused("kernel-operands"));
     }
-    Some((|| {
-        if !attrs.is_empty() {
-            return Err(refused("external-attributes"));
+    if !attrs.is_empty() {
+        return Err(refused("external-attributes"));
+    }
+    // All input and output allocation bounds precede cryptographic work.
+    for arg in args {
+        if let Value::Indices(xs) = arg {
+            p.vector_width(xs.len(), 8)?;
         }
-        // All input and output allocation bounds precede cryptographic work.
-        for arg in args {
-            if let Value::Indices(xs) = arg {
-                p.vector_width(xs.len(), 8)?;
-            }
-        }
-        let widths: &[usize] = match name {
-            "external.monero.init" => &[35],
-            "external.monero.hash" => &[32],
-            "external.monero.update" => &[35, 32],
-            "external.openvm.init" | "external.openvm.observe" => &[21],
-            "external.openvm.sample_ext" => &[21, 4],
-            "external.openvm.sample"
-            | "external.openvm.sample_bits"
-            | "external.openvm.check_witness" => &[21, 0],
-            _ => return Err(refused("external-contract")),
+    }
+    let widths: &[usize] = match name {
+        "external.monero.init" => &[35],
+        "external.monero.hash" => &[32],
+        "external.monero.update" => &[35, 32],
+        "external.openvm.init" | "external.openvm.observe" => &[21],
+        "external.openvm.sample_ext" => &[21, 4],
+        "external.openvm.sample"
+        | "external.openvm.sample_bits"
+        | "external.openvm.check_witness" => &[21, 0],
+        _ => return Err(refused("external-contract")),
+    };
+    let mut total = 0usize;
+    for &width in widths {
+        // Zero denotes a scalar port: the native value carrier charges
+        // 512 bytes for an index/bool, not one eight-byte vector element.
+        let bytes = if width == 0 {
+            512
+        } else {
+            p.vector_width(width, 8)?;
+            size(width, 8)?
         };
-        let mut total = 0usize;
-        for &width in widths {
-            // Zero denotes a scalar port: the native value carrier charges
-            // 512 bytes for an index/bool, not one eight-byte vector element.
-            let bytes = if width == 0 {
-                512
-            } else {
-                p.vector_width(width, 8)?;
-                size(width, 8)?
-            };
-            total = total
-                .checked_add(bytes)
-                .ok_or_else(|| exhausted("size-overflow"))?;
+        total = total
+            .checked_add(bytes)
+            .ok_or_else(|| exhausted("size-overflow"))?;
+    }
+    p.output(total, available)?;
+    match (name, args) {
+        ("external.monero.init", [v]) => {
+            let v = vector(v)?;
+            if v.len() != 32 {
+                return Err(refused("external-word-width"));
+            }
+            bytes(v)?;
+            Ok(vec![encoded(1, v.iter().copied())])
         }
-        p.output(total, available)?;
-        match (name, args) {
-            ("external.monero.init", [v]) => {
-                let v = vector(v)?;
-                if v.len() != 32 {
-                    return Err(refused("external-word-width"));
-                }
-                bytes(v)?;
-                Ok(vec![encoded(1, v.iter().copied())])
-            }
-            ("external.monero.hash", [v]) => {
-                let words = words(vector(v)?)?;
-                budget.charge(monero::hash_work(words.len(), false).map_err(primitive)?)?;
-                Ok(vec![raw(monero::hash_to_scalar(&words))])
-            }
-            ("external.monero.update", [s, v]) => {
-                let state = bytes(payload(vector(s)?, 1, 32)?)?
-                    .try_into()
-                    .expect("state width");
-                let words = words(vector(v)?)?;
-                budget.charge(monero::hash_work(words.len(), true).map_err(primitive)?)?;
-                let next = monero::HashChain::new(state).update(&words);
-                Ok(vec![encoded(1, next.into_iter().map(u64::from)), raw(next)])
-            }
-            ("external.openvm.init", []) => Ok(vec![packed(&openvm::Duplex::new())]),
-            ("external.openvm.observe", [s, v]) => {
-                let mut d = duplex(s)?;
-                let values = vector(v)?
-                    .iter()
-                    .map(|x| {
-                        u32::try_from(*x)
-                            .ok()
-                            .filter(|x| *x < openvm::MODULUS)
-                            .ok_or_else(|| refused("external-noncanonical-field"))
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                budget.charge(d.observe_work(values.len()).map_err(primitive)?)?;
-                d.observe(&values).map_err(primitive)?;
-                Ok(vec![packed(&d)])
-            }
-            ("external.openvm.sample", [s]) => {
-                let mut d = duplex(s)?;
-                budget.charge(d.sample_work(1).map_err(primitive)?)?;
-                let v = d.sample().value;
-                Ok(vec![packed(&d), Value::Index(v.into())])
-            }
-            ("external.openvm.sample_ext", [s]) => {
-                let mut d = duplex(s)?;
-                budget.charge(d.sample_work(4).map_err(primitive)?)?;
-                let v = d.sample_ext().value;
-                Ok(vec![
-                    packed(&d),
-                    Value::Indices(v.into_iter().map(u64::from).collect::<Vec<_>>().into()),
-                ])
-            }
-            ("external.openvm.sample_bits", [s, b]) => {
-                let mut d = duplex(s)?;
-                let bits = index(b)?;
-                openvm::validate_bits(bits).map_err(primitive)?;
-                budget.charge(d.sample_work(1).map_err(primitive)?)?;
-                let v = d.sample_bits(bits).map_err(primitive)?.value;
-                Ok(vec![packed(&d), Value::Index(v.into())])
-            }
-            ("external.openvm.check_witness", [s, b, w]) => {
-                let mut d = duplex(s)?;
-                let bits = index(b)?;
-                openvm::validate_bits(bits).map_err(primitive)?;
-                let witness = index(w)?;
-                openvm::validate_field(witness).map_err(primitive)?;
-                budget.charge(d.witness_work(bits).map_err(primitive)?)?;
-                let v = d.check_witness(bits, witness).map_err(primitive)?.value;
-                Ok(vec![packed(&d), Value::Bool(v)])
-            }
-            _ => Err(refused("external-operands")),
+        ("external.monero.hash", [v]) => {
+            let words = words(vector(v)?)?;
+            budget.charge(monero::hash_work(words.len(), false).map_err(primitive)?)?;
+            Ok(vec![raw(monero::hash_to_scalar(&words))])
         }
-    })())
+        ("external.monero.update", [s, v]) => {
+            let state = bytes(payload(vector(s)?, 1, 32)?)?
+                .try_into()
+                .expect("state width");
+            let words = words(vector(v)?)?;
+            budget.charge(monero::hash_work(words.len(), true).map_err(primitive)?)?;
+            let next = monero::HashChain::new(state).update(&words);
+            Ok(vec![encoded(1, next.into_iter().map(u64::from)), raw(next)])
+        }
+        ("external.openvm.init", []) => Ok(vec![packed(&openvm::Duplex::new())]),
+        ("external.openvm.observe", [s, v]) => {
+            let mut d = duplex(s)?;
+            let values = vector(v)?
+                .iter()
+                .map(|x| {
+                    u32::try_from(*x)
+                        .ok()
+                        .filter(|x| *x < openvm::MODULUS)
+                        .ok_or_else(|| refused("external-noncanonical-field"))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            budget.charge(d.observe_work(values.len()).map_err(primitive)?)?;
+            d.observe(&values).map_err(primitive)?;
+            Ok(vec![packed(&d)])
+        }
+        ("external.openvm.sample", [s]) => {
+            let mut d = duplex(s)?;
+            budget.charge(d.sample_work(1).map_err(primitive)?)?;
+            let v = d.sample().value;
+            Ok(vec![packed(&d), Value::Index(v.into())])
+        }
+        ("external.openvm.sample_ext", [s]) => {
+            let mut d = duplex(s)?;
+            budget.charge(d.sample_work(4).map_err(primitive)?)?;
+            let v = d.sample_ext().value;
+            Ok(vec![
+                packed(&d),
+                Value::Indices(v.into_iter().map(u64::from).collect::<Vec<_>>().into()),
+            ])
+        }
+        ("external.openvm.sample_bits", [s, b]) => {
+            let mut d = duplex(s)?;
+            let bits = index(b)?;
+            openvm::validate_bits(bits).map_err(primitive)?;
+            budget.charge(d.sample_work(1).map_err(primitive)?)?;
+            let v = d.sample_bits(bits).map_err(primitive)?.value;
+            Ok(vec![packed(&d), Value::Index(v.into())])
+        }
+        ("external.openvm.check_witness", [s, b, w]) => {
+            let mut d = duplex(s)?;
+            let bits = index(b)?;
+            openvm::validate_bits(bits).map_err(primitive)?;
+            let witness = index(w)?;
+            openvm::validate_field(witness).map_err(primitive)?;
+            budget.charge(d.witness_work(bits).map_err(primitive)?)?;
+            let v = d.check_witness(bits, witness).map_err(primitive)?.value;
+            Ok(vec![packed(&d), Value::Bool(v)])
+        }
+        _ => Err(refused("external-operands")),
+    }
 }
 
 pub(crate) const OPERATIONS: &[&str] = &[
@@ -289,7 +287,7 @@ pub(crate) const OPERATIONS: &[&str] = &[
 mod tests {
     use super::*;
     fn run(name: &str, args: &[Value], budget: &mut Budget) -> Result<Vec<Value>> {
-        apply(name, args, &[], &Policy::default(), usize::MAX, budget).expect("external contract")
+        apply(name, args, &[], &Policy::default(), usize::MAX, budget)
     }
     fn ns(xs: Vec<u64>) -> Value {
         Value::Indices(xs.into())
@@ -331,7 +329,6 @@ mod tests {
                 0,
                 &mut fresh
             )
-            .unwrap()
             .unwrap_err()
             .code,
             "exhausted:output-bytes"
@@ -349,7 +346,6 @@ mod tests {
                 800,
                 &mut fresh
             )
-            .unwrap()
             .unwrap_err()
             .code,
             "exhausted:output-bytes"
@@ -364,7 +360,6 @@ mod tests {
         let state = packed(&openvm::Duplex::new());
         let refusal = |name: &str, args: &[Value], attrs: &[String], budget: &mut Budget| {
             apply(name, args, attrs, &Policy::default(), usize::MAX, budget)
-                .expect("external contract")
                 .unwrap_err()
                 .code
         };

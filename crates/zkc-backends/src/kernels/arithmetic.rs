@@ -270,7 +270,7 @@ pub(crate) fn apply(
     args: &[Value],
     i: &Invocation<'_>,
     p: &Policy,
-) -> Option<Result<Vec<Value>>> {
+) -> Result<Vec<Value>> {
     if !(name.starts_with("field.")
         || name.starts_with("matrix.")
         || name.starts_with("vector.")
@@ -287,52 +287,48 @@ pub(crate) fn apply(
                 | "poly.round_evaluate"
         ))
     {
-        return None;
+        return Err(refused("kernel-operands"));
     }
     if matches!(
         name,
         "vector.from_point" | "vector.to_point" | "vector.from_table" | "vector.to_table"
     ) {
-        return None;
+        return Err(refused("kernel-operands"));
     }
     if name == "vector.embed" {
-        return Some((|| {
-            let [Value::KoalaBearVector(xs)] = args else {
-                return Err(refused("kernel-operands"));
-            };
-            p.vector_width(xs.len(), 32)?;
-            p.output(size(xs.len(), 32)?, i.max_output_bytes)?;
-            let mut out = reserve(xs.len())?;
-            out.extend(xs.iter().copied().map(KoalaBearExt8::from));
-            Ok(vec![Value::KoalaBearExt8Vector(out.into())])
-        })());
+        let [Value::KoalaBearVector(xs)] = args else {
+            return Err(refused("kernel-operands"));
+        };
+        p.vector_width(xs.len(), 32)?;
+        p.output(size(xs.len(), 32)?, i.max_output_bytes)?;
+        let mut out = reserve(xs.len())?;
+        out.extend(xs.iter().copied().map(KoalaBearExt8::from));
+        return Ok(vec![Value::KoalaBearExt8Vector(out.into())]);
     }
     if name == "field.embed" {
-        return Some((|| {
-            p.output(512, i.max_output_bytes)?;
-            match (
-                i.binding
-                    .signature()
-                    .outputs
-                    .first()
-                    .map(|t| t.logical().identity()),
-                args,
-            ) {
-                (Some(Identity::KoalaBearExt8), [Value::KoalaBearField(x)]) => {
-                    Ok(vec![Value::KoalaBearExt8Field((*x).into())])
-                }
-                _ => Err(refused("kernel-operands")),
+        p.output(512, i.max_output_bytes)?;
+        return match (
+            i.binding
+                .signature()
+                .outputs
+                .first()
+                .map(|t| t.logical().identity()),
+            args,
+        ) {
+            (Some(Identity::KoalaBearExt8), [Value::KoalaBearField(x)]) => {
+                Ok(vec![Value::KoalaBearExt8Field((*x).into())])
             }
-        })());
+            _ => Err(refused("kernel-operands")),
+        };
     }
-    Some(match field {
+    match field {
         Some(Identity::Bn254Fr) => dense::<crate::Bn254Scalar>(name, args, i, p),
         Some(Identity::Bls12381Fr) => dense::<Scalar>(name, args, i, p),
         Some(Identity::Ristretto255Scalar) => dense::<RistrettoScalar>(name, args, i, p),
         Some(Identity::KoalaBearExt8) => dense::<KoalaBearExt8>(name, args, i, p),
         Some(Identity::KoalaBear) => dense::<KoalaBear>(name, args, i, p),
         _ => Err(refused("kernel-operands")),
-    })
+    }
 }
 fn dense<S: Family>(
     name: &str,

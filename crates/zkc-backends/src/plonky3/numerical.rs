@@ -82,7 +82,7 @@ pub(crate) fn apply(
     invocation: &Invocation<'_>,
     policy: &Policy,
     kernels: &Kernels,
-) -> Option<Result<Vec<Value>>> {
+) -> Result<Vec<Value>> {
     if !matches!(
         name,
         "poly.coset_evaluate"
@@ -93,9 +93,9 @@ pub(crate) fn apply(
             | "poly.even_odd_fold"
             | "poly.opening_quotient"
     ) {
-        return None;
+        return Err(refused("kernel-operands"));
     }
-    Some(match field {
+    match field {
         Some(Identity::KoalaBear) => {
             execute::<KoalaBear>(name, args, policy, invocation.max_output_bytes, kernels)
         }
@@ -103,7 +103,7 @@ pub(crate) fn apply(
             execute::<KoalaBearExt8>(name, args, policy, invocation.max_output_bytes, kernels)
         }
         _ => Err(refused("coset-field")),
-    })
+    }
 }
 fn execute<E: Family>(
     name: &str,

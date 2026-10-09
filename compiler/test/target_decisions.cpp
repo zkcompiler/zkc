@@ -6,6 +6,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Transforms/Protocol.h"
 #include <tuple>
 #include <type_traits>
 
@@ -203,6 +204,64 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  auto refusedSelection = [&](ModuleOp module, StringRef code) {
+    auto before = printed(module);
+    std::vector<std::string> codes;
+    ScopedDiagnosticHandler capture(&context, [&](Diagnostic &diagnostic) {
+      for (const auto &refusal : diagnostics::refusals(diagnostic))
+        codes.push_back(refusal.code);
+      return success();
+    });
+    LinearContractionStats stats;
+    stats.selectedPairs = 123;
+    require(failed(lowerPhysical(module, {}, false, &stats)),
+            "invalid selection input accepted");
+    require(codes == std::vector<std::string>{code.str()},
+            "selection refusal changed");
+    require(printed(module) == before && stats.selectedPairs == 0,
+            "failed public selection changed input or retained statistics");
+  };
+  for (StringRef source : {"module {}", "module { module {} module {} }"})
+    cases.run("physical selection requires one root: " + source, [&] {
+      auto module = parseSourceString<ModuleOp>(source, &context);
+      require(bool(module), "wrapper fixture parse");
+      refusedSelection(*module, "interactive-module-count");
+    });
+  cases.run("physical selection rejects a non-protocol root", [&] {
+    auto module = parseSourceString<ModuleOp>("module { module {} }", &context);
+    require(bool(module), "wrapper fixture parse");
+    refusedSelection(*module, "interactive-module");
+  });
+  for (bool project : {false, true})
+    cases.run(project ? "physical selection rejects participant mathematics"
+                      : "physical selection rejects common mathematics",
+              [&] {
+                auto module = parseSourceString<ModuleOp>(layouts(), &context);
+                require(bool(module), "mathematical fixture parse");
+                if (project) {
+                  PassManager pipeline(&context);
+                  pipeline.addPass(createProjectProtocolPass(false));
+                  require(succeeded(pipeline.run(*module)), "projection");
+                }
+                refusedSelection(*module, "interactive-module");
+              });
+  cases.run("physical selection admits exec and refuses reselection", [&] {
+    auto module = take(executableFixture(layouts(), context));
+    require(succeeded(lowerPhysical(*module)), "physical selection");
+    require(succeeded(verify(*module)), "selected candidate admission");
+    refusedSelection(*module, "interactive-physical-stage");
+  });
+  for (bool extraRoot : {false, true})
+    cases.run(extraRoot ? "execution admission precedes wrapper refusal"
+                        : "physical selection still admits local definitions",
+              [&] {
+                auto module = take(executableFixture(layouts(), context));
+                function(*module)->removeAttr("logical_origin");
+                if (extraRoot)
+                  module->getBody()->push_back(
+                      ModuleOp::create(module->getLoc()).getOperation());
+                refusedSelection(*module, "binding-logical-origin");
+              });
   cases.run(
       "mixed layouts, per-use crossing order and immutable checked copy", [&] {
         auto module = take(executableFixture(layouts(), context));

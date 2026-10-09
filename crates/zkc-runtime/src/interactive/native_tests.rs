@@ -2,15 +2,33 @@
 use super::*;
 use crate::interactive::{LogicalType, ProgramAction, admit_supplied};
 use serde_json::json;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
 const FIELD: &str = "field:bls12-381.fr@arkworks.fr/1";
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct V {
+    clones: Arc<AtomicUsize>,
     ty: PhysicalType,
     size: usize,
     public: bool,
     valid: bool,
     number: u64,
+}
+impl Clone for V {
+    fn clone(&self) -> Self {
+        self.clones.fetch_add(1, Ordering::Relaxed);
+        Self {
+            clones: self.clones.clone(),
+            ty: self.ty.clone(),
+            size: self.size,
+            public: self.public,
+            valid: self.valid,
+            number: self.number,
+        }
+    }
 }
 impl V {
     fn index(number: u64) -> Self {
@@ -29,6 +47,7 @@ impl V {
     }
     fn field() -> Self {
         Self {
+            clones: Arc::default(),
             ty: PhysicalType::parse(FIELD).unwrap(),
             size: 32,
             public: true,
@@ -171,6 +190,53 @@ fn expose(r: &mut Runner<Mock>) -> Cut {
         _ => panic!("receive"),
     }
 }
+#[test]
+fn send_checks_and_consumption_do_not_clone_pending_payloads() {
+    let value = V::field();
+    let clones = value.clones.clone();
+    let mut sender = Runner::new(
+        &program(),
+        "main",
+        "Alice",
+        "session",
+        Mock::default(),
+        vec![value],
+    )
+    .unwrap();
+    let local = sender.poll_ref().cut().unwrap();
+    sender.execute_local(&local).unwrap();
+    let Action::Send(packet) = sender.poll_ref() else {
+        panic!("send")
+    };
+    let cut = packet.envelope.cut(CutKind::Send);
+    let unrelated = Packet {
+        envelope: packet.envelope.clone(),
+        ty: packet.ty.clone(),
+        payload: V::field(),
+    };
+    let before = clones.load(Ordering::Relaxed);
+    let usage = sender.usage();
+    let mut wrong = cut.clone();
+    wrong.site.push_str("-stale");
+    assert!(matches!(
+        sender.take_send(&wrong),
+        Err(RuntimeError::WrongCut)
+    ));
+    assert_eq!(
+        sender.check_delivery(&unrelated),
+        Err(RuntimeError::WrongAction)
+    );
+    assert_eq!(sender.usage(), usage);
+    let sent = sender.take_send(&cut).unwrap();
+    assert!(Arc::ptr_eq(&sent.payload.clones, &clones));
+    assert_eq!(clones.load(Ordering::Relaxed), before);
+    let mut recipient = receiver();
+    let receive = expose(&mut recipient);
+    recipient.check_delivery(&sent).unwrap();
+    assert_eq!(recipient.poll_ref().cut(), Some(receive));
+    assert_eq!(clones.load(Ordering::Relaxed), before);
+}
+
 #[test]
 fn layout_resolves_send_operand_type_through_local_results() {
     let entry = program().program_entry("main").unwrap();

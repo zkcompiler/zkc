@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Passes.h"
@@ -34,27 +35,12 @@ std::optional<size_t> scanObjectKeys(StringRef text) {
   size_t keys = 0;
   for (size_t i = 0; i < text.size(); ++i) {
     if (text[i] == '"') {
-      while (++i < text.size() && text[i] != '"') {
-        if (text[i] != '\\' || i + 1 >= text.size())
-          continue;
-        // LLVM replaces lone surrogate escapes with U+FFFD. Require actual
-        // Unicode scalars so another JSON reader sees the same string.
-        unsigned unit;
-        if (text[i + 1] == 'u' && text.size() - i >= 6 &&
-            !text.substr(i + 2, 4).getAsInteger(16, unit)) {
-          if (unit >= 0xdc00 && unit <= 0xdfff)
-            return std::nullopt;
-          if (unit >= 0xd800 && unit <= 0xdbff) {
-            unsigned low;
-            if (text.size() - i < 12 || text.substr(i + 6, 2) != "\\u" ||
-                text.substr(i + 8, 4).getAsInteger(16, low) || low < 0xdc00 ||
-                low > 0xdfff)
-              return std::nullopt;
-            i += 6;
-          }
-        }
-        ++i;
-      }
+      size_t start = i;
+      while (++i < text.size() && text[i] != '"')
+        if (text[i] == '\\' && i + 1 < text.size())
+          ++i;
+      if (i == text.size() || !validStringEncoding(text.slice(start, i + 1)))
+        return std::nullopt;
       size_t next = i + 1;
       while (next < text.size() && isSpace(text[next]))
         ++next;
