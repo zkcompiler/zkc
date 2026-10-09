@@ -63,11 +63,11 @@ fn upstream_ignored_nv_and_extra_coordinate_regressions_are_guarded() {
 #[test]
 fn setup_fingerprint_binds_bases_absent_from_verifier_projection() {
     let mut params = Pcs::setup(2, &mut StdRng::from_seed([13; 32]));
-    let original = codec::fingerprint(b"zkc-arkworks/setup/v1", &[], &params).unwrap();
+    let original = codec::fingerprint(b"zkc-arkworks/setup/v0", &[], &params).unwrap();
     params.powers_of_h[0][0] = ark_bls12_381::G2Affine::identity();
     assert_ne!(
         original,
-        codec::fingerprint(b"zkc-arkworks/setup/v1", &[], &params).unwrap()
+        codec::fingerprint(b"zkc-arkworks/setup/v0", &[], &params).unwrap()
     );
     let (_, vk) = Pcs::trim(&params, 2);
     let key = key_fingerprint(original, &vk).unwrap();

@@ -18,7 +18,6 @@ pub(crate) type Handler = fn(&mut NativeBackend, &Invocation<'_>, &[Value]) -> R
 pub(super) struct Implementation {
     contract: &'static str,
     signature: Signature,
-    pub(super) public_operands: bool,
     pub(super) handler: Handler,
 }
 impl Implementation {
@@ -57,40 +56,34 @@ impl Registry {
     }
     fn family(
         &mut self,
-        providers: &[&str],
-        contracts: &'static [&'static str],
+        implementations: &'static [(&'static str, &'static str)],
         signature: Signature,
         handler: Handler,
     ) -> Result<()> {
-        for provider in providers {
-            for &contract in contracts {
-                self.insert(
-                    format!("{provider}/{contract}"),
-                    Implementation {
-                        contract,
-                        signature,
-                        handler,
-                        public_operands: false,
-                    },
-                )?;
-            }
+        for &(identity, contract) in implementations {
+            self.insert(
+                identity.into(),
+                Implementation {
+                    contract,
+                    signature,
+                    handler,
+                },
+            )?;
         }
         Ok(())
     }
     fn shaped(
         &mut self,
-        providers: &[&str],
         contracts: &'static [crate::bindings::Contract],
         handler: Handler,
     ) -> Result<()> {
         for row in contracts {
-            for provider in providers {
+            for implementation in row.implementations {
                 self.insert(
-                    format!("{provider}/{}", row.name),
+                    (*implementation).into(),
                     Implementation {
                         contract: row.name,
                         signature: Signature::Shaped(row, crate::bindings::Selection::Default),
-                        public_operands: false,
                         handler,
                     },
                 )?;
@@ -116,7 +109,6 @@ impl Registry {
             },
         );
         entry.handler = row.handler.unwrap_or(entry.handler);
-        entry.public_operands |= row.public_operands;
         self.insert(row.identity.into(), entry)
     }
     pub(super) fn implementations(&self) -> Vec<(String, &'static str)> {
@@ -138,14 +130,12 @@ pub(crate) struct Alternative {
     pub(crate) ports: crate::bindings::PortTransform,
     /// Omit for a layout-only alternative to retain the original algorithm.
     pub(crate) handler: Option<Handler>,
-    pub(crate) public_operands: bool,
 }
 pub(super) fn alternatives() -> impl Iterator<Item = &'static Alternative> {
     [
         super::execute::ALTERNATIVES,
         crate::kernels::conversions::ALTERNATIVES,
         crate::diagonal::ALTERNATIVES,
-        crate::kernels::curve::ALTERNATIVES,
         crate::kernels::pairwise::ALTERNATIVES,
     ]
     .into_iter()
@@ -157,92 +147,58 @@ pub(super) fn installed() -> Result<&'static Registry> {
     REGISTRY
         .get_or_init(|| {
             let mut r = Registry::default();
-            let providers = &["arkworks", "dalek", "plonky3", "spongefish"];
-            r.shaped(&["arkworks"], super::execute::CONTRACTS, basic)?;
-            r.shaped(
-                &["arkworks", "dalek", "plonky3"],
-                crate::kernels::arithmetic::CONTRACTS,
-                arithmetic,
-            )?;
-            r.shaped(
-                &["arkworks"],
-                crate::kernels::conversions::CONTRACTS,
-                conversions,
-            )?;
-            r.shaped(
-                &["arkworks", "dalek"],
-                crate::kernels::curve::CONTRACTS,
-                curve,
-            )?;
-            r.shaped(providers, crate::kernels::resources::CONTRACTS, resources)?;
-            r.shaped(
-                &["arkworks", "plonky3"],
-                crate::plonky3::numerical::CONTRACTS,
-                numerical,
-            )?;
+            r.shaped(super::execute::CONTRACTS, basic)?;
+            r.shaped(crate::kernels::arithmetic::CONTRACTS, arithmetic)?;
+            r.shaped(crate::kernels::conversions::CONTRACTS, conversions)?;
+            r.shaped(crate::kernels::curve::CONTRACTS, curve)?;
+            r.shaped(crate::kernels::resources::CONTRACTS, resources)?;
+            r.shaped(crate::plonky3::numerical::CONTRACTS, numerical)?;
             r.family(
-                &["native"],
-                crate::kernels::indices::OPERATIONS,
+                crate::kernels::indices::IMPLEMENTATIONS,
                 Signature::Custom(crate::kernels::indices::signature),
                 indices,
             )?;
             r.family(
-                &["native"],
-                crate::external_kernels::OPERATIONS,
+                crate::external_kernels::IMPLEMENTATIONS,
                 Signature::Custom(crate::external_kernels::signature),
                 external,
             )?;
             r.family(
-                &["plonky3"],
-                crate::oracle::OPERATIONS,
+                crate::oracle::IMPLEMENTATIONS,
                 Signature::Custom(crate::oracle::signature),
                 oracle,
             )?;
             r.family(
-                &["arkworks"],
-                crate::field_array::OPERATIONS,
+                crate::field_array::IMPLEMENTATIONS,
                 Signature::Custom(crate::field_array::signature),
                 field_array,
             )?;
             r.family(
-                &["native"],
-                crate::sequence::OPERATIONS,
+                crate::sequence::IMPLEMENTATIONS,
                 Signature::Custom(crate::sequence::signature),
                 sequence,
             )?;
             r.family(
-                &["plonky3"],
-                crate::fixed_vector::OPERATIONS,
+                crate::fixed_vector::IMPLEMENTATIONS,
                 Signature::Custom(crate::fixed_vector::signature),
                 fixed_vector,
             )?;
             r.family(
-                &["logical"],
                 &[
-                    "resource_unit.create",
-                    "resource_unit.pass",
-                    "resource_unit.consume",
+                    ("logical/resource_unit.create", "resource_unit.create"),
+                    ("logical/resource_unit.pass", "resource_unit.pass"),
+                    ("logical/resource_unit.consume", "resource_unit.consume"),
                 ],
                 Signature::Custom(super::resource_unit::signature),
                 super::resource_unit::execute,
             )?;
             r.family(
-                &["arkworks"],
-                super::execute::SPECIAL_OPERATIONS,
+                super::execute::SPECIAL_IMPLEMENTATIONS,
                 Signature::Custom(crate::bindings::table::relayout),
                 basic,
             )?;
-            r.shaped(
-                &["plonky3"],
-                crate::kernels::arithmetic::EMBEDDINGS,
-                arithmetic,
-            )?;
-            r.shaped(&["arkworks"], crate::kernels::curve::PAIRINGS, curve)?;
-            r.shaped(
-                providers,
-                crate::kernels::resources::OBSERVATIONS,
-                resources,
-            )?;
+            r.shaped(crate::kernels::arithmetic::EMBEDDINGS, arithmetic)?;
+            r.shaped(crate::kernels::curve::PAIRINGS, curve)?;
             for row in alternatives() {
                 r.alternative(row)?;
             }
@@ -259,9 +215,6 @@ fn field(i: &Invocation<'_>) -> Option<Identity> {
         .chain(&i.binding.signature().outputs)
         .find_map(|t| t.logical().identity().scalar_field())
 }
-fn required(result: Option<Result<Vec<Value>>>) -> Result<Vec<Value>> {
-    result.unwrap_or_else(|| Err(refused("kernel-operands")))
-}
 pub(crate) fn basic(
     b: &mut NativeBackend,
     i: &Invocation<'_>,
@@ -276,64 +229,45 @@ fn sequence(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result
     crate::sequence::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
 }
 fn arithmetic(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-    required(crate::kernels::arithmetic::apply(
+    crate::kernels::arithmetic::apply(
         &i.binding.declaration().contract,
         field(i),
         args,
         i,
         &b.core.policy,
-    ))
+    )
 }
 pub(crate) fn conversions(
     b: &mut NativeBackend,
     i: &Invocation<'_>,
     args: &[Value],
 ) -> Result<Vec<Value>> {
-    required(crate::kernels::conversions::apply(
-        &i.binding.declaration().contract,
-        args,
-        i,
-        &b.core.policy,
-    ))
+    crate::kernels::conversions::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
 }
 fn curve(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-    required(crate::kernels::curve::apply(
+    crate::kernels::curve::apply(
         &i.binding.declaration().contract,
         field(i),
         args,
         i,
         &b.core.policy,
-        false,
-    ))
+    )
 }
-pub(crate) fn public_msm(
-    b: &mut NativeBackend,
-    i: &Invocation<'_>,
-    args: &[Value],
-) -> Result<Vec<Value>> {
-    required(crate::kernels::curve::apply(
-        &i.binding.declaration().contract,
-        field(i),
-        args,
-        i,
-        &b.core.policy,
-        true,
-    ))
-}
+
 fn resources(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-    required(crate::kernels::resources::apply(
+    crate::kernels::resources::apply(
         &i.binding.declaration().contract,
         args,
         i,
         &b.core.policy,
         &mut b.core.resources,
         &b.core.setups,
-    ))
+    )
 }
 fn numerical(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     // One owner selects its typed specialization from the admitted closed ports.
     let name = &i.binding.declaration().contract;
-    required(if field(i) == Some(Identity::Bn254Fr) {
+    if field(i) == Some(Identity::Bn254Fr) {
         crate::kernels::bn254::apply(name, field(i), args, i, &b.core.policy)
     } else {
         crate::plonky3::numerical::apply(
@@ -344,41 +278,36 @@ fn numerical(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Resul
             &b.core.policy,
             &b.core.polynomial,
         )
-    })
+    }
 }
 fn indices(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-    required(crate::kernels::indices::apply(
+    crate::kernels::indices::apply(
         &i.binding.declaration().contract,
         args,
         i.attributes,
         &b.core.policy,
         i.max_output_bytes,
-    ))
+    )
 }
 fn external(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-    required(crate::external_kernels::apply(
+    crate::external_kernels::apply(
         &i.binding.declaration().contract,
         args,
         i.attributes,
         &b.core.policy,
         i.max_output_bytes,
         &mut b.external_work,
-    ))
+    )
 }
 fn oracle(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-    required(crate::oracle::apply(
-        &i.binding.declaration().contract,
-        args,
-        i,
-        &b.core.policy,
-    ))
+    crate::oracle::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
 }
 pub(crate) fn diagonal(
     b: &mut NativeBackend,
     i: &Invocation<'_>,
     args: &[Value],
 ) -> Result<Vec<Value>> {
-    required(crate::diagonal::apply(i, args, &b.core.policy))
+    crate::diagonal::apply(i, args, &b.core.policy)
 }
 
 pub(crate) fn pairwise(

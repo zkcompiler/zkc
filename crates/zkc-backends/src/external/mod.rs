@@ -2,12 +2,9 @@
 //!
 //! These providers know no proof schedule. Protocol authors choose transition
 //! grouping and wire mappings; the runtime owns admission, caps and attempts.
-//! See [`replay`] and the adjacent README for the finite conformance boundary.
-pub mod grinding;
+//! See the adjacent README for the finite conformance boundary.
 pub mod monero;
 pub mod openvm;
-pub mod replay;
-pub mod wire;
 
 /// Stable errors at the primitive/mapping boundary. No error means proof validity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,7 +61,7 @@ pub struct Work {
     pub samples: u64,
 }
 impl Work {
-    /// The deployment metric used by native external kernels and grinding.
+    /// The deployment metric used by native external kernels.
     /// Each primitive count and hashed byte costs one unit; this is not a
     /// cryptographic cost model or a wall-clock prediction.
     pub fn units(self) -> Result<u64> {

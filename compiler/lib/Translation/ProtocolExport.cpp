@@ -1,14 +1,14 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/Execution.h"
-#include "zkc/Source/Codec.h"
+#include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Protocol.h"
 
 using namespace llvm;
 using namespace mlir;
 namespace zkc::protocol {
-Expected<source::Content> exportSource(Operation *root) {
+Expected<program::Participants> exportProgram(Operation *root) {
   if (!root)
     return error("interactive-malformed-ir");
   Error refusals = Error::success();
@@ -31,19 +31,15 @@ Expected<source::Content> exportSource(Operation *root) {
   return readExecutionModel(root);
 }
 Expected<json::Value> exportModule(Operation *root) {
-  auto value = exportSource(root);
+  auto value = exportProgram(root);
   if (!value)
     return value.takeError();
-  if (const auto *participants = std::get_if<source::Participants>(&*value))
-    if (source::isProgram(participants->contract) &&
-        participants->stage != source::Participants::Stage::Physical)
-      return error("native-physical-required");
-  auto encoded = source::encode(*value);
-  if (const auto *participants = std::get_if<source::Participants>(&*value))
-    if (source::isProgram(participants->contract)) {
-      if (auto e = verifyProgramArtifact(root, printJson(encoded)))
-        return std::move(e);
-    }
+  if (value->stage != program::Participants::Stage::Physical)
+    return error("native-physical-required");
+  auto encoded = program::encode(*value);
+  auto checked = verifyProgramArtifact(root, printJson(encoded));
+  if (!checked)
+    return checked.takeError();
   return encoded;
 }
 } // namespace zkc::protocol

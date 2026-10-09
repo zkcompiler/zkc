@@ -19,22 +19,7 @@ def reserve(path):
     path.mkdir(parents=True, exist_ok=False)
 
 
-def execution_tools(runtime, checker):
-    if bool(runtime) != bool(checker):
-        raise ValueError("independent execution requires both --runtime and --checker")
-    tools = {}
-    for name, path in (("ZKC_DOMAIN_RUNTIME", runtime), ("ZKC_DOMAIN_CHECKER", checker)):
-        if path:
-            resolved = Path(path).resolve()
-            if not resolved.is_file() or not os.access(resolved, os.X_OK):
-                raise ValueError(f"independent execution requires an executable: {resolved}")
-            tools[name] = str(resolved)
-    return tools
-
-
-def check_consumers(prefixes, output, selected, run, execution=None):
-    execution = execution or {}
-    identities = {}
+def check_consumers(prefixes, output, selected, run):
     for name, prefix in prefixes.items():
         package = prefix / "lib/cmake/ZkcCompiler"
         if not (package / "ZkcCompilerConfig.cmake").is_file():
@@ -48,14 +33,10 @@ def check_consumers(prefixes, output, selected, run, execution=None):
         consumer = output / f"{name}-consumer"
         reserve(consumer)
         expected = ["installed-envelope", "installed-declarations"]
-        if name == "domain":
-            expected.append("installed-specialization")
-            if execution:
-                expected.append("installed-execution")
         run(["cmake", "-S", ROOT / "compiler/examples/domain/consumer", "-B", consumer,
              "-G", "Ninja", f"-DZkcCompiler_DIR={prefix}/lib/cmake/ZkcCompiler",
              f"-DEXPECT_ENVELOPE={'ON' if name == 'domain' else 'OFF'}",
-             *[f"-D{key}={value}" for key, value in (selected | execution).items()]])
+             *[f"-D{key}={value}" for key, value in selected.items()]])
         run(["cmake", "--build", consumer])
         inventory = output / f"{name}-tests.json"
         with inventory.open("w") as stream:
@@ -71,16 +52,6 @@ def check_consumers(prefixes, output, selected, run, execution=None):
                 or any(case.find(tag) is not None for case in cases
                        for tag in ("skipped", "failure", "error"))):
             raise ValueError(f"{name}: CTest evidence does not contain {len(expected)} passing cases")
-        identity_file = output / f"{name}-checked-identities.json"
-        with identity_file.open("w") as stream:
-            run([consumer / "envelope-consumer", "--checked-identities"], stdout=stream)
-        identities[name] = json.loads(identity_file.read_text())
-        if (not isinstance(identities[name], list) or not identities[name]
-                or any(not isinstance(key, str) or not key for key in identities[name])):
-            raise ValueError(f"{name}: missing exact checked-library identities")
-    if (len(identities["base"]) != len(identities["domain"])
-            or identities["base"] == identities["domain"]):
-        raise ValueError("checked-library identities must capture the different installed environments")
 
 
 def recorded_run(output, run, details):
@@ -139,7 +110,6 @@ def install_domain(args, run):
     if args.profile not in {"release", "dev", "shared"}:
         raise ValueError("install-domain supports release, dev and shared profiles")
     selected = native_configuration()
-    execution = execution_tools(args.runtime, args.checker)
     if args.skip_build and not (args.base_build and args.domain_build):
         raise ValueError("--skip-build requires both --base-build and --domain-build")
     output = Path(args.output).absolute() if args.output else reports_root() / "install-domain"
@@ -193,7 +163,7 @@ def install_domain(args, run):
                 f"ZKC_CTEST_COMPONENTS={build / 'component-dependencies.txt'}",
                 sys.executable, ROOT / "compiler/test/component_dependencies.py"])
         invoke(["cmake", "--install", build, "--prefix", prefixes[name]])
-    check_consumers(prefixes, output, selected, invoke, execution)
+    check_consumers(prefixes, output, selected, invoke)
 
 
 def main():
@@ -205,16 +175,13 @@ def main():
     parser.add_argument("--base-prefix", required=True, type=Path)
     parser.add_argument("--domain-prefix", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--runtime", type=Path)
-    parser.add_argument("--checker", type=Path)
     args = parser.parse_args()
     selected = native_configuration()
-    execution = execution_tools(args.runtime, args.checker)
     output = args.output.absolute()
     reserve(output)
     prefixes = {"base": args.base_prefix.resolve(), "domain": args.domain_prefix.resolve()}
     invoke = recorded_run(output, run, {"prefixes": {k: str(v) for k, v in prefixes.items()}})
-    check_consumers(prefixes, output, selected, invoke, execution)
+    check_consumers(prefixes, output, selected, invoke)
 
 
 if __name__ == "__main__":

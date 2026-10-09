@@ -14,7 +14,7 @@ mod resource_unit;
 mod sequence;
 mod services;
 mod structural;
-pub use services::{ServiceContract, ServicePort, ServiceSignature};
+pub use services::{ServiceContract, ServicePort, ServiceSignature, ServiceSupport};
 mod variant;
 pub use resource_unit::ResourceDomain;
 pub use structural::{
@@ -23,33 +23,27 @@ pub use structural::{
 };
 pub use variant::{VariantAlternative, VariantDescriptor};
 mod decode;
-mod driver;
 mod model;
 mod native_proof;
 mod program;
 pub use native_proof::{NativeProofEntry, NativeProofError, NativeTranscriptEvent};
-mod noninteractive;
 pub use program::{ProgramAction, ProgramCut, ProgramRole, ProgramState};
 mod runner;
-mod source;
 mod transport;
 
-pub use admit::{Admitted, Correspondence, EntryRole, ReceivePort, admit_physical, admit_supplied};
+pub use admit::{Admitted, EntryRole, admit_supplied};
 pub use backend::{
     Backend, BackendError, Frame, FrameExit, FrameId, FrameKind, Invocation, ServiceInvocation,
     Value,
 };
 pub use bindings::{
-    ArtifactFormat, BoundSignature, Identity, LogicalType, OperationBinding, PhysicalType,
-    Representation, ResolvedBinding,
+    BoundSignature, Identity, LogicalType, OperationBinding, PhysicalType, Representation,
+    ResolvedBinding,
 };
-pub use driver::{DriverCut, DriverEvent, drive_cut};
 pub use model::{
     AdmissionError, AttributeRule, ErrorCode, KernelSignature, Limits, LogicalOrigin, Type,
 };
-pub use noninteractive::{NoninteractiveEntry, NoninteractiveError};
 pub use runner::Runner;
-pub use source::{CallMapping, PortMapping, SourceMap};
 pub use transport::{
     Action, Cut, CutKind, DecodeReason, Envelope, LoadError, LocalAction, LocalContext, Origin,
     Packet, PathElement, QueryAction, Receive, ReceiveCompletion, RuntimeError, Stop, StopKind,
@@ -62,6 +56,3 @@ mod control_tests;
 mod tests;
 
 mod domain_bindings;
-
-#[cfg(test)]
-mod family_tests;

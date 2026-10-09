@@ -15,6 +15,15 @@ pub(crate) enum Error {
     Timeout,
     OutputLimit,
 }
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Process(error) | Self::Io(error) => write!(f, "{error}"),
+            Self::Timeout => f.write_str("process deadline exceeded"),
+            Self::OutputLimit => f.write_str("process output limit exceeded"),
+        }
+    }
+}
 struct Running(Child);
 impl Drop for Running {
     fn drop(&mut self) {
@@ -57,12 +66,15 @@ pub(crate) fn capture(
     let mut child = Running(command.spawn().map_err(Error::Process)?);
     let start = Instant::now();
     let status = loop {
+        // Once reaped, the direct child cannot append between the final size
+        // check and returning the capture. Descendants remain caller-owned.
+        let status = child.0.try_wait().map_err(Error::Process)?;
         for file in std::iter::once(&stdout).chain(stderr.iter()) {
             if file.as_file().metadata().map_err(Error::Io)?.len() > limit as u64 {
                 return Err(Error::OutputLimit);
             }
         }
-        if let Some(status) = child.0.try_wait().map_err(Error::Process)? {
+        if let Some(status) = status {
             break status;
         }
         if timed_out(start.elapsed()) {
@@ -81,7 +93,7 @@ pub(crate) fn capture(
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use crate::host::io::{ReadError, read_bounded};
+    use crate::host::io::{ReadError, read_regular};
     use std::process::Output;
     fn run(script: &str, limit: usize, stderr: bool) -> Result<Output, Error> {
         let dir = tempfile::tempdir().unwrap();
@@ -93,7 +105,7 @@ mod tests {
             stderr,
         )?;
         let read = |path: &Path| {
-            read_bounded(path, limit).map_err(|error| match error {
+            read_regular(path, limit).map_err(|error| match error {
                 ReadError::Io(e) => Error::Io(e),
                 ReadError::Limit => Error::OutputLimit,
             })
@@ -118,14 +130,21 @@ mod tests {
     }
     #[test]
     fn rejects_overflow_even_when_the_writer_exits_immediately() {
-        assert!(matches!(
-            run("printf abcde", 4, true),
-            Err(Error::OutputLimit)
-        ));
-        assert!(matches!(
-            run("printf abcde >&2", 4, true),
-            Err(Error::OutputLimit)
-        ));
+        let dir = tempfile::tempdir().unwrap();
+        for script in ["printf abcde", "printf abcde >&2", "printf abcde; exit 7"] {
+            // Assert the capture boundary itself; a subsequent bounded read
+            // must not be what discovers the child's output overflow.
+            assert!(matches!(
+                capture(
+                    Command::new("sh").args(["-c", script]),
+                    dir.path(),
+                    |elapsed| elapsed >= Duration::from_secs(1),
+                    4,
+                    true,
+                ),
+                Err(Error::OutputLimit)
+            ));
+        }
         assert!(run("printf abcde >&2", 4, false).unwrap().status.success());
     }
     #[test]
@@ -134,7 +153,7 @@ mod tests {
         let pid_file = dir.path().join("pid");
         let mut command = Command::new("sh");
         command
-            .args(["-c", r#"echo $$ > "$1"; exec sleep 30"#, "checker"])
+            .args(["-c", r#"echo $$ > "$1"; exec sleep 30"#, "bounded-child"])
             .arg(&pid_file);
         assert!(matches!(
             capture(

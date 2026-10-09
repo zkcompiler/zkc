@@ -1,14 +1,22 @@
 use crate::{Bounds, Error, Scalar, Table, bounds::vector, error::same_arity};
 use ark_ff::{AdditiveGroup, Field};
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 /// Immutable multilinear evaluations in logical MSB-first storage order.
 /// Arithmetic uses Arkworks scalars; this is a table representation and kernel
 /// implementation, not a separate field or commitment implementation.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct MsbTable {
     values: Arc<Vec<Scalar>>,
     arity: usize,
+}
+
+impl fmt::Debug for MsbTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MsbTable")
+            .field("arity", &self.arity())
+            .finish_non_exhaustive()
+    }
 }
 
 impl MsbTable {

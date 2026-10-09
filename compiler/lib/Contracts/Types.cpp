@@ -215,7 +215,7 @@ Expected<BoundType> parseBoundType(StringRef spelling, bool physical,
       if (!duplicable(element) || !discardable(element))
         return error("sequence-element-permission");
       if (physical) {
-        if (rep != "logical.sequence/1")
+        if (rep != "logical.sequence/0")
           return error("binding-representation");
         auto selected = defaultRepresentation(element);
         if (!selected)
@@ -229,7 +229,7 @@ Expected<BoundType> parseBoundType(StringRef spelling, bool physical,
     auto descriptor = decodeVariant(logical.str(), depth, budget);
     if (!descriptor)
       return error("variant-type");
-    if (physical && rep != "logical.variant/1")
+    if (physical && rep != "logical.variant/0")
       return error("binding-representation");
     if (physical)
       for (const auto &arm : descriptor->alternatives)
@@ -246,7 +246,7 @@ Expected<BoundType> parseBoundType(StringRef spelling, bool physical,
   if (kind == "resource_unit") {
     if (!resourceUnitDomain(identity))
       return error("binding-type-identity");
-    if (physical && rep != "logical.resource_unit/1")
+    if (physical && rep != "logical.resource_unit/0")
       return error("binding-representation");
     return BoundType{kind.str(), identity.str(), rep.str()};
   }
@@ -283,7 +283,7 @@ Expected<BoundType> defaultRepresentation(const BoundType &logical) {
   if (!(*checked == logical))
     return error("binding-type-identity");
   if (logical.kind == "sequence")
-    return parseBoundType(logical.spelling() + "@logical.sequence/1", true);
+    return parseBoundType(logical.spelling() + "@logical.sequence/0", true);
   if (!logical.arguments.empty()) {
     const auto *entry = appliedTypeRepresentation(logical);
     if (!entry)
@@ -292,9 +292,9 @@ Expected<BoundType> defaultRepresentation(const BoundType &logical) {
         logical.spelling() + "@" + entry->representation.str(), true);
   }
   if (logical.kind == "variant")
-    return parseBoundType(logical.spelling() + "@logical.variant/1", true);
+    return parseBoundType(logical.spelling() + "@logical.variant/0", true);
   if (logical.kind == "resource_unit")
-    return BoundType{logical.kind, logical.identity, "logical.resource_unit/1"};
+    return BoundType{logical.kind, logical.identity, "logical.resource_unit/0"};
   const auto *rep =
       installedDomains().defaultRepresentation(logical.kind, logical.identity);
   if (!rep)

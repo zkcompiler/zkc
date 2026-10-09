@@ -29,7 +29,7 @@ cones, and records input hashes for the current checkout. It permits only
 consumer objects are built in the new output directory.
 
 Run it with `just test-lean`. The [workflow](../../../.github/workflows/ci.yml)'s
-manual `main` scope also runs it; pull-request checks do not build Lean.
+manual `optional` formal-checks scope also runs it; pull-request checks do not build Lean.
 
 ## Reproduce
 
@@ -45,4 +45,4 @@ The runner copies the four modules into a separate Lake package, depends on the
 maintained library, builds and audits all four modules, and rejects input drift
 or a missing audit marker. These controls add no production admission rule or
 native exporter. Broader claim APIs, portable artifact composition and compact
-graph checking retain their own [formal questions](../../design/formal-questions.md).
+graph checking retain their own [formal questions](../../docs/native-connection.md).

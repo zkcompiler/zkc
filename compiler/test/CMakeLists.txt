@@ -1,7 +1,4 @@
-# Native API tests and tool-level integration checks. Every test.cpp here is
-# built and named from this one list: two of them used to be declared a
-# directory up, which put their binaries somewhere else and made them look, to
-# anyone reading this file, like sources nothing ran.
+# Native API tests and tool-level integration checks are built and named here.
 #
 # A test name is optional. Without one the file is built but registers no test,
 # which is for an executable a Python test here drives as a tool.
@@ -15,27 +12,61 @@ function(add_zkc_test name component)
   endif()
 endfunction()
 
-add_zkc_test(compilation CompilerCore compilation-api)
-add_zkc_test(run CompilerCore run-api)
-add_zkc_test(run_preservation CompilerCore run-preservation)
+add_zkc_test(math_realization Transforms)
+add_test(NAME math-realization COMMAND zkc-math_realization-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/helper-realization.mlir")
+set_tests_properties(math-realization PROPERTIES LABELS native)
+mlir_target_link_libraries(zkc-math_realization-test PRIVATE MLIRParser)
+add_zkc_test(language_package Compiler language-package)
+add_zkc_test(language_interface Compiler language-interface)
+add_zkc_test(language_assets Language language-assets)
+add_zkc_test(language_specifications Language language-specifications)
+add_zkc_test(language_entries Language language-entries)
+add_zkc_test(language_entry_ir Compiler)
+mlir_target_link_libraries(zkc-language_entry_ir-test PRIVATE MLIRParser)
+add_test(NAME language-entry-ir COMMAND zkc-language_entry_ir-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/language/schnorr.zkc")
+set_tests_properties(language-entry-ir PROPERTIES LABELS native)
+add_zkc_test(language_specification_ir Compiler language-specification-ir)
+mlir_target_link_libraries(zkc-language_specification_ir-test PRIVATE MLIRParser)
+add_zkc_test(language_natural Language language-natural)
+add_zkc_test(language_power Compiler language-power)
+add_zkc_test(language_polynomial Compiler)
+mlir_target_link_libraries(zkc-language_polynomial-test PRIVATE MLIRParser)
+add_test(NAME language-polynomial COMMAND zkc-language_polynomial-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/language/polynomial.zkc")
+set_tests_properties(language-polynomial PROPERTIES LABELS native)
+add_zkc_test(language_boolean Compiler language-boolean)
+mlir_target_link_libraries(zkc-language_boolean-test PRIVATE MLIRParser)
+add_zkc_test(language_capabilities Compiler language-capabilities)
+add_zkc_test(language_types Compiler language-types)
+mlir_target_link_libraries(zkc-language_types-test PRIVATE MLIRParser)
+add_zkc_test(language Compiler language-api)
+mlir_target_link_libraries(zkc-language-test PRIVATE MLIRParser)
+target_compile_definitions(zkc-language-test PRIVATE
+  ZKC_LANGUAGE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/language")
+add_zkc_test(run Compiler run-api)
+add_zkc_test(run_preservation Compiler run-preservation)
 mlir_target_link_libraries(zkc-run_preservation-test PRIVATE MLIRParser)
-add_zkc_test(public_coin CompilerCore public-coin-api)
+add_zkc_test(public_coin Compiler public-coin-api)
 mlir_target_link_libraries(zkc-public_coin-test PRIVATE MLIRParser)
-add_zkc_test(construction CompilerCore)
-target_link_libraries(zkc-construction-test PRIVATE ZkcFrontendLoading)
 add_zkc_test(json Support json-carrier)
 add_zkc_test(requirements Contracts)
 add_zkc_test(generic Contracts generic-signatures)
 add_zkc_test(contract_declarations Contracts contract-declarations)
 add_zkc_test(native_origin Contracts native-origin)
-add_zkc_test(native_preservation CompilerCore)
+add_zkc_test(native_preservation Compiler)
 mlir_target_link_libraries(zkc-native_preservation-test PRIVATE MLIRParser)
 add_test(NAME native-preservation COMMAND zkc-native_preservation-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/schnorr-services.mlir")
-add_zkc_test(native_proof CompilerCore)
+add_zkc_test(native_proof Compiler)
 mlir_target_link_libraries(zkc-native_proof-test PRIVATE MLIRParser)
 add_test(NAME native-proof-construction COMMAND zkc-native_proof-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/schnorr-services.mlir")
+add_zkc_test(native_proof_selection Compiler)
+mlir_target_link_libraries(zkc-native_proof_selection-test PRIVATE MLIRParser)
+add_test(NAME native-proof-selection COMMAND zkc-native_proof_selection-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical")
 add_zkc_test(structural_types Contracts structural-types)
 add_zkc_test(implementation_policy Transforms implementation-policy)
 add_zkc_test(type_adapters IR type-adapters)
@@ -63,39 +94,15 @@ add_test(NAME contract-mapping-generation
     "-DZKC_MAPPING_TEST_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/contract-mapping-generation"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/contract_mapping_generation.cmake")
 set_tests_properties(contract-mapping-generation PROPERTIES LABELS native)
-add_zkc_test(frontend_dependencies Frontend frontend-dependencies)
-add_zkc_test(frontend_loading FrontendLoading frontend-loading)
-add_zkc_test(frontend_documents FrontendLoading frontend-documents)
-add_zkc_test(source CompilerCore source-document)
-add_zkc_test(frontend_analysis FrontendLoading frontend-analysis)
-add_zkc_test(frontend_structural_types Frontend frontend-structural-types)
-add_zkc_test(frontend_static_arguments Frontend frontend-static-arguments)
-add_zkc_test(frontend_budgets Frontend frontend-work-budgets)
-add_zkc_test(operator_recovery Frontend operator-recovery)
-add_zkc_test(checked_library Frontend checked-library)
-add_zkc_test(library_entry Frontend library-entry-layout)
-add_zkc_test(frontend_provenance Frontend frontend-provenance)
-add_zkc_test(export CompilerCore protocol-export)
-add_zkc_test(admission Protocol protocol-admission)
-add_zkc_test(variants CompilerCore local-variants)
-add_zkc_test(symbols IR protocol-symbols)
-add_zkc_test(family_symbols CompilerCore input-family-symbols)
 add_zkc_test(relation Relation relation-model)
-add_zkc_test(relation_authoring FrontendLoading relation-authoring-model)
 add_zkc_test(air Relation air-model)
 add_zkc_test(air_polynomial Relation air-polynomial-model)
-add_zkc_test(claims CompilerCore claims-api)
-add_zkc_test(execution Frontend source-execution)
-add_zkc_test(input_family_provenance Frontend input-family-static-provenance)
-add_zkc_test(oracle_access Protocol oracle-access)
 add_zkc_test(operation_contracts Contracts operation-contracts)
 target_compile_definitions(zkc-operation_contracts-test PRIVATE
-  ZKC_HISTORY_FIXTURE="${PROJECT_SOURCE_DIR}/../tests/fixtures/variants/history-contracts.txt")
-add_zkc_test(polynomial_domain_contracts Protocol polynomial-domain-contracts)
+  ZKC_HISTORY_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/contracts/history.txt")
 add_zkc_test(linear_interfaces Transforms linear-interfaces)
 add_zkc_test(target_decisions Transforms target-decisions)
 target_link_libraries(zkc-target_decisions-test PRIVATE ZkcTranslation)
-add_zkc_test(obligations Protocol obligation-closure)
 add_zkc_test(domains IR nominal-domains)
 add_zkc_test(relation_declarations IR relation-declarations)
 mlir_target_link_libraries(zkc-relation_declarations-test PRIVATE MLIRParser)
@@ -136,11 +143,6 @@ add_zkc_test(properties IR registered-properties)
 
 add_zkc_test(diagnostics IR ir-diagnostics)
 add_zkc_test(dialect_registration IR dialect-registration)
-add_zkc_test(ir_verification Translation ir-verification)
-mlir_target_link_libraries(zkc-symbols-test PRIVATE MLIRParser)
-mlir_target_link_libraries(zkc-variants-test PRIVATE MLIRParser)
-mlir_target_link_libraries(zkc-family_symbols-test PRIVATE MLIRParser)
-mlir_target_link_libraries(zkc-claims-test PRIVATE MLIRParser)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_program(zkc_record_tablegen NAMES llvm-tblgen HINTS "${LLVM_TOOLS_BINARY_DIR}" REQUIRED)
@@ -158,15 +160,12 @@ file(GENERATE OUTPUT "${PROJECT_BINARY_DIR}/generation-settings.json"
 # path, so no test can be handed the wrong one. To run one by hand, run it from
 # here: ctest --test-dir BUILD -R NAME -V.
 set(zkc_script_environment
+  ZKC_CTEST_PROGRAM_CODEC=$<TARGET_FILE:zkc-program_codec-test>
   ZKC_CTEST_TABLEGEN=$<TARGET_FILE:zkc-tblgen>
   ZKC_CTEST_COMPONENTS=${PROJECT_BINARY_DIR}/component-dependencies.txt
   ZKC_CTEST_COMPILER=$<TARGET_FILE:zkc-compile>
   ZKC_CTEST_OPTIMIZER=$<TARGET_FILE:zkc-opt>
-  ZKC_CTEST_SOURCE_BENCH=$<TARGET_FILE:zkc-source-bench>
-  ZKC_CTEST_SERVICE_COMPILER=$<TARGET_FILE:zkc-service-compile>
-  ZKC_CTEST_SERVICE_OPTIMIZER=$<TARGET_FILE:zkc-service-opt>
   ZKC_CTEST_REQUIREMENTS_TEST=$<TARGET_FILE:zkc-requirements-test>
-  ZKC_CTEST_CONSTRUCTION_TEST=$<TARGET_FILE:zkc-construction-test>
   PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/support:${PROJECT_SOURCE_DIR}/../tests/support)
 
 # Every Python file in this directory is a test, and its name is the test's
@@ -181,3 +180,8 @@ foreach(script ${zkc_scripts})
   add_test(NAME ${name} COMMAND ${Python3_EXECUTABLE} ${script})
   set_tests_properties(${name} PROPERTIES ENVIRONMENT "${zkc_script_environment}")
 endforeach()
+
+mlir_target_link_libraries(zkc-contract_mappings-test PRIVATE MLIRParser)
+mlir_target_link_libraries(zkc-target_decisions-test PRIVATE MLIRParser)
+
+add_zkc_test(program_codec Program)

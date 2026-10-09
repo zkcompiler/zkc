@@ -1,4 +1,4 @@
-//! Shape-bound native field arrays and explicit legacy-codec refusal.
+//! Shape-bound native field arrays and malformed-frame refusal.
 mod common;
 use common::ark_backend;
 use zkc_backends::{
@@ -22,15 +22,14 @@ fn array(length: usize) -> Value {
 }
 
 #[test]
-fn exact_frame_and_shape_cannot_cross_codec_profiles() {
+fn exact_frame_and_shape_are_checked() {
     let backend = ark_backend(None);
     let value = array(2);
     let ty = value.physical_type();
     assert_eq!(native_wire_size(&ty), Some(70));
     assert!(!ty.logical().kind().is_serializable());
-    assert!(backend.encode_value(&value).is_err());
     let bytes = backend.encode_native_value(&value).unwrap();
-    let mut expected = b"ZKCV\x01\x40".to_vec();
+    let mut expected = b"ZKCV\x00\x40".to_vec();
     for x in [1u8, 2] {
         let mut scalar = [0u8; 32];
         scalar[0] = x;
@@ -40,7 +39,6 @@ fn exact_frame_and_shape_cannot_cross_codec_profiles() {
     let decoded = backend.decode_native_value(&ty, &bytes).unwrap();
     assert_eq!(decoded.physical_type(), ty);
     assert_eq!(backend.encode_native_value(&decoded).unwrap(), bytes);
-    assert!(backend.decode_typed_value(ty.clone(), &bytes).is_err());
     for end in 0..bytes.len() {
         assert_eq!(
             backend.decode_native_value(&ty, &bytes[..end]).unwrap_err(),
@@ -122,7 +120,7 @@ fn construction_and_policy_are_checked_before_decode_allocation() {
             ..Policy::default()
         },
     ] {
-        let backend = NativeBackend::new(policy, common::entry(None), None).unwrap();
+        let backend = NativeBackend::new(policy, common::entry(None), Default::default()).unwrap();
         assert_eq!(
             backend
                 .decode_native_value(&value.physical_type(), &bytes)
@@ -142,7 +140,7 @@ fn decoder_charges_the_temporary_and_retained_array_at_the_peak() {
             ..Policy::default()
         },
         common::entry(None),
-        None,
+        Default::default(),
     )
     .unwrap();
     assert!(
@@ -161,7 +159,7 @@ fn native_encoding_enforces_the_array_element_limit() {
             ..Policy::default()
         },
         common::entry(None),
-        None,
+        Default::default(),
     )
     .unwrap();
     assert_eq!(
@@ -199,7 +197,7 @@ fn encoding_and_decoding_charge_their_own_value_memory() {
                 ..Policy::default()
             },
             common::entry(None),
-            None,
+            Default::default(),
         )
         .unwrap()
     };

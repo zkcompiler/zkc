@@ -2,7 +2,7 @@
 
 `zkc run-bundle` executes a compiler-produced joint bundle with the same role
 interpreter used by proof hosts. It needs the compiler and Rust tools; this route
-does not call Lean. The [bundle specification](../spec/profiles/compiler/run.md)
+does not call Lean. The [bundle specification](../spec/runtime/joint.md)
 defines its authority, input formats, limits and reports.
 
 ## A complete example
@@ -30,8 +30,8 @@ IR
 # This pin comes from our own trusted compilation. Store it with the artifact.
 pin=$(sha256sum "$work_dir/message.bundle" | cut -d ' ' -f 1)
 cat > "$work_dir/inputs.json" <<'JSON'
-["zkc.bundle-inputs/1", "example-session",
- [["Alice", [["0", "bool@native.bool/1", ["wire", "5a4b4356010500"]]], []],
+["zkc.bundle-inputs/0", "example-session",
+ [["Alice", [["0", "bool@native.bool/0", ["wire", "5a4b4356000500"]]], []],
   ["Bob", [], []]], []]
 JSON
 "$native" run-bundle "$work_dir/message.bundle" "$pin" "$work_dir/inputs.json"
@@ -53,7 +53,7 @@ from trusted compilation/distribution, not from rehashing an unknown received fi
 ## Programmatic use
 
 ```rust,ignore
-use zkc_tools::protocol::run::{HostLimits, RunHost, SetupAuthority};
+use zkc_tools::run::{HostLimits, RunHost, SetupAuthority};
 
 let host = RunHost::admit(&bundle_bytes, &authorized_digest,
                          HostLimits::default(), SetupAuthority::default())?;
@@ -81,27 +81,25 @@ Preparation uses the shared host input diagnostics: `artifact-byte-limit` and
 entry occurrences. These stable error strings also serve other hosts; their
 prefixes do not identify an artifact-specific execution path.
 
-## Independent proofs and retained consumers
+## Independent proofs
 
 For noninteractive execution, use the compiler's selected transcript construction
-and the separate `produce-native-proof` and `validate-native-proof` processes,
-described in [native proof deployments](../compiler/native-proofs.md). A joint
+and the separate `prove-bundle` and `verify-bundle` processes,
+described in [native proof deployments](../compiler/construction.md). A joint
 bundle is an interactive scheduling artifact, not the proof format. The installed
 joint host currently refuses transcript-typed entry inputs because it has no
 application-authenticated transcript-root configuration.
 
-The [source host](inputs.md) remains for source/Lean correspondence, generic and
-parameterized protocols and per-receive setup selection. Its remaining migration
-gates are [explicit](../compiler/migration.md#retained-host-contracts). Both hosts
-use the general interpreter, while preserving their different authority and
-wire-failure contracts.
+Named source applications use the [Entry Host](entries.md), which
+binds its source interface to these same execution and proof boundaries.
 
 ## Separate producer and validator
 
 This minimal example returns a received Boolean as the selected validator decision.
 It exercises deployment and proof framing; it does not establish a cryptographic
 statement. Real protocols author their equations and guards in the same IR.
-The empty suite selects transcript-free execution under policy `/4`.
+The empty suite selects transcript-free execution under the native proof policy. Both commands
+explicitly acknowledge header-only binding with `--allow-header-only`.
 
 <!-- executable: native-proof -->
 ```sh
@@ -119,19 +117,19 @@ module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : () -> () }
 IR
 cat > "$work_dir/policy.json" <<'JSON'
-["zkc.native-proof-policy/4", "main", "P", "V", "0", "", "", [], []]
+["zkc.native-proof-policy/0", "main", "P", "V", "0", "", "", [], []]
 JSON
 "$compiler" protocol-proof "$work_dir/message.mlir" "$work_dir/policy.json" > "$work_dir/deployment.json"
 # Authorize these exact bytes from our own trusted compilation.
 pin=$(sha256sum "$work_dir/deployment.json" | cut -d ' ' -f 1)
 cat > "$work_dir/producer-inputs.json" <<'JSON'
-["zkc.native-proof-inputs/1", [], [["0", ["wire", "5a4b4356010501"]]], "", [], "0"]
+["zkc.native-proof-inputs/0", [], [["0", ["wire", "5a4b4356000501"]]], "", [], "0"]
 JSON
 cat > "$work_dir/validator-inputs.json" <<'JSON'
-["zkc.native-proof-inputs/1", [], [], "", [], "0"]
+["zkc.native-proof-inputs/0", [], [], "", [], "0"]
 JSON
-"$native" produce-native-proof "$work_dir/deployment.json" "$pin" "$work_dir/producer-inputs.json" "$work_dir/proof.bin" > "$work_dir/producer.json"
-"$native" validate-native-proof "$work_dir/deployment.json" "$pin" "$work_dir/validator-inputs.json" "$work_dir/proof.bin" > "$work_dir/validator.json"
+"$native" prove-bundle "$work_dir/deployment.json" "$pin" "$work_dir/producer-inputs.json" "$work_dir/proof.bin" --allow-header-only > "$work_dir/producer.json"
+"$native" verify-bundle "$work_dir/deployment.json" "$pin" "$work_dir/validator-inputs.json" "$work_dir/proof.bin" --allow-header-only > "$work_dir/validator.json"
 cat "$work_dir/validator.json"
 printf 'Proof files: %s\n' "$work_dir"
 ```
@@ -139,5 +137,5 @@ printf 'Proof files: %s\n' "$work_dir"
 The producer reports `produced`; the separate validator reports `accepted`.
 The validator receives no private producer inputs. Its trusted deployment pin
 selects both the program and the policy, including which output is the decision.
-The [proof guide](../compiler/native-proofs.md) explains transcript construction,
+The [proof guide](../compiler/construction.md) explains transcript construction,
 public bindings, repeated attempts and setup authority for larger protocols.

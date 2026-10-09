@@ -158,7 +158,7 @@ fn admission_rejects_noncanonical_attributes_without_modular_reduction() {
         }
         let bytes = plan(d, "vector.scatter_sum", &["1", "0"]);
         let mut bad: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        bad[3][0][2][0][1] = json!(
+        bad[2][0][2][0][1] = json!(
             binding((d + 1) % 3, "vector.scatter_sum")
                 .signature()
                 .unwrap()

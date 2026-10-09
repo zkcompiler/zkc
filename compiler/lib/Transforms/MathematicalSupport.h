@@ -2,6 +2,22 @@
 #define ZKC_TRANSFORMS_MATHEMATICALSUPPORT_H
 #include "zkc/Dialect/Operations.h"
 namespace zkc::mathematical {
+// Helpers operate only on an owned candidate whose original module passed
+// admission. Work budgets are shared across every selected definition.
+mlir::LogicalResult inlineHelpers(mlir::Operation *body, unsigned &remaining,
+                                  uint64_t &indices,
+                                  mlir::SymbolTableCollection &symbols,
+                                  mlir::Operation *lookupRoot = nullptr,
+                                  uint64_t *work = nullptr);
+// Closed execution vocabulary of the mathematical recipes. Admission of a
+// data signature alone does not establish that an operation is total.
+bool isCalculationContract(llvm::StringRef contract);
+mlir::LogicalResult
+verifyCalculationRecipes(protocol_ir::ProtocolModuleOp original,
+                         protocol_ir::ProtocolModuleOp candidate,
+                         llvm::ArrayRef<local::FuncOp> functions);
+mlir::LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
+                                      llvm::ArrayRef<local::FuncOp> functions);
 // Internal rewrite entry used by preparation and participant simplification.
 // The caller has already admitted the complete unit.
 mlir::LogicalResult simplifyCalculations(mlir::Operation *body);
@@ -13,4 +29,8 @@ mlir::ArrayAttr statementBindings(protocol_ir::MathematicalOp program,
 mlir::LogicalResult verifyMathLowering(protocol_ir::ProtocolModuleOp original,
                                        protocol_ir::ProtocolModuleOp candidate);
 } // namespace zkc::mathematical
+namespace zkc::poly {
+mlir::LogicalResult eliminatePolynomials(mlir::Block &body,
+                                         uint64_t &remaining);
+}
 #endif

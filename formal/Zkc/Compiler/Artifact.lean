@@ -36,8 +36,8 @@ structure Claim where
 def completeExecution : Claim :=
   ⟨"equality", "logical-outcome-state-events", "all-inputs-and-handlers"⟩
 
-def formatVersion : Nat := 1
-def semanticsVersion : String := "finite-source-1"
+def formatVersion : Nat := 0
+def semanticsVersion : String := "finite-source-0"
 
 structure Request (Ty Op : Type) where
   context : CompilationContext Ty

@@ -7,7 +7,39 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use zkc_runtime::interactive::ServiceContract;
 
-pub const RANDOM_FIELD_SERVICE: &str = "random.bls12-381.fr/1";
+/// Native service shapes belong to the executing provider, independently of
+/// the runtime contract catalogue. These facts never authorize a root or lease.
+pub(crate) fn support(
+    contract: ServiceContract,
+    method: &str,
+) -> Option<zkc_runtime::interactive::ServiceSupport> {
+    use zkc_runtime::interactive::{
+        Identity, LogicalType, PhysicalType, Representation, ServiceSignature, ServiceSupport, Type,
+    };
+    if method != "draw" {
+        return None;
+    }
+    let (field, representation) = match contract {
+        ServiceContract::RandomBls12381Field => (Identity::Bls12381Fr, Representation::Fr),
+        ServiceContract::RandomBn254Field => (Identity::Bn254Fr, Representation::Bn254Fr),
+        ServiceContract::RandomRistrettoField => {
+            (Identity::Ristretto255Scalar, Representation::DalekScalar)
+        }
+        ServiceContract::RandomExtensionField => {
+            (Identity::KoalaBearExt8, Representation::KoalaBearExt8)
+        }
+    };
+    Some(ServiceSupport {
+        signature: ServiceSignature {
+            inputs: vec![],
+            outputs: vec![
+                PhysicalType::new(LogicalType::new(Type::Field, field).ok()?, representation)
+                    .ok()?,
+            ],
+        },
+        max_retained_bytes: 512,
+    })
+}
 
 struct Authority;
 struct LeaseIdentity;
@@ -134,9 +166,6 @@ impl ServiceRegistry {
             contract: ServiceContract::for_field(state.roots[&id].token.identity())
                 .expect("installed service field"),
         })
-    }
-    pub fn issue_random(&self, owner: &str, budget: u64) -> Result<ServiceReference> {
-        self.issue_random_for(owner, ServiceContract::RandomBls12381Field, budget)
     }
     pub fn issue_random_for(
         &self,
@@ -345,7 +374,6 @@ impl ServiceBindings {
     }
     pub(crate) fn enter(&mut self, frame: &zkc_runtime::interactive::Frame) -> Result<()> {
         if self.lease.is_some()
-            || !frame.origin().format.is_program()
             || frame.services().len() != self.ports.len()
             || frame.services().iter().any(|port| {
                 !self

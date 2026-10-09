@@ -4,9 +4,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Frontend/Protocol.h"
 #include "zkc/Relation/Matrices.h"
-#include "zkc/Source/RelationLowering.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Translation/Relations.h"
@@ -55,28 +53,24 @@ int runCommand(int argc, char **argv, const mlir::DialectRegistry &registry) {
   const StringRef mode(argv[1]);
   if (mode.starts_with("relation-air-"))
     return runAIRCommand(argc, argv, registry);
-  bool publicMatrices =
-      mode == "relation-compile-data" || mode == "relation-lower-data";
-  bool compile = mode == "relation-compile" || mode == "relation-compile-data";
   bool native = mode == "relation-protocol";
   bool requirements = mode == "relation-requirements";
   bool import = mode == "relation-import";
-  bool lower = mode == "relation-lower" || mode == "relation-lower-data";
   bool exportIR = mode == "relation-export";
   bool evaluateMode = mode == "relation-evaluate";
   bool inspect = mode == "relation-inspect";
   bool normalize = mode == "relation-read";
   bool matrices = mode == "relation-matrices";
-  if ((!compile && !import && !lower && !exportIR && !evaluateMode &&
-       !inspect && !normalize && !matrices && !native && !requirements) ||
-      (evaluateMode          ? argc != 5
-       : (compile || import) ? argc != 3 && argc != 4
-                             : argc != 3))
+  if ((!import && !exportIR && !evaluateMode && !inspect && !normalize &&
+       !matrices && !native && !requirements) ||
+      (evaluateMode ? argc != 5
+       : import     ? argc != 3 && argc != 4
+                    : argc != 3))
     return fail(zkc::error("relation-command"));
   mlir::MLIRContext context(registry);
   std::string symbol = argc == 4 ? argv[3] : "Imported";
   auto relation = [&]() -> Expected<R1CS> {
-    if (!lower && !exportIR)
+    if (!exportIR)
       return read(argv[2]);
     auto text = readInput(argv[2], Limits::bytes);
     if (!text)
@@ -105,16 +99,6 @@ int runCommand(int argc, char **argv, const mlir::DialectRegistry &registry) {
     else
       (*module)->print(outs());
     outs() << '\n';
-  } else if (compile || lower) {
-    auto source = lowerMultilinearR1CS(*relation, symbol,
-                                       publicMatrices ? Staging::PublicMatrices
-                                                      : Staging::Specialized);
-    if (!source)
-      return fail(source.takeError());
-    auto text = frontend::printProtocol(source::Content{std::move(*source)});
-    if (!text)
-      return fail(text.takeError());
-    outs() << *text;
   } else if (import) {
     auto module = importR1CS(*relation, symbol, context);
     if (!module)

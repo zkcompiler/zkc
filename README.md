@@ -1,112 +1,70 @@
 # zkc
 
 zkc is a compiler for zero-knowledge **proof protocols**. It makes participant
-computation, interaction, and protocol composition explicit, providing a common
-foundation for analysis, optimization, and verification.
+computation, interaction and protocol composition explicit so they can be
+analyzed, transformed and executed using cryptographic libraries.
 
-A circuit, AIR, or relation describes what is being proved. A protocol describes
-how participants compute, exchange messages, obtain challenges, and check the
-proof. zkc compiles that protocol into participant programs that execute using
-cryptographic libraries.
+A relation describes what is being proved. A protocol describes how participants
+compute, exchange messages, obtain challenges and check the proof. zkc authors
+that protocol in `.zkc` and compiles it through mathematical MLIR to independently
+executable participant programs.
 
 The project is under active development. [Implementation status](docs/status.md)
-records supported paths and their current boundaries.
-
-## Why zkc?
-
-- **Make the protocol visible.** Express participant computations, messages,
-  challenge use, and subprotocol calls in one typed source. Keep reusable local
-  algorithms separate from the interaction that uses them.
-- **Share compiler infrastructure across protocols.** Use common analyses and
-  transformation machinery while exposing domain operations and backend
-  contracts. The compiler can work on computation, storage, and execution plans
-  while retaining the conditions under which a change is valid.
-- **Connect implementation and formal reasoning.** Give source programs and
-  transformations explicit semantic contracts. Lean supplies definitions,
-  reusable proofs, and executable references for checking supported compiler
-  outputs.
-
-zkc is intended for protocol authors, compiler developers, and researchers
-working on proof-system implementation and verification. The
-[project overview](docs/overview.md) develops the approach and its tradeoffs.
+records supported capabilities and their limits.
 
 ## A protocol in zkc
 
-The [committed two-factor argument](examples/protocols/committed-two-factor.pir)
-proves a product-sum claim about two committed polynomials. It composes Sumcheck
-with openings of the original polynomials and a final verifier check.
-
-This excerpt shows its interaction body. `P` is the prover and `V` the verifier;
-the full source defines the inputs, local algorithms, and child protocols.
+The [Schnorr library](libraries/schnorr/lib.zkc) expresses its exchange
+with explicit roles and random services:
 
 ```text
-dependencies (sumcheck: ProductSumcheck(n = n), opening: FactorOpening());
-local [commit_factors] P: let (cf, cg, sf, sg) = CommitFactors(pk, f, g);
-message [root_f] commitment: P(cf) -> V(root_f);
-message [root_g] commitment: P(cg) -> V(root_g);
-local [check_expected_roots] V: CheckExpectedRoots(root_f, root_g, expected_f, expected_g);
-invoke [sumcheck_call] sumcheck(
-  f,
-  g,
-  claim,
-  coins
-) -> (p_point, v_point, terminal_claim, next_coins);
-invoke [open_f] opening(sf, p_point, vk, root_f, v_point) -> (f_value);
-invoke [open_g] opening(sg, p_point, vk, root_g, v_point) -> (g_value);
-local [terminal] V: let accepted = CheckTerminal(f_value, g_value, terminal_claim);
-return (accepted, next_coins);
+let nonce = nonces.draw();
+let commitment = send P -> V(base * nonce);
+let challenge = challenges.draw();
+let received = send V -> P(challenge);
+let response = send P -> V(nonce + received * scalar);
+let accepted@V = base * response == commitment + point * challenge;
+return (accepted = accepted);
 ```
 
-`local` places a computation at a participant; `message` transfers a value;
-`invoke` calls a child protocol. The verifier first checks the commitments
-against its public inputs, then checks the openings at the point derived by
-Sumcheck. A separate [construction descriptor](examples/protocols/committed-two-factor.construction.pir)
-selects the transcript-based execution used by the demo.
-
-Other examples exercise different protocol structures:
-
-| Example | What it expresses |
-|---|---|
-| [Groth16](examples/protocols/groth16.pir) | Proving and verification over a compiled R1CS, with snarkjs interoperability fixtures |
-| [AIR and FRI](examples/protocols/air-oracle/README.md) | A bounded AIR permutation argument with quotient checks, Merkle openings, and FRI |
-| [Reusable libraries and clients](examples/projects/README.md) | Separately authored protocol schedules importing checked implementation libraries |
-
-See the [source language](docs/language/README.md) and
-[protocol examples](examples/protocols/README.md) for complete sources.
+Its [Entry](examples/projects/schnorr/main.zkc) selects public inputs, the
+acceptance result and a Fiat–Shamir construction. The compiler derives participant
+transcripts; the Rust Host executes independent prove/verify calls. The
+[Sumcheck project](examples/projects/sumcheck/README.md) demonstrates bounded
+repetition, vector kernels and an actual terminal evaluation.
 
 ## How it works
 
-```mermaid
-flowchart LR
-    source["Protocol source (.pir)"] --> compiler["C++ / MLIR compiler"]
-    compiler --> plans["Participant execution plans"]
-    plans --> runtime["Rust host and runtime"]
-    runtime --> backends["Cryptographic libraries"]
-    source -.-> checks["Lean reference checks"]
-    plans -.-> checks
-    checks -.-> runtime
+```text
+.zkc Language → mathematical MLIR
+                 protocol → participant → exec → physical
+                                                       ↓
+                                                 zkc.program/0
+                                                       ↓
+                                     shared Rust Runner + installed kernels
+                                        Entry / proof / joint Hosts
 ```
 
-The frontend resolves libraries and checks types and requirements. The MLIR
-compiler retains protocol and algebraic structure for analysis and transformation,
-projects participant programs, and lowers them to physical execution plans.
-Rust binds those plans to inputs and backend implementations and executes them.
+Language checks explicit modules, types, capabilities, resources and selected
+Entries. The compiler preserves mathematical structure through participant
+projection, demand lowering and physical kernel selection. Hosts authenticate
+packages, bind application inputs and setup authority, and manage execution and
+publication. Direct MLIR clients enter the same pipeline.
 
-The `.pir` source route used by `just demo` has independent Lean tools that check
-candidate plans against retained source. The native mathematical route takes
-MLIR directly and uses compiler preservation checks and runtime admission; its
-frontend and Lean connections remain planned. See the [native walkthrough](docs/runtime/bundles.md)
-for direct compilation and separate proof execution. The [Lean library](formal/README.md) also
-provides semantic definitions and proofs and can be used independently of the
-native compiler. [Architecture](docs/architecture.md) explains the boundaries;
-[assurance](docs/assurance.md) distinguishes formal proofs, executable checks,
-and implementation trust.
+The independent [Lean library](formal/README.md) supplies semantic models and
+proofs. Those results concern their stated formal subjects; native pipeline
+correspondence remains open. [Architecture](docs/architecture.md) explains the
+owners, and [assurance](docs/assurance.md) distinguishes formal results, compiler
+checks and bounded tests.
 
 ## Try it
 
+On x86_64 Linux, `nix run . -- --help` runs the packaged CLI, including its
+companion compiler. `nix build` creates `result/bin/zkc`.
+
 The supported development environment is x86_64 Linux with Nix. Follow the
-[setup guide](docs/development/README.md#set-up-the-development-checkout) to
-install Nix and enable flakes, then run from the repository root:
+[setup guide](docs/development/README.md#set-up-the-development-checkout), then
+run from the repository root:
 
 ```sh
 nix develop
@@ -114,32 +72,23 @@ just setup
 just demo
 ```
 
-`just setup` downloads development dependencies. `just demo` builds the tools,
-generates development inputs, compiles the argument above, produces a proof, and
-verifies it in a separate process. It reports `Proof accepted` and the output
-directory containing `proof.bin` and the producer and validator reports.
-
-The demo uses development keys and a nonhiding commitment scheme. The
-[walkthrough](docs/getting-started.md) explains the individual steps and inputs.
-For development checks, use the [test guide](tests/README.md#selecting-checks);
-the full integration suite is separate from this first run.
+The demo builds the C++/Rust tools, compiles Schnorr with known-witness inputs,
+produces a proof and verifies it in a separate process. It reports `Proof accepted`
+and the output directory containing `proof.bin` and execution reports. The
+witness is deliberately public; runtime randomness is fresh. See the
+[walkthrough](docs/getting-started.md) for individual steps and authority binding.
 
 ## Explore
 
-| You want to… | Start here |
+| Task | Start here |
 |---|---|
-| Write a protocol or library | [Source language](docs/language/README.md), [library projects](docs/language/projects.md) |
-| Develop the compiler or a backend | [Architecture](docs/architecture.md), [extension guide](docs/development/extensions.md) |
-| Study the semantics and verification | [Model guides](docs/guides/README.md), [specification](docs/spec/README.md), [Lean library](formal/README.md) |
-| Assess current support and future work | [Implementation status](docs/status.md), [roadmap](docs/roadmap.md) |
+| Write a protocol or library | [Language](docs/language/README.md), [example projects](examples/projects/README.md) |
+| Develop the compiler or a backend | [Architecture](docs/architecture.md), [development](docs/development/README.md) |
+| Study semantics and verification | [Native specification](docs/spec/README.md), [formal models](formal/docs/README.md) |
+| Assess support and future work | [Status](docs/status.md), [roadmap](docs/roadmap.md) |
 
-The [documentation index](docs/README.md) maps the full reference.
-
-## Contributing
-
-Protocol examples, compiler improvements, formalization, and bug reports are
-welcome. See the [contribution guide](.github/CONTRIBUTING.md) for development
-and review expectations.
+The [documentation index](docs/README.md) maps the reference. Contributions follow
+[the contribution guide](.github/CONTRIBUTING.md).
 
 ## License
 

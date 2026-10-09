@@ -112,8 +112,16 @@ fn authenticated_rows_collections_and_shape_are_independent_of_polynomials() {
                 ));
             }
             // Immutable opening custody is not an input/output codec.
-            assert!(backend(Policy::default()).encode_value(&state).is_err());
-            assert!(backend(Policy::default()).encode_value(&states).is_err());
+            assert!(
+                backend(Policy::default())
+                    .encode_native_value(&state)
+                    .is_err()
+            );
+            assert!(
+                backend(Policy::default())
+                    .encode_native_value(&states)
+                    .is_err()
+            );
         }
     }
 }
@@ -141,21 +149,28 @@ fn wire_nominality_canonicality_and_preimport_accounting() {
         .remove(0);
         let b = backend(Policy::default());
         for value in [committed[0].clone(), opened[1].clone(), roots] {
-            let bytes = b.encode_value(&value).unwrap();
+            if !zkc_backends::has_native_wire(&value.physical_type()) {
+                assert!(b.encode_native_value(&value).is_err());
+                continue;
+            }
+            let bytes = b.encode_native_value(&value).unwrap();
             let ty = value.physical_type();
-            let recovered = b.decode_typed_value(ty.clone(), &bytes).unwrap();
-            assert_eq!(b.encode_value(&recovered).unwrap(), bytes);
+            let recovered = b.decode_native_value(&ty.clone(), &bytes).unwrap();
+            assert_eq!(b.encode_native_value(&recovered).unwrap(), bytes);
             assert!(
                 Value::typed_wire_retained_bytes_bound(ty.clone(), bytes.len(), &Policy::default())
                     .unwrap()
                     >= recovered.retained_bytes()
             );
             for length in 0..bytes.len() {
-                assert!(b.decode_typed_value(ty.clone(), &bytes[..length]).is_err());
+                assert!(
+                    b.decode_native_value(&ty.clone(), &bytes[..length])
+                        .is_err()
+                );
             }
             let mut extra = bytes.clone();
             extra.push(0);
-            assert!(b.decode_typed_value(ty.clone(), &extra).is_err());
+            assert!(b.decode_native_value(&ty.clone(), &extra).is_err());
             let other = if domain == Domain::Base {
                 Domain::Extension
             } else {
@@ -164,7 +179,7 @@ fn wire_nominality_canonicality_and_preimport_accounting() {
             let other_ty =
                 PhysicalType::default_for(LogicalType::new(ty.kind(), other.identity()).unwrap())
                     .unwrap();
-            assert!(b.decode_typed_value(other_ty, &bytes).is_err());
+            assert!(b.decode_native_value(&other_ty, &bytes).is_err());
         }
     }
 }

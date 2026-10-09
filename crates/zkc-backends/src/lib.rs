@@ -9,7 +9,6 @@ mod external_kernels;
 mod kernels;
 pub mod matrix;
 pub mod oracle;
-pub mod representations;
 mod resource;
 mod sampling;
 pub mod services;
@@ -17,18 +16,14 @@ mod setups;
 mod transcript;
 mod value;
 
-pub mod choices;
 /// Independently installed physical domains and their nominal associations.
 pub mod domains;
 pub mod plonky3;
 pub use plonky3::{KoalaBear, KoalaBearExt8, parse_decimal as parse_koala_bear_decimal};
 
-mod public_operands;
-pub use public_operands::{PublicRolePolicy, requires_public_operands};
-
-pub use backend::{EntryPolicy, NativeBackend, PortConstraint, PublicInputs};
+pub use backend::{EntryPolicy, NativeBackend, PortConstraint};
 pub use codec::{
-    InputBindings, InputPlan, NativeWireError, has_native_wire, native_wire_size, requires_setup,
+    NativeInputSize, NativeWireError, has_native_wire, native_wire_size, requires_setup,
 };
 pub use resource::{Capability, CapabilityObservation, Domain, LogicalUnit};
 pub use setups::SetupRegistry;

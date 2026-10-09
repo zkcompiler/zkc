@@ -15,7 +15,6 @@ def OpRandomIndex : ZKC_Operation<"random.index", [OpRandomIndexF],
     [ZKC_Apply<TypeRng, [OpRandomIndexF]>, ZKC_Apply<TypeIndex, []>],
     [ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeRng, [OpRandomIndexF]>], [ZKC_Holds<CapabilityIndexRandomness, [OpRandomIndexF]>]> {
   int ordinal = 123;
-  let derivedCounterpart = OpTranscriptDrawIndex;
   let facets = [ZKC_Sampling<Entropy, IndexSample, 1>];
 }
 def ExportRandomIndex : ZKC_OperationExport<"zkc::random", "index",
@@ -26,7 +25,6 @@ def OpRandomDraw : ZKC_Operation<"random.draw", [OpRandomDrawF],
     [ZKC_Apply<TypeRng, [OpRandomDrawF]>],
     [ZKC_Apply<TypeField, [OpRandomDrawF]>, ZKC_Apply<TypeRng, [OpRandomDrawF]>], [ZKC_Holds<CapabilityField, [OpRandomDrawF]>]> {
   int ordinal = 125;
-  let derivedCounterpart = OpTranscriptChallenge;
   let facets = [ZKC_Sampling<Entropy, FieldSample, -1>];
 }
 def ExportRandomDraw : ZKC_OperationExport<"zkc::random", "draw",

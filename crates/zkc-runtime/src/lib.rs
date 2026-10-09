@@ -1,22 +1,6 @@
-//! Owned execution of checked logical plans. Libraries provide meanings;
-//! the dispatcher owns binding and structured stopped control.
-mod admission;
-pub mod arena;
+//! Bounded execution of native mathematical programs and owned runtime resources.
 pub mod attempt;
-pub mod buffer;
-mod execution;
-pub mod format;
 pub mod iteration;
-mod plan;
-pub mod table;
-pub use admission::{
-    CheckFailure, CheckRequest, Checker, EndpointEntry, PhaseEvidence, Realization,
-};
-pub use execution::{
-    AdmissionFailure, AdmittedJob, AdmittedProgram, BindingFailure, Bindings, Budget, Completed,
-    Resources, Session, StartFailure,
-};
-pub use plan::{Library, Sort};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Error(pub &'static str);

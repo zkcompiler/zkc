@@ -6,21 +6,29 @@ pub(super) const CONTRACTS: &[Contract] = &[
     Contract::new(
         "random.vector",
         (&[Rng], &[Vector, Rng], AttributeRule::NaturalIndex),
-    ),
+    )
+    .implemented_by(&[
+        "arkworks/random.vector",
+        "dalek/random.vector",
+        "plonky3/random.vector",
+    ]),
     Contract::new(
         "random.index",
         (&[Rng, Index], &[Index, Rng], AttributeRule::None),
-    ),
-    Contract::new("random.draw", (&[Rng], &[Field, Rng], AttributeRule::None)),
+    )
+    .implemented_by(&["plonky3/random.index"]),
+    Contract::new("random.draw", (&[Rng], &[Field, Rng], AttributeRule::None)).implemented_by(&[
+        "arkworks/random.draw",
+        "dalek/random.draw",
+        "plonky3/random.draw",
+    ]),
 ];
 
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     contracts: CONTRACTS,
     resolve,
     select,
-    providers: &["arkworks", "dalek", "plonky3", "spongefish"],
     alternatives: &[],
-    logical_refusals: &[],
     physical_error: "uninstalled operation binding",
     physical_only: false,
 };

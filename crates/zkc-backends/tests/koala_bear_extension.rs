@@ -331,9 +331,13 @@ fn canonical_coordinate_wire_is_exact_and_domain_separated() {
     ];
     for (value, tag) in values.into_iter().zip(26..=30) {
         let ty = value.physical_type();
-        let bytes = b.encode_value(&value).unwrap();
-        assert_eq!(&bytes[..6], &[b'Z', b'K', b'C', b'V', 1, tag]);
-        let decoded = b.decode_typed_value(ty.clone(), &bytes).unwrap();
+        if !zkc_backends::has_native_wire(&value.physical_type()) {
+            assert!(b.encode_native_value(&value).is_err());
+            continue;
+        }
+        let bytes = b.encode_native_value(&value).unwrap();
+        assert_eq!(&bytes[..6], &[b'Z', b'K', b'C', b'V', 0, tag]);
+        let decoded = b.decode_native_value(&ty.clone(), &bytes).unwrap();
         assert_value(&value, &decoded);
         assert!(
             Value::typed_wire_retained_bytes_bound(ty.clone(), bytes.len(), &Policy::default())
@@ -341,18 +345,18 @@ fn canonical_coordinate_wire_is_exact_and_domain_separated() {
                 >= decoded.retained_bytes()
         );
         for len in 0..bytes.len() {
-            assert!(b.decode_typed_value(ty.clone(), &bytes[..len]).is_err());
+            assert!(b.decode_native_value(&ty.clone(), &bytes[..len]).is_err());
         }
         let mut extra = bytes.clone();
         extra.push(0);
-        assert!(b.decode_typed_value(ty.clone(), &extra).is_err());
+        assert!(b.decode_native_value(&ty.clone(), &extra).is_err());
         for domain in [
             zkc_backends::domains::BLS,
             zkc_backends::domains::RISTRETTO,
             zkc_backends::domains::KOALA_BEAR,
         ] {
             assert!(
-                b.decode_typed_value(domain.physical(ty.kind()).unwrap(), &bytes)
+                b.decode_native_value(&domain.physical(ty.kind()).unwrap(), &bytes)
                     .is_err()
             );
         }
@@ -366,25 +370,27 @@ fn canonical_coordinate_wire_is_exact_and_domain_separated() {
                 let mut bad = bytes.clone();
                 bad[start + 4 * i..start + 4 * i + 4].copy_from_slice(&invalid.to_le_bytes());
                 assert_eq!(
-                    b.decode_typed_value(ty.clone(), &bad).unwrap_err().code,
-                    "refused:noncanonical-scalar"
+                    b.decode_native_value(&ty.clone(), &bad)
+                        .unwrap_err()
+                        .to_string(),
+                    "native-wire-invalid:scalar"
                 );
             }
         }
     }
     assert!(
-        b.encode_value(&Value::KoalaBearExt8Polynomial(
+        b.encode_native_value(&Value::KoalaBearExt8Polynomial(
             [KoalaBearExt8::ZERO].into()
         ))
         .is_err()
     );
-    let mut bad = b.encode_value(&vector(&[X])).unwrap();
+    let mut bad = b.encode_native_value(&vector(&[X])).unwrap();
     bad[6..10].copy_from_slice(&u32::MAX.to_le_bytes());
     assert_eq!(
-        b.decode_typed_value(KOALA_BEAR_EXT8.physical(Type::Vector).unwrap(), &bad)
+        b.decode_native_value(&KOALA_BEAR_EXT8.physical(Type::Vector).unwrap(), &bad)
             .unwrap_err()
-            .code,
-        "refused:wire-length"
+            .to_string(),
+        "native-wire-limit"
     );
     assert!(
         Value::koala_bear_ext8_matrix(1, 1, &[(0, 0, KoalaBearExt8::ZERO)], &Policy::default())

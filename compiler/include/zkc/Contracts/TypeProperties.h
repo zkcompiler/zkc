@@ -51,7 +51,7 @@ inline bool nativeFieldArrayWire(const BoundType &type, bool physical = false) {
          type.arguments[0].domain == "bls12-381.fr" &&
          type.arguments[1].kind == TypeArgument::Kind::Nat &&
          type.arguments[1].natural <= 1048576 &&
-         (physical ? type.representation == "arkworks.field-array/1"
+         (physical ? type.representation == "arkworks.field-array/0"
                    : type.representation.empty());
 }
 // Complete closed native message grammar. Local copy permission alone is
@@ -106,10 +106,10 @@ inline bool nativeMessageData(const BoundType &type) {
          ((type.kind == "group" || type.kind == "groups") &&
           type.identity == "bls12-381.g1") ||
          ((type.kind == "commitment" || type.kind == "proof") &&
-          (type.identity == "multilinear.kzg.bls12-381/1" ||
-           type.identity == "rows.merkle-keccak256.koala-bear/1" ||
+          (type.identity == "multilinear.kzg.bls12-381/0" ||
+           type.identity == "rows.merkle-keccak256.koala-bear/0" ||
            type.identity ==
-               "rows.merkle-keccak256.koala-bear.ext8-binomial3/1"));
+               "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"));
 }
 // Frames introduced by the structured message profile, including standalone
 // numeric collections. Existing scalar and fixed-array frames keep their IDs.
@@ -120,20 +120,21 @@ inline bool nativeDataFrame(const BoundType &type) {
          nativeMessageData(type);
 }
 inline bool nativeSetupType(const BoundType &type) {
-  if (type.identity == "multilinear.kzg.bls12-381/1")
+  if (type.kind == "prover_key" || type.kind == "verifier_key" ||
+      type.identity == "multilinear.kzg.bls12-381/0")
     return true;
   if (type.kind == "variant") {
     auto logical = type;
     logical.representation.clear();
     auto descriptor = decodeVariant(logical.spelling());
     if (!descriptor)
-      return false;
+      return true;
     for (const auto &arm : descriptor->alternatives)
       for (const auto &leaf : arm.payload) {
         auto child = parseBoundType(leaf, false);
         if (!child) {
           llvm::consumeError(child.takeError());
-          continue;
+          return true;
         }
         if (nativeSetupType(*child))
           return true;
@@ -160,7 +161,7 @@ inline bool applicationPermission(llvm::StringRef type, bool copy) {
 }
 inline bool variantPermission(llvm::StringRef type, bool copy) {
   auto [logical, rep] = type.split('@');
-  if (type.contains('@') && rep != "logical.variant/1")
+  if (type.contains('@') && rep != "logical.variant/0")
     return false;
   auto descriptor = decodeVariant(logical.str());
   if (!descriptor)
@@ -194,7 +195,7 @@ inline Custody custody(llvm::StringRef type) {
   if (kind == "variant") {
     auto logical = type.split('@').first;
     if (!decodeVariant(logical.str()) ||
-        (type.contains('@') && type.split('@').second != "logical.variant/1"))
+        (type.contains('@') && type.split('@').second != "logical.variant/0"))
       return Custody::Unknown;
     return variantPermission(type, true) ? Custody::PrivateImmutable
                                          : Custody::Affine;

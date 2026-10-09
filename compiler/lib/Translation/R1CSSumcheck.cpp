@@ -136,15 +136,14 @@ public:
   OwningOpRef<ModuleOp> run() {
     OwningOpRef<ModuleOp> module = ModuleOp::create(loc);
     b.setInsertionPointToStart(module->getBody());
-    unit = pir::ProtocolModuleOp::create(b, loc, pir::Profile::Protocol,
-                                         pir::ExecutionContractAttr{});
+    unit = pir::ProtocolModuleOp::create(b, loc, pir::Profile::Protocol);
     unit.getBody().push_back(new Block());
     b.setInsertionPointToEnd(&unit.getBody().front());
     Type assignment = RankedTensorType::get({relation.columns()}, field);
     Type point = RankedTensorType::get({arity}, field);
     Type table = RankedTensorType::get({rows}, field);
     Type service =
-        pir::ServiceReferenceType::get(b.getContext(), "random.bls12-381.fr/1");
+        pir::ServiceReferenceType::get(b.getContext(), "random.bls12-381.fr/0");
     auto helper = func::FuncOp::create(
         b, loc, "recipe",
         b.getFunctionType({assignment, point}, {polynomial(arity)}));
@@ -265,7 +264,7 @@ public:
       purposes.assign(relation.publicCount(), b.getStringAttr("statement"));
       op(DeclareOp::getOperationName(), {}, {},
          {text("sym_name", "subject"), text("kind", "r1cs"),
-          text("key", relation.identity()), text("revision", "1"),
+          text("key", relation.identity()), text("revision", "0"),
           b.getNamedAttr("signature", TypeAttr::get(b.getFunctionType(
                                           publicTypes, b.getI1Type()))),
           b.getNamedAttr("purposes", b.getArrayAttr(purposes))});
@@ -330,7 +329,7 @@ json::Value r1csSumcheckRequirements(const R1CS &relation) {
     points.push_back(i + 2);
   json::Object requirement{
       {"id", "r1cs"},
-      {"family", "r1cs-sum-to-point/1"},
+      {"family", "r1cs-sum-to-point/0"},
       {"reduction", "reduction"},
       {"terminal", "terminal"},
       {"recipe", "recipe"},
@@ -350,7 +349,7 @@ json::Value r1csSumcheckRequirements(const R1CS &relation) {
                                    {"reduction_site", "reduce"},
                                    {"terminal_site", "decide"}}},
       {"relation", relation.encode()}};
-  return json::Object{{"format", "zkc.polynomial-requirements/1"},
+  return json::Object{{"format", "zkc.polynomial-requirements/0"},
                       {"requirements", json::Array{std::move(requirement)}}};
 }
 } // namespace zkc::relation

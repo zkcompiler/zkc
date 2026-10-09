@@ -47,7 +47,7 @@ def prepare (sourceJson descriptorJson inputs : Json) : Result Invocation := do
   let context ← Context.bind [] (definition.arguments.map Port.name) ports
   let [.str tag, .str applicationContext, publicJson, inputJson, configJson] ← Decode.array inputs
     | throw "artifact-inputs"
-  ensure (tag == "zkc.artifact-inputs/1") "artifact-inputs"
+  ensure (tag == "zkc.artifact-inputs/0") "artifact-inputs"
   let configJson ← match identity with
     | some identity => identity.configuration configJson
     | none => pure configJson
@@ -95,9 +95,9 @@ def prepare (sourceJson descriptorJson inputs : Json) : Result Invocation := do
     let ty ← Json.str <$> value.typeFor
     publicRecords := publicRecords.push (.arr #[.str declaration.label, ty, .str (hex wire)])
   let rootJson := match identity with
-    | some identity => Json.arr #[.str "zkc.artifact-binding/1", identity.normalized,
+    | some identity => Json.arr #[.str "zkc.artifact-binding/0", identity.normalized,
         descriptor.json, .str applicationContext, .arr publicRecords, configJson]
-    | none => Json.arr #[.str "zkc.artifact-binding/1",
+    | none => Json.arr #[.str "zkc.artifact-binding/0",
         sourceJson, descriptorJson, .str applicationContext, .arr publicRecords, configJson]
   -- Input records are keyed by label, while runtime setup validation pairs
   -- these values with declarations. Retain declaration order in both lists.
@@ -107,7 +107,7 @@ def prepare (sourceJson descriptorJson inputs : Json) : Result Invocation := do
     orderedPublic, ← treeBytes rootJson, configJson, setups⟩
 
 def decodeAnswers (json : Json) : Result (Array OracleReply) := do
-  let [.str "zkc.primitive-replies/1", records] ← Decode.array json | throw "primitive-replies"
+  let [.str "zkc.primitive-replies/0", records] ← Decode.array json | throw "primitive-replies"
   let mut answers : Array OracleReply := #[]
   for record in ← Decode.array records do
     let [request, response] ← Decode.array record | throw "primitive-reply"
@@ -131,12 +131,12 @@ def run (invocation : Invocation) : RunM (List Value) := do
         some <$> checked (selection coordinate invocation.setups.inputs)
       else pure none
     validatePublic source value selected
-  let header ← oracle (.arr #[.str "zkc.hash/1", .str "sha256", .str (hex invocation.root)])
+  let header ← oracle (.arr #[.str "zkc.hash/0", .str "sha256", .str (hex invocation.root)])
   let expected ← checked (unhex (← checked (Decode.string header)))
   require (expected.size == 32) "hash-response"
   let (header, cursor) ← checked ((← get).cursor.read 40)
   modify fun s => { s with cursor := cursor }
-  require (header.extract 0 8 == "ZKCPRF01".toUTF8 && header.extract 8 40 == expected) "proof-header"
+  require (header.extract 0 8 == "ZKCPRF00".toUTF8 && header.extract 8 40 == expected) "proof-header"
   let some body := invocation.definition.body | fail "refused" "external-protocol"
   let location : Location := {
     entry := invocation.descriptor.entry

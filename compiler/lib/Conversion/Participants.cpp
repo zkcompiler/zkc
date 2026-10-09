@@ -4,9 +4,7 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Protocol/Execution.h"
 #include "zkc/Dialect/detail/Builders.h"
-#include "zkc/Protocol/Admission.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/LinearContraction.h"
 #include "zkc/Transforms/Passes.h"
@@ -26,13 +24,15 @@ lowerPhysical(ModuleOp module,
   module.getContext()->getOrLoadDialect<zkc::plan::PlanDialect>();
   if (failed(verify(module)))
     return failure();
-  auto candidate = readExecutionModel(module);
-  if (!candidate)
-    return diagnostics::emit(module.emitError(), candidate.takeError());
-  if (auto e = admit(*candidate, true))
-    return diagnostics::emit(module.emitError(), std::move(e));
+  if (!llvm::hasSingleElement(*module.getBody()))
+    return diagnostics::emit(module.emitError(), "interactive-module-count");
   auto root =
-      cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
+      dyn_cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
+  if (!root || !zkc::protocol_ir::isExecutableProfile(root.getProfile()))
+    return diagnostics::emit(module.emitError(), "interactive-module");
+  // For executable profiles, ProtocolModuleOp::verifyRegions already reads
+  // and admits the execution model. Keep the wrapper/profile checks here
+  // without reconstructing and discarding the same admitted records.
   if (root.getProfile() != zkc::protocol_ir::Profile::Exec)
     return diagnostics::emit(root.emitError(), "interactive-physical-stage");
   OwningOpRef<ModuleOp> selected(cast<ModuleOp>(module->clone()));
@@ -50,7 +50,7 @@ lowerPhysical(ModuleOp module,
 namespace {
 struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PhysicalPass)
-  PhysicalPass(source::Assignments selected, bool linear, bool release,
+  PhysicalPass(protocol::Assignments selected, bool linear, bool release,
                LinearContractionStats *output)
       : selections(std::move(selected)), output(output) {
     linearContractions = linear;
@@ -59,7 +59,7 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
   PhysicalPass(const PhysicalPass &other)
       : PassWrapper(other), selections(other.selections), output(other.output) {
   }
-  source::Assignments selections;
+  protocol::Assignments selections;
   LinearContractionStats *output;
   Option<bool> linearContractions{
       *this, "linear-contractions",
@@ -101,7 +101,7 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
 };
 } // namespace
 std::unique_ptr<Pass>
-createSelectPhysicalPass(source::Assignments selections,
+createSelectPhysicalPass(protocol::Assignments selections,
                          bool linearContractions, bool releaseStorage,
                          LinearContractionStats *statistics) {
   return std::make_unique<PhysicalPass>(

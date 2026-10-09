@@ -1,7 +1,7 @@
 """Local workspace paths shared by development commands and Python tests.
 
 Tool versions belong to Nix and language manifests. This module only resolves
-mutable checkout paths and rejects obsolete, ambiguous environment settings.
+mutable checkout paths and validates explicit tool and report directories.
 All ZKC path settings are relative to the checkout, not the caller's directory.
 """
 
@@ -11,31 +11,13 @@ import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REMOVED = {
-    "ZKC_JOBS": "use the build tool's parallelism variable (see docs/development/configuration.md#toolchain-and-concurrency)",
-    "ZKC_BUILD_PRESET": "pass a profile argument, e.g. just build-compiler dev",
-    "ZKC_COMPILER_BUILD": "use a CMake preset; select its output with ZKC_COMPILER_BIN",
-    "ZKC_COMPILER": "set ZKC_COMPILER_BIN to the directory containing zkc-compile",
-    "ZKC_SOURCE_BENCH": "set ZKC_COMPILER_BIN to the compiler output directory",
-    "ZKC_SERVICE_COMPILER": "set ZKC_COMPILER_BIN to the compiler output directory",
-    "ZKC_SERVICE_OPTIMIZER": "set ZKC_COMPILER_BIN to the compiler output directory",
-    "ZKC_REQUIREMENTS_TEST": "set ZKC_COMPILER_BIN to the compiler output directory",
-    "ZKC_OPTIMIZER": "set ZKC_COMPILER_BIN to the directory containing zkc-opt",
-    "ZKC_LEAN": "set ZKC_LEAN_BIN to the directory containing the Lean checkers",
-    "ZKC_PHYSICAL_CHECKER": "set ZKC_LEAN_BIN to the directory containing the Lean checkers",
-    "ZKC_TEST_RECORDS": "set ZKC_REPORTS_DIR to the reports root (without /tests)",
-}
 DIRECTORIES = {
     "compiler": ("ZKC_COMPILER_BIN", "build/compiler"),
     "native": ("ZKC_NATIVE_BIN", "target/release"),
-    "lean": ("ZKC_LEAN_BIN", "formal/.lake/build/bin"),
 }
 
 
 def validate_environment():
-    for name, replacement in REMOVED.items():
-        if name in os.environ:
-            raise ValueError(f"{name} was removed; {replacement}")
     for name in [entry[0] for entry in DIRECTORIES.values()] + ["ZKC_REPORTS_DIR"]:
         if name in os.environ and not os.environ[name].strip():
             raise ValueError(f"{name} must be a nonempty path; unset it to use the default")

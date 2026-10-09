@@ -1,40 +1,43 @@
 {
-  stdenvNoCC,
   source,
   pythonTools,
   uv,
   environment,
   just,
   git,
-  lean,
+  cmake,
+  ninja,
   compiler,
   tools,
-  formal,
+  testSupport,
   python3,
   cacert,
-  time,
 }:
-stdenvNoCC.mkDerivation (
+tools.overrideAttrs (
+  old:
   (environment.outputs {
     compilerBin = "${compiler.testSupport}/bin";
-    nativeBin = "${tools.testSupport}/bin";
-    leanBin = "${formal}/bin";
+    nativeBin = "${testSupport}/bin";
   })
   // {
     pname = "zkc-project-checks";
-    version = "0.1.0";
+    version = "0.0.0";
     src = source;
-    nativeBuildInputs = [
+    # Generated bindings are compiled as a separate consumer crate. Reuse the
+    # Rust package's toolchain and offline vendor hooks for that boundary test.
+    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
       pythonTools
       just # Exercised by the command regression test, not the test runner.
       uv
       git
-      lean
+      cmake
+      ninja
       python3
-      time
     ];
     dontConfigure = true;
     dontBuild = true;
+    outputs = [ "out" ];
+    CARGO_NET_OFFLINE = "true";
     UV_PROJECT_ENVIRONMENT = pythonTools;
     UV_NO_SYNC = "1";
     UV_OFFLINE = "1";
@@ -45,16 +48,12 @@ stdenvNoCC.mkDerivation (
       runHook preCheck
       export UV_CACHE_DIR="$TMPDIR/uv-cache"
       ${environment.checks}
-      # Existing checkers and independent Lake consumers need a writable copy.
-      cp -R ${formal.library}/share/zkc/formal/.lake formal/
-      chmod -R u+w formal/.lake
       python3 tests/run.py project
       runHook postCheck
     '';
     installPhase = ''
       mkdir -p "$out"
-      # Keep reports, not consumers' dependency symlinks or rebuilt Lake objects.
-      find build/reports -type f ! -path '*/.lake/*' -exec cp --parents {} "$out/" \;
+      find build/reports -type f -exec cp --parents {} "$out/" \;
       mv "$out/build/reports" "$out/reports"
       rmdir "$out/build"
     '';

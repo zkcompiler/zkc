@@ -10,7 +10,7 @@ from tools import compiler, records
 OUT = records()
 commands = Commands(OUT)
 FIXTURES = Path(__file__).parent / 'fixtures/mathematical'
-SUITES = ['merlin3.bls12-381.fr64be/1', 'spongefish0.7.4.keccak.bls12-381.fr64be/1']
+SUITES = ['merlin3.bls12-381.fr64be/0', 'spongefish0.7.4.keccak.bls12-381.fr64be/0']
 manifest = []
 
 def expanded(caller, callee):
@@ -20,8 +20,8 @@ def policy(family, suite):
     if family == 'nested':
         draws = [[expanded(expanded('segment', step), site) for site in ('draw_challenge', 'challenge')]
                  for step in ('first', 'second')]
-        return ['zkc.native-proof-policy/2', 'main', 'P', 'V', '0', suite, '5', ['0', '1', '3'], draws]
-    return ['zkc.native-proof-policy/2', 'main', 'P', 'V', '0', suite, '4', ['1', '2', '3'], [['draw', 'challenge']]]
+        return ['zkc.native-proof-policy/0', 'main', 'P', 'V', '0', suite, '5', ['0', '1', '3'], draws]
+    return ['zkc.native-proof-policy/0', 'main', 'P', 'V', '0', suite, '4', ['1', '2', '3'], [['draw', 'challenge']]]
 
 for family, fixture in [('sumcheck', 'iterated-sumcheck'), ('cubic', 'cubic-sumcheck'), ('nested', 'nested-schnorr')]:
     source = (FIXTURES / (fixture + '.mlir')).read_text()
@@ -33,9 +33,9 @@ for family, fixture in [('sumcheck', 'iterated-sumcheck'), ('cubic', 'cubic-sumc
                 src.write_text(source); pol.write_text(json.dumps(policy(family, suite)))
                 result = commands.run([compiler, 'protocol-proof', src, pol, *options])
                 envelope = json.loads(result)
-                assert envelope[0] == 'zkc.native-proof/2'
+                assert envelope[0] == 'zkc.native-proof/0'
                 assert envelope[1] == hashlib.sha256(source.encode()).hexdigest()
-                assert json.loads(envelope[4])[0] == 'zkc.program/1'
+                assert json.loads(envelope[4])[0] == 'zkc.program/0'
                 (OUT / (name + '.deployment')).write_text(result)
                 manifest.append(dict(name=name, family=family))
                 if not suffix and suite_index == 0:
@@ -94,14 +94,14 @@ with case('distinct field-array shapes retain distinct transcript bindings'):
     }) {sym_name="main",function_type=(ui64,!q_t,!q_t,!q_f,!q_f,!q_rng)->i1,roles=["P","V"],input_roles=[["P"],["P","V"],["P","V"],["V"],["V"],["V"]],output_roles=[["V"]]} : ()->()'''
     source = qa + ca + 'module { "protocol.module"() ({' + qb + cb + main + '}) {profile=#protocol.profile<protocol>} : ()->() }'
     src = OUT / 'mixed_shapes.mlir'; src.write_text(source)
-    p = ['zkc.native-proof-policy/2','main','P','V','0',SUITES[0],'5',['1','2','3','4'],
+    p = ['zkc.native-proof-policy/0','main','P','V','0',SUITES[0],'5',['1','2','3','4'],
          [[expanded(call,site) for site in ('draw','challenge')] for call in ('quadratic','cubic')]]
     pol = OUT / 'mixed_shapes.policy'; pol.write_text(json.dumps(p))
     result = json.loads(commands.run([compiler,'protocol-proof',src,pol]))
     bindings = json.loads(result[4])[1]
-    arrays = [b for b in bindings if 'transcript.native.indexed.observe.field_array' in b]
+    arrays = [b for b in bindings if 'transcript.native.indexed.observe.data' in b and b[2][-1].startswith('field_array<')]
     assert len(arrays) == 2, arrays
-    assert {b[2][-1] for b in arrays} == {'3', '4'}
+    assert {b[2][-1] for b in arrays} == {'field_array<bls12-381.fr,3>', 'field_array<bls12-381.fr,4>'}, arrays
 
 with case('iterated source correspondence checks real control operands'):
     src, pol = OUT / 'sumcheck_0.mlir', OUT / 'sumcheck_0.policy'
@@ -115,9 +115,9 @@ with case('iterated source correspondence checks real control operands'):
     assert count == 1
     candidate.write_text(changed)
     commands.run([compiler, 'protocol-check-proof', src, pol, candidate], refuses='native-proof-correspondence')
-    # A v2 helper cannot be authorized by v1 construction metadata.
-    assert 'zkc.native-construction/2' in original
-    candidate.write_text(original.replace('zkc.native-construction/2', 'zkc.native-construction/1'))
+    # An unknown construction tag cannot authorize transcript helpers.
+    assert 'zkc.native-construction/0' in original
+    candidate.write_text(original.replace('zkc.native-construction/0', 'invalid.native-construction'))
     commands.run([compiler, 'protocol-check-proof', src, pol, candidate], refuses='native-proof-candidate')
     # Updating both the action metadata and loop bounds cannot authorize a
     # different source maximum.
@@ -145,11 +145,11 @@ with case('nested source correspondence retains actual coordinate operands'):
         commands.run([compiler, 'protocol-check-proof', src, pol, candidate],
                      refuses='native-proof-correspondence')
 
-with case('flat policy refuses loop source before preparation'):
+with case('unknown policy tag refuses loop source before preparation'):
     source = OUT / 'sumcheck_0.mlir'
-    p = policy('sumcheck', SUITES[0]); p[0] = 'zkc.native-proof-policy/1'
-    pol = OUT / 'flat.policy'; pol.write_text(json.dumps(p))
-    commands.run([compiler, 'protocol-proof', source, pol], refuses='native-proof-flat-profile')
+    p = policy('sumcheck', SUITES[0]); p[0] = 'invalid.native-proof-policy'
+    pol = OUT / 'unknown-tag.policy'; pol.write_text(json.dumps(p))
+    commands.run([compiler, 'protocol-proof', source, pol], refuses='native-proof-policy')
 with case('cross-block draw delivery is not admitted'):
     text = (FIXTURES / 'iterated-sumcheck.mlir').read_text()
     # A draw before a loop may not be delivered by its body.

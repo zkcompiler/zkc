@@ -14,11 +14,11 @@ def request {F : Type} [Zero F] [BEq F] (domain : String) (canonical : F → Nat
   let .matrix matrix := value | throw "matrix-identity-type"
   ensure matrix.valid "matrix-canonical"
   let natural := fun n => Json.str (toString n)
-  let payload := Json.arr #[.str "zkc.matrix/1", .str domain,
+  let payload := Json.arr #[.str "zkc.matrix/0", .str domain,
     .arr #[natural matrix.rows, natural matrix.columns,
       .arr (matrix.entries.map fun e => Json.arr #[natural e.row, natural e.column,
         natural (canonical e.coefficient)]).toArray]]
-  return .arr #[.str "zkc.hash/1", .str "sha256", .str (Tools.Artifact.hex payload.compress.toUTF8)]
+  return .arr #[.str "zkc.hash/0", .str "sha256", .str (Tools.Artifact.hex payload.compress.toUTF8)]
 
 /-- Prime-field content uses the canonical residue, not Montgomery bytes. -/
 def prime (domain : ScalarReference.Domain) (value : ScalarReference.Data (ScalarReference.Scalar domain)) :

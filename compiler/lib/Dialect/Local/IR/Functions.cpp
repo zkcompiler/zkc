@@ -1,3 +1,4 @@
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/Interfaces/FunctionImplementation.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -52,10 +53,12 @@ LogicalResult ReturnOp::verify() {
 namespace {
 LogicalResult verifyCall(Operation *op, FlatSymbolRefAttr reference,
                          SymbolTableCollection &tables) {
-  auto function = tables.lookupNearestSymbolFrom<FuncOp>(op, reference);
-  if (!function)
-    return diagnostics::emit(op->emitOpError(), "interactive-symbol-kind",
-                             "expected a local.func symbol");
+  auto *function = tables.lookupNearestSymbolFrom(op, reference);
+  if (!isa_and_nonnull<FuncOp>(function) &&
+      !(isa<ApplyOp>(op) && isa_and_nonnull<RealizeOp>(function)))
+    return diagnostics::emit(
+        op->emitOpError(), "interactive-symbol-kind",
+        "expected a local.func or preparation-time realization");
   // A sibling's verifier may not have run yet.
   auto attribute = function->getAttrOfType<TypeAttr>("function_type");
   auto type =
@@ -81,9 +84,22 @@ LogicalResult ApplyOp::verifySymbolUses(SymbolTableCollection &tables) {
     return failure();
   auto function =
       tables.lookupNearestSymbolFrom<FuncOp>(*this, getCalleeAttr());
-  if (function.isExternal())
+  if (function && function.isExternal())
     return diagnostics::emit(emitOpError(), "algorithm-call-symbol",
                              "local.apply requires an executable body");
+  return success();
+}
+
+LogicalResult RealizeOp::verifySymbolUses(SymbolTableCollection &tables) {
+  auto helper =
+      tables.lookupNearestSymbolFrom<func::FuncOp>(*this, getHelperAttr());
+  if (!helper || failed(helper->getName().verifyInvariants(helper)) ||
+      helper.isExternal() || !helper.isPrivate() ||
+      helper->getParentOp() != (*this)->getParentOp())
+    return diagnostics::emit(emitOpError(), "local-realization-helper");
+  auto attribute = helper->getAttrOfType<TypeAttr>("function_type");
+  if (!attribute || attribute.getValue() != getFunctionType())
+    return diagnostics::emit(emitOpError(), "local-realization-signature");
   return success();
 }
 

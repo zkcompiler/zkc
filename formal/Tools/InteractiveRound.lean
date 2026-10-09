@@ -54,7 +54,7 @@ def process (requestPath planPath : System.FilePath) (certificatePath : Option S
     | return ← refused "phase-not-admitted"
   match invocation with
   | none =>
-    emit (Json.mkObj [("status", .str "admitted"), ("profile", .str "interactive-round/1"),
+    emit (Json.mkObj [("status", .str "admitted"), ("profile", .str "interactive-round/0"),
       ("claim", .str "phase-conformance-and-normal-return")])
     return 0
   | some (enabled, value) =>

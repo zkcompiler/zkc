@@ -14,7 +14,7 @@ import component_dependencies as policy
 
 directory = records()
 root = Path(directory) / "compiler"
-for area in ("include", "lib", "tools", "examples/service"):
+for area in ("include", "lib", "tools", "examples"):
     shutil.copytree(policy.ROOT / area, root / area)
 original_manifest = Path(os.environ["ZKC_CTEST_COMPONENTS"])
 manifest = Path(directory) / "component-dependencies.txt"
@@ -70,37 +70,21 @@ def rejects(name, path, transform, message):
 
 with case("the actual component graph passes in an isolated tree"):
     check()
-for filename in ("BuiltinHeaders.h.inc", "BuiltinDialects.inc", "NativeDialects.inc",
+for filename in ("BuiltinHeaders.h.inc", "BuiltinDialects.inc",
                  "ContributionHeaders.h.inc", "ContributionDialects.inc"):
-    for source in ("lib/Dialect/Claim/IR/ClaimDialect.cpp", "include/zkc/Dialect/Registry.h"):
+    for source in ("lib/Dialect/Algebra/IR/Mathematical.cpp", "include/zkc/Dialect/Registry.h"):
         rejects(f"registration fragment is private: {filename} from {source}",
                 root / source,
                 lambda text, filename=filename: f'#include "zkc/Dialect/{filename}"\n' + text,
                 "private dialect registration fragment")
 rejects("absolute registration fragment cannot bypass ownership",
-        root / "lib/Dialect/Claim/IR/ClaimDialect.cpp",
+        root / "lib/Dialect/Algebra/IR/Mathematical.cpp",
         lambda text: f'#include "{manifest.parent / "include/zkc/Dialect/BuiltinDialects.inc"}"\n' + text,
         "private dialect registration fragment")
-rejects("a bridge does not grant its owner's other private headers",
-        root / "lib/Claims/Admission.h",
-        lambda text: '#include "Internal.h"\n' + text,
-        "private component dependency: ZkcClaimTranslation")
-rejects("claim translation cannot include other checker internals",
-        root / "lib/ClaimTranslation/Claims.cpp",
-        lambda text: '#include "../Claims/Internal.h"\n' + text,
-        "private component dependency: ZkcClaimTranslation")
-rejects("ordinary IR cannot include the claim checker",
-        root / "lib/Dialect/Claim/IR/ClaimDialect.cpp",
-        lambda text: '#include "zkc/Claims/Claims.h"\n' + text,
-        "ZkcIR: upward include")
-rejects("ordinary IR cannot include optional claim translation",
-        root / "lib/Dialect/Claim/IR/ClaimDialect.cpp",
-        lambda text: '#include "zkc/ClaimTranslation/Claims.h"\n' + text,
-        "ZkcIR: upward include")
-rejects("claim translation public headers cannot expose the private bridge",
-        root / "include/zkc/ClaimTranslation/Claims.h",
-        lambda text: '#include "../../../lib/Claims/Admission.h"\n' + text,
-        "public header includes private implementation")
+rejects("IR cannot depend on a compiler workflow", root / "lib/Dialect/Algebra/IR/Mathematical.cpp",
+        lambda text: '#include "zkc/Compiler/Run.h"\n' + text, "ZkcIR: upward include")
+rejects("public program headers cannot expose implementation", root / "include/zkc/Program/Model.h",
+        lambda text: '#include "../../../lib/Program/Structure.h"\n' + text, "public header includes private implementation")
 rejects("public extension headers cannot reexport raw builders",
         root / "include/zkc/Dialect/IR.h",
         lambda text: '#include "zkc/Dialect/detail/Builders.h"\n' + text,
@@ -116,28 +100,18 @@ def move_source(text, source, destination):
         lines.append(f"{name}|{links}|{interface}|{';'.join(items)}")
     return "\n".join(lines) + "\n"
 
-for source in ("lib/Dialect/Claim/IR/ClaimDialect.cpp", "lib/Dialect/Protocol/IR/Protocol.cpp"):
+for source in ("lib/Dialect/Algebra/IR/Mathematical.cpp", "lib/Dialect/Protocol/IR/Protocol.cpp"):
     rejects(f"mandatory IR source cannot move to optional translation: {source}", manifest,
-            lambda text, source=source: move_source(text, source, "ZkcClaimTranslation"),
+            lambda text, source=source: move_source(text, source, "ZkcTranslation"),
             "mandatory component ownership")
-rejects("claim translation must retain its audited direct dependency", manifest,
-        lambda text: text.replace("ZkcClaimTranslation|ZkcClaims;", "ZkcClaimTranslation|", 1),
-        "Claims bridge requires a direct Claims dependency")
 rejects("the manifest cannot add an unrecognized component", manifest,
         lambda text: text + "ZkcExtra|||\n", "ownership policy disagree")
 rejects("the manifest cannot repeat a component", manifest,
         lambda text: text + "ZkcSupport|LLVM|LLVM|\n", "duplicate component")
-rejects("frontend cannot use C file I/O headers", root / "lib/Frontend/Analysis.cpp",
-        lambda text: '#include <cstdio>\n' + text, "input loading belongs to FrontendLoading")
-rejects("loading cannot reach private lexer internals", root / "lib/Frontend/Loading/Capture.cpp",
-        lambda text: '#include "../Syntax/Lexer.h"\n' + text, "frontend phase dependency")
-rejects("carrier decoding cannot invoke authored name resolution", root / "lib/Frontend/Carrier/Reader.cpp",
-        lambda text: '#include "../Resolution/Names.h"\n' + text, "frontend phase dependency")
-rejects("installed headers cannot reach an implementation", root / "include/zkc/Claims/Claims.h",
-        lambda text: '#include "../../../lib/Claims/Internal.h"\n' + text,
-        "public header includes private implementation")
+rejects("language cannot use C file I/O headers", root / "lib/Language/Check.cpp",
+        lambda text: '#include <cstdio>\n' + text, "input loading belongs to Driver")
 rejects("a dylib does not permit an upward target edge", manifest,
-        lambda text: text.replace("ZkcIR|", "ZkcIR|ZkcFrontend;", 1),
+        lambda text: text.replace("ZkcIR|", "ZkcIR|ZkcDriver;", 1),
         "hidden private or extra interface dependencies")
 # Adding both links preserves direct/interface agreement and must still fail.
 def mixed_mlir(text):
@@ -316,8 +290,50 @@ rejects("IR cannot consume private mathematical transform helpers",
 rejects("IR cannot parse invocation input",
         root / "lib/Dialect/Protocol/IR/Projection.cpp",
         lambda text: '#include "mlir/Parser/Parser.h"\n' + text,
-        "parsing belongs to CompilerCore or Driver")
+        "parsing belongs to Compiler or Driver")
 rejects("transforms cannot parse invocation input",
         root / "lib/Transforms/Algorithms.cpp",
         lambda text: '#include "mlir/Parser/Parser.h"\n' + text,
-        "parsing belongs to CompilerCore or Driver")
+        "parsing belongs to Compiler or Driver")
+
+rejects("Program cannot depend on MLIR operations",
+        root / "lib/Program/Admission.cpp",
+        lambda text: '#include "mlir/IR/Operation.h"\n' + text,
+        "includes mlir/IR/Operation.h")
+rejects("Program cannot depend on Language types",
+        root / "lib/Program/Admission.cpp",
+        lambda text: '#include "zkc/Language/Types.h"\n' + text,
+        "ZkcProgram: upward include")
+rejects("Contracts cannot depend on Program records",
+        root / "lib/Contracts/Bindings.cpp",
+        lambda text: '#include "zkc/Program/Model.h"\n' + text,
+        "ZkcContracts: upward include")
+
+rejects("semantic queries cannot acquire source checker state",
+        root / "lib/Language/Semantics.cpp",
+        lambda text: '#include "Checker.h"\n' + text,
+        "semantic queries cannot depend on source checking")
+rejects("Entry closure cannot acquire source syntax",
+        root / "lib/Language/Specialize.cpp",
+        lambda text: '#include "Internal.h"\n' + text,
+        "semantic queries cannot depend on source checking")
+
+rejects("Compiler cannot acquire CLI headers",
+        root / "lib/Compiler/Compilation.cpp",
+        lambda text: '#include "zkc/Driver/Compiler.h"\n' + text,
+        "ZkcCompiler: upward include")
+rejects("Compiler cannot link Driver", manifest,
+        lambda text: text.replace("ZkcCompiler|", "ZkcCompiler|ZkcDriver;", 1),
+        "hidden private or extra interface dependencies")
+rejects("prepared protocol bridge cannot enter public Compiler headers",
+        root / "include/zkc/Compiler/Compilation.h",
+        lambda text: '#include "../../../lib/Transforms/PreparedProtocol.h"\n' + text,
+        "public header includes private implementation")
+rejects("Driver cannot directly use the prepared protocol bridge",
+        root / "lib/Driver/Compiler.cpp",
+        lambda text: '#include "../Transforms/PreparedProtocol.h"\n' + text,
+        "private component dependency")
+rejects("prepared protocol bridge grants no other private transform header",
+        root / "lib/Compiler/Compilation.cpp",
+        lambda text: '#include "../Transforms/MathematicalSupport.h"\n' + text,
+        "private component dependency")

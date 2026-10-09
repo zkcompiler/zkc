@@ -1,0 +1,13 @@
+module sample;
+math fn formula(a:bool,b:bool)->(bool,bool,bool,bool){
+  return (intrinsic("bool.and",a,b),intrinsic("bool.or",a,b),
+          intrinsic("bool.xor",a,b),a==false);
+}
+fn local_formula(a:bool,b:bool)->(bool,bool,bool,bool){return formula(a,b);}
+protocol Run roles(P)(a:bool@P,b:bool@P)
+    ->(mathematical:(bool,bool,bool,bool)@P,executable:(bool,bool,bool,bool)@P){
+  let m=formula(a,b);
+  local P let e=local_formula(a,b);
+  return(mathematical=m,executable=e);
+}
+entry Demo=Run;

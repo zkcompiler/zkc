@@ -1,6 +1,5 @@
 //! Checked module contractions. Default Ristretto MSM uses MultiscalarMul.
-//! The explicit public-operand implementation requires the backend role gate.
-//! Neither choice establishes a whole-runtime timing guarantee.
+//! Kernel choice does not establish a whole-runtime timing guarantee.
 use crate::kernels::arithmetic::{equal_len, natural, reserve, split_len};
 use crate::{
     GroupPoint, Policy, Result, RistrettoPoint, RistrettoScalar, Scalar, Value, exhausted, refused,
@@ -8,7 +7,7 @@ use crate::{
 };
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT,
-    traits::{Identity, MultiscalarMul, VartimeMultiscalarMul},
+    traits::{Identity, MultiscalarMul},
 };
 use std::sync::Arc;
 use zkc_runtime::interactive::Invocation;
@@ -19,7 +18,7 @@ trait Group: Copy + PartialEq {
     fn add(self, other: Self) -> Self;
     fn neg(self) -> Self;
     fn scale(self, scalar: Self::Scalar) -> Self;
-    fn msm(s: &[Self::Scalar], p: &[Self], public: bool) -> Result<Self>;
+    fn msm(s: &[Self::Scalar], p: &[Self]) -> Result<Self>;
     fn point(v: &Value) -> Result<Self>;
     fn points(v: &Value) -> Result<&Arc<[Self]>>;
     fn scalar(v: &Value) -> Result<Self::Scalar>;
@@ -46,7 +45,7 @@ impl Group for GroupPoint {
     fn scale(self, scalar: Scalar) -> Self {
         Self::scale(&self, scalar)
     }
-    fn msm(s: &[Scalar], p: &[Self], _public: bool) -> Result<Self> {
+    fn msm(s: &[Scalar], p: &[Self]) -> Result<Self> {
         Self::msm(s, p).map_err(crate::ark)
     }
     fn point(v: &Value) -> Result<Self> {
@@ -107,13 +106,9 @@ impl Group for RistrettoPoint {
     fn scale(self, scalar: RistrettoScalar) -> Self {
         self * scalar
     }
-    fn msm(s: &[RistrettoScalar], p: &[Self], public: bool) -> Result<Self> {
+    fn msm(s: &[RistrettoScalar], p: &[Self]) -> Result<Self> {
         equal_len(s.len(), p.len())?;
-        Ok(if public {
-            Self::vartime_multiscalar_mul(s, p)
-        } else {
-            Self::multiscalar_mul(s, p)
-        })
+        Ok(Self::multiscalar_mul(s, p))
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::RistrettoGroup(v) = v {
@@ -175,7 +170,7 @@ macro_rules! bn_group {
             fn scale(self, s: Self::Scalar) -> Self {
                 Self::scale(&self, s)
             }
-            fn msm(s: &[Self::Scalar], p: &[Self], _: bool) -> Result<Self> {
+            fn msm(s: &[Self::Scalar], p: &[Self]) -> Result<Self> {
                 Self::msm(s, p).map_err(crate::ark)
             }
             fn point(v: &Value) -> Result<Self> {
@@ -229,40 +224,35 @@ pub(crate) fn apply(
     args: &[Value],
     i: &Invocation<'_>,
     p: &Policy,
-    public: bool,
-) -> Option<Result<Vec<Value>>> {
+) -> Result<Vec<Value>> {
     if name == "pairing.apply" {
-        return Some((|| {
-            let [Value::Bn254G1(a), Value::Bn254G2(b)] = args else {
-                return Err(refused("kernel-operands"));
-            };
-            p.output(512, i.max_output_bytes)?;
-            // Bound pairing preparation scratch independently of the GT result.
-            p.output(32768, usize::MAX)?;
-            Ok(vec![Value::Bn254Gt(zkc_arkworks::bn254::pairing(a, b))])
-        })());
+        let [Value::Bn254G1(a), Value::Bn254G2(b)] = args else {
+            return Err(refused("kernel-operands"));
+        };
+        p.output(512, i.max_output_bytes)?;
+        // Bound pairing preparation scratch independently of the GT result.
+        p.output(32768, usize::MAX)?;
+        return Ok(vec![Value::Bn254Gt(zkc_arkworks::bn254::pairing(a, b))]);
     }
     if name == "pairing.check" {
-        return Some((|| {
-            let [Value::Bn254G1Vector(a), Value::Bn254G2Vector(b)] = args else {
-                return Err(refused("kernel-operands"));
-            };
-            equal_len(a.len(), b.len())?;
-            p.bn254_groups::<crate::Bn254G1>(a.len())?;
-            p.bn254_groups::<crate::Bn254G2>(b.len())?;
-            p.output(512, i.max_output_bytes)?;
-            // BN254 G2 preparations retain 91 line coefficients (three Fq2 each),
-            // plus G1 preparation and multi-Miller loop working vectors.
-            p.output(size(a.len(), 32768)?, usize::MAX)?;
-            Ok(vec![Value::Bool(
-                zkc_arkworks::bn254::pairing_check(a, b).map_err(crate::ark)?,
-            )])
-        })());
+        let [Value::Bn254G1Vector(a), Value::Bn254G2Vector(b)] = args else {
+            return Err(refused("kernel-operands"));
+        };
+        equal_len(a.len(), b.len())?;
+        p.bn254_groups::<crate::Bn254G1>(a.len())?;
+        p.bn254_groups::<crate::Bn254G2>(b.len())?;
+        p.output(512, i.max_output_bytes)?;
+        // BN254 G2 preparations retain 91 line coefficients (three Fq2 each),
+        // plus G1 preparation and multi-Miller loop working vectors.
+        p.output(size(a.len(), 32768)?, usize::MAX)?;
+        return Ok(vec![Value::Bool(
+            zkc_arkworks::bn254::pairing_check(a, b).map_err(crate::ark)?,
+        )]);
     }
     if !name.starts_with("curve.") || matches!(name, "curve.commit" | "curve.response") {
-        return None;
+        return Err(refused("kernel-operands"));
     }
-    Some(match field {
+    match field {
         Some(zkc_runtime::interactive::Identity::Bn254Fr) => {
             match i
                 .binding
@@ -271,27 +261,26 @@ pub(crate) fn apply(
                 .first()
                 .map(String::as_str)
             {
-                Some("bn254.g1") => dense::<crate::Bn254G1>(name, args, i, p, public),
-                Some("bn254.g2") => dense::<crate::Bn254G2>(name, args, i, p, public),
+                Some("bn254.g1") => dense::<crate::Bn254G1>(name, args, i, p),
+                Some("bn254.g2") => dense::<crate::Bn254G2>(name, args, i, p),
                 Some("bn254.gt") => target(name, args, i, p),
                 _ => Err(refused("kernel-operands")),
             }
         }
         Some(zkc_runtime::interactive::Identity::Ristretto255Scalar) => {
-            dense::<RistrettoPoint>(name, args, i, p, public)
+            dense::<RistrettoPoint>(name, args, i, p)
         }
         Some(zkc_runtime::interactive::Identity::Bls12381Fr) => {
-            dense::<GroupPoint>(name, args, i, p, public)
+            dense::<GroupPoint>(name, args, i, p)
         }
         _ => Err(refused("kernel-operands")),
-    })
+    }
 }
 fn dense<G: Group>(
     name: &str,
     args: &[Value],
     i: &Invocation<'_>,
     p: &Policy,
-    public: bool,
 ) -> Result<Vec<Value>> {
     let arg = |j| args.get(j).ok_or_else(|| refused("kernel-operands"));
     let point = |j| G::point(arg(j)?);
@@ -362,7 +351,7 @@ fn dense<G: Group>(
                     usize::MAX,
                 )?;
             }
-            G::value(G::msm(s, b, public)?)
+            G::value(G::msm(s, b)?)
         }
         "curve.scale_each" => {
             let (s, b) = (G::scalars(arg(0)?)?, points(1)?);
@@ -434,63 +423,80 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::curve;
     use zkc_runtime::interactive::{AttributeRule, Type::*};
     &[
-        curve::operation("curve.generator", &[], &[Group], AttributeRule::None),
-        curve::operation("curve.add", &[Group, Group], &[Group], AttributeRule::None),
+        curve::operation("curve.generator", &[], &[Group], AttributeRule::None)
+            .implemented_by(&["arkworks/curve.generator", "dalek/curve.generator"]),
+        curve::operation("curve.add", &[Group, Group], &[Group], AttributeRule::None)
+            .implemented_by(&["arkworks/curve.add", "dalek/curve.add"]),
         curve::operation(
             "curve.scale",
             &[Group, Field],
             &[Group],
             AttributeRule::None,
-        ),
-        curve::operation("curve.equal", &[Group, Group], &[Bool], AttributeRule::None),
-        curve::operation("curve.empty", &[], &[Groups], AttributeRule::None),
+        )
+        .implemented_by(&["arkworks/curve.scale", "dalek/curve.scale"]),
+        curve::operation("curve.equal", &[Group, Group], &[Bool], AttributeRule::None)
+            .implemented_by(&["arkworks/curve.equal", "dalek/curve.equal"]),
+        curve::operation("curve.empty", &[], &[Groups], AttributeRule::None)
+            .implemented_by(&["arkworks/curve.empty", "dalek/curve.empty"]),
         curve::operation(
             "curve.append",
             &[Groups, Group],
             &[Groups],
             AttributeRule::None,
-        ),
-        curve::operation("curve.at", &[Groups], &[Group], AttributeRule::NaturalIndex),
-        curve::operation("curve.get", &[Groups, Index], &[Group], AttributeRule::None),
-        curve::operation("curve.length", &[Groups], &[Index], AttributeRule::None),
-        curve::operation("curve.neg", &[Group], &[Group], AttributeRule::None),
-        curve::operation("curve.nonidentity", &[Group], &[Bool], AttributeRule::None),
+        )
+        .implemented_by(&["arkworks/curve.append", "dalek/curve.append"]),
+        curve::operation("curve.at", &[Groups], &[Group], AttributeRule::NaturalIndex)
+            .implemented_by(&["arkworks/curve.at", "dalek/curve.at"]),
+        curve::operation("curve.get", &[Groups, Index], &[Group], AttributeRule::None)
+            .implemented_by(&["arkworks/curve.get", "dalek/curve.get"]),
+        curve::operation("curve.length", &[Groups], &[Index], AttributeRule::None)
+            .implemented_by(&["arkworks/curve.length", "dalek/curve.length"]),
+        curve::operation("curve.neg", &[Group], &[Group], AttributeRule::None)
+            .implemented_by(&["arkworks/curve.neg", "dalek/curve.neg"]),
+        curve::operation("curve.nonidentity", &[Group], &[Bool], AttributeRule::None)
+            .implemented_by(&["arkworks/curve.nonidentity", "dalek/curve.nonidentity"]),
         curve::operation(
             "curve.msm",
             &[Vector, Groups],
             &[Group],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/curve.msm", "dalek/curve.msm"]),
         curve::operation(
             "curve.scale_each",
             &[Vector, Groups],
             &[Groups],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/curve.scale_each", "dalek/curve.scale_each"]),
         curve::operation(
             "curve.vector_add",
             &[Groups, Groups],
             &[Groups],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/curve.vector_add", "dalek/curve.vector_add"]),
         curve::operation(
             "curve.vector_scale",
             &[Groups, Field],
             &[Groups],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/curve.vector_scale", "dalek/curve.vector_scale"]),
         curve::operation(
             "curve.split",
             &[Groups],
             &[Groups, Groups],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/curve.split", "dalek/curve.split"]),
         curve::operation(
             "curve.concat",
             &[Groups, Groups],
             &[Groups],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/curve.concat", "dalek/curve.concat"]),
     ]
 };
 pub(crate) const PAIRINGS: &[crate::bindings::Contract] = &[
@@ -502,7 +508,8 @@ pub(crate) const PAIRINGS: &[crate::bindings::Contract] = &[
         ],
         &[zkc_runtime::interactive::Type::Group],
         zkc_runtime::interactive::AttributeRule::None,
-    ),
+    )
+    .implemented_by(&["arkworks/pairing.apply"]),
     crate::bindings::curve::pairing(
         "pairing.check",
         &[
@@ -511,18 +518,9 @@ pub(crate) const PAIRINGS: &[crate::bindings::Contract] = &[
         ],
         &[zkc_runtime::interactive::Type::Bool],
         zkc_runtime::interactive::AttributeRule::None,
-    ),
+    )
+    .implemented_by(&["arkworks/pairing.check"]),
 ];
-
-pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] =
-    &[crate::backend::registry::Alternative {
-        identity: "dalek-vartime/curve.msm",
-        original: "dalek/curve.msm",
-        primary: zkc_runtime::interactive::Identity::Ristretto255Group,
-        ports: crate::bindings::PortTransform::Default,
-        handler: Some(crate::backend::registry::public_msm),
-        public_operands: true,
-    }];
 
 fn target(name: &str, args: &[Value], i: &Invocation<'_>, p: &Policy) -> Result<Vec<Value>> {
     use crate::Bn254Gt as G;

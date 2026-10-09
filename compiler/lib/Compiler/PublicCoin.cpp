@@ -5,7 +5,7 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
-#include "zkc/Support/MLIRInput.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/ADT/StringExtras.h"
@@ -26,81 +26,6 @@ struct Requirement {
   SmallVector<unsigned> bound;
   SmallVector<std::pair<std::string, std::string>> draws;
 };
-// LLVM accepts integral floats, leading signs/zeros and duplicate object keys.
-// These formats must agree with typed JSON consumers. Check numeric spellings
-// and surrogate escapes, and count authored keys. json::parse owns the
-// remaining JSON grammar and decodes accepted strings.
-std::optional<size_t> scanObjectKeys(StringRef text) {
-  size_t keys = 0;
-  for (size_t i = 0; i < text.size(); ++i) {
-    if (text[i] == '"') {
-      while (++i < text.size() && text[i] != '"') {
-        if (text[i] != '\\' || i + 1 >= text.size())
-          continue;
-        // LLVM replaces lone surrogate escapes with U+FFFD. Require actual
-        // Unicode scalars so another JSON reader sees the same string.
-        unsigned unit;
-        if (text[i + 1] == 'u' && text.size() - i >= 6 &&
-            !text.substr(i + 2, 4).getAsInteger(16, unit)) {
-          if (unit >= 0xdc00 && unit <= 0xdfff)
-            return std::nullopt;
-          if (unit >= 0xd800 && unit <= 0xdbff) {
-            unsigned low;
-            if (text.size() - i < 12 || text.substr(i + 6, 2) != "\\u" ||
-                text.substr(i + 8, 4).getAsInteger(16, low) || low < 0xdc00 ||
-                low > 0xdfff)
-              return std::nullopt;
-            i += 6;
-          }
-        }
-        ++i;
-      }
-      size_t next = i + 1;
-      while (next < text.size() && isSpace(text[next]))
-        ++next;
-      if (next < text.size() && text[next] == ':')
-        ++keys;
-    } else if (text[i] == '-' || text[i] == '+' || text[i] == '.') {
-      return std::nullopt;
-    } else if (isDigit(text[i])) {
-      if (text[i] == '0' && i + 1 < text.size() && isDigit(text[i + 1]))
-        return std::nullopt;
-      while (i + 1 < text.size() && isDigit(text[i + 1]))
-        ++i;
-      if (i + 1 < text.size() &&
-          (text[i + 1] == '.' || text[i + 1] == 'e' || text[i + 1] == 'E'))
-        return std::nullopt;
-    }
-  }
-  return keys;
-}
-size_t countObjectKeys(const json::Value &value) {
-  size_t keys = 0;
-  if (auto *object = value.getAsObject()) {
-    keys = object->size();
-    for (auto &item : *object)
-      keys += countObjectKeys(item.second);
-  } else if (auto *array = value.getAsArray()) {
-    for (auto &item : *array)
-      keys += countObjectKeys(item);
-  }
-  return keys;
-}
-Expected<json::Value> parseRecord(StringRef text, StringRef code) {
-  auto keys = scanObjectKeys(text);
-  if (!keys)
-    return error(code);
-  auto parsed = json::parse(text);
-  if (!parsed) {
-    consumeError(parsed.takeError());
-    return error(code);
-  }
-  // Any duplicate loses at least one authored key, including duplicate keys
-  // spelled with distinct JSON escapes or containing a replaced object value.
-  if (countObjectKeys(*parsed) != *keys)
-    return error(code);
-  return parsed;
-}
 bool keys(const json::Object &o, ArrayRef<StringRef> names) {
   return o.size() == names.size() &&
          all_of(names, [&](StringRef name) { return o.get(name); });
@@ -121,9 +46,8 @@ bool index(const json::Object &o, StringRef key, unsigned &out) {
   return true;
 }
 Expected<Requirement> parseRequirement(StringRef text) {
-  if (text.size() > 1024 * 1024 || !mlirNestingWithinLimit(text))
-    return error("public-coin-limit");
-  auto parsed = parseRecord(text, "public-coin-requirement");
+  auto parsed = parseNaturalJson(
+      text, 1024 * 1024, 64, "public-coin-requirement", "public-coin-limit");
   if (!parsed)
     return parsed.takeError();
   auto *o = parsed->getAsObject();
@@ -131,7 +55,7 @@ Expected<Requirement> parseRequirement(StringRef text) {
   if (!o ||
       !keys(*o, {"format", "entry", "prover", "verifier", "service", "decision",
                  "bound_inputs", "draws"}) ||
-      o->getString("format") != "zkc.public-coin-requirement/1" ||
+      o->getString("format") != "zkc.public-coin-requirement/0" ||
       !name(*o, "entry", r.entry) || !name(*o, "prover", r.prover) ||
       !name(*o, "verifier", r.verifier) || r.prover == r.verifier ||
       !index(*o, "service", r.service) || !index(*o, "decision", r.decision))
@@ -514,7 +438,7 @@ public:
     auto nonStatement = bound;
     nonStatement.reset(statement);
     return json::Object{
-        {"format", "zkc.public-coin-view/1"},
+        {"format", "zkc.public-coin-view/0"},
         {"entry", r.entry},
         {"prover", r.prover},
         {"verifier", r.verifier},
@@ -579,9 +503,8 @@ Expected<json::Value> analyzePublicCoin(ModuleOp original, StringRef text) {
 }
 Error checkPublicCoin(ModuleOp original, StringRef requirement,
                       StringRef text) {
-  if (text.size() > 8 * 1024 * 1024 || !mlirNestingWithinLimit(text))
-    return error("public-coin-limit");
-  auto candidate = parseRecord(text, "public-coin-report");
+  auto candidate = parseNaturalJson(text, 8 * 1024 * 1024, 64,
+                                    "public-coin-report", "public-coin-limit");
   if (!candidate)
     return candidate.takeError();
   auto checked = analyzePublicCoin(original, requirement);

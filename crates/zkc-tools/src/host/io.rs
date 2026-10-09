@@ -9,13 +9,21 @@ pub(crate) enum ReadError {
     Io(io::Error),
     Limit,
 }
-pub(crate) fn read_bounded(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>, ReadError> {
-    read_from(std::fs::File::open(path).map_err(ReadError::Io)?, limit)
+impl std::fmt::Display for ReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(error) => write!(f, "{error}"),
+            Self::Limit => f.write_str("input byte limit exceeded"),
+        }
+    }
 }
-/// Key material is a regular file. Nonblocking open prevents a FIFO swap from
+/// File-based adapters use regular files. Nonblocking open prevents a FIFO swap from
 /// hanging before descriptor validation. Symlinks resolve normally; the opened
 /// descriptor is checked and read once, so path changes cannot replace it.
 pub(crate) fn read_regular(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>, ReadError> {
+    read_from(open_regular(path)?, limit)
+}
+pub(crate) fn open_regular(path: impl AsRef<Path>) -> Result<std::fs::File, ReadError> {
     let mut options = std::fs::OpenOptions::new();
     options.read(true);
     #[cfg(unix)]
@@ -27,10 +35,10 @@ pub(crate) fn read_regular(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u
     if !file.metadata().map_err(ReadError::Io)?.is_file() {
         return Err(ReadError::Io(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "expected a regular key file",
+            "expected a regular file",
         )));
     }
-    read_from(file, limit)
+    Ok(file)
 }
 fn read_from(reader: impl Read, limit: usize) -> Result<Vec<u8>, ReadError> {
     let mut bytes = Vec::new();

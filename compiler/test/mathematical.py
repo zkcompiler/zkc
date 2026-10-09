@@ -40,10 +40,10 @@ class Stop(Exception):
 
 def execute(carrier, role, inputs, replies=()):
     bindings = {b[0]: b[1] for b in carrier[1]}
-    functions = {f[1]: f for f in carrier[3]}
-    participant = next(p for p in carrier[4] if p[3] == role)
-    assert len(inputs) == len(participant[5])
-    env = dict(zip((p[0] for p in participant[5]), inputs))
+    functions = {f[1]: f for f in carrier[2]}
+    participant = next(p for p in carrier[3] if p[3] == role)
+    assert len(inputs) == len(participant[4])
+    env = dict(zip((p[0] for p in participant[4]), inputs))
     events = []
     incoming = iter(replies)
 
@@ -98,7 +98,7 @@ def execute(carrier, role, inputs, replies=()):
         raise AssertionError("carrier body has no terminator")
 
     try:
-        return "returned", body(participant[7], env), events
+        return "returned", body(participant[6], env), events
     except Stop as stop:
         return str(stop), (), events
 
@@ -110,7 +110,7 @@ receives = (ROOT / "receives.mlir").read_text()
 
 with case("acceptance maps identify independent role components"):
     family = '''module { "protocol.module"() ({
-      relation.declare @check {kind="external", key="example/component", revision="1", signature=(i1) -> i1, purposes=["statement"]}
+      relation.declare @check {kind="external", key="example/component", revision="0", signature=(i1) -> i1, purposes=["statement"]}
       "protocol.func"() ({
       ^entry(%x: i1):
         protocol.statement @check(%x) {selectors=["P"], acceptance=0 : i64} : i1
@@ -124,7 +124,7 @@ with case("acceptance maps identify independent role components"):
 
 with case("mixed helper: per-result slices and all advertised ports"):
     candidate, _ = project(mixed, name="mixed")
-    assert {p[3]: len(p[5]) for p in candidate[4]} == {"Alice": 2, "Bob": 1, "Observer": 1}
+    assert {p[3]: len(p[4]) for p in candidate[3]} == {"Alice": 2, "Bob": 1, "Observer": 1}
     for a in [0, 1, 19, FIELD-1]:
         for w in [0, 7, FIELD-1]:
             assert execute(candidate, "Alice", [a,w])[:2] == ("returned", (2*a % FIELD, 2*a*w % FIELD))
@@ -139,9 +139,9 @@ with case("multiple common programs share one checked helper closure"):
     other = mixed[function_start:function_end].replace('sym_name="main"', 'sym_name="other"')
     combined = mixed[:function_end]+other+mixed[function_end:]
     carrier, _ = project(combined)
-    assert len(carrier[4]) == 6
-    assert len(carrier[5]) == 2
-    assert {entry[1] for entry in carrier[5]} == {'main', 'other'}
+    assert len(carrier[3]) == 6
+    assert len(carrier[4]) == 2
+    assert {entry[1] for entry in carrier[4]} == {'main', 'other'}
 
 with case("helper expansion precedes scoped CSE"):
     helper_call = next(line for line in mixed.splitlines() if '%h:2 = func.call' in line)
@@ -154,7 +154,7 @@ with case("helper expansion precedes scoped CSE"):
     candidate, _ = project(repeated, optimize=False)
     # Alice computes add/mul once; Bob computes add once. The two helper calls
     # demand different results but share their common addition after expansion.
-    assert sum(op[0] == 'op' for f in candidate[3] for op in f[4]) == 3
+    assert sum(op[0] == 'op' for f in candidate[2] for op in f[4]) == 3
     assert execute(candidate, 'Alice', [3, 7])[:2] == ('returned', (6, 42))
 
 with case("Schnorr generated carriers use actual commitment/challenge/response"):
@@ -191,7 +191,7 @@ with case("renaming roles and preserving statement/acceptance interface"):
     assert execute(candidate,"Checker",[1,13,19],[17,264])[:2] == ("returned",(True,))
     assert 'selectors = ["Checker", "Checker", "Sender"]' in ir
     assert 'acceptance = 0' in ir
-    assert [len(p[5]) for p in candidate[4]] == [4,3]
+    assert [len(p[4]) for p in candidate[3]] == [4,3]
 
 with case("ordinary CSE merges total values and retains explicit restriction"):
     source = receives.replace('%one = protocol.exchange', '%double = algebra.field_add %a, %a : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">\n%duplicate = algebra.field_add %a, %a : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">\n%narrow = protocol.restrict_roles %duplicate {roles=["Alice"]} : !algebra.field<"bls12-381.fr">\n%one = protocol.exchange').replace('protocol.exchange %a','protocol.exchange %double',1).replace('protocol.exchange %a','protocol.exchange %narrow',1)
@@ -266,7 +266,7 @@ negative += [
     ("empty common region", empty, "mathematical-formation"),
     ("recursive helper", recursive, "mathematical-formation"),
     ("opaque helper", opaque, "mathematical-formation"),
-    ("finite legacy field is outside this profile", mixed.replace('bls12-381.fr','f7'), "mathematical-formation"),
+    ("uninstalled field is outside this profile", mixed.replace('bls12-381.fr','invalid.field'), "unknown-domain"),
     ("called helper must be private", mixed.replace('private @helper','@helper'), "mathematical-formation"),
     ("unavailable explicit restriction", receives.replace('%one = protocol.exchange', f'%n = protocol.restrict_roles %a {{roles=["Bob"]}} : {F}\n%one = protocol.exchange'), "mathematical-formation"),
 ]
@@ -326,7 +326,7 @@ wide_helper = mixed.replace('}) {profile=', f'func.func private @wide({wide_argu
 unused_intermediate = (mixed.replace('return %s, %t', 'return %a, %w')
     .replace('input_roles=[["Alice","Bob"]', 'input_roles=[["Bob"]')
     .replace('output_roles=[["Alice","Bob"]', 'output_roles=[["Bob"]'))
-conflict = 'relation.declare @conflicting {kind="external", key="example/schnorr", revision="1", signature=(!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> i1, purposes=["statement", "statement", "witness"]}'
+conflict = 'relation.declare @conflicting {kind="external", key="example/schnorr", revision="0", signature=(!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> i1, purposes=["statement", "statement", "witness"]}'
 conflicting_relation = schnorr.replace('}) {profile=', conflict+'\n}) {profile=')
 negative += [
     ("wide helper dependency work bound", wide_helper, "mathematical-analysis-limit"),
@@ -340,7 +340,7 @@ for attribute in ['arg_attrs=[{test.assumption=true}, {}]', 'res_attrs=[{}, {}]'
         mixed.replace('func.call @helper(%a, %w) :', f'func.call @helper(%a, %w) {{{attribute}}} :'),
         "mathematical-formation"))
 negative += [
-    ("common function in wrong profile", mixed.replace('#protocol.profile<protocol>', '#protocol.profile<protocol_exec>'), "mathematical-formation"),
+    ("common function in wrong profile", mixed.replace('#protocol.profile<protocol>', '#protocol.profile<exec>'), "mathematical-formation"),
     ("common function argument annotations", mixed.replace('sym_name="main"', 'sym_name="main", arg_attrs=[]'), "mathematical-formation"),
 ]
 

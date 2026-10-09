@@ -4,10 +4,9 @@ mod policy;
 pub(crate) mod registry;
 mod resource_unit;
 mod validation;
-use crate::setups::Setups;
+use crate::SetupRegistry;
 use crate::{Capability, CapabilityObservation, Domain, Policy, Result, Value};
-pub use policy::{EntryPolicy, PortConstraint, PublicInputs};
-use std::sync::Arc;
+pub use policy::{EntryPolicy, PortConstraint};
 use validation::Core;
 use zkc_arkworks::{Metadata, VerifierKey};
 use zkc_runtime::interactive::{Backend, Frame, FrameExit, Invocation};
@@ -18,7 +17,6 @@ use zkc_runtime::interactive::{Backend, Frame, FrameExit, Invocation};
 pub struct NativeBackend {
     sequence_work: crate::sequence::Budget,
     external_work: crate::external_kernels::Budget,
-    public_roles: crate::PublicRolePolicy,
     core: Core,
     services: Option<crate::services::ServiceBindings>,
     implementations: &'static registry::Registry,
@@ -46,8 +44,9 @@ impl NativeBackend {
         self.core.check_entry_values(&role.inputs, values)
     }
 
-    /// Bound cumulative expanded-node traversal by sequence kernels. Previously
-    /// spent work survives frame cleanup and changes to the limit.
+    /// Bound cumulative sequence work: `3 * (1 + expanded operand nodes)` per
+    /// call. Shared subtrees count per occurrence.
+    /// Previously spent work survives frame cleanup and changes to the limit.
     pub fn with_sequence_work_limit(mut self, limit: u64) -> Self {
         self.sequence_work.limit = limit;
         self
@@ -92,6 +91,7 @@ impl NativeBackend {
     pub const DEFAULT_EXTERNAL_WORK_LIMIT: u64 = crate::external_kernels::DEFAULT_WORK_LIMIT;
 
     /// Set a total primitive-work cap before external construction execution.
+    /// One unit is one hash call, hashed byte, permutation, observe or sample.
     /// Work already consumed is retained; lowering a cap never refunds it.
     pub fn with_external_work_limit(mut self, limit: u64) -> Self {
         self.external_work.limit = limit;
@@ -101,68 +101,17 @@ impl NativeBackend {
         self.external_work.spent
     }
 
-    /// Explicit caller-owned publicness assertion. Ordinary constructors grant
-    /// nothing. The artifact host derives this from its checked public profile;
-    /// arbitrary interactive hosts must justify the assertion themselves.
-    pub fn with_public_role_policy(mut self, policy: crate::PublicRolePolicy) -> Self {
-        self.public_roles = policy;
-        self
-    }
-
-    /// Direct native host utility. Key operands come from trusted host inputs;
-    /// entry keys must agree, and an optional verifier pins PCS values/decoding.
-    /// Use `with_setups` for prior authorization of every independent setup.
-    pub fn new(policy: Policy, entry: EntryPolicy, verifier: Option<VerifierKey>) -> Result<Self> {
-        let mut backend = Self {
-            sequence_work: crate::sequence::Budget::default(),
-            external_work: crate::external_kernels::Budget::default(),
-            implementations: registry::installed()?,
-            public_roles: crate::PublicRolePolicy::default(),
-            core: Core::new(policy, entry),
-            services: None,
-        };
-        backend.core.setups = Setups::InputKeys(verifier);
-        if let Some(vk) = backend.core.setups.only() {
-            backend.validate_value(&Value::VerifierKey(Arc::new(vk.clone())))?;
-        }
-        Ok(backend)
-    }
-    /// Install explicit setup authorization for several independent instances.
-    /// The entry's optional homogeneous arity still applies when supplied; use
-    /// named port constraints for heterogeneous tables, points and PCS values.
-    pub fn with_setups(
-        policy: Policy,
-        entry: EntryPolicy,
-        setups: crate::SetupRegistry,
-    ) -> Result<Self> {
+    /// Install explicit Host authorization for all PCS setup material.
+    /// An empty registry is valid for computations that use no setup.
+    pub fn new(policy: Policy, entry: EntryPolicy, setups: crate::SetupRegistry) -> Result<Self> {
         setups.validate(&policy)?;
-        let mut core = Core::new(policy, entry);
-        core.setups = Setups::Registered(setups);
         Ok(Self {
             sequence_work: crate::sequence::Budget::default(),
             external_work: crate::external_kernels::Budget::default(),
             implementations: registry::installed()?,
-            public_roles: crate::PublicRolePolicy::default(),
-            core,
+            core: Core::new(policy, entry, setups),
             services: None,
         })
-    }
-    /// Bind an explicit private transcript resource to host-authorized canonical
-    /// root bytes with Merlin3/Fr64BE identity. Domain is custody-only; its local session is not hashed.
-    pub fn issue_transcript(
-        &mut self,
-        domain: Domain,
-        budget: u64,
-        root_binding: &[u8],
-    ) -> Result<Value> {
-        self.core.policy.wire(root_binding.len())?;
-        self.core
-            .resources
-            .issue_transcript(domain, budget, root_binding)
-    }
-    /// Issue an opaque BLS12-381.Fr nonce for the installed curve contracts.
-    pub fn issue_nonce(&mut self, domain: Domain, budget: u64) -> Result<Value> {
-        self.core.resources.issue_nonce(domain, budget)
     }
     #[cfg(feature = "test-utils")]
     pub fn issue_test_nonce(
@@ -173,6 +122,7 @@ impl NativeBackend {
     ) -> Result<Value> {
         self.core.resources.test_nonce(domain, budget, k)
     }
+    /// Issue a random source for an explicitly selected installed field.
     pub fn issue_rng_for(
         &mut self,
         field: zkc_runtime::interactive::Identity,
@@ -181,6 +131,7 @@ impl NativeBackend {
     ) -> Result<Value> {
         self.core.resources.issue_rng_for(field, domain, budget)
     }
+    /// Issue an opaque nonce for an explicitly selected curve scalar field.
     pub fn issue_nonce_for(
         &mut self,
         field: zkc_runtime::interactive::Identity,
@@ -189,6 +140,8 @@ impl NativeBackend {
     ) -> Result<Value> {
         self.core.resources.issue_nonce_for(field, domain, budget)
     }
+    /// Bind a selected transcript suite to Host-authorized canonical root bytes.
+    /// Domain controls custody; its local session is not hashed.
     pub fn issue_transcript_for(
         &mut self,
         suite: zkc_runtime::interactive::Identity,
@@ -233,17 +186,8 @@ impl NativeBackend {
     pub fn policy(&self) -> &Policy {
         &self.core.policy
     }
-    pub(crate) fn setups(&self) -> &Setups {
+    pub(crate) fn setups(&self) -> &SetupRegistry {
         &self.core.setups
-    }
-    pub fn verifier_key(&self) -> Option<&VerifierKey> {
-        self.core.setups.only()
-    }
-    pub(crate) fn has_setup_registry(&self) -> bool {
-        self.core.setups.is_registered()
-    }
-    pub(crate) fn input_setup(&self, port: &str) -> Option<Metadata> {
-        self.core.entry.ports.get(port).and_then(|p| p.setup)
     }
     pub fn authorized_verifier_key(&self, identity: Metadata) -> Option<&VerifierKey> {
         self.core.setups.get(identity)
@@ -257,10 +201,6 @@ impl NativeBackend {
         tape: Vec<crate::Bn254Scalar>,
     ) -> Result<Value> {
         self.core.resources.test_bn254_tape(domain, budget, tape)
-    }
-    /// Issue a BLS12-381.Fr random source; `_for` selects another installed field.
-    pub fn issue_rng(&mut self, domain: Domain, budget: u64) -> Result<Value> {
-        self.core.resources.issue_rng(domain, budget)
     }
     #[cfg(feature = "test-utils")]
     pub fn issue_test_rng(&mut self, domain: Domain, budget: u64, seed: [u8; 32]) -> Result<Value> {
@@ -301,12 +241,12 @@ impl Backend for NativeBackend {
         true
     }
     type Value = Value;
-    fn service_signature(
+    fn service_support(
         &self,
         contract: zkc_runtime::interactive::ServiceContract,
         method: &str,
-    ) -> Option<(zkc_runtime::interactive::ServiceSignature, usize)> {
-        contract.signature(method).map(|signature| (signature, 512))
+    ) -> Option<zkc_runtime::interactive::ServiceSupport> {
+        crate::services::support(contract, method)
     }
     fn query(
         &mut self,
@@ -315,17 +255,11 @@ impl Backend for NativeBackend {
     ) -> Result<Vec<Value>> {
         use zkc_runtime::interactive::FrameKind;
         self.core.resources.active(invocation.frame)?;
-        if !invocation.frame.origin().format.is_program()
-            || !matches!(
-                invocation.frame.kind(),
-                FrameKind::Entry | FrameKind::Loop { .. }
-            )
-            || !invocation.frame.services().contains(invocation.port)
-            || invocation
-                .port
-                .contract
-                .signature(invocation.method)
-                .is_none()
+        if !matches!(
+            invocation.frame.kind(),
+            FrameKind::Entry | FrameKind::Loop { .. }
+        ) || !invocation.frame.services().contains(invocation.port)
+            || crate::services::support(invocation.port.contract, invocation.method).is_none()
             || !arguments.is_empty()
             || invocation.max_output_bytes < 512
         {
@@ -397,28 +331,14 @@ impl Backend for NativeBackend {
         let signature = implementation
             .signature(i.binding.declaration())
             .ok_or_else(|| crate::refused("kernel-binding"))?;
-        if crate::sequence::OPERATIONS.contains(&i.binding.declaration().contract.as_str()) {
+        if crate::sequence::IMPLEMENTATIONS
+            .iter()
+            .any(|(_, contract)| *contract == i.binding.declaration().contract)
+        {
             self.sequence_work.charge(args)?;
         }
         self.core.invoke(i, args, &signature)?;
-        // Every family, including zero-input and early-return kernels, passes
-        // the installed security gate before handler execution. Traversal work
-        // charged above remains spent if validation or this gate refuses.
-        if implementation.public_operands && !self.public_roles.permits(i.frame.role()) {
-            return Err(crate::refused("public-operands-required"));
-        }
         let outputs = (implementation.handler)(self, i, args)?;
         self.core.outputs(i, outputs)
     }
-}
-
-// Constructors propagate installation errors before admitting or executing anything.
-// This legacy bool query conservatively requires public operands on installation
-// failure; it cannot authorize execution or replace constructor validation.
-pub(crate) fn requires_public_operands(identity: &str) -> bool {
-    registry::installed().map_or(true, |registry| {
-        registry
-            .get(identity)
-            .is_some_and(|entry| entry.public_operands)
-    })
 }

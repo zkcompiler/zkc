@@ -17,7 +17,7 @@ private def resolve (physical : Bool) (binding : Declaration) (shape : Support.S
     ensure ((← scalarModulus field) > 2) "binding-requirement"
   let msb := binding.implementation == "arkworks-msb/" ++ binding.contract
   let representation := fun (_ : Bool) (_ : Nat) (ty : ValueType) =>
-    if msb && ty.kind == "table" then "arkworks.mle-msb/1" else ty.defaultRepresentation
+    if msb && ty.kind == "table" then "arkworks.mle-msb/0" else ty.defaultRepresentation
   Support.realize physical binding (Support.signature shape field) (Support.scalarBackend field)
     (if field == fr then alternatives binding.contract else []) representation
 

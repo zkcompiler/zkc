@@ -58,7 +58,7 @@ def LocalMatchOp : LocalControlOp<"match"> {
     the region of the active alternative executes; its arguments are that
     alternative's payload followed by the captures, so the payload is not a
     successor operand of the variant. A terminal stop inside a region bypasses
-    every continuation (docs/spec/profiles/compiler/local-variants.md).
+    every continuation (docs/spec/ir/variants.md).
   }];
   let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$site, ArrayAttr:$alternatives);
   let regions = (region VariadicRegion<AnyRegion>:$arms);
@@ -129,7 +129,7 @@ def VariantInjectOp : Op<LocalDialect, "variant_inject"> {
     Builds a local variant value from the payload of one named alternative. Only
     that alternative's payload is stored; no placeholder is created for the
     others, so an affine payload is transferred exactly once
-    (docs/spec/profiles/compiler/local-variants.md).
+    (docs/spec/ir/variants.md).
   }];
   let arguments = (ins Variadic<AnyType>:$payload, StrAttr:$site, StrAttr:$alternative);
   let results = (outs AnyType:$output);
@@ -137,8 +137,7 @@ def VariantInjectOp : Op<LocalDialect, "variant_inject"> {
 }
 
 // Executable functions deliberately have no inlining, speculation or purity
-// contract. Native profiles require bodies; protocol_exec can retain external
-// declarations from its source contract.
+// contract. Native profiles require bodies.
 def Local_FuncOp : Op<LocalDialect, "func",
     [FunctionOpInterface, IsolatedFromAbove, OpAsmOpInterface]> {
   let arguments = (ins SymbolNameAttr:$sym_name,
@@ -205,6 +204,15 @@ class ExecutableCallOp<string name> : Op<LocalDialect, name,
     }
   }];
   let assemblyFormat = "$callee `(` $inputs `)` attr-dict `:` functional-type($inputs, $outputs)";
+}
+
+// Preparation realizes this total helper as an ordered, data-only local body.
+// The Protocol profile owns helper admission and prohibits executable escape.
+def Local_RealizeOp : Op<LocalDialect, "realize",
+    [Symbol, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let arguments = (ins SymbolNameAttr:$sym_name, FlatSymbolRefAttr:$helper,
+    TypeAttrOf<FunctionType>:$function_type);
+  let assemblyFormat = "$sym_name `=` $helper attr-dict `:` $function_type";
 }
 
 // Source-local application is expanded under canonical-expanded-locals/1.

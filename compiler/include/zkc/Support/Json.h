@@ -5,15 +5,26 @@
 #include "llvm/Support/JSON.h"
 
 namespace zkc {
+/// Parse bounded object/array JSON with unique decoded object keys, valid
+/// Unicode strings, and canonical unsigned decimal numeric tokens. LLVM owns
+/// the remaining JSON grammar. Limits are checked before lexical/shape errors;
+/// consumers retain their own schema and numeric range checks. Unlike
+/// parseJson, numbers use LLVM's numeric carrier, not arbitrary-precision
+/// natural markers.
+llvm::Expected<llvm::json::Value>
+parseNaturalJson(llvm::StringRef text, size_t byteLimit, unsigned depthLimit,
+                 llvm::StringRef invalidCode, llvm::StringRef limitCode);
+
+/// Reject invalid UTF-8 and unpaired surrogate escapes in a quoted JSON token.
+/// The caller still checks JSON string syntax and escapes.
+bool validStringEncoding(llvm::StringRef quotedSpelling);
+
 // The array format admits natural tokens of arbitrary precision. LLVM's JSON
 // numeric carrier is insufficient, so parsing retains those tokens explicitly.
 // Natural markers are singleton {"natural": "<canonical decimal>"} objects.
 // The textual input profile rejects ordinary objects. printJson preserves
 // malformed/programmatically supplied objects as JSON instead of unwrapping
 // their contents; subsequent parsing/admission therefore rejects them.
-/// Reject invalid UTF-8 and unpaired surrogate escapes in a quoted JSON token.
-/// The caller still checks JSON string syntax and escapes.
-bool validStringEncoding(llvm::StringRef quotedSpelling);
 /// invalidStringOffset, when supplied, identifies a rejected Unicode spelling
 /// in the original text. It is cleared before parsing; other failures leave it
 /// empty.

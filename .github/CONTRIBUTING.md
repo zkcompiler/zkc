@@ -29,7 +29,7 @@ or volume.
 
 | To find out | Read |
 |---|---|
-| What the project is and where it is going | [Project Overview](../docs/overview.md) |
+| What the project is and where it is going | [Architecture](../docs/architecture.md) |
 | What the current checkout actually claims | [Current Status](../docs/status.md) |
 | Which document decides what | [documentation authority map](../docs/README.md) |
 | How to build and run the checks | [Development guide](../docs/development/README.md) and [test scopes](../tests/README.md) |
@@ -47,8 +47,8 @@ to `main` directly. Branch names are short and topical — `feat/…`, `fix/…`
    integration validation, not for every edit. Run optional suites when their
    integration boundary changes, and describe the checks actually performed.
    Automatic CI checks sources, formatting, documentation and the test harness.
-   Full builds, Nix packaging and cross-language suites are separate manual
-   workflow scopes. Run affected checks locally and record their results; see the
+   Native changes also run Rust tests and installed CLI/SDK package checks.
+   Full compiler/protocol integration and optional suites have manual workflow scopes. Run affected checks locally and record their results; see the
    [maintenance guide](../docs/development/maintenance.md).
 2. Open the pull request and write its title and body as described below.
 3. Respond to review on the branch. What review confirms is fixed in the
@@ -105,17 +105,23 @@ belongs in the pull request body, which is what survives the squash.
   module whose entry point is `def run : IO Unit` has the same choice:
   `Tests.Checks` records a condition that does not hold and carries on, while
   a shape error stays fatal because there is no value to go on with.
-- **Semantics.** Update the owning specification. `docs/spec/` describes the
-  intended model and is not weakened to match what is built; what is built
-  belongs on the [status page](../docs/status.md), not in the
-  specification.
-- **Carrier formats.** These may change freely at v0; a break
-  is the norm rather than an event. What a change carries is that the
-  compiler, the native workspace and the Lean reference move in the same
-  change set, and that loading stays fail closed.
-- **Independent implementations.** The compiler, the native runtime and the
-  Lean reference admit the same carriers independently. A change to a surface
-  they share moves all of them. Where they disagree, the specification decides.
+- **Semantics.** Update the owning specification: `docs/spec/` for native and
+  shared contracts, `formal/docs/spec/` for independent formal models. Keep
+  intended contracts and implementation coverage distinct; do not weaken a
+  contract to match a missing implementation. Record native coverage in
+  [status](../docs/status.md) and theorem scope in
+  [formal support](../formal/docs/support.md).
+- **Formats and identities.** Version persisted or exchanged formats and
+  cryptographic byte constructions. Before stabilization, keep zkc-owned
+  format and construction versions at `0` and update producers, readers and
+  fixtures together.
+  Maintain one current schema with exact shape and unknown-field validation;
+  do not add compatibility readers or migration notes. See the
+  [format version policy](../docs/development/maintenance.md#format-versions).
+- **Independent implementations.** The compiler and native runtime independently
+  validate the executable program carrier. A change to that surface updates both.
+  Formal research checks do not establish correspondence with current native
+  execution unless an explicit maintained bridge states that claim.
 - **Diagnostics.** Identifiers are the stable surface and message prose is
   not, so a new diagnostic is asserted by a test that names
   the identifier.
@@ -125,6 +131,10 @@ belongs in the pull request body, which is what survives the squash.
 - **External integrations.** Pin exact sources in the manifest that owns them
   and state the adapter boundary. Code adapted from elsewhere names its source
   in the file that holds it. One reproduced run is not a conformance claim.
+- **Libraries.** Reusable `.zkc` algorithms belong in `libraries/`; concrete
+  Entries belong in `examples/projects/`. Document public exports and protocol
+  assumptions in the [library guide](../libraries/README.md). Exercise changes
+  through the common compiler and Host, including invalid inputs or proofs.
 - **Documentation.** Update whatever the change makes wrong or incomplete,
   in the [document that owns it](../docs/development/documentation.md). A design choice that a reader could reasonably
   have made differently gets a [rationale record](../docs/rationale/README.md)

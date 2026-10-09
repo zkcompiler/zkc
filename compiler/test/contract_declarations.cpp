@@ -33,7 +33,7 @@ void refusal(Error error, StringRef expected) {
   check(toString(std::move(error)) == expected, expected);
 }
 const generic::Signature &signature(StringRef key) {
-  for (const auto &op : boundOperationContracts())
+  for (const auto &op : executableOperationContracts())
     if (op.name == key)
       return op.signature;
   errs() << "missing signature: " << key << '\n';
@@ -138,21 +138,14 @@ int main() {
             type(pairing.inputs[0], "groups", {1}) &&
             type(pairing.inputs[1], "groups", {2}),
         "pairing groups collapsed");
-  const auto &observe = signature("transcript.observe.field");
-  check(observe.scope.terms[0].name == "T" &&
-            observe.scope.terms[1].name == "F" &&
-            !observe.scope.terms[1].parent &&
-            observe.scope.terms[2].name == "E" &&
-            observe.requirements ==
-                std::vector<requirements::Predicate>{
-                    requirements::Predicate::holds("Transcript", {0}),
-                    requirements::Predicate::holds("Encodes.field", {2, 1})},
-        "observation codec root or payload requirement lost");
-  const auto &observeBool = signature("transcript.observe.bool");
-  check(observeBool.requirements[1] ==
-            requirements::Predicate::holds("Encodes.bool", {1}),
-        "unparameterized observation codec lost");
-  const auto &draw = signature("transcript.challenge");
+  const auto &observe = signature("transcript.native.indexed.observe.data");
+  check(observe.scope.terms.size() == 2 && observe.scope.terms[0].name == "T" &&
+            observe.scope.terms[1].name == "D" &&
+            observe.scope.sorts[1] == "Type" &&
+            !observe.scope.terms[1].parent && observe.inputs.size() == 3 &&
+            type(observe.inputs[2], "indices", {}),
+        "typed observation lost its payload or occurrence coordinates");
+  const auto &draw = signature("transcript.native.indexed.challenge");
   check(draw.scope.terms[1].name == "ChallengeField" &&
             draw.scope.terms[1].parent == 0 &&
             type(draw.outputs[0], "field", {1}),
@@ -161,7 +154,7 @@ int main() {
   // Stage and export policy are separate from common carrier formation.
   check(authoringStage("poly.univariate_evaluate") == AuthoringStage::Source &&
             authoringStage("random.draw") == AuthoringStage::Source &&
-            authoringStage("transcript.challenge") ==
+            authoringStage("transcript.native.indexed.challenge") ==
                 AuthoringStage::Construction &&
             authoringStage("unknown.call") != AuthoringStage::Source,
         "source authoring stage boundary");
@@ -254,10 +247,11 @@ int main() {
           "private immutable custody changed");
   check(!typePermissions("fixture_array"),
         "Type/Nat fixture installed in production");
-  check(operationEffect("unknown.call").empty(),
-        "unknown operation acquired an effect envelope");
+  check(!parameterContract("unknown.call") &&
+            authoringStage("unknown.call") == AuthoringStage::CompilerGenerated,
+        "unknown operation acquired a source declaration");
   for (const auto &kernel : kernels())
-    check(operationEffect(kernel.key) == "local", kernel.key);
+    check(parameterContract(kernel.key) != nullptr, kernel.key);
   auto unsupported = parseBoundType("fixture_array:anything", false);
   check(!unsupported, "generation-only constructor admitted");
   if (!unsupported)
@@ -296,15 +290,15 @@ int main() {
           "matrix digest");
   refusal(checkParameters("matrix.identity_check", {std::string(64, 'A')}),
           "interactive-kernel-parameters");
-  success(checkParameters("transcript.challenge", {"a", "b", "c", "d", "e"}),
-          "transcript origin");
-  refusal(checkParameters("transcript.challenge", {"a", "b", "c", "d", "!"}),
-          "interactive-transcript-origin");
+  refusal(checkParameters("transcript.native.indexed.challenge", {"00"}),
+          "interactive-native-origin");
+  refusal(checkParameters("transcript.native.indexed.challenge", {"a", "b"}),
+          "interactive-kernel-parameters");
 
   // The generated structures must also satisfy the independent C++ checker.
   for (const auto &op : boundOperationContracts()) {
     success(checkStaticVocabulary(op.signature), op.name);
-    check(operationEffect(op.name) == "local", "local envelope lost");
+    check(parameterContract(op.name) != nullptr, "operation declaration lost");
     generic::Function function;
     function.signature = op.signature;
     generic::Call call;

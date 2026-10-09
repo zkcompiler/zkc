@@ -101,7 +101,7 @@ fn conversions_retain_length_identity_and_never_expose_a_codec() {
     let value = call("from_vector", 3, vec![input.clone()]).remove(0);
     assert_eq!(
         value.physical_type().spelling(),
-        "fixed_vector<field:koala-bear,3>@plonky3.fixed-vector/1"
+        "fixed_vector<field:koala-bear,3>@plonky3.fixed-vector/0"
     );
     assert_ne!(value.physical_type(), input.physical_type());
     assert!(value.physical_type().is_duplicable());
@@ -120,20 +120,20 @@ fn conversions_retain_length_identity_and_never_expose_a_codec() {
     );
     let native = backend(Policy::default());
     assert_eq!(
-        native.encode_value(&value).unwrap_err().code,
-        "refused:nonserializable"
+        native.encode_native_value(&value).unwrap_err().to_string(),
+        "native-wire-backend:native-wire-type"
     );
-    let bytes = native.encode_value(&input).unwrap();
+    let bytes = native.encode_native_value(&input).unwrap();
     assert_eq!(
         native
-            .decode_typed_value(value.physical_type(), &bytes)
+            .decode_native_value(&value.physical_type(), &bytes)
             .unwrap_err()
-            .code,
-        "refused:nonserializable"
+            .to_string(),
+        "native-wire-backend:native-wire-type"
     );
     let output = call("to_vector", 3, vec![value]).remove(0);
     assert_eq!(output.physical_type(), input.physical_type());
-    assert_eq!(native.encode_value(&output).unwrap(), bytes);
+    assert_eq!(native.encode_native_value(&output).unwrap(), bytes);
     assert_eq!(
         output.physical_type().representation(),
         Representation::KoalaBearVector
@@ -222,8 +222,8 @@ fn one_typed_local_program_executes_conversions_and_dot() {
     let values = result.unwrap();
     assert!(matches!(&values[0], Value::KoalaBearField(n) if n.as_canonical_u32() == 32));
     assert_eq!(
-        native.encode_value(&values[1]).unwrap(),
-        native.encode_value(&vector(&[1, 2, 3])).unwrap()
+        native.encode_native_value(&values[1]).unwrap(),
+        native.encode_native_value(&vector(&[1, 2, 3])).unwrap()
     );
 }
 
@@ -307,7 +307,7 @@ fn canonical_generic_origin_arguments_retain_types_and_naturals_without_authorit
         &["x".into()],
     );
     let mut carrier: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    carrier[3][0][5] = json!([
+    carrier[2][0][5] = json!([
         "Generic",
         [
             ["F", "koala-bear"],
@@ -328,10 +328,10 @@ fn canonical_generic_origin_arguments_retain_types_and_naturals_without_authorit
         "1048577",
         "unknown<bool,0>",
         "fixed_vector<bool,01>",
-        "fixed_vector<bool,2>@plonky3.fixed-vector/1",
-        "zkcv.fixed_vector.koala-bear/1",
+        "fixed_vector<bool,2>@plonky3.fixed-vector/0",
+        "zkcv.fixed_vector.koala-bear/0",
     ] {
-        carrier[3][0][5][1][1][1] = json!(bad);
+        carrier[2][0][5][1][1][1] = json!(bad);
         let error = admit_supplied(
             &serde_json::to_vec(&carrier).unwrap(),
             &backend(Policy::default()),
@@ -341,7 +341,7 @@ fn canonical_generic_origin_arguments_retain_types_and_naturals_without_authorit
         assert_eq!(error.detail, "logical origin static identity");
     }
     // Even a canonical origin cannot change the independently resolved length.
-    carrier[3][0][5][1][1][1] = json!("3");
+    carrier[2][0][5][1][1][1] = json!("3");
     assert_eq!(
         run_program(
             backend(Policy::default()),

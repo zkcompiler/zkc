@@ -270,69 +270,41 @@ pub(crate) fn apply(
     args: &[Value],
     i: &Invocation<'_>,
     p: &Policy,
-) -> Option<Result<Vec<Value>>> {
-    if !(name.starts_with("field.")
-        || name.starts_with("matrix.")
-        || name.starts_with("vector.")
-        || matches!(
-            name,
-            "poly.from_coefficients"
-                | "poly.divide_opening"
-                | "poly.coefficients"
-                | "poly.coefficient_count"
-                | "poly.degree_check"
-                | "poly.univariate_evaluate"
-                | "poly.univariate_boundary"
-                | "poly.boundary"
-                | "poly.round_evaluate"
-        ))
-    {
-        return None;
-    }
-    if matches!(
-        name,
-        "vector.from_point" | "vector.to_point" | "vector.from_table" | "vector.to_table"
-    ) {
-        return None;
-    }
+) -> Result<Vec<Value>> {
     if name == "vector.embed" {
-        return Some((|| {
-            let [Value::KoalaBearVector(xs)] = args else {
-                return Err(refused("kernel-operands"));
-            };
-            p.vector_width(xs.len(), 32)?;
-            p.output(size(xs.len(), 32)?, i.max_output_bytes)?;
-            let mut out = reserve(xs.len())?;
-            out.extend(xs.iter().copied().map(KoalaBearExt8::from));
-            Ok(vec![Value::KoalaBearExt8Vector(out.into())])
-        })());
+        let [Value::KoalaBearVector(xs)] = args else {
+            return Err(refused("kernel-operands"));
+        };
+        p.vector_width(xs.len(), 32)?;
+        p.output(size(xs.len(), 32)?, i.max_output_bytes)?;
+        let mut out = reserve(xs.len())?;
+        out.extend(xs.iter().copied().map(KoalaBearExt8::from));
+        return Ok(vec![Value::KoalaBearExt8Vector(out.into())]);
     }
     if name == "field.embed" {
-        return Some((|| {
-            p.output(512, i.max_output_bytes)?;
-            match (
-                i.binding
-                    .signature()
-                    .outputs
-                    .first()
-                    .map(|t| t.logical().identity()),
-                args,
-            ) {
-                (Some(Identity::KoalaBearExt8), [Value::KoalaBearField(x)]) => {
-                    Ok(vec![Value::KoalaBearExt8Field((*x).into())])
-                }
-                _ => Err(refused("kernel-operands")),
+        p.output(512, i.max_output_bytes)?;
+        return match (
+            i.binding
+                .signature()
+                .outputs
+                .first()
+                .map(|t| t.logical().identity()),
+            args,
+        ) {
+            (Some(Identity::KoalaBearExt8), [Value::KoalaBearField(x)]) => {
+                Ok(vec![Value::KoalaBearExt8Field((*x).into())])
             }
-        })());
+            _ => Err(refused("kernel-operands")),
+        };
     }
-    Some(match field {
+    match field {
         Some(Identity::Bn254Fr) => dense::<crate::Bn254Scalar>(name, args, i, p),
         Some(Identity::Bls12381Fr) => dense::<Scalar>(name, args, i, p),
         Some(Identity::Ristretto255Scalar) => dense::<RistrettoScalar>(name, args, i, p),
         Some(Identity::KoalaBearExt8) => dense::<KoalaBearExt8>(name, args, i, p),
         Some(Identity::KoalaBear) => dense::<KoalaBear>(name, args, i, p),
         _ => Err(refused("kernel-operands")),
-    })
+    }
 }
 fn dense<S: Family>(
     name: &str,
@@ -790,260 +762,510 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::{field, poly};
     use zkc_runtime::interactive::{AttributeRule, Type::*};
     &[
-        field::operation("field.constant", &[], &[Field], AttributeRule::FieldDecimal),
-        field::operation("field.add", &[Field, Field], &[Field], AttributeRule::None),
-        field::operation("field.mul", &[Field, Field], &[Field], AttributeRule::None),
-        field::operation("field.equal", &[Field, Field], &[Bool], AttributeRule::None),
-        poly::operation("poly.boundary", &[Round], &[Field], AttributeRule::None),
+        field::operation("field.constant", &[], &[Field], AttributeRule::FieldDecimal)
+            .implemented_by(&[
+                "arkworks/field.constant",
+                "dalek/field.constant",
+                "plonky3/field.constant",
+            ]),
+        field::operation("field.add", &[Field, Field], &[Field], AttributeRule::None)
+            .implemented_by(&["arkworks/field.add", "dalek/field.add", "plonky3/field.add"]),
+        field::operation("field.mul", &[Field, Field], &[Field], AttributeRule::None)
+            .implemented_by(&["arkworks/field.mul", "dalek/field.mul", "plonky3/field.mul"]),
+        field::operation("field.equal", &[Field, Field], &[Bool], AttributeRule::None)
+            .implemented_by(&[
+                "arkworks/field.equal",
+                "dalek/field.equal",
+                "plonky3/field.equal",
+            ]),
+        poly::operation("poly.boundary", &[Round], &[Field], AttributeRule::None).implemented_by(
+            &[
+                "arkworks/poly.boundary",
+                "dalek/poly.boundary",
+                "plonky3/poly.boundary",
+            ],
+        ),
         poly::operation(
             "poly.round_evaluate",
             &[Round, Field],
             &[Field],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/poly.round_evaluate",
+            "dalek/poly.round_evaluate",
+            "plonky3/poly.round_evaluate",
+        ]),
         field::operation(
             "vector.get",
             &[Vector, Index],
             &[Field],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.get",
+            "dalek/vector.get",
+            "plonky3/vector.get",
+        ]),
         field::operation(
             "vector.slice",
             &[Vector, Index, Index],
             &[Vector],
             AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/vector.slice",
+            "dalek/vector.slice",
+            "plonky3/vector.slice",
+        ]),
+        field::operation("vector.length", &[Vector], &[Index], AttributeRule::None).implemented_by(
+            &[
+                "arkworks/vector.length",
+                "dalek/vector.length",
+                "plonky3/vector.length",
+            ],
         ),
-        field::operation("vector.length", &[Vector], &[Index], AttributeRule::None),
         field::operation(
             "vector.rotate",
             &[Vector, Index],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.rotate",
+            "dalek/vector.rotate",
+            "plonky3/vector.rotate",
+        ]),
         field::operation(
             "vector.interleave",
             &[Vector, Vector],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.interleave",
+            "dalek/vector.interleave",
+            "plonky3/vector.interleave",
+        ]),
         field::operation(
             "vector.prefix_product",
             &[Vector],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.prefix_product",
+            "dalek/vector.prefix_product",
+            "plonky3/vector.prefix_product",
+        ]),
         field::operation(
             "vector.prefix_sum",
             &[Vector],
             &[Vector],
             AttributeRule::None,
-        ),
-        field::operation("vector.inverse", &[Vector], &[Vector], AttributeRule::None),
-        field::embedding("vector.embed", &[Vector], &[Vector], AttributeRule::None),
+        )
+        .implemented_by(&[
+            "arkworks/vector.prefix_sum",
+            "dalek/vector.prefix_sum",
+            "plonky3/vector.prefix_sum",
+        ]),
+        field::operation("vector.inverse", &[Vector], &[Vector], AttributeRule::None)
+            .implemented_by(&[
+                "arkworks/vector.inverse",
+                "dalek/vector.inverse",
+                "plonky3/vector.inverse",
+            ]),
+        field::embedding("vector.embed", &[Vector], &[Vector], AttributeRule::None)
+            .implemented_by(&["plonky3/vector.embed"]),
         field::operation(
             "vector.fill",
             &[Field, Index],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.fill",
+            "dalek/vector.fill",
+            "plonky3/vector.fill",
+        ]),
         field::operation(
             "vector.geometric",
             &[Field, Index],
             &[Vector],
             AttributeRule::None,
-        ),
-        field::operation("field.from_index", &[Index], &[Field], AttributeRule::None),
+        )
+        .implemented_by(&[
+            "arkworks/vector.geometric",
+            "dalek/vector.geometric",
+            "plonky3/vector.geometric",
+        ]),
+        field::operation("field.from_index", &[Index], &[Field], AttributeRule::None)
+            .implemented_by(&[
+                "arkworks/field.from_index",
+                "dalek/field.from_index",
+                "plonky3/field.from_index",
+            ]),
         poly::operation(
             "poly.coefficient_count",
             &[Polynomial],
             &[Index],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/poly.coefficient_count",
+            "dalek/poly.coefficient_count",
+            "plonky3/poly.coefficient_count",
+        ]),
         poly::operation(
             "poly.divide_opening",
             &[Polynomial, Field, Field],
             &[Polynomial],
             AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/poly.divide_opening",
+            "dalek/poly.divide_opening",
+            "plonky3/poly.divide_opening",
+        ]),
+        field::operation("field.sub", &[Field, Field], &[Field], AttributeRule::None)
+            .implemented_by(&["arkworks/field.sub", "dalek/field.sub", "plonky3/field.sub"]),
+        field::operation("field.neg", &[Field], &[Field], AttributeRule::None).implemented_by(&[
+            "arkworks/field.neg",
+            "dalek/field.neg",
+            "plonky3/field.neg",
+        ]),
+        field::operation("field.inverse", &[Field], &[Field], AttributeRule::None).implemented_by(
+            &[
+                "arkworks/field.inverse",
+                "dalek/field.inverse",
+                "plonky3/field.inverse",
+            ],
         ),
-        field::operation("field.sub", &[Field, Field], &[Field], AttributeRule::None),
-        field::operation("field.neg", &[Field], &[Field], AttributeRule::None),
-        field::operation("field.inverse", &[Field], &[Field], AttributeRule::None),
         field::operation(
             "matrix.mul_vector",
             &[Matrix, Vector],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/matrix.mul_vector",
+            "dalek/matrix.mul_vector",
+            "plonky3/matrix.mul_vector",
+        ]),
         field::operation(
             "matrix.transpose_mul_vector",
             &[Matrix, Vector],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/matrix.transpose_mul_vector",
+            "dalek/matrix.transpose_mul_vector",
+            "plonky3/matrix.transpose_mul_vector",
+        ]),
         field::operation(
             "matrix.bilinear",
             &[Matrix, Vector, Vector],
             &[Field],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/matrix.bilinear",
+            "dalek/matrix.bilinear",
+            "plonky3/matrix.bilinear",
+        ]),
         field::operation(
             "matrix.dimension",
             &[Matrix],
             &[Index],
             AttributeRule::Unsigned64,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/matrix.dimension",
+            "dalek/matrix.dimension",
+            "plonky3/matrix.dimension",
+        ]),
         field::operation(
             "matrix.shape_check",
             &[Matrix],
             &[Bool],
             AttributeRule::MatrixDimensions,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/matrix.shape_check",
+            "dalek/matrix.shape_check",
+            "plonky3/matrix.shape_check",
+        ]),
         field::operation(
             "matrix.identity_check",
             &[Matrix],
             &[Bool],
             AttributeRule::MatrixIdentity,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/matrix.identity_check",
+            "dalek/matrix.identity_check",
+            "plonky3/matrix.identity_check",
+        ]),
         field::operation(
             "vector.constant",
             &[],
             &[Vector],
             AttributeRule::FieldDecimals,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.constant",
+            "dalek/vector.constant",
+            "plonky3/vector.constant",
+        ]),
         field::operation(
             "vector.scatter_sum",
             &[Vector],
             &[Vector],
             AttributeRule::ScatterShape,
-        ),
-        field::operation("vector.empty", &[], &[Vector], AttributeRule::None),
+        )
+        .implemented_by(&[
+            "arkworks/vector.scatter_sum",
+            "dalek/vector.scatter_sum",
+            "plonky3/vector.scatter_sum",
+        ]),
+        field::operation("vector.empty", &[], &[Vector], AttributeRule::None).implemented_by(&[
+            "arkworks/vector.empty",
+            "dalek/vector.empty",
+            "plonky3/vector.empty",
+        ]),
         field::operation(
             "vector.append",
             &[Vector, Field],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.append",
+            "dalek/vector.append",
+            "plonky3/vector.append",
+        ]),
         field::operation(
             "vector.splat",
             &[Field],
             &[Vector],
             AttributeRule::NaturalIndex,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.splat",
+            "dalek/vector.splat",
+            "plonky3/vector.splat",
+        ]),
         field::operation(
             "vector.powers",
             &[Field],
             &[Vector],
             AttributeRule::NaturalIndex,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.powers",
+            "dalek/vector.powers",
+            "plonky3/vector.powers",
+        ]),
         field::operation(
             "vector.equal",
             &[Vector, Vector],
             &[Bool],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.equal",
+            "dalek/vector.equal",
+            "plonky3/vector.equal",
+        ]),
         field::operation(
             "vector.add",
             &[Vector, Vector],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.add",
+            "dalek/vector.add",
+            "plonky3/vector.add",
+        ]),
         field::operation(
             "vector.sub",
             &[Vector, Vector],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.sub",
+            "dalek/vector.sub",
+            "plonky3/vector.sub",
+        ]),
         field::operation(
             "vector.mul",
             &[Vector, Vector],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.mul",
+            "dalek/vector.mul",
+            "plonky3/vector.mul",
+        ]),
         field::operation(
             "vector.scale",
             &[Vector, Field],
             &[Vector],
             AttributeRule::None,
-        ),
-        field::operation("vector.sum", &[Vector], &[Field], AttributeRule::None),
+        )
+        .implemented_by(&[
+            "arkworks/vector.scale",
+            "dalek/vector.scale",
+            "plonky3/vector.scale",
+        ]),
+        field::operation("vector.sum", &[Vector], &[Field], AttributeRule::None).implemented_by(&[
+            "arkworks/vector.sum",
+            "dalek/vector.sum",
+            "plonky3/vector.sum",
+        ]),
         field::operation(
             "vector.dot",
             &[Vector, Vector],
             &[Field],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.dot",
+            "dalek/vector.dot",
+            "plonky3/vector.dot",
+        ]),
         field::operation(
             "vector.split",
             &[Vector],
             &[Vector, Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.split",
+            "dalek/vector.split",
+            "plonky3/vector.split",
+        ]),
         field::operation(
             "vector.concat",
             &[Vector, Vector],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.concat",
+            "dalek/vector.concat",
+            "plonky3/vector.concat",
+        ]),
         field::operation(
             "vector.at",
             &[Vector],
             &[Field],
             AttributeRule::NaturalIndex,
-        ),
+        )
+        .implemented_by(&["arkworks/vector.at", "dalek/vector.at", "plonky3/vector.at"]),
         field::operation(
             "vector.length_check",
             &[Vector],
             &[Bool],
             AttributeRule::NaturalIndex,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.length_check",
+            "dalek/vector.length_check",
+            "plonky3/vector.length_check",
+        ]),
         field::operation(
             "vector.gather",
             &[Vector],
             &[Vector],
             AttributeRule::NaturalIndices,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.gather",
+            "dalek/vector.gather",
+            "plonky3/vector.gather",
+        ]),
         field::operation(
             "vector.kronecker",
             &[Vector, Vector],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.kronecker",
+            "dalek/vector.kronecker",
+            "plonky3/vector.kronecker",
+        ]),
         field::operation(
             "vector.matvec",
             &[Vector, Vector],
             &[Vector],
             AttributeRule::MatrixShape,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/vector.matvec",
+            "dalek/vector.matvec",
+            "plonky3/vector.matvec",
+        ]),
         poly::operation(
             "poly.from_coefficients",
             &[Vector],
             &[Polynomial],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/poly.from_coefficients",
+            "dalek/poly.from_coefficients",
+            "plonky3/poly.from_coefficients",
+        ]),
         poly::operation(
             "poly.coefficients",
             &[Polynomial],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/poly.coefficients",
+            "dalek/poly.coefficients",
+            "plonky3/poly.coefficients",
+        ]),
         poly::operation(
             "poly.degree_check",
             &[Polynomial],
             &[Bool],
             AttributeRule::NaturalIndex,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/poly.degree_check",
+            "dalek/poly.degree_check",
+            "plonky3/poly.degree_check",
+        ]),
         poly::operation(
             "poly.univariate_evaluate",
             &[Polynomial, Field],
             &[Field],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/poly.univariate_evaluate",
+            "dalek/poly.univariate_evaluate",
+            "plonky3/poly.univariate_evaluate",
+        ]),
         poly::operation(
             "poly.univariate_boundary",
             &[Polynomial],
             &[Field],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/poly.univariate_boundary",
+            "dalek/poly.univariate_boundary",
+            "plonky3/poly.univariate_boundary",
+        ]),
     ]
 };
 pub(crate) const EMBEDDINGS: &[crate::bindings::Contract] = &[crate::bindings::field::embedding(
@@ -1051,7 +1273,8 @@ pub(crate) const EMBEDDINGS: &[crate::bindings::Contract] = &[crate::bindings::f
     &[zkc_runtime::interactive::Type::Field],
     &[zkc_runtime::interactive::Type::Field],
     zkc_runtime::interactive::AttributeRule::None,
-)];
+)
+.implemented_by(&["plonky3/field.embed"])];
 
 #[cfg(test)]
 mod batch_inversion_tests {

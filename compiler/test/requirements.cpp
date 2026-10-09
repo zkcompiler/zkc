@@ -60,7 +60,7 @@ json::Array numbers(ArrayRef<unsigned> values) {
 Expected<json::Value> run(const json::Value &value) {
   const auto *request = value.getAsArray();
   if (!request || request->size() != 5 ||
-      (*request)[0].getAsString() != "zkc.requirements/1")
+      (*request)[0].getAsString() != "zkc.requirements")
     return invalid();
   const auto *rawTerms = (*request)[1].getAsArray();
   const auto *rawRules = (*request)[3].getAsArray();
@@ -125,7 +125,7 @@ Expected<json::Value> run(const json::Value &value) {
   for (const auto &goal : result->goals)
     answers.push_back(goal ? json::Value(int64_t(*goal))
                            : json::Value(nullptr));
-  return json::Value(json::Array{"zkc.requirements-certificate/1",
+  return json::Value(json::Array{"zkc.requirements-certificate",
                                  std::move(steps), std::move(answers)});
 }
 // Run with --self-test. Failures remain named even in Release/NDEBUG builds.

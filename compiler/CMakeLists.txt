@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(ZkcCompiler VERSION 0.1 LANGUAGES C CXX)
+project(ZkcCompiler VERSION 0.0.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -56,26 +56,20 @@ include(cmake/Components.cmake)
 add_executable(zkc-compile tools/zkc-compile.cpp)
 target_link_libraries(zkc-compile PRIVATE ZkcDriver)
 target_compile_options(zkc-compile PRIVATE -Wall -Wextra -Werror)
-add_executable(zkc-source-bench tools/zkc-source-bench.cpp)
-target_link_libraries(zkc-source-bench PRIVATE ZkcCompilerCore)
-target_compile_options(zkc-source-bench PRIVATE -Wall -Wextra -Werror)
-target_compile_definitions(zkc-source-bench PRIVATE
-  ZKC_BENCH_VERSION="${PROJECT_VERSION}"
-  ZKC_BENCH_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
 add_executable(zkc-opt tools/zkc-opt.cpp)
 foreach(tool zkc-compile zkc-opt)
   target_compile_definitions(${tool} PRIVATE ZKC_VERSION="${PROJECT_VERSION}")
 endforeach()
-target_link_libraries(zkc-opt PRIVATE ZkcCompilerCore MLIRMlirOptMain)
+target_link_libraries(zkc-opt PRIVATE ZkcCompiler MLIRMlirOptMain)
 target_compile_options(zkc-opt PRIVATE -Wall -Wextra -Werror)
 
 include(CMakePackageConfigHelpers)
 # Keep installed tools usable with the selected external LLVM/MLIR package.
 set_target_properties(zkc-compile zkc-opt zkc-tblgen PROPERTIES
   INSTALL_RPATH_USE_LINK_PATH TRUE INSTALL_RPATH "$ORIGIN/../lib")
-install(TARGETS ${zkc_components} ZkcCompiler zkc-compile zkc-opt zkc-tblgen
-  EXPORT ZkcCompilerTargets
-  ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+include(cmake/InstallSDK.cmake)
+zkc_install_sdk(COMPONENTS ${zkc_components}
+  TOOLS zkc-compile zkc-opt zkc-tblgen)
 install(DIRECTORY include/zkc DESTINATION include FILES_MATCHING PATTERN "*.h" PATTERN "*.td" PATTERN "*.def")
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Contracts/Installation.td"
   DESTINATION include/zkc/Contracts)
@@ -89,17 +83,11 @@ foreach(header ${zkc_generated_headers})
   get_filename_component(directory "${header}" DIRECTORY)
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${header}" DESTINATION "${directory}")
 endforeach()
-install(EXPORT ZkcCompilerTargets NAMESPACE Zkc:: DESTINATION lib/cmake/ZkcCompiler)
-configure_package_config_file(cmake/ZkcCompilerConfig.cmake.in
-  "${CMAKE_CURRENT_BINARY_DIR}/ZkcCompilerConfig.cmake"
-  INSTALL_DESTINATION lib/cmake/ZkcCompiler)
 write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/ZkcCompilerConfigVersion.cmake"
   COMPATIBILITY ExactVersion)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ZkcCompilerConfig.cmake"
-  "${CMAKE_CURRENT_BINARY_DIR}/ZkcCompilerConfigVersion.cmake"
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ZkcCompilerConfigVersion.cmake"
   DESTINATION lib/cmake/ZkcCompiler)
 include(CTest)
 if(BUILD_TESTING)
-  add_subdirectory(examples/service)
   add_subdirectory(test)
 endif()

@@ -1,0 +1,15 @@
+module transfer;
+use algebra::{Fr, mix, other};
+protocol Transfer roles(P, V)(x: Fr @P, c: Fr @(P, V))
+    -> (first: Fr @V, second: Fr @V, delta: Fr @V, ok: bool @V) {
+  let a = mix(x, c);
+  let b = other(x, c);
+  let r1 = send P -> V(a);
+  let r2 = send P -> V(b);
+  let cv @V = c;
+  let d = r1 - cv;
+  let expected: bool = true;
+  let ok: bool = (r2 == 9) == expected;
+  return (first = r1, second = r2, delta = d, ok = ok);
+}
+entry Demo = Transfer;

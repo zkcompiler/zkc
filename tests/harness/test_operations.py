@@ -15,7 +15,7 @@ from harness import executable, load
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize("operation", ["setup", "fetch-lean", "lean-integration"])
+@pytest.mark.parametrize("operation", ["fetch-lean", "lean-integration"])
 def test_repeated_preparation_keeps_previous_reports(operation, monkeypatch, tmp_path):
     developer = load("developer", "scripts/develop.py")
     outputs, calls = [], []
@@ -44,8 +44,6 @@ def test_repeated_preparation_keeps_previous_reports(operation, monkeypatch, tmp
     assert len(roots) == 2
     assert all(json.loads((root / "run.json").read_text())["status"] == "pass" for root in roots)
     assert all(any(path.is_relative_to(root) for root in roots) for path in outputs)
-    if operation == "setup":
-        assert [call for call in calls if call[0] == "uv"] == [["uv", "sync", "--locked"]] * 2
 
 
 @pytest.mark.parametrize("explicit", [False, True])
@@ -124,7 +122,7 @@ def test_install_refuses_existing_prefix_without_running_commands(kind, monkeypa
     assert os.path.lexists(prefix)
 
 
-@pytest.mark.parametrize("scope", ["cross", "harness", "lint"])
+@pytest.mark.parametrize("scope", ["integration", "harness", "lint"])
 def test_uv_test_and_lint_commands_never_sync(scope, monkeypatch, tmp_path):
     runner = load("runner", "tests/run.py")
     calls = []
@@ -138,7 +136,7 @@ def test_uv_test_and_lint_commands_never_sync(scope, monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("driver,operation,child", [
-    ("tests/run.py", "cross", "uv"),
+    ("tests/run.py", "integration", "uv"),
     ("scripts/develop.py", "lean", "lake"),
 ])
 @pytest.mark.parametrize("status", [7, -signal.SIGTERM])
@@ -176,31 +174,28 @@ Path(sys.argv[sys.argv.index("--output-junit") + 1]).write_text("<testsuite test
 
 def test_demo_writes_under_current_run_reports(monkeypatch, tmp_path):
     runner = load("runner", "tests/run.py")
-    tools = SimpleNamespace(compiler="compiler", runtime="runtime", checker=lambda _: "lean",
-                            example=lambda _: "fixture")
+    tools = SimpleNamespace(compiler="compiler", runtime="runtime")
     monkeypatch.setattr(runner, "Toolchain", lambda: tools)
     outputs = []
 
     def run(args, stdout=None, **kwargs):
-        if args[0] == "fixture":
-            Path(args[1]).mkdir()
         if stdout:
             outputs.append(Path(stdout.name))
-            if args[1] == "protocol-construct":
-                stdout.write(json.dumps(["construction", [], ["common"]]))
-            elif args[1] in {"produce-artifact", "validate-artifact"}:
-                Path(args[-3]).write_bytes(b"proof")
-                stdout.write(json.dumps({"status": "produced" if args[1] == "produce-artifact"
-                                         else "accepted"}))
-            else:
-                stdout.write("[]")
+            if args[1] == "compile":
+                package = Path(next(arg.removeprefix("--output=") for arg in args
+                                    if isinstance(arg, str) and arg.startswith("--output=")))
+                package.write_bytes(b"package")
+                stdout.write(json.dumps({"package_sha256": "0" * 64}))
+            elif args[1] in {"prove", "verify"}:
+                Path(args[-1]).write_bytes(b"proof")
+                stdout.write(json.dumps({"status": "produced" if args[1] == "prove" else "accepted"}))
 
     monkeypatch.setattr(runner, "run", run)
     monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path / "run"))
     runner.execute("demo", SimpleNamespace())
     output = tmp_path / "run/demo"
     assert all(path.parent == output for path in outputs)
-    assert json.loads((output / "common.json").read_text()) == ["common"]
+    assert (output / "proof.entry").read_bytes() == b"package"
     assert (output / "proof.bin").read_bytes() == b"proof"
     assert json.loads((output / "validator.json").read_text())["status"] == "accepted"
     # Reusing the same invocation output must not overwrite a prior proof.
@@ -223,3 +218,27 @@ def test_missing_installed_config_cannot_fall_back_to_an_old_package(monkeypatch
         developer.main()
     assert len(calls) == 1 and calls[0][:2] == ["cmake", "--install"]
     assert config.read_text() == "# stale config"
+
+
+def test_setup_prepares_only_native_dependencies(monkeypatch):
+    developer = load("developer", "scripts/develop.py")
+    calls = []
+    monkeypatch.setattr(developer, "run", lambda args, **kwargs: calls.append(args))
+    developer.execute(SimpleNamespace(operation="setup"))
+    assert calls == [["uv", "sync", "--locked"], ["cargo", "fetch", "--locked"]]
+
+
+def test_unknown_scope_is_rejected(tmp_path):
+    result = subprocess.run([sys.executable, str(ROOT / "tests/run.py"), "invalid-scope"],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 2 and "invalid choice" in result.stderr
+
+
+def test_project_checks_do_not_invoke_formal_drivers(monkeypatch, tmp_path):
+    runner = load("runner", "tests/run.py")
+    calls = []
+    execute = runner.execute
+    monkeypatch.setattr(runner, "execute", lambda scope, args: calls.append(scope))
+    monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path))
+    execute("project", SimpleNamespace())
+    assert calls == ["integration", "demo"]

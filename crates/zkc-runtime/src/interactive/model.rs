@@ -1,7 +1,7 @@
-use super::{ArtifactFormat, PhysicalType, ResolvedBinding};
+use super::{PhysicalType, ResolvedBinding};
 use std::{collections::BTreeMap, fmt, sync::Arc};
 
-/// Hard ceilings, shared by all admissions and executions. Callers cannot raise them.
+/// Admission and execution ceilings, plus explicitly documented policy defaults.
 pub struct Limits;
 impl Limits {
     pub const ARTIFACT_BYTES: usize = 1024 * 1024;
@@ -23,10 +23,11 @@ impl Limits {
     pub const STACK_DEPTH: usize = 64;
     pub const LOOP_COUNT: u64 = 1_048_576;
     pub const INSTRUCTIONS: u64 = 1_000_000;
-    pub const CALLS: u64 = 100_000;
     pub const ITERATIONS: u64 = 100_000;
     pub const LIVE_VALUES: usize = 16_384;
+    /// Hard per-value ceiling and default live-value budget.
     pub const VALUE_BYTES: usize = 64 * 1024 * 1024;
+    /// Default cumulative retained-value budget; callers may configure another value.
     pub const TOTAL_VALUE_BYTES: usize = 256 * 1024 * 1024;
 }
 
@@ -258,10 +259,6 @@ pub enum AttributeRule {
     MatrixShape,
     MatrixDimensions,
     MatrixIdentity,
-    MessageOrigin,
-    ChallengeOrigin,
-    NativeMessageOrigin,
-    NativeChallengeOrigin,
     NativeMessageTemplate,
     NativeChallengeTemplate,
 }
@@ -289,12 +286,9 @@ pub enum ErrorCode {
     Site,
     Attributes,
     Capture,
-    Cycle,
     Role,
-    Parameters,
     Terminal,
     Backend,
-    Correspondence,
 }
 impl ErrorCode {
     /// Stable admission category name, independent of diagnostic prose.
@@ -314,12 +308,9 @@ impl ErrorCode {
             Self::Site => "Site",
             Self::Attributes => "Attributes",
             Self::Capture => "Capture",
-            Self::Cycle => "Cycle",
             Self::Role => "Role",
-            Self::Parameters => "Parameters",
             Self::Terminal => "Terminal",
             Self::Backend => "Backend",
-            Self::Correspondence => "Correspondence",
         }
     }
 }
@@ -419,30 +410,11 @@ pub(crate) enum LocalInstruction {
     },
     Return(Vec<String>),
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct FamilySelector {
-    pub function: String,
-    pub arguments: Vec<String>,
-}
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct FamilyIngress {
-    pub bound: u64,
-    pub selectors: BTreeMap<String, FamilySelector>,
-}
 #[derive(Debug)]
-pub(crate) enum Count {
-    Constant(u64),
-    Parameter(String),
-    Value {
-        value: String,
-        maximum: u64,
-        induction: String,
-    },
-}
-impl Count {
-    pub fn may_run(&self) -> bool {
-        !matches!(self, Self::Constant(0))
-    }
+pub(crate) struct LoopCount {
+    pub value: String,
+    pub maximum: u64,
+    pub induction: String,
 }
 #[derive(Debug)]
 pub(crate) struct Participant {
@@ -450,8 +422,6 @@ pub(crate) struct Participant {
     pub symbol: String,
     pub instance: String,
     pub role: String,
-    pub parameters: BTreeMap<String, u64>,
-    pub families: BTreeMap<String, FamilyIngress>,
     pub inputs: Ports,
     pub outputs: Vec<PhysicalType>,
     pub body: Body,
@@ -484,15 +454,9 @@ pub(crate) enum Instruction {
         output: String,
         ty: PhysicalType,
     },
-    Call {
-        site: String,
-        participant: String,
-        inputs: Vec<String>,
-        outputs: Vec<String>,
-    },
     Loop {
         site: String,
-        count: Count,
+        count: LoopCount,
         carried: Vec<(String, String)>,
         captures: Vec<String>,
         body: Body,
@@ -506,17 +470,9 @@ pub(crate) enum Instruction {
     },
     Yield(Vec<String>),
     Return(Vec<String>),
-    Stop {
-        site: String,
-        reason: String,
-    },
-    Incomplete {
-        site: String,
-    },
 }
 #[derive(Debug)]
 pub(crate) struct Program {
-    pub format: ArtifactFormat,
     pub functions: BTreeMap<String, Arc<Function>>,
     pub participants: BTreeMap<String, Arc<Participant>>,
     pub entries: BTreeMap<String, BTreeMap<String, String>>,

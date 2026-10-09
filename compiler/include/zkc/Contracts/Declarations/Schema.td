@@ -97,7 +97,6 @@ def MatrixIdentity : ZKC_Parameters<"MatrixIdentity", 1, 1>;
 def MatrixVector : ZKC_Parameters<"MatrixVector", 3, 3>;
 def GatherIndices : ZKC_Parameters<"GatherIndices", 0, -1>;
 def ScatterIndices : ZKC_Parameters<"ScatterIndices", 1, -1>;
-def TranscriptOrigin : ZKC_Parameters<"TranscriptOrigin", 5, 5>;
 def NativeOrigin : ZKC_Parameters<"NativeOrigin", 1, 1>;
 class ZKC_Facet : ZKC_Declaration;
 def PublicReplay : ZKC_Facet;
@@ -174,8 +173,6 @@ class ZKC_Operation<string value, list<ZKC_Term> terms,
   list<ZKC_Facet> facets = [];
   ZKC_Operation derivedCounterpart = ?;
   bit commonGeneric = 1;
-  // The closed local envelope preserves existing failure behavior.
-  string effect = "local";
 }
 class ZKC_TypeFamily<string value> : ZKC_TypeHead<value>;
 class ZKC_TypeFamilyCase<ZKC_TypeFamily f, ZKC_Type element, ZKC_Type result> : ZKC_Declaration {

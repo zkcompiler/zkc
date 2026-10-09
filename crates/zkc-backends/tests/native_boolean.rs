@@ -3,20 +3,17 @@ mod common;
 use common::ark_backend;
 use serde_json::{Value as Json, json};
 use zkc_backends::Value;
-use zkc_runtime::interactive::{
-    Action, ArtifactFormat, Runner, StopKind, ValueBudget, admit_supplied,
-};
+use zkc_runtime::interactive::{Action, Runner, StopKind, ValueBudget, admit_supplied};
 
 fn candidate(value: bool) -> Json {
     json!([
-        "zkc.program/1",
+        "zkc.program/0",
         [],
-        "physical",
         [[
             "function",
             "literal",
             [],
-            ["bool@native.bool/1"],
+            ["bool@native.bool/0"],
             [
                 ["bool_constant", "make", "result", value],
                 ["return", ["result"]]
@@ -29,8 +26,7 @@ fn candidate(value: bool) -> Json {
             "instance",
             "P",
             [],
-            [],
-            ["bool@native.bool/1"],
+            ["bool@native.bool/0"],
             [
                 ["local", "run", "literal", [], ["out"]],
                 ["return", ["out"]]
@@ -49,8 +45,6 @@ fn literal_charges_a_step_and_returns_the_exact_boolean() {
     for value in [false, true] {
         let backend = ark_backend(None);
         let admitted = admit_supplied(&bytes(&candidate(value)), &backend).unwrap();
-        assert_eq!(admitted.format(), ArtifactFormat::Program);
-        assert!(admitted.checked_source().is_none());
         let mut runner = Runner::new(&admitted, "main", "P", "session", backend, vec![])
             .unwrap_or_else(|_| panic!("entry"));
         let Action::Local(local) = runner.poll() else {
@@ -110,42 +104,44 @@ fn formats_shapes_context_and_names_are_independently_checked() {
     let backend = ark_backend(None);
     let refused =
         |value: Json| assert!(admit_supplied(&bytes(&value), &backend).is_err(), "{value}");
-    let mut legacy = candidate(true);
-    legacy[0] = json!("zkc.participants/1");
-    legacy[4][0].as_array_mut().unwrap().pop();
-    refused(legacy);
+    let mut unknown_format = candidate(true);
+    unknown_format[0] = json!("invalid.program");
+    refused(unknown_format);
+    let mut missing_services = candidate(true);
+    missing_services[3][0].as_array_mut().unwrap().pop();
+    refused(missing_services);
     for literal in [json!("true"), json!(1), Json::Null, json!([]), json!({})] {
         let mut value = candidate(true);
-        value[3][0][4][0][3] = literal;
+        value[2][0][4][0][3] = literal;
         refused(value);
     }
     let mut value = candidate(true);
-    value[2] = json!("logical");
+    value.as_array_mut().unwrap().insert(2, json!("logical"));
     refused(value);
     let mut value = candidate(true);
-    value[3][0][4][0]
+    value[2][0][4][0]
         .as_array_mut()
         .unwrap()
         .push(json!("extra"));
     refused(value);
     let mut value = candidate(true);
-    value[3][0][4][0][1] = json!("");
+    value[2][0][4][0][1] = json!("");
     refused(value);
     let mut value = candidate(true);
-    value[3][0][4][0][2] = json!("bad/name");
+    value[2][0][4][0][2] = json!("bad/name");
     refused(value);
     let mut value = candidate(true);
-    let duplicate = value[3][0][4][0].clone();
-    value[3][0][4].as_array_mut().unwrap().insert(1, duplicate);
+    let duplicate = value[2][0][4][0].clone();
+    value[2][0][4].as_array_mut().unwrap().insert(1, duplicate);
     refused(value);
     let mut value = candidate(true);
-    value[4][0][7]
+    value[3][0][6]
         .as_array_mut()
         .unwrap()
         .insert(0, json!(["bool_constant", "root_literal", "v", true]));
     refused(value);
     let mut value = candidate(true);
-    value[3][0][3] = json!(["index@native.index/1"]);
+    value[2][0][3] = json!(["index@native.index/0"]);
     refused(value);
 }
 
@@ -155,11 +151,8 @@ impl zkc_runtime::interactive::Value for WrongBoolean {
     fn from_control_bool(_: bool) -> Result<Self, zkc_runtime::interactive::BackendError> {
         Ok(Self)
     }
-    fn type_name(&self) -> &str {
-        "index"
-    }
     fn physical_type(&self) -> zkc_runtime::interactive::PhysicalType {
-        zkc_runtime::interactive::PhysicalType::parse("index@native.index/1").unwrap()
+        zkc_runtime::interactive::PhysicalType::parse("index@native.index/0").unwrap()
     }
     fn validate_serializable(&self) -> Result<(), zkc_runtime::interactive::BackendError> {
         Ok(())
@@ -213,7 +206,7 @@ impl zkc_runtime::interactive::Backend for LiteralAdapter {
 #[test]
 fn unsupported_adapter_is_refused_before_any_prefix_and_rechecked_on_entry() {
     let mut value = candidate(true);
-    value[3].as_array_mut().unwrap().push(json!([
+    value[2].as_array_mut().unwrap().push(json!([
         "function",
         "prefix",
         [],
@@ -221,7 +214,7 @@ fn unsupported_adapter_is_refused_before_any_prefix_and_rechecked_on_entry() {
         [["return", []]],
         ["prefix", []]
     ]));
-    value[4][0][7]
+    value[3][0][6]
         .as_array_mut()
         .unwrap()
         .insert(0, json!(["local", "before", "prefix", [], []]));
@@ -274,7 +267,7 @@ fn a_false_adapter_promise_does_not_bypass_runtime_type_validation() {
 fn only_the_selected_nested_literal_executes() {
     for condition in [false, true] {
         let mut value = candidate(condition);
-        value[3][0][4] = json!([
+        value[2][0][4] = json!([
             ["bool_constant", "make", "condition", condition],
             [
                 "if",
@@ -311,52 +304,11 @@ fn only_the_selected_nested_literal_executes() {
 }
 
 #[test]
-fn native_literals_never_reach_the_legacy_correspondence_checker() {
-    struct Forbidden;
-    impl zkc_runtime::interactive::Correspondence for Forbidden {
-        fn check_with_mapping(
-            &self,
-            _: &[u8],
-            _: &[u8],
-            _: ArtifactFormat,
-        ) -> Result<
-            Option<zkc_runtime::interactive::SourceMap>,
-            zkc_runtime::interactive::AdmissionError,
-        > {
-            panic!("legacy correspondence mapping callback must not run")
-        }
-        fn check(
-            &self,
-            _: &[u8],
-            _: &[u8],
-            _: ArtifactFormat,
-        ) -> Result<(), zkc_runtime::interactive::AdmissionError> {
-            panic!("legacy correspondence callback must not run")
-        }
-    }
-    let error = zkc_runtime::interactive::admit_physical(
-        b"original",
-        &bytes(&candidate(true)),
-        &ark_backend(None),
-        &Forbidden,
-    )
-    .expect_err("native correspondence is deferred");
-    assert_eq!(
-        error.code,
-        zkc_runtime::interactive::ErrorCode::Correspondence
-    );
-    assert_eq!(
-        error.detail,
-        "native-participant-correspondence-unsupported"
-    );
-}
-
-#[test]
 fn unused_literal_definitions_are_admitted_and_require_backend_support() {
     let mut value = candidate(true);
     // The endpoint never calls the retained literal function.
-    value[4][0][6] = json!([]);
-    value[4][0][7] = json!([["return", []]]);
+    value[3][0][5] = json!([]);
+    value[3][0][6] = json!([["return", []]]);
     assert!(
         admit_supplied(&bytes(&value), &ark_backend(None))
             .unwrap()
@@ -370,29 +322,8 @@ fn unused_literal_definitions_are_admitted_and_require_backend_support() {
     let error = admit_supplied(&bytes(&value), &adapter)
         .expect_err("unused literal still requires support");
     assert!(error.detail.contains("native-boolean-unsupported"));
-    value[3][0][4][0][3] = json!("malformed");
+    value[2][0][4][0][3] = json!("malformed");
     assert!(admit_supplied(&bytes(&value), &ark_backend(None)).is_err());
-}
-
-#[test]
-fn legacy_identity_functions_admit_but_literals_do_not() {
-    let mut value = candidate(true);
-    value[0] = json!("zkc.participants/1");
-    value[4][0].as_array_mut().unwrap().pop();
-    value[3][0][2] = json!([["input", "bool@native.bool/1"]]);
-    value[3][0][4] = json!([["return", ["input"]]]);
-    value[4][0][5] = json!([["input", "bool@native.bool/1"]]);
-    value[4][0][7][0][3] = json!(["input"]);
-    assert!(admit_supplied(&bytes(&value), &ark_backend(None)).is_ok());
-    value[3][0][4]
-        .as_array_mut()
-        .unwrap()
-        .insert(0, json!(["bool_constant", "hidden", "unused", true]));
-    let error = admit_supplied(&bytes(&value), &ark_backend(None))
-        .err()
-        .unwrap();
-    assert_eq!(error.code, zkc_runtime::interactive::ErrorCode::Record);
-    assert_eq!(error.detail, "unknown local instruction");
 }
 
 #[test]
@@ -402,11 +333,11 @@ fn native_endpoint_stops_are_not_local_stops() {
         json!(["incomplete", "end"]),
     ] {
         let mut value = candidate(true);
-        value[4][0][7] = json!([terminal]);
+        value[3][0][6] = json!([terminal]);
         let error = admit_supplied(&bytes(&value), &ark_backend(None))
             .err()
             .unwrap();
-        assert_eq!(error.detail, "native-participant-terminal");
+        assert_eq!(error.detail, "unknown participant instruction");
     }
 }
 
@@ -414,7 +345,7 @@ fn native_endpoint_stops_are_not_local_stops() {
 #[test]
 fn program_service_query_executes_and_releases_its_lease() {
     use zkc_backends::{Scalar, services::ServiceRegistry};
-    use zkc_runtime::interactive::{Action, ArtifactFormat, Runner};
+    use zkc_runtime::interactive::{Action, Runner};
     let registry = ServiceRegistry::new(zkc_backends::Policy::default());
     let root = registry
         .issue_test_tape("P", 1, vec![Scalar::from(17)])
@@ -425,11 +356,10 @@ fn program_service_query_executes_and_releases_its_lease() {
             std::collections::BTreeMap::from([("coins".into(), root.clone())]),
         )
         .unwrap();
-    let field = "field:bls12-381.fr@arkworks.fr/1";
+    let field = "field:bls12-381.fr@arkworks.fr/0";
     let carrier = json!([
-        "zkc.program/1",
+        "zkc.program/0",
         [],
-        "physical",
         [],
         [[
             "participant",
@@ -437,18 +367,16 @@ fn program_service_query_executes_and_releases_its_lease() {
             "root",
             "P",
             [],
-            [],
             [field],
             [
                 ["query", "sample", "coins", "draw", [], ["x"]],
                 ["return", ["x"]]
             ],
-            [["coins", "random.bls12-381.fr/1", "0"]]
+            [["coins", "random.bls12-381.fr/0", "0"]]
         ]],
         [["entry", "main", [["P", "p"]]]]
     ]);
     let admitted = admit_supplied(&bytes(&carrier), &backend).unwrap();
-    assert_eq!(admitted.format(), ArtifactFormat::Program);
     let mut runner = Runner::new(&admitted, "main", "P", "session", backend, vec![])
         .unwrap_or_else(|e| panic!("{}", e.error));
     let Action::Query(query) = runner.poll() else {
@@ -466,9 +394,9 @@ fn program_service_query_executes_and_releases_its_lease() {
         (state.generation, state.draw_count, state.budget),
         (1, 1, 0)
     );
-    let mut retired = carrier;
-    retired[0] = json!("zkc.service-participants/1");
-    let error = admit_supplied(&bytes(&retired), runner.backend())
+    let mut unknown_format = carrier;
+    unknown_format[0] = json!("invalid.program");
+    let error = admit_supplied(&bytes(&unknown_format), runner.backend())
         .err()
         .unwrap();
     assert_eq!(error.code, zkc_runtime::interactive::ErrorCode::Record);
@@ -479,17 +407,15 @@ fn program_service_query_executes_and_releases_its_lease() {
 fn program_iteration_exhaustion_preserves_the_attempted_loop_coordinate() {
     use zkc_runtime::interactive::{PathElement, WorkBudget};
     let carrier = json!([
-        "zkc.program/1",
+        "zkc.program/0",
         [],
-        "physical",
         [],
         [[
             "participant",
             "p",
             "root",
             "P",
-            [],
-            [["n", "index@native.index/1"]],
+            [["n", "index@native.index/0"]],
             [],
             [
                 [

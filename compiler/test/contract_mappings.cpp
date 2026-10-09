@@ -1,9 +1,9 @@
 #include "mlir/IR/Verifier.h"
+#include "mlir/Parser/Parser.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/raw_ostream.h"
@@ -33,30 +33,10 @@ struct ExpectedMapping {
 // boundOperationName, operationSupportsContract, or C++ operation classes.
 // Contract spelling and IR mnemonic intentionally differ in several families.
 constexpr ExpectedMapping expected[] = {
-    {"transcript.native.indexed.observe.commitment",
-     "crypto.exec.indexed_transcript_observe_commitment"},
-    {"transcript.native.indexed.observe.proof",
-     "crypto.exec.indexed_transcript_observe_proof"},
     {"transcript.native.indexed.challenge",
      "crypto.exec.indexed_transcript_challenge"},
-    {"transcript.native.indexed.observe.bool",
-     "crypto.exec.indexed_transcript_observe_bool"},
-    {"transcript.native.indexed.observe.field",
-     "crypto.exec.indexed_transcript_observe_field"},
-    {"transcript.native.indexed.observe.group",
-     "crypto.exec.indexed_transcript_observe_group"},
-    {"transcript.native.indexed.observe.index",
-     "crypto.exec.indexed_transcript_observe_index"},
     {"transcript.native.indexed.observe.data",
      "crypto.exec.indexed_transcript_observe_data"},
-    {"transcript.native.indexed.observe.field_array",
-     "crypto.exec.indexed_transcript_observe_field_array"},
-    {"transcript.native.challenge", "crypto.exec.native_transcript_challenge"},
-    {"transcript.native.observe.bool", "crypto.exec.native_transcript_observe"},
-    {"transcript.native.observe.field",
-     "crypto.exec.native_transcript_observe"},
-    {"transcript.native.observe.group",
-     "crypto.exec.native_transcript_observe"},
     {"field_array.at", "algebra.exec.field_array_at"},
     {"field_array.from_vector", "algebra.exec.field_array_from_vector"},
     {"fixed_vector.from_vector", "algebra.exec.fixed_vector_from_vector"},
@@ -194,7 +174,6 @@ constexpr ExpectedMapping expected[] = {
     {"pcs.open", "pcs.exec.open"},
     {"pcs.check", "pcs.exec.check"},
     {"random.index", "crypto.exec.random_index"},
-    {"transcript.draw_index", "crypto.exec.transcript_draw_index"},
     {"random.draw", "crypto.exec.random_draw"},
     {"pcs.equal", "pcs.exec.equal"},
     {"curve.generator", "algebra.exec.group_generator"},
@@ -208,22 +187,6 @@ constexpr ExpectedMapping expected[] = {
     {"curve.length", "algebra.exec.group_length"},
     {"curve.commit", "crypto.exec.curve_commit"},
     {"curve.response", "crypto.exec.curve_response"},
-    {"transcript.challenge", "crypto.exec.transcript_challenge"},
-    {"transcript.observe.bool", "crypto.exec.transcript_observe"},
-    {"transcript.observe.field", "crypto.exec.transcript_observe"},
-    {"transcript.observe.table", "crypto.exec.transcript_observe"},
-    {"transcript.observe.point", "crypto.exec.transcript_observe"},
-    {"transcript.observe.round", "crypto.exec.transcript_observe"},
-    {"transcript.observe.commitment", "crypto.exec.transcript_observe"},
-    {"transcript.observe.proof", "crypto.exec.transcript_observe"},
-    {"transcript.observe.group", "crypto.exec.transcript_observe"},
-    {"transcript.observe.groups", "crypto.exec.transcript_observe"},
-    {"transcript.observe.matrix", "crypto.exec.transcript_observe"},
-    {"transcript.observe.vector", "crypto.exec.transcript_observe"},
-    {"transcript.observe.polynomial", "crypto.exec.transcript_observe"},
-    {"transcript.observe.index", "crypto.exec.transcript_observe"},
-    {"transcript.observe.indices", "crypto.exec.transcript_observe"},
-    {"transcript.observe.commitments", "crypto.exec.transcript_observe"},
 };
 
 void identities(MLIRContext &context) {
@@ -239,7 +202,7 @@ void identities(MLIRContext &context) {
     check(protocol::boundOperationName(row.contract) == row.operation,
           "wrong imported identity for " + row.contract + ": expected " +
               row.operation);
-    // Check the complete cross product, including all many-to-one observations.
+    // Check the complete cross product of exact contract mappings.
     // Neither expected side is computed with the production forward mapping.
     for (const auto &other : expected)
       check(
@@ -253,10 +216,8 @@ void identities(MLIRContext &context) {
           "missing independent oracle: " + kernel.key);
 
   for (StringRef unknown :
-       {"", "field.sum", "algebra.exec.field_add", "Field.add",
-        "field.add.extra", "table.relayout", "transcript.observe",
-        "transcript.observe.", "transcript.observe.uninstalled",
-        "transcript.observe.field.extra", "transcript.observe_field"}) {
+       {"", "invalid.contract", "algebra.exec.field_add", "Field.add",
+        "field.add.extra", "transcript.native.indexed.observe.data.extra"}) {
     check(protocol::boundOperationName(unknown).empty(),
           "unknown contract mapped: " + unknown);
     for (const auto &row : expected)
@@ -264,30 +225,10 @@ void identities(MLIRContext &context) {
             "operation accepted unknown contract: " + unknown);
   }
   for (StringRef unknown :
-       {"", "table.field_add", "field.add", "pir.uninstalled",
-        "plan.execute_kernel", "crypto.exec.transcript_observe.extra"})
+       {"", "invalid.operation", "field.add", "algebra.exec.field_add.extra"})
     for (const auto &row : expected)
       check(!protocol::operationSupportsContract(unknown, row.contract),
             "unmapped operation accepted contract: " + unknown);
-}
-
-source::Module arithmetic() {
-  source::Module module;
-  module.bindings = {{{}, "add", {"field.add", {"koala-bear"}, ""}},
-                     {{}, "mul", {"field.mul", {"koala-bear"}, ""}}};
-  source::Function function;
-  function.name = "Arithmetic";
-  function.origin = source::LogicalOrigin{"Arithmetic", {}};
-  function.arguments = {{"x", "field:koala-bear"}, {"y", "field:koala-bear"}};
-  function.results = {"field:koala-bear", "field:koala-bear"};
-  function.body = source::Body{
-      {{}, "add_site", source::Operation{"add", {}, {}, {"x", "y"}, {"sum"}}},
-      {{},
-       "mul_site",
-       source::Operation{"mul", {}, {}, {"x", "y"}, {"product"}}},
-      {{}, "", source::Return{{"sum", "product"}}}};
-  module.functions.push_back(std::move(function));
-  return module;
 }
 
 // A deliberately tiny independent interpreter for the two imported mnemonics.
@@ -331,32 +272,36 @@ void arithmeticVector(zkc::local::FuncOp function, uint64_t x, uint64_t y,
 }
 
 void importedArithmetic(MLIRContext &context) {
-  auto source = arithmetic();
-  auto add = protocol::resolveBinding(source.bindings[0].application, false);
-  auto mul = protocol::resolveBinding(source.bindings[1].application, false);
-  if (!add || !mul) {
-    if (!add)
-      check(false, toString(add.takeError()));
-    if (!mul)
-      check(false, toString(mul.takeError()));
+  auto imported = mlir::parseSourceString<ModuleOp>(R"(
+!F = !algebra.field<"koala-bear">
+module { "protocol.module"() ({
+ "local.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
+ "local.binding"() {sym_name="mul",contract="field.mul",arguments=["koala-bear"],implementation=""} : ()->()
+ local.func @Arithmetic(%x:!F,%y:!F)->(!F,!F) attributes {logical_origin=["Arithmetic",[]]} {
+   %sum = "algebra.exec.field_add"(%x,%y) {binding=@add,site="add_site",parameters=[]} : (!F,!F)->!F
+   %product = "algebra.exec.field_multiply"(%x,%y) {binding=@mul,site="mul_site",parameters=[]} : (!F,!F)->!F
+   local.return %sum,%product : !F,!F
+ }
+ "protocol.func"() ({^entry(%x:!F,%y:!F):
+   %out:2 = "protocol.local_call"(%x,%y) {callee=@Arithmetic,role="P",site="work"} : (!F,!F)->(!F,!F)
+   "protocol.return"(%out#0,%out#1) : (!F,!F)->()
+ }) {sym_name="main",function_type=(!F,!F)->(!F,!F),roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"],["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)",
+                                                    &context);
+  if (!check(bool(imported), "mathematical arithmetic fixture refused"))
     return;
-  }
-  check(add->inputs == mul->inputs && add->outputs == mul->outputs,
-        "swap control must have identical signatures");
-  auto imported = protocol::importModule(source, context);
-  if (!imported) {
-    check(false, "arithmetic import failed: " + toString(imported.takeError()));
-    return;
-  }
-  check(succeeded(verify(imported->get())), "imported arithmetic rejected");
+  check(succeeded(verify(*imported)), "arithmetic fixture rejected");
   unsigned sites = 0, functions = 0;
-  (*imported)->walk([&](zkc::local::FuncOp function) {
+  imported->walk([&](zkc::local::FuncOp function) {
     ++functions;
     arithmeticVector(function, 2, 3, 5, 6);
     arithmeticVector(function, 0, 7, 7, 0);
   });
   check(functions == 1, "expected one arithmetic function");
-  (*imported)->walk([&](Operation *op) {
+  imported->walk([&](Operation *op) {
+    if (!op->hasAttr("binding"))
+      return;
     auto site = op->getAttrOfType<StringAttr>("site");
     if (!site)
       return;

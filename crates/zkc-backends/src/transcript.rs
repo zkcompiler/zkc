@@ -1,6 +1,7 @@
 //! Suite-specific byte state. The capability store owns this non-Clone wrapper.
-//! Framing is zkc's versioned construction; upstream supplies the duplex and
+//! zkc defines the byte framing; upstream supplies the duplex and
 //! permutation. This is not spongefish's default SHAKE/DomainSeparator protocol.
+use crate::{Result, refused};
 use spongefish::{DuplexSpongeInterface, instantiations::Keccak};
 use zkc_runtime::interactive::Identity;
 
@@ -20,23 +21,25 @@ fn frame(sponge: &mut Keccak, tag: u8, label: &[u8], data: &[u8]) {
 }
 
 impl Transcript {
-    pub(crate) fn new(suite: Identity, root: &[u8]) -> Self {
+    pub(crate) fn new(suite: Identity, root: &[u8]) -> Result<Self> {
         let mut result = match suite {
             Identity::Merlin3Fr64Be
             | Identity::Merlin3Ristretto64Le
             | Identity::Merlin3KoalaBearExt8 => {
-                Self::Merlin(merlin::Transcript::new(b"zkc.artifact/1"))
+                Self::Merlin(merlin::Transcript::new(b"zkc.artifact/0"))
             }
             Identity::Spongefish074KeccakFr64Be => {
                 let mut sponge = Keccak::default();
-                frame(&mut sponge, 0, b"domain", b"zkc.artifact/1");
+                frame(&mut sponge, 0, b"domain", b"zkc.artifact/0");
                 frame(&mut sponge, 0, b"suite", suite.name().as_bytes());
                 Self::Spongefish(sponge)
             }
-            _ => unreachable!("resource issuance checks suite"),
+            _ => return Err(refused("transcript-suite")),
         };
+        // Canonical framing does not authenticate the root's provenance.
+        zkc_runtime::logical::decode_tree(root).map_err(|_| refused("transcript-root"))?;
         result.append_message(b"binding", root);
-        result
+        Ok(result)
     }
     pub(crate) fn append_message(&mut self, label: &'static [u8], value: &[u8]) {
         match self {

@@ -78,14 +78,13 @@ def test_same(directory, request, name):
     assert len({path.read_text() for path in records}) == 4
 
 
-def test_artifact_output_is_never_automatically_deleted(monkeypatch, tmp_path):
-    runner = load("artifact_runner", "tests/run.py")
+def test_demo_output_is_never_automatically_deleted(monkeypatch, tmp_path):
+    runner = load("demo_runner", "tests/run.py")
     calls = []
     monkeypatch.setattr(runner, "run", lambda *args, **kwargs: calls.append(args))
     for kind, names in {
         "compiler": ["zkc-compile"],
-        "native": ["zkc", "artifact-primitive", "examples/artifact_fixture", "examples/artifact_baseline"],
-        "lean": ["interactive-protocol", "artifact-reference"],
+        "native": ["zkc"],
     }.items():
         for name in names:
             executable(tmp_path / kind / name)
@@ -94,7 +93,7 @@ def test_artifact_output_is_never_automatically_deleted(monkeypatch, tmp_path):
     output.mkdir()
     (output / "previous.json").write_text(json.dumps({"keep": True}))
     with pytest.raises(FileExistsError):
-        runner.artifact(output)
+        runner.demo(output)
     assert json.loads((output / "previous.json").read_text()) == {"keep": True}
     assert not calls
 

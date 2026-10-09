@@ -55,31 +55,31 @@ def formation (checks : Checks) : IO Unit := do
   checks.holds (same (compute .bn254 "vector.equal" [] [.vector [1,2], .vector [1,2]]) (.ok [.boolean true])) "vector equality"
   checks.holds (same (compute .bn254 "vector.equal" [] [.vector [1,2], .vector [1]]) (.ok [.boolean false])) "vector equality length"
   let target ← get (Bindings.resolve true ⟨"target", "pairing.apply", [Bindings.bn254Fr], "arkworks/pairing.apply"⟩)
-  checks.holds (target.outputs.map (·.spelling) == ["group:bn254.gt@arkworks.bn254-gt/1"]) "pairing target binding"
+  checks.holds (target.outputs.map (·.spelling) == ["group:bn254.gt@arkworks.bn254-gt/0"]) "pairing target binding"
   checks.holds (!(Bindings.valueType false "groups:bn254.gt").isOk) "no target vectors"
   checks.holds ((match Reference.decodeValue (.arr #[.str "group:bn254.gt", .str ""]) with
     | .error e => e == "reference-pairing-target-unsupported"
     | .ok _ => false)) "explicit native target refusal"
   let pair ← get (Bindings.resolve true ⟨"pair", "pairing.check", [Bindings.bn254Fr], "arkworks/pairing.check"⟩)
-  checks.holds (pair.inputs.map (·.spelling) == ["groups:bn254.g1@arkworks.bn254-g1-vector/1",
-    "groups:bn254.g2@arkworks.bn254-g2-vector/1"] && pair.outputs.map (·.spelling) == ["bool@native.bool/1"]) "separate pairing operands"
+  checks.holds (pair.inputs.map (·.spelling) == ["groups:bn254.g1@arkworks.bn254-g1-vector/0",
+    "groups:bn254.g2@arkworks.bn254-g2-vector/0"] && pair.outputs.map (·.spelling) == ["bool@native.bool/0"]) "separate pairing operands"
   for field in [Bindings.fr, Bindings.ristrettoScalar, Bindings.bn254G1, Bindings.bn254G2] do
     checks.holds (!(Bindings.resolve false ⟨"pair", "pairing.check", [field], ""⟩).isOk) "pairing domain"
-  for bad in ["group:bn254.fr", "field:bn254.g1", "groups:bn254.g2@arkworks.bn254-g1-vector/1",
-      "field:bn254.fr@arkworks.fr/1", "nonce:bn254.fr", "table:bn254.fr"] do
+  for bad in ["group:bn254.fr", "field:bn254.g1", "groups:bn254.g2@arkworks.bn254-g1-vector/0",
+      "field:bn254.fr@arkworks.fr/0", "nonce:bn254.fr", "table:bn254.fr"] do
     checks.holds (!(Bindings.valueType (bad.contains '@') bad).isOk) "nominal/representation swap"
   let f := Zkc.Source.Requirements.Term.root "F"
   let sig ← get (Generic.signature [("F", .field)] "pairing.check" [f])
   checks.holds (sig.inputs.map (·.domain) == [some (.project f "PairingG1"), some (.project f "PairingG2")]) "symbolic group distinction"
   checks.holds (!(Requirements.check [.relation "Field" [f]] sig.needs).isOk) "PairingField required"
   checks.holds ((Requirements.check [.relation "PairingField" [f]] sig.needs).isOk) "PairingField provided"
-  checks.holds (!(Generic.prepareSource (.arr #[.str "zkc.relations/1", .arr #[], .arr #[]])).isOk) "relation envelope refused"
+  checks.holds (!(Generic.prepareSource (.arr #[.str "zkc.relations/0", .arr #[], .arr #[]])).isOk) "relation envelope refused"
 
 def matrixIdentity (checks : Checks) : IO Unit := do
   let matrix : Data (Scalar .bn254) := .matrix ⟨2,3,[⟨0,1,7⟩,⟨1,2,-1⟩]⟩
   let request ← get (MatrixIdentity.prime .bn254 matrix)
-  let encoded := Lean.Json.arr #[.str "zkc.matrix/1", .str "bn254.fr", ScalarReference.json .bn254 matrix]
-  checks.holds (request == .arr #[.str "zkc.hash/1", .str "sha256", .str (Tools.Artifact.hex encoded.compress.toUTF8)]) "canonical matrix hash payload"
+  let encoded := Lean.Json.arr #[.str "zkc.matrix/0", .str "bn254.fr", ScalarReference.json .bn254 matrix]
+  checks.holds (request == .arr #[.str "zkc.hash/0", .str "sha256", .str (Tools.Artifact.hex encoded.compress.toUTF8)]) "canonical matrix hash payload"
   checks.holds (!(Bindings.attributes false "matrix.identity_check" [String.ofList (List.replicate 64 'A')]).isOk) "uppercase digest refused"
   checks.holds (!(Bindings.attributes false "matrix.identity_check" ["00"]).isOk) "digest length refused"
   let digest := String.ofList (List.replicate 64 '0')

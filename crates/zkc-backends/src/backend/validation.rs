@@ -1,8 +1,7 @@
 //! Shared entry, operand and result checks for every native kernel.
-use super::{EntryPolicy, PublicInputs};
+use super::EntryPolicy;
 use crate::{Policy, Result, Value, ark, exhausted, refused};
-use crate::{resource::Resources, setups::Setups};
-use zkc_arkworks::VerifierKey;
+use crate::{SetupRegistry, resource::Resources};
 use zkc_runtime::interactive::{
     AttributeRule, Frame, FrameKind, Invocation, Type, Value as RuntimeValue,
 };
@@ -11,16 +10,16 @@ pub(super) struct Core {
     pub(super) policy: Policy,
     pub(super) entry: EntryPolicy,
     pub(super) resources: Resources,
-    pub(super) setups: Setups,
+    pub(super) setups: SetupRegistry,
     pub(super) polynomial: crate::plonky3::polynomial::Kernels,
 }
 impl Core {
-    pub(super) fn new(policy: Policy, entry: EntryPolicy) -> Self {
+    pub(super) fn new(policy: Policy, entry: EntryPolicy, setups: SetupRegistry) -> Self {
         Self {
             policy,
             entry,
             resources: Resources::new(policy),
-            setups: Setups::InputKeys(None),
+            setups,
             polynomial: Default::default(),
         }
     }
@@ -235,7 +234,6 @@ impl Core {
                 return Err(refused("entry-constraint-port"));
             }
         }
-        let mut identity = self.setups.only().map(VerifierKey::metadata);
         for ((port, ty), v) in inputs.iter().zip(values) {
             if v.is_none() && !matches!(ty.kind(), Type::Rng | Type::Nonce | Type::Transcript) {
                 return Err(refused("entry-preparation-value"));
@@ -243,9 +241,7 @@ impl Core {
             let (arity, meta) = match v {
                 Some(Value::Table(t)) => (Some(t.arity()), None),
                 Some(Value::TableMsb(t)) => (Some(t.arity()), None),
-                Some(Value::Point(point)) if self.setups.is_registered() => {
-                    (Some(point.len()), None)
-                }
+                Some(Value::Point(point)) => (Some(point.len()), None),
                 Some(Value::ProverKey(k)) => (Some(k.metadata().arity()), Some(k.metadata())),
                 Some(Value::VerifierKey(k)) => (Some(k.metadata().arity()), Some(k.metadata())),
                 Some(Value::Commitment(c)) => (Some(c.metadata().arity()), Some(c.metadata())),
@@ -269,38 +265,6 @@ impl Core {
                     return Err(refused("entry-port-setup"));
                 }
             }
-            if let Some(meta) = meta.filter(|_| !self.setups.is_registered()) {
-                if identity.is_some_and(|old| old != meta) {
-                    return Err(refused("entry-key-mismatch"));
-                }
-                identity = Some(meta);
-            }
-        }
-        if let Some(key) = self.setups.only()
-            && self
-                .entry
-                .arity
-                .is_some_and(|n| n != key.metadata().arity())
-        {
-            return Err(refused("entry-verifier-shape"));
-        }
-        if let PublicInputs::Exact(pins) = &self.entry.public_inputs {
-            for (name, expected) in pins {
-                let index = inputs
-                    .iter()
-                    .position(|(n, _)| n == name)
-                    .ok_or_else(|| refused("public-input-port"))?;
-                let actual = values
-                    .get(index)
-                    .and_then(|v| *v)
-                    .ok_or_else(|| refused("frame-arguments"))?;
-                self.validate(expected)?;
-                if crate::codec::encode(expected, &self.policy)?
-                    != crate::codec::encode(actual, &self.policy)?
-                {
-                    return Err(refused("public-input-mismatch"));
-                }
-            }
         }
         Ok(())
     }
@@ -311,14 +275,6 @@ impl Core {
         if matches!(frame.kind(), FrameKind::Entry) {
             if !self.entry.domain.matches(frame) {
                 return Err(refused("entry-domain"));
-            }
-            if self
-                .entry
-                .parameters
-                .iter()
-                .any(|(name, value)| frame.parameters().get(name) != Some(value))
-            {
-                return Err(refused("entry-parameters"));
             }
             self.check_entry_values(frame.inputs(), &args.iter().map(Some).collect::<Vec<_>>())?;
         }
@@ -415,19 +371,7 @@ impl Core {
                 zkc_runtime::logical::native_origin_template(i.attributes, kind)
                     .map_err(|_| refused("kernel-attributes"))?;
             }
-            AttributeRule::NativeMessageOrigin | AttributeRule::NativeChallengeOrigin => {
-                let kind = if signature.attributes == AttributeRule::NativeMessageOrigin {
-                    "message"
-                } else {
-                    "query"
-                };
-                zkc_runtime::logical::native_origin(i.attributes, kind)
-                    .map_err(|_| refused("kernel-attributes"))?;
-            }
-            AttributeRule::MessageOrigin | AttributeRule::ChallengeOrigin => {
-                zkc_runtime::logical::validate_source_attributes(i.attributes)
-                    .map_err(|_| refused("kernel-attributes"))?;
-            }
+
             AttributeRule::FieldDecimal if i.attributes.len() == 1 => {
                 zkc_arkworks::parse_decimal(&i.attributes[0]).map_err(ark)?;
             }

@@ -41,8 +41,8 @@ def fetch_lean(deps):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["setup", "configure", "compiler", "rust", "lean",
-                                             "fetch-lean", "lean-integration", "lean-fresh", "install", "install-domain", "bench", "clean-reports"])
+    parser.add_argument("operation", choices=["setup", "configure", "compiler", "rust", "test-drivers", "lean",
+                                             "fetch-lean", "lean-integration", "lean-fresh", "install", "install-domain", "clean-reports"])
     parser.add_argument("--profile", default="release")
     parser.add_argument("--deps", choices=["main", "arklib"], default="main")
     parser.add_argument("--output")
@@ -50,11 +50,9 @@ def main():
     parser.add_argument("--domain-build", help="install-domain: explicit envelope CMake build directory")
     parser.add_argument("--skip-build", action="store_true",
                         help="install-domain: install already built, cache-checked directories without rebuilding")
-    parser.add_argument("--runtime", help="install-domain: zkc executable for independent execution checks")
-    parser.add_argument("--checker", help="install-domain: Lean interactive-protocol executable")
     args = parser.parse_args()
-    if args.operation != "install-domain" and (args.base_build or args.domain_build or args.skip_build or args.runtime or args.checker):
-        parser.error("--base-build, --domain-build, --skip-build, --runtime and --checker require install-domain")
+    if args.operation != "install-domain" and (args.base_build or args.domain_build or args.skip_build):
+        parser.error("--base-build, --domain-build and --skip-build require install-domain")
     validate_environment()
     # Native Cargo paths keep Cargo's cwd-relative meaning even though the
     # commands below consistently run at the repository root.
@@ -91,7 +89,6 @@ def execute(args):
     if args.operation == "setup":
         run(["uv", "sync", "--locked"])
         run(["cargo", "fetch", "--locked"])
-        fetch_lean("main")
     elif args.operation == "fetch-lean":
         fetch_lean(args.deps)
     elif args.operation == "lean-integration":
@@ -109,7 +106,9 @@ def execute(args):
     elif args.operation == "lean":
         run(["lake", "build"], cwd=ROOT / "formal")
     elif args.operation == "rust":
-        run(["cargo", "build", "--release", "--locked", "--workspace", "--bins", "--examples"])
+        run(["cargo", "build", "--release", "--locked", "-p", "zkc-tools", "--bin", "zkc"])
+    elif args.operation == "test-drivers":
+        run(["cargo", "build", "--release", "--locked", "-p", "zkc-test-drivers", "--bins"])
     elif args.operation == "install-domain":
         install_domain(args, run)
     elif args.operation == "install":
@@ -135,17 +134,6 @@ def execute(args):
              *[f"-D{key}={value}" for key, value in selected.items()]])
         run(["cmake", "--build", consumer])
         run(["ctest", "--test-dir", consumer, "--output-on-failure"])
-    elif args.operation == "bench":
-        output = Path(args.output or ROOT / "build/bench").resolve()
-        output.mkdir(parents=True, exist_ok=True)
-        for manifest, binary, filename in [
-            ("bench/range-native/Cargo.toml", None, "range-native.json"),
-            ("bench/air-proof/Cargo.toml", "air_baseline", "air-baseline.json"),
-            ("bench/air-proof/Cargo.toml", "upstream_stark", "upstream-stark.json"),
-        ]:
-            with (output / filename).open("w") as stream:
-                run(["cargo", "run", "--release", "--locked", "--manifest-path", manifest,
-                     *(["--bin", binary] if binary else [])], stdout=stream)
     elif args.operation == "clean-reports":
         clear_report_directory(ROOT / os.environ.get("ZKC_REPORTS_DIR", "build/reports"))
 

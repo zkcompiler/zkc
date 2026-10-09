@@ -1,6 +1,7 @@
 #include "zkc/Compiler/Run.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Compiler/Diagnostics.h"
+#include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 using namespace llvm;
@@ -49,15 +50,13 @@ int main() {
   for (bool simplify : {false, true})
     for (bool release : {false, true}) {
       auto result = compile(simplify, release);
-      require(!result.compilation.source(),
-              "MLIR invocation invented a Document");
       require(succeeded(mlir::verify(result.compilation.module())),
               "owned native IR invalid");
       auto bundle = json::parse(result.bundle);
       require(bool(bundle), "bundle is not JSON");
       auto *object = bundle->getAsObject();
-      require(object && object->getString("format") == "zkc.run/1",
-              "bundle version");
+      require(object && object->getString("format") == "zkc.run/0",
+              "bundle tag");
       auto *steps = object->getArray("steps");
       require(steps && steps->size() == 2,
               "guard became a demand prefix or was erased");

@@ -74,7 +74,7 @@ json::Value AIRPolynomialAnalysis::encode() const {
                                              : json::Value(nullptr)}});
   for (auto read : reads)
     footprint.push_back(json::Array{read.row, read.column});
-  return json::Object{{"schema", "zkc.air-polynomial-analysis/1"},
+  return json::Object{{"schema", "zkc.air-polynomial-analysis/0"},
                       {"height", parameters.height},
                       {"domain_size", parameters.domainSize},
                       {"trace_degree", parameters.traceDegree},

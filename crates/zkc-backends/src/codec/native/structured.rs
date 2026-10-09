@@ -31,11 +31,11 @@ pub(super) fn tag(ty: &PhysicalType) -> Option<u8> {
 }
 // Counts are per complete message, so nesting cannot multiply a collection's
 // configured work limit. Retained allocation is charged separately.
-#[derive(Default)]
-struct Counts {
-    nodes: usize,
-    elements: usize,
-    groups: usize,
+#[derive(Default, Debug)]
+pub(super) struct Counts {
+    pub(super) nodes: usize,
+    pub(super) elements: usize,
+    pub(super) groups: usize,
 }
 impl Counts {
     pub(super) fn add(&mut self, elements: usize, groups: usize) -> Result<()> {
@@ -43,7 +43,7 @@ impl Counts {
         self.groups = add(self.groups, groups)?;
         Ok(())
     }
-    fn admit(&self, policy: &Policy) -> Result<()> {
+    pub(super) fn admit(&self, policy: &Policy) -> Result<()> {
         policy
             .vector_width(self.nodes, 512)
             .map_err(|_| Error::Limit)?;
@@ -53,6 +53,73 @@ impl Counts {
         policy.groups(self.groups).map_err(|_| Error::Limit)
     }
 }
+// Typed ingress follows the same whole-value collection accounting as wire
+// scans. It does not reserve encoded buffers or charge decoding peak memory.
+pub(super) fn value_counts(value: &Value, policy: &Policy) -> Result<Counts> {
+    fn visit(ty: &PhysicalType, value: &Value, policy: &Policy, counts: &mut Counts) -> Result<()> {
+        if value.physical_type() != *ty {
+            return Err(unsupported());
+        }
+        counts.nodes = add(counts.nodes, 1)?;
+        counts.admit(policy)?;
+        if let Some(tag) = tag(ty) {
+            match (tag, value) {
+                (69, Value::Sequence(v)) => {
+                    let logical = ty.logical();
+                    let element = physical(logical.sequence_element().ok_or_else(unsupported)?)?;
+                    for child in v.elements() {
+                        visit(&element, child, policy, counts)?;
+                    }
+                }
+                (65, Value::Variant(v)) => {
+                    let logical = ty.logical();
+                    let descriptor = logical.variant_descriptor().ok_or_else(unsupported)?;
+                    let arm = descriptor
+                        .alternatives()
+                        .get(v.alternative())
+                        .ok_or_else(unsupported)?;
+                    if arm.payload().len() != v.payload().len() {
+                        return Err(unsupported());
+                    }
+                    for (leaf, child) in arm.payload().iter().zip(v.payload()) {
+                        visit(&physical(leaf)?, child, policy, counts)?;
+                    }
+                }
+                (68, Value::Indices(v)) => counts.add(v.len(), 0)?,
+                _ => return Err(unsupported()),
+            }
+        } else if super::bulk::format(ty).is_some() {
+            let (elements, groups) = super::bulk::value_counts(value, policy)?;
+            counts.add(elements, groups)?;
+        } else if let Some((_, width)) = super::frame(ty) {
+            let (elements, groups) = fixed_counts(ty, width);
+            counts.add(elements, groups)?;
+        } else if super::pcs::tag(ty).is_some() {
+            match value {
+                Value::Commitment(_) => counts.add(0, 1)?,
+                Value::Proof(p) => counts.add(0, p.metadata().arity())?,
+                _ => return Err(unsupported()),
+            }
+        } else {
+            return Err(unsupported());
+        }
+        counts.admit(policy)
+    }
+    let mut counts = Counts::default();
+    visit(&value.physical_type(), value, policy, &mut counts)?;
+    Ok(counts)
+}
+
+fn fixed_counts(ty: &PhysicalType, width: usize) -> (usize, usize) {
+    (
+        match ty.kind() {
+            Type::Field | Type::Index => 1,
+            Type::FieldArray => (width - 6) / 32,
+            _ => 0,
+        },
+        usize::from(ty.kind() == Type::Group),
+    )
+}
 pub(super) fn peak(policy: &Policy, charge: usize, wire: usize) -> Result<()> {
     // Decoding can temporarily retain Vec and Arc; observation retains the
     // decoded value, output frame and two temporary PCS leaf buffers. Both directions
@@ -60,7 +127,7 @@ pub(super) fn peak(policy: &Policy, charge: usize, wire: usize) -> Result<()> {
     let bytes = mul(charge, 2)?.max(add(charge, mul(wire, 3)?)?);
     policy.output(bytes, usize::MAX).map_err(|_| Error::Limit)
 }
-fn width(value: &Value, policy: &Policy, key: &crate::setups::Setups) -> Result<usize> {
+fn width(value: &Value, policy: &Policy, key: &crate::SetupRegistry) -> Result<usize> {
     if let Value::Sequence(v) = value {
         if tag(&value.physical_type()) != Some(69) {
             return Err(unsupported());
@@ -102,7 +169,7 @@ fn width(value: &Value, policy: &Policy, key: &crate::setups::Setups) -> Result<
 fn write(
     value: &Value,
     policy: &Policy,
-    key: &crate::setups::Setups,
+    key: &crate::SetupRegistry,
     out: &mut Vec<u8>,
 ) -> Result<()> {
     let Some(tag) = tag(&value.physical_type()) else {
@@ -150,7 +217,7 @@ fn write(
 pub(super) fn encode(
     value: &Value,
     policy: &Policy,
-    key: &crate::setups::Setups,
+    key: &crate::SetupRegistry,
 ) -> Result<Vec<u8>> {
     let size = width(value, policy, key)?;
     policy.wire(size).map_err(|_| Error::Limit)?;
@@ -204,11 +271,11 @@ fn child<'a>(bytes: &mut &'a [u8]) -> Result<&'a [u8]> {
 }
 // This preflight does not allocate payload containers. Physical descriptors are
 // derived from an already admitted bounded type; their charge is included below.
-fn scan(
+pub(super) fn scan(
     ty: &PhysicalType,
     bytes: &[u8],
     policy: &Policy,
-    key: &crate::setups::Setups,
+    key: &crate::SetupRegistry,
     counts: &mut Counts,
 ) -> Result<usize> {
     policy.wire(bytes.len()).map_err(|_| Error::Limit)?;
@@ -281,14 +348,8 @@ fn scan(
         if &bytes[..5] != super::super::MAGIC || bytes[5] != tag {
             return Err(invalid(DecodeReason::Header));
         }
-        counts.add(
-            match ty.kind() {
-                Type::Field | Type::Index => 1,
-                Type::FieldArray => (width - 6) / 32,
-                _ => 0,
-            },
-            usize::from(ty.kind() == Type::Group),
-        )?;
+        let (elements, groups) = fixed_counts(ty, width);
+        counts.add(elements, groups)?;
     } else if let Some(tag) = super::pcs::tag(ty) {
         // Both production/observation and receive check active setup identity.
         // Receive performs this check before group decoding or payload allocation.

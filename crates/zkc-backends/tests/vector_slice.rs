@@ -51,14 +51,14 @@ fn slice_checks_dynamic_bounds_and_preserves_every_installed_scalar_carrier() {
             assert_eq!(out[0].physical_type(), vector.physical_type());
             // Compare canonical bytes independently using the sequence framing.
             let b = backend(p);
-            let original = b.encode_value(&vector).unwrap();
+            let original = b.encode_native_value(&vector).unwrap();
             let width = (original.len() - 10) / 4;
             let mut expected = original[..6].to_vec();
             expected.extend((length as u32).to_le_bytes());
             expected.extend(
                 &original[10 + start as usize * width..10 + (start + length) as usize * width],
             );
-            assert_eq!(b.encode_value(&out[0]).unwrap(), expected);
+            assert_eq!(b.encode_native_value(&out[0]).unwrap(), expected);
         }
         for (start, length) in [(5, 0), (4, 1), (1, 4), (u64::MAX, 1), (1, u64::MAX)] {
             assert!(

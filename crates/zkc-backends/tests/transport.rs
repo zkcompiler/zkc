@@ -1,7 +1,7 @@
 mod common;
 use common::*;
 use serde_json::json;
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 use zkc_backends::*;
 use zkc_runtime::interactive::{Action, Packet, Runner, admit_supplied};
 
@@ -61,7 +61,6 @@ fn independent_runners_exchange_only_bound_public_bytes_and_reject_bad_packets()
                 "prover",
                 "instance",
                 "P",
-                [["n", "2"]],
                 [["pk", "prover_key"], ["t", "table"], ["p", "point"]],
                 [],
                 [
@@ -76,14 +75,14 @@ fn independent_runners_exchange_only_bound_public_bytes_and_reject_bad_packets()
                     ["send", "value_site", "value_schema", "V", "y"],
                     ["send", "proof_site", "proof_schema", "V", "proof"],
                     ["return", []]
-                ]
+                ],
+                []
             ],
             [
                 "participant",
                 "verifier",
                 "instance",
                 "V",
-                [["n", "2"]],
                 [["vk", "verifier_key"], ["p", "point"]],
                 ["bool"],
                 [
@@ -112,18 +111,18 @@ fn independent_runners_exchange_only_bound_public_bytes_and_reject_bad_packets()
                         ["ok"]
                     ],
                     ["return", ["ok"]]
-                ]
+                ],
+                []
             ]
         ],
         [["entry", "main", [["P", "prover"], ["V", "verifier"]]]]
     ]))
     .unwrap();
     let public_point = point(&[11, 13]);
-    let pins = PublicInputs::Exact(BTreeMap::from([("p".into(), public_point.clone())]));
     let prover = NativeBackend::new(
         policy,
-        EntryPolicy::new(domain(), Some(2), pins.clone()),
-        None,
+        EntryPolicy::new(domain(), Some(2)),
+        SetupRegistry::new(vec![keys.verifier_key().clone()], &policy).unwrap(),
     )
     .unwrap();
     let verifier = NativeBackend::new(
@@ -131,9 +130,12 @@ fn independent_runners_exchange_only_bound_public_bytes_and_reject_bad_packets()
         EntryPolicy::new(
             Domain::new("V", "session", "main", Some("instance")),
             Some(2),
-            pins,
         ),
-        Some(keys.verifier_key().clone()),
+        zkc_backends::SetupRegistry::new(
+            vec![keys.verifier_key().clone()],
+            &zkc_backends::Policy::default(),
+        )
+        .unwrap(),
     )
     .unwrap();
     let admitted = admit_supplied(&bytes, &prover).unwrap();
@@ -173,16 +175,16 @@ fn independent_runners_exchange_only_bound_public_bytes_and_reject_bad_packets()
         let send = p.poll();
         assert!(matches!(send, Action::Send(_)));
         let packet = p.take_send(&send.cut().unwrap()).unwrap();
-        let wire = p.backend().encode_value(&packet.payload).unwrap();
+        let wire = p.backend().encode_native_value(&packet.payload).unwrap();
         assert!(
             v.backend()
-                .decode_typed_value(expected.ty.clone(), &wire[..wire.len() - 1])
+                .decode_native_value(&expected.ty.clone(), &wire[..wire.len() - 1])
                 .is_err()
         );
         assert!(matches!(v.poll(),Action::Receive(ref still) if still == &expected));
         let payload = v
             .backend()
-            .decode_typed_value(expected.ty.clone(), &wire)
+            .decode_native_value(&expected.ty.clone(), &wire)
             .unwrap();
         let mut wrong = Packet {
             envelope: packet.envelope.clone(),

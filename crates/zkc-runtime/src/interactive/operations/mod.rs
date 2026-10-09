@@ -27,6 +27,7 @@ type PhysicalResolver =
 
 pub(super) struct Contract {
     name: &'static str,
+    implementations: &'static [&'static str],
     shape: Option<(&'static [Type], &'static [Type], AttributeRule)>,
     alternatives: bool,
     history: bool,
@@ -38,6 +39,7 @@ impl Contract {
     ) -> Self {
         Self {
             name,
+            implementations: &[],
             shape: Some(shape),
             alternatives: false,
             history: false,
@@ -55,10 +57,16 @@ impl Contract {
     pub(super) const fn custom(name: &'static str) -> Self {
         Self {
             name,
+            implementations: &[],
             shape: None,
             alternatives: false,
             history: false,
         }
+    }
+    /// Exact default owners, independent of domain applicability and alternatives.
+    pub(super) const fn implemented_by(mut self, implementations: &'static [&'static str]) -> Self {
+        self.implementations = implementations;
+        self
     }
     /// A transition of protocol-visible observation or sampling history.
     /// This facet does not imply purity, totality, or a sampling law.
@@ -103,34 +111,22 @@ impl Selection {
 pub(super) struct Contribution {
     pub(super) contracts: &'static [Contract],
     pub(super) resolve: LogicalResolver,
-    pub(super) providers: &'static [&'static str],
     pub(super) select: PhysicalResolver,
     pub(super) alternatives: &'static [Alternative],
-    pub(super) logical_refusals: &'static [(&'static str, &'static str)],
     pub(super) physical_error: &'static str,
     pub(super) physical_only: bool,
 }
 struct Registry {
     logical: BTreeMap<&'static str, (&'static Contract, &'static Contribution)>,
-    refusals: BTreeMap<&'static str, &'static str>,
     physical: BTreeMap<String, (&'static str, Selection)>,
 }
 impl Registry {
     fn assemble(contributions: &[&'static Contribution]) -> Result<Self> {
         let mut registry = Self {
             logical: BTreeMap::new(),
-            refusals: BTreeMap::new(),
             physical: BTreeMap::new(),
         };
         for &contribution in contributions {
-            for &(contract, detail) in contribution.logical_refusals {
-                if registry.refusals.insert(contract, detail).is_some() {
-                    return Err(AdmissionError::new(
-                        ErrorCode::Signature,
-                        "duplicate-logical-owner",
-                    ));
-                }
-            }
             for contract in contribution.contracts {
                 if registry
                     .logical
@@ -142,12 +138,8 @@ impl Registry {
                         "duplicate-logical-owner",
                     ));
                 }
-                for provider in contribution.providers {
-                    registry.install_physical(
-                        &format!("{provider}/{}", contract.name),
-                        contract.name,
-                        Selection::Default,
-                    )?;
+                for implementation in contract.implementations {
+                    registry.install_physical(implementation, contract.name, Selection::Default)?;
                 }
             }
             for alternative in contribution.alternatives {
@@ -157,16 +149,6 @@ impl Registry {
                     Selection::Alternative(alternative),
                 )?;
             }
-        }
-        if registry
-            .refusals
-            .keys()
-            .any(|name| registry.logical.contains_key(name))
-        {
-            return Err(AdmissionError::new(
-                ErrorCode::Signature,
-                "duplicate-logical-owner",
-            ));
         }
         if registry
             .physical
@@ -250,9 +232,6 @@ pub(super) fn logical_signature(
     binding: &OperationBinding,
 ) -> Result<KernelSignature<LogicalType>> {
     let registry = installed()?;
-    if let Some(detail) = registry.refusals.get(binding.contract.as_str()) {
-        return Err(AdmissionError::new(ErrorCode::Signature, *detail));
-    }
     let (contract, owner) = registry
         .logical
         .get(binding.contract.as_str())

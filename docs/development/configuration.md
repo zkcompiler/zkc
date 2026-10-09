@@ -25,8 +25,8 @@ the same operation is available as
 ## Toolchain and concurrency
 
 Toolchain settings (`CC`, `CXX`, `MLIR_DIR`, `LLVM_CONFIG`, `UV_PYTHON`,
-`UV_PYTHON_DOWNLOADS` and `TZDIR`) are supplied by Nix. Lean's package wrapper
-owns its `LEAN_CC` default. Do not redefine these in just or a local `.env`.
+`UV_PYTHON_DOWNLOADS` and `TZDIR`) are supplied by Nix. The optional formal
+environment separately owns Lean tools and its `LEAN_CC` default. Do not redefine these in just or a local `.env`.
 An intentional toolchain change belongs in the owning manifest or Nix input.
 Native builds outside Nix require an explicitly supplied compatible toolchain.
 The configure driver requires `CC` and `CXX` to name executable files (including
@@ -50,11 +50,11 @@ command. `just` does not recalculate or override them.
 | `CTEST_PARALLEL_LEVEL` | Compiler test concurrency |
 | `CARGO_BUILD_JOBS` | Cargo build concurrency |
 | `RUST_TEST_THREADS` | Rust test concurrency |
-| `LEAN_NUM_THREADS` | Lean worker threads |
+| `LEAN_NUM_THREADS` | Optional formal environment worker threads |
 | `PYTEST_XDIST_AUTO_NUM_WORKERS` | Cross-language pytest workers |
 
 The development default is four for each. Without that environment, native
-tools retain their own defaults; the cross-language driver uses one pytest
+tools retain their own defaults; the integration driver uses one pytest
 worker unless explicitly configured. Builds and tests may themselves start
 threaded subprocesses, so increase these values deliberately. Nix checks use
 their allocated `NIX_BUILD_CORES`, with one worker when that budget is zero or
@@ -63,16 +63,15 @@ they do not inherit `devShell` settings.
 
 ## Built tool selection
 
-Only three public directory settings select already-built executables:
+Two public directory settings select already-built executables:
 
 | Variable | Checkout default | Contents |
 |---|---|---|
 | `ZKC_COMPILER_BIN` | `build/compiler` | Compiler tools and their test/example subdirectories |
-| `ZKC_NATIVE_BIN` | `target/release` | Rust tools and `examples/` |
-| `ZKC_LEAN_BIN` | `formal/.lake/build/bin` | Named Lean checker executables |
+| `ZKC_NATIVE_BIN` | `target/release` | Rust CLI and integration driver binaries |
 
 Explicit directories take precedence over defaults and must be nonempty.
-Relative `ZKC_*` paths are resolved from the checkout root in Python and Rust,
+Relative `ZKC_*` paths are resolved from the checkout root by the test drivers,
 including when invoked from another directory. A missing or nonexecutable tool
 fails; it never falls back to another build or `PATH`. These variables select
 inputs to tests, not where a native build writes its outputs. Cargo's native
@@ -80,7 +79,7 @@ inputs to tests, not where a native build writes its outputs. Cargo's native
 cwd-relative meaning. Prefer absolute Cargo target paths when invoking tools
 from different directories. Native runtime examples use the release profile.
 
-These directory inputs select tools for cross-language and artifact tests.
+These directory inputs select C++/Rust tools for native integration tests.
 Formal package audits and independent Lake consumers inspect the selected
 source package and its own build outputs; their `--formal`, `--lake` or
 explicit checker arguments retain that package boundary.
@@ -88,7 +87,7 @@ explicit checker arguments retain that package boundary.
 CTest privately passes exact target files using `ZKC_CTEST_*`, so a test of a
 `dev` or `sanitize` build uses that build even if the shell names another
 compiler directory. Those settings are supplied by CMake and are not public
-cross-language overrides. Standalone compiler scripts use the public compiler
+integration overrides. Standalone compiler scripts use the public compiler
 directory when no exact CTest target was supplied. Python import paths needed
 by test scripts are confined to test processes and CTest; the shell does not
 export a global `PYTHONPATH`.
@@ -96,7 +95,7 @@ export a global `PYTHONPATH`.
 ## Reports and integration inputs
 
 `ZKC_REPORTS_DIR` selects the report root, defaulting to `build/reports`.
-Python, Rust, CTest, formal controls and artifact drivers place their reports
+Python, Rust, CTest, optional formal controls and integration drivers place their reports
 under this root. Relative values are checkout-relative. `tests/run.py` creates
 a new `runs/<scope>-…` directory, prints its path and passes it to children via
 the same `ZKC_REPORTS_DIR`; there is no second report-root variable. Direct
@@ -108,17 +107,10 @@ stores are still shared. Concurrent builds of one profile or Lake package are
 not isolated by report allocation. The
 [test guide](../../tests/README.md) owns the report and cancellation contract.
 
-A test's explicit `--output` overrides its default where supported. Artifact
-drivers require an absent output directory, preserving previous evidence on
+A test's explicit `--output` overrides its default where supported. Drivers that capture published artifacts require an absent output directory, preserving previous evidence on
 reruns. `just test` does not delete reports; `just clean-reports` explicitly
 removes them and must not run concurrently with tests. Cleanup refuses a
 symlink destination, home/ancestor directories, the entire build directory and
 checkout source directories. Generated report locations inside the checkout
 must be below `build/`. Use a dedicated external directory for reports outside
-the checkout. `ZKC_GROTH16_FIXTURE` remains a separate, scoped input for
-reproduced interoperability fixtures.
-
-## Removed settings
-
-Obsolete `ZKC_*` names are rejected with a replacement hint. Use the settings
-listed above; silently ignored aliases are not supported.
+the checkout.

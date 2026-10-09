@@ -10,7 +10,7 @@
 }:
 stdenvNoCC.mkDerivation {
   pname = "zkc-arklib";
-  version = "0.1.0";
+  version = "0.0.0";
   dontUnpack = true;
   dontConfigure = true;
   nativeBuildInputs = [

@@ -38,8 +38,8 @@ fn same_ports_distinct_dot_algorithms_preserve_results_and_refusals() {
             .0
             .unwrap();
         assert_eq!(
-            native.encode_value(&x[0]).unwrap(),
-            native.encode_value(&y[0]).unwrap()
+            native.encode_native_value(&x[0]).unwrap(),
+            native.encode_native_value(&y[0]).unwrap()
         );
     }
     for b in [normal, alternate] {
@@ -96,15 +96,15 @@ impl Backend for Divergent {
     fn binding_signature(&self, _: &OperationBinding) -> Option<BoundSignature> {
         Some(BoundSignature {
             inputs: if self.input {
-                vec![PhysicalType::parse("vector:bls12-381.fr@arkworks.fr-vector/1").unwrap()]
+                vec![PhysicalType::parse("vector:bls12-381.fr@arkworks.fr-vector/0").unwrap()]
             } else {
-                vec![PhysicalType::parse("vector:bls12-381.fr@arkworks.fr-vector/1").unwrap(); 2]
+                vec![PhysicalType::parse("vector:bls12-381.fr@arkworks.fr-vector/0").unwrap(); 2]
             },
             outputs: vec![
                 PhysicalType::parse(if self.input {
-                    "field:bls12-381.fr@arkworks.fr/1"
+                    "field:bls12-381.fr@arkworks.fr/0"
                 } else {
-                    "bool@native.bool/1"
+                    "bool@native.bool/0"
                 })
                 .unwrap(),
             ],
@@ -170,25 +170,18 @@ fn unused_retained_bindings_still_require_independent_physical_admission() {
     assert_eq!(error.code, ErrorCode::Signature);
 }
 #[test]
-fn artifact_text_cannot_remove_installed_security_requirements() {
+fn unknown_implementations_and_extra_authority_facets_are_refused() {
     let b = OperationBinding {
         contract: "curve.msm".into(),
         arguments: vec!["ristretto255.group".into()],
-        implementation: "dalek-vartime/curve.msm".into(),
+        implementation: "invalid/curve.msm".into(),
     };
-    // The carrier has no producer-supplied security facet. Omitting a facet
-    // cannot remove the requirement attached to the selected native owner.
-    assert_eq!(
-        one(
-            backend(Policy::default()),
-            b.clone(),
-            &[],
-            vec![vector(true, &[]), support::groups(true, &[])]
-        )
-        .0
-        .unwrap_err(),
-        "refused:public-operands-required"
-    );
+    assert!(b.signature().is_err());
+    assert!(backend(Policy::default()).binding_signature(&b).is_none());
+    let b = OperationBinding {
+        implementation: "dalek/curve.msm".into(),
+        ..b
+    };
     let sig = b.signature().unwrap();
     let mut bytes: serde_json::Value =
         serde_json::from_slice(&program(&[b], &sig.inputs, vec![], &[], &[])).unwrap();

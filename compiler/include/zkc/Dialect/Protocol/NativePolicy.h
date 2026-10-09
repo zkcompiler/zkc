@@ -1,20 +1,15 @@
 #ifndef ZKC_DIALECT_PROTOCOL_NATIVEPOLICY_H
 #define ZKC_DIALECT_PROTOCOL_NATIVEPOLICY_H
 #include "mlir/IR/Types.h"
+#include "zkc/Contracts/NativePolicy.h"
 #include "llvm/ADT/DenseMap.h"
 #include <optional>
 namespace mlir {
 class Operation;
 }
 namespace zkc::mathematical {
-struct NativeTypePolicy {
-  bool total;
-  bool shared;
-  bool affine;
-  bool protocolPort;
-  bool wire;
-};
-// Closed native-local/1 vocabulary. Nominal formation is checked before any
+using NativeTypePolicy = protocol::NativeTypePolicy;
+// Closed native-local/0 vocabulary. Nominal formation is checked before any
 // use permission is returned; containers recursively check their leaves.
 std::optional<NativeTypePolicy> nativeTypePolicy(mlir::Type type);
 class NativeTypePolicies {

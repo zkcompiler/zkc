@@ -48,18 +48,14 @@ pub(super) fn signature(
 use super::operations::{Contract, Contribution};
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
-    logical_refusals: &[(
-        "transcript.observe.field_array",
-        "field-array-observation-uninstalled",
-    )],
     physical_error: "binding-implementation",
     physical_only: false,
 
     contracts: &[
-        Contract::custom("field_array.from_vector"),
-        Contract::custom("field_array.at"),
+        Contract::custom("field_array.from_vector")
+            .implemented_by(&["arkworks/field_array.from_vector"]),
+        Contract::custom("field_array.at").implemented_by(&["arkworks/field_array.at"]),
     ],
     resolve: |binding, _| signature(binding),
-    providers: &["arkworks"],
     select: super::operations::default_ports,
 };

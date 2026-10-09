@@ -141,9 +141,8 @@ class TranscriptCorrespondence {
     else
       inputs.push_back(event.payload);
     unsigned data = inputs.size();
-    if (policy.iterated())
-      inputs.append(event.depth, IntegerType::get(function.getContext(), 64,
-                                                  IntegerType::Unsigned));
+    inputs.append(event.depth, IntegerType::get(function.getContext(), 64,
+                                                IntegerType::Unsigned));
     outputs.push_back(stateType);
     if (function.getFunctionType() !=
             FunctionType::get(function.getContext(), inputs, outputs) ||
@@ -152,7 +151,7 @@ class TranscriptCorrespondence {
     auto &block = function.getBody().front();
     Operation *cursor = &block.front();
     SmallVector<Value> operands(block.getArguments().take_front(data));
-    if (policy.iterated()) {
+    {
       if (!kernel(cursor, "indices.empty", {}, {}, {}))
         return false;
       Value indices = cursor->getResult(0);
@@ -170,24 +169,12 @@ class TranscriptCorrespondence {
       consumeError(logical.takeError());
       return false;
     }
-    std::string contract =
-        policy.iterated() ? "transcript.native.indexed." : "transcript.native.";
-    contract += event.query           ? "challenge"
-                : policy.structured() ? "observe.data"
-                                      : "observe." + logical->kind;
+    std::string contract = event.query
+                               ? "transcript.native.indexed.challenge"
+                               : "transcript.native.indexed.observe.data";
     SmallVector<std::string> arguments{policy.suite};
-    if (!event.query) {
-      if (policy.structured())
-        arguments.push_back(logical->spelling());
-      else if (logical->kind == "field_array") {
-        arguments.push_back(logical->arguments[0].domain);
-        arguments.push_back(std::to_string(logical->arguments[1].natural));
-      } else {
-        if (!logical->identity.empty())
-          arguments.push_back(logical->identity);
-        arguments.push_back(protocol::defaultCodec(*logical).str());
-      }
-    }
+    if (!event.query)
+      arguments.push_back(logical->spelling());
     if (!kernel(cursor, contract, arguments, operands, {event.origin}))
       return false;
     auto ret = dyn_cast_if_present<local::ReturnOp>(cursor->getNextNode());
@@ -209,8 +196,7 @@ class TranscriptCorrespondence {
     SmallVector<Value> inputs{state};
     if (payload)
       inputs.push_back(payload);
-    if (policy.iterated())
-      append_range(inputs, coordinates);
+    append_range(inputs, coordinates);
     if (invocation.getInputs() != ValueRange(inputs) ||
         coordinates.size() != event.depth || event.query != bool(challenge))
       return false;
@@ -267,7 +253,7 @@ class TranscriptCorrespondence {
           loop && observedLoops.contains(loop)) {
         auto actual = dyn_cast<pir::ProtocolLoopOp>(cursor);
         unsigned split = 1 + loop.getCarried();
-        if (!actual || !policy.iterated() || !loop.getMaximum() ||
+        if (!actual || !loop.getMaximum() ||
             !attributes(&op, cursor, {"carried"}) ||
             actual.getCarried() != loop.getCarried() + 1 ||
             actual.getNumOperands() !=
@@ -433,7 +419,7 @@ class TranscriptCorrespondence {
         after.getDictionary(a.getContext()) != before ||
         !construction.getAs<StringAttr>("format") ||
         construction.getAs<StringAttr>("format").getValue() !=
-            "zkc.native-construction/" + std::to_string(policy.version) ||
+            "zkc.native-construction/0" ||
         !construction.getAs<TypeAttr>("transcript") ||
         construction.getAs<TypeAttr>("transcript").getValue() != stateType)
       return false;

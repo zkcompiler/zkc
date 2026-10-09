@@ -98,7 +98,7 @@ def import_relation(args):
         ] != len(receipt["public_inputs"]):
             raise ValueError("llzk-native-public-layout")
         native_receipt = {
-            "schema": "zkc-llzk-native-binding/v1",
+            "schema": "zkc-llzk-native-binding/v0",
             "subject": info["subject"],
             "field": info["field"],
             "columns": info["columns"],

@@ -1,6 +1,6 @@
 # Python in this repository is a driver, not a product: it runs the compiler,
-# the runtime and the Lean checkers as separate processes and compares what they
-# do. Every script uses the standard library alone, so what is pinned here are
+# the common runtime as separate processes and checks their behavior. Scripts
+# use the standard library alone, so what is pinned here are
 # the two tools that are not part of it — the test runner and the linter.
 #
 # One interpreter runs everything: the one already on the machine. The compiler

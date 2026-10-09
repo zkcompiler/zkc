@@ -28,7 +28,7 @@ example : natural (toJson (1 : Nat)) 65536 "bad" = .error "bad" := by decide +ke
 example : scalar .koalaBear (.str "2130706433") = .error "relation-coefficient" := by decide +kernel
 example : scalar .koalaBear (.str "2130706432") = .ok (-1) := by decide +kernel
 
-private def fixture : Json := .arr #[.str "zkc.relation.r1cs/1", .str "koala-bear",
+private def fixture : Json := .arr #[.str "zkc.relation.r1cs/0", .str "koala-bear",
   .str "4", .str "1", .str "1", .arr #[.arr #[
     .arr #[.arr #[.str "3", .str "1"]],
     .arr #[.arr #[.str "3", .str "1"]],
@@ -51,7 +51,7 @@ private def run (x z : Array Nat) : Except String Bool := do
 #guard run #[4] #[1, 4, 7, 2] == .error "relation-assignment-shape"
 
 private def withForms (forms : Json) : Json :=
-  .arr #[.str "zkc.relation.r1cs/1", .str "koala-bear", .str "4", .str "1", .str "1",
+  .arr #[.str "zkc.relation.r1cs/0", .str "koala-bear", .str "4", .str "1", .str "1",
     .arr #[forms]]
 private def term (i c : String) : Json := .arr #[.str i, .str c]
 private def refused (json : Json) : Except String Unit := (decode json).map (fun _ => ())
@@ -67,9 +67,9 @@ private def refused (json : Json) : Except String Unit := (decode json).map (fun
 #guard refused (withForms (.arr #[.arr #[], .arr #[]])) == .error "relation-row"
 #guard refused (withForms (.arr #[.arr #[.arr #[.str "1"]], .arr #[], .arr #[]])) ==
   .error "relation-term"
-#guard refused (.arr #[.str "zkc.relation.r1cs/1", .str "bn128", .str "1", .str "0",
+#guard refused (.arr #[.str "zkc.relation.r1cs/0", .str "bn128", .str "1", .str "0",
   .str "0", .arr #[]]) == .error "relation-field"
-#guard refused (.arr #[.str "zkc.relation.r1cs/1", .str "koala-bear", .str "1", .str "1",
+#guard refused (.arr #[.str "zkc.relation.r1cs/0", .str "koala-bear", .str "1", .str "1",
   .str "0", .arr #[]]) == .error "relation-dimension"
 
 -- Escapes of ordinary ASCII are valid JSON; malformed Unicode is refused.

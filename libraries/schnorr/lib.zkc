@@ -1,0 +1,24 @@
+module schnorr;
+
+pub relation DLog<G: Group>(parameter base: G, statement point: G,
+                           witness scalar: G::Scalar) {
+  return point == base * scalar;
+}
+
+pub protocol Schnorr<G: Group+Share+Wire> roles(P, V)
+    (base: G @(P,V), point: G @(P,V), scalar: G::Scalar @P)
+    using(nonces: Random<G::Scalar> @P, challenges: Random<G::Scalar> @V)
+    -> (accepted: bool @V)
+    where Share(G::Scalar), Wire(G::Scalar)
+    spec {
+      target knowledge = DLog<G>(in.base@V, in.point@V, in.scalar)
+        accept out.accepted;
+    } {
+  let nonce = nonces.draw();
+  let commitment = send P -> V(base * nonce);
+  let challenge = challenges.draw();
+  let received = send V -> P(challenge);
+  let response = send P -> V(nonce + received * scalar);
+  let accepted@V = base * response == commitment + point * challenge;
+  return (accepted = accepted);
+}

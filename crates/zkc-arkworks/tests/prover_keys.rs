@@ -30,7 +30,7 @@ fn hash(domain: &[u8], context: &[u8], object: &[u8]) -> [u8; 32] {
 }
 
 fn envelope(n: usize, kind: u8, setup: [u8; 32], key: [u8; 32]) -> Vec<u8> {
-    let mut bytes = b"ZKCAR006".to_vec();
+    let mut bytes = b"ZKCAR000".to_vec();
     bytes.push(kind);
     bytes.extend_from_slice(&(n as u64).to_le_bytes());
     bytes.extend_from_slice(&setup);
@@ -74,13 +74,13 @@ fn material_pin(bytes: &[u8], n: usize) -> [u8; 32] {
     }
     assert_eq!(offset, bytes.len());
     canonical.extend_from_slice(&bytes[HEADER..HEADER + 144]);
-    hash(b"zkc-arkworks/prover/v1", &bytes[17..81], &canonical)
+    hash(b"zkc-arkworks/prover/v0", &bytes[17..81], &canonical)
 }
 
 fn fixture(params: &upstream::UniversalParams<Bls12_381>) -> (Vec<u8>, [u8; 32], VerifierKey) {
-    let setup = hash(b"zkc-arkworks/setup/v1", &[], &encoded(params));
+    let setup = hash(b"zkc-arkworks/setup/v0", &[], &encoded(params));
     let (ck, vk) = MultilinearPC::trim(params, params.num_vars);
-    let key = hash(b"zkc-arkworks/key/v1", &setup, &encoded(&vk));
+    let key = hash(b"zkc-arkworks/key/v0", &setup, &encoded(&vk));
     let mut vb = envelope(vk.nv, 1, setup, key);
     vb.extend(encoded(&vk.g));
     vb.extend(encoded(&vk.h));
@@ -93,7 +93,7 @@ fn fixture(params: &upstream::UniversalParams<Bls12_381>) -> (Vec<u8>, [u8; 32],
     // Check the independent manual key preimage against actual upstream serde.
     assert_eq!(
         pin,
-        hash(b"zkc-arkworks/prover/v1", &bytes[17..81], &encoded(&ck))
+        hash(b"zkc-arkworks/prover/v0", &bytes[17..81], &encoded(&ck))
     );
     (bytes, pin, verifier)
 }
@@ -391,7 +391,7 @@ fn admitted_vk_with_changed_masks_cannot_authorize_an_unrelated_setup_hash() {
     // Model a separately admitted VK with the original setup label but altered
     // masks. VK import alone cannot reconstruct or verify that setup label.
     let setup = original_vk.metadata().setup_id();
-    let key_id = hash(b"zkc-arkworks/key/v1", &setup, &encoded(&raw_vk));
+    let key_id = hash(b"zkc-arkworks/key/v0", &setup, &encoded(&raw_vk));
     let mut vb = envelope(2, 1, setup, key_id);
     vb.extend(encoded(&raw_vk.g));
     vb.extend(encoded(&raw_vk.h));

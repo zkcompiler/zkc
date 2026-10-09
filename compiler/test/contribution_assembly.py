@@ -97,7 +97,7 @@ def cmake_controls(args):
     source.write_text("// IR implementation.\n")
     configure(registration("first", f'IR_SOURCES "{source}" TRANSFORM_SOURCES "{source}"'), "Multiple contribution source owners")
     configure(registration("first", f'IR_SOURCES "{source}"') + registration("second", f'IR_SOURCES "{source}"'), "Multiple contribution source owners")
-    for library in ("ZkcTransforms", "Zkc::Frontend", "MLIRPass", "$<LINK_ONLY:ZkcTransforms>"):
+    for library in ("ZkcTransforms", "Zkc::Driver", "MLIRPass", "$<LINK_ONLY:ZkcTransforms>"):
         configure(registration("first", f'LINK_LIBRARIES "{library}"'), "Invalid contribution external library")
     configure(registration("first", 'LINK_LIBRARIES Vendor::IR TRANSFORM_LINK_LIBRARIES Vendor::Pass'))
 
@@ -110,11 +110,11 @@ def cmake_controls(args):
             + '\nzkc_assemble_contributions("${CMAKE_CURRENT_BINARY_DIR}/include")\n'
             # Like Components.cmake, resolve forward references only after
             # assembly and after all core targets have been defined.
-            + 'add_library(ZkcFrontend INTERFACE)\n'
-            + 'add_library(Zkc::Frontend ALIAS ZkcFrontend)\n'
+            + 'add_library(ZkcDriver INTERFACE)\n'
+            + 'add_library(Zkc::Driver ALIAS ZkcDriver)\n'
             + 'add_library(LLVMCore INTERFACE IMPORTED)\n'
             + 'add_library(MLIRPass INTERFACE IMPORTED)\n'
-            + 'add_library(Vendor::CoreAlias ALIAS ZkcFrontend)\n'
+            + 'add_library(Vendor::CoreAlias ALIAS ZkcDriver)\n'
             + 'add_library(Vendor::LLVMAlias ALIAS LLVMCore)\n'
             + 'zkc_validate_contribution_libraries()\n'
         )
@@ -209,7 +209,7 @@ def cmake_controls(args):
         assert f"{outside / 'Nested.h'}|linked/Nested.h" in inventory
         linked.unlink()
         stale = first / "Stale.h.inc"
-        stale.write_text("// Obsolete generated output.\n")
+        stale.write_text("// Unexpected generated output.\n")
         configure(registration("first"))
         assert "Stale.h.inc" not in (args.work / "output/contribution-dependencies.txt").read_text()
         stale.unlink()
@@ -247,7 +247,7 @@ set_property(TARGET Vendor::Leaf PROPERTY INTERFACE_LINK_LIBRARIES "Vendor::IR")
         project("reserved-config", imported + 'set_property(TARGET Vendor::IR PROPERTY INTERFACE_LINK_LIBRARIES "$<$<CONFIG:Debug>:MLIRPass>")\n', expected="reaches a reserved target")
         project("reserved-flag", imported + 'set_property(TARGET Vendor::IR PROPERTY INTERFACE_LINK_LIBRARIES "-lLLVMCore")\n', expected="reaches a reserved target")
 
-    helper = f'add_library(helper STATIC "{source}")\ntarget_link_libraries(helper PUBLIC ZkcFrontend)\n'
+    helper = f'add_library(helper STATIC "{source}")\ntarget_link_libraries(helper PUBLIC ZkcDriver)\n'
     for name, targets, extra, expected in (
         ("helper", helper, "LINK_LIBRARIES helper", "must be IMPORTED: helper"),
         ("helper-alias", helper + 'add_library(Vendor::Helper ALIAS helper)\n',
@@ -259,7 +259,7 @@ set_property(TARGET Vendor::Leaf PROPERTY INTERFACE_LINK_LIBRARIES "Vendor::IR")
         with case(f"external library refusal: {name}"):
             project(name, targets, extra, expected)
     for name, dependency, expected in (
-        ("upward", "ZkcFrontend", "reaches a reserved target"),
+        ("upward", "ZkcDriver", "reaches a reserved target"),
         ("core-alias", "Vendor::CoreAlias", "reaches a reserved target"),
         ("llvm-alias", "Vendor::LLVMAlias", "reaches a reserved target"),
         ("llvm", "LLVMCore", "reaches a reserved target"),
@@ -267,15 +267,15 @@ set_property(TARGET Vendor::Leaf PROPERTY INTERFACE_LINK_LIBRARIES "Vendor::IR")
         ("reserved-raw", "MLIRFuture", "reaches a reserved target"),
         ("local-transitive", "helper", "must be IMPORTED: helper"),
         ("local-alias-transitive", "Vendor::Helper", "must be IMPORTED: helper"),
-        ("link-only", "$<LINK_ONLY:ZkcFrontend>", "reaches a reserved target"),
-        ("build-interface", "$<BUILD_INTERFACE:ZkcFrontend>", "reaches a reserved target"),
-        ("install-interface", "$<INSTALL_INTERFACE:ZkcFrontend>", "reaches a reserved target"),
+        ("link-only", "$<LINK_ONLY:ZkcDriver>", "reaches a reserved target"),
+        ("build-interface", "$<BUILD_INTERFACE:ZkcDriver>", "reaches a reserved target"),
+        ("install-interface", "$<INSTALL_INTERFACE:ZkcDriver>", "reaches a reserved target"),
         ("wrapper-list", "$<LINK_ONLY:$<BUILD_INTERFACE:m;Vendor::CoreAlias>>", "reaches a reserved target"),
-        ("configuration-core", "$<$<CONFIG:Debug>:ZkcFrontend>", "reaches a reserved target"),
-        ("unsupported-nested", "$<LINK_ONLY:$<TARGET_NAME_IF_EXISTS:ZkcFrontend>>", "Unsupported contribution external link interface"),
+        ("configuration-core", "$<$<CONFIG:Debug>:ZkcDriver>", "reaches a reserved target"),
+        ("unsupported-nested", "$<LINK_ONLY:$<TARGET_NAME_IF_EXISTS:ZkcDriver>>", "Unsupported contribution external link interface"),
         ("unclosed", "$<LINK_ONLY:m", "Unsupported contribution external link interface"),
         ("extra-close", "m>", "Unsupported contribution external link interface"),
-        ("link-flag", "-lZkcFrontend", "reaches a reserved target"),
+        ("link-flag", "-lZkcDriver", "reaches a reserved target"),
         ("missing-transitive", "Vendor::Missing", "target is not visible"),
     ):
         with case(f"transitive external library refusal: {name}"):

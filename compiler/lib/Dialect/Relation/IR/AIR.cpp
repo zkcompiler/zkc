@@ -90,7 +90,7 @@ Expected<AIR> readAIROperation(Operation *op) {
   if (!name || name.getValue().empty())
     return zkc::error("air-ir-symbol");
   size_t remaining = 8 * AIRLimits::nodes + 8 * AIRLimits::constraints + 16;
-  json::Object result{{"schema", "zkc.air.v1"}};
+  json::Object result{{"schema", "zkc.air.v0"}};
   for (const auto &item : op->getAttrs()) {
     auto key = item.getName().strref();
     if (key == "sym_name")

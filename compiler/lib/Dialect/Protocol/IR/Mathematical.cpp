@@ -662,6 +662,7 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
   SymbolTableCollection tables;
   HelperAnalysis helpers(module, tables);
   unsigned programs = 0;
+  unsigned remainingRealizations = realizedHelperOperationLimit;
   for (auto &op : module.getBody().front()) {
     if (auto program = dyn_cast<protocol_ir::MathematicalOp>(op)) {
       ++programs;
@@ -669,6 +670,23 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
       const HelperSummary *summary;
       if (failed(helpers.get(helper, summary)))
         return failure();
+    } else if (auto realization = dyn_cast<local::RealizeOp>(op)) {
+      for (auto attr : realization->getAttrs())
+        if (!is_contained(realization.getAttributeNames(),
+                          attr.getName().getValue()))
+          return refuse(realization, "unsupported realization attribute");
+      const HelperSummary *summary;
+      auto helper = tables.lookupNearestSymbolFrom<func::FuncOp>(
+          realization, realization.getHelperAttr());
+      if (failed(helpers.get(helper, summary)))
+        return failure();
+      if (summary->expandedOperations > remainingRealizations)
+        return diagnostics::emit(
+            realization.emitOpError(), "mathematical-analysis-limit",
+            "realized helpers exceed the shared expansion budget");
+      remainingRealizations -= summary->expandedOperations;
+      // The local-definition reader independently checks data-only native
+      // ports.
     } else if (isa<local::FuncOp, local::OperationBindingOp, poly::RecipeOp,
                    poly::RealizeOp>(op)) {
       // Whole executable admission below checks even unused definitions.

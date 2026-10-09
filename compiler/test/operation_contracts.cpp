@@ -46,28 +46,7 @@ int main() {
             "duplicate history inventory entry");
   }
   require(fixture.eof(), "invalid history inventory row");
-  // The shared portable inventory remains the Lean reader's supported set.
-  // Native source origins are admitted only by the native execution profile.
-  for (llvm::StringRef key :
-       {"transcript.native.challenge", "transcript.native.observe.bool",
-        "transcript.native.observe.field", "transcript.native.observe.group",
-        "transcript.native.indexed.challenge",
-        "transcript.native.indexed.observe.bool",
-        "transcript.native.indexed.observe.field",
-        "transcript.native.indexed.observe.group",
-        "transcript.native.indexed.observe.index",
-        "transcript.native.indexed.observe.field_array",
-        "transcript.native.indexed.observe.data",
-        "transcript.native.indexed.observe.commitment",
-        "transcript.native.indexed.observe.proof"})
-    require(expectedHistory.emplace(key.str(), true).second,
-            "duplicate native history inventory entry");
-  // Closed native sequence operations carry no transcript history. The older
-  // portable reader does not admit their complete-Type ports.
-  for (llvm::StringRef key :
-       {"sequence.empty", "sequence.append", "sequence.at", "sequence.length"})
-    require(expectedHistory.emplace(key.str(), false).second,
-            "duplicate sequence history inventory entry");
+  // This compiler-owned inventory covers the current executable contracts.
   for (const auto &kernel : kernels()) {
     require(keys.insert(kernel.key.str()).second, "duplicate contract key");
     auto expected = expectedHistory.find(kernel.key.str());
@@ -138,9 +117,7 @@ int main() {
                   kernel.outputs[observation->stateOutput] == "transcript",
               "observation port outside transcript signature");
       auto suffix = kernel.key;
-      require((suffix.consume_front("transcript.observe.") ||
-               suffix.consume_front("transcript.native.observe.") ||
-               suffix.consume_front("transcript.native.indexed.observe.")) &&
+      require(suffix.consume_front("transcript.native.indexed.observe.") &&
                   suffix == kernel.inputs[observation->payloadInput],
               "observation payload differs from its logical contract");
     }
@@ -188,7 +165,7 @@ int main() {
   // It has no logical kernel row and must not acquire one through discovery.
   BindingApplication relayout{
       "table.relayout",
-      {"bls12-381.fr", "arkworks.mle-lsb/1", "arkworks.mle-msb/1"},
+      {"bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"},
       "arkworks/table.relayout"};
   auto physicalRelayout = resolveBinding(relayout, true);
   require(bool(physicalRelayout), "physical relayout must be installed");

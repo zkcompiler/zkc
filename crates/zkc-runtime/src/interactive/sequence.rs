@@ -27,16 +27,14 @@ fn signature(binding: &OperationBinding) -> Result<KernelSignature<LogicalType>,
 }
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
-    logical_refusals: &[],
     physical_error: "binding-implementation",
     physical_only: false,
     contracts: &[
-        Contract::custom("sequence.empty"),
-        Contract::custom("sequence.append"),
-        Contract::custom("sequence.length"),
-        Contract::custom("sequence.at"),
+        Contract::custom("sequence.empty").implemented_by(&["native/sequence.empty"]),
+        Contract::custom("sequence.append").implemented_by(&["native/sequence.append"]),
+        Contract::custom("sequence.length").implemented_by(&["native/sequence.length"]),
+        Contract::custom("sequence.at").implemented_by(&["native/sequence.at"]),
     ],
     resolve: |binding, _| signature(binding),
-    providers: &["native"],
     select: super::operations::default_ports,
 };

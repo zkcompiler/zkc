@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from cases import case, counted
 from commands import Commands
-from tools import records, compiler
+from tools import records, compiler, tool
 
 OUT = records()
 commands = Commands(OUT)
@@ -103,12 +103,12 @@ with case("exit operands preserve source correspondence"):
     policy.write_text(
         json.dumps(
             [
-                "zkc.native-proof-policy/2",
+                "zkc.native-proof-policy/0",
                 "main",
                 "P",
                 "V",
                 "0",
-                "merlin3.bls12-381.fr64be/1",
+                "merlin3.bls12-381.fr64be/0",
                 "3",
                 ["0", "1"],
                 [["draw", "challenge"]],
@@ -142,7 +142,7 @@ with case("raw executable completion continuation arity"):
 
     assert remove_continuation(program) == 1
     commands.run(
-        [compiler, "protocol-import", "-"],
+        [tool("program_codec")],
         stdin=json.dumps(program),
         refuses="interactive-shape",
     )

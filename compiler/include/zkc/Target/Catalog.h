@@ -4,10 +4,11 @@
 #include "zkc/Contracts/Bindings.h"
 
 namespace zkc::target {
-/// Same-version, in-process policy seam. Candidates are preferences, not new
-/// contracts or laws. Every answer must still resolve through installed
-/// Contracts. Provider queries must be read-only and deterministic for replay
-/// of a compilation; no concurrent input/context mutation is supported.
+/// In-process policy interface for the selected compiler build. Candidates are
+/// preferences, not new contracts or laws. Every answer must still resolve
+/// through installed Contracts. Provider queries must be read-only and
+/// deterministic for replay of a compilation; no concurrent input/context
+/// mutation is supported.
 class CandidateCatalog {
 public:
   virtual ~CandidateCatalog() = default;

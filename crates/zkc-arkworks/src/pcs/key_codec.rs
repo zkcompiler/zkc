@@ -16,7 +16,7 @@ impl ProverKey {
         self.inner.material_fingerprint
     }
 
-    /// Encode public proving material with the v1 envelope, kind 4, and
+    /// Encode public proving material with the fixed envelope, kind 4, and
     /// fixed-width compressed points. No witness or opening state is included.
     /// Row lengths are implicit in the positive arity; there are no Vec lengths.
     pub fn to_bytes(&self, bounds: &Bounds) -> Result<Vec<u8>, Error> {
@@ -125,7 +125,7 @@ pub(super) fn material_fingerprint(
     let mut context = [0u8; 64];
     context[..32].copy_from_slice(&metadata.setup_id);
     context[32..].copy_from_slice(&metadata.key_id);
-    codec::fingerprint(b"zkc-arkworks/prover/v1", &context, key)
+    codec::fingerprint(b"zkc-arkworks/prover/v0", &context, key)
 }
 
 /// Serialization-only borrowed view matching upstream UniversalParams field
@@ -146,7 +146,7 @@ fn setup_fingerprint(
     verifier: &upstream::VerifierKey<Bls12_381>,
 ) -> Result<[u8; 32], Error> {
     codec::fingerprint(
-        b"zkc-arkworks/setup/v1",
+        b"zkc-arkworks/setup/v0",
         &[],
         &SetupView {
             num_vars: key.nv,

@@ -487,6 +487,51 @@ public:
   LoweringVerifier(protocol_ir::ProtocolModuleOp before,
                    protocol_ir::ProtocolModuleOp after)
       : before(before), after(after), sourceSymbols(before), symbols(after) {}
+  LogicalResult calculations(ArrayRef<local::FuncOp> functions) {
+    for (auto target : functions) {
+      auto source = sourceSymbols.lookup<local::FuncOp>(target.getSymName());
+      if (!source ||
+          source->getAttrDictionary() != target->getAttrDictionary() ||
+          !hasSingleElement(source.getBody()) ||
+          !hasSingleElement(target.getBody()))
+        return refuse(target, "realized calculation interface changed");
+      llvm::DenseMap<Value, Value> values;
+      for (auto [a, b] : zip(source.getArguments(), target.getArguments()))
+        values[a] = b;
+      auto *cursor = &target.getBody().front().front();
+      for (auto &op : source.getBody().front()) {
+        if (!charge(1 + op.getNumOperands() + op.getNumResults()))
+          return refuse(target, "lowering comparison work limit exceeded");
+        SmallVector<Value> inputs;
+        for (auto operand : op.getOperands()) {
+          auto value = values.lookup(operand);
+          if (!value)
+            return refuse(target, "realized calculation lost a dependency");
+          inputs.push_back(value);
+        }
+        if (isa<local::ReturnOp>(op)) {
+          auto returned = dyn_cast_or_null<local::ReturnOp>(cursor);
+          if (!returned || cursor->getNextNode() ||
+              returned.getInputs() != ValueRange(inputs))
+            return refuse(target, "realized calculation changed its return");
+          cursor = nullptr;
+          continue;
+        }
+        if (!isTotal(&op) || op.getNumResults() != 1)
+          return refuse(target, "unexpected realized mathematical operation");
+        auto value = recipe(&op, cursor, inputs);
+        if (!value || value.getType() != op.getResult(0).getType() ||
+            value.use_empty())
+          return refuse(
+              target,
+              "realized calculation changed a recipe, operand or liveness");
+        values[op.getResult(0)] = value;
+      }
+      if (cursor)
+        return refuse(target, "realized calculation contains extra work");
+    }
+    return success();
+  }
   LogicalResult run() {
     if (before.getProfile() != protocol_ir::Profile::Participant ||
         after.getProfile() != protocol_ir::Profile::Exec)
@@ -578,6 +623,11 @@ public:
   }
 };
 } // namespace
+LogicalResult verifyCalculationRecipes(protocol_ir::ProtocolModuleOp original,
+                                       protocol_ir::ProtocolModuleOp candidate,
+                                       ArrayRef<local::FuncOp> functions) {
+  return LoweringVerifier(original, candidate).calculations(functions);
+}
 LogicalResult verifyMathLowering(protocol_ir::ProtocolModuleOp original,
                                  protocol_ir::ProtocolModuleOp candidate) {
   return LoweringVerifier(original, candidate).run();

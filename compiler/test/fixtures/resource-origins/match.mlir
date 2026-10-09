@@ -1,5 +1,5 @@
 !s = !local.capability<"rng:bls12-381.fr">
-!tag = !local.variant<"variant:5b227a6b632e76617269616e742f31222c5b2243686f696365222c226c656674222c5b5d2c5b2231222c2232225d2c227269676874222c5b2234222c2232225d2c5b2233222c2235225d2c5b2230222c2236225d5d5d">
+!tag = !local.variant<"variant:5b227a6b632e76617269616e742f30222c5b2243686f696365222c226c656674222c5b5d2c5b2231222c2232225d2c227269676874222c5b2234222c2232225d2c5b2233222c2235225d2c5b2230222c2236225d5d5d">
 module { "protocol.module"() ({
  local.func @step(%s:!s,%go:i1,%lo:ui64,%hi:ui64) -> !s attributes {logical_origin=["step",[]]} {
  %tag = "local.variant_inject"() {alternative="left",site="tag"} : ()->!tag

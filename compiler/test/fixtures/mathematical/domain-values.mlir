@@ -3,8 +3,8 @@
 !g2 = !algebra.group<"bn254.g2">
 !b = !algebra.field<"koala-bear">
 !e = !algebra.field<"koala-bear.ext8-binomial3">
-!s = !protocol.service_ref<"random.koala-bear.ext8-binomial3/1">
-!bnrng = !protocol.service_ref<"random.bn254.fr/1">
+!s = !protocol.service_ref<"random.koala-bear.ext8-binomial3/0">
+!bnrng = !protocol.service_ref<"random.bn254.fr/0">
 module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%x:!f,%a:!g1,%b:!g2,%base:!b,%ext:!e,%random:!s,%bnrandom:!bnrng,%extrandom:!s):
    %bnDraw = "protocol.query"(%bnrandom) {owner="P",method="draw",site="bn_draw"} : (!bnrng)->!f

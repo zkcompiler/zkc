@@ -57,7 +57,7 @@ def check(formal):
         expect('source-check', ['check', *paths[:2]],
                {'status': 'checked', 'claim': 'complete-logical-execution'})
         expect('phase-admission', ['admit', *paths],
-               {'status': 'admitted', 'profile': 'interactive-round/1',
+               {'status': 'admitted', 'profile': 'interactive-round/0',
                 'claim': 'phase-conformance-and-normal-return'})
         events = [['commit', 5], ['challenge'], ['respond', 11],
                   ['commit', 11], ['challenge'], ['respond', 14],
@@ -123,7 +123,7 @@ def check(formal):
     if result.returncode or result.stderr or blocks != expected:
         raise AssertionError(('block controls', result, expected))
     return {
-        'format': 'zkc.formal-tool-controls.v1', 'status': 'pass',
+        'format': 'zkc.formal-tool-controls.v0', 'status': 'pass',
         'cases': direct['cases'] + len(cases) + len(blocks) + len(relations),
         'source_plan': direct, 'interactive_round': cases, 'blocks': blocks,
         'relation_reference': relations,

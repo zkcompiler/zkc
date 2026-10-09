@@ -1,13 +1,40 @@
 #ifndef ZKC_TRANSFORMS_MATHEMATICAL_H
 #define ZKC_TRANSFORMS_MATHEMATICAL_H
 #include "mlir/IR/BuiltinOps.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Error.h"
 namespace zkc::mathematical {
+/// Admit the whole mathematical module, then check polynomial observations in
+/// selected pure helpers even when no execution path calls them. Expansion and
+/// degree checks use bounded scratch copies without simplification or
+/// execution; the supplied original is unchanged. Names must be distinct
+/// existing helpers.
+mlir::LogicalResult
+verifyHelperObservations(mlir::ModuleOp original,
+                         llvm::ArrayRef<llvm::StringRef> helpers);
+
+/// Source-formula linkage and observation admission on an already verified
+/// immutable mathematical original. Roots derive from native declaration keys;
+/// one shared work budget covers inventory, uses, clones and expansion. Full
+/// logical schema/revision agreement is checked at the source interface
+/// boundary.
+llvm::Error checkFormulaDefinitions(mlir::ModuleOp, uint64_t &remaining);
+
 /// Check the six selected realization rules against actual generated bodies.
 /// Preserves ordered checks under the declared primitive contracts and
 /// sufficient capacity. Does not prove native kernel implementations.
 mlir::LogicalResult verifyPolynomialRecipesPreserved(mlir::ModuleOp original,
                                                      mlir::ModuleOp candidate);
 mlir::LogicalResult expandPolynomialRecipes(mlir::ModuleOp module);
+
+/// Realize admitted data-signature math helpers through the common polynomial
+/// and calculation lowerers. Calls remain ordered and expand with local.apply.
+mlir::LogicalResult expandMathRealizations(mlir::ModuleOp module);
+/// Structural containment check, not an independent proof of the math lowerers.
+/// Checks retained declarations, data-only recipes and binding accounting.
+mlir::LogicalResult verifyMathRealizationsPreserved(mlir::ModuleOp original,
+                                                    mlir::ModuleOp candidate);
 
 // Closed, bounded checks on actual source/candidate pairs. Keep the original
 // frozen and verify both subjects before calling. Preparation and projection

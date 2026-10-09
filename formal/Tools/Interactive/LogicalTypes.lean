@@ -13,19 +13,19 @@ def bn254G1 := "bn254.g1"
 def bn254G2 := "bn254.g2"
 def bn254GT := "bn254.gt"
 def bn254Modulus : Nat := 21888242871839275222246405745257275088548364400416034343698204186575808495617
-def pcs := "multilinear.kzg.bls12-381/1"
-def extensionTranscript := "merlin3.koala-bear.ext8-binomial3.rejection31le/1"
-def transcriptIdentity := "merlin3.bls12-381.fr64be/1"
-def spongefishTranscript := "spongefish0.7.4.keccak.bls12-381.fr64be/1"
+def pcs := "multilinear.kzg.bls12-381/0"
+def extensionTranscript := "merlin3.koala-bear.ext8-binomial3.rejection31le/0"
+def transcriptIdentity := "merlin3.bls12-381.fr64be/0"
+def spongefishTranscript := "spongefish0.7.4.keccak.bls12-381.fr64be/0"
 
 def ristrettoScalar := "ristretto255.scalar"
 def ristrettoGroup := "ristretto255.group"
-def ristrettoTranscript := "merlin3.ristretto255.scalar64le/1"
+def ristrettoTranscript := "merlin3.ristretto255.scalar64le/0"
 def ristrettoModulus : Nat := 2^252 + 27742317777372353535851937790883648493
 def koalaBear := "koala-bear"
 def koalaBearExt8 := "koala-bear.ext8-binomial3"
-def rowBase := "rows.merkle-keccak256.koala-bear/1"
-def rowExtension := "rows.merkle-keccak256.koala-bear.ext8-binomial3/1"
+def rowBase := "rows.merkle-keccak256.koala-bear/0"
+def rowExtension := "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"
 def rowDomain (identity : String) : Bool := identity == rowBase || identity == rowExtension
 def oracleContract (name : String) : Bool :=
   name.startsWith "oracle." || name.startsWith "commitments." || name.startsWith "opening_states."
@@ -68,7 +68,8 @@ def leafLogicalIdentity (kind identity : String) : Bool :=
 `bool` and `bool:` are one type with one name. Admitting both would give one
 payload two nominal identities, because a descriptor keeps the text it was given.
 Readers do not silently normalize a different identity to an admitted spelling:
-docs/spec/profiles/compiler/local-variants.md. -/
+docs/spec/ir/variants.md.
+The reference reuses these rules without establishing native correspondence. -/
 def leafLogical (text : String) : Bool :=
   if domainIndependent text then true else match text.splitOn ":" with
     | [kind, identity] => !identity.isEmpty && leafLogicalIdentity kind identity

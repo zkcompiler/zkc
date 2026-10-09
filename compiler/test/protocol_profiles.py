@@ -1,66 +1,46 @@
-"""Profiles and executable feature selectors are independently checked."""
+"""The four profiles select formation and export; unknown properties refuse."""
 import json
 from commands import Commands
-from tools import records
+from tools import records, canonical_program
 
 commands = Commands(records())
 
-def module(profile, contract=None):
+
+def module(profile):
     attrs = f'profile = #protocol.profile<{profile}>'
-    if contract:
-        attrs += f', execution_contract = #protocol.execution_contract<{contract}>'
+    if profile in ('protocol', 'participant'):
+        mathematical = 'module { "protocol.module"() <{profile=#protocol.profile<protocol>}> ({"protocol.func"() <{sym_name="main", function_type=() -> (), roles=["P"], input_roles=[], output_roles=[]}> ({"protocol.return"() : () -> ()}) : () -> ()}) : () -> () }'
+        return commands.verified(mathematical, None, '--zkc-project-protocol') if profile == 'participant' else mathematical
     body = '^entry:'
     if profile in ('exec', 'physical'):
-        body += '\n"protocol.participant"() <{sym_name="p", function_type=() -> (), instance="example", role="P", parameters=[]}> ({"protocol.finish"() : () -> ()}) : () -> ()'
+        body += '\n"protocol.participant"() <{sym_name="p", function_type=() -> (), instance="example", role="P"}> ({"protocol.finish"() : () -> ()}) : () -> ()'
         body += '\n"protocol.entry"() <{sym_name="main", targets=[["P", @p]]}> : () -> ()'
     return f'module {{ "protocol.module"() <{{{attrs}}}> ({{{body}}}) : () -> () }}'
 
-# Empty symbol-table blocks are explicitly present in generic assembly.
-common = module('protocol_exec').replace('({})', '({^entry:})')
-normalized = commands.verified(common)
-assert 'stage' not in normalized
-assert 'protocol_exec' in normalized
-for profile in ('exec', 'physical'):
-    source = module(profile, 'legacy_participants_v1').replace('({})', '({^entry:})')
-    normalized = commands.verified(source)
-    carrier = json.loads(commands.source('protocol-export', normalized))
-    assert carrier[0] == 'zkc.participants/1'
-    imported = commands.source('protocol-import', json.dumps(carrier))
-    assert f'#protocol.profile<{profile}>' in imported
-    assert '#protocol.execution_contract<legacy_participants_v1>' in imported
 
-for profile in ('protocol_exec', 'protocol', 'participant'):
-    for contract in ('legacy_participants_v1', 'program'):
-        commands.verified(module(profile, contract), 'protocol-execution-contract')
+for profile in ('protocol', 'participant', 'exec', 'physical'):
+    commands.verified(module(profile))
+    malformed = module(profile).replace(f'#protocol.profile<{profile}>', f'#protocol.profile<{profile}>, unexpected=true')
+    commands.verified(malformed, 'mlir-unknown-property')
 for profile in ('exec', 'physical'):
-    commands.verified(module(profile), 'protocol-execution-contract')
-commands.verified('module { "protocol.module"() ({}) {profile=#protocol.profile<participant>} : () -> () }', 'must have exactly one block')
-commands.verified(module('participant'), 'mathematical-projection')
-commands.verified(module('unknown'), 'to be one of')
-commands.verified(module('protocol_exec', 'unknown'), 'to be one of')
-commands.verified(common.replace('profile = #protocol.profile<protocol_exec>', 'stage = "common"'),
-                  'mlir-unknown-property')
-# Changing a profile alone never reinterprets a program. This protocol_exec
-# module lacks the declarations required by protocol admission.
-commands.verified(common.replace('protocol_exec', 'protocol'), 'mathematical-module')
-native = commands.verified(module('exec', 'program'))
+    for value in ('[]', '["n"]'):
+        malformed = module(profile).replace('role="P"', f'role="P", unexpected={value}')
+        commands.verified(malformed, 'mlir-unknown-property')
+commands.verified(module('invalid'), 'to be one of')
+native = commands.verified(module('exec'))
 commands.source('protocol-export', native, refuses='native-physical-required')
 native = commands.verified(native, None, '--zkc-select-physical')
 carrier = json.loads(commands.source('protocol-export', native))
-assert carrier[0] == 'zkc.program/1'
-assert len(carrier[4][0]) == 9
-commands.verified(commands.source('protocol-import', json.dumps(carrier)))
-for retired in ('zkc.service-participants/1', 'zkc.native-participants/1', 'zkc.native-participants/2',
-                'zkc.native-participants/3', 'zkc.program/99'):
-    mutant = list(carrier)
-    mutant[0] = retired
-    commands.source('protocol-import', json.dumps(mutant), refuses='interactive-format')
-for retired in ('service_participants_v1', 'native_participants_v1', 'native_participants_v2', 'native_participants_v3'):
-    commands.verified(module('physical', retired), 'to be one of')
-carrier[2] = 'logical'
-commands.source('protocol-import', json.dumps(carrier), refuses='native-physical-required')
+assert carrier[0] == 'zkc.program/0'
+assert len(carrier) == 5 and len(carrier[3][0]) == 8
+assert json.loads(canonical_program(commands, json.dumps(carrier))) == carrier
+mutant = list(carrier)
+mutant[0] = 'invalid.program'
+canonical_program(commands, json.dumps(mutant), refuses='interactive-format')
+mutant = list(carrier)
+mutant.insert(2, [])
+canonical_program(commands, json.dumps(mutant), refuses='interactive-shape')
+commands.verified(module('physical').replace('"protocol.finish"', '"protocol.incomplete"'), 'unregistered operation')
+commands.verified(module('physical').replace('"protocol.finish"() : () -> ()', '"local.stop"() {site="end", reason="reject"} : () -> ()'), 'interactive-callable-terminator')
+commands.source('invalid-command', '', refuses='unknown-command')
 print(f'protocol profile checks: {commands.save()}')
-
-for terminal in ['"protocol.incomplete"() {site="end"} : () -> ()', '"local.stop"() {site="end", reason="reject"} : () -> ()']:
-    candidate = module('physical', 'program').replace('"protocol.finish"() : () -> ()', terminal)
-    commands.verified(candidate, 'native-participant-terminal')

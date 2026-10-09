@@ -17,6 +17,7 @@ type Resolver = fn(&OperationBinding, &Contract, Selection) -> Option<BoundSigna
 
 pub(crate) struct Contract {
     pub(crate) name: &'static str,
+    pub(crate) implementations: &'static [&'static str],
     inputs: &'static [Type],
     outputs: &'static [Type],
     attributes: AttributeRule,
@@ -33,12 +34,17 @@ impl Contract {
     ) -> Self {
         Self {
             name,
+            implementations: &[],
             inputs,
             outputs,
             attributes,
             resolve,
             alternatives: false,
         }
+    }
+    pub(crate) const fn implemented_by(mut self, implementations: &'static [&'static str]) -> Self {
+        self.implementations = implementations;
+        self
     }
     const fn selectable(self) -> Self {
         Self {

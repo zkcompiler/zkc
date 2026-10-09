@@ -3,13 +3,13 @@ use common::*;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 use zkc_backends::*;
+use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::{
     Backend, BackendError, Frame, FrameExit, FrameKind, Invocation, Runner, admit_supplied,
 };
 
 fn draw_program() -> Vec<u8> {
     program(
-        None,
         &[("r", "rng")],
         vec![op(
             "draw",
@@ -24,8 +24,8 @@ fn draw_program() -> Vec<u8> {
 #[test]
 fn os_draws_use_real_advancing_resources_and_clone_is_only_handle() {
     let mut b = ark_backend(None);
-    let r = b.issue_rng(domain(), 3).unwrap();
-    let outside = b.issue_rng(domain(), 7).unwrap();
+    let r = b.issue_rng_for(Identity::Bls12381Fr, domain(), 3).unwrap();
+    let outside = b.issue_rng_for(Identity::Bls12381Fr, domain(), 7).unwrap();
     let before = b.observe(token(&outside)).unwrap();
     let (out, b) = run(&draw_program(), b, vec![r.clone()]);
     let out = out.unwrap();
@@ -45,9 +45,9 @@ fn os_draws_use_real_advancing_resources_and_clone_is_only_handle() {
 }
 #[test]
 fn actual_alias_cross_backend_wrong_kind_and_domain_are_refused_at_entry() {
-    let bytes = program(None, &[("a", "rng"), ("b", "rng")], vec![], &[], &[]);
+    let bytes = program(&[("a", "rng"), ("b", "rng")], vec![], &[], &[]);
     let mut b = ark_backend(None);
-    let r = b.issue_rng(domain(), 3).unwrap();
+    let r = b.issue_rng_for(Identity::Bls12381Fr, domain(), 3).unwrap();
     let admitted = admit_supplied(&bytes, &b).unwrap();
     match Runner::new(
         &admitted,
@@ -65,7 +65,9 @@ fn actual_alias_cross_backend_wrong_kind_and_domain_are_refused_at_entry() {
         Ok(_) => panic!(),
     }
     let mut owner = ark_backend(None);
-    let token = owner.issue_rng(domain(), 2).unwrap();
+    let token = owner
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 2)
+        .unwrap();
     let other = ark_backend(None);
     assert_eq!(
         other.validate_value(&token).unwrap_err().code,
@@ -78,7 +80,9 @@ fn actual_alias_cross_backend_wrong_kind_and_domain_are_refused_at_entry() {
         Domain::new("P", "session", "main", Some("wrong")),
     ] {
         let mut b = ark_backend(None);
-        let r = b.issue_rng(bad_domain, 1).unwrap();
+        let r = b
+            .issue_rng_for(Identity::Bls12381Fr, bad_domain, 1)
+            .unwrap();
         let admitted = admit_supplied(&draw_program(), &b).unwrap();
         match Runner::new(&admitted, "main", "P", "session", b, vec![r]) {
             Err(e) => {
@@ -89,15 +93,17 @@ fn actual_alias_cross_backend_wrong_kind_and_domain_are_refused_at_entry() {
         }
     }
     let mut g = backend().build();
-    let nonce = g.issue_nonce(domain(), 2).unwrap();
+    let nonce = g
+        .issue_nonce_for(Identity::Bls12381Fr, domain(), 2)
+        .unwrap();
     let Value::Nonce(n) = nonce else { panic!() };
     assert!(owner.validate_value(&Value::Rng(n)).is_err());
 }
 #[test]
 fn exhausted_attempt_advances_generation_and_counter_without_touching_other_slot() {
     let mut b = ark_backend(None);
-    let r = b.issue_rng(domain(), 0).unwrap();
-    let other = b.issue_rng(domain(), 9).unwrap();
+    let r = b.issue_rng_for(Identity::Bls12381Fr, domain(), 0).unwrap();
+    let other = b.issue_rng_for(Identity::Bls12381Fr, domain(), 9).unwrap();
     let before = b.observe(token(&other)).unwrap();
     let (out, b) = run(&draw_program(), b, vec![r.clone()]);
     let stop = out.unwrap_err();
@@ -116,12 +122,11 @@ fn exhausted_attempt_advances_generation_and_counter_without_touching_other_slot
 fn successful_and_failed_multi_resource_frames_preserve_completed_prefix_and_outside() {
     for valid in [true, false] {
         let mut b = ark_backend(None);
-        let a = b.issue_rng(domain(), 3).unwrap();
-        let second = b.issue_rng(domain(), 4).unwrap();
-        let outside = b.issue_rng(domain(), 8).unwrap();
+        let a = b.issue_rng_for(Identity::Bls12381Fr, domain(), 3).unwrap();
+        let second = b.issue_rng_for(Identity::Bls12381Fr, domain(), 4).unwrap();
+        let outside = b.issue_rng_for(Identity::Bls12381Fr, domain(), 8).unwrap();
         let before = b.observe(token(&outside)).unwrap();
         let bytes = program(
-            None,
             &[("a", "rng"), ("b", "rng"), ("cond", "bool")],
             vec![
                 op("a", "arkworks/random.draw", &["a"], &["ra", "anext"]),
@@ -175,7 +180,7 @@ impl Backend for Probe {
         if matches!(f.kind(), FrameKind::Entry) {
             self.root = Some(f.clone());
         }
-        if self.exit_order_probe && matches!(f.kind(), FrameKind::Call { .. }) {
+        if self.exit_order_probe && matches!(f.kind(), FrameKind::Local { .. }) {
             self.inner.enter_frame(f, args)?;
             let count = self.inner.active_frames();
             for exit in [
@@ -260,56 +265,44 @@ impl Backend for Probe {
     }
 }
 fn nested_program() -> Vec<u8> {
-    participants(json!([
-        [[
-            "function",
-            "draw",
-            [["r", "rng"]],
-            ["rng"],
-            [
-                op("d", "arkworks/random.draw", &["r"], &["v", "next"]),
-                ["return", ["next"]]
-            ]
-        ]],
+    let raw = program(
+        &[("a", "rng"), ("b", "rng"), ("n", "index")],
+        vec![op("d", "random.draw", &["a"], &["v", "next"])],
+        &["rng"],
+        &["next"],
+    );
+    let mut j: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+    j[2][0][2] = json!([["a", "rng:bls12-381.fr@host.resource/0"]]);
+    j[3][0][6] = json!([
         [
+            "loop",
+            "outer",
+            ["value", "n", "1", "i"],
+            [["current", "a"]],
+            [],
             [
-                "participant",
-                "root",
-                "instance",
-                "P",
-                [],
-                [["a", "rng"], ["b", "rng"]],
-                ["rng"],
-                [
-                    ["call", "child_site", "child", ["a"], ["next"]],
-                    ["return", ["next"]]
-                ]
+                ["local", "draw", "kernel_test", ["current"], ["next"]],
+                ["yield", ["next"]]
             ],
-            [
-                "participant",
-                "child",
-                "child_instance",
-                "P",
-                [],
-                [["x", "rng"]],
-                ["rng"],
-                [
-                    ["local", "draw_site", "draw", ["x"], ["child_next"]],
-                    ["return", ["child_next"]]
-                ]
-            ]
+            ["out0"]
         ],
-        [["entry", "main", [["P", "root"]]]]
-    ]))
-    .unwrap()
+        ["return", ["out0"]]
+    ]);
+    serde_json::to_vec(&j).unwrap()
 }
 #[test]
 fn nested_child_cannot_recover_unpassed_ancestor_slot_and_kernel_needs_active_view() {
     for ancestor_slot in [true, false] {
         let mut inner = ark_backend(None);
-        let a = inner.issue_rng(domain(), 3).unwrap();
-        let b = inner.issue_rng(domain(), 4).unwrap();
-        let outside = inner.issue_rng(domain(), 5).unwrap();
+        let a = inner
+            .issue_rng_for(Identity::Bls12381Fr, domain(), 3)
+            .unwrap();
+        let b = inner
+            .issue_rng_for(Identity::Bls12381Fr, domain(), 4)
+            .unwrap();
+        let outside = inner
+            .issue_rng_for(Identity::Bls12381Fr, domain(), 5)
+            .unwrap();
         let hidden = if ancestor_slot {
             b.clone()
         } else {
@@ -326,7 +319,11 @@ fn nested_child_cannot_recover_unpassed_ancestor_slot_and_kernel_needs_active_vi
             leave_failure: false,
             exit_order_probe: false,
         };
-        let (out, p) = run(&nested_program(), probe, vec![a.clone(), b.clone()]);
+        let (out, p) = run(
+            &nested_program(),
+            probe,
+            vec![a.clone(), b.clone(), Value::Index(1)],
+        );
         out.unwrap();
         assert_eq!(
             *findings.lock().unwrap(),
@@ -346,8 +343,12 @@ fn nested_child_cannot_recover_unpassed_ancestor_slot_and_kernel_needs_active_vi
 fn output_failure_keeps_consumption_and_failed_leave_always_removes_view() {
     for leave_failure in [true, false] {
         let mut inner = ark_backend(None);
-        let r = inner.issue_rng(domain(), 3).unwrap();
-        let hidden = inner.issue_rng(domain(), 9).unwrap();
+        let r = inner
+            .issue_rng_for(Identity::Bls12381Fr, domain(), 3)
+            .unwrap();
+        let hidden = inner
+            .issue_rng_for(Identity::Bls12381Fr, domain(), 9)
+            .unwrap();
         let before = inner.observe(token(&hidden)).unwrap();
         let probe = Probe {
             inner,
@@ -380,9 +381,15 @@ fn output_failure_keeps_consumption_and_failed_leave_always_removes_view() {
 #[test]
 fn non_top_exit_refusal_preserves_views_for_ordered_cleanup_without_resource_effects() {
     let mut inner = ark_backend(None);
-    let a = inner.issue_rng(domain(), 3).unwrap();
-    let b = inner.issue_rng(domain(), 4).unwrap();
-    let outside = inner.issue_rng(domain(), 5).unwrap();
+    let a = inner
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 3)
+        .unwrap();
+    let b = inner
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 4)
+        .unwrap();
+    let outside = inner
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 5)
+        .unwrap();
     let before = [&a, &b, &outside].map(|v| inner.observe(token(v)).unwrap());
     let probe = Probe {
         inner,
@@ -394,16 +401,16 @@ fn non_top_exit_refusal_preserves_views_for_ordered_cleanup_without_resource_eff
         exit_order_probe: true,
     };
     let mut j: serde_json::Value = serde_json::from_slice(&nested_program()).unwrap();
-    j[4][0][6] = json!([
-        "rng:bls12-381.fr@host.resource/1",
-        "rng:bls12-381.fr@host.resource/1"
+    j[3][0][5] = json!([
+        "rng:bls12-381.fr@host.resource/0",
+        "rng:bls12-381.fr@host.resource/0"
     ]);
-    j[4][0][7][1] = json!(["return", ["next", "b"]]);
-    j[4][1][7] = json!([["return", ["x"]]]);
+    j[3][0][6][1] = json!(["return", ["out0", "b"]]);
+    j[2][0][4] = json!([["return", ["a"]]]);
     let (out, p) = run(
         &serde_json::to_vec(&j).unwrap(),
         probe,
-        vec![a.clone(), b.clone()],
+        vec![a.clone(), b.clone(), Value::Index(1)],
     );
     assert_eq!(out.unwrap().len(), 2); // Both views still authorize all their slots.
     assert_eq!(
@@ -445,18 +452,27 @@ fn explicit_seed_and_tape_are_reproducible_and_tape_failure_keeps_state() {
 #[test]
 fn nested_failure_and_cancellation_release_all_frames_and_preserve_unpassed_slots() {
     let mut b = ark_backend(None);
-    let a = b.issue_rng(domain(), 0).unwrap();
-    let second = b.issue_rng(domain(), 4).unwrap();
+    let a = b.issue_rng_for(Identity::Bls12381Fr, domain(), 0).unwrap();
+    let second = b.issue_rng_for(Identity::Bls12381Fr, domain(), 4).unwrap();
     let before = b.observe(token(&second)).unwrap();
-    let (out, b) = run(&nested_program(), b, vec![a.clone(), second.clone()]);
+    let (out, b) = run(
+        &nested_program(),
+        b,
+        vec![a.clone(), second.clone(), Value::Index(1)],
+    );
     assert_eq!(code(&out.unwrap_err()), "exhausted:resource-budget");
     assert_eq!(b.active_frames(), 0);
     assert_eq!(b.observe(token(&a)).unwrap().generation, 1);
     assert_eq!(b.observe(token(&second)).unwrap(), before);
     let mut b = ark_backend(None);
-    let a = b.issue_rng(domain(), 3).unwrap();
-    let second = b.issue_rng(domain(), 4).unwrap();
-    let mut runner = load(&nested_program(), b, vec![a.clone(), second.clone()]);
+    let a = b.issue_rng_for(Identity::Bls12381Fr, domain(), 3).unwrap();
+    let second = b.issue_rng_for(Identity::Bls12381Fr, domain(), 4).unwrap();
+    let mut runner = load(
+        &nested_program(),
+        b,
+        vec![a.clone(), second.clone(), Value::Index(1)],
+    );
+    while runner.advance_local_control().unwrap() {}
     assert!(matches!(
         runner.poll(),
         zkc_runtime::interactive::Action::Local(_)
@@ -486,14 +502,13 @@ fn repeated_loop_iterations_pass_only_current_successor_handle() {
             "root",
             "instance",
             "P",
-            [],
-            [["a", "rng"]],
+            [["a", "rng"], ["count", "index"]],
             ["rng"],
             [
                 [
                     "loop",
                     "repeat",
-                    "3",
+                    ["value", "count", "3", "iteration"],
                     [["carried", "a"]],
                     [],
                     [
@@ -503,14 +518,15 @@ fn repeated_loop_iterations_pass_only_current_successor_handle() {
                     ["final"]
                 ],
                 ["return", ["final"]]
-            ]
+            ],
+            []
         ]],
         [["entry", "main", [["P", "root"]]]]
     ]))
     .unwrap();
     let mut b = ark_backend(None);
-    let a = b.issue_rng(domain(), 3).unwrap();
-    let (out, b) = run(&bytes, b, vec![a.clone()]);
+    let a = b.issue_rng_for(Identity::Bls12381Fr, domain(), 3).unwrap();
+    let (out, b) = run(&bytes, b, vec![a.clone(), Value::Index(3)]);
     out.unwrap();
     let state = b.observe(token(&a)).unwrap();
     assert_eq!(
@@ -523,8 +539,12 @@ fn repeated_loop_iterations_pass_only_current_successor_handle() {
 #[test]
 fn retiring_a_failed_attempt_preserves_other_resources_and_never_reuses_identity() {
     let mut backend = ark_backend(None);
-    let temporary = backend.issue_rng(domain(), 0).unwrap();
-    let persistent = backend.issue_rng(domain(), 9).unwrap();
+    let temporary = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 0)
+        .unwrap();
+    let persistent = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 9)
+        .unwrap();
     let before = backend.observe(token(&persistent)).unwrap();
     let (out, mut backend) = run(&draw_program(), backend, vec![temporary.clone()]);
     assert_eq!(code(&out.unwrap_err()), "exhausted:resource-budget");
@@ -539,7 +559,9 @@ fn retiring_a_failed_attempt_preserves_other_resources_and_never_reuses_identity
         backend.validate_value(&temporary).unwrap_err().code,
         "refused:capability-unissued"
     );
-    let replacement = backend.issue_rng(domain(), 1).unwrap();
+    let replacement = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 1)
+        .unwrap();
     assert!(token(&replacement).issued_id() > retired.issued_id);
     let mut foreign = ark_backend(None);
     assert_eq!(
@@ -561,7 +583,9 @@ fn finite_attempt_controller_passes_real_successor_rng_without_reinitialization(
         )
         .unwrap();
     let original = rng.clone();
-    let unrelated = backend.issue_rng(domain(), 9).unwrap();
+    let unrelated = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 9)
+        .unwrap();
     let outside = backend.observe(token(&unrelated)).unwrap();
     let attempt = |(), (backend, rng)| {
         let (out, backend) = run(&draw_program(), backend, vec![rng]);
@@ -597,8 +621,12 @@ fn stopped_controller_retains_failed_resource_for_host_retirement() {
     use zkc_runtime::{Outcome, Stop, iteration::Execution};
 
     let mut backend = ark_backend(None);
-    let rng = backend.issue_rng(domain(), 0).unwrap();
-    let unrelated = backend.issue_rng(domain(), 9).unwrap();
+    let rng = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 0)
+        .unwrap();
+    let unrelated = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 9)
+        .unwrap();
     let outside = backend.observe(token(&unrelated)).unwrap();
     let prefix = Execution::pending((), (backend, rng)).advance(1, |(), (backend, rng)| {
         let (out, backend) = run(&draw_program(), backend, vec![rng.clone()]);

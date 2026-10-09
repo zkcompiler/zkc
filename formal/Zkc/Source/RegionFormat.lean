@@ -2,7 +2,7 @@ import Zkc.Source.RegionEncoding
 import Zkc.Source.Format
 
 /-! An independently selected region grammar. Its additional `bind` constructor
-is not accepted as part of the existing `finite-source-1` format. -/
+is not accepted as part of the existing `finite-source-0` format. -/
 
 set_option autoImplicit false
 namespace Zkc.Source.RegionFormat

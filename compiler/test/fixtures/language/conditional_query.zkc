@@ -1,0 +1,15 @@
+module sample;
+domain Fr = field("bls12-381.fr");
+fn count(go: bool) -> index {
+  return if go capture() { yield 1; } else { yield 0; };
+}
+protocol Run roles(V)(go: bool @V) using(coins: Random<Fr> @V) -> (v: Fr @V) {
+  local V let n = count(go);
+  let zero: Fr @V = 0;
+  let result = repeat roles(V)(i < n, max 1) carry(last = zero) capture() using(coins) {
+    let value = coins.draw();
+    yield (last = value);
+  };
+  return (v = result);
+}
+entry Demo = Run;

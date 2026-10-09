@@ -2,6 +2,7 @@
 #define ZKC_CONTRACTS_BINDING_H
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace zkc::protocol {
@@ -11,6 +12,13 @@ struct BindingApplication {
   std::string contract;
   std::vector<std::string> arguments;
   std::string implementation;
+};
+using Assignments = std::vector<std::pair<std::string, std::string>>;
+
+/// Named application of an installed contract, optionally physically selected.
+struct OperationBinding {
+  std::string name;
+  BindingApplication application;
 };
 } // namespace zkc::protocol
 

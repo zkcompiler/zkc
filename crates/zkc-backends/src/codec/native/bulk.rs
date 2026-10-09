@@ -73,6 +73,19 @@ fn count(value: &Value) -> Result<usize> {
         _ => return Err(unsupported()),
     })
 }
+fn quantities(kind: Type, count: usize) -> (usize, usize) {
+    if kind == Type::Groups {
+        (0, count)
+    } else {
+        (count, 0)
+    }
+}
+pub(super) fn value_counts(value: &Value, policy: &Policy) -> Result<(usize, usize)> {
+    let (_, _, memory) = format(&value.physical_type()).ok_or_else(unsupported)?;
+    let count = count(value)?;
+    limit(value.ty(), count, memory, policy)?;
+    Ok(quantities(value.ty(), count))
+}
 fn prefix(kind: Type) -> usize {
     match kind {
         Type::Matrix => 18,
@@ -130,26 +143,26 @@ pub(super) fn scan(
     if bytes.len() != add(prefix(kind), mul(n, wire)?)? {
         return Err(invalid(DecodeReason::Length));
     }
+    let (elements, groups) = quantities(kind, n);
     Ok((
         if kind == Type::Commitment {
             512
         } else {
             add(256, mul(n, memory)?)?
         },
-        if kind == Type::Groups { 0 } else { n },
-        if kind == Type::Groups { n } else { 0 },
+        elements,
+        groups,
     ))
 }
 pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>> {
     let width = width(value, policy)?;
     policy.wire(width).map_err(|_| Error::Limit)?;
     peak(policy, value.retained_bytes(), width)?;
-    // Reuse checked canonical producers. Only BLS native vector tags differ
-    // from the older logical codec; their payload layout is identical.
+    // Reuse the type-owned canonical payload encoders.
     let mut bytes = crate::matrix::encode(value, policy)
         .or_else(|| crate::oracle::encode(value, policy))
-        .or_else(|| super::super::bn254::encode(value, policy))
-        .or_else(|| super::super::domains::encode(value, policy))
+        .or_else(|| super::bn254::encode(value, policy))
+        .or_else(|| super::domains::encode(value, policy))
         .unwrap_or_else(|| {
             if let Value::Groups(v) = value {
                 let mut out = Vec::new();
@@ -182,6 +195,8 @@ fn matrix<S: crate::matrix::Wire>(bytes: &[u8], p: &Policy) -> Result<Value> {
     let mut entries = Vec::new();
     entries.try_reserve_exact(n).map_err(|_| Error::Limit)?;
     let mut previous = None;
+    // This generic associated width cannot be a stable Rust array length.
+    #[allow(clippy::chunks_exact_to_as_chunks)]
     for b in bytes[18..].chunks_exact(S::WIDTH + 8) {
         let row = u32::from_le_bytes(b[..4].try_into().unwrap());
         let col = u32::from_le_bytes(b[4..8].try_into().unwrap());

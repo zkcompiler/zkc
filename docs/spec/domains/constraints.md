@@ -1,6 +1,11 @@
 # Constraint relations and protocol views
 
-A constraint representation defines a [relation family](../properties/relations.md#relation-families-and-instances).
+Native R1CS/AIR Assets and relation adapters use these field, layout and constraint contracts.
+This chapter states shared laws; a native implementation claim needs its
+actual instance and evidence. Independent formal examples retain their own
+[model scope](../../../formal/docs/spec/README.md).
+
+A constraint representation defines a [relation family](../relations.md#relation-families-and-instances).
 Its public layout, mathematical domain and constraints determine which statements
 and witnesses satisfy it. A witness generator is a separate partial computation;
 its outputs do not define the set of permitted witnesses. Importing constraints
@@ -9,7 +14,7 @@ backend.
 
 This chapter defines two domain views: sparse rank-one constraints and finite
 arithmetic traces. Neither is a mandatory representation for other relations or
-for directly authored group protocols. [Source encoding adequacy](../properties/relations.md#source-encoding-adequacy)
+for directly authored group protocols. [Source encoding adequacy](../relations.md#source-encoding-adequacy)
 is a separate obligation from the meaning of either view.
 
 ## Sparse rank-one constraints
@@ -178,7 +183,7 @@ soundness or hiding.
 
 A verifier fixes its intended relation, field and ordered statement independently
 of the prover. A normalized relation digest identifies an encoding under its
-stated version; it is neither a semantic equivalence proof nor evidence that an
+stated format; it is neither a semantic equivalence proof nor evidence that an
 external frontend preserved constraints. Source provenance, mathematical subject
 identity and physical representation identity serve different purposes.
 
@@ -189,7 +194,7 @@ coefficient-independent program is a reusable consumer, not authentication of
 whatever relation file a prover supplies.
 
 The mathematical correspondence is recorded in
-[the domain map](../correspondence/domains.md#relation-domain-foundation).
+[the domain map](../../../formal/docs/correspondence/domains.md#relation-domain-foundation).
 Native ingestion, staging and trust boundaries are described in the
-[compiler guide](../../compiler/relation-ingress.md). Neither changes PIR's
+[compiler guide](../../compiler/relations.md). Neither changes PIR's
 execution model or supplies a general imported-protocol security theorem.

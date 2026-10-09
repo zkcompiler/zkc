@@ -9,11 +9,11 @@ from tools import compiler, records
 OUT = records()
 commands = Commands(OUT)
 source = Path(__file__).parent / 'fixtures/mathematical/composed-state.mlir'
-suites = ['merlin3.bls12-381.fr64be/1', 'spongefish0.7.4.keccak.bls12-381.fr64be/1']
+suites = ['merlin3.bls12-381.fr64be/0', 'spongefish0.7.4.keccak.bls12-381.fr64be/0']
 manifest = []
 for family in ['fold', 'batch']:
     for suite_index, suite in enumerate(suites):
-        policy = ['zkc.native-proof-policy/4', family, 'P', 'V', '0', suite,
+        policy = ['zkc.native-proof-policy/0', family, 'P', 'V', '0', suite,
                   '5', ['0', '1', '2'], [['draw', 'challenge']]]
         for mode, options in [('normal', []), ('plain', ['--no-simplify']),
                               ('release', ['--release-storage']),
@@ -28,7 +28,7 @@ for family in ['fold', 'batch']:
                 # Count remains an input and the body remains a single loop in
                 # each participant. No host-sized specialization is generated.
                 carrier = json.loads(envelope[4])
-                assert carrier[0] == 'zkc.program/1'
+                assert carrier[0] == 'zkc.program/0'
                 def loops(value):
                     if not isinstance(value, list):
                         return []

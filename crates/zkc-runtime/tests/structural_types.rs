@@ -84,8 +84,8 @@ fn noncanonical_or_ill_kinded_applications_refuse() {
         "fixed_vector<field:koala-bear,1>\n",
         "fixed_vector<field:koala-bear,\t1>",
         "fixed_vector<field:koala-bear,１>",
-        "fixed_vector<field:koala-bear@plonky3.koala-bear/1,1>",
-        "fixed_vector<fixed_vector<bool,0>@plonky3.fixed-vector/1,1>",
+        "fixed_vector<field:koala-bear@plonky3.koala-bear/0,1>",
+        "fixed_vector<fixed_vector<bool,0>@plonky3.fixed-vector/0,1>",
         "fixed_vector<field<koala-bear>,1>",
         "field<koala-bear>",
         "bool<>",
@@ -273,10 +273,10 @@ fn logical_admission_survives_missing_physical_realization() {
     assert_eq!(error.code, ErrorCode::Representation);
     assert_eq!(error.detail, "unrepresented logical type");
     assert!(
-        PhysicalType::parse("fixed_vector<field:koala-bear,1>@plonky3.koala-bear-vector/1")
+        PhysicalType::parse("fixed_vector<field:koala-bear,1>@plonky3.koala-bear-vector/0")
             .is_err()
     );
-    assert!(PhysicalType::parse("vector:koala-bear@plonky3.fixed-vector/1").is_err());
+    assert!(PhysicalType::parse("vector:koala-bear@plonky3.fixed-vector/0").is_err());
 }
 
 #[test]
@@ -301,7 +301,7 @@ fn binding_arguments_are_kinded_and_observation_is_explicitly_uninstalled() {
     observe.contract = "transcript.observe.fixed_vector".into();
     assert_eq!(
         observe.signature().unwrap_err().detail,
-        "fixed-vector-observation-uninstalled"
+        "uninstalled operation binding"
     );
     for name in [
         "fixed_vector.unknown",

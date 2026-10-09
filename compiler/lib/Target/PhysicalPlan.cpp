@@ -41,7 +41,7 @@ struct InputSnapshot {
   ModuleOp subject;
   std::string contents;
   SmallVector<const void *> addresses;
-  source::Assignments selections;
+  protocol::Assignments selections;
   bool linearContractions;
   Error check(ModuleOp module) const {
     // Compare only fresh live IR against opaque saved addresses. Never walk or
@@ -439,8 +439,8 @@ public:
               sameApplication(candidate.binding.application, *application))
             binding = i;
         if (binding == plan.bindings.size()) {
-          source::OperationBinding declaration{
-              {}, fresh(used, "layout_", next), std::move(*application)};
+          protocol::OperationBinding declaration{fresh(used, "layout_", next),
+                                                 std::move(*application)};
           plan.bindings.push_back({std::move(declaration),
                                    BindingPurpose::Conversion,
                                    {},
@@ -475,7 +475,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
   PhysicalPlan plan;
   plan.input = std::make_shared<InputSnapshot>(
       InputSnapshot{module, structure(module), identities(module),
-                    source::Assignments(selections.begin(), selections.end()),
+                    protocol::Assignments(selections.begin(), selections.end()),
                     linearContractions});
   Proposer proposer(module, catalog, failureLocation);
   if (auto e = proposer.initialize(selections, linearContractions))

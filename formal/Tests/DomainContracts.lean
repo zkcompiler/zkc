@@ -9,11 +9,11 @@ open Bindings
 private def resolve (contract domain : String) (implementation : String := "") (physical := false) :=
   Bindings.resolve physical ⟨"op", contract, [domain], implementation⟩
 
-example : defaultRepresentation "field" ristrettoScalar = "dalek.scalar/1" := by native_decide
-example : defaultRepresentation "vector" fr = "arkworks.fr-vector/1" := by native_decide
-example : defaultRepresentation "vector" ristrettoScalar = "dalek.scalar-vector/1" := by native_decide
+example : defaultRepresentation "field" ristrettoScalar = "dalek.scalar/0" := by native_decide
+example : defaultRepresentation "vector" fr = "arkworks.fr-vector/0" := by native_decide
+example : defaultRepresentation "vector" ristrettoScalar = "dalek.scalar-vector/0" := by native_decide
 example : defaultRepresentation "table" ristrettoScalar = "" := by native_decide
-example : defaultRepresentation "field" koalaBear = "plonky3.koala-bear/1" := by native_decide
+example : defaultRepresentation "field" koalaBear = "plonky3.koala-bear/0" := by native_decide
 example : defaultRepresentation "rng" koalaBear = "" := by native_decide
 example : defaultRepresentation "table" koalaBear = "" := by native_decide
 example : (resolve "vector.dot" koalaBear "plonky3/vector.dot" true).isOk = true := by native_decide
@@ -25,14 +25,14 @@ example : (resolve "poly.product_sum" koalaBear).isOk = false := by native_decid
 example : associatedIdentity koalaBear "Scalar" = .error "binding-associated-identity" := by native_decide
 example : attributes false "field.constant" ["2130706433"] koalaBear =
     .error "noncanonical-field" := by native_decide
-example : (valueType true "vector:ristretto255.scalar@arkworks.fr-vector/1").isOk = false := by native_decide
-example : (valueType true "groups:ristretto255.group@dalek.ristretto-diagonal/1").isOk = true := by native_decide
-example : (valueType true "vector:ristretto255.scalar@dalek.scalar-diagonal/1").isOk = false := by native_decide
+example : (valueType true "vector:ristretto255.scalar@arkworks.fr-vector/0").isOk = false := by native_decide
+example : (valueType true "groups:ristretto255.group@dalek.ristretto-diagonal/0").isOk = true := by native_decide
+example : (valueType true "vector:ristretto255.scalar@dalek.scalar-diagonal/0").isOk = false := by native_decide
 example : associatedIdentity ristrettoGroup "Scalar" = .ok ristrettoScalar := by native_decide
 example : associatedIdentity ristrettoTranscript "ChallengeField" = .ok ristrettoScalar := by native_decide
 example : associatedIdentity ristrettoGroup "PointField" = .error "binding-associated-identity" := by native_decide
-example : StaticSort.codec.accepts "zkcv.vector.ristretto255.scalar/1" = true := by native_decide
-example : StaticSort.codec.accepts "zkcv.vector.ristretto255.scalar/2" = false := by native_decide
+example : StaticSort.codec.accepts "zkcv.vector.ristretto255.scalar/0" = true := by native_decide
+example : StaticSort.codec.accepts "zkcv.vector.uninstalled/0" = false := by native_decide
 example : (resolve "poly.product_sum" ristrettoScalar).isOk = false := by native_decide
 example : (resolve "pcs.check" ristrettoGroup).isOk = false := by native_decide
 example : (resolve "field.inverse" ristrettoScalar "dalek/field.inverse").isOk = true := by native_decide
@@ -44,10 +44,10 @@ example : (resolve "curve.scale_each" ristrettoGroup).map (·.inputs) =
 example : (resolve "curve.vector_scale" ristrettoGroup).map (·.inputs) =
     .ok [.mk "groups" ristrettoGroup, .mk "field" ristrettoScalar] := by native_decide
 example : (resolve "vector.mul" fr "arkworks-diagonal/vector.mul" true).map (·.outputs) =
-    .ok [.mk "vector" fr "arkworks.fr-diagonal/1"] := by native_decide
+    .ok [.mk "vector" fr "arkworks.fr-diagonal/0"] := by native_decide
 example : (resolve "curve.msm" ristrettoGroup "dalek-diagonal/curve.msm" true).map (·.inputs) =
-    .ok [.mk "vector" ristrettoScalar "dalek.scalar-vector/1",
-      .mk "groups" ristrettoGroup "dalek.ristretto-diagonal/1"] := by native_decide
+    .ok [.mk "vector" ristrettoScalar "dalek.scalar-vector/0",
+      .mk "groups" ristrettoGroup "dalek.ristretto-diagonal/0"] := by native_decide
 example : (resolve "curve.msm" g1 "dalek-diagonal/curve.msm" true).isOk = false := by native_decide
 example : (resolve "vector.mul" ristrettoScalar "arkworks-diagonal/vector.mul" true).isOk = false := by native_decide
 example : (Bindings.resolve false ⟨"o", "transcript.observe.vector",
@@ -87,8 +87,8 @@ private def logical : Explicit.Function :=
 private def candidate (body := code) : Explicit.CandidateLocals :=
   ⟨true, [⟨"mul", "vector.mul", [fr], "arkworks-diagonal/vector.mul"⟩,
     ⟨"dot", "vector.dot", [fr], "arkworks-diagonal/vector.dot"⟩],
-    [⟨⟨"Pair", logical.code.arguments.map (fun (n, ty) => (n, ty ++ "@arkworks.fr-vector/1")),
-      [scalarTy ++ "@arkworks.fr/1"], some body⟩, none⟩], .null, .null⟩
+    [⟨⟨"Pair", logical.code.arguments.map (fun (n, ty) => (n, ty ++ "@arkworks.fr-vector/0")),
+      [scalarTy ++ "@arkworks.fr/0"], some body⟩, none⟩], .null, .null⟩
 
 -- Both logical operations, their sites and intermediate correspondence survive.
 example : (Generic.validateClosed logical bindings candidate "Pair").isOk = true := by native_decide
@@ -103,10 +103,10 @@ private def ristrettoBindings : List OperationBinding :=
 private def ristrettoCandidate : Explicit.CandidateLocals :=
   ⟨true, [⟨"mul", "curve.scale_each", [ristrettoGroup], "dalek-diagonal/curve.scale_each"⟩,
     ⟨"dot", "curve.msm", [ristrettoGroup], "dalek-diagonal/curve.msm"⟩],
-    [⟨⟨"GroupPair", [("f", "vector:ristretto255.scalar@dalek.scalar-vector/1"),
-      ("v", "groups:ristretto255.group@dalek.ristretto-vector/1"),
-      ("w", "vector:ristretto255.scalar@dalek.scalar-vector/1")],
-      ["group:ristretto255.group@dalek.ristretto/1"], some code⟩, none⟩], .null, .null⟩
+    [⟨⟨"GroupPair", [("f", "vector:ristretto255.scalar@dalek.scalar-vector/0"),
+      ("v", "groups:ristretto255.group@dalek.ristretto-vector/0"),
+      ("w", "vector:ristretto255.scalar@dalek.scalar-vector/0")],
+      ["group:ristretto255.group@dalek.ristretto/0"], some code⟩, none⟩], .null, .null⟩
 example : (Generic.validateClosed ristrettoLogical ristrettoBindings ristrettoCandidate "GroupPair").isOk = true := by native_decide
 
 private def sharedCode : List Instruction :=
@@ -154,13 +154,13 @@ example : formation [
     .error "invalid-function-body" := by native_decide
 
 private def escaped : Function := { (candidate.functions.headD logical).code with
-  results := [vectorTy ++ "@arkworks.fr-diagonal/1"]
+  results := [vectorTy ++ "@arkworks.fr-diagonal/0"]
   body := some [.op "multiply" "mul" [] ["f", "v"] ["d"], .ret ["d"]] }
 example : PhysicalFormation.check candidate.bindings escaped =
     .error "diagonal-boundary" := by native_decide
 private def borrowed : Function := { (candidate.functions.headD logical).code with
-  arguments := [("w", vectorTy ++ "@arkworks.fr-vector/1"),
-    ("d", vectorTy ++ "@arkworks.fr-diagonal/1")]
+  arguments := [("w", vectorTy ++ "@arkworks.fr-vector/0"),
+    ("d", vectorTy ++ "@arkworks.fr-diagonal/0")]
   body := some [.op "contract" "dot" [] ["w", "d"] ["z"], .ret ["z"]] }
 example : PhysicalFormation.check candidate.bindings borrowed =
     .error "diagonal-boundary" := by native_decide

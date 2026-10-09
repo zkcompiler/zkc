@@ -1,0 +1,17 @@
+module sample;
+domain Fr = field("bls12-381.fr");
+domain G = group("bls12-381.g1");
+
+math fn scaled<H:Group>(point:H, scalar:H::Scalar)->H {
+  return point * scalar + point;
+}
+fn work<H:Group>(point:H, scalar:H::Scalar)->H {
+  return scaled(point, scalar);
+}
+protocol Run<H:Group+Share+Wire> roles(P,V)(point:H@P, scalar:H::Scalar@P)->(result:H@V)
+where Share(H::Scalar), Wire(H::Scalar) {
+  local P let result = work(point, scalar);
+  let received = send P->V(result);
+  return(result=received);
+}
+entry Demo = Run<G>;

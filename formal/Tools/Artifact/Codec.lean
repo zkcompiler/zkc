@@ -116,7 +116,7 @@ def tag (ty : Ty) : Result UInt8 := do
   | "proof" => return 7 | "group" => return 9 | "groups" => return 10
   | _ => throw "nonserializable"
 
-def magic : ByteArray := ByteArray.mk #[90, 75, 67, 86, 1]
+def magic : ByteArray := ByteArray.mk #[90, 75, 67, 86, 0]
 
 def fieldsBytes (values : List Math.Fr) : ByteArray :=
   values.foldl (fun b f => b ++ fieldBytes f) ByteArray.empty
@@ -380,7 +380,7 @@ def decodeWire (ty : Ty) (bytes : ByteArray) : Result Value := do
       if ty == "table" then return .table (← Math.Table.admit n values)
       else return .point values
   | "commitment" | "proof" =>
-      ensure (payload.size ≥ 81 && payload.extract 0 8 == "ZKCAR006".toUTF8) "pcs-header"
+      ensure (payload.size ≥ 81 && payload.extract 0 8 == "ZKCAR000".toUTF8) "pcs-header"
       ensure (payload[8]! == (if ty == "commitment" then 2 else 3)) "pcs-kind"
       let n := valueLE (payload.extract 9 17)
       ensure (0 < n) "pcs-rank"

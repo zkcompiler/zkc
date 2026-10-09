@@ -2,8 +2,8 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Protocol/Admission.h"
-#include "zkc/Source/Codec.h"
+#include "zkc/Program/Admission.h"
+#include "zkc/Program/Codec.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
@@ -81,8 +81,8 @@ int main() {
         "table:koala-bear.ext8-binomial3", "table:bn254.fr", "nonce:bn254.fr",
         "rng:koala-bear"})
     refuse(parseBoundType(spelling, false), "binding-type-identity");
-  source::OperationBinding empty{
-      {}, "empty", {"poly.empty_point", {"bls12-381.fr"}, ""}};
+  protocol::OperationBinding empty{"empty",
+                                   {"poly.empty_point", {"bls12-381.fr"}, ""}};
   auto signature = accept(resolveBinding(empty.application, false));
   require(signature.inputs.empty() &&
               signature.outputs[0].spelling() == "point:bls12-381.fr",
@@ -91,8 +91,8 @@ int main() {
   refuse(resolveBinding(empty.application, false), "binding-static-arity");
   empty.application.arguments = {"bls12-381.g1"};
   refuse(resolveBinding(empty.application, false), "binding-static-identity");
-  source::OperationBinding fold{
-      {}, "fold", {"poly.fold", {"bls12-381.fr"}, "arkworks/poly.fold"}};
+  protocol::OperationBinding fold{
+      "fold", {"poly.fold", {"bls12-381.fr"}, "arkworks/poly.fold"}};
   auto lsb = accept(resolveBinding(fold.application, true));
   fold.application.implementation = "arkworks-msb/poly.fold";
   auto msb = accept(resolveBinding(fold.application, true));
@@ -106,37 +106,30 @@ int main() {
   refuse(resolveBinding(fold.application, true), "binding-implementation");
   fold.application.implementation.clear();
   refuse(resolveBinding(fold.application, true), "binding-stage");
-  source::OperationBinding opening{
-      {}, "open", {"pcs.open", {"multilinear.kzg.bls12-381/1"}, ""}};
-  source::OperationBinding challenge{
-      {}, "draw", {"transcript.challenge", {"merlin3.bls12-381.fr64be/1"}, ""}};
+  protocol::OperationBinding opening{
+      "open", {"pcs.open", {"multilinear.kzg.bls12-381/0"}, ""}};
+  protocol::OperationBinding challenge{"draw",
+                                       {"transcript.native.indexed.challenge",
+                                        {"merlin3.bls12-381.fr64be/0"},
+                                        ""}};
   require(accept(resolveBinding(challenge.application, false))
                   .outputs[0]
                   .identity == "bls12-381.fr",
           "installed Merlin challenge field");
-  challenge.application.arguments = {"sha256.fiat-shamir.bls12-381/1"};
+  challenge.application.arguments = {"sha256.fiat-shamir.bls12-381/0"};
   refuse(resolveBinding(challenge.application, false),
          "binding-static-identity");
-  source::OperationBinding observe{
-      {},
+  protocol::OperationBinding observe{
       "observe",
-      {"transcript.observe.table",
-       {"merlin3.bls12-381.fr64be/1", "bls12-381.fr",
-        "zkcv.table.bls12-381.fr/1"},
+      {"transcript.native.indexed.observe.data",
+       {"merlin3.bls12-381.fr64be/0", "vector:bls12-381.fr"},
        ""}};
-  require(
-      accept(resolveBinding(observe.application, false)).inputs[1].identity ==
-          "bls12-381.fr",
-      "observation selects payload and codec explicitly");
-  observe.application.arguments[2] = "zkcv.point.bls12-381.fr/1";
-  refuse(resolveBinding(observe.application, false), "binding-requirement");
-  for (const auto &op : boundOperationContracts())
-    if (op.name == "transcript.observe.table") {
-      require(op.signature.scope.terms.size() == 3 &&
-                  !op.signature.scope.terms[1].parent &&
-                  op.signature.inputs[1].arguments == std::vector<unsigned>{1},
-              "payload field is independent of the transcript challenge field");
-    }
+  auto observed = accept(resolveBinding(observe.application, false));
+  require(observed.inputs[1].identity == "bls12-381.fr" &&
+              observed.inputs[2].kind == "indices",
+          "typed payload and coordinates");
+  observe.application.arguments[1] = "rng:bls12-381.fr";
+  refuse(resolveBinding(observe.application, false), "native-proof-wire-type");
   auto pcs = accept(resolveBinding(opening.application, false));
   require(pcs.outputs[0].identity == "bls12-381.fr" &&
               pcs.outputs[1].identity == opening.application.arguments[0],
@@ -174,59 +167,51 @@ int main() {
     accept(generic::check(body, boundTypeConstructors(),
                           boundOperationContracts(), boundCapabilityRules()));
   }
-  source::Module module;
+  program::LocalDefinitions module;
   module.bindings.push_back(
-      {{},
-       opening.name,
+      {opening.name,
        {opening.application.contract, opening.application.arguments,
         opening.application.implementation}});
-  auto encoded = source::encode(module);
-  auto decoded = accept(source::decode(encoded));
-  require(source::encode(decoded) == encoded,
-          "binding source-codec round trip");
-  require(!admit(decoded, false), "binding declaration admitted");
   module.bindings.push_back(module.bindings.front());
-  auto duplicate = admit(module, false);
+  auto duplicate = admitNativeLocalDefinitions(module);
   require(bool(duplicate), "duplicate binding refused");
   require(toString(std::move(duplicate)) == "binding-name", "binding-name");
   module.bindings.pop_back();
   module.bindings.front().application.arguments.clear();
-  auto malformed = admit(module, false);
+  auto malformed = admitNativeLocalDefinitions(module);
   require(bool(malformed), "binding arity refused");
   require(toString(std::move(malformed)) == "binding-static-arity",
           "binding-static-arity");
-  const std::string spongefish = "spongefish0.7.4.keccak.bls12-381.fr64be/1";
+  const std::string spongefish = "spongefish0.7.4.keccak.bls12-381.fr64be/0";
   // Explicit policy preserves the selected provider for all installed suites,
   // including suites whose physical state is named host.resource/1.
   for (const auto &[suite, provider] :
-       {std::pair{"merlin3.bls12-381.fr64be/1", "arkworks"},
-        std::pair{"merlin3.ristretto255.scalar64le/1", "dalek"},
-        std::pair{"merlin3.koala-bear.ext8-binomial3.rejection31le/1",
+       {std::pair{"merlin3.bls12-381.fr64be/0", "arkworks"},
+        std::pair{"merlin3.ristretto255.scalar64le/0", "dalek"},
+        std::pair{"merlin3.koala-bear.ext8-binomial3.rejection31le/0",
                   "plonky3"},
-        std::pair{"spongefish0.7.4.keccak.bls12-381.fr64be/1", "spongefish"}}) {
-    BindingApplication application{"transcript.challenge", {suite}, ""};
+        std::pair{"spongefish0.7.4.keccak.bls12-381.fr64be/0", "spongefish"}}) {
+    BindingApplication application{
+        "transcript.native.indexed.challenge", {suite}, ""};
     const std::string implementation =
-        std::string(provider) + "/transcript.challenge";
+        std::string(provider) + "/transcript.native.indexed.challenge";
     require(accept(defaultImplementation(application)) == implementation,
             "nominal transcript policy preserves the selected provider");
     application.implementation = implementation;
     accept(resolveBinding(application, true));
   }
   // Policy never installs an arbitrary operation on the selected provider.
-  source::OperationBinding unsupported{
-      {},
-      "unsupported",
-      {"field.add", {"bls12-381.fr"}, "spongefish/field.add"}};
+  protocol::OperationBinding unsupported{
+      "unsupported", {"field.add", {"bls12-381.fr"}, "spongefish/field.add"}};
   refuse(resolveBinding(unsupported.application, true),
          "binding-implementation");
   require(associatedIdentity(spongefish, "ChallengeField") == "bls12-381.fr",
           "second-suite-associated-field");
-  for (const auto &contract :
-       {"transcript.challenge", "transcript.observe.field"}) {
-    source::OperationBinding b{{}, "second", {contract, {spongefish}, ""}};
-    if (StringRef(contract).ends_with("field")) {
-      b.application.arguments.push_back("bls12-381.fr");
-      b.application.arguments.push_back("zkcv.field.bls12-381.fr/1");
+  for (const auto &contract : {"transcript.native.indexed.challenge",
+                               "transcript.native.indexed.observe.data"}) {
+    protocol::OperationBinding b{"second", {contract, {spongefish}, ""}};
+    if (StringRef(contract).ends_with("data")) {
+      b.application.arguments.push_back("field:bls12-381.fr");
     }
     require(accept(defaultImplementation(b.application)) ==
                 "spongefish/" + b.application.contract,
@@ -237,11 +222,10 @@ int main() {
             "second-suite-nominal-state");
     b.application.implementation = "arkworks/" + b.application.contract;
     refuse(resolveBinding(b.application, true), "binding-implementation");
-    if (b.application.arguments.size() == 3) {
+    if (b.application.arguments.size() == 2) {
       b.application.implementation = "spongefish/" + b.application.contract;
-      b.application.arguments[1] = "ristretto255.scalar";
-      b.application.arguments[2] = "zkcv.field.ristretto255.scalar/1";
-      refuse(resolveBinding(b.application, true), "binding-implementation");
+      b.application.arguments[1] = "rng:bls12-381.fr";
+      refuse(resolveBinding(b.application, true), "native-proof-wire-type");
     }
   }
 }

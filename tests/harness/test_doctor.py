@@ -40,9 +40,17 @@ def test_configure_and_doctor_refuse_missing_selection(variable, value, monkeypa
         monkeypatch.setenv(variable, value)
     for arguments in (["scripts/develop.py", "configure"], ["scripts/doctor.py", "--json"]):
         result = subprocess.run([sys.executable, str(ROOT / arguments[0]), *arguments[1:]],
-                                capture_output=True, text=True, timeout=10)
+                                capture_output=True, text=True, timeout=60)
         assert result.returncode > 0
-        assert "requires explicit" in result.stderr and variable in result.stderr
+        if arguments[0].endswith("doctor.py"):
+            report = json.loads(result.stdout)
+            assert report["status"] == "fail"
+            errors = " ".join(record.get("error", "") for record in report["tools"])
+            assert "requires explicit" in errors and variable in errors
+            assert any(record["tool"] == "python" for record in report["tools"])
+            assert not result.stderr
+        else:
+            assert "requires explicit" in result.stderr and variable in result.stderr
         assert "+ cmake" not in result.stdout
 
 
@@ -185,3 +193,28 @@ def test_python_environment_is_checked_against_the_lock(state, monkeypatch, tmp_
     assert record["status"] == "pass"
     assert calls == ([] if state == "absent" else [["uv", "sync", "--locked", "--check", "--offline"]])
     assert ("note" in record) == (state != "current")
+
+
+@pytest.mark.parametrize("variable,field", [("ZKC_NATIVE_BIN", "native"), ("ZKC_REPORTS_DIR", "reports")])
+def test_doctor_keeps_json_when_output_configuration_is_empty(variable, field, monkeypatch, native_config):
+    monkeypatch.setenv(variable, "")
+    result = subprocess.run([sys.executable, str(ROOT / "scripts/doctor.py"), "--json"],
+                            capture_output=True, text=True, timeout=60)
+    assert result.returncode == 1 and not result.stderr
+    report = json.loads(result.stdout)
+    assert report["status"] == "fail"
+    assert any(r["tool"] == "python" and r["status"] == "pass" for r in report["tools"])
+    summary = report["workspace"]
+    assert (summary["reports"] if field == "reports" else summary["outputs"][field]) is None
+
+
+def test_package_metadata_read_error_is_a_diagnostic(monkeypatch, tmp_path):
+    doctor = load("doctor", "scripts/doctor.py")
+    (tmp_path / "MLIRConfigVersion.cmake").write_text('set(PACKAGE_VERSION "23.1.2")\n')
+
+    def denied(*args, **kwargs):
+        raise PermissionError("unreadable package metadata")
+
+    monkeypatch.setattr(Path, "read_text", denied)
+    record = doctor.package_version("MLIR", tmp_path, "23.1.2")
+    assert record["status"] == "fail" and "unreadable package metadata" in record["error"]

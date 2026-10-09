@@ -9,7 +9,7 @@ namespace TableProtocol.Endpoint
 open Lean Zkc.Source Zkc.Compiler PhaseAdmission Protocol
 
 abbrev Phase := Admission.Phase
-def profile : String := "table-endpoint/1"
+def profile : String := "table-endpoint/0"
 def role : String := "prover"
 def primitiveOwner (_ : Call) : String := role
 structure Entry where

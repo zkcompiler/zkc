@@ -10,97 +10,10 @@
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
-#include "llvm/ADT/StringSwitch.h"
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
 namespace {
-std::optional<NativeTypePolicy> policy(const protocol::BoundType &type,
-                                       unsigned depth, unsigned &remaining,
-                                       bool &limited, bool &copy) {
-  if (!remaining || depth > 64) {
-    limited = true;
-    return std::nullopt;
-  }
-  --remaining;
-  StringRef kind = type.kind;
-  bool total = kind == "bool" || kind == "field" || kind == "group" ||
-               kind == "field_array" || kind == "index" || kind == "indices" ||
-               kind == "vector" || kind == "matrix" || kind == "groups";
-  bool shared =
-      total ||
-      llvm::StringSwitch<bool>(kind)
-          .Cases({"index", "indices", "vector", "matrix"}, true)
-          .Cases({"polynomial", "table", "point", "round"}, true)
-          .Cases({"groups", "commitment", "commitments", "proof"}, true)
-          .Default(false);
-  bool local = llvm::StringSwitch<bool>(kind)
-                   .Cases({"opening_states", "prover_key", "verifier_key",
-                           "opening_state"},
-                          true)
-                   .Cases({"rng", "nonce", "transcript", "resource_unit"}, true)
-                   .Cases({"fixed_vector", "variant"}, true)
-                   .Default(false);
-  if (!shared && !local && kind != "sequence")
-    return std::nullopt;
-  // Accumulate custody and boundary facts once per child. Do not stringify
-  // and reparse every subtree through the generic custody helpers.
-  bool childrenCopy = true, childrenTotal = true, childrenShared = true,
-       protocolPort = true;
-  auto include = [&](const protocol::BoundType &child) {
-    bool childCopy = false;
-    auto facts = policy(child, depth + 1, remaining, limited, childCopy);
-    if (!facts)
-      return false;
-    childrenCopy &= childCopy;
-    childrenTotal &= facts->total;
-    childrenShared &= facts->shared;
-    protocolPort &= facts->protocolPort;
-    return true;
-  };
-  for (const auto &argument : type.arguments)
-    if (argument.kind == protocol::TypeArgument::Kind::Type &&
-        !include(*argument.type))
-      return std::nullopt;
-  if (kind == "sequence") {
-    copy = childrenCopy;
-    return NativeTypePolicy{copy && childrenTotal, copy && childrenShared,
-                            !copy, copy && protocolPort,
-                            protocol::nativeMessageData(type)};
-  }
-  if (kind == "variant") {
-    auto descriptor = protocol::decodeVariant(type.spelling());
-    if (!descriptor)
-      return std::nullopt;
-    for (const auto &arm : descriptor->alternatives)
-      for (const auto &leaf : arm.payload) {
-        auto parsed = protocol::parseBoundType(leaf, false);
-        if (!parsed) {
-          consumeError(parsed.takeError());
-          return std::nullopt;
-        }
-        if (!include(*parsed))
-          return std::nullopt;
-      }
-    copy = childrenCopy;
-    return NativeTypePolicy{copy && childrenTotal, copy && childrenShared,
-                            !copy, copy && protocolPort,
-                            protocol::nativeMessageData(type)};
-  }
-  const auto *permissions = protocol::typePermissions(kind);
-  if (!permissions)
-    return std::nullopt;
-  copy = permissions->copy && childrenCopy;
-  bool affine =
-      permissions->custody == protocol::Custody::Affine || !childrenCopy;
-  // A structural application does not inherit its nominal head's wire codec.
-  bool wire = shared && type.arguments.empty() &&
-              permissions->custody == protocol::Custody::PublicValue &&
-              !protocol::defaultCodec(type).empty();
-  if (kind == "field_array")
-    wire = protocol::nativeFieldArrayWire(type);
-  return NativeTypePolicy{total, shared, affine, protocolPort, wire};
-}
 LogicalResult refuse(Operation *op, StringRef detail) {
   return diagnostics::emit(op->emitOpError(), "native-local-policy", detail);
 }
@@ -113,10 +26,7 @@ std::optional<NativeTypePolicy> nativeTypePolicy(Type type) {
     consumeError(logical.takeError());
     return std::nullopt;
   }
-  unsigned remaining = 200000;
-  bool limited = false;
-  bool copy = false;
-  return policy(*logical, 0, remaining, limited, copy);
+  return protocol::nativeTypePolicy(*logical);
 }
 std::optional<NativeTypePolicy> NativeTypePolicies::get(Type type) {
   if (isa<poly::PolynomialType>(type))
@@ -137,8 +47,7 @@ std::optional<NativeTypePolicy> NativeTypePolicies::get(Type type) {
     limited = true;
   else {
     remainingBytes -= bytes;
-    bool copy = false;
-    result = policy(*logical, 0, remaining, limited, copy);
+    result = protocol::nativeTypePolicy(*logical, remaining, limited);
   }
   if (limited)
     (void)diagnostics::emit(owner->emitOpError(), "native-type-policy-limit",
@@ -266,7 +175,7 @@ LogicalResult verifyNativeExecution(Operation *unit,
         if (physical && algebra::isFieldArray(logical(type))) {
           auto selected = cast<plan::DataType>(type);
           representation =
-              selected.getRepresentation() == "arkworks.field-array/1";
+              selected.getRepresentation() == "arkworks.field-array/0";
         }
         if (!policy || !policy->wire || !representation) {
           (void)refuse(op, "unsupported native wire type");

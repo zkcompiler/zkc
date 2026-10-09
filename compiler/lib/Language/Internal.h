@@ -1,0 +1,213 @@
+#ifndef ZKC_LANGUAGE_INTERNAL_H
+#define ZKC_LANGUAGE_INTERNAL_H
+
+#include "State.h"
+#include "llvm/ADT/StringMap.h"
+#include "llvm/Support/JSON.h"
+#include <map>
+#include <set>
+
+namespace zkc::language {
+class Layouts;
+}
+namespace zkc::language::detail {
+struct SyntaxType {
+  enum class Kind {
+    Name,
+    Builtin,
+    Formal,
+    Natural,
+    Add,
+    Multiply,
+    PowerOfTwo,
+    Array,
+    Tuple
+  } kind = Kind::Name;
+  std::string name;
+  Span span;
+  // Parser-maintained height also bounds left-associated syntax and its
+  // cleanup.
+  unsigned height = 1;
+  std::vector<SyntaxType> arguments;
+};
+struct SyntaxSelector {
+  bool output = false;
+  std::string port;
+  std::vector<std::string> path;
+  std::optional<std::string> role;
+  Span span;
+};
+struct SyntaxPort {
+  std::string name;
+  SyntaxType type;
+  std::vector<std::string> roles;
+  Span span;
+  bool isPublic = true;
+  std::optional<RelationPurpose> purpose;
+  std::optional<SyntaxSelector> binding;
+};
+struct SyntaxParameter {
+  std::string name;
+  SyntaxType constraint;
+  Permissions permissions;
+  Span span;
+};
+struct SyntaxRequirement {
+  std::string permission, capability;
+  std::vector<SyntaxType> arguments;
+  SyntaxType lhs, rhs;
+  Span span;
+};
+struct Expression {
+  enum class Kind {
+    Name,
+    Decimal,
+    Boolean,
+    Call,
+    Kernel,
+    Intrinsic,
+    Apply,
+    MethodCall,
+    Repeat,
+    FinishIf,
+    Add,
+    Subtract,
+    Multiply,
+    Equal,
+    Tuple,
+    Array,
+    Record,
+    Projection,
+    If,
+    Match,
+    For
+  } kind;
+  std::string text;
+  std::vector<uint32_t> children;
+  bool bracket = false;
+  Span span;
+  std::vector<SyntaxType> arguments;
+  std::vector<std::string> labels;
+  std::vector<std::string> captures;
+  std::vector<std::string> services;
+  std::vector<std::optional<std::vector<std::string>>> carriedRoles;
+  std::optional<std::vector<std::string>> roles;
+  std::vector<uint32_t> regions;
+  std::vector<std::vector<std::string>> payloads;
+};
+struct Statement {
+  enum class Kind {
+    Let,
+    Drop,
+    Consume,
+    Require,
+    Alias,
+    Guard
+  } kind = Kind::Let;
+  std::string name;
+  std::optional<std::vector<std::string>> resultNames;
+  std::optional<SyntaxType> type;
+  std::optional<std::vector<std::string>> roles;
+  std::optional<std::pair<std::string, std::string>> exchange;
+  std::optional<std::string> owner;
+  uint32_t expression;
+  Span span;
+};
+struct SyntaxBody {
+  std::vector<Statement> statements;
+  std::vector<std::pair<std::string, uint32_t>> results;
+  bool stopped = false;
+  std::string stopReason;
+  Span span;
+};
+struct SyntaxAlternative {
+  std::string name;
+  std::vector<SyntaxPort> fields;
+  Span span;
+};
+struct SyntaxSubject {
+  std::optional<unsigned> inlineMember;
+  SyntaxType relation;
+  std::vector<SyntaxSelector> operands;
+  Span span;
+};
+struct SyntaxClause {
+  SpecificationClause::Kind kind;
+  std::string name;
+  SyntaxSubject subject;
+  std::optional<SyntaxSubject> residual;
+  std::optional<SyntaxSelector> decision;
+  Span span;
+};
+struct SyntaxRelation {
+  RelationDefinition::Kind kind = RelationDefinition::Kind::Formula;
+  std::string externalKind, key, revision, asset;
+};
+struct SyntaxName {
+  std::string name;
+  Span span;
+};
+struct SyntaxSetupSlot {
+  SyntaxName name;
+  std::vector<SyntaxSelector> inputs;
+  Span span;
+};
+struct SyntaxProofEntry {
+  SyntaxName prover, verifier;
+  std::vector<SyntaxName> publicInputs;
+  SyntaxSelector acceptance;
+  std::optional<SyntaxSelector> completion;
+  std::optional<SyntaxName> target, service;
+  ProofEntry::Construction construction = ProofEntry::Construction::Authored;
+  std::string suite;
+  Span span;
+};
+struct SyntaxDeclaration {
+  Declaration::Kind kind;
+  std::string name, domain, target;
+  bool isPublic = false;
+  bool completes = false;
+  Span span;
+  std::vector<std::string> roles;
+  std::vector<SyntaxPort> inputs, outputs, services;
+  std::vector<Expression> expressions;
+  // Root body is kept in the first slot; nested bodies use stable indices.
+  std::vector<SyntaxBody> bodies;
+  std::vector<SyntaxParameter> parameters;
+  std::vector<SyntaxRequirement> requirements;
+  std::optional<Permissions> permissions;
+  std::optional<Effects> effects;
+  std::optional<SyntaxType> definition;
+  std::vector<SyntaxType> targetArguments;
+  std::vector<SyntaxPort> fields;
+  std::vector<SyntaxAlternative> alternatives;
+  std::vector<SyntaxDeclaration> members;
+  bool abstract = false;
+  std::string associatedSort;
+  std::optional<SyntaxRelation> relation;
+  bool anonymous = false;
+  std::optional<Span> specificationBlock;
+  std::vector<SyntaxClause> specifications;
+  std::optional<SyntaxProofEntry> proof;
+  std::vector<SyntaxSetupSlot> setups;
+  bool entryBlock = false;
+};
+struct Import {
+  std::string module;
+  std::vector<std::string> names;
+  Span span;
+};
+struct SyntaxModule {
+  ModuleId id;
+  std::vector<Import> imports;
+  std::vector<SyntaxDeclaration> declarations;
+};
+llvm::Error lex(const SourceBuffer &, ModuleId, Work &, std::vector<Token> &);
+llvm::Expected<SyntaxModule> parse(const SourceBuffer &, ModuleId,
+                                   llvm::ArrayRef<Token>, Work &);
+llvm::Error check(std::vector<SyntaxModule>, CheckedStorage &, Work &);
+llvm::Error checkSetups(const ClosedEntry &, Layouts &, Work &);
+llvm::Error checkCapabilityInstallation();
+} // namespace zkc::language::detail
+
+#endif

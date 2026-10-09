@@ -9,7 +9,7 @@
 // This client constructs SSA directly and links no frontend or translation.
 int main() {
   mlir::DialectRegistry registry;
-  zkc::registerNativeDialects(registry);
+  zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
   mlir::OpBuilder builder(&context);
@@ -58,9 +58,7 @@ int main() {
   // Passes publish a new body in the builtin module; reacquire its unit.
   auto scope = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
       module->getBody()->front());
-  if (scope.getProfile() != zkc::protocol_ir::Profile::Physical ||
-      scope.getExecutionContract() !=
-          zkc::protocol_ir::ExecutionContract::Program)
+  if (scope.getProfile() != zkc::protocol_ir::Profile::Physical)
     return 2;
   unsigned literals = 0;
   module->walk([&](zkc::plan::BoolConstantOp) { ++literals; });

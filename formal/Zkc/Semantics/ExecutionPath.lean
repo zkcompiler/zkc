@@ -72,7 +72,7 @@ variable {I : Signature} {S E A : Type}
 /-- A public all-reply bound limits actual invocations, including the call that
     stops. The count is independent of the number of events emitted by a call
     and does not measure the handler's internal work. See
-    docs/spec/core/execution.md, "the bound counts reached handler
+    formal/docs/spec/core/execution.md, "the bound counts reached handler
     invocations, including the stopping invocation". -/
 theorem calls_bounded (P : Interaction I) (h : Handler I S E) (p : Proc I A)
     (n : Nat) (phase : P.Phase) (s : S) (bounded : Within n p) :

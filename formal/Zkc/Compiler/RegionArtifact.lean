@@ -10,7 +10,7 @@ set_option autoImplicit false
 namespace Zkc.Compiler.RegionArtifact
 open Lean Source Source.Format
 
-def semanticsVersion : String := "region-source-1"
+def semanticsVersion : String := "region-source-0"
 
 structure Request (Ty Op : Type) where
   context : CompilationContext Ty

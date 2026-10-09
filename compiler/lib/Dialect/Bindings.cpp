@@ -112,7 +112,7 @@ Expected<BoundType> encodeBoundType(Type type, bool physical) {
   return checked;
 }
 
-Expected<source::OperationBinding> readBinding(Operation *op) {
+Expected<protocol::OperationBinding> readBinding(Operation *op) {
   auto declaration = dyn_cast_or_null<zkc::local::OperationBindingOp>(op);
   if (!declaration ||
       !isa_and_nonnull<zkc::protocol_ir::ProtocolModuleOp>(op->getParentOp()))
@@ -123,7 +123,7 @@ Expected<source::OperationBinding> readBinding(Operation *op) {
   auto arguments = declaration.getArgumentsAttr();
   if (!name || !contract || !implementation || !arguments)
     return error("binding-declaration");
-  source::Names values;
+  std::vector<std::string> values;
   for (auto arg : arguments) {
     auto value = dyn_cast<StringAttr>(arg);
     if (!value)
@@ -133,18 +133,17 @@ Expected<source::OperationBinding> readBinding(Operation *op) {
   auto root = cast<zkc::protocol_ir::ProtocolModuleOp>(op->getParentOp());
   bool physical = root.getProfileAttr() &&
                   root.getProfile() == zkc::protocol_ir::Profile::Physical;
-  source::OperationBinding binding{{},
-                                   name.getValue().str(),
-                                   {contract.getValue().str(),
-                                    std::move(values),
-                                    implementation.getValue().str()}};
+  protocol::OperationBinding binding{name.getValue().str(),
+                                     {contract.getValue().str(),
+                                      std::move(values),
+                                      implementation.getValue().str()}};
   if (auto e =
           checkBindingDeclaration(binding.name, binding.application, physical))
     return e;
   return binding;
 }
 
-Expected<source::OperationBinding> operationBinding(Operation *user) {
+Expected<protocol::OperationBinding> operationBinding(Operation *user) {
   auto root = user->getParentOfType<zkc::protocol_ir::ProtocolModuleOp>();
   auto reference = user->getAttrOfType<FlatSymbolRefAttr>("binding");
   if (!root || !reference)
@@ -187,7 +186,7 @@ LogicalResult verifyBoundOperation(Operation *op, bool physical) {
   auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
   if (!parameters)
     return diagnostics::emit(op->emitOpError(), "binding-parameters");
-  source::Names values;
+  std::vector<std::string> values;
   for (auto p : parameters) {
     auto value = dyn_cast<StringAttr>(p);
     if (!value)

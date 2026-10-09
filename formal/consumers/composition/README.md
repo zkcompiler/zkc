@@ -69,7 +69,7 @@ axiom cones and records input/build hashes. Its source manifest includes
 maintained files beyond the consumer's transitive imports; reported counts apply
 to the tested checkout.
 
-The [workflow](../../../.github/workflows/ci.yml)'s manual `main` scope runs this
+The [workflow](../../../.github/workflows/ci.yml)'s manual `optional` formal-checks scope runs this
 check and retains its JSON/log outputs.
 
 The `Examples/OpeningReduction` modules in the maintained source tree are not
@@ -78,4 +78,4 @@ imported or audited as owned declarations by this consumer.
 Field/limb adequacy, a real-ISA state/observation map, cryptographic PCS soundness
 and native layout correspondence remain separate obligations. The accumulator
 fixture is a witness for this model, not a verified RISC-V program. See the
-[formal questions](../../design/formal-questions.md) for extension boundaries.
+[formal questions](../../docs/native-connection.md) for extension boundaries.

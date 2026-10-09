@@ -88,7 +88,7 @@ def primitive (_source : Source) (name : String) (arguments attrs : List String)
       let records ← checked (keys.mapM fun (name, value) => do
         let [.str ty, wire] ← Decode.array (← value.jsonFor) | throw "primitive-key-record"
         return Json.arr #[.str name, .str ty, wire])
-      pure (Json.arr #[.str "zkc.public-primitive/1", .arr records.toArray,
+      pure (Json.arr #[.str "zkc.public-primitive/0", .arr records.toArray,
         .str name, .arr (arguments.map Json.str).toArray,
         .arr (attrs.map Json.str).toArray, .arr values.toArray])
   match ← checked (Decode.array (← oracle request)) with

@@ -12,7 +12,7 @@ fixtures = Path(__file__).parent / "fixtures/mathematical"
 manifest = []
 for family, suite, service, public, roles, draws in [
     ("qap-composition", "", "", ["0", "1", "3", "4", "5", "6"], ["P", "V"], []),
-    ("air-composition", "merlin3.koala-bear.ext8-binomial3.rejection31le/1", "6", ["1", "2", "3", "4", "5"], ["P", "V"], [["draw", "challenge"]]),
+    ("air-composition", "merlin3.koala-bear.ext8-binomial3.rejection31le/0", "6", ["1", "2", "3", "4", "5"], ["P", "V"], [["draw", "challenge"]]),
     ("target-accumulation", "", "", ["0", "1", "2", "3"], ["P", "V"], []),
 ]:
     for suffix, options in [
@@ -24,7 +24,7 @@ for family, suite, service, public, roles, draws in [
         with case(name):
             source = fixtures / (family + ".mlir")
             p = [
-                "zkc.native-proof-policy/4",
+                "zkc.native-proof-policy/0",
                 "main",
                 *roles,
                 "0",

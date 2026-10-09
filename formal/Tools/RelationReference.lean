@@ -133,7 +133,7 @@ structure Decoded where
 Strict sparse admission rejects duplicate, unsorted and zero entries. -/
 def decode (json : Json) : Result Decoded := do
   let record ← array json "relation-format"
-  if record.size != 6 || record[0]! != .str "zkc.relation.r1cs/1" then
+  if record.size != 6 || record[0]! != .str "zkc.relation.r1cs/0" then
     throw "relation-format"
   let .str field := record[1]! | throw "relation-format"
   let domain ← Domain.parse field |>.mapError (fun _ => "relation-field")
@@ -168,7 +168,7 @@ def encode (relation : Decoded) : Json :=
   let form := fun (entries : Sparse.Row (Scalar relation.domain) relation.columns) =>
     Json.arr (entries.toArray.map fun (column, value) =>
       .arr #[.str (toString column.val), scalarJson value])
-  .arr #[.str "zkc.relation.r1cs/1", .str relation.domain.identity,
+  .arr #[.str "zkc.relation.r1cs/0", .str relation.domain.identity,
     .str (toString relation.columns), .str (toString relation.outputs),
     .str (toString relation.inputs), .arr (Array.ofFn fun i : Fin relation.rows =>
       .arr #[form relation.system.A.rows[i], form relation.system.B.rows[i],

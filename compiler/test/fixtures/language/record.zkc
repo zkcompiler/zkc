@@ -1,0 +1,4 @@
+module sample; domain Fr=field("bls12-381.fr");
+struct Pair<T:Type+Copy+Drop>{pub left:T,pub right:T}
+math fn swap<F:Field>(p:Pair<F>)->Pair<F>{return Pair<F>{left:p.right,right:p.left};}
+protocol Run roles(P,V)(p:Pair<Fr>@P)->(r:Pair<Fr>@V){let a=swap(p);let b=send P->V(a);return(r=b);} entry Demo=Run;

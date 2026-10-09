@@ -12,8 +12,8 @@ def Domain.identity : Domain → String
   | .base => Bindings.rowBase | .extension => Bindings.rowExtension
 def Domain.width : Domain → Nat | .base => 4 | .extension => 32
 def Domain.codec : Domain → String
-  | .base => "koala-bear.canonical-u32le/1"
-  | .extension => "koala-bear.ext8-binomial3.ascending-u32le/1"
+  | .base => "koala-bear.canonical-u32le/0"
+  | .extension => "koala-bear.ext8-binomial3.ascending-u32le/0"
 def Domain.parse (s : String) : Result Domain :=
   if s == Bindings.rowBase then .ok .base
   else if s == Bindings.rowExtension then .ok .extension
@@ -23,13 +23,13 @@ private def little (width n : Nat) : ByteArray :=
   ByteArray.mk ((List.range width).map (fun i => UInt8.ofNat (n / 256^i % 256))).toArray
 private def natural (bytes : ByteArray) : Nat := bytes.toList.foldr (fun b n => b.toNat+256*n) 0
 private def zero : ByteArray := ByteArray.mk (Array.replicate 32 0)
-private def magic : ByteArray := ByteArray.mk #[90,75,67,86,1]
+private def magic : ByteArray := ByteArray.mk #[90,75,67,86,0]
 
 def leaf (domain : Domain) (width height : Nat) (row : ByteArray) : ByteArray :=
-  Tools.Crypto.Keccak.hash ("zkc.oracle.keccak256.leaf/1".toUTF8 ++ ByteArray.mk #[0] ++
+  Tools.Crypto.Keccak.hash ("zkc.oracle.keccak256.leaf/0".toUTF8 ++ ByteArray.mk #[0] ++
     little 8 domain.codec.utf8ByteSize ++ domain.codec.toUTF8 ++ little 8 width ++ little 8 height ++ row)
 def node (left right : ByteArray) : ByteArray :=
-  Tools.Crypto.Keccak.hash ("zkc.oracle.keccak256.node/1".toUTF8 ++ ByteArray.mk #[0] ++ left ++ right)
+  Tools.Crypto.Keccak.hash ("zkc.oracle.keccak256.node/0".toUTF8 ++ ByteArray.mk #[0] ++ left ++ right)
 def depth (height : Nat) : Nat := if height ≤ 1 then 0 else (height-1).log2+1
 
 structure State where

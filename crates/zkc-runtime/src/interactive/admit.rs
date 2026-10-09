@@ -1,6 +1,4 @@
-use super::{
-    ArtifactFormat, PhysicalType, Representation, SourceMap, backend::Backend, decode, model::*,
-};
+use super::{PhysicalType, Representation, backend::Backend, decode, model::*};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -11,63 +9,24 @@ fn err(code: ErrorCode, detail: impl Into<String>) -> AdmissionError {
     AdmissionError::new(code, detail)
 }
 
-/// Installed source checker owned by the compiler integration. It must check
-/// actual source formation and the actual candidate's projection/lowering, including
-/// parameters and action cuts. Digest equality alone does not implement this contract.
-pub trait Correspondence {
-    fn check(&self, source: &[u8], physical_candidate: &[u8], format: ArtifactFormat)
-    -> Result<()>;
-
-    /// Current source correspondence requires complete source coordinate maps.
-    /// Missing maps are refused even if a checker reports a positive verdict.
-    fn check_with_mapping(
-        &self,
-        source: &[u8],
-        candidate: &[u8],
-        format: ArtifactFormat,
-    ) -> Result<Option<SourceMap>>;
-}
-
 /// Immutable custody of exactly the checked bytes and derived typed program.
 #[derive(Clone, Debug)]
 pub struct Admitted {
     pub(crate) program: Arc<Program>,
     bytes: Arc<[u8]>,
-    source: Option<Arc<[u8]>>,
-    source_map: Option<Arc<SourceMap>>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EntryRole {
     pub role: String,
     pub participant: String,
     pub instance: String,
-    pub parameters: BTreeMap<String, u64>,
     pub inputs: Vec<(String, PhysicalType)>,
     pub outputs: Vec<PhysicalType>,
     pub services: Vec<super::ServicePort>,
 }
-/// Static receiving port in the admitted participant graph. A loop or repeated
-/// call may visit it many times; those dynamic origins remain in each envelope.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ReceivePort {
-    pub instance: String,
-    pub role: String,
-    pub site: String,
-    pub schema: String,
-    pub ty: PhysicalType,
-}
 impl Admitted {
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
-    }
-    pub fn checked_source(&self) -> Option<&[u8]> {
-        self.source.as_deref()
-    }
-    pub fn source_map(&self) -> Option<&SourceMap> {
-        self.source_map.as_deref()
-    }
-    pub fn format(&self) -> ArtifactFormat {
-        self.program.format
     }
     pub fn entry_names(&self) -> impl Iterator<Item = &str> {
         self.program.entries.keys().map(String::as_str)
@@ -82,7 +41,6 @@ impl Admitted {
                         role: role.clone(),
                         participant: symbol.clone(),
                         instance: p.instance.clone(),
-                        parameters: p.parameters.clone(),
                         inputs: p.inputs.clone(),
                         outputs: p.outputs.clone(),
                         services: p.services.clone(),
@@ -97,141 +55,10 @@ impl Admitted {
     pub fn requires_boolean_literals(&self) -> bool {
         requires_boolean_literals(&self.program)
     }
-
-    /// Bound kernel implementations and the actual roles that may reach them from
-    /// this entry. Traverses admitted participant calls and local functions,
-    /// excluding fixed zero-trip loop bodies without unrolling other loops.
-    /// Conservative after guards/stops: does not assume a prefix will fail.
-    /// Names carry no publicness claim; hosts interpret installed contracts.
-    pub fn executable_implementation_roles(
-        &self,
-        entry: &str,
-    ) -> Option<BTreeMap<String, BTreeSet<String>>> {
-        // A local body is scanned once, even when thousands of cuts call it.
-        let function_uses: BTreeMap<_, BTreeSet<_>> = self
-            .program
-            .functions
-            .iter()
-            .map(|(name, function)| {
-                let implementations = LocalInstruction::walk(&function.body)
-                    .into_iter()
-                    .filter_map(|op| {
-                        if let LocalInstruction::Op { binding, .. } = op {
-                            Some(binding.implementation())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                (name, implementations)
-            })
-            .collect();
-        let mut used_functions = BTreeSet::new();
-        let mut pending = self
-            .program
-            .entries
-            .get(entry)?
-            .values()
-            .collect::<Vec<_>>();
-        let mut visited = BTreeSet::new();
-        let mut uses: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-        while let Some(symbol) = pending.pop() {
-            if !visited.insert(symbol) {
-                continue;
-            }
-            let participant = &self.program.participants[symbol];
-            for family in participant.families.values() {
-                let selector = &family.selectors[&participant.role];
-                if used_functions.insert((&selector.function, &participant.role)) {
-                    for implementation in &function_uses[&selector.function] {
-                        uses.entry((*implementation).to_owned())
-                            .or_default()
-                            .insert(participant.role.clone());
-                    }
-                }
-            }
-            let mut bodies = vec![participant.body.as_ref()];
-            while let Some(body) = bodies.pop() {
-                for instruction in body {
-                    match instruction {
-                        Instruction::Local { function, .. } => {
-                            if used_functions.insert((function, &participant.role)) {
-                                for implementation in &function_uses[function] {
-                                    uses.entry((*implementation).to_owned())
-                                        .or_default()
-                                        .insert(participant.role.clone());
-                                }
-                            }
-                        }
-                        Instruction::Call { participant, .. } => pending.push(participant),
-                        Instruction::Loop { count, body, .. } if count.may_run() => {
-                            bodies.push(body)
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-        Some(uses)
-    }
-
-    /// All statically reachable receiving ports, without unrolling public loops.
-    /// Includes zero-trip loop bodies so policy remains stable across parameters.
-    pub fn receive_ports(&self, entry: &str) -> Option<Vec<ReceivePort>> {
-        self.collect_receive_ports(entry, true)
-    }
-
-    /// Receiving ports reachable under this artifact's fixed public loop counts.
-    /// No loop is unrolled; zero-trip bodies and their exclusively dead callees
-    /// are excluded. Useful for execution-specific application setup policies.
-    pub fn executable_receive_ports(&self, entry: &str) -> Option<Vec<ReceivePort>> {
-        self.collect_receive_ports(entry, false)
-    }
-
-    fn collect_receive_ports(&self, entry: &str, include_zero: bool) -> Option<Vec<ReceivePort>> {
-        let mut pending = self
-            .program
-            .entries
-            .get(entry)?
-            .values()
-            .collect::<Vec<_>>();
-        let mut visited = BTreeSet::new();
-        let mut ports = Vec::new();
-        while let Some(symbol) = pending.pop() {
-            if !visited.insert(symbol) {
-                continue;
-            }
-            let participant = &self.program.participants[symbol];
-            let mut bodies = vec![participant.body.as_ref()];
-            while let Some(body) = bodies.pop() {
-                for instruction in body {
-                    match instruction {
-                        Instruction::Receive {
-                            site, schema, ty, ..
-                        } => ports.push(ReceivePort {
-                            instance: participant.instance.clone(),
-                            role: participant.role.clone(),
-                            site: site.clone(),
-                            schema: schema.clone(),
-                            ty: ty.clone(),
-                        }),
-                        Instruction::Loop { body, count, .. }
-                            if include_zero || count.may_run() =>
-                        {
-                            bodies.push(body);
-                        }
-                        Instruction::Call { participant, .. } => pending.push(participant),
-                        _ => {}
-                    }
-                }
-            }
-        }
-        Some(ports)
-    }
 }
 
-/// Admit an independently supplied participant. This asserts executable structure
-/// and installed contracts, with NO assertion that it came from a common source.
+/// Admit an independently supplied native program by checking its executable
+/// structure and installed contracts.
 pub fn admit_supplied<B: Backend>(bytes: &[u8], backend: &B) -> Result<Admitted> {
     let program = decode::physical(bytes)?;
     validate(&program)?;
@@ -239,42 +66,8 @@ pub fn admit_supplied<B: Backend>(bytes: &[u8], backend: &B) -> Result<Admitted>
     Ok(Admitted {
         program: Arc::new(program),
         bytes: Arc::from(bytes),
-        source: None,
-        source_map: None,
     })
 }
-/// Admit compiler output against actual source bytes using an installed checker.
-/// Both source and candidate are copied into immutable custody after successful checks.
-pub fn admit_physical<B: Backend, C: Correspondence>(
-    source: &[u8],
-    candidate: &[u8],
-    backend: &B,
-    checker: &C,
-) -> Result<Admitted> {
-    if source.len() > Limits::ARTIFACT_BYTES {
-        return Err(err(ErrorCode::Limit, "source byte ceiling"));
-    }
-    let mut admitted = admit_supplied(candidate, backend)?;
-    if admitted.format().is_program() {
-        return Err(err(
-            ErrorCode::Correspondence,
-            "native-participant-correspondence-unsupported",
-        ));
-    }
-    let mapping = checker
-        .check_with_mapping(source, admitted.bytes(), admitted.format())
-        .map_err(|e| err(ErrorCode::Correspondence, e.to_string()))?;
-    if admitted.format() == ArtifactFormat::ExplicitBindings && mapping.is_none() {
-        return Err(err(ErrorCode::Correspondence, "source-map-required"));
-    }
-    if let Some(mapping) = mapping {
-        mapping.validate(&admitted.program)?;
-        admitted.source_map = Some(Arc::new(mapping));
-    }
-    admitted.source = Some(Arc::from(source));
-    Ok(admitted)
-}
-
 fn requires_boolean_literals(p: &Program) -> bool {
     p.functions.values().any(|f| {
         LocalInstruction::walk(&f.body)
@@ -290,9 +83,10 @@ pub(crate) fn installed<B: Backend>(p: &Program, backend: &B) -> Result<()> {
         for port in &participant.services {
             let expected = port.contract.signature("draw").expect("installed method");
             if !backend
-                .service_signature(port.contract, "draw")
-                .is_some_and(|(signature, bytes)| {
-                    signature == expected && bytes <= Limits::VALUE_BYTES
+                .service_support(port.contract, "draw")
+                .is_some_and(|support| {
+                    support.signature == expected
+                        && support.max_retained_bytes <= Limits::VALUE_BYTES
                 })
             {
                 return Err(err(
@@ -487,21 +281,7 @@ fn attributes(
         {
             Ok(())
         }
-        AttributeRule::NativeMessageOrigin
-            if crate::logical::native_origin(attrs, "message").is_ok() =>
-        {
-            Ok(())
-        }
-        AttributeRule::NativeChallengeOrigin
-            if crate::logical::native_origin(attrs, "query").is_ok() =>
-        {
-            Ok(())
-        }
-        AttributeRule::MessageOrigin | AttributeRule::ChallengeOrigin
-            if crate::logical::validate_source_attributes(attrs).is_ok() =>
-        {
-            Ok(())
-        }
+
         AttributeRule::Bn254Decimal
         | AttributeRule::FieldDecimal
         | AttributeRule::RistrettoDecimal
@@ -592,7 +372,7 @@ fn local_body(
                     &mut env,
                     &mut seen,
                     output,
-                    PhysicalType::parse("bool@native.bool/1")?,
+                    PhysicalType::parse("bool@native.bool/0")?,
                 )?;
             }
             LocalInstruction::Stop { site: s, .. } => {
@@ -761,7 +541,7 @@ fn local_body(
                 }
                 let mut ports = vec![(
                     induction.clone(),
-                    PhysicalType::parse("index@native.index/1")?,
+                    PhysicalType::parse("index@native.index/0")?,
                 )];
                 ports.extend(
                     carried
@@ -790,7 +570,7 @@ fn local_body(
                     if !matches!(body.last(), Some(LocalInstruction::Yield(_))) {
                         return Err(err(ErrorCode::Record, "local-control-yield"));
                     }
-                    yielded.insert(0, PhysicalType::parse("bool@native.bool/1")?);
+                    yielded.insert(0, PhysicalType::parse("bool@native.bool/0")?);
                 }
                 local_body(body, child, sites, true, Some(&yielded))?;
                 results(&mut env, &mut seen, outputs, &types)?;
@@ -927,7 +707,7 @@ impl Check<'_> {
         if peer == self.role {
             return Err(err(ErrorCode::Role, "self message"));
         }
-        if !ty.is_message_type(self.program.format) {
+        if !ty.is_message_type() {
             return Err(err(ErrorCode::Type, "nonserializable message type"));
         }
         if let Some(old) = self
@@ -953,33 +733,7 @@ impl Check<'_> {
             return Err(err(ErrorCode::Terminal, "empty body"));
         }
         for (i, instruction) in body.iter().enumerate() {
-            let format = self.program.format;
-            if format.is_program()
-                && matches!(
-                    instruction,
-                    Instruction::Stop { .. } | Instruction::Incomplete { .. }
-                )
-            {
-                return Err(err(ErrorCode::Record, "native-participant-terminal"));
-            }
-            if format.is_program() && matches!(instruction, Instruction::Call { .. }) {
-                return Err(err(
-                    ErrorCode::Record,
-                    "service-participant-composition-unsupported",
-                ));
-            }
-            if format.is_program()
-                && matches!(instruction, Instruction::Loop { count, .. } if !matches!(count, Count::Value { .. }))
-            {
-                return Err(err(ErrorCode::Record, "interactive-loop-count"));
-            }
-            let terminal = matches!(
-                instruction,
-                Instruction::Return(_)
-                    | Instruction::Yield(_)
-                    | Instruction::Stop { .. }
-                    | Instruction::Incomplete { .. }
-            );
+            let terminal = matches!(instruction, Instruction::Return(_) | Instruction::Yield(_));
             if terminal != (i + 1 == body.len()) {
                 return Err(err(
                     ErrorCode::Terminal,
@@ -994,9 +748,6 @@ impl Check<'_> {
                     inputs,
                     outputs,
                 } => {
-                    if !self.program.format.is_program() {
-                        return Err(err(ErrorCode::Record, "service-query-context"));
-                    }
                     site(&mut self.sites, s)?;
                     let port = self
                         .services
@@ -1029,28 +780,6 @@ impl Check<'_> {
                     )?;
                     results(&mut env, &mut self.seen, outputs, &f.outputs)?;
                 }
-                Instruction::Call {
-                    site: s,
-                    participant,
-                    inputs,
-                    outputs,
-                } => {
-                    site(&mut self.sites, s)?;
-                    let p = self
-                        .program
-                        .participants
-                        .get(participant)
-                        .ok_or_else(|| err(ErrorCode::Symbol, "unresolved participant call"))?;
-                    if p.role != self.role {
-                        return Err(err(ErrorCode::Role, "cross-role participant call"));
-                    }
-                    operands(
-                        &mut env,
-                        inputs,
-                        &p.inputs.iter().map(|p| p.1.clone()).collect::<Vec<_>>(),
-                    )?;
-                    results(&mut env, &mut self.seen, outputs, &p.outputs)?;
-                }
                 Instruction::Send {
                     site: s,
                     schema,
@@ -1073,49 +802,20 @@ impl Check<'_> {
                 }
                 Instruction::Loop {
                     site: s,
+                    count,
                     carried,
                     captures,
                     body,
                     outputs,
-                    ..
                 } => {
                     site(&mut self.sites, s)?;
-                    if let Instruction::Loop {
-                        count: Count::Parameter(key),
-                        ..
-                    } = instruction
-                    {
-                        let owner = self
-                            .program
-                            .participants
-                            .values()
-                            .find(|p| p.instance == self.instance && p.role == self.role)
-                            .unwrap();
-                        if !owner.families.contains_key(key) {
-                            return Err(err(ErrorCode::Parameters, "interactive-loop-parameter"));
-                        }
+                    if count.maximum > Limits::LOOP_COUNT {
+                        return Err(err(ErrorCode::Record, "interactive-loop-count"));
                     }
-                    let induction = if let Instruction::Loop {
-                        count:
-                            Count::Value {
-                                value,
-                                maximum,
-                                induction,
-                            },
-                        ..
-                    } = instruction
-                    {
-                        if !self.program.format.is_program() || *maximum > Limits::LOOP_COUNT {
-                            return Err(err(ErrorCode::Record, "interactive-loop-count"));
-                        }
-                        let ty = lookup(&env, value)?;
-                        if ty != PhysicalType::parse("index@native.index/1")? {
-                            return Err(err(ErrorCode::Type, "interactive-loop-count"));
-                        }
-                        Some((induction, ty))
-                    } else {
-                        None
-                    };
+                    let induction_type = lookup(&env, &count.value)?;
+                    if induction_type != PhysicalType::parse("index@native.index/0")? {
+                        return Err(err(ErrorCode::Type, "interactive-loop-count"));
+                    }
                     let types = carried
                         .iter()
                         .map(|p| lookup(&env, &p.1))
@@ -1126,9 +826,7 @@ impl Check<'_> {
                         &types,
                     )?;
                     let mut child = Env::new();
-                    if let Some((name, ty)) = induction {
-                        define(&mut child, &mut self.seen, name, ty)?;
-                    }
+                    define(&mut child, &mut self.seen, &count.induction, induction_type)?;
                     for ((arg, _), ty) in carried.iter().zip(&types) {
                         define(&mut child, &mut self.seen, arg, ty.clone())?;
                     }
@@ -1162,14 +860,11 @@ impl Check<'_> {
                     values,
                     continuations,
                 } => {
-                    if !format.is_program() {
-                        return Err(err(ErrorCode::Record, "program-return-required"));
-                    }
                     site(&mut self.sites, s)?;
                     operands(
                         &mut env,
                         std::slice::from_ref(condition),
-                        &[PhysicalType::parse("bool@native.bool/1")?],
+                        &[PhysicalType::parse("bool@native.bool/0")?],
                     )?;
                     operands(&mut env, values, self.entry_outputs)?;
                     let types: Vec<_> = self
@@ -1182,62 +877,18 @@ impl Check<'_> {
                 }
                 Instruction::Return(names) if !in_loop => operands(&mut env, names, expected)?,
                 Instruction::Yield(names) if in_loop => operands(&mut env, names, expected)?,
-                Instruction::Stop { site: s, .. } | Instruction::Incomplete { site: s } => {
-                    site(&mut self.sites, s)?
-                }
                 _ => return Err(err(ErrorCode::Terminal, "return/yield in wrong region")),
             }
         }
         Ok(())
     }
 }
-fn callees(body: &Body, out: &mut BTreeSet<String>) {
-    for i in body.iter() {
-        match i {
-            Instruction::Call { participant, .. } => {
-                out.insert(participant.clone());
-            }
-            Instruction::Loop { body, .. } => callees(body, out),
-            _ => (),
-        }
-    }
-}
-fn dag(
-    name: &str,
-    edges: &BTreeMap<String, BTreeSet<String>>,
-    active: &mut BTreeSet<String>,
-    depths: &mut BTreeMap<String, usize>,
-) -> Result<usize> {
-    if let Some(depth) = depths.get(name) {
-        return Ok(*depth);
-    }
-    if !active.insert(name.to_owned()) {
-        return Err(err(ErrorCode::Cycle, "recursive participant graph"));
-    }
-    if active.len() > Limits::STACK_DEPTH {
-        return Err(err(ErrorCode::Limit, "call graph depth ceiling"));
-    }
-    let mut depth = 1;
-    for next in &edges[name] {
-        depth = depth.max(1 + dag(next, edges, active, depths)?);
-    }
-    active.remove(name);
-    if depth > Limits::STACK_DEPTH {
-        return Err(err(ErrorCode::Limit, "call graph depth ceiling"));
-    }
-    depths.insert(name.to_owned(), depth);
-    Ok(depth)
-}
 fn validate(p: &Program) -> Result<()> {
     for f in p.functions.values() {
         function(f)?;
     }
-    let (mut instances, mut identities, mut schemas, mut edges) = (
-        BTreeMap::new(),
-        BTreeSet::new(),
-        BTreeMap::new(),
-        BTreeMap::new(),
-    );
+    let mut identities = BTreeSet::new();
+    let mut schemas = BTreeMap::new();
     for participant in p.participants.values() {
         local_boundary(&participant.inputs, &participant.outputs)?;
         if p.functions.contains_key(&participant.symbol)
@@ -1248,87 +899,14 @@ fn validate(p: &Program) -> Result<()> {
         if !identities.insert((&participant.instance, &participant.role)) {
             return Err(err(ErrorCode::Symbol, "duplicate body for instance/role"));
         }
-        if let Some(params) = instances.insert(
-            &participant.instance,
-            (&participant.parameters, &participant.families),
-        ) && params != (&participant.parameters, &participant.families)
-        {
-            return Err(err(
-                ErrorCode::Parameters,
-                "instance role parameter disagreement",
-            ));
-        }
-        for family in participant.families.values() {
-            let selector = family
-                .selectors
-                .get(&participant.role)
-                .ok_or_else(|| err(ErrorCode::Parameters, "interactive-family-roles"))?;
-            let f = p
-                .functions
-                .get(&selector.function)
-                .ok_or_else(|| err(ErrorCode::Parameters, "interactive-family-selector"))?;
-            if LocalInstruction::walk(&f.body).iter().any(|op| {
-                matches!(
-                    op,
-                    LocalInstruction::Variant { .. } | LocalInstruction::Match { .. }
-                )
-            }) {
-                return Err(err(ErrorCode::Parameters, "variant-family-selector"));
-            }
-            let inputs = selector
-                .arguments
-                .iter()
-                .map(|name| {
-                    participant
-                        .inputs
-                        .iter()
-                        .find(|(n, _)| n == name)
-                        .map(|(_, ty)| ty.clone())
-                        .ok_or_else(|| err(ErrorCode::Parameters, "interactive-family-argument"))
-                })
-                .collect::<Result<Vec<_>>>()?;
-            if !inputs.iter().all(|ty| ty.is_serializable())
-                || !f.inputs.iter().map(|(_, ty)| ty).eq(inputs.iter())
-                || f.outputs.len() != 1
-                || f.outputs[0].kind() != Type::Index
-            {
-                return Err(err(ErrorCode::Parameters, "interactive-family-signature"));
-            }
-            let actual_roles: BTreeSet<_> = p
-                .participants
-                .values()
-                .filter(|q| q.instance == participant.instance)
-                .map(|q| &q.role)
-                .collect();
-            if actual_roles != family.selectors.keys().collect() {
-                return Err(err(ErrorCode::Parameters, "interactive-family-roles"));
-            }
-        }
         if participant
             .inputs
             .iter()
             .map(|(_, ty)| ty)
             .chain(&participant.outputs)
-            .any(|ty| {
-                if p.format.is_program() {
-                    !ty.logical().is_program_port()
-                } else {
-                    ty.kind() == Type::Variant
-                }
-            })
+            .any(|ty| !ty.logical().is_program_port())
         {
             return Err(err(ErrorCode::Type, "variant-participant-boundary"));
-        }
-        if p.format.is_program()
-            && (!participant.parameters.is_empty() || !participant.families.is_empty())
-        {
-            return Err(err(
-                ErrorCode::Record,
-                "service-participant-composition-unsupported",
-            ));
-        }
-        if !p.format.is_program() && !participant.services.is_empty() {
-            return Err(err(ErrorCode::Record, "service-profile-required"));
         }
         if participant.inputs.len() + participant.services.len() > Limits::PORTS {
             return Err(err(ErrorCode::Limit, "interactive-port-limit"));
@@ -1354,18 +932,6 @@ fn validate(p: &Program) -> Result<()> {
             schemas: &mut schemas,
         }
         .body(&participant.body, env, &participant.outputs, false)?;
-        let mut calls = BTreeSet::new();
-        callees(&participant.body, &mut calls);
-        if (!participant.families.is_empty() && !calls.is_empty())
-            || calls.iter().any(|c| {
-                p.participants
-                    .get(c)
-                    .is_some_and(|q| !q.families.is_empty())
-            })
-        {
-            return Err(err(ErrorCode::Parameters, "interactive-family-dependency"));
-        }
-        edges.insert(participant.symbol.clone(), calls);
     }
     for (name, roles) in &p.entries {
         if p.functions.contains_key(name) {
@@ -1388,10 +954,6 @@ fn validate(p: &Program) -> Result<()> {
             }
             instance = Some(&body.instance);
         }
-    }
-    let (mut active, mut depths) = (BTreeSet::new(), BTreeMap::new());
-    for name in edges.keys() {
-        dag(name, &edges, &mut active, &mut depths)?;
     }
     Ok(())
 }

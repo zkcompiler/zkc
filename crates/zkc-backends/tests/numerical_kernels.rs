@@ -170,5 +170,5 @@ fn capabilities_are_nominal_and_embedding_preserves_all_coordinates() {
     let e = KoalaBearExt8::from_basis_coefficients_fn(|i| KoalaBear::new(i as u32 + 1));
     let literal = Value::KoalaBearExt8Field(e);
     assert!(domains::KOALA_BEAR_EXT8.physical(Type::Field).is_some());
-    assert!(b.encode_value(&literal).is_ok());
+    assert!(b.encode_native_value(&literal).is_ok());
 }

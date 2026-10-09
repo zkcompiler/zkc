@@ -9,7 +9,7 @@ open Zkc.Source.TablePreparation
 /-- Repeated addition in the additive cyclic group Z/7Z. The seed 0 is
     captured; six instructions materialize 1*h through 6*h modulo 7. -/
 def key (h : Nat) : Key :=
-  ⟨1,700,[0],(List.range 6).map (fun i => .mod (.add (.reg i) (.lit h)) 7)⟩
+  ⟨0,700,[0],(List.range 6).map (fun i => .mod (.add (.reg i) (.lit h)) 7)⟩
 def consume (t : List Nat) (m r : Nat) := (m + t[r % 7]?.getD 0) % 7
 
 theorem table_exact : ∀ h : Fin 7,

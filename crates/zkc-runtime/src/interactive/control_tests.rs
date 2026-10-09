@@ -1,9 +1,9 @@
 //! General control and cleanup contracts, using a noncryptographic backend.
 use super::*;
 use serde_json::{Value as Json, json};
-const BOOL: &str = "bool@native.bool/1";
-const INDEX: &str = "index@native.index/1";
-const RNG: &str = "rng:bls12-381.fr@host.resource/1";
+const BOOL: &str = "bool@native.bool/0";
+const INDEX: &str = "index@native.index/0";
+const RNG: &str = "rng:bls12-381.fr@host.resource/0";
 #[derive(Clone, Debug)]
 struct Datum {
     ty: PhysicalType,
@@ -18,9 +18,6 @@ impl Datum {
     }
 }
 impl Value for Datum {
-    fn type_name(&self) -> &str {
-        "control-test"
-    }
     fn physical_type(&self) -> PhysicalType {
         self.ty.clone()
     }
@@ -82,16 +79,14 @@ impl Backend for Store {
 }
 fn artifact(body: Json, functions: Json) -> Json {
     json!([
-        "zkc.program/1",
+        "zkc.program/0",
         [],
-        "physical",
         functions,
         [[
             "participant",
             "p",
             "root",
             "P",
-            [],
             [["c", BOOL], ["n", INDEX], ["r", RNG]],
             [BOOL, RNG],
             body,
@@ -202,7 +197,7 @@ fn continuing_resources_stay_single_use_and_controls_are_explicit() {
     assert!(matches!(r.poll(), Action::Returned(_)));
     assert!(r.early_return().is_none());
     let mut invalid = artifact(body(false), json!([]));
-    invalid[4][0][7][1][1][1] = json!("r");
+    invalid[3][0][6][1][1][1] = json!("r");
     assert!(admit_supplied(&serde_json::to_vec(&invalid).unwrap(), &Store::default()).is_err());
     let mut r = runner(false, true, None, 1000);
     assert!(matches!(r.poll(), Action::Stopped(_))); // poll must not silently cross control
@@ -267,7 +262,7 @@ fn bounded_local_condition_skips_unreached_iterations() {
             ]),
             functions,
         );
-        program[4][0][5]
+        program[3][0][4]
             .as_array_mut()
             .unwrap()
             .push(json!(["hi", INDEX]));
@@ -309,22 +304,22 @@ fn bounded_local_condition_skips_unreached_iterations() {
         }
         if conditional {
             let mut changed = program.clone();
-            changed[3][0][4][0][7][1][1] = json!(["r"]);
+            changed[2][0][4][0][7][1][1] = json!(["r"]);
             assert!(
                 admit_supplied(&serde_json::to_vec(&changed).unwrap(), &Store::default()).is_err()
             );
             changed = program.clone();
-            changed[3][0][4][0][7][1][1] = json!(["i", "r"]);
+            changed[2][0][4][0][7][1][1] = json!(["i", "r"]);
             assert!(
                 admit_supplied(&serde_json::to_vec(&changed).unwrap(), &Store::default()).is_err()
             );
             changed = program.clone();
-            changed[3][0][4][0][7] = json!([["stop", "halt", "abort"]]);
+            changed[2][0][4][0][7] = json!([["stop", "halt", "abort"]]);
             let error = admit_supplied(&serde_json::to_vec(&changed).unwrap(), &Store::default())
                 .unwrap_err();
             assert!(error.to_string().contains("local-control-yield"));
             changed = program.clone();
-            changed[0] = json!("zkc.participants/1");
+            changed[0] = json!("invalid.program");
             assert!(
                 admit_supplied(&serde_json::to_vec(&changed).unwrap(), &Store::default()).is_err()
             );
@@ -333,18 +328,13 @@ fn bounded_local_condition_skips_unreached_iterations() {
 }
 
 #[test]
-fn false_exits_preserve_every_iteration_and_legacy_records_refuse() {
+fn false_exits_preserve_iterations_and_malformed_records_refuse() {
     let mut r = runner(true, false, None, 1000);
     while r.advance_local_control().unwrap() {}
     assert!(matches!(r.poll(), Action::Returned(_)));
     assert_eq!(r.usage().iterations, 12);
     assert!(r.early_return().is_none());
-    for tag in [
-        "zkc.participants/1",
-        "zkc.native-participants/1",
-        "zkc.native-participants/2",
-        "zkc.native-participants/3",
-    ] {
+    for tag in ["invalid.program", ""] {
         let mut program = artifact(body(false), json!([]));
         program[0] = json!(tag);
         assert!(admit_supplied(&serde_json::to_vec(&program).unwrap(), &Store::default()).is_err());
@@ -356,7 +346,29 @@ fn false_exits_preserve_every_iteration_and_legacy_records_refuse() {
         json!(["return_if", "exit", "c", ["c", "r"], ["r"]]),
     ] {
         let mut program = artifact(body(false), json!([]));
-        program[4][0][7][0] = changed;
+        program[3][0][6][0] = changed;
+        assert!(admit_supplied(&serde_json::to_vec(&program).unwrap(), &Store::default()).is_err());
+    }
+}
+
+#[test]
+fn extra_participant_fields_and_malformed_instructions_refuse() {
+    let base = artifact(body(false), json!([]));
+    for parameters in [json!([["n", "2"]]), json!([["n", ["ingress", "8", []]]])] {
+        let mut program = base.clone();
+        program[3][0].as_array_mut().unwrap().insert(4, parameters);
+        let error =
+            admit_supplied(&serde_json::to_vec(&program).unwrap(), &Store::default()).unwrap_err();
+        assert_eq!(error.code, ErrorCode::Record);
+    }
+    for instruction in [
+        json!(["call", "child", "other", [], []]),
+        json!(["loop", "fixed", "2", [], [], [["yield", []]], []]),
+        json!(["loop", "parameterized", "n", [], [], [["yield", []]], []]),
+        json!(["incomplete", "end"]),
+    ] {
+        let mut program = base.clone();
+        program[3][0][6] = json!([instruction, ["return", []]]);
         assert!(admit_supplied(&serde_json::to_vec(&program).unwrap(), &Store::default()).is_err());
     }
 }

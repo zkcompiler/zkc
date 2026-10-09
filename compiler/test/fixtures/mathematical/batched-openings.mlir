@@ -1,19 +1,19 @@
-!message = !local.variant<"variant:5b227a6b632e76617269616e742f31222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f31222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d">
-!pk = !pcs.object<"multilinear.kzg.bls12-381/1", "prover_key">
-!vk = !pcs.object<"multilinear.kzg.bls12-381/1", "verifier_key">
-!c = !pcs.object<"multilinear.kzg.bls12-381/1", "commitment">
-!o = !pcs.object<"multilinear.kzg.bls12-381/1", "opening_state">
-!proof = !pcs.object<"multilinear.kzg.bls12-381/1", "proof">
+!message = !local.variant<"variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d">
+!pk = !pcs.object<"multilinear.kzg.bls12-381/0", "prover_key">
+!vk = !pcs.object<"multilinear.kzg.bls12-381/0", "verifier_key">
+!c = !pcs.object<"multilinear.kzg.bls12-381/0", "commitment">
+!o = !pcs.object<"multilinear.kzg.bls12-381/0", "opening_state">
+!proof = !pcs.object<"multilinear.kzg.bls12-381/0", "proof">
 !f = !algebra.field<"bls12-381.fr">
 !t = !poly.multilinear<"bls12-381.fr">
 !p = !poly.point<"bls12-381.fr">
 !batch = !data.sequence<!message>
 !fs = tensor<?x!f>
 module { "protocol.module"() ({
- "local.binding"() {sym_name="empty",contract="sequence.empty",arguments=["variant:5b227a6b632e76617269616e742f31222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f31222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d"],implementation=""} : ()->()
- "local.binding"() {sym_name="append",contract="sequence.append",arguments=["variant:5b227a6b632e76617269616e742f31222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f31222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d"],implementation=""} : ()->()
- "local.binding"() {sym_name="length",contract="sequence.length",arguments=["variant:5b227a6b632e76617269616e742f31222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f31222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d"],implementation=""} : ()->()
- "local.binding"() {sym_name="at",contract="sequence.at",arguments=["variant:5b227a6b632e76617269616e742f31222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f31222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d"],implementation=""} : ()->()
+ "local.binding"() {sym_name="empty",contract="sequence.empty",arguments=["variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d"],implementation=""} : ()->()
+ "local.binding"() {sym_name="append",contract="sequence.append",arguments=["variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d"],implementation=""} : ()->()
+ "local.binding"() {sym_name="length",contract="sequence.length",arguments=["variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d"],implementation=""} : ()->()
+ "local.binding"() {sym_name="at",contract="sequence.at",arguments=["variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d"],implementation=""} : ()->()
  "local.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
  "local.binding"() {sym_name="equal",contract="index.equal",arguments=[],implementation=""} : ()->()
  "local.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
@@ -21,9 +21,9 @@ module { "protocol.module"() ({
  "local.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "local.binding"() {sym_name="point",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "local.binding"() {sym_name="coordinate",contract="poly.append_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="commit",contract="pcs.commit",arguments=["multilinear.kzg.bls12-381/1"],implementation=""} : ()->()
- "local.binding"() {sym_name="open",contract="pcs.open",arguments=["multilinear.kzg.bls12-381/1"],implementation=""} : ()->()
- "local.binding"() {sym_name="check",contract="pcs.check",arguments=["multilinear.kzg.bls12-381/1"],implementation=""} : ()->()
+ "local.binding"() {sym_name="commit",contract="pcs.commit",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+ "local.binding"() {sym_name="open",contract="pcs.open",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+ "local.binding"() {sym_name="check",contract="pcs.check",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
  local.func @produce(%table:!t,%key:!pk,%points:!fs)->!batch attributes {logical_origin=["produce",[]]} {
    %state:2 = "pcs.exec.commit"(%key,%table) {binding=@commit,parameters=[],site="commit"} : (!pk,!t)->(!c,!o)
    %empty = "data.exec.sequence_empty"() {binding=@empty,parameters=[],site="empty"} : ()->!batch

@@ -13,7 +13,7 @@ open Lean (Json)
 open Tools.Interactive Tools.Interactive.Reference
 
 private def sourceText := r#"[
-  "zkc.protocol/1",
+  "zkc.protocol/0",
   [["create", "resource_unit.create", ["Slot.A"], ""]],
   [["function", "Select", [["n", "index"]], ["index"],
     [["op", "temporary", "create", [], [], ["temporary"]], ["return", ["n"]]], ["Select", []]]],
@@ -155,7 +155,7 @@ def run : IO Unit := do
   let .ok publicSource := Json.parse publicText | throw (IO.userError "public-json")
   let .ok (publicPrepared, publicInvocation) := seed publicSource 0 0
     | throw (IO.userError "public-fixture")
-  let .ok group := decodeValue (.arr #[.str "groups:bls12-381.g1", .str "5a4b4356010a00000000"])
+  let .ok group := decodeValue (.arr #[.str "groups:bls12-381.g1", .str "5a4b4356000a00000000"])
     | throw (IO.userError "public-value")
   let publicInvocation := { publicInvocation with
     environments := publicInvocation.environments.map fun (role, store) =>

@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
 project(ZkcConsumer LANGUAGES C CXX)
-find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS Compiler Support Contracts Relation Protocol Claims IR Translation ClaimTranslation Frontend FrontendLoading Transforms CompilerCore Driver)
-add_executable(consumer main.cpp)
-target_link_libraries(consumer PRIVATE Zkc::Compiler)
+find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS Compiler Support Contracts Language Relation Program IR Translation Transforms Driver Tools)
+add_executable(registration-consumer main.cpp)
+target_link_libraries(registration-consumer PRIVATE Zkc::Compiler)
 
 enable_testing()
 # Inspect the installed link graph, including transitive dependencies. Linking
-# an IR client must not acquire any optional claim or compiler workflow.
+# an IR client must not acquire a compiler workflow.
 function(check_component_closure component forbidden)
   set(pending ${component})
   set(visited)
@@ -27,46 +27,31 @@ function(check_component_closure component forbidden)
     endforeach()
   endwhile()
 endfunction()
-check_component_closure(Zkc::IR "Zkc::Translation;Zkc::Claims;Zkc::ClaimTranslation;Zkc::Transforms;Zkc::Frontend;Zkc::CompilerCore;Zkc::Driver")
-check_component_closure(Zkc::Claims "Zkc::IR;Zkc::ClaimTranslation;Zkc::Transforms;Zkc::Frontend;Zkc::CompilerCore;Zkc::Driver")
-check_component_closure(Zkc::ClaimTranslation "Zkc::Transforms;Zkc::Frontend;Zkc::CompilerCore;Zkc::Driver")
-check_component_closure(Zkc::Transforms "Zkc::Translation;Zkc::Frontend;Zkc::CompilerCore;Zkc::Driver")
-check_component_closure(Zkc::Translation "Zkc::Transforms;Zkc::Claims;Zkc::Frontend;Zkc::CompilerCore;Zkc::Driver")
-get_target_property(claim_links Zkc::ClaimTranslation INTERFACE_LINK_LIBRARIES)
-foreach(required Zkc::Claims Zkc::IR)
-  if(NOT required IN_LIST claim_links)
-    message(FATAL_ERROR "ClaimTranslation is missing its ${required} dependency")
-  endif()
-endforeach()
-get_target_property(core_links Zkc::CompilerCore INTERFACE_LINK_LIBRARIES)
-if(NOT "Zkc::ClaimTranslation" IN_LIST core_links)
-  message(FATAL_ERROR "CompilerCore is missing claim translation")
-endif()
-add_test(NAME compiler-consumer COMMAND consumer)
-foreach(component Support Contracts Relation Protocol Claims IR Translation ClaimTranslation Frontend FrontendLoading Transforms CompilerCore Driver)
+check_component_closure(Zkc::Language "Zkc::Program;Zkc::IR;Zkc::Translation;Zkc::Compiler;Zkc::Driver")
+check_component_closure(Zkc::Program "Zkc::Language;Zkc::Relation;Zkc::IR;Zkc::Translation;Zkc::Transforms;Zkc::Compiler;Zkc::Driver")
+check_component_closure(Zkc::IR "Zkc::Translation;Zkc::Transforms;Zkc::Compiler;Zkc::Driver")
+check_component_closure(Zkc::Transforms "Zkc::Translation;Zkc::Compiler;Zkc::Driver")
+check_component_closure(Zkc::Translation "Zkc::Transforms;Zkc::Compiler;Zkc::Driver")
+check_component_closure(Zkc::Compiler "Zkc::Driver")
+add_test(NAME compiler-registration COMMAND registration-consumer)
+foreach(component Support Contracts Language Relation Program IR Translation Transforms Compiler Driver)
   string(TOLOWER ${component} name)
   add_executable(${name}-consumer ${name}.cpp)
   target_link_libraries(${name}-consumer PRIVATE Zkc::${component})
   target_compile_options(${name}-consumer PRIVATE -Wall -Wextra -Werror)
   if(component STREQUAL "Driver")
-    add_test(NAME ${name}-consumer COMMAND ${name}-consumer protocol-prepare
-      "${CMAKE_CURRENT_SOURCE_DIR}/protocol.pir")
+    add_test(NAME ${name}-consumer COMMAND ${name}-consumer --help)
   else()
     add_test(NAME ${name}-consumer COMMAND ${name}-consumer)
   endif()
 endforeach()
 
-# Build the real extension using only the installed package. This also checks
-# that public TableGen includes survive component and aggregate changes.
-set(ZKC_SERVICE_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../../compiler/examples/service"
-  CACHE PATH "Standalone service extension source directory")
-add_subdirectory("${ZKC_SERVICE_SOURCE}" service)
-add_test(NAME service-compiler-consumer COMMAND zkc-service-compile --help)
-add_test(NAME service-optimizer-consumer COMMAND zkc-service-opt --help)
+target_link_libraries(ir-consumer PRIVATE MLIRParser)
+target_link_libraries(translation-consumer PRIVATE MLIRParser)
 
 # Do not test source-tree headers: use the package's own include root.
 get_target_property(zkc_include_dirs Zkc::Support INTERFACE_INCLUDE_DIRECTORIES)
-set(header_units)
+set(header_owners)
 foreach(directory IN LISTS zkc_include_dirs)
   if(EXISTS "${directory}/zkc")
     file(GLOB_RECURSE headers CONFIGURE_DEPENDS "${directory}/zkc/*.h")
@@ -75,27 +60,49 @@ foreach(directory IN LISTS zkc_include_dirs)
       string(SHA256 identifier "${relative}")
       set(unit "${CMAKE_CURRENT_BINARY_DIR}/headers/${identifier}.cpp")
       file(GENERATE OUTPUT "${unit}" CONTENT "#include <${relative}>\n")
-      list(APPEND header_units "${unit}")
+      if(relative MATCHES "^zkc/(Dialect|Interfaces)/")
+        set(owner IR)
+      elseif(relative MATCHES "^zkc/(Transforms|Target)/")
+        set(owner Transforms)
+      elseif(relative MATCHES "^zkc/(Support|Contracts|Relation|Language|Program|Translation|Compiler|Driver)/")
+        set(owner "${CMAKE_MATCH_1}")
+      else()
+        message(FATAL_ERROR "Public header has no SDK owner: ${relative}")
+      endif()
+      list(APPEND header_units_${owner} "${unit}")
+      list(APPEND header_owners ${owner})
     endforeach()
   endif()
 endforeach()
-if(NOT header_units)
+if(NOT header_owners)
   message(FATAL_ERROR "Installed public headers were not found")
 endif()
-add_library(public-headers OBJECT ${header_units})
-target_link_libraries(public-headers PRIVATE Zkc::Compiler)
-target_compile_options(public-headers PRIVATE -Wall -Wextra -Werror)
-add_test(NAME package-component-validation COMMAND ${CMAKE_COMMAND}
-  "-DPACKAGE_DIR=${ZkcCompiler_DIR}" "-DMLIR_DIR=${MLIR_DIR}"
-  "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/component-validation"
-  "-DC_COMPILER=${CMAKE_C_COMPILER}" "-DCXX_COMPILER=${CMAKE_CXX_COMPILER}"
-  -P "${CMAKE_CURRENT_SOURCE_DIR}/package-components.cmake")
+list(REMOVE_DUPLICATES header_owners)
+foreach(owner IN LISTS header_owners)
+  add_library(public-headers-${owner} OBJECT ${header_units_${owner}})
+  target_link_libraries(public-headers-${owner} PRIVATE Zkc::${owner})
+  target_compile_options(public-headers-${owner} PRIVATE -Wall -Wextra -Werror)
+endforeach()
+foreach(mode required optional optional-native repeated default compiler tools
+    Support Contracts Program Relation Language)
+  add_test(NAME package-${mode} COMMAND ${CMAKE_COMMAND}
+    "-DPACKAGE_DIR=${ZkcCompiler_DIR}" "-DMLIR_DIR=${MLIR_DIR}" "-DLLVM_DIR=${LLVM_DIR}"
+    "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/component-validation/${mode}"
+    "-DMODE=${mode}" "-DCONSUMER_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}"
+    "-DC_COMPILER=${CMAKE_C_COMPILER}" "-DCXX_COMPILER=${CMAKE_CXX_COMPILER}"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/package-components.cmake")
+endforeach()
 
 # Optional cross-language boundary: execute the exact installed API output.
-set(ZKC_CONSUMER_RUNTIME "" CACHE FILEPATH "Same-version zkc runtime for artifact execution")
+set(ZKC_CONSUMER_RUNTIME "" CACHE FILEPATH "Matching zkc runtime for artifact execution")
 if(ZKC_CONSUMER_RUNTIME)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   add_test(NAME installed-native-execution COMMAND ${Python3_EXECUTABLE}
     "${CMAKE_CURRENT_SOURCE_DIR}/execution.py"
-    --consumer $<TARGET_FILE:compilercore-consumer> --runtime "${ZKC_CONSUMER_RUNTIME}")
+    --consumer $<TARGET_FILE:compiler-consumer> --runtime "${ZKC_CONSUMER_RUNTIME}")
 endif()
+
+add_executable(services-consumer services.cpp)
+target_link_libraries(services-consumer PRIVATE Zkc::Compiler)
+target_compile_options(services-consumer PRIVATE -Wall -Wextra -Werror)
+add_test(NAME installed-rng-services COMMAND services-consumer)

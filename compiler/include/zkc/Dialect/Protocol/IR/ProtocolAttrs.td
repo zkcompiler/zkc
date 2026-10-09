@@ -14,16 +14,10 @@ class ProtocolEnum<string name, string description,
 def ProtocolProfile : ProtocolEnum<"Profile", "protocol abstraction profile", [
   I32EnumAttrCase<"Protocol", 0, "protocol">,
   I32EnumAttrCase<"Participant", 1, "participant">,
-  I32EnumAttrCase<"ProtocolExec", 2, "protocol_exec">,
   I32EnumAttrCase<"Exec", 3, "exec">,
   I32EnumAttrCase<"Physical", 4, "physical">
 ]>;
 
-def ProtocolExecutionContract : ProtocolEnum<"ExecutionContract",
-    "participant execution contract", [
-  I32EnumAttrCase<"LegacyParticipantsV1", 0, "legacy_participants_v1">,
-  I32EnumAttrCase<"Program", 2, "program">
-]>;
 
 class ProtocolEnumAttr<ProtocolEnum info, string mnemonic>
     : EnumAttr<ProtocolDialect, info, mnemonic> {
@@ -31,7 +25,6 @@ class ProtocolEnumAttr<ProtocolEnum info, string mnemonic>
   let genVerifyDecl = 1;
 }
 def ProtocolProfileAttr : ProtocolEnumAttr<ProtocolProfile, "profile">;
-def ProtocolExecutionContractAttr :
-    ProtocolEnumAttr<ProtocolExecutionContract, "execution_contract">;
+
 
 #endif

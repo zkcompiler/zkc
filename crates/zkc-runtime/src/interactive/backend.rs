@@ -1,6 +1,6 @@
 use super::model::LogicalOrigin;
 use super::{BoundSignature, OperationBinding, Origin, PhysicalType, ResolvedBinding};
-use std::{collections::BTreeMap, fmt, sync::Arc};
+use std::{fmt, sync::Arc};
 
 /// Trusted adapter value, preferably an enum of typed immutable/Arc-backed values.
 /// Cloning a capability copies its handle, never its issuance authority or state.
@@ -42,7 +42,6 @@ pub trait Value: Clone {
     fn from_control_index(_index: u64) -> Result<Self, BackendError> {
         Err(BackendError::new("local-control-index"))
     }
-    fn type_name(&self) -> &str;
     /// Intrinsic full type, derived from the admitted payload representation.
     fn physical_type(&self) -> PhysicalType;
     /// Validate the complete public representation, including nested contents.
@@ -79,7 +78,6 @@ impl FrameId {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FrameKind {
     Entry,
-    Call { site: String },
     Loop { site: String, iteration: u64 },
     Local { site: String, function: String },
 }
@@ -97,7 +95,6 @@ pub struct Frame {
     pub(crate) parent: Option<FrameId>,
     pub(crate) role: String,
     pub(crate) origin: Origin,
-    pub(crate) parameters: Arc<BTreeMap<String, u64>>,
     pub(crate) kind: FrameKind,
     pub(crate) inputs: Vec<(String, PhysicalType)>,
     pub(crate) services: Vec<super::ServicePort>,
@@ -120,9 +117,6 @@ impl Frame {
     }
     pub fn origin(&self) -> &Origin {
         &self.origin
-    }
-    pub fn parameters(&self) -> &BTreeMap<String, u64> {
-        &self.parameters
     }
     pub fn kind(&self) -> &FrameKind {
         &self.kind
@@ -149,7 +143,7 @@ impl Invocation<'_> {
     pub fn domain_bytes(&self) -> Vec<u8> {
         let binding = self.binding.declaration();
         serde_json::to_vec(&serde_json::json!([
-            "zkc.local-domain/2",
+            "zkc.local-domain/0",
             self.frame.origin.json(),
             self.frame.role,
             match &self.frame.kind {
@@ -162,12 +156,7 @@ impl Invocation<'_> {
             ],
             self.site,
             [binding.contract, serde_json::json!(binding.arguments)],
-            self.attributes,
-            self.frame
-                .parameters
-                .iter()
-                .map(|(k, v)| [k.clone(), v.to_string()])
-                .collect::<Vec<_>>()
+            self.attributes
         ]))
         .expect("string/array domain serialization cannot fail")
     }
@@ -202,18 +191,22 @@ pub struct ServiceInvocation<'a> {
 pub trait Backend {
     type Value: Value;
     /// Read-only installation fact. True promises both Boolean constructors
-    /// return native.bool/1 values. Runtime validation still checks each value.
+    /// return native.bool/0 values. Runtime validation still checks each value.
     /// Admission checks this before any frame, message or backend transition.
     fn supports_boolean_literals(&self) -> bool {
         false
     }
-    /// Installed method signature and conservative retained reply bytes.
+    /// Independently installed method shape and aggregate retained reply bound.
+    /// Author these from the implementation's actual supported values; echoing
+    /// ServiceContract::signature does not provide independent installation facts.
+    /// Keep them stable throughout admission and execution. Runtime checks both
+    /// the declaration and actual replies; service-root authority is separate.
     /// The default refuses native service admission.
-    fn service_signature(
+    fn service_support(
         &self,
         _contract: super::ServiceContract,
         _method: &str,
-    ) -> Option<(super::ServiceSignature, usize)> {
+    ) -> Option<super::ServiceSupport> {
         None
     }
     fn query(
@@ -252,21 +245,19 @@ pub trait Backend {
 #[cfg(test)]
 mod domain_tests {
     use super::*;
-    use crate::interactive::{ArtifactFormat, LogicalOrigin, OperationBinding};
+    use crate::interactive::{LogicalOrigin, OperationBinding};
 
-    fn frame(format: ArtifactFormat, function: &str) -> Frame {
+    fn frame(function: &str) -> Frame {
         Frame {
             id: FrameId(3),
             parent: Some(FrameId(1)),
             role: "P".into(),
             origin: Origin {
-                format,
                 session: "s".into(),
                 entry: "main".into(),
                 instance: "root".into(),
                 path: vec![],
             },
-            parameters: Arc::new(BTreeMap::from([("n".into(), 2)])),
             kind: FrameKind::Local {
                 site: "round".into(),
                 function: function.into(),
@@ -292,8 +283,8 @@ mod domain_tests {
         };
         let lsb = binding("arkworks/poly.fold");
         let msb = binding("arkworks-msb/poly.fold");
-        let a = frame(ArtifactFormat::ExplicitBindings, "generated_lsb");
-        let mut b = frame(ArtifactFormat::ExplicitBindings, "generated_msb");
+        let a = frame("generated_lsb");
+        let mut b = frame("generated_msb");
         let domain =
             |frame: &Frame, binding: &ResolvedBinding, origin: &LogicalOrigin, site: &str| {
                 Invocation {
@@ -327,9 +318,9 @@ mod domain_tests {
         .unwrap();
         let origin = LogicalOrigin {
             definition: "Add".into(),
-            arguments: vec![],
+            arguments: vec![("F".into(), "bls12-381.fr".into())],
         };
-        let frame = frame(ArtifactFormat::ExplicitBindings, "add");
+        let frame = frame("add");
         let bytes = Invocation {
             frame: &frame,
             site: "op",
@@ -340,17 +331,7 @@ mod domain_tests {
             max_output_bytes: 1,
         }
         .domain_bytes();
-        let expected = serde_json::json!([
-            "zkc.local-domain/2",
-            ["zkc.origin/2", "s", "main", "root", []],
-            "P",
-            "round",
-            ["Add", []],
-            "op",
-            ["field.add", ["bls12-381.fr"]],
-            [],
-            [["n", "2"]]
-        ]);
-        assert_eq!(bytes, serde_json::to_vec(&expected).unwrap());
+        let expected = br#"["zkc.local-domain/0",["zkc.origin/0","s","main","root",[]],"P","round",["Add",[["F","bls12-381.fr"]]],"op",["field.add",["bls12-381.fr"]],[]]"#;
+        assert_eq!(bytes, expected);
     }
 }

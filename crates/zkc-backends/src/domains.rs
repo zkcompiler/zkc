@@ -125,7 +125,7 @@ impl NativeDomain {
             Type::Commitment | Type::Proof => ".multilinear-kzg.bls12-381".into(),
             _ => format!(".{}", self.field.name()),
         };
-        Some(format!("zkcv.{}{suffix}/1", kind.name()))
+        Some(format!("zkcv.{}{suffix}/0", kind.name()))
     }
 }
 pub fn for_identity(identity: Identity) -> Option<NativeDomain> {

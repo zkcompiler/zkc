@@ -35,9 +35,8 @@ fn authorized_setups_are_per_port_and_peer_bytes_cannot_select_authority() {
             ),
         ]))
     };
-    let backend = || NativeBackend::with_setups(policy, port_policy(), registry()).unwrap();
+    let backend = || NativeBackend::new(policy, port_policy(), registry()).unwrap();
     let bytes = program(
-        None,
         &[("a", "verifier_key"), ("b", "verifier_key")],
         vec![],
         &[],
@@ -97,37 +96,36 @@ fn authorized_setups_are_per_port_and_peer_bytes_cannot_select_authority() {
     .unwrap();
     let state = a.prover_key().commit(&table).unwrap();
     let value = Value::Commitment(Arc::new(state.commitment().clone()));
-    let wire = host.encode_value(&value).unwrap();
-    // Ambiguous implicit selection fails; the host must name the authorized context.
+    let wire = host.encode_native_value(&value).unwrap();
+    // Native headers select metadata only within the independently authorized registry.
     assert!(
-        host.decode_typed_value(value.physical_type(), &wire)
-            .is_err()
-    );
-    assert!(
-        host.decode_for_setup(value.physical_type(), a.verifier_key().metadata(), &wire)
+        host.decode_native_value(&value.physical_type(), &wire)
             .is_ok()
     );
+    let foreign_state = foreign.prover_key().commit(&table).unwrap();
+    let foreign_value = Value::Commitment(Arc::new(foreign_state.commitment().clone()));
+    let foreign_host = NativeBackend::new(
+        policy,
+        entry(None),
+        zkc_backends::SetupRegistry::new(
+            vec![foreign.verifier_key().clone()],
+            &zkc_backends::Policy::default(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let foreign_wire = foreign_host.encode_native_value(&foreign_value).unwrap();
     assert!(
-        host.decode_for_setup(value.physical_type(), b.verifier_key().metadata(), &wire)
+        host.decode_native_value(&value.physical_type(), &foreign_wire)
             .is_err()
     );
     assert!(
-        host.decode_for_setup(
-            value.physical_type(),
-            foreign.verifier_key().metadata(),
+        host.decode_native_value(
+            &PhysicalType::parse("field:bls12-381.fr@arkworks.fr/0").unwrap(),
             &wire
         )
         .is_err()
     );
-    assert!(
-        host.decode_for_setup(
-            PhysicalType::parse("field:bls12-381.fr@arkworks.fr/1").unwrap(),
-            a.verifier_key().metadata(),
-            &wire
-        )
-        .is_err()
-    );
-
     // Public entry bytes use a host-selected port context too. Even a sole
     // registered setup does not implicitly become the input's expected setup.
     let port = zkc_runtime::interactive::EntryRole {
@@ -135,17 +133,11 @@ fn authorized_setups_are_per_port_and_peer_bytes_cannot_select_authority() {
         role: "P".into(),
         participant: "p".into(),
         instance: "root".into(),
-        parameters: BTreeMap::new(),
         inputs: vec![("c".into(), value.physical_type())],
         outputs: vec![],
     };
-    let input = serde_json::to_vec(&serde_json::json!([
-        "zkc.inputs/1",
-        [["c", ["wire", zkc_test_support::hex(&wire)]]]
-    ]))
-    .unwrap();
     let constrained = |metadata| {
-        NativeBackend::with_setups(
+        NativeBackend::new(
             policy,
             entry(None).with_ports(BTreeMap::from([(
                 "c".into(),
@@ -158,40 +150,26 @@ fn authorized_setups_are_per_port_and_peer_bytes_cannot_select_authority() {
         )
         .unwrap()
     };
-    let bindings = InputBindings::new();
     assert!(
         constrained(Some(a.verifier_key().metadata()))
-            .inputs_from_json(&port, &input, &bindings)
+            .check_entry_values(&port, &[Some(&value)])
             .is_ok()
     );
     assert!(
         constrained(Some(b.verifier_key().metadata()))
-            .inputs_from_json(&port, &input, &bindings)
+            .check_entry_values(&port, &[Some(&value)])
             .is_err()
     );
+    // Registry membership alone is sufficient unless the Host selected an input constraint.
     assert!(
         constrained(None)
-            .inputs_from_json(&port, &input, &bindings)
-            .unwrap_err()
-            .code
-            .contains("input-setup-required")
-    );
-    let sole = NativeBackend::with_setups(
-        policy,
-        entry(None),
-        SetupRegistry::new(vec![a.verifier_key().clone()], &policy).unwrap(),
-    )
-    .unwrap();
-    assert!(
-        sole.inputs_from_json(&port, &input, &bindings)
-            .unwrap_err()
-            .code
-            .contains("input-setup-required")
+            .check_entry_values(&port, &[Some(&value)])
+            .is_ok()
     );
 }
 
 #[test]
-fn both_table_layouts_use_the_same_logical_wire_codec() {
+fn only_default_table_layout_crosses_native_wire() {
     let policy = Policy::default();
     let backend = ark_backend(None);
     let lsb = table(&[0, 1, 4, 9]);
@@ -202,25 +180,35 @@ fn both_table_layouts_use_the_same_logical_wire_codec() {
         )
         .unwrap(),
     ));
-    let wire = backend.encode_value(&lsb).unwrap();
-    assert_eq!(wire, backend.encode_value(&msb).unwrap());
-    for value in [&lsb, &msb] {
+    let wire = backend.encode_native_value(&lsb).unwrap();
+    assert!(backend.encode_native_value(&msb).is_err());
+    assert!(
+        backend
+            .decode_native_value(&msb.physical_type(), &wire)
+            .is_err()
+    );
+    let Value::TableMsb(ref alternate) = msb else {
+        unreachable!()
+    };
+    let canonical = Value::Table(Arc::new(alternate.to_lsb(&policy.ark_bounds()).unwrap()));
+    assert_eq!(backend.encode_native_value(&canonical).unwrap(), wire);
+    for value in [&lsb, &canonical] {
         let decoded = backend
-            .decode_typed_value(value.physical_type(), &wire)
+            .decode_native_value(&value.physical_type(), &wire)
             .unwrap();
         assert_eq!(decoded.physical_type(), value.physical_type());
-        assert_eq!(backend.encode_value(&decoded).unwrap(), wire);
+        assert_eq!(backend.encode_native_value(&decoded).unwrap(), wire);
     }
     let mut bad = wire.clone();
     bad[6..10].copy_from_slice(&31u32.to_le_bytes());
     assert!(
         backend
-            .decode_typed_value(msb.physical_type(), &bad)
+            .decode_native_value(&msb.physical_type(), &bad)
             .is_err()
     );
     assert!(
         backend
-            .decode_typed_value(msb.physical_type(), &wire[..wire.len() - 1])
+            .decode_native_value(&msb.physical_type(), &wire[..wire.len() - 1])
             .is_err()
     );
 }
@@ -233,7 +221,7 @@ fn native_nested_messages_resolve_only_registered_setups() {
         .into_iter()
         .map(|n| Keys::setup_for_development(n, &bounds).unwrap())
         .collect();
-    let host = NativeBackend::with_setups(
+    let host = NativeBackend::new(
         policy,
         entry(None),
         SetupRegistry::new(
@@ -265,7 +253,7 @@ fn native_nested_messages_resolve_only_registered_setups() {
         .decode_native_value(&value.physical_type(), &bytes)
         .unwrap();
     assert_eq!(host.encode_native_value(&decoded).unwrap(), bytes);
-    let empty = NativeBackend::with_setups(
+    let empty = NativeBackend::new(
         policy,
         entry(None),
         SetupRegistry::new(vec![], &policy).unwrap(),
@@ -286,8 +274,16 @@ fn native_nested_messages_resolve_only_registered_setups() {
         );
     }
     assert!(host.encode_native_value(&values[2]).is_err());
-    let foreign =
-        NativeBackend::new(policy, entry(None), Some(keys[2].verifier_key().clone())).unwrap();
+    let foreign = NativeBackend::new(
+        policy,
+        entry(None),
+        zkc_backends::SetupRegistry::new(
+            vec![keys[2].verifier_key().clone()],
+            &zkc_backends::Policy::default(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
     let bytes = foreign.encode_native_value(&values[2]).unwrap();
     assert!(
         host.decode_native_value(&values[2].physical_type(), &bytes)

@@ -60,16 +60,15 @@ fn signature(
 }
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
-    logical_refusals: &[],
     physical_error: "binding-implementation",
     physical_only: false,
 
     contracts: &[
-        Contract::custom("resource_unit.create"),
-        Contract::custom("resource_unit.pass"),
-        Contract::custom("resource_unit.consume"),
+        Contract::custom("resource_unit.create").implemented_by(&["logical/resource_unit.create"]),
+        Contract::custom("resource_unit.pass").implemented_by(&["logical/resource_unit.pass"]),
+        Contract::custom("resource_unit.consume")
+            .implemented_by(&["logical/resource_unit.consume"]),
     ],
     resolve: signature,
-    providers: &["logical"],
     select: super::operations::default_ports,
 };

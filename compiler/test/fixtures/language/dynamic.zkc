@@ -1,0 +1,15 @@
+module sample;
+domain Fr=field("bls12-381.fr");
+type Vector<F:Field>=builtin("vector",F);
+fn filled<F:Field>(x:F,n:index)->Vector<F>{return kernel<F>("vector.fill",x,n);}
+fn split<F:Field>(xs:Vector<F>)->(Vector<F>,Vector<F>){return kernel<F>("vector.split",xs);}
+fn sum<F:Field>(xs:Vector<F>)->F{return kernel<F>("vector.sum",xs);}
+protocol Run roles(P,V)(x:Fr@P,n:index@P)->(left:Fr@V,right:Fr@V){
+ local P let xs=filled(x,n);
+ local P let parts=split(xs);
+ let ys=send P->V(parts);
+ local V let left=sum(ys.0);
+ local V let right=sum(ys.1);
+ return(left=left,right=right);
+}
+entry Demo=Run;

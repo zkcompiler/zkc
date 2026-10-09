@@ -1,0 +1,21 @@
+module sample;
+domain Fr=field("bls12-381.fr");
+math fn dot<F:Field>(a:[F;3],z:[F;3])->F{
+  return a[0]*z[0]+a[1]*z[1]+a[2]*z[2];
+}
+math fn row<F:Field>(a:[F;3],b:[F;3],c:[F;3],z:[F;3])->bool{
+  return dot(a,z)*dot(b,z)==dot(c,z);
+}
+math fn both(a:bool,b:bool)->bool{return intrinsic("bool.and",a,b);}
+math fn holds<F:Field>(a:[[F;3];2],b:[[F;3];2],c:[[F;3];2],s:F,z:[F;3])->bool{
+  return both(both(z[0]==1,z[1]==s),both(row(a[0],b[0],c[0],z),row(a[1],b[1],c[1],z)));
+}
+// Matrices are ordinary runtime parameters. No circuit name selects behavior.
+relation RankOne<F:Field>(parameter a:[[F;3];2],parameter b:[[F;3];2],
+                         parameter c:[[F;3];2],statement s:F,witness z:[F;3]){
+  return holds(a,b,c,s,z);
+}
+protocol Run roles(P)(a:[[Fr;3];2]@P,b:[[Fr;3];2]@P,c:[[Fr;3];2]@P,s:Fr@P,z:[Fr;3]@P)
+ ->(ok:bool@P) spec{target validity=RankOne<Fr>(in.a,in.b,in.c,in.s,in.z) accept out.ok;}
+ {return(ok=holds(a,b,c,s,z));}
+entry Demo=Run;

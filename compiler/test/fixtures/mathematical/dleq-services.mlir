@@ -1,15 +1,15 @@
 module {
 "protocol.module"() ({
-relation.declare @dleq_relation {kind="external", key="example/dleq", revision="1", signature=(!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> i1, purposes=["parameter", "statement", "parameter", "statement", "witness"]}
+relation.declare @dleq_relation {kind="external", key="example/dleq", revision="0", signature=(!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> i1, purposes=["parameter", "statement", "parameter", "statement", "witness"]}
 "protocol.func"() ({
-^entry(%g: !algebra.group<"bls12-381.g1">, %x: !algebra.field<"bls12-381.fr">, %y: !algebra.group<"bls12-381.g1">, %nonce: !protocol.service_ref<"random.bls12-381.fr/1">, %challenge_service: !protocol.service_ref<"random.bls12-381.fr/1">, %h: !algebra.group<"bls12-381.g1">, %w: !algebra.group<"bls12-381.g1">):
+^entry(%g: !algebra.group<"bls12-381.g1">, %x: !algebra.field<"bls12-381.fr">, %y: !algebra.group<"bls12-381.g1">, %nonce: !protocol.service_ref<"random.bls12-381.fr/0">, %challenge_service: !protocol.service_ref<"random.bls12-381.fr/0">, %h: !algebra.group<"bls12-381.g1">, %w: !algebra.group<"bls12-381.g1">):
 protocol.statement @dleq_relation(%g, %y, %h, %w, %x) {selectors=["Bob","Bob","Bob","Bob","Alice"], acceptance=0 : i64} : !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">
-%k = "protocol.query"(%nonce) {method="draw", owner="Alice", site="nonce"} : (!protocol.service_ref<"random.bls12-381.fr/1">) -> !algebra.field<"bls12-381.fr">
+%k = "protocol.query"(%nonce) {method="draw", owner="Alice", site="nonce"} : (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">
 %r = algebra.group_scale %g, %k : (!algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> !algebra.group<"bls12-381.g1">
 %commitment = protocol.exchange %r {site="commitment",sender="Alice",receiver="Bob"} : !algebra.group<"bls12-381.g1">
 %b = algebra.group_scale %h, %k : (!algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> !algebra.group<"bls12-381.g1">
 %second_commitment = protocol.exchange %b {site="second_commitment",sender="Alice",receiver="Bob"} : !algebra.group<"bls12-381.g1">
-%c = "protocol.query"(%challenge_service) {method="draw", owner="Bob", site="draw_challenge"} : (!protocol.service_ref<"random.bls12-381.fr/1">) -> !algebra.field<"bls12-381.fr">
+%c = "protocol.query"(%challenge_service) {method="draw", owner="Bob", site="draw_challenge"} : (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">
 %challenge = protocol.exchange %c {site="challenge",sender="Bob",receiver="Alice"} : !algebra.field<"bls12-381.fr">
 %cx = algebra.field_multiply %challenge, %x : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
 %z = algebra.field_add %k, %cx : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
@@ -24,6 +24,6 @@ protocol.statement @dleq_relation(%g, %y, %h, %w, %x) {selectors=["Bob","Bob","B
 %second_ok = algebra.group_equal %left_second, %right_second : (!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> i1
 %accepted = arith.andi %ok, %second_ok : i1
 "protocol.return"(%accepted) : (i1) -> ()
-}) {sym_name="main", function_type=(!algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">, !algebra.group<"bls12-381.g1">, !protocol.service_ref<"random.bls12-381.fr/1">, !protocol.service_ref<"random.bls12-381.fr/1">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> (i1), roles=["Alice", "Bob"], input_roles=[["Alice", "Bob"], ["Alice"], ["Alice", "Bob"], ["Alice"], ["Bob"], ["Alice", "Bob"], ["Alice", "Bob"]], output_roles=[["Bob"]]} : () -> ()
+}) {sym_name="main", function_type=(!algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">, !algebra.group<"bls12-381.g1">, !protocol.service_ref<"random.bls12-381.fr/0">, !protocol.service_ref<"random.bls12-381.fr/0">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> (i1), roles=["Alice", "Bob"], input_roles=[["Alice", "Bob"], ["Alice"], ["Alice", "Bob"], ["Alice"], ["Bob"], ["Alice", "Bob"], ["Alice", "Bob"]], output_roles=[["Bob"]]} : () -> ()
 }) {profile=#protocol.profile<protocol>} : () -> ()
 }

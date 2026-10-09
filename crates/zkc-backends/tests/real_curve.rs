@@ -1,3 +1,4 @@
+use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::Value as RuntimeValue;
 mod common;
 use common::*;
@@ -22,7 +23,7 @@ fn prog(
     types: &[&str],
     ret: &[&str],
 ) -> Vec<u8> {
-    program(None, ports, ops, types, ret)
+    program(ports, ops, types, ret)
 }
 
 #[test]
@@ -32,7 +33,7 @@ fn nominal_bindings_match_independent_provider_signatures() {
     for (contract, arguments) in [
         ("curve.generator", vec!["bls12-381.g1"]),
         ("curve.scale", vec!["bls12-381.g1"]),
-        ("pcs.commit", vec!["multilinear.kzg.bls12-381/1"]),
+        ("pcs.commit", vec!["multilinear.kzg.bls12-381/0"]),
         ("poly.fold", vec!["bls12-381.fr"]),
         ("bool.and", vec![]),
         ("control.require", vec![]),
@@ -66,7 +67,7 @@ fn nominal_bindings_match_independent_provider_signatures() {
         ),
         (
             "transcript.observe.nonce",
-            vec!["merlin3.bls12-381.fr64be/1"],
+            vec!["merlin3.bls12-381.fr64be/0"],
             "arkworks/transcript.observe.nonce",
         ),
         ("bool.and", vec![], "reference/bool.and"),
@@ -83,8 +84,8 @@ fn nominal_bindings_match_independent_provider_signatures() {
         );
     }
     assert!(LogicalType::parse("scalar:bls12-381.fr").is_err());
-    assert!(LogicalType::parse("group:reference.additive.bls12-381.fr/1").is_err());
-    assert!(PhysicalType::parse("group:bls12-381.g1@reference.additive-fr/1").is_err());
+    assert!(LogicalType::parse("group:reference.additive.bls12-381.fr/0").is_err());
+    assert!(PhysicalType::parse("group:bls12-381.g1@reference.additive-fr/0").is_err());
 }
 #[test]
 fn public_curve_kernels_and_vector_bounds_run_through_runner() {
@@ -163,7 +164,7 @@ fn public_curve_kernels_and_vector_bounds_run_through_runner() {
         max_groups: 1,
         ..Policy::default()
     };
-    let backend = NativeBackend::new(policy, entry(None), None).unwrap();
+    let backend = NativeBackend::new(policy, entry(None), Default::default()).unwrap();
     assert_eq!(
         code(
             &run(
@@ -181,58 +182,67 @@ fn public_curve_kernels_and_vector_bounds_run_through_runner() {
 fn public_codecs_are_exact_and_nominally_typed() {
     let b = real();
     let g = Value::Curve(GroupPoint::generator());
-    let wire = b.encode_value(&g).unwrap();
-    assert_eq!(&wire[..6], b"ZKCV\x01\x09");
+    let wire = b.encode_native_value(&g).unwrap();
+    assert_eq!(&wire[..6], b"ZKCV\x00\x09");
     assert_eq!(wire.len(), 54);
-    // Historical additive-Fr bytes remain malformed G1 bytes; never map the
+    // A scalar-sized payload is malformed for G1; never map the
     // exposed discrete logarithm onto a curve generator.
-    let mut old_group = b"ZKCV\x01\x09".to_vec();
-    old_group.extend(zkc_arkworks::encode_scalar(&Scalar::from(1)).unwrap());
-    assert!(b.decode_typed_value(g.physical_type(), &old_group).is_err());
-    assert!(b.decode_typed_value(f(1).physical_type(), &wire).is_err());
+    let mut malformed_group = b"ZKCV\x00\x09".to_vec();
+    malformed_group.extend(zkc_arkworks::encode_scalar(&Scalar::from(1)).unwrap());
+    assert!(
+        b.decode_native_value(&g.physical_type(), &malformed_group)
+            .is_err()
+    );
+    assert!(b.decode_native_value(&f(1).physical_type(), &wire).is_err());
     for value in [
         g,
         Value::Curve(GroupPoint::identity()),
         groups(&[]),
         groups(&[0, 1, 7]),
     ] {
-        let bytes = b.encode_value(&value).unwrap();
+        let bytes = b.encode_native_value(&value).unwrap();
         assert_eq!(
-            b.encode_value(&b.decode_typed_value(value.physical_type(), &bytes).unwrap())
-                .unwrap(),
+            b.encode_native_value(
+                &b.decode_native_value(&value.physical_type(), &bytes)
+                    .unwrap()
+            )
+            .unwrap(),
             bytes
         );
         for n in 0..bytes.len() {
             assert!(
-                b.decode_typed_value(value.physical_type(), &bytes[..n])
+                b.decode_native_value(&value.physical_type(), &bytes[..n])
                     .is_err()
             );
         }
         let mut extra = bytes;
         extra.push(0);
-        assert!(b.decode_typed_value(value.physical_type(), &extra).is_err());
+        assert!(
+            b.decode_native_value(&value.physical_type(), &extra)
+                .is_err()
+        );
     }
-    let mut enormous = b"ZKCV\x01\x0a".to_vec();
+    let mut enormous = b"ZKCV\x00\x43".to_vec();
     enormous.extend(u32::MAX.to_le_bytes());
     assert_eq!(
-        b.decode_typed_value(
-            zkc_runtime::interactive::PhysicalType::default_for(
+        b.decode_native_value(
+            &zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse("groups:bls12-381.g1").unwrap()
             )
             .unwrap(),
             &enormous
         )
         .unwrap_err()
-        .code,
-        "exhausted:group-limit"
+        .to_string(),
+        "native-wire-limit"
     );
-    let mut invalid = b"ZKCV\x01\x0a".to_vec();
+    let mut invalid = b"ZKCV\x00\x43".to_vec();
     invalid.extend(1u32.to_le_bytes());
     invalid.extend([0; 48]);
     invalid[10] = 0x80;
     assert!(
-        b.decode_typed_value(
-            zkc_runtime::interactive::PhysicalType::default_for(
+        b.decode_native_value(
+            &zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse("groups:bls12-381.g1").unwrap()
             )
             .unwrap(),
@@ -240,19 +250,19 @@ fn public_codecs_are_exact_and_nominally_typed() {
         )
         .is_err()
     );
-    let mut nonexistent = b"ZKCV\x01\x0a".to_vec();
+    let mut nonexistent = b"ZKCV\x00\x43".to_vec();
     nonexistent.extend(2u32.to_le_bytes());
     assert_eq!(
-        b.decode_typed_value(
-            zkc_runtime::interactive::PhysicalType::default_for(
+        b.decode_native_value(
+            &zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse("groups:bls12-381.g1").unwrap()
             )
             .unwrap(),
             &nonexistent
         )
         .unwrap_err()
-        .code,
-        "refused:wire-length"
+        .to_string(),
+        "native-wire-invalid:length"
     );
 }
 #[cfg(feature = "test-utils")]
@@ -375,7 +385,16 @@ fn pcs_equal_uses_pinned_public_commitments_and_preserves_keys() {
         &["same"],
     );
     for (other, expected) in [(c.commitment(), true), (c2.commitment(), false)] {
-        let b = NativeBackend::new(p, entry(Some(1)), Some(keys.verifier_key().clone())).unwrap();
+        let b = NativeBackend::new(
+            p,
+            entry(Some(1)),
+            zkc_backends::SetupRegistry::new(
+                vec![keys.verifier_key().clone()],
+                &zkc_backends::Policy::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
         let (out, _) = run(
             &bytes,
             b,
@@ -385,6 +404,52 @@ fn pcs_equal_uses_pinned_public_commitments_and_preserves_keys() {
             ],
         );
         assert!(matches!(out.unwrap()[0], Value::Bool(v) if v==expected));
+    }
+    // Zero commitments have identical group payloads across setups. Equality
+    // must still compare full setup metadata when every key is authorized.
+    let foreign = Keys::setup_for_development(1, &p.ark_bounds()).unwrap();
+    let other_arity = Keys::setup_for_development(2, &p.ark_bounds()).unwrap();
+    let zero = |key: &Keys| {
+        let table = zkc_arkworks::Table::from_logical_vec(
+            vec![Scalar::from(0); 1 << key.verifier_key().metadata().arity()],
+            &p.ark_bounds(),
+        )
+        .unwrap();
+        key.prover_key()
+            .commit(&table)
+            .unwrap()
+            .commitment()
+            .clone()
+    };
+    let zero_current = zero(&keys);
+    for (other, expected) in [
+        (zero(&keys), true),
+        (zero(&foreign), false),
+        (zero(&other_arity), false),
+    ] {
+        let a = zero_current.to_bytes(&p.ark_bounds()).unwrap();
+        let b = other.to_bytes(&p.ark_bounds()).unwrap();
+        assert_eq!(&a[a.len() - 48..], &b[b.len() - 48..]);
+        assert_eq!(zero_current.metadata() == other.metadata(), expected);
+        let registry = SetupRegistry::new(
+            vec![
+                keys.verifier_key().clone(),
+                foreign.verifier_key().clone(),
+                other_arity.verifier_key().clone(),
+            ],
+            &p,
+        )
+        .unwrap();
+        let backend = NativeBackend::new(p, entry(None), registry).unwrap();
+        let (out, _) = run(
+            &bytes,
+            backend,
+            vec![
+                Value::Commitment(std::sync::Arc::new(zero_current.clone())),
+                Value::Commitment(std::sync::Arc::new(other)),
+            ],
+        );
+        assert!(matches!(out.unwrap()[0], Value::Bool(same) if same == expected));
     }
 }
 
@@ -403,27 +468,32 @@ fn real_os_nonce_custody_aliases_and_cancellation() {
         &["rs", "next"],
     );
     let mut backend = real();
-    let nonce = backend.issue_nonce(domain(), 2).unwrap();
+    let nonce = backend
+        .issue_nonce_for(Identity::Bls12381Fr, domain(), 2)
+        .unwrap();
     let old = nonce.clone();
     let (out, backend) = run(&bytes, backend, vec![nonce, groups(&[1, 3])]);
     let out = out.unwrap();
     assert_eq!(backend.observe(token(&old)).unwrap().stage, "committed");
     assert_eq!(
-        backend.encode_value(&out[1]).unwrap_err().code,
-        "refused:nonserializable"
+        backend
+            .encode_native_value(&out[1])
+            .unwrap_err()
+            .to_string(),
+        "native-wire-backend:native-wire-type"
     );
     assert_eq!(
         backend
-            .decode_typed_value(
-                zkc_runtime::interactive::PhysicalType::default_for(
+            .decode_native_value(
+                &zkc_runtime::interactive::PhysicalType::default_for(
                     zkc_runtime::interactive::LogicalType::parse("nonce:bls12-381.fr").unwrap()
                 )
                 .unwrap(),
                 &[]
             )
             .unwrap_err()
-            .code,
-        "refused:nonserializable"
+            .to_string(),
+        "native-wire-backend:native-wire-type"
     );
     assert_eq!(
         real().validate_value(&out[1]).unwrap_err().code,
@@ -434,7 +504,9 @@ fn real_os_nonce_custody_aliases_and_cancellation() {
         Domain::new("P", "session", "main", Some("different_instance")),
     ] {
         let mut backend = real();
-        let nonce = backend.issue_nonce(wrong, 2).unwrap();
+        let nonce = backend
+            .issue_nonce_for(Identity::Bls12381Fr, wrong, 2)
+            .unwrap();
         let old = nonce.clone();
         let admitted = admit_supplied(&bytes, &backend).unwrap();
         let e = Runner::new(
@@ -457,7 +529,9 @@ fn real_os_nonce_custody_aliases_and_cancellation() {
         &["a", "b"],
     );
     let mut backend = real();
-    let nonce = backend.issue_nonce(domain(), 2).unwrap();
+    let nonce = backend
+        .issue_nonce_for(Identity::Bls12381Fr, domain(), 2)
+        .unwrap();
     let admitted = admit_supplied(&aliases, &backend).unwrap();
     let e = Runner::new(
         &admitted,
@@ -475,7 +549,9 @@ fn real_os_nonce_custody_aliases_and_cancellation() {
     );
     // Cancel after commit but before participant return; preserve committed stage.
     let mut backend = real();
-    let nonce = backend.issue_nonce(domain(), 2).unwrap();
+    let nonce = backend
+        .issue_nonce_for(Identity::Bls12381Fr, domain(), 2)
+        .unwrap();
     let old = nonce.clone();
     let mut runner = load(&bytes, backend, vec![nonce, groups(&[1])]);
     let Action::Local(local) = runner.poll() else {

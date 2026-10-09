@@ -9,7 +9,7 @@
 }:
 stdenv.mkDerivation {
   pname = "zkc-compiler";
-  version = "0.1.0";
+  version = "0.0.0";
   src = source;
   outputs = [
     "out"
@@ -33,12 +33,11 @@ stdenv.mkDerivation {
     "-DMLIR_TABLEGEN_EXE=${llvm.tblgen}/bin/mlir-tblgen"
     "-DBUILD_TESTING=ON"
   ];
-  doCheck = true;
+  # Full compiler validation is checks.compiler; installation does not run tests.
+  doCheck = false;
   postInstall = ''
-    mkdir -p "$testSupport/bin/examples/service" "$testSupport/bin/test"
-    ln -s "$out/bin/zkc-compile" "$out/bin/zkc-opt" "$testSupport/bin/"
-    cp zkc-source-bench "$testSupport/bin/"
-    find examples/service -maxdepth 1 -type f -executable -exec cp {} "$testSupport/bin/examples/service/" \;
+    mkdir -p "$testSupport/bin/test"
+    ln -s "$out/bin/zkc-compile" "$out/bin/zkc-opt" "$out/bin/zkc-tblgen" "$testSupport/bin/"
     find test -maxdepth 1 -type f -executable -exec cp {} "$testSupport/bin/test/" \;
   '';
   meta = {

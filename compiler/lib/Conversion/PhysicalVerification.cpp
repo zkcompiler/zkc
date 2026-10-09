@@ -19,7 +19,7 @@ class PhysicalCorrespondence {
   unsigned remaining = 1000000;
   bool charge() { return remaining && (--remaining, true); }
   bool binding(local::OperationBindingOp op,
-               const source::OperationBinding &expected) {
+               const protocol::OperationBinding &expected) {
     if (!op || op.getSymName() != expected.name ||
         op.getContract() != expected.application.contract ||
         op.getImplementation() != expected.application.implementation ||
@@ -31,7 +31,7 @@ class PhysicalCorrespondence {
         return false;
     return op->getAttrs().size() == 4;
   }
-  bool kernel(Operation *op, const source::OperationBinding &binding,
+  bool kernel(Operation *op, const protocol::OperationBinding &binding,
               ValueRange operands, TypeRange results, Attribute site,
               ArrayAttr parameters) {
     if (!op || !charge() || !isa<plan::ExecuteKernelOp>(op) ||

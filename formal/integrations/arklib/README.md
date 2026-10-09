@@ -69,7 +69,7 @@ A proof parameter may express a missing law, but without a supplier it yields
 only a conditional theorem. Native contract trust, cryptographic assumptions,
 missing mathematical proofs and undischarged hypotheses remain distinct.
 
-The [research agenda](../../design/formal-questions.md#3-external-libraries-and-theorem-boundaries)
+The [research agenda](../../docs/support.md)
 tracks general FS/duplex and knowledge questions. General results belong upstream
 where useful; zkc remains responsible for its source, encoding, query, observer
 and failure correspondence. Updating an upstream pin cannot prove those adapters.

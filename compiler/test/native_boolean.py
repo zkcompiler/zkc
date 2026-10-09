@@ -1,11 +1,11 @@
-"""Closed Boolean arithmetic, versioned literals and exact carrier boundaries."""
+"""Closed Boolean arithmetic, canonical literals and exact carrier boundaries."""
 import copy
 import itertools
 import json
 import re
 from pathlib import Path
 from commands import Commands
-from tools import records
+from tools import records, canonical_program
 
 out = records()
 commands = Commands(out)
@@ -13,7 +13,7 @@ source = (Path(__file__).parent / "fixtures/mathematical/booleans.mlir").read_te
 
 def evaluate(carrier, arguments):
     bindings = {b[0]: b[1] for b in carrier[1]}
-    functions = {f[1]: f for f in carrier[3]}
+    functions = {f[1]: f for f in carrier[2]}
     def body(instructions, env):
         for op in instructions:
             if op[0] in ("return", "yield"):
@@ -36,8 +36,8 @@ def evaluate(carrier, arguments):
                 env.update(zip(op[4], body(f[4], dict(zip((p[0] for p in f[2]), (env[n] for n in op[3]))))))
             else: raise AssertionError(op)
         raise AssertionError("no return")
-    p = carrier[4][0]
-    return body(p[7], dict(zip((p[0] for p in p[5]), arguments)))
+    p = carrier[3][0]
+    return body(p[6], dict(zip((p[0] for p in p[4]), arguments)))
 
 for optimize in (False, True):
     passes = ["--zkc-project-protocol"]
@@ -49,26 +49,25 @@ for optimize in (False, True):
     assert "local.bool_constant" not in physical and "plan.bool_constant" in physical
     encoded = commands.source("protocol-export", physical)
     carrier = json.loads(encoded)
-    assert carrier[0] == "zkc.program/1"
+    assert carrier[0] == "zkc.program/0"
     for a, b, c in itertools.product((False, True), repeat=3):
         assert evaluate(carrier, [a, b, c, 11, 23, 31, 47]) == [
             True, False, a and b, a or b, a != b, a == b, a != b, not a,
             a if c else b, 11 if c else 23, 31 if c else 47]
     (out / f"booleans-{int(optimize)}.json").write_text(encoded)
-    assert json.loads(commands.source("protocol-export", commands.source("protocol-import", encoded))) == carrier
+    assert json.loads(canonical_program(commands, encoded)) == carrier
 
 mutant = copy.deepcopy(carrier)
-mutant[0] = "zkc.participants/1"
-for p in mutant[4]: p.pop()
-commands.source("protocol-import", json.dumps(mutant), refuses="interactive-instruction")
+mutant[0] = "invalid.program"
+canonical_program(commands, json.dumps(mutant), refuses="interactive-format")
 for value in ("true", 1, None, []):
     mutant = copy.deepcopy(carrier)
-    literal = next(op for f in mutant[3] for op in f[4] if op[0] == "bool_constant")
+    literal = next(op for f in mutant[2] for op in f[4] if op[0] == "bool_constant")
     literal[3] = value
-    commands.source("protocol-import", json.dumps(mutant), refuses="native-boolean-value")
+    canonical_program(commands, json.dumps(mutant), refuses="native-boolean-value")
 mutant = copy.deepcopy(carrier)
-mutant[4][0][7].insert(0, ["bool_constant", "root_literal", "new_value", True])
-commands.source("protocol-import", json.dumps(mutant), refuses="native-boolean-context")
+mutant[3][0][6].insert(0, ["bool_constant", "root_literal", "new_value", True])
+canonical_program(commands, json.dumps(mutant), refuses="native-boolean-context")
 
 for predicate in ("ult", "ule", "ugt", "uge", "slt", "sle", "sgt", "sge"):
     commands.verified(source.replace("cmpi eq", "cmpi " + predicate), "mathematical-dependencies", "--canonicalize", "--cse")
@@ -121,10 +120,10 @@ condition_arm = json.loads(commands.source('protocol-export', bound))
 for a, b, c in itertools.product((False, True), repeat=3):
     assert evaluate(condition_arm, [a, b, c, 11, 23, 31, 47])[8] == (c or b)
 
-# Legacy MLIR cannot acquire the literal by changing the execution selector.
-commands.verified(physical.replace('program', 'legacy_participants_v1'), 'native-boolean-context')
+# The profile owns the phase boundary and refuses unknown properties.
+commands.verified(physical.replace('#protocol.profile<physical>', '#protocol.profile<physical>, unexpected="value"'), 'mlir-unknown-property')
 for length in (128, 129):
     named = copy.deepcopy(carrier)
-    literal = next(op for f in named[3] for op in f[4] if op[0] == 'bool_constant')
+    literal = next(op for f in named[2] for op in f[4] if op[0] == 'bool_constant')
     literal[1] = 's' * length
-    commands.source('protocol-import', json.dumps(named), refuses=None if length == 128 else 'interactive-name')
+    canonical_program(commands, json.dumps(named), refuses=None if length == 128 else 'interactive-name')

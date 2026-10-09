@@ -10,11 +10,7 @@ void registerCompilerPasses() {
   mlir::registerPass([] { return protocol::createEliminatePolynomialsPass(); });
   mlir::registerPass([] { return protocol::createFixPolynomialFactorsPass(); });
   mlir::registerPass([] { return protocol::createSimplifyParticipantPass(); });
-  mlir::registerPass([] { return createLowerPIRToPlanPass(); });
-  mlir::registerPass([] { return createLowerPlanToPhysicalPass(); });
-  mlir::registerPass([] { return createSimplifyTableRegionsPass(); });
   mlir::registerPass([] { return protocol::createExpandAlgorithmsPass(); });
-  mlir::registerPass([] { return protocol::createProjectParticipantsPass(); });
   mlir::registerPass([] { return protocol::createSelectPhysicalPass(); });
   mlir::registerPass([] { return relation::createDeduplicateRelationsPass(); });
 }

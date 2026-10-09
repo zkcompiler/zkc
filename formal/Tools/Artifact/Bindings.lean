@@ -27,7 +27,7 @@ def artifactOrigins (json : Json) : Result (List Algorithms.Origin) := do
 
 def nominalKind (kind : String) : Result Ty := do
   let identities := ["", "bls12-381.fr", "bls12-381.g1",
-    "multilinear.kzg.bls12-381/1", "merlin3.bls12-381.fr64be/1"]
+    "multilinear.kzg.bls12-381/0", "merlin3.bls12-381.fr64be/0"]
   let [identity] := identities.filter (Bindings.logicalIdentity kind)
     | throw "artifact-nominal-value"
   return (Bindings.ValueType.mk kind identity "").spelling
@@ -98,7 +98,7 @@ def decodeValue (ty : Ty) (bytes : ByteArray) : Result Value := do
     checkRistrettoWire kind bytes
     return .nominalBytes nominal.identity kind bytes
   let value ← if kind == "verifier_key" then do
-      ensure (bytes.size ≥ 81 && bytes.extract 0 8 == "ZKCAR006".toUTF8 && bytes[8]! == 1) "verifier-key-header"
+      ensure (bytes.size ≥ 81 && bytes.extract 0 8 == "ZKCAR000".toUTF8 && bytes[8]! == 1) "verifier-key-header"
       let n := valueLE (bytes.extract 9 17)
       ensure (0 < n && n ≤ limits.rank && bytes.size == 81 + 144 + 48*n) "verifier-key-shape"
       pure (.verifierKey bytes)

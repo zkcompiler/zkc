@@ -90,49 +90,8 @@ def RandomIndexOp : KernelOp<CryptoDialect, "exec.random_index", [OpRandomIndex]
 
 def RandomVectorOp : KernelOp<CryptoDialect, "exec.random_vector", [OpRandomVector]>;
 
-def TranscriptChallengeOp : KernelOp<CryptoDialect, "exec.transcript_challenge", [OpTranscriptChallenge]>;
-
-def TranscriptDrawIndexOp : KernelOp<CryptoDialect, "exec.transcript_draw_index", [OpTranscriptDrawIndex]>;
-
-def TranscriptObserveOp : KernelOp<CryptoDialect, "exec.transcript_observe", []> {
-  // Payloads differ deliberately; each remains a distinct checked contract.
-  let observationContracts = [
-    OpTranscriptObserveBool, OpTranscriptObserveField, OpTranscriptObserveTable,
-    OpTranscriptObservePoint, OpTranscriptObserveRound,
-    OpTranscriptObserveCommitment, OpTranscriptObserveProof,
-    OpTranscriptObserveGroup, OpTranscriptObserveGroups,
-    OpTranscriptObserveMatrix, OpTranscriptObserveVector,
-    OpTranscriptObservePolynomial, OpTranscriptObserveIndex,
-    OpTranscriptObserveIndices, OpTranscriptObserveCommitments
-  ];
-}
-
-def NativeTranscriptChallengeOp : KernelOp<CryptoDialect,
-    "exec.native_transcript_challenge", [OpNativeTranscriptChallenge]>;
-
-def NativeTranscriptObserveOp : KernelOp<CryptoDialect,
-    "exec.native_transcript_observe", []> {
-  let observationContracts = [OpNativeTranscriptObserveBool,
-    OpNativeTranscriptObserveField, OpNativeTranscriptObserveGroup];
-}
-
 def IndexedTranscriptChallengeOp : KernelOp<CryptoDialect,
     "exec.indexed_transcript_challenge", [OpIndexedTranscriptChallenge]>;
-def IndexedTranscriptObserveBoolOp : KernelOp<CryptoDialect,
-    "exec.indexed_transcript_observe_bool", [OpIndexedTranscriptObserveBool]>;
-def IndexedTranscriptObserveFieldOp : KernelOp<CryptoDialect,
-    "exec.indexed_transcript_observe_field", [OpIndexedTranscriptObserveField]>;
-def IndexedTranscriptObserveGroupOp : KernelOp<CryptoDialect,
-    "exec.indexed_transcript_observe_group", [OpIndexedTranscriptObserveGroup]>;
-def IndexedTranscriptObserveCommitmentOp : KernelOp<CryptoDialect,
-    "exec.indexed_transcript_observe_commitment", [OpIndexedTranscriptObserveCommitment]>;
-def IndexedTranscriptObserveProofOp : KernelOp<CryptoDialect,
-    "exec.indexed_transcript_observe_proof", [OpIndexedTranscriptObserveProof]>;
-def IndexedTranscriptObserveIndexOp : KernelOp<CryptoDialect,
-    "exec.indexed_transcript_observe_index", [OpIndexedTranscriptObserveIndex]>;
-def IndexedTranscriptObserveFieldArrayOp : KernelOp<CryptoDialect,
-    "exec.indexed_transcript_observe_field_array", [OpIndexedTranscriptObserveFieldArray]>;
-
 def IndexedTranscriptObserveDataOp : KernelOp<CryptoDialect,
     "exec.indexed_transcript_observe_data", [OpIndexedTranscriptObserveData]>;
 

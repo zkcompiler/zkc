@@ -51,15 +51,15 @@ private def decodeResource (json : Json) : Result Resource := do
             ensure (kind == "field") "extension-rng-tape"
             pure (ScalarReference.Data.field (← ExtensionReference.scalar payload) : ExtensionReference.Data)
         pure (.erng tape)
-    | "transcript:merlin3.koala-bear.ext8-binomial3.rejection31le/1" => do
+    | "transcript:merlin3.koala-bear.ext8-binomial3.rejection31le/0" => do
         pure (.transcript Bindings.extensionTranscript (← Tools.Artifact.treeBytes value) #[])
     | "rng:bn254.fr" => do pure (.brng (← (← Decode.array value 1048576).mapM (ScalarReference.decodeScalar .bn254)))
     | "rng:ristretto255.scalar" => do pure (.rrng (← (← Decode.array value 1048576).mapM (ScalarReference.decodeScalar .ristretto)))
     | "nonce:ristretto255.scalar" => do pure (.rnonce (.issued (← ScalarReference.decodeScalar .ristretto value)))
-    | "transcript:merlin3.ristretto255.scalar64le/1" => do pure (.transcript Bindings.ristrettoTranscript (← Tools.Artifact.treeBytes value) #[])
+    | "transcript:merlin3.ristretto255.scalar64le/0" => do pure (.transcript Bindings.ristrettoTranscript (← Tools.Artifact.treeBytes value) #[])
     | "rng" => do pure (.rng (← decodeScalars value))
     | "nonce" => do pure (.nonce (.issued (← decodeScalar value)))
-    | "transcript:spongefish0.7.4.keccak.bls12-381.fr64be/1" => do pure (.transcript Bindings.spongefishTranscript (← Tools.Artifact.treeBytes value) #[])
+    | "transcript:spongefish0.7.4.keccak.bls12-381.fr64be/0" => do pure (.transcript Bindings.spongefishTranscript (← Tools.Artifact.treeBytes value) #[])
     | "transcript" => do pure (.transcript Bindings.transcriptIdentity (← Tools.Artifact.treeBytes value) #[])
     | _ => throw "resource-kind"
   return ⟨← Decode.name identity, ← Decode.name owner, boundInstance, budget, payload, 0, 0⟩
@@ -78,7 +78,7 @@ private def records (json : Json) : Result (List (Json × Json)) := do
 def invocation (prepared : Generic.Prepared) (selected : Option Name) (json : Json) : Result Invocation := do
   let parts ← Decode.array json
   let (parts, setups) := if parts.length == 8 then (parts.take 7, parts[7]!) else (parts, .arr #[])
-  let [.str "zkc.reference-inputs/1", entry, session, supplied, resources, answers, replies] := parts
+  let [.str "zkc.reference-inputs/0", entry, session, supplied, resources, answers, replies] := parts
     | throw "reference-inputs"
   let entry ← Decode.name entry
   let session ← decodeSession session
@@ -274,11 +274,11 @@ def observe (selected : Option Name) (invocation : Invocation)
   let outcome := match result.1 with
     | .ok values => .arr #[.str "returned", valuesJson values]
     | .error fault => .arr #[.str fault.reason, .str fault.detail, fault.location.json]
-  .arr #[.str "zkc.reference-observation/1", .str invocation.location.entry,
+  .arr #[.str "zkc.reference-observation/0", .str invocation.location.entry,
     .str (selected.getD "joint"), outcome, .arr result.2.events,
     result.2.resourcesJson, .str (toString result.2.replies.length),
     .arr #[.str "scope", .str "source-control-and-typed-locals",
-      .str (if selected.isNone then "tools-joint-schedule/1" else "open-role/1"),
+      .str (if selected.isNone then "tools-joint-schedule/0" else "open-role/0"),
       .str "external-group-contract", .str "logical-resources",
       .str "external-pcs-contract", .str "external-hash-contract",
       .str "no-physical-resource-correspondence", .str "no-elaboration-adequacy-proof"]]

@@ -13,7 +13,7 @@ fn resolve(
     row: &Contract,
     selection: Selection,
 ) -> Option<BoundSignature> {
-    if binding.arguments != ["multilinear.kzg.bls12-381/1"] {
+    if binding.arguments != ["multilinear.kzg.bls12-381/0"] {
         return None;
     }
     support::domain_signature(binding, row, selection, crate::domains::BLS)

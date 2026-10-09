@@ -45,7 +45,7 @@ structure Candidate where
   profile : Profile := .reference
 
 def candidateCodec : Format.Codec Candidate where
-  encode candidate := .arr #[.str candidate.profile.formatName, toJson (1 : Nat),
+  encode candidate := .arr #[.str candidate.profile.formatName, toJson (0 : Nat),
     (ArtifactFormat.context types).encode candidate.context,
     RegionFormat.encode types operations candidate.body]
   decode json := do
@@ -55,7 +55,7 @@ def candidateCodec : Format.Codec Candidate where
         | "zkc-table-physical-reference" => pure Profile.reference
         | "zkc-table-physical-plan" => pure Profile.native
         | _ => throw Format.Error.shape
-      if (← Format.natural version) != 1 then throw .shape
+      if (← Format.natural version) != 0 then throw .shape
       return ⟨← (ArtifactFormat.context types).decode context,
         ← RegionFormat.decode types operations 256 body, profile⟩
     | _ => throw .shape
@@ -75,7 +75,7 @@ def admit (request : RegionArtifact.Request Ty Protocol.Operation) (candidate : 
   if request.context.dependencies != dependencies then throw "unresolved-dependency"
   if candidate.context != request.context then throw "context-mismatch"
   -- The request context must be valid, as for direct plans
-  -- (docs/spec/profiles/compiler/direct-plan.md).
+  -- (formal/docs/spec/profiles/compiler/direct-plan.md).
   if !validContext request.context then throw "invalid-context"
   check (request.context.inputs.map (·.type)) request.context.resultType request.source candidate.body
 

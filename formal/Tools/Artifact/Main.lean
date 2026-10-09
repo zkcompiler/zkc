@@ -22,7 +22,7 @@ def reference (source descriptor inputs : Json) (proof : ByteArray) (answers : J
     | .ok values => do
         pure (.arr #[.str "accepted", .arr (← values.mapM (fun v => observedValue v)).toArray])
     | .error failure => pure (.arr #[.str failure.reason, .str failure.detail, failure.request])
-  return .arr #[.str "zkc.artifact-observation/1", outcome, .arr state.events, .arr state.requests,
+  return .arr #[.str "zkc.artifact-observation/0", outcome, .arr state.events, .arr state.requests,
     .str (toString state.cursor.position), .str (toString state.draws),
     .str (toString state.transcriptActions), .str (hex invocation.root),
     .arr #[.str "original-source-validator", .str "independent-control-and-framing",
@@ -70,7 +70,7 @@ def dispatch (args : List String) : IO (Result Json) := do
             let binding ← source.binding (← lookup prepared.descriptor.entry source.entries)
             let definition ← source.protocol binding.protocol
             let _ ← decodeConfiguration source prepared.descriptor binding definition configuration
-            return .arr #[.str "zkc.identity-inspection/1", prepared.resolution.carrier.json,
+            return .arr #[.str "zkc.identity-inspection/0", prepared.resolution.carrier.json,
               prepared.descriptor.json, prepared.normalized, configuration]
   | "reference" :: sourcePath :: descriptorPath :: inputPath :: proofPath :: repliesPath :: policy =>
       let source ← Decode.read sourcePath

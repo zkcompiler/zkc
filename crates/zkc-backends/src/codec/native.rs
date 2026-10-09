@@ -1,10 +1,16 @@
 //! Closed native wire profile. Errors are classified where they occur; opaque
 //! BackendError strings are never parsed into receive failures.
+mod bn254;
 mod bulk;
+mod domains;
+mod input;
+pub use input::NativeInputSize;
 mod pcs;
 mod structured;
 use crate::{NativeBackend, Policy, Value};
-use zkc_runtime::interactive::{BackendError, DecodeReason, PhysicalType, Value as RuntimeValue};
+use zkc_runtime::interactive::{
+    BackendError, DecodeReason, PhysicalType, Type, Value as RuntimeValue,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NativeWireError {
@@ -87,7 +93,7 @@ fn table_type(ty: &PhysicalType) -> bool {
 pub(crate) fn encode(
     value: &Value,
     policy: &Policy,
-    key: &crate::setups::Setups,
+    key: &crate::SetupRegistry,
 ) -> Result<Vec<u8>, NativeWireError> {
     if bulk::format(&value.physical_type()).is_some() {
         return bulk::encode(value, policy);
@@ -96,9 +102,7 @@ pub(crate) fn encode(
         return structured::encode(value, policy, key);
     }
     if pcs::tag(&value.physical_type()).is_some() {
-        if key.is_registered() {
-            pcs::encoded_width(value, key)?;
-        }
+        pcs::encoded_width(value, key)?;
         return pcs::encode(value, policy);
     }
     if let Value::Table(table) = value {
@@ -190,6 +194,27 @@ fn encode_fixed(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWireErr
     Ok(bytes)
 }
 impl NativeBackend {
+    /// Check supported immutable host data without encoding it. Backend policy,
+    /// setup authorization and aggregate collection limits apply; wire buffers
+    /// and decode-only temporary allocations are absent from this path.
+    /// Native elements must satisfy their upstream library invariants; this
+    /// method does not repair values created with unchecked scalar constructors.
+    pub fn validate_native_input(&self, value: &Value) -> Result<(), NativeWireError> {
+        let ty = value.physical_type();
+        if matches!(ty.kind(), Type::ProverKey | Type::VerifierKey)
+            || !ty.is_duplicable()
+            || !has_native_wire(&ty)
+        {
+            return Err(unsupported());
+        }
+        if structured::tag(&ty).is_some() {
+            structured::value_counts(value, self.policy())?;
+        } else if bulk::format(&ty).is_some() {
+            bulk::value_counts(value, self.policy())?;
+        }
+        zkc_runtime::interactive::Backend::validate_value(self, value)
+            .map_err(NativeWireError::Backend)
+    }
     /// Bound native input retention before expensive payload decoding. This
     /// uses byte lengths and, for recursive/bulk encodings, shape scans.
     /// Callers must still decode and check complete framing and values.

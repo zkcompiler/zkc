@@ -8,15 +8,21 @@ use zkc_runtime::interactive::{Limits, ValueBudget, WorkBudget};
 /// or lower byte/work ceilings. Neither proof nor deployment data grants this
 /// authority. Setup and provider-specific ceilings keep their existing owners.
 #[derive(Clone, Copy, Debug)]
-pub struct NativeCapacity {
+pub struct Capacity {
+    /// Maximum elements in one numeric collection.
     pub elements: usize,
+    /// Maximum group elements in one collection.
     pub groups: usize,
+    /// Bytes in one canonical wire frame.
     pub wire_bytes: usize,
+    /// Retained bytes in one native value.
     pub value_bytes: usize,
+    /// Instructions and loop iterations per runner (cumulative for proof retries).
     pub work: WorkBudget,
+    /// Live retained payload and cumulative allocation charge, in bytes.
     pub values: ValueBudget,
 }
-impl Default for NativeCapacity {
+impl Default for Capacity {
     fn default() -> Self {
         let p = Policy::default();
         Self {
@@ -29,17 +35,31 @@ impl Default for NativeCapacity {
         }
     }
 }
-impl NativeCapacity {
-    pub(crate) fn check(&self) -> Result<()> {
-        if self.elements > 1 << 20
-            || self.groups > 32768
-            || self.wire_bytes > INPUT_LIMIT
-            || self.value_bytes > Limits::VALUE_BYTES
-            || self.work.instructions > Limits::INSTRUCTIONS
-            || self.work.calls > Limits::CALLS
-            || self.work.iterations > Limits::ITERATIONS
-            || self.values.live_bytes > Limits::VALUE_BYTES
-            || self.values.total_bytes > Limits::TOTAL_VALUE_BYTES
+impl Capacity {
+    /// Installed hard ceilings; defaults may be lower. These do not bound peak RSS.
+    pub const HARD_MAX: Self = Self {
+        elements: 1 << 20,
+        groups: 32768,
+        wire_bytes: INPUT_LIMIT,
+        value_bytes: Limits::VALUE_BYTES,
+        work: WorkBudget {
+            instructions: Limits::INSTRUCTIONS,
+            iterations: Limits::ITERATIONS,
+        },
+        values: ValueBudget {
+            live_bytes: Limits::VALUE_BYTES,
+            total_bytes: Limits::TOTAL_VALUE_BYTES,
+        },
+    };
+    pub fn validate(&self) -> Result<()> {
+        if self.elements > Self::HARD_MAX.elements
+            || self.groups > Self::HARD_MAX.groups
+            || self.wire_bytes > Self::HARD_MAX.wire_bytes
+            || self.value_bytes > Self::HARD_MAX.value_bytes
+            || self.work.instructions > Self::HARD_MAX.work.instructions
+            || self.work.iterations > Self::HARD_MAX.work.iterations
+            || self.values.live_bytes > Self::HARD_MAX.values.live_bytes
+            || self.values.total_bytes > Self::HARD_MAX.values.total_bytes
         {
             return Err("native-capacity-limit".into());
         }
@@ -65,14 +85,13 @@ impl NativeCapacity {
     /// semantic binding root; changing a quota cannot change successful values.
     pub fn record(&self) -> Json {
         json!([
-            "zkc.native-capacity/1",
+            "zkc.native-capacity/0",
             self.elements.to_string(),
             self.groups.to_string(),
             self.wire_bytes.to_string(),
             self.value_bytes.to_string(),
             [
                 self.work.instructions.to_string(),
-                self.work.calls.to_string(),
                 self.work.iterations.to_string()
             ],
             [
@@ -85,12 +104,12 @@ impl NativeCapacity {
     pub fn parse(bytes: &[u8]) -> Result<Self> {
         let value = parse(bytes, 4096)?;
         let row = array(&value, 7)?;
-        if text(&row[0])? != "zkc.native-capacity/1" {
+        if text(&row[0])? != "zkc.native-capacity/0" {
             return Err("native-capacity-format".into());
         }
         let size =
             |v| usize::try_from(natural(v)?).map_err(|_| String::from("native-capacity-limit"));
-        let work = array(&row[5], 3)?;
+        let work = array(&row[5], 2)?;
         let values = array(&row[6], 2)?;
         let result = Self {
             elements: size(&row[1])?,
@@ -99,22 +118,25 @@ impl NativeCapacity {
             value_bytes: size(&row[4])?,
             work: WorkBudget {
                 instructions: natural(&work[0])?,
-                calls: natural(&work[1])?,
-                iterations: natural(&work[2])?,
+                iterations: natural(&work[1])?,
             },
             values: ValueBudget {
                 live_bytes: size(&values[0])?,
                 total_bytes: size(&values[1])?,
             },
         };
-        result.check()?;
+        result.validate()?;
         Ok(result)
     }
     pub(crate) fn wire(&self, value: &Json) -> Result<Vec<u8>> {
         // Check the knowable binary length before allocating its hex decoding.
-        if text(value)?.len() / 2 > self.wire_bytes {
+        self.check_wire(text(value)?.len() / 2)?;
+        unhex(value)
+    }
+    pub(crate) fn check_wire(&self, bytes: usize) -> Result<()> {
+        if bytes > self.wire_bytes {
             return Err("native-capacity-wire".into());
         }
-        unhex(value)
+        Ok(())
     }
 }

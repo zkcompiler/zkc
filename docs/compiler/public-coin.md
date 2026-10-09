@@ -2,7 +2,7 @@
 
 The native analysis asks which actual verifier values determine its guards and
 decision, and which values precede each public challenge. The
-[profile](../spec/profiles/compiler/public-coin.md) owns the judgment and formats.
+[profile](../spec/ir/public-coin.md) owns the judgment and formats.
 It derives a bounded view from existing MLIR SSA and action order. There is no
 second mathematical graph or new IR stage.
 
@@ -30,13 +30,14 @@ new defect in that interactive experiment or a bound on all malicious strategies
 The analysis refuses statement-only binding for this client. Full-assignment
 binding passes and reports the non-statement witness port. Binding is a declared
 view premise: the report does not publish, authenticate or hash that witness.
-Any future noninteractive instantiation must specify when and how it is fixed.
+A noninteractive construction using this client must fix the required values
+before deriving the affected challenge.
 
 ## Alternatives considered
 
 | Candidate | Decision and reason |
 |---|---|
-| Explicit transcript transformation | Selected in the [native proof design](native-proofs.md): analyze retained common source, emit role-local affine calls after projection, and admit exact host-created transcript resources. Selected construction and independent execution are implemented under proof policies `/1`–`/4`. |
+| Explicit transcript transformation | Selected in the [native proof design](construction.md): analyze retained common source, emit role-local affine calls after projection, and admit exact host-created transcript resources. Selected construction and independent execution are implemented under the native proof policy. |
 | Pure deterministic derivation on role-family values | Not selected as the execution representation. It does not preserve affine custody, stopped prefixes or transition accounting by itself. A suite-specific mathematical interpretation can still support later analysis. |
 | Verifier-view analysis | Implemented at the bounded scope below. It detects missing actual input binding on existing clients and changed challenge edges in synthetic controls; it specifies the values a construction must account for. |
 | Algebraic completeness/special soundness | Defer until a client needs an interpreted relation ideal or a two-transcript extraction experiment. Existing scalar Schnorr examples and exact Sumcheck correspondence do not supply that extractor experiment or imply those analyses. |
@@ -47,7 +48,7 @@ the verifier actually observes in the same program.
 
 ## Implementation boundaries
 
-`ZkcCompilerCore` owns the analysis because it invokes the existing preparation
+`ZkcCompiler` owns the analysis because it invokes the existing preparation
 workflow. `createPrepareProtocolPass(false)` exposes unsimplified expansion;
 projection and default preparation retain their existing behavior. An owned
 clone, ordinary admission, shared role availability and registered operand
@@ -62,13 +63,13 @@ and exact emitted bundle, while preserving the narrower structural claim.
 
 ## Adopted construction boundary
 
-The [native proof profile](../spec/profiles/compiler/native-proofs.md) fixes the
-selected independent execution and construction boundary. The [supported policies](native-proofs.md#supported-policies-and-formats)
-cover flat, iterated, committed and structured clients. Broader automatic
+The [native proof profile](../spec/formats/proof.md) fixes the
+selected independent execution and construction boundary. The [single policy](construction.md#encoding-and-message-semantics)
+covers flat, iterated, committed and structured clients. Broader automatic
 derivation and new security theorems remain separate work. This public-coin report
 keeps its existing meaning and does not itself authorize the construction.
 
-Preserve the [observation analysis inputs](ir-foundation.md#information-retained-for-observation-analyses)
+Preserve the [observation analysis inputs](pipeline.md#analysis-boundary)
 through construction. The existing public-coin report does not cover
 general algebraic observations, root distribution laws, later disclosure or
 prover behavior. Its verifier receive anchors must not become honest sender
@@ -78,7 +79,7 @@ analyzer is separate from retaining these inputs and from placement correctness.
 Construction checks source draw/delivery pairing, complete public bindings and
 actual candidate operands against the retained source. It then threads explicit
 state in each projected role, avoiding a new common role-family assembly
-operation. The flat profile supplies authorized public values to the host
+operation. The construction supplies authorized public values to the host
 for transcript-root initialization and adds no participant data inputs. Private
 verifier inputs are not silently disclosed. Iterated prefixes and local public replay
 recipes require extensions beyond the current static report. Diagnostic sites

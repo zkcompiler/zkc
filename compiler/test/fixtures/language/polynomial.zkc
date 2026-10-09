@@ -1,0 +1,47 @@
+module sample;
+domain Fr = field("bls12-381.fr");
+type Array<F:Field,N:nat> = builtin("field_array",F,N);
+type Poly<F:Field,N:nat> = formal("polynomial",F,N);
+math fn pack<F:Field,N:nat>(xs:[F;N])->Array<F,N>{
+  return intrinsic<F,N>("array.pack",xs);
+}
+math fn mle<F:Field,N:nat>(xs:Array<F,pow2(N)>)->Poly<F,N>{
+  return intrinsic<F,N>("poly.mle",xs);
+}
+math fn coefficients<F:Field,N:nat>(p:Poly<F,1>)->Array<F,N> where 1<=N {
+  return intrinsic<F,N>("poly.coefficients",p);
+}
+math fn evaluate<F:Field,N:nat>(p:Poly<F,N>,x:[F;N])->F{
+  return intrinsic<F,N>("poly.evaluate",p,x);
+}
+math fn calculate(a:Fr,b:Fr,x:Fr)->(Fr,Fr,Fr,Fr,Fr,Fr){
+  let table = pack<Fr,4>([a,b,a,b]);
+  let p = mle<Fr,2>(table);
+  let fixed = intrinsic<Fr,1,1>("poly.fix",p,[x]);
+  let sum = intrinsic<Fr,1,1>("poly.sum_suffix",p);
+  let reduced = intrinsic<Fr,1,1>("poly.fix_table",table,[x]);
+  let interpolated = mle<Fr,1>(reduced);
+  let linear = intrinsic<Fr,2>("poly.from_coefficients",pack<Fr,2>([a,b]));
+  let square = intrinsic<Fr,1>("poly.multiply",linear,linear);
+  let coeff = coefficients<Fr,3>(square);
+  let leading = intrinsic<Fr,3,2>("array.at",coeff);
+  let samples = intrinsic<Fr>("poly.evaluate_domain",linear;"0","1","2");
+  let recovered = intrinsic<Fr>("poly.interpolate",samples;"0","1","2");
+  let c = intrinsic<Fr,2>("poly.constant",a);
+  let added = intrinsic<Fr,2>("poly.add",p,c);
+  return (evaluate<Fr,1>(fixed,[x]),evaluate<Fr,1>(sum,[x]),
+          evaluate<Fr,1>(interpolated,[x]),leading,
+          evaluate<Fr,1>(recovered,[x]),evaluate<Fr,2>(added,[0,1]));
+}
+fn local_calculate(a:Fr,b:Fr,x:Fr)->(Fr,Fr,Fr,Fr,Fr,Fr){
+  return calculate(a,b,x);
+}
+protocol Run roles(P)(a:Fr@P,b:Fr@P,x:Fr@P)->(r:(Fr,Fr,Fr,Fr,Fr,Fr)@P){
+  return(r=calculate(a,b,x));
+}
+protocol Local roles(P)(a:Fr@P,b:Fr@P,x:Fr@P)->(r:(Fr,Fr,Fr,Fr,Fr,Fr)@P){
+  local P let r=local_calculate(a,b,x);
+  return(r=r);
+}
+entry Demo=Run;
+entry LocalDemo=Local;

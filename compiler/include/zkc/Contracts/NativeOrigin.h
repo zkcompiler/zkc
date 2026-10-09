@@ -7,11 +7,7 @@
 #include <string>
 namespace zkc::protocol {
 /// Bounded source occurrence syntax. Does not establish source correspondence.
-llvm::Error checkNativeOrigin(llvm::StringRef hex, llvm::StringRef kind,
-                              bool indexed = false);
-llvm::Expected<std::string>
-encodeNativeOrigin(llvm::StringRef entry, llvm::ArrayRef<std::string> path,
-                   llvm::ArrayRef<std::string> event);
+llvm::Error checkNativeOrigin(llvm::StringRef hex, llvm::StringRef kind);
 llvm::Expected<std::string>
 encodeNativeOriginTemplate(llvm::StringRef entry,
                            llvm::ArrayRef<std::array<std::string, 3>> path,

@@ -50,7 +50,7 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Builder builder(&context);
-  auto location = FileLineColLoc::get(&context, "test.pir", 7, 3);
+  auto location = FileLineColLoc::get(&context, "test.mlir", 7, 3);
   std::vector<zkc::diagnostics::RefusalInfo> codes;
   std::string text;
   unsigned notes = 0;
@@ -73,7 +73,7 @@ int main() {
   {
     auto diagnostic =
         zkc::diagnostics::emit(emitError(location), mixedErrors());
-    diagnostic.attachNote(FileLineColLoc::get(&context, "related.pir", 2, 9))
+    diagnostic.attachNote(FileLineColLoc::get(&context, "related.mlir", 2, 9))
         << "source context";
   }
   require(text == toString(mixedErrors()), "LLVM error rendering changed");
@@ -82,7 +82,7 @@ int main() {
               codes[1].code == "last" && codes[1].detail.empty() &&
               notes == 1 && noteText[0] == "source context" &&
               noteLocations[0] ==
-                  FileLineColLoc::get(&context, "related.pir", 2, 9),
+                  FileLineColLoc::get(&context, "related.mlir", 2, 9),
           "native refusals must retain fields and order across foreign errors");
   // The metadata's strings must survive temporary Error/source data teardown.
   {
@@ -127,96 +127,39 @@ int main() {
               codes[0].code == "invalid-original-rank",
           "type verifier exposes a structured refusal");
 
-  OperationState state(location, zkc::table::PIRStopOp::getOperationName());
+  OperationState state(location, zkc::local::StopOp::getOperationName());
   auto *operation = Operation::create(state);
   zkc::diagnostics::emit(operation->emitOpError(), "local", "detail context");
   operation->destroy();
   require(codes.size() == 1 && codes[0].code == "local" &&
               codes[0].detail == "detail context" &&
-              text == "'table.source.stop' op local: detail context",
+              text == "'local.stop' op local: detail context",
           "operation prefix and complete detail preserved");
 
-  // Exercise the verifier callers that previously streamed detail after
-  // attaching metadata. Invoke symbol verification directly so the checks do
-  // not depend on MLIR's order of structural and region verification.
+  // Native entry symbol verification preserves the missing target in detail.
   OwningOpRef<ModuleOp> module(ModuleOp::create(location));
   OpBuilder operations(&context);
   operations.setInsertionPointToEnd(module->getBody());
-  auto make = [&](StringRef name, ArrayRef<NamedAttribute> attributes,
-                  bool region = false) {
-    OperationState state(location, name);
-    state.addAttributes(attributes);
-    if (region)
-      state.addRegion();
-    return operations.create(state);
-  };
-  auto attr = [&](StringRef name, Attribute value) {
-    return builder.getNamedAttr(name, value);
-  };
-  auto empty = builder.getArrayAttr({});
-  auto role = builder.getStringAttr("P");
-  auto roles = builder.getArrayAttr({role});
-  auto mapping = builder.getArrayAttr({role, role});
-  auto roleBindings = builder.getArrayAttr({mapping});
-  auto dependency = [&](StringRef alias) {
-    return builder.getArrayAttr({builder.getArrayAttr(
-        {builder.getStringAttr(alias),
-         FlatSymbolRefAttr::get(&context, "child"), empty})});
-  };
-  auto protocol = [&](StringRef name, ArrayAttr dependencies) {
-    return cast<zkc::protocol_ir::ExecFuncOp>(make(
-        "protocol.exec_func",
-        {attr("sym_name", builder.getStringAttr(name)),
-         attr("function_type", TypeAttr::get(builder.getFunctionType({}, {}))),
-         attr("roles", roles), attr("parameters", empty),
-         attr("dependencies", dependencies)},
-        true));
-  };
-  auto child = protocol("child", empty);
-  auto parent = protocol("parent", dependency("declared"));
-  auto instance = cast<zkc::protocol_ir::InstanceOp>(
-      make("protocol.instance",
-           {attr("protocol", FlatSymbolRefAttr::get(&context, "child")),
-            attr("dependencies", empty), attr("parameters", empty),
-            attr("roles", builder.getArrayAttr({mapping, mapping}))}));
+  OperationState rootState(location, "protocol.module");
+  rootState.addAttribute("profile",
+                         zkc::protocol_ir::ProfileAttr::get(
+                             &context, zkc::protocol_ir::Profile::Exec));
+  rootState.addRegion();
+  auto *root = operations.create(rootState);
+  operations.createBlock(&root->getRegion(0));
+  OperationState entryState(location, "protocol.entry");
+  entryState.addAttribute("sym_name", builder.getStringAttr("main"));
+  entryState.addAttribute("targets",
+                          builder.getArrayAttr({builder.getArrayAttr(
+                              {builder.getStringAttr("P"),
+                               FlatSymbolRefAttr::get(&context, "absent")})}));
+  auto entry =
+      cast<zkc::protocol_ir::ProtocolEntryOp>(operations.create(entryState));
   SymbolTableCollection tables;
-  auto expect = [&](StringRef code, StringRef detail, LogicalResult result) {
-    require(failed(result) && codes.size() == 1 && codes[0].code == code &&
-                codes[0].detail == detail &&
-                StringRef(text).ends_with((code + ": " + detail).str()),
-            "verifier detail missing from metadata or rendering");
-  };
-  expect("interactive-binding-attribute", "duplicate binding P",
-         instance.verifySymbolUses(tables));
-  instance->setAttr("roles", roleBindings);
-  instance->setAttr("protocol", FlatSymbolRefAttr::get(&context, "absent"));
-  expect("interactive-symbol-kind", "expected protocol.exec_func for @absent",
-         instance.verifySymbolUses(tables));
-  instance->setAttr("protocol", FlatSymbolRefAttr::get(&context, "parent"));
-  instance->setAttr("dependencies",
-                    builder.getArrayAttr({builder.getArrayAttr(
-                        {builder.getStringAttr("other"),
-                         FlatSymbolRefAttr::get(&context, "i")})}));
-  expect("interactive-dependency-binding", "missing alias declared",
-         instance.verifySymbolUses(tables));
-  auto *body = new Block;
-  parent->getRegion(0).push_back(body);
-  operations.setInsertionPointToEnd(body);
-  auto call = cast<zkc::protocol_ir::ProtocolCallOp>(make(
-      "protocol.call", {attr("dependency", builder.getStringAttr("absent"))}));
-  expect("interactive-dependency", "undeclared alias absent",
-         call.verifySymbolUses(tables));
-  call->setAttr("dependency", builder.getStringAttr("declared"));
-  child->setAttr("roles", builder.getArrayAttr({builder.getStringAttr("V")}));
-  expect("interactive-dependency-role",
-         "child formal role is absent in caller: V",
-         call.verifySymbolUses(tables));
-  child->setAttr("roles", roles);
-  child->setAttr("function_type", TypeAttr::get(builder.getFunctionType(
-                                      {builder.getI1Type()}, {})));
-  expect("interactive-call-signature",
-         "operands/results must match \"child\" function_type",
-         call.verifySymbolUses(tables));
+  require(failed(entry.verifySymbolUses(tables)) && codes.size() == 1 &&
+              codes[0].code == "interactive-symbol-kind" &&
+              StringRef(codes[0].detail).contains("absent"),
+          "native verifier lost missing symbol detail");
 
   // Extracted payloads remain valid after their MLIR context and temporary
   // rendering operands are gone.

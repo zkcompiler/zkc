@@ -48,7 +48,7 @@ class AlgorithmCorrespondence {
   // The selected capture indices refer to the original capture list. Aliases
   // introduced by calls identify repeated immutable bindings, not loop state.
   LogicalResult block(Block &source, Block &target, Block::iterator &cursor,
-                      Values &values, const source::Assignments &path,
+                      Values &values, const protocol::Assignments &path,
                       bool encode, SmallVectorImpl<Value> &returned,
                       bool &stopped, unsigned depth,
                       ArrayRef<unsigned> yieldIndices = {},

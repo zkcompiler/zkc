@@ -6,8 +6,7 @@ offers no way to reach the native or the formal build: there is nothing here to
 name one with.
 
 CTest passes the exact file CMake built, through `$<TARGET_FILE:...>`, which no
-directory-and-name rule can get wrong -- and the build directory does hold older
-copies of several of these names from configurations that wrote them elsewhere.
+directory-and-name rule can get wrong.
 Direct invocations use the compiler output directory selected by the shared
 workspace configuration. Either way the path is checked before it is handed
 back, and a tool that is not there is a failure naming the directory searched
@@ -33,26 +32,14 @@ REPORTS = records_root() / "compiler-test"
 # Repeated requests in this process share only their own exclusive directory.
 OPENED = {}
 
-# Shared inputs for compiler, native and cross-language tests and benchmarks.
-# Component-specific inputs can stay beside the tests that own them.
-corpus = ROOT / "tests/fixtures"
-
-# The authored protocols the compiler ships. Nine tests here spelled this
-# path out beside their own copy of where the repository is; it is the same
-# directory for the same reason the corpus is.
-examples = ROOT / "examples/protocols"
-
 # What each tool is called, what CMake calls the variable it passes it in, and
 # where under the build directory to look when nothing passed it.
 TOOLS = {
+    "program_codec": ("zkc-program_codec-test", "ZKC_CTEST_PROGRAM_CODEC", "test"),
     "tablegen": ("zkc-tblgen", "ZKC_CTEST_TABLEGEN", "."),
     "compiler": ("zkc-compile", "ZKC_CTEST_COMPILER", "."),
     "optimizer": ("zkc-opt", "ZKC_CTEST_OPTIMIZER", "."),
-    "source_bench": ("zkc-source-bench", "ZKC_CTEST_SOURCE_BENCH", "."),
-    "service_compiler": ("zkc-service-compile", "ZKC_CTEST_SERVICE_COMPILER", "examples/service"),
-    "service_optimizer": ("zkc-service-opt", "ZKC_CTEST_SERVICE_OPTIMIZER", "examples/service"),
     "requirements_test": ("zkc-requirements-test", "ZKC_CTEST_REQUIREMENTS_TEST", "test"),
-    "construction_test": ("zkc-construction-test", "ZKC_CTEST_CONSTRUCTION_TEST", "test"),
 }
 
 
@@ -120,10 +107,8 @@ def __getattr__(name):
 def records(case=None):
     """The directory the calling test writes its sources, plans and reports to.
 
-    These tests used to work in a temporary directory and delete it on the way
-    out, which threw away the plans and sources of exactly the run worth
-    reading: the one that failed. What a test writes now stays under the
-    build's reports, where CI keeps it and a developer can open it.
+    Sources and outputs remain under the build's reports so failures retain
+    their evidence for CI and local inspection.
 
     The name is the test's own, which here is the file's: this directory
     registers every `.py` in it under its own name, so there is no convention
@@ -149,3 +134,8 @@ def records(case=None):
         label = caller.name + (f"::{case}" if case is not None else "")
         OPENED[key] = new_directory(REPORTS, identity, label)
     return OPENED[key]
+
+
+def canonical_program(commands, text, refuses=None):
+    """Exercise the installed model codec without inventing an IR importer."""
+    return commands.run([tool("program_codec")], stdin=text, refuses=refuses)

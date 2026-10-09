@@ -11,10 +11,10 @@ pub enum ServiceContract {
 impl ServiceContract {
     pub fn parse(value: &str) -> Result<Self, AdmissionError> {
         match value {
-            "random.bls12-381.fr/1" => Ok(Self::RandomBls12381Field),
-            "random.bn254.fr/1" => Ok(Self::RandomBn254Field),
-            "random.ristretto255.scalar/1" => Ok(Self::RandomRistrettoField),
-            "random.koala-bear.ext8-binomial3/1" => Ok(Self::RandomExtensionField),
+            "random.bls12-381.fr/0" => Ok(Self::RandomBls12381Field),
+            "random.bn254.fr/0" => Ok(Self::RandomBn254Field),
+            "random.ristretto255.scalar/0" => Ok(Self::RandomRistrettoField),
+            "random.koala-bear.ext8-binomial3/0" => Ok(Self::RandomExtensionField),
             _ => Err(AdmissionError::new(
                 ErrorCode::Type,
                 "unsupported service contract",
@@ -23,10 +23,10 @@ impl ServiceContract {
     }
     pub fn name(self) -> &'static str {
         match self {
-            Self::RandomBls12381Field => "random.bls12-381.fr/1",
-            Self::RandomBn254Field => "random.bn254.fr/1",
-            Self::RandomRistrettoField => "random.ristretto255.scalar/1",
-            Self::RandomExtensionField => "random.koala-bear.ext8-binomial3/1",
+            Self::RandomBls12381Field => "random.bls12-381.fr/0",
+            Self::RandomBn254Field => "random.bn254.fr/0",
+            Self::RandomRistrettoField => "random.ristretto255.scalar/0",
+            Self::RandomExtensionField => "random.koala-bear.ext8-binomial3/0",
         }
     }
     pub fn field(self) -> super::Identity {
@@ -65,6 +65,16 @@ impl ServiceContract {
 pub struct ServiceSignature {
     pub inputs: Vec<PhysicalType>,
     pub outputs: Vec<PhysicalType>,
+}
+/// Independently authored installation facts for one service method.
+/// This description grants no authority to a particular service root.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ServiceSupport {
+    pub signature: ServiceSignature,
+    /// Conservative aggregate retained-byte charge for the entire reply tuple.
+    /// Count shared backing in full, as Value::retained_bytes does. This is not
+    /// a wire-size bound or a reservation of provider scratch space.
+    pub max_retained_bytes: usize,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ServicePort {

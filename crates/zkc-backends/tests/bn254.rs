@@ -295,10 +295,14 @@ fn groups_pairing_codecs_nominal_separation_and_memory_limits() {
         b2,
         Value::bn254_matrix(1, 1, &[(0, 0, F::one())], &Policy::default()).unwrap(),
     ] {
-        let bytes = backend.encode_value(&v).unwrap();
+        if !zkc_backends::has_native_wire(&v.physical_type()) {
+            assert!(backend.encode_native_value(&v).is_err());
+            continue;
+        }
+        let bytes = backend.encode_native_value(&v).unwrap();
         let ty = v.physical_type();
-        let decoded = backend.decode_typed_value(ty.clone(), &bytes).unwrap();
-        assert_eq!(backend.encode_value(&decoded).unwrap(), bytes);
+        let decoded = backend.decode_native_value(&ty.clone(), &bytes).unwrap();
+        assert_eq!(backend.encode_native_value(&decoded).unwrap(), bytes);
         assert!(
             Value::typed_wire_retained_bytes_bound(ty.clone(), bytes.len(), &Policy::default())
                 .unwrap()
@@ -306,20 +310,20 @@ fn groups_pairing_codecs_nominal_separation_and_memory_limits() {
         );
         let mut bad = bytes.clone();
         bad.push(0);
-        assert!(backend.decode_typed_value(ty.clone(), &bad).is_err());
+        assert!(backend.decode_native_value(&ty.clone(), &bad).is_err());
         let mut bad = bytes;
         bad[5] ^= 1;
-        assert!(backend.decode_typed_value(ty.clone(), &bad).is_err());
+        assert!(backend.decode_native_value(&ty.clone(), &bad).is_err());
     }
     let v = Value::Bn254G2Vector(vec![b; 3].into());
-    let bytes = backend.encode_value(&v).unwrap();
+    let bytes = backend.encode_native_value(&v).unwrap();
     let constrained = support::backend(Policy {
         max_value_bytes: v.retained_bytes() - 1,
         ..Policy::default()
     });
     assert!(
         constrained
-            .decode_typed_value(v.physical_type(), &bytes)
+            .decode_native_value(&v.physical_type(), &bytes)
             .is_err()
     );
     assert_eq!(
@@ -380,21 +384,21 @@ fn literal_admission_uses_bn254_modulus_and_wire_is_fixed() {
             Value::Bn254Field(_) | Value::Bn254Vector(_)
         ));
     }
-    let bytes = backend.encode_value(&f(1)).unwrap();
-    let mut expected = b"ZKCV\x01\x28".to_vec();
+    let bytes = backend.encode_native_value(&f(1)).unwrap();
+    let mut expected = b"ZKCV\x00\x28".to_vec();
     expected.push(1);
     expected.extend([0; 31]);
     assert_eq!(bytes, expected);
     let g = Value::Bn254G1(G1::generator());
-    let bytes = backend.encode_value(&g).unwrap();
-    let mut expected = b"ZKCV\x01\x2e".to_vec();
+    let bytes = backend.encode_native_value(&g).unwrap();
+    let mut expected = b"ZKCV\x00\x2e".to_vec();
     // Arkworks BN254's smaller y-coordinate sign is clear for (1,2).
     expected.push(1);
     expected.extend([0; 31]);
     assert_eq!(bytes, expected);
     assert!(
         backend
-            .decode_typed_value(Value::Bn254G2(G2::generator()).physical_type(), &bytes)
+            .decode_native_value(&Value::Bn254G2(G2::generator()).physical_type(), &bytes)
             .is_err()
     );
     assert_eq!(

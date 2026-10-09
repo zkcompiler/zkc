@@ -79,7 +79,7 @@ private def decodeCode (value : Json) : Option String :=
   match Reference.decodeValue value with | .error code => some code | .ok _ => none
 example : decodeCode (.arr #[.str "field:bls12-381.fr", .str (toString fieldModulus)]) =
     some "noncanonical-field" := by native_decide
-example : decodeCode (.arr #[.str "field:bls12-381.fr@arkworks.fr/1", .str "1"]) =
+example : decodeCode (.arr #[.str "field:bls12-381.fr@arkworks.fr/0", .str "1"]) =
     some "binding-type" := by native_decide
 example : decodeCode (.arr #[.str "group:bls12-381.fr", .str "1"]) =
     some "binding-type" := by native_decide

@@ -212,9 +212,9 @@ pub(crate) fn apply(
     policy.output(result.retained_bytes(), invocation.max_output_bytes)?;
     Ok(vec![result])
 }
-pub(crate) const OPERATIONS: &[&str] = &[
-    "sequence.empty",
-    "sequence.append",
-    "sequence.length",
-    "sequence.at",
+pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
+    ("native/sequence.empty", "sequence.empty"),
+    ("native/sequence.append", "sequence.append"),
+    ("native/sequence.length", "sequence.length"),
+    ("native/sequence.at", "sequence.at"),
 ];

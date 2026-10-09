@@ -57,7 +57,7 @@ void constantKinds() {
   for (const auto &invalid :
        {spelling.substr(0, spelling.size() - 1),
         std::string("fixed_vector<bool,04>"),
-        std::string("field:koala-bear@plonky3.koala-bear/1"),
+        std::string("field:koala-bear@plonky3.koala-bear/0"),
         std::string(4097, 'x')}) {
     auto bad = signature;
     bad.scope.constants[0] = invalid;

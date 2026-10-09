@@ -137,7 +137,7 @@ def compactRequest : RegionArtifact.Request Ty Op :=
   ⟨request.context, [], compactRound.erase⟩
 
 def compactCandidate : RegionArtifact.Candidate Ty Op :=
-  ⟨⟨1, RegionArtifact.semanticsVersion, [], "direct-logical-plan", "direct-lowering",
+  ⟨⟨formatVersion, RegionArtifact.semanticsVersion, [], "direct-logical-plan", "direct-lowering",
     completeExecution, compactRequest.context, []⟩, compactRound.erase⟩
 
 def compactChecked : RegionArtifact.Checked (language := language) compactRequest compactCandidate :=

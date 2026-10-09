@@ -3,6 +3,7 @@ mod common;
 use common::*;
 use serde_json::{Value as Json, json};
 use zkc_backends::{Policy, Value};
+use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::{
     Backend, ErrorCode, LogicalType, PhysicalType, StopKind, Value as RuntimeValue, admit_supplied,
 };
@@ -10,7 +11,7 @@ use zkc_runtime::interactive::{
 use zkc_test_support::variants::logical;
 
 fn physical(nominal: &str, arms: Json) -> String {
-    format!("{}@logical.variant/1", logical(nominal, arms))
+    format!("{}@logical.variant/0", logical(nominal, arms))
 }
 fn descriptor(ty: &str) -> std::sync::Arc<zkc_runtime::interactive::VariantDescriptor> {
     LogicalType::parse(ty)
@@ -34,7 +35,7 @@ fn fixture(ports: Json, results: Json, body: Json) -> Json {
         .map(|(i, _)| format!("out{i}"))
         .collect::<Vec<_>>();
     json!([
-        "zkc.participants/1",
+        "zkc.program/0",
         [
             ["add", "field.add", ["bls12-381.fr"], "arkworks/field.add"],
             [
@@ -62,17 +63,16 @@ fn fixture(ports: Json, results: Json, body: Json) -> Json {
                 "logical/resource_unit.consume"
             ]
         ],
-        "physical",
         [["function", "Local", ports, results, body, ["Local", []]]],
         [[
             "participant",
             "root_P",
             "root",
             "P",
-            [],
             ports,
             results,
-            [["local", "work", "Local", args, names], ["return", names]]
+            [["local", "work", "Local", args, names], ["return", names]],
+            []
         ]],
         [["entry", "main", [["P", "root_P"]]]]
     ])
@@ -80,9 +80,9 @@ fn fixture(ports: Json, results: Json, body: Json) -> Json {
 fn bytes(j: &Json) -> Vec<u8> {
     serde_json::to_vec(j).unwrap()
 }
-const FIELD: &str = "field:bls12-381.fr@arkworks.fr/1";
-const RNG: &str = "rng:bls12-381.fr@host.resource/1";
-const UNIT: &str = "resource_unit:Slot.A@logical.resource_unit/1";
+const FIELD: &str = "field:bls12-381.fr@arkworks.fr/0";
+const RNG: &str = "rng:bls12-381.fr@host.resource/0";
+const UNIT: &str = "resource_unit:Slot.A@logical.resource_unit/0";
 
 #[test]
 fn exact_canonical_descriptors_and_conservative_permissions() {
@@ -157,7 +157,7 @@ fn malformed_descriptors_fail_closed() {
         (json!([]), "variant:alternatives"),
         (json!([["a", []], ["a", []]]), "variant:duplicate-label"),
         (json!([["bad!", []]]), "variant:label"),
-        (json!([["ok", ["bool@native.bool/1"]]]), "variant:payload"),
+        (json!([["ok", ["bool@native.bool/0"]]]), "variant:payload"),
         (
             json!([["ok", ["unknown"]]]),
             "explicit nominal identity required",
@@ -193,7 +193,7 @@ fn malformed_descriptors_fail_closed() {
             "variant:hex",
         ),
         (format!("{valid}f"), "variant:hex"),
-        (format!("{valid}@logical.variant/1"), "variant:hex"),
+        (format!("{valid}@logical.variant/0"), "variant:hex"),
         ("variant:".to_owned(), "variant:hex"),
     ] {
         refused_as(&bad, detail);
@@ -216,7 +216,7 @@ fn malformed_descriptors_fail_closed() {
         deep = logical(&format!("N{i}"), json!([["ok", [deep]]]));
     }
     refused_as(&deep, "variant:limit");
-    let error = PhysicalType::parse(&format!("{valid}@host.resource/1")).unwrap_err();
+    let error = PhysicalType::parse(&format!("{valid}@host.resource/0")).unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
         (
@@ -230,21 +230,21 @@ fn malformed_descriptors_fail_closed() {
 fn malformed_descriptor_graphs_name_the_failed_check() {
     for (descriptor, detail) in [
         (json!([]), "variant:descriptor"),
-        (json!(["zkc.variant/1"]), "variant:descriptor"),
+        (json!(["zkc.variant/0"]), "variant:descriptor"),
         // A canonical graph whose root is a lone string, not a variant tree.
-        (json!(["zkc.variant/1", ["x"]]), "variant:descriptor"),
-        (json!(["zkc.variant/2", ["x"]]), "variant:version"),
-        (json!(["zkc.variant/1", []]), "variant:descriptor"),
-        (json!(["zkc.variant/1", [1]]), "variant:graph-node"),
+        (json!(["zkc.variant/0", ["x"]]), "variant:descriptor"),
+        (json!(["invalid.variant", ["x"]]), "variant:format"),
+        (json!(["zkc.variant/0", []]), "variant:descriptor"),
+        (json!(["zkc.variant/0", [1]]), "variant:graph-node"),
         (
-            json!(["zkc.variant/1", ["x", ["01"]]]),
+            json!(["zkc.variant/0", ["x", ["01"]]]),
             "variant:graph-reference",
         ),
         (
-            json!(["zkc.variant/1", ["x", ["99999999999999999999"]]]),
+            json!(["zkc.variant/0", ["x", ["99999999999999999999"]]]),
             "variant:graph-reference",
         ),
-        (json!(["zkc.variant/1", [["0"]]]), "variant:graph-reference"),
+        (json!(["zkc.variant/0", [["0"]]]), "variant:graph-reference"),
     ] {
         refused_as(&raw(descriptor), detail);
     }
@@ -254,10 +254,10 @@ fn malformed_descriptor_graphs_name_the_failed_check() {
     for i in 0..40 {
         nodes.push(json!([i.to_string(), i.to_string()]));
     }
-    refused_as(&raw(json!(["zkc.variant/1", nodes])), "variant:graph-limit");
+    refused_as(&raw(json!(["zkc.variant/0", nodes])), "variant:graph-limit");
     // One node past the graph's node budget, however small each node is.
     let wide: Vec<Json> = (0..=16384).map(|_| json!("x")).collect();
-    refused_as(&raw(json!(["zkc.variant/1", wide])), "variant:graph-limit");
+    refused_as(&raw(json!(["zkc.variant/0", wide])), "variant:graph-limit");
     let valid = logical("X", json!([["ok", []]]));
     for (tree, detail) in [
         (json!(["X", [["ok"]]]), "variant:alternative"),
@@ -270,7 +270,7 @@ fn malformed_descriptor_graphs_name_the_failed_check() {
 }
 
 #[test]
-fn native_active_payload_has_unequal_layouts_and_no_wire_codec() {
+fn native_active_payload_has_unequal_layouts_and_exact_wire_codec() {
     let ty = logical(
         "Unequal",
         json!([
@@ -299,9 +299,15 @@ fn native_active_payload_has_unequal_layouts_and_no_wire_codec() {
     let backend = ark_backend(None);
     for value in [&empty, &scalar, &wide] {
         backend.validate_value(value).unwrap();
-        assert_eq!(
-            backend.encode_value(value).unwrap_err().code,
-            "refused:nonserializable"
+        let bytes = backend.encode_native_value(value).unwrap();
+        let decoded = backend
+            .decode_native_value(&value.physical_type(), &bytes)
+            .unwrap();
+        assert_eq!(backend.encode_native_value(&decoded).unwrap(), bytes);
+        assert!(
+            backend
+                .decode_native_value(&value.physical_type(), &bytes[..bytes.len() - 1])
+                .is_err()
         );
     }
     assert_eq!(
@@ -320,10 +326,10 @@ fn native_active_payload_has_unequal_layouts_and_no_wire_codec() {
     );
     assert_eq!(
         backend
-            .decode_typed_value(empty.physical_type(), b"")
+            .decode_native_value(&empty.physical_type(), b"")
             .unwrap_err()
-            .code,
-        "refused:nonserializable"
+            .to_string(),
+        "native-wire-invalid:length"
     );
     // A value that is not a variant has no alternative to unpack.
     assert_eq!(
@@ -348,7 +354,7 @@ fn selected_arm_and_capture_execute_on_native_backend() {
         ("two", json!(["x", "flag"]), 14),
     ] {
         let j = fixture(
-            json!([["x", FIELD], ["cap", FIELD], ["flag", "bool@native.bool/1"]]),
+            json!([["x", FIELD], ["cap", FIELD], ["flag", "bool@native.bool/0"]]),
             json!([FIELD]),
             json!([
                 ["variant", "pack", ty, arm, payload, "v"],
@@ -401,7 +407,7 @@ fn nested_affine_rng_crosses_only_selected_frames_and_keeps_authority() {
         json!([["rng", ["rng:bls12-381.fr"]], ["zero", []]]),
     );
     let outer = physical("Outer", json!([["nested", [inner]], ["unused", []]]));
-    let inner_physical = format!("{inner}@logical.variant/1");
+    let inner_physical = format!("{inner}@logical.variant/0");
     let j = fixture(
         json!([["r", RNG]]),
         json!([FIELD, RNG]),
@@ -454,9 +460,13 @@ fn nested_affine_rng_crosses_only_selected_frames_and_keeps_authority() {
         ]),
     );
     let mut backend = ark_backend(None);
-    let rng = backend.issue_rng(domain(), 2).unwrap();
+    let rng = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 2)
+        .unwrap();
     let old = rng.clone();
-    let outside = backend.issue_rng(domain(), 7).unwrap();
+    let outside = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 7)
+        .unwrap();
     let before = backend.observe(token(&outside)).unwrap();
     let (out, backend) = run(&bytes(&j), backend, vec![rng]);
     let out = out.unwrap();
@@ -504,7 +514,9 @@ fn terminal_stops_bypass_other_arms_and_preserve_categories() {
             ]),
         );
         let mut backend = ark_backend(None);
-        let rng = backend.issue_rng(domain(), 2).unwrap();
+        let rng = backend
+            .issue_rng_for(Identity::Bls12381Fr, domain(), 2)
+            .unwrap();
         let old = rng.clone();
         let (out, backend) = run(&bytes(&j), backend, vec![rng]);
         let stop = out.unwrap_err();
@@ -553,7 +565,7 @@ fn resource_unit_in_active_payload_survives_join_and_is_consumed_once() {
     assert!(out.unwrap().is_empty());
     assert_eq!(backend.active_frames(), 0);
     let mut duplicate = j.clone();
-    duplicate[3][0][4]
+    duplicate[2][0][4]
         .as_array_mut()
         .unwrap()
         .insert(4, json!(["op", "again", "consume", [], ["next"], []]));
@@ -594,22 +606,22 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
     for mutation in 0..10 {
         let mut j = base.clone();
         match mutation {
-            0 => j[3][0][4][1][4]
+            0 => j[2][0][4][1][4]
                 .as_array_mut()
                 .unwrap()
                 .pop()
                 .map(|_| ())
                 .unwrap(),
-            1 => j[3][0][4][1][4][1][0] = json!("a"),
-            2 => j[3][0][4][1][4][1][0] = json!("extra"),
-            3 => j[3][0][4][1][4][0][1] = json!([]),
-            4 => j[3][0][4][1][3] = json!([]), // arm cannot reach outside capture environment
-            5 => j[3][0][4][0][3] = json!("missing"),
-            6 => j[3][0][4][0][4] = json!([]),
-            8 => j[3][0][4][1][2] = json!("x"), // a field is not a variant to match on
-            9 => j[3][0][4][0][2] = json!(FIELD), // nor a type to construct
+            1 => j[2][0][4][1][4][1][0] = json!("a"),
+            2 => j[2][0][4][1][4][1][0] = json!("extra"),
+            3 => j[2][0][4][1][4][0][1] = json!([]),
+            4 => j[2][0][4][1][3] = json!([]), // arm cannot reach outside capture environment
+            5 => j[2][0][4][0][3] = json!("missing"),
+            6 => j[2][0][4][0][4] = json!([]),
+            8 => j[2][0][4][1][2] = json!("x"), // a field is not a variant to match on
+            9 => j[2][0][4][0][2] = json!(FIELD), // nor a type to construct
             _ => {
-                j[3][0][4][1][4][0][2] =
+                j[2][0][4][1][4][0][2] =
                     json!([["send", "leak", "tag", "V", "p"], ["yield", ["p"]]])
             }
         }
@@ -633,26 +645,23 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
         );
     }
     let mut entry = base.clone();
-    entry[4][0][5][0][1] = json!(ty);
+    entry[3][0][4][0][1] = json!(ty);
     let error = admit_supplied(&bytes(&entry), &backend).unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
-        (ErrorCode::Type, "variant-participant-boundary")
+        (ErrorCode::Signature, "operand type x")
     );
     let mut send = base.clone();
-    send[3][0][3] = json!([ty]);
-    send[3][0][4] = json!([["variant", "pack", ty, "a", ["x"], "v"], ["return", ["v"]]]);
-    send[4][0][7] = json!([
+    send[2][0][3] = json!([ty]);
+    send[2][0][4] = json!([["variant", "pack", ty, "a", ["x"], "v"], ["return", ["v"]]]);
+    send[3][0][6] = json!([
         ["local", "work", "Local", ["x"], ["v"]],
         ["send", "leak", "tag", "V", "v"],
         ["return", []]
     ]);
-    send[4][0][6] = json!([]);
-    let error = admit_supplied(&bytes(&send), &backend).unwrap_err();
-    assert_eq!(
-        (error.code, error.detail.as_str()),
-        (ErrorCode::Type, "nonserializable message type")
-    );
+    send[3][0][5] = json!([]);
+    // An immutable sum of native public data is a valid native message.
+    assert!(admit_supplied(&bytes(&send), &backend).is_ok());
 }
 
 #[test]
@@ -758,7 +767,9 @@ fn active_retained_bytes_and_resource_exhaustion_stay_terminal() {
         ]),
     );
     let mut backend = ark_backend(None);
-    let r = backend.issue_rng(domain(), 0).unwrap();
+    let r = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 0)
+        .unwrap();
     let old = r.clone();
     let (out, backend) = run(&bytes(&j), backend, vec![r]);
     assert!(
@@ -775,7 +786,7 @@ fn resource_variant_transfers_through_local_function_ports() {
         json!([["guard", ["resource_unit:Slot.A"]], ["zero", []]]),
     );
     let mut j = fixture(json!([]), json!([UNIT]), json!([["return", []]]));
-    j[3] = json!([
+    j[2] = json!([
         [
             "function",
             "Make",
@@ -810,7 +821,7 @@ fn resource_variant_transfers_through_local_function_ports() {
             ["Use", []]
         ]
     ]);
-    j[4][0][7] = json!([
+    j[3][0][6] = json!([
         ["local", "make", "Make", [], ["v"]],
         ["local", "use", "Use", ["v"], ["g"]],
         ["return", ["g"]]
@@ -839,8 +850,8 @@ fn zero_trip_variant_carry_preserves_incoming_resource() {
     let j = fixture(
         json!([
             ["r", RNG],
-            ["lo", "index@native.index/1"],
-            ["hi", "index@native.index/1"]
+            ["lo", "index@native.index/0"],
+            ["hi", "index@native.index/0"]
         ]),
         json!([RNG]),
         json!([
@@ -869,7 +880,9 @@ fn zero_trip_variant_carry_preserves_incoming_resource() {
     );
     for upper in [0, 1] {
         let mut backend = ark_backend(None);
-        let rng = backend.issue_rng(domain(), 4).unwrap();
+        let rng = backend
+            .issue_rng_for(Identity::Bls12381Fr, domain(), 4)
+            .unwrap();
         let old = rng.clone();
         let (out, backend) = run(
             &bytes(&j),
@@ -885,9 +898,9 @@ fn zero_trip_variant_carry_preserves_incoming_resource() {
         assert_eq!(backend.active_frames(), 0);
     }
     let mut capture = j.clone();
-    capture[3][0][4][1][5] = json!([]);
-    capture[3][0][4][1][6] = json!(["v"]);
-    capture[3][0][4][1][8] = json!([]);
+    capture[2][0][4][1][5] = json!([]);
+    capture[2][0][4][1][6] = json!(["v"]);
+    capture[2][0][4][1][8] = json!([]);
     let error = admit_supplied(&bytes(&capture), &ark_backend(None)).unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
@@ -904,14 +917,14 @@ fn wrong_nominal_same_layout_refuses() {
         json!([]),
         json!([["variant", "pack", a, "ok", ["x"], "v"], ["return", []]]),
     );
-    j[3][0][3] = json!([a]);
-    j[3][0][4][1] = json!(["return", ["v"]]);
+    j[2][0][3] = json!([a]);
+    j[2][0][4][1] = json!(["return", ["v"]]);
     // Retain the variant only as a local intermediate, with matching call
     // arity. The participant must not expose a variant at its output boundary.
-    j[4][0][7][0][4] = json!(["discarded"]);
+    j[3][0][6][0][4] = json!(["discarded"]);
     admit_supplied(&bytes(&j), &ark_backend(None)).unwrap();
 
-    j[3][0][3] = json!([b]);
+    j[2][0][3] = json!([b]);
     let error = admit_supplied(&bytes(&j), &ark_backend(None)).unwrap_err();
     assert_eq!(error.code, ErrorCode::Signature);
     assert_eq!(error.detail, "function-return-types: operand type v");
@@ -937,7 +950,7 @@ fn duplicate_affine_captures_refuse() {
         ]),
     );
     admit_supplied(&bytes(&j), &ark_backend(None)).unwrap();
-    j[3][0][4][1][3] = json!(["r", "r"]);
+    j[2][0][4][1][3] = json!(["r", "r"]);
     let error = admit_supplied(&bytes(&j), &ark_backend(None)).unwrap_err();
     assert_eq!(error.code, ErrorCode::Ssa);
     assert_eq!(
@@ -949,9 +962,12 @@ fn duplicate_affine_captures_refuse() {
 #[test]
 fn private_match_cannot_schedule_transcript_challenges() {
     let ty = physical("Private", json!([["a", []], ["b", []]]));
-    let transcript = "transcript:merlin3.bls12-381.fr64be/1@host.resource/1";
+    let transcript = "transcript:merlin3.bls12-381.fr64be/0@host.resource/0";
     let mut j = fixture(
-        json!([["t", transcript]]),
+        json!([
+            ["t", transcript],
+            ["coordinates", "indices@native.indices/0"]
+        ]),
         json!([]),
         json!([
             ["variant", "pack", ty, "a", [], "v"],
@@ -959,7 +975,7 @@ fn private_match_cannot_schedule_transcript_challenges() {
                 "match",
                 "case",
                 "v",
-                ["t"],
+                ["t", "coordinates"],
                 [
                     [
                         "a",
@@ -969,8 +985,8 @@ fn private_match_cannot_schedule_transcript_challenges() {
                                 "op",
                                 "challenge",
                                 "challenge",
-                                ["Protocol", "instance", "P", "V", "site"],
-                                ["t"],
+                                common::transcript_attributes("query", "Source", "draw", "P", "V"),
+                                ["t", "coordinates"],
                                 ["x", "next"]
                             ],
                             ["yield", []]
@@ -985,12 +1001,12 @@ fn private_match_cannot_schedule_transcript_challenges() {
     );
     j[1].as_array_mut().unwrap().push(json!([
         "challenge",
-        "transcript.challenge",
-        ["merlin3.bls12-381.fr64be/1"],
-        "arkworks/transcript.challenge"
+        "transcript.native.indexed.challenge",
+        ["merlin3.bls12-381.fr64be/0"],
+        "arkworks/transcript.native.indexed.challenge"
     ]));
     let mut outside_match = j.clone();
-    outside_match[3][0][4] = json!([j[3][0][4][1][4][0][2][0], ["return", []]]);
+    outside_match[2][0][4] = json!([j[2][0][4][1][4][0][2][0], ["return", []]]);
     admit_supplied(&bytes(&outside_match), &ark_backend(None)).unwrap();
     let error = admit_supplied(&bytes(&j), &ark_backend(None)).unwrap_err();
     assert_eq!(error.detail, "match-protocol-effect");
@@ -999,7 +1015,7 @@ fn private_match_cannot_schedule_transcript_challenges() {
 #[test]
 fn shared_descriptor_graph_refusal_corpus() {
     let cases: Json = serde_json::from_str(include_str!(
-        "../../../tests/fixtures/variants/descriptors.json"
+        "../../zkc-test-support/fixtures/variants/descriptors.json"
     ))
     .unwrap();
     for row in cases.as_array().unwrap() {
@@ -1017,7 +1033,7 @@ fn shared_descriptor_graph_refusal_corpus() {
         // row is kept here rather than in the fixture.
         let expected = match row[0].as_str().unwrap() {
             "canonical" => continue,
-            "raised-version" => "variant:version",
+            "unknown-format" => "variant:format",
             "forward-reference" | "leading-zero" | "negative-reference" | "missing-reference"
             | "self-reference" => "variant:graph-reference",
             "duplicate-root" | "unused-entry" | "alternate-order" => "variant:canonical",

@@ -8,8 +8,6 @@ mod codec;
 mod diagonal;
 #[path = "domains/local_vocabulary.rs"]
 mod local_vocabulary;
-#[path = "domains/public_msm.rs"]
-mod public_msm;
 #[path = "domains/resources.rs"]
 mod resources;
 #[path = "domains/support.rs"]

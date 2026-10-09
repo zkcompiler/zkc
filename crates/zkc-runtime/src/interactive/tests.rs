@@ -1,3 +1,6 @@
+mod joint;
+mod storage;
+use joint::{DriverCut, DriverEvent, drive_cut};
 // Explicit reference/mock service. None of these tests is cryptographic evidence.
 use super::*;
 use serde_json::{Value as Json, json};
@@ -15,7 +18,6 @@ enum V {
         seal: u64,
     },
     PrivateAsField,
-    Oversize,
     Sized(usize),
 }
 impl V {
@@ -100,14 +102,6 @@ impl Value for V {
         };
         PhysicalType::default_for(LogicalType::parse(logical).unwrap()).unwrap()
     }
-    fn type_name(&self) -> &str {
-        match self {
-            Self::Variant(..) => "variant",
-            Self::Bool(_) => "bool",
-            Self::Cap { .. } => "rng",
-            _ => "field",
-        }
-    }
     fn validate_serializable(&self) -> Result<(), BackendError> {
         match self {
             Self::Field(_) | Self::Bool(_) => Ok(()),
@@ -119,7 +113,6 @@ impl Value for V {
             Self::Variant(d, _, p) => {
                 256 + d.retained_bytes() + p.iter().map(Value::retained_bytes).sum::<usize>()
             }
-            Self::Oversize => usize::MAX,
             Self::Sized(bytes) => *bytes,
             _ => 16,
         }
@@ -215,12 +208,9 @@ impl Backend for Mock {
         }
         Some(signature)
     }
-    fn validate_value(&self, value: &V) -> Result<(), BackendError> {
+    fn validate_value(&self, _value: &V) -> Result<(), BackendError> {
         // PrivateAsField deliberately passes local representation validation;
         // independent public-value validation must still reject it at a message.
-        if matches!(value, V::Oversize) {
-            return Err(BackendError::new("size"));
-        }
         Ok(())
     }
     fn enter_frame(&mut self, frame: &Frame, arguments: &[V]) -> Result<(), BackendError> {
@@ -349,9 +339,9 @@ fn fixture_type(kind: &str) -> String {
         }
         "field" | "scalar" => "bls12-381.fr",
         "group" | "groups" => "bls12-381.g1",
-        "transcript" => "merlin3.bls12-381.fr64be/1",
+        "transcript" => "merlin3.bls12-381.fr64be/0",
         "prover_key" | "verifier_key" | "opening_state" | "commitment" | "proof" => {
-            "multilinear.kzg.bls12-381/1"
+            "multilinear.kzg.bls12-381/0"
         }
         _ => "bls12-381.fr",
     };
@@ -396,13 +386,13 @@ fn module(mut functions: Json, mut participants: Json, entries: Json) -> Json {
         }
     }
     for p in participants.as_array_mut().unwrap() {
-        for port in p[5].as_array_mut().unwrap() {
+        for port in p[4].as_array_mut().unwrap() {
             port[1] = json!(fixture_type(port[1].as_str().unwrap()));
         }
-        for ty in p[6].as_array_mut().unwrap() {
+        for ty in p[5].as_array_mut().unwrap() {
             *ty = json!(fixture_type(ty.as_str().unwrap()));
         }
-        fixture_body(&mut p[7]);
+        fixture_body(&mut p[6]);
     }
     let bindings: Vec<_> = [
         "field.constant",
@@ -434,14 +424,7 @@ fn module(mut functions: Json, mut participants: Json, entries: Json) -> Json {
         json!([key, key, args, format!("arkworks/{key}")])
     })
     .collect();
-    json!([
-        "zkc.participants/1",
-        bindings,
-        "physical",
-        functions,
-        participants,
-        entries
-    ])
+    json!(["zkc.program/0", bindings, functions, participants, entries])
 }
 
 fn participant(
@@ -457,10 +440,10 @@ fn participant(
         symbol,
         instance,
         role,
-        [],
         inputs,
         outputs,
-        body
+        body,
+        []
     ])
 }
 fn one(functions: Json, inputs: Json, outputs: Json, body: Json) -> Json {
@@ -585,25 +568,25 @@ fn strict_json_scalars_objects_trailing_and_truncation() {
 #[test]
 fn exact_tags_arities_names_and_limits() {
     let mut j = identity();
-    j[0] = json!("zkc.protocol/2");
+    j[0] = json!("invalid.program");
     reject(&j, ErrorCode::Record);
     let mut j = identity();
     j.as_array_mut().unwrap().push(json!([]));
     reject(&j, ErrorCode::Record);
     let mut j = identity();
-    j[4][0][1] = json!("bad/name");
+    j[3][0][1] = json!("bad/name");
     reject(&j, ErrorCode::Name);
     let mut j = identity();
-    j[4][0][1] = json!("é");
+    j[3][0][1] = json!("é");
     reject(&j, ErrorCode::Name);
     let mut j = identity();
-    j[4][0][1] = json!("x".repeat(129));
+    j[3][0][1] = json!("x".repeat(129));
     reject(&j, ErrorCode::Name);
     let mut j = identity();
-    j[4][0][7][0].as_array_mut().unwrap().push(json!([]));
+    j[3][0][6][0].as_array_mut().unwrap().push(json!([]));
     reject(&j, ErrorCode::Record);
     let mut j = identity();
-    j[4][0][7] = json!([["opaque", "anything"]]);
+    j[3][0][6] = json!([["opaque", "anything"]]);
     reject(&j, ErrorCode::Record);
     let huge = vec![b' '; Limits::ARTIFACT_BYTES + 1];
     assert_eq!(
@@ -619,32 +602,41 @@ fn exact_tags_arities_names_and_limits() {
     );
 }
 #[test]
-fn stage_binding_records_and_non_nominal_types_rejected() {
-    for stage in ["logical", "source", "Physical", ""] {
-        let mut j = identity();
-        j[2] = json!(stage);
-        reject(&j, ErrorCode::Stage);
+fn unknown_program_format_and_extra_fields_are_distinct_refusals() {
+    let mut unknown_format = identity();
+    unknown_format[0] = json!("invalid.program");
+    reject(&unknown_format, ErrorCode::Record);
+    for extra in [json!("extra"), json!([]), json!([["n", "4"]])] {
+        let mut root = identity();
+        root.as_array_mut().unwrap().insert(2, extra.clone());
+        reject(&root, ErrorCode::Record);
+        let mut participant = identity();
+        participant[3][0].as_array_mut().unwrap().insert(4, extra);
+        reject(&participant, ErrorCode::Record);
     }
+}
+#[test]
+fn binding_records_and_non_nominal_types_rejected() {
     let mut j = identity();
-    j[1] = json!("caller.backend/1");
+    j[1] = json!("caller.backend/0");
     reject(&j, ErrorCode::Record);
     for ty in ["opaque:Secret", "nonce", "custom", "arkworks.field"] {
         let mut j = identity();
-        j[4][0][5][0][1] = json!(ty);
+        j[3][0][4][0][1] = json!(ty);
         reject(&j, ErrorCode::Type);
     }
 }
 #[test]
 fn symbol_and_signature_admission() {
     let mut j = identity();
-    let duplicate = j[4][0].clone();
-    j[4].as_array_mut().unwrap().push(duplicate);
+    let duplicate = j[3][0].clone();
+    j[3].as_array_mut().unwrap().push(duplicate);
     reject(&j, ErrorCode::Symbol);
     let mut j = identity();
-    j[5][0][2][0][1] = json!("missing");
+    j[4][0][2][0][1] = json!("missing");
     reject(&j, ErrorCode::Symbol);
     let mut j = identity();
-    j[5][0][2][0][0] = json!("V");
+    j[4][0][2][0][0] = json!("V");
     reject(&j, ErrorCode::Role);
     let j = one(
         json!([add_fn()]),
@@ -702,7 +694,7 @@ fn installed_signatures_are_not_artifact_authority() {
         "arkworks/unknown",
     ] {
         let mut j = j.clone();
-        j[3][0][4][0][2] = json!(kernel);
+        j[2][0][4][0][2] = json!(kernel);
         reject(
             &j,
             if kernel.contains('/') {
@@ -743,12 +735,12 @@ fn exact_attributes_and_canonical_field_constants() {
         "52435875175126190479447740508185965837690552500527637822603658699938581184513",
     ] {
         let mut j = base.clone();
-        j[3][0][4][0][3] = json!([s]);
+        j[2][0][4][0][3] = json!([s]);
         reject(&j, ErrorCode::Attributes);
     }
     for attrs in [json!([]), json!(["1", "2"])] {
         let mut j = base.clone();
-        j[3][0][4][0][3] = attrs;
+        j[2][0][4][0][3] = attrs;
         reject(&j, ErrorCode::Attributes);
     }
     let mut j = one(
@@ -757,31 +749,31 @@ fn exact_attributes_and_canonical_field_constants() {
         json!([]),
         json!([["return", []]]),
     );
-    j[3][0][4][0][3] = json!(["0"]);
+    j[2][0][4][0][3] = json!(["0"]);
     reject(&j, ErrorCode::Attributes);
 }
 #[test]
 fn ssa_terminal_and_site_checks() {
     let mut j = identity();
-    j[4][0][7][0][1] = json!(["foreign"]);
+    j[3][0][6][0][1] = json!(["foreign"]);
     reject(&j, ErrorCode::Ssa);
     let mut j = identity();
-    j[4][0][5]
+    j[3][0][4]
         .as_array_mut()
         .unwrap()
         .push(json!(["x", fixture_type("field")]));
     reject(&j, ErrorCode::Ssa);
     let mut j = identity();
-    j[4][0][7]
+    j[3][0][6]
         .as_array_mut()
         .unwrap()
         .push(json!(["return", ["x"]]));
     reject(&j, ErrorCode::Terminal);
     let mut j = identity();
-    j[4][0][7] = json!([]);
+    j[3][0][6] = json!([]);
     reject(&j, ErrorCode::Terminal);
     let mut j = identity();
-    j[4][0][7][0][0] = json!("yield");
+    j[3][0][6][0][0] = json!("yield");
     reject(&j, ErrorCode::Terminal);
     let j = one(
         json!([add_fn()]),
@@ -795,8 +787,8 @@ fn ssa_terminal_and_site_checks() {
     );
     reject(&j, ErrorCode::Site);
     let mut j = j;
-    j[4][0][7][1][1] = json!("other");
-    j[4][0][7][1][4] = json!(["x"]);
+    j[3][0][6][1][1] = json!("other");
+    j[3][0][6][1][4] = json!(["x"]);
     reject(&j, ErrorCode::Ssa);
 }
 #[test]
@@ -855,51 +847,6 @@ fn entry_inputs_are_exact_and_role_owned() {
     let mut r = runner(&j, "P", Mock::new(), vec![V::Field(9)]);
     assert_eq!(r.poll(), Action::Returned(vec![V::Field(9)]));
     assert!(r.backend().frames.is_empty());
-}
-#[test]
-fn immutable_custody_and_explicit_source_checker() {
-    struct Exact {
-        source: Vec<u8>,
-        candidate: Vec<u8>,
-    }
-    impl Correspondence for Exact {
-        fn check(&self, s: &[u8], c: &[u8], _: ArtifactFormat) -> Result<(), AdmissionError> {
-            if s == self.source && c == self.candidate {
-                Ok(())
-            } else {
-                Err(AdmissionError::new(ErrorCode::Correspondence, "mock-check"))
-            }
-        }
-        fn check_with_mapping(
-            &self,
-            s: &[u8],
-            c: &[u8],
-            format: ArtifactFormat,
-        ) -> Result<Option<SourceMap>, AdmissionError> {
-            self.check(s, c, format)?;
-            Ok(Some(SourceMap {
-                ports: vec![PortMapping {
-                    instance: "root".into(),
-                    role: "P".into(),
-                    participant: "mainP".into(),
-                    arguments: vec![("x".into(), "x".into())],
-                }],
-                calls: vec![],
-            }))
-        }
-    }
-    let mut data = bytes(&identity());
-    let expected = data.clone();
-    let checker = Exact {
-        source: b"source fixture".to_vec(),
-        candidate: expected.clone(),
-    };
-    let a = admit_physical(b"source fixture", &data, &Mock::new(), &checker).unwrap();
-    data.fill(b' ');
-    assert_eq!(a.bytes(), expected);
-    assert_eq!(a.checked_source(), Some(b"source fixture".as_slice()));
-    assert!(admit_physical(b"wrong", &expected, &Mock::new(), &checker).is_err());
-    assert!(admitted(&identity()).checked_source().is_none());
 }
 #[test]
 fn local_is_one_whole_function_and_pending_is_stable() {
@@ -977,9 +924,9 @@ fn every_envelope_dimension_is_matched() {
     q.envelope.origin.session = "different".into();
     variants.push(q);
     let mut q = packet.clone();
-    q.envelope.origin.path.push(PathElement::Call {
-        site: "call".into(),
-        instance: "child".into(),
+    q.envelope.origin.path.push(PathElement::Match {
+        site: "case".into(),
+        alternative: "child".into(),
     });
     variants.push(q);
     let mut q = packet.clone();
@@ -1022,509 +969,10 @@ fn malicious_private_public_disguise_rejected_at_both_message_edges() {
     assert!(matches!(v.deliver(packet), Err(RuntimeError::Backend(_))));
     assert!(matches!(v.poll(), Action::Receive(_)));
     let mut j = exchange();
-    j[4][0][5][0][1] = json!("rng");
+    j[3][0][4][0][1] = json!("rng");
     reject(&j, ErrorCode::Type);
 }
 
-#[test]
-fn instance_identity_parameters_and_call_graph() {
-    let mut j = exchange();
-    j[4][0][4] = json!([["n", "2"]]);
-    j[4][1][4] = json!([["n", "3"]]);
-    reject(&j, ErrorCode::Parameters);
-    let mut j = identity();
-    j[4][0][4] = json!([["n", "1"], ["n", "1"]]);
-    reject(&j, ErrorCode::Parameters);
-    for n in ["01", "-1", "+0", "18446744073709551616"] {
-        let mut j = identity();
-        j[4][0][4] = json!([["n", n]]);
-        reject(&j, ErrorCode::Natural);
-    }
-    let mut j = identity();
-    j[4][0][4] = json!([["n", "1048577"]]);
-    reject(&j, ErrorCode::Limit);
-    let mut j = exchange();
-    let mut duplicate = j[4][0].clone();
-    duplicate[1] = json!("aliasP");
-    j[4].as_array_mut().unwrap().push(duplicate);
-    reject(&j, ErrorCode::Symbol);
-    let mut j = exchange();
-    j[4][0][7] = json!([["call", "child", "mainV", [], ["z"]], ["return", []]]);
-    reject(&j, ErrorCode::Role);
-    let mut j = identity();
-    j[4][0][7] = json!([
-        ["call", "recursive", "mainP", ["x"], ["z"]],
-        ["return", ["z"]]
-    ]);
-    reject(&j, ErrorCode::Cycle);
-    let j = module(
-        json!([]),
-        json!([
-            participant(
-                "mainP",
-                "root",
-                "P",
-                json!([]),
-                json!([]),
-                json!([["call", "a", "childP", [], []], ["return", []]])
-            ),
-            participant(
-                "childP",
-                "child",
-                "P",
-                json!([]),
-                json!([]),
-                json!([["call", "b", "mainP", [], []], ["return", []]])
-            )
-        ]),
-        json!([["entry", "main", [["P", "mainP"]]]]),
-    );
-    reject(&j, ErrorCode::Cycle);
-}
-fn repeated_exchange(count: &str) -> Json {
-    let mut participants = vec![];
-    for role in ["P", "V"] {
-        let is_p = role == "P";
-        participants.push(participant(
-            &format!("main{role}"),
-            "root",
-            role,
-            if is_p {
-                json!([["x", "field"]])
-            } else {
-                json!([])
-            },
-            json!([]),
-            json!([
-                [
-                    "loop",
-                    "outer",
-                    count,
-                    [],
-                    if is_p { json!(["x"]) } else { json!([]) },
-                    [
-                        [
-                            "call",
-                            "first",
-                            format!("wrapper{role}"),
-                            if is_p { json!(["x"]) } else { json!([]) },
-                            []
-                        ],
-                        [
-                            "call",
-                            "second",
-                            format!("wrapper{role}"),
-                            if is_p { json!(["x"]) } else { json!([]) },
-                            []
-                        ],
-                        ["yield", []]
-                    ],
-                    []
-                ],
-                ["return", []]
-            ]),
-        ));
-        participants.push(participant(
-            &format!("wrapper{role}"),
-            "wrapper",
-            role,
-            if is_p {
-                json!([["x", "field"]])
-            } else {
-                json!([])
-            },
-            json!([]),
-            json!([
-                [
-                    "call",
-                    "nested",
-                    format!("leaf{role}"),
-                    if is_p { json!(["x"]) } else { json!([]) },
-                    []
-                ],
-                ["return", []]
-            ]),
-        ));
-        participants.push(participant(
-            &format!("leaf{role}"),
-            "leaf",
-            role,
-            if is_p {
-                json!([["x", "field"]])
-            } else {
-                json!([])
-            },
-            json!([]),
-            if is_p {
-                json!([["send", "wire", "fieldSchema", "V", "x"], ["return", []]])
-            } else {
-                json!([
-                    ["receive", "wire", "fieldSchema", "P", "y", "field"],
-                    ["return", []]
-                ])
-            },
-        ));
-    }
-    module(
-        json!([]),
-        json!(participants),
-        json!([["entry", "main", [["P", "mainP"], ["V", "mainV"]]]]),
-    )
-}
-#[test]
-fn repeated_nested_calls_share_definitions_and_reject_cross_call_packets() {
-    let j = repeated_exchange("2");
-    let a = admitted(&j);
-    assert_eq!(a.program.participants.len(), 6);
-    let mut p = runner(&j, "P", Mock::new(), vec![V::Field(5)]);
-    let mut v = runner(&j, "V", Mock::new(), vec![]);
-    let mut previous: Option<Packet<V>> = None;
-    let mut origins = vec![];
-    for iteration in 0..2 {
-        for call in ["first", "second"] {
-            let Action::Send(packet) = p.poll() else {
-                panic!()
-            };
-            assert_eq!(packet.envelope.origin.instance, "leaf");
-            assert_eq!(
-                packet.envelope.origin.path,
-                vec![
-                    PathElement::Loop {
-                        site: "outer".into(),
-                        iteration
-                    },
-                    PathElement::Call {
-                        site: call.into(),
-                        instance: "wrapper".into()
-                    },
-                    PathElement::Call {
-                        site: "nested".into(),
-                        instance: "leaf".into()
-                    }
-                ]
-            );
-            let pending = v.poll();
-            let usage = v.usage();
-            let trace = v.backend().trace.clone();
-            for _ in 0..3 {
-                assert_eq!(v.poll(), pending);
-            }
-            assert_eq!(v.usage(), usage);
-            assert_eq!(v.backend().trace, trace);
-            if let Some(old) = &previous {
-                assert_eq!(v.deliver(old.clone()), Err(RuntimeError::Envelope));
-            }
-            let cut = DriverCut::Message {
-                send: p.poll().cut().unwrap(),
-                receive: v.poll().cut().unwrap(),
-            };
-            drive_cut(&mut p, &mut v, &cut).unwrap();
-            origins.push(packet.envelope.domain_bytes());
-            previous = Some(packet);
-        }
-    }
-    assert_eq!(origins.iter().collect::<BTreeSet<_>>().len(), 4);
-    assert_eq!(p.poll(), Action::Returned(vec![]));
-    assert_eq!(v.poll(), Action::Returned(vec![]));
-    assert_eq!(p.usage().calls, 8);
-    assert_eq!(v.usage().calls, 8);
-    assert!(p.backend().frames.is_empty());
-    assert!(v.backend().frames.is_empty());
-}
-#[test]
-fn zero_and_empty_loop_state_preserve_control() {
-    let mut j = one(
-        json!([]),
-        json!([["x", "field"]]),
-        json!(["field"]),
-        json!([
-            [
-                "loop",
-                "zero",
-                "0",
-                [["a", "x"]],
-                [],
-                [["stop", "bodyStop", "abort"]],
-                ["z"]
-            ],
-            ["return", ["z"]]
-        ]),
-    );
-    let mut r = runner(&j, "P", Mock::new(), vec![V::Field(7)]);
-    assert_eq!(r.poll(), Action::Returned(vec![V::Field(7)]));
-    assert_eq!(r.usage().iterations, 0);
-    j[4][0][7][0][2] = json!("1");
-    let mut r = runner(&j, "P", Mock::new(), vec![V::Field(7)]);
-    assert!(matches!(
-        r.poll(),
-        Action::Stopped(Stop {
-            kind: StopKind::Explicit(_),
-            ..
-        })
-    ));
-    let j = one(
-        json!([]),
-        json!([]),
-        json!([]),
-        json!([
-            ["loop", "empty", "3", [], [], [["yield", []]], []],
-            ["return", []]
-        ]),
-    );
-    let mut r = runner(&j, "P", Mock::new(), vec![]);
-    assert_eq!(r.poll(), Action::Returned(vec![]));
-    assert_eq!(r.usage().iterations, 3);
-    let j = repeated_exchange("0");
-    let mut r = runner(&j, "V", Mock::new(), vec![]);
-    assert_eq!(r.poll(), Action::Returned(vec![]));
-    assert_eq!(r.usage().calls, 0);
-}
-#[test]
-fn nested_loops_carried_state_closed_captures_and_iteration_order() {
-    let j = one(
-        json!([add_fn()]),
-        json!([["x", "field"], ["increment", "field"]]),
-        json!(["field"]),
-        json!([
-            [
-                "loop",
-                "outer",
-                "2",
-                [["a", "x"]],
-                ["increment"],
-                [
-                    [
-                        "loop",
-                        "inner",
-                        "3",
-                        [["b", "a"]],
-                        ["increment"],
-                        [
-                            ["local", "step", "add", ["b", "increment"], ["c"]],
-                            ["yield", ["c"]]
-                        ],
-                        ["d"]
-                    ],
-                    ["yield", ["d"]]
-                ],
-                ["z"]
-            ],
-            ["return", ["z"]]
-        ]),
-    );
-    let mut r = runner(&j, "P", Mock::new(), vec![V::Field(2), V::Field(3)]);
-    for outer in 0..2 {
-        for inner in 0..3 {
-            let Action::Local(a) = r.poll() else { panic!() };
-            assert_eq!(
-                a.cut.origin.path,
-                vec![
-                    PathElement::Loop {
-                        site: "outer".into(),
-                        iteration: outer
-                    },
-                    PathElement::Loop {
-                        site: "inner".into(),
-                        iteration: inner
-                    }
-                ]
-            );
-            r.execute_local(&a.cut).unwrap();
-        }
-    }
-    assert_eq!(r.poll(), Action::Returned(vec![V::Field(20)]));
-    assert_eq!(r.usage().iterations, 8);
-    let mut bad = j.clone();
-    bad[4][0][7][0][4] = json!([]);
-    reject(&bad, ErrorCode::Ssa);
-    let mut bad = j.clone();
-    bad[4][0][7][0][5][0][4] = json!(["increment", "increment"]);
-    reject(&bad, ErrorCode::Capture);
-    let mut bad = j.clone();
-    bad[4][0][7][0][5][0][5][1][1] = json!([]);
-    reject(&bad, ErrorCode::Signature);
-    let mut bad = j;
-    bad[4][0][7][0][5][0][5][1][0] = json!("return");
-    reject(&bad, ErrorCode::Terminal);
-}
-#[test]
-fn loop_count_and_parameter_admission_limits() {
-    for value in [
-        json!("01"),
-        json!("-1"),
-        json!("1.0"),
-        json!("1048577"),
-        json!(["constant", "1"]),
-        json!(1),
-    ] {
-        let j = one(
-            json!([]),
-            json!([]),
-            json!([]),
-            json!([
-                ["loop", "l", value, [], [], [["yield", []]], []],
-                ["return", []]
-            ]),
-        );
-        assert!(admit_supplied(&bytes(&j), &Mock::new()).is_err());
-    }
-}
-#[test]
-fn call_signature_and_instance_parameter_context_survive_execution() {
-    let mut j = module(
-        json!([add_fn()]),
-        json!([
-            participant(
-                "mainP",
-                "root",
-                "P",
-                json!([["x", "field"]]),
-                json!(["field"]),
-                json!([
-                    ["call", "childCall", "childP", ["x"], ["y"]],
-                    ["call", "again", "childP", ["y"], ["z"]],
-                    ["return", ["z"]]
-                ])
-            ),
-            participant(
-                "childP",
-                "selected",
-                "P",
-                json!([["arg", "field"]]),
-                json!(["field"]),
-                json!([
-                    ["local", "twice", "add", ["arg", "arg"], ["out"]],
-                    ["return", ["out"]]
-                ])
-            )
-        ]),
-        json!([["entry", "main", [["P", "mainP"]]]]),
-    );
-    j[4][0][4] = json!([["n", "4"]]);
-    j[4][1][4] = json!([["n", "2"]]);
-    let mut r = runner(&j, "P", Mock::new(), vec![V::Field(3)]);
-    local(&mut r);
-    local(&mut r);
-    assert_eq!(r.poll(), Action::Returned(vec![V::Field(12)]));
-    assert_ne!(r.backend().domains[0], r.backend().domains[1]);
-    assert!(
-        String::from_utf8(r.backend().domains[0].clone())
-            .unwrap()
-            .contains("[\"n\",\"2\"]")
-    );
-    let mut bad = j.clone();
-    bad[4][0][7][0][3] = json!([]);
-    reject(&bad, ErrorCode::Signature);
-    let mut bad = j;
-    bad[4][0][7][0][2] = json!("missing");
-    reject(&bad, ErrorCode::Symbol);
-}
-fn resource_child(failing: bool) -> Json {
-    let f = if failing {
-        json!([
-            "function",
-            "resource",
-            [["r", "rng"], ["ok", "bool"]],
-            ["rng"],
-            [
-                [
-                    "op",
-                    "prefix",
-                    "arkworks/random.draw",
-                    [],
-                    ["r"],
-                    ["x", "r1"]
-                ],
-                ["op", "guard", "arkworks/control.require", [], ["ok"], []],
-                [
-                    "op",
-                    "suffix",
-                    "arkworks/random.draw",
-                    [],
-                    ["r1"],
-                    ["y", "r2"]
-                ],
-                ["return", ["r2"]]
-            ]
-        ])
-    } else {
-        json!([
-            "function",
-            "resource",
-            [["r", "rng"], ["ok", "bool"]],
-            ["rng"],
-            [
-                [
-                    "op",
-                    "prefix",
-                    "arkworks/random.draw",
-                    [],
-                    ["r"],
-                    ["x", "r1"]
-                ],
-                ["return", ["r1"]]
-            ]
-        ])
-    };
-    module(
-        json!([f]),
-        json!([
-            participant(
-                "mainP",
-                "root",
-                "P",
-                json!([["r", "rng"], ["other", "rng"], ["ok", "bool"]]),
-                json!(["rng", "rng"]),
-                json!([
-                    ["call", "focus", "childP", ["r", "ok"], ["next"]],
-                    ["return", ["next", "other"]]
-                ])
-            ),
-            participant(
-                "childP",
-                "child",
-                "P",
-                json!([["r", "rng"], ["ok", "bool"]]),
-                json!(["rng"]),
-                json!([
-                    ["local", "work", "resource", ["r", "ok"], ["next"]],
-                    ["return", ["next"]]
-                ])
-            )
-        ]),
-        json!([["entry", "main", [["P", "mainP"]]]]),
-    )
-}
-#[test]
-fn focused_child_success_and_failure_preserve_unaffected_frame() {
-    for succeeds in [true, false] {
-        let j = resource_child(true);
-        let mut b = Mock::new();
-        let r = b.issue(0, "P");
-        let other = b.issue(1, "P");
-        let mut runner = runner(&j, "P", b, vec![r, other.clone(), V::Bool(succeeds)]);
-        local(&mut runner);
-        if succeeds {
-            let Action::Returned(values) = runner.poll() else {
-                panic!()
-            };
-            assert_eq!(values[1], other);
-        } else {
-            assert!(
-                matches!(runner.poll(),Action::Stopped(Stop{kind:StopKind::Backend(BackendError{code}),..})if code=="require-failed")
-            );
-        }
-        assert_eq!(
-            runner.backend().slots[&0].draws,
-            if succeeds { 2 } else { 1 }
-        );
-        assert_eq!(runner.backend().slots[&1].draws, 0);
-        assert_eq!(runner.backend().slots[&1].generation, 0);
-        assert!(runner.backend().frames.is_empty());
-        let backend = runner.into_backend();
-        assert_eq!(backend.slots[&0].generation, if succeeds { 2 } else { 1 });
-    }
-}
 #[test]
 fn failure_inside_consuming_kernel_keeps_successor_and_runs_no_suffix() {
     let j = resource_child(true);
@@ -1546,82 +994,6 @@ fn failure_inside_consuming_kernel_keeps_successor_and_runs_no_suffix() {
             .iter()
             .any(|s| s == "arkworks/control.require")
     );
-    assert_eq!(runner.backend().slots[&1].draws, 0);
-}
-#[test]
-fn aliased_actual_arguments_fail_after_real_focused_prefix() {
-    let f = json!([
-        "function",
-        "alias",
-        [["a", "rng"], ["b", "rng"]],
-        [],
-        [
-            [
-                "op",
-                "first",
-                "arkworks/random.draw",
-                [],
-                ["a"],
-                ["x", "a1"]
-            ],
-            [
-                "op",
-                "second",
-                "arkworks/random.draw",
-                [],
-                ["b"],
-                ["y", "b1"]
-            ],
-            ["return", []]
-        ]
-    ]);
-    let j = module(
-        json!([f]),
-        json!([
-            participant(
-                "mainP",
-                "root",
-                "P",
-                json!([["a", "rng"], ["b", "rng"], ["other", "rng"]]),
-                json!([]),
-                json!([["call", "focus", "childP", ["a", "b"], []], ["return", []]])
-            ),
-            participant(
-                "childP",
-                "child",
-                "P",
-                json!([["a", "rng"], ["b", "rng"]]),
-                json!([]),
-                json!([["local", "work", "alias", ["a", "b"], []], ["return", []]])
-            )
-        ]),
-        json!([["entry", "main", [["P", "mainP"]]]]),
-    );
-    let mut b = Mock::new();
-    let a = b.issue(0, "P");
-    let other = b.issue(1, "P");
-    let mut r = runner(&j, "P", b, vec![a.clone(), a, other]);
-    local(&mut r);
-    assert!(
-        matches!(r.poll(),Action::Stopped(Stop{kind:StopKind::Backend(BackendError{code}),..})if code=="stale")
-    );
-    assert_eq!(r.backend().slots[&0].draws, 1);
-    assert_eq!(r.backend().slots[&1].draws, 0);
-    assert!(r.backend().frames.is_empty());
-}
-#[test]
-fn child_cannot_access_resource_outside_actual_operands() {
-    let j = resource_child(false);
-    let mut b = Mock::new();
-    let r = b.issue(0, "P");
-    let other = b.issue(1, "P");
-    b.intrude = Some(1);
-    let mut runner = runner(&j, "P", b, vec![r, other, V::Bool(true)]);
-    local(&mut runner);
-    assert!(
-        matches!(runner.poll(),Action::Stopped(Stop{kind:StopKind::Backend(BackendError{code}),..})if code=="outside-operands")
-    );
-    assert_eq!(runner.backend().slots[&0].draws, 0);
     assert_eq!(runner.backend().slots[&1].draws, 0);
 }
 #[test]
@@ -1659,60 +1031,6 @@ fn unissued_wrong_owner_and_stale_capabilities_fail_entry_admission() {
         *seal = 0;
     }
     assert!(Runner::new(&a, "main", "P", "s", b, vec![forged]).is_err());
-}
-#[test]
-fn loop_carried_resource_advances_without_minting_fresh_tapes() {
-    let j = one(
-        json!([draw_fn()]),
-        json!([["r", "rng"]]),
-        json!(["rng"]),
-        json!([
-            [
-                "loop",
-                "rounds",
-                "3",
-                [["current", "r"]],
-                [],
-                [
-                    ["local", "drawSite", "draw", ["current"], ["x", "next"]],
-                    ["yield", ["next"]]
-                ],
-                ["out"]
-            ],
-            ["return", ["out"]]
-        ]),
-    );
-    let mut b = Mock::new();
-    let r = b.issue(0, "P");
-    let mut runner = runner(&j, "P", b, vec![r]);
-    for _ in 0..3 {
-        local(&mut runner);
-    }
-    let Action::Returned(values) = runner.poll() else {
-        panic!()
-    };
-    assert!(matches!(
-        values[0],
-        V::Cap {
-            slot: 0,
-            generation: 3,
-            ..
-        }
-    ));
-    assert_eq!(runner.backend().slots[&0].draws, 3);
-    assert_eq!(
-        runner
-            .backend()
-            .domains
-            .iter()
-            .collect::<BTreeSet<_>>()
-            .len(),
-        3
-    );
-    let mut bad = j;
-    bad[4][0][7][0][3] = json!([]);
-    bad[4][0][7][0][4] = json!(["r"]);
-    reject(&bad, ErrorCode::Capture);
 }
 #[test]
 fn backend_output_contract_and_cleanup_errors_fail_closed() {
@@ -1759,28 +1077,19 @@ fn cancellation_unwinds_and_preserves_resource_state() {
 }
 #[test]
 fn unrelated_peer_stop_does_not_cancel_or_advance_role() {
-    let mut j = exchange();
-    j[4][0][7] = json!([["stop", "privateStop", "abort"]]);
+    let j = exchange();
     let mut p = runner(&j, "P", Mock::new(), vec![V::Field(1)]);
     let mut v = runner(&j, "V", Mock::new(), vec![]);
     let pending = v.poll();
     let usage = v.usage();
+    p.cancel();
     assert!(matches!(p.poll(), Action::Stopped(_)));
     assert_eq!(v.poll(), pending);
     assert_eq!(v.usage(), usage);
-    let mut j = identity();
-    j[4][0][7] = json!([["incomplete", "foreign"]]);
-    let mut r = runner(&j, "P", Mock::new(), vec![V::Field(1)]);
-    assert!(matches!(
-        r.poll(),
-        Action::Stopped(Stop {
-            kind: StopKind::Incomplete,
-            ..
-        })
-    ));
 }
+
 #[test]
-fn source_order_driver_preserves_p_a_v_fail_p_b_cut() {
+fn explicit_driver_preserves_selected_order_after_peer_failure() {
     let guard = json!([
         "function",
         "guard",
@@ -1871,36 +1180,6 @@ fn wrong_driver_cut_and_cross_session_fail_without_local_execution() {
         Err(RuntimeError::Envelope)
     );
 }
-#[test]
-fn runtime_value_and_iteration_limits_are_real_stops() {
-    let a = admitted(&identity());
-    assert!(matches!(
-        Runner::new(&a, "main", "P", "s", Mock::new(), vec![V::Oversize])
-            .err()
-            .unwrap()
-            .error,
-        RuntimeError::Limit
-    ));
-    let j = one(
-        json!([]),
-        json!([]),
-        json!([]),
-        json!([
-            ["loop", "many", "100001", [], [], [["yield", []]], []],
-            ["return", []]
-        ]),
-    );
-    let mut r = runner(&j, "P", Mock::new(), vec![]);
-    assert!(matches!(
-        r.poll(),
-        Action::Stopped(Stop {
-            kind: StopKind::Limit,
-            ..
-        })
-    ));
-    assert_eq!(r.usage().iterations, Limits::ITERATIONS);
-    assert!(r.backend().frames.is_empty());
-}
 
 #[test]
 fn failed_root_result_reservation_never_reports_returned_frame() {
@@ -1927,341 +1206,6 @@ fn failed_root_result_reservation_never_reports_returned_frame() {
     }
 }
 
-fn child_entry_program(loop_count: Option<u64>) -> Json {
-    let child = match loop_count {
-        None => json!(["call", "childSite", "childP", ["next", "x"], ["out"]]),
-        Some(count) => json!([
-            "loop",
-            "childSite",
-            count.to_string(),
-            [["current", "next"]],
-            ["x"],
-            [
-                [
-                    "local",
-                    "drawSite",
-                    "draw",
-                    ["current"],
-                    ["sample", "successor"]
-                ],
-                ["yield", ["successor"]]
-            ],
-            ["out"]
-        ]),
-    };
-    module(
-        json!([draw_fn()]),
-        json!([
-            participant(
-                "mainP",
-                "root",
-                "P",
-                json!([["r", "rng"], ["x", "field"]]),
-                json!(["rng"]),
-                json!([
-                    ["local", "prefix", "draw", ["r"], ["prefixSample", "next"]],
-                    child,
-                    ["return", ["out"]]
-                ])
-            ),
-            participant(
-                "childP",
-                "child",
-                "P",
-                json!([["r", "rng"], ["x", "field"]]),
-                json!(["rng"]),
-                json!([["return", ["r"]]])
-            )
-        ]),
-        json!([["entry", "main", [["P", "mainP"]]]]),
-    )
-}
-
-fn child_origin(mut base: Origin, iteration: Option<u64>) -> Origin {
-    base.path.push(match iteration {
-        Some(iteration) => PathElement::Loop {
-            site: "childSite".into(),
-            iteration,
-        },
-        None => {
-            base.instance = "child".into();
-            PathElement::Call {
-                site: "childSite".into(),
-                instance: "child".into(),
-            }
-        }
-    });
-    base
-}
-
-fn assert_child_stop(r: &mut Runner<Mock>, stop: Stop, expected: Origin, draws: u64) {
-    assert_eq!(stop.origin, expected);
-    assert_eq!(stop.site.as_deref(), Some("childSite"));
-    assert_eq!(stop.role, "P");
-    assert!(stop.cleanup_errors.is_empty());
-    assert!(r.backend().frames.is_empty());
-    assert_eq!(r.usage().live_values, 0);
-    assert_eq!(r.usage().live_value_bytes, 0);
-    assert_eq!(r.backend().slots[&0].generation, draws);
-    assert_eq!(r.backend().slots[&0].draws, draws);
-    assert_eq!(r.backend().slots[&1].generation, 0);
-    assert_eq!(r.backend().slots[&1].draws, 0);
-    let trace = r.backend().trace.clone();
-    assert_eq!(
-        trace.iter().filter(|s| s.starts_with("enter:")).count(),
-        trace.iter().filter(|s| s.starts_with("leave:")).count()
-    );
-    let usage = r.usage();
-    assert_eq!(r.poll(), Action::Stopped(stop.clone()));
-    r.cancel();
-    assert_eq!(r.poll(), Action::Stopped(stop));
-    assert_eq!(r.usage(), usage);
-    assert_eq!(r.backend().trace, trace);
-}
-
-#[test]
-fn child_entry_refusal_preserves_attempted_origin_and_completed_prefix() {
-    for iteration in [None, Some(0), Some(1)] {
-        let mut j = child_entry_program(iteration.map(|_| 2));
-        // Keep an admitted ancestor to check the full nested origin and unwind order.
-        let body = j[4][0][7].as_array_mut().unwrap();
-        let child_body = json!([body[1].clone(), body[2].clone()]);
-        body[1] = json!(["call", "outerSite", "outerP", ["next", "x"], ["out"]]);
-        j[4].as_array_mut().unwrap().push(participant(
-            "outerP",
-            "outer",
-            "P",
-            json!([["next", fixture_type("rng")], ["x", fixture_type("field")]]),
-            json!([fixture_type("rng")]),
-            child_body,
-        ));
-        let mut b = Mock::new();
-        b.fail_enter = Some(match iteration {
-            None => FrameKind::Call {
-                site: "childSite".into(),
-            },
-            Some(iteration) => FrameKind::Loop {
-                site: "childSite".into(),
-                iteration,
-            },
-        });
-        let cap = b.issue(0, "P");
-        b.issue(1, "P");
-        let mut r = runner(&j, "P", b, vec![cap, V::Field(7)]);
-        let mut base = r.root_origin().clone();
-        base.instance = "outer".into();
-        base.path.push(PathElement::Call {
-            site: "outerSite".into(),
-            instance: "outer".into(),
-        });
-        local(&mut r);
-        for _ in 0..iteration.unwrap_or(0) {
-            local(&mut r);
-        }
-        let Action::Stopped(stop) = r.poll() else {
-            panic!("child admission must stop")
-        };
-        let expected = child_origin(base, iteration);
-        assert_eq!(
-            r.backend().refused_frame.as_ref().unwrap().origin(),
-            &expected
-        );
-        assert_eq!(
-            stop.kind,
-            StopKind::Backend(BackendError::new("enter-refused"))
-        );
-        assert_eq!(
-            r.backend()
-                .trace
-                .iter()
-                .filter(|s| *s == "leave:Stopped")
-                .count(),
-            2
-        );
-        assert_child_stop(&mut r, stop, expected, 1 + iteration.unwrap_or(0));
-        let trace = r.backend().trace.clone();
-        assert_eq!(r.into_backend().trace, trace);
-    }
-}
-
-#[test]
-fn child_entry_reservation_failure_preserves_origin_without_entering_backend() {
-    // Call and initial-loop live-byte limits, then cumulative bytes on a later push.
-    for (count, size_mib, iteration, draws) in [
-        (None, 34, None, 1),
-        (Some(1), 34, Some(0), 1),
-        (Some(12), 20, Some(11), 12),
-    ] {
-        for failure in [true, false] {
-            let count = if !failure && count == Some(12) {
-                Some(11)
-            } else {
-                count
-            };
-            let size_mib = if !failure && size_mib != 20 {
-                size_mib - 4
-            } else {
-                size_mib
-            };
-            let mut b = Mock::new();
-            let cap = b.issue(0, "P");
-            b.issue(1, "P");
-            let mut r = runner(
-                &child_entry_program(count),
-                "P",
-                b,
-                vec![cap, V::Sized(size_mib * 1024 * 1024)],
-            );
-            let expected = child_origin(r.root_origin().clone(), iteration);
-            let terminal = loop {
-                match r.poll() {
-                    Action::Local(action) => r.execute_local(&action.cut).unwrap(),
-                    terminal => break terminal,
-                }
-            };
-            if failure {
-                let Action::Stopped(stop) = terminal else {
-                    panic!("reservation must stop")
-                };
-                assert_eq!(stop.kind, StopKind::Limit);
-                assert_eq!(
-                    r.backend()
-                        .trace
-                        .iter()
-                        .filter(|s| s.starts_with("enter:"))
-                        .count(),
-                    (2 * draws) as usize
-                );
-                assert_eq!(
-                    r.backend()
-                        .trace
-                        .iter()
-                        .filter(|s| *s == "leave:Stopped")
-                        .count(),
-                    1
-                );
-                assert_child_stop(&mut r, stop, expected, draws);
-            } else {
-                assert!(matches!(terminal, Action::Returned(_)));
-                assert_eq!(r.backend().slots[&0].draws, 1 + count.unwrap_or(0));
-                assert!(r.backend().frames.is_empty());
-            }
-        }
-    }
-}
-
-#[test]
-fn owned_incomplete_stop_is_distinct_from_foreign_leaf() {
-    for reason in ["reject", "abort", "exhausted", "incomplete", "refused"] {
-        let j = one(
-            json!([]),
-            json!([]),
-            json!([]),
-            json!([["stop", "owned", reason]]),
-        );
-        let mut r = runner(&j, "P", Mock::new(), vec![]);
-        let Action::Stopped(stop) = r.poll() else {
-            panic!("expected owned stop")
-        };
-        assert_eq!(stop.kind, StopKind::Explicit(reason.into()));
-        assert_eq!(stop.site.as_deref(), Some("owned"));
-    }
-    let j = one(
-        json!([]),
-        json!([]),
-        json!([]),
-        json!([["incomplete", "foreign"]]),
-    );
-    let mut r = runner(&j, "P", Mock::new(), vec![]);
-    let Action::Stopped(stop) = r.poll() else {
-        panic!("expected foreign leaf")
-    };
-    assert_eq!(stop.kind, StopKind::Incomplete);
-    assert_eq!(stop.site, None);
-    let unknown = one(
-        json!([]),
-        json!([]),
-        json!([]),
-        json!([["stop", "owned", "unknown"]]),
-    );
-    assert!(admit_supplied(&serde_json::to_vec(&unknown).unwrap(), &Mock::new()).is_err());
-}
-
-#[test]
-fn combined_loop_capture_allocation_fails_before_child_entry() {
-    let j = one(
-        json!([]),
-        json!([["x", "field"]]),
-        json!([]),
-        json!([
-            ["loop", "l", "1", [], ["x"], [["yield", []]], []],
-            ["return", []]
-        ]),
-    );
-    let mut r = runner(&j, "P", Mock::new(), vec![V::Sized(34 * 1024 * 1024)]);
-    assert!(matches!(
-        r.poll(),
-        Action::Stopped(Stop {
-            kind: StopKind::Limit,
-            ..
-        })
-    ));
-    assert_eq!(
-        r.backend()
-            .trace
-            .iter()
-            .filter(|s| s.starts_with("enter:"))
-            .count(),
-        1
-    );
-    assert!(r.backend().frames.is_empty());
-    assert_eq!(r.usage().live_values, 0);
-    assert_eq!(r.usage().live_value_bytes, 0);
-}
-#[test]
-fn runtime_stack_checks_combined_calls_and_loops() {
-    let mut participants = vec![];
-    for index in 0..24 {
-        let mut body = if index == 23 {
-            json!([["yield", []]])
-        } else {
-            json!([
-                ["call", "child", format!("p{}", index + 1), [], []],
-                ["yield", []]
-            ])
-        };
-        for nesting in 0..3 {
-            body = json!([
-                ["loop", format!("loop{nesting}"), "1", [], [], body, []],
-                ["yield", []]
-            ]);
-        }
-        body.as_array_mut().unwrap().last_mut().unwrap()[0] = json!("return");
-        participants.push(participant(
-            &format!("p{index}"),
-            &format!("i{index}"),
-            "P",
-            json!([]),
-            json!([]),
-            body,
-        ));
-    }
-    let j = module(
-        json!([]),
-        json!(participants),
-        json!([["entry", "main", [["P", "p0"]]]]),
-    );
-    let mut r = runner(&j, "P", Mock::new(), vec![]);
-    assert!(matches!(
-        r.poll(),
-        Action::Stopped(Stop {
-            kind: StopKind::Limit,
-            ..
-        })
-    ));
-    assert!(r.backend().frames.is_empty());
-}
-
 // A second, deliberately tiny NONCRYPTOGRAPHIC value/service implementation
 // demonstrates that the runner has no field-table or all-role environment ABI.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2274,16 +1218,14 @@ enum G {
 }
 impl Value for G {
     fn physical_type(&self) -> PhysicalType {
-        PhysicalType::parse(&fixture_type(self.type_name())).unwrap()
-    }
-    fn type_name(&self) -> &str {
-        match self {
+        PhysicalType::parse(&fixture_type(match self {
             Self::Scalar(_) => "field",
             Self::Group(_) => "group",
             Self::Groups(_) => "groups",
             Self::Nonce(_) => "nonce",
             Self::Bool(_) => "bool",
-        }
+        }))
+        .unwrap()
     }
     fn validate_serializable(&self) -> Result<(), BackendError> {
         if matches!(self, Self::Nonce(_)) {
@@ -2599,40 +1541,15 @@ fn nonpolynomial_group_roles_use_distinct_typed_backend_and_consumed_nonce() {
 }
 
 #[test]
-fn dropping_pending_runner_unwinds_every_frame_even_on_cleanup_error() {
-    for fail_cleanup in [false, true] {
-        let counter = std::rc::Rc::new(std::cell::Cell::new(0));
-        let j = resource_child(false);
-        let mut b = Mock::new();
-        b.close_count = Some(counter.clone());
-        b.fail_leave = fail_cleanup;
-        let r = b.issue(0, "P");
-        let other = b.issue(1, "P");
-        let mut runner = runner(&j, "P", b, vec![r, other, V::Bool(true)]);
-        assert!(matches!(runner.poll(), Action::Local(_)));
-        assert_eq!(counter.get(), 0);
-        drop(runner);
-        assert_eq!(counter.get(), 2);
-    }
-}
-
-#[path = "storage_tests.rs"]
-mod storage_tests;
-
-#[test]
 fn closed_profile_participants_are_not_an_execution_format() {
     let mut candidate = identity();
     for profile in [
-        "arkworks.multilinear.bls12-381/1",
-        "arkworks.bls12-381/1",
-        "reference.group/1",
+        "arkworks.multilinear.bls12-381/0",
+        "arkworks.bls12-381/0",
+        "reference.group/0",
     ] {
-        // The tag has to be one the decoder accepts. Written with a retired
-        // tag the record would be refused for its tag alone, which is a
-        // different refusal from the one this is about. The three
-        // profiles say the answer does not turn on which profile the record
-        // names; they are not three different refusals.
-        candidate[0] = json!("zkc.participants/1");
+        // Keep the format valid so the malformed bindings field is checked.
+        candidate[0] = json!("zkc.program/0");
         candidate[1] = json!(profile);
         reject(&candidate, ErrorCode::Record);
     }
@@ -2641,7 +1558,7 @@ fn closed_profile_participants_are_not_an_execution_format() {
 #[test]
 fn reference_variant_selects_only_active_resource_and_preserves_stop_trace() {
     let ty = format!(
-        "{}@logical.variant/1",
+        "{}@logical.variant/0",
         zkc_test_support::variants::logical(
             "Reference",
             json!([["draw", ["rng:bls12-381.fr"]], ["empty", []]])
@@ -2797,13 +1714,13 @@ fn runner_refuses_a_variant_that_misreports_itself() {
     }
 }
 
-const INDICES: &str = "indices@native.indices/1";
-const INDEX: &str = "index@native.index/1";
-const TRANSCRIPT: &str = "transcript:merlin3.bls12-381.fr64be/1@host.resource/1";
+const INDICES: &str = "indices@native.indices/0";
+const INDEX: &str = "index@native.index/0";
+const TRANSCRIPT: &str = "transcript:merlin3.bls12-381.fr64be/0@host.resource/0";
 
 fn tag_type(payload: &[&str]) -> String {
     format!(
-        "{}@logical.variant/1",
+        "{}@logical.variant/0",
         zkc_test_support::variants::logical("Tag", json!([["yes", payload], ["no", []]]))
     )
 }
@@ -2961,18 +1878,18 @@ fn private_match_refuses_a_history_effect_under_nested_local_control() {
 /// operation's attribute rule.
 #[test]
 fn private_match_refuses_internal_transcript_observation_and_challenge() {
-    let suite = "merlin3.bls12-381.fr64be/1";
+    let suite = "merlin3.bls12-381.fr64be/0";
     for (contract, arguments, inputs, outputs) in [
         (
-            "transcript.observe.index",
-            json!([suite, "zkcv.index/1"]),
-            json!(["t", "n"]),
+            "transcript.native.indexed.observe.data",
+            json!([suite, "index"]),
+            json!(["t", "n", "coordinates"]),
             json!(["t2"]),
         ),
         (
-            "transcript.challenge",
+            "transcript.native.indexed.challenge",
             json!([suite]),
-            json!(["t"]),
+            json!(["t", "coordinates"]),
             json!(["x", "t2"]),
         ),
     ] {
@@ -2980,7 +1897,11 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
             json!([[
                 "function",
                 "Work",
-                [["t", TRANSCRIPT], ["n", INDEX]],
+                [
+                    ["t", TRANSCRIPT],
+                    ["n", INDEX],
+                    ["coordinates", "indices@native.indices/0"]
+                ],
                 [TRANSCRIPT],
                 [
                     ["variant", "pack", tag_type(&[]), "yes", [], "v"],
@@ -2988,7 +1909,7 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
                         "match",
                         "case",
                         "v",
-                        ["t", "n"],
+                        ["t", "n", "coordinates"],
                         [
                             [
                                 "yes",
@@ -2998,7 +1919,31 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
                                         "op",
                                         "effect",
                                         "kernel",
-                                        ["Protocol", "instance", "P", "V", "site"],
+                                        [zkc_test_support::hex(
+                                            &crate::logical::encode_tree(&json!([
+                                                "zkc.native-origin-template/0",
+                                                "main",
+                                                [],
+                                                [],
+                                                if contract.ends_with("data") {
+                                                    json!([
+                                                        "message", "Source", "site", "Schema", "P",
+                                                        "V"
+                                                    ])
+                                                } else {
+                                                    json!([
+                                                        "query",
+                                                        "Source",
+                                                        "draw",
+                                                        "input_0",
+                                                        "random.bls12-381.fr/0",
+                                                        "draw",
+                                                        "V"
+                                                    ])
+                                                }
+                                            ]))
+                                            .unwrap()
+                                        )],
                                         inputs,
                                         outputs
                                     ],
@@ -3012,10 +1957,14 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
                     ["return", ["out"]]
                 ]
             ]]),
-            json!([["t", TRANSCRIPT], ["n", INDEX]]),
+            json!([
+                ["t", TRANSCRIPT],
+                ["n", INDEX],
+                ["coordinates", "indices@native.indices/0"]
+            ]),
             json!([TRANSCRIPT]),
             json!([
-                ["local", "work", "Work", ["t", "n"], ["out"]],
+                ["local", "work", "Work", ["t", "n", "coordinates"], ["out"]],
                 ["return", ["out"]]
             ]),
         );
@@ -3026,7 +1975,7 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
             format!("arkworks/{contract}")
         ]));
         let mut outside_match = j.clone();
-        outside_match[3][0][4] = json!([j[3][0][4][1][4][0][2][0], ["return", ["t2"]]]);
+        outside_match[2][0][4] = json!([j[2][0][4][1][4][0][2][0], ["return", ["t2"]]]);
         admitted(&outside_match);
         let error = admit_supplied(&bytes(&j), &Mock::new()).unwrap_err();
         assert_eq!(
@@ -3082,7 +2031,7 @@ fn tagged_witness(leaf: &str) -> Json {
 /// and a descriptor keeps the text it was given, so admitting both would mint a
 /// second nominal identity for one payload. Readers do not silently normalize a
 /// different identity to an admitted spelling:
-/// docs/spec/profiles/compiler/local-variants.md.
+/// docs/spec/ir/variants.md.
 #[test]
 fn leaf_payload_types_have_a_single_canonical_spelling() {
     for alias in ["bool:", "index:", "indices:"] {
@@ -3108,18 +2057,16 @@ fn leaf_payload_types_have_a_single_canonical_spelling() {
 #[test]
 fn program_ports_admit_copyable_variants_and_refuse_affine_payloads() {
     let logical = zkc_test_support::variants::logical("Local", json!([["empty", []]]));
-    let ty = format!("{logical}@logical.variant/1");
+    let ty = format!("{logical}@logical.variant/0");
     let mut program = json!([
-        "zkc.program/1",
+        "zkc.program/0",
         [],
-        "physical",
         [],
         [[
             "participant",
             "p",
             "root",
             "P",
-            [],
             [["x", ty]],
             [ty],
             [["return", ["x"]]],
@@ -3132,149 +2079,12 @@ fn program_ports_admit_copyable_variants_and_refuse_affine_payloads() {
         "Local",
         json!([["empty", []], ["owned", ["rng:bls12-381.fr"]]]),
     );
-    let affine = format!("{affine}@logical.variant/1");
-    program[4][0][5][0][1] = json!(affine);
-    program[4][0][6][0] = json!(affine);
+    let affine = format!("{affine}@logical.variant/0");
+    program[3][0][4][0][1] = json!(affine);
+    program[3][0][5][0] = json!(affine);
     let error = admit_supplied(&bytes(&program), &Mock::new()).unwrap_err();
     assert_eq!(error.code, ErrorCode::Type);
     assert_eq!(error.detail, "variant-participant-boundary");
-}
-
-#[test]
-fn host_work_limits_stop_administrative_execution_at_the_selected_boundary() {
-    let j = one(
-        json!([]),
-        json!([]),
-        json!([]),
-        json!([
-            ["loop", "rounds", "3", [], [], [["yield", []]], []],
-            ["return", []]
-        ]),
-    );
-    for budget in [
-        WorkBudget {
-            instructions: 1,
-            ..WorkBudget::default()
-        },
-        WorkBudget {
-            iterations: 1,
-            ..WorkBudget::default()
-        },
-    ] {
-        let mut r = Runner::new_with_budgets(
-            &admitted(&j),
-            "main",
-            "P",
-            "s",
-            Mock::new(),
-            vec![],
-            ValueBudget::default(),
-            budget,
-        )
-        .unwrap();
-        assert!(matches!(
-            r.poll(),
-            Action::Stopped(Stop {
-                kind: StopKind::Limit,
-                ..
-            })
-        ));
-        assert!(r.usage().instructions <= budget.instructions);
-        assert!(r.usage().iterations <= budget.iterations);
-        assert!(r.backend().frames.is_empty());
-    }
-    let j = module(
-        json!([]),
-        json!([
-            participant(
-                "mainP",
-                "root",
-                "P",
-                json!([]),
-                json!([]),
-                json!([["call", "nested", "childP", [], []], ["return", []]])
-            ),
-            participant(
-                "childP",
-                "child",
-                "P",
-                json!([]),
-                json!([]),
-                json!([["return", []]])
-            )
-        ]),
-        json!([["entry", "main", [["P", "mainP"]]]]),
-    );
-    let mut r = Runner::new_with_budgets(
-        &admitted(&j),
-        "main",
-        "P",
-        "s",
-        Mock::new(),
-        vec![],
-        ValueBudget::default(),
-        WorkBudget {
-            calls: 0,
-            ..WorkBudget::default()
-        },
-    )
-    .unwrap();
-    assert!(matches!(
-        r.poll(),
-        Action::Stopped(Stop {
-            kind: StopKind::Limit,
-            ..
-        })
-    ));
-    assert_eq!(r.usage().calls, 0);
-    assert!(r.backend().frames.is_empty());
-}
-
-#[test]
-fn participant_iteration_limit_identifies_the_attempted_occurrence() {
-    let j = one(
-        json!([]),
-        json!([]),
-        json!([]),
-        json!([
-            ["loop", "rounds", "3", [], [], [["yield", []]], []],
-            ["return", []]
-        ]),
-    );
-    for (iterations, instructions, expected, site) in [
-        (0, 100, 0, Some("rounds")),
-        (1, 100, 1, Some("rounds")),
-        (100, 1, 0, None),
-    ] {
-        let mut runner = Runner::new_with_budgets(
-            &admitted(&j),
-            "main",
-            "P",
-            "s",
-            Mock::new(),
-            vec![],
-            ValueBudget::default(),
-            WorkBudget {
-                instructions,
-                iterations,
-                ..WorkBudget::default()
-            },
-        )
-        .unwrap();
-        let Action::Stopped(stop) = runner.poll() else {
-            panic!("expected budget stop")
-        };
-        assert_eq!(stop.kind, StopKind::Limit);
-        assert_eq!(stop.site.as_deref(), site);
-        assert_eq!(
-            stop.origin.path,
-            vec![PathElement::Loop {
-                site: "rounds".into(),
-                iteration: expected
-            }]
-        );
-        assert!(runner.backend().frames.is_empty());
-    }
 }
 
 #[test]
@@ -3305,4 +2115,26 @@ fn local_stop_identifies_its_namespace_when_a_participant_site_collides() {
         }))
     );
     assert!(r.backend().frames.is_empty());
+}
+
+#[test]
+fn admitted_program_owns_its_bytes() {
+    let mut data = bytes(&identity());
+    let expected = data.clone();
+    let admitted = admit_supplied(&data, &Mock::new()).unwrap();
+    data.fill(b' ');
+    assert_eq!(admitted.bytes(), expected);
+}
+
+// Two independently owned resources; only the actual local operand enters its frame.
+fn resource_child(_failing: bool) -> Json {
+    one(
+        json!([draw_fn()]),
+        json!([["r", "rng"], ["other", "rng"], ["ok", "bool"]]),
+        json!([]),
+        json!([
+            ["local", "draw", "draw", ["r"], ["value", "next"]],
+            ["return", []]
+        ]),
+    )
 }

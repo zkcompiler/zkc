@@ -25,14 +25,14 @@ EXE = FORMAL / ".lake/build/bin/artifact-reference"
 SCRATCH = records("frontend-identity")
 FR = "bls12-381.fr"
 FIELD, RNG = f"field:{FR}", f"rng:{FR}"
-SUITE = "merlin3.bls12-381.fr64be/1"
-CONFIG = ["zkc.public-configuration/1", [], [], []]
-INPUTS = ["zkc.artifact-inputs/1", "", [], [], CONFIG]
+SUITE = "merlin3.bls12-381.fr64be/0"
+CONFIG = ["zkc.public-configuration/0", [], [], []]
+INPUTS = ["zkc.artifact-inputs/0", "", [], [], CONFIG]
 ROLES = [["P", "P"], ["V", "V"]]
 
 
 def ordinary():
-    return ["zkc.protocol/1", [
+    return ["zkc.protocol/0", [
         ["coin", "random.draw", [FR], ""],
         ["eq", "field.equal", [FR], ""],
         ["guard", "control.require", [], ""],
@@ -53,13 +53,13 @@ def ordinary():
 
 
 def descriptor(callee="Draw", identity="normalized"):
-    return ["zkc.construction/1", "main", "P", "V", [],
+    return ["zkc.construction/0", "main", "P", "V", [],
             ["coins", [[callee, "sample"]]], "0", SUITE, identity]
 
 
 def expected_ordinary():
     # Independently specified complete seven-field expected tree.
-    return ["zkc.protocol-identity/1", ["entry", "main", "root"],
+    return ["zkc.protocol-identity/0", ["entry", "main", "root"],
         [["instance", "root", "Main", [], [], ROLES]],
         [["protocol", "Main", ["P", "V"], [], [["coins", "V", RNG]],
           [["V", "bool"], ["V", RNG]], [], [
@@ -79,7 +79,7 @@ def generic():
     common = ordinary()
     common[2] = common[2][1:]
     common[3][0][7][0][3] = "Full"
-    return ["zkc.library/1", [
+    return ["zkc.library/0", [
         ["generic_function", "GenDraw", [["F", "Field"]], [["Field", ["F"]]],
          [["rng", "rng:F"]], ["field:F", "rng:F"], [
              ["op", "sample", "random.draw", ["F"], [], ["rng"], ["x", "next"]],
@@ -138,19 +138,19 @@ def expected_nested():
 
 def receives():
     source = ordinary()
-    scheme = "multilinear.kzg.bls12-381/1"
+    scheme = "multilinear.kzg.bls12-381/0"
     source[3][0][4] += [["payload", "P", f"commitment:{scheme}"], ["key", "V", f"verifier_key:{scheme}"]]
     source[3][0][7].insert(0, ["message", "receive_alias", "commitment", "P", "V", "payload", "received"])
     # Structural fixture only. No claim that these bytes are valid curve points.
-    wire = b"ZKCAR006\1" + (1).to_bytes(8, "little") + b"\7" * 64 + b"\0" * 192
-    config = ["zkc.public-configuration/1", [["key", f"verifier_key:{scheme}", wire.hex()]],
+    wire = b"ZKCAR000\1" + (1).to_bytes(8, "little") + b"\7" * 64 + b"\0" * 192
+    config = ["zkc.public-configuration/0", [["key", f"verifier_key:{scheme}", wire.hex()]],
               [["P", "payload", "key"]], [["root", "V", "receive_alias", "key"]]]
     return source, config
 
 
 def expected_receives():
     value = expected_ordinary()
-    scheme = "multilinear.kzg.bls12-381/1"
+    scheme = "multilinear.kzg.bls12-381/0"
     value[3][0][4] += [["payload", "P", f"commitment:{scheme}"], ["key", "V", f"verifier_key:{scheme}"]]
     value[3][0][7] = [
         ["message", "site0", "commitment", "P", "V", "v1", "v3"],
@@ -204,18 +204,18 @@ def inspect(source, desc=None, config=None):
 
 
 def replay(source, desc, inputs=INPUTS, *, exe=EXE, tail=b""):
-    replies = ["zkc.primitive-replies/1", []]
+    replies = ["zkc.primitive-replies/0", []]
     proof = b""
     for _ in range(32):
         result = command("reference", source, desc, inputs, proof, replies, exe=exe)
         if result[0] == "refused" or result[1][0] != "pending-primitive":
             return result, proof, replies
         request = result[1][2]
-        if request[0] == "zkc.hash/1":
+        if request[0] == "zkc.hash/0":
             digest = hashlib.sha256(bytes.fromhex(request[2])).hexdigest()
-            proof = b"ZKCPRF01" + bytes.fromhex(digest) + tail
+            proof = b"ZKCPRF00" + bytes.fromhex(digest) + tail
             response = digest
-        elif request[0] == "zkc.transcript-request/3":
+        elif request[0] == "zkc.transcript-request/0":
             response = ["ok", "00" * 63 + "07"]
         else:
             raise AssertionError(("unplanned primitive", request))
@@ -250,7 +250,7 @@ def snapshot_tests(baseline):
 
 class IdentityTests(unittest.TestCase):
     def assertInspection(self, result):
-        self.assertEqual(result[0], "zkc.identity-inspection/1", result)
+        self.assertEqual(result[0], "zkc.identity-inspection/0", result)
         self.assertEqual(len(result[3]), 7)
 
     def test_exact_ordinary(self):
@@ -305,38 +305,34 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(result[1][0], "accepted", result)
         resolved_desc = descriptor()
         resolved_desc[5][1][0][1] = "site0"
-        root = ["zkc.artifact-binding/1", expected_ordinary(), resolved_desc, "", [], CONFIG]
+        root = ["zkc.artifact-binding/0", expected_ordinary(), resolved_desc, "", [], CONFIG]
         self.assertEqual(result[7], encode(root).hex())
         challenge = next(event for event in result[2] if event[0] == "challenge")
-        self.assertEqual(decode(bytes.fromhex(challenge[1])), ["zkc.logical-origin/1", "main", "root", [],
+        self.assertEqual(decode(bytes.fromhex(challenge[1])), ["zkc.logical-origin/0", "main", "root", [],
             ["challenge", "Main", "site0", "Draw", "site0", "V"]])
-        request = next(r for r in result[3] if r[0] == "zkc.transcript-request/3")
-        self.assertEqual(request[1:3], [SUITE, "zkc.artifact/1".encode().hex()])
+        request = next(r for r in result[3] if r[0] == "zkc.transcript-request/0")
+        self.assertEqual(request[1:3], [SUITE, "zkc.artifact/0".encode().hex()])
         self.assertEqual(request[3][0], ["append", "binding".encode().hex(), result[7]])
 
-    def retired(self):
-        """The current source, inputs and configuration under retired tags.
-
-        Every carrier now holds explicit bindings under one tag; a document
-        written under a retired tag is refused rather than read as the old form.
-        """
+    def unknown_tags(self):
+        """Current carriers with unknown tags must be refused."""
         source = ordinary()
-        source[0] = "zkc.protocol/2"
+        source[0] = "invalid.protocol"
         inputs = copy.deepcopy(INPUTS)
-        inputs[0] = "zkc.artifact-inputs/2"
+        inputs[0] = "invalid.artifact-inputs"
         return source, descriptor(identity="exact"), inputs
 
     def test_roots_and_replays(self):
         for source, desc, inputs, actual, _, _ in replays():
             self.assertEqual(actual[1][0], "accepted", actual)
             self.assertEqual(decode(bytes.fromhex(actual[7])), [
-                "zkc.artifact-binding/1", source, desc, "", [], inputs[4]])
+                "zkc.artifact-binding/0", source, desc, "", [], inputs[4]])
 
-    def test_a_retired_source_tag_is_refused(self):
+    def test_an_unknown_source_tag_is_refused(self):
         # The identity path refuses the tag it reads; the reference cannot
         # load the source as a library or an explicit module, before it reads
         # the inputs.
-        source, desc, inputs = self.retired()
+        source, desc, inputs = self.unknown_tags()
         self.assertEqual(inspect(source, desc), ["refused", "identity-source-version"])
         actual, _, _ = replay(source, desc, inputs)
         self.assertEqual(actual, ["refused", "generic-library"])
@@ -392,14 +388,14 @@ class IdentityTests(unittest.TestCase):
         source[3][5][0][0:2] = ["entry", "Full"]
         self.assertEqual(inspect(source, descriptor("Full")),
                          ["refused", "generic-common-name-conflict"])
-        for desc in [descriptor() + [[]], descriptor()[:-1], ["zkc.construction/2", *descriptor()[1:]],
+        for desc in [descriptor() + [[]], descriptor()[:-1], ["invalid.construction", *descriptor()[1:]],
                      descriptor(identity="exact"), descriptor(identity="other")]:
             self.assertEqual(inspect(ordinary(), desc)[0], "refused")
         desc = descriptor()
         desc[5][1][0][1] = "missing"
         self.assertEqual(inspect(ordinary(), desc)[0], "refused")
         source = ordinary()
-        source[0] = "zkc.protocol/2"
+        source[0] = "invalid.protocol"
         self.assertEqual(inspect(source), ["refused", "identity-source-version"])
         source = generic()
         source[2][0][3] = []
@@ -421,7 +417,7 @@ class IdentityTests(unittest.TestCase):
     def test_nested_runtime_public_context_and_order(self):
         source, desc = nested()
         inputs = copy.deepcopy(INPUTS)
-        inputs[2] = [["flag", "bool", "5a4b4356010501"], ["extra", "bool", "5a4b4356010500"]]
+        inputs[2] = [["flag", "bool", "5a4b4356000501"], ["extra", "bool", "5a4b4356000500"]]
         result, proof, replies = replay(source, desc, inputs)
         self.assertEqual(result[1][0], "accepted", result)
         root = decode(bytes.fromhex(result[7]))
@@ -434,7 +430,7 @@ class IdentityTests(unittest.TestCase):
             (copy.deepcopy(inputs), desc), (inputs, copy.deepcopy(desc)),
         ]:
             if changed_inputs == inputs and changed_desc is desc:
-                changed_inputs[2][0][2] = "5a4b4356010500"
+                changed_inputs[2][0][2] = "5a4b4356000500"
             if changed_desc is not desc:
                 changed_desc[4].reverse()
             observation = command("reference", source, changed_desc, changed_inputs, proof, replies)
@@ -469,15 +465,15 @@ class IdentityTests(unittest.TestCase):
         source, config = receives()
         inputs = copy.deepcopy(INPUTS)
         inputs[4] = config
-        result = command("reference", source, descriptor(), inputs, b"", ["zkc.primitive-replies/1", []])
+        result = command("reference", source, descriptor(), inputs, b"", ["zkc.primitive-replies/0", []])
         self.assertEqual(result[1][0], "pending-primitive", result)
-        self.assertEqual(result[1][2][0], "zkc.public-primitive/1")
+        self.assertEqual(result[1][2][0], "zkc.public-primitive/0")
         root = decode(bytes.fromhex(result[7]))
         expected = copy.deepcopy(config)
         expected[3][0][2] = "site0"
         self.assertEqual(root[5], expected)
         config[1][0][2] = config[1][0][2][:-2] + "01"
-        changed = command("reference", source, descriptor(), inputs, b"", ["zkc.primitive-replies/1", []])
+        changed = command("reference", source, descriptor(), inputs, b"", ["zkc.primitive-replies/0", []])
         self.assertEqual(changed[1][0], "pending-primitive", changed)
         self.assertNotEqual(changed[7], result[7])
 
@@ -549,12 +545,12 @@ class IdentityTests(unittest.TestCase):
         source = ordinary()
         source[3][0][4].append(["secret", "P", FIELD])
         source[3][0][7].insert(0, ["message", "wire_alias", "field_schema", "P", "V", "secret", "received"])
-        wire = b"ZKCV\1\1" + (11).to_bytes(32, "little")
+        wire = b"ZKCV\0\1" + (11).to_bytes(32, "little")
         tail = len(wire).to_bytes(8, "little") + wire
         result, proof, replies = replay(source, descriptor(), tail=tail)
         self.assertEqual(result[1][0], "accepted", result)
         message = next(e for e in result[2] if e[0] == "message")
-        self.assertEqual(decode(bytes.fromhex(message[1])), ["zkc.logical-origin/1", "main", "root", [],
+        self.assertEqual(decode(bytes.fromhex(message[1])), ["zkc.logical-origin/0", "main", "root", [],
             ["message", "Main", "site0", "field_schema", "P", "V"]])
         self.assertEqual(message[2:], [FIELD, wire.hex()])
         self.assertEqual(result[4], str(len(proof)))

@@ -10,8 +10,8 @@ pub(crate) fn relayout(binding: &OperationBinding) -> Option<BoundSignature> {
     }
     let make = |name: &str| {
         let representation = match name {
-            "arkworks.mle-lsb/1" => Representation::TableLsb,
-            "arkworks.mle-msb/1" => Representation::TableMsb,
+            "arkworks.mle-lsb/0" => Representation::TableLsb,
+            "arkworks.mle-msb/0" => Representation::TableMsb,
             _ => return None,
         };
         PhysicalType::new(

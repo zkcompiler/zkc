@@ -1,15 +1,13 @@
 //! Driver policy controls. Generated mathematical clients live in native_joint.
 use serde_json::{Value as Json, json};
-use zkc_backends::{
-    Domain, EntryPolicy, NativeBackend, NativeWireError, Policy, PublicInputs, Value,
-};
+use zkc_backends::{Domain, EntryPolicy, NativeBackend, NativeWireError, Policy, Value};
 use zkc_runtime::interactive::Value as RuntimeValue;
 use zkc_runtime::interactive::{
     Action, Backend, BackendError, CutKind, DecodeReason, Frame, FrameExit, Invocation,
     PhysicalType, Runner, Stop, StopKind, ValueBudget,
 };
-use zkc_tools::protocol::run::*;
-const BOOL: &str = "bool@native.bool/1";
+use zkc_tools::run::*;
+const BOOL: &str = "bool@native.bool/0";
 #[derive(Clone, Copy, Debug, Default)]
 enum Decode {
     #[default]
@@ -34,12 +32,8 @@ impl Default for Host {
         Self {
             codec: NativeBackend::new(
                 Policy::default(),
-                EntryPolicy::new(
-                    Domain::new("Alice", "session", "main", None),
-                    None,
-                    PublicInputs::LocalOnly,
-                ),
-                None,
+                EntryPolicy::new(Domain::new("Alice", "session", "main", None), None),
+                Default::default(),
             )
             .unwrap(),
             enters: 0,
@@ -109,9 +103,8 @@ fn carrier() -> Json {
 }
 fn typed_carrier(ty: &str) -> Json {
     json!([
-        "zkc.program/1",
+        "zkc.program/0",
         [],
-        "physical",
         [[
             "function",
             "id",
@@ -126,7 +119,6 @@ fn typed_carrier(ty: &str) -> Json {
                 "a",
                 "root",
                 "Alice",
-                [],
                 [["x", ty]],
                 [],
                 [
@@ -141,7 +133,6 @@ fn typed_carrier(ty: &str) -> Json {
                 "b",
                 "root",
                 "Bob",
-                [],
                 [],
                 [ty],
                 [
@@ -158,7 +149,7 @@ fn raw() -> Json {
     message_bundle(BOOL)
 }
 fn message_bundle(ty: &str) -> Json {
-    json!({"format":"zkc.run/1", "candidate":typed_carrier(ty).to_string(), "entry":"main", "roles":["Alice","Bob"],
+    json!({"format":"zkc.run/0", "candidate":typed_carrier(ty).to_string(), "entry":"main", "roles":["Alice","Bob"],
         "steps":[step(0,0,Some(0)),step(0,1,Some(0)),step(1,0,Some(0)),step(0,2,None),step(1,1,None)]})
 }
 fn step(role: usize, instruction: usize, anchor: Option<usize>) -> Json {
@@ -250,8 +241,7 @@ fn failed(report: &Report<Host>, kind: FailureKind) {
 }
 #[test]
 fn completed_false_is_an_output_and_roster_is_source_order() {
-    let bundle = admit(&raw()).unwrap();
-    assert!(bundle.admitted().checked_source().is_none());
+    admit(&raw()).unwrap();
     let report = execute(&mut NoHooks, inputs(), RunLimits::default());
     assert_eq!(report.outcome, Outcome::Completed);
     assert_eq!(report.reached.len(), 5);
@@ -322,15 +312,15 @@ fn admission_refuses_coverage_group_and_envelope_mutations() {
     cases.push(x);
     let mut x = raw();
     let mut c = carrier();
-    c[4][1][7][0][2] = json!("other-schema");
+    c[3][1][6][0][2] = json!("other-schema");
     x["candidate"] = json!(c.to_string());
     cases.push(x);
     let mut x = raw();
-    x["format"] = json!("zkc.run/99");
+    x["format"] = json!("invalid.run");
     cases.push(x);
     let mut x = raw();
     let mut c = carrier();
-    c[0] = json!("zkc.service-participants/1");
+    c[0] = json!("invalid.program");
     x["candidate"] = json!(c.to_string());
     cases.push(x);
     for (index, x) in cases.iter().enumerate() {
@@ -394,9 +384,8 @@ fn outer_decoder_checks_duplicates_unknown_missing_and_bounds() {
 #[test]
 fn coherent_cross_role_reordering_remains_supplied_only() {
     let c = json!([
-        "zkc.program/1",
+        "zkc.program/0",
         [],
-        "physical",
         [[
             "function",
             "id",
@@ -411,7 +400,6 @@ fn coherent_cross_role_reordering_remains_supplied_only() {
                 "a",
                 "root",
                 "Alice",
-                [],
                 [["x", BOOL]],
                 [BOOL],
                 [["local", "alice", "id", ["x"], ["y"]], ["return", ["y"]]],
@@ -422,7 +410,6 @@ fn coherent_cross_role_reordering_remains_supplied_only() {
                 "b",
                 "root",
                 "Bob",
-                [],
                 [["x", BOOL]],
                 [BOOL],
                 [["local", "bob", "id", ["x"], ["y"]], ["return", ["y"]]],
@@ -440,7 +427,6 @@ fn coherent_cross_role_reordering_remains_supplied_only() {
             step(0, 1, None),
             step(1, 1, None)
         ]);
-        assert!(admit(&x).unwrap().admitted().checked_source().is_none());
     }
     x["steps"] = json!([
         step(0, 0, Some(0)),
@@ -468,7 +454,7 @@ fn cancellation_between_halves_keeps_bytes_and_unpolled_receiver() {
         matches!(&report.outcome, Outcome::HostCancelled(reason) if reason.text == "host interruption")
     );
     assert_eq!(hook.transfers, 0);
-    assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x01\x05\0");
+    assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x00\x05\0");
     assert_eq!(
         report.roles[0].before,
         State::Unpolled {
@@ -502,7 +488,7 @@ fn cancellation_between_halves_keeps_bytes_and_unpolled_receiver() {
 fn malformed_bytes_stop_receive_and_consume_slot_with_prior_effects() {
     for (bytes, reason) in [
         (vec![], DecodeReason::Length),
-        (b"ZKCV\x01\x05\x02".to_vec(), DecodeReason::Boolean),
+        (b"ZKCV\x00\x05\x02".to_vec(), DecodeReason::Boolean),
     ] {
         let report = execute(
             &mut Controls {
@@ -531,7 +517,7 @@ fn malformed_bytes_stop_receive_and_consume_slot_with_prior_effects() {
 fn typed_message_change_is_distinct_from_bad_encoding() {
     let report = execute(
         &mut Controls {
-            replacement: Some(b"ZKCV\x01\x05\x01".to_vec()),
+            replacement: Some(b"ZKCV\x00\x05\x01".to_vec()),
             ..Default::default()
         },
         inputs(),
@@ -575,7 +561,7 @@ fn codec_and_hook_failures_preserve_the_exact_handoff_state() {
                 ..
             }
         ));
-        assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x01\x05\0");
+        assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x00\x05\0");
         assert_eq!(report.wire.receives, 0);
     }
     for (hook, kind) in [
@@ -603,7 +589,7 @@ fn codec_and_hook_failures_preserve_the_exact_handoff_state() {
                 ..
             }
         ));
-        assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x01\x05\0");
+        assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x00\x05\0");
     }
 }
 #[test]
@@ -688,8 +674,8 @@ fn setup_failure_recovers_every_backend_and_cancels_entered_peer() {
 #[test]
 fn receive_retention_limit_is_an_accepted_stopping_completion() {
     let mut c = carrier();
-    c[4][0][7] = json!([["send", "message", "message", "Bob", "x"], ["return", []]]);
-    c[4][1][5] = json!([["unused", BOOL]]);
+    c[3][0][6] = json!([["send", "message", "message", "Bob", "x"], ["return", []]]);
+    c[3][1][4] = json!([["unused", BOOL]]);
     let mut x = raw();
     x["candidate"] = json!(c.to_string());
     x["steps"] = json!([
@@ -766,7 +752,7 @@ fn final_return_failure_and_cumulative_wire_limit_preserve_prefix() {
     assert!(report.pending.is_none());
     let report = execute(
         &mut Controls {
-            replacement: Some(b"ZKCV\x01\x05\x01".to_vec()),
+            replacement: Some(b"ZKCV\x00\x05\x01".to_vec()),
             ..Default::default()
         },
         inputs(),
@@ -777,7 +763,7 @@ fn final_return_failure_and_cumulative_wire_limit_preserve_prefix() {
     );
     failed(&report, FailureKind::Limit);
     assert!(matches!(report.roles[1].before, State::Unpolled { .. }));
-    assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x01\x05\0");
+    assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x00\x05\0");
     assert_eq!(report.wire.replacement_bytes, 0);
 }
 #[test]
@@ -882,7 +868,6 @@ fn loop_bundle() -> Json {
                 symbol,
                 "root",
                 role,
-                [],
                 [["n", index]],
                 [],
                 [
@@ -902,14 +887,13 @@ fn loop_bundle() -> Json {
         })
         .collect();
     let candidate = json!([
-        "zkc.program/1",
+        "zkc.program/0",
         [],
-        "physical",
         [],
         participants,
         [["entry", "main", [["Alice", "a"], ["Bob", "b"]]]]
     ]);
-    json!({"format": "zkc.run/1", "candidate": candidate.to_string(), "entry":"main",
+    json!({"format": "zkc.run/0", "candidate": candidate.to_string(), "entry":"main",
         "roles":["Alice","Bob"], "steps":[
             {"loop":[step(0,0,Some(0)),step(1,0,Some(0))], "body":[],
              "yield":[step(0,1,None),step(1,1,None)]},
@@ -1026,13 +1010,13 @@ fn structured_participant_admission_checks_every_nested_body() {
     ] {
         let mut raw = loop_bundle();
         let mut candidate: Json = serde_json::from_str(raw["candidate"].as_str().unwrap()).unwrap();
-        candidate[4][0][7][0][5] = body;
+        candidate[3][0][6][0][5] = body;
         raw["candidate"] = json!(candidate.to_string());
         assert!(matches!(admit(&raw), Err(BundleError::Candidate(_))));
     }
     let mut raw = loop_bundle();
     let mut candidate: Json = serde_json::from_str(raw["candidate"].as_str().unwrap()).unwrap();
-    candidate[4][0][7][0][2] = json!("1");
+    candidate[3][0][6][0][2] = json!("1");
     raw["candidate"] = json!(candidate.to_string());
     assert!(matches!(admit(&raw), Err(BundleError::Candidate(_))));
 }
@@ -1134,26 +1118,14 @@ fn entering_native_loop_preserves_count_failure_as_stopped_outcome() {
 }
 
 #[test]
-fn current_formats_refuse_retired_and_unknown_tags() {
+fn unknown_formats_and_wrong_participant_shapes_refuse() {
     admit(&raw()).unwrap();
-    for format in [
-        "zkc.native-run/1",
-        "zkc.native-run/2",
-        "zkc.native-run/3",
-        "zkc.run/2",
-        "zkc.run/99",
-    ] {
+    for format in ["invalid.run", ""] {
         let mut raw = raw();
         raw["format"] = json!(format);
         assert_eq!(admit(&raw).unwrap_err(), BundleError::Format, "{format}");
     }
-    for format in [
-        "zkc.service-participants/1",
-        "zkc.native-participants/1",
-        "zkc.native-participants/2",
-        "zkc.native-participants/3",
-        "zkc.program/99",
-    ] {
+    for format in ["invalid.program", ""] {
         let mut candidate = carrier();
         candidate[0] = json!(format);
         let mut raw = raw();
@@ -1179,13 +1151,12 @@ fn current_formats_refuse_retired_and_unknown_tags() {
         );
     }
     let mut candidate = carrier();
-    candidate[0] = json!("zkc.participants/1");
-    for role in candidate[4].as_array_mut().unwrap() {
+    for role in candidate[3].as_array_mut().unwrap() {
         role.as_array_mut().unwrap().pop();
     }
     let mut raw = raw();
     raw["candidate"] = json!(candidate.to_string());
-    assert_eq!(admit(&raw).unwrap_err(), BundleError::Format);
+    assert!(matches!(admit(&raw), Err(BundleError::Candidate(_))));
 }
 
 #[test]
@@ -1197,26 +1168,30 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
 
     let vector = Value::Vector(vec![].into()).physical_type().spelling();
     let mut program = typed_carrier(&vector);
-    program[4][1][5] = json!([["accepted", BOOL]]);
-    program[4][1][6] = json!([BOOL]);
-    program[4][1][7][1] = json!(["return", ["accepted"]]);
-    let error =
-        NativeProofEntry::new(admit(&program), "main", "Alice", "Bob", 0, None, &[]).unwrap_err();
-    assert_eq!(error.to_string(), "native-proof-wire-type");
-    let error =
-        NativeProofEntry::new_committed(admit(&program), "main", "Alice", "Bob", 0, None, &[])
-            .unwrap_err();
-    assert_eq!(error.to_string(), "native-proof-wire-type");
-    NativeProofEntry::new_structured(admit(&program), "main", "Alice", "Bob", 0, None, &[])
-        .unwrap();
+    program[3][1][4] = json!([["accepted", BOOL]]);
+    program[3][1][5] = json!([BOOL]);
+    program[3][1][6][1] = json!(["return", ["accepted"]]);
+    NativeProofEntry::new(admit(&program), "main", "Alice", "Bob", 0, None, &[]).unwrap();
+    let mut unsupported = program.clone();
+    let polynomial = Value::Polynomial(vec![].into()).physical_type().spelling();
+    unsupported[2][0][2][0][1] = json!(&polynomial);
+    unsupported[2][0][3][0] = json!(&polynomial);
+    unsupported[3][0][4][0][1] = json!(&polynomial);
+    unsupported[3][1][6][0][5] = json!(&polynomial);
+    assert_eq!(
+        NativeProofEntry::new(admit(&unsupported), "main", "Alice", "Bob", 0, None, &[])
+            .unwrap_err()
+            .to_string(),
+        "native-proof-wire-type"
+    );
 
     let mut program = carrier();
-    for role in program[4].as_array_mut().unwrap() {
-        role[5]
+    for role in program[3].as_array_mut().unwrap() {
+        role[4]
             .as_array_mut()
             .unwrap()
-            .push(json!(["n", "index@native.index/1"]));
-        role[7].as_array_mut().unwrap().insert(
+            .push(json!(["n", "index@native.index/0"]));
+        role[6].as_array_mut().unwrap().insert(
             0,
             json!([
                 "loop",
@@ -1229,10 +1204,7 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
             ]),
         );
     }
-    let error =
-        NativeProofEntry::new(admit(&program), "main", "Alice", "Bob", 0, None, &[]).unwrap_err();
-    assert_eq!(error.to_string(), "native-proof-state-chain");
-    NativeProofEntry::new_committed(admit(&program), "main", "Alice", "Bob", 0, None, &[]).unwrap();
+    NativeProofEntry::new(admit(&program), "main", "Alice", "Bob", 0, None, &[]).unwrap();
 }
 
 #[test]
@@ -1349,7 +1321,7 @@ fn structured_bundles_transfer_dynamic_and_nested_messages() {
     // A serializable logical value does not automatically authorize its wire grammar.
     assert_eq!(
         admit(&message_bundle(
-            "polynomial:bn254.fr@arkworks.bn254-fr-polynomial/1"
+            "polynomial:bn254.fr@arkworks.bn254-fr-polynomial/0"
         ))
         .unwrap_err(),
         BundleError::WireType
@@ -1493,7 +1465,7 @@ fn structured_bundles_retain_fixed_width_send_checks() {
 }
 
 #[test]
-fn exact_pin_precedes_parsing_and_reports_effective_budgets() {
+fn exact_pin_precedes_parsing_and_limit_requests_are_not_clamped() {
     use sha2::{Digest, Sha256};
     let bytes = raw().to_string();
     let pin: [u8; 32] = Sha256::digest(bytes.as_bytes()).into();
@@ -1526,17 +1498,23 @@ fn exact_pin_precedes_parsing_and_reports_effective_budgets() {
     limits.work.instructions = 0;
     limits.values.live_bytes = usize::MAX;
     limits.values.total_bytes = usize::MAX;
+    let rejected = run(&admit(&raw()).unwrap(), "s", inputs(), limits, &mut NoHooks)
+        .err()
+        .unwrap();
+    assert_eq!(rejected.failure.kind, FailureKind::Limit);
+    assert_eq!(rejected.inputs.len(), 2);
+    assert!(
+        rejected
+            .inputs
+            .iter()
+            .all(|r| r.backend.enters == 0 && r.backend.leaves == 0)
+    );
+    assert_eq!(rejected.inputs[0].role, "Bob");
+    assert_eq!(rejected.inputs[1].values.len(), 1);
+    let mut limits = RunLimits::default();
+    limits.work.instructions = 0;
     let report = execute(&mut NoHooks, inputs(), limits);
-    assert_eq!(report.limits.steps, RunLimits::default().steps);
     assert_eq!(report.limits.work.instructions, 0);
-    assert_eq!(
-        report.limits.values.live_bytes,
-        ValueBudget::default().live_bytes
-    );
-    assert_eq!(
-        report.limits.values.total_bytes,
-        ValueBudget::default().total_bytes
-    );
     assert!(matches!(
         report.outcome,
         Outcome::ParticipantStopped { role: 0 }
@@ -1560,7 +1538,7 @@ fn exact_pin_precedes_parsing_and_reports_effective_budgets() {
 #[test]
 fn pure_partition_needs_distinct_anchors_and_changes_finite_cost() {
     let mut candidate = carrier();
-    let body = candidate[4][0][7].as_array_mut().unwrap();
+    let body = candidate[3][0][6].as_array_mut().unwrap();
     body.insert(1, json!(["local", "second", "id", ["y"], ["z"]]));
     body[2][4] = json!("z");
     let mut split = raw();

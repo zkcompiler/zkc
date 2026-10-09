@@ -1,5 +1,10 @@
 # Vectors and linear combinations
 
+Native MSM, matrix contractions and vector kernels use these ordered value contracts.
+This chapter states shared laws; a native implementation claim needs its
+actual instance and evidence. Independent formal examples retain their own
+[model scope](../../../formal/docs/spec/README.md).
+
 For a carrier `X`, `Vector X n = Fin n → X`. A dynamically sized vector carries
 its length together with that indexed value. Length zero is permitted. Element
 order is part of the value; equal byte widths or element counts do not identify
@@ -73,7 +78,7 @@ meaning. Storage and library choices belong to the physical representation.
 `matrix.identity_check<F>(M) [digest]` compares SHA-256 of a canonical
 mathematical encoding with one lowercase 64-character hexadecimal attribute.
 The encoding is compact UTF-8 JSON
-`["zkc.matrix/1", fieldName, [rows, columns, entries]]`, with naturals and
+`["zkc.matrix/0", fieldName, [rows, columns, entries]]`, with naturals and
 coefficients as canonical decimal strings. Entries are ordered `[row,column,value]`
 triples; zero coefficients are omitted. Prime-field values use least nonnegative
 representatives. The installed octic extension encodes its ascending coordinates

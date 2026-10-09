@@ -5,7 +5,7 @@ use zkc_runtime::interactive::{Backend, PhysicalType, Representation, Value as R
 fn new_codecs_are_domain_distinct_exact_and_canonical() {
     let backend = backend(Policy::default());
     let values = vec![
-        (11, vector(false, &[2, 3])),
+        (66, vector(false, &[2, 3])),
         (12, Value::Polynomial(vec![Scalar::from(2)].into())),
         (13, field(true, 2)),
         (14, vector(true, &[2, 3])),
@@ -21,10 +21,14 @@ fn new_codecs_are_domain_distinct_exact_and_canonical() {
         ),
     ];
     for (tag, v) in values {
-        let bytes = backend.encode_value(&v).unwrap();
-        assert_eq!(&bytes[..6], &[b'Z', b'K', b'C', b'V', 1, tag]);
+        if !zkc_backends::has_native_wire(&v.physical_type()) {
+            assert!(backend.encode_native_value(&v).is_err());
+            continue;
+        }
+        let bytes = backend.encode_native_value(&v).unwrap();
+        assert_eq!(&bytes[..6], &[b'Z', b'K', b'C', b'V', 0, tag]);
         let decoded = backend
-            .decode_typed_value(v.physical_type(), &bytes)
+            .decode_native_value(&v.physical_type(), &bytes)
             .unwrap();
         assert_value(&v, &decoded);
         assert!(
@@ -39,7 +43,7 @@ fn new_codecs_are_domain_distinct_exact_and_canonical() {
         for n in 0..bytes.len() {
             assert!(
                 backend
-                    .decode_typed_value(v.physical_type(), &bytes[..n])
+                    .decode_native_value(&v.physical_type(), &bytes[..n])
                     .is_err()
             );
         }
@@ -47,45 +51,35 @@ fn new_codecs_are_domain_distinct_exact_and_canonical() {
         trailing.push(0);
         assert_eq!(
             backend
-                .decode_typed_value(v.physical_type(), &trailing)
+                .decode_native_value(&v.physical_type(), &trailing)
                 .unwrap_err()
-                .code,
-            "refused:wire-length"
+                .to_string(),
+            "native-wire-invalid:length"
         );
         let mut wrong = bytes.clone();
-        wrong[5] = if tag == 11 { 14 } else { 11 };
+        wrong[5] = if tag == 66 { 14 } else { 66 };
         assert_eq!(
             backend
-                .decode_typed_value(v.physical_type(), &wrong)
+                .decode_native_value(&v.physical_type(), &wrong)
                 .unwrap_err()
-                .code,
-            "refused:wire-header"
+                .to_string(),
+            "native-wire-invalid:header"
         );
         let mut malformed = bytes;
         malformed[6..].fill(255);
         assert!(
             backend
-                .decode_typed_value(v.physical_type(), &malformed)
+                .decode_native_value(&v.physical_type(), &malformed)
                 .is_err()
         );
     }
     assert_eq!(
-        backend.encode_value(&field(true, 2)).unwrap()[6..],
+        backend.encode_native_value(&field(true, 2)).unwrap()[6..],
         [vec![2], vec![0; 31]].concat()
     );
     for d in [false, true] {
         let empty = call(d, "poly.from_coefficients", &[], vec![vector(d, &[0])]).remove(0);
-        let mut bytes = backend.encode_value(&empty).unwrap();
-        assert_eq!(bytes.len(), 10);
-        bytes[6..10].copy_from_slice(&1u32.to_le_bytes());
-        bytes.extend([0; 32]);
-        assert_eq!(
-            backend
-                .decode_typed_value(empty.physical_type(), &bytes)
-                .unwrap_err()
-                .code,
-            "refused:polynomial-normalization"
-        );
+        assert!(backend.encode_native_value(&empty).is_err());
         let v = if d {
             Value::RistrettoPolynomial(vec![RistrettoScalar::ZERO].into())
         } else {
@@ -95,15 +89,15 @@ fn new_codecs_are_domain_distinct_exact_and_canonical() {
             backend.validate_value(&v).unwrap_err().code,
             "refused:polynomial-normalization"
         );
-        assert!(backend.encode_value(&v).is_err());
-        let mut huge = backend.encode_value(&vector(d, &[])).unwrap();
+        assert!(backend.encode_native_value(&v).is_err());
+        let mut huge = backend.encode_native_value(&vector(d, &[])).unwrap();
         huge[6..10].copy_from_slice(&u32::MAX.to_le_bytes());
         assert_eq!(
             backend
-                .decode_typed_value(vector(d, &[]).physical_type(), &huge)
+                .decode_native_value(&vector(d, &[]).physical_type(), &huge)
                 .unwrap_err()
-                .code,
-            "refused:wire-length"
+                .to_string(),
+            "native-wire-limit"
         );
     }
     let view = PhysicalType::new(
@@ -113,98 +107,80 @@ fn new_codecs_are_domain_distinct_exact_and_canonical() {
     .unwrap();
     assert_eq!(
         backend
-            .decode_typed_value(view, &backend.encode_value(&vector(false, &[])).unwrap())
+            .decode_native_value(
+                &view,
+                &backend.encode_native_value(&vector(false, &[])).unwrap()
+            )
             .unwrap_err()
-            .code,
-        "refused:nonserializable"
+            .to_string(),
+        "native-wire-backend:native-wire-type"
     );
 }
 #[test]
 fn scalar_modulus_and_noncanonical_point_are_refused() {
     let b = backend(Policy::default());
-    let mut bytes = b.encode_value(&field(true, 0)).unwrap();
+    let mut bytes = b.encode_native_value(&field(true, 0)).unwrap();
     // Dalek scalar order: 2^252 + 27742317777372353535851937790883648493.
     bytes[6..].copy_from_slice(&[
         0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde,
         0x14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10,
     ]);
     assert_eq!(
-        b.decode_typed_value(field(true, 0).physical_type(), &bytes)
+        b.decode_native_value(&field(true, 0).physical_type(), &bytes)
             .unwrap_err()
-            .code,
-        "refused:noncanonical-scalar"
+            .to_string(),
+        "native-wire-invalid:scalar"
     );
     bytes[6] -= 1;
     assert!(
-        b.decode_typed_value(field(true, 0).physical_type(), &bytes)
+        b.decode_native_value(&field(true, 0).physical_type(), &bytes)
             .is_ok()
     );
     let g = call(true, "curve.generator", &[], vec![]).remove(0);
-    let mut bytes = b.encode_value(&g).unwrap();
+    let mut bytes = b.encode_native_value(&g).unwrap();
     bytes[6..].fill(255);
     assert_eq!(
-        b.decode_typed_value(g.physical_type(), &bytes)
+        b.decode_native_value(&g.physical_type(), &bytes)
             .unwrap_err()
-            .code,
-        "refused:noncanonical-point"
+            .to_string(),
+        "native-wire-invalid:group"
     );
 }
 #[test]
-fn tool_json_ingress_uses_admitted_domain_and_checks_polynomial_normalization() {
-    use serde_json::json;
-    use zkc_backends::InputBindings;
-    use zkc_runtime::interactive::admit_supplied;
+fn native_inputs_keep_polynomial_normalization_local() {
     for d in [false, true] {
         let b = super::support::backend(Policy::default());
-        let bind = binding(d, "poly.univariate_evaluate");
-        let sig = bind.signature().unwrap();
-        let bytes = program(
-            &[bind],
-            &sig.inputs,
-            vec![json!(["op", "site", "b0", [], ["a0", "a1"], ["x"]])],
-            &sig.outputs,
-            &["x".into()],
-        );
-        let admitted = admit_supplied(&bytes, &b).unwrap();
-        let role = admitted.entry("main").unwrap().remove(0);
-        let input = json!([
-            "zkc.inputs/1",
-            [["a0", ["polynomial", ["2", "3"]]], ["a1", ["field", "5"]]]
-        ]);
-        let values = b
-            .inputs_from_json(
-                &role,
-                &serde_json::to_vec(&input).unwrap(),
-                &InputBindings::new(),
-            )
-            .unwrap();
+        let polynomial = call(d, "poly.from_coefficients", &[], vec![vector(d, &[2, 3])]).remove(0);
+        assert!(!zkc_backends::has_native_wire(&polynomial.physical_type()));
+        assert!(b.encode_native_value(&polynomial).is_err());
         assert_value(
-            &super::support::run_program(b, &bytes, values).0.unwrap()[0],
+            &call(
+                d,
+                "poly.univariate_evaluate",
+                &[],
+                vec![polynomial, field(d, 5)],
+            )[0],
             &field(d, 17),
         );
-        let b = super::support::backend(Policy::default());
-        let mut invalid = input;
-        invalid[1][0][1][1] = json!(["2", "0"]);
+        let invalid = if d {
+            Value::RistrettoPolynomial(vec![RistrettoScalar::ZERO].into())
+        } else {
+            Value::Polynomial(vec![Scalar::from(0)].into())
+        };
         assert_eq!(
-            b.inputs_from_json(
-                &role,
-                &serde_json::to_vec(&invalid).unwrap(),
-                &InputBindings::new()
-            )
-            .unwrap_err()
-            .code,
+            b.validate_value(&invalid).unwrap_err().code,
             "refused:polynomial-normalization"
         );
     }
 }
 
 #[test]
-fn fixed_vector_polynomial_round_bytes_do_not_depend_on_decoder_agreement() {
+fn fixed_native_bytes_and_local_only_values_do_not_depend_on_decoder_agreement() {
     let b = backend(Policy::default());
     let scalar_bytes = |n: u64| [n.to_le_bytes().to_vec(), vec![0; 24]].concat();
     for d in [false, true] {
         for (tag, v) in [
-            (if d { 14 } else { 11 }, vector(d, &[2, 3])),
+            (if d { 14 } else { 66 }, vector(d, &[2, 3])),
             (
                 if d { 15 } else { 12 },
                 call(
@@ -216,32 +192,27 @@ fn fixed_vector_polynomial_round_bytes_do_not_depend_on_decoder_agreement() {
                 .remove(0),
             ),
         ] {
+            if !zkc_backends::has_native_wire(&v.physical_type()) {
+                assert!(b.encode_native_value(&v).is_err());
+                continue;
+            }
             let expected = [
-                b"ZKCV\x01".to_vec(),
+                b"ZKCV\x00".to_vec(),
                 vec![tag],
                 2u32.to_le_bytes().to_vec(),
                 scalar_bytes(2),
                 scalar_bytes(3),
             ]
             .concat();
-            assert_eq!(b.encode_value(&v).unwrap(), expected);
+            assert_eq!(b.encode_native_value(&v).unwrap(), expected);
         }
     }
     let round = Value::RistrettoRound([1u64, 2, 3].map(RistrettoScalar::from));
-    assert_eq!(
-        b.encode_value(&round).unwrap(),
-        [
-            b"ZKCV\x01\x12".to_vec(),
-            scalar_bytes(1),
-            scalar_bytes(2),
-            scalar_bytes(3)
-        ]
-        .concat()
-    );
+    assert!(b.encode_native_value(&round).is_err());
     let generator = call(true, "curve.generator", &[], vec![]).remove(0);
-    let hex = zkc_test_support::hex(&b.encode_value(&generator).unwrap());
+    let hex = zkc_test_support::hex(&b.encode_native_value(&generator).unwrap());
     assert_eq!(
         hex,
-        "5a4b43560110e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76"
+        "5a4b43560010e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76"
     );
 }

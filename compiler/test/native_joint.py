@@ -16,10 +16,10 @@ def compile_bundle(name, text, expected, *options):
     bundle = json.loads(output)
     (OUT / f'{name}.bundle').write_text(output)
     (OUT / f'{name}.mlir').write_text(text)
-    assert bundle['format'] == 'zkc.run/1'
+    assert bundle['format'] == 'zkc.run/0'
     candidate = json.loads(bundle['candidate'])
-    assert candidate[0] == 'zkc.program/1'
-    programs = {p[3]: p[7] for p in candidate[4]}
+    assert candidate[0] == 'zkc.program/0'
+    programs = {p[3]: p[6] for p in candidate[3]}
     authored_local = {(r, s) for r, k, s, _ in expected if k == 'local'}
     actual = []
     for step in bundle['steps']:
@@ -99,5 +99,10 @@ with case('reject physical input and invalid invocation without partial output')
     commands.source('protocol-bundle', single, '--entry=main', '--entry=main', refuses='run-duplicate-option')
     commands.source('protocol-bundle', single, '--no-simplify=yes', refuses='run-option')
     commands.source('protocol-bundle', 'module {', refuses='error')
+
+for suffix, flags in [('', ()), ('_plain', ('--no-simplify',)), ('_release', ('--release-storage',))]:
+    with case(f'mathematical helper realization executes at local call{suffix}'):
+        compile_bundle('realized' + suffix, (FIXTURES / 'helper-realization.mlir').read_text(),
+                       [('P', 'local', 'work', 0)], *flags)
 
 counted()

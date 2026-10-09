@@ -206,7 +206,7 @@ with case('successor chains are work, not nesting'):
 with case('local.call retains endpoint-only placement'):
     text=source('local.call @identity(%s) {site="call"} : (!s)->!s\nlocal.return %s : !s')
     text=text.replace(' local.func @step', 'local.func @identity(%x:!s)->!s attributes {logical_origin=["identity",[]]} { local.return %x : !s }\n local.func @step')
-    commands.source('protocol-bundle', text, refuses='interactive-role-attribute')
+    commands.source('protocol-bundle', text, refuses='interactive-local-symbol')
 
 with case('one role stopping does not erase another role identity'):
     for name in ['role-stop-direct', 'role-stop-apply']:

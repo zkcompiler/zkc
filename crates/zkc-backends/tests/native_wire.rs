@@ -7,7 +7,7 @@ use zkc_backends::{
 use zkc_runtime::interactive::{DecodeReason, PhysicalType, Value as RuntimeValue};
 
 #[test]
-fn native_frames_match_existing_codec_and_decode_exact_values() {
+fn native_frames_decode_exact_values_and_refuse_malformed_bytes() {
     let backend = ark_backend(None);
     for (value, width) in [
         (Value::Index(0), 14),
@@ -24,10 +24,9 @@ fn native_frames_match_existing_codec_and_decode_exact_values() {
         let ty = value.physical_type();
         assert_eq!(native_wire_size(&ty), Some(width));
         let bytes = backend.encode_native_value(&value).unwrap();
-        assert_eq!(bytes, backend.encode_value(&value).unwrap());
         assert_eq!(bytes.len(), width);
         let decoded = backend.decode_native_value(&ty, &bytes).unwrap();
-        assert_eq!(backend.encode_value(&decoded).unwrap(), bytes);
+        assert_eq!(backend.encode_native_value(&decoded).unwrap(), bytes);
         for end in 0..width {
             assert_eq!(
                 backend.decode_native_value(&ty, &bytes[..end]).unwrap_err(),
@@ -55,7 +54,7 @@ fn invalid_boolean_scalar_and_group_encodings_have_closed_reasons() {
     let backend = ark_backend(None);
     let boolean = Value::Bool(false).physical_type();
     for b in 2..=255 {
-        let mut bytes = b"ZKCV\x01\x05".to_vec();
+        let mut bytes = b"ZKCV\x00\x05".to_vec();
         bytes.push(b);
         assert_eq!(
             backend.decode_native_value(&boolean, &bytes).unwrap_err(),
@@ -67,7 +66,7 @@ fn invalid_boolean_scalar_and_group_encodings_have_closed_reasons() {
     let modulus =
         zkc_test_support::unhex("01000000fffffffffe5bfeff02a4bd5305d8a10908d83933487d9d2953a7ed73");
     for payload in [modulus, vec![255; 32]] {
-        let mut bytes = b"ZKCV\x01\x01".to_vec();
+        let mut bytes = b"ZKCV\x00\x01".to_vec();
         bytes.extend(payload);
         assert_eq!(
             backend.decode_native_value(&field, &bytes).unwrap_err(),
@@ -81,7 +80,7 @@ fn invalid_boolean_scalar_and_group_encodings_have_closed_reasons() {
     infinity[0] = 0xc0;
     infinity[47] = 1;
     for payload in [nonsubgroup, infinity, vec![255; 48], vec![0; 48]] {
-        let mut bytes = b"ZKCV\x01\x09".to_vec();
+        let mut bytes = b"ZKCV\x00\x09".to_vec();
         bytes.extend(payload);
         assert_eq!(
             backend.decode_native_value(&group, &bytes).unwrap_err(),
@@ -97,11 +96,11 @@ fn policy_failure_and_other_providers_never_become_decode_stops() {
             ..Policy::default()
         },
         common::entry(None),
-        None,
+        Default::default(),
     )
     .unwrap();
     let value = Value::Bool(true);
-    let bytes = ark_backend(None).encode_value(&value).unwrap();
+    let bytes = ark_backend(None).encode_native_value(&value).unwrap();
     assert_eq!(
         limited
             .decode_native_value(&value.physical_type(), &bytes)
@@ -120,7 +119,7 @@ fn policy_failure_and_other_providers_never_become_decode_stops() {
             .unwrap_err(),
         NativeWireError::Invalid(DecodeReason::Length)
     );
-    let ty = PhysicalType::parse("polynomial:bn254.fr@arkworks.bn254-fr-polynomial/1").unwrap();
+    let ty = PhysicalType::parse("polynomial:bn254.fr@arkworks.bn254-fr-polynomial/0").unwrap();
     assert_eq!(native_wire_size(&ty), None);
     assert!(matches!(
         limited.decode_native_value(&ty, &[]),
@@ -132,14 +131,14 @@ fn policy_failure_and_other_providers_never_become_decode_stops() {
             ..Policy::default()
         },
         common::entry(None),
-        None,
+        Default::default(),
     )
     .unwrap();
     assert_eq!(
         tiny.encode_native_value(&value).unwrap_err(),
         NativeWireError::Limit
     );
-    let bytes = ark_backend(None).encode_value(&value).unwrap();
+    let bytes = ark_backend(None).encode_native_value(&value).unwrap();
     assert_eq!(
         tiny.decode_native_value(&value.physical_type(), &bytes)
             .unwrap_err(),
@@ -159,7 +158,15 @@ fn native_public_tables_are_canonical_and_bounded_before_allocation() {
         assert!(zkc_backends::has_native_wire(&ty));
         assert_eq!(native_wire_size(&ty), None);
         let bytes = codec.encode_native_value(&value).unwrap();
-        assert_eq!(bytes, codec.encode_value(&value).unwrap());
+        let expected = [
+            b"ZKCV\x00\x02".to_vec(),
+            (n as u32).to_le_bytes().to_vec(),
+            (1..=1u64 << n)
+                .flat_map(|x| [x.to_le_bytes().to_vec(), vec![0; 24]].concat())
+                .collect(),
+        ]
+        .concat();
+        assert_eq!(bytes, expected);
         assert_eq!(
             codec
                 .encode_native_value(&codec.decode_native_value(&ty, &bytes).unwrap())
@@ -205,7 +212,8 @@ fn native_public_tables_are_canonical_and_bounded_before_allocation() {
                 ..Policy::default()
             },
         ] {
-            let limited = NativeBackend::new(policy, common::entry(None), None).unwrap();
+            let limited =
+                NativeBackend::new(policy, common::entry(None), Default::default()).unwrap();
             assert_eq!(
                 limited.decode_native_value(&ty, &bytes).unwrap_err(),
                 NativeWireError::Limit
@@ -216,10 +224,10 @@ fn native_public_tables_are_canonical_and_bounded_before_allocation() {
             );
         }
     }
-    let other = PhysicalType::parse("table:bls12-381.fr@arkworks.mle-msb/1").unwrap();
+    let other = PhysicalType::parse("table:bls12-381.fr@arkworks.mle-msb/0").unwrap();
     assert!(!zkc_backends::has_native_wire(&other));
     assert!(matches!(
-        codec.decode_native_value(&other, b"ZKCV\x01\x02"),
+        codec.decode_native_value(&other, b"ZKCV\x00\x02"),
         Err(NativeWireError::Backend(_))
     ));
 }
@@ -356,7 +364,7 @@ fn additional_domains_keep_exact_canonical_frames_and_typed_errors() {
     for value in &values {
         let ty = value.physical_type();
         let bytes = backend.encode_native_value(value).unwrap();
-        assert_eq!(bytes, backend.encode_value(value).unwrap());
+        assert_eq!(bytes, backend.encode_native_value(value).unwrap());
         assert_eq!(native_wire_size(&ty), Some(bytes.len()));
         assert_eq!(
             backend

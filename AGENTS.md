@@ -6,7 +6,8 @@ If `AGENTS.local.md` exists, read it for additional local instructions.
 
 - Follow [the contribution guide](.github/CONTRIBUTING.md) for repository changes.
 - Use [the documentation index](docs/README.md) to find relevant documents.
-  `docs/spec/` defines semantics; `docs/status.md` records implementation support.
+  `docs/spec/` defines native and shared contracts; `formal/docs/spec/` defines
+  the independent formal models. `docs/status.md` records implementation support.
   Research notes provide context, not specification. Read what the task needs.
 
 ## Development

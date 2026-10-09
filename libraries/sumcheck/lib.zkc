@@ -1,0 +1,40 @@
+module sumcheck;
+
+pub type Vector<F: Field> = builtin("vector", F);
+fn sums<F: Field>(values: Vector<F>) -> (F, F) {
+  let halves = kernel<F>("vector.split", values);
+  return (kernel<F>("vector.sum", halves.0), kernel<F>("vector.sum", halves.1));
+}
+fn fold<F: Field>(values: Vector<F>, challenge: F) -> Vector<F> {
+  let halves = kernel<F>("vector.split", values);
+  let low = kernel<F>("vector.scale", halves.0, 1 - challenge);
+  let high = kernel<F>("vector.scale", halves.1, challenge);
+  return kernel<F>("vector.add", low, high);
+}
+math fn both(a: bool, b: bool) -> bool { return intrinsic("bool.and", a, b); }
+fn terminal<F: Field>(values: Vector<F>, claim: F) -> bool {
+  let size = kernel<F>("vector.length", values);
+  return both(size == 1, kernel<F>("vector.sum", values) == claim);
+}
+
+// Multilinear public-table Sumcheck. V evaluates the public table directly at
+// the delivered point; there is no commitment or hidden evaluation callback.
+pub protocol Sumcheck<F: Field+Share+Wire, Max: nat> roles(P, V)
+    (values: Vector<F> @(P,V), claim: F @V, rounds: index @(P,V))
+    using(challenges: Random<F> @V) -> (accepted: bool @V) {
+  let (lastP, lastV, final_claim) = repeat roles(P,V)(i < rounds, max Max)
+      carry(tableP = values @P, tableV = values @V, current = claim @V)
+      capture() using(challenges) {
+    local P let parts = sums(tableP);
+    let actual = send P -> V(parts);
+    guard @V current == actual.0 + actual.1;
+    let cv = challenges.draw();
+    let cp = send V -> P(cv);
+    local P let nextP = fold(tableP, cp);
+    local V let nextV = fold(tableV, cv);
+    yield (tableP = nextP, tableV = nextV,
+           current = (1 - cv) * actual.0 + cv * actual.1);
+  };
+  local V let accepted = terminal(lastV, final_claim);
+  return (accepted = accepted);
+}

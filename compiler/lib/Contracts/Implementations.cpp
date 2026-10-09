@@ -25,17 +25,17 @@ constexpr ProviderDomain providerDomains[] = {
     {"arkworks", "bn254.g1"},
     {"arkworks", "bn254.g2"},
     {"arkworks", "bn254.gt"},
-    {"arkworks", "multilinear.kzg.bls12-381/1"},
-    {"arkworks", "merlin3.bls12-381.fr64be/1"},
+    {"arkworks", "multilinear.kzg.bls12-381/0"},
+    {"arkworks", "merlin3.bls12-381.fr64be/0"},
     {"dalek", "ristretto255.scalar"},
     {"dalek", "ristretto255.group"},
-    {"dalek", "merlin3.ristretto255.scalar64le/1"},
+    {"dalek", "merlin3.ristretto255.scalar64le/0"},
     {"plonky3", "koala-bear"},
     {"plonky3", "koala-bear.ext8-binomial3"},
-    {"plonky3", "merlin3.koala-bear.ext8-binomial3.rejection31le/1"},
-    {"plonky3", "rows.merkle-keccak256.koala-bear/1"},
-    {"plonky3", "rows.merkle-keccak256.koala-bear.ext8-binomial3/1"},
-    {"spongefish", "spongefish0.7.4.keccak.bls12-381.fr64be/1"}};
+    {"plonky3", "merlin3.koala-bear.ext8-binomial3.rejection31le/0"},
+    {"plonky3", "rows.merkle-keccak256.koala-bear/0"},
+    {"plonky3", "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"},
+    {"spongefish", "spongefish0.7.4.keccak.bls12-381.fr64be/0"}};
 
 // These finite rows are the implementation inventory, not a walk over logical
 // declarations. Adding a declaration grants no implementation. Provider sets
@@ -46,8 +46,7 @@ enum Provider : unsigned {
   Plonky3 = 4,
   Spongefish = 8,
   Native = 16,
-  Arithmetic = Arkworks | Dalek | Plonky3,
-  Transcripts = Arithmetic | Spongefish
+  Arithmetic = Arkworks | Dalek | Plonky3
 };
 struct ContractRow {
   StringRef contract;
@@ -202,48 +201,6 @@ constexpr ContractRow contractRows[] = {
      Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
     {"transcript.native.indexed.observe.data",
      Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
-    {"transcript.native.indexed.observe.bool", Arkworks | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.native.indexed.observe.field", Arkworks | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.native.indexed.observe.group", Arkworks | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.native.indexed.observe.index", Arkworks | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.native.indexed.observe.field_array", Arkworks | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.native.indexed.observe.commitment", Arkworks | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.native.indexed.observe.proof", Arkworks | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.native.challenge", Transcripts, Compatibility::Transcript},
-    {"transcript.native.observe.bool", Transcripts, Compatibility::Transcript},
-    {"transcript.native.observe.field", Transcripts, Compatibility::Transcript},
-    {"transcript.native.observe.group", Arkworks | Dalek | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.challenge", Transcripts, Compatibility::Transcript},
-    {"transcript.draw_index", Plonky3, Compatibility::Transcript},
-    {"transcript.observe.bool", Transcripts, Compatibility::Transcript},
-    {"transcript.observe.field", Transcripts, Compatibility::Transcript},
-    {"transcript.observe.round", Transcripts, Compatibility::Transcript},
-    {"transcript.observe.matrix", Transcripts, Compatibility::Transcript},
-    {"transcript.observe.vector", Transcripts, Compatibility::Transcript},
-    {"transcript.observe.polynomial", Transcripts, Compatibility::Transcript},
-    {"transcript.observe.index", Transcripts, Compatibility::Transcript},
-    {"transcript.observe.indices", Transcripts, Compatibility::Transcript},
-    {"transcript.observe.table", Arkworks | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.observe.point", Arkworks | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.observe.group", Arkworks | Dalek | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.observe.groups", Arkworks | Dalek | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.observe.commitment", Arkworks | Plonky3 | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.observe.proof", Arkworks | Plonky3 | Spongefish,
-     Compatibility::Transcript},
-    {"transcript.observe.commitments", Plonky3, Compatibility::Transcript},
     {"field_array.from_vector", Arkworks, Compatibility::Nominal,
      "bls12-381.fr"},
     {"field_array.at", Arkworks, Compatibility::Nominal, "bls12-381.fr"},
@@ -442,7 +399,7 @@ Error checkImplementationArguments(const ImplementationDescriptor &entry,
       else if (sort == "Commitment")
         payloadField = associatedIdentity(identity, "ValueField");
       if (payloadField != field &&
-          !(suite == "merlin3.koala-bear.ext8-binomial3.rejection31le/1" &&
+          !(suite == "merlin3.koala-bear.ext8-binomial3.rejection31le/0" &&
             payloadField == "koala-bear"))
         return error("binding-implementation");
     }
@@ -524,37 +481,35 @@ const ImplementationCatalog &installedImplementations() {
                          "arkworks",
                          Compatibility::Nominal,
                          "bls12-381.fr",
-                         {{"table", "bls12-381.fr", "arkworks.mle-msb/1"}}});
+                         {{"table", "bls12-381.fr", "arkworks.mle-msb/0"}}});
     entries.push_back(
         {"vector.mul",
          "arkworks-diagonal/vector.mul",
          "arkworks",
          Compatibility::Nominal,
          "bls12-381.fr",
-         {{"vector", "bls12-381.fr", "arkworks.fr-diagonal/1", 0, true}}});
+         {{"vector", "bls12-381.fr", "arkworks.fr-diagonal/0", 0, true}}});
     entries.push_back(
         {"vector.dot",
          "arkworks-diagonal/vector.dot",
          "arkworks",
          Compatibility::Nominal,
          "bls12-381.fr",
-         {{"vector", "bls12-381.fr", "arkworks.fr-diagonal/1", 1}}});
+         {{"vector", "bls12-381.fr", "arkworks.fr-diagonal/0", 1}}});
     entries.push_back({"curve.scale_each",
                        "dalek-diagonal/curve.scale_each",
                        "dalek",
                        Compatibility::Nominal,
                        "ristretto255.group",
                        {{"groups", "ristretto255.group",
-                         "dalek.ristretto-diagonal/1", 0, true}}});
+                         "dalek.ristretto-diagonal/0", 0, true}}});
     entries.push_back(
         {"curve.msm",
          "dalek-diagonal/curve.msm",
          "dalek",
          Compatibility::Nominal,
          "ristretto255.group",
-         {{"groups", "ristretto255.group", "dalek.ristretto-diagonal/1", 1}}});
-    entries.push_back({"curve.msm", "dalek-vartime/curve.msm", "dalek",
-                       Compatibility::Nominal, "ristretto255.group"});
+         {{"groups", "ristretto255.group", "dalek.ristretto-diagonal/0", 1}}});
     auto result = ImplementationCatalog::create(std::move(entries),
                                                 std::move(preferences));
     if (!result)

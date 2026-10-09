@@ -73,11 +73,11 @@ def Value.ty : Value → Bindings.ValueType
   | .boolean _ => ⟨"bool", "", "", []⟩
   | .group _ => ⟨"group", "bls12-381.g1", "", []⟩
   | .groups _ => ⟨"groups", "bls12-381.g1", "", []⟩
-  | .commitment _ => ⟨"commitment", "multilinear.kzg.bls12-381/1", "", []⟩
-  | .proof _ => ⟨"proof", "multilinear.kzg.bls12-381/1", "", []⟩
-  | .proverKey _ => ⟨"prover_key", "multilinear.kzg.bls12-381/1", "", []⟩
-  | .verifierKey _ => ⟨"verifier_key", "multilinear.kzg.bls12-381/1", "", []⟩
-  | .opening _ => ⟨"opening_state", "multilinear.kzg.bls12-381/1", "", []⟩
+  | .commitment _ => ⟨"commitment", "multilinear.kzg.bls12-381/0", "", []⟩
+  | .proof _ => ⟨"proof", "multilinear.kzg.bls12-381/0", "", []⟩
+  | .proverKey _ => ⟨"prover_key", "multilinear.kzg.bls12-381/0", "", []⟩
+  | .verifierKey _ => ⟨"verifier_key", "multilinear.kzg.bls12-381/0", "", []⟩
+  | .opening _ => ⟨"opening_state", "multilinear.kzg.bls12-381/0", "", []⟩
   | .rng .. => ⟨"rng", "bls12-381.fr", "", []⟩
   | .nonce .. => ⟨"nonce", "bls12-381.fr", "", []⟩
   | .transcript suite .. => ⟨"transcript", suite, "", []⟩

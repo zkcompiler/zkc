@@ -132,64 +132,80 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::{control, pcs, poly};
     use zkc_runtime::interactive::{AttributeRule, Type::*};
     &[
-        control::operation("bool.and", &[Bool, Bool], &[Bool], AttributeRule::None),
-        control::operation("bool.not", &[Bool], &[Bool], AttributeRule::None),
-        control::operation("bool.or", &[Bool, Bool], &[Bool], AttributeRule::None),
-        control::operation("control.require", &[Bool], &[], AttributeRule::None),
-        poly::operation("poly.table_arity", &[Table], &[Index], AttributeRule::None),
+        control::operation("bool.and", &[Bool, Bool], &[Bool], AttributeRule::None)
+            .implemented_by(&["arkworks/bool.and"]),
+        control::operation("bool.not", &[Bool], &[Bool], AttributeRule::None)
+            .implemented_by(&["arkworks/bool.not"]),
+        control::operation("bool.or", &[Bool, Bool], &[Bool], AttributeRule::None)
+            .implemented_by(&["arkworks/bool.or"]),
+        control::operation("control.require", &[Bool], &[], AttributeRule::None)
+            .implemented_by(&["arkworks/control.require"]),
+        poly::operation("poly.table_arity", &[Table], &[Index], AttributeRule::None)
+            .implemented_by(&["arkworks/poly.table_arity"]),
         poly::operation(
             "poly.product_sum",
             &[Table, Table],
             &[Field],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/poly.product_sum"]),
         poly::operation(
             "poly.product_round",
             &[Table, Table],
             &[Round],
             AttributeRule::None,
-        ),
-        poly::operation("poly.fold", &[Table, Field], &[Table], AttributeRule::None),
+        )
+        .implemented_by(&["arkworks/poly.product_round"]),
+        poly::operation("poly.fold", &[Table, Field], &[Table], AttributeRule::None)
+            .implemented_by(&["arkworks/poly.fold"]),
         poly::operation(
             "poly.evaluate",
             &[Table, Point],
             &[Field],
             AttributeRule::None,
-        ),
-        poly::operation("poly.empty_point", &[], &[Point], AttributeRule::None),
+        )
+        .implemented_by(&["arkworks/poly.evaluate"]),
+        poly::operation("poly.empty_point", &[], &[Point], AttributeRule::None)
+            .implemented_by(&["arkworks/poly.empty_point"]),
         poly::operation(
             "poly.append_point",
             &[Point, Field],
             &[Point],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/poly.append_point"]),
         pcs::operation(
             "pcs.commit",
             &[ProverKey, Table],
             &[Commitment, OpeningState],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/pcs.commit"]),
         pcs::operation(
             "pcs.open",
             &[OpeningState, Point],
             &[Field, Proof],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/pcs.open"]),
         pcs::operation(
             "pcs.check",
             &[VerifierKey, Commitment, Point, Field, Proof],
             &[Bool],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/pcs.check"]),
         pcs::operation(
             "pcs.equal",
             &[Commitment, Commitment],
             &[Bool],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/pcs.equal"]),
     ]
 };
-pub(crate) const SPECIAL_OPERATIONS: &[&str] = &["table.relayout"];
+pub(crate) const SPECIAL_IMPLEMENTATIONS: &[(&str, &str)] =
+    &[("arkworks/table.relayout", "table.relayout")];
 
 pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
     crate::backend::registry::Alternative {
@@ -198,7 +214,6 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
-        public_operands: false,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.product_round",
@@ -206,7 +221,6 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
-        public_operands: false,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.fold",
@@ -214,7 +228,6 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
-        public_operands: false,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.evaluate",
@@ -222,7 +235,6 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
-        public_operands: false,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.empty_point",
@@ -230,7 +242,6 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
-        public_operands: false,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.append_point",
@@ -238,7 +249,6 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
-        public_operands: false,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.boundary",
@@ -246,7 +256,6 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
-        public_operands: false,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.round_evaluate",
@@ -254,6 +263,5 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
-        public_operands: false,
     },
 ];

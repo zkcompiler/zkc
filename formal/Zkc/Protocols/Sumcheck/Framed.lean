@@ -23,7 +23,7 @@ open AlgebraicRounds.Construction (Frame Event Query)
 variable {F S Q : Type} {n : Nat}
 
 def root (domain : String) (p : Quadratic F n) (claim : F) : List (Frame F) :=
-  [.context domain n claim, .statement "sumcheck.quadratic.v1" p.coefficients]
+  [.context domain n claim, .statement "sumcheck.quadratic.v0" p.coefficients]
 
 def initial (domain : String) (p : Quadratic F n) (claim : F) (prover : S) (provider : Q) :
     AlgebraicRounds.Framed.State F S Q := ⟨prover, provider, root domain p claim, 0⟩

@@ -1,11 +1,15 @@
-//! Consumer-installed checker integration. The runtime never launches tools.
-pub mod artifact;
-mod checker;
-pub mod groth16;
-pub mod ingress;
-pub mod noninteractive;
-pub mod protocol;
-pub mod snarkjs;
-pub use checker::LeanChecker;
+//! Authenticated Entry packages, native run bundles and independent proof hosts.
+pub mod entry;
 mod host;
-pub mod table;
+pub mod proof;
+pub mod run;
+
+/// Command discovery and file transport. Applications use entry, proof, or run.
+pub mod cli;
+
+/// Shared operational capacity, immutable input values and prover material.
+pub mod execution {
+    pub use crate::host::capacity::Capacity;
+    pub use crate::host::material::ProverMaterial;
+    pub use crate::host::request::InputValue;
+}

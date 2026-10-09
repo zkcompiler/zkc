@@ -1,223 +1,171 @@
 #include "mlir/AsmParser/AsmParser.h"
-#include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Contracts/Binding.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Frontend/Analysis.h"
-#include "zkc/Translation/Protocol.h"
-#include "llvm/Support/JSON.h"
-#include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 #if EXPECT_ENVELOPE
 #include "envelope/Envelope.h"
+#include "envelope/Specialization.h"
 #endif
-using namespace llvm;
-using namespace mlir;
-using namespace zkc::protocol;
-int main(int argc, char **argv) {
-  if (argc == 2 && StringRef(argv[1]) == "--checked-identities") {
-    // Identical checked source under two installations captures each installed
-    // declaration environment. Return exact keys, not hashes used as evidence.
-    auto common = zkc::frontend::analyzeProtocol(R"(
-      library(namespace="example", name="installation", version="1",
-              resolution="installed-consumer");
-      interface Cell { local keep(value: bool) -> bool; }
-      component Plain: Cell {
-        local keep(value: bool) -> bool { return value; }
-      }
-      fn Client<C: Cell>(value: bool) -> bool { return C::keep(value); }
-      link Selected = Client<Plain>;
-    )",
-                                                 "identity.pir");
-    if (!common.complete()) {
-      for (const auto &diagnostic : common.diagnostics())
-        errs() << diagnostic.code << ": " << diagnostic.message << '\n';
-      return 1;
-    }
-    json::Array identities;
-    for (const auto &dependency : common.dependencies())
-      if (dependency.kind ==
-          zkc::frontend::SemanticDependency::Kind::LinkLayout)
-        identities.push_back(dependency.target);
-    if (identities.empty())
-      return 1;
-    outs() << json::Value(std::move(identities)) << '\n';
-    return 0;
+#include "llvm/Support/raw_ostream.h"
+#if EXPECT_ENVELOPE
+namespace {
+void require(bool condition, llvm::StringRef message) {
+  if (!condition) {
+    llvm::errs() << message << '\n';
+    std::exit(1);
   }
-  if (argc != 1)
-    return 2;
-  auto analysis = zkc::frontend::analyzeProtocol(R"(
-    use zkc::envelope::{Envelope, keep};
-    fn Keep<T: Type, N: nat>(value: Envelope<T,N>) -> Envelope<T,N> {
-      return keep(value);
-    }
-  )",
-                                                 "envelope.pir");
-#if !EXPECT_ENVELOPE
-  for (const auto &diagnostic : analysis.diagnostics())
-    if (diagnostic.code == "source-name-unresolved") {
-      outs() << "base installation refuses the absent source vocabulary\n";
-      return 0;
-    }
-  errs() << "base installation did not refuse the absent vocabulary\n";
-  return 1;
-#else
-  auto require = [](bool accepted, StringRef why) {
-    if (!accepted) {
-      errs() << why << '\n';
-      std::exit(1);
-    }
-  };
-  if (!analysis.complete())
-    for (const auto &diagnostic : analysis.diagnostics())
-      errs() << diagnostic.code << ": " << diagnostic.message << '\n';
-  require(analysis.complete(), "contributed source export did not check");
-  auto lowered = analysis.lower();
-  if (!lowered) {
-    errs() << toString(lowered.takeError()) << '\n';
-    return 1;
+}
+template <typename T> T take(llvm::Expected<T> value) {
+  if (!value) {
+    llvm::errs() << llvm::toString(value.takeError()) << '\n';
+    std::exit(1);
   }
-  for (StringRef call : {"let pair = envelope::pair::<U,K,L>(x,y);",
-                         "let pair = envelope::pair(x,y);",
-                         "let pair: (FixedVector<U,K>, FixedVector<U,L>) = "
-                         "envelope::pair(x,y);"}) {
-    auto generic = zkc::frontend::analyzeProtocol((R"(
-      use zkc::algebra::FixedVector;
-      use zkc::envelope;
-      fn Pair<U: Type, K: nat, L: nat>(x: FixedVector<U,K>, y: FixedVector<U,L>)
-          -> (FixedVector<U,K>, FixedVector<U,L>) {
-    )" + call + "return pair; }")
-                                                      .str(),
-                                                  "pair.pir");
-    require(generic.complete(),
-            "contributed generic multi-result source did not check");
-    bool solved = false;
-    for (const auto &binding : generic.bindings())
-      if (binding.name == "pair")
-        solved = generic.display(binding.type) ==
-                 "(fixed_vector<U,K>, fixed_vector<U,L>)";
-    require(solved, "multi-result type arguments differ");
-    auto model = generic.lower();
-    if (!model) {
-      errs() << toString(model.takeError()) << '\n';
-      return 1;
-    }
+  return std::move(*value);
+}
+void domainControls(mlir::MLIRContext &context) {
+  using namespace mlir;
+  using namespace zkc::protocol;
+  for (llvm::StringRef spelling :
+       {"envelope<field:koala-bear,4>", "fixed_vector<envelope<bool,2>,3>"}) {
+    auto logical = take(parseBoundType(spelling, false));
+    auto native = decodeBoundType(&context, logical);
+    require(bool(native), "contributed bound type did not decode");
+    require(take(encodeBoundType(native, false)) == logical,
+            "nested contributed descriptor changed");
+    std::string printed;
+    llvm::raw_string_ostream stream(printed);
+    native.print(stream);
+    require(parseType(printed, &context) == native,
+            "contributed type assembly did not roundtrip");
+    auto physical = defaultRepresentation(logical);
+    require(!physical, "logical-only type acquired a physical implementation");
+    llvm::consumeError(physical.takeError());
   }
-  auto protocol = zkc::frontend::analyzeProtocol(R"(
-    use zkc::envelope::Capability;
-    protocol Abstract<D: Capability> { roles(P); return; }
-  )",
-                                                 "bound.pir");
-  require(protocol.complete(),
-          "contributed protocol domain-sort bound did not check");
-  DialectRegistry registry;
-  zkc::registerDialects(registry);
-  MLIRContext context(registry);
-  context.loadAllAvailableDialects();
-  require(zkc::hasProtocolDialects(context),
-          "installation did not register its dialects");
-  auto logical = parseBoundType("envelope<field:koala-bear,4>", false);
-  if (!logical) {
-    errs() << toString(logical.takeError()) << '\n';
-    return 1;
-  }
-  auto expected = envelope::EnvelopeType::get(
-      &context, zkc::algebra::FieldType::get(&context, "koala-bear"), 4);
-  require(decodeBoundType(&context, *logical) == expected,
-          "wrong contributed native type");
-  auto encoded = encodeBoundType(expected, false);
-  if (!encoded) {
-    errs() << toString(encoded.takeError()) << '\n';
-    return 1;
-  }
-  require(*encoded == *logical, "logical roundtrip changed the descriptor");
-  std::string assembly;
-  raw_string_ostream stream(assembly);
-  Type(expected).print(stream);
-  require(parseType(assembly, &context) == expected,
-          "native assembly did not roundtrip");
-  auto nested = parseBoundType("fixed_vector<envelope<bool,2>,3>", false);
-  if (!nested) {
-    errs() << toString(nested.takeError()) << '\n';
-    return 1;
-  }
-  auto nestedNative = decodeBoundType(&context, *nested);
-  auto nestedExpected = zkc::algebra::FixedVectorType::get(
-      &context,
-      envelope::EnvelopeType::get(&context, IntegerType::get(&context, 1), 2),
-      3);
-  require(nestedNative == nestedExpected,
-          "cross-domain nested native type differs");
-  auto nestedBack = encodeBoundType(nestedNative, false);
-  if (!nestedBack) {
-    errs() << toString(nestedBack.takeError()) << '\n';
-    return 1;
-  }
-  require(*nestedBack == *nested, "cross-domain roundtrip differs");
-  require(boundOperationName("envelope.keep") == "envelope.keep",
-          "contributed ODS contract mapping is missing");
-  require(boundOperationName("envelope.pair").empty(),
-          "logical-only declaration gained an invented native mapping");
-  auto concrete = zkc::frontend::analyzeProtocol(R"(
-    use zkc::envelope::{Envelope, keep};
-    fn Keep(value: Envelope<"koala-bear"::Element,4>)
-        -> Envelope<"koala-bear"::Element,4> {
-      return keep(value);
-    }
-  )",
-                                                 "concrete.pir");
-  require(concrete.complete(), "concrete contributed source did not check");
-  auto source = concrete.lower();
-  if (!source) {
-    errs() << toString(source.takeError()) << '\n';
-    return 1;
-  }
-  auto imported = importModule(*source, context);
-  if (!imported) {
-    errs() << toString(imported.takeError()) << '\n';
-    return 1;
-  }
-  require(succeeded(verify(**imported)),
-          "contributed operation did not verify");
+  require(boundOperationName("envelope.keep") == "envelope.keep" &&
+              boundOperationName("envelope.pair").empty(),
+          "contributed operation mapping differs");
+  auto module = parseSourceString<ModuleOp>(R"(
+!T = !envelope.value<!algebra.field<"koala-bear">,4>
+module { "protocol.module"() ({
+ "local.binding"() {sym_name="keep",contract="envelope.keep",arguments=["field:koala-bear","4"],implementation=""} : ()->()
+ local.func @Keep(%x:!T)->!T attributes {logical_origin=["Keep",[]]} {
+   %y = "envelope.keep"(%x) {binding=@keep,site="keep",parameters=[]} : (!T)->!T
+   local.return %y : !T
+ }
+ "protocol.func"() ({^entry(%x:!T):
+   %y = "protocol.local_call"(%x) {callee=@Keep,role="P",site="use"} : (!T)->!T
+   "protocol.return"(%y) : (!T)->()
+ }) {sym_name="main",function_type=(!T)->!T,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() })",
+                                            ParserConfig(&context, false));
+  require(bool(module), "contributed operation fixture refused");
+  // The contributed carrier has logical adapters but no native port policy.
+  // Check its registered operation invariant independently of module admission.
   unsigned operations = 0;
-  (*imported)->walk([&](envelope::KeepOp operation) {
+  module->walk([&](envelope::KeepOp operation) {
     ++operations;
+    require(succeeded(operation->getName().verifyInvariants(operation)),
+            "valid contributed signature refused");
     auto original = operation->getResult(0).getType();
     operation->getResult(0).setType(IntegerType::get(&context, 1));
     {
       ScopedDiagnosticHandler silence(&context,
                                       [](Diagnostic &) { return success(); });
-      require(failed(verify(**imported)),
-              "standard verifier admitted the wrong result type");
+      require(failed(operation->getName().verifyInvariants(operation)),
+              "wrong contributed result type admitted");
     }
     operation->getResult(0).setType(original);
+    require(succeeded(operation->getName().verifyInvariants(operation)),
+            "contributed operation restoration failed");
   });
-  require(operations == 1 && succeeded(verify(**imported)),
-          "contributed operation import or restoration failed");
-  // An unknown owned property must fail during parsing, before an incomplete
-  // operation could fail for an unrelated signature or binding reason.
+  require(operations == 1, "contributed operation missing");
+  {
+    ScopedDiagnosticHandler silence(&context,
+                                    [](Diagnostic &) { return success(); });
+    require(failed(verify(*module)),
+            "logical-only carrier acquired native endpoint support");
+  }
   bool unknownProperty = false;
   {
     ScopedDiagnosticHandler capture(&context, [&](Diagnostic &diagnostic) {
       std::string message;
-      raw_string_ostream stream(message);
+      llvm::raw_string_ostream stream(message);
       diagnostic.print(stream);
-      unknownProperty |= StringRef(message).contains("mlir-unknown-property");
+      unknownProperty |=
+          llvm::StringRef(message).contains("mlir-unknown-property");
       return success();
     });
     auto malformed = parseSourceString<ModuleOp>(
-        R"(module { "envelope.keep"() <{surprise = "must-not-disappear"}> : () -> () })",
+        R"(module { "envelope.keep"() <{surprise="must-not-disappear"}> : ()->() })",
         &context);
-    require(!malformed, "unknown contributed owned property disappeared");
+    require(!malformed, "unknown contributed property disappeared");
   }
-  require(unknownProperty, "contributed parsing did not use strict properties");
-  auto selected = defaultRepresentation(*logical);
-  require(!selected,
-          "logical registration silently supplied a physical implementation");
-  outs() << "source checking/lowering, native expectations and nested "
-            "roundtrips passed; physical selection refuses: "
-         << toString(selected.takeError()) << '\n';
-  return 0;
+  require(unknownProperty, "contributed parser bypassed strict properties");
+}
+} // namespace
+#endif
+int main() {
+  mlir::DialectRegistry registry;
+  zkc::registerDialects(registry);
+#if !EXPECT_ENVELOPE
+  return registry.getDialectAllocator("envelope") ? 1 : 0;
+#else
+  mlir::MLIRContext context(registry);
+  context.loadAllAvailableDialects();
+  domainControls(context);
+  auto type = mlir::parseType("!envelope.value<i1, 3>", &context);
+  if (!mlir::isa_and_nonnull<envelope::EnvelopeType>(type))
+    return 1;
+  auto module = mlir::parseSourceString<mlir::ModuleOp>(R"(
+!F = !algebra.field<"koala-bear">
+module { "protocol.module"() ({
+ "local.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
+ local.func @Sum(%x:!F,%y:!F,%z:!F)->!F attributes {logical_origin=["Sum",[]]} {
+   %a = "algebra.exec.field_add"(%x,%y) {binding=@add,site="first",parameters=[]} : (!F,!F)->!F
+   %b = "algebra.exec.field_add"(%a,%z) {binding=@add,site="second",parameters=[]} : (!F,!F)->!F
+   local.return %b : !F
+ }
+ "protocol.func"() ({^entry(%x:!F,%y:!F,%z:!F):
+   %out = "protocol.local_call"(%x,%y,%z) {callee=@Sum,role="P",site="work"} : (!F,!F,!F)->!F
+   "protocol.return"(%out) : (!F)->()
+ }) {sym_name="main",function_type=(!F,!F,!F)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() })",
+                                                        &context);
+  if (!module)
+    return 2;
+  auto text = [&] {
+    std::string result;
+    llvm::raw_string_ostream stream(result);
+    module->print(stream, mlir::OpPrintingFlags().enableDebugInfo());
+    return result;
+  };
+  auto before = text();
+  if (mlir::failed(envelope::specializeFieldSums(*module)))
+    return 3;
+  unsigned composites = 0;
+  module->walk([&](envelope::FieldSumChainOp) { ++composites; });
+  if (composites != 1)
+    return 4;
+  if (mlir::failed(envelope::decomposeFieldSums(*module)) ||
+      mlir::failed(mlir::verify(*module)) || text() != before)
+    return 5;
+  // Restoration metadata is required; failure must leave the composite present.
+  if (mlir::failed(envelope::specializeFieldSums(*module)))
+    return 6;
+  module->walk([&](envelope::FieldSumChainOp operation) {
+    operation->setAttr("first_attributes", mlir::DictionaryAttr::get(&context));
+  });
+  {
+    mlir::ScopedDiagnosticHandler silence(
+        &context, [](mlir::Diagnostic &) { return mlir::success(); });
+    if (mlir::succeeded(envelope::decomposeFieldSums(*module)))
+      return 7;
+  }
+  composites = 0;
+  module->walk([&](envelope::FieldSumChainOp) { ++composites; });
+  return composites != 1;
 #endif
 }

@@ -113,4 +113,10 @@ pub(crate) fn apply(
     };
     Ok(vec![value])
 }
-pub(crate) const OPERATIONS: &[&str] = &["field_array.from_vector", "field_array.at"];
+pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
+    (
+        "arkworks/field_array.from_vector",
+        "field_array.from_vector",
+    ),
+    ("arkworks/field_array.at", "field_array.at"),
+];

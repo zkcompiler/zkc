@@ -88,7 +88,7 @@ def run : IO Unit := do
     "fixed_vector<field:koala-bear,>", "fixed_vector<,4>", "fixed_vector<field:koala-bear,4,5>",
     "fixed_vector<field:koala-bear,4", "fixed_vector<field:koala-bear,4>>", "fixed_vector<>",
     "fixed_vector:field:koala-bear,4", "fixed_vector<koala-bear,4>", "fixed_vector<field:unknown,4>",
-    "fixed_vector<field:koala-bear@plonky3.koala-bear/1,4>",
+    "fixed_vector<field:koala-bear@plonky3.koala-bear/0,4>",
     "unknown<field:koala-bear,4>", "fixed_vector<unknown:koala-bear,4>"]
   for text in malformed do
     checks.holds (!(Bindings.valueType false text).isOk) ("malformed: " ++ text)
@@ -150,17 +150,17 @@ def run : IO Unit := do
     "nonvariant byte bound exceeded"
   checks.holds ((Bindings.valueType false (sized 300)).isOk && (sized 300).utf8ByteSize > 512)
     "no retained Lean 512-byte divergence"
-  checks.holds (a.defaultRepresentation == "plonky3.fixed-vector/1" && c.defaultRepresentation.isEmpty)
+  checks.holds (a.defaultRepresentation == "plonky3.fixed-vector/0" && c.defaultRepresentation.isEmpty)
     "realization selection uses full element identity"
-  checks.holds ((Bindings.valueType true (a.spelling ++ "@plonky3.fixed-vector/1")).isOk)
+  checks.holds ((Bindings.valueType true (a.spelling ++ "@plonky3.fixed-vector/0")).isOk)
     "KoalaBear fixed-vector physical spelling"
-  checks.holds (code (Bindings.valueType true (c.spelling ++ "@plonky3.fixed-vector/1")) == some "binding-representation")
+  checks.holds (code (Bindings.valueType true (c.spelling ++ "@plonky3.fixed-vector/0")) == some "binding-representation")
     "BLS formation succeeds but physical selection fails"
   checks.holds (code (Bindings.valueType true c.spelling) == some "binding-representation")
     "empty default is not physical support"
-  checks.holds (!(Bindings.valueType true (a.spelling ++ "@plonky3.koala-bear-vector/1")).isOk)
+  checks.holds (!(Bindings.valueType true (a.spelling ++ "@plonky3.koala-bear-vector/0")).isOk)
     "fixed vectors do not reuse the dynamic-vector representation"
-  checks.holds (!(Bindings.valueType true (a.spelling ++ "@plonky3.fixed-vector/1@extra")).isOk)
+  checks.holds (!(Bindings.valueType true (a.spelling ++ "@plonky3.fixed-vector/0@extra")).isOk)
     "one outer representation only"
   for contract in contracts do
     checks.holds ((Bindings.resolve false (binding contract 4)).isOk) "logical operation signature"

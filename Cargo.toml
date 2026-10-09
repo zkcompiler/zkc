@@ -5,7 +5,9 @@ members = [
   "crates/zkc-arkworks",
   "crates/zkc-backends",
   "crates/zkc-test-support",
+  "crates/zkc-test-drivers",
 ]
+default-members = ["crates/zkc-tools"]
 resolver = "3"
 
 [workspace.package]
@@ -15,9 +17,8 @@ license = "Apache-2.0"
 [workspace.dependencies]
 serde_json = { version = "=1.0.151", features = ["arbitrary_precision", "unbounded_depth"] }
 num-bigint = "=0.4.8"
-num-traits = "=0.2.19"
 tempfile = "=3.27.0"
-# Already locked by the runtime dependencies; used for nonblocking regular-file ingress.
+# Nonblocking regular-file ingress for native hosts.
 libc = "=0.2.189"
 zkc-test-support = { path = "crates/zkc-test-support" }
 
@@ -52,6 +53,7 @@ p3-field-043 = { package = "p3-field", version = "=0.4.3" }
 p3-symmetric-043 = { package = "p3-symmetric", version = "=0.4.3" }
 p3-challenger-043 = { package = "p3-challenger", version = "=0.4.3" }
 
+zkc-tools = { path = "crates/zkc-tools" }
 zkc-runtime = { path = "crates/zkc-runtime" }
 zkc-backends = { path = "crates/zkc-backends" }
 zkc-arkworks = { path = "crates/zkc-arkworks" }

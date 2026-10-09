@@ -1,0 +1,34 @@
+module sample;
+domain Fr=field("bls12-381.fr");
+struct Result{pub ready:bool,pub value:Fr}
+protocol Round roles(P,V)(done:bool@P)
+  using(coins:Random<Fr>@P,challenges:Random<Fr>@V)
+  ->(padding:Fr@P,result:Result@P,accepted:bool@V) {
+  let nonce=coins.draw();
+  let message=send P->V(nonce);
+  let challenge=challenges.draw();
+  let received=send V->P(challenge);
+  let response=nonce+received;
+  let actual=send P->V(response);
+  let ok=actual==message+challenge;
+  let result=Result{ready:done,value:response};
+  return(padding=nonce,result=result,accepted=ok);
+}
+protocol Authored roles(P,V)(done:bool@P) using(coins:Random<Fr>@P)
+  ->(padding:Fr@P,result:Result@P,accepted:bool@V) {
+  let nonce=coins.draw();
+  let message=send P->V(nonce);
+  let ok=message==message;
+  let result=Result{ready:done,value:nonce};
+  return(padding=nonce,result=result,accepted=ok);
+}
+entry Derived=Round{
+  prover P;verifier V;public{};accept accepted;complete result.ready;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0"){derive challenges;}
+}
+entry Plain=Authored{
+  prover P;verifier V;public{};accept accepted;complete result.ready;
+  construction authored;
+}
+entry Once=Authored{prover P;verifier V;public{};accept accepted;construction authored;}
+entry Run=Round;

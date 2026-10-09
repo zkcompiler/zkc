@@ -1,10 +1,10 @@
-// Executable algebraic clients; see docs/compiler/composed-state.md.
+// Executable algebraic clients; see docs/compiler/mathematics.md.
 !f = !algebra.field<"bls12-381.fr">
 !g = !algebra.group<"bls12-381.g1">
 !fs = tensor<?x!f>
 !gs = tensor<?x!g>
 !r = !local.capability<"rng:bls12-381.fr">
-!s = !protocol.service_ref<"random.bls12-381.fr/1">
+!s = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
   "local.binding"() {sym_name="random_draw",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()
   "local.binding"() {sym_name="field_constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()

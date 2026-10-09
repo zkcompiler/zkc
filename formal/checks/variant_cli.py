@@ -31,7 +31,7 @@ def source(alternative='Some'):
                 ['None', [], [['yield', ['fallback']]]]], ['out']],
             ['return', ['out']]]
     args = [['x', 'index'], ['fallback', 'index']]
-    return ['zkc.protocol/1', [['add', 'index.add', [], '']],
+    return ['zkc.protocol/0', [['add', 'index.add', [], '']],
             [['function', 'Select', args, ['index'], body, ['Select', []]]],
             [['protocol', 'Main', ['P'], [], [[n, 'P', t] for n, t in args], [['P', 'index']], [],
               [['local', 'invoke', 'P', 'Select', ['x', 'fallback'], ['out']], ['return', ['out']]]]],
@@ -61,7 +61,7 @@ def effect_source(contract, arm, functions=()):
              [['yes', [], arm], ['no', [], [['yield', ['s']]]]], ['out']],
             ['return', ['out']]]
     fns = [['function', 'Work', args, ['indices'], body, ['Work', []]]] + list(functions)
-    return ['zkc.protocol/1', [['kernel', contract, [], '']], fns,
+    return ['zkc.protocol/0', [['kernel', contract, [], '']], fns,
             [['protocol', 'Main', ['P'], [], [[n, 'P', t] for n, t in args], [['P', 'indices']], [],
               [['local', 'invoke', 'P', 'Work', ['s', 'w', 'n', 'm'], ['out']], ['return', ['out']]]]],
             [['instance', 'root', 'Main', [], [], [['P', 'P']]]], [['entry', 'main', 'root']]]
@@ -82,7 +82,7 @@ def tagged_witness(leaf):
             ['match', 'select', 'v', ['s2'],
              [['yes', ['b'], [['yield', ['s2']]]], ['no', [], [['yield', ['s2']]]]], ['out']],
             ['return', ['out']]]
-    return ['zkc.protocol/1', [['kernel', 'external.openvm.check_witness', [], '']],
+    return ['zkc.protocol/0', [['kernel', 'external.openvm.check_witness', [], '']],
             [['function', 'Work', args, ['indices'], body, ['Work', []]]],
             [['protocol', 'Main', ['P'], [], [[n, 'P', t] for n, t in args], [['P', 'indices']], [],
               [['local', 'invoke', 'P', 'Work', ['s', 'n', 'm'], ['out']], ['return', ['out']]]]],
@@ -91,8 +91,8 @@ def tagged_witness(leaf):
 
 def physical_type(ty):
     if ty.startswith('variant:'):
-        return ty + '@logical.variant/1'
-    return ty + '@native.' + ty + '/1'
+        return ty + '@logical.variant/0'
+    return ty + '@native.' + ty + '/0'
 
 
 def physical_body(body):
@@ -124,7 +124,7 @@ def candidate(s, physical=False):
     projected(body)
     if physical:
         body = physical_body(body)
-    return ['zkc.participants/1', [['add', 'index.add', [], 'native/index.add' if physical else '']],
+    return ['zkc.participants/0', [['add', 'index.add', [], 'native/index.add' if physical else '']],
             'physical' if physical else 'logical',
             [['function', 'Select', args, results, body, ['Select', []]]],
             [['participant', 'p', 'root', 'P', [], args, results,
@@ -133,7 +133,7 @@ def candidate(s, physical=False):
 
 
 def inputs():
-    return ['zkc.reference-inputs/1', 'main', 'test',
+    return ['zkc.reference-inputs/0', 'main', 'test',
             [['P', [['x', ['index', '5']], ['fallback', ['index', '7']]]]], [], [], []]
 
 
@@ -183,7 +183,7 @@ def main():
                 r = invoke(root, '--check', s, bad)
                 check(r == ['refused', 'source-local-unmatched'], f'{alternative} dormant mutation {physical}', r)
             r = invoke(root, '--physical-local-reference', s, candidate(s, True), inputs(),
-                       ['zkc.local-resources/1', '67108864', []])
+                       ['zkc.local-resources/0', '67108864', []])
             check(r[1] == ['returned', [['index', value]]] and r[4][1:3] == ['1', '512'] and r[4][4] == '0',
                   f'{alternative} physical result and cleanup', r)
         mutations = {
@@ -225,7 +225,7 @@ def main():
         r = invoke(root, '--reference', s, inputs())
         check(r[3][:2] == ['reject', 'explicit-stop'] and not r[4], 'uncatchable selected stop', r)
         r = invoke(root, '--physical-local-reference', s, candidate(s, True), inputs(),
-                   ['zkc.local-resources/1', '67108864', []])
+                   ['zkc.local-resources/0', '67108864', []])
         check(r[1][:2] == ['reject', 'explicit-stop'] and r[4][1:3] == ['0', '0'] and r[4][4] == '0',
               'physical stopped cleanup', r)
         # Neither nested descriptors nor active resource handles are flattened

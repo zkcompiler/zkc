@@ -30,7 +30,6 @@ class MappingTestVariant<ZKC_Operation original>
   let parameterField = original.parameterField;
   let facets = original.facets;
   let commonGeneric = original.commonGeneric;
-  let effect = original.effect;
 }
 ]=])
 set(failures "")
@@ -145,15 +144,6 @@ def Many : MappingTestOp<"many"> {
 }
 ]=] "")
 
-# Scope arity, payload constructor and codec requirements deliberately differ.
-mapping_case(observations [=[
-def Observe : MappingTestOp<"observe"> {
-  let observationContracts = [OpTranscriptObserveBool, OpTranscriptObserveField,
-                             OpTranscriptObserveCommitment];
-}
-]=] "")
-expect_rows(observations
-  [=[{"transcript.observe.bool", "mapping_test.observe"};{"transcript.observe.field", "mapping_test.observe"};{"transcript.observe.commitment", "mapping_test.observe"}]=])
 # Logical declarations need not have a distinguished native operation.
 mapping_case(unmapped-declarations "" "")
 expect_rows(unmapped-declarations "")
@@ -165,25 +155,9 @@ def B : MappingTestOp<"b"> { let contracts = [OpFieldAdd]; }
 mapping_case(repeated-contract [=[
 def A : MappingTestOp<"a"> { let contracts = [OpFieldAdd, OpFieldAdd]; }
 ]=] "conflicting contract association")
-mapping_case(duplicate-observation [=[
-def A : MappingTestOp<"a"> { let observationContracts = [OpTranscriptObserveField]; }
-def B : MappingTestOp<"b"> { let observationContracts = [OpTranscriptObserveField]; }
-]=] "conflicting contract association")
-mapping_case(repeated-observation [=[
-def A : MappingTestOp<"a"> {
-  let observationContracts = [OpTranscriptObserveField, OpTranscriptObserveField];
-}
-]=] "conflicting contract association")
-mapping_case(exact-observation-overlap [=[
-def A : MappingTestOp<"a"> { let observationContracts = [OpTranscriptObserveField]; }
-def B : MappingTestOp<"b"> { let contracts = [OpTranscriptObserveField]; }
-]=] "conflicting contract association")
-mapping_case(mixed-lists [=[
-def A : MappingTestOp<"a"> {
-  let contracts = [OpTranscriptObserveField];
-  let observationContracts = [OpTranscriptObserveField];
-}
-]=] "cannot mix exact and observation contract lists")
+mapping_case(unknown-property [=[
+def A : MappingTestOp<"a"> { let unexpected = [OpIndexedTranscriptObserveData]; }
+]=] "Value 'unexpected' unknown")
 mapping_case(duplicate-operation [=[
 def A : MappingTestOp<"a"> { let contracts = [OpFieldAdd]; }
 def B : MappingTestOp<"a"> { let contracts = [OpFieldMul]; }
@@ -207,13 +181,6 @@ def A : MappingTestOp<"a"> { let contracts = ["field.add"]; }
 mapping_case(wrong-record-kind [=[
 def A : MappingTestOp<"a"> { let contracts = [TypeField]; }
 ]=] "Element type mismatch for list")
-mapping_case(string-family [=[
-def A : MappingTestOp<"a"> { let observationContracts = ["transcript.observe."]; }
-]=] "Element type mismatch for list")
-mapping_case(old-prefix-field [=[
-def A : MappingTestOp<"a"> { let contractFamilies = ["transcript.observe."]; }
-]=] "Value 'contractFamilies' unknown")
-
 mapping_case(input-arity [=[
 def A : MappingTestOp<"a"> { let contracts = [OpFieldAdd, OpFieldInverse]; }
 ]=] "incompatible mapped contract signatures")
@@ -254,76 +221,16 @@ mapping_case(authoring-stage [=[
 def Changed : MappingTestVariant<OpFieldAdd> { let stage = Construction; }
 def A : MappingTestOp<"a"> { let contracts = [OpFieldAdd, Changed]; }
 ]=] "incompatible mapped contract signatures")
-mapping_case(observations-require-explicit-adapter [=[
+mapping_case(indexed-transcript-signatures [=[
 def A : MappingTestOp<"a"> {
-  let contracts = [OpTranscriptObserveBool, OpTranscriptObserveField];
+  let contracts = [OpIndexedTranscriptChallenge, OpIndexedTranscriptObserveData];
 }
 ]=] "incompatible mapped contract signatures")
-mapping_case(non-observation [=[
-def A : MappingTestOp<"a"> { let observationContracts = [OpFieldAdd]; }
-]=] "incompatible observation contract mapping")
-mapping_case(sampling-is-not-observation [=[
-def A : MappingTestOp<"a"> { let observationContracts = [OpTranscriptChallenge]; }
-]=] "incompatible observation contract mapping")
-mapping_case(observation-port-layout [=[
-def Changed : MappingTestVariant<OpTranscriptObserveField> {
-  let inputs = [ZKC_Apply<TypeField, [OpTranscriptObserveFieldF]>,
-                ZKC_Apply<TypeTranscript, [OpTranscriptObserveFieldT]>];
-  let facets = [ZKC_Observation<1, 0, 0>, ZKC_History<1, 0>];
-}
-def A : MappingTestOp<"a"> { let observationContracts = [Changed]; }
-]=] "incompatible observation contract mapping")
-mapping_case(observation-extra-result [=[
-def Changed : MappingTestVariant<OpTranscriptObserveField> {
-  let outputs = [ZKC_Apply<TypeTranscript, [OpTranscriptObserveFieldT]>,
-                 ZKC_Apply<TypeBool>];
-}
-def A : MappingTestOp<"a"> { let observationContracts = [Changed]; }
-]=] "incompatible observation contract mapping")
-mapping_case(observation-authoring-stage [=[
-def Changed : MappingTestVariant<OpTranscriptObserveField> { let stage = Source; }
-def A : MappingTestOp<"a"> { let observationContracts = [Changed]; }
-]=] "incompatible observation contract mapping")
-mapping_case(observation-parameters [=[
-def Changed : MappingTestVariant<OpTranscriptObserveField> { let parameters = NoParameters; }
-def A : MappingTestOp<"a"> { let observationContracts = [Changed]; }
-]=] "incompatible observation contract mapping")
-mapping_case(observation-extra-facet [=[
-def Changed : MappingTestVariant<OpTranscriptObserveField> {
-  let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>, PublicReplay];
-}
-def A : MappingTestOp<"a"> { let observationContracts = [Changed]; }
-]=] "incompatible observation contract mapping")
-mapping_case(observation-state-root [=[
-def OtherT : ZKC_Root<"U", TranscriptDomain>;
-def Changed : MappingTestVariant<OpTranscriptObserveBool> {
-  let scope = [OtherT, OpTranscriptObserveBoolE];
-  let inputs = [ZKC_Apply<TypeTranscript, [OtherT]>, ZKC_Apply<TypeBool>];
-  let outputs = [ZKC_Apply<TypeTranscript, [OtherT]>];
-  let requirements = [ZKC_Holds<CapabilityTranscript, [OtherT]>,
-                      ZKC_Holds<CapabilityEncodesBool, [OpTranscriptObserveBoolE]>];
-}
-def A : MappingTestOp<"a"> {
-  let observationContracts = [OpTranscriptObserveBool, Changed];
-}
-]=] "incompatible observation state signature")
-mapping_case(observation-projected-state [=[
-def StateMember : ZKC_Member<"State", TranscriptDomain, TranscriptDomain>;
-def State : ZKC_Project<OpTranscriptObserveBoolT, StateMember>;
-def Changed : MappingTestVariant<OpTranscriptObserveBool> {
-  let scope = [OpTranscriptObserveBoolT, State, OpTranscriptObserveBoolE];
-  let inputs = [ZKC_Apply<TypeTranscript, [State]>, ZKC_Apply<TypeBool>];
-  let outputs = [ZKC_Apply<TypeTranscript, [State]>];
-  let requirements = [ZKC_Holds<CapabilityTranscript, [State]>,
-                      ZKC_Holds<CapabilityEncodesBool, [OpTranscriptObserveBoolE]>];
-}
-def A : MappingTestOp<"a"> { let observationContracts = [Changed]; }
-]=] "observation mapping requires a transcript root")
 mapping_case(observation-missing-history [=[
-def Changed : MappingTestVariant<OpTranscriptObserveBool> {
+def Changed : MappingTestVariant<OpIndexedTranscriptObserveData> {
   let facets = [ZKC_Observation<0, 1, 0>];
 }
-def A : MappingTestOp<"a"> { let observationContracts = [Changed]; }
+def A : MappingTestOp<"a"> { let contracts = [Changed]; }
 ]=] "transcript facet requires matching history ports")
 
 # Mapping generation must reuse neutral validation, including ownership and

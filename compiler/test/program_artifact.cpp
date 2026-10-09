@@ -3,8 +3,8 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Protocol/Admission.h"
-#include "zkc/Source/Codec.h"
+#include "zkc/Program/Admission.h"
+#include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
@@ -25,14 +25,12 @@ constexpr StringLiteral fixture = R"mlir(module { "protocol.module"() ({
    "protocol.return"(%both,%seen) : (i1,i1)->()
  }) {sym_name="main",function_type=(i1,i1)->(i1,i1),roles=["P","V"],input_roles=[["P"],["P"]],output_roles=[["P"],["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() })mlir";
-source::Participants program(ModuleOp module) {
+program::Participants readProgram(ModuleOp module) {
   auto json = take(protocol::exportModule(module));
-  auto decoded = take(source::decode(json));
-  require(std::holds_alternative<source::Participants>(decoded),
-          "wrong export kind");
-  return std::get<source::Participants>(std::move(decoded));
+  auto decoded = take(program::decode(json));
+  return decoded;
 }
-source::Function &calculation(source::Participants &program) {
+program::Function &calculation(program::Participants &program) {
   for (auto &function : program.functions)
     if (function.arguments.size() == 2)
       return function;
@@ -50,34 +48,106 @@ int main() {
   run(*module, protocol::createLowerMathPass());
   require(succeeded(protocol::lowerPhysical(*module)),
           "physical lowering refused");
-  auto original = program(*module);
-  auto encoded = [&](const source::Participants &program) {
-    if (auto e = source::checkStructure(program))
+  auto original = readProgram(*module);
+  auto encoded = [&](const program::Participants &program) {
+    if (auto e = program::checkStructure(program))
       throw std::runtime_error(llvm::toString(std::move(e)));
-    if (auto e = protocol::admit(program, true))
+    if (auto e = protocol::admit(program))
       throw std::runtime_error(llvm::toString(std::move(e)));
-    return printJson(source::encode(program));
+    return printJson(program::encode(program));
   };
   cases.run("actual decoded artifact", [&] {
-    if (auto e = protocol::verifyProgramArtifact(*module, encoded(original)))
-      throw std::runtime_error(llvm::toString(std::move(e)));
+    auto checked =
+        take(protocol::verifyProgramArtifact(*module, encoded(original)));
+    require(program::encode(checked) == program::encode(original),
+            "verified artifact changed on return");
   });
-  auto negative = [&](StringRef name,
-                      llvm::function_ref<void(source::Participants &)> mutate) {
-    cases.run(name, [&] {
-      auto candidate = original;
-      mutate(candidate);
-      auto bytes = encoded(candidate); // Every mutant remains executable.
-      auto result = protocol::verifyProgramArtifact(*module, bytes);
-      require(bool(result), "wrong artifact passed correspondence");
-      require(namesIdentifier(llvm::toString(std::move(result)),
-                              "artifact-correspondence"),
-              "wrong refusal code");
-    });
-  };
+  cases.run("current program shape retains actual arguments", [&] {
+    auto artifact = program::encode(original);
+    auto &root = *artifact.getAsArray();
+    require(root.size() == 5 && root[0].getAsString() == "zkc.program/0",
+            "wrong current root grammar");
+    auto &participant = *root[3].getAsArray()->front().getAsArray();
+    require(participant.size() == 8 &&
+                participant[4].getAsArray()->size() ==
+                    original.participants.front().arguments.size(),
+            "actual participant arguments were lost");
+  });
+  cases.run("unknown program tag refuses with valid root arity", [&] {
+    auto artifact = program::encode(original);
+    (*artifact.getAsArray())[0] = "invalid.program";
+    refuses(program::decode(artifact), "interactive-format");
+  });
+  cases.run("program root refuses an extra field", [&] {
+    auto artifact = program::encode(original);
+    auto &root = *artifact.getAsArray();
+    root.insert(root.begin() + 2, llvm::json::Array{});
+    refuses(program::decode(artifact), "interactive-shape");
+  });
+  cases.run("program root refuses a missing field", [&] {
+    auto artifact = program::encode(original);
+    auto &root = *artifact.getAsArray();
+    root.pop_back();
+    refuses(program::decode(artifact), "interactive-shape");
+  });
+  cases.run("unexpanded local.apply is internal to mathematical locals", [&] {
+    auto candidate = original;
+    auto &function = calculation(candidate);
+    function.body.front().value = program::LocalApply{"callee", {}, {}};
+    auto refusal = program::checkStructure(candidate);
+    require(bool(refusal), "unexpanded local.apply entered physical carrier");
+    llvm::consumeError(std::move(refusal));
+  });
+  cases.run("program codecs require defined callable bodies", [&] {
+    auto json = program::encode(original);
+    auto &functions = *(*json.getAsArray())[2].getAsArray();
+    (*functions.front().getAsArray())[4] = "external";
+    auto decoded = program::decode(json);
+    require(!decoded, "undefined callable passed the physical decoder");
+    require(namesIdentifier(llvm::toString(decoded.takeError()),
+                            "interactive-external-body"),
+            "wrong undefined callable refusal");
+  });
+  cases.run("decoder bounds programmatic strings before semantic admission",
+            [&] {
+              // Direct JSON values exercise Program's own size bound
+              // independently of the text parser's byte limit. LLVM writes
+              // backspace/form feed as six bytes, so these shorter strings also
+              // exceed the encoded-size ceiling.
+              for (char value : {'x', '\b', '\f'}) {
+                auto json = program::encode(original);
+                auto &functions = *(*json.getAsArray())[2].getAsArray();
+                (*functions.front().getAsArray())[1] =
+                    std::string(value == 'x' ? 1048576 : 174763, value);
+                refuses(program::decode(json), "source-limit");
+              }
+            });
+  cases.run("native logical origin arguments round trip", [&] {
+    auto candidate = original;
+    calculation(candidate).origin->arguments = {{"F", "bls12-381.fr"}};
+    auto json = take(parseJson(encoded(candidate)));
+    auto decoded = take(program::decode(json));
+    if (auto e = protocol::admit(decoded))
+      throw std::runtime_error(llvm::toString(std::move(e)));
+    require(program::encode(decoded) == json, "logical arguments were lost");
+  });
+  auto negative =
+      [&](StringRef name,
+          llvm::function_ref<void(program::Participants &)> mutate) {
+        cases.run(name, [&] {
+          auto candidate = original;
+          mutate(candidate);
+          auto bytes = encoded(candidate); // Every mutant remains executable.
+          auto result = protocol::verifyProgramArtifact(*module, bytes);
+          require(!result, "wrong artifact passed correspondence");
+          require(namesIdentifier(llvm::toString(result.takeError()),
+                                  "artifact-correspondence"),
+                  "wrong refusal code");
+        });
+      };
   negative("serialized primitive uses wrong operand", [&](auto &p) {
-    for (auto &instruction : *calculation(p).body)
-      if (auto *operation = instruction.template get<source::Operation>()) {
+    for (auto &instruction : calculation(p).body)
+      if (auto *operation = instruction.template get<program::Operation>()) {
         operation->inputs[1] = operation->inputs[0];
         return;
       }
@@ -89,13 +159,13 @@ int main() {
   });
   negative("serialized local return changed", [&](auto &p) {
     auto &function = calculation(p);
-    function.body->back().template get<source::Return>()->values[0] =
+    function.body.back().template get<program::Return>()->values[0] =
         function.arguments[0].name;
   });
   negative("serialized send uses local input", [&](auto &p) {
     for (auto &participant : p.participants)
       for (auto &instruction : participant.body)
-        if (auto *send = instruction.template get<source::Send>()) {
+        if (auto *send = instruction.template get<program::Send>()) {
           send->input = participant.arguments.front().name;
           return;
         }
@@ -110,58 +180,90 @@ int main() {
     auto &function = calculation(renamed);
     auto old = function.arguments[0].name;
     function.arguments[0].name = "renamed";
-    source::walk(*function.body, [&](source::Instruction &instruction) {
-      if (auto *op = instruction.get<source::Operation>())
+    program::walk(function.body, [&](program::Instruction &instruction) {
+      if (auto *op = instruction.get<program::Operation>())
         for (auto &input : op->inputs)
           if (input == old)
             input = "renamed";
     });
-    if (auto e = protocol::verifyProgramArtifact(*module, encoded(renamed)))
-      throw std::runtime_error(llvm::toString(std::move(e)));
+    take(protocol::verifyProgramArtifact(*module, encoded(renamed)));
   });
   cases.run("removed serialized storage release", [&] {
     auto released = OwningOpRef<ModuleOp>(cast<ModuleOp>((*module)->clone()));
     require(succeeded(protocol::releaseLocalStorage(*released)),
             "storage pass refused");
-    auto candidate = program(*released);
+    auto candidate = readProgram(*released);
     bool removed = false;
     for (auto &function : candidate.functions)
-      if (function.body)
-        for (auto it = function.body->begin(); it != function.body->end(); ++it)
-          if (it->get<source::Release>()) {
-            function.body->erase(it);
-            removed = true;
-            break;
-          }
+      for (auto it = function.body.begin(); it != function.body.end(); ++it)
+        if (it->get<program::Release>()) {
+          function.body.erase(it);
+          removed = true;
+          break;
+        }
     require(removed, "missing released value");
     auto error = protocol::verifyProgramArtifact(*released, encoded(candidate));
-    require(bool(error) && namesIdentifier(llvm::toString(std::move(error)),
-                                           "artifact-correspondence"),
+    require(!error && namesIdentifier(llvm::toString(error.takeError()),
+                                      "artifact-correspondence"),
             "removed release escaped");
   });
-  cases.run("program parameters are refused even without service ports", [&] {
-    auto artifact = original;
-    artifact.participants.front().parameters = {{"n", std::string("4")}};
-    auto e = protocol::admit(artifact, true);
-    require(bool(e) && namesIdentifier(llvm::toString(std::move(e)),
-                                       "service-profile-required"),
-            "program admitted legacy static parameters");
+  cases.run("hostile storage releases fail Program admission", [&] {
+    for (unsigned mutation = 0; mutation != 5; ++mutation) {
+      auto candidate = original;
+      auto &function = calculation(candidate);
+      const auto input = function.arguments.front().name;
+      program::Instruction release{"", program::Release{{input}}};
+      StringRef code;
+      if (mutation == 0) {
+        function.body.insert(function.body.begin(), release);
+        code = "interactive-resource-reuse";
+      } else if (mutation == 1) {
+        function.body.insert(function.body.end() - 1, {release, release});
+        code = "interactive-release-unavailable";
+      } else if (mutation == 2) {
+        release.get<program::Release>()->values.clear();
+        function.body.insert(function.body.begin(), release);
+        code = "interactive-release-empty";
+      } else if (mutation == 3) {
+        release.site = "unexpected";
+        function.body.insert(function.body.begin(), release);
+        auto refusal = program::checkStructure(candidate);
+        require(bool(refusal) &&
+                    namesIdentifier(llvm::toString(std::move(refusal)),
+                                    "source-model-shape"),
+                "unencodable release site passed structure checking");
+        continue;
+      } else {
+        auto &body = candidate.participants.front().body;
+        body.insert(body.begin(), release);
+        code = "interactive-release-context";
+      }
+      // Exercise the portable decoder before the independent semantic gate.
+      if (auto error = program::checkStructure(candidate))
+        throw std::runtime_error(llvm::toString(std::move(error)));
+      auto decoded = take(program::decode(program::encode(candidate)));
+      auto refusal = protocol::admit(decoded);
+      require(bool(refusal) &&
+                  namesIdentifier(llvm::toString(std::move(refusal)), code),
+              "hostile release missed its admission boundary");
+    }
   });
-  cases.run(
-      "program participant calls are refused even without service ports", [&] {
-        auto artifact = original;
-        source::Instruction instruction;
-        instruction.site = "invoke";
-        source::ProtocolCall call;
-        call.callee = artifact.participants.back().name;
-        instruction.value = call;
-        artifact.participants.front().body.insert(
-            artifact.participants.front().body.begin(), instruction);
-        auto e = protocol::admit(artifact, true);
-        require(bool(e) && namesIdentifier(
-                               llvm::toString(std::move(e)),
-                               "service-participant-composition-unsupported"),
-                "program admitted legacy participant call");
-      });
+  cases.run("participant record refuses an extra empty field", [&] {
+    auto artifact = program::encode(original);
+    auto &participant =
+        *(*artifact.getAsArray())[3].getAsArray()->front().getAsArray();
+    participant.insert(participant.begin() + 4, llvm::json::Array{});
+    refuses(program::decode(artifact), "interactive-record");
+  });
+  cases.run("participant composition opcode is not in the carrier", [&] {
+    auto artifact = program::encode(original);
+    auto &participant =
+        *(*artifact.getAsArray())[3].getAsArray()->front().getAsArray();
+    participant[6].getAsArray()->insert(participant[6].getAsArray()->begin(),
+                                        llvm::json::Array{"call", "invoke", "p",
+                                                          llvm::json::Array{},
+                                                          llvm::json::Array{}});
+    refuses(program::decode(artifact), "interactive-instruction");
+  });
   return cases.result();
 }

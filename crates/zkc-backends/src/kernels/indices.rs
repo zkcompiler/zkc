@@ -50,162 +50,87 @@ pub(crate) fn apply(
     attributes: &[String],
     policy: &Policy,
     available: usize,
-) -> Option<Result<Vec<Value>>> {
+) -> Result<Vec<Value>> {
     if !name.starts_with("index.") && !name.starts_with("indices.") {
-        return None;
+        return Err(refused("kernel-operands"));
     }
-    Some((|| {
-        use Value::{Bool, Index, Indices};
-        let output = match (name, args) {
-            ("index.constant", []) => Index(
-                attributes
-                    .first()
-                    .and_then(|n| n.parse::<u64>().ok().filter(|v| v.to_string() == *n))
-                    .filter(|_| attributes.len() == 1)
-                    .ok_or_else(|| refused("index-constant"))?,
-            ),
-            ("index.add", [Index(a), Index(b)]) => {
-                Index(a.checked_add(*b).ok_or_else(|| refused("index-overflow"))?)
-            }
-            ("index.sub", [Index(a), Index(b)]) => Index(
-                a.checked_sub(*b)
-                    .ok_or_else(|| refused("index-underflow"))?,
-            ),
-            ("index.mul", [Index(a), Index(b)]) => {
-                Index(a.checked_mul(*b).ok_or_else(|| refused("index-overflow"))?)
-            }
-            ("index.div", [Index(a), Index(b)]) => Index(
-                a.checked_div(*b)
-                    .ok_or_else(|| refused("index-zero-divisor"))?,
-            ),
-            ("index.mod", [Index(a), Index(b)]) => Index(
-                a.checked_rem(*b)
-                    .ok_or_else(|| refused("index-zero-divisor"))?,
-            ),
-            ("index.equal", [Index(a), Index(b)]) => Bool(a == b),
-            ("index.less", [Index(a), Index(b)]) => Bool(a < b),
-            ("indices.empty", []) => {
-                policy.output(size(0, 8)?, available)?;
-                Indices(Vec::new().into())
-            }
-            ("indices.append", [Indices(ns), Index(n)]) => {
-                let len = ns
-                    .len()
-                    .checked_add(1)
-                    .ok_or_else(|| exhausted("size-overflow"))?;
-                policy.vector_width(len, 8)?;
-                policy.output(size(len, 8)?, available)?;
-                let mut result = crate::kernels::arithmetic::reserve(len)?;
-                result.extend_from_slice(ns);
-                result.push(*n);
-                Indices(result.into())
-            }
-            ("indices.at", [Indices(ns), Index(n)]) => {
-                let n = usize::try_from(*n).map_err(|_| refused("index-bounds"))?;
-                Index(*ns.get(n).ok_or_else(|| refused("index-bounds"))?)
-            }
-            ("indices.length", [Indices(ns)]) => {
-                Index(u64::try_from(ns.len()).map_err(|_| exhausted("size-overflow"))?)
-            }
-            _ => return Err(refused("index-operands")),
-        };
-        Ok(vec![output])
-    })())
-}
-
-pub(crate) fn encode(v: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> {
-    let (tag, count) = match v {
-        Value::Index(_) => (31, None),
-        Value::Indices(ns) => (32, Some(ns.len())),
-        _ => return None,
+    use Value::{Bool, Index, Indices};
+    let output = match (name, args) {
+        ("index.constant", []) => Index(
+            attributes
+                .first()
+                .and_then(|n| n.parse::<u64>().ok().filter(|v| v.to_string() == *n))
+                .filter(|_| attributes.len() == 1)
+                .ok_or_else(|| refused("index-constant"))?,
+        ),
+        ("index.add", [Index(a), Index(b)]) => {
+            Index(a.checked_add(*b).ok_or_else(|| refused("index-overflow"))?)
+        }
+        ("index.sub", [Index(a), Index(b)]) => Index(
+            a.checked_sub(*b)
+                .ok_or_else(|| refused("index-underflow"))?,
+        ),
+        ("index.mul", [Index(a), Index(b)]) => {
+            Index(a.checked_mul(*b).ok_or_else(|| refused("index-overflow"))?)
+        }
+        ("index.div", [Index(a), Index(b)]) => Index(
+            a.checked_div(*b)
+                .ok_or_else(|| refused("index-zero-divisor"))?,
+        ),
+        ("index.mod", [Index(a), Index(b)]) => Index(
+            a.checked_rem(*b)
+                .ok_or_else(|| refused("index-zero-divisor"))?,
+        ),
+        ("index.equal", [Index(a), Index(b)]) => Bool(a == b),
+        ("index.less", [Index(a), Index(b)]) => Bool(a < b),
+        ("indices.empty", []) => {
+            policy.output(size(0, 8)?, available)?;
+            Indices(Vec::new().into())
+        }
+        ("indices.append", [Indices(ns), Index(n)]) => {
+            let len = ns
+                .len()
+                .checked_add(1)
+                .ok_or_else(|| exhausted("size-overflow"))?;
+            policy.vector_width(len, 8)?;
+            policy.output(size(len, 8)?, available)?;
+            let mut result = crate::kernels::arithmetic::reserve(len)?;
+            result.extend_from_slice(ns);
+            result.push(*n);
+            Indices(result.into())
+        }
+        ("indices.at", [Indices(ns), Index(n)]) => {
+            let n = usize::try_from(*n).map_err(|_| refused("index-bounds"))?;
+            Index(*ns.get(n).ok_or_else(|| refused("index-bounds"))?)
+        }
+        ("indices.length", [Indices(ns)]) => {
+            Index(u64::try_from(ns.len()).map_err(|_| exhausted("size-overflow"))?)
+        }
+        _ => return Err(refused("index-operands")),
     };
-    Some((|| {
-        if let Some(n) = count {
-            policy.vector_width(n, 8)?;
-        }
-        let bytes = count
-            .unwrap_or(1)
-            .checked_mul(8)
-            .and_then(|n| n.checked_add(if count.is_some() { 10 } else { 6 }))
-            .ok_or_else(|| exhausted("wire-bytes"))?;
-        policy.wire(bytes)?;
-        let mut output = crate::kernels::arithmetic::reserve(bytes)?;
-        output.extend_from_slice(b"ZKCV\x01");
-        output.push(tag);
-        match v {
-            Value::Index(n) => output.extend(n.to_le_bytes()),
-            Value::Indices(ns) => {
-                output.extend(
-                    u32::try_from(ns.len())
-                        .map_err(|_| exhausted("element-limit"))?
-                        .to_le_bytes(),
-                );
-                for n in ns.iter() {
-                    output.extend(n.to_le_bytes());
-                }
-            }
-            _ => unreachable!(),
-        }
-        Ok(output)
-    })())
+    Ok(vec![output])
 }
 
-pub(crate) fn decode(ty: PhysicalType, bytes: &[u8], policy: &Policy) -> Option<Result<Value>> {
-    let tag = match ty.kind() {
-        Type::Index => 31,
-        Type::Indices => 32,
-        _ => return None,
-    };
-    Some((|| {
-        policy.wire(bytes.len())?;
-        if bytes.get(..5) != Some(b"ZKCV\x01") || bytes.get(5) != Some(&tag) {
-            return Err(refused("wire-header"));
-        }
-        let read = |b: &[u8]| -> Result<u64> {
-            Ok(u64::from_le_bytes(
-                b.try_into().map_err(|_| refused("wire-length"))?,
-            ))
-        };
-        if tag == 31 {
-            return Ok(Value::Index(read(&bytes[6..])?));
-        }
-        let count = bytes.get(6..10).ok_or_else(|| refused("wire-length"))?;
-        let n = usize::try_from(u32::from_le_bytes(
-            count.try_into().map_err(|_| refused("wire-length"))?,
-        ))
-        .map_err(|_| exhausted("size-overflow"))?;
-        if n.checked_mul(8).and_then(|n| n.checked_add(10)) != Some(bytes.len()) {
-            return Err(refused("wire-length"));
-        }
-        policy.vector_width(n, 8)?;
-        let mut ns = crate::kernels::arithmetic::reserve(n)?;
-        for b in bytes[10..].as_chunks::<8>().0 {
-            ns.push(read(b)?);
-        }
-        Ok(Value::Indices(ns.into()))
-    })())
-}
-
-pub(crate) const OPERATIONS: &[&str] = &[
-    "index.constant",
-    "index.add",
-    "index.sub",
-    "index.mul",
-    "index.div",
-    "index.mod",
-    "index.equal",
-    "index.less",
-    "indices.empty",
-    "indices.append",
-    "indices.at",
-    "indices.length",
+pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
+    ("native/index.constant", "index.constant"),
+    ("native/index.add", "index.add"),
+    ("native/index.sub", "index.sub"),
+    ("native/index.mul", "index.mul"),
+    ("native/index.div", "index.div"),
+    ("native/index.mod", "index.mod"),
+    ("native/index.equal", "index.equal"),
+    ("native/index.less", "index.less"),
+    ("native/indices.empty", "indices.empty"),
+    ("native/indices.append", "indices.append"),
+    ("native/indices.at", "indices.at"),
+    ("native/indices.length", "indices.length"),
 ];
 
 #[cfg(test)]
 mod tests {
     use super::*;
     fn run(name: &str, args: &[Value]) -> Result<Vec<Value>> {
-        apply(name, args, &[], &Policy::default(), usize::MAX).unwrap()
+        apply(name, args, &[], &Policy::default(), usize::MAX)
     }
     #[test]
     fn arithmetic_is_checked_not_modular() {
@@ -235,25 +160,29 @@ mod tests {
             PhysicalType::default_for(LogicalType::new(Type::Indices, Identity::None).unwrap())
                 .unwrap();
         let ns = Value::Indices(vec![u64::MAX, 9, 9].into());
-        let wire = encode(&ns, &p).unwrap().unwrap();
-        let decoded = decode(ty.clone(), &wire, &p).unwrap().unwrap();
+        let backend = |policy| {
+            crate::NativeBackend::new(
+                policy,
+                crate::EntryPolicy::new(crate::Domain::new("P", "wire", "main", None), None),
+                Default::default(),
+            )
+            .unwrap()
+        };
+        let wire = backend(p).encode_native_value(&ns).unwrap();
+        let decoded = backend(p).decode_native_value(&ty, &wire).unwrap();
         assert!(matches!(decoded, Value::Indices(xs) if xs.as_ref()==[u64::MAX,9,9]));
         assert!(run("indices.at", &[ns.clone(), Value::Index(3)]).is_err());
         for n in 0..wire.len() {
-            assert!(decode(ty.clone(), &wire[..n], &p).unwrap().is_err());
+            assert!(backend(p).decode_native_value(&ty, &wire[..n]).is_err());
         }
         let mut extra = wire.clone();
         extra.push(0);
-        assert!(decode(ty.clone(), &extra, &p).unwrap().is_err());
+        assert!(backend(p).decode_native_value(&ty, &extra).is_err());
         let small = Policy {
             max_table_elements: 2,
             ..p
         };
-        assert!(decode(ty.clone(), &wire, &small).unwrap().is_err());
-        assert!(
-            apply("indices.append", &[ns, Value::Index(1)], &[], &p, 256)
-                .unwrap()
-                .is_err()
-        );
+        assert!(backend(small).decode_native_value(&ty, &wire).is_err());
+        assert!(apply("indices.append", &[ns, Value::Index(1)], &[], &p, 256).is_err());
     }
 }

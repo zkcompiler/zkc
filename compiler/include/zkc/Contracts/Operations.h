@@ -85,19 +85,6 @@ struct OperationContracts {
   bool publicReplay = false;
   bool acceptanceGuard = false;
   bool conjunction = false;
-
-  static OperationContracts replay();
-  static OperationContracts guard();
-  static OperationContracts booleanConjunction();
-  static OperationContracts transcriptObservation();
-  static OperationContracts diagonal();
-  static OperationContracts contraction();
-  static OperationContracts onCoset(CosetContract);
-  static OperationContracts exactDomainValue(DomainValueRule,
-                                             bool replay = false);
-  static OperationContracts sample(RandomnessProvider, SampleDomain,
-                                   std::optional<unsigned> bound = {},
-                                   llvm::StringRef derivedCounterpart = {});
 };
 
 /// Resolve a logical contract key, independently of physical implementation.

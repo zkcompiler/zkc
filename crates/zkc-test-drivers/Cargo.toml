@@ -1,0 +1,198 @@
+[package]
+name = "zkc-test-drivers"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+autobins = false
+
+[dependencies]
+ark-bls12-381.workspace = true
+ark-bn254.workspace = true
+ark-ec.workspace = true
+ark-ff.workspace = true
+ark-poly.workspace = true
+ark-poly-commit.workspace = true
+ark-serialize.workspace = true
+curve25519-dalek.workspace = true
+merlin.workspace = true
+num-bigint.workspace = true
+p3-baby-bear-043.workspace = true
+p3-challenger-043.workspace = true
+p3-field.workspace = true
+p3-field-043.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+sha3.workspace = true
+spongefish = { workspace = true, features = ["keccak", "zeroize"] }
+zkc-arkworks = { workspace = true, features = ["test-utils"] }
+zkc-backends = { workspace = true, features = ["test-utils"] }
+zkc-runtime.workspace = true
+zkc-test-support.workspace = true
+zkc-tools = { workspace = true, features = ["test-utils"] }
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "backend_contract_conformance"
+path = "src/backend_contract_conformance.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "contract_conformance"
+path = "src/contract_conformance.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "language_native"
+path = "src/language_native.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "linear_contractions"
+path = "src/linear_contractions.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "mathematical_native"
+path = "src/mathematical_native.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "mathematical_services"
+path = "src/mathematical_services.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "mixed_native"
+path = "src/mixed_native.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_attempts"
+path = "src/native_attempts.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_authored_transcripts"
+path = "src/native_authored_transcripts/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_boolean"
+path = "src/native_boolean.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_committed_proof"
+path = "src/native_committed_proof/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_composed_state"
+path = "src/native_composed_state/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_composition"
+path = "src/native_composition/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_domains"
+path = "src/native_domains.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_entry_completion"
+path = "src/native_entry_completion.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_iterated_proof"
+path = "src/native_iterated_proof/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_iteration"
+path = "src/native_iteration.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_joint"
+path = "src/native_joint.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_nested_data"
+path = "src/native_nested_data.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_proof"
+path = "src/native_proof/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_relation_bindings"
+path = "src/native_relation_bindings.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_setups"
+path = "src/native_setups.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_structured_proof"
+path = "src/native_structured_proof.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "public_coin"
+path = "src/public_coin.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "relation_composition"
+path = "src/relation_composition.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "resource_origins"
+path = "src/resource_origins.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "structured_math"
+path = "src/structured_math.rs"
+test = false
+bench = false

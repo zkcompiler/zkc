@@ -29,7 +29,7 @@ module { "protocol.module"() ({
 "local.binding"() {sym_name="curve_msm_17",contract="curve.msm",arguments=["bn254.g1"],implementation=""} : ()->()
 "local.binding"() {sym_name="vector_slice",contract="vector.slice",arguments=["bn254.fr"],implementation=""} : ()->()
 "local.binding"() {sym_name="bool_and",contract="bool.and",arguments=[],implementation=""} : ()->()
-relation.declare @relation {kind="external",key="example/qap-data",revision="1",signature=(!ms,!v,!v,!gs,!g2,!f,ui64)->i1,purposes=["parameter","statement","witness","parameter","parameter","parameter","parameter"]}
+relation.declare @relation {kind="external",key="example/qap-data",revision="0",signature=(!ms,!v,!v,!gs,!g2,!f,ui64)->i1,purposes=["parameter","statement","witness","parameter","parameter","parameter","parameter"]}
 local.func @numerator(%matrices:!ms,%w:!v,%shift:!f,%n:ui64)->(!v,i1) attributes {logical_origin=["numerator",[]]} {
   %zero = "algebra.exec.index_constant"() {binding=@index_constant,parameters=["0"],site="zero"} : ()->(ui64)
   %one_index = "algebra.exec.index_constant"() {binding=@index_constant,parameters=["1"],site="one_index"} : ()->(ui64)

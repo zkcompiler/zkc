@@ -109,22 +109,22 @@ example : wireRoundtrip .ristretto "round" (.round ⟨1, 2, 3⟩) = .ok true := 
 example : wireRoundtrip .koalaBear "vector" (.vector [0, 1, -1]) = .ok true := by native_decide
 example : wireRoundtrip .koalaBear "round" (.round ⟨1, 2, 3⟩) = .ok true := by native_decide
 example : (Tools.Artifact.arithmeticWire .koalaBear (.field (-1))).map Tools.Artifact.hex =
-    .ok "5a4b435601130000007f" := by native_decide
+    .ok "5a4b435600130000007f" := by native_decide
 example : (Tools.Artifact.arithmeticWire .koalaBear (.vector [1, 2])).map Tools.Artifact.hex =
-    .ok "5a4b43560114020000000100000002000000" := by native_decide
+    .ok "5a4b43560014020000000100000002000000" := by native_decide
 example : (Tools.Artifact.arithmeticWire .koalaBear (.polynomial [])).map Tools.Artifact.hex =
-    .ok "5a4b4356011500000000" := by native_decide
+    .ok "5a4b4356001500000000" := by native_decide
 
 private def koalaDecode (kind input : String) := do
   let bytes ← Tools.Artifact.unhex input
   (Tools.Artifact.decodeArithmeticWire .koalaBear kind bytes).map (numbers .koalaBear)
-example : koalaDecode "field" "5a4b435601130100007f" = .error "noncanonical-field" := by native_decide
-example : koalaDecode "field" "5a4b435601130100000000" = .error "field-width" := by native_decide
-example : koalaDecode "vector" "5a4b4356011401000000" = .error "scalar-vector-length" := by native_decide
-example : koalaDecode "polynomial" "5a4b435601150100000000000000" = .error "polynomial-normalization" := by native_decide
-example : koalaDecode "field" "5a4b4356010d01000000" = .error "wire-header" := by native_decide
+example : koalaDecode "field" "5a4b435600130100007f" = .error "noncanonical-field" := by native_decide
+example : koalaDecode "field" "5a4b435600130100000000" = .error "field-width" := by native_decide
+example : koalaDecode "vector" "5a4b4356001401000000" = .error "scalar-vector-length" := by native_decide
+example : koalaDecode "polynomial" "5a4b435600150100000000000000" = .error "polynomial-normalization" := by native_decide
+example : koalaDecode "field" "5a4b4356000d01000000" = .error "wire-header" := by native_decide
 example : (Tools.Artifact.arithmeticWire .ristretto (.field 1)).map Tools.Artifact.hex =
-    .ok "5a4b4356010d0100000000000000000000000000000000000000000000000000000000000000" := by native_decide
+    .ok "5a4b4356000d0100000000000000000000000000000000000000000000000000000000000000" := by native_decide
 
 private def decodeWire (kind : String) (tag : UInt8) (count : Nat) (xs : List Nat) (tail := ByteArray.empty) :=
   (Tools.Artifact.decodeArithmeticWire .ristretto kind
@@ -263,7 +263,7 @@ private def artifactLocation : Tools.Artifact.Location :=
   { entry := "main", binding := "root", path := [], protocol := "Protocol", role := "V", function := "Draw", operation := "draw" }
 private def artifactDescriptor : Tools.Artifact.Descriptor :=
   ⟨"main", "P", "V", [], "rng", [("Draw", "draw")], 0,
-    .arr #[.str "zkc.construction/1", .str "main", .str "P", .str "V", .arr #[], .arr #[], .str "0", .str Bindings.ristrettoTranscript, .str "normalized"]⟩
+    .arr #[.str "zkc.construction/0", .str "main", .str "P", .str "V", .arr #[], .arr #[], .str "0", .str Bindings.ristrettoTranscript, .str "normalized"]⟩
 private def artifactSource : Source :=
   ⟨.explicit [⟨"eval", "poly.univariate_evaluate", [Bindings.ristrettoScalar], ""⟩,
     ⟨"draw", "random.draw", [Bindings.ristrettoScalar], ""⟩,
@@ -276,7 +276,7 @@ private def artifactResult (outcome : Except Tools.Artifact.Failure (List Tools.
 private def artifactEvaluation : String :=
   artifactResult ((Tools.Artifact.evaluate artifactSource artifactDescriptor artifactLocation "eval" []
     [.arithmetic .ristretto (.polynomial [1, 2, 3, 4]), .arithmetic .ristretto (.field 2)]).run artifactState).1
-example : artifactEvaluation = "[[\"field:ristretto255.scalar\",\"5a4b4356010d3100000000000000000000000000000000000000000000000000000000000000\"]]" := by native_decide
+example : artifactEvaluation = "[[\"field:ristretto255.scalar\",\"5a4b4356000d3100000000000000000000000000000000000000000000000000000000000000\"]]" := by native_decide
 -- Vector masking is a source RNG operation, outside the artifact selected-challenge profile.
 example : artifactResult ((Tools.Artifact.evaluate artifactSource artifactDescriptor artifactLocation "mask" ["2"]
     [.ristrettoRng 0]).run artifactState).1 = "refused:unimplemented-validator-kernel" := by native_decide

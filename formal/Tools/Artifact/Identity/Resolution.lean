@@ -111,21 +111,21 @@ structure Carrier where
 
 def Carrier.decode (json : Json) : Result Carrier := do
   let (isLibrary, definitions, configurations, common) ← match ← Decode.array json with
-    | [.str "zkc.library/1", definitions, configurations, common] =>
+    | [.str "zkc.library/0", definitions, configurations, common] =>
         pure (true, ← Decode.array definitions limits.definitions,
           ← Decode.array configurations limits.definitions, common)
-    | .str "zkc.protocol/1" :: _ => pure (false, [], [], json)
+    | .str "zkc.protocol/0" :: _ => pure (false, [], [], json)
     | _ => throw "identity-source-version"
-  let [.str "zkc.protocol/1", bindings, functions, protocols, instances, entries] ← Decode.array common
+  let [.str "zkc.protocol/0", bindings, functions, protocols, instances, entries] ← Decode.array common
     | throw "identity-source-version"
   return ⟨isLibrary, definitions, configurations, bindings,
     ← Decode.array functions limits.definitions, ← Decode.array protocols limits.definitions,
     ← Decode.array instances limits.definitions, ← Decode.array entries limits.definitions⟩
 
 def Carrier.json (carrier : Carrier) : Json :=
-  let common := Json.arr #[.str "zkc.protocol/1", carrier.bindings, array carrier.functions,
+  let common := Json.arr #[.str "zkc.protocol/0", carrier.bindings, array carrier.functions,
     array carrier.protocols, array carrier.instances, array carrier.entries]
-  if carrier.isLibrary then .arr #[.str "zkc.library/1", array carrier.definitions,
+  if carrier.isLibrary then .arr #[.str "zkc.library/0", array carrier.definitions,
     array carrier.configurations, common] else common
 
 structure Resolution where
@@ -157,7 +157,7 @@ def Resolution.localSites (resolution : Resolution) (library : Generic.Library)
 
 def resolveDescriptor (resolution : Resolution) (library : Generic.Library)
     (json : Json) : Result Json := do
-  let [.str "zkc.construction/1", _, _, _, _, random, _, _, .str "normalized"] ← Decode.array json
+  let [.str "zkc.construction/0", _, _, _, _, random, _, _, .str "normalized"] ← Decode.array json
     | throw "identity-descriptor"
   let [rng, draws] ← Decode.array random | throw "construction-random"
   -- Concrete names and logical origins can overlap in valid source. A single
@@ -190,7 +190,7 @@ def resolveDescriptor (resolution : Resolution) (library : Generic.Library)
 /-- Receive aliases belong to the protocol selected by the named instance.
 Coverage, ownership and setup-key validity are checked after this resolution. -/
 def resolveConfiguration (resolution : Resolution) (source : Source) (json : Json) : Result Json := do
-  let [.str "zkc.public-configuration/1", _, _, receives] ← Decode.array json
+  let [.str "zkc.public-configuration/0", _, _, receives] ← Decode.array json
     | throw "public-configuration"
   let receives ← (← Decode.array receives).mapM fun record => do
     let [instanceName, role, site, key] ← Decode.array record | throw "artifact-receive-record"

@@ -28,7 +28,7 @@ LogicalResult zkc::plan::BoolConstantOp::verify() {
     llvm::consumeError(type.takeError());
     return zkc::diagnostics::emit(emitOpError(), "native-boolean-type");
   }
-  if (type->spelling() != "bool@native.bool/1")
+  if (type->spelling() != "bool@native.bool/0")
     return zkc::diagnostics::emit(emitOpError(), "native-boolean-type");
   return success();
 }

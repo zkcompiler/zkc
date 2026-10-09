@@ -11,11 +11,12 @@ fn variant(ty: &str, tag: usize, values: Vec<Value>) -> Value {
     Value::Variant(Variant::new(ty.variant_descriptor().unwrap().clone(), tag, values).unwrap())
 }
 fn bounded(policy: Policy) -> NativeBackend {
-    NativeBackend::new(policy, common::entry(None), None).unwrap()
+    NativeBackend::new(policy, common::entry(None), Default::default()).unwrap()
 }
 fn roundtrip(value: &Value) -> Vec<u8> {
     let backend = common::ark_backend(None);
     let ty = value.physical_type();
+    backend.validate_native_input(value).unwrap();
     let bytes = backend.encode_native_value(value).unwrap();
     let loaded = backend.decode_native_value(&ty, &bytes).unwrap();
     assert_eq!(backend.encode_native_value(&loaded).unwrap(), bytes);
@@ -89,7 +90,7 @@ fn complete_expected_types_frame_records_alternatives_and_dynamic_data() {
                 ],
             );
             let bytes = roundtrip(&value);
-            assert_eq!(&bytes[..10], b"ZKCV\x01\x41\0\0\0\0");
+            assert_eq!(&bytes[..10], b"ZKCV\x00\x41\0\0\0\0");
         }
     }
     for value in [
@@ -180,11 +181,11 @@ fn inactive_unsupported_payloads_do_not_inherit_wire_authority() {
     let backend = common::ark_backend(None);
     for leaf in [
         "rng:bls12-381.fr",
-        "prover_key:multilinear.kzg.bls12-381/1",
-        "verifier_key:multilinear.kzg.bls12-381/1",
+        "prover_key:multilinear.kzg.bls12-381/0",
+        "verifier_key:multilinear.kzg.bls12-381/0",
         "table:bls12-381.fr",
         "polynomial:bn254.fr",
-        "opening_state:rows.merkle-keccak256.koala-bear/1",
+        "opening_state:rows.merkle-keccak256.koala-bear/0",
     ] {
         let ty = logical("Optional", json!([["none", []], ["some", [leaf]]]));
         let value = variant(&ty, 0, vec![]);
@@ -194,7 +195,7 @@ fn inactive_unsupported_payloads_do_not_inherit_wire_authority() {
             Err(Error::Backend(_))
         ));
         assert!(matches!(
-            backend.decode_native_value(&value.physical_type(), b"ZKCV\x01\x41\0\0\0\0"),
+            backend.decode_native_value(&value.physical_type(), b"ZKCV\x00\x41\0\0\0\0"),
             Err(Error::Backend(_))
         ));
     }
@@ -273,7 +274,7 @@ fn nested_pcs_frames_require_the_authorized_setup_and_exact_metadata() {
             ["none", []],
             [
                 "some",
-                ["field:bls12-381.fr", "proof:multilinear.kzg.bls12-381/1"]
+                ["field:bls12-381.fr", "proof:multilinear.kzg.bls12-381/0"]
             ]
         ]),
     );
@@ -489,7 +490,7 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
     let state = keys.prover_key().commit(&table).unwrap();
     let ty = logical(
         "Record",
-        json!([["record", ["commitment:multilinear.kzg.bls12-381/1"]]]),
+        json!([["record", ["commitment:multilinear.kzg.bls12-381/0"]]]),
     );
     let value = variant(
         &ty,
@@ -516,11 +517,11 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
         let inputs = json!([
             ["t", t],
             ["v", value.physical_type().spelling()],
-            ["ix", "indices@native.indices/1"]
+            ["ix", "indices@native.indices/0"]
         ]);
         let origin = zkc_test_support::hex(
             &encoding::encode_tree(&json!([
-                "zkc.native-origin-template/1",
+                "zkc.native-origin-template/0",
                 "main",
                 [],
                 [],
@@ -529,14 +530,13 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
             .unwrap(),
         );
         let program = json!([
-            "zkc.program/1",
+            "zkc.program/0",
             [[
                 "observe",
                 "transcript.native.indexed.observe.data",
-                ["merlin3.bls12-381.fr64be/1", ty],
+                ["merlin3.bls12-381.fr64be/0", ty],
                 "arkworks/transcript.native.indexed.observe.data"
             ]],
-            "physical",
             [[
                 "function",
                 "observer",
@@ -560,7 +560,6 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
                 "participant",
                 "main",
                 "P",
-                [],
                 inputs,
                 [t],
                 [
@@ -579,18 +578,195 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
             "session",
             backend,
             vec![state, value.clone(), Value::Indices(vec![].into())],
-        )
-        .unwrap_or_else(|error| panic!("{}", error.error));
-        let (outcome, backend) = common::finish(runner);
-        if configured {
-            outcome.unwrap();
-        } else {
-            assert!(common::code(&outcome.unwrap_err()).contains("native-wire-setup-required"));
-        }
+        );
+        let backend = match runner {
+            Ok(runner) => {
+                assert!(configured);
+                let (outcome, backend) = common::finish(runner);
+                outcome.unwrap();
+                backend
+            }
+            Err(error) => {
+                assert!(!configured);
+                assert!(error.error.to_string().contains("unauthorized-setup"));
+                error.backend
+            }
+        };
         assert_eq!(
             backend.observe(&token).unwrap().generation,
             u64::from(configured)
         );
         assert_eq!(backend.active_frames(), 0);
     }
+}
+
+#[test]
+fn typed_variant_payloads_preserve_aggregate_group_limits() {
+    let ty = logical(
+        "Groups",
+        json!([["pair", ["groups:bls12-381.g1", "groups:bls12-381.g1"]]]),
+    );
+    let value = variant(
+        &ty,
+        0,
+        vec![Value::Groups(vec![GroupPoint::generator(); 3].into()); 2],
+    );
+    let bytes = bounded(Policy::default())
+        .encode_native_value(&value)
+        .unwrap();
+    let low = bounded(Policy {
+        max_groups: 4,
+        ..Policy::default()
+    });
+    assert_eq!(low.validate_native_input(&value).unwrap_err(), Error::Limit);
+    assert_eq!(
+        low.decode_native_value(&value.physical_type(), &bytes)
+            .unwrap_err(),
+        Error::Limit
+    );
+    let exact = bounded(Policy {
+        max_groups: 6,
+        max_wire_bytes: 0,
+        ..Policy::default()
+    });
+    exact.validate_native_input(&value).unwrap();
+}
+
+#[test]
+fn native_and_wire_collection_admission_agree_across_nested_shapes() {
+    fn sequence(values: Vec<Value>) -> Value {
+        Value::Sequence(
+            zkc_backends::Sequence::new(
+                values[0].physical_type().logical(),
+                values,
+                &Policy::default(),
+            )
+            .unwrap(),
+        )
+    }
+    let vector = Value::Vector(vec![Scalar::from(3); 3].into());
+    let groups = Value::Groups(vec![GroupPoint::generator(); 2].into());
+    let mixed = logical(
+        "Mixed",
+        json!([["payload", ["indices", "vector:bls12-381.fr"]]]),
+    );
+    let corpus = [
+        sequence(vec![sequence(vec![vector.clone(), vector.clone()]); 2]),
+        sequence(vec![groups.clone(), groups]),
+        variant(&mixed, 0, vec![Value::Indices(vec![1, 2].into()), vector]),
+    ];
+    let encoder = bounded(Policy::default());
+    for value in corpus {
+        let ty = value.physical_type();
+        let bytes = encoder.encode_native_value(&value).unwrap();
+        for elements in 0..=14 {
+            for groups in 0..=6 {
+                let backend = bounded(Policy {
+                    max_table_elements: elements,
+                    max_groups: groups,
+                    ..Policy::default()
+                });
+                assert_eq!(
+                    backend.validate_native_input(&value).is_ok(),
+                    backend.native_input_retained_bytes(&ty, &bytes).is_ok(),
+                    "{}: elements={elements}, groups={groups}",
+                    ty.spelling(),
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn host_assembly_measures_complete_type_counts_and_construction_peak() {
+    let backend = common::ark_backend(None);
+    let ty = LogicalType::parse(&logical("HostPair", json!([["pair", ["bool", "bool"]]]))).unwrap();
+    let physical = zkc_runtime::interactive::PhysicalType::default_for(ty.clone()).unwrap();
+    let a = Value::Bool(false);
+    let b = Value::Bool(true);
+    let sizes = [
+        backend.measure_native_input(&a).unwrap(),
+        backend.measure_native_input(&b).unwrap(),
+    ];
+    let measured = backend
+        .measure_native_variant(&physical, 0, &sizes)
+        .unwrap();
+    let value = Value::Variant(
+        Variant::new(ty.variant_descriptor().unwrap().clone(), 0, vec![a, b]).unwrap(),
+    );
+    assert_eq!(measured.retained_bytes(), value.retained_bytes());
+    let limited = bounded(Policy {
+        max_value_bytes: measured.retained_bytes() * 2 - 1,
+        ..Policy::default()
+    });
+    assert_eq!(
+        limited
+            .measure_native_variant(&physical, 0, &sizes)
+            .unwrap_err(),
+        Error::Limit
+    );
+    let changed = [
+        backend.measure_native_input(&Value::Index(0)).unwrap(),
+        backend.measure_native_input(&Value::Bool(false)).unwrap(),
+    ];
+    assert!(
+        backend
+            .measure_native_variant(&physical, 0, &changed)
+            .is_err()
+    );
+    assert!(
+        backend
+            .measure_native_variant(&physical, 1, &sizes)
+            .is_err()
+    );
+    assert!(
+        backend
+            .measure_native_variant(&physical, 0, &sizes[..1])
+            .is_err()
+    );
+}
+
+#[test]
+fn mixed_host_payloads_charge_wire_peak_with_retained_siblings() {
+    let backend = common::ark_backend(None);
+    let logical = LogicalType::parse(&logical(
+        "Mixed",
+        json!([["pair", ["vector:bls12-381.fr", "vector:bls12-381.fr"]]]),
+    ))
+    .unwrap();
+    let ty = zkc_runtime::interactive::PhysicalType::default_for(logical).unwrap();
+    let vector = Value::Vector(vec![Scalar::from(1); 512].into());
+    let wire = backend.encode_native_value(&vector).unwrap();
+    let sizes = [
+        backend.measure_native_input(&vector).unwrap(),
+        backend
+            .measure_native_wire(&vector.physical_type(), &wire)
+            .unwrap(),
+    ];
+    let total = backend
+        .measure_native_variant(&ty, 0, &sizes)
+        .unwrap()
+        .retained_bytes();
+    let limit = total * 2;
+    assert!(total + 3 * wire.len() > limit);
+    let bounded = bounded(Policy {
+        max_value_bytes: limit,
+        ..Policy::default()
+    });
+    // Both individual children fit. Their combined live buffers do not.
+    assert!(bounded.measure_native_input(&vector).is_ok());
+    assert!(
+        bounded
+            .measure_native_wire(&vector.physical_type(), &wire)
+            .is_ok()
+    );
+    assert_eq!(
+        bounded.measure_native_variant(&ty, 0, &sizes).unwrap_err(),
+        Error::Limit
+    );
+    let native = [
+        bounded.measure_native_input(&vector).unwrap(),
+        bounded.measure_native_input(&vector).unwrap(),
+    ];
+    assert!(bounded.measure_native_variant(&ty, 0, &native).is_ok());
 }

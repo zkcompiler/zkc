@@ -1,5 +1,10 @@
 # Evidence, requirements and use
 
+Native checker reports and use of retained results must state which of these obligations they establish.
+This chapter states shared laws; a native implementation claim needs its
+actual instance and evidence. Independent formal examples retain their own
+[model scope](../../../formal/docs/spec/README.md).
+
 A checking result states a proposition about an actual mathematical context.
 Conditional evidence retains the premises needed to use that proposition.
 Logical proof, native checker correspondence and cryptographic assumptions
@@ -95,7 +100,7 @@ These boundaries need not share a universal status enum. An input error before
 execution is not an extra protocol stop. A checker timeout is not a verifier's
 rejection. A native crash is not an automatically returned `incomplete` result.
 An explicitly modeled instruction-list `incomplete` exit follows its
-[own semantics](../profiles/realization/instruction-machine.md#embedded-machine-exits).
+[own semantics](../../../formal/docs/spec/profiles/realization/instruction-machine.md#embedded-machine-exits).
 
 ## Caller requirements
 
@@ -136,7 +141,7 @@ over that entire domain. Unresolved alternatives remain in it unless the domain
 definition or another proof excludes them. Search failure does not silently
 remove a candidate from the comparison.
 
-The selected [preparation accounting law](../profiles/compiler/factor-preparation.md#immutable-preparation-and-prices)
+The selected [preparation accounting law](../../../formal/docs/spec/profiles/compiler/factor-preparation.md#immutable-preparation-and-prices)
 gives a narrower exact comparison under its supplied prices and operational
 counts. It does not establish an unrestricted optimizer optimum or a native
 speedup without the corresponding cost model and evidence.

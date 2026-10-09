@@ -11,7 +11,7 @@ import re
 import struct
 from cases import case
 from commands import Commands
-from tools import compiler, optimizer, records
+from tools import compiler, records
 
 fields = {
     "bls12-381.fr": 52435875175126190479447740508185965837690552500527637822603658699938581184513,
@@ -30,73 +30,32 @@ def run(tool, *args, text=None, refuses=None):
 
 def digest(field, matrix):
     return hashlib.sha256(
-        json.dumps(["zkc.matrix/1", field, matrix], separators=(",", ":")).encode()
+        json.dumps(["zkc.matrix/0", field, matrix], separators=(",", ":")).encode()
     ).hexdigest()
 
 
-def source(field, attrs, requirements="requires (Field(F))"):
-    return f'''
-  use zkc::algebra::{{Matrix}};
-  use zkc::algebra;
-      fn Check<F: domain Field>(m:Matrix<F::Element>) -> (bool) {requirements} {{
-        [check] let ok = zkc::algebra::matrix_identity_check::<F>(m) attributes ({attrs});
-        return (ok);
-      }}
-      configure Concrete = Check(F="{field}");
-      protocol Main {{ roles (P); inputs (P m:Matrix<"{field}"::Element>);
-        outputs (P bool); local [call] P: let ok = Concrete(m); return (ok);
-      }}
-      instance concrete: Main {{roles (P=P);}} entry main = concrete;
-    '''
-
+def source(field, parameters):
+    return f'''!M = tensor<?x?x!algebra.field<"{field}">>
+module {{ "protocol.module"() ({{
+ "local.binding"() {{sym_name="check",contract="matrix.identity_check",arguments=["{field}"],implementation=""}} : ()->()
+ local.func @Check(%m:!M)->i1 attributes {{logical_origin=["Check",[]]}} {{
+   %ok = "algebra.exec.matrix_identity_check"(%m) {{binding=@check,parameters={json.dumps(parameters, ensure_ascii=False)},site="check"}} : (!M)->i1
+   local.return %ok : i1
+ }}
+ "protocol.func"() ({{^entry(%m:!M):
+   %ok = "protocol.local_call"(%m) {{callee=@Check,role="P",site="work"}} : (!M)->i1
+   "protocol.return"(%ok) : (i1)->()
+ }}) {{sym_name="main",function_type=(!M)->i1,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]}} : ()->()
+}}) {{profile=#protocol.profile<protocol>}} : ()->() }}'''
 
 for field in [*fields, "koala-bear.ext8-binomial3"]:
     expected = digest(field, ["4", "8", [["0", "1", "7"], ["1", "3", "11"]]])
-    text = source(field, json.dumps(expected))
-    logical = run(compiler, "protocol-import", "-", text=text)
-    assert "algebra.exec.matrix_identity_check" in logical and expected in logical
-    assert "algebra.exec.matrix_identity_check" in run(
-        optimizer, "--verify-each", "--canonicalize", "--cse", text=logical
-    )
-    physical = run(compiler, "protocol-physical-ir", "-", text=text)
-    run(optimizer, "--verify-each", text=physical)
-    plan = json.loads(run(compiler, "protocol-compile", "-", text=text))
-    assert json.loads(run(compiler, "protocol-export", "-", text=physical)) == plan
-    run(
-        compiler,
-        "protocol-import",
-        "-",
-        text=source(field, json.dumps(expected), ""),
-        refuses="generic-public-requirement",
-    )
-    for bad in [
-        [],
-        [""],
-        ["0" * 63],
-        ["0" * 65],
-        ["A" * 64],
-        ["g" * 64],
-        ["é" * 32],
-        ["0" * 63 + " "],
-        [expected, expected],
-    ]:
-        attrs = ",".join(json.dumps(a) for a in bad)
-        run(
-            compiler,
-            "protocol-import",
-            "-",
-            text=source(field, attrs),
-            refuses="interactive-kernel-parameters",
-        )
-        # Actual IR independently refuses the modified digest, not just source.
-        if len(bad) == 1:
-            changed = logical.replace(expected, bad[0])
-            run(
-                optimizer,
-                "--verify-each",
-                text=changed,
-                refuses="interactive-kernel-parameters",
-            )
+    logical = commands.verified(source(field, [expected]))
+    physical = commands.verified(logical, None, "--zkc-project-protocol", "--zkc-lower-math", "--zkc-select-physical")
+    assert expected in commands.source("protocol-export", physical)
+    for bad in [[], [""], ["0" * 63], ["0" * 65], ["A" * 64], ["g" * 64],
+                ["é" * 32], ["0" * 63 + " "], [expected, expected]]:
+        commands.verified(source(field, bad), "interactive-kernel-parameters")
 
 
 def binary(prime, rows, width=32):
@@ -124,60 +83,29 @@ def hashes(ir):
 
 directory = records()
 path = Path(directory) / "relation.r1cs"
-source_path = Path(directory) / "source.pir"
-snapshot_path = Path(directory) / "snapshot.json"
-views = [(field, "rank_one") for field in fields]
-views.append(("bls12-381.fr", "multilinear"))
-for field, view in views:
-    with case(f"{field} {view} matrix identity"):
-        prime = fields[field]
-        dimensions = ["4", "8"] if view == "multilinear" else ["3", "5"]
-        source_path.write_text(f"""
-          relation Circuit = r1cs("relation.r1cs");
-          derive Rows = {view}(Circuit, public_matrices);
-        """)
+for field, prime in fields.items():
+    with case(f"{field} normalized matrix identity"):
         rows = [
             [[(1, 7)], [(3, 11)], [(2, 13)]],
             [[(0, 2)], [(4, 5)], [(2, 17)]],
             [[(1, 19)], [], [(0, 23)]],
         ]
         path.write_bytes(binary(prime, rows))
-        canonical = run(compiler, "protocol-resolve", source_path)
-        # The source origin separately carries relation identity, while only
-        # parameters on actual identity ops carry these matrix digests.
-        ir = run(compiler, "protocol-import", "-", text=canonical)
-        actual = hashes(ir)
-        matrices = [
-            [
-                *dimensions,
-                [
-                    [str(r), str(c), str(a)]
-                    for r, row in enumerate(rows)
-                    for c, a in row[k]
-                ],
-            ]
-            for k in range(3)
-        ]
-        expected = {digest(field, matrix) for matrix in matrices}
-        assert actual == expected, (field, actual, expected)
-        snapshot_path.write_text(canonical)
-        data = json.loads(
-            run(compiler, "protocol-relation-data", snapshot_path, "Rows")
-        )
-        assert data[4] == matrices
-        # Reorder, duplicate, cancel and insert explicit zero terms before the
-        # importer normalizes. Raw byte identity changes; all matrix pins stay.
+        canonical = run(compiler, "relation-read", path)
+        actual = json.loads(run(compiler, "relation-matrices", path))
+        matrices = [["4", "8", [[str(r), str(c), str(a)] for r,row in enumerate(rows)
+                                    for c,a in row[k]]] for k in range(3)]
+        assert actual == matrices
+        ir = run(compiler, "relation-import", path)
+        assert json.loads(run(compiler, "relation-export", "-", text=ir)) == json.loads(canonical)
         raw = copy.deepcopy(rows)
         raw[0][0] = [(4, 11), (1, 9), (3, 0), (1, prime - 2), (4, prime - 11)]
         path.write_bytes(binary(prime, raw, width=(prime.bit_length() + 7) // 8))
-        normalized = run(compiler, "protocol-resolve", source_path)
-        assert normalized == canonical
-        # Coefficient-only mutation must change the generated pin at same shape.
+        assert run(compiler, "relation-read", path) == canonical
+        assert json.loads(run(compiler, "relation-matrices", path)) == matrices
         different = copy.deepcopy(rows)
         different[0][0][0] = (1, 8)
         path.write_bytes(binary(prime, different))
-        altered = run(compiler, "protocol-resolve", source_path)
-        altered_ir = run(compiler, "protocol-import", "-", text=altered)
-        assert altered != canonical and hashes(altered_ir) != actual
-
+        altered = json.loads(run(compiler, "relation-matrices", path))
+        assert {digest(field, m) for m in altered} != {digest(field, m) for m in matrices}
 print(f"matrix identity: {commands.save()} compiler/IR/normalization checks passed")

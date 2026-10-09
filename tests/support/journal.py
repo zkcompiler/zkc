@@ -1,10 +1,5 @@
 """What a test does to a tool, and what it keeps of having done it.
 
-Every test here drives tools as separate processes and judges what comes back.
-Each of them used to write that again: twenty-one versions of one function,
-differing in what bound the tool, what counted as a refusal, and what a failure
-was allowed to say. None of those differences was a choice anyone made.
-
 There are two ways a test treats a tool, and they are different enough to say
 separately. `run` is for a step the test requires: it must succeed, or it must
 refuse for the reason the test names, and anything else stops the test there.

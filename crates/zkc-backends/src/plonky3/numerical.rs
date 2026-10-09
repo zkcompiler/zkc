@@ -82,7 +82,7 @@ pub(crate) fn apply(
     invocation: &Invocation<'_>,
     policy: &Policy,
     kernels: &Kernels,
-) -> Option<Result<Vec<Value>>> {
+) -> Result<Vec<Value>> {
     if !matches!(
         name,
         "poly.coset_evaluate"
@@ -93,9 +93,9 @@ pub(crate) fn apply(
             | "poly.even_odd_fold"
             | "poly.opening_quotient"
     ) {
-        return None;
+        return Err(refused("kernel-operands"));
     }
-    Some(match field {
+    match field {
         Some(Identity::KoalaBear) => {
             execute::<KoalaBear>(name, args, policy, invocation.max_output_bytes, kernels)
         }
@@ -103,7 +103,7 @@ pub(crate) fn apply(
             execute::<KoalaBearExt8>(name, args, policy, invocation.max_output_bytes, kernels)
         }
         _ => Err(refused("coset-field")),
-    })
+    }
 }
 fn execute<E: Family>(
     name: &str,
@@ -202,37 +202,53 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             &[Polynomial, Field, Index],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/poly.coset_evaluate",
+            "plonky3/poly.coset_evaluate",
+        ]),
         poly::operation(
             "poly.coset_interpolate",
             &[Vector, Field],
             &[Polynomial],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/poly.coset_interpolate",
+            "plonky3/poly.coset_interpolate",
+        ]),
         poly::operation(
             "poly.domain_point",
             &[Field, Index, Index],
             &[Field],
             AttributeRule::None,
-        ),
-        poly::operation("poly.domain_root", &[Index], &[Field], AttributeRule::None),
+        )
+        .implemented_by(&["arkworks/poly.domain_point", "plonky3/poly.domain_point"]),
+        poly::operation("poly.domain_root", &[Index], &[Field], AttributeRule::None)
+            .implemented_by(&["arkworks/poly.domain_root", "plonky3/poly.domain_root"]),
         poly::operation(
             "poly.domain_points",
             &[Field, Index],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/poly.domain_points", "plonky3/poly.domain_points"]),
         poly::operation(
             "poly.even_odd_fold",
             &[Vector, Field, Field],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&["arkworks/poly.even_odd_fold", "plonky3/poly.even_odd_fold"]),
         poly::operation(
             "poly.opening_quotient",
             &[Vector, Field, Field, Field],
             &[Vector],
             AttributeRule::None,
-        ),
+        )
+        .implemented_by(&[
+            "arkworks/poly.opening_quotient",
+            "plonky3/poly.opening_quotient",
+        ]),
     ]
 };

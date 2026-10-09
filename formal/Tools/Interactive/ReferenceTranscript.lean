@@ -47,7 +47,7 @@ def transcriptOrigin (location : Location) (kind : String) (attributes : List St
   ensure (Bindings.validTranscriptAttributes attributes) "transcript-origin"
   -- Like the selected contract, excludes session, executor role and local frame.
   -- Attribute correspondence is a separate construction judgment.
-  Tools.Artifact.treeBytes (.arr #[.str "zkc.logical-origin/1", .str location.entry,
+  Tools.Artifact.treeBytes (.arr #[.str "zkc.logical-origin/0", .str location.entry,
     .str location.scope.binding, .arr location.interactionPath,
     .arr ((kind :: attributes).map Json.str).toArray])
 

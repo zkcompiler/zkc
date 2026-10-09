@@ -1,11 +1,12 @@
 #include "../lib/Conversion/Bindings.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
+#include "support/MathematicalFixture.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Translation/Protocol.h"
+#include "zkc/Transforms/Protocol.h"
 #include <tuple>
 #include <type_traits>
 
@@ -35,84 +36,103 @@ void reject(Error error, StringRef code) {
   auto message = toString(std::move(error));
   require(namesIdentifier(message, code), "unexpected refusal: " + message);
 }
-template <typename T> source::Instruction ins(std::string site, T value) {
-  return {{}, std::move(site), std::move(value)};
+std::string layouts(bool fixed = true) {
+  auto text = mathematicalFixture(R"(
+"local.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+"local.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation=""} : ()->()
+)",
+                                  "%a:!T,%r:!F", "%a,%r", "!T,!F", "!T", R"(
+%x = "poly.exec.fold"(%a,%r) {binding=@msb,site="first",parameters=[]} : (!T,!F)->!T
+%q = "poly.exec.fold"(%x,%r) {binding=@msb,site="same",parameters=[]} : (!T,!F)->!T
+%y = "poly.exec.fold"(%x,%r) {binding=@dense,site="left",parameters=[]} : (!T,!F)->!T
+%z = "poly.exec.fold"(%x,%r) {binding=@dense,site="right",parameters=[]} : (!T,!F)->!T
+local.return %q : !T
+)",
+                                  2);
+  if (!fixed)
+    text = replaceText(text, "arkworks-msb/poly.fold", "");
+  return "!F = !algebra.field<\"bls12-381.fr\">\n!T = "
+         "!poly.multilinear<\"bls12-381.fr\">\n" +
+         text;
 }
-source::Instruction call(std::string site, std::string binding,
-                         source::Names inputs, std::string output) {
-  return ins(
-      std::move(site),
-      source::Operation{
-          std::move(binding), {}, {}, std::move(inputs), {std::move(output)}});
-}
-source::Participants subject(std::vector<source::OperationBinding> bindings,
-                             source::Function function) {
-  source::Participants result;
-  result.bindings = std::move(bindings);
-  function.name = "Work";
-  function.origin = source::LogicalOrigin{"Work", {}};
-  source::Participant participant;
-  participant.name = "participant";
-  participant.instance = "instance";
-  participant.role = "P";
-  participant.arguments = function.arguments;
-  participant.results = function.results;
-  source::Names inputs, outputs;
-  for (const auto &arg : function.arguments)
-    inputs.push_back(arg.name);
-  for (size_t i = 0; i < function.results.size(); ++i)
-    outputs.push_back("result" + std::to_string(i));
-  participant.body = {
-      ins("work", source::LocalCall{"", "Work", inputs, outputs}),
-      ins("", source::Return{outputs})};
-  result.functions = {std::move(function)};
-  result.participants = {std::move(participant)};
-  result.entries = {{{}, "main", {{"P", "participant"}}}};
-  return result;
-}
-source::Participants layouts(bool fixed = true) {
-  source::Function function;
-  function.arguments = {{"a", "table:bls12-381.fr"},
-                        {"r", "field:bls12-381.fr"}};
-  function.results = {"table:bls12-381.fr"};
-  function.body = source::Body{call("first", "msb", {"a", "r"}, "x"),
-                               call("same", "msb", {"x", "r"}, "q"),
-                               call("left", "dense", {"x", "r"}, "y"),
-                               call("right", "dense", {"x", "r"}, "z"),
-                               ins("", source::Return{{"q"}})};
-  return subject(
-      {{{},
-        "msb",
-        {"poly.fold", {"bls12-381.fr"}, fixed ? "arkworks-msb/poly.fold" : ""}},
-       {{}, "dense", {"poly.fold", {"bls12-381.fr"}, ""}}},
-      std::move(function));
-}
-source::Participants contractions(bool group = false) {
-  source::Function function;
+std::string contractions(bool group = false) {
+  auto text =
+      mathematicalFixture(R"(
+"local.binding"() {sym_name="map",contract="vector.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"local.binding"() {sym_name="reduce",contract="vector.dot",arguments=["bls12-381.fr"],implementation=""} : ()->()
+)",
+                          "%w:!V,%f:!V,%v:!A", "%w,%f,%v", "!V,!V,!A", "!R", R"(
+%mapped = "algebra.exec.vector_mul"(%f,%v) {binding=@map,site="map",parameters=[]} : (!V,!A)->!A
+%a = "algebra.exec.vector_dot"(%w,%mapped) {binding=@reduce,site="first",parameters=[]} : (!V,!A)->!R
+%b = "algebra.exec.vector_dot"(%w,%mapped) {binding=@reduce,site="second",parameters=[]} : (!V,!A)->!R
+local.return %b : !R
+)",
+                          3);
+  if (group) {
+    text = replaceText(text, "bls12-381.fr", "ristretto255.group");
+    text = replaceText(text, "vector.mul", "curve.scale_each");
+    text = replaceText(text, "vector.dot", "curve.msm");
+    text = replaceText(text, "algebra.exec.vector_mul",
+                       "algebra.exec.group_scale_each");
+    text =
+        replaceText(text, "algebra.exec.vector_dot", "algebra.exec.group_msm");
+  }
   std::string scalar = group ? "ristretto255.scalar" : "bls12-381.fr";
-  std::string values =
-      group ? "groups:ristretto255.group" : "vector:bls12-381.fr";
-  function.arguments = {
-      {"w", "vector:" + scalar}, {"f", "vector:" + scalar}, {"v", values}};
-  function.results = {group ? "group:ristretto255.group"
-                            : "field:bls12-381.fr"};
-  function.body = source::Body{call("map", "map", {"f", "v"}, "mapped"),
-                               call("first", "reduce", {"w", "mapped"}, "a"),
-                               call("second", "reduce", {"w", "mapped"}, "b"),
-                               ins("", source::Return{{"b"}})};
-  std::string identity = group ? "ristretto255.group" : "bls12-381.fr";
-  return subject(
-      {{{}, "map", {group ? "curve.scale_each" : "vector.mul", {identity}, ""}},
-       {{}, "reduce", {group ? "curve.msm" : "vector.dot", {identity}, ""}}},
-      std::move(function));
+  return "!V = tensor<?x!algebra.field<\"" + scalar + "\">>\n!A = " +
+         (group ? "tensor<?x!algebra.group<\"ristretto255.group\">>"
+                : "tensor<?x!algebra.field<\"bls12-381.fr\">>") +
+         "\n!R = " +
+         (group ? "!algebra.group<\"ristretto255.group\">"
+                : "!algebra.field<\"bls12-381.fr\">") +
+         "\n" + text;
 }
-source::Participants arithmetic(std::string identity = "bls12-381.fr") {
-  source::Function function;
-  function.arguments = {{"a", "field:" + identity}, {"b", "field:" + identity}};
-  function.results = {"field:" + identity};
-  function.body = source::Body{call("add", "add", {"a", "b"}, "c"),
-                               ins("", source::Return{{"c"}})};
-  return subject({{{}, "add", {"field.add", {identity}, ""}}}, function);
+std::string arithmetic(std::string identity = "bls12-381.fr") {
+  return "!F = !algebra.field<\"" + identity + "\">\n" +
+         mathematicalFixture(
+             "\"local.binding\"() "
+             "{sym_name=\"add\",contract=\"field.add\",arguments=[\"" +
+                 identity + "\"],implementation=\"\"} : ()->()",
+             "%a:!F,%b:!F", "%a,%b", "!F,!F", "!F", R"(
+%c = "algebra.exec.field_add"(%a,%b) {binding=@add,site="add",parameters=[]} : (!F,!F)->!F
+local.return %c : !F
+)",
+             2);
+}
+std::string orderedCrossings() {
+  return R"(!F = !algebra.field<"bls12-381.fr">
+!T = !poly.multilinear<"bls12-381.fr">
+)" + mathematicalFixture(R"(
+"local.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.product_sum"} : ()->()
+"local.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
+)",
+                         "%a:!T,%b:!T,%allowed:i1", "%a,%b,%allowed",
+                         "!T,!T,i1", "!F", R"(
+"local.exec.require"(%allowed) {binding=@guard,site="before",parameters=[]} : (i1)->()
+%value = "poly.exec.product_sum"(%a,%b) {binding=@product,site="product",parameters=[]} : (!T,!T)->!F
+"local.exec.require"(%allowed) {binding=@guard,site="after",parameters=[]} : (i1)->()
+local.return %value : !F
+)",
+                         3);
+}
+std::string nestedLayouts() {
+  return R"(!F = !algebra.field<"bls12-381.fr">
+!T = !poly.multilinear<"bls12-381.fr">
+)" + mathematicalFixture(R"(
+"local.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+)",
+                         "%a:!T,%r:!F,%condition:i1", "%a,%r,%condition",
+                         "!T,!F,i1", "!T", R"(
+%x = "poly.exec.fold"(%a,%r) {binding=@fold,site="outer",parameters=[]} : (!T,!F)->!T
+%z = "local.if"(%condition,%x,%r) ({^left(%leftTable:!T,%leftScalar:!F):
+  %y = "poly.exec.fold"(%leftTable,%leftScalar) {binding=@fold,site="inner",parameters=[]} : (!T,!F)->!T
+  "local.yield"(%y) : (!T)->()
+}, {^right(%rightTable:!T,%rightScalar:!F):
+  %y = "poly.exec.fold"(%rightTable,%rightScalar) {binding=@fold,site="other",parameters=[]} : (!T,!F)->!T
+  "local.yield"(%y) : (!T)->()
+}) {site="choose"} : (i1,!T,!F)->!T
+local.return %z : !T
+)",
+                         3);
 }
 OperationDecision &site(PhysicalPlan &plan, ModuleOp module, StringRef name) {
   auto ops = physicalPlanOperations(module);
@@ -184,9 +204,67 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  auto refusedSelection = [&](ModuleOp module, StringRef code) {
+    auto before = printed(module);
+    std::vector<std::string> codes;
+    ScopedDiagnosticHandler capture(&context, [&](Diagnostic &diagnostic) {
+      for (const auto &refusal : diagnostics::refusals(diagnostic))
+        codes.push_back(refusal.code);
+      return success();
+    });
+    LinearContractionStats stats;
+    stats.selectedPairs = 123;
+    require(failed(lowerPhysical(module, {}, false, &stats)),
+            "invalid selection input accepted");
+    require(codes == std::vector<std::string>{code.str()},
+            "selection refusal changed");
+    require(printed(module) == before && stats.selectedPairs == 0,
+            "failed public selection changed input or retained statistics");
+  };
+  for (StringRef source : {"module {}", "module { module {} module {} }"})
+    cases.run("physical selection requires one root: " + source, [&] {
+      auto module = parseSourceString<ModuleOp>(source, &context);
+      require(bool(module), "wrapper fixture parse");
+      refusedSelection(*module, "interactive-module-count");
+    });
+  cases.run("physical selection rejects a non-protocol root", [&] {
+    auto module = parseSourceString<ModuleOp>("module { module {} }", &context);
+    require(bool(module), "wrapper fixture parse");
+    refusedSelection(*module, "interactive-module");
+  });
+  for (bool project : {false, true})
+    cases.run(project ? "physical selection rejects participant mathematics"
+                      : "physical selection rejects common mathematics",
+              [&] {
+                auto module = parseSourceString<ModuleOp>(layouts(), &context);
+                require(bool(module), "mathematical fixture parse");
+                if (project) {
+                  PassManager pipeline(&context);
+                  pipeline.addPass(createProjectProtocolPass(false));
+                  require(succeeded(pipeline.run(*module)), "projection");
+                }
+                refusedSelection(*module, "interactive-module");
+              });
+  cases.run("physical selection admits exec and refuses reselection", [&] {
+    auto module = take(executableFixture(layouts(), context));
+    require(succeeded(lowerPhysical(*module)), "physical selection");
+    require(succeeded(verify(*module)), "selected candidate admission");
+    refusedSelection(*module, "interactive-physical-stage");
+  });
+  for (bool extraRoot : {false, true})
+    cases.run(extraRoot ? "execution admission precedes wrapper refusal"
+                        : "physical selection still admits local definitions",
+              [&] {
+                auto module = take(executableFixture(layouts(), context));
+                function(*module)->removeAttr("logical_origin");
+                if (extraRoot)
+                  module->getBody()->push_back(
+                      ModuleOp::create(module->getLoc()).getOperation());
+                refusedSelection(*module, "binding-logical-origin");
+              });
   cases.run(
       "mixed layouts, per-use crossing order and immutable checked copy", [&] {
-        auto module = take(importModule(layouts(), context));
+        auto module = take(executableFixture(layouts(), context));
         auto original = printed(*module);
         auto plan = take(proposePhysical(*module));
         require(printed(*module) == original, "proposal mutated input");
@@ -232,32 +310,32 @@ int main() {
                 "two direct declarations shared by four uses");
       });
   cases.run("missing operation", [&] {
-    auto module = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
     auto plan = take(proposePhysical(*module));
     plan.operations.pop_back();
     refusedMutation(*module, plan, "binding-plan-coverage");
   });
   cases.run("duplicate or reordered operation", [&] {
-    auto module = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
     auto plan = take(proposePhysical(*module));
     plan.operations[1] = plan.operations[0];
     refusedMutation(*module, plan, "binding-plan-coverage");
   });
   cases.run("missing conversion", [&] {
-    auto module = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
     auto plan = take(proposePhysical(*module));
     site(plan, *module, "left").conversions.clear();
     refusedMutation(*module, plan, "binding-no-conversion");
   });
   cases.run("wrong conversion endpoint", [&] {
-    auto module = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
     auto plan = take(proposePhysical(*module));
     auto &conversion = site(plan, *module, "left").conversions.front();
     conversion.to = conversion.from;
     refusedMutation(*module, plan, "binding-no-conversion");
   });
   cases.run("wrong conversion operand", [&] {
-    auto module = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
     auto plan = take(proposePhysical(*module));
     site(plan, *module, "left").conversions.front().operand = 1;
     refusedMutation(*module, plan, "binding-no-conversion");
@@ -265,7 +343,7 @@ int main() {
   cases.run(
       "forged binding with another operation and identical physical ports",
       [&] {
-        auto module = take(importModule(arithmetic(), context));
+        auto module = take(executableFixture(arithmetic(), context));
         auto plan = take(proposePhysical(*module));
         auto forged = plan.bindings.front();
         forged.binding.name = "forged";
@@ -283,7 +361,7 @@ int main() {
         refusedMutation(*module, plan, "binding-operation");
       });
   cases.run("source contract mutation cannot hide behind unchanged ports", [&] {
-    auto module = take(importModule(arithmetic(), context));
+    auto module = take(executableFixture(arithmetic(), context));
     auto plan = take(proposePhysical(*module));
     plan.bindings.front().binding.application.contract = "field.mul";
     plan.bindings.front().binding.application.implementation =
@@ -291,19 +369,19 @@ int main() {
     refusedMutation(*module, plan, "binding-operation");
   });
   cases.run("nominal arguments cannot be substituted", [&] {
-    auto module = take(importModule(arithmetic(), context));
+    auto module = take(executableFixture(arithmetic(), context));
     auto plan = take(proposePhysical(*module));
     plan.bindings.front().binding.application.arguments = {"bn254.fr"};
     refusedMutation(*module, plan, "binding-operation");
   });
   cases.run("source fixedness is recomputed", [&] {
-    auto module = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
     auto plan = take(proposePhysical(*module));
     plan.bindings.front().fixed = false;
     refusedMutation(*module, plan, "binding-selection-conflict");
   });
   cases.run("request fixedness is recomputed", [&] {
-    auto module = take(importModule(layouts(false), context));
+    auto module = take(executableFixture(layouts(false), context));
     auto plan = take(proposePhysical(*module, installedCandidates(),
                                      {{"msb", "arkworks-msb/poly.fold"}}));
     plan.bindings.front().binding.application.implementation =
@@ -311,7 +389,7 @@ int main() {
     refusedMutation(*module, plan, "binding-selection-conflict");
   });
   cases.run("stale attribute and materialization rejection", [&] {
-    auto module = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
     auto plan = take(proposePhysical(*module));
     auto checked = take(validatePhysical(*module, plan));
     function(*module)->setAttr("changed", UnitAttr::get(&context));
@@ -321,13 +399,13 @@ int main() {
     require(printed(*module) == before, "stale application mutated input");
   });
   cases.run("erased operation and values never dereferenced", [&] {
-    auto module = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
     auto plan = take(proposePhysical(*module));
     function(*module)->erase();
     refusedMutation(*module, plan, "binding-stale-selection");
   });
   cases.run("structurally identical replacement is stale", [&] {
-    auto module = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
     auto plan = take(proposePhysical(*module));
     auto old = function(*module);
     auto *copy = old->clone();
@@ -336,15 +414,15 @@ int main() {
     refusedMutation(*module, plan, "binding-stale-selection");
   });
   cases.run("separate equal module is stale", [&] {
-    auto module = take(importModule(layouts(), context));
-    auto other = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
+    auto other = take(executableFixture(layouts(), context));
     auto plan = take(proposePhysical(*module));
     refusedMutation(*other, plan, "binding-stale-selection");
   });
   cases.run(
       "test provider candidate order, valid installed conversion only", [&] {
         TestCandidates catalog;
-        auto module = take(importModule(layouts(false), context));
+        auto module = take(executableFixture(layouts(false), context));
         auto plan = take(proposePhysical(*module, catalog));
         require(plan.bindings.front().binding.application.implementation ==
                     "arkworks-msb/poly.fold",
@@ -367,7 +445,7 @@ int main() {
   cases.run(
       "unavailable conversion fails read-only proposal and validation", [&] {
         TestCandidates catalog;
-        auto module = take(importModule(layouts(), context));
+        auto module = take(executableFixture(layouts(), context));
         auto before = printed(*module);
         auto plan = take(proposePhysical(*module, catalog));
         catalog.available = false;
@@ -385,7 +463,7 @@ int main() {
                field),
            "binding-no-conversion");
     auto from =
-        take(parseBoundType("table:bls12-381.fr@arkworks.mle-lsb/1", true));
+        take(parseBoundType("table:bls12-381.fr@arkworks.mle-lsb/0", true));
     auto to = from;
     to.identity = "bn254.fr";
     reject(checkDirectConversion(
@@ -396,7 +474,7 @@ int main() {
            "binding-no-conversion");
   });
   cases.run("Plonky3 compatible nominal operation retains default", [&] {
-    auto module = take(importModule(arithmetic("koala-bear"), context));
+    auto module = take(executableFixture(arithmetic("koala-bear"), context));
     auto plan = take(proposePhysical(*module));
     require(plan.bindings.front().binding.application.implementation ==
                 "plonky3/field.add",
@@ -410,7 +488,7 @@ int main() {
         group ? "group contraction complete producer and consumers"
               : "field contraction complete producer and consumers",
         [&] {
-          auto module = take(importModule(contractions(group), context));
+          auto module = take(executableFixture(contractions(group), context));
           auto plan =
               take(proposePhysical(*module, installedCandidates(), {}, true));
           require(plan.contractions.size() == 1 &&
@@ -460,16 +538,8 @@ int main() {
   });
   cases.run(
       "logical roles survive absence of an installed diagonal layout", [&] {
-        auto source = contractions();
-        for (auto &binding : source.bindings)
-          binding.application.arguments = {"koala-bear"};
-        for (auto &argument : source.functions.front().arguments)
-          argument.type = "vector:koala-bear";
-        source.functions.front().results = {"field:koala-bear"};
-        source.participants.front().arguments =
-            source.functions.front().arguments;
-        source.participants.front().results = source.functions.front().results;
-        auto module = take(importModule(source, context));
+        auto source = replaceText(contractions(), "bls12-381.fr", "koala-bear");
+        auto module = take(executableFixture(source, context));
         LinearContractionStats opportunities;
         require(
             findLinearContractions(function(*module), opportunities).size() ==
@@ -488,24 +558,24 @@ int main() {
         require(succeeded(verify(*module)), "dense fallback verifies");
       });
   for (bool group : {false, true}) {
-    cases.run(group ? "group policy skips uninstalled and dense preferences"
-                    : "field policy skips uninstalled and dense preferences",
-              [&] {
-                auto module = take(importModule(contractions(group), context));
-                TestCandidates policy;
-                policy.invalidDiagonalFirst = true;
-                auto plan = take(proposePhysical(*module, policy, {}, true));
-                require(plan.contractions.size() == 1,
-                        "installed diagonal candidate chosen");
-                auto checked = take(validatePhysical(*module, plan, policy));
-                accept(materializePhysical(*module, checked));
-                require(succeeded(verify(*module)),
-                        "installed choice materializes");
-              });
+    cases.run(
+        group ? "group policy skips uninstalled and dense preferences"
+              : "field policy skips uninstalled and dense preferences",
+        [&] {
+          auto module = take(executableFixture(contractions(group), context));
+          TestCandidates policy;
+          policy.invalidDiagonalFirst = true;
+          auto plan = take(proposePhysical(*module, policy, {}, true));
+          require(plan.contractions.size() == 1,
+                  "installed diagonal candidate chosen");
+          auto checked = take(validatePhysical(*module, plan, policy));
+          accept(materializePhysical(*module, checked));
+          require(succeeded(verify(*module)), "installed choice materializes");
+        });
   }
   for (const auto &contract : {"vector.mul", "vector.dot"}) {
     cases.run(std::string("withheld diagonal alternative: ") + contract, [&] {
-      auto module = take(importModule(contractions(), context));
+      auto module = take(executableFixture(contractions(), context));
       TestCandidates policy;
       policy.withheldDiagonalContract = contract;
       auto plan = take(proposePhysical(*module, policy, {}, true));
@@ -520,7 +590,7 @@ int main() {
   }
   cases.run(
       "dense contracts and complete ports cannot forge a diagonal group", [&] {
-        auto module = take(importModule(contractions(), context));
+        auto module = take(executableFixture(contractions(), context));
         TestCandidates policy;
         policy.invalidDiagonalFirst =
             true; // Dense candidates are available but illegal here.
@@ -547,7 +617,7 @@ int main() {
         refuses(validatePhysical(*module, plan, policy), "binding-contraction");
       });
   cases.run("diagonal output does not waive complete factor port checks", [&] {
-    auto module = take(importModule(contractions(), context));
+    auto module = take(executableFixture(contractions(), context));
     auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
     auto &producer = site(plan, *module, "map");
     producer.inputs[0] = producer.outputs[0];
@@ -555,7 +625,7 @@ int main() {
   });
   cases.run(
       "uninstalled diagonal mutation cannot be authorized by policy", [&] {
-        auto module = take(importModule(contractions(), context));
+        auto module = take(executableFixture(contractions(), context));
         TestCandidates policy;
         policy.invalidDiagonalFirst = true;
         auto plan = take(proposePhysical(*module, policy, {}, true));
@@ -567,7 +637,7 @@ int main() {
       });
   cases.run(
       "explicit diagonals ignore optional preferences and automatic flag", [&] {
-        auto module = take(importModule(contractions(), context));
+        auto module = take(executableFixture(contractions(), context));
         TestCandidates policy;
         policy.diagonalAvailable = false;
         auto plan =
@@ -583,32 +653,32 @@ int main() {
                 "explicit installed diagonals verify");
       });
   cases.run("contraction missing use", [&] {
-    auto module = take(importModule(contractions(), context));
+    auto module = take(executableFixture(contractions(), context));
     auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
     plan.contractions.front().consumers.pop_back();
     refusedMutation(*module, plan, "binding-contraction");
   });
   cases.run("contraction missing producer group", [&] {
-    auto module = take(importModule(contractions(), context));
+    auto module = take(executableFixture(contractions(), context));
     auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
     plan.contractions.clear();
     refusedMutation(*module, plan, "binding-contraction");
   });
   cases.run("contraction duplicate consumer", [&] {
-    auto module = take(importModule(contractions(), context));
+    auto module = take(executableFixture(contractions(), context));
     auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
     plan.contractions.front().consumers[1] =
         plan.contractions.front().consumers[0];
     refusedMutation(*module, plan, "binding-contraction");
   });
   cases.run("contraction mismatched producer", [&] {
-    auto module = take(importModule(contractions(), context));
+    auto module = take(executableFixture(contractions(), context));
     auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
     plan.contractions.front().producer = plan.contractions.front().consumers[0];
     refusedMutation(*module, plan, "binding-contraction");
   });
   cases.run("fixed consumer preflights the entire group", [&] {
-    auto module = take(importModule(contractions(), context));
+    auto module = take(executableFixture(contractions(), context));
     auto plan =
         take(proposePhysical(*module, installedCandidates(),
                              {{"reduce", "arkworks/vector.dot"}}, true));
@@ -628,8 +698,15 @@ int main() {
   });
   cases.run("fixed producer preflights the entire group", [&] {
     auto source = contractions();
-    source.bindings.front().application.implementation = "arkworks/vector.mul";
-    auto module = take(importModule(source, context));
+    source = replaceText(source, "implementation=\"\"",
+                         "implementation=\"arkworks/vector.mul\"");
+    source =
+        replaceText(source,
+                    "sym_name=\"reduce\",contract=\"vector.dot\",arguments=["
+                    "\"bls12-381.fr\"],implementation=\"arkworks/vector.mul\"",
+                    "sym_name=\"reduce\",contract=\"vector.dot\",arguments=["
+                    "\"bls12-381.fr\"],implementation=\"\"");
+    auto module = take(executableFixture(source, context));
     auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
     require(plan.contractions.empty() && plan.bindings.size() == 2,
             "source-fixed producer keeps all uses dense");
@@ -637,22 +714,24 @@ int main() {
   });
   cases.run("all-uses escape keeps group dense", [&] {
     auto source = contractions();
-    auto &function = source.functions.front();
-    function.results = {"vector:bls12-381.fr"};
-    function.body->back() = ins("", source::Return{{"mapped"}});
-    source.participants.front().results = function.results;
-    auto module = take(importModule(source, context));
+    source = replaceText(source, "local.return %b : !R",
+                         "local.return %mapped : !A");
+    source = replaceText(source, ")->!R attributes", ")->!A attributes");
+    source = replaceText(source, "(!V,!V,!A)->!R", "(!V,!V,!A)->!A");
+    source = replaceText(source, "(%out) : (!R)", "(%out) : (!A)");
+    auto module = take(executableFixture(source, context));
     auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
     require(plan.contractions.empty(), "escaping producer is dense");
     take(validatePhysical(*module, plan));
   });
   cases.run("explicit diagonal escape rejected before materialization", [&] {
     auto source = contractions();
-    auto &function = source.functions.front();
-    function.results = {"vector:bls12-381.fr"};
-    function.body->back() = ins("", source::Return{{"mapped"}});
-    source.participants.front().results = function.results;
-    auto module = take(importModule(source, context));
+    source = replaceText(source, "local.return %b : !R",
+                         "local.return %mapped : !A");
+    source = replaceText(source, ")->!R attributes", ")->!A attributes");
+    source = replaceText(source, "(!V,!V,!A)->!R", "(!V,!V,!A)->!A");
+    source = replaceText(source, "(%out) : (!R)", "(%out) : (!A)");
+    auto module = take(executableFixture(source, context));
     auto before = printed(*module);
     // Dense return has no installed representation conversion for a view.
     refuses(proposePhysical(*module, installedCandidates(),
@@ -664,50 +743,61 @@ int main() {
   });
   cases.run("two slots using a producer keep group dense", [&] {
     auto source = contractions();
-    source.functions.front().body->at(1).get<source::Operation>()->inputs[0] =
-        "mapped";
-    auto module = take(importModule(source, context));
+    source = replaceText(source, "(%w,%mapped)", "(%mapped,%mapped)");
+    auto module = take(executableFixture(source, context));
     auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
     require(plan.contractions.empty(),
             "values cannot occupy coefficients slot");
     take(validatePhysical(*module, plan));
   });
-  cases.run(
-      "declaration budget reserves conversions before keeping contractions",
-      [&] {
-        auto source = contractions();
-        auto foldSource = layouts();
-        foldSource.functions.front().name = "Fold";
-        foldSource.functions.front().origin = source::LogicalOrigin{"Fold", {}};
-        source.functions.push_back(foldSource.functions.front());
-        append_range(source.bindings, foldSource.bindings);
-        // Three clones would leave 4095 declarations, then two real relayout
-        // declarations would overflow. The whole group must remain dense.
-        while (source.bindings.size() < 4092)
-          source.bindings.push_back(
-              {{},
-               "unused" + std::to_string(source.bindings.size()),
-               {"field.add", {"bls12-381.fr"}, ""}});
-        auto module = take(importModule(source, context));
-        auto plan =
-            take(proposePhysical(*module, installedCandidates(), {}, true));
-        require(plan.contractions.empty() && plan.bindings.size() == 4094,
-                "conversion-aware atomic dense fallback");
-        auto checked = take(validatePhysical(*module, plan));
-        accept(materializePhysical(*module, checked));
-        require(succeeded(verify(*module)),
-                "budget-aware result is admissible");
-      });
+  cases.run("declaration budget reserves conversions before contractions", [&] {
+    auto module = take(executableFixture(contractions(), context));
+    auto folds = take(executableFixture(layouts(), context));
+    auto root =
+        cast<protocol_ir::ProtocolModuleOp>(&module->getBody()->front());
+    auto foldRoot =
+        cast<protocol_ir::ProtocolModuleOp>(&folds->getBody()->front());
+    for (auto &operation : foldRoot.getBody().front()) {
+      if (auto local = dyn_cast<zkc::local::FuncOp>(operation)) {
+        auto *clone = local->clone();
+        clone->setAttr("sym_name", StringAttr::get(&context, "Fold"));
+        OpBuilder builder(&context);
+        clone->setAttr("logical_origin",
+                       builder.getArrayAttr({builder.getStringAttr("Fold"),
+                                             builder.getArrayAttr({})}));
+        root.getBody().front().push_back(clone);
+      } else if (isa<zkc::local::OperationBindingOp>(operation)) {
+        root.getBody().front().push_back(operation.clone());
+      }
+    }
+    auto binding = *root.getBody()
+                        .front()
+                        .getOps<zkc::local::OperationBindingOp>()
+                        .begin();
+    for (unsigned i = 4; i < 4092; ++i) {
+      auto *clone = binding->clone();
+      clone->setAttr("sym_name",
+                     StringAttr::get(&context, "unused" + std::to_string(i)));
+      root.getBody().front().push_back(clone);
+    }
+    require(succeeded(verify(*module)), "native budget fixture formation");
+    auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
+    require(plan.contractions.empty() && plan.bindings.size() == 4094,
+            "conversion-aware atomic dense fallback");
+    auto checked = take(validatePhysical(*module, plan));
+    accept(materializePhysical(*module, checked));
+    require(succeeded(verify(*module)), "budget-aware result is admitted");
+  });
   cases.run("identical input and choices produce identical output", [&] {
-    auto first = take(importModule(layouts(), context));
-    auto second = take(importModule(layouts(), context));
+    auto first = take(executableFixture(layouts(), context));
+    auto second = take(executableFixture(layouts(), context));
     require(succeeded(lowerBoundPhysical(*first, {}, false, nullptr)) &&
                 succeeded(lowerBoundPhysical(*second, {}, false, nullptr)),
             "transactional planning");
     require(printed(*first) == printed(*second), "deterministic output");
   });
   cases.run("failed transaction preserves exact input and statistics", [&] {
-    auto module = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
     auto before = printed(*module);
     LinearContractionStats stats;
     stats.selectedPairs = 123;
@@ -721,24 +811,7 @@ int main() {
   });
   cases.run(
       "two operands convert in operand order before a stopping guard", [&] {
-        source::Function f;
-        f.arguments = {{"a", "table:bls12-381.fr"},
-                       {"b", "table:bls12-381.fr"},
-                       {"allowed", "bool"}};
-        f.results = {"field:bls12-381.fr"};
-        f.body = source::Body{
-            ins("before", source::Operation{"guard", {}, {}, {"allowed"}, {}}),
-            call("product", "product", {"a", "b"}, "value"),
-            ins("after", source::Operation{"guard", {}, {}, {"allowed"}, {}}),
-            ins("", source::Return{{"value"}})};
-        auto source = subject({{{},
-                                "product",
-                                {"poly.product_sum",
-                                 {"bls12-381.fr"},
-                                 "arkworks-msb/poly.product_sum"}},
-                               {{}, "guard", {"control.require", {}, ""}}},
-                              f);
-        auto module = take(importModule(source, context));
+        auto module = take(executableFixture(orderedCrossings(), context));
         auto plan = take(proposePhysical(*module));
         auto &product = site(plan, *module, "product");
         require(product.conversions.size() == 2 &&
@@ -767,26 +840,7 @@ int main() {
                 "stopping source instructions retain their original positions");
       });
   cases.run("nested control captures retain default interface layouts", [&] {
-    source::Function f;
-    f.arguments = {{"a", "table:bls12-381.fr"},
-                   {"r", "field:bls12-381.fr"},
-                   {"condition", "bool"}};
-    f.results = {"table:bls12-381.fr"};
-    source::Body arm{call("inner", "fold", {"x", "r"}, "y"),
-                     ins("", source::Yield{{"y"}})};
-    auto otherArm = arm;
-    otherArm.front().site = "other";
-    f.body = source::Body{
-        call("outer", "fold", {"a", "r"}, "x"),
-        ins("choose",
-            source::Conditional{"condition", {"x", "r"}, arm, otherArm, {"z"}}),
-        ins("", source::Return{{"z"}})};
-    auto source =
-        subject({{{},
-                  "fold",
-                  {"poly.fold", {"bls12-381.fr"}, "arkworks-msb/poly.fold"}}},
-                f);
-    auto module = take(importModule(source, context));
+    auto module = take(executableFixture(nestedLayouts(), context));
     auto plan = take(proposePhysical(*module));
     auto &control = site(plan, *module, "choose");
     require(control.conversions.size() == 1 &&
@@ -806,7 +860,7 @@ int main() {
             "nested physical interface verification");
   });
   cases.run("unexpected conversion on equal types is not a cast", [&] {
-    auto module = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
     auto plan = take(proposePhysical(*module));
     site(plan, *module, "same").conversions =
         site(plan, *module, "first").conversions;
@@ -814,7 +868,7 @@ int main() {
   });
   cases.run(
       "explicit full diagonal selection independently checks all uses", [&] {
-        auto module = take(importModule(contractions(), context));
+        auto module = take(executableFixture(contractions(), context));
         auto plan =
             take(proposePhysical(*module, installedCandidates(),
                                  {{"map", "arkworks-diagonal/vector.mul"},
@@ -829,7 +883,7 @@ int main() {
       });
   cases.run("physical output port cannot acquire another nominal identity",
             [&] {
-              auto module = take(importModule(arithmetic(), context));
+              auto module = take(executableFixture(arithmetic(), context));
               auto plan = take(proposePhysical(*module));
               auto wrong = take(defaultRepresentation(
                   take(parseBoundType("field:bn254.fr", false))));
@@ -838,7 +892,7 @@ int main() {
               refusedMutation(*module, plan, "binding-operation-signature");
             });
   cases.run("unknown and duplicate selection requests preserve input", [&] {
-    auto module = take(importModule(arithmetic(), context));
+    auto module = take(executableFixture(arithmetic(), context));
     auto before = printed(*module);
     refuses(proposePhysical(*module, installedCandidates(),
                             {{"unknown", "arkworks/field.add"}}),
@@ -850,20 +904,20 @@ int main() {
     require(printed(*module) == before, "request refusal changed input");
   });
   cases.run("missing selected binding coverage", [&] {
-    auto module = take(importModule(arithmetic(), context));
+    auto module = take(executableFixture(arithmetic(), context));
     auto plan = take(proposePhysical(*module));
     site(plan, *module, "add").binding.reset();
     refusedMutation(*module, plan, "binding-plan-coverage");
   });
   cases.run("null proposed port refuses before type dereference", [&] {
-    auto module = take(importModule(arithmetic(), context));
+    auto module = take(executableFixture(arithmetic(), context));
     auto plan = take(proposePhysical(*module));
     site(plan, *module, "add").outputs[0] = Type{};
     refusedMutation(*module, plan, "binding-operation-signature");
   });
   cases.run(
       "unavailable physical implementation is not installed by proposal", [&] {
-        auto module = take(importModule(layouts(), context));
+        auto module = take(executableFixture(layouts(), context));
         auto plan = take(proposePhysical(*module));
         for (auto &binding : plan.bindings)
           if (binding.purpose == BindingPurpose::Conversion)
@@ -871,13 +925,13 @@ int main() {
         refusedMutation(*module, plan, "binding-conversion");
       });
   cases.run("invalid conversion site refuses before rewriting", [&] {
-    auto module = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
     auto plan = take(proposePhysical(*module));
     site(plan, *module, "left").conversions.front().site = "not/a/site";
     refusedMutation(*module, plan, "binding-plan-coverage");
   });
   cases.run("stale operand graph refuses despite matching types", [&] {
-    auto module = take(importModule(layouts(), context));
+    auto module = take(executableFixture(layouts(), context));
     auto plan = take(proposePhysical(*module));
     auto operations = physicalPlanOperations(*module);
     auto index = site(plan, *module, "left").operation;
@@ -885,7 +939,7 @@ int main() {
     refusedMutation(*module, plan, "binding-stale-selection");
   });
   cases.run("unused generated declaration refuses", [&] {
-    auto module = take(importModule(arithmetic(), context));
+    auto module = take(executableFixture(arithmetic(), context));
     auto plan = take(proposePhysical(*module));
     auto unused = plan.bindings.front();
     unused.purpose = BindingPurpose::Contraction;
@@ -896,8 +950,8 @@ int main() {
   });
   cases.run(
       "selection refusal preserves declaration location and metadata", [&] {
-        auto module = take(importModule(arithmetic(), context));
-        auto location = FileLineColLoc::get(&context, "selection.pir", 2, 3);
+        auto module = take(executableFixture(arithmetic(), context));
+        auto location = FileLineColLoc::get(&context, "selection.mlir", 2, 3);
         module->walk(
             [&](zkc::local::OperationBindingOp op) { op->setLoc(location); });
         auto before = printed(*module);
@@ -916,8 +970,8 @@ int main() {
         require(printed(*module) == before, "failed lowering preserves input");
       });
   cases.run("conversion refusal identifies its actual consumer", [&] {
-    auto module = take(importModule(layouts(), context));
-    auto location = FileLineColLoc::get(&context, "conversion.pir", 7, 5);
+    auto module = take(executableFixture(layouts(), context));
+    auto location = FileLineColLoc::get(&context, "conversion.mlir", 7, 5);
     module->walk([&](Operation *op) {
       if (auto name = op->getAttrOfType<StringAttr>("site"))
         if (name.getValue() == "first")
@@ -932,8 +986,8 @@ int main() {
             "conversion refusal retains consumer location");
   });
   cases.run("validation refusal identifies its actual operation", [&] {
-    auto module = take(importModule(arithmetic(), context));
-    auto location = FileLineColLoc::get(&context, "validation.pir", 9, 7);
+    auto module = take(executableFixture(arithmetic(), context));
+    auto location = FileLineColLoc::get(&context, "validation.mlir", 9, 7);
     module->walk([&](Operation *op) {
       if (op->hasAttr("site"))
         op->setLoc(location);
@@ -951,7 +1005,7 @@ int main() {
     cases.run(changeReturn ? "materialized local return changed"
                            : "materialized kernel operand changed",
               [&] {
-                auto before = take(importModule(arithmetic(), context));
+                auto before = take(executableFixture(arithmetic(), context));
                 auto checked = take(
                     validatePhysical(*before, take(proposePhysical(*before))));
                 OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
@@ -976,7 +1030,7 @@ int main() {
               });
   }
   cases.run("conversion feeds the wrong same-typed table", [&] {
-    auto before = take(importModule(layouts(), context));
+    auto before = take(executableFixture(layouts(), context));
     auto checked =
         take(validatePhysical(*before, take(proposePhysical(*before))));
     OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));

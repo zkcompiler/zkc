@@ -21,14 +21,15 @@ void check(mlir::MLIRContext &context, llvm::StringRef name) {
 
 int main() {
   mlir::DialectRegistry nativeRegistry;
-  zkc::registerNativeDialects(nativeRegistry);
+  zkc::registerDialects(nativeRegistry);
   require(!nativeRegistry.getDialectAllocator("table"));
   mlir::MLIRContext native(nativeRegistry);
   native.loadAllAvailableDialects();
   require(zkc::hasProtocolDialects(native));
   require(mlir::OperationName("arith.andi", &native)
               .hasInterface<zkc::MathematicalOpInterface>());
-  require(!native.getLoadedDialect<zkc::table::TableDialect>());
+  require(!native.getLoadedDialect("table"));
+  require(!native.isOperationRegistered("protocol.exec_func"));
   check<zkc::protocol_ir::ProtocolDialect>(native, "protocol");
   check<zkc::local::LocalDialect>(native, "local");
   check<zkc::plan::PlanDialect>(native, "plan");
@@ -44,13 +45,13 @@ int main() {
   check<zkc::protocol_ir::ProtocolDialect>(context, "protocol");
   check<zkc::local::LocalDialect>(context, "local");
   check<zkc::crypto::CryptoDialect>(context, "crypto");
-  check<zkc::table::TableDialect>(context, "table");
+  require(!registry.getDialectAllocator("table"));
   check<zkc::algebra::AlgebraDialect>(context, "algebra");
   check<zkc::poly::PolynomialDialect>(context, "poly");
   check<zkc::plan::PlanDialect>(context, "plan");
   check<zkc::pcs::PCSDialect>(context, "pcs");
   check<zkc::oracle::OracleDialect>(context, "oracle");
   check<zkc::relation::RelationDialect>(context, "relation");
-  check<zkc::claim::ClaimDialect>(context, "claim");
+  require(!registry.getDialectAllocator("claim"));
   check<mlir::func::FuncDialect>(context, "func");
 }

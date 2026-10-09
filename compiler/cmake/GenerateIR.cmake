@@ -7,16 +7,10 @@ set(zkc_tablegen_includes ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_BINARY_DIR}/include ${ZKC_CONTRIBUTION_INCLUDES}
   ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
 set(zkc_generated_headers
-  include/zkc/Interfaces/SourceOpInterface.h.inc
   include/zkc/Interfaces/LinearContraction.h.inc
   include/zkc/Interfaces/Mathematical.h.inc)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect
   ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Interfaces)
-set(LLVM_TARGET_DEFINITIONS include/zkc/Interfaces/SourceOpInterface.td)
-mlir_tablegen(include/zkc/Interfaces/SourceOpInterface.h.inc -gen-op-interface-decls
-    EXTRA_INCLUDES ${zkc_tablegen_includes})
-mlir_tablegen(include/zkc/Interfaces/SourceOpInterface.cpp.inc -gen-op-interface-defs
-    EXTRA_INCLUDES ${zkc_tablegen_includes})
 set(LLVM_TARGET_DEFINITIONS include/zkc/Interfaces/LinearContraction.td)
 mlir_tablegen(include/zkc/Interfaces/LinearContraction.h.inc -gen-op-interface-decls
     EXTRA_INCLUDES ${zkc_tablegen_includes})
@@ -43,7 +37,6 @@ mlir_tablegen(include/zkc/Dialect/Protocol/IR/protocolAttrs.cpp.inc -gen-attrdef
 set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/IR.td)
 set(zkc_builtin_headers "// Generated private registration includes.\n")
 set(zkc_builtin_classes "// Generated private registration classes.\n")
-set(zkc_native_classes "// Generated private native registration classes.\n")
 foreach(record IN LISTS zkc_builtin_dialects)
   string(REPLACE "|" ";" fields "${record}")
   list(GET fields 0 dialect)
@@ -56,9 +49,6 @@ foreach(record IN LISTS zkc_builtin_dialects)
     set(cpp_namespace "protocol_ir")
   endif()
   string(APPEND zkc_builtin_classes ", ::zkc::${cpp_namespace}::${owner}Dialect\n")
-  if(NOT dialect STREQUAL "table")
-    string(APPEND zkc_native_classes ", ::zkc::${cpp_namespace}::${owner}Dialect\n")
-  endif()
   file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/${owner}/IR)
   list(APPEND zkc_generated_headers
     include/zkc/Dialect/${owner}/IR/${dialect}Dialect.h.inc)
@@ -87,8 +77,6 @@ file(CONFIGURE OUTPUT include/zkc/Dialect/BuiltinHeaders.h.inc
   CONTENT "${zkc_builtin_headers}" @ONLY)
 file(CONFIGURE OUTPUT include/zkc/Dialect/BuiltinDialects.inc
   CONTENT "${zkc_builtin_classes}" @ONLY)
-file(CONFIGURE OUTPUT include/zkc/Dialect/NativeDialects.inc
-  CONTENT "${zkc_native_classes}" @ONLY)
 include(cmake/ContractMappings.cmake)
 set(LLVM_TARGET_DEFINITIONS
   ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/Installation.td)
@@ -113,7 +101,6 @@ tablegen(ZKC include/zkc/Dialect/TypeAdapters/Installed.inc
 set(zkc_ir_generated_files ${TABLEGEN_OUTPUT}
   ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/BuiltinHeaders.h.inc
   ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/BuiltinDialects.inc
-  ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/NativeDialects.inc
   ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/ContributionHeaders.h.inc
   ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/ContributionDialects.inc)
 list(REMOVE_DUPLICATES zkc_ir_generated_files)

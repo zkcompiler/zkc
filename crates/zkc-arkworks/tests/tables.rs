@@ -28,6 +28,25 @@ fn logical_restrict(values: &[Scalar], r: Scalar) -> Vec<Scalar> {
 }
 
 #[test]
+fn table_diagnostics_expose_shape_without_evaluations() {
+    let first = scalars(&[123456789, 987654321]);
+    let second = scalars(&[234567891, 876543219]);
+    for render in [
+        |values: &[Scalar]| format!("{:?}", Table::from_logical(values, &bounds()).unwrap()),
+        |values: &[Scalar]| {
+            format!(
+                "{:?}",
+                zkc_arkworks::MsbTable::from_logical(values, &bounds()).unwrap()
+            )
+        },
+    ] {
+        let diagnostic = render(&first);
+        assert!(diagnostic.contains("arity: 1"));
+        assert_eq!(diagnostic, render(&second));
+    }
+}
+
+#[test]
 fn scalar_codec_is_exact_and_does_not_reduce() {
     let modulus = Scalar::MODULUS.to_bytes_le();
     for value in [
@@ -252,8 +271,8 @@ fn every_boolean_vertex_and_non_symmetric_order() {
 }
 
 #[test]
-fn admission_can_exceed_the_old_finite_runtime_rank_limit() {
-    // The older runtime fixes MAX_RANK=12. This crate's table semantics do not.
+fn admission_uses_the_configured_table_rank_bound() {
+    // Table admission follows the supplied bounds, including rank thirteen.
     let bounds = Bounds::new(13, 8192, 8192 * 32, 0);
     let logical: Vec<_> = (0..8192u64).map(Scalar::from).collect();
     let table = Table::from_logical(&logical, &bounds).unwrap();

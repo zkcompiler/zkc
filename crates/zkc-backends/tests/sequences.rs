@@ -45,7 +45,7 @@ fn formation_distinguishes_copying_storage_and_wire_permission() {
         "matrix:bls12-381.fr",
         "field:koala-bear",
         "sequence<index>",
-        "prover_key:multilinear.kzg.bls12-381/1",
+        "prover_key:multilinear.kzg.bls12-381/0",
     ] {
         let ty = LogicalType::sequence(LogicalType::parse(element).unwrap()).unwrap();
         assert!(ty.is_duplicable() && ty.is_discardable());
@@ -69,7 +69,7 @@ fn formation_distinguishes_copying_storage_and_wire_permission() {
             .encode_native_value(&empty)
             .is_err()
     );
-    let setup = LogicalType::parse("sequence<proof:multilinear.kzg.bls12-381/1>").unwrap();
+    let setup = LogicalType::parse("sequence<proof:multilinear.kzg.bls12-381/0>").unwrap();
     assert!(zkc_backends::requires_setup(setup));
 }
 
@@ -77,7 +77,7 @@ fn formation_distinguishes_copying_storage_and_wire_permission() {
 fn empty_records_sums_and_nested_sequences_have_canonical_boundaries() {
     assert_eq!(
         roundtrip(&sequence("index", vec![])),
-        b"ZKCV\x01\x45\0\0\0\0"
+        b"ZKCV\x00\x45\0\0\0\0"
     );
     let inner = sequence("index", vec![Value::Index(7)]);
     roundtrip(&sequence(
@@ -158,7 +158,7 @@ fn ragged_matrices_preserve_shape_including_zero_dimensions() {
     let bytes = roundtrip(&matrix);
     assert_eq!(
         bytes,
-        backend.encode_value(&matrix).unwrap(),
+        backend.encode_native_value(&matrix).unwrap(),
         "existing COO codec is reused"
     );
     for (offset, value) in [(6, u32::MAX), (10, u32::MAX), (14, u32::MAX)] {
@@ -223,7 +223,7 @@ fn nested_limits_count_expanded_values_before_allocation() {
         max_table_elements: 40,
         ..Policy::default()
     };
-    let backend = NativeBackend::new(policy, support::entry(None), None).unwrap();
+    let backend = NativeBackend::new(policy, support::entry(None), Default::default()).unwrap();
     assert!(matches!(
         backend.decode_native_value(&value.physical_type(), &bytes),
         Err(NativeWireError::Limit)
@@ -265,7 +265,7 @@ fn codec_preflight_matches_cached_retained_storage_at_the_exact_peak_limit() {
             max_value_bytes: limit,
             ..Policy::default()
         };
-        let codec = NativeBackend::new(policy, support::entry(None), None).unwrap();
+        let codec = NativeBackend::new(policy, support::entry(None), Default::default()).unwrap();
         assert_eq!(codec.encode_native_value(&value).is_ok(), accepted);
         assert_eq!(
             codec
@@ -330,10 +330,7 @@ fn one(
         &sig.outputs,
         &output_names,
     );
-    let mut tree: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    tree[0] = json!("zkc.program/1");
-    tree[4][0].as_array_mut().unwrap().push(json!([]));
-    support::run_program(backend, &serde_json::to_vec(&tree).unwrap(), args)
+    support::run_program(backend, &bytes, args)
 }
 #[test]
 fn kernels_are_immutable_checked_and_charge_work_across_frames() {
@@ -382,7 +379,7 @@ fn empty_private_sequences_are_local_and_setup_checks_reach_active_elements() {
         zkc_arkworks::Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
     let other =
         zkc_arkworks::Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
-    let empty = sequence("prover_key:multilinear.kzg.bls12-381/1", vec![]);
+    let empty = sequence("prover_key:multilinear.kzg.bls12-381/0", vec![]);
     assert!(
         support::backend(Policy::default())
             .encode_native_value(&empty)
@@ -398,13 +395,21 @@ fn empty_private_sequences_are_local_and_setup_checks_reach_active_elements() {
     let codec = NativeBackend::new(
         Policy::default(),
         support::entry(None),
-        Some(keys.verifier_key().clone()),
+        zkc_backends::SetupRegistry::new(
+            vec![keys.verifier_key().clone()],
+            &zkc_backends::Policy::default(),
+        )
+        .unwrap(),
     )
     .unwrap();
     let wrong = NativeBackend::new(
         Policy::default(),
         support::entry(None),
-        Some(other.verifier_key().clone()),
+        zkc_backends::SetupRegistry::new(
+            vec![other.verifier_key().clone()],
+            &zkc_backends::Policy::default(),
+        )
+        .unwrap(),
     )
     .unwrap();
     let different_arity =
@@ -412,7 +417,11 @@ fn empty_private_sequences_are_local_and_setup_checks_reach_active_elements() {
     let wrong_arity = NativeBackend::new(
         Policy::default(),
         support::entry(None),
-        Some(different_arity.verifier_key().clone()),
+        zkc_backends::SetupRegistry::new(
+            vec![different_arity.verifier_key().clone()],
+            &zkc_backends::Policy::default(),
+        )
+        .unwrap(),
     )
     .unwrap();
     for leaf in [
@@ -444,7 +453,7 @@ fn empty_private_sequences_are_local_and_setup_checks_reach_active_elements() {
 }
 
 #[test]
-fn standalone_matrix_decoders_agree_on_canonicality_and_shape() {
+fn native_matrix_decode_peak_and_canonicality_are_exact() {
     let codec = support::backend(Policy::default());
     let m = Value::matrix(
         2,
@@ -453,46 +462,35 @@ fn standalone_matrix_decoders_agree_on_canonicality_and_shape() {
         &Policy::default(),
     )
     .unwrap();
-    let wire = codec.encode_value(&m).unwrap();
-    // This newly admitted native frame uses the shared structured peak policy;
-    // the older typed leaf codec intentionally retains its narrower accounting.
-    // The shared typed bulk reader retains 336 bytes and bounds max(2R,R+3W).
+    let wire = codec.encode_native_value(&m).unwrap();
+    // Native decode bounds both retained storage and temporary buffers.
     let required = 672;
     for (limit, accepted) in [(required, true), (required - 1, false)] {
         let tight = support::backend(Policy {
             max_value_bytes: limit,
             ..Policy::default()
         });
-        assert!(tight.decode_typed_value(m.physical_type(), &wire).is_ok());
         assert_eq!(
             tight.decode_native_value(&m.physical_type(), &wire).is_ok(),
             accepted
         );
     }
-    for bytes in [&wire[..], &wire[..wire.len() - 1]] {
-        let a = codec.decode_typed_value(m.physical_type(), bytes);
-        let b = codec.decode_native_value(&m.physical_type(), bytes);
-        assert_eq!(a.is_ok(), b.is_ok());
-        if let (Ok(a), Ok(b)) = (a, b) {
-            assert_eq!(
-                codec.encode_value(&a).unwrap(),
-                codec.encode_value(&b).unwrap()
-            );
-        }
-    }
+    let decoded = codec
+        .decode_native_value(&m.physical_type(), &wire)
+        .unwrap();
+    assert_eq!(codec.encode_native_value(&decoded).unwrap(), wire);
+    assert!(
+        codec
+            .decode_native_value(&m.physical_type(), &wire[..wire.len() - 1])
+            .is_err()
+    );
     for (start, end, fill) in [(6, 10, 255), (18, 22, 255), (26, 58, 0), (26, 58, 255)] {
         let mut bad = wire.clone();
         bad[start..end].fill(fill);
-        assert!(codec.decode_typed_value(m.physical_type(), &bad).is_err());
         assert!(codec.decode_native_value(&m.physical_type(), &bad).is_err());
     }
     let mut duplicate = wire.clone();
     duplicate[58..98].copy_from_slice(&wire[18..58]);
-    assert!(
-        codec
-            .decode_typed_value(m.physical_type(), &duplicate)
-            .is_err()
-    );
     assert!(
         codec
             .decode_native_value(&m.physical_type(), &duplicate)
@@ -501,11 +499,6 @@ fn standalone_matrix_decoders_agree_on_canonicality_and_shape() {
     let mut reversed = wire.clone();
     reversed[18..58].copy_from_slice(&wire[58..98]);
     reversed[58..98].copy_from_slice(&wire[18..58]);
-    assert!(
-        codec
-            .decode_typed_value(m.physical_type(), &reversed)
-            .is_err()
-    );
     assert!(
         codec
             .decode_native_value(&m.physical_type(), &reversed)
@@ -517,7 +510,7 @@ fn standalone_matrix_decoders_agree_on_canonicality_and_shape() {
         max_table_elements: 1 << 21,
         ..Policy::default()
     });
-    let mut excessive = b"ZKCV\x01\x17".to_vec();
+    let mut excessive = b"ZKCV\x00\x17".to_vec();
     for n in [65536u32, 65536, (1 << 20) + 1] {
         excessive.extend_from_slice(&n.to_le_bytes());
     }

@@ -51,8 +51,9 @@ and every later challenge would become a function of that tag. The internal
 `transcript.` family and the external duplex states are decided here together,
 because an external state is ordinary checked data and carries no attribute that
 would mark it. Construction and stateless hashing touch no history:
-docs/spec/profiles/compiler/local-variants.md,
-docs/spec/realization/external-constructions.md. -/
+docs/spec/ir/variants.md,
+docs/spec/realization/external-constructions.md.
+The reference reuses these rules without establishing native correspondence. -/
 def historyContract (contract : String) : Bool :=
   contract.startsWith "transcript." ||
     ["external.monero.update", "external.openvm.observe", "external.openvm.sample",
@@ -70,63 +71,63 @@ def logicalIdentity (kind identity : String) : Bool :=
 /-- Unknown nominal types have no default. Kind alone never selects a backend. -/
 def defaultRepresentation (kind identity : String) : String :=
   if !logicalIdentity kind identity then ""
-  else if kind == "variant" then "logical.variant/1"
-  else if kind == "resource_unit" then "logical.resource_unit/1"
-  else if domainIndependent kind then "native." ++ kind ++ "/1"
-  else if ["rng", "nonce", "transcript"].contains kind then "host.resource/1"
+  else if kind == "variant" then "logical.variant/0"
+  else if kind == "resource_unit" then "logical.resource_unit/0"
+  else if domainIndependent kind then "native." ++ kind ++ "/0"
+  else if ["rng", "nonce", "transcript"].contains kind then "host.resource/0"
   else if rowDomain identity then
     "plonky3.merkle-" ++ (match kind with
       | "commitment" => "root" | "proof" => "path" | "opening_state" => "state"
-      | "commitments" => "roots" | _ => "states") ++ "/1"
+      | "commitments" => "roots" | _ => "states") ++ "/0"
   else if identity == koalaBearExt8 then
     match kind with
-    | "field" => "plonky3.koala-bear.ext8-binomial3/1"
-    | "matrix" => "plonky3.koala-bear.ext8-binomial3-sparse-coo/1"
-    | "vector" => "plonky3.koala-bear.ext8-binomial3-vector/1"
-    | "polynomial" => "plonky3.koala-bear.ext8-binomial3-polynomial/1"
-    | "round" => "plonky3.koala-bear.ext8-binomial3-quadratic/1"
+    | "field" => "plonky3.koala-bear.ext8-binomial3/0"
+    | "matrix" => "plonky3.koala-bear.ext8-binomial3-sparse-coo/0"
+    | "vector" => "plonky3.koala-bear.ext8-binomial3-vector/0"
+    | "polynomial" => "plonky3.koala-bear.ext8-binomial3-polynomial/0"
+    | "round" => "plonky3.koala-bear.ext8-binomial3-quadratic/0"
     | _ => ""
   else if identity == koalaBear then
     match kind with
-    | "field" => "plonky3.koala-bear/1"
-    | "matrix" => "plonky3.koala-bear-sparse-coo/1"
-    | "vector" => "plonky3.koala-bear-vector/1"
-    | "polynomial" => "plonky3.koala-bear-polynomial/1"
-    | "round" => "plonky3.koala-bear-quadratic/1"
+    | "field" => "plonky3.koala-bear/0"
+    | "matrix" => "plonky3.koala-bear-sparse-coo/0"
+    | "vector" => "plonky3.koala-bear-vector/0"
+    | "polynomial" => "plonky3.koala-bear-polynomial/0"
+    | "round" => "plonky3.koala-bear-quadratic/0"
     | _ => ""
   else if identity == bn254Fr then
     match kind with
-    | "field" => "arkworks.bn254-fr/1"
-    | "matrix" => "arkworks.bn254-fr-sparse-coo/1"
-    | "vector" => "arkworks.bn254-fr-vector/1"
-    | "polynomial" => "arkworks.bn254-fr-polynomial/1"
-    | "round" => "arkworks.bn254-fr-round/1"
+    | "field" => "arkworks.bn254-fr/0"
+    | "matrix" => "arkworks.bn254-fr-sparse-coo/0"
+    | "vector" => "arkworks.bn254-fr-vector/0"
+    | "polynomial" => "arkworks.bn254-fr-polynomial/0"
+    | "round" => "arkworks.bn254-fr-round/0"
     | _ => ""
-  else if identity == bn254GT then "arkworks.bn254-gt/1"
+  else if identity == bn254GT then "arkworks.bn254-gt/0"
   else if identity == bn254G1 || identity == bn254G2 then
     "arkworks.bn254-" ++ (if identity == bn254G1 then "g1" else "g2") ++
-      (if kind == "groups" then "-vector/1" else "/1")
+      (if kind == "groups" then "-vector/0" else "/0")
   else if identity == ristrettoScalar then
     match kind with
-    | "field" => "dalek.scalar/1"
-    | "matrix" => "dalek.scalar-sparse-coo/1"
-    | "vector" => "dalek.scalar-vector/1"
-    | "polynomial" => "dalek.polynomial/1"
-    | "round" => "dalek.quadratic/1"
+    | "field" => "dalek.scalar/0"
+    | "matrix" => "dalek.scalar-sparse-coo/0"
+    | "vector" => "dalek.scalar-vector/0"
+    | "polynomial" => "dalek.polynomial/0"
+    | "round" => "dalek.quadratic/0"
     | _ => ""
   else if identity == ristrettoGroup then
-    if kind == "group" then "dalek.ristretto/1" else "dalek.ristretto-vector/1"
+    if kind == "group" then "dalek.ristretto/0" else "dalek.ristretto-vector/0"
   else match kind with
-    | "field" => "arkworks.fr/1"
-    | "matrix" => "arkworks.fr-sparse-coo/1"
-    | "vector" => "arkworks.fr-vector/1"
-    | "polynomial" => "arkworks.polynomial/1"
-    | "table" => "arkworks.mle-lsb/1"
-    | "point" => "arkworks.point/1"
-    | "round" => "arkworks.quadratic/1"
-    | "group" => "arkworks.g1/1"
-    | "groups" => "arkworks.g1-vector/1"
-    | _ => "arkworks.multilinear-pcs/1"
+    | "field" => "arkworks.fr/0"
+    | "matrix" => "arkworks.fr-sparse-coo/0"
+    | "vector" => "arkworks.fr-vector/0"
+    | "polynomial" => "arkworks.polynomial/0"
+    | "table" => "arkworks.mle-lsb/0"
+    | "point" => "arkworks.point/0"
+    | "round" => "arkworks.quadratic/0"
+    | "group" => "arkworks.g1/0"
+    | "groups" => "arkworks.g1-vector/0"
+    | _ => "arkworks.multilinear-pcs/0"
 
 /-- Complete-type selection: no realization for arbitrary element types. -/
 def ValueType.defaultRepresentation (ty : ValueType) : String :=
@@ -134,7 +135,7 @@ def ValueType.defaultRepresentation (ty : ValueType) : String :=
   else if ty.kind == "fixed_vector" && ty.identity.isEmpty then
     match ty.arguments with
     | [.type (.atom "field" field), .natural n] =>
-        if field == koalaBear && n ≤ Logical.naturalLimit then "plonky3.fixed-vector/1" else ""
+        if field == koalaBear && n ≤ Logical.naturalLimit then "plonky3.fixed-vector/0" else ""
     | _ => ""
   else ""
 
@@ -144,9 +145,9 @@ def ValueType.valid (physical : Bool) (ty : ValueType) : Bool :=
       if physical then
         !ty.representation.isEmpty &&
           (ty.representation == ty.defaultRepresentation ||
-          (ty.kind == "table" && ty.identity == fr && ty.representation == "arkworks.mle-msb/1") ||
-          (ty.kind == "vector" && ty.identity == fr && ty.representation == "arkworks.fr-diagonal/1") ||
-          (ty.kind == "groups" && ty.identity == ristrettoGroup && ty.representation == "dalek.ristretto-diagonal/1"))
+          (ty.kind == "table" && ty.identity == fr && ty.representation == "arkworks.mle-msb/0") ||
+          (ty.kind == "vector" && ty.identity == fr && ty.representation == "arkworks.fr-diagonal/0") ||
+          (ty.kind == "groups" && ty.identity == ristrettoGroup && ty.representation == "dalek.ristretto-diagonal/0"))
       else ty.representation.isEmpty
 
 def valueType (physical : Bool) (text : String) : Result ValueType := do
@@ -174,12 +175,12 @@ def variantPayload (ty : Ty) (alternative : Name) : Result (List Ty) := do
 def codec (kind identity : String) : String :=
   if !Logical.publicKind kind || !leafLogicalIdentity kind identity then ""
   else
-  if domainIndependent kind then "zkcv." ++ kind ++ "/1"
+  if domainIndependent kind then "zkcv." ++ kind ++ "/0"
   else if rowDomain identity then
     "zkcv." ++ kind ++ ".rows-merkle-keccak256." ++
-      (if identity == rowBase then koalaBear else koalaBearExt8) ++ "/1"
-  else if ["commitment", "proof"].contains kind then "zkcv." ++ kind ++ ".multilinear-kzg.bls12-381/1"
-  else "zkcv." ++ kind ++ "." ++ identity ++ "/1"
+      (if identity == rowBase then koalaBear else koalaBearExt8) ++ "/0"
+  else if ["commitment", "proof"].contains kind then "zkcv." ++ kind ++ ".multilinear-kzg.bls12-381/0"
+  else "zkcv." ++ kind ++ "." ++ identity ++ "/0"
 
 def serializableKinds : List String :=
   ["index", "indices", "field", "matrix", "vector", "polynomial", "table", "point", "round", "bool", "group", "groups", "commitment", "commitments", "proof"]

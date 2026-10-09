@@ -16,8 +16,8 @@ setup:
 doctor:
     python3 scripts/doctor.py
 
-# Build all three components incrementally.
-build: (build-compiler "release") build-lean build-rust
+# Build the compiler and native execution toolkit incrementally.
+build: (build-compiler "release") build-rust
 
 # Configure a compiler profile from CMakePresets.json.
 configure profile="release":
@@ -27,16 +27,20 @@ configure profile="release":
 build-compiler profile="release":
     python3 scripts/develop.py compiler --profile "$1"
 
-# Build the native runtime, tools and examples.
+# Build the product CLI with its default features.
 build-rust:
     python3 scripts/develop.py rust
 
-# Build every default target declared by the formal package.
+# Build the integration drivers with explicit test providers.
+build-test-drivers:
+    python3 scripts/develop.py test-drivers
+
+# Build the optional independent Lean research package.
 build-lean:
     python3 scripts/develop.py lean
 
-# Run the main suite, including resource-boundary tests; optional suites are separate.
-test: test-compiler test-cross test-rust test-lean test-artifact test-install test-evidence test-docs lint demo
+# Run compiler, Rust, native integration, installation, documentation and lint checks.
+test: test-compiler test-integration test-rust test-install test-docs lint demo
 
 # Explicitly remove retained reports when no tests are using them.
 clean-reports:
@@ -49,9 +53,9 @@ test-compiler profile="release": (build-compiler profile)
 # Build and run the native C++ sanitizer tests.
 test-sanitize: (test-compiler "sanitize")
 
-# Run cross-language regressions against the built components.
-test-cross: build
-    python3 tests/run.py cross
+# Run native compiler/Runner/Host integration and harness checks.
+test-integration: build build-test-drivers
+    python3 tests/run.py integration
 
 # Test command wiring and reporting without compiled project tools.
 test-harness:
@@ -61,17 +65,9 @@ test-harness:
 test-rust: build
     python3 tests/run.py rust
 
-# Run the ordered artifact interoperability drivers.
-test-artifact output="": build
-    python3 tests/run.py artifact --output "$1"
-
-# Run all discovered formal controls and independent consumers.
+# Run optional formal controls and independent Lean consumers.
 test-lean: build-lean
     python3 tests/run.py lean
-
-# Run Groth16 interoperability using an explicitly reproduced fixture.
-test-groth16 fixture: build
-    python3 tests/run.py groth16 --fixture "$1"
 
 # Fetch pinned main or ArkLib dependency objects for development.
 fetch-lean deps="main":
@@ -93,30 +89,22 @@ test-install prefix="" profile="release": (build-compiler profile)
 test-install-domain profile="release" *args:
     python3 scripts/develop.py install-domain --profile "$@"
 
-# Verify the retained Groth16 evidence.
-test-evidence:
-    python3 tests/run.py evidence
-
 # Check documentation links, fragments and reachability.
 test-docs:
     python3 tests/run.py docs
 
-# Produce and verify a committed argument using explicit development fixtures.
+# Compile a source Entry and produce and verify its proof.
 demo: build
     python3 tests/run.py demo
 
-# Measure the maintained direct implementations.
-bench output="build/bench":
-    python3 scripts/develop.py bench --output "$1"
-
-# Run correctness controls in the separate benchmark workspaces.
-test-bench:
-    python3 tests/run.py bench
-
-# Check Rust formatting, Clippy and Python lint.
+# Check C++/Rust formatting, Clippy and Python lint.
 lint:
     python3 tests/run.py lint
 
 # Format the Nix definitions with the pinned formatter.
 fmt-nix:
     nix fmt
+
+# Format maintained C++ sources with the selected LLVM toolchain.
+fmt-cpp:
+    python3 scripts/format.py --write

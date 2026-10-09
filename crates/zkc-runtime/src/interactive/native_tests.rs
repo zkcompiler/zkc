@@ -2,33 +2,52 @@
 use super::*;
 use crate::interactive::{LogicalType, ProgramAction, admit_supplied};
 use serde_json::json;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
-const FIELD: &str = "field:bls12-381.fr@arkworks.fr/1";
-#[derive(Clone, Debug)]
+const FIELD: &str = "field:bls12-381.fr@arkworks.fr/0";
+#[derive(Debug)]
 struct V {
+    clones: Arc<AtomicUsize>,
     ty: PhysicalType,
     size: usize,
     public: bool,
     valid: bool,
     number: u64,
 }
+impl Clone for V {
+    fn clone(&self) -> Self {
+        self.clones.fetch_add(1, Ordering::Relaxed);
+        Self {
+            clones: self.clones.clone(),
+            ty: self.ty.clone(),
+            size: self.size,
+            public: self.public,
+            valid: self.valid,
+            number: self.number,
+        }
+    }
+}
 impl V {
     fn index(number: u64) -> Self {
         Self {
-            ty: PhysicalType::parse("index@native.index/1").unwrap(),
+            ty: PhysicalType::parse("index@native.index/0").unwrap(),
             number,
             ..Self::field()
         }
     }
     fn boolean(value: bool) -> Self {
         Self {
-            ty: PhysicalType::parse("bool@native.bool/1").unwrap(),
+            ty: PhysicalType::parse("bool@native.bool/0").unwrap(),
             number: u64::from(value),
             ..Self::field()
         }
     }
     fn field() -> Self {
         Self {
+            clones: Arc::default(),
             ty: PhysicalType::parse(FIELD).unwrap(),
             size: 32,
             public: true,
@@ -49,9 +68,6 @@ impl Value for V {
         Ok(Self::field())
     }
 
-    fn type_name(&self) -> &str {
-        "field"
-    }
     fn physical_type(&self) -> PhysicalType {
         self.ty.clone()
     }
@@ -103,14 +119,13 @@ impl Backend for Mock {
         Err(BackendError::new("unexpected-kernel"))
     }
 }
-fn program(native: bool) -> Admitted {
-    program_with_type(native, FIELD)
+fn program() -> Admitted {
+    program_with_type(FIELD)
 }
-fn program_with_type(native: bool, field: &str) -> Admitted {
-    let mut value = json!([
-        "zkc.program/1",
+fn program_with_type(field: &str) -> Admitted {
+    let value = json!([
+        "zkc.program/0",
         [],
-        "physical",
         [[
             "function",
             "id",
@@ -125,7 +140,6 @@ fn program_with_type(native: bool, field: &str) -> Admitted {
                 "a",
                 "root",
                 "Alice",
-                [],
                 [["x", field]],
                 [],
                 [
@@ -141,7 +155,6 @@ fn program_with_type(native: bool, field: &str) -> Admitted {
                 "root",
                 "Bob",
                 [],
-                [],
                 [field],
                 [
                     ["receive", "message", "message", "Alice", "z", field],
@@ -152,17 +165,11 @@ fn program_with_type(native: bool, field: &str) -> Admitted {
         ],
         [["entry", "main", [["Alice", "a"], ["Bob", "b"]]]]
     ]);
-    if !native {
-        value[0] = json!("zkc.participants/1");
-        for p in value[4].as_array_mut().unwrap() {
-            p.as_array_mut().unwrap().pop();
-        }
-    }
     admit_supplied(&serde_json::to_vec(&value).unwrap(), &Mock::default()).unwrap()
 }
 fn receiver() -> Runner<Mock> {
     Runner::new(
-        &program(true),
+        &program(),
         "main",
         "Bob",
         "session",
@@ -178,12 +185,58 @@ fn expose(r: &mut Runner<Mock>) -> Cut {
     }
 }
 #[test]
+fn send_checks_and_consumption_do_not_clone_pending_payloads() {
+    let value = V::field();
+    let clones = value.clones.clone();
+    let mut sender = Runner::new(
+        &program(),
+        "main",
+        "Alice",
+        "session",
+        Mock::default(),
+        vec![value],
+    )
+    .unwrap();
+    let local = sender.poll_ref().cut().unwrap();
+    sender.execute_local(&local).unwrap();
+    let Action::Send(packet) = sender.poll_ref() else {
+        panic!("send")
+    };
+    let cut = packet.envelope.cut(CutKind::Send);
+    let unrelated = Packet {
+        envelope: packet.envelope.clone(),
+        ty: packet.ty.clone(),
+        payload: V::field(),
+    };
+    let before = clones.load(Ordering::Relaxed);
+    let usage = sender.usage();
+    let mut wrong = cut.clone();
+    wrong.site.push_str("-stale");
+    assert!(matches!(
+        sender.take_send(&wrong),
+        Err(RuntimeError::WrongCut)
+    ));
+    assert_eq!(
+        sender.check_delivery(&unrelated),
+        Err(RuntimeError::WrongAction)
+    );
+    assert_eq!(sender.usage(), usage);
+    let sent = sender.take_send(&cut).unwrap();
+    assert!(Arc::ptr_eq(&sent.payload.clones, &clones));
+    assert_eq!(clones.load(Ordering::Relaxed), before);
+    let mut recipient = receiver();
+    let receive = expose(&mut recipient);
+    recipient.check_delivery(&sent).unwrap();
+    assert_eq!(recipient.poll_ref().cut(), Some(receive));
+    assert_eq!(clones.load(Ordering::Relaxed), before);
+}
+
+#[test]
 fn layout_resolves_send_operand_type_through_local_results() {
-    let entry = program(true).program_entry("main").unwrap();
+    let entry = program().program_entry("main").unwrap();
     assert!(matches!(&entry[0].actions[1], ProgramAction::Send { ty, .. } if ty == &V::field().ty));
     assert!(matches!(&entry[1].actions[1], ProgramAction::Finish));
-    assert!(program(false).program_entry("main").is_err());
-    assert!(program(true).program_entry("missing").is_err());
+    assert!(program().program_entry("missing").is_err());
 }
 #[test]
 fn inspection_preserves_unpolled_pending_and_return_states() {
@@ -265,7 +318,7 @@ fn wrong_unexposed_stale_and_wrong_type_requests_do_not_advance() {
         if private {
             bad.public = false;
         } else {
-            bad.ty = PhysicalType::parse("bool@native.bool/1").unwrap();
+            bad.ty = PhysicalType::parse("bool@native.bool/0").unwrap();
         }
         assert_eq!(
             r.complete_receive(&cut, Ok(bad)),
@@ -342,9 +395,9 @@ fn receive_tick_precedes_decode_and_retention_is_a_limit_stop() {
     assert_eq!(r.usage().instructions, 1);
 }
 #[test]
-fn existing_delivery_and_old_carrier_contracts_stay_independent() {
+fn packet_delivery_preserves_public_value_checks() {
     let mut r = Runner::new(
-        &program(false),
+        &program(),
         "main",
         "Bob",
         "session",
@@ -355,12 +408,7 @@ fn existing_delivery_and_old_carrier_contracts_stay_independent() {
     let Action::Receive(request) = r.poll() else {
         panic!("receive")
     };
-    let cut = request.cut();
     let usage = r.usage();
-    assert_eq!(
-        r.complete_receive(&cut, Err(DecodeReason::Length)),
-        Err(RuntimeError::WrongAction)
-    );
     let mut value = V::field();
     value.public = false;
     assert!(
@@ -397,7 +445,7 @@ fn existing_numeric_message_types_keep_value_serialization_checks() {
             ..V::field()
         };
         for native in [false, true] {
-            let admitted = program_with_type(native, &ty.spelling());
+            let admitted = program_with_type(&ty.spelling());
             let mut receiving =
                 Runner::new(&admitted, "main", "Bob", "session", Mock::default(), vec![]).unwrap();
             let Action::Receive(request) = receiving.poll() else {
@@ -456,7 +504,7 @@ fn borrowed_poll_exposure_finish_and_send_exhaustion_preserve_stops() {
     ));
     assert!(matches!(finish.poll_ref(), Action::Stopped(stop) if stop.kind == StopKind::Limit));
     let mut send = Runner::new(
-        &program(true),
+        &program(),
         "main",
         "Alice",
         "session",
@@ -475,53 +523,34 @@ fn borrowed_poll_exposure_finish_and_send_exhaustion_preserve_stops() {
     assert_eq!(send.backend().frames, 0);
 }
 
-fn local_candidate(body: serde_json::Value, ingress: bool) -> Admitted {
-    let index = "index@native.index/1";
-    let boolean = "bool@native.bool/1";
+fn local_candidate(body: serde_json::Value) -> Admitted {
+    let index = "index@native.index/0";
+    let boolean = "bool@native.bool/0";
     let ports = json!([["lo", index], ["hi", index], ["flag", boolean]]);
-    let counts = if ingress {
-        json!([[
-            "n",
-            ["ingress", "8", [["Alice", "f", ["lo", "hi", "flag"]]]]
-        ]])
-    } else {
-        json!([])
-    };
-    let main = if ingress {
-        json!([["return", []]])
-    } else {
-        json!([
-            ["local", "call", "f", ["lo", "hi", "flag"], ["out"]],
-            ["return", []]
-        ])
-    };
-    let mut carrier = json!([
-        "zkc.program/1",
+    let carrier = json!([
+        "zkc.program/0",
         [],
-        "physical",
         [["function", "f", ports, [index], body, ["f", []]]],
         [[
             "participant",
             "a",
             "root",
             "Alice",
-            counts,
             ports,
             [],
-            main,
+            [
+                ["local", "call", "f", ["lo", "hi", "flag"], ["out"]],
+                ["return", []]
+            ],
             []
         ]],
         [["entry", "main", [["Alice", "a"]]]]
     ]);
-    if ingress {
-        carrier[0] = json!("zkc.participants/1");
-        carrier[4][0].as_array_mut().unwrap().pop();
-    }
     admit_supplied(&serde_json::to_vec(&carrier).unwrap(), &Mock::default()).unwrap()
 }
 
 #[test]
-fn local_and_ingress_cleanup_errors_follow_actual_frame_exit_order() {
+fn local_cleanup_errors_follow_actual_frame_exit_order() {
     let body = json!([
         [
             "if",
@@ -534,8 +563,8 @@ fn local_and_ingress_cleanup_errors_follow_actual_frame_exit_order() {
         ],
         ["return", ["out"]]
     ]);
-    for ingress in [false, true] {
-        let admitted = local_candidate(body.clone(), ingress);
+    {
+        let admitted = local_candidate(body.clone());
         let backend = Mock {
             fail_leave: true,
             ..Mock::default()
@@ -549,7 +578,7 @@ fn local_and_ingress_cleanup_errors_follow_actual_frame_exit_order() {
             vec![V::index(0), V::index(1), V::boolean(true)],
         )
         .unwrap();
-        if !ingress {
+        {
             let Action::Local(action) = runner.poll() else {
                 panic!("local cut")
             };
@@ -569,9 +598,9 @@ fn local_and_ingress_cleanup_errors_follow_actual_frame_exit_order() {
 }
 
 #[test]
-fn successful_local_and_ingress_cleanup_failures_stop_once() {
-    for ingress in [false, true] {
-        let admitted = local_candidate(json!([["return", ["lo"]]]), ingress);
+fn successful_local_cleanup_failures_stop_once() {
+    {
+        let admitted = local_candidate(json!([["return", ["lo"]]]));
         let mut runner = Runner::new(
             &admitted,
             "main",
@@ -584,7 +613,7 @@ fn successful_local_and_ingress_cleanup_failures_stop_once() {
             vec![V::index(0), V::index(1), V::boolean(true)],
         )
         .unwrap();
-        if !ingress {
+        {
             let Action::Local(action) = runner.poll() else {
                 panic!("local cut")
             };
@@ -593,10 +622,7 @@ fn successful_local_and_ingress_cleanup_failures_stop_once() {
         }
         let stop = runner.stop().expect("cleanup stops the role").clone();
         assert!(matches!(&stop.kind, StopKind::Backend(e) if e.code == "cleanup.2"));
-        assert_eq!(
-            stop.site.as_deref(),
-            Some(if ingress { "ingress.n" } else { "call" })
-        );
+        assert_eq!(stop.site.as_deref(), Some("call"));
         assert_eq!(
             stop.cleanup_errors
                 .iter()
@@ -620,7 +646,7 @@ fn local_induction_rejects_a_backend_literal_with_the_wrong_type() {
         ["for", "items", "i", "lo", "hi", [], [], [["yield", []]], []],
         ["return", ["lo"]]
     ]);
-    let admitted = local_candidate(body, false);
+    let admitted = local_candidate(body);
     let mut runner = Runner::new(
         &admitted,
         "main",
@@ -645,17 +671,15 @@ fn local_induction_rejects_a_backend_literal_with_the_wrong_type() {
 #[test]
 fn protocol_induction_rejects_a_backend_literal_with_the_wrong_type() {
     let carrier = json!([
-        "zkc.program/1",
+        "zkc.program/0",
         [],
-        "physical",
         [],
         [[
             "participant",
             "a",
             "root",
             "Alice",
-            [],
-            [["n", "index@native.index/1"]],
+            [["n", "index@native.index/0"]],
             [],
             [
                 [

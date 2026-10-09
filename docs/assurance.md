@@ -1,217 +1,105 @@
-# Assurance and formal coverage
+# Assurance
 
-The reference distinguishes **defined meaning**, **proved propositions**,
-**actual source correspondence**, **finite/native evidence**, and **declared
-trust**. None is a substitute for all the others. The selected model's definition
-homes are in this tree and its maintained Lean sources are in `formal/`.
+Definitions, kernel-checked propositions, source-relative compiler checks,
+native tests and declared trust establish different claims. Each claim must name
+its actual subject, assumptions and evidence.
 
-The correspondence maps separate definitions, proved consequences and the
-obligations a source or native implementation still owes for the clauses they
-cover. Their subjects are
-[core execution and observations](spec/correspondence/core.md),
-[programs, inputs and interaction](spec/correspondence/programs.md),
-[domains and source](spec/correspondence/domains.md),
-[modules, transformations and judgments](spec/correspondence/transformations.md),
-[realization and binding](spec/correspondence/realization.md), and
-[properties, probability, release and continuations](spec/correspondence/properties.md).
-Each entry names the exact declarations and the hypotheses they retain, so a
-declaration name alone never supplies a semantics. These maps are not an
-exhaustive audit of every profile: some profiles give their Formal references
-in-page, and others retain explicit implementation or proof obligations. Read
-them with the [support map](../formal/SUPPORT.md) and [status](status.md); neither
-a reference nor a map entry expands native or cryptographic implementation claims.
+## Formal propositions
 
-## 1. Claim-to-definition map
+The independent [formal specification](../formal/docs/spec/README.md) defines the
+models. [Formal support](../formal/docs/support.md) owns the theorem inventory,
+premises and limits; [correspondence maps](../formal/docs/README.md#definitions-and-proofs)
+link selected clauses to exact declarations. Some profiles give their formal
+references in-page. A generic record states obligations; constructing such a
+record does not verify an arbitrary native implementation.
 
-| Claim | Maintained formal source | Exact scope |
+The library's declaration audit permits only `propext`, `Classical.choice` and
+`Quot.sound` in the transitive dependencies of reached library, tool and example
+declarations. External dependencies may contain unfinished proofs, but reached
+declarations may not depend on them. This audit does not prove kernel correctness
+or statement adequacy.
+
+`native_decide` adds native-evaluation trust and is excluded from the proof
+library, its tools and its examples by structural controls. Conformance cases
+under `formal/Tests/` use it only in `example` declarations: those cases check
+compiled evaluation on named inputs and are not audited library theorems.
+Declaration counts therefore do not measure those tests or model maturity.
+
+## Contract boundaries
+
+| Claim | Owning definition | Additional native obligation |
 |---|---|---|
-| Complete finite execution and sequencing | [Execution](../formal/Zkc/Semantics/Execution.lean), [MonadExecution](../formal/Zkc/Semantics/MonadExecution.lean) | Returned/stopped outcome, actual residual state and ordered events; generic monadic interpretation |
-| Different reply representations | [Simulation](../formal/Zkc/Realization/Simulation.lean) | Value relation at actual final states, exact stops, projected events and sequencing/composition; no native progress or concrete Rust heap theorem |
-| Interaction, returned phases and public bounds | [Interaction](../formal/Zkc/Semantics/Interaction.lean), [Boundary](../formal/Zkc/Semantics/Boundary.lean) | All interface-typed replies; returned-path conditions; finite atomic sessions; no honest completion inferred |
-| Actual invocation records | [ExecutionPath](../formal/Zkc/Semantics/ExecutionPath.lean) | Exact erasure; conformance implies actual permission; `Within n` bounds actual calls including the stopping call, independently of handler event count and internal cost |
-| Actual role inputs and immutable source | [Inputs](../formal/Zkc/Source/Inputs.lean), [Closures](../formal/Zkc/Source/Closures.lean), [Elaboration](../formal/Zkc/Source/Elaboration.lean) | Ordered available inputs, actual captures, fixed-source agreement and pure execution correspondence |
-| Original table-expression adequacy | [TableExpression](../formal/Zkc/Polynomial/TableExpression.lean), [TableSource](../formal/Zkc/Protocols/Sumcheck/TableSource.lean) | All-point and Boolean-sum equality for accepted compilation; complete run including short/extra tapes; terminal and ordinary interactive soundness premises use the original actual tables |
-| Effectful source and common admission | [pure frontend](../formal/Zkc/Source/Frontend.lean), [local-code admission](../formal/Zkc/Protocols/Sumcheck/LocalProver/Admission.lean), [Installed](../formal/Zkc/Protocols/CapturedPrograms/Inputs.lean) | Checked local code, no missing-input fallback, phase/bound/input preservation, source selection and actual installed-world use |
-| Mixed analysis and preparation | [Analysis](../formal/Zkc/Compiler/FactorExecution.lean), [Mixed](../formal/Zkc/Polynomial/Bilinear/Execution.lean), [guarded compilation and readiness](../formal/Zkc/Polynomial/Bilinear/Compilation.lean) | Actual caller, failure/alias framing and valid immutable cache; original legal-caller law plus preservation up to actual readiness refusal under reached-call premises |
-| Contextual preparation and component connection | [generic law](../formal/Zkc/Semantics/Preparation.lean), [Sumcheck source](../formal/Zkc/Protocols/Sumcheck/Preparation.lean), [residual connection](../formal/Zkc/Protocols/Sumcheck/Connection.lean), [integration](../formal/Tests/SumcheckPreparation.lean) | Valid cache and pure provider, arbitrary stateful external operations, full source outcome/state/projected events; the actual Fresh source also meets the common direct-evaluator acceptance connection. No native speedup, cryptographic PCS or universal construction-security theorem |
-| Communication and scheduling | [Communication](../formal/Zkc/Protocols/CorrelatedSetup/Communication.lean), [AtomicSessions](../formal/Zkc/Protocols/CommitmentSessions/Source.lean) | Finite supplied clients/scheduler, retained state/events and actual preparation accounting |
-| Persistent product provider | [ProductTape](../formal/Zkc/Probability/ProductTape.lean), [Provider](../formal/Zkc/Probability/ConditionalTape.lean) | Conditional product initialization, every finite adaptive prefix, residual reconstruction and next-output mass |
-| Source-to-property consumer (optional ArkLib integration) | [SourceProvider](../formal/integrations/arklib/ZkcArkLib/LocalProver/Provider.lean) | Actual local code/committed messages and selected scalar reduction with its field/point-cap/false-claim premises |
-| Correlated setup observer | [ServiceProbability](../formal/Zkc/Protocols/CapturedPrograms/Probability.lean) | Existing service publication/history mass law, fixed setup/source conditions and sufficient tape |
-| Joint artifact/runtime release | [Deterministic](../formal/Zkc/Semantics/Disclosure.lean), [normalized PMF](../formal/Zkc/Probability/Disclosure.lean) | Exact allowed-world relation or one common coupling with actual marginals; pair-leakage and status-release controls; computational hiding requires another experiment |
-| Conditional admission and use | [Judgment](../formal/Zkc/Properties/Judgment.lean), [local-code judgment](../formal/Zkc/Protocols/Sumcheck/LocalProver/Admission.lean) | Actual contextual premises retained through formation/refinement; uncertainty and caller requirements separate |
-| Accepted atomic export | [AuthorizedContinuation](../formal/Zkc/Semantics/AuthorizedContinuation.lean) | Actual source, installed policy/handler/arm, phase/bound composition, current isolated ledger, retained verdict and no authorized partial export after stop |
-| Residual-to-terminal use | [Relation](../formal/Zkc/Semantics/Relation.lean) | Reduction direction with explicit bad event, composed residual contract and actual scalar terminal; no automatic probability bound |
+| Preserve observations and disclosure | [Observations](../formal/docs/spec/core/observations.md), [disclosure](../formal/docs/spec/properties/disclosure.md) | Implement the selected projection over actual releases, diagnostics and identifiers |
+| Authorize a retained continuation | [Accepted continuations](../formal/docs/spec/profiles/services/accepted-continuations.md) | Actual identity, custody and publication adapter; the model's atomic single export is not distributed persistence |
+| Bind interpretation to the supplied subject | [Artifacts](spec/realization/artifacts.md), [representations](spec/realization/representations.md) | Resolver, loader, parser and backend correspondence |
+| Use a conditional checked result | [Judgments](spec/verification/judgments.md), [refinement](spec/verification/refinement.md) | Native checker correspondence and actual premise discharge |
+| Establish source adequacy | [Relation encoding](spec/relations.md#source-encoding-adequacy), [source translation](spec/language/translation.md) | Preserve the intended source, captures and actual target; import/type validity alone is insufficient |
+| Establish protocol acceptance | [Relations and terminals](spec/relations.md) | Actual terminal consumption plus the argument-specific security experiment |
 
-The library uses capability APIs and separately resolved optional integrations.
-[Formal support](../formal/SUPPORT.md) records their actual clients and limits.
-Their generic records specify obligations; their concrete instances and laws
-show where those obligations are actually established. A record constructor
-does not certify an arbitrary native implementation.
+## Native checks and trust
 
-## 2. Integration boundaries
-
-The shared integration contracts have these homes:
-
-| Contract | Definition and evidence | Implementation extension |
-|---|---|---|
-| internal binding versus disclosure | [Observation contract](guides/execution.md#observations-and-refinement), `Disclosure`, actual private-receipt versus `publicStatus` controls | Native release/diagnostic/identifier schema must implement its chosen projection |
-| retained verdict and authorized export | [Continuation contract](guides/accepted-continuations.md), installed service and joined failure/replay controls | Native identity, custody storage and publication; richer transferable/multiple exports only when promised |
-| interpretation and checked inputs | [Binding](guides/artifact-binding.md), immutable issuance, installed-world interpretation, field/capture controls | Native resolver, dependency/FFI binding and lawful mutable rebinding |
-| conditional judgments and attempts | [Judgments](guides/security-properties.md#judgments-premises-and-use), actual formation-to-refinement composition, unknown/requirement/cost controls | Native checker result correspondence; complete search only if claimed |
-| source adequacy and erasure | [Source](guides/source-and-inputs.md), scoped erasure, all-capture/readiness checks and wrong-body/input controls | Actual structured/native lowering and imported source parser |
-| relation-bearing results | [Relations](guides/security-properties.md#relation-bearing-results-and-terminal-verification), generic reduction/terminal laws and finished-scalar rejection | Complete argument-specific relation/security theorem for each promised consumer |
-
-These definitions close the selected semantic integration without pretending
-that all implementation or cryptographic extension work is done. In particular,
-the atomic export model is a single-service, single-export interpretation;
-general distributed/reentrant custody is outside its promise.
-
-## 3. Verification and reproducibility
-
-The [formal reproducer](../formal/reproduce.py) rebuilds selected pinned inputs
-without prior Lean objects. The [development guide](development/README.md) and
-[test guide](../tests/README.md) distinguish this source reconstruction from
-incremental builds and individual check scopes. An available reproducer is not
-evidence that it ran successfully for the current revision.
-
-The audit permits only `propext`, `Classical.choice` and `Quot.sound` in the
-transitive dependency of every reached zkc/control declaration. External
-libraries can contain unfinished declarations; no dependence on their proof
-holes is allowed for these declarations. Generated auxiliary theorem counts
-are not counts of new authored contributions or a percentage of model maturity.
-
-The [integration controls](../formal/Tests/Integration.lean) are kernel-checked
-discriminators alongside general laws. [Protocol interpretations](guides/protocols.md)
-explain the contrasting boundaries; [status](status.md) and maintained example
-and [benchmark guides](../bench/README.md) identify native evidence and comparison
-conditions. Reorganizing documentation does not rerun those measurements.
-
-The [domain-extension case](../tests/protocol/test_domain_extension.py) compares
-source specialization and participant lowering with native Plonky3 execution and
-an independently written [Lean fixed-vector reference](../formal/Tools/Interactive/FixedVectorReference.lean).
-Its checked data retains the exact length; its arithmetic does not call the native
-kernel. [Contract conformance](../tests/protocol/test_contract_conformance.py)
-compares three independently installed logical readers and four physical readers,
-including the executing backend's signature resolver. Separate native tests run
-each installed alternative against its original implementation. Generated declarations
-provide test cases, never executable authority for Rust or Lean. These checks
-cover the declared finite profile and supplied cases; they do not prove native
-elaboration, kernel refinement or cryptographic security for arbitrary extensions.
-
-## 4. Trust and unmechanized boundaries
-
-| Boundary | Current assurance |
+| Boundary | Current evidence and remaining trust |
 |---|---|
-| Lean propositions | Checked by the installed pinned Lean kernel with the audited standard axioms |
-| Lean/Std toolchain | Pinned by `formal/lean-toolchain`; a build record must identify the actual source/cache scope and completed audits; no toolchain bootstrap claim |
-| Mathematical external libraries | Exact source pins; reached proof assumptions audited |
-| Native checker/parser and artifact bytes | Correspondence obligation for implementation; no universal decoder correctness theorem yet |
-| Structured MLIR source and lowering | Source route: Lean source/candidate checks at supported profiles. Native route: bounded [adjacent and emitted-artifact checks](compiler/preservation.md), with native Lean correspondence still open |
-| Rust runtime and backend | Explicit common contracts; native realization can be proved or declared trusted at its actual scope |
-| Concrete cryptography/providers | Scheme/model-specific assumptions and experiments; product-tape math does not prove native entropy/PRG/hash security |
-| Full protocol security | Only the exact existing scoped propositions; no blanket completeness, soundness, knowledge or zero-knowledge theorem |
+| Source and MLIR lowering | Bounded [adjacent and emitted-artifact comparisons](compiler/verification.md); no native Lean refinement theorem |
+| Artifact admission | Native parsers, structural checks, exact byte pins and interface binding; no universal decoder theorem |
+| Runner and backend | Installed operation contracts and [native execution tests](../tests/native.md); runtime and primitive correctness remain implementation assumptions |
+| Cryptographic providers | Scheme-specific assumptions and actual sampling/encoding contracts; product-tape mathematics does not prove native RNG or hash security |
+| Whole protocol properties | Only exact established propositions under their hypotheses; no blanket soundness, extraction or zero-knowledge guarantee |
 
-Reached-axiom auditing cannot establish kernel correctness.
+Source-relative checking and supplied-artifact admission are separate. A digest
+authenticates authorized bytes without proving their derivation from source.
+Two interpreters agreeing on one exported program cannot detect a shared
+source-to-program mistake. References compute expectations from original inputs
+and a separately implemented contract at the boundary being tested.
 
-The selected semantics can be a complete implementation basis while these
-native and property-specific proofs remain separate milestones. A stronger
-claim must identify and discharge its additional boundary rather than
-reclassifying existing evidence.
+## Verification and reproducibility
 
-The [verification design map](../formal/design/verification-map.md#5-assurance-is-a-collection-of-scoped-results)
-separates kernel proof replay, compiled checker acceptance, native-evaluation
-axioms and implementation correspondence. `native_decide` adds a
-native-evaluation axiom to whatever it closes, so it does not meet the
-restricted-axiom policy and appears in none of the proof library, its tools or
-its examples; a control in `formal/checks/test_checks.py` keeps it out of them.
+The [formal package guide](../formal/README.md#build-and-validate) describes builds,
+axiom audits and fresh reproduction. A reproducer or workflow definition is not
+evidence that it succeeded on the current revision. Build records identify
+source, dependency locks, toolchain and completed scope; pinned Lean/Std and its
+kernel remain trusted.
 
-The conformance cases under `formal/Tests/` do use it, and always on an
-`example`. What such a case establishes is that the compiled evaluator agrees
-with a stated value on a named input, which is native-evaluation evidence
-rather than a kernel proof. An `example` enters no declaration into the
-environment, so the axiom audit neither covers nor could cover those; the
-declaration and theorem counts it reports are the library's.
+[Tests](../tests/README.md) select native and formal checks. Finite controls can
+discriminate errors and document bounded behavior without proving all inputs.
+Timeouts and unsupported cases are not agreement. Measurements follow the
+[documentation policy](development/documentation.md); no benchmark campaign is
+currently maintained.
 
-## 5. Theory coverage
+## Native correspondence
 
-[Theory](theory.md) owns the inventory of mathematical methods, their
-applications and primary references. Its application table separates mechanized
-laws, design methods with narrower current instances, and further research.
-These categories constrain assurance claims: explicit framing is not a full
-separation logic, and phase conformance is not a general session-type projection
-or progress result.
+The native source semantics, exported artifact and Runner need an explicit
+connection before independent Lean results apply to them.
 
-The [research triggers](roadmap.md#3-research-triggers) record remaining candidates,
-including stronger concurrency/projection, computational provider models,
-aggregate attempts, richer reduction/custody interfaces, search completeness and
-native confidentiality. These are not omitted theories silently assumed by the
-current proofs. A new design task examines the theory needed by its exact
-obligation; an open topic gets a concrete research target before expanding scope.
+A realization claim MUST identify the actual implementation and build, its
+relation, input domain, observer and trusted boundaries. It MUST distinguish
+kernel proof replay, trusted executable checking, independent differential
+evidence and declared assumptions. A mathematical simulation establishes its
+mathematical adapters; a claim about native parsing, FFI or allocation supplies
+the corresponding connection to those actual operations.
 
-## 6. Implementation correspondence policy
+Differential controls used for a realization claim MUST exercise the actual
+retained source and candidate data and compare complete related results,
+including negative cases. Passing those controls does not establish a universal
+native theorem or a protocol-security bound.
 
-Differential testing against executable Lean meanings is the default practical
-validation of native correspondence. A proof of the Rust implementation is an
-optional strengthening. Mathematical compiler/checker and protocol-security
-theorems retain their own completion conditions.
+Each comparison fixes:
 
-The mathematical MLIR/program route uses two explicit evidence milestones:
+- the source subset and actual executable bytes;
+- actual inputs, initial states and provider behavior;
+- returned/stopped outcomes, residual-state relation and ordered observations;
+- capacity premises or related budgets when exhaustion is in scope;
+- parser, primitive, runtime and build/loader assumptions that remain trusted.
 
-| Milestone | Required evidence |
-|---|---|
-| Foundation stabilization | Source/candidate validation through the actual emitted artifact for the declared compiler route; independent execution references for its required capability compositions, inputs, failures, state and selected observations; mutation controls and recorded coverage/trust limits |
-| Native Lean connection and completed native migration | Executable Lean meaning for the actual supported carrier, source/artifact binding and Lean/native differential campaigns for each delivered slice, with its declared comparison relation |
+Successful outputs alone are insufficient when failed prefixes or state are
+observable. A sufficient-capacity relation cannot be reported as equality under
+arbitrary unchanged instruction caps. Erasing charge events does not erase a
+different stop or residual state.
 
-These milestones permit tested foundation implementation before the native Lean
-connection; they do not count current C++/Rust tests as Lean evidence.
-The selected foundation milestone is met at the bounded scope recorded in the
-[validation map](compiler/foundation-validation.md#source-to-artifact-checks).
-[Compiler preservation](compiler/preservation.md) checks adjacent source/candidate
-subjects through physical SSA and the actual emitted program, schedule and
-source-port maps. Independent execution references and mutation controls cover
-the required compositions. Same-constructor reconstruction and encoder/decoder
-round trips alone are insufficient. This completion adds no native Lean meaning,
-universal refinement, cryptographic security or whole-process resource theorem.
+A connection may establish one scoped boundary at a time. Cryptographic
+security additionally fixes the actual
+statement, adversary, oracle/sampling model, encoding and property transport.
+Transcript construction correctness is not a Fiat–Shamir security reduction.
 
-An independent reference derives the expected result from the original inputs
-and selected operation/protocol contract without using the producer's rewrite
-or recipe-emission algorithm as its oracle. It may decode actual artifacts for
-comparison. Running two interpreters on the same exported plan alone cannot detect
-a shared source-to-plan mistake. A reference that checks only arithmetic at a
-proof-supplied challenge supplies only that narrower evidence, not independent
-challenge or transcript validation.
-
-Each slice records its source subset, carrier/policy, comparison scope, remaining
-implementation trust and open Lean differential obligation in status and campaign
-records. None may be described as Lean-corresponding until that obligation closes.
-Existing Lean-checked routes retain their evidence requirement and refuse
-unsupported native formats; they cannot be retired while a migrated consumer still
-requires their checking capability. No artifact flag can promote supplied code to
-a higher evidence class. Frontend migration alone cannot close native migration.
-
-Bring native Lean evidence forward if a consumer needs it before its migration
-slice, or if an independent reference cannot test a required contract. An
-unsupported comparison cannot count as agreement.
-
-Each campaign identifies the supported source subset, actual compiler route,
-executables, inputs, initial states/providers and comparison relation. Compare
-returned values or stops, related residual state and the selected ordered
-observations. Different representations or lawful optimizations may use an
-explicit projection/relation instead of equality of internal buffers or caches.
-The relation must come from the semantic contract before evaluating results.
-Shared explicit random tapes test operational correspondence; they do not prove
-the sampling law or security of a changed challenge construction.
-
-Use generated cases alongside boundary, failure and regression cases, independent
-reference checks where feasible, and controls that show the comparator detects
-disagreement. Record coverage gaps and retain reproducible failing artifacts.
-A timeout or unsupported case is not agreement. Passing a finite campaign is
-empirical evidence, not a universal equivalence theorem or a numerical bound on
-the chance of a remaining bug. Unproved implementation boundaries remain explicit.
-
-The [native design](../formal/design/native-correspondence.md#21-default-validation-route)
-specifies the working method. The [status page](status.md) and
-[test map](../tests/README.md) identify the maintained routes. A campaign
-establishes only its recorded input, execution
-and comparison scope; this policy does not expand that evidence.
+[Formal connection components](../formal/docs/native-connection.md) identify
+existing laws; the [roadmap](roadmap.md) sequences further work.

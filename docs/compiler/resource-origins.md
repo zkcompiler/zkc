@@ -2,7 +2,7 @@
 
 Implemented by the private [resource-origin analysis](../../compiler/lib/Dialect/Protocol/IR/ResourceOrigins.cpp)
 in `ZkcIR`. The [capability map](../status.md#foundation-capability-map) owns
-current coverage and the [structured iteration profile](../spec/profiles/compiler/structured-iteration.md)
+current coverage and the [structured iteration profile](../spec/ir/iteration.md)
 owns the carried-root invariant.
 
 ## Purpose and scope
@@ -42,7 +42,7 @@ from both an unknown root and a noncontinuing execution.
 | Affine input | Its own symbolic root. Identity edges require affine values at both ends. |
 | Installed state successor | Follow validated history, sampling and observation pairs. All applicable pairs for an output must identify the same exact input root; unknown or conflicting equations remain unknown. |
 | `local.apply` or protocol-level local call | Resolve the actual definition and substitute actual arguments into its formal-relative summary. Existing placement and call validation remain required. |
-| `protocol.apply` | Summarize the mathematical callee and substitute its actual inputs. Role/application validation and preparation expansion remain unchanged. |
+| `protocol.apply` | Summarize the mathematical callee and substitute its actual inputs under the role/application validation and preparation rules. |
 | `local.if` | Join equal roots from every continuing arm. An explicit stopping arm contributes no returned value. |
 | `local.match` | Join explicit captures the same way. Payload arguments have no inferred relation to an outer root. Existing private-tag history restrictions remain. |
 | `local.for` | Give each affine carried slot a distinct symbol. A backedge preserving that slot proves the initial root, including zero trips. An unknown slot does not discard evidence for other slots. |
@@ -146,7 +146,7 @@ repeated acyclic calls and work sharing between demanded queries.
 The [generated execution fixture](../../compiler/test/fixtures/resource-origins/execution.mlir)
 carries RNG and transcript resources through nested common/local loops,
 applications, both Boolean arms and both match tags. The
-[runtime client](../../crates/zkc-tools/examples/resource_origins.rs) checks returned
+[runtime client](../../crates/zkc-test-drivers/src/resource_origins.rs) checks returned
 roots, generations, actual draw/observation/challenge counters, budgets, stop,
 cancellation, backend failure and frame cleanup. Stops are exercised before any
 draw and after transitions inside nested control; cancellation occurs between
@@ -161,8 +161,8 @@ readers still enforce their own type/custody contracts; they do not infer
 mathematical source correspondence. No new Lean semantics, independent retry
 host, external transcript deployment or security theorem follows.
 
-[Native attempts](native-attempts.md) use the shared controller and
-`produce_admitted` driver. The [structured proof boundary](structured-proofs.md),
-[nested data](nested-data.md) and [mathematical composition](mathematical-composition.md)
+[Native attempts](../runtime/attempts.md) use the shared controller and
+`produce_admitted` driver. The [structured proof boundary](construction.md),
+[nested data](mathematics.md) and [mathematical composition](mathematics.md)
 use the same participant execution path. The [roadmap](../roadmap.md) records
-remaining consumer migration and formalization.
+remaining native correspondence work.

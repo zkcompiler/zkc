@@ -6,7 +6,7 @@ use ark_ff::{BigInt, BigInteger, PrimeField};
 use p3_field::{BasedVectorSpace, PrimeField32};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use zkc_runtime::interactive::{Identity, PhysicalType, Type};
+use zkc_runtime::interactive::Identity;
 
 /// Canonical mathematical coefficients, independent of Montgomery or wire
 /// storage. Prime fields use their least nonnegative decimal representative.
@@ -144,7 +144,7 @@ pub(crate) fn from_entries<S: Coefficient>(
 /// Public-data content binding under SHA256, not relation satisfaction or key
 /// provenance. Checked constructors already enforce normalized sorted COO.
 /// Stream compact JSON without retaining a second copy of the matrix:
-/// ["zkc.matrix/1", field, [rowsString, columnsString, [[r,c,coefficient],...]]].
+/// ["zkc.matrix/0", field, [rowsString, columnsString, [[r,c,coefficient],...]]].
 pub(crate) fn identity_check<S: CanonicalCoefficient>(
     m: &SparseCoo<S>,
     attributes: &[String],
@@ -160,7 +160,7 @@ pub(crate) fn identity_check<S: CanonicalCoefficient>(
         return Err(refused("kernel-attributes"));
     }
     let mut hash = Sha256::new();
-    hash.update(b"[\"zkc.matrix/1\",\"");
+    hash.update(b"[\"zkc.matrix/0\",\"");
     hash.update(S::IDENTITY.name());
     hash.update(b"\",[\"");
     hash.update(m.rows.to_string());
@@ -311,7 +311,7 @@ fn encode_matrix<S: Wire>(m: &SparseCoo<S>, p: &Policy) -> Result<Vec<u8>> {
     let length = wire_size::<S>(m.entries.len())?;
     p.wire(length)?;
     let mut out = reserve(length)?;
-    out.extend_from_slice(b"ZKCV\x01");
+    out.extend_from_slice(b"ZKCV\x00");
     out.push(S::TAG);
     for n in [m.rows, m.columns, m.entries.len()] {
         out.extend(
@@ -327,55 +327,7 @@ fn encode_matrix<S: Wire>(m: &SparseCoo<S>, p: &Policy) -> Result<Vec<u8>> {
     }
     Ok(out)
 }
-fn u32le(b: &[u8]) -> Result<u32> {
-    Ok(u32::from_le_bytes(
-        b.try_into().map_err(|_| refused("wire-length"))?,
-    ))
-}
-#[allow(
-    clippy::chunks_exact_to_as_chunks,
-    reason = "generic associated scalar widths cannot be array lengths on stable Rust"
-)]
-fn decode_matrix<S: Wire>(bytes: &[u8], p: &Policy) -> Result<Value> {
-    p.wire(bytes.len())?;
-    if bytes.len() < 6 || &bytes[..5] != b"ZKCV\x01" || bytes[5] != S::TAG {
-        return Err(refused("wire-header"));
-    }
-    if bytes.len() < 18 {
-        return Err(refused("wire-length"));
-    }
-    let rows = u32le(&bytes[6..10])? as usize;
-    let columns = u32le(&bytes[10..14])? as usize;
-    let nnz = u32le(&bytes[14..18])? as usize;
-    preflight::<S>(rows, columns, nnz, p)?;
-    if wire_size::<S>(nnz)? != bytes.len() {
-        return Err(refused("wire-length"));
-    }
-    let decode_entry = |chunk: &[u8]| -> Result<_> {
-        Ok((
-            u32le(&chunk[..4])?,
-            u32le(&chunk[4..8])?,
-            S::decode(&chunk[8..])?,
-        ))
-    };
-    // First pass validates every coefficient and coordinate before reserving
-    // backing. The second pass decodes the same immutable bytes into storage.
-    let mut previous = None;
-    for chunk in bytes[18..].chunks_exact(8 + S::WIDTH) {
-        let e = decode_entry(chunk)?;
-        entry(rows, columns, previous, e)?;
-        previous = Some((e.0, e.1));
-    }
-    let mut entries = reserve(nnz)?;
-    for chunk in bytes[18..].chunks_exact(8 + S::WIDTH) {
-        entries.push(decode_entry(chunk)?);
-    }
-    Ok(S::value(SparseCoo {
-        rows,
-        columns,
-        entries: entries.into(),
-    }))
-}
+
 pub(crate) fn encode(v: &Value, p: &Policy) -> Option<Result<Vec<u8>>> {
     Some(match v {
         Value::Bn254Matrix(m) => encode_matrix(m, p),
@@ -384,19 +336,6 @@ pub(crate) fn encode(v: &Value, p: &Policy) -> Option<Result<Vec<u8>>> {
         Value::KoalaBearMatrix(m) => encode_matrix(m, p),
         Value::KoalaBearExt8Matrix(m) => encode_matrix(m, p),
         _ => return None,
-    })
-}
-pub(crate) fn decode(ty: PhysicalType, bytes: &[u8], p: &Policy) -> Option<Result<Value>> {
-    if ty.kind() != Type::Matrix {
-        return None;
-    }
-    Some(match ty.logical().identity() {
-        Identity::Bn254Fr => decode_matrix::<crate::Bn254Scalar>(bytes, p),
-        Identity::Bls12381Fr => decode_matrix::<crate::Scalar>(bytes, p),
-        Identity::Ristretto255Scalar => decode_matrix::<crate::RistrettoScalar>(bytes, p),
-        Identity::KoalaBear => decode_matrix::<crate::KoalaBear>(bytes, p),
-        Identity::KoalaBearExt8 => decode_matrix::<crate::KoalaBearExt8>(bytes, p),
-        _ => Err(refused("wire-type")),
     })
 }
 

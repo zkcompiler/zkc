@@ -2,7 +2,7 @@
 """Hash the revisions already selected by the owning dependency manifests.
 
 This updates Nix transport hashes only. It never chooses a newer revision or
-changes a Lake/Cargo/npm lockfile. Run from the repository root in the
+changes a Lake/Cargo lockfile. Run from the repository root in the
 maintenance shell; review the resulting JSON diff before building.
 """
 
@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import tempfile
 
-FORMAT = "canonical-git-v1"
+FORMAT = "canonical-git-v0"
 NORMALIZER = Path(__file__).resolve().parents[1] / "nix/normalize-git-source.sh"
 
 
@@ -57,12 +57,8 @@ def main():
             if package["type"] == "git":
                 packages[package["rev"]] = package
     update(root / "nix/lake-sources.json", list(packages.values()), args.refresh)
-    groth16 = json.loads((root / "tests/groth16/SOURCE_PINS.json").read_text())
-    llzk = json.loads((root / "compiler/adapters/llzk/pins.json").read_text())
-    external = [{"url": groth16[name]["repository"], "rev": groth16[name]["commit"]}
-                for name in ("circom", "circomlib")]
-    external.extend({"url": llzk[name]["url"], "rev": llzk[name]["revision"]}
-                    for name in ("llzk-current", "llzk-circom-locked"))
+    llzk = json.loads((root / "compiler/adapters/llzk/pins.json").read_text())["llzk-current"]
+    external = [{"url": llzk["url"], "rev": llzk["revision"]}]
     update(root / "nix/external-sources.json", external, args.refresh)
 
 

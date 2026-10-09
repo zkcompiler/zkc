@@ -1,4 +1,6 @@
 #include "zkc/Support/Json.h"
+#include "zkc/Support/MLIRInput.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
@@ -43,6 +45,73 @@ bool validStringEncoding(StringRef spelling) {
     i += 6;
   }
   return true;
+}
+namespace {
+// LLVM accepts integral floats, leading signs/zeros and duplicate object keys.
+// These formats must agree with typed JSON consumers. Check numeric spellings
+// and surrogate escapes, and count authored keys. json::parse owns the
+// remaining JSON grammar and decodes accepted strings.
+std::optional<size_t> scanNaturalJsonKeys(StringRef text) {
+  size_t keys = 0;
+  for (size_t i = 0; i < text.size(); ++i) {
+    if (text[i] == '"') {
+      size_t start = i;
+      while (++i < text.size() && text[i] != '"')
+        if (text[i] == '\\' && i + 1 < text.size())
+          ++i;
+      if (i == text.size() || !validStringEncoding(text.slice(start, i + 1)))
+        return std::nullopt;
+      size_t next = i + 1;
+      while (next < text.size() && isSpace(text[next]))
+        ++next;
+      if (next < text.size() && text[next] == ':')
+        ++keys;
+    } else if (text[i] == '-' || text[i] == '+' || text[i] == '.') {
+      return std::nullopt;
+    } else if (isDigit(text[i])) {
+      if (text[i] == '0' && i + 1 < text.size() && isDigit(text[i + 1]))
+        return std::nullopt;
+      while (i + 1 < text.size() && isDigit(text[i + 1]))
+        ++i;
+      if (i + 1 < text.size() &&
+          (text[i + 1] == '.' || text[i + 1] == 'e' || text[i + 1] == 'E'))
+        return std::nullopt;
+    }
+  }
+  return keys;
+}
+size_t countNaturalJsonKeys(const json::Value &value) {
+  size_t keys = 0;
+  if (auto *object = value.getAsObject()) {
+    keys = object->size();
+    for (auto &item : *object)
+      keys += countNaturalJsonKeys(item.second);
+  } else if (auto *array = value.getAsArray()) {
+    for (auto &item : *array)
+      keys += countNaturalJsonKeys(item);
+  }
+  return keys;
+}
+} // namespace
+Expected<json::Value> parseNaturalJson(StringRef text, size_t byteLimit,
+                                       unsigned depthLimit,
+                                       StringRef invalidCode,
+                                       StringRef limitCode) {
+  if (text.size() > byteLimit || !mlirNestingWithinLimit(text, depthLimit))
+    return error(limitCode);
+  auto keys = scanNaturalJsonKeys(text);
+  if (!keys)
+    return error(invalidCode);
+  auto parsed = json::parse(text);
+  if (!parsed) {
+    consumeError(parsed.takeError());
+    return error(invalidCode);
+  }
+  // Any duplicate loses at least one authored key, including duplicate keys
+  // spelled with distinct JSON escapes or containing a replaced object value.
+  if (countNaturalJsonKeys(*parsed) != *keys)
+    return error(invalidCode);
+  return parsed;
 }
 Expected<json::Value> parseJson(StringRef text,
                                 std::optional<size_t> *invalidStringOffset) {

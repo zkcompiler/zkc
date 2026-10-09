@@ -81,7 +81,7 @@ struct MetadataVerifier {
     return success();
   }
 
-  LogicalResult checkTranscriptHelper(local::FuncOp function, bool iterated) {
+  LogicalResult checkTranscriptHelper(local::FuncOp function) {
     if (!function.getBody().hasOneBlock())
       return refuse(record, "invalid inserted transcript helper");
     auto &body = function.getBody().front();
@@ -127,12 +127,12 @@ struct MetadataVerifier {
         coordinates = op.getResult(0);
         continue;
       }
-      bool indexed = contract.starts_with("transcript.native.indexed.");
-      if (!contract.starts_with("transcript.native.") ||
-          indexed != bool(coordinates) || indexed != iterated)
+      if ((contract != "transcript.native.indexed.challenge" &&
+           contract != "transcript.native.indexed.observe.data") ||
+          !coordinates)
         return refuse(record, "invalid inserted transcript helper");
       unsigned ordinary = contract.ends_with(".challenge") ? 1 : 2;
-      if (indexed) {
+      {
         if (op.getNumOperands() != ordinary + 1 ||
             op.getOperands().back() != coordinates ||
             body.getNumArguments() != ordinary + indices.size() ||
@@ -143,9 +143,7 @@ struct MetadataVerifier {
               return !logicalType(value.getType()).isUnsignedInteger(64);
             }))
           return refuse(record, "invalid inserted transcript coordinates");
-      } else if (!indices.empty() ||
-                 !llvm::equal(op.getOperands(), body.getArguments()))
-        return refuse(record, "invalid inserted transcript helper");
+      }
       transition = &op;
     }
     if (!transition || body.empty() || !isa<local::ReturnOp>(body.back()))
@@ -213,7 +211,6 @@ struct MetadataVerifier {
     Type transcript;
     llvm::DenseSet<unsigned> removedServices;
     ArrayAttr constructedActions;
-    bool iteratedConstruction = false;
     if (construction) {
       auto format = construction.getAs<StringAttr>("format");
       auto state = construction.getAs<TypeAttr>("transcript");
@@ -221,21 +218,13 @@ struct MetadataVerifier {
       constructedActions = construction.getAs<ArrayAttr>("actions");
       if (!keys(construction,
                 {"format", "transcript", "removed_services", "actions"}) ||
-          !format ||
-          (format.getValue() != "zkc.native-construction/1" &&
-           format.getValue() != "zkc.native-construction/2" &&
-           format.getValue() != "zkc.native-construction/3" &&
-           format.getValue() != "zkc.native-construction/4") ||
+          !format || format.getValue() != "zkc.native-construction/0" ||
           !state || !removed || removed.size() != 1 || !constructedActions)
         return refuse(record, "invalid native construction mapping");
-      iteratedConstruction = format.getValue() != "zkc.native-construction/1";
       auto capability = dyn_cast<local::CapabilityType>(state.getValue());
       if (!capability || !capability.getKind().starts_with("transcript:") ||
           protocol::nativeChallengeField(capability.getKind().drop_front(11))
-              .empty() ||
-          (format.getValue() != "zkc.native-construction/4" &&
-           protocol::nativeChallengeField(
-               capability.getKind().drop_front(11)) != "bls12-381.fr"))
+              .empty())
         return refuse(record, "unsupported constructed transcript type");
       transcript = state.getValue();
       for (auto item : removed) {
@@ -276,11 +265,10 @@ struct MetadataVerifier {
                 : loop ? keys(action,
                               {"site", "kind", "targets", "maximum", "body"})
                        : keys(action, {"site", "kind", "targets"})))
-            return refuse(record, "invalid original flat construction action");
+            return refuse(record, "invalid original construction action");
           if (loop) {
             auto body = action.getAs<ArrayAttr>("body");
-            if (!iteratedConstruction || !body ||
-                !index(action.get("maximum"), 1048577) ||
+            if (!body || !index(action.get("maximum"), 1048577) ||
                 failed(self(self, body, depth + 1)))
               return refuse(record, "invalid original construction loop");
           }
@@ -550,7 +538,7 @@ struct MetadataVerifier {
           if (!function)
             return refuse(record, "missing constructed helper");
           if (insertedCallees.insert(ref).second &&
-              failed(checkTranscriptHelper(function, iteratedConstruction)))
+              failed(checkTranscriptHelper(function)))
             return failure();
           auto targets = action.getAs<ArrayAttr>("targets");
           if (!targets || failed(charge(targets.size())))
@@ -707,8 +695,7 @@ struct MetadataVerifier {
     return success();
   }
   LogicalResult run() {
-    if (unit.getProfile() == protocol_ir::Profile::Protocol ||
-        unit.getProfile() == protocol_ir::Profile::ProtocolExec)
+    if (unit.getProfile() == protocol_ir::Profile::Protocol)
       return refuse(record, "projection metadata requires the 'participant', "
                             "'exec' or 'physical' profile");
     if (record->getAttrs().size() != 2 || record.getInterfaces().empty())
@@ -879,13 +866,10 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
                     "unclassified declaration in the 'participant' profile");
     for (auto attr : participant->getAttrs())
       if (!is_contained(ArrayRef<StringRef>{"sym_name", "function_type",
-                                            "instance", "role", "parameters",
+                                            "instance", "role",
                                             "service_ports"},
                         attr.getName().getValue()))
         return refuse(participant, "unsupported participant attribute");
-    if (!participant.getParameters().empty())
-      return refuse(participant,
-                    "native participant parameters are not admitted");
     auto port = [&](Type type) -> LogicalResult {
       auto policy = types.get(type);
       if (!policy)

@@ -1,5 +1,10 @@
 # Bound subjects and artifacts
 
+Native compilation, Entry packages and deployment admission use these subject-binding obligations.
+This chapter states shared laws; a native implementation claim needs its
+actual instance and evidence. Independent formal examples retain their own
+[model scope](../../../formal/docs/spec/README.md).
+
 Evidence concerns a particular subject under particular meanings and premises.
 An artifact carries that subject across proposal, checking and execution.
 Its representation must retain the distinctions on which the evidence depends.
@@ -16,9 +21,9 @@ Admission and execution MUST bind the same source, candidate and meanings used
 by the applicable law. Invocation additionally binds the actual input
 environment and initial state. A universally quantified preservation theorem
 can apply to many environments; each invocation still uses one actual
-[binding](../profiles/source/named-inputs.md#exact-ordered-binding).
+[binding](../../../formal/docs/spec/profiles/source/named-inputs.md#exact-ordered-binding).
 
-The [direct profile](../profiles/compiler/direct-plan.md#checked-plans) gives a concrete
+The [direct profile](../../../formal/docs/spec/profiles/compiler/direct-plan.md#checked-plans) gives a concrete
 source-indexed checked record. Other profiles may use different representations
 of evidence, provided they establish the specified judgment about the actual
 retained operands.
@@ -28,7 +33,7 @@ retained operands.
 The interpretation closure of a claim is the collection of semantic operands
 and premises on which its proposition or use depends. It includes the relevant
 domain, operation meanings and laws, module/source meaning, input binding,
-interface versions, observer, relation and assumptions. Dependencies are
+interface contracts, observer, relation and assumptions. Dependencies are
 selected by their role in that claim, not by proximity in the repository.
 
 A consumer using a name or revision reference MUST resolve it to the actual
@@ -72,7 +77,7 @@ applicable frame, equivalence or rebinding law. A mutable read follows its
 declared transition. It cannot masquerade as an immutable capture while
 rereading changed storage.
 
-The [immutable cache contract](../core/contracts.md#immutable-cache-validity)
+The [immutable cache contract](../../../formal/docs/spec/core/contracts.md#immutable-cache-validity)
 can justify reuse beyond the lifetime of a mutable fact when the cache's own
 provider and dependency law remains valid. Rebinding a provider requires its
 agreement on the actual occupied entries; agreement at an unrelated test key
@@ -109,7 +114,7 @@ obligation, even when execution refinement holds.
 An open candidate can retain unresolved choices, requirements or evidence.
 Admission means that a specified judgment is usable at its stated scope.
 A sealed artifact fixes a selected subject, interpretations, interface
-versions and evidence or trust references for reproducible use. A concrete
+contracts and evidence or trust references for reproducible use. A concrete
 sealing mechanism supplies its retention and resolution contract; these terms
 alone define no cryptographic sealing operation.
 
@@ -118,7 +123,7 @@ identifies bytes under its stated assumptions. It does not establish semantic
 correctness, secrecy, security or publication permission.
 
 Source, code, proofs, receipts, digests and diagnostics exposed to an observer
-form part of the [permitted release](../properties/disclosure.md). This includes values
+form part of the [permitted release](../../../formal/docs/spec/properties/disclosure.md). This includes values
 revealed through secret-dependent specialization. Admission to execute a
 candidate is not by itself admission to publish every artifact of its creation.
 
@@ -128,7 +133,7 @@ An executable artifact profile distinguishes:
 
 | Field class | Interpretation |
 |---|---|
-| Format and semantic versions | How to decode the artifact and interpret its constructs |
+| Format and semantic identities | How to decode the artifact and interpret its constructs |
 | Mandatory capabilities | Additional facilities required to admit or use it |
 | Realization, rule and claim | What is executed, which checking rule applies, and which proposition is established |
 | Source and context | The consumer-retained subject and its declared dependencies |
@@ -143,7 +148,7 @@ optimization; missing effect information cannot default to purity.
 
 Extending a logical-plan claim to generated native code requires a realization
 definition, a checking rule and the corresponding realization laws. The
-[direct envelope](../profiles/compiler/direct-plan.md#envelope-grammar) fixes one
+[direct envelope](../../../formal/docs/spec/profiles/compiler/direct-plan.md#envelope-grammar) fixes one
 concrete instance of these distinctions.
 
 ## Exact retained content

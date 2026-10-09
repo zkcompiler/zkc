@@ -1,18 +1,8 @@
-"""Locate the executables a cross-build test needs, by name.
+"""Resolve native compiler/runtime tools without falling back to PATH.
 
-A test here runs tools from three separate builds in separate processes and
-compares what they do. It never looks inside another build's directory, and it
-never receives an executable path from its caller: it names the tool it needs
-and this module finds it. Which Lean reference a test compares against is part
-of what the test is, so the test states it rather than the invocation.
-
-    ZKC_COMPILER_BIN   zkc-compile, zkc-opt and the compiler's own examples
-    ZKC_NATIVE_BIN     zkc, artifact-primitive and the runtime's examples
-    ZKC_LEAN_BIN       the compiled Lean references
-
-Missing means missing. A test that cannot find its tool fails, names the
-directory that was searched and says what to build, rather than passing while
-checking nothing or comparing against the wrong reference.
+ZKC_COMPILER_BIN and ZKC_NATIVE_BIN select build output directories. Missing
+executables fail with the selected path and a build command. Optional formal
+checks resolve their own Lake outputs independently.
 """
 
 import os
@@ -29,8 +19,7 @@ from reporting import new_directory  # noqa: E402
 
 BUILDS = {
     "compiler": "just build-compiler",
-    "native": "just build-rust",
-    "lean": "just build-lean",
+    "native": "just build-rust build-test-drivers",
 }
 
 
@@ -39,7 +28,7 @@ class Missing(Exception):
 
 
 class Toolchain:
-    """The three build output directories, and the executables inside them."""
+    """The compiler and runtime build output directories, and the executables inside them."""
 
     def __init__(self, **overrides):
         validate_environment()
@@ -67,8 +56,7 @@ class Toolchain:
     def present(self, kind):
         """The executables this build has actually produced, for a failure to name.
 
-        Lake writes a digest, a response file and a trace beside each binary; an
-        extension is what separates those from the executable itself.
+        Report executable outputs without library and metadata sidecars.
         """
         directory = self.directories[kind]
         if not directory.is_dir():
@@ -86,48 +74,15 @@ class Toolchain:
     def optimizer(self):
         return self.tool("compiler", "zkc-opt")
 
-    @property
-    def source_bench(self):
-        return self.tool("compiler", "zkc-source-bench")
-
-    def service(self, name):
-        """A tool from the compiler's own service example, by its name."""
-        return self.tool("compiler", str(Path("examples/service") / name))
-
-    def native_test(self, name):
-        """A native API test executable, which CMake writes beside its source.
-
-        The compiler build's own directory may still hold an older copy of one
-        of these, from a configuration that wrote them there, so the directory
-        is part of the name.
-        """
-        return self.tool("compiler", str(Path("test") / name))
-
     # The native build.
 
     @property
     def runtime(self):
         return self.tool("native", "zkc")
 
-    @property
-    def primitive(self):
-        return self.tool("native", "artifact-primitive")
-
-    def example(self, name):
-        """A Rust example binary, by its name."""
-        return self.tool("native", str(Path("examples") / name))
-
-    # The formal build.
-
-    def checker(self, name):
-        """A compiled Lean reference, by its executable name.
-
-        The ten references are not interchangeable: a source consumer refuses
-        an artifact descriptor, and an artifact reference refuses a table plan.
-        Passing the wrong one produces a plausible refusal rather than an
-        obvious error, so the name belongs to the test.
-        """
-        return self.tool("lean", name)
+    def driver(self, name):
+        """An integration driver from the dedicated test package."""
+        return self.tool("native", name)
 
 
 # Repeated requests in one process share a directory. Other processes and
@@ -145,7 +100,7 @@ def records_root():
 
 
 def records(case=None):
-    """The directory the calling test writes its sources, plans and reports to.
+    """The directory the calling test writes its inputs, programs and reports to.
 
     The name is the test file's, not a string the test repeats: every one of
     these directories was named after the file it was written in, so writing it

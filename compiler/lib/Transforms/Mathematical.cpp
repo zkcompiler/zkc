@@ -1,6 +1,7 @@
 #include "zkc/Transforms/Mathematical.h"
 #include "MathematicalSupport.h"
 #include "MathematicalValues.h"
+#include "PreparedProtocol.h"
 #include "ProtocolApplications.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IRMapping.h"
@@ -9,6 +10,7 @@
 #include "mlir/Transforms/CSE.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Relation.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
@@ -16,9 +18,12 @@
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringSet.h"
 #include <map>
@@ -26,31 +31,41 @@
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
-namespace {
 // Only already-admitted acyclic helpers enter here. Expand on the candidate
 // copy, preserving the caller's snapshot and ordinary SSA use-def ownership.
-LogicalResult inlineHelpers(zkc::protocol_ir::MathematicalOp program,
-                            unsigned &remaining, uint64_t &indices,
-                            SymbolTableCollection &tables) {
+LogicalResult inlineHelpers(Operation *program, unsigned &remaining,
+                            uint64_t &indices, SymbolTableCollection &tables,
+                            Operation *lookupRoot, uint64_t *work) {
   SmallVector<func::CallOp> pending;
-  program.walk([&](func::CallOp call) { pending.push_back(call); });
+  program->walk([&](func::CallOp call) { pending.push_back(call); });
   while (!pending.empty()) {
     auto call = pending.pop_back_val();
-    auto helper = tables.lookupNearestSymbolFrom<func::FuncOp>(
-        call, call.getCalleeAttr());
+    auto helper = lookupRoot ? tables.lookupSymbolIn<func::FuncOp>(
+                                   lookupRoot, call.getCalleeAttr())
+                             : tables.lookupNearestSymbolFrom<func::FuncOp>(
+                                   call, call.getCalleeAttr());
+    if (!helper || helper.isExternal())
+      return diagnostics::emit(call.emitError(), "mathematical-helper",
+                               "expected a helper body");
     IRMapping mapping;
     for (auto [arg, input] : zip(helper.getArguments(), call.getOperands()))
       mapping.map(arg, input);
     OpBuilder builder(call);
     for (auto &op : helper.front().without_terminator()) {
-      if (!remaining--)
+      if (!remaining)
         return diagnostics::emit(call.emitError(),
                                  "mathematical-expansion-limit");
+      --remaining;
       uint64_t slots = op.getNumOperands() + op.getNumResults();
       if (slots > indices)
         return diagnostics::emit(call.emitError(),
                                  "mathematical-expansion-limit");
+      if (work && slots + 1 > *work)
+        return diagnostics::emit(call.emitError(),
+                                 "mathematical-expansion-limit");
       indices -= slots;
+      if (work)
+        *work -= slots + 1;
       auto *copy = builder.clone(op, mapping);
       copy->setLoc(CallSiteLoc::get(op.getLoc(), call.getLoc()));
       if (auto nested = dyn_cast<func::CallOp>(copy))
@@ -64,6 +79,7 @@ LogicalResult inlineHelpers(zkc::protocol_ir::MathematicalOp program,
   return success();
 }
 
+namespace {
 class Projector {
   OpBuilder builder;
   SymbolTableCollection sourceSymbols;
@@ -463,7 +479,7 @@ class Projector {
     auto target = zkc::protocol_ir::ParticipantOp::create(
         builder, program.getLoc(), fresh(),
         builder.getFunctionType(inputTypes, outputTypes), program.getSymName(),
-        roleName.getValue(), builder.getArrayAttr({}), ArrayAttr());
+        roleName.getValue());
     if (!servicePorts.empty())
       target->setAttr("service_ports", builder.getArrayAttr(servicePorts));
     auto *body = new Block();
@@ -512,8 +528,7 @@ public:
     auto root = zkc::protocol_ir::ProtocolModuleOp::create(
         builder, source.getLoc(),
         zkc::protocol_ir::ProfileAttr::get(
-            builder.getContext(), zkc::protocol_ir::Profile::Participant),
-        zkc::protocol_ir::ExecutionContractAttr());
+            builder.getContext(), zkc::protocol_ir::Profile::Participant));
     declarations = new Block();
     root.getBody().push_back(declarations);
     builder.setInsertionPointToEnd(declarations);
@@ -580,6 +595,133 @@ LogicalResult verifyNestedDegrees(Operation *root) {
   });
   return failure(result.wasInterrupted());
 }
+namespace {
+LogicalResult checkHelperObservations(protocol_ir::ProtocolModuleOp unit,
+                                      ArrayRef<StringRef> helpers,
+                                      uint64_t &work) {
+  SymbolTableCollection symbols;
+  auto &table = symbols.getSymbolTable(unit);
+  llvm::StringSet<> seen;
+  unsigned remaining = std::min<uint64_t>(realizedHelperOperationLimit, work);
+  uint64_t indices = std::min<uint64_t>(1000000, work);
+  for (auto name : helpers) {
+    if (!work)
+      return diagnostics::emit(unit.emitError(),
+                               "mathematical-expansion-limit");
+    --work;
+    auto helper = table.lookup<func::FuncOp>(name);
+    if (!helper || helper.isExternal() || !seen.insert(name).second)
+      return diagnostics::emit(unit.emitError(), "mathematical-helper",
+                               "expected distinct pure helper bodies");
+    auto traversal = helper.walk([&](Operation *op) {
+      uint64_t slots = op->getNumOperands() + op->getNumResults();
+      if (!remaining || slots > indices || slots + 1 > work) {
+        diagnostics::emit(op->emitError(), "mathematical-expansion-limit");
+        return WalkResult::interrupt();
+      }
+      --remaining;
+      indices -= slots;
+      work -= slots + 1;
+      return WalkResult::advance();
+    });
+    if (traversal.wasInterrupted())
+      return failure();
+    // Detached copies use the immutable source symbol table explicitly.
+    // Dependencies and unrelated protocol bodies are never cloned or edited.
+    OwningOpRef<func::FuncOp> scratch(cast<func::FuncOp>(helper->clone()));
+    auto result =
+        inlineHelpers(*scratch, remaining, indices, symbols, unit, &work);
+    if (failed(result) || failed(verifyNestedDegrees(*scratch)))
+      return failure();
+  }
+  return success();
+}
+} // namespace
+LogicalResult verifyHelperObservations(ModuleOp original,
+                                       ArrayRef<StringRef> helpers) {
+  if (failed(verify(original)))
+    return failure();
+  if (!hasSingleElement(*original.getBody()))
+    return diagnostics::emit(original.emitError(), "mathematical-module");
+  auto unit =
+      dyn_cast<protocol_ir::ProtocolModuleOp>(original.getBody()->front());
+  if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol)
+    return diagnostics::emit(original.emitError(), "mathematical-module");
+  uint64_t work = 1000000;
+  return checkHelperObservations(unit, helpers, work);
+}
+Error checkFormulaDefinitions(ModuleOp original, uint64_t &remaining) {
+  if (!hasSingleElement(*original.getBody()))
+    return error("target.admission", "expected one mathematical module");
+  auto unit =
+      dyn_cast<protocol_ir::ProtocolModuleOp>(original.getBody()->front());
+  if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol)
+    return error("target.admission", "expected mathematical protocol profile");
+  SymbolTable table(unit);
+  SmallVector<std::string> names;
+  llvm::StringSet<> roots;
+  for (auto &op : unit.getBody().front()) {
+    if (!remaining)
+      return error("source.limit", "formula admission work limit exceeded");
+    --remaining;
+    auto declaration = dyn_cast<relation::DeclareOp>(op);
+    if (!declaration || declaration.getKind() != "zkc.language.formula/0")
+      continue;
+    auto name = relation::formulaSymbol(declaration.getKey());
+    auto helper = table.lookup<func::FuncOp>(name);
+    if (declaration.getKey() != declaration.getSymName() || !helper ||
+        helper.isExternal() ||
+        helper.getFunctionType() != declaration.getSignature() ||
+        helper.getVisibility() != SymbolTable::Visibility::Private ||
+        !roots.insert(name).second) {
+      declaration.emitError("invalid formula helper binding");
+      return error("target.admission", "invalid formula helper binding");
+    }
+    names.push_back(std::move(name));
+  }
+  if (names.empty())
+    return Error::success();
+  auto walk = unit.walk([&](Operation *op) {
+    uint64_t work =
+        1 + op->getNumOperands() + op->getNumResults() + op->getAttrs().size();
+    if (work > remaining)
+      return WalkResult::interrupt();
+    remaining -= work;
+    return WalkResult::advance();
+  });
+  if (walk.wasInterrupted())
+    return error("source.limit", "formula symbol use work limit exceeded");
+  auto uses = SymbolTable::getSymbolUses(&unit.getBody());
+  if (!uses)
+    return error("target.admission", "formula symbol uses cannot be resolved");
+  for (const auto &use : *uses) {
+    if (!remaining)
+      return error("source.limit", "formula symbol use work limit exceeded");
+    --remaining;
+    if (roots.contains(use.getSymbolRef().getRootReference())) {
+      use.getUser()->emitError(
+          "specification predicate has executable references");
+      return error("target.admission",
+                   "specification predicate has executable references");
+    }
+  }
+  SmallVector<StringRef> helpers;
+  for (const auto &name : names)
+    helpers.push_back(name);
+  bool limited = false;
+  ScopedDiagnosticHandler limits(original.getContext(), [&](Diagnostic
+                                                                &diagnostic) {
+    for (const auto &refusal : diagnostics::refusals(diagnostic))
+      limited |= refusal.code == "mathematical-expansion-limit";
+    return failure(); // Keep the caller's diagnostic and source attribution.
+  });
+  if (failed(checkHelperObservations(unit, helpers, remaining)))
+    return error(limited ? "source.limit" : "target.admission",
+                 limited ? "predicate observation work limit exceeded"
+                         : "predicate polynomial observation check failed");
+  return Error::success();
+}
+
 LogicalResult simplifyCalculations(Operation *body) {
   // Required bounds must be checked before DCE can erase an invalid unused
   // observation. Helpers have been transparently expanded by preparation.
@@ -636,7 +778,7 @@ namespace {
 // Admit the original whole unit before expanding or erasing anything. Every
 // rewrite is confined to mathematical protocol bodies on an owned candidate;
 // executable local definitions will not be traversed by this optimization.
-OwningOpRef<ModuleOp> prepare(ModuleOp source, bool simplify = true) {
+OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify) {
   if (failed(verify(source)))
     return {};
   if (!llvm::hasSingleElement(*source.getBody())) {
@@ -654,7 +796,8 @@ OwningOpRef<ModuleOp> prepare(ModuleOp source, bool simplify = true) {
     return {};
   }
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
-  if (failed(expandPolynomialRecipes(*candidate)))
+  if (failed(expandPolynomialRecipes(*candidate)) ||
+      failed(expandMathRealizations(*candidate)))
     return {};
   // Algorithm expansion either leaves admitted IR untouched or returns a
   // verified candidate; static application analysis relies on that contract.
@@ -669,14 +812,15 @@ OwningOpRef<ModuleOp> prepare(ModuleOp source, bool simplify = true) {
     return {};
   OwningOpRef<protocol_ir::ProtocolModuleOp> expanded(
       cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
-  // Canonical local application expansion is the only permitted preparation
-  // change to authored execution. Freeze that result before math rewriting.
+  // Freeze canonical local application expansion and realized math helpers
+  // before participant rewriting. A realization's logical_origin names its
+  // original pure helper; its recipes were checked before reaching this point.
   OwningOpRef<ModuleOp> frozenLocals(ModuleOp::create(unit.getLoc()));
   OpBuilder snapshotBuilder(frozenLocals->getBodyRegion());
   for (auto &op : unit.getBody().front())
     if (isa<zkc::local::FuncOp, zkc::local::OperationBindingOp>(op))
       snapshotBuilder.clone(op);
-  unsigned remainingHelpers = 100000;
+  unsigned remainingHelpers = realizedHelperOperationLimit;
   uint64_t helperIndices = 1000000;
   SymbolTableCollection helperSymbols;
   for (auto program :
@@ -696,6 +840,19 @@ OwningOpRef<ModuleOp> prepare(ModuleOp source, bool simplify = true) {
     return {};
   return candidate;
 }
+
+OwningOpRef<ModuleOp> projectPrepared(ModuleOp candidate) {
+  // Retain the actual prepared subject, including its role restrictions.
+  // Projection selects the permitted local component without mutating it.
+  auto output = Projector(candidate.getContext()).run(candidate);
+  if (!output || failed(verify(*output)) ||
+      failed(verifyAuthoredLocalsPreserved(&candidate.getBody()->front(),
+                                           &output->getBody()->front())) ||
+      failed(verifyProjectionPreserved(candidate, *output)))
+    return {};
+  return output;
+}
+
 struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PreparePass)
   PreparePass() = default;
@@ -711,7 +868,7 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   }
   void runOnOperation() final {
     auto source = getOperation();
-    auto candidate = prepare(source, simplify);
+    auto candidate = prepareSource(source, simplify);
     if (!candidate)
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
@@ -772,22 +929,54 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
   }
   void runOnOperation() final {
     auto source = getOperation();
-    auto candidate = prepare(source, simplify);
+    auto candidate = prepareSource(source, simplify);
     if (!candidate)
       return signalPassFailure();
-    // Retain the actual prepared subject, including its role restrictions.
-    // Projection selects the permitted local component without mutating it.
-    auto output = Projector(source.getContext()).run(*candidate);
-    if (!output || failed(verify(*output)) ||
-        failed(verifyAuthoredLocalsPreserved(&candidate->getBody()->front(),
-                                             &output->getBody()->front())) ||
-        failed(verifyProjectionPreserved(*candidate, *output)))
+    auto output = projectPrepared(*candidate);
+    if (!output)
       return signalPassFailure();
     source->setAttrs(output->getOperation()->getAttrs());
     source.getBodyRegion().takeBody(output->getBodyRegion());
   }
 };
 } // namespace
+
+std::optional<PreparedProtocol> PreparedProtocol::prepare(ModuleOp source) {
+  auto candidate = prepareSource(source, false);
+  if (!candidate)
+    return std::nullopt;
+  return PreparedProtocol(std::move(candidate));
+}
+
+OwningOpRef<ModuleOp> PreparedProtocol::snapshot() const {
+  return module ? OwningOpRef<ModuleOp>(cast<ModuleOp>(module.get()->clone()))
+                : OwningOpRef<ModuleOp>();
+}
+
+OwningOpRef<ModuleOp> PreparedProtocol::project(bool simplify) && {
+  auto prepared = std::move(module);
+  if (!prepared)
+    return {};
+  if (!simplify)
+    return projectPrepared(*prepared);
+  // Preparation has already checked the entire unsimplified source. Rewrite
+  // only a private copy, retaining that subject for the checked edge. Neither
+  // helpers nor applications need to be expanded a second time.
+  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(prepared->clone()));
+  auto unit =
+      cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+  for (auto program :
+       unit.getBody().front().getOps<protocol_ir::MathematicalOp>())
+    if (failed(simplifyCalculations(program)))
+      return {};
+  if (failed(verify(*candidate)) ||
+      failed(verifyProtocolPreparationPreserved(&prepared->getBody()->front(),
+                                                unit)) ||
+      failed(
+          verifyAuthoredLocalsPreserved(&prepared->getBody()->front(), unit)))
+    return {};
+  return projectPrepared(*candidate);
+}
 } // namespace zkc::mathematical
 
 std::unique_ptr<mlir::Pass>

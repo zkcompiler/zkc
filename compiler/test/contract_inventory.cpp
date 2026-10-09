@@ -57,7 +57,7 @@ int main() {
                      {"default", entry.isDefault}});
   }
   outs() << json::Value(json::Object{
-                {"profile", "zkc.contract-catalog/1"},
+                {"profile", "zkc.contract-catalog"},
                 {"domains", std::move(domains)},
                 {"codecs", std::move(codecs)},
                 {"logical_types", std::move(types)},

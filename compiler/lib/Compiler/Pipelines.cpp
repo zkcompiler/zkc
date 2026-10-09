@@ -4,31 +4,7 @@
 #include "zkc/Transforms/Passes.h"
 
 namespace zkc {
-void buildTablePipeline(mlir::OpPassManager &pm, bool simplify,
-                        llvm::StringRef physicalMode) {
-  if (simplify)
-    pm.addPass(createSimplifyTableRegionsPass());
-  pm.addPass(createLowerPIRToPlanPass());
-  if (!physicalMode.empty())
-    pm.addPass(createLowerPlanToPhysicalPass(physicalMode));
-}
-void buildParticipantPipeline(mlir::OpPassManager &pm,
-                              const protocol::PhysicalOptions &options,
-                              bool projectOnly,
-                              LinearContractionStats *statistics) {
-  pm.addPass(protocol::createProjectParticipantsPass());
-  if (!projectOnly)
-    pm.addPass(protocol::createSelectPhysicalPass(
-        options.implementations.choices, options.linearContractions,
-        options.releaseStorage, statistics));
-}
 namespace {
-struct TablePipelineOptions : mlir::PassPipelineOptions<TablePipelineOptions> {
-  Option<bool> simplify{*this, "simplify", llvm::cl::init(false),
-                        llvm::cl::desc("Simplify identical table endpoints")};
-  Option<std::string> physical{*this, "physical", llvm::cl::init(""),
-                               llvm::cl::desc("Empty, lazy or materialized")};
-};
 struct ParticipantOptions : mlir::PassPipelineOptions<ParticipantOptions> {
   Option<bool> projectOnly{*this, "project-only", llvm::cl::init(false),
                            llvm::cl::desc("Stop after participant projection")};
@@ -40,18 +16,16 @@ struct ParticipantOptions : mlir::PassPipelineOptions<ParticipantOptions> {
 };
 } // namespace
 void registerCompilerPipelines() {
-  static mlir::PassPipelineRegistration<TablePipelineOptions> tables(
-      "zkc-table-pipeline", "Lower a finite closed-source program",
-      [](mlir::OpPassManager &pm, const TablePipelineOptions &options) {
-        buildTablePipeline(pm, options.simplify, options.physical);
-      });
   static mlir::PassPipelineRegistration<ParticipantOptions> participants(
       "zkc-participant-pipeline", "Project and plan an interactive protocol",
       [](mlir::OpPassManager &pm, const ParticipantOptions &options) {
-        protocol::PhysicalOptions physical;
-        physical.linearContractions = options.linear;
-        physical.releaseStorage = options.release;
-        buildParticipantPipeline(pm, physical, options.projectOnly);
+        pm.addPass(protocol::createProjectProtocolPass());
+        if (!options.projectOnly) {
+          pm.addPass(protocol::createEliminatePolynomialsPass());
+          pm.addPass(protocol::createLowerMathPass());
+          pm.addPass(protocol::createSelectPhysicalPass({}, options.linear,
+                                                        options.release));
+        }
       });
 }
 } // namespace zkc

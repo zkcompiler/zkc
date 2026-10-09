@@ -1,0 +1,32 @@
+module sample;
+domain Fr = field("bls12-381.fr");
+type Vector<F: Field> = builtin("vector", F);
+fn sums<F: Field>(values: Vector<F>) -> (F, F) {
+  let parts = kernel<F>("vector.split", values);
+  return (kernel<F>("vector.sum", parts.0), kernel<F>("vector.sum", parts.1));
+}
+fn fold<F: Field>(values: Vector<F>, challenge: F) -> Vector<F> {
+  let parts = kernel<F>("vector.split", values);
+  let low = kernel<F>("vector.scale", parts.0, 1 - challenge);
+  let high = kernel<F>("vector.scale", parts.1, challenge);
+  return kernel<F>("vector.add", low, high);
+}
+fn sum<F: Field>(values: Vector<F>) -> F {
+  return kernel<F>("vector.sum", values);
+}
+protocol Run roles(P,V)(values: Vector<Fr> @P, claim: Fr @V, n: index @(P,V))
+    using(coins: Random<Fr> @V) -> (prover: Fr @P, verifier: Fr @V) {
+  let (last, final_claim) = repeat roles(P,V)(i < n, max 2)
+      carry(table = values @P, current = claim @V) capture() using(coins) {
+    local P let parts = sums(table);
+    let received = send P -> V(parts);
+    guard @V current == received.0 + received.1;
+    let cv = coins.draw();
+    let cp = send V -> P(cv);
+    local P let next = fold(table, cp);
+    yield (table = next, current = (1 - cv) * received.0 + cv * received.1);
+  };
+  local P let final_sum = sum(last);
+  return (prover = final_sum, verifier = final_claim);
+}
+entry Demo = Run;

@@ -10,7 +10,7 @@ open Lean (Json)
 -- the public entry point without requiring the native compiler or Rust runner.
 private def parse (text : String) : Json := (Json.parse text).toOption.getD .null
 
-private def source : Json := parse r#"["zkc.protocol/1",
+private def source : Json := parse r#"["zkc.protocol/0",
   [["and","bool.and",[],""]],
   [["function","B",[["x","bool"],["y","bool"]],["bool"],
     [["op","combine","and",[],["x","y"],["z"]],["return",["z"]]],["B",[]]]],
@@ -18,17 +18,17 @@ private def source : Json := parse r#"["zkc.protocol/1",
     [["P","bool"]],[],[["local","step","P","B",["x","y"],["z"]],["return",["z"]]]]],
   [["instance","root","Main",[],[],[["P","P"]]]],[["entry","main","root"]]]"#
 
-private def candidate : Json := parse r#"["zkc.participants/1",
+private def candidate : Json := parse r#"["zkc.participants/0",
   [["and","bool.and",[],"arkworks/bool.and"]],"physical",
-  [["function","B",[["a","bool@native.bool/1"],["b","bool@native.bool/1"]],
-    ["bool@native.bool/1"],[["op","combine","and",[],["a","b"],["c"]],["return",["c"]]],["B",[]]]],
-  [["participant","p","root","P",[],[["x","bool@native.bool/1"],["y","bool@native.bool/1"]],
-    ["bool@native.bool/1"],[["local","step","B",["x","y"],["z"]],["return",["z"]]]]],
+  [["function","B",[["a","bool@native.bool/0"],["b","bool@native.bool/0"]],
+    ["bool@native.bool/0"],[["op","combine","and",[],["a","b"],["c"]],["return",["c"]]],["B",[]]]],
+  [["participant","p","root","P",[],[["x","bool@native.bool/0"],["y","bool@native.bool/0"]],
+    ["bool@native.bool/0"],[["local","step","B",["x","y"],["z"]],["return",["z"]]]]],
   [["entry","main",[["P","p"]]]]]"#
 
-private def inputs : Json := parse r#"["zkc.reference-inputs/1","main","test",
+private def inputs : Json := parse r#"["zkc.reference-inputs/0","main","test",
   [["P",[["x",["bool","true"]],["y",["bool","false"]]]]],[],[],[]]"#
-private def storage : Json := parse r#"["zkc.local-resources/1","67108864",[]]"#
+private def storage : Json := parse r#"["zkc.local-resources/0","67108864",[]]"#
 
 private def replace : Json → List Nat → Json → Json
   | _, [], value => value
@@ -74,8 +74,8 @@ private def twoRoleSource :=
     [4, 0, 5] (parse r#"[["P","P"],["V","V"]]"#)
 private def twoRoleCandidate :=
   replace (replace candidate [4] (parse r#"[
-    ["participant","p","root","P",[],[["x","bool@native.bool/1"],["y","bool@native.bool/1"]],
-      ["bool@native.bool/1"],[["local","step","B",["x","y"],["z"]],["return",["z"]]]],
+    ["participant","p","root","P",[],[["x","bool@native.bool/0"],["y","bool@native.bool/0"]],
+      ["bool@native.bool/0"],[["local","step","B",["x","y"],["z"]],["return",["z"]]]],
     ["participant","v","root","V",[],[],[],[["return",[]]]]]"#))
     [5, 0, 2] (parse r#"[["P","p"],["V","v"]]"#)
 private def twoRoleInputs := replace inputs [3] (parse r#"[

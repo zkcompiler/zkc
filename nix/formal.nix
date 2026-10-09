@@ -9,7 +9,7 @@
 }:
 stdenvNoCC.mkDerivation {
   pname = "zkc-formal";
-  version = "0.1.0";
+  version = "0.0.0";
   src = source;
   outputs = [
     "out"
