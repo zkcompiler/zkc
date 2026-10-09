@@ -23,18 +23,23 @@ def below (base name : Name) : Bool := base.isPrefixOf name
 
 /-- Implementation dependencies of the generic library cannot enter protocol
 applications or downstream clients. Probability also excludes source/compiler
-syntax. External theorem ecosystems belong only to the optional package. -/
+syntax. External theorem ecosystems belong only to their optional packages,
+and neither optional library may depend on tests or on the other package. -/
 def permitted (owner dependency : Name) : Bool := Id.run do
   if below `Zkc owner then
-    if [ `Tests, `TestsArkLib, `Examples, `Tools, `ZkcArkLib,
-         `ArkLib, `VCVio, `PolyFun ].any (below · dependency) then return false
+    if [ `Tests, `TestsArkLib, `TestsClean, `Examples, `Tools, `ZkcArkLib, `ZkcClean,
+         `ArkLib, `VCVio, `PolyFun, `Clean ].any (below · dependency) then return false
     if !below `Zkc.Protocols owner && below `Zkc.Protocols dependency then return false
     if [ `Zkc.Modules, `Zkc.Source ].any (below · owner) &&
         below `Zkc.Compiler dependency then return false
     if below `Zkc.Probability owner &&
         [ `Zkc.Source, `Zkc.Compiler ].any (below · dependency) then return false
   if below `ZkcArkLib owner &&
-      [ `Tests, `TestsArkLib, `Examples, `Tools ].any (below · dependency) then return false
+      [ `Tests, `TestsArkLib, `TestsClean, `Examples, `Tools, `ZkcClean, `Clean ].any
+        (below · dependency) then return false
+  if below `ZkcClean owner &&
+      [ `Tests, `TestsArkLib, `TestsClean, `Examples, `Tools, `ZkcArkLib, `ArkLib, `VCVio,
+        `PolyFun ].any (below · dependency) then return false
   return true
 
 abbrev Graph := Std.HashMap Name (Array Name)

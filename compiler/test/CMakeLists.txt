@@ -102,6 +102,11 @@ add_zkc_test(air Relation air-model)
 add_zkc_test(air_ring_expression Relation air-ring-expression)
 add_zkc_test(air_polynomial Relation air-polynomial-model)
 add_zkc_test(relation_bundle Relation relation-bundle)
+# Also driven with the Rust ring provider by tests/protocol/test_clean_air_conformance.py.
+add_zkc_test(clean_air_conformance Relation)
+add_test(NAME clean-air-conformance COMMAND zkc-clean_air_conformance-test
+  "${PROJECT_SOURCE_DIR}/../tests/fixtures/clean/air-control.json")
+set_tests_properties(clean-air-conformance PROPERTIES LABELS native)
 add_zkc_test(operation_contracts Contracts operation-contracts)
 target_compile_definitions(zkc-operation_contracts-test PRIVATE
   ZKC_HISTORY_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/contracts/history.txt")

@@ -48,6 +48,12 @@ test = false
 bench = false
 
 [[bin]]
+name = "clean_air_conformance"
+path = "src/clean_air_conformance.rs"
+test = false
+bench = false
+
+[[bin]]
 name = "backend_contract_conformance"
 path = "src/backend_contract_conformance.rs"
 test = false
