@@ -12,7 +12,7 @@ concrete domains, Entries and transcript constructions in
 | [`zkc::vector`](zkc/vector.zkc) | `Vector`, length/get/sum/split/add/scale/dot/fill/fold/has_length | Ordered finite vectors; fold pairs contiguous halves |
 | [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, multiply/transpose_multiply/bilinear/rows/columns | Ordered sparse matrix operations |
 | [`zkc::polynomial`](zkc/polynomial.zkc) | `Polynomial`, from_coefficients/evaluate/boundary | Runtime univariate polynomial data; boundary is p(0) + p(1) |
-| [`zkc::symbolic`](zkc/symbolic.zkc) | `Array`, `Polynomial`, pack/get/mle/from_coefficients/coefficients/evaluate/add/multiply/constant | Total formal polynomial expressions |
+| [`zkc::symbolic`](zkc/symbolic.zkc) | `Array`, `Polynomial`, pack/get/mle/from_coefficients/coefficients/evaluate/fix_prefix/sum_suffix/fix_table/add/multiply/constant | Total formal polynomial expressions |
 | [`zkc::boolean`](zkc/boolean.zkc) | both/either/different/negate | Total Boolean formulas; eager operands |
 | [`schnorr`](schnorr/lib.zkc) | `DLog<G>`, `Schnorr<G>` | Discrete-log relation and three-message group protocol |
 | [`sumcheck`](sumcheck/lib.zkc) | `Sumcheck<F, Max>` | Bounded multilinear Sumcheck over a public evaluation table |
@@ -32,12 +32,16 @@ qualified paths when both occur in one module. Formal MLEs use MSB-first Boolean
 coordinates. `mle<F, N>` keeps `N` explicit because inferring it would invert
 `pow2(N)`; ordinary field, array and result inference still applies. Coefficients
 are increasing powers; formal coefficient extraction checks its degree premise.
+`fix_prefix` substitutes leading coordinates; `sum_suffix` sums trailing Boolean
+coordinates. `fix_table` performs the same prefix substitution on an MLE table.
+Their static arguments name the remaining arity and the fixed/summed arity;
+these choices stay explicit when their sum alone would not determine them.
 Generic preconditions are completed from the intrinsic contracts and checked
 at each call. These modules select no field, commitment or transcript.
 
 The [mathematics client](../examples/projects/mathematics/README.md) compares
 formal evaluation and runtime folding. Group arithmetic already has ordinary
-`+`, `-` and scalar `*`; no duplicate group wrapper is needed. Asset-specific
+`+`, `-` and scaling as `point * scalar`; no duplicate group wrapper is needed. Asset-specific
 ring operations and component-specific PCS operations stay in their owning
 libraries, using explicit asset/component parameters and installed kernels.
 

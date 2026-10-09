@@ -6,7 +6,6 @@
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/Refusal.h"
-#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -21,35 +20,28 @@ int runLanguageCompiler(int argc, char **argv) {
   bool declarations = false;
   EntryOptions options;
   Limits limits;
-  auto refuse = [&](Error error) {
+  auto refuse = [&](Error failure) {
+    std::vector<Diagnostic> messages;
+    auto append = [&](StringRef code, StringRef message) {
+      messages.push_back(
+          {code.take_front(129).str(), message.take_front(2049).str(), {}, {}});
+    };
     handleAllErrors(
-        std::move(error),
-        [&](const DiagnosticError &diagnostic) {
-          const auto &value = diagnostic.diagnostic();
-          if (captured)
-            errs() << formatDiagnostics(*captured, {value});
-          else {
-            printEscapedString(StringRef(value.code).take_front(128), errs());
-            errs() << ": ";
-            printEscapedString(StringRef(value.message).take_front(2048),
-                               errs());
-            errs() << '\n';
-          }
+        std::move(failure),
+        [&](const DiagnosticError &error) {
+          messages.push_back(error.diagnostic());
         },
-        [&](const CompilationError &diagnostic) {
-          for (const auto &refusal : diagnostic.refusals)
-            errs() << refusal.code << ": " << refusal.detail << '\n';
-          errs() << diagnostic.message << '\n';
-          for (const auto &location : diagnostic.locations) {
-            errs() << "at ";
-            printEscapedString(StringRef(location.filename).take_front(512),
-                               errs());
-            errs() << ':' << location.line << ':' << location.column << '\n';
-          }
+        [&](const CompilationError &error) {
+          for (const auto &refusal : ArrayRef(error.refusals).take_front(16))
+            append(refusal.code, refusal.detail);
+          append("", error.message);
+          for (const auto &location : ArrayRef(error.locations).take_front(4))
+            append("", "at " + location.filename + ":" +
+                           std::to_string(location.line) + ":" +
+                           std::to_string(location.column));
         },
-        [&](const ErrorInfoBase &diagnostic) {
-          errs() << diagnostic.message() << '\n';
-        });
+        [&](const ErrorInfoBase &error) { append("", error.message()); });
+    errs() << formatDiagnostics(messages, captured ? &*captured : nullptr);
     return 1;
   };
   StringRef command(argv[1]);
@@ -63,12 +55,14 @@ int runLanguageCompiler(int argc, char **argv) {
   for (int i = 2; i < argc; ++i) {
     StringRef arg(argv[i]);
     if (arg.consume_front("--source-format=")) {
-      if (!format.empty())
-        return refuse(error("source.options", "duplicate source format"));
+      if (arg.empty() || !format.empty())
+        return refuse(error("source.options",
+                            "source format must be nonempty and unique"));
       format = arg.str();
     } else if (arg.consume_front("--entry=")) {
-      if (!entry.empty())
-        return refuse(error("source.options", "duplicate Entry selection"));
+      if (arg.empty() || !entry.empty())
+        return refuse(error("source.options",
+                            "Entry selection must be nonempty and unique"));
       entry = arg.str();
     } else if (arg.consume_front("--module=")) {
       auto [name, path] = arg.split('=');
@@ -106,7 +100,12 @@ int runLanguageCompiler(int argc, char **argv) {
             error("source.options",
                   "--declarations is a check option and may appear once"));
       declarations = true;
-    } else if (arg == "--no-simplify")
+    } else if (command == "language-check" &&
+               (arg == "--no-simplify" || arg == "--release-storage"))
+      return refuse(
+          error("source.options",
+                "checking accepts no executable optimization options"));
+    else if (arg == "--no-simplify")
       options.simplify = false;
     else if (arg == "--release-storage")
       options.releaseStorage = true;
@@ -124,7 +123,7 @@ int runLanguageCompiler(int argc, char **argv) {
   captured = std::move(*captureResult);
   auto analysis = analyze(*captured);
   if (!analysis.diagnostics().empty()) {
-    errs() << formatDiagnostics(*captured, analysis.diagnostics());
+    errs() << formatDiagnostics(analysis.diagnostics(), &*captured);
     return 1;
   }
   auto project = analysis.checkedProject();
@@ -132,6 +131,7 @@ int runLanguageCompiler(int argc, char **argv) {
     return refuse(project.takeError());
   json::Object checked{{"format", "zkc.source-check/0"},
                        {"status", "checked"},
+                       {"phase", "complete"},
                        {"scope", entry.empty() ? "definitions" : "entry"},
                        {"capture", captured->identity()},
                        {"installation", project->installationIdentity()}};

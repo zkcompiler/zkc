@@ -46,7 +46,9 @@ zkc compile --project=zkc.json --entry=example::Proof --output=proof.entry
 `check` checks every definition, including generic library bodies, without
 requiring an Entry. With `--entry`, it also closes that Entry and checks its
 mathematical IR and source correspondence. Neither form executes a protocol.
-The JSON report records the reached scope and capture identity.
+The JSON report records the reached scope and capture identity. The compiler and
+CLI use the same flat `zkc.source-check/0` result; the CLI adds its selected
+compiler path.
 
 Use a project file or repeated `--module`/`--asset` options, never both. The
 manifest selects no Entry, backend, transcript or setup policy. Assets have
@@ -60,11 +62,13 @@ source names; see [relation inputs](relations.md) for supported formats.
 zkc check --project=libraries/zkc/zkc.json --declarations
 ```
 
-The report's `check.declarations` array lists public mathematical functions,
+The report's `declarations` array lists public mathematical functions,
 local functions and protocols by qualified name. It shows static parameters,
 permissions, input/output types, participant roles, services, completed
-requirements and effects. Inferred natural/capability requirements are marked;
-written effect allowances are separate from actual body effects. Private helpers
+requirements and effects. Members name their interface/component owner and mark
+inherited parameters; abstract members report their allowance explicitly.
+Inferred natural/capability requirements are marked; effect allowances (written
+or inherited) are separate from actual body effects. Private helpers
 are still checked but are omitted from this view. The report is diagnostic data,
 not an importable interface or a proof of protocol security.
 

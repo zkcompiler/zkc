@@ -31,8 +31,12 @@ def check(binary, compiler, output):
 
     invoke("help", "--help")
     invoke("version", "--version")
-    arguments = ["compile", "--entry=example::Proof", "--module=schnorr=schnorr.zkc",
-                 "--module=example=main.zkc", "--output=proof.entry"]
+    (output / "zkc.json").write_text(json.dumps({"format": "zkc.project/0",
+        "modules": {"schnorr": "schnorr.zkc", "example": "main.zkc"}, "assets": {}}))
+    checked = json.loads(invoke("check", "check", "--project=zkc.json", "--declarations"))
+    assert checked["status"] == "checked" and checked["scope"] == "definitions"
+    assert any(d["name"] == "schnorr::Schnorr" for d in checked["declarations"])
+    arguments = ["compile", "--entry=example::Proof", "--project=zkc.json", "--output=proof.entry"]
     built = json.loads(invoke("compile", *arguments))
     assert Path(built["compiler"]).resolve() == compiler.resolve()
     # An explicit selection must remain usable through the package wrapper.

@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -30,18 +31,29 @@ def test_source_only_check_and_selected_entry(toolchain, journal, directory):
     source, project = source_project(directory)
     command = [toolchain.runtime, 'check', f'--compiler={toolchain.compiler}']
     report = journal.json([*command, f'--project={project}'], cwd=directory.parent)
-    assert report['status'] == 'checked' and report['check']['scope'] == 'definitions'
+    assert report['status'] == 'checked' and report['scope'] == 'definitions'
     explicit = journal.json([*command, f'--module=main={source}'])
-    assert explicit['check'] == report['check']
+    assert explicit == report
     selected = journal.json([*command, f'--project={project}', '--entry=main::Job'])
-    assert selected['check']['scope'] == 'entry'
-    assert selected['check']['capture'] == report['check']['capture']
-    assert len(selected['check']['original']) == 64
+    assert selected['scope'] == 'entry'
+    assert selected['capture'] == report['capture']
+    assert len(selected['original']) == 64
     library = journal.json([*command, f'--project={ROOT}/libraries/zkc/zkc.json'])
-    assert library['check']['scope'] == 'definitions'
+    assert library['scope'] == 'definitions'
     source.write_text(source.read_text() + '\nfn unused()->bool{return 3;}\n')
-    failed = journal.json([*command, f'--project={project}'], refuses='entry-compilation')
+    failed = journal.json([*command, f'--project={project}'], refuses='source-compilation')
     assert 'source.type' in failed['diagnostics']
+
+
+def test_check_requires_a_successful_compiler_report(toolchain, journal, directory):
+    _, project = source_project(directory)
+    compiler = directory / 'compiler'
+    for text in ['not JSON', '{}', '{"format":"zkc.source-check/0","status":"refused"}',
+                 '{"format":"zkc.source-check/0","status":"checked","scope":"entry"}']:
+        compiler.write_text(f'#!{sys.executable}\nprint({text!r})\n')
+        compiler.chmod(0o755)
+        journal.run([toolchain.runtime, 'check', f'--compiler={compiler}',
+                     f'--project={project}'], refuses='source-check-format')
 
 
 def test_project_compilation_is_exact_and_inputs_are_protected(toolchain, journal, directory):
@@ -65,7 +77,7 @@ def test_project_compilation_is_exact_and_inputs_are_protected(toolchain, journa
 @pytest.mark.parametrize('change,code', [
     ({'format': 'zkc.unknown/0'}, 'source-project-format'),
     ({'extra': True}, 'source-project-format'),
-    ({'modules': {}}, 'cli-usage'),
+    ({'modules': {}}, 'source-project-format'),
     ({'modules': {'main': ''}}, 'source-project-format'),
     ({'modules': {'main=other': 'main.zkc'}}, 'source-project-format'),
     ({'assets': {'a': {'format': 'guess', 'path': 'missing'}}}, 'source-project-format'),
@@ -82,6 +94,9 @@ def test_project_ambiguity_duplicates_and_io_refuse(toolchain, journal, director
     source, project = source_project(directory)
     command = [toolchain.runtime, 'check', f'--compiler={toolchain.compiler}']
     journal.run(command, refuses='cli-usage')
+    for flags in [ ['--entry='], [f'--project={project}'], ['--no-simplify'] ]:
+        journal.run([*command, f'--project={project}', *flags], refuses='cli-option')
+    journal.run([toolchain.runtime, 'compile', '--declarations'], refuses='cli-option')
     journal.run([*command, f'--project={project}', f'--module=main={source}'], refuses='cli-usage')
     journal.run([*command, f'--module=main={source}', f'--module=main={source}'], refuses='source-project-duplicate')
     journal.run([*command, f'--project={directory}/missing'], refuses='source-project-io')
@@ -94,6 +109,21 @@ def test_project_ambiguity_duplicates_and_io_refuse(toolchain, journal, director
         journal.run([*command, f'--project={project}'], refuses='source-project-format')
     project.write_bytes(b' ' * (1024 * 1024 + 1))
     journal.run([*command, f'--project={project}'], refuses='source-project-limit')
+
+
+def test_relative_project_and_module_paths_share_the_callers_directory(toolchain, journal, directory):
+    source, _ = source_project(directory)
+    command = [toolchain.runtime, 'check', f'--compiler={toolchain.compiler}']
+    checked = journal.json([*command, '--project=zkc.json', '--entry=main::Job', '--declarations'], cwd=directory)
+    assert checked['scope'] == 'entry' and checked['entry'] == 'main::Job'
+    assert 'declarations' in checked and 'check' not in checked
+    explicit = journal.json([*command, '--module=main=main.zkc', '--entry=main::Job', '--declarations'], cwd=directory)
+    assert checked == explicit
+    before = source.read_bytes()
+    journal.run([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+                 '--module=main=main.zkc', '--entry=main::Job', '--output=main.zkc'],
+                cwd=directory, refuses='entry-output-path')
+    assert source.read_bytes() == before
 
 
 def test_project_paths_use_the_visible_parent_and_do_not_enter_identity(toolchain, journal, directory):
@@ -113,7 +143,7 @@ def test_project_paths_use_the_visible_parent_and_do_not_enter_identity(toolchai
     assert pins[0] == pins[1]
     # A symlinked manifest still names inputs relative to its visible parent.
     (relocated / 'main.zkc').write_text('module wrong;')
-    journal.run([*command, f'--project={link}', f'--output={directory}/bad.entry'], refuses='entry-compilation')
+    journal.run([*command, f'--project={link}', f'--output={directory}/bad.entry'], refuses='source-compilation')
 
 
 def test_project_assets_are_captured_and_protected(toolchain, journal, directory):
@@ -131,7 +161,7 @@ def test_project_assets_are_captured_and_protected(toolchain, journal, directory
     assert asset.read_bytes() == before
     config['assets']['product']['format'] = 'air-json'
     project.write_text(json.dumps(config))
-    journal.run([*command, f'--output={directory}/wrong.entry'], refuses='entry-compilation')
+    journal.run([*command, f'--output={directory}/wrong.entry'], refuses='source-compilation')
 
 
 def test_completed_declarations_and_actionable_inference_errors(toolchain, journal, directory):
@@ -147,7 +177,7 @@ pub fn identity(value:bool)->bool{return value;}
 use library::{zero};
 pub fn work()->bool {let unresolved = zero(); return true;}
 ''')
-    report = journal.json(command, refuses='entry-compilation')
+    report = journal.json(command, refuses='source-compilation')
     assert "cannot infer static argument 'F'" in report['diagnostics']
     assert 'library::zero' in report['diagnostics']
     assert 'note: related source' in report['diagnostics']
@@ -157,7 +187,7 @@ use library::{identity};
 domain F=field("bls12-381.fr");
 pub fn work(value:F)->bool {return identity(value);}
 ''')
-    report = journal.json(command, refuses='entry-compilation')
+    report = journal.json(command, refuses='source-compilation')
     assert 'type conflict:' in report['diagnostics'] and 'bool' in report['diagnostics']
     assert f'{library}:3:' in report['diagnostics']
     source.write_text('''module main;
@@ -167,15 +197,19 @@ pub protocol Run roles(P,V)(x:bool@(P,V))->(out:bool@V){
  return x;
 }
 ''')
-    report = journal.json(command, refuses='entry-compilation')
+    report = journal.json(command, refuses='source-compilation')
     assert 'ambiguous participant (P, V)' in report['diagnostics'] and '@Role' in report['diagnostics']
     source.write_text(source.read_text().replace('unresolved =', 'unresolved @P ='))
-    checked = journal.json([*command, '--declarations'])['check']
+    checked = journal.json([*command, '--declarations'])
     declarations = checked['declarations']
     assert [d['name'] for d in declarations] == ['library::identity', 'library::zero', 'main::Run']
     assert declarations[-1]['roles'] == ['P', 'V']
     assert declarations[1]['outputs'][0]['type'] == 'F'
     assert declarations[1]['parameters'][0]['sort'] == 'Field'
     assert declarations[0]['effects'] == {'opaque': False, 'stop': False}
-    compact = journal.json(command)['check']
+    compact = journal.json(command)
     assert 'declarations' not in compact
+    source.write_text('module main; fn bad<T:Type+Copy+Drop>(x:T)->bool{return x;}')
+    diagnostic = journal.json(command, refuses='source-compilation')['diagnostics']
+    assert 'parameter:' not in diagnostic
+    assert 'T versus bool' in diagnostic or 'bool versus T' in diagnostic

@@ -9,6 +9,13 @@
 using namespace llvm;
 namespace zkc::language {
 namespace {
+std::string atomName(StringRef name) {
+  if (name.starts_with("parameter:"))
+    return name.rsplit("::").second.str();
+  if (name.starts_with("self:"))
+    return "Self";
+  return name.str();
+}
 std::string escaped(StringRef text, size_t limit) {
   std::string result;
   raw_string_ostream out(result);
@@ -18,19 +25,19 @@ std::string escaped(StringRef text, size_t limit) {
   return result;
 }
 class Renderer {
-  const CapturedProject &capture;
+  const CapturedProject *capture;
   raw_ostream &out;
   std::map<unsigned, std::vector<unsigned>> lines;
 
 public:
-  Renderer(const CapturedProject &capture, raw_ostream &out)
+  Renderer(const CapturedProject *capture, raw_ostream &out)
       : capture(capture), out(out) {}
   void location(Span span) {
-    if (span.module.index >= capture.sources().size()) {
+    if (!capture || span.module.index >= capture->sources().size()) {
       out << " (invalid source span)\n";
       return;
     }
-    const auto &source = capture.sources()[span.module.index];
+    const auto &source = capture->sources()[span.module.index];
     if (span.begin > span.end || span.end > source.text.size()) {
       out << " (invalid source span)\n";
       return;
@@ -64,7 +71,9 @@ public:
         << "^\n";
   }
   void diagnostic(const Diagnostic &value) {
-    out << escaped(value.code, 128) << ": " << escaped(value.message, 2048);
+    if (!value.code.empty())
+      out << escaped(value.code, 128) << ": ";
+    out << escaped(value.message, 2048);
     if (value.primary)
       location(*value.primary);
     else
@@ -87,8 +96,8 @@ public:
   }
 };
 } // namespace
-std::string formatDiagnostics(const CapturedProject &capture,
-                              ArrayRef<Diagnostic> diagnostics) {
+std::string formatDiagnostics(ArrayRef<Diagnostic> diagnostics,
+                              const CapturedProject *capture) {
   std::string result;
   BoundedStream out(result, 64 * 1024 - 64);
   Renderer renderer(capture, out);
@@ -104,5 +113,60 @@ std::string formatDiagnostics(const CapturedProject &capture,
   else if (shown < diagnostics.size())
     out << diagnostics.size() - shown << " further diagnostics omitted\n";
   return result;
+}
+std::string formatNatural(const Natural &natural) {
+  std::string result;
+  for (const auto &[factors, coefficient] : natural.terms()) {
+    if (!result.empty())
+      result += " + ";
+    bool product = coefficient != 1 || factors.empty();
+    if (product)
+      result += std::to_string(coefficient);
+    for (const auto &factor : factors) {
+      if (product)
+        result += " * ";
+      auto name = atomName(factor.name);
+      if (factor.kind == Natural::Factor::Kind::PowerOfTwo)
+        name = "pow2(" + name + ")";
+      else if (factor.kind == Natural::Factor::Kind::Projection)
+        name += "::" + factor.member;
+      result += name;
+      product = true;
+    }
+  }
+  return result.empty() ? "0" : result;
+}
+std::string formatType(const Type &type) {
+  using K = Type::Kind;
+  if (type.kind == K::Natural)
+    return formatNatural(type.dimension);
+  if (type.kind == K::Array)
+    return "[" + formatType(type.arguments.front()) + "; " +
+           formatNatural(type.dimension) + "]";
+  if ((type.kind == K::Associated || !domainSort(type).empty()) &&
+      !type.arguments.empty())
+    return formatType(type.arguments.front()) +
+           "::" + StringRef(type.domain).rsplit("::").second.str();
+  if (type.arguments.empty()) {
+    if (type.symbolic)
+      return atomName(type.domain);
+    return spelling(type);
+  }
+  bool tuple = type.kind == K::Tuple;
+  bool builtin = type.kind == K::Builtin || type.kind == K::Formal;
+  std::string result =
+      tuple ? "("
+      : builtin
+          ? std::string(type.kind == K::Builtin ? "builtin(\"" : "formal(\"") +
+                type.domain + "\", "
+          : atomName(type.domain) + "<";
+  for (unsigned i = 0; i < type.arguments.size(); ++i) {
+    if (i)
+      result += ", ";
+    result += formatType(type.arguments[i]);
+  }
+  if (tuple && type.arguments.size() == 1)
+    result += ",";
+  return result + (tuple || builtin ? ")" : ">");
 }
 } // namespace zkc::language

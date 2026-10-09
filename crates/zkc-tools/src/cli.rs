@@ -1,4 +1,4 @@
-//! Command discovery and argument admission over the Entry and bundle transports.
+//! Command discovery and argument admission for source, Entry and bundle tools.
 mod arguments;
 pub(crate) use arguments::Arguments;
 use arguments::{Command, OptionSpec as Opt};
@@ -179,12 +179,21 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
 }
 /// Successful exit requires the requested operation and all requested publications.
 pub fn succeeded(report: &serde_json::Value) -> bool {
-    if report["format"] == "zkc.source-check/0" {
-        report["status"] == "checked"
-    } else if report["format"] == "zkc.bundle-result/0" {
+    if report["format"] == "zkc.bundle-result/0" {
         report["status"] == "executed" && report["outcome"][0] == "completed"
     } else {
-        crate::entry::cli::succeeded(report)
+        matches!(
+            report["status"].as_str(),
+            Some(
+                "checked"
+                    | "compiled"
+                    | "inspected"
+                    | "executed"
+                    | "produced"
+                    | "accepted"
+                    | "generated"
+            )
+        )
     }
 }
 

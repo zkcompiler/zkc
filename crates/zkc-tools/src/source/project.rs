@@ -58,7 +58,7 @@ impl Inputs {
                 document::read(&bytes, MANIFEST_BYTES).map_err(|_| "source-project-format")?;
             let project: Project =
                 serde_json::from_value(value).map_err(|_| "source-project-format")?;
-            if project.format != "zkc.project/0" {
+            if project.format != "zkc.project/0" || project.modules.is_empty() {
                 return Err("source-project-format".into());
             }
             let parent = Path::new(path).parent().ok_or("source-project-format")?;

@@ -12,6 +12,19 @@ FIXTURES = Path(__file__).parent / 'fixtures/language'
 modules = [f'--module={name}={FIXTURES / (name + ".zkc")}' for name in ('transfer', 'algebra')]
 options = ['--source-format=zkc', '--entry=transfer::Demo', *modules]
 
+with case('definition checking never treats empty Entry selection as omission'):
+    for args in [
+        ['--source-format=zkc', '--entry=', *modules],
+        ['--source-format=', '--source-format=zkc', *modules],
+        ['--source-format=zkc', '--declarations', '--declarations', *modules],
+        ['--source-format=zkc', '--no-simplify', *modules],
+    ]:
+        commands.run([compiler, 'language-check', *args], refuses='source.options')
+    commands.run([compiler, 'language-emit', *options, '--declarations'], refuses='source.options')
+    invalid = commands.attempt([compiler, 'language-check', '--unknown=\x1b\n'])
+    assert invalid.returncode > 0 and '\x1b' not in invalid.stderr
+    assert '\\1B' in invalid.stderr and len(invalid.stderr) < 65536
+
 with case('explicit source path retains its original and interface'):
     commands.run([compiler, 'language-check', *options])
     original = commands.run([compiler, 'language-emit', *options])

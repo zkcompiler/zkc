@@ -59,7 +59,7 @@ int main() {
     return 10;
   }
   if (declarations->find("m::swap") == std::string::npos ||
-      zkc::language::formatDiagnostics(*capture, {}).size() != 0)
+      zkc::language::formatDiagnostics({}, &*capture).size() != 0)
     return 11;
   auto entry = zkc::language::closeEntry(*checked, "m::Demo");
   if (!entry) {

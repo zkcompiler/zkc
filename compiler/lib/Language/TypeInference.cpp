@@ -1,4 +1,5 @@
 #include "TypeInference.h"
+#include "zkc/Language/Diagnostics.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::language::detail {
@@ -157,7 +158,7 @@ bool TypeInference::equal(Variable a, Variable b, Span span, unsigned depth) {
                  std::to_string(node.arguments.size()) + " elements";
         if (node.head->kind == Type::Kind::Array)
           return std::string("array");
-        return spelling(*node.head);
+        return formatType(*node.head);
       }
       std::string choices;
       for (unsigned kind = 0; kind <= unsigned(Type::Kind::Asset); ++kind)

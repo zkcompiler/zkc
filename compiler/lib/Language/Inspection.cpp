@@ -1,8 +1,8 @@
 #include "zkc/Language/Inspection.h"
+#include "zkc/Language/Diagnostics.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/JSON.h"
 
 using namespace llvm;
@@ -20,27 +20,13 @@ json::Array permissions(Permissions value) {
     result.push_back("Wire");
   return result;
 }
-// Render checked parameter atoms using their source binder names. This is only
-// presentation; neither term substitution nor inference runs for inspection.
-std::string display(std::string text, const Declaration &decl) {
-  for (const auto &parameter : decl.parameters) {
-    size_t offset = 0;
-    while ((offset = text.find(parameter.atom, offset)) != std::string::npos) {
-      auto end = offset + parameter.atom.size();
-      if (end < text.size() && (isAlnum(text[end]) || text[end] == '_')) {
-        offset = end;
-        continue;
-      }
-      text.replace(offset, parameter.atom.size(), parameter.name);
-      offset += parameter.name.size();
-    }
-  }
-  return text;
-}
 json::Object describe(const CheckedProject &project, const Declaration &decl) {
-  auto type = [&](const Type &t) { return display(spelling(t), decl); };
+  auto type = [&](const Type &t) { return formatType(t); };
+  const auto *owner =
+      decl.parent ? &project.declarations()[decl.parent->index] : nullptr;
   json::Array parameters;
-  for (const auto &p : decl.parameters) {
+  for (unsigned i = 0; i < decl.parameters.size(); ++i) {
+    const auto &p = decl.parameters[i];
     std::string sort;
     switch (p.sort) {
     case Parameter::Sort::Type:
@@ -59,6 +45,7 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
     }
     json::Object parameter{{"name", p.name},
                            {"sort", sort},
+                           {"inherited", owner && i < owner->parameters.size()},
                            {"permissions", permissions(p.permissions)}};
     if (p.interface) {
       parameter["interface"] =
@@ -90,11 +77,10 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                                     {"field", type(service.field)},
                                     {"owner", decl.roles[service.owner]}});
   for (const auto &bound : decl.bounds)
-    requirements.push_back(
-        json::Object{{"kind", "natural"},
-                     {"lhs", display(bound.lhs.spelling(), decl)},
-                     {"rhs", display(bound.rhs.spelling(), decl)},
-                     {"inferred", bound.inferred}});
+    requirements.push_back(json::Object{{"kind", "natural"},
+                                        {"lhs", formatNatural(bound.lhs)},
+                                        {"rhs", formatNatural(bound.rhs)},
+                                        {"inferred", bound.inferred}});
   for (const auto &bound : decl.capabilityBounds) {
     json::Array arguments;
     for (const auto &arg : bound.arguments)
@@ -124,6 +110,7 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                 : decl.effectAllowance.value_or(Effects{ordered, ordered});
   json::Object result{
       {"name", decl.qualifiedName},
+      {"abstract", decl.abstract},
       {"kind", !ordered                                ? "math"
                : decl.kind == Declaration::Kind::Local ? "local"
                                                        : "protocol"},
@@ -141,10 +128,20 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
            {"module", project.capture().sources()[decl.module.index].module},
            {"begin", decl.span.begin},
            {"end", decl.span.end}}}};
-  if (decl.effectAllowance)
+  if (decl.effectAllowance || decl.abstract) {
+    auto allowance = decl.effectAllowance.value_or(Effects{ordered, ordered});
     result["effect_allowance"] =
-        json::Object{{"stop", decl.effectAllowance->mayStop},
-                     {"opaque", decl.effectAllowance->opaque}};
+        json::Object{{"stop", allowance.mayStop}, {"opaque", allowance.opaque}};
+  }
+  if (owner) {
+    json::Object parent{{"name", owner->qualifiedName},
+                        {"kind", owner->kind == Declaration::Kind::Interface
+                                     ? "interface"
+                                     : "component"}};
+    if (owner->implementation)
+      parent["implements"] = type(*owner->implementation);
+    result["owner"] = std::move(parent);
+  }
   return result;
 }
 } // namespace

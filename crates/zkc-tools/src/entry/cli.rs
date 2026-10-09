@@ -59,13 +59,6 @@ impl Options {
         Ok(options)
     }
 }
-/// Exit status is zero only for the requested completed operation.
-pub fn succeeded(report: &Json) -> bool {
-    matches!(
-        report["status"].as_str(),
-        Some("compiled" | "inspected" | "executed" | "produced" | "accepted" | "generated")
-    )
-}
 /// Reports preserve reached execution and publication state without returning
 /// private values or proof bytes on standard output.
 pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
