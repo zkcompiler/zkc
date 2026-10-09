@@ -27,6 +27,8 @@ pub const HEIGHT_LIMIT: u32 = 1 << 20;
 pub const COORDINATE_LIMIT: u64 = 1 << 22;
 pub const WORK_LIMIT: u64 = 1 << 26;
 pub const CONTRIBUTION_LIMIT: u64 = 1 << 22;
+pub const RESULT_RECORD_LIMIT: u64 = 1 << 20;
+pub const RESULT_COORDINATE_LIMIT: u64 = 1 << 22;
 pub const MULTIPLICITY_LIMIT: u64 = u32::MAX as u64;
 pub const PHASE_LIMIT: usize = 16;
 pub const SLOT_LIMIT: usize = 4_096;
@@ -1326,6 +1328,9 @@ impl Bundle {
             work: 0,
         };
         let mut coordinates = 0u64;
+        for slot in &self.publics {
+            coordinates += degree(slot.field).ok_or(Error("bundle-field"))? as u64;
+        }
         for (t, table) in self.tables.iter().enumerate() {
             let (cfg_height, cfg_groups) = &config.tables[t];
             let present = instance.tables[t].is_some();
@@ -1400,7 +1405,8 @@ impl Bundle {
             admitted.present[t] = present;
             admitted.heights[t] = if present { height } else { 0 };
         }
-        let (mut work, mut contributions) = (0u64, 0u64);
+        let (mut work, mut contributions, mut result_records, mut result_coordinates) =
+            (0u64, 0u64, 0u64, 0u64);
         for (t, table) in self.tables.iter().enumerate() {
             if !admitted.present[t] {
                 continue;
@@ -1414,12 +1420,22 @@ impl Bundle {
             };
             for a in &table.assertions {
                 window_at(a.scope, table.read_model, height, &offsets(&[a.output]))?;
+                let (lo, hi) = scope_rows(a.scope, height);
+                let rows = u64::from(hi.saturating_sub(lo));
+                result_records += rows;
+                result_coordinates += rows
+                    * degree(self.facts[t][a.output].field).ok_or(Error("bundle-field"))? as u64;
             }
             for i in &table.interactions {
                 let scope = i.parts().2;
                 window_at(scope, table.read_model, height, &offsets(&i.outputs()))?;
                 let (lo, hi) = scope_rows(scope, height);
                 contributions += u64::from(hi.saturating_sub(lo));
+                let width = i.outputs().iter().try_fold(0u64, |sum, p| -> Result<u64> {
+                    Ok(sum + degree(self.facts[t][*p].field).ok_or(Error("bundle-field"))? as u64)
+                })?;
+                result_records += u64::from(hi.saturating_sub(lo));
+                result_coordinates += u64::from(hi.saturating_sub(lo)) * width;
             }
             let checks = table.assertions.len() + table.interactions.len();
             if checks > 0 {
@@ -1431,6 +1447,10 @@ impl Bundle {
             }
             if contributions > CONTRIBUTION_LIMIT {
                 return Err(Error("bundle-contribution-limit"));
+            }
+            if result_records > RESULT_RECORD_LIMIT || result_coordinates > RESULT_COORDINATE_LIMIT
+            {
+                return Err(Error("bundle-result-limit"));
             }
         }
         admitted.work = work;

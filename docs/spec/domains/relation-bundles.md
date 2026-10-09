@@ -213,6 +213,11 @@ between the staged predicate and the bundle follows from a program alone. Such a
 relation requires a separately stated reduction with its premises, challenge
 distribution and error bound.
 
+Formation checks premise references and their shape, but does not establish
+their truth or read definedness. This includes characteristic inequalities
+against installed fields and the scope of a premise-only output. A reduction
+consumer must discharge these obligations explicitly before using them.
+
 ## Finite AIR embedding
 
 A [finite AIR](constraints.md#finite-arithmetic-traces) over field `F` with `c`
@@ -231,7 +236,7 @@ formation.
 
 A bundle or staged program is at most 8 MiB of canonical text with at most 256
 tables, 256 groups per table, 65,536 public slots, 4,096 channels, tuple arity
-64 and 4,096 checks per table. Supplied data carriers are at most 256 MiB of text
+64, local keys in [0,4096], and 4,096 checks per table. Supplied data carriers are at most 256 MiB of text
 and 2^22 base coordinates in total; admission computes that total from the
 declared heights, widths and element degrees before comparing data lengths.
 Before any value is parsed, admission also bounds
@@ -239,6 +244,23 @@ the reference evaluation work, `height * (arena nodes + inputs + checks + 1)`
 summed over tables with checks, by 2^26, and the number of interaction
 contributions by 2^22. Staged programs have at most 16 phases and 4,096
 challenge and claim slots per phase.
+
+Before reference evaluation, admission also bounds materialized results by
+2^20 records and 2^22 base coordinates (`bundle-result-limit`). Each scoped
+assertion row contributes one residual record and its output field degree in
+coordinates. Each scoped interaction row is conservatively counted as one
+distinct balance record, with all tuple coordinates and its count field's
+degree; equal keys and zero weights do not reduce this preflight charge.
+Staged evaluation counts assertion rows across all phases and global assertions
+against one such budget. These bounds apply separately to the deterministic
+and staged predicates. At each table, the existing work and contribution
+limits are checked before the result limits.
+
+Embedded arenas retain the `ring-*` refusal identifiers of the
+[ring contract](ring-expressions.md), including `ring-degree` for a bundle's
+weighted degree. Staged assignments reuse bundle value, group, window, scope
+and resource identifiers; challenge/claim list shape uses `staged-slot-shape`
+in both the reader and evaluator.
 
 [`Zkc.Relation.Bundle`](../../../formal/Zkc/Relation/Bundle.lean) is the
 independent formal denotation. The

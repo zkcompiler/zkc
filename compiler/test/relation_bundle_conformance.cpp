@@ -7,13 +7,14 @@
 using namespace llvm;
 using namespace zkc::relation;
 
-// Bounded test transport: [bundle, configuration, instance, witness].
+// Bounded test transport: [bundle, configuration, instance, witness] followed
+// optionally by [staged-program, assignment]. Both predicates stay separate.
 static Expected<json::Value> evaluate(StringRef text) {
   auto parsed = readBundleDataJson(text);
   if (!parsed)
     return parsed.takeError();
   auto *rows = parsed->getAsArray();
-  if (!rows || rows->size() != 4)
+  if (!rows || (rows->size() != 4 && rows->size() != 6))
     return zkc::error("test-schema");
   auto bundle = readBundle((*rows)[0]);
   if (!bundle)
@@ -30,10 +31,28 @@ static Expected<json::Value> evaluate(StringRef text) {
   auto result = bundle->evaluate(*config, *instance, *witness);
   if (!result)
     return result.takeError();
-  return json::Object{{"accepted", true},
+  json::Object report{{"accepted", true},
                       {"identity", bundle->identity().str()},
                       {"bundle", bundle->encode()},
                       {"result", result->encode()}};
+  if (rows->size() == 6) {
+    auto staged = readStagedProgram(*bundle, (*rows)[4]);
+    if (!staged)
+      return staged.takeError();
+    auto assignment = readStagedAssignment(*bundle, *staged, (*rows)[5]);
+    if (!assignment)
+      return assignment.takeError();
+    auto evaluated =
+        staged->evaluate(*bundle, *config, *instance, *witness, *assignment);
+    if (!evaluated)
+      return evaluated.takeError();
+    report["staged_identity"] = staged->identity();
+    report["staged"] = staged->encode();
+    report["assignment"] =
+        encodeStagedAssignment(*bundle, *staged, *assignment);
+    report["staged_result"] = evaluated->encode();
+  }
+  return std::move(report);
 }
 
 int main() {

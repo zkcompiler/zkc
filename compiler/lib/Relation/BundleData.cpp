@@ -248,6 +248,12 @@ Expected<Admitted> admitData(const Bundle &bundle,
   result.tables.resize(tables.size());
   std::vector<uint32_t> configHeights(tables.size(), 0);
   uint64_t coordinates = 0;
+  for (const auto &slot : bundle.publics()) {
+    auto degree = bundleFieldDegree(slot.field);
+    if (!degree)
+      return degree.takeError();
+    coordinates += *degree;
+  }
   // Shape, presence, height authority and exact lengths; no value is parsed.
   for (size_t t = 0; t < tables.size(); ++t) {
     const auto &table = tables[t];
@@ -331,17 +337,26 @@ Expected<Admitted> admitData(const Bundle &bundle,
   }
   // Every read domain is checked from syntax before any arithmetic, so a
   // product with zero cannot hide an undefined read.
-  uint64_t work = 0, contributions = 0;
+  uint64_t work = 0, contributions = 0, resultRecords = 0,
+           resultCoordinates = 0;
   for (size_t t = 0; t < tables.size(); ++t) {
     if (!result.tables[t].present)
       continue;
     const auto &table = tables[t];
     const auto &facts = bundle.facts()[t];
     uint32_t height = result.tables[t].height;
-    for (const auto &assertion : table.assertions)
+    for (const auto &assertion : table.assertions) {
       if (auto error = windowAt(assertion.scope, table.readModel, height,
                                 offsets(facts, {assertion.output})))
         return withDetail(std::move(error), table.name);
+      auto [lo, hi] = scopeRows(assertion.scope, height);
+      uint64_t rows = hi > lo ? hi - lo : 0;
+      auto degree = bundleFieldDegree(facts[assertion.output].field);
+      if (!degree)
+        return degree.takeError();
+      resultRecords += rows;
+      resultCoordinates += rows * *degree;
+    }
     for (const auto &interaction : table.interactions) {
       if (auto error =
               windowAt(interaction.scope, table.readModel, height,
@@ -349,6 +364,18 @@ Expected<Admitted> admitData(const Bundle &bundle,
         return withDetail(std::move(error), table.name);
       auto [lo, hi] = scopeRows(interaction.scope, height);
       contributions += hi > lo ? hi - lo : 0;
+      uint64_t rows = hi > lo ? hi - lo : 0, width = 0;
+      for (auto output : interactionOutputs(interaction)) {
+        auto degree = bundleFieldDegree(facts[output].field);
+        if (!degree)
+          return degree.takeError();
+        width += *degree;
+      }
+      // Before seeing values, each contribution may create a distinct balance
+      // key. Include every tuple coordinate and the count, even for zero
+      // weight.
+      resultRecords += rows;
+      resultCoordinates += rows * width;
     }
     size_t checks = table.assertions.size() + table.interactions.size();
     if (checks)
@@ -358,6 +385,9 @@ Expected<Admitted> admitData(const Bundle &bundle,
       return zkc::error("bundle-work-limit", table.name);
     if (contributions > BundleLimits::contributions)
       return zkc::error("bundle-contribution-limit", table.name);
+    if (resultRecords > BundleLimits::resultRecords ||
+        resultCoordinates > BundleLimits::resultCoordinates)
+      return zkc::error("bundle-result-limit", table.name);
   }
   result.work = work;
   // Canonical value parsing, bounded by the coordinate count above.

@@ -538,6 +538,12 @@ Expected<StagedAssignment> readStagedAssignment(const Bundle &bundle,
     if (!tables || tables->size() != bundle.tables().size())
       return zkc::error("staged-data-schema");
     StagedAssignment::Phase data;
+    auto *challengeValues = (*entry)[0].getAsArray();
+    auto *claimValues = (*entry)[1].getAsArray();
+    if (!challengeValues ||
+        challengeValues->size() != phase.challenges.size() || !claimValues ||
+        claimValues->size() != phase.claims.size())
+      return zkc::error("staged-slot-shape");
     std::vector<std::string> fields;
     for (const auto &slot : phase.challenges)
       fields.push_back(slot.field);
@@ -635,7 +641,7 @@ StagedProgram::evaluate(const Bundle &bundle, const BundleConfiguration &config,
     return zkc::error("staged-data-shape");
   auto tables = bundle.tables();
   // Shape, presence and windows before any value is parsed.
-  uint64_t coordinates = 0, work = 0;
+  uint64_t coordinates = 0, work = 0, resultRecords = 0, resultCoordinates = 0;
   for (size_t p = 0; p < phases_.size(); ++p) {
     const auto &phase = phases_[p];
     const auto &data = assignment.phases[p];
@@ -644,6 +650,15 @@ StagedProgram::evaluate(const Bundle &bundle, const BundleConfiguration &config,
       return zkc::error("staged-slot-shape");
     if (data.tables.size() != tables.size())
       return zkc::error("staged-data-shape");
+    for (const auto *slots : {&phase.challenges, &phase.claims})
+      for (const auto &slot : *slots) {
+        auto degree = bundleFieldDegree(slot.field);
+        if (!degree)
+          return degree.takeError();
+        coordinates += *degree;
+      }
+    if (coordinates > BundleLimits::coordinates)
+      return zkc::error("bundle-data-limit");
     for (size_t t = 0; t < tables.size(); ++t) {
       const auto &state = base->tables[t];
       const auto &table = phase.tables[t];
@@ -668,19 +683,42 @@ StagedProgram::evaluate(const Bundle &bundle, const BundleConfiguration &config,
         if ((*data.tables[t])[g].size() != expected)
           return context("bundle-group-shape");
       }
-      for (const auto &assertion : table.assertions)
+      for (const auto &assertion : table.assertions) {
         if (auto error = windowAt(
                 assertion.scope, tables[t].readModel, state.height,
                 stagedOffsets(table.arena, table.inputs, assertion.output)))
           return withDetail(std::move(error), tables[t].name);
+        auto [lo, hi] = scopeRows(assertion.scope, state.height);
+        uint64_t rows = hi > lo ? hi - lo : 0;
+        auto degree = bundleFieldDegree(
+            table.arena.facts()[table.arena.outputs()[assertion.output]].field);
+        if (!degree)
+          return degree.takeError();
+        resultRecords += rows;
+        resultCoordinates += rows * *degree;
+      }
       if (!table.assertions.empty())
         work += uint64_t(state.height) *
                 (table.arena.nodes().size() + table.arena.inputs().size() +
                  table.assertions.size() + 1);
       if (work > BundleLimits::work)
         return context("bundle-work-limit");
+      if (resultRecords > BundleLimits::resultRecords ||
+          resultCoordinates > BundleLimits::resultCoordinates)
+        return context("bundle-result-limit");
     }
   }
+  for (auto output : global_.assertions) {
+    auto degree = bundleFieldDegree(
+        global_.arena.facts()[global_.arena.outputs()[output]].field);
+    if (!degree)
+      return degree.takeError();
+    ++resultRecords;
+    resultCoordinates += *degree;
+  }
+  if (resultRecords > BundleLimits::resultRecords ||
+      resultCoordinates > BundleLimits::resultCoordinates)
+    return zkc::error("bundle-result-limit");
   // Parse challenges, claims and staged groups.
   std::vector<std::vector<Scalar>> challenges(phases_.size()),
       claims(phases_.size());

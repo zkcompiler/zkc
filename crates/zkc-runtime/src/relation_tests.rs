@@ -1,5 +1,145 @@
 use super::*;
 
+#[test]
+fn result_materialization_has_separate_record_and_coordinate_bounds() {
+    let table = |name: &str, field: &str, count: usize| {
+        json!([
+            name,
+            "required",
+            ["fixed", 65536],
+            "finite",
+            [],
+            ["zkc.ring/0", [], [["constant", field, "0"]], [0]],
+            [],
+            vec![json!([0, ["all"]]); count],
+            []
+        ])
+    };
+    let admit = |document: Value| {
+        let bundle = Bundle::decode(&document).unwrap();
+        let id = bundle.identity().to_string();
+        bundle.admit(
+            &Configuration {
+                relation: id.clone(),
+                tables: vec![(None, vec![]); bundle.tables.len()],
+            },
+            &Instance {
+                relation: id.clone(),
+                publics: vec![],
+                tables: vec![Some((None, vec![])); bundle.tables.len()],
+            },
+            &Witness {
+                relation: id,
+                tables: vec![Some(vec![]); bundle.tables.len()],
+            },
+        )
+    };
+    for (field, count) in [("koala-bear", 16), ("koala-bear.ext8-binomial3", 8)] {
+        assert!(
+            admit(json!([
+                "zkc.relation-bundle/0",
+                [],
+                [],
+                [table("t", field, count)]
+            ]))
+            .is_ok()
+        );
+        assert_eq!(
+            admit(json!([
+                "zkc.relation-bundle/0",
+                [],
+                [],
+                [table("t", field, count + 1)]
+            ]))
+            .unwrap_err(),
+            Error("bundle-result-limit")
+        );
+    }
+    for count in [8, 9] {
+        let result = admit(json!([
+            "zkc.relation-bundle/0",
+            [],
+            [],
+            [table("a", "koala-bear", 8), table("b", "koala-bear", count)]
+        ]));
+        if count == 8 {
+            assert!(result.is_ok());
+        } else {
+            assert_eq!(result.unwrap_err(), Error("bundle-result-limit"));
+        }
+    }
+    for width in [63, 64] {
+        let mut t = table("t", "koala-bear", 0);
+        t[8] = json!([[
+            "field-balance",
+            0,
+            ["global"],
+            ["all"],
+            vec![0; width],
+            0,
+            null
+        ]]);
+        let result = admit(json!([
+            "zkc.relation-bundle/0",
+            [],
+            [[
+                "bus",
+                "field-balance",
+                vec!["koala-bear"; width],
+                "koala-bear"
+            ]],
+            [t]
+        ]));
+        if width == 63 {
+            assert!(result.is_ok());
+        } else {
+            assert_eq!(result.unwrap_err(), Error("bundle-result-limit"));
+        }
+    }
+}
+
+#[test]
+fn public_coordinates_share_the_declared_data_budget() {
+    let bundle = Bundle::decode(&json!([
+        "zkc.relation-bundle/0",
+        [["p", "koala-bear"]],
+        [],
+        [[
+            "t",
+            "required",
+            ["fixed", 1048576],
+            "finite",
+            [["x", "witness", "koala-bear", 4]],
+            ["zkc.ring/0", [], [], []],
+            [],
+            [],
+            []
+        ]]
+    ]))
+    .unwrap();
+    let id = bundle.identity().to_string();
+    assert_eq!(
+        bundle
+            .admit(
+                &Configuration {
+                    relation: id.clone(),
+                    tables: vec![(None, vec![])]
+                },
+                &Instance {
+                    relation: id.clone(),
+                    publics: vec![vec!["0".into()]],
+                    tables: vec![Some((None, vec![]))]
+                },
+                &Witness {
+                    relation: id,
+                    tables: vec![Some(vec![vec![]])]
+                }
+            )
+            .unwrap_err(),
+        Error("bundle-data-limit")
+    );
+}
+
 /// Independent test arithmetic: prime fields below 2^63 by u128 products and
 /// the binomial extension X^8 = 3 over KoalaBear.
 struct Reference;

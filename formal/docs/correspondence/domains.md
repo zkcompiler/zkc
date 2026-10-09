@@ -54,6 +54,14 @@ without changing PIR execution or requiring every protocol to use constraints.
 | Finite AIR as a bundle | D: `Bundle.FiniteAIR.bundle`, `Bundle.FiniteAIR.data`; T: `Bundle.FiniteAIR.holds_iff`, `Bundle.FiniteAIR.assertion_iff`, `Bundle.FiniteAIR.term_inputs_defined` | Whole-relation equivalence for every height `h + 1 <= maxHeight`, through the shared `AIR.Expr.toRing` translation; not a proof of the native `embedAIR` |
 | Staged challenge-indexed predicate | D: `Bundle.Staged.Holds`, `Bundle.Staged.PhaseTableHolds`; T: `Bundle.Staged.phaseTableHolds_local` | A phase's predicate depends only on challenges, claims and groups of earlier or equal phases; premises and reductions to the bundle relation are not modelled |
 
+The bundle model and native admission have different boundaries. An undefined
+finite read or scope makes the Lean predicate false; native admission refuses
+it. Native configuration heights must obey their policy even for an absent
+optional table, while Lean checks that policy only for present tables.
+For a zero-column AIR, the formal embedding has one width-zero group and the
+native embedding has no groups. The finite-AIR theorem relates formal
+predicates; it does not assert equality of these carrier shapes.
+
 The optional [Clean package](../../integrations/clean/README.md) maps one Clean
 flat AIR component into `AIR.family` with every-row, current-row constraints.
 `ZkcClean.export_expression` equates expression evaluation, `ZkcClean.holds_iff`

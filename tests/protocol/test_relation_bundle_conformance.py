@@ -73,6 +73,26 @@ def test_exported_bundles_and_mutations_agree(toolchain, journal):
     changed[3][2][0][0][0][0] = '1'
     cases.append(('extension mutation', changed, False, None))
 
+    # Tiny, constant-only carriers must not expand into millions of records or
+    # wide tuple coordinates. No large witness or result is allocated here.
+    for field, count in [(base, 17), (ext, 9)]:
+        bundle = ['zkc.relation-bundle/0', [], [], [[
+            'constant', 'required', ['fixed', 65536], 'finite', [],
+            ['zkc.ring/0', [], [['constant', field, '0']], [0]], [],
+            [[0, ['all']]] * count, []]]]
+        candidate = rebind([bundle, ['zkc.relation-configuration/0', '', [[None, []]]],
+            ['zkc.relation-instance/0', '', [], [['present', None, []]]],
+            ['zkc.relation-witness/0', '', [[]]]])
+        cases.append((f'{field}: result expansion', candidate, 'bundle-result-limit', None))
+        scoped = deepcopy(candidate)
+        scoped[0][3][0][7] = [[0, ['first']]] * count
+        cases.append((f'{field}: scoped small result', rebind(scoped), True, []))
+    wide = deepcopy(candidate)
+    wide[0][2] = [['wide', 'field-balance', [ext] * 64, ext]]
+    wide[0][3][0][7] = []
+    wide[0][3][0][8] = [['field-balance', 0, ['global'], ['all'], [0] * 64, 0, None]]
+    cases.append(('wide extension tuple expansion', rebind(wide), 'bundle-result-limit', None))
+
     wire = ''.join(json.dumps(c, separators=(',', ':')) + '\n' for _, c, _, _ in cases)
     replies = []
     for executable in [toolchain.tool('compiler', 'test/zkc-relation_bundle_conformance-test'),

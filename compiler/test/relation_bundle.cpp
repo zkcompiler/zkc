@@ -1696,6 +1696,12 @@ static void refusalTests() {
   slots.phases[0].challenges.clear();
   refuses(program.evaluate(bundle, d.config, d.instance, d.witness, slots),
           "staged-slot-shape", "missing challenge value");
+  auto missingChallenge = encodeStagedAssignment(bundle, program, honest);
+  auto *encodedPhases = (*missingChallenge.getAsArray())[2].getAsArray();
+  (*(*encodedPhases)[0].getAsArray())[0] = json::Array{};
+  refuses(readStagedAssignment(bundle, program, missingChallenge),
+          "staged-slot-shape",
+          "reader and evaluator agree on missing challenge");
   auto phases = honest;
   phases.phases.push_back(phases.phases[0]);
   refuses(program.evaluate(bundle, d.config, d.instance, d.witness, phases),
@@ -1709,6 +1715,88 @@ static void refusalTests() {
           "staged-data-schema", "staged assignment tag");
 }
 
+static void resultLimitTests() {
+  constexpr uint32_t height = 1u << 16;
+  for (const auto &field : {KB, EXT}) {
+    Arena arena;
+    arena.out(arena.lit(field, "0"));
+    unsigned count = field == KB ? 16 : 8;
+    auto candidate = table("results", arena, {}, fixedHeight(height));
+    candidate.assertions.assign(count, {0, scope(BundleScopeKind::All)});
+    auto exact = value(Bundle::create({}, {}, {candidate}), "result boundary");
+    auto d = data(exact);
+    d.instance.tables[0] = {true, std::nullopt, {}};
+    d.witness.tables[0] = std::vector<BundleColumns>{};
+    check(
+        !exact.admit(d.config, d.instance, d.witness),
+        "exact result record/coordinate boundary admitted without evaluation");
+    candidate.assertions.push_back({0, scope(BundleScopeKind::All)});
+    auto over = value(Bundle::create({}, {}, {candidate}), "result overflow");
+    d.config.relation = d.instance.relation = d.witness.relation =
+        over.identity().str();
+    refuses(over.admit(d.config, d.instance, d.witness), "bundle-result-limit",
+            "compact constant relation cannot expand beyond result budget");
+  }
+  Arena arena;
+  arena.out(arena.lit(KB, "0"));
+  auto wide = table("wide", arena, {}, instanceHeight(1, height));
+  wide.interactions = {fieldBalance(0, std::vector<uint32_t>(64, 0), 0)};
+  auto bus = value(Bundle::create({},
+                                  {{"wide", BundleChannelKind::FieldBalance,
+                                    std::vector<std::string>(64, KB), KB}},
+                                  {wide}),
+                   "wide result tuple");
+  auto d = data(bus);
+  d.instance.tables[0] = {
+      true, uint32_t(BundleLimits::resultCoordinates / 65), {}};
+  d.witness.tables[0] = std::vector<BundleColumns>{};
+  check(!bus.admit(d.config, d.instance, d.witness),
+        "tuple-coordinate result boundary admitted");
+  d.instance.tables[0].height = *d.instance.tables[0].height + 1;
+  refuses(bus.admit(d.config, d.instance, d.witness), "bundle-result-limit",
+          "zero weight and equal keys cannot evade tuple materialization "
+          "preflight");
+
+  Arena empty;
+  auto base = value(
+      Bundle::create({}, {}, {table("base", empty, {}, fixedHeight(height))}),
+      "staged result base");
+  auto publicBudget =
+      value(Bundle::create(
+                {{"p", KB}}, {},
+                {table("data", empty, {{"x", BundleAuthority::Witness, KB, 4}},
+                       fixedHeight(BundleLimits::height))}),
+            "public coordinate budget");
+  auto publicData = data(publicBudget);
+  publicData.instance.publics = {{"0"}};
+  publicData.instance.tables[0] = {true, std::nullopt, {}};
+  publicData.witness.tables[0] = std::vector<BundleColumns>{{}};
+  refuses(publicBudget.admit(publicData.config, publicData.instance,
+                             publicData.witness),
+          "bundle-data-limit",
+          "public coordinates count before supplied group lengths");
+  d = data(base);
+  d.instance.tables[0] = {true, std::nullopt, {}};
+  d.witness.tables[0] = std::vector<BundleColumns>{};
+  StagedTable staged{
+      {},
+      arena.build(),
+      {},
+      std::vector<BundleAssertion>(16, {0, scope(BundleScopeKind::All)})};
+  StagedPhase phase{{}, {}, {staged}};
+  // The phase reaches the exact record boundary; one global result exceeds it.
+  auto program =
+      value(StagedProgram::create(base, {phase}, {arena.build(), {}, {0}}, {}),
+            "staged global result budget");
+  StagedAssignment assignment;
+  assignment.program = program.identity();
+  assignment.phases.resize(1);
+  assignment.phases[0].tables = {std::vector<BundleColumns>{}};
+  refuses(program.evaluate(base, d.config, d.instance, d.witness, assignment),
+          "bundle-result-limit",
+          "global results share the phase materialization budget");
+}
+
 int main() {
   airEmbedding();
   machineTests();
@@ -1720,6 +1808,7 @@ int main() {
   preflightTests();
   sharedFixtureTests();
   refusalTests();
+  resultLimitTests();
   outs() << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

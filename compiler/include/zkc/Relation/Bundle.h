@@ -26,6 +26,8 @@ struct BundleLimits {
   static constexpr uint32_t offset = 65536, height = 1u << 20;
   static constexpr uint64_t coordinates = 1u << 22, work = 1u << 26;
   static constexpr uint64_t contributions = 1u << 22;
+  static constexpr uint64_t resultRecords = 1u << 20;
+  static constexpr uint64_t resultCoordinates = 1u << 22;
   static constexpr uint64_t multiplicity = UINT32_MAX;
   static constexpr uint32_t phases = 16, slots = 4096, premises = 4096;
 };
