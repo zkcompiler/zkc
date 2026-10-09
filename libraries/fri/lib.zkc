@@ -1,0 +1,211 @@
+module fri;
+
+pub type Vector<F: Field> = builtin("vector", F);
+pub type Root<C: Commitment> = builtin("commitment", C);
+type Path<C: Commitment> = builtin("proof", C);
+type Opening<C: Commitment> = builtin("opening_state", C);
+type Openings<C: Commitment> = builtin("opening_states", C);
+type Roots<C: Commitment> = builtin("commitments", C);
+type Polynomial<F: Field> = builtin("polynomial", F);
+pub type Positions = builtin("indices");
+
+math fn both(a: bool, b: bool) -> bool { return intrinsic("bool.and", a, b); }
+fn yes() -> bool { return true; }
+fn zero_index(value: index) -> bool { return value == 0; }
+fn add_index(a: index, b: index) -> index { return a + b; }
+fn natural<N: nat>() -> index { return index<N>(); }
+fn at_position(values: Positions, position: index) -> index {
+  return kernel("indices.at", values, position);
+}
+fn first<F: Field>(values: Vector<F>) -> F { return kernel<F>("vector.at", values; "0"); }
+fn less(a: index, b: index) -> bool { return kernel("index.less", a, b); }
+fn halve(a: index) -> index { return kernel("index.div", a, 2); }
+fn remainder(a: index, b: index) -> index { return kernel("index.mod", a, b); }
+fn equal<F: Field>(a: F, b: F) -> bool { return a == b; }
+fn length<F: Field>(values: Vector<F>) -> index {
+  return kernel<F>("vector.length", values);
+}
+fn append<F: Field>(values: Vector<F>, value: F) -> Vector<F> {
+  return kernel<F>("vector.append", values, value);
+}
+fn get<F: Field>(values: Vector<F>, position: index) -> F {
+  return kernel<F>("vector.get", values, position);
+}
+fn empty<F: Field>() -> Vector<F> { return kernel<F>("vector.empty"); }
+fn positions() -> Positions { return kernel("indices.empty"); }
+fn remember(values: Positions, position: index) -> Positions {
+  return kernel("indices.append", values, position);
+}
+fn root_list<C: Commitment>() -> Roots<C> { return kernel<C>("commitments.empty"); }
+fn opening_list<C: Commitment>() -> Openings<C> { return kernel<C>("opening_states.empty"); }
+fn keep_root<C: Commitment>(roots: Roots<C>, root: Root<C>) -> Roots<C> {
+  return kernel<C>("commitments.append", roots, root);
+}
+fn keep_opening<C: Commitment>(states: Openings<C>, state: Opening<C>) -> Openings<C> {
+  return kernel<C>("opening_states.append", states, state);
+}
+fn commit<C: Commitment>(values: Vector<C::ValueField>) -> (Root<C>, Opening<C>) {
+  return kernel<C>("oracle.commit", values, 1);
+}
+fn open<C: Commitment>(states: Openings<C>, round: index, position: index)
+    -> (Vector<C::ValueField>, Path<C>) {
+  return kernel<C>("oracle.open", kernel<C>("opening_states.at", states, round), position);
+}
+fn authenticate<C: Commitment>(roots: Roots<C>, round: index, height: index,
+    position: index, row: Vector<C::ValueField>, path: Path<C>) -> bool {
+  return kernel<C>("oracle.check", kernel<C>("commitments.at", roots, round),
+                   1, height, position, row, path);
+}
+fn fold<F: Field>(values: Vector<F>, shift: F, beta: F) -> Vector<F> {
+  return kernel<F>("poly.even_odd_fold", values, shift, beta);
+}
+fn interpolate_coefficients<F: Field>(values: Vector<F>, shift: F) -> Vector<F> {
+  let polynomial = kernel<F>("poly.coset_interpolate", values, shift);
+  return kernel<F>("poly.coefficients", polynomial);
+}
+fn bounded<F: Field, LogDegree: nat>(coefficients: Vector<F>) -> bool {
+  let count = length(coefficients);
+  return less(count, index<pow2(LogDegree)>() + 1);
+}
+fn terminal<F: Field>(coefficients: Vector<F>, shift: F, size: index,
+                      position: index) -> F {
+  let polynomial = kernel<F>("poly.from_coefficients", coefficients);
+  let point = kernel<F>("poly.domain_point", shift, size, position);
+  return kernel<F>("poly.univariate_evaluate", polynomial, point);
+}
+// Natural domain order pairs x with -x in the two contiguous halves.
+fn folded_value<F: Field>(low: F, high: F, shift: F, size: index,
+                         position: index, beta: F) -> F {
+  let x = kernel<F>("poly.domain_point", shift, size, position);
+  let inverse_two = kernel<F>("field.inverse", 1 + 1);
+  let inverse_x = kernel<F>("field.inverse", x);
+  return (low + high) * inverse_two + beta * (low - high) * inverse_two * inverse_x;
+}
+fn chain<F: Field>(round: index, selected: F, expected: F) -> bool {
+  return if zero_index(round) { true } else { equal(selected, expected) };
+}
+fn keep_first<F: Field>(values: Vector<F>, selected: F, round: index) -> Vector<F> {
+  return if zero_index(round) { append(values, selected) } else { values };
+}
+fn select_half<F: Field>(low: F, high: F, position: index, half: index) -> F {
+  return if less(position, half) { low } else { high };
+}
+fn shape<F: Field, LogSize: nat>(values: Vector<F>, shift: F) -> bool {
+  // The point operation also checks the installed two-adic domain bound.
+  let first_point = kernel<F>("poly.domain_point", shift, index<pow2(LogSize)>(), 0);
+  return both(length(values) == index<pow2(LogSize)>(), kernel("bool.not", first_point == 0));
+}
+
+fn configured<F: Field, LogSize: nat, Rounds: nat, Queries: nat>(
+    shift: F, rounds: index, queries: index) -> bool {
+  let point = kernel<F>("poly.domain_point", shift, index<pow2(LogSize)>(), 0);
+  return both(both(rounds == index<Rounds>(), queries == index<Queries>()),
+              kernel("bool.not", point == 0));
+}
+
+// Binary FRI for one word on shift*<g>. All round roots and the terminal
+// polynomial are fixed before any query. The returned first-layer values let
+// a caller bind this low-degree test to its own polynomial-opening equations.
+pub protocol LowDegree<C: Commitment, LogSize: nat, TerminalLog: nat,
+                       Rounds: nat, Queries: nat> roles(P,V)
+    (word: Vector<C::ValueField> @P, shift: C::ValueField @(P,V),
+     round_count: index @(P,V), query_count: index @(P,V),
+     coins: Random<C::ValueField> @V)
+    -> (accepted: bool @V, positionsP: Positions @P,
+        positionsV: Positions @V, valuesV: Vector<C::ValueField> @V)
+    where Share(C::ValueField), Wire(C::ValueField),
+      zkc::algebra::TwoAdicField(C::ValueField),
+      zkc::algebra::CharacteristicNotTwo(C::ValueField),
+      zkc::random::IndexRandomness(C::ValueField),
+      zkc::oracle::VectorCommitment(C),
+      1 <= Rounds, TerminalLog+Rounds+1 <= LogSize, 1 <= Queries {
+  let schedule_ok @V = configured<C::ValueField,LogSize,Rounds,Queries>(
+    shift, round_count, query_count);
+  require @V schedule_ok;
+  let initial_sizeP @P = natural<pow2(LogSize)>();
+  let initial_sizeV @V = natural<pow2(LogSize)>();
+  let input_ok @P = shape<C::ValueField,LogSize>(word, shift);
+  require @P input_ok;
+  let mut current = word;
+  let mut current_shift = shift;
+  let mut roots @V = root_list<C>();
+  let mut states @P = opening_list<C>();
+  let mut betas @V = empty<C::ValueField>();
+  for round in 0..round_count roles(P,V) max Rounds {
+    let tree @P = commit<C>(current);
+    let root = send P -> V(tree.0);
+    let kept_root @V = keep_root(roots, root);
+    let kept_state @P = keep_opening(states, tree.1);
+    roots = kept_root;
+    states = kept_state;
+    let betaV = coins.draw();
+    let betaP = send V -> P(betaV);
+    let kept_beta @V = append(betas, betaV);
+    betas = kept_beta;
+    let next @P = fold(current, current_shift, betaP);
+    current = next;
+    current_shift = current_shift * current_shift;
+  }
+  let proposed @P = interpolate_coefficients(current, current_shift);
+  let final_coefficients = send P -> V(proposed);
+  let final_degree_ok @V = bounded<C::ValueField,TerminalLog>(final_coefficients);
+  require @V final_degree_ok;
+  let mut positionsP @P = positions();
+  let mut positionsV @V = positions();
+  let mut valuesV @V = empty<C::ValueField>();
+  for query in 0..query_count roles(P,V) max Queries {
+    let positionV = coins.index<pow2(LogSize)>();
+    let positionP = send V -> P(positionV);
+    let rememberedP @P = remember(positionsP, positionP);
+    let rememberedV @V = remember(positionsV, positionV);
+    positionsP = rememberedP;
+    positionsV = rememberedV;
+  }
+  for query in 0..query_count roles(P,V) max Queries {
+    let positionP @P = at_position(positionsP, query);
+    let positionV @V = at_position(positionsV, query);
+    let mut atP = positionP;
+    let mut atV = positionV;
+    let mut sizeP = initial_sizeP;
+    let mut sizeV = initial_sizeV;
+    let mut query_shift = shift;
+    let mut expected: C::ValueField @V = 0;
+    for round in 0..round_count roles(P,V) max Rounds {
+      let halfP @P = halve(sizeP);
+      let halfV @V = halve(sizeV);
+      let lowP @P = remainder(atP, halfP);
+      let lowV @V = remainder(atV, halfV);
+      let opened_low @P = open<C>(states, round, lowP);
+      let opened_high @P = open<C>(states, round, add_index(lowP, halfP));
+      let row_low = send P -> V(opened_low.0);
+      let path_low = send P -> V(opened_low.1);
+      let row_high = send P -> V(opened_high.0);
+      let path_high = send P -> V(opened_high.1);
+      let low_ok @V = authenticate(roots, round, sizeV, lowV, row_low, path_low);
+      require @V low_ok;
+      let high_ok @V = authenticate(roots, round, sizeV, add_index(lowV, halfV), row_high, path_high);
+      require @V high_ok;
+      let low @V = first(row_low);
+      let high @V = first(row_high);
+      let selected @V = select_half(low, high, atV, halfV);
+      let chain_ok @V = chain(round, selected, expected);
+      require @V chain_ok;
+      let first_values @V = keep_first(valuesV, selected, round);
+      valuesV = first_values;
+      let beta @V = get(betas, round);
+      let next @V = folded_value(low, high, query_shift, sizeV, lowV, beta);
+      expected = next;
+      atP = lowP;
+      atV = lowV;
+      sizeP = halfP;
+      sizeV = halfV;
+      query_shift = query_shift * query_shift;
+    }
+    let evaluated @V = terminal(final_coefficients, query_shift, sizeV, atV);
+    let terminal_ok @V = equal(evaluated, expected);
+    require @V terminal_ok;
+  }
+  let accepted @V = yes();
+  return (accepted = accepted, positionsP = positionsP,
+          positionsV = positionsV, valuesV = valuesV);
+}
