@@ -30,7 +30,7 @@ def language(subcommand, source, entry, *options, refuses=None, name="source"):
 PICK = '''module sample;
 domain E = field("koala-bear.ext8-binomial3");
 domain Fr = field("bls12-381.fr");
-protocol Pick roles(P, V)() using(coins: Random<E> @V)
+protocol Pick roles(P, V)(coins: Random<E> @V)
     -> (p: index @P, v: index @V) {
   let v = coins.index<8>();
   let p = send V -> P(v);
@@ -51,24 +51,33 @@ with case("a static power-of-two domain emits a constant bound and an index quer
 
 GENERIC = '''module sample;
 domain E = field("koala-bear.ext8-binomial3");
-protocol Pick<F: Field + Share + Wire, N: nat> roles(P, V)()
-    using(coins: Random<F> @V) -> (v: index @V) REQUIRE {
+protocol Pick<F: Field + Share + Wire, N: nat> roles(P, V)(coins: Random<F> @V) -> (v: index @V) REQUIRE {
   let v = coins.index<N>();
   return (v = v);
 }
-protocol Run roles(P, V)() using(coins: Random<E> @V) -> (v: index @V) {
-  let v = apply Pick<E, SIZE>() using(coins);
+protocol Run roles(P, V)(coins: Random<E> @V) -> (v: index @V) {
+  let v = Pick<E, SIZE>(coins);
   return (v = v);
 }
 entry Demo = Run;
 '''
 
-with case("a generic service needs an explicit IndexRandomness assumption"):
+with case("explicit generic contracts retain the IndexRandomness requirement"):
     assumed = GENERIC.replace("REQUIRE", "where zkc::random::IndexRandomness(F)")
     language("language-check", assumed.replace("SIZE", "pow2(4)"), "Demo",
              name="generic_assumed")
-    language("language-check", GENERIC.replace("REQUIRE", "").replace("SIZE", "16"),
+    language("language-check", GENERIC.replace("REQUIRE", "where ()").replace("SIZE", "16"),
              "Demo", name="generic_missing", refuses="source.service")
+
+with case("an omitted generic contract infers IndexRandomness"):
+    language("language-check", GENERIC.replace("REQUIRE", "").replace("SIZE", "16"),
+             "Demo", name="generic_inferred")
+
+with case("index results constrain unannotated arithmetic and service aliases"):
+    aliased = PICK.replace("let v = coins.index<8>();",
+                           "let alias = coins; let v = increment(alias.index<8>());")
+    aliased += "fn increment(value: index) { return 1 + value; }\n"
+    language("language-check", aliased, "Demo", name="index_alias_inference")
 
 with case("a selected generic domain must close to a power of two"):
     language("language-check",
@@ -81,7 +90,7 @@ for name, old, new in [
     ("empty domain", "index<8>", "index<0>"),
     ("missing domain", "index<8>()", "index()"),
     ("two domains", "index<8>", "index<8, 8>"),
-    ("data argument", "index<8>()", "index<8>(v)"),
+    ("data argument", "index<8>()", "index<8>(1)"),
     ("type domain", "index<8>", "index<E>"),
     ("field without index randomness", "Random<E>", "Random<Fr>"),
 ]:
@@ -151,23 +160,21 @@ fn agree(a: E, b: E) -> bool { return a == b; }
 fn yes() -> bool { return true; }
 // P returns each derived field challenge and position. V compares them with
 // its own samples, so a prover/verifier transcript disagreement is rejected.
-protocol Echo<N: nat, Max: nat> roles(P, V)(rounds: index @(P,V))
-    using(coins: Random<E> @V) -> (accepted: bool @V) {
-  let checked = repeat roles(P,V)(i < rounds, max Max)
-      carry(done = rounds @V) capture() using(coins) {
+protocol Echo<N: nat, Max: nat> roles(P, V)(rounds: index @(P,V),
+     coins: Random<E> @V) -> (accepted: bool @V) {
+  for i in 0..rounds roles(P,V) max Max {
     let c = coins.draw();
     let cp = send V -> P(c);
     let q = coins.index<N>();
     let qp = send V -> P(q);
     let ce = send P -> V(cp);
     let qe = send P -> V(qp);
-    local V let c_ok = agree(c, ce);
-    local V let q_ok = same(q, qe);
-    guard @V c_ok;
-    guard @V q_ok;
-    yield (done = done);
-  };
-  local V let accepted = yes();
+    let c_ok @V = agree(c, ce);
+    let q_ok @V = same(q, qe);
+    require @V c_ok;
+    require @V q_ok;
+  }
+  let accepted @V = yes();
   return (accepted = accepted);
 }
 entry Proof = Echo<pow2(5), 4> {

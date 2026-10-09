@@ -36,8 +36,13 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 Language resolves explicit modules and R1CS/AIR Assets, checks generic libraries
 and closes selected Entries. It supports scalar mathematics, Boolean formulas,
 nominal products/variants, static parameters and components, capabilities and
-permissions, formal polynomial intrinsics, local control, messages, services,
-static protocol composition, bounded repetition and conditional completion.
+permissions, lexical scopes and patterns, mutable bindings with inferred region
+state/captures, statement-scoped participant inference, nested ordered calls,
+helper result inference, expression-wide structural type constraints, partial
+static arguments, inferred catalog/natural
+preconditions with explicit contract checking, unified data/service arguments,
+source rejection with `require`, formal polynomial intrinsics, local control,
+messages, services, static protocol composition, bounded repetition and conditional completion.
 Independent source comparison checks emitted MLIR against checked definitions;
 [source semantics](spec/language/README.md) owns exact limits.
 
@@ -49,6 +54,8 @@ for source correspondence; it does not interpret retained MLIR. Maintained
 
 Fixed source arrays use static numeric indexing. Private ingress without an
 admitted validator, member-generic conformance and zero-leaf messages refuse.
+Resource permission inference, implicit role remapping, natural equation solving
+and inversion of associated types are outside the source profile.
 Relation and target/input/output/continuation clauses state intent; declarations
 alone add no runtime guard, satisfaction fact or security theorem.
 

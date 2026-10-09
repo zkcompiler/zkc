@@ -48,7 +48,7 @@ fn work(cs:Vector<F>,shift:F,beta:F,n:index,query:index)
 }}
 protocol Run roles(P)(cs:Vector<F>@P,shift:F@P,beta:F@P,n:index@P,query:index@P)
   ->(result:(Vector<F>,Vector<F>,Vector<F>,F,index)@P) {{
-  local P let result=work(cs,shift,beta,n,query);
+  let result @P =work(cs,shift,beta,n,query);
   return(result=result);
 }}
 entry Demo=Run;
@@ -95,9 +95,9 @@ fn twice(q:index)->Indices {
 }
 fn size(xs:Indices)->index { return kernel("indices.length",xs); }
 protocol Run roles(P,V)(q:index@P)->(result:Indices@V,count:index@V) {
-  local P let collection=twice(q);
+  let collection @P =twice(q);
   let received=send P->V(collection);
-  local V let count=size(received);
+  let count @V =size(received);
   return(result=received,count=count);
 }
 entry Demo=Run;

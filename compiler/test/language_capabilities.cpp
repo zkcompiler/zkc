@@ -44,7 +44,7 @@ int main() {
       domain K=field("koala-bear");
       protocol Run<F:Field> roles(P)(n:index@P)->(r:F@P)
           where zkc::algebra::TwoAdicField(F) {
-        local P let r=root<F>(n);return(r=r);
+        let r @P =root<F>(n);return(r=r);
       }
       entry Demo=Run<K>;
     )")
@@ -57,7 +57,7 @@ int main() {
   });
   cases.run("calls require the caller's bounds on the exact argument", [] {
     refuses(check((root + R"(
-      fn caller<F:Field>(n:index)->F{return root<F>(n);}
+      fn caller<F:Field>(n:index)->F where () {return root<F>(n);}
     )")
                       .str()),
             "source.capability");
@@ -85,7 +85,7 @@ int main() {
     )"));
     refuses(check(R"(
       fn transcript<T:Transcript>()->() where zkc::transcript::TranscriptCapability(T) {return ();}
-      fn caller<T:Transcript>()->() {return transcript<T>();}
+      fn caller<T:Transcript>()->() where () {return transcript<T>();}
     )"),
             "source.capability");
   });
@@ -103,7 +103,7 @@ int main() {
       domain Fr=field("bls12-381.fr");
       protocol Run<F:Field> roles(P)(n:index@P)->(r:F@P)
           where zkc::algebra::TwoAdicField(F) {
-        local P let r=root<F>(n);return(r=r);
+        let r @P =root<F>(n);return(r=r);
       } entry Demo=Run<Fr>;
     )")
                       .str()),
@@ -149,7 +149,7 @@ int main() {
       }
     )"));
     refuses(check(implementation + R"(
-      fn call<F:Field>(n:index)->F{return invoke<F,Impl<F>>(n);}
+      fn call<F:Field>(n:index)->F where () {return invoke<F,Impl<F>>(n);}
     )"),
             "source.capability");
     refuses(check(R"(
@@ -267,8 +267,9 @@ int main() {
         auto unbounded = library;
         auto bound = unbounded.find("where zkc::pcs::MultilinearOpening(C)");
         require(bound != std::string::npos, "PCS bound anchor missing");
-        unbounded.erase(
-            bound, StringRef("where zkc::pcs::MultilinearOpening(C)").size());
+        unbounded.replace(
+            bound, StringRef("where zkc::pcs::MultilinearOpening(C)").size(),
+            "where ()");
         refuses(check(unbounded), "source.kernel");
         refuses(check(library + R"(
           fn false_bound()->() where zkc::pcs::MultilinearOpening(Rows) {return ();}
@@ -281,7 +282,7 @@ int main() {
       }
       protocol Run<C:Commitment> roles(P,V)(a:Commit<C>@P,b:Commit<C>@V)->(accepted:bool@V)
           where zkc::pcs::MultilinearOpening(C) {
-        let sent=send P->V(a);local V let ok=equal<C>(sent,b);return(accepted=ok);
+        let sent=send P->V(a);let ok @V =equal<C>(sent,b);return(accepted=ok);
       } entry Demo=Run<Kzg>{setup pcs{a,b};}
     )");
         take(compileEntry(take(prepareOriginal(entry))));

@@ -3,11 +3,11 @@ domain Fr=field("bls12-381.fr");
 math fn twice<F:Field>(x:F)->F{return x+x;}
 fn work(x:Fr,go:bool)->Fr {
   let two=twice(x);
-  let out=if go capture(two,x){yield two;}else{yield x;};
+  let out=if go {two}else{x};
   return out;
 }
 protocol Run roles(P,V)(x:Fr@P,go:bool@P)->(out:Fr@V){
- local P let y=work(x,go);
+ let y @P =work(x,go);
  let sent=send P->V(y);
  return(out=sent);
 }

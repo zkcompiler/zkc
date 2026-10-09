@@ -24,6 +24,10 @@ if(NOT IS_ABSOLUTE "${MLIR_TABLEGEN_EXE}")
     HINTS "${MLIR_TOOLS_DIR}" "${LLVM_TOOLS_BINARY_DIR}" REQUIRED)
   set(MLIR_TABLEGEN_EXE "${ZKC_MLIR_TABLEGEN_EXE}")
 endif()
+if(NOT TARGET "${MLIR_TABLEGEN_TARGET}" AND
+   NOT IS_ABSOLUTE "${MLIR_TABLEGEN_TARGET}")
+  set(MLIR_TABLEGEN_TARGET "${MLIR_TABLEGEN_EXE}")
+endif()
 # MLIR's C++ interfaces change between major releases, so the major release is
 # what a native build requires. The Nix lock selects the tested upstream patch;
 # other native 23 builds report their difference with this baseline.

@@ -330,7 +330,7 @@ entry Demo=Run;)zkc");
     for (
         StringRef code : {
             R"zkc(module sample; struct Token:Drop{} fn mint()->Token{return Token{};}
-      protocol Run roles(P)()->(x:Token@P){local P let t=mint();return(x=t);}entry Demo=Run;)zkc",
+      protocol Run roles(P)()->(x:Token@P){let t @P =mint();return(x=t);}entry Demo=Run;)zkc",
             R"zkc(module sample; enum Choice{A(bool),B()}
       protocol Run roles(P)(x:Choice@P)->(y:Choice@P){return(y=x);}entry Demo=Run;)zkc"}) {
       auto source = compile(code);
@@ -512,7 +512,7 @@ enum Choice {Some(Fr), None()}
 fn make(x:Fr)->State {return State{value:x};}
 protocol Run roles(P)(choice:Choice@P, empty:[Fr;0]@P, x:Fr@P)
   ->(same:Choice@P, unit:()@P, state:State@P) {
- local P let state=make(x);
+ let state @P =make(x);
  return(same=choice,unit=(),state=state);
 }
 entry Demo=Run;)zkc");
@@ -561,7 +561,7 @@ entry Demo=Run;)zkc");
 struct Ticket:Share {}
 struct Wrapper {ticket:Ticket}
 fn make()->Wrapper {return Wrapper{ticket:Ticket{}};}
-protocol Run roles(P)()->(result:Wrapper@P) {local P let value=make(); return(result=value);}
+protocol Run roles(P)()->(result:Wrapper@P) {let value @P =make(); return(result=value);}
 entry Demo=Run;)zkc");
         auto view = take(readInterface(source.bytes(), source.interfaceJson()));
         require(
@@ -609,7 +609,7 @@ entry Demo=Run;)zkc");
     auto source = compile(R"zkc(module sample;
 struct Token:Drop {}
 fn mint()->Token {return Token{};}
-protocol Run roles(P,V)()->(t:Token@P) {local P let t=mint();return(t=t);}
+protocol Run roles(P,V)()->(t:Token@P) {let t @P =mint();return(t=t);}
 entry Demo=Run;)zkc");
     auto v = take(json::parse(source.interfaceJson()));
     auto &port = *protocol(v).getArray("outputs")->front().getAsObject();
@@ -634,7 +634,7 @@ struct Token:Drop {}
 enum Choice {Some(bool),None()}
 fn mint()->Token {return Token{};}
 protocol Run roles(P)(v:Choice@P)->(a:Token@P,b:Token@P,x:Choice@P,y:Choice@P) {
- local P let a=mint(); local P let b=mint();return(a=a,b=b,x=v,y=v);
+ let a @P =mint(); let b @P =mint();return(a=a,b=b,x=v,y=v);
 }
 entry Demo=Run;)zkc");
     for (unsigned index : {1u, 3u}) {

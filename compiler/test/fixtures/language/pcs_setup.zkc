@@ -21,11 +21,11 @@ fn check<C:Commitment>(vk:VK<C>,c:Commit<C>,point:Vector<C::PointField>,value:C:
 protocol Opening<C:Commitment> roles(P,V)
   (vk:VK<C>@V,pk:PK<C>@P,data:Vector<C::ValueField>@P,point:Vector<C::PointField>@(P,V))
   ->(accepted:bool@V) where zkc::pcs::MultilinearOpening(C), Share(C::PointField), Share(C::EvaluationField), Wire(C::EvaluationField) {
-  local P let opened=produce<C>(pk,data,point);
+  let opened @P =produce<C>(pk,data,point);
   let c=send P->V(opened.0);
   let value=send P->V(opened.1);
   let proof=send P->V(opened.2);
-  local V let ok=check<C>(vk,c,point,value,proof);
+  let ok @V =check<C>(vk,c,point,value,proof);
   return(accepted=ok);
 }
 math fn both(a:bool,b:bool)->bool{return intrinsic("bool.and",a,b);}
@@ -34,8 +34,8 @@ protocol Pair roles(P,V)
   (claim:Claim@(P,V),vk0:VK<Kzg>@V,pk0:PK<Kzg>@P,data0:Vector<Kzg::ValueField>@P,
    vk1:VK<Kzg>@V,pk1:PK<Kzg>@P,data1:Vector<Kzg::ValueField>@P,
    point:Vector<Kzg::PointField>@(P,V),vk_alias:VK<Kzg>@V)->(accepted:bool@V,ready:bool@P) {
-  let first=apply Opening<Kzg> roles(P,V)(vk0,pk0,data0,point);
-  let second=apply Opening<Kzg> roles(P,V)(vk1,pk1,data1,point);
+  let first=Opening<Kzg> roles(P,V)(vk0,pk0,data0,point);
+  let second=Opening<Kzg> roles(P,V)(vk1,pk1,data1,point);
   let ok=both(first,second);
   return(accepted=ok,ready=claim.tag);
 }

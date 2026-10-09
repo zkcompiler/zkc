@@ -175,8 +175,9 @@ bool Semantics::entails(const Declaration *context, const CapabilityBound &goal,
   if (!proof)
     return accept(proof.takeError(), goal.span);
   return proof->goals.front().has_value() ||
+         (inferCapability && inferCapability(context, goal)) ||
          fail(code,
-              "declared bounds do not establish catalog capability: " +
+              "contract does not establish catalog capability: " +
                   display(goal.predicate),
               goal.span);
 }

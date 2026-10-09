@@ -30,22 +30,20 @@ fn accept() -> bool { return true; }
 // [0, N) at V and checks P's opening at that position. N must be a power of
 // two; V's own vector must have N rows.
 protocol SpotCheck<N: nat, Max: nat> roles(P, V)
-    (values: Vector<E> @P, expected: Vector<E> @V, rounds: index @(P,V))
-    using(coins: Random<E> @V) -> (accepted: bool @V) {
-  let checked = repeat roles(P,V)(i < rounds, max Max)
-      carry(done = rounds @V) capture(values, expected) using(coins) {
-    local P let tree = commit(values);
+    (values: Vector<E> @P, expected: Vector<E> @V, rounds: index @(P,V),
+     coins: Random<E> @V) -> (accepted: bool @V) {
+  for i in 0..rounds roles(P,V) max Max {
+    let tree @P = commit(values);
     let root = send P -> V(tree.0);
     let position = coins.index<N>();
     let at = send V -> P(position);
-    local P let opened = open(tree.1, at);
+    let opened @P = open(tree.1, at);
     let row = send P -> V(opened.0);
     let path = send P -> V(opened.1);
-    local V let ok = check<N>(expected, root, position, row, path);
-    guard @V ok;
-    yield (done = done);
-  };
-  local V let accepted = accept();
+    let ok @V = check<N>(expected, root, position, row, path);
+    require @V ok;
+  }
+  let accepted @V = accept();
   return (accepted = accepted);
 }
 

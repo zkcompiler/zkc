@@ -3,11 +3,12 @@ domain Fr = field("bls12-381.fr");
 struct State: Drop { value: Fr }
 fn make(x: Fr) -> State { return State { value: x }; }
 protocol Run roles(P)(n: index @P, go: bool @P, x: Fr @P) -> (state: State @P) completes {
-  local P let state = make(x);
-  let result = repeat roles(P)(i < n, max 4) carry(s = state) capture(go) {
-    let next = finish_if @P(go) (state = s);
-    yield (s = next);
-  };
-  return (state = result);
+  let mut state @P = make(x);
+  for _ in 0..n roles(P) max 4 {
+    let next = finish_if @P(go) (state = state);
+    state = next;
+  }
+  return state;
 }
+
 entry Demo = Run;

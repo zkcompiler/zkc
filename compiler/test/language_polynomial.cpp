@@ -150,8 +150,8 @@ int main(int argc, char **argv) {
     math fn bad(x:builtin("field_array",F,0))->Poly<1>{return intrinsic<F,0>("poly.from_coefficients",x);}
   )",
           "source.bound");
-  refuses("generic index needs bound", R"(
-    math fn bad<N:nat,I:nat>(x:builtin("field_array",F,N))->F{return intrinsic<F,N,I>("array.at",x);}
+  refuses("closed generic contract needs bound", R"(
+    math fn bad<N:nat,I:nat>(x:builtin("field_array",F,N))->F where () {return intrinsic<F,N,I>("array.at",x);}
   )",
           "source.bound");
   refuses("wrong table shape", R"(
@@ -297,10 +297,10 @@ int main(int argc, char **argv) {
               changed += R"(
             protocol Nested roles(P)(n:index@P,a:Fr@P,b:Fr@P,x:Fr@P)
                 ->(r:(Fr,Fr,Fr,Fr,Fr,Fr)@P){
-              let r=repeat roles(P)(i<n,max 2)
-                  carry(v=(a,a,a,a,a,a)@P) capture(a,b,x){
-                yield(v=calculate(a,b,x));
-              };
+              let mut r@P=(a,a,a,a,a,a);
+              for _ in 0..n roles(P) max 2 {
+                r=calculate(a,b,x);
+              }
               return(r=r);
             }entry NestedDemo=Nested;
           )";

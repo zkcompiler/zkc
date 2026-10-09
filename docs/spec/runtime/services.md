@@ -2,7 +2,7 @@
 
 This profile extends [closed mathematical protocols](../ir/protocols.md)
 with owner-local reusable references and explicit, synchronous service queries.
-It defines a native execution contract. The [mathematical source profile](../language/protocols.md#managed-services-and-guards) compares emitted service ports, queries and aliases with its checked source. Native Lean checking remains separate.
+It defines a native execution contract. The [mathematical source profile](../language/protocols.md#managed-services-and-rejection) compares emitted service ports, queries and aliases with its checked source. Native Lean checking remains separate.
 
 ## Common IR
 

@@ -42,8 +42,6 @@ std::optional<ValueId> BodyChecker::intrinsic(const Expression &expr,
   auto components = combine(operands, expr.span);
   if (!components)
     return {};
-  if (!components->empty())
-    body.formationRequirements.push_back(*components);
   return emit(MathValue{mathematicalIntrinsic(expr.text)->identity,
                         std::move(operands),
                         {},

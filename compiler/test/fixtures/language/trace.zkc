@@ -4,17 +4,17 @@ type Matrix<F: Field> = builtin("matrix", F);
 type Trace<F: Field> = builtin("sequence", Matrix<F>);
 fn row_count<F: Field>(trace: Trace<F>) -> index {
   let n = kernel<Matrix<F>>("sequence.length", trace);
-  let zero: index = 0;
-  let count = for i in 0..n carry(count = zero) capture(trace) {
+  let mut count: index = 0;
+  for i in 0..n {
     let matrix = kernel<Matrix<F>>("sequence.at", trace, i);
     let rows = kernel<F>("matrix.dimension", matrix; "0");
-    yield count + rows;
-  };
+    count = count + rows;
+  }
   return count;
 }
 protocol Run roles(P,V)(trace: Trace<Fr> @P) -> (rows: index @V) {
   let received = send P -> V(trace);
-  local V let rows = row_count(received);
+  let rows @V = row_count(received);
   return (rows = rows);
 }
 entry Demo = Run;

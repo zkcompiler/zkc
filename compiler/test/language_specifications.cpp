@@ -91,7 +91,7 @@ int main() {
                     spec[3].subject.operands[1].role == 0,
                 "clause meanings or role components collapsed");
         for (const auto &op : entry.protocol().body->operations)
-          require(!std::holds_alternative<ProtocolGuard>(op.action),
+          require(!std::holds_alternative<Require>(op.action),
                   "clause inserted a runtime guard");
       });
   cases.run(
@@ -215,7 +215,7 @@ int main() {
                     std::vector<unsigned>{0, 1},
                 "product selector path differs");
         auto at = source.find("where 1<=N");
-        source.erase(at, 10);
+        source.replace(at, 10, "where ()");
         refuses(check(source), "source.bound");
       });
   cases.run(

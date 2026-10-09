@@ -347,7 +347,7 @@ def test_bindings_refuse_outputs_without_host_export(toolchain, journal, directo
     source.write_text('module sample; struct Restricted:Drop{pub b:bool}'
                       'fn make()->Restricted{return Restricted{b:true};}'
                       'protocol Run roles(P)()->(r:Restricted@P){'
-                      'local P let r=make();return(r=r);}entry Demo=Run;')
+                      'let r @P =make();return(r=r);}entry Demo=Run;')
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
     bindings = directory / 'bindings.rs'
     bindings.write_bytes(b'unchanged')
@@ -392,7 +392,7 @@ def test_compiler_failures_are_bounded_and_do_not_publish(toolchain, journal, di
 def test_proof_file_public_inputs_are_authoritative(toolchain, journal, directory):
     source = directory / 'public.zkc'
     source.write_text((FIXTURES / 'attempts.zkc').read_text()
-                      .replace('Round roles(P,V)(done:bool@P)', 'Round roles(P,V)(done:bool@P,tag:bool@(P,V))')
+                      .replace('Round roles(P,V)(done:bool@P,', 'Round roles(P,V)(done:bool@P,tag:bool@(P,V),')
                       .replace('public{};accept accepted;complete result.ready;', 'public{tag};accept accepted;complete result.ready;', 1))
     package, pin = compile_entry(toolchain, journal, directory, 'Derived', source)
     producer = write(directory / 'producer.json', {'format': 'zkc.entry-proof/0', 'public': {'tag': True}, 'inputs': {'done': True}})
@@ -455,7 +455,7 @@ domain Fr=field("bls12-381.fr");
 type Vector<F:Field>=builtin("vector",F);
 fn filled(x:Fr)->Vector<Fr>{let n:index=3;return kernel<Fr>("vector.fill",x,n);}
 protocol Run roles(P,V)(done:bool@P)->(large:Vector<Fr>@P,accepted:bool@V){
-  local P let large=filled(1);
+  let large @P =filled(1);
   let actual=send P->V(done);
   return(large=large,accepted=actual);
 }
@@ -552,3 +552,40 @@ def test_run_work_limits_apply_and_configuration_files_are_protected(toolchain, 
     assert refused['phase'] == 'execution'
     journal.run([*command, f'--results={limits}'], refuses='entry-output-path')
     assert limits.read_bytes() == sentinel
+
+
+@pytest.mark.parametrize('local', [False, True])
+def test_require_proof_outcome_and_unpublished_prefix(toolchain, journal, directory, local):
+    def condition(name):
+        return f'checked({name})' if local else name
+    source = directory / 'require.zkc'
+    source.write_text(f'''module sample;
+fn checked(go:bool)->bool{{require go;return go;}}
+protocol Check roles(P,V)(produce:bool@P,accept:bool@P)->(accepted:bool@V){{
+  require {condition('produce')};
+  let actual=send P->V(accept);
+  require {condition('actual')};
+  let final=send P->V(true);
+  return true;
+}}
+entry Proof=Check{{prover P;verifier V;public{{}};accept accepted;construction authored;}}
+''')
+    package, pin = compile_entry(toolchain, journal, directory, 'Proof', source)
+    producer = write(directory / 'producer.json', {'format': 'zkc.entry-proof/0', 'public': {},
+                                                  'inputs': {'produce': True, 'accept': True}})
+    verifier = write(directory / 'verifier.json', {'format': 'zkc.entry-proof/0', 'public': {}, 'inputs': {}})
+    proof = directory / 'proof.bin'
+    proving = [toolchain.runtime, 'prove', package, pin, producer, proof, '--allow-header-only']
+    verifying = [toolchain.runtime, 'verify', package, pin, verifier, proof, '--allow-header-only']
+    assert journal.json(proving)['status'] == 'produced'
+    assert journal.json(verifying)['status'] == 'accepted'
+    write(producer, {'format': 'zkc.entry-proof/0', 'public': {}, 'inputs': {'produce': True, 'accept': False}})
+    assert journal.json(proving)['status'] == 'produced'
+    report = journal.json(verifying, refuses='artifact-stopped')
+    assert report['execution']['stop']['kind'] == 'Explicit("reject")'
+    assert report['execution']['stop']['role'] == 'V'
+    write(producer, {'format': 'zkc.entry-proof/0', 'public': {}, 'inputs': {'produce': False, 'accept': True}})
+    proof.unlink()
+    report = journal.json(proving, refuses='artifact-stopped')
+    assert not proof.exists(), 'producer rejection published a partial proof'
+    assert 'Explicit("reject")' in str(report)

@@ -2,58 +2,48 @@
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
-bool BodyChecker::application(const Statement &statement) {
-  const auto &expr = syntax.expressions[statement.expression];
-  if (!protocol() || statement.kind != Statement::Kind::Let ||
-      statement.owner || statement.roles || statement.type ||
-      statement.exchange)
-    return fail(
-        "source.mode",
-        "protocol application requires an unannotated protocol let binding",
-        statement.span);
+std::optional<std::vector<ValueId>>
+BodyChecker::application(const Expression &expr) {
+  if (!protocol()) {
+    fail("source.mode", "protocol application requires protocol mode",
+         expr.span);
+    return {};
+  }
   auto target = checker.resolve(decl, expr.text, expr.span);
   if (!target)
-    return false;
+    return {};
   auto &callee = checker.output.declarations[target->index];
-  if (callee.kind != Declaration::Kind::Protocol)
-    return fail("source.call", "application target must be a protocol",
-                expr.span);
-  if (callee.completes)
-    return fail("source.completion",
-                "a completing protocol can only be selected as an Entry",
-                expr.span);
-  const auto names =
-      statement.resultNames.value_or(std::vector<std::string>{statement.name});
-  if (names.size() != callee.outputs.size() ||
-      expr.children.size() != callee.inputs.size())
-    return fail("source.call",
-                "protocol application input or result count differs",
-                expr.span);
-  std::set<std::string> seen;
-  for (const auto &name : names)
-    if (!checker.bindingName(decl, name, statement.span) ||
-        bindings.count(name) || services.count(name) ||
-        !seen.insert(name).second)
-      return checker.types.diagnostic
-                 ? false
-                 : fail("source.shadow",
-                        "duplicate or shadowing result binding",
-                        statement.span);
+  if (callee.kind != Declaration::Kind::Protocol) {
+    fail("source.call", "application target must be a protocol", expr.span);
+    return {};
+  }
+  if (callee.completes) {
+    fail("source.completion",
+         "a completing protocol can only be selected as an Entry", expr.span);
+    return {};
+  }
+  if (expr.children.size() != callee.inputOrder.size()) {
+    fail("source.call", "protocol application input count differs", expr.span);
+    return {};
+  }
   const auto &roleNames = expr.roles ? *expr.roles : callee.roles;
-  if (roleNames.size() != callee.roles.size())
-    return fail("source.roles",
-                "protocol role substitution must cover the callee roster",
-                expr.span);
+  if (roleNames.size() != callee.roles.size()) {
+    fail("source.roles",
+         "protocol role substitution must cover the callee roster", expr.span);
+    return {};
+  }
   std::vector<unsigned> mapping;
   for (const auto &name : roleNames) {
     auto role = checker.roles(decl, {name}, expr.span);
     if (!role)
-      return false;
-    if (llvm::is_contained(mapping, role->front()))
-      return fail("source.roles",
-                  "protocol role substitution must be injective", expr.span);
+      return {};
+    if (llvm::is_contained(mapping, role->front())) {
+      fail("source.roles", "protocol role substitution must be injective",
+           expr.span);
+      return {};
+    }
     if (!active(*role, expr.span))
-      return false;
+      return {};
     mapping.push_back(role->front());
   }
   auto mappedRoles = [&](const Port &port) {
@@ -63,85 +53,70 @@ bool BodyChecker::application(const Statement &statement) {
     llvm::sort(roles);
     return roles;
   };
-  std::vector<std::optional<Type>> hints;
-  for (auto child : expr.children) {
-    hints.push_back(hint(child));
-    if (checker.types.diagnostic)
-      return false;
-  }
-  auto arguments = actuals(callee, expr, hints, {}, {});
-  if (!arguments)
-    return false;
-  auto substitution = checker.types.substitution(callee, *arguments);
-  if (expr.services.size() != callee.services.size())
-    return fail("source.service",
-                "protocol application managed port count differs", expr.span);
+  const auto id = uint32_t(&expr - syntax.expressions.data());
+  TypeScope types(*this, id, {});
+  if (!types)
+    return {};
+  std::vector<uint32_t> data;
   std::vector<ServiceId> managed;
-  for (unsigned i = 0; i < expr.services.size(); ++i) {
-    auto found = services.find(expr.services[i]);
-    if (found == services.end())
-      return fail("source.service",
-                  "application requires an existing managed binding",
-                  expr.span);
-    const auto &actual = body.services[found->second.index];
+  for (unsigned i = 0; i < expr.children.size(); ++i) {
+    auto child = expr.children[i];
+    if (callee.inputOrder[i].kind == Declaration::InputSlot::Kind::Service) {
+      auto root = service(syntax.expressions[child]);
+      if (!root)
+        return {};
+      managed.push_back(*root);
+    } else {
+      data.push_back(child);
+    }
+    if (checker.types.diagnostic)
+      return {};
+  }
+  const auto &arguments = inference->arguments.at(id);
+  auto substitution = checker.types.substitution(callee, arguments);
+  for (unsigned i = 0; i < managed.size(); ++i) {
+    const auto &actual = body.services[managed[i].index];
     const auto &expected = callee.services[i];
     auto field =
         checker.types.substitute(expected.field, substitution, expr.span);
     if (!field)
-      return false;
-    if (*field != actual.field || mapping[expected.owner] != actual.owner)
-      return fail("source.service",
-                  "managed service field or mapped owner differs", expr.span);
-    managed.push_back(found->second);
+      return {};
+    if (*field != actual.field || mapping[expected.owner] != actual.owner) {
+      fail("source.service", "managed service field or mapped owner differs",
+           expr.span);
+      return {};
+    }
   }
   std::vector<ValueId> operands;
-  for (unsigned i = 0; i < expr.children.size(); ++i) {
+  for (unsigned i = 0; i < data.size(); ++i) {
     const auto &port = callee.inputs[i];
     auto type = checker.types.substitute(port.type, substitution, expr.span);
     if (!type)
-      return false;
-    auto value = expression(expr.children[i], *type);
+      return {};
+    auto value = expression(data[i], *type);
     if (!value)
-      return false;
+      return {};
     auto roles = mappedRoles(port);
-    const auto &available = body.values[value->index].components;
-    if (!std::includes(available.begin(), available.end(), roles.begin(),
-                       roles.end()))
-      return fail("source.roles",
-                  "protocol argument lacks a required participant component",
-                  expr.span);
-    auto permissions = checker.types.permissions(*type, expr.span, &decl);
-    if (!permissions || (available != roles && !permissions->drop))
-      return checker.types.diagnostic
-                 ? false
-                 : fail("source.permission",
-                        "application cannot discard a component without Drop",
-                        expr.span);
+    if (!demand(*value, roles, expr.span))
+      return {};
     if (!use(*value, expr.span))
-      return false;
+      return {};
     operands.push_back(*value);
   }
-  if (!checker.body(callee.id, callDepth + 1))
-    return false;
-  checker.bodyHeights[decl.id.index] =
-      std::max(checker.bodyHeights[decl.id.index],
-               checker.bodyHeights[callee.id.index] + 1);
   body.mayStop |= callee.body->mayStop;
   body.opaque |= callee.body->opaque;
   std::vector<Value> results;
   for (const auto &port : callee.outputs) {
     auto type = checker.types.substitute(port.type, substitution, expr.span);
     if (!type)
-      return false;
+      return {};
     results.push_back({*type, mappedRoles(port), expr.span});
   }
   auto emitted = emitResults(
-      ProtocolApplication{callee.id, operands, *arguments, mapping, managed},
+      ProtocolApplication{callee.id, operands, arguments, mapping, managed},
       std::move(results), expr.span);
-  if (!emitted)
-    return false;
-  for (unsigned i = 0; i < names.size(); ++i)
-    bindings.emplace(names[i], (*emitted)[i]);
-  return true;
+  if (emitted)
+    placement->applications.push_back(body.operations.size() - 1);
+  return emitted;
 }
 } // namespace zkc::language::detail

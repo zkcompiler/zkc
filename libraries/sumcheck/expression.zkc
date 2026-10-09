@@ -42,29 +42,32 @@ fn equal<F: Field>(left: F, right: F) -> bool { return left == right; }
 pub protocol Sumcheck<F: Field+Share+Wire, Max: nat, Width: nat, Degree: nat,
                       E: Expression<F>> roles(P,V)
     (prover_values: Vector<F> @P, verifier_values: Vector<F> @V,
-     claim: F @V, rounds: index @(P,V))
-    using(challenges: Random<F> @V) -> (accepted: bool @V) {
-  let (lastP, lastV, final_claim) = repeat roles(P,V)(i < rounds, max Max)
-      carry(tableP = prover_values, tableV = verifier_values, current = claim @V)
-      capture() using(challenges) {
-    local P let proposed = round<F,Width,E>(tableP);
+     claim: F @V, rounds: index @(P,V),
+     challenges: Random<F> @V) -> (accepted: bool @V) {
+  let mut tableP = prover_values;
+  let mut tableV = verifier_values;
+  let mut current = claim;
+  for i in 0..rounds roles(P,V) max Max {
+    let proposed @P = round<F,Width,E>(tableP);
     let received = send P -> V(proposed);
-    local V let actual = polynomial(received);
-    local V let size_ok = has_length<F,Degree+1>(received);
-    guard @V size_ok;
-    local V let total = boundary(actual);
-    local V let sum_ok = equal(current, total);
-    guard @V sum_ok;
+    let actual @V = polynomial(received);
+    let size_ok @V = has_length<F,Degree+1>(received);
+    require @V size_ok;
+    let total @V = boundary(actual);
+    let sum_ok @V = equal(current, total);
+    require @V sum_ok;
     let cv = challenges.draw();
     let cp = send V -> P(cv);
-    local P let nextP = fold(tableP, cp);
-    local V let nextV = fold(tableV, cv);
-    local V let nextClaim = evaluate(actual, cv);
-    yield (tableP = nextP, tableV = nextV, current = nextClaim);
-  };
-  local V let size_ok = has_length<F,Width>(lastV);
-  guard @V size_ok;
-  local V let evaluated = E::evaluate(lastV);
-  local V let accepted = equal(evaluated, final_claim);
+    let nextP @P = fold(tableP, cp);
+    let nextV @V = fold(tableV, cv);
+    let nextClaim @V = evaluate(actual, cv);
+    tableP = nextP;
+    tableV = nextV;
+    current = nextClaim;
+  }
+  let size_ok @V = has_length<F,Width>(tableV);
+  require @V size_ok;
+  let evaluated @V = E::evaluate(tableV);
+  let accepted @V = equal(evaluated, current);
   return (accepted = accepted);
 }

@@ -8,7 +8,7 @@ fn evaluate<F: Field>(m: Matrix<F>, v: Vector<F>) -> F {
 }
 protocol Run roles(P,V)(m: Matrix<Fr> @P, v: Vector<Fr> @P) -> (r: Fr @V) {
   let data = send P -> V((m, v));
-  local V let result = evaluate(data.0, data.1);
+  let result @V = evaluate(data.0, data.1);
   return (r = result);
 }
 entry Demo = Run;

@@ -43,7 +43,7 @@ fn work(m:Matrix<F>,x:Vector<F>,y:Vector<F>)->(Vector<F>,Vector<F>,F,bool) {{
 }}
 protocol Run roles(P)(m:Matrix<F>@P,x:Vector<F>@P,y:Vector<F>@P)
   ->(result:(Vector<F>,Vector<F>,F,bool)@P) {{
-  local P let result=work(m,x,y);
+  let result @P =work(m,x,y);
   return(result=result);
 }}
 entry Demo=Run;
