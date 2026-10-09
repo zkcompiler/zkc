@@ -1,0 +1,78 @@
+module accumulator_machine;
+use air_stark::{Base, Extension};
+use air_polynomial::{Vector};
+use air_bundle::{Statement, TableStatement, ThreeTableArgument};
+use air_interaction::{Reduction, LogUp, GrandProduct};
+domain Machine = bundle(asset machine);
+
+// The formals the captured Bundle derives: public slots, then per table its
+// presence (optional tables), height (configured or instance) and groups.
+relation MachineRelation(statement initial: Base, statement final: Base,
+    statement cpu_height: index, witness cpu: Vector<Base>,
+    parameter program_height: index, parameter instructions: Vector<Base>,
+    witness usage: Vector<Base>,
+    statement memory_present: bool, parameter memory_height: index,
+    parameter schedule: Vector<Base>, witness cells: Vector<Base>) = bundle(asset machine);
+
+fn none() -> Vector<Base> { return kernel<Base>("vector.empty"); }
+fn table(present: bool, height: index, configuration: Vector<Base>) -> TableStatement {
+  return TableStatement { present, height, configuration, public_columns: none() };
+}
+fn statement(initial: Base, final: Base, cpu_height: index, program_height: index,
+    instructions: Vector<Base>, memory_present: bool, memory_height: index,
+    schedule: Vector<Base>, shift: Base) -> Statement {
+  let first = kernel<Base>("vector.fill", initial, 1);
+  return Statement {
+    tables: [table(true, cpu_height, none()), table(true, program_height, instructions),
+      table(memory_present, memory_height, schedule)],
+    public_data: kernel<Base>("vector.append", first, final), shift };
+}
+
+// Sizes and counts are deliberately small for executable protocol tests:
+// tables of at most 32 rows on a 64-point domain, eight queries and eight
+// out-of-domain sampling attempts.
+protocol MachineProof<R: Reduction<Extension>> roles(P,V)
+    (initial: Base @(P,V), final: Base @(P,V), cpu_height: index @(P,V),
+     cpu: Vector<Base> @P, program_height: index @(P,V), instructions: Vector<Base> @(P,V),
+     usage: Vector<Base> @P, memory_present: bool @(P,V), memory_height: index @(P,V),
+     schedule: Vector<Base> @(P,V), cells: Vector<Base> @P, shift: Base @(P,V),
+     round_count: index @(P,V), query_count: index @(P,V), attempt_count: index @(P,V),
+     channel_count: index @(P,V), coins: Random<Extension> @V) -> (accepted: bool @V)
+    spec {
+      target constraints = MachineRelation(in.initial@V, in.final@V, in.cpu_height@V,
+        in.cpu, in.program_height@V, in.instructions@V, in.usage, in.memory_present@V,
+        in.memory_height@V, in.schedule@V, in.cells) accept out.accepted;
+    } {
+  let statementP @P = statement(initial, final, cpu_height, program_height, instructions,
+    memory_present, memory_height, schedule, shift);
+  let statementV @V = statement(initial, final, cpu_height, program_height, instructions,
+    memory_present, memory_height, schedule, shift);
+  let witness @P = [cpu, usage, cells];
+  let accepted = ThreeTableArgument<Machine,R,5,6,8,8>(witness, statementP, statementV,
+    round_count, query_count, attempt_count, channel_count, coins);
+  return (accepted = accepted);
+}
+
+entry Run = MachineProof<LogUp<Extension>>;
+entry ProofLogUp = MachineProof<LogUp<Extension>> {
+  prover P;
+  verifier V;
+  public { initial, final, cpu_height, program_height, instructions, memory_present,
+    memory_height, schedule, shift, round_count, query_count, attempt_count, channel_count };
+  accept accepted;
+  target constraints;
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {
+    derive coins;
+  }
+}
+entry ProofProduct = MachineProof<GrandProduct<Extension>> {
+  prover P;
+  verifier V;
+  public { initial, final, cpu_height, program_height, instructions, memory_present,
+    memory_height, schedule, shift, round_count, query_count, attempt_count, channel_count };
+  accept accepted;
+  target constraints;
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {
+    derive coins;
+  }
+}
