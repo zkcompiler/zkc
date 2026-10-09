@@ -433,6 +433,57 @@ def test_machine_executions_and_mutations_agree(toolchain, journal):
                   sorted(map(str, declared - covered)))
 
 
+def test_execution_tables_cannot_be_spliced_or_rebased(toolchain, journal):
+    # Both complete runs satisfy the same Bundle. Their program is identical,
+    # but the changed initial accumulator changes the value stored and loaded.
+    first = rows_of(MEMORY_PROGRAM, 1)
+    second = rows_of(MEMORY_PROGRAM, 2)
+    memory_difference = {
+        ('memory', (clock, 0, value, write))
+        for clock, write in [(1, 1), (5, 0)] for value in [5, 6]}
+    cases = [('first run', first, HOLDS), ('second run', second, HOLDS)]
+
+    rows = deepcopy(first)
+    rows.cpu = deepcopy(second.cpu)
+    cases.append(('foreign CPU with original public boundaries', rows,
+                  fails(('cpu', 'accumulator starts at the public initial value', 0),
+                        ('cpu', 'final accumulator is the public result', 7),
+                        unbalanced=memory_difference)))
+    rows = deepcopy(first)
+    rows.memory = deepcopy(second.memory)
+    cases.append(('foreign RAM with original CPU', rows,
+                  fails(unbalanced=memory_difference)))
+    rows = deepcopy(first)
+    other_program = replaced(MEMORY_PROGRAM, 6, ('add-immediate', 3))
+    rows.instructions = rows_of(other_program, 1).instructions
+    cases.append(('foreign authorized program', rows,
+                  fails(unbalanced={('program', (6, 2, 2)), ('program', (6, 2, 3))})))
+
+    # A complete-run relation starts at pc/clock zero. Rebase both ends of each
+    # bus together, preserving its balance and internal successor constraints.
+    rows = deepcopy(first)
+    for row in rows.cpu:
+        row[1] += 1
+    for row in rows.schedule:
+        row[0] += 1
+    cases.append(('clock continuation with consistent bus records', rows,
+                  fails(('cpu', 'clock starts at zero', 0),
+                        ('memory', 'schedule starts at clock zero', 0))))
+    rows = deepcopy(first)
+    for row in rows.cpu:
+        row[0] += 1
+    for row in rows.instructions:
+        row[0] += 1
+    cases.append(('pc continuation with consistent program records', rows,
+                  fails(('cpu', 'pc starts at zero', 0),
+                        ('program', 'configured pc starts at zero', 0))))
+    reports = replies(toolchain, journal, [candidate(rows) for _, rows, _ in cases])
+    for (name, _, expected), report in zip(cases, reports):
+        actual = bundle_outcome(report)
+        journal.check(name, actual == expected,
+                      {'actual': repr(actual), 'expected': repr(expected)})
+
+
 # Staged reductions.
 
 def staged_outcome(report, reduction):
