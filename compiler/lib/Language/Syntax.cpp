@@ -1501,11 +1501,17 @@ private:
       }
       Statement s;
       s.span = current().span;
-      if (take("guard")) {
-        s.kind = Statement::Kind::Guard;
-        s.owner.emplace();
-        if (!expect("@") || !name(*s.owner))
-          return {};
+      if (take("require")) {
+        s.kind = Statement::Kind::Require;
+        if (take("@")) {
+          s.owner.emplace();
+          if (!protocol) {
+            fail("source.roles", "require owner belongs to protocol mode");
+            return {};
+          }
+          if (!name(*s.owner))
+            return {};
+        }
       } else if (take("let")) {
         s.mutableBinding = take("mut");
         auto p = pattern(depth);
@@ -1535,8 +1541,6 @@ private:
         s.kind = Statement::Kind::Drop;
       else if (take("consume"))
         s.kind = Statement::Kind::Consume;
-      else if (take("require"))
-        s.kind = Statement::Kind::Require;
       else if (current().kind == TokenKind::Word &&
                cursor + 1 < tokens.size() &&
                StringRef(source.text)

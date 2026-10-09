@@ -73,9 +73,11 @@ Invariant places require `Copy`. A possibly empty loop does not discharge an out
 invariant's no-`Drop` obligation: it still needs a use outside the loop. Managed
 services are unavailable inside local functions.
 
-`require condition;` stops on false. `stop` uses a native reason: `reject`, `abort`,
-`exhausted`, `incomplete` or `refused`. Target execution limits remain independent
-of source effects and typing.
+`require condition;` stops with native reason `reject` on false and retains
+effects already performed. A raw `kernel("control.require", condition)` instead
+retains its installed backend-failure contract. `stop` uses a native reason:
+`reject`, `abort`, `exhausted`, `incomplete` or `refused`. Target execution limits
+remain independent of source effects and typing.
 
 ## Participant meaning
 
@@ -101,12 +103,56 @@ input may accept disjoint roles, but an unused sum of both inputs still requires
 a common participant. Abstract mathematical members conservatively depend on all
 inputs for both result availability and formation, including unused calls.
 
-`let value @P = helper(args);` owns an ordered local call at P, without
-communication. An assignment to an existing singleton-role binding supplies the
-same owner context. The call must occupy the whole RHS; nested ordered calls are
-not inferred from their arguments. Mathematical calls need no owner selection.
+An ordinary `fn` runs once at exactly one participant; its result is available
+only there. The compiler infers that owner within the current authored statement.
+Inputs, explicit `@` annotations, a mutable target's fixed roles, a send's sender,
+return ports and enclosing ordinary calls constrain the choice. Every ordinary
+call requires all its arguments at its owner, including unused arguments.
+There must be exactly one solution for every call; conflicts use `source.roles`
+and ambiguities use `source.owner`. Neither permissions nor the cost of execution
+chooses an owner. Explicit annotations are checked constraints.
+
+```text
+// shared: Fr @(P,V), p: Fr @P; f is an ordinary fn.
+let a = f(p);                 // P
+let b = f(shared) + p;        // P
+let c @V = f(shared);         // V
+let received = send P -> V(f(shared)); // call at P, received value at V
+// let ambiguous = f(shared); // error: P or V
+```
+
+Each let, assignment, discarded expression, require, send, application,
+completion and return settles before the next statement. Later uses cannot
+choose an earlier owner. A multi-port return supplies separate demands in one
+statement. A loop header settles before its body, whose statements and final
+unit expression settle in order. Inner block statements settle independently;
+the outer demand reaches only the block's final expression. Compiler-generated
+temporaries do not create new boundaries. Callee contracts are fixed before checking the caller;
+specialization does not infer owners again.
+
+Nested calls evaluate strictly left to right and remain ordered even when their
+results are unused. Different calls in one statement may have different owners.
+Pure mathematics propagates demand through its actual result dependencies.
+Every original mathematical intermediate must still form at the chosen owners,
+but an ignored intermediate cannot select them. For example, if `zero(x)` returns
+constant zero, `let r @P = zero(f(shared));` remains ambiguous. Likewise,
+`zero(f(shared) * p)` remains ambiguous even though the ignored product would
+need P. Once other demands uniquely select owners, every such product must
+still form; the compiler never retries another owner after a formation failure.
+
+One logical tuple, record or array requires common availability for all fields.
+Projection and destructuring preserve that set, including through mathematical
+helpers and native flattening. Separate protocol result ports keep separate sets.
+Dependencies are determined before optimization: `x-x` and `x*0` retain x's source
+dependency.
+
 Narrowing availability requires `Drop`; multi-role values require `Share` in
-addition to each operation's own permissions.
+addition to each operation's own permissions. `let mut x = shared;` fixes both
+components; assigning a P-only value cannot narrow x. Use separate bindings such
+as `let mut xp @P = shared;` and `let mut xv @V = shared;` for independent state.
+No rule inserts communication or replicates an ordinary call. Inside a restricted
+roster, reads use its available components; actions stay inside that roster and
+mutable state retains its entire original role set.
 
 A sole protocol output accepts `return expression;`. Multiple outputs use
 `return (port = expression, ...);`, with same-name shorthand `return (port, ...);`.
@@ -121,7 +167,7 @@ by receiver-only `protocol.restrict_roles`. Zero-leaf messages refuse because er
 a message would erase an interaction. These operations assume neither honest
 delivery nor equality of participant components.
 
-## Managed services and guards
+## Managed services and rejection
 
 ```text
 protocol Draw<F: Field> roles(V)() using(coins: Random<F> @V) -> (r: F @V) {
@@ -130,7 +176,7 @@ protocol Draw<F: Field> roles(V)() using(coins: Random<F> @V) -> (r: F @V) {
   return (r = r);
 }
 protocol Run roles(V)(go: bool @V) using(coins: Random<Fr> @V) -> (r: Fr @V) {
-  guard @V go;
+  require @V go;
   let r = Draw<Fr>() using(coins);
   return (r = r);
 }
@@ -150,10 +196,16 @@ functions or return values. An application supplies its managed bindings after
 its data arguments, in declared service order. Each field and mapped owner must
 match. Repeating a binding passes the same reference to both ports.
 
-`guard @V condition;` requires a Boolean available at V. False stops V at that
+`require @V condition;` requires a Boolean available at V. False stops V at that
 ordered occurrence; it does not produce a Boolean result or establish knowledge
-at another role. The guard contributes the `stop` effect. Queries and guards
-remain distinct native operations checked by source correspondence.
+at another role. Omit `@V` when the statement determines one owner, as in
+`require actual == expected;` with V-only `actual`. A shared condition alone is
+ambiguous. Local functions inherit their caller's owner. False is a native
+rejection, distinct from returning `false`, backend failure or normal completion.
+It does not broadcast, roll back effects or request a retry. A stopped prover
+publishes no completed proof; a stopped verifier cannot accept. The action
+contributes `stop` and lowers to `protocol.guard` or local conditional rejection.
+Source correspondence checks those exact outcomes.
 
 In the original MLIR, managed ports follow flattened data inputs. Each has a
 `protocol.service_ref` type and a singleton role set. The source interface lists
@@ -200,7 +252,7 @@ expansion limits. No additional runtime call stack is introduced.
 let mut a = initialP;
 let mut b = initialV;
 for i in 0..n roles(P, V) max N {
-  guard @V go;
+  require @V go;
   let (x, y) = Round(a, b) using(coins);
   a = x;
   b = y;

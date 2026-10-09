@@ -94,7 +94,7 @@ fn choose(x: Fr, go: bool) -> Pair<Fr> {
   return Pair<Fr>{left: x, right: selected};
 }
 protocol Transfer roles(P, V)(x: Fr @P, go: bool @P) -> (result: Pair<Fr> @V) {
-  let pair @P = choose(x, go);
+  let pair = choose(x, go);
   let received = send P -> V(pair);
   return received;
 }
@@ -102,9 +102,10 @@ entry Demo = Transfer;
 ```
 
 `math fn` describes total algebra. `fn` describes ordered work, including control
-and resources. The protocol explicitly chooses P as the owner of `choose` and
-sends its result. The receiver obtains its actual received components. The record
-becomes two ordered payload leaves, which the interface maps back to named fields.
+and resources. The compiler infers P as the owner of `choose` from its P-only
+arguments. The protocol sends its result. The receiver obtains its actual
+received components. The record becomes two ordered payload leaves, which the
+interface maps back to named fields.
 
 Generic libraries declare the permissions they use. A mathematical parameter
 needs `Copy + Drop`; a protocol message also needs `Share + Wire`. A plain `Type`
@@ -127,8 +128,13 @@ Protocol loops additionally spell `roles(P, V) max N`. Protocol calls use ordina
 call syntax, such as `let result = Round(x) using(coins);`. `using` passes managed
 service references; `let alias = coins;` gives the same service another name.
 Defined functions infer effects. Write `!{}` only
-when an effect-free interface is an intended contract. Local owner inference,
-nonlinear dimension inference and arbitrary inequality solving are not required.
+when an effect-free interface is an intended contract. Ordinary calls can nest;
+all calls in one statement must have uniquely determined participants. Use `@P`
+on a binding to resolve ambiguity. Later statements never move an earlier call.
+`require condition;` rejects at its inferred participant when false; a shared
+condition needs an explicit owner, such as `require @V condition;`.
+Nonlinear dimension inference and arbitrary inequality solving remain outside
+this source profile.
 
 The maintained fixtures cover [arrays](../../compiler/test/fixtures/language/array.zkc),
 [variants](../../compiler/test/fixtures/language/variant.zkc),

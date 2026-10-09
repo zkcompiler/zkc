@@ -116,8 +116,7 @@ struct Statement {
     Expression,
     Drop,
     Consume,
-    Require,
-    Guard
+    Require
   } kind = Kind::Let;
   Pattern pattern;
   bool mutableBinding = false;

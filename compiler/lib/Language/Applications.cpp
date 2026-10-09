@@ -99,22 +99,8 @@ BodyChecker::application(const Expression &expr) {
     if (!value)
       return {};
     auto roles = mappedRoles(port);
-    const auto &available = body.values[value->index].components;
-    if (!std::includes(available.begin(), available.end(), roles.begin(),
-                       roles.end())) {
-      fail("source.roles",
-           "protocol argument lacks a required participant component",
-           expr.span);
+    if (!demand(*value, roles, expr.span))
       return {};
-    }
-    auto permissions = checker.types.permissions(*type, expr.span, &decl);
-    if (!permissions)
-      return {};
-    if (available != roles && !permissions->drop) {
-      fail("source.permission",
-           "application cannot discard a component without Drop", expr.span);
-      return {};
-    }
     if (!use(*value, expr.span))
       return {};
     operands.push_back(*value);
@@ -136,6 +122,8 @@ BodyChecker::application(const Expression &expr) {
   auto emitted = emitResults(
       ProtocolApplication{callee.id, operands, *arguments, mapping, managed},
       std::move(results), expr.span);
+  if (emitted)
+    placement->applications.push_back(body.operations.size() - 1);
   return emitted;
 }
 } // namespace zkc::language::detail

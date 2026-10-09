@@ -72,10 +72,18 @@ bool BodyChecker::addInput(BindingId id, const Type &type,
 }
 std::optional<ValueId> BodyChecker::emit(decltype(Operation::action) action,
                                          const Type &type,
-                                         std::vector<unsigned> components,
-                                         Span span) {
-  auto ids = emitResults(std::move(action),
-                         {{type, std::move(components), span}}, span);
+                                         Components components, Span span) {
+  auto ids = emitResults(
+      std::move(action),
+      {{type,
+        components.owners.empty() ? components.roles : std::vector<unsigned>{},
+        span}},
+      span);
+  if (ids && placement) {
+    if (!placement->form(components, span))
+      return {};
+    placement->values[ids->front().index] = std::move(components);
+  }
   return ids ? std::optional<ValueId>(ids->front()) : std::nullopt;
 }
 std::optional<std::vector<ValueId>>
@@ -91,7 +99,7 @@ BodyChecker::emitResults(decltype(Operation::action) action,
     if (!checker.types.chargeType(value.type, span) ||
         !checker.types.charge(value.components.size() + 1, span))
       return {};
-    if (protocol() && value.components.size() > 1) {
+    if (protocol() && !placement && value.components.size() > 1) {
       auto caps = checker.types.permissions(value.type, span, &decl);
       if (!caps || !caps->share) {
         if (!checker.types.diagnostic)
@@ -104,14 +112,25 @@ BodyChecker::emitResults(decltype(Operation::action) action,
   std::vector<ValueId> ids;
   for (auto &value : results) {
     ids.push_back(ValueId{uint32_t(body.values.size())});
+    if (placement)
+      placement->values.emplace(ids.back().index, Components(value.components));
     body.values.push_back(std::move(value));
     uses.emplace_back();
   }
   body.operations.push_back({std::move(action), ids, span, statement});
   return ids;
 }
-std::optional<std::vector<unsigned>>
-BodyChecker::combine(ArrayRef<ValueId> args, Span span) {
+std::optional<Components> BodyChecker::combine(ArrayRef<ValueId> args,
+                                               Span span) {
+  if (placement) {
+    std::vector<Components> inputs;
+    for (auto id : args)
+      inputs.push_back(components(id));
+    auto result = placement->intersect(inputs, span);
+    if (result && !placement->form(*result, span))
+      return {};
+    return result;
+  }
   std::vector<unsigned> result =
       math() || local() ? std::vector<unsigned>{} : allRoles();
   for (auto id : args) {
@@ -131,7 +150,9 @@ BodyChecker::combine(ArrayRef<ValueId> args, Span span) {
     fail("source.roles", "operation has no common participant", span);
     return {};
   }
-  return result;
+  if (math() && !result.empty())
+    body.formationRequirements.push_back(result);
+  return Components(std::move(result));
 }
 bool BodyChecker::restricted(const Type &type) {
   if (type.kind == Type::Kind::Associated || type.kind == Type::Kind::Parameter)
@@ -148,7 +169,7 @@ bool BodyChecker::statements(const SyntaxBody &source) {
     if (body.stopped)
       return fail("source.unreachable", "statement follows a guaranteed stop",
                   s.span);
-    owner.reset();
+    StatementPlacement inference(*this);
     const auto &expr = syntax.expressions[s.expression];
     if (s.kind == Statement::Kind::Let && expr.kind == Expression::Kind::Name &&
         expr.binding && syntax.bindings[expr.binding->index].service) {
@@ -161,7 +182,7 @@ bool BodyChecker::statements(const SyntaxBody &source) {
     }
     if (expr.kind == Expression::Kind::FinishIf) {
       auto results = complete(s);
-      if (!results || !bindResults(s, *results))
+      if (!results || !inference.commit() || !bindResults(s, *results))
         return false;
       ++statement;
       continue;
@@ -179,7 +200,7 @@ bool BodyChecker::statements(const SyntaxBody &source) {
                       "protocol application requires a complete statement",
                       s.span);
         auto results = application(expr);
-        if (!results || !bindResults(s, *results))
+        if (!results || !inference.commit() || !bindResults(s, *results))
           return false;
         ++statement;
         continue;
@@ -205,24 +226,20 @@ bool BodyChecker::statements(const SyntaxBody &source) {
       expected = found->second.type;
       selected = found->second.roles;
     }
-    if (protocol() && expr.kind == Expression::Kind::Call && !s.exchange &&
-        selected && selected->size() == 1)
-      owner = selected->front();
-    std::optional<unsigned> guardOwner;
-    if (s.kind == Statement::Kind::Guard) {
+    std::optional<unsigned> requireOwner;
+    if (s.kind == Statement::Kind::Require && s.owner) {
       auto roles = checker.roles(decl, {*s.owner}, s.span);
       if (!roles || !active(*roles, s.span))
         return false;
-      guardOwner = roles->front();
+      requireOwner = roles->front();
     }
-    if (s.kind == Statement::Kind::Require || s.kind == Statement::Kind::Guard)
+    if (s.kind == Statement::Kind::Require)
       expected = Type{};
     if (s.kind == Statement::Kind::Expression && !s.terminated)
       expected = Type(Type::Kind::Unit);
     auto value = expression(s.expression, expected, 1,
                             s.kind != Statement::Kind::Let &&
                                 s.kind != Statement::Kind::Assign);
-    owner.reset();
     if (!value) {
       if (!body.stopped || checker.types.diagnostic)
         return false;
@@ -233,14 +250,26 @@ bool BodyChecker::statements(const SyntaxBody &source) {
                     s.span);
       continue;
     }
-    if (s.kind == Statement::Kind::Guard) {
-      if (!protocol() || !guardOwner ||
-          !llvm::is_contained(body.values[value->index].components,
-                              *guardOwner))
-        return fail("source.roles",
-                    "guard condition must be available at its owner", s.span);
+    if (s.kind == Statement::Kind::Require) {
+      if (math())
+        return fail("source.mode", "require needs ordered execution", s.span);
+      std::optional<unsigned> variable;
+      if (protocol()) {
+        auto chosen = placement->owner(s.span);
+        if (!chosen)
+          return false;
+        variable = chosen->owners.front();
+        if ((requireOwner &&
+             !placement->demand(*chosen, {*requireOwner}, s.span)) ||
+            !placement->together(*chosen, components(*value), s.span))
+          return false;
+      }
+      if (!inference.commit())
+        return false;
+      if (variable)
+        requireOwner = inference.state->selected(*variable);
       if (!use(*value, s.span) ||
-          !emitResults(ProtocolGuard{*value, *guardOwner}, {}, s.span))
+          !emitResults(Require{*value, requireOwner}, {}, s.span))
         return false;
       body.mayStop = true;
       ++statement;
@@ -264,8 +293,8 @@ bool BodyChecker::statements(const SyntaxBody &source) {
       if (*sender == *receiver)
         return fail("source.send", "sender and receiver must be distinct",
                     s.span);
-      if (!llvm::is_contained(before.components, sender->front()))
-        return fail("source.roles", "payload unavailable at sender", s.span);
+      if (!demand(*value, *sender, s.span) || !inference.commit())
+        return false;
       if (!use(*value, s.span))
         return false;
       value = emit(Exchange{sender->front(), receiver->front(), *value},
@@ -275,18 +304,13 @@ bool BodyChecker::statements(const SyntaxBody &source) {
     }
     if (s.kind == Statement::Kind::Let || s.kind == Statement::Kind::Assign ||
         s.kind == Statement::Kind::Expression) {
+      if (!s.exchange && protocol() &&
+          (!demand(*value, selected.value_or(std::vector<unsigned>{}),
+                   s.span) ||
+           !inference.commit()))
+        return false;
       if (!bindResults(s, {*value}))
         return false;
-    } else if (s.kind == Statement::Kind::Require) {
-      if (!local())
-        return fail("source.mode",
-                    "require belongs in an ordered local function", s.span);
-      if (!use(*value, s.span))
-        return false;
-      if (!emit(LocalPrimitive{"control.require", {*value}, {}},
-                Type(Type::Kind::Unit), {}, s.span))
-        return false;
-      body.mayStop = true;
     } else {
       auto &type = body.values[value->index].type;
       auto caps = checker.types.permissions(type, s.span, &decl);
@@ -323,7 +347,6 @@ bool BodyChecker::statements(const SyntaxBody &source) {
     }
     ++statement;
   }
-  owner.reset();
   if (body.stopped &&
       (source.returned || source.stopped || !source.results.empty()))
     return fail("source.unreachable", "terminator follows a guaranteed stop",
@@ -347,19 +370,28 @@ std::optional<ValueId> BodyChecker::tail(const SyntaxBody &source,
                                          bool allowUntypedStop) {
   if (!statements(source) || body.stopped)
     return {};
+  // A protocol loop body has its own tail statement. Expression-block tails
+  // instead participate in the enclosing statement's demands.
+  std::optional<StatementPlacement> inference;
+  if (protocol() && !placement)
+    inference.emplace(*this);
+  std::optional<ValueId> result;
   if (source.results.empty()) {
     if (expected && expected->kind != Type::Kind::Unit) {
       fail("source.type", "block without a tail has unit type", source.span);
       return {};
     }
-    return pack({}, source.span);
-  }
-  if (source.results.size() != 1) {
+    result = pack({}, source.span);
+  } else if (source.results.size() != 1) {
     fail("source.return", "block requires one logical result", source.span);
     return {};
-  }
-  return expression(source.results.front().second, expected, 1,
-                    allowUntypedStop);
+  } else
+    result = expression(source.results.front().second, expected, 1,
+                        allowUntypedStop);
+  if (result && inference &&
+      (!demand(*result, {}, source.span) || !inference->commit()))
+    return {};
+  return result;
 }
 std::optional<ValueId> BodyChecker::block(const Expression &expr,
                                           std::optional<Type> expected,
@@ -386,6 +418,7 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
   for (unsigned i = 0; i < outputs.size(); ++i)
     names.emplace(outputs[i].name, i);
   std::set<unsigned> seen;
+  StatementPlacement inference(*this);
   body.results.resize(outputs.size());
   for (const auto &[name, id] : source.results) {
     auto found = names.find(name);
@@ -404,27 +437,27 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
         body.results.clear();
       return body.stopped && !checker.types.diagnostic && finish(source.span);
     }
-    if (isProtocol) {
-      const auto &available = body.values[value->index].components;
-      if (!std::includes(available.begin(), available.end(), port.roles.begin(),
-                         port.roles.end()))
-        return fail("source.roles", "result unavailable at output roles",
-                    syntax.expressions[id].span);
-      if (available != port.roles) {
-        auto caps = checker.types.permissions(port.type, port.span, &decl);
-        if (!caps ||
-            (!caps->drop &&
-             !fail("source.permission",
-                   "return cannot discard components without Drop", port.span)))
-          return false;
-      }
-    }
+    if (isProtocol && !demand(*value, port.roles, syntax.expressions[id].span))
+      return false;
     if (!use(*value, syntax.expressions[id].span))
       return false;
     body.results[found->second] = *value;
   }
   if (seen.size() != outputs.size())
     return fail("source.return", "missing return port", source.span);
+  if (!inference.commit())
+    return false;
+  if (isProtocol)
+    for (unsigned i = 0; i < outputs.size(); ++i)
+      if (body.values[body.results[i].index].components != outputs[i].roles) {
+        auto caps =
+            checker.types.permissions(outputs[i].type, outputs[i].span, &decl);
+        if (!caps || (!caps->drop &&
+                      !fail("source.permission",
+                            "return cannot discard components without Drop",
+                            outputs[i].span)))
+          return false;
+      }
   return finish(source.span);
 }
 bool Checker::body(DeclarationId id, unsigned depth) {

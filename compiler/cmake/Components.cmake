@@ -69,6 +69,8 @@ add_zkc_component(Language
   lib/Language/Bindings.cpp
   lib/Language/Regions.cpp
   lib/Language/BodyCheck.cpp
+  lib/Language/Placement.cpp
+  lib/Language/BodyPlacement.cpp
   lib/Language/Expressions.cpp
   lib/Language/Calls.cpp
   lib/Language/Builtins.cpp

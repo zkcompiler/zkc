@@ -12,7 +12,7 @@ relation Never(statement p:Fr,witness v:Fr){return false;}
 protocol Run roles(P, V)(go: bool @V) using(coins: Random<Fr> @V)
     -> (p: Fr @P, v: Fr @V)
     spec{output documented=Never(out.p,out.v);} {
-  guard @V go;
+  require @V go;
   let alias = coins;
   let (p, v) = Draw<Fr>() using(alias, coins);
   return (p = p, v = v);

@@ -26,15 +26,15 @@ pub protocol Sumcheck<F: Field+Share+Wire, Max: nat> roles(P, V)
   let mut tableV @V = values;
   let mut current = claim;
   for _ in 0..rounds roles(P, V) max Max {
-    let parts @P = sums(tableP);
+    let parts = sums(tableP);
     let actual = send P -> V(parts);
-    guard @V current == actual.0 + actual.1;
+    require current == actual.0 + actual.1;
     let cv = challenges.draw();
     let cp = send V -> P(cv);
     tableP = fold(tableP, cp);
     tableV = fold(tableV, cv);
     current = (1 - cv) * actual.0 + cv * actual.1;
   }
-  let accepted @V = terminal(tableV, current);
+  let accepted = terminal(tableV, current);
   return accepted;
 }

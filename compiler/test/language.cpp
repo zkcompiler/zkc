@@ -608,14 +608,13 @@ protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:Fr@B){return(r=keep<First>(x,y));
 math fn pair(x:Fr,y:Fr)->(Fr,Fr){return(x,y);}
 protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:(Fr,Fr)@B){return(r=pair(x,y));}entry Demo=Run;)",
            R"(module m;math fn yes(x:bool)->bool{return x;}
-protocol Run roles(V)(go:bool@V)->(){guard @V yes(go);return();}entry Demo=Run;)",
+protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}entry Demo=Run;)",
            R"(module m;domain Fr=field("bls12-381.fr");
-protocol Run roles(V)(x:Fr@V)using(coins:Random<Fr>@V)->(){guard @V coins.draw()==x;return();}entry Demo=Run;)",
+protocol Run roles(V)(x:Fr@V)using(coins:Random<Fr>@V)->(){require @V coins.draw()==x;return();}entry Demo=Run;)",
        })
     must(compileEntry(original(source)));
-  sourceRefuses(R"(module m;fn yes(x:bool)->bool{return x;}
-protocol Run roles(V)(go:bool@V)->(){guard @V yes(go);return();}entry Demo=Run;)",
-                "source.mode");
+  must(compileEntry(original(R"(module m;fn yes(x:bool)->bool{return x;}
+protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}entry Demo=Run;)")));
   auto emptyMessage = check(R"(module m;
 protocol Relay<T:Type+Copy+Drop+Share+Wire> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}entry Demo=Relay<()>;)");
   refuses(closeEntry(emptyMessage, "m::Demo"), "source.wire");
@@ -698,7 +697,7 @@ void distributedRepetition() {
            {"n: index @(P,V)", "n: index @V", "source.roles"},
            {"let mut vb = b", "let mut vb @P = b", "source.roles"},
            {"pa = x;", "pa = y;", "source.roles"},
-           {"guard @V go;", "guard @V missing;", "source.name"},
+           {"require @V go;", "require @V missing;", "source.name"},
            {"using(coins);", "using();", "source.service"},
            {"max N", "max Fr", "source.bound"},
            {"max N", "max 1048577", "source.bound"},
@@ -800,7 +799,7 @@ void managedServices() {
             "source.shadow"},
            {"let unused = first.draw()", "let unused = (first,)",
             "source.name"},
-           {"guard @V go", "guard @P go", "source.roles"},
+           {"require @V go", "require @P go", "source.roles"},
            {"let unused = first.draw()", "let unused = send V -> P(first)",
             "source.service"},
            {"entry Demo = Run;",

@@ -579,15 +579,45 @@ class Comparator {
                           input.begin() + offset + width);
           offset += width;
         }
-      } else if (auto *guard = std::get_if<ProtocolGuard>(&op.action)) {
-        auto *actual = next(block, cursor, op.span, "protocol.guard",
-                            values[guard->condition.index], 0);
+      } else if (auto *check = std::get_if<Require>(&op.action)) {
+        const bool protocol = source.mode == Body::Mode::Protocol;
+        if (source.mode == Body::Mode::Math ||
+            protocol != check->owner.has_value())
+          return fail("require owner does not match its body mode");
+        auto *actual = next(
+            block, cursor, op.span, protocol ? "protocol.guard" : "local.if",
+            values[check->condition.index], 0, protocol ? 0 : 2);
         if (!actual)
           return false;
-        if (!attributes(*actual, {"owner", "site"}) ||
-            !string(*actual, "owner", decl.roles[guard->owner]) ||
-            !string(*actual, "site", site))
-          return fail("guard owner or occurrence differs");
+        if (protocol) {
+          if (!attributes(*actual, {"owner", "site"}) ||
+              !string(*actual, "owner", decl.roles[*check->owner]) ||
+              !string(*actual, "site", site))
+            return fail("require owner or occurrence differs");
+        } else {
+          if (!attributes(*actual, {"site"}) || !string(*actual, "site", site))
+            return fail("require occurrence differs");
+          for (unsigned i = 0; i < 2; ++i) {
+            auto &region = actual->getRegion(i);
+            if (!llvm::hasSingleElement(region) ||
+                region.front().getNumArguments() != 0 ||
+                !llvm::hasSingleElement(region.front()))
+              return fail("require branch structure differs");
+            auto &terminator = region.front().front();
+            if (terminator.getNumOperands() || terminator.getNumResults() ||
+                terminator.getNumRegions() ||
+                terminator.getName().getStringRef() !=
+                    (i ? "local.stop" : "local.yield"))
+              return fail("require branch outcome differs");
+            if (i ? (!attributes(terminator, {"site", "reason"}) ||
+                     !string(terminator, "site", site + "_reject") ||
+                     !string(terminator, "reason", "reject"))
+                  : !attributes(terminator, {}))
+              return fail("require rejection reason or occurrence differs");
+            if (!record(terminator, op.span))
+              return false;
+          }
+        }
       } else if (auto *application =
                      std::get_if<ProtocolApplication>(&op.action)) {
         const auto &target = project.declarations()[application->callee.index];

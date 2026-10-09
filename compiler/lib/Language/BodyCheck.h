@@ -1,6 +1,7 @@
 #ifndef ZKC_LANGUAGE_BODYCHECK_H
 #define ZKC_LANGUAGE_BODYCHECK_H
 #include "Checker.h"
+#include "Placement.h"
 namespace zkc::language::detail {
 class BodyChecker {
 public:
@@ -17,7 +18,20 @@ private:
   Body &body;
   unsigned callDepth;
   uint32_t statement = 0;
-  std::optional<unsigned> owner;
+  Placement *placement = nullptr;
+  struct StatementPlacement {
+    BodyChecker &checker;
+    Placement *outer;
+    std::optional<Placement> state;
+    explicit StatementPlacement(BodyChecker &);
+    StatementPlacement(const StatementPlacement &) = delete;
+    StatementPlacement &operator=(const StatementPlacement &) = delete;
+    ~StatementPlacement();
+    bool commit();
+  };
+  Components components(ValueId) const;
+  bool demand(ValueId, llvm::ArrayRef<unsigned>, Span);
+  bool settle(Placement &);
   std::optional<std::vector<unsigned>> activeRoles;
   struct BindingState {
     Type type;
@@ -38,9 +52,9 @@ private:
   bool protocol() const { return body.mode == Body::Mode::Protocol; }
   bool fail(llvm::StringRef, const llvm::Twine &, Span);
   std::vector<unsigned> allRoles() const;
-  std::optional<std::vector<unsigned>> combine(llvm::ArrayRef<ValueId>, Span);
+  std::optional<Components> combine(llvm::ArrayRef<ValueId>, Span);
   std::optional<ValueId> emit(decltype(Operation::action), const Type &,
-                              std::vector<unsigned>, Span);
+                              Components, Span);
   std::optional<std::vector<ValueId>> emitResults(decltype(Operation::action),
                                                   std::vector<Value>, Span);
   std::optional<std::vector<ValueId>> application(const Expression &);

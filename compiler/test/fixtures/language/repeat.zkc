@@ -11,7 +11,7 @@ protocol Run<N: nat> roles(P, V)(n: index @(P,V), a: Fr @P, b: Fr @V, go: bool @
   let mut pa = a;
   let mut vb = b;
   for _ in 0..n roles(P, V) max N {
-    guard @V go;
+    require @V go;
     let (x, y) = Round<Fr>(pa, vb) using(coins);
     pa = x;
     vb = y;

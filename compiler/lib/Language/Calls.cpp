@@ -282,12 +282,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     return {};
   }
   bool ordered = callee.kind == Declaration::Kind::Local;
-  if (!ordered)
-    owner.reset();
-  if ((ordered && math()) || (ordered && protocol() && !owner)) {
-    fail("source.mode",
-         "ordered protocol calls require a whole binding or assignment RHS at "
-         "an explicit singleton owner",
+  if (ordered && math()) {
+    fail("source.mode", "ordered calls require local or protocol mode",
          expr.span);
     return {};
   }
@@ -316,28 +312,9 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
         checker.types.substitute(callee.inputs[i].type, subst, expr.span);
     if (!type || (!math() && !checker.types.executableType(*type, expr.span)))
       return {};
-    auto selectedOwner = owner;
-    owner.reset();
     auto arg = expression(expr.children[i], *type, depth + 1);
-    owner = selectedOwner;
     if (!arg || !use(*arg, expr.span))
       return {};
-    if (owner &&
-        !llvm::is_contained(body.values[arg->index].components, *owner)) {
-      fail("source.roles", "local argument is unavailable at its owner",
-           expr.span);
-      return {};
-    }
-    if (owner && body.values[arg->index].components.size() > 1) {
-      auto p = checker.types.permissions(*type, expr.span, &decl);
-      if (!p || !p->copy || !p->drop) {
-        if (!checker.types.diagnostic)
-          fail("source.permission",
-               "owned call cannot duplicate or discard restricted components",
-               expr.span);
-        return {};
-      }
-    }
     args.push_back(*arg);
   }
   auto resultType =
@@ -363,10 +340,19 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     body.mayStop |= effects.mayStop;
     body.opaque |= effects.opaque;
   }
-  std::vector<unsigned> components;
+  Components resultComponents;
+  std::optional<unsigned> variable;
   if (ordered) {
-    if (owner)
-      components = {*owner};
+    if (protocol()) {
+      auto chosen = placement->owner(expr.span);
+      if (!chosen)
+        return {};
+      resultComponents = std::move(*chosen);
+      variable = resultComponents.owners.front();
+      for (auto arg : args)
+        if (!placement->together(resultComponents, components(arg), expr.span))
+          return {};
+    }
   } else {
     auto substituteDependencies = [&](ArrayRef<unsigned> indices) {
       std::vector<ValueId> selected;
@@ -379,18 +365,20 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
         auto required = substituteDependencies(requirement);
         if (!required)
           return std::optional<ValueId>{};
-        if (math() && !required->empty())
-          body.formationRequirements.push_back(*required);
       }
     auto available = substituteDependencies(dependencies);
     if (!available)
       return {};
-    components = *available;
-    if (math() && callee.abstract && !components.empty())
-      body.formationRequirements.push_back(components);
+    resultComponents = *available;
   }
-  return emit(HelperCall{callee.id, std::move(args), std::move(*staticArgs),
-                         target->second, owner},
-              *resultType, std::move(components), expr.span);
+  auto result = emit(HelperCall{callee.id,
+                                std::move(args),
+                                std::move(*staticArgs),
+                                target->second,
+                                {}},
+                     *resultType, std::move(resultComponents), expr.span);
+  if (result && variable)
+    placement->calls.emplace_back(body.operations.size() - 1, *variable);
+  return result;
 }
 } // namespace zkc::language::detail

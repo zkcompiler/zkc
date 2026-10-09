@@ -1,6 +1,7 @@
 #include "BodyCheck.h"
 #include "zkc/Contracts/Kernels.h"
 #include <algorithm>
+#include <cassert>
 using namespace llvm;
 namespace zkc::language::detail {
 std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
@@ -129,6 +130,8 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
                                                std::optional<Type> expected,
                                                unsigned depth,
                                                bool allowUntypedStop) {
+  assert((!protocol() || placement) &&
+         "protocol expression requires a statement inference scope");
   auto result = evaluate(id, expected, depth, allowUntypedStop);
   const auto &expr = syntax.expressions[id];
   if (!result && body.stopped && !checker.types.diagnostic &&
@@ -162,8 +165,7 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
   } else if (expr.kind == K::Intrinsic) {
     result = intrinsic(expr, depth);
   } else if (expr.kind == K::MethodCall) {
-    if (!protocol() || owner || expr.text != "draw" ||
-        expr.children.size() != 1) {
+    if (!protocol() || expr.text != "draw" || expr.children.size() != 1) {
       fail("source.service",
            "managed query requires service.draw() in protocol mode", expr.span);
       return {};
@@ -172,6 +174,8 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
     if (!root)
       return {};
     const auto &port = body.services[root->index];
+    if (!active({port.owner}, expr.span))
+      return {};
     result = emit(ServiceQuery{*root}, port.field, {port.owner}, expr.span);
   } else if (expr.kind == K::Name) {
     auto p = place(id, depth);
@@ -186,8 +190,8 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
         projected(body.values[p->first.index].type, p->second, expr.span);
     if (!type || !use(p->first, expr.span, p->second))
       return {};
-    result = emit(Projection{p->first, p->second}, *type,
-                  body.values[p->first.index].components, expr.span);
+    result = emit(Projection{p->first, p->second}, *type, components(p->first),
+                  expr.span);
   } else if (expr.kind == K::Boolean || expr.kind == K::Decimal) {
     Type type;
     if (expr.kind == K::Decimal) {
@@ -327,8 +331,6 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
       for (auto arg : args)
         if (!data(body.values[arg.index].type, expr.span))
           return {};
-      if (math() && !components->empty())
-        body.formationRequirements.push_back(*components);
       auto identity =
           group ? (equal                 ? MathematicalIdentity::GroupEqual
                    : expr.kind == K::Add ? MathematicalIdentity::GroupAdd

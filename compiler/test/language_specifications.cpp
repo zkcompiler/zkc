@@ -91,7 +91,7 @@ int main() {
                     spec[3].subject.operands[1].role == 0,
                 "clause meanings or role components collapsed");
         for (const auto &op : entry.protocol().body->operations)
-          require(!std::holds_alternative<ProtocolGuard>(op.action),
+          require(!std::holds_alternative<Require>(op.action),
                   "clause inserted a runtime guard");
       });
   cases.run(

@@ -8,7 +8,11 @@ Source names resolve to lexical binding identities. Typed elaboration derives
 explicit region inputs, mutable state successors and resource joins, producing
 an immutable checked graph with Math, Local and Protocol body modes. Mutable
 source bindings become immutable checked values; no runtime variable store or
-additional public IR is introduced. Closing an Entry substitutes already checked bodies;
+additional public IR is introduced. A temporary statement constraint solver selects
+unique participants and checks original formation obligations; only concrete roles
+and owners enter the checked graph. Type and resource uses are checked in source
+order without guessing owners. Checks that depend on component sets run after
+selection. Closing an Entry substitutes already checked bodies;
 it never reparses templates. Closed instances are memoized by declaration, mode
 and exact static type identity. Only closed definitions enter original MLIR.
 
@@ -27,6 +31,10 @@ written directly inside `fn` remains an ordered primitive.
 Protocols become `protocol.func`, with explicit `protocol.local_call` for owned calls.
 Total operations use their admitted dialect identities; ordered operations use
 existing executable bindings. No additional protocol interpreter is introduced.
+Source `require` is one checked action: protocol checks emit `protocol.guard`; local checks emit `local.if` with a
+continuing true branch and `local.stop` with reason `reject` on false. Comparison
+checks both branches, their sites and the rejection reason. Raw bound
+`control.require` remains a separate backend operation.
 
 Products flatten in declaration order. Variants retain a native tagged descriptor
 with exact nominal identity and payload layouts. A noncopyable restricted nominal

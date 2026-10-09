@@ -360,9 +360,9 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
 )");
   check(prefix + "protocol Run roles(P)()->(r:bool@P){let r @P "
                  "=true;return(r=r);}entry Demo=Run;");
-  refuses(prefix + "fn f(x:Fr)->Fr{return x;}protocol Run "
-                   "roles(P)(x:Fr@P)->(r:Fr@P){return(r=f(x));}entry Demo=Run;",
-          "source.mode");
+  must(compileEntry(original(
+      prefix + "fn f(x:Fr)->Fr{return x;}protocol Run "
+               "roles(P)(x:Fr@P)->(r:Fr@P){return(r=f(x));}entry Demo=Run;")));
   refuses(prefix +
               "struct Secret:Copy+Drop+Share+Wire {pub x:bool}protocol "
               "Run<T:Type+Copy+Drop+Share+Wire> "
@@ -686,6 +686,27 @@ fn guarded(go:bool)->(){require go;return ();}
 protocol Run roles(P)(go:bool@P)->(){let ignored @P =guarded(go);return();}entry Demo=Run;)");
   mutation(guard,
            [](auto module) { first(module, "protocol.local_call")->erase(); });
+  mutation(guard, [](auto module) {
+    auto *stop = first(module, "local.stop");
+    stop->setAttr("reason",
+                  mlir::StringAttr::get(module.getContext(), "abort"));
+  });
+  mutation(guard, [](auto module) {
+    auto *branch = first(module, "local.if");
+    mlir::Region temporary;
+    temporary.takeBody(branch->getRegion(0));
+    branch->getRegion(0).takeBody(branch->getRegion(1));
+    branch->getRegion(1).takeBody(temporary);
+  });
+  mutation(guard, [](auto module) { first(module, "local.if")->erase(); });
+  auto inferred = original(prefix + R"(
+fn identity(x:Fr)->Fr{return x;}
+protocol Run roles(P,V)(x:Fr@(P,V))->(){let unused@P=identity(x);return ();}
+entry Demo=Run;)");
+  mutation(inferred, [](auto module) {
+    first(module, "protocol.local_call")
+        ->setAttr("role", mlir::StringAttr::get(module.getContext(), "V"));
+  });
   auto custodyVariant = original(prefix + R"(
 enum Choice:Drop {unpack(), Other(Fr)}
 fn get()->Fr{let v=Choice::unpack();return match v {Other(x)=>{ x},unpack()=>{let zero:Fr=0; zero}};}

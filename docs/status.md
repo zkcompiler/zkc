@@ -37,8 +37,9 @@ Language resolves explicit modules and R1CS/AIR Assets, checks generic libraries
 and closes selected Entries. It supports scalar mathematics, Boolean formulas,
 nominal products/variants, static parameters and components, capabilities and
 permissions, lexical scopes and patterns, mutable bindings with inferred region
-state/captures, formal polynomial intrinsics, local control, messages, services,
-static protocol composition, bounded repetition and conditional completion.
+state/captures, statement-scoped participant inference, nested ordered calls,
+source rejection with `require`, formal polynomial intrinsics, local control,
+messages, services, static protocol composition, bounded repetition and conditional completion.
 Independent source comparison checks emitted MLIR against checked definitions;
 [source semantics](spec/language/README.md) owns exact limits.
 

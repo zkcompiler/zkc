@@ -21,7 +21,7 @@ protocol Run roles(P,V)(values: Vector<Fr> @P, claim: Fr @V, n: index @(P,V))
   for _ in 0..n roles(P, V) max 2 {
     let parts @P = sums(table);
     let received = send P -> V(parts);
-    guard @V current == received.0 + received.1;
+    require @V current == received.0 + received.1;
     let cv = coins.draw();
     let cp = send V -> P(cv);
     table = fold(table, cp);

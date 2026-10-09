@@ -24,11 +24,8 @@ BodyChecker::complete(const Statement &statement) {
   auto condition = expression(expr.children.front(), Type{});
   if (!condition || !use(*condition, expr.span))
     return {};
-  if (!is_contained(body.values[condition->index].components, owner)) {
-    fail("source.roles", "completion condition is unavailable at its owner",
-         expr.span);
+  if (!demand(*condition, {owner}, expr.span))
     return {};
-  }
   std::vector<const Port *> outputs;
   std::map<std::string, unsigned> ports;
   for (const auto &port : decl.outputs)
@@ -50,11 +47,8 @@ BodyChecker::complete(const Statement &statement) {
     auto value = expression(expr.children[i + 1], port.type);
     if (!value)
       return {};
-    if (!is_contained(body.values[value->index].components, owner)) {
-      fail("source.roles", "completion result is unavailable at its owner",
-           expr.span);
+    if (!demand(*value, {owner}, expr.span))
       return {};
-    }
     if (!use(*value, expr.span))
       return {};
     operation.values[found->second] = *value;
@@ -69,6 +63,12 @@ BodyChecker::complete(const Statement &statement) {
     auto caps = checker.types.permissions(outputs[i]->type, expr.span, &decl);
     if (!caps)
       return {};
+    auto available = components(operation.values[i]);
+    if (available.owners.empty() && available.roles != *role && !caps->drop) {
+      fail("source.permission",
+           "completion cannot discard components without Drop", expr.span);
+      return {};
+    }
     if (!caps->copy) {
       operation.continuations.push_back(i);
       results.push_back({outputs[i]->type, *role, expr.span});

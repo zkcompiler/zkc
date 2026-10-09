@@ -19,6 +19,6 @@ pub protocol Schnorr<G: Group+Share+Wire> roles(P, V)
   let challenge = challenges.draw();
   let received = send V -> P(challenge);
   let response = send P -> V(nonce + received * scalar);
-  let accepted@V = base * response == commitment + point * challenge;
+  let accepted = base * response == commitment + point * challenge;
   return (accepted = accepted);
 }

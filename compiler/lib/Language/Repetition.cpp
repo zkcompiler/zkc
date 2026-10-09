@@ -23,15 +23,12 @@ bool BodyChecker::repeat(const Expression &expr) {
       maximum->dimension.closedValue() > 1048576)
     return fail("source.bound", "loop maximum exceeds installed limit",
                 expr.span);
+  StatementPlacement header(*this);
   auto count = expression(expr.children[1], Type(Type::Kind::Index));
   if (!count || !use(*count, expr.span))
     return false;
-  const auto &countRoles = body.values[count->index].components;
-  if (!std::includes(countRoles.begin(), countRoles.end(), roles->begin(),
-                     roles->end()))
-    return fail("source.roles",
-                "loop count must be available at every loop participant",
-                expr.span);
+  if (!demand(*count, *roles, expr.span) || !header.commit())
+    return false;
   auto summary = regionInputs(expr);
   if (!summary)
     return false;

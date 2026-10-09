@@ -378,18 +378,10 @@ void protocols() {
     }entry Demo=Run;
   )");
   for (auto [source, code] :
-       {std::pair{"protocol R roles(P)(x:Fr@P)->(r:Fr@P){let "
-                  "y=take(make(x));return y;}",
-                  "source.mode"},
-        {"protocol R roles(P)(x:Fr@P)->(r:Fr@P){let y@P=take(make(x));return "
-         "y;}",
-         "source.mode"},
-        {"protocol R roles(P)(x:Fr@P)->(r:Fr@P){let y@P=take(make(x))+x;return "
-         "y;}",
-         "source.mode"},
-        {"protocol R roles(P,V)(x:Fr@(P,V),n:index@P)->(){let mut s=x;for _ in "
-         "0..n roles(P) max 4{s=s+x;}return ();}",
-         "source.roles"},
+       {std::pair{"protocol R roles(P,V)(x:Fr@(P,V),n:index@P)->(){let mut "
+                  "s=x;for _ in "
+                  "0..n roles(P) max 4{s=s+x;}return ();}",
+                  "source.roles"},
         {"protocol R roles(P)(n:index@P)->(){for _ in 1..n roles(P) max "
          "4{}return ();}",
          "source.bound"},

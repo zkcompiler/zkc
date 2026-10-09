@@ -139,9 +139,10 @@ struct ProtocolApplication {
 struct ServiceQuery {
   ServiceId service;
 };
-struct ProtocolGuard {
+struct Require {
   ValueId condition;
-  unsigned owner;
+  /// Absent in a local function, whose caller supplies its execution owner.
+  std::optional<unsigned> owner;
 };
 struct ProtocolCompletion {
   ValueId condition;
@@ -204,7 +205,7 @@ struct LocalControl {
 struct Operation {
   std::variant<MathValue, HelperCall, Exchange, Restriction, Construct,
                Projection, LocalPrimitive, Consume, LocalControl,
-               ProtocolApplication, ServiceQuery, ProtocolGuard, ProtocolRepeat,
+               ProtocolApplication, ServiceQuery, Require, ProtocolRepeat,
                ProtocolCompletion>
       action;
   /// Each result has its own type and participant availability.

@@ -73,7 +73,7 @@ BodyChecker::project(ValueId value, ArrayRef<unsigned> path, Span span) {
     return {};
   return emit(
       Projection{value, std::vector<unsigned>(path.begin(), path.end())}, *type,
-      body.values[value.index].components, span);
+      components(value), span);
 }
 std::optional<ValueId> BodyChecker::fresh(ValueId value, Span span) {
   return project(value, {}, span);

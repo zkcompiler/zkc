@@ -562,11 +562,33 @@ class Emitter {
                           outputs.begin() + offset + width);
           offset += width;
         }
-      } else if (auto *guard = std::get_if<ProtocolGuard>(&op.action)) {
-        if (!make(
-                "protocol.guard", {}, values[guard->condition.index],
-                {text("owner", decl.roles[guard->owner]), text("site", site)}))
+      } else if (auto *check = std::get_if<Require>(&op.action)) {
+        const bool protocol = source.mode == Body::Mode::Protocol;
+        if (source.mode == Body::Mode::Math ||
+            protocol != check->owner.has_value()) {
+          failure = error("source.mode",
+                          "require owner does not match its body mode");
           return false;
+        }
+        if (protocol) {
+          if (!make("protocol.guard", {}, values[check->condition.index],
+                    {text("owner", decl.roles[*check->owner]),
+                     text("site", site)}))
+            return false;
+        } else {
+          auto *branch = make("local.if", {}, values[check->condition.index],
+                              {text("site", site)}, 2);
+          if (!branch)
+            return false;
+          mlir::OpBuilder::InsertionGuard insertion(builder);
+          builder.setInsertionPointToEnd(&branch->getRegion(0).front());
+          if (!make("local.yield", {}, {}, {}))
+            return false;
+          builder.setInsertionPointToEnd(&branch->getRegion(1).front());
+          if (!make("local.stop", {}, {},
+                    {text("site", site + "_reject"), text("reason", "reject")}))
+            return false;
+        }
       } else if (auto *application =
                      std::get_if<ProtocolApplication>(&op.action)) {
         const auto &target = project.declarations()[application->callee.index];
