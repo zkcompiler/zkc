@@ -1,5 +1,10 @@
 # Vectors and linear combinations
 
+Native MSM, matrix contractions and vector kernels use these ordered value contracts.
+This chapter states shared laws; a native implementation claim needs its
+actual instance and evidence. Independent formal examples retain their own
+[model scope](../../../formal/docs/spec/README.md).
+
 For a carrier `X`, `Vector X n = Fin n → X`. A dynamically sized vector carries
 its length together with that indexed value. Length zero is permitted. Element
 order is part of the value; equal byte widths or element counts do not identify

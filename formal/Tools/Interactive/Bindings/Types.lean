@@ -51,8 +51,9 @@ and every later challenge would become a function of that tag. The internal
 `transcript.` family and the external duplex states are decided here together,
 because an external state is ordinary checked data and carries no attribute that
 would mark it. Construction and stateless hashing touch no history:
-docs/spec/profiles/compiler/local-variants.md,
-docs/spec/realization/external-constructions.md. -/
+docs/spec/ir/variants.md,
+docs/spec/realization/external-constructions.md.
+The reference reuses these rules without establishing native correspondence. -/
 def historyContract (contract : String) : Bool :=
   contract.startsWith "transcript." ||
     ["external.monero.update", "external.openvm.observe", "external.openvm.sample",

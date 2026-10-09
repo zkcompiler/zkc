@@ -7,7 +7,7 @@
 
 The [walkthrough](../../docs/getting-started.md) runs the Schnorr project. Compile
 explicit `--module=NAME=FILE` mappings, then invoke the selected package through
-the [common Host](../../docs/language/entries.md). These projects require no
+the [common Host](../../docs/runtime/entries.md). These projects require no
 protocol-specific executor. The [source project checks](../../tests/protocol/test_source_projects.py)
 exercise their commands and invalid inputs/proofs.
 

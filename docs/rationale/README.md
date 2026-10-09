@@ -20,7 +20,7 @@ A separate record is useful when a reader could reasonably choose differently
 and the reason needs more than a paragraph beside the definition. Combine choices
 that answer the same question. Keep short reasons with their owning guide or
 specification; independent Lean model choices belong with
-[formal design](../../formal/README.md#design-choices).
+[formal design](../../formal/docs/README.md#design-and-tools).
 
 Explain the actual tradeoff with an example or a concrete cost. Link to the
 owning contract and from the page where readers encounter the choice. Use only

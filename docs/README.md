@@ -1,37 +1,32 @@
 # Documentation
 
-zkc has one supported implementation model: `.zkc` Language → mathematical MLIR
-(`protocol`, `participant`, `exec`, `physical`) → `zkc.program/0` → the shared Rust
-Runner, installed kernels and Entry/proof/joint Hosts. Direct MLIR authoring uses
-that same pipeline. The independent Lean research library has its own semantic
-subjects and proof boundaries.
+zkc compiles `.zkc` source or mathematical MLIR into participant programs executed
+by a shared Rust runtime. The [architecture](architecture.md) explains the system;
+the [walkthrough](getting-started.md) compiles and runs a complete example.
 
 ## Reading routes
 
-| Task | Route |
+| Task | Start here |
 |---|---|
-| Compile and run a protocol | [Walkthrough](getting-started.md) → [language](language/README.md) → [Entry execution](language/entries.md) |
-| Understand the system | [Overview](overview.md) → [architecture](architecture.md) → [status](status.md) |
-| Develop a component | [Development](development/README.md) → [compiler](compiler/README.md) or [runtime](runtime/README.md) |
-| Study semantics and proofs | [Model guides](guides/README.md) → [specification](spec/README.md) → [formal support](../formal/SUPPORT.md) |
-| Evaluate evidence or future work | [Assurance](assurance.md) → [roadmap](roadmap.md) |
+| Write a protocol and select an Entry | [Language](language/README.md), [libraries](../libraries/README.md), [projects](../examples/projects/README.md) |
+| Run an Entry or integrate an application | [Runtime and Hosts](runtime/README.md) |
+| Work on the compiler | [Compiler](compiler/README.md) |
+| Find exact syntax, IR or artifact rules | [Specification](spec/README.md) |
+| Check implemented capabilities | [Status](status.md) |
+| Assess proofs and tests | [Assurance](assurance.md), [formal models](../formal/docs/README.md) |
+| Build, test or contribute | [Development](development/README.md), [tests](../tests/README.md) |
+| Understand adopted choices or future work | [Rationale](rationale/README.md), [roadmap](roadmap.md) |
 
-The [maintained libraries](../libraries/README.md) provide reusable protocols;
-[example projects](../examples/projects/README.md) select concrete Entries. [Relation data](language/relations.md) enters through explicit
-Assets or relation adapters. [Theory](theory.md) explains the mathematical tools
-behind the model; [rationale](rationale/README.md) records consequential choices.
+## Authority
 
-## Which document decides
+`docs/spec/` owns native contracts and the mathematical laws they use.
+`formal/docs/spec/` owns the independent Lean models; their theorem scope is in
+[formal support](../formal/docs/support.md). Applying a model theorem to the native
+implementation requires an explicit correspondence. A specification, compiler
+check, test and security proof establish different claims.
 
-`spec/` owns definitions, judgments and profile contracts. Its
-[scope map](spec/README.md#adopted-scope) distinguishes current native contracts
-from independently formalized models. [Status](status.md) owns implementation
-support, [architecture](architecture.md) assigns responsibilities, and
-[roadmap](roadmap.md) sequences remaining work. A theorem establishes its exact
-proposition under its hypotheses; a correspondence claim must identify the
-actual implementation to which it applies.
-
-Build commands and maintenance belong in [development](development/README.md).
-The [test guide](../tests/README.md) selects checks. Documentation changes follow
-[the writing and placement guide](development/documentation.md). Review logs,
-private research records and superseded guides do not belong in this reference.
+Guides explain these contracts without redefining them. Component READMEs own
+their APIs and procedures. [Status](status.md) records implementation coverage;
+[roadmap](roadmap.md) records remaining work. Research proposals, review logs and
+superseded documents stay outside this public reference. See the
+[documentation guide](development/documentation.md) for maintenance rules.

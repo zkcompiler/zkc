@@ -1,139 +1,59 @@
-# Selected-model specification
+# Specification
 
-This specification defines the finite atomic model selected by
-[docs](../README.md): its mathematical objects, admitted programs,
-complete executions, checking judgments, property claims and realization
-requirements, with explicit outer iteration over finite bodies. Common laws do not prescribe an IR hierarchy or physical runtime; native
-profiles separately fix the supported compiler and executable contracts.
-Start with [conventions](conventions.md) for notation, execution scope and
-conformance claims.
+This reference defines the native `.zkc` → mathematical MLIR → `zkc.program/0`
+path, its application interfaces, and the mathematical contracts used to describe
+it. Definitions are normative within their stated parameters and premises.
+Examples are informative. [Status](../status.md) records implemented coverage.
 
-## Adopted scope
+## Native contracts
 
-The seven parts below own the selected definitions. A common chapter defines
-parameters and laws; a profile fixes a particular vocabulary, algorithm,
-representation or experiment. A profile's restrictions apply within that
-profile rather than to the whole language.
-
-### 1. Core semantics
-
-| Chapter | Definition scope |
+| Subject | Contract |
 |---|---|
-| [Execution](core/execution.md) | Signatures, bodies, complete outcomes, sequencing, bounds and retained histories |
-| [Iteration](core/iteration.md) | Pending prefixes, termination, deployment caps and publication |
-| [Observations](core/observations.md) | Event projections, equal-result relations and justified observers |
-| [Operation interpretations](core/interpretations.md) | Expansion, composition, execution fusion and admission transport |
-| [Contracts](core/contracts.md) | Complete-result satisfaction, sequencing and immutable cache validity |
+| Source language | [Definitions, types, bodies, Entries and translation](language/README.md) |
+| Mathematical IR | [Protocol profiles](ir/protocols.md), [mathematics](ir/mathematics.md), [polynomial recipes](ir/polynomials.md) |
+| Composition and control | [Applications](ir/composition.md), [iteration](ir/iteration.md), [functions](ir/functions.md), [control](ir/control.md), [completion](ir/completion.md) |
+| Data | [Variants](ir/variants.md), [nested data](ir/data.md) |
+| Construction and analysis | [Transcripts](ir/construction.md), [public-coin views](ir/public-coin.md), [compiler limits](ir/limits.md) |
+| Serialized artifacts | [Program](formats/program.md), [Entry package and interface](formats/entry.md), [proof deployment and transport](formats/proof.md), [message frames and setups](formats/messages.md) |
+| Host execution | [Entries](runtime/entries.md), [joint bundles](runtime/joint.md), [proofs](runtime/proofs.md), [attempts](runtime/attempts.md), [services](runtime/services.md) |
+| Operational boundaries | [Capacity](runtime/capacity.md), [file admission and publication](runtime/publication.md) |
 
-### 2. Language and admission
+The four MLIR profiles constrain one program at successive compilation
+boundaries; they are not four dialects. An artifact's structural admission does
+not establish its derivation from source. Version `0` names the current schema,
+without promising compatibility between development builds.
 
-| Chapter | Definition scope |
+## Mathematical and checking contracts
+
+These chapters define parameterized objects, laws and obligations. A native
+consumer must fix the relevant interpretation, inputs, states and capacity
+premises. A law alone does not prove that a C++ checker or Rust kernel realizes it.
+
+| Subject | Contract and native use |
 |---|---|
-| [Typed programs](language/programs.md) | Ordered heterogeneous contexts, control, denotation and structural bounds |
-| [Inputs and captures](language/inputs.md) | Capture lifetime and source selection; concrete input binding is defined by the source profiles |
-| [Interaction and endpoints](language/interaction.md) | Public subjects, all-reply conformance, return phases and semantic admission |
+| Values and domains | [Values](domains/values.md), [vectors](domains/vectors.md): typed algebra, contractions and representations |
+| Polynomial meaning | [Tables and polynomials](domains/polynomials.md): formal polynomial SSA and recipe lowering |
+| Relations and authentication | [Constraints](domains/constraints.md), [oracles](domains/oracles.md), [relation terminals](relations.md): imported assets, binding and explicit terminal checks |
+| Representation | [Complete results](realization/representations.md), [codecs](realization/codecs.md), [artifacts](realization/artifacts.md): source comparison, wire admission and retained authority |
+| External constructions | [Hash-chain and duplex transitions](realization/external-constructions.md): explicit native primitive calls |
+| Validation | [Refinement](verification/refinement.md), [analysis](verification/analysis.md), [judgments](verification/judgments.md): the obligations of source-relative checking |
 
-### 3. Domain objects
+The mathematical chapters use the [formal core](../../formal/docs/spec/README.md)
+vocabulary of signatures, interpretations, handlers, complete results and
+observations. Those definitions are normative for the parameterized laws;
+a native consumer must supply an instance and establish its connection to
+actual execution. The native contracts above define the implemented surfaces.
+Formal profiles supply informative examples and separate proof subjects,
+without selecting another native execution path.
+[Correspondence maps](../../formal/docs/README.md#definitions-and-proofs) identify
+exact Lean declarations and their premises.
 
-| Chapter | Definition scope |
-|---|---|
-| [Values and domains](domains/values.md) | Interpreted sorts, actual shapes, conversions and adequacy |
-| [Vectors and linear combinations](domains/vectors.md) | Ordered shapes, scalar/group contractions, linear maps and representation obligations |
-| [Tables and polynomials](domains/polynomials.md) | Ordered cells, extension, factor occurrences, residuals and contraction |
-| [Constraint relations](domains/constraints.md) | Sparse rank-one views, public/ONE binding, finite AIR windows, read locality and degree |
-| [Authenticated tables](domains/oracles.md) | Vector commitments, private opening custody, exact queries and source ordering policies |
+## Conformance
 
-### 4. Transformations and checking
-
-| Chapter | Definition scope |
-|---|---|
-| [Refinement](verification/refinement.md) | Actual execution models, initial domains, transformation rules and candidate binding |
-| [Analysis](verification/analysis.md) | Sound sufficient facts, transfer, conservative merging and applicability |
-| [Evidence and use](verification/judgments.md) | Conditional claims, discharge, logical results, failure boundaries and cost |
-
-### 5. Experiments and properties
-
-| Chapter | Definition scope |
-|---|---|
-| [Probability](properties/probability.md) | Normalized execution, joint initialization, reached masses and complete updates |
-| [Experiments](properties/experiments.md) | Actual operands, strategies, property quantifiers and transport |
-| [Relations and terminals](properties/relations.md) | Statement validity, heterogeneous component connections, contextual replacement, bound reductions and actual terminal consumption |
-| [Disclosure](properties/disclosure.md) | Allowed worlds, joint release, couplings and permitted observations |
-
-### 6. Realization and artifacts
-
-| Chapter | Definition scope |
-|---|---|
-| [Representations](realization/representations.md) | Values in actual post-states, complete-result relations, acceptance/output adequacy and native obligations |
-| [External construction transitions](realization/external-constructions.md) | Explicit Monero hash-chain and OpenVM duplex data states, call boundaries and primitive trust |
-| [Codecs](realization/codecs.md) | Accepted input languages, decoding laws, receive effects and capacities |
-| [Artifacts](realization/artifacts.md) | Consumer-retained subjects, specialization dependencies, interpretation closure, identity and custody |
-
-### 7. Selected profiles
-
-The [profile inventory](profiles/README.md) separates current native contracts
-from independent semantic models and locates reference clients at their actual
-scope. Formal source/direct-plan/table results concern those independent models,
-not additional supported execution paths or native pipeline validation.
-
-The inventory is the complete list. Its groups are source formation and input
-binding; compiler plans and local control; concrete realization; providers;
-Sumcheck components; and stateful services. Each entry states the scope of the
-selected definition rather than implying support across all implementations.
-
-## Reading routes
-
-Read conventions and complete execution first, then follow the relevant route:
-
-| Reader | Route |
-|---|---|
-| Frontend author | Language and inputs → interaction admission → domain objects → selected source profile |
-| Compiler/checker author | Programs and contracts → representations → refinement, analysis and judgments → selected rule/profile |
-| Protocol author | Interaction and actual inputs → domains → probability, experiments and relations → protocol and terminal profile |
-| Runtime/codec author | Execution and contracts → representations, codecs and artifacts → concrete format and custody |
-
-These routes are dependencies for understanding claims, not compiler passes.
-For example, an exact plan transformation still needs source adequacy, and a
-protocol bound still needs its actual experiment and terminal observer.
-
-## Reading and conformance rules
-
-Definitions and rules are normative within their stated parameters and
-premises. Examples are informative. [Conformance](conventions.md#conformance-claims)
-identifies the actual frontend, checker, experiment or realization and its
-covered domain; it does not combine all assurance questions into one Boolean.
-
-Architecture explains responsibilities, design documents select realizations,
-and decisions explain choices. [Status](../status.md) and
-[assurance](../assurance.md) report achieved evidence. Those documents use this
-specification's definitions. Each definition has one current home, reached through the chapter or profile
-index. Correspondence maps and in-page Formal references identify selected
-definitions, theorems and remaining obligations.
-
-## Relationship with Formal and public documentation
-
-Root [Formal](../../formal/README.md) supplies mathematical definitions and
-kernel-checked propositions. The six correspondence maps identify actual
-[core](correspondence/core.md),
-[program](correspondence/programs.md),
-[domain](correspondence/domains.md),
-[transformation](correspondence/transformations.md),
-[property](correspondence/properties.md) and
-[realization](correspondence/realization.md) declarations,
-hypotheses and limits. A parameterized obligation is not automatically a
-mechanized theorem or an implementation guarantee.
-
-A disagreement is adjudicated against the intended subject, its mathematics and
-actual evidence. Neither an implementation's convenience nor a theorem about
-a different object decides the intended semantics. The
-[writing rules](writing.md) give the editorial rules.
-
-Common chapters own laws that hold across choices; profiles own concrete
-vocabularies, algorithms and experiments. Keeping those choices separate prevents
-one codec or degree restriction from reading as a universal requirement. Group
-by independent parameters and conclusions, rather than one whole protocol per
-profile, and keep a general law outside its first consumer. This is document
-organization, not an additional IR stage.
-
-This specification and its Formal correspondence do not establish native
-protocol support; the [status page](../status.md) states what is implemented.
+A claim names its actual source or artifact, accepted inputs, interpretation,
+result or observation relation, and applicable limits. State failures and
+residual state when they are observable. Do not substitute a theorem about a
+different subject or a successful finite test for a missing implementation law.
+[Assurance](../assurance.md) defines the evidence policy; the
+[writing guide](../development/documentation.md#writing-specifications) defines
+editorial rules.

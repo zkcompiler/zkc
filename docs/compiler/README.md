@@ -1,33 +1,23 @@
 # Compiler reference
 
-The compiler takes checked `.zkc` source or direct mathematical MLIR through
-`protocol → participant → exec → physical`, then exports `zkc.program/0`.
-Start with the [pipeline](protocol-pipeline.md); the [implementation design](design.md)
-assigns its internal responsibilities.
+The compiler accepts checked `.zkc` source or mathematical MLIR and exports
+`zkc.program/0`. The [pipeline](pipeline.md) explains representations and ownership;
+[verification](verification.md) explains the comparisons performed before
+publication.
 
-## Read by boundary
-
-| Boundary | Guides |
+| Responsibility | Guide |
 |---|---|
-| Source to mathematical IR | [Language](../language/mathematical.md), [relation ingress](relation-ingress.md) |
-| IR formation and correctness | [Verification](ir-verification.md), [preservation](preservation.md), [validation evidence](foundation-validation.md) |
-| Mathematics and realization | [Structured mathematics](structured-mathematics.md), [representation](representation.md), [operation contracts](operation-contracts.md) |
-| Control and resources | [Local control](local-control.md), [resource origins](resource-origins.md), [Entry completion](entry-completion.md) |
-| Data and composition | [Nested data](nested-data.md), [numeric state](composed-state.md), [mathematical composition](mathematical-composition.md) |
-| Relation clients | [Bindings](relation-bindings.md), [native reduction and composition](relation-composition.md) |
-| Proof construction | [Native proofs](native-proofs.md), [structured messages](structured-proofs.md), [public-coin analysis](public-coin.md) |
-| Stateful proof execution | [Attempts](native-attempts.md), [authored transcripts](authored-transcripts.md) |
+| Profiles, dialects and lowering | [Pipeline](pipeline.md) |
+| Formation and source-relative comparisons | [Verification](verification.md) |
+| Algebra, polynomials and structured values | [Mathematics and data](mathematics.md) |
+| Local control and participant completion | [Control](control.md) |
+| Affine identity through branches and calls | [Resource origins](resource-origins.md) |
+| Imported assets and relation bindings | [Relations](relations.md) |
+| Derived and authored transcripts | [Construction](construction.md) |
+| Verifier dependency analysis | [Public-coin views](public-coin.md) |
+| Operation metadata and kernel selection | [Operation contracts](operation-contracts.md), [representation](representation.md) |
 
-The [foundation boundary](ir-foundation.md) explains which general mechanisms
-belong in the IR. [Runtime](../runtime/README.md) owns artifact use and Host
-execution; [extensions](../development/extensions.md) explains contributor work.
-
-## Meaning and evidence
-
-[Refinement](../spec/verification/refinement.md),
-[analysis](../spec/verification/analysis.md) and
-[evidence judgments](../spec/verification/judgments.md) define the semantic
-obligations. Native checkers recognize bounded relations over actual retained
-subjects. Independent Lean proofs concern their specified models and do not
-establish native compilation correctness. [Status](../status.md) records current
-support and [assurance](../assurance.md) distinguishes these claims.
+[Specification](../spec/README.md) owns exact rules; [native tests](../../tests/native.md)
+own validation scope. [Runtime](../runtime/README.md) owns application execution.
+The [C++ SDK](../../compiler/README.md) describes installed targets and APIs;
+[extensions](../development/extensions.md) explains contributor work.

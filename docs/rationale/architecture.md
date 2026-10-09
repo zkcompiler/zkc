@@ -22,7 +22,7 @@ runtime need to inspect.
 Lean models can state meanings independently of mutable compiler structures and
 study proofs without becoming a runtime dependency. Their theorems apply to
 their stated models. Connecting them to native code requires the explicit
-[correspondence work](../assurance.md#6-native-correspondence-policy).
+[correspondence work](../assurance.md#native-correspondence).
 
 ## Alternatives and cost
 

@@ -20,9 +20,9 @@ interprets those bytes with the same semantics.
 | Invocation context | The selected policy's canonical public values, application context and authorized setup configuration |
 | Relation Asset | Canonical relation contents, exact field and ordered layout under its data format |
 
-Use [Entry execution](../language/entries.md) for package authorization and
-[native proof execution](../spec/profiles/compiler/native-proofs.md) for the exact
-source/deployment/root encodings. [Joint bundles](../spec/profiles/compiler/run.md)
+Use [Entry execution](entries.md) for package authorization and
+[native proof execution](../spec/formats/proof.md) for the exact
+source/deployment/root encodings. [Joint bundles](../spec/runtime/joint.md)
 have their own envelope digest and invocation contract. These identifiers are
 not interchangeable.
 

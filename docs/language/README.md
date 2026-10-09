@@ -12,13 +12,14 @@ Start with the [walkthrough](../getting-started.md), then read the
 | Task | Reference |
 |---|---|
 | Define types, helpers, roles, services and control | [Mathematical source](mathematical.md) |
-| Compile, run, prove or verify an Entry | [Entry execution](entries.md) |
+| Select a closed job | [Entry declarations](entries.md) |
+| Compile, run, prove or verify an Entry | [Entry execution](../runtime/entries.md) |
 | Capture relation data and bind its meaning | [Relation Assets](relations.md) |
-| Read exact typing, effects and Entry rules | [Mathematical language profile](../spec/profiles/source/mathematical-language.md) |
+| Read exact typing, effects and Entry rules | [Mathematical language profile](../spec/language/README.md) |
 
 The compiler checks declared contracts and availability. A relation clause alone
 adds no runtime guard or proof of satisfaction. Backend implementations must
 satisfy their operation and representation contracts; a successful type check
 does not infer cryptographic assumptions. [Status](../status.md) records supported
-syntax and native capabilities, and [model guides](../guides/README.md) explain
+syntax and native capabilities, and [model guides](../../formal/docs/guides/README.md) explain
 the independent semantic foundations.

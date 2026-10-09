@@ -42,6 +42,9 @@ checks.
 
 ## Coverage and ownership
 
+The [native validation map](native.md) connects compiler boundaries to
+representative controls and states their evidence limits.
+
 - `protocol/` covers compiler-generated mathematical programs, native proofs,
   Entry Host commands, generated bindings, public `.zkc` projects, CLI discovery
   and executable documentation. Native generators run into fresh directories;

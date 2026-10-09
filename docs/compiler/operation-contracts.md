@@ -16,7 +16,7 @@ The `zkc.contract-declarations/0` inventory distinguishes constructor-applicatio
 ports from an explicit complete-Type port (`{"term": index}`). The latter is
 restricted to construction-only observation payloads, with exact static-type and
 representation checks. Source admission does not gain arbitrary operations from
-catalog presence; the [structured observer](../spec/profiles/compiler/structured-proof-messages.md#transcript-observation)
+catalog presence; the [structured observer](../spec/formats/messages.md#transcript-observation)
 owns that boundary.
 
 Declaration presence and authoring stage govern source availability. Semantic

@@ -2,7 +2,7 @@
 
 `zkc run-bundle` executes a compiler-produced joint bundle with the same role
 interpreter used by proof hosts. It needs the compiler and Rust tools; this route
-does not call Lean. The [bundle specification](../spec/profiles/compiler/run.md)
+does not call Lean. The [bundle specification](../spec/runtime/joint.md)
 defines its authority, input formats, limits and reports.
 
 ## A complete example
@@ -85,12 +85,12 @@ prefixes do not identify an artifact-specific execution path.
 
 For noninteractive execution, use the compiler's selected transcript construction
 and the separate `prove-bundle` and `verify-bundle` processes,
-described in [native proof deployments](../compiler/native-proofs.md). A joint
+described in [native proof deployments](../compiler/construction.md). A joint
 bundle is an interactive scheduling artifact, not the proof format. The installed
 joint host currently refuses transcript-typed entry inputs because it has no
 application-authenticated transcript-root configuration.
 
-Named source applications use the [Entry Host](../language/entries.md), which
+Named source applications use the [Entry Host](entries.md), which
 binds its source interface to these same execution and proof boundaries.
 
 ## Separate producer and validator
@@ -137,5 +137,5 @@ printf 'Proof files: %s\n' "$work_dir"
 The producer reports `produced`; the separate validator reports `accepted`.
 The validator receives no private producer inputs. Its trusted deployment pin
 selects both the program and the policy, including which output is the decision.
-The [proof guide](../compiler/native-proofs.md) explains transcript construction,
+The [proof guide](../compiler/construction.md) explains transcript construction,
 public bindings, repeated attempts and setup authority for larger protocols.

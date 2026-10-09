@@ -117,12 +117,12 @@ interpretation may obtain the hash and permutation through an explicit primitive
 interface, whose replies are bound to exact inputs and call origins. Such a
 provider assumption alone establishes neither primitive correctness nor a
 complete native correspondence. Current APIs and evidence are recorded in the
-[authored native guide](../../compiler/authored-transcripts.md)
+[authored native guide](../../compiler/construction.md)
 and [backend adapter](../../../crates/zkc-backends/src/external/README.md).
 
 ## Authored native deployment
 
-The [native proof profile](../profiles/compiler/native-proofs.md) admits
+The [native proof profile](../formats/proof.md) admits
 these transitions through ordinary local functions and its `indices` input and
 message codec. An empty selected suite declares no derived transcript. It does
 not forbid an authored data-state computation. Existing affine transcript inputs

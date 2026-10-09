@@ -281,7 +281,8 @@ def withLocalFrame (location : Location) (inputs : List Value)
 /-- The selected arm extends the local origin and the interaction path together,
 exactly as a branch or an iteration does, so a local observation and its domain
 separation name the arm they happened in:
-docs/spec/profiles/compiler/local-variants.md. -/
+docs/spec/ir/variants.md.
+The reference reuses these rules without establishing native correspondence. -/
 def enterMatch (location : Location) (site alternative : Name) : Location :=
   { location with
     scope := { location.scope with path := location.scope.path ++ [.localMatch site alternative] },

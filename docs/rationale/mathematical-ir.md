@@ -1,6 +1,6 @@
 # Mathematical IR uses ordinary SSA
 
-The [mathematical profile](../spec/profiles/compiler/mathematical-protocols.md)
+The [mathematical profile](../spec/ir/protocols.md)
 keeps total mathematics in ordinary typed SSA. Role interfaces and explicit
 restrictions state availability boundaries; analysis derives intermediate
 availability from dependencies. Structured control uses regions, and functions
@@ -26,7 +26,7 @@ neither agreement between roles nor permission to disclose a value.
 
 ## Representations follow consumers
 
-The [four profiles](../compiler/protocol-pipeline.md) preserve different facts:
+The [four profiles](../compiler/pipeline.md) preserve different facts:
 joint mathematics, participant behavior, executable calculations and physical
 choices. Domain dialects keep their ownership across those profiles. Phase
 legality, observation policies and analysis facts are judgments on a program;
@@ -36,7 +36,7 @@ polynomial stage merely because other protocols use polynomials.
 An opaque host callback would lose inspectable computation. Conversely, an
 interpretation alone supplies no materialized target for a lower-level analysis.
 Build a form where a consumer needs it, with its preservation obligation. The
-[formal semantics](../../formal/design/semantics.md#interpretation-and-representations)
+[formal semantics](../../formal/docs/design/semantics.md#interpretation-and-representations)
 explains that distinction independently of the native pipeline.
 
 The tradeoff is that placement and preservation need explicit analyses rather

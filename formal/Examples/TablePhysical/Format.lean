@@ -75,7 +75,7 @@ def admit (request : RegionArtifact.Request Ty Protocol.Operation) (candidate : 
   if request.context.dependencies != dependencies then throw "unresolved-dependency"
   if candidate.context != request.context then throw "context-mismatch"
   -- The request context must be valid, as for direct plans
-  -- (docs/spec/profiles/compiler/direct-plan.md).
+  -- (formal/docs/spec/profiles/compiler/direct-plan.md).
   if !validContext request.context then throw "invalid-context"
   check (request.context.inputs.map (·.type)) request.context.resultType request.source candidate.body
 

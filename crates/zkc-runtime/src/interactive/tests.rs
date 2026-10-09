@@ -2031,7 +2031,7 @@ fn tagged_witness(leaf: &str) -> Json {
 /// and a descriptor keeps the text it was given, so admitting both would mint a
 /// second nominal identity for one payload. Readers do not silently normalize a
 /// different identity to an admitted spelling:
-/// docs/spec/profiles/compiler/local-variants.md.
+/// docs/spec/ir/variants.md.
 #[test]
 fn leaf_payload_types_have_a_single_canonical_spelling() {
     for alias in ["bool:", "index:", "indices:"] {

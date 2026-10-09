@@ -90,18 +90,29 @@ def component_pages():
 def check(include_components=False):
     # docs/private holds non-public material checked out inside docs/.
     private = ROOT / "docs" / "private"
+    public_root, private_root = ROOT.resolve(), private.resolve()
+
+    def public_path(path):
+        target = path.resolve()
+        return target.is_relative_to(public_root) and not target.is_relative_to(private_root)
+
     active = sorted(p for p in (ROOT / "docs").rglob("*.md") if private not in p.parents)
     extra = ["README.md"]
     formal_pages = sorted((ROOT / "formal").glob("*.md"))
-    formal_pages += sorted((ROOT / "formal" / "design").rglob("*.md"))
+    formal_reference = sorted((ROOT / "formal" / "docs").rglob("*.md"))
+    formal_pages += formal_reference
     formal_pages += sorted((ROOT / "formal" / "Zkc").rglob("*.md"))
     formal_pages += sorted((ROOT / "formal" / "Examples").rglob("*.md"))
     formal_pages += sorted((ROOT / "formal" / "integrations" / "arklib").glob("*.md"))
     pages = active + formal_pages + [ROOT / p for p in extra]
     if include_components:
         pages = sorted(set(pages) | set(component_pages()))
+    errors = [[str(p.relative_to(ROOT)), "outside public repository"]
+              for p in pages if not public_path(p)]
+    pages = [p for p in pages if public_path(p)]
+    active = [p for p in active if public_path(p)]
+    formal_reference = [p for p in formal_reference if public_path(p)]
     links = fragments = 0
-    errors = []
     outgoing = collections.defaultdict(set)
     incoming = collections.defaultdict(set)
     for page in pages:
@@ -114,6 +125,9 @@ def check(include_components=False):
                 continue
             links += 1
             path = (page.parent / unquote(url.path)).resolve() if url.path else page
+            if not public_path(path):
+                errors.append([label, target, "outside public repository"])
+                continue
             if not path.exists():
                 errors.append([label, target, "missing"])
                 continue
@@ -126,17 +140,21 @@ def check(include_components=False):
         for n, line in enumerate(page.read_text().splitlines(), 1):
             if line.rstrip() != line:
                 errors.append([label, n, "trailing whitespace"])
-    # Every page of the reference is reachable by links from its index, so a
-    # page cannot exist outside the reading paths.
-    index = (ROOT / "docs" / "README.md").resolve()
-    reached, frontier = {index}, [index]
-    while frontier:
-        for target in outgoing[frontier.pop()]:
-            if target not in reached:
-                reached.add(target)
-                frontier.append(target)
-    for page in sorted(p for p in active if p.resolve() not in reached):
-        errors.append([str(page.relative_to(ROOT)), "unreachable from docs/README.md"])
+    # Each reference is discoverable from its own index. Links from the other
+    # reference do not make an otherwise orphaned page reachable.
+    for reference, index_name, owner in (
+        (active, "docs/README.md", ROOT / "docs"),
+        (formal_reference, "formal/docs/README.md", ROOT / "formal"),
+    ):
+        index = (ROOT / index_name).resolve()
+        reached, frontier = {index}, [index]
+        while frontier:
+            for target in outgoing[frontier.pop()]:
+                if target not in reached and target.is_relative_to(owner.resolve()):
+                    reached.add(target)
+                    frontier.append(target)
+        for page in sorted(p for p in reference if p.resolve() not in reached):
+            errors.append([str(page.relative_to(ROOT)), f"unreachable from {index_name}"])
     home = (ROOT / "docs" / "rationale").resolve()
     for page in sorted(home.glob("*.md")):
         if page.name != "README.md":
@@ -146,11 +164,12 @@ def check(include_components=False):
     return {
         "status": "pass" if not errors else "fail",
         "pages": len(pages), "reference_pages": len(active),
+        "formal_reference_pages": len(formal_reference),
         "local_links": links, "fragments": fragments, "errors": errors,
         "page_sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                         for p in pages},
         "scope": ("reference and component guides" if include_components else "reference and root/formal guides")
-                 + "; local inline links, ATX heading fragments, reference reachability, whitespace and rationale rules",
+                 + "; local inline links, ATX heading fragments, native/formal reachability, public boundaries, whitespace and rationale rules",
     }
 
 

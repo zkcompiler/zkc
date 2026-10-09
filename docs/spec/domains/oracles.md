@@ -1,5 +1,10 @@
 # Authenticated finite tables
 
+Native oracle operations use these commitment, query and opening obligations.
+This chapter states shared laws; a native implementation claim needs its
+actual instance and evidence. Independent formal examples retain their own
+[model scope](../../../formal/docs/spec/README.md).
+
 A vector commitment authenticates coordinates of an ordered finite table. It
 does not assert polynomial degree, relation satisfaction, an extraction theorem
 or hiding. A protocol can use this domain without using AIR, FRI or polynomials.
@@ -46,7 +51,7 @@ Shape, byte and element limits apply before allocation. Authentication failure
 returns false; malformed shapes and resource exhaustion refuse execution.
 These schemes are nonhiding and do not require an external setup key. Setup
 policy is selected by nominal scheme, never by the words `commitment` or `proof`
-alone. The [structured proof contract](../profiles/compiler/structured-proof-messages.md)
+alone. The [structured proof contract](../formats/messages.md)
 fixes public codec admission.
 
 ## Publication, queries and acceptance
@@ -70,7 +75,7 @@ not justify treating them as one simultaneous query experiment.
 
 These are semantic obligations for the authored protocol and its selected
 experiment. The native implementation provides general oracle kernels and
-[composed mathematical clients](../../compiler/mathematical-composition.md).
+[composed mathematical clients](../../compiler/mathematics.md).
 It does not provide a complete FRI application or a BCS/Fiat–Shamir security
 theorem. Automatic lowering of an
 arbitrary ideal-oracle IOP remains separate work.

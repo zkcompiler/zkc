@@ -453,7 +453,7 @@ impl LogicalType {
         // `bool`, and admitting both would let a producer mint a second nominal
         // identity for one payload, because a variant descriptor keeps the text
         // it was given. Readers do not silently normalize a different identity
-        // to an admitted spelling: docs/spec/profiles/compiler/local-variants.md.
+        // to an admitted spelling: docs/spec/ir/variants.md.
         if parsed.spelling() != spelling {
             return Err(error("noncanonical nominal spelling"));
         }

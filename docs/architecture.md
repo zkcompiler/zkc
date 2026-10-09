@@ -28,7 +28,7 @@ Lean: independently formalized semantic models and proofs
 
 Source Assets capture immutable relation data. They do not install a relation
 checker or infer proof obligations merely by appearing in a project. The
-[relation ingress guide](compiler/relation-ingress.md) distinguishes data import,
+[relation ingress guide](compiler/relations.md) distinguishes data import,
 relation declarations and the bounded native R1CS adapter.
 
 ## Representation and checking
@@ -43,8 +43,8 @@ relation declarations and the bounded native R1CS adapter.
 | `zkc.program/0` | Closed executable participant description admitted by C++ export and Rust loading |
 | Host package | Application-authorized identity, input/result layout, setup authority, execution limits and publication |
 
-The [pipeline](compiler/protocol-pipeline.md) explains the transitions. Each
-[adjacent preservation check](compiler/preservation.md) reads actual candidate
+The [pipeline](compiler/pipeline.md) explains the transitions. Each
+[adjacent preservation check](compiler/verification.md) reads actual candidate
 operands and control against retained input. Source checking, IR formation,
 transformation correspondence and runtime admission establish different facts.
 Unknown or unsupported cases refuse; successful formation is not a security
@@ -83,7 +83,7 @@ admitted program; it trusts the compiler publication for source correspondence.
 It does not interpret the retained MLIR.
 
 The native proof policy covers flat, iterated, PCS and structured
-programs on the shared executable and Runner. [Proof compilation](compiler/native-proofs.md)
+programs on the shared executable and Runner. [Proof compilation](compiler/construction.md)
 owns construction within the participant profile. [Exact identity](runtime/artifact-identity.md)
 binds the authorized bytes and invocation context. No normalized identity policy
 is supplied by this implementation.
@@ -94,7 +94,7 @@ cleanup outcomes. A validator's acceptance comes from its selected decision,
 not from producer completion. Entry input associations and the Host registry
 authorize setup material. Explicit verifier-key-consuming PCS operations enforce
 the protocol's expected setup; an authorized receive may be observed before
-that check. See the [setup boundary](spec/profiles/compiler/structured-proof-messages.md#application-authorized-setups),
+that check. See the [setup boundary](spec/formats/messages.md#application-authorized-setups),
 including unchecked returned PCS values.
 
 ## Formal models and extension boundaries

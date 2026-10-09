@@ -42,17 +42,17 @@ cannot erase earlier effects, consumed work or a stopped prefix. Copyable result
 publish only according to the Host's completion and cleanup rules; resource
 handles are never serialized into portable authority.
 
-[Attempts](../compiler/native-attempts.md) retain provider state and accumulated
-work across explicitly authorized retries. [Conditional completion](../compiler/entry-completion.md)
+[Attempts](attempts.md) retain provider state and accumulated
+work across explicitly authorized retries. [Conditional completion](../compiler/control.md)
 retains the reached prefix and skips the unreached suffix. Neither permits
 replaying consumed affine capabilities.
 
 ## Contracts and assurance
 
 The native proof contract covers every admitted program shape.
-[Entry inputs](../language/entries.md) and the Host registry authorize setups;
+[Entry inputs](entries.md) and the Host registry authorize setups;
 an explicit verifier-key-consuming PCS check enforces the expected terminal key.
-The [setup contract](../spec/profiles/compiler/structured-proof-messages.md#application-authorized-setups)
+The [setup contract](../spec/formats/messages.md#application-authorized-setups)
 distinguishes input pins, authorized receives, observation timing and unchecked
 returned PCS data.
 
@@ -60,3 +60,16 @@ Compiler checks, structural admission, installed kernel contracts and runtime
 tests cover distinct trust boundaries. Native Lean correspondence is open. The
 independent formal realization laws state how complete results and states would
 have to relate; they do not supply a correctness theorem for this Runner.
+
+## Realization evidence
+
+The [representation laws](../spec/realization/representations.md) relate
+complete results, values at actual states, capacities, progress and custody.
+Native controls exercise actual parsers, lowering and execution: changed
+captures, wrong domains, same-typed swaps, omitted guards, failed writes,
+exhausted providers, remaining-byte differences and stale aliases. Compare
+the actual reached prefix and residual state, including failures.
+
+Constant-time MSM and diagonal contraction kernels retain their explicit
+[physical selection](../compiler/representation.md#checked-physical-decisions).
+Selection does not infer public-input authority or prove a protocol leakage law.

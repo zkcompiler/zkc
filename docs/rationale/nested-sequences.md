@@ -2,7 +2,7 @@
 
 Use `!data.sequence<T>` for runtime-count immutable records and variable-size
 payloads. Keep numeric vectors and matrices in their existing ranked tensor
-representation. The [nested-data profile](../spec/profiles/compiler/nested-data.md)
+representation. The [nested-data profile](../spec/ir/data.md)
 owns formation, operations and realization.
 
 ## Alternatives and reason

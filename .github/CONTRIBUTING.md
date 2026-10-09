@@ -29,7 +29,7 @@ or volume.
 
 | To find out | Read |
 |---|---|
-| What the project is and where it is going | [Project Overview](../docs/overview.md) |
+| What the project is and where it is going | [Architecture](../docs/architecture.md) |
 | What the current checkout actually claims | [Current Status](../docs/status.md) |
 | Which document decides what | [documentation authority map](../docs/README.md) |
 | How to build and run the checks | [Development guide](../docs/development/README.md) and [test scopes](../tests/README.md) |
@@ -105,10 +105,12 @@ belongs in the pull request body, which is what survives the squash.
   module whose entry point is `def run : IO Unit` has the same choice:
   `Tests.Checks` records a condition that does not hold and carries on, while
   a shape error stays fatal because there is no value to go on with.
-- **Semantics.** Update the owning specification. `docs/spec/` describes the
-  intended model and is not weakened to match what is built; what is built
-  belongs on the [status page](../docs/status.md), not in the
-  specification.
+- **Semantics.** Update the owning specification: `docs/spec/` for native and
+  shared contracts, `formal/docs/spec/` for independent formal models. Keep
+  intended contracts and implementation coverage distinct; do not weaken a
+  contract to match a missing implementation. Record native coverage in
+  [status](../docs/status.md) and theorem scope in
+  [formal support](../formal/docs/support.md).
 - **Formats and identities.** Version persisted or exchanged formats and
   cryptographic byte constructions. Before stabilization, keep zkc-owned
   format and construction versions at `0` and update producers, readers and

@@ -78,4 +78,4 @@ imported or audited as owned declarations by this consumer.
 Field/limb adequacy, a real-ISA state/observation map, cryptographic PCS soundness
 and native layout correspondence remain separate obligations. The accumulator
 fixture is a witness for this model, not a verified RISC-V program. See the
-[formal questions](../../design/formal-questions.md) for extension boundaries.
+[formal questions](../../docs/native-connection.md) for extension boundaries.

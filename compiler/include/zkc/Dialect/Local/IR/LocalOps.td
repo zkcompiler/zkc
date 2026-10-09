@@ -58,7 +58,7 @@ def LocalMatchOp : LocalControlOp<"match"> {
     the region of the active alternative executes; its arguments are that
     alternative's payload followed by the captures, so the payload is not a
     successor operand of the variant. A terminal stop inside a region bypasses
-    every continuation (docs/spec/profiles/compiler/local-variants.md).
+    every continuation (docs/spec/ir/variants.md).
   }];
   let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$site, ArrayAttr:$alternatives);
   let regions = (region VariadicRegion<AnyRegion>:$arms);
@@ -129,7 +129,7 @@ def VariantInjectOp : Op<LocalDialect, "variant_inject"> {
     Builds a local variant value from the payload of one named alternative. Only
     that alternative's payload is stored; no placeholder is created for the
     others, so an affine payload is transferred exactly once
-    (docs/spec/profiles/compiler/local-variants.md).
+    (docs/spec/ir/variants.md).
   }];
   let arguments = (ins Variadic<AnyType>:$payload, StrAttr:$site, StrAttr:$alternative);
   let results = (outs AnyType:$output);

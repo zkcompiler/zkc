@@ -68,7 +68,8 @@ def leafLogicalIdentity (kind identity : String) : Bool :=
 `bool` and `bool:` are one type with one name. Admitting both would give one
 payload two nominal identities, because a descriptor keeps the text it was given.
 Readers do not silently normalize a different identity to an admitted spelling:
-docs/spec/profiles/compiler/local-variants.md. -/
+docs/spec/ir/variants.md.
+The reference reuses these rules without establishing native correspondence. -/
 def leafLogical (text : String) : Bool :=
   if domainIndependent text then true else match text.splitOn ":" with
     | [kind, identity] => !identity.isEmpty && leafLogicalIdentity kind identity

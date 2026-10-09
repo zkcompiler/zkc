@@ -2,7 +2,7 @@
 
 Implemented by the private [resource-origin analysis](../../compiler/lib/Dialect/Protocol/IR/ResourceOrigins.cpp)
 in `ZkcIR`. The [capability map](../status.md#foundation-capability-map) owns
-current coverage and the [structured iteration profile](../spec/profiles/compiler/structured-iteration.md)
+current coverage and the [structured iteration profile](../spec/ir/iteration.md)
 owns the carried-root invariant.
 
 ## Purpose and scope
@@ -161,8 +161,8 @@ readers still enforce their own type/custody contracts; they do not infer
 mathematical source correspondence. No new Lean semantics, independent retry
 host, external transcript deployment or security theorem follows.
 
-[Native attempts](native-attempts.md) use the shared controller and
-`produce_admitted` driver. The [structured proof boundary](structured-proofs.md),
-[nested data](nested-data.md) and [mathematical composition](mathematical-composition.md)
+[Native attempts](../runtime/attempts.md) use the shared controller and
+`produce_admitted` driver. The [structured proof boundary](construction.md),
+[nested data](mathematics.md) and [mathematical composition](mathematics.md)
 use the same participant execution path. The [roadmap](../roadmap.md) records
 remaining native correspondence work.

@@ -45,4 +45,4 @@ The runner copies the four modules into a separate Lake package, depends on the
 maintained library, builds and audits all four modules, and rejects input drift
 or a missing audit marker. These controls add no production admission rule or
 native exporter. Broader claim APIs, portable artifact composition and compact
-graph checking retain their own [formal questions](../../design/formal-questions.md).
+graph checking retain their own [formal questions](../../docs/native-connection.md).

@@ -28,7 +28,7 @@ zkc verify sumcheck.entry EXPECTED_SHA256 examples/projects/sumcheck/verifier.js
 
 `EXPECTED_SHA256` comes from trusted compilation. Both requests authorize the
 same public table, claim and round count. No private inputs are needed for this
-public example. The [Entry guide](../../../docs/language/entries.md) explains
+public example. The [Entry guide](../../../docs/runtime/entries.md) explains
 request encoding and limits. Compiling `example::Interactive` and passing
 [interactive.json](interactive.json) to `run` exercises both live roles.
 

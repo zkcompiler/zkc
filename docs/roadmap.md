@@ -26,7 +26,7 @@ through an explicit interpretation with their hypotheses discharged.
 
 Compiler postconditions and C++/Rust agreement remain useful regression evidence.
 They do not replace a semantics for native execution or prove backend kernels.
-[Preservation](compiler/preservation.md) states the existing comparisons;
+[Preservation](compiler/verification.md) states the existing comparisons;
 [assurance](assurance.md) identifies their remaining trust boundaries.
 
 ## Develop transcript assurance
@@ -37,8 +37,8 @@ verifier dependencies; transcript construction checks observations and state
 threading. Neither is a random-oracle reduction. Repeated attempts require a
 separate treatment of retained provider state, failed work and adversarial trials.
 
-The [public-coin profile](spec/profiles/compiler/public-coin.md) and
-[native proof contract](spec/profiles/compiler/native-proofs.md) remain the
+The [public-coin profile](spec/ir/public-coin.md) and
+[native proof contract](spec/formats/proof.md) remain the
 contract owners. Changes to the proof policy must update compiler
 production, Host admission and controls together. Setup authority remains at
 Entry inputs and the Host registry, with explicit verifier-key-consuming PCS

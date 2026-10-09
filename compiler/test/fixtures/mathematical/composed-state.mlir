@@ -1,4 +1,4 @@
-// Executable algebraic clients; see docs/compiler/composed-state.md.
+// Executable algebraic clients; see docs/compiler/mathematics.md.
 !f = !algebra.field<"bls12-381.fr">
 !g = !algebra.group<"bls12-381.g1">
 !fs = tensor<?x!f>

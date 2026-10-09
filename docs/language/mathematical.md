@@ -3,12 +3,12 @@
 The `.zkc` language combines total mathematical helpers, ordered local functions,
 static libraries and explicit participant messages. It emits mathematical MLIR
 for the existing participant compiler and runtime. The
-[source profile](../spec/profiles/source/mathematical-language.md) defines syntax,
+[source profile](../spec/language/README.md) defines syntax,
 permissions, role semantics and bounds. Static protocol composition, managed
 randomness, bounded repetition and conditional participant completion are supported.
 Relations, specification clauses and explicit run/proof Entries are supported.
 The common Host supports authenticated packages, named inputs/results and
-independent proof calls through the [CLI and Rust API](entries.md).
+independent proof calls through the [CLI and Rust API](../runtime/entries.md).
 
 For a complete small example, read [algebra.zkc](../../compiler/test/fixtures/language/algebra.zkc)
 and [transfer.zkc](../../compiler/test/fixtures/language/transfer.zkc). The two
@@ -69,36 +69,12 @@ The compiler finds the actual draws of `challenges` through composition and
 repetition. It checks each delivery before constructing participant transcripts.
 Use `construction authored;` for an authored noninteractive job. `target` is
 optional and adds no execution guard. An Entry alias such as `entry Release = Proof;`
-inherits the whole configuration. The [Entry contract](../spec/profiles/source/mathematical-language.md#entry-jobs)
+inherits the whole configuration. The [Entry contract](../spec/language/entries.md#entry-jobs)
 defines exact selection and refusal rules.
 
-`language-package` wraps the original, source interface and compiled artifact in
-one exact publication. Rust `zkc_tools::entry::Package::capture` authenticates the
-outer package against an application-supplied digest. `Interface::read` checks
-its bounded schema, logical names, selectors and Entry choices. `check_run` and
-`check_proof` bind that view to the exact admitted native artifact and its ports.
-Proof binding also checks the original digest, compile options and construction.
-These checks rely on the authenticated compiler publication for source
-correspondence; the Rust Host does not interpret the retained MLIR. `RunEntry`
-and `ProofEntry` perform this admission and accept named logical values through
-the same common runtimes.
-
-`language-bundle` emits the existing native proof deployment for a proof Entry;
-its producer and validator use the [shared proof host](../compiler/native-proofs.md).
-The package SDK supplies named `RunRequest` and `ProofRequest` calls. Prove and
-verify are independent; the verifier needs its public values and role inputs,
-without a prover witness or live peer. Products, variants and unit values follow
-the checked interface. Successful reports return named copyable outputs after
-cleanup. Authored jobs require explicit `BindingPolicy::AllowHeaderOnly`;
-derived transcript jobs use the default policy. Named setup slots bind checked
-key initialization to application-owned identities. The [Entry guide](entries.md)
-shows package compilation, independent CLI calls and thin Rust bindings.
-A proof Entry may select `complete result.ready;`
-to withhold incomplete proofs, including in one-shot proving. Repeated attempts
-require an explicit application request. The common controller retains managed
-providers and cumulative work. Omitted service and derived transcript budgets use
-the documented operational default; explicit budgets, including zero, take precedence.
-See [attempts and defaults](../spec/profiles/source/mathematical-language.md#attempts-and-operational-defaults).
+A proof Entry can select `complete result.ready;` for bounded attempts. Setup
+slots select application-authorized inputs. The [Entry guide](../runtime/entries.md) owns
+package admission, CLI calls, operational defaults and generated Rust bindings.
 
 ## Local code and reusable types
 
@@ -152,13 +128,9 @@ Fixed arrays currently use static numeric indices. Private ingress requires a
 validator that this source profile does not yet expose. Zero-leaf messages refuse;
 empty values and ports still retain their source obligations and interface rows.
 
-`language-interface` emits `zkc.language-interface/0`. Schemas retain an exact
-logical type identity and kind separately from their display label. A logical port's `native`
-indices and recursive `schema` describe its flattened fields, variant payloads and
-custody. These indices refer to the original mathematical signature, not a promise
-that downstream physical storage uses the same positions. Host adapters must also
-consult the selected bundle. The named Host binds that schema to the selected deployment and handles typed
-source jobs through the [Entry API](entries.md).
+The [retained interface](../spec/formats/entry.md) maps logical names and
+schemas to original mathematical ports. Physical placement may differ; the
+common Host binds the interface to the actual selected artifact.
 
 ## Setup-bound inputs
 

@@ -81,7 +81,7 @@ witness is deliberately public; runtime randomness is fresh. See the
 |---|---|
 | Write a protocol or library | [Language](docs/language/README.md), [example projects](examples/projects/README.md) |
 | Develop the compiler or a backend | [Architecture](docs/architecture.md), [development](docs/development/README.md) |
-| Study semantics and verification | [Model guides](docs/guides/README.md), [specification](docs/spec/README.md) |
+| Study semantics and verification | [Native specification](docs/spec/README.md), [formal models](formal/docs/README.md) |
 | Assess support and future work | [Status](docs/status.md), [roadmap](docs/roadmap.md) |
 
 The [documentation index](docs/README.md) maps the reference. Contributions follow

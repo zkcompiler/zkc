@@ -73,8 +73,8 @@ theorem for this complete executable path remain separate work.
 | Understand types, helpers, roles, services and control | [Mathematical source guide](language/mathematical.md) |
 | Compile reusable libraries with separate clients | [Source projects](../examples/projects/README.md) |
 | Inspect a repeated protocol with a real terminal check | [Public Sumcheck](../examples/projects/sumcheck/README.md) |
-| Supply named inputs, setup authority, limits or Rust bindings | [Entry execution](language/entries.md) |
-| Read exact source semantics | [Source profile](spec/profiles/source/mathematical-language.md) |
+| Supply named inputs, setup authority, limits or Rust bindings | [Entry execution](runtime/entries.md) |
+| Read exact source semantics | [Source profile](spec/language/README.md) |
 | Extend the compiler or runtime | [Extension guide](development/extensions.md) |
 
 `zkc --help`, `zkc COMMAND --help`, `zkc-compile --help` and `zkc-opt --help`

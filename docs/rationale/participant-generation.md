@@ -1,6 +1,6 @@
 # Participant generation preserves explicit communication
 
-The [native pipeline](../compiler/protocol-pipeline.md#preparation-and-projection)
+The [native pipeline](../compiler/pipeline.md#preparation-and-projection)
 derives participant programs from admitted common mathematics. Projection
 preserves authored exchanges and refuses when a role lacks a needed value.
 
@@ -11,14 +11,14 @@ in a transformation with an explicit observation relation.
 
 A receive is a fresh role-local input. Replacing it with an already available
 same-typed value would assume honest delivery and could remove a check on hostile
-input. The [role-indexed comparison](../compiler/preservation.md#role-indexed-value-correspondence)
+input. The [role-indexed comparison](../compiler/verification.md#role-indexed-value-correspondence)
 keeps actual receives distinct; honest transport is a separate premise.
 
 Dynamic global choice needs its own projection rule. A participant must know
 the branch, have equivalent continuations, or learn the choice through explicit
 communication. Erasing a guard or inventing communication cannot supply that
-rule. The independent [interaction model](../spec/language/interaction.md)
-and [shared-control reference](../spec/profiles/source/located-execution.md#actual-agreement-for-shared-control)
+rule. The independent [interaction model](../../formal/docs/spec/language/interaction.md)
+and [shared-control reference](../../formal/docs/spec/profiles/source/located-execution.md#actual-agreement-for-shared-control)
 state their own locality and agreement conditions.
 
 This conservative policy can decline protocols with a valid implementation.

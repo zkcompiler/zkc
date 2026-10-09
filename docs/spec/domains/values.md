@@ -1,15 +1,20 @@
 # Domain values
 
+Typed native algebra and physical value admission use these domain distinctions.
+This chapter states shared laws; a native implementation claim needs its
+actual instance and evidence. Independent formal examples retain their own
+[model scope](../../../formal/docs/spec/README.md).
+
 A domain interpretation gives source values and operations their mathematical
 meaning. It declares its sorts, operations, legal inputs and source denotation.
-The [language](../language/programs.md#language-signatures) supplies the
+The [language](../../../formal/docs/spec/language/programs.md#language-signatures) supplies the
 typed control structure in which those operations occur.
 
 ## Sorts and interpretations
 
 For a language with sort type `Ty`, a value interpretation assigns
 `Value : Ty → Type`. Its operation interpretation takes the declared ordered
-arguments and produces a [body](../core/execution.md#bodies) returning the
+arguments and produces a [body](../../../formal/docs/spec/core/execution.md#bodies) returning the
 interpreted result sort.
 
 Field, scalar, group, digest, index and shape-indexed values have distinct sorts
@@ -60,7 +65,7 @@ specialized modulo the characteristic; closed `field.constant` and
 `p`. They do not encode arbitrary extension coordinates. The catalog's existing
 `modulus` member records this characteristic bound for natural casts, not the
 extension's cardinality. Public extension coordinates use the canonical
-[native structured codec](../profiles/compiler/structured-proof-messages.md).
+[native structured codec](../formats/messages.md).
 
 The native installation uses pinned Plonky3 0.5.1; the executable independent
 `Tools.Interactive.ExtensionReference` uses fixed coordinates, convolution and
@@ -147,12 +152,12 @@ ordered scalar/group sequences and linear contractions. A dynamically sized
 vector is distinct from a coordinate point or a polynomial table; conversions
 establish their shape and indexing connections explicitly.
 
-For messages, the [interaction](../language/interaction.md#roles-and-phases)
+For messages, the [interaction](../../../formal/docs/spec/language/interaction.md#roles-and-phases)
 specifies the entire permitted reply domain, including hostile values of the
 declared shape. An honest arithmetic predicate is a separate condition.
 The [codec contract](../realization/codecs.md#codec-domains) specifies the
 accepted external language, decoding and malformed-input behavior. The public
-[dimension syntax](../profiles/source/public-dimensions.md) is one selected profile; a different shape language
+[dimension syntax](../../../formal/docs/spec/profiles/source/public-dimensions.md) is one selected profile; a different shape language
 specifies its own evaluation and admission rules.
 
 ## Domain adequacy
@@ -163,7 +168,7 @@ correctness, source-name equality, successful compilation and finite tests do
 not by themselves establish that connection.
 
 An operation can retain a logical computation for later
-[interpretation](../core/interpretations.md#interpretation-interface). Its
+[interpretation](../../../formal/docs/spec/core/interpretations.md#interpretation-interface). Its
 eventual implementation refines the same declared operation on the same bound
 operands, including failure and retained effects under the applicable execution
 relation. Keeping an operation abstract does not supply a cryptographic theorem.

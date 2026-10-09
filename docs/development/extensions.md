@@ -51,7 +51,7 @@ A pass preserves or invalidates analyses for the actual changed IR. Validate
 local signatures, nested captures/carries, role availability, ordered actions,
 affine successors and closed dependencies. Source locations and copied metadata
 locate evidence; they do not prove it. Follow the
-[preservation contract](../compiler/preservation.md) through serialization and
+[preservation contract](../compiler/verification.md) through serialization and
 Host maps, not only through an intermediate in-memory module.
 
 Physical changes validate proposed implementations/conversions independently,
@@ -85,7 +85,7 @@ request/reply service family; that requires a future service extension.
 Relation import validates domain data. Wider external frontends must identify
 unsupported operations before erasing them, preserve exact field/public layout
 and state the scope of source encoding adequacy. The
-[relation ingress guide](../compiler/relation-ingress.md) covers Assets, native
+[relation ingress guide](../compiler/relations.md) covers Assets, native
 adapters and optional LLZK integration.
 
 Lean models provide reusable laws at their stated semantic subjects. An extension

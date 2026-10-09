@@ -1,7 +1,7 @@
 # Compiler representation
 
 Mathematical values retain their domain meaning through the
-[pipeline](protocol-pipeline.md). Logical types, operation contracts and role
+[pipeline](pipeline.md). Logical types, operation contracts and role
 availability remain separate from installed storage and kernel choices. A new
 representation must preserve its declared values, complete outcomes, residual
 state and observations under the [realization laws](../spec/realization/representations.md).
@@ -18,7 +18,7 @@ Total mathematics can be simplified under its laws. Ordered local calls retain
 partiality, effects and resource transitions. A mathematical identity alone does
 not authorize moving a failure, erasing a draw or reusing a consumed capability.
 [Operation contracts](operation-contracts.md) and
-[local control](local-control.md) define those distinctions.
+[local control](control.md) define those distinctions.
 
 ## Checked physical decisions
 
@@ -48,7 +48,7 @@ planner's `linearContractions` setting. Entry compilation and the composed
 `compileRun`/`compileNativeProof` paths leave it disabled. Constant-time MSM and
 explicit physical implementation selection remain available. The planner checks
 every actual result use against the selected port and algebraic contract. Declaration/work limits apply before
-publication. [Preservation](preservation.md) checks the materialized operations,
+publication. [Preservation](verification.md) checks the materialized operations,
 conversions and operands separately from proposal validation.
 
 ## Execution and evidence
