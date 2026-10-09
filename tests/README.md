@@ -20,6 +20,7 @@ maintains independent research models and checks.
 | C++/Rust/Python style | `just lint` | clang-format, Rust formatting, Clippy and Python lint |
 | Broad native integration | `just test` | Compiler, Rust, root integration, installation, docs, lint and demo |
 | Plonky3 AIR adapter | `just test-plonky3` | Pinned upstream adapter and native differential controls |
+| OpenVM relation adapter | [Standalone workspace commands](../compiler/adapters/openvm/README.md#run-the-checks) | Pinned branch-subsystem export, upstream comparisons and both native Bundle evaluators |
 | Independent Lean research | `just test-lean` | Optional formal build, controls and consumers |
 
 `just setup` prepares locked Python and Cargo dependencies. `just build` builds
