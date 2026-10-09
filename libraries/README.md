@@ -12,6 +12,7 @@ concrete domains, Entries and transcript constructions in
 | [`schnorr`](schnorr/lib.zkc) | `DLog<G>`, `Schnorr<G>` | Discrete-log relation and three-message group protocol |
 | [`sumcheck`](sumcheck/lib.zkc) | `Vector<F>`, `Sumcheck<F, Max>` | Bounded multilinear Sumcheck over a public evaluation table |
 | [`fri`](fri/lib.zkc) | `LowDegree<C, LogSize, TerminalLog, Rounds, Queries>` | Binary FRI over a natural-order two-adic coset |
+| [`air_polynomial`, `air_table`, `air_stark`](air/README.md) | Scope polynomials, Bundle opening equations and `TableArgument` | A nonhiding KoalaBear/Ext8 argument for one present table, composed with FRI |
 | [`expression_sumcheck`](sumcheck/expression.zkc) | `Vector<F>`, `Polynomial<F>`, `Sumcheck<F, Max, A: Ring>` | Sumcheck for a captured ring expression over public multilinear tables |
 
 ### Schnorr
@@ -103,6 +104,21 @@ reference tests cover execution, compilation options, profiles, malformed
 schedules, degree violations, mutated proof messages, dishonest prover folds
 and terminals, and transcript event order. These tests establish no proximity
 or Fiat–Shamir soundness theorem.
+
+### AIR STARK
+
+The [AIR modules](air/README.md) derive the constraints, scopes, opening subjects
+and quotient bounds from a captured Bundle. They interpolate base-field trace
+columns, construct extension-field quotient chunks, check out-of-domain claims,
+and tie the original committed rows to the positions and values returned by FRI.
+Vector combinations use checked native maps; protocol order stays in source.
+
+The [recurrence project](../examples/projects/air-stark/README.md) consumes an
+actual Plonky3 export through independent prover and verifier Hosts. Its small
+parameters exercise a complete selected nonhiding profile. Multi-table
+interactions require additional composition, and no security reduction for this
+exact profile is supplied. See the module guide for parameters, equations,
+sampling exhaustion and cryptographic assumptions.
 
 ## Use a module
 

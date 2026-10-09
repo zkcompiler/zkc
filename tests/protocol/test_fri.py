@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from octic_reference import P, ZERO, ONE, add, mul, coordinates
+from logical_tree import decode_tree
 
 ROOT = Path(__file__).resolve().parents[2]
 LIBRARY = ROOT / 'libraries/fri/lib.zkc'
@@ -137,22 +138,6 @@ def positions(encoded):
     return [int.from_bytes(raw[10 + 8 * i:18 + 8 * i], 'little') for i in range(count)]
 
 
-def decode(encoded):
-    """The bounded logical tree encoding: tag 0 is a string, tag 1 a list."""
-    def node(at):
-        tag, count = encoded[at], int.from_bytes(encoded[at + 1:at + 9], 'little')
-        at += 9
-        if tag == 0:
-            return encoded[at:at + count].decode(), at + count
-        assert tag == 1
-        items = []
-        for _ in range(count):
-            item, at = node(at)
-            items.append(item)
-        return items, at
-    tree, end = node(0)
-    assert end == len(encoded)
-    return tree
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
@@ -301,7 +286,7 @@ def test_fri_transcript_events_follow_source_order(toolchain, journal, directory
     assert policy[7] == ['1', '2', '3']
     events = []
     for kind, origin, *bound in descriptor[3]:
-        template = decode(bytes.fromhex(origin))
+        template = decode_tree(bytes.fromhex(origin))
         assert template[0] == 'zkc.native-origin-template/0' and template[3] == []
         steps, event = template[2], template[4]
         assert steps[0][0] == 'apply' and all(step[0] == 'repeat' for step in steps[1:])

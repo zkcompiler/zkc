@@ -1,0 +1,193 @@
+module air_table;
+use air_polynomial::{Vector, length, empty, append, concat, get, slice, fill,
+  add, scale, accumulate, multiply, inverse, less, not, both, point,
+  transpose, column_at, vanishing, vanishing_values, recombine};
+
+pub struct Shape {
+  pub witness: index,
+  pub configuration: index,
+  pub public_columns: index,
+  pub public_slots: index,
+  pub inputs: index,
+  pub assertions: index,
+  pub chunks: index
+}
+pub fn shape<F: Field, Table: nat, B: Bundle>(height: index) -> Shape {
+  let facts = kernel<F,Table>("relation.table_shape", height; B);
+  return Shape { witness: facts.0, configuration: facts.1,
+    public_columns: facts.2, public_slots: facts.3, inputs: facts.4,
+    assertions: facts.5, chunks: facts.6 };
+}
+fn descriptor<F: Field, Table: nat, B: Bundle>(height: index, slot: index)
+    -> (index, index, index) {
+  return kernel<F,Table>("relation.table_input", height, slot; B);
+}
+fn scope<F: Field, Table: nat, B: Bundle>(height: index, assertion: index)
+    -> (index, index) {
+  return kernel<F,Table>("relation.table_scope", height, assertion; B);
+}
+fn shifted_point<F: Field>(height: index, rotation: index, zeta: F) -> F {
+  return zeta * point<F>(1, height, rotation);
+}
+
+// Substitution assignments are in the captured arena's input order. All
+// matrices here have contiguous columns; metadata supplies authority and
+// column, never an author-supplied interpretation of an input slot.
+pub fn claims<F: Field, Table: nat, B: Bundle>(witness: Vector<F>,
+    configuration: Vector<F>, public_columns: Vector<F>, public_data: Vector<F>,
+    height: index, zeta: F) -> Vector<F> {
+  let facts = shape<F,Table,B>(height);
+  require both(length(witness) == height * facts.witness,
+    both(length(configuration) == height * facts.configuration,
+      both(length(public_columns) == height * facts.public_columns,
+           length(public_data) == facts.public_slots)));
+  let mut assignments = empty<F>();
+  for slot in 0..facts.inputs {
+    let binding = descriptor<F,Table,B>(height, slot);
+    let x = shifted_point(height, binding.2, zeta);
+    let value = if binding.0 == 0 { get(public_data, binding.1) }
+      else { if binding.0 == 1 { column_at(witness, binding.1, height, x, 1) }
+      else { if binding.0 == 2 { column_at(configuration, binding.1, height, x, 1) }
+      else { column_at(public_columns, binding.1, height, x, 1) } } };
+    assignments = append(assignments, value);
+  }
+  return assignments;
+}
+
+pub fn quotient_values<F: Field, Table: nat, B: Bundle>(witness: Vector<F>,
+    configuration: Vector<F>, public_columns: Vector<F>, public_data: Vector<F>,
+    height: index, shift: F, size: index, alpha: F) -> Vector<F> {
+  let facts = shape<F,Table,B>(height);
+  require both(length(witness) == size * facts.witness,
+    both(length(configuration) == size * facts.configuration,
+      both(length(public_columns) == size * facts.public_columns,
+           length(public_data) == facts.public_slots)));
+  let blowup = kernel("index.div", size, height);
+  require size == height * blowup;
+  let mut slots = empty<F>();
+  for slot in 0..facts.inputs {
+    let binding = descriptor<F,Table,B>(height, slot);
+    let evaluations = if binding.0 == 0 { fill(get(public_data, binding.1), size) }
+      else {
+        let column = if binding.0 == 1 { slice(witness, binding.1 * size, size) }
+          else { if binding.0 == 2 { slice(configuration, binding.1 * size, size) }
+          else { slice(public_columns, binding.1 * size, size) } };
+        kernel<F>("vector.rotate", column, binding.2 * blowup)
+      };
+    slots = concat(slots, evaluations);
+  }
+  let assignments = transpose(slots, facts.inputs, size);
+  let rows = kernel<F,Table>("relation.table_points", assignments, size; B);
+  let residuals = transpose(rows, size, facts.assertions);
+  let mut result = fill<F>(0, size);
+  let mut weight: F = 1;
+  for assertion in 0..facts.assertions {
+    let interval = scope<F,Table,B>(height, assertion);
+    if less(interval.0, interval.1) {
+      let denominator = vanishing_values(height, interval.0, interval.1, shift, size);
+      let quotient = multiply(slice(residuals, assertion * size, size),
+        kernel<F>("vector.inverse", denominator));
+      result = accumulate(result, quotient, weight);
+      weight = weight * alpha;
+    }
+  }
+  return result;
+}
+
+pub fn opening_claims<F: Field>(columns: Vector<F>, count: index, shift: F,
+    size: index, zeta: F) -> Vector<F> {
+  require length(columns) == count * size;
+  let mut result = empty<F>();
+  for column in 0..count {
+    result = append(result, column_at(columns, column, size, zeta, shift));
+  }
+  return result;
+}
+
+pub fn identity<F: Field, Table: nat, B: Bundle>(assignments: Vector<F>,
+    quotient_claims: Vector<F>, configuration: Vector<F>, public_columns: Vector<F>,
+    public_data: Vector<F>, height: index, zeta: F, alpha: F) -> bool {
+  let facts = shape<F,Table,B>(height);
+  require both(length(assignments) == facts.inputs, length(quotient_claims) == facts.chunks);
+  require both(length(configuration) == height * facts.configuration,
+    both(length(public_columns) == height * facts.public_columns, length(public_data) == facts.public_slots));
+  let mut known = true;
+  for slot in 0..facts.inputs {
+    let binding = descriptor<F,Table,B>(height, slot);
+    if not(binding.0 == 1) {
+      let x = shifted_point(height, binding.2, zeta);
+      let expected = if binding.0 == 0 { get(public_data, binding.1) }
+        else { if binding.0 == 2 { column_at(configuration, binding.1, height, x, 1) }
+        else { column_at(public_columns, binding.1, height, x, 1) } };
+      known = both(known, get(assignments, slot) == expected);
+    }
+  }
+  let residuals = kernel<F,Table>("relation.table_point", assignments; B);
+  let mut combined: F = 0;
+  let mut weight: F = 1;
+  for assertion in 0..facts.assertions {
+    let interval = scope<F,Table,B>(height, assertion);
+    if less(interval.0, interval.1) {
+      combined = combined + weight * get(residuals, assertion) *
+        inverse(vanishing(height, interval.0, interval.1, zeta));
+      weight = weight * alpha;
+    }
+  }
+  return both(known, combined == recombine(quotient_claims, height, zeta));
+}
+
+// Each witness read is a polynomial opening at zeta*g^offset. The same
+// commitment column is used for every offset. Known configuration/public
+// columns were checked directly and need no probabilistic opening reduction.
+pub fn deep_word<F: Field, Table: nat, B: Bundle>(witness: Vector<F>,
+    quotients: Vector<F>, assignments: Vector<F>, quotient_claims: Vector<F>,
+    height: index, shift: F, size: index, zeta: F, rho: F, adjustment: F) -> Vector<F> {
+  let facts = shape<F,Table,B>(height);
+  require both(length(assignments) == facts.inputs, length(quotient_claims) == facts.chunks);
+  require both(length(witness) == facts.witness * size, length(quotients) == facts.chunks * size);
+  let mut result = fill<F>(0, size);
+  let mut weight: F = 1;
+  for slot in 0..facts.inputs {
+    let binding = descriptor<F,Table,B>(height, slot);
+    if binding.0 == 1 {
+      let column = slice(witness, binding.1 * size, size);
+      let x = shifted_point(height, binding.2, zeta);
+      let reduced = kernel<F>("poly.opening_quotient", column, shift, x, get(assignments, slot));
+      result = accumulate(result, reduced, weight);
+      weight = weight * rho;
+    }
+  }
+  for column in 0..facts.chunks {
+    let reduced = kernel<F>("poly.opening_quotient", slice(quotients, column * size, size),
+      shift, zeta, get(quotient_claims, column));
+    result = accumulate(result, reduced, weight);
+    weight = weight * rho;
+  }
+  let xs = kernel<F>("poly.domain_points", shift, size);
+  return multiply(result, add(fill<F>(1, size), scale(xs, adjustment)));
+}
+
+pub fn deep_value<F: Field, Table: nat, B: Bundle>(witness_row: Vector<F>,
+    quotient_row: Vector<F>, assignments: Vector<F>, quotient_claims: Vector<F>,
+    height: index, x: F, zeta: F, rho: F, adjustment: F) -> F {
+  let facts = shape<F,Table,B>(height);
+  require both(length(witness_row) == facts.witness, length(quotient_row) == facts.chunks);
+  require both(length(assignments) == facts.inputs, length(quotient_claims) == facts.chunks);
+  let mut result: F = 0;
+  let mut weight: F = 1;
+  for slot in 0..facts.inputs {
+    let binding = descriptor<F,Table,B>(height, slot);
+    if binding.0 == 1 {
+      let at = shifted_point(height, binding.2, zeta);
+      let reduced = (get(witness_row, binding.1) - get(assignments, slot)) * inverse(x - at);
+      result = result + weight * reduced;
+      weight = weight * rho;
+    }
+  }
+  for column in 0..facts.chunks {
+    let reduced = (get(quotient_row, column) - get(quotient_claims, column)) * inverse(x - zeta);
+    result = result + weight * reduced;
+    weight = weight * rho;
+  }
+  return result * (1 + adjustment * x);
+}
