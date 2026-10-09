@@ -1,6 +1,7 @@
 import Tests.RelationEncoding
 import Tests.RelationSparse
 import Tests.RelationAIR
+import Tests.RelationBundle
 import Tests.AIRPolynomial
 import Zkc.Relation.AIR.Embedding
 import Tests.MultisetFingerprint
@@ -19,4 +20,5 @@ run_cmd Tools.DeclarationAudit.check [
   `Zkc.Relation, `Zkc.Algebra.MultisetFingerprint,
   `Tests.RelationEncoding, `Tests.RelationSparse,
   `Tests.RelationAIR, `Tests.AIRPolynomial, `Tests.RelationReference,
-  `Tests.MultisetFingerprint, `Tests.AIRProductConnection] "RELATION-AUDIT-PASS"
+  `Tests.MultisetFingerprint, `Tests.AIRProductConnection,
+  `Tests.RelationBundle] "RELATION-AUDIT-PASS"

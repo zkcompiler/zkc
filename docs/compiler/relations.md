@@ -34,6 +34,21 @@ pinned Plonky3 release into shared ring-expression views with a feature inventor
 and refuses features it does not represent. Successful import cannot detect a
 constraint already lost by an external frontend.
 
+## Relation bundles
+
+`zkc/Relation/Bundle.h` in `Zkc::Relation` admits the
+[relation bundle](../spec/domains/relation-bundles.md) carriers. `readBundleText`
+forms a `Bundle`; `readBundleConfiguration`, `readBundleInstance` and
+`readBundleWitness` decode the supplied data against it. `Bundle::admit` checks
+authority, presence, heights, every read window and the work bounds before any
+value is parsed; `Bundle::evaluate` adds the reference interpretation and
+reports residuals, balance sums and multiplicity range failures. `embedAIR`
+and `embedAIRData` map a finite AIR and trace into a one-table bundle.
+`StagedProgram` forms and evaluates a challenge-indexed staged program for
+supplied challenges and claims. The Rust `zkc_runtime::relation` module admits
+the same carriers independently and evaluates them through a supplied field
+algebra.
+
 ## Declaration and binding
 
 `relation.declare` is a non-callable identity with one function type and an

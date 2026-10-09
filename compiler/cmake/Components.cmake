@@ -83,6 +83,9 @@ add_zkc_component(Relation
   lib/Relation/R1CSBinary.cpp
   lib/Relation/AIR.cpp
   lib/Relation/AIRPolynomial.cpp
+  lib/Relation/Bundle.cpp
+  lib/Relation/BundleData.cpp
+  lib/Relation/BundleStaged.cpp
   lib/Relation/Matrices.cpp
 )
 add_zkc_component(Program

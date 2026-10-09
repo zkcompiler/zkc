@@ -1,6 +1,7 @@
 //! Bounded execution of native mathematical programs and owned runtime resources.
 pub mod attempt;
 pub mod iteration;
+pub mod relation;
 pub mod ring;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

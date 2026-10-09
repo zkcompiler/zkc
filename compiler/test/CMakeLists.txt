@@ -100,6 +100,7 @@ add_zkc_test(relation Relation relation-model)
 add_zkc_test(air Relation air-model)
 add_zkc_test(air_ring_expression Relation air-ring-expression)
 add_zkc_test(air_polynomial Relation air-polynomial-model)
+add_zkc_test(relation_bundle Relation relation-bundle)
 add_zkc_test(operation_contracts Contracts operation-contracts)
 target_compile_definitions(zkc-operation_contracts-test PRIVATE
   ZKC_HISTORY_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/contracts/history.txt")

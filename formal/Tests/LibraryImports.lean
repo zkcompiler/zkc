@@ -252,6 +252,8 @@ import Zkc.Relation.AIR.Polynomial
 import Zkc.Relation.AIR.ProductConnection
 import Zkc.Relation.AIR.RingExpression
 import Zkc.Relation.AIR
+import Zkc.Relation.Bundle.AIR
+import Zkc.Relation.Bundle
 import Zkc.Relation.Encoding
 import Zkc.Relation.Padding
 import Zkc.Relation.QuadraticArithmetic
@@ -435,6 +437,7 @@ import Tests.ReferenceTranscript
 import Tests.Regions
 import Tests.RelationAIR
 import Tests.RelationAudit
+import Tests.RelationBundle
 import Tests.RelationComposition
 import Tests.RelationEncoding
 import Tests.RelationReference
