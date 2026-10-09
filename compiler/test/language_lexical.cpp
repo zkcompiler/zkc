@@ -149,9 +149,9 @@ void lexicalBindings() {
         "protocol R roles(P)(x:Fr@P)->(){local P let y=make(x);return();}",
         "protocol R roles(P)()->(){let ()=apply R();return();}"})
     refuses(source, "source.syntax");
-  refuses("protocol R roles(P)()using(coins:Random<Fr>@P)->(){using "
+  refuses("protocol R roles(P)(coins:Random<Fr>@P)->(){using "
           "alias=coins;return();}",
-          "source.name");
+          "source.syntax");
   check("fn f(x:Fr,go:bool)->Fr{let(a,b)=({let y=x+x;y},if "
         "go{x}else{x+x});return a+b;}");
   check("fn f(x:Ticket)->(){let mut state=x;let "
@@ -255,7 +255,7 @@ void control() {
 void protocols() {
   auto count = original(R"(
     math fn count(n:index,x:Fr)->index{return n;}
-    protocol Run roles(P)(n:index@P)using(coins:Random<Fr>@P)->(){
+    protocol Run roles(P)(n:index@P, coins:Random<Fr>@P)->(){
       for _ in 0..count(n,coins.draw()) roles(P) max 4{}return();
     }entry Demo=Run;
   )");
@@ -337,7 +337,7 @@ void protocols() {
     entry Demo=Run;
   )");
   auto queries = original(R"(
-    protocol Run roles(P,V)(n:index@V)using(coins:Random<Fr>@V)->(r:Fr@V){
+    protocol Run roles(P,V)(n:index@V, coins:Random<Fr>@V)->(r:Fr@V){
       let alias=coins;let mut total:Fr@V=0;
       for _ in 0..n roles(V) max 4{total=total+alias.draw()+coins.draw();}
       return total;
@@ -347,7 +347,7 @@ void protocols() {
           "two draws must remain two ordered queries");
   must(compileEntry(queries));
   auto returns = original(R"(
-    protocol Run roles(P)()using(coins:Random<Fr>@P)->(first:Fr@P,second:Fr@P){
+    protocol Run roles(P)(coins:Random<Fr>@P)->(first:Fr@P,second:Fr@P){
       return(second=coins.draw(),first=coins.draw());
     }entry Demo=Run;
   )");
@@ -396,7 +396,7 @@ void protocols() {
         {"protocol R roles(P)(x:State@P)->(r:Fr@P){let State{value}=x;return "
          "value;}",
          "source.mode"},
-        {"protocol R roles(P)()using(coins:Random<Fr>@P)->(){let mut "
+        {"protocol R roles(P)(coins:Random<Fr>@P)->(){let mut "
          "alias=coins;return ();}",
          "source.service"},
         {"protocol R roles(P)(x:State@P,go:bool@P)->(r:State@P)completes{let "

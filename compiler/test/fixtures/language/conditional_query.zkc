@@ -3,7 +3,7 @@ domain Fr = field("bls12-381.fr");
 fn count(go: bool) -> index {
   return if go { 1 } else { 0 };
 }
-protocol Run roles(V)(go: bool @V) using(coins: Random<Fr> @V) -> (v: Fr @V) {
+protocol Run roles(V)(go: bool @V, coins: Random<Fr> @V) -> (v: Fr @V) {
   let n @V = count(go);
   let mut result: Fr @V = 0;
   for _ in 0..n roles(V) max 1 {

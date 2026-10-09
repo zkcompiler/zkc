@@ -103,16 +103,17 @@ bool isUnsupported(StringRef name) {
 }
 bool isReserved(StringRef name) {
   static const std::set<StringRef> words = {
-      "module",      "use",    "pub",      "domain",    "field",     "group",
-      "math",        "fn",     "protocol", "roles",     "entry",     "let",
-      "return",      "send",   "bool",     "true",      "false",     "index",
-      "type",        "struct", "enum",     "interface", "component", "where",
-      "nat",         "mut",    "if",       "else",      "using",     "max",
-      "match",       "for",    "in",       "drop",      "consume",   "require",
-      "stop",        "opaque", "Type",     "Field",     "Group",     "Copy",
-      "Drop",        "Share",  "Wire",     "completes", "finish_if", "builtin",
-      "kernel",      "pow2",   "formal",   "intrinsic", "relation",  "spec",
-      "construction"};
+      "module",    "use",       "pub",       "domain",      "field",
+      "group",     "math",      "fn",        "protocol",    "roles",
+      "entry",     "let",       "return",    "send",        "bool",
+      "true",      "false",     "index",     "type",        "struct",
+      "enum",      "interface", "component", "where",       "nat",
+      "mut",       "if",        "else",      "max",         "match",
+      "for",       "in",        "drop",      "consume",     "require",
+      "stop",      "opaque",    "Type",      "Field",       "Group",
+      "Copy",      "Drop",      "Share",     "Wire",        "completes",
+      "finish_if", "builtin",   "kernel",    "pow2",        "formal",
+      "intrinsic", "relation",  "spec",      "construction"};
   return words.count(name) || isUnsupported(name);
 }
 bool isIdentifier(StringRef name) {

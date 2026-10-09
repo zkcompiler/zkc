@@ -144,22 +144,21 @@ int main(int argc, char **argv) {
             R"(math fn both(a:bool,b:bool)->bool{return intrinsic("bool.and",a,b);})";
         for (bool repeated : {false, true}) {
           auto text = definitions + R"(
-        protocol Wrapper roles(P,V)(base:G@(P,V),point:G@(P,V),scalar:G::Scalar@P,n:index@(P,V))
-        using(nonces:Random<G::Scalar>@P,challenges:Random<G::Scalar>@V)->(accepted:bool@V){
+        protocol Wrapper roles(P,V)(base:G@(P,V),point:G@(P,V),scalar:G::Scalar@P,n:index@(P,V), nonces:Random<G::Scalar>@P,challenges:Random<G::Scalar>@V)->(accepted:bool@V){
       )";
           if (repeated)
             text += R"(
           let mut valid@V=true;
           for _ in 0..n roles(P,V) max 3 {
-            let ok=Schnorr<G>(base,point,scalar) using(nonces,challenges);
+            let ok=Schnorr<G>(base,point,scalar, nonces,challenges);
             valid=both(valid,ok);
           }
           return(accepted=valid);
         )";
           else
             text += R"(
-          let first=Schnorr<G>(base,point,scalar) using(nonces,challenges);
-          let second=Schnorr<G>(base,point,scalar) using(nonces,challenges);
+          let first=Schnorr<G>(base,point,scalar, nonces,challenges);
+          let second=Schnorr<G>(base,point,scalar, nonces,challenges);
           return(accepted=both(first,second));
         )";
           text += R"(}

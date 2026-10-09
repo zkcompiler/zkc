@@ -74,11 +74,19 @@ bool BodyChecker::infer(const Type &pattern, const Type &actual,
   }
   return true;
 }
-std::optional<std::vector<Type>>
-BodyChecker::actuals(const Declaration &callee, const Expression &expr,
-                     ArrayRef<std::optional<Type>> inputs,
-                     std::optional<Type> expected,
-                     std::optional<Type> component) {
+std::optional<std::vector<Type>> BodyChecker::actuals(
+    const Declaration &callee, const Expression &expr,
+    ArrayRef<std::optional<Type>> inputs, std::optional<Type> expected,
+    std::optional<Type> component, ArrayRef<Type> serviceFields) {
+  // A definition's contract is independent of this call's arguments or expected
+  // type. Complete it before consulting its result or requirements.
+  if (!callee.abstract) {
+    if (!checker.body(callee.id, callDepth + 1))
+      return {};
+    checker.bodyHeights[decl.id.index] =
+        std::max(checker.bodyHeights[decl.id.index],
+                 checker.bodyHeights[callee.id.index] + 1);
+  }
   Substitution bindings;
   if (component && callee.parent) {
     auto &interface = checker.output.declarations[callee.parent->index];
@@ -95,15 +103,25 @@ BodyChecker::actuals(const Declaration &callee, const Expression &expr,
       return {};
     }
     for (unsigned i = 0; i < expr.arguments.size(); ++i) {
+      if (expr.arguments[i].kind == SyntaxType::Kind::Hole)
+        continue;
       auto t = checker.type(decl, expr.arguments[i]);
       if (!t)
         return {};
       bindings.emplace(callee.parameters[inherited + i].atom, *t);
     }
-  } else {
+  }
+  if (expr.arguments.empty() ||
+      llvm::any_of(expr.arguments, [](const auto &argument) {
+        return argument.kind == SyntaxType::Kind::Hole;
+      })) {
     for (unsigned i = 0; i < inputs.size() && i < callee.inputs.size(); ++i)
       if (inputs[i] &&
           !infer(callee.inputs[i].type, *inputs[i], bindings, expr.span))
+        return {};
+    for (unsigned i = 0; i < serviceFields.size(); ++i)
+      if (!infer(callee.services[i].field, serviceFields[i], bindings,
+                 expr.span))
         return {};
     if (expected && callee.outputs.size() == 1 &&
         !infer(callee.outputs.front().type, *expected, bindings, expr.span))
@@ -129,10 +147,8 @@ BodyChecker::actuals(const Declaration &callee, const Expression &expr,
 std::optional<ValueId> BodyChecker::call(const Expression &expr,
                                          std::optional<Type> expected,
                                          unsigned depth) {
-  if (expr.roles || !expr.services.empty()) {
-    fail("source.call",
-         "role mappings and managed arguments belong to protocol calls",
-         expr.span);
+  if (expr.roles) {
+    fail("source.call", "role mappings belong to protocol calls", expr.span);
     return {};
   }
   if (expr.text == "index") {
@@ -323,11 +339,6 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     return {};
   std::vector<unsigned> dependencies;
   if (!callee.abstract) {
-    if (!checker.body(callee.id, callDepth + 1))
-      return {};
-    checker.bodyHeights[decl.id.index] =
-        std::max(checker.bodyHeights[decl.id.index],
-                 checker.bodyHeights[callee.id.index] + 1);
     if (callee.kind == Declaration::Kind::Math)
       dependencies =
           callee.body->values[callee.body->results.front().index].components;

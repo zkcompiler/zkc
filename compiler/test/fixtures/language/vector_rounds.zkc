@@ -14,8 +14,7 @@ fn fold<F: Field>(values: Vector<F>, challenge: F) -> Vector<F> {
 fn sum<F: Field>(values: Vector<F>) -> F {
   return kernel<F>("vector.sum", values);
 }
-protocol Run roles(P,V)(values: Vector<Fr> @P, claim: Fr @V, n: index @(P,V))
-    using(coins: Random<Fr> @V) -> (prover: Fr @P, verifier: Fr @V) {
+protocol Run roles(P,V)(values: Vector<Fr> @P, claim: Fr @V, n: index @(P,V), coins: Random<Fr> @V) -> (prover: Fr @P, verifier: Fr @V) {
   let mut table @P = values;
   let mut current = claim;
   for _ in 0..n roles(P, V) max 2 {

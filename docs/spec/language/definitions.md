@@ -51,8 +51,10 @@ resource-limit diagnostics.
 
 ## Definition checking and Entry closure
 
-Analysis checks every definition and Entry reference against declared static
-bounds. The resulting `CheckedProject` is immutable. Selecting an Entry creates
+Analysis completes each callable's contract from its declaration and body,
+then checks applications against that contract. Callers never determine a
+definition's inferred result or preconditions. The resulting `CheckedProject`
+is immutable. Selecting an Entry creates
 an independent `ClosedEntry` containing the reachable specialized bodies and
 retained type declarations. Only those bodies and selected relation declarations enter its original MLIR.
 Specification clauses make their relations and mathematical dependencies explicit
@@ -131,11 +133,11 @@ exponential arithmetic. Static argument inference does not invert `pow2`.
 `where 1 <= N` requires a natural bound. `where Copy(T), Drop(T)` adds permission
 requirements; `T: Type + Copy + Drop` expresses the same parameter permissions.
 `where Share(G::Scalar), Wire(G::Scalar)` constrains an associated projection.
-Calls must prove these bounds from the caller's explicit assumptions or the selected
+Calls must prove permission bounds from the caller's explicit assumptions or the selected
 concrete type. Closed permission requirements are evaluated immediately; a true
 requirement adds no generic assumption. Group permissions do not imply scalar permissions.
 Requirements follow a callable's result type or a nominal declaration's parameter
-list; an alias places them before `=`. Symbolic inequalities must match an explicit
+list; an alias places them before `=`. Symbolic inequalities must match a
 normalized assumption, or be reflexive. A stronger closed lower bound with the
 same right-hand side suffices: `2 <= N` establishes `1 <= N`. Closed inequalities
 are evaluated. There
@@ -147,13 +149,31 @@ The catalog defines each predicate's argument count and sorts; arguments may be
 associated projections. Names are exact qualified exports, including
 `zkc::algebra::Field` and `zkc::curve::Group`. There are no ambient short names or
 user-declared facts. Field/Group sorts imply their corresponding facts. Other
-symbolic requirements must follow from explicit caller bounds and installed
+symbolic requirements must follow from caller bounds and installed
 unary implications; arguments match by normalized source identity. A closed
 requirement is checked against installed facts, even in an unused declaration,
 and never established by an assumption. These are operation availability
 requirements, not cryptographic guarantees. Before source checking, the installed
 catalog must sustain inherent sort facts and every installed unary implication.
 This preserves generic assumptions when type aliases normalize away their bounds.
+
+Defined `fn`, `math fn` and `protocol` declarations without a `where` clause infer
+missing open catalog and natural preconditions from signature formation,
+specification selectors and body operations, including calls. Inference records
+requirements; it does not prove them or invent catalog facts. Every concrete
+application still checks them. A written `where` clause is complete: checking
+cannot silently add a condition. `where ()` states that the sort and parameter
+bounds suffice. Abstract members, relations, types, interfaces and components
+retain explicit preconditions. Component implementations may infer member
+conditions only when their interface and component contract establish them.
+
+`Copy`, `Drop`, `Share` and `Wire` remain explicit resource permissions. Omitting
+them from `T: Type` promises none; `Field` and `Group` retain their inherent Copy
+and Drop. An inline bound such as `T: Type + Copy` supplies that permission while
+leaving catalog and natural inference enabled when `where` is absent. Inference
+does not change move behavior, select participants or insert communication.
+The checked declaration API exposes completed result types and requirements;
+each inferred bound records its origin span and `inferred` flag.
 
 Bounds apply to generic type and component applications as well as calls. Parent
 bounds are inherited. Associated type declarations cannot introduce their own
@@ -168,7 +188,8 @@ work budget and the finite requirement checker's term and assumption limits.
 
 Fixed arrays have bounded closed lengths after selection. `[a, b]` constructs an
 array; `a[0]` uses a numeric static index. A symbolic length needs a corresponding
-explicit bound for that index. Dynamic array indexing is outside this profile.
+bound for that index, inferred or written under the contract rules above.
+Dynamic array indexing is outside this profile.
 Runtime loops and `index<N>()` in local code can use a closed natural as an index
 value. Indices are not field elements.
 
@@ -220,7 +241,7 @@ tuple, and no results form unit. Constant parameters use the contract's own
 validation, including field-literal bounds. A generic field admits only `0` and
 `1` as literals; concrete field parameters are checked against that field.
 
-Generic checking uses declared capability bounds, inherent Field/Group facts and
+Generic checking uses completed capability bounds, inherent Field/Group facts and
 installed implications. For example, `where zkc::algebra::TwoAdicField(F)` permits
 a generic wrapper for `poly.domain_root`; `where zkc::pcs::MultilinearOpening(C)`
 permits generic PCS wrappers rooted at `C` and its associated fields. Every
@@ -387,9 +408,20 @@ math fn applyIncrement<C: Increment<Fr>>(x: Fr) -> Fr {
 
 `math fn` is total, unordered mathematics over `Copy + Drop` values. An ordinary
 `fn` is ordered local computation. Both have typed inputs and one logical result,
-which may be a tuple or unit. Calls infer direct generic parameters from argument
-types where unambiguous; explicit arguments must check. There is no global instance
-search, runtime component dispatch or inference through noninjective associations.
+which may be a tuple or unit. A defined helper may omit `-> T`: its body must
+determine the result without caller context. Numeric literals and empty arrays
+need a type context; a function with no continuing result needs an explicit
+result type. Abstract members require result types. Protocols retain named,
+typed output ports with explicit participant sets.
+
+Helper and protocol calls infer bare static parameters from data argument types,
+managed-service fields and expected helper results. Omit the entire static list,
+or write one slot per parameter and use `_` for selected holes, as in
+`choose<_, Impl>(value)`. Explicit slots constrain inference. Every hole must
+have one consistent solution; there are no default types, dimensions or component
+implementations. Holes are whole call slots, not nested type syntax or kernel,
+intrinsic, constructor or Entry arguments. There is no global instance search,
+runtime component dispatch or inference through noninjective associations.
 
 An interface declares associated types/domains and math/local member signatures.
 A component selects one interface and defines every member exactly once. Associated

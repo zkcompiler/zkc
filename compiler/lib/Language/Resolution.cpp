@@ -111,15 +111,6 @@ private:
     for (auto child : expr.children)
       if (!expression(child, depth + 1))
         return false;
-    for (auto &name : expr.services) {
-      auto binding = lookup(name, expr.span);
-      if (!binding)
-        return false;
-      if (!syntax.bindings[binding->index].service)
-        return fail("source.service", "expected a managed service argument",
-                    expr.span);
-      expr.serviceBindings.push_back(*binding);
-    }
     for (unsigned i = 0; i < expr.regions.size(); ++i) {
       auto mark = undo.size();
       ++scope;

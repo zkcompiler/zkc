@@ -150,8 +150,8 @@ int main(int argc, char **argv) {
     math fn bad(x:builtin("field_array",F,0))->Poly<1>{return intrinsic<F,0>("poly.from_coefficients",x);}
   )",
           "source.bound");
-  refuses("generic index needs bound", R"(
-    math fn bad<N:nat,I:nat>(x:builtin("field_array",F,N))->F{return intrinsic<F,N,I>("array.at",x);}
+  refuses("closed generic contract needs bound", R"(
+    math fn bad<N:nat,I:nat>(x:builtin("field_array",F,N))->F where () {return intrinsic<F,N,I>("array.at",x);}
   )",
           "source.bound");
   refuses("wrong table shape", R"(

@@ -266,7 +266,9 @@ private:
     if (!bounded(depth))
       return false;
     out.span = current().span;
-    if (take("pow2")) {
+    if (take("_")) {
+      out.kind = SyntaxType::Kind::Hole;
+    } else if (take("pow2")) {
       out.kind = SyntaxType::Kind::PowerOfTwo;
       SyntaxType exponent;
       if (!expect("(") || !type(exponent, depth + 1) || !expect(")"))
@@ -381,6 +383,9 @@ private:
   bool requirements(SyntaxDeclaration &decl) {
     if (!take("where"))
       return true;
+    decl.explicitRequirements = true;
+    if (take("("))
+      return expect(")");
     do {
       SyntaxRequirement req;
       req.span = current().span;
@@ -977,18 +982,24 @@ private:
         return {};
       if (!ports(d.inputs, protocol))
         return {};
-      if (take("using")) {
-        if (!protocol || !ports(d.services, true)) {
-          fail("source.service", "managed ports require protocol mode");
-          return {};
+      if (protocol) {
+        auto ports = std::move(d.inputs);
+        d.inputs.clear();
+        for (auto &port : ports) {
+          bool service = port.type.kind == SyntaxType::Kind::Name &&
+                         port.type.name == "Random";
+          auto &selected = service ? d.services : d.inputs;
+          d.inputOrder.push_back({service
+                                      ? Declaration::InputSlot::Kind::Service
+                                      : Declaration::InputSlot::Kind::Data,
+                                  unsigned(selected.size())});
+          selected.push_back(std::move(port));
         }
       }
-      if (!expect("->"))
-        return {};
       if (protocol) {
-        if (!ports(d.outputs, true))
+        if (!expect("->") || !ports(d.outputs, true))
           return {};
-      } else {
+      } else if (take("->")) {
         SyntaxPort p;
         p.name = "result";
         p.span = current().span;
@@ -996,6 +1007,9 @@ private:
           return {};
         p.span.end = previousEnd;
         d.outputs.push_back(std::move(p));
+      } else if (abstract) {
+        fail("source.inference", "abstract functions require a result type");
+        return {};
       }
       if (take("completes")) {
         if (!protocol) {
@@ -1258,8 +1272,6 @@ private:
           } while (take(",") && !at(")"));
         if (!expect(")"))
           return {};
-        if (take("using") && !names(value.services))
-          return {};
       } else if (records && take("{")) {
         value.kind = Expression::Kind::Record;
         if (!at("}"))
@@ -1371,7 +1383,9 @@ private:
       return {};
     Pattern result;
     result.span = current().span;
-    if (take("(")) {
+    if (take("_")) {
+      result.kind = Pattern::Kind::Ignore;
+    } else if (take("(")) {
       result.kind = Pattern::Kind::Tuple;
       bool comma = false;
       if (!at(")"))
@@ -1424,8 +1438,7 @@ private:
                  term.name.find("::") != std::string::npos) {
         fail("source.binding", "type path requires a record pattern");
         return {};
-      } else if (term.name == "_")
-        result.kind = Pattern::Kind::Ignore;
+      }
     }
     result.span.end = previousEnd;
     return result;

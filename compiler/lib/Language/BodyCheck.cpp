@@ -404,12 +404,16 @@ std::optional<ValueId> BodyChecker::block(const Expression &expr,
          expr.span);
   return value;
 }
-bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
+bool BodyChecker::run(const SyntaxBody &source, std::vector<Port> &outputs,
                       bool isProtocol) {
+  const bool inferResult = !isProtocol && outputs.empty();
   if (!statements(source))
     return false;
   if (body.stopped)
-    return finish(source.span);
+    return inferResult
+               ? fail("source.inference",
+                      "stopped function needs a result type", source.span)
+               : finish(source.span);
   if (!source.returned)
     return fail("source.return",
                 "continuing declaration requires an explicit return",
@@ -417,9 +421,11 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
   std::map<std::string, unsigned> names;
   for (unsigned i = 0; i < outputs.size(); ++i)
     names.emplace(outputs[i].name, i);
+  if (inferResult)
+    names.emplace("result", 0);
   std::set<unsigned> seen;
   StatementPlacement inference(*this);
-  body.results.resize(outputs.size());
+  body.results.resize(inferResult ? 1 : outputs.size());
   for (const auto &[name, id] : source.results) {
     auto found = names.find(name);
     if (isProtocol && name.empty() && outputs.size() == 1)
@@ -430,13 +436,21 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
                   source.span);
     if (!seen.insert(found->second).second)
       return fail("source.return", "duplicate return port", source.span);
-    const auto &port = outputs[found->second];
-    auto value = expression(id, port.type);
+    auto value = expression(
+        id, inferResult ? std::nullopt
+                        : std::optional<Type>(outputs[found->second].type));
     if (!value) {
       if (body.stopped)
         body.results.clear();
+      if (body.stopped && inferResult && !checker.types.diagnostic)
+        return fail("source.inference", "stopped function needs a result type",
+                    source.span);
       return body.stopped && !checker.types.diagnostic && finish(source.span);
     }
+    if (inferResult)
+      outputs.push_back(
+          {"result", body.values[value->index].type, {}, source.span});
+    const auto &port = outputs[found->second];
     if (isProtocol && !demand(*value, port.roles, syntax.expressions[id].span))
       return false;
     if (!use(*value, syntax.expressions[id].span))
@@ -473,6 +487,8 @@ bool Checker::body(DeclarationId id, unsigned depth) {
                       decl.span);
   bodyState[id.index] = 1;
   bodyHeights[id.index] = 1;
+  if (decl.kind == Declaration::Kind::Protocol && !specifications(decl))
+    return false;
   Body result;
   result.mode = (decl.kind == Declaration::Kind::Math ||
                  decl.kind == Declaration::Kind::Relation)
@@ -506,6 +522,9 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     if (!check.addService(sources[id.index]->serviceBindings[i],
                           decl.services[i]))
       return false;
+  if (!check.run(sources[id.index]->bodies.front(), decl.outputs,
+                 result.mode == Body::Mode::Protocol))
+    return false;
   for (auto &p : decl.outputs) {
     auto caps = types.permissions(p.type, p.span, &decl);
     if (!caps)
@@ -518,9 +537,6 @@ bool Checker::body(DeclarationId id, unsigned depth) {
       return types.fail("source.permission",
                         "shared output requires Copy, Drop and Share", p.span);
   }
-  if (!check.run(sources[id.index]->bodies.front(), decl.outputs,
-                 result.mode == Body::Mode::Protocol))
-    return false;
   if (decl.effectAllowance &&
       ((result.mayStop && !decl.effectAllowance->mayStop) ||
        (result.opaque && !decl.effectAllowance->opaque)))
@@ -528,6 +544,7 @@ bool Checker::body(DeclarationId id, unsigned depth) {
                       "body exceeds its written effect allowance", decl.span);
   decl.body = std::make_shared<Body>(std::move(result));
   bodyState[id.index] = 2;
+  inferredContracts.erase(&decl);
   return true;
 }
 } // namespace zkc::language::detail

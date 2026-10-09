@@ -6,8 +6,8 @@ pub relation DLog<G: Group>(parameter base: G, statement point: G,
 }
 
 pub protocol Schnorr<G: Group+Share+Wire> roles(P, V)
-    (base: G @(P,V), point: G @(P,V), scalar: G::Scalar @P)
-    using(nonces: Random<G::Scalar> @P, challenges: Random<G::Scalar> @V)
+    (base: G @(P,V), point: G @(P,V), scalar: G::Scalar @P,
+     nonces: Random<G::Scalar> @P, challenges: Random<G::Scalar> @V)
     -> (accepted: bool @V)
     where Share(G::Scalar), Wire(G::Scalar)
     spec {

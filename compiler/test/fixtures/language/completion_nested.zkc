@@ -1,8 +1,7 @@
 module sample;
 domain Fr = field("bls12-381.fr");
 fn count() -> index { return 2; }
-protocol Run roles(P,V)(go: bool @V, x: Fr @(P,V))
-    using(coins: Random<Fr> @V) -> (result: Fr @(P,V)) completes {
+protocol Run roles(P,V)(go: bool @V, x: Fr @(P,V), coins: Random<Fr> @V) -> (result: Fr @(P,V)) completes {
   let n @V = count();
   let mut state @V = x;
   for _ in 0..n roles(V) max 2 {

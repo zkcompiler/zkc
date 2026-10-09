@@ -72,9 +72,6 @@ BodyChecker::regionInputs(const Expression &control) {
         }
       }
     }
-    for (auto id : expr.serviceBindings)
-      if (services.count(id))
-        result.services.insert(id);
     for (auto child : expr.children) {
       if (!visit(child, depth + 1, flow))
         return false;

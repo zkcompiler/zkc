@@ -13,6 +13,7 @@ class Layouts;
 namespace zkc::language::detail {
 struct SyntaxType {
   enum class Kind {
+    Hole,
     Name,
     Builtin,
     Formal,
@@ -101,12 +102,10 @@ struct Expression {
   Span span;
   std::vector<SyntaxType> arguments;
   std::vector<std::string> labels;
-  std::vector<std::string> services;
   std::optional<std::vector<std::string>> roles;
   std::vector<uint32_t> regions;
   std::vector<std::vector<Pattern>> payloads;
   std::optional<BindingId> binding;
-  std::vector<BindingId> serviceBindings;
   Pattern index;
 };
 struct Statement {
@@ -194,6 +193,7 @@ struct SyntaxDeclaration {
   Span span;
   std::vector<std::string> roles;
   std::vector<SyntaxPort> inputs, outputs, services;
+  std::vector<Declaration::InputSlot> inputOrder;
   std::vector<Expression> expressions;
   // Root body is kept in the first slot; nested bodies use stable indices.
   std::vector<SyntaxBody> bodies;
@@ -203,6 +203,7 @@ struct SyntaxDeclaration {
   bool resolved = false;
   std::vector<SyntaxParameter> parameters;
   std::vector<SyntaxRequirement> requirements;
+  bool explicitRequirements = false;
   std::optional<Permissions> permissions;
   std::optional<Effects> effects;
   std::optional<SyntaxType> definition;

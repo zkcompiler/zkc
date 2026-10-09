@@ -1,8 +1,7 @@
 module sample;
 domain Fr=field("bls12-381.fr");
 struct Result{pub ready:bool,pub value:Fr}
-protocol Round roles(P,V)(done:bool@P)
-  using(coins:Random<Fr>@P,challenges:Random<Fr>@V)
+protocol Round roles(P,V)(done:bool@P, coins:Random<Fr>@P,challenges:Random<Fr>@V)
   ->(padding:Fr@P,result:Result@P,accepted:bool@V) {
   let nonce=coins.draw();
   let message=send P->V(nonce);
@@ -14,7 +13,7 @@ protocol Round roles(P,V)(done:bool@P)
   let result=Result{ready:done,value:response};
   return(padding=nonce,result=result,accepted=ok);
 }
-protocol Authored roles(P,V)(done:bool@P) using(coins:Random<Fr>@P)
+protocol Authored roles(P,V)(done:bool@P, coins:Random<Fr>@P)
   ->(padding:Fr@P,result:Result@P,accepted:bool@V) {
   let nonce=coins.draw();
   let message=send P->V(nonce);

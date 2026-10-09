@@ -22,7 +22,7 @@ BodyChecker::application(const Expression &expr) {
          "a completing protocol can only be selected as an Entry", expr.span);
     return {};
   }
-  if (expr.children.size() != callee.inputs.size()) {
+  if (expr.children.size() != callee.inputOrder.size()) {
     fail("source.call", "protocol application input count differs", expr.span);
     return {};
   }
@@ -53,30 +53,31 @@ BodyChecker::application(const Expression &expr) {
     llvm::sort(roles);
     return roles;
   };
+  std::vector<uint32_t> data;
+  std::vector<ServiceId> managed;
+  std::vector<Type> serviceFields;
   std::vector<std::optional<Type>> hints;
-  for (auto child : expr.children) {
-    hints.push_back(hint(child));
+  for (unsigned i = 0; i < expr.children.size(); ++i) {
+    auto child = expr.children[i];
+    if (callee.inputOrder[i].kind == Declaration::InputSlot::Kind::Service) {
+      auto root = service(syntax.expressions[child]);
+      if (!root)
+        return {};
+      managed.push_back(*root);
+      serviceFields.push_back(body.services[root->index].field);
+    } else {
+      data.push_back(child);
+      hints.push_back(hint(child));
+    }
     if (checker.types.diagnostic)
       return {};
   }
-  auto arguments = actuals(callee, expr, hints, {}, {});
+  auto arguments = actuals(callee, expr, hints, {}, {}, serviceFields);
   if (!arguments)
     return {};
   auto substitution = checker.types.substitution(callee, *arguments);
-  if (expr.services.size() != callee.services.size()) {
-    fail("source.service", "protocol application managed port count differs",
-         expr.span);
-    return {};
-  }
-  std::vector<ServiceId> managed;
-  for (unsigned i = 0; i < expr.services.size(); ++i) {
-    auto found = services.find(expr.serviceBindings[i]);
-    if (found == services.end()) {
-      fail("source.service", "application requires an existing managed binding",
-           expr.span);
-      return {};
-    }
-    const auto &actual = body.services[found->second.index];
+  for (unsigned i = 0; i < managed.size(); ++i) {
+    const auto &actual = body.services[managed[i].index];
     const auto &expected = callee.services[i];
     auto field =
         checker.types.substitute(expected.field, substitution, expr.span);
@@ -87,15 +88,14 @@ BodyChecker::application(const Expression &expr) {
            expr.span);
       return {};
     }
-    managed.push_back(found->second);
   }
   std::vector<ValueId> operands;
-  for (unsigned i = 0; i < expr.children.size(); ++i) {
+  for (unsigned i = 0; i < data.size(); ++i) {
     const auto &port = callee.inputs[i];
     auto type = checker.types.substitute(port.type, substitution, expr.span);
     if (!type)
       return {};
-    auto value = expression(expr.children[i], *type);
+    auto value = expression(data[i], *type);
     if (!value)
       return {};
     auto roles = mappedRoles(port);
@@ -105,11 +105,6 @@ BodyChecker::application(const Expression &expr) {
       return {};
     operands.push_back(*value);
   }
-  if (!checker.body(callee.id, callDepth + 1))
-    return {};
-  checker.bodyHeights[decl.id.index] =
-      std::max(checker.bodyHeights[decl.id.index],
-               checker.bodyHeights[callee.id.index] + 1);
   body.mayStop |= callee.body->mayStop;
   body.opaque |= callee.body->opaque;
   std::vector<Value> results;

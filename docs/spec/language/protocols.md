@@ -170,19 +170,22 @@ delivery nor equality of participant components.
 ## Managed services and rejection
 
 ```text
-protocol Draw<F: Field> roles(V)() using(coins: Random<F> @V) -> (r: F @V) {
+protocol Draw<F: Field> roles(V)(coins: Random<F> @V) -> (r: F @V) {
   let alias = coins;
   let r = alias.draw();
   return (r = r);
 }
-protocol Run roles(V)(go: bool @V) using(coins: Random<Fr> @V) -> (r: Fr @V) {
+protocol Run roles(V)(go: bool @V, coins: Random<Fr> @V) -> (r: Fr @V) {
   require @V go;
-  let r = Draw<Fr>() using(coins);
+  let r = Draw<Fr>(coins);
   return (r = r);
 }
 ```
 
-Managed service ports are separate from data ports and static type arguments.
+Protocol declarations and applications use one ordered list for data and managed
+arguments; either kind may appear in any position. The checked representation
+retains distinct data ports, service ports and their source argument order.
+Static type arguments remain separate.
 `Random<F>` requires a field and exactly one owner. Closure selects an installed
 random-service contract for that field; analysis can retain a generic declaration
 before that selection. The installed catalog includes service contracts in its
@@ -192,8 +195,8 @@ identity.
 independence assumption. `coins.draw()` is ordered protocol work: its result is
 available only at the service owner, and an unused result does not remove the
 query. Services cannot enter ordinary types, aggregate fields, messages, local
-functions or return values. An application supplies its managed bindings after
-its data arguments, in declared service order. Each field and mapped owner must
+functions or return values. An application supplies each managed binding in its
+declared argument position. Each field and mapped owner must
 match. Repeating a binding passes the same reference to both ports.
 
 `require @V condition;` requires a Boolean available at V. False stops V at that
@@ -253,7 +256,7 @@ let mut a = initialP;
 let mut b = initialV;
 for i in 0..n roles(P, V) max N {
   require @V go;
-  let (x, y) = Round(a, b) using(coins);
+  let (x, y) = Round(a, b, coins);
   a = x;
   b = y;
 }

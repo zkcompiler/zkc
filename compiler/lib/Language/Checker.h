@@ -49,6 +49,7 @@ private:
   std::map<std::string, DeclarationId> qualified;
   std::vector<std::map<std::string, DeclarationId>> visible;
   std::vector<unsigned> signatureState;
+  std::set<const Declaration *> inferredContracts;
   unsigned signatureDepth = 0;
   bool representations();
   bool chargeStaticSignature(const Declaration &);

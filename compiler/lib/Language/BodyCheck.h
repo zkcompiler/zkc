@@ -7,7 +7,7 @@ class BodyChecker {
 public:
   BodyChecker(Checker &, Declaration &, const SyntaxDeclaration &, Body &,
               unsigned);
-  bool run(const SyntaxBody &, llvm::ArrayRef<Port>, bool protocol);
+  bool run(const SyntaxBody &, std::vector<Port> &, bool protocol);
   bool addService(BindingId, const ServicePort &);
   bool addInput(BindingId, const Type &, std::vector<unsigned>, Span);
 
@@ -127,11 +127,10 @@ private:
   std::optional<std::pair<DeclarationId, std::optional<Type>>>
   callable(const Expression &);
   bool infer(const Type &, const Type &, Substitution &, Span);
-  std::optional<std::vector<Type>> actuals(const Declaration &,
-                                           const Expression &,
-                                           llvm::ArrayRef<std::optional<Type>>,
-                                           std::optional<Type>,
-                                           std::optional<Type>);
+  std::optional<std::vector<Type>>
+  actuals(const Declaration &, const Expression &,
+          llvm::ArrayRef<std::optional<Type>>, std::optional<Type>,
+          std::optional<Type>, llvm::ArrayRef<Type> serviceFields = {});
 };
 } // namespace zkc::language::detail
 #endif

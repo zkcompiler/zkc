@@ -102,7 +102,9 @@ std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
       return {};
     auto args = actuals(callee, expr, inputs, {}, target->second);
     if (!args) {
-      if (checker.types.diagnostic &&
+      // A missing call context may be supplied during expression checking.
+      // A definition's own inference error cannot: preserve it and its origin.
+      if ((callee.abstract || callee.body) && checker.types.diagnostic &&
           checker.types.diagnostic->code == "source.inference")
         checker.types.diagnostic.reset();
       return {};

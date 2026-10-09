@@ -610,7 +610,7 @@ protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:(Fr,Fr)@B){return(r=pair(x,y));}e
            R"(module m;math fn yes(x:bool)->bool{return x;}
 protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}entry Demo=Run;)",
            R"(module m;domain Fr=field("bls12-381.fr");
-protocol Run roles(V)(x:Fr@V)using(coins:Random<Fr>@V)->(){require @V coins.draw()==x;return();}entry Demo=Run;)",
+protocol Run roles(V)(x:Fr@V, coins:Random<Fr>@V)->(){require @V coins.draw()==x;return();}entry Demo=Run;)",
        })
     must(compileEntry(original(source)));
   must(compileEntry(original(R"(module m;fn yes(x:bool)->bool{return x;}
@@ -657,8 +657,8 @@ void participantCompletion() {
        })
     sourceRefuses(replace(source, from, to), code);
   sourceRefuses(source + R"(
-protocol Reuse roles(P,V)(go:bool@V,x:Fr@(P,V))using(coins:Random<Fr>@V)->(result:Fr@(P,V)){
- let result=Run(go,x)using(coins);return(result=result);
+protocol Reuse roles(P,V)(go:bool@V,x:Fr@(P,V), coins:Random<Fr>@V)->(result:Fr@(P,V)){
+ let result=Run(go,x, coins);return(result=result);
 })",
                 "source.completion");
   auto affine =
@@ -698,7 +698,7 @@ void distributedRepetition() {
            {"let mut vb = b", "let mut vb @P = b", "source.roles"},
            {"pa = x;", "pa = y;", "source.roles"},
            {"require @V go;", "require @V missing;", "source.name"},
-           {"using(coins);", "using();", "source.service"},
+           {"Round<Fr>(pa, vb, coins)", "Round<Fr>(pa, vb)", "source.call"},
            {"max N", "max Fr", "source.bound"},
            {"max N", "max 1048577", "source.bound"},
            {"let (x, y)", "let (x, x)", "source.binding"},
@@ -783,9 +783,10 @@ void managedServices() {
     must(compileEntry(checked, {simplify, false}));
   for (const auto &[from, to, code] :
        std::vector<std::tuple<std::string, std::string, std::string>>{
-           {"using(alias, coins)", "using(alias)", "source.service"},
-           {"using(alias, coins)", "using(unknown, coins)", "source.name"},
-           {"using(alias, coins)", "using(go, coins)", "source.service"},
+           {"Draw<Fr>(alias, coins)", "Draw<Fr>(alias)", "source.call"},
+           {"Draw<Fr>(alias, coins)", "Draw<Fr>(unknown, coins)",
+            "source.name"},
+           {"Draw<Fr>(alias, coins)", "Draw<Fr>(go, coins)", "source.service"},
            {"Random<Fr> @V", "Random<Fr> @(P,V)", "source.service"},
            {"Random<Fr> @V", "Random<Fr> @P", "source.service"},
            {"Random<Fr>", "Random<bool>", "source.service"},

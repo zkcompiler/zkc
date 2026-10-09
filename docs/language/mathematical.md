@@ -125,8 +125,9 @@ for _ in 0..n {
 ```
 
 Protocol loops additionally spell `roles(P, V) max N`. Protocol calls use ordinary
-call syntax, such as `let result = Round(x) using(coins);`. `using` passes managed
-service references; `let alias = coins;` gives the same service another name.
+call syntax, such as `let result = Round(x, coins);`. Declare the service alongside
+data inputs, for example `(x: F @V, coins: Random<F> @V)`.
+`let alias = coins;` gives the same service another name.
 Defined functions infer effects. Write `!{}` only
 when an effect-free interface is an intended contract. Ordinary calls can nest;
 all calls in one statement must have uniquely determined participants. Use `@P`
@@ -135,6 +136,24 @@ on a binding to resolve ambiguity. Later statements never move an earlier call.
 condition needs an explicit owner, such as `require @V condition;`.
 Nonlinear dimension inference and arbitrary inequality solving remain outside
 this source profile.
+
+Defined helpers can omit result types. Defined helpers and protocols infer
+catalog and natural preconditions when `where` is absent. A written clause is a
+complete contract; `where ()` forbids additional preconditions. Resource
+permissions stay explicit. For example:
+
+```text
+fn first<T: Type + Copy + Drop, N: nat>(xs: [T; N]) {
+  return xs[0];
+}
+fn pairFirst<T: Type + Copy + Drop>(xs: [T; 2]) {
+  return first<_, 2>(xs);
+}
+```
+
+`first` infers result `T` and condition `1 <= N`; the call infers its `_` as `T`.
+An explicit result type remains useful for literals and stable library interfaces.
+Component choices, protocol role remapping and ambiguous owners stay explicit.
 
 The maintained fixtures cover [arrays](../../compiler/test/fixtures/language/array.zkc),
 [variants](../../compiler/test/fixtures/language/variant.zkc),

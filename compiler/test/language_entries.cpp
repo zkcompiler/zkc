@@ -9,8 +9,7 @@ namespace {
 constexpr StringLiteral base = R"(module sample;
  domain F=field("bls12-381.fr");
  relation Equal(statement x:F,witness y:F){return x==y;}
- protocol Round roles(P,V)(x:F@(P,V),y:F@P)
- using(coins:Random<F>@V)->(ok:bool@V)
+ protocol Round roles(P,V)(x:F@(P,V),y:F@P, coins:Random<F>@V)->(ok:bool@V)
  spec{target claim=Equal(in.x@V,in.y) accept out.ok;}
  {let ok@V=true;return(ok=ok);}
 )";

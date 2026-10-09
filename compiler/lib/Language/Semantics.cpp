@@ -331,8 +331,11 @@ bool Semantics::checkArguments(const Declaration &target, ArrayRef<Type> args,
         return false;
       goal.arguments.push_back(std::move(*actual));
     }
-    if (!entails(context, goal))
+    if (!entails(context, goal)) {
+      if (diagnostic)
+        diagnostic->related.push_back(bound.span);
       return false;
+    }
   }
   for (const auto &bound : target.permissionBounds) {
     Type requirement = bound.type;
@@ -357,7 +360,7 @@ bool Semantics::checkArguments(const Declaration &target, ArrayRef<Type> args,
     if (l->dimension.isClosed() && r->dimension.isClosed() &&
         l->dimension.closedValue() > r->dimension.closedValue())
       return fail("source.bound", "closed natural requirement does not hold",
-                  span);
+                  span, {bound.span});
   }
   return true;
 }
@@ -384,8 +387,10 @@ bool Semantics::assumptions(const Declaration &caller,
           given.lhs.closedValue() >= l->dimension.closedValue())))
       return true;
   }
-  return fail("source.bound", "generic call needs an explicit natural bound",
-              span);
+  return (inferNatural &&
+          inferNatural(caller, {l->dimension, r->dimension, span})) ||
+         fail("source.bound", "contract does not establish natural bound", span,
+              {bound.span});
 }
 
 } // namespace zkc::language::detail

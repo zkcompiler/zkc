@@ -249,6 +249,7 @@ struct Alternative {
 struct NaturalBound {
   Natural lhs, rhs;
   Span span;
+  bool inferred = false;
 };
 struct PermissionBound {
   Type type;
@@ -260,6 +261,7 @@ struct CapabilityBound {
   std::string predicate;
   std::vector<Type> arguments;
   Span span;
+  bool inferred = false;
 };
 /// Upper bounds on the observable effects of a callable.
 struct Effects {
@@ -364,6 +366,13 @@ struct Declaration {
   std::vector<std::string> roles;
   std::vector<Port> inputs, outputs;
   std::vector<ServicePort> services;
+  /// Protocol source arguments in written order. Data and managed identities
+  /// remain separate in the checked body and native signatures.
+  struct InputSlot {
+    enum class Kind { Data, Service } kind;
+    unsigned index;
+  };
+  std::vector<InputSlot> inputOrder;
   std::shared_ptr<const Body> body;
   bool anonymous = false;
   std::optional<Span> specificationBlock;

@@ -392,7 +392,7 @@ def test_compiler_failures_are_bounded_and_do_not_publish(toolchain, journal, di
 def test_proof_file_public_inputs_are_authoritative(toolchain, journal, directory):
     source = directory / 'public.zkc'
     source.write_text((FIXTURES / 'attempts.zkc').read_text()
-                      .replace('Round roles(P,V)(done:bool@P)', 'Round roles(P,V)(done:bool@P,tag:bool@(P,V))')
+                      .replace('Round roles(P,V)(done:bool@P,', 'Round roles(P,V)(done:bool@P,tag:bool@(P,V),')
                       .replace('public{};accept accepted;complete result.ready;', 'public{tag};accept accepted;complete result.ready;', 1))
     package, pin = compile_entry(toolchain, journal, directory, 'Derived', source)
     producer = write(directory / 'producer.json', {'format': 'zkc.entry-proof/0', 'public': {'tag': True}, 'inputs': {'done': True}})

@@ -147,7 +147,8 @@ void typing() {
            {"fn bad(a:[Fr;2])->Fr{return a[2];}", "source.index"},
            {"fn bad(a:[Fr;2],i:index)->Fr{return a[i];}", "source.index"},
            {"math fn bad<F:Field>(x:F)->F{return x+2;}", "source.literal"},
-           {"fn bad<N:nat>(x:[Fr;N])->Fr{return x[0];}", "source.bound"},
+           {"fn bad<N:nat>(x:[Fr;N])->Fr where () {return x[0];}",
+            "source.bound"},
            {"type Bad=[Fr;18446744073709551615+1];", "source.natural"},
            {"fn bad<N:nat+Copy>()->bool{return true;}", "source.permission"},
            {"fn bad<N:nat>()->bool where Copy(N) {return true;}",
@@ -306,7 +307,7 @@ fn f<N:nat,C:Limited<N>>()->bool where 1<=N{return C::get();}
 )");
   refuses(prefix + R"(
 interface Limited<N:nat> where 1<=N {fn get()->bool;}
-fn f<N:nat,C:Limited<N>>()->bool{return C::get();}
+fn f<N:nat,C:Limited<N>>()->bool where () {return C::get();}
 )",
           "source.bound");
   check(prefix + R"(
@@ -411,7 +412,7 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
   refuses(prefix + "interface I{type State;math fn bad(x:State)->State;}",
           "source.mode");
   refuses(prefix + "type Nonempty<N:nat> where 1<=N=[Fr;N];fn "
-                   "bad<N:nat>(x:Nonempty<N>)->(){return ();}",
+                   "bad<N:nat>(x:Nonempty<N>)->() where () {return ();}",
           "source.bound");
   refuses(prefix + "interface I<N:nat>{fn f()->bool;}component "
                    "C<N:nat>:I<N>{fn f()->bool where 1<=N{return true;}}",
@@ -1036,7 +1037,7 @@ void nativeData() {
   }
 
   refuses(library + R"(
-    fn bad<F:Field>(n:index)->F{return kernel<F>("poly.domain_root",n);}
+    fn bad<F:Field>(n:index)->F where () {return kernel<F>("poly.domain_root",n);}
   )" + unit,
           "source.kernel");
   must(compileEntry(original(prefix + R"(

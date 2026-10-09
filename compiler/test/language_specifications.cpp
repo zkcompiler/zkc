@@ -215,7 +215,7 @@ int main() {
                     std::vector<unsigned>{0, 1},
                 "product selector path differs");
         auto at = source.find("where 1<=N");
-        source.erase(at, 10);
+        source.replace(at, 10, "where ()");
         refuses(check(source), "source.bound");
       });
   cases.run(

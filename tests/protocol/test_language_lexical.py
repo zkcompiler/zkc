@@ -234,7 +234,7 @@ def test_nested_calls_preserve_draw_and_rejection_order(toolchain, journal, dire
 domain F=field("bls12-381.fr");
 fn checked(x:F,go:bool)->F{require go;return x;}
 fn add(a:F,b:F)->F{return a+b;}
-protocol Run roles(P)(go:bool@P)using(coins:Random<F>@P)->(r:F@P){
+protocol Run roles(P)(go:bool@P, coins:Random<F>@P)->(r:F@P){
   return add(checked(coins.draw(),go),coins.draw());
 }
 entry Demo=Run;

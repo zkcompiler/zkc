@@ -16,12 +16,40 @@ Error Checker::run() {
     return error;
   if (!collect() || !imports())
     return types.takeError();
+  for (auto &decl : output.declarations)
+    if (!decl.abstract && !sources[decl.id.index]->explicitRequirements &&
+        (decl.kind == Declaration::Kind::Math ||
+         decl.kind == Declaration::Kind::Local ||
+         decl.kind == Declaration::Kind::Protocol))
+      inferredContracts.insert(&decl);
+  types.inferCapability = [this](const Declaration *scope,
+                                 const CapabilityBound &bound) {
+    if (!inferredContracts.count(scope))
+      return false;
+    auto requirement = bound;
+    requirement.inferred = true;
+    output.declarations[scope->id.index].capabilityBounds.push_back(
+        std::move(requirement));
+    return true;
+  };
+  types.inferNatural = [this](const Declaration &scope,
+                              const NaturalBound &bound) {
+    if (!inferredContracts.count(&scope))
+      return false;
+    auto requirement = bound;
+    requirement.inferred = true;
+    output.declarations[scope.id.index].bounds.push_back(
+        std::move(requirement));
+    return true;
+  };
   signatureState.resize(output.declarations.size());
   for (unsigned i = 0; i < output.declarations.size(); ++i)
     if (!signature(DeclarationId{i}))
       return types.takeError();
   if (!relationIdentities())
     return types.takeError();
+  bodyState.resize(output.declarations.size());
+  bodyHeights.resize(bodyState.size());
   for (auto &decl : output.declarations)
     if (decl.kind == Declaration::Kind::Component && !conformance(decl.id))
       return types.takeError();
@@ -52,8 +80,6 @@ Error Checker::run() {
             return types.takeError();
           }
         }
-  bodyState.resize(output.declarations.size());
-  bodyHeights.resize(bodyState.size());
   for (unsigned i = 0; i < sources.size(); ++i) {
     auto &decl = output.declarations[i];
     if ((decl.kind == Declaration::Kind::Math ||
@@ -64,9 +90,6 @@ Error Checker::run() {
         !decl.abstract && !body(decl.id, 1))
       return types.takeError();
   }
-  for (auto &decl : output.declarations)
-    if (decl.kind == Declaration::Kind::Protocol && !specifications(decl))
-      return types.takeError();
   if (!entries())
     return types.takeError();
   return Error::success();
@@ -102,6 +125,7 @@ bool Checker::collect() {
     decl.completes = source.completes;
     decl.permissions = source.permissions;
     decl.effectAllowance = source.effects;
+    decl.inputOrder = source.inputOrder;
     decl.associatedSort = source.associatedSort;
     decl.anonymous = source.anonymous;
     decl.specificationBlock = source.specificationBlock;

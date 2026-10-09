@@ -38,6 +38,8 @@ and closes selected Entries. It supports scalar mathematics, Boolean formulas,
 nominal products/variants, static parameters and components, capabilities and
 permissions, lexical scopes and patterns, mutable bindings with inferred region
 state/captures, statement-scoped participant inference, nested ordered calls,
+helper result inference, partial static arguments, inferred catalog/natural
+preconditions with explicit contract checking, unified data/service arguments,
 source rejection with `require`, formal polynomial intrinsics, local control,
 messages, services, static protocol composition, bounded repetition and conditional completion.
 Independent source comparison checks emitted MLIR against checked definitions;
@@ -51,6 +53,8 @@ for source correspondence; it does not interpret retained MLIR. Maintained
 
 Fixed source arrays use static numeric indexing. Private ingress without an
 admitted validator, member-generic conformance and zero-leaf messages refuse.
+Resource permission inference, implicit role remapping and general type-equation
+solving are outside the source profile.
 Relation and target/input/output/continuation clauses state intent; declarations
 alone add no runtime guard, satisfaction fact or security theorem.
 
