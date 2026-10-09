@@ -310,3 +310,153 @@ def test_staged_assignments_agree(toolchain, journal):
             assert cpp['staged_identity'] == identity(candidate[4])
             assert cpp['staged'] == candidate[4]
             assert cpp['assignment'] == candidate[5]
+
+
+
+def test_formation_analysis_is_bounded(toolchain, journal):
+    """Small DAGs with shared roots must not expand into huge read-set facts."""
+    field = 'koala-bear'
+    empty = ['zkc.ring/0', [], [], []]
+
+    def arena(width, outputs=1):
+        nodes = [['input', i] for i in range(width)]
+        level = list(range(width))
+        while len(level) > 1:
+            parents = []
+            for left, right in zip(level[::2], level[1::2]):
+                parents.append(len(nodes))
+                nodes.append(['add', left, right])
+            level = parents
+        return ['zkc.ring/0', [field] * width, nodes, level * outputs]
+
+    def base_case(width, outputs=1, references=None, tables=1, blank=False):
+        tables_data = [[
+            f'trace{t}', 'required', ['fixed', 1], 'cyclic',
+            [['x', 'witness', field, width]],
+            empty if blank else arena(width, outputs),
+            [] if blank else [['read', 0, '0', i] for i in range(width)],
+            [] if blank else [[i % outputs, ['all']]
+                              for i in range(outputs if references is None else references)],
+            []] for t in range(tables)]
+        return rebind([
+            ['zkc.relation-bundle/0', [], [], tables_data],
+            ['zkc.relation-configuration/0', '', [[None, []]] * tables],
+            ['zkc.relation-instance/0', '', [], [['present', None, []]] * tables],
+            ['zkc.relation-witness/0', '', [[['0'] * width]] * tables]])
+
+    def staged_case_for_analysis(width, references, phases):
+        candidate = base_case(width, blank=True)
+        table = [[], arena(width), [['read', 0, 0, '0', i] for i in range(width)],
+                 [[0, ['all']]] * references]
+        candidate.extend([
+            ['zkc.relation-staged/0', '', [[[], [], [table]]] * phases,
+             [empty, [], []], []],
+            ['zkc.relation-staged-assignment/0', '', [[[], [], [[]]]] * phases]])
+        return bind_staged(candidate)
+
+    cases = [
+        ('shared roots within budget', base_case(4, 4), True),
+        ('retained inputs', base_case(2048, 2049), False),
+        ('retained inputs across tables', base_case(1024, 2049, tables=2), False),
+        ('repeated static checks', base_case(8192, references=2730), False),
+        ('small staged program', staged_case_for_analysis(4, 3, 2), True),
+        ('staged repeated checks', staged_case_for_analysis(8192, 2730, 1), False),
+        ('staged cumulative checks', staged_case_for_analysis(4096, 2730, 2), False),
+    ]
+    global_case = staged_case_for_analysis(1, 0, 1)
+    global_case[4][2][0][2][0] = [[], empty, [], []]
+    global_case[0][1] = [[f'p{i}', field] for i in range(8192)]
+    global_case[2][2] = ['0'] * 8192
+    global_case[4][3] = [arena(8192), [['public', i] for i in range(8192)], [0] * 2730]
+    cases.append(('global analysis', bind_staged(global_case), False))
+
+    rows = [json.dumps(c, separators=(',', ':')) for _, c, _ in cases]
+    assert all(len(row) < 1024 * 1024 for row in rows)
+    wire = ''.join(row + '\n' for row in rows)
+    replies = []
+    for executable in [toolchain.tool('compiler', 'test/zkc-relation_bundle_conformance-test'),
+                       toolchain.driver('relation_bundle_conformance')]:
+        replies.append([json.loads(row) for row in journal.run([executable], stdin=wire).splitlines()])
+    assert len(replies[0]) == len(replies[1]) == len(cases)
+    for (name, _, accepted), cpp, rust in zip(cases, *replies):
+        assert cpp == rust, (name, cpp, rust)
+        if accepted:
+            assert cpp['accepted'] and cpp['result']['satisfied'], (name, cpp)
+            if 'staged_result' in cpp:
+                assert cpp['staged_result']['satisfied'], (name, cpp)
+        else:
+            assert cpp == {'accepted': False, 'error': 'bundle-analysis-limit'}, (name, cpp)
+
+
+
+def test_interaction_balances_and_refusals_agree(toolchain, journal):
+    field, modulus = 'koala-bear', 2130706433
+    bundle = ['zkc.relation-bundle/0', [], [
+        ['field', 'field-balance', [field], field],
+        ['natural', 'multiset', [field], field]], [[
+            'counts', 'required', ['fixed', 2], 'cyclic',
+            [['values', 'witness', field, 3]],
+            ['zkc.ring/0', [field] * 3,
+             [['input', 0], ['input', 1], ['input', 2], ['neg', 2]], [0, 1, 2, 3]],
+            [['read', 0, '0', i] for i in range(3)], [], [
+                ['field-balance', 0, ['global'], ['all'], [0], 1, None],
+                ['field-balance', 0, ['global'], ['all'], [0], 3, None],
+                ['multiset', 1, ['global'], ['all'], 'push', [0], 1, 3],
+                ['multiset', 1, ['global'], ['all'], 'pull', [0], 2, 3]]]]]
+    original = rebind([bundle,
+        ['zkc.relation-configuration/0', '', [[None, []]]],
+        ['zkc.relation-instance/0', '', [], [['present', None, []]]],
+        ['zkc.relation-witness/0', '', [[['5', '1', '1', '5', '2', '2']]]]])
+    cases = [('balanced field and natural counts', original, True)]
+    changed = deepcopy(original)
+    changed[3][2][0][0][-1] = '1'
+    cases.append(('unequal counts', changed, False))
+    changed = deepcopy(original)
+    changed[3][2][0][0][1:3] = ['4', '4']
+    cases.append(('multiplicity range', changed, False))
+    changed = deepcopy(original)
+    changed[0][3][0][8][0][2] = ['local', 0]
+    cases.append(('local partition differs from global', rebind(changed), False))
+    changed = deepcopy(original)
+    for interaction in changed[0][3][0][8][2:]:
+        interaction[-1] = modulus - 1
+    changed[3][2][0][0] = ['5', str(modulus - 1), '0', '5', '1', '0']
+    cases.append(('field cancellation is not natural equality', rebind(changed), False))
+    changed = deepcopy(original)
+    changed[0][3][0][8][2][-1] = 0
+    cases.append(('invalid multiplicity bound', rebind(changed), 'bundle-multiset-bound'))
+    changed = deepcopy(original)
+    changed[0][3][0][2] = ['instance', 1, 4, False]
+    changed[0][3][0][4][0][1] = 'config'
+    cases.append(('configuration height authority', rebind(changed), 'bundle-config-height'))
+    changed = deepcopy(original)
+    table = changed[0][3][0]
+    table[4][0][3] = 4
+    table[5][1].append(field)
+    table[6].append(['read', 0, '0', 3])
+    cases.append(('unused declared input', rebind(changed), 'bundle-unused-input'))
+    changed = deepcopy(original)
+    changed[0][3][0][2] = ['fixed', 32768]
+    changed[0][3][0][7] = [[0, ['all']]] * 4092
+    changed[3][2][0][0] = ['0'] * (32768 * 3)
+    cases.append(('work limit', rebind(changed), 'bundle-work-limit'))
+    changed = deepcopy(original)
+    changed[0][3][0][2] = ['fixed', 1 << 20]
+    table = changed[0][3][0]
+    table[4:9] = [[], ['zkc.ring/0', [], [['constant', field, '1']], [0]], [], [],
+                  [['field-balance', 0, ['global'], ['all'], [0], 0, None]] * 5]
+    changed[3][2][0] = []
+    cases.append(('contribution limit on compact input', rebind(changed), 'bundle-contribution-limit'))
+
+    wire = ''.join(json.dumps(c, separators=(',', ':')) + '\n' for _, c, _ in cases)
+    replies = []
+    for executable in [toolchain.tool('compiler', 'test/zkc-relation_bundle_conformance-test'),
+                       toolchain.driver('relation_bundle_conformance')]:
+        replies.append([json.loads(row) for row in journal.run([executable], stdin=wire).splitlines()])
+    assert len(replies[0]) == len(replies[1]) == len(cases)
+    for (name, _, expected), cpp, rust in zip(cases, *replies):
+        assert cpp == rust, (name, cpp, rust)
+        if isinstance(expected, str):
+            assert cpp == {'accepted': False, 'error': expected}, (name, cpp)
+        else:
+            assert cpp['accepted'] and cpp['result']['satisfied'] == expected, (name, cpp)

@@ -277,56 +277,71 @@ std::string AIR::identity() const {
   return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
 }
 
-Expected<AIRExpressionView> AIR::expressionView(uint32_t constraint) const {
-  if (constraint >= constraints_.size())
-    return zkc::error("air-constraint-index");
-  const auto &source = constraints_[constraint].expression;
+namespace {
+Expected<AIRExpressionView>
+buildExpressionView(StringRef field, ArrayRef<AIRConstraint> constraints) {
   std::vector<ring::Input> inputs;
   std::vector<AIRExpressionInput> bindings;
   std::vector<ring::Node> nodes;
   std::map<uint32_t, uint32_t> publics;
   std::map<AIRCell, uint32_t> reads;
-  for (const auto &node : source) {
-    switch (node.kind) {
-    case AIRKind::Constant:
-      nodes.push_back(ring::Node::literal(fieldName, node.value));
-      break;
-    case AIRKind::Public: {
-      auto [found, inserted] = publics.emplace(node.index, inputs.size());
-      if (inserted) {
-        inputs.push_back({fieldName});
-        bindings.push_back({AIRExpressionInput::Kind::Public, node.index, {}});
+  std::vector<uint32_t> outputs;
+  for (const auto &constraint : constraints) {
+    uint32_t base = nodes.size();
+    for (const auto &node : constraint.expression) {
+      switch (node.kind) {
+      case AIRKind::Constant:
+        nodes.push_back(ring::Node::literal(field.str(), node.value));
+        break;
+      case AIRKind::Public: {
+        auto [found, inserted] = publics.emplace(node.index, inputs.size());
+        if (inserted) {
+          inputs.push_back({field.str()});
+          bindings.push_back(
+              {AIRExpressionInput::Kind::Public, node.index, {}});
+        }
+        nodes.push_back(ring::Node::slot(found->second));
+        break;
       }
-      nodes.push_back(ring::Node::slot(found->second));
-      break;
-    }
-    case AIRKind::Read: {
-      AIRCell cell{node.offset, node.column};
-      auto [found, inserted] = reads.emplace(cell, inputs.size());
-      if (inserted) {
-        inputs.push_back({fieldName});
-        bindings.push_back({AIRExpressionInput::Kind::Read, 0, cell});
+      case AIRKind::Read: {
+        AIRCell cell{node.offset, node.column};
+        auto [found, inserted] = reads.emplace(cell, inputs.size());
+        if (inserted) {
+          inputs.push_back({field.str()});
+          bindings.push_back({AIRExpressionInput::Kind::Read, 0, cell});
+        }
+        nodes.push_back(ring::Node::slot(found->second));
+        break;
       }
-      nodes.push_back(ring::Node::slot(found->second));
-      break;
+      case AIRKind::Add:
+        nodes.push_back(ring::Node::add(base + node.lhs, base + node.rhs));
+        break;
+      case AIRKind::Mul:
+        nodes.push_back(ring::Node::mul(base + node.lhs, base + node.rhs));
+        break;
+      case AIRKind::Neg:
+        nodes.push_back(ring::Node::neg(base + node.lhs));
+        break;
+      }
     }
-    case AIRKind::Add:
-      nodes.push_back(ring::Node::add(node.lhs, node.rhs));
-      break;
-    case AIRKind::Mul:
-      nodes.push_back(ring::Node::mul(node.lhs, node.rhs));
-      break;
-    case AIRKind::Neg:
-      nodes.push_back(ring::Node::neg(node.lhs));
-      break;
-    }
+    outputs.push_back(nodes.size() - 1);
   }
-  uint32_t root = nodes.size() - 1;
-  auto expression =
-      ring::Expression::create(std::move(inputs), std::move(nodes), {root});
+  auto expression = ring::Expression::create(
+      std::move(inputs), std::move(nodes), std::move(outputs));
   if (!expression)
     return expression.takeError();
   return AIRExpressionView{std::move(*expression), std::move(bindings)};
+}
+} // namespace
+
+Expected<AIRExpressionView> AIR::expressionView(uint32_t constraint) const {
+  if (constraint >= constraints_.size())
+    return zkc::error("air-constraint-index");
+  return buildExpressionView(fieldName,
+                             ArrayRef(constraints_).slice(constraint, 1));
+}
+Expected<AIRExpressionView> AIR::expressionView() const {
+  return buildExpressionView(fieldName, constraints_);
 }
 
 json::Value AIR::analysis() const {

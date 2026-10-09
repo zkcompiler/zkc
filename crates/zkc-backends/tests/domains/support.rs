@@ -280,6 +280,7 @@ pub struct Controlled {
     pub implementation: Option<String>,
     pub attributes: Option<Vec<String>>,
     pub outputs: Vec<Vec<Value>>,
+    pub frames: Vec<zkc_runtime::interactive::Frame>,
 }
 impl Controlled {
     pub fn new(inner: NativeBackend) -> Self {
@@ -290,6 +291,7 @@ impl Controlled {
             implementation: None,
             attributes: None,
             outputs: Vec::new(),
+            frames: Vec::new(),
         }
     }
 }
@@ -309,7 +311,9 @@ impl Backend for Controlled {
         f: &zkc_runtime::interactive::Frame,
         a: &[Value],
     ) -> Result<(), zkc_runtime::interactive::BackendError> {
-        self.inner.enter_frame(f, a)
+        self.inner.enter_frame(f, a)?;
+        self.frames.push(f.clone());
+        Ok(())
     }
     fn leave_frame(
         &mut self,

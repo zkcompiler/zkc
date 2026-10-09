@@ -44,33 +44,10 @@ pub struct Expression {
 fn field(value: &Value) -> Result<Identity> {
     let field = Identity::parse(value.as_str().ok_or(Error("ring-schema"))?)
         .map_err(|_| Error("ring-field"))?;
-    modulus(field).ok_or(Error("ring-field"))?;
+    field.field_characteristic().ok_or(Error("ring-field"))?;
     Ok(field)
 }
-fn modulus(field: Identity) -> Option<&'static str> {
-    match field {
-        Identity::KoalaBear | Identity::KoalaBearExt8 => Some("2130706433"),
-        Identity::Bls12381Fr => {
-            Some("52435875175126190479447740508185965837690552500527637822603658699938581184513")
-        }
-        Identity::Bn254Fr => {
-            Some("21888242871839275222246405745257275088548364400416034343698204186575808495617")
-        }
-        Identity::Ristretto255Scalar => {
-            Some("7237005577332262213973186563042994240857116359379907606001950938285454250989")
-        }
-        _ => None,
-    }
-}
-fn literal(field: Identity, value: &str) -> bool {
-    let Some(modulus) = modulus(field) else {
-        return false;
-    };
-    !value.is_empty()
-        && value.bytes().all(|b| b.is_ascii_digit())
-        && (value.len() == 1 || !value.starts_with('0'))
-        && (value.len() < modulus.len() || (value.len() == modulus.len() && value < modulus))
-}
+
 fn index(value: &Value) -> Result<usize> {
     value
         .as_u64()
@@ -178,7 +155,7 @@ impl Expression {
         if inputs.len() > NODE_LIMIT || nodes.len() > NODE_LIMIT || outputs.len() > OUTPUT_LIMIT {
             return Err(Error("ring-limit"));
         }
-        if inputs.iter().any(|f| modulus(*f).is_none()) {
+        if inputs.iter().any(|f| f.field_characteristic().is_none()) {
             return Err(Error("ring-field"));
         }
         let mut facts: Vec<Fact> = Vec::with_capacity(nodes.len());
@@ -186,10 +163,10 @@ impl Expression {
             let get = |i: usize| facts.get(i).copied().ok_or(Error("ring-edge"));
             let fact = match node {
                 Node::Constant(f, n) => {
-                    if modulus(*f).is_none() {
+                    if f.field_characteristic().is_none() {
                         return Err(Error("ring-field"));
                     }
-                    if !literal(*f, n) {
+                    if !f.canonical_field_literal(n) {
                         return Err(Error("ring-literal"));
                     }
                     Fact {
@@ -358,13 +335,22 @@ impl Expression {
     /// nodes rather than scanning every unselected branch on every trace row.
     pub fn select(&self, positions: &[usize]) -> Result<Self> {
         let live = self.dependencies(positions)?;
+        if positions.len() > OUTPUT_LIMIT {
+            return Err(Error("ring-limit"));
+        }
+        let mut seen = vec![false; self.outputs.len()];
+        let unique = positions
+            .iter()
+            .all(|p| !std::mem::replace(&mut seen[*p], true));
         let mut remap = vec![0; self.nodes.len()];
         let mut nodes = Vec::new();
+        let mut facts = Vec::new();
         for (i, n) in self.nodes.iter().enumerate() {
             if !live[i] {
                 continue;
             }
             remap[i] = nodes.len();
+            facts.push(self.facts[i]);
             nodes.push(match n {
                 Node::Constant(..) | Node::Input(_) => n.clone(),
                 Node::Add(a, b) => Node::Add(remap[*a], remap[*b]),
@@ -373,11 +359,22 @@ impl Expression {
                 Node::Embed(f, a) => Node::Embed(*f, remap[*a]),
             });
         }
-        Self::new(
-            self.inputs.clone(),
-            nodes,
-            positions.iter().map(|p| remap[self.outputs[*p]]).collect(),
-        )
+        let outputs = positions.iter().map(|p| remap[self.outputs[*p]]).collect();
+        if unique {
+            // A closed sub-DAG keeps the admitted field, degree and depth facts.
+            // Removing nodes/outputs and renumbering edges down cannot increase
+            // canonical bytes. Keep the parent's input numbering for callers.
+            // Avoid re-admission and JSON serialization for every row segment.
+            Ok(Self {
+                inputs: self.inputs.clone(),
+                nodes,
+                outputs,
+                facts,
+            })
+        } else {
+            // Repeated roots can grow the carrier; retain ordinary byte checks.
+            Self::new(self.inputs.clone(), nodes, outputs)
+        }
     }
 }
 
@@ -405,6 +402,18 @@ mod tests {
         assert_eq!(e.degrees(&[0, 7]).unwrap(), [0, 0, 7, 7]);
         assert_eq!(e.used_inputs(&[1]).unwrap(), [1]);
         assert_eq!(e.select(&[1]).unwrap().nodes(), [Node::Input(1)]);
+        for positions in [&[][..], &[1], &[1, 0], &[1, 1]] {
+            let selected = e.select(positions).unwrap();
+            let read_back = Expression::parse(&selected.canonical()).unwrap();
+            assert_eq!(selected.nodes(), read_back.nodes());
+            assert_eq!(selected.facts(), read_back.facts());
+            assert_eq!(selected.outputs(), read_back.outputs());
+        }
+        assert_eq!(e.select(&[2]).err(), Some(Error("ring-output")));
+        assert_eq!(
+            e.select(&vec![0; OUTPUT_LIMIT + 1]).err(),
+            Some(Error("ring-limit"))
+        );
         assert_eq!(e.degrees(&[DEGREE_LIMIT, 1]), Err(Error("ring-degree")));
         for invalid in [
             text.replace("[3,2]", "[4,2]"),

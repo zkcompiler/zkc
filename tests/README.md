@@ -19,6 +19,7 @@ maintains independent research models and checks.
 | Installed CLI | `nix build .#checks.x86_64-linux.application` | Compile, inspect, prove and verify outside the checkout |
 | C++/Rust/Python style | `just lint` | clang-format, Rust formatting, Clippy and Python lint |
 | Broad native integration | `just test` | Compiler, Rust, root integration, installation, docs, lint and demo |
+| Plonky3 AIR adapter | `just test-plonky3` | Pinned upstream adapter and native differential controls |
 | Independent Lean research | `just test-lean` | Optional formal build, controls and consumers |
 
 `just setup` prepares locked Python and Cargo dependencies. `just build` builds

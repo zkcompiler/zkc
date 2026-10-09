@@ -80,7 +80,7 @@ semantics flattens them and the restriction is checked on the flattened list.
 | [Specification](ZkcClean/Specification.lean): `guarantees_of_export`, `table_guarantees_of_export` | `FullGuarantees` and `FullRequirements` (table `Guarantees` and `Requirements`) hold | Successful export: no interaction exists |
 | Same module: `row_spec`, `table_spec` | The zkc relation gives the component's `Spec` per row, and the table's `Spec` and `Requirements` | The component's actual `Assumptions`, which may constrain `Environment.data`; via upstream `Component.weakSoundness`, `Table.weakSoundness` |
 | [Native](ZkcClean/Native.lean): `export_ring`, `component_ring` | Each imported assertion's shared ring tree (`AIR.Expr.toRing`) evaluates to the upstream constraint's `Expression.eval`, in export order | Successful export and import; composes `export_expression` with `Zkc.Relation.AIR.Expr.toRing_eval` |
-| Same module: `native_ring`, `component_native_ring` | Output `j` of the emitted relation arena, read as a ring tree with residue literals and input `i` bound to column `i`, evaluates to upstream constraint `j` on the row | A `PrimePresentation`: Clean's `fromNat` is `Nat.cast` on a prime field of the presented size |
+| Same module: `native_ring`, `component_native_ring` | The Lean `Term.ring` interpretation of assertion `j`, with residue literals and input `i` bound to column `i`, evaluates to upstream constraint `j` on the row | A `PrimePresentation`: Clean's `fromNat` is `Nat.cast` on a prime field of the presented size |
 | Same module: `no_presentation_of_not_prime` | A Clean field of non-prime size, such as a binary field, has no presentation | None |
 
 The theorems relate Lean terms: a Clean component, its exported artifact and the

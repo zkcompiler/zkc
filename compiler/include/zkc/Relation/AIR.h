@@ -117,6 +117,8 @@ public:
   /// The selected constraint's actual expression in the shared ring core.
   /// Input maps contain only referenced public coordinates and relative reads.
   llvm::Expected<AIRExpressionView> expressionView(uint32_t constraint) const;
+  /// All constraints as ordered outputs, sharing identical public/read inputs.
+  llvm::Expected<AIRExpressionView> expressionView() const;
   llvm::Expected<AIRPlan> compile(uint32_t height) const;
   /// Dense admission checks every field value, including unused coordinates.
   /// scheduledReads counts only subsequent selective evaluation fetches.

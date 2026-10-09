@@ -147,7 +147,7 @@ fn extension_products_embeddings_and_carrier_promotion() {
         run(&e, &bound, 2, true),
         [bound[0] * bound[1], bound[2] * bound[3]]
     );
-    assert!(
+    assert_eq!(
         ring::rows(
             &e,
             Identity::KoalaBear,
@@ -158,9 +158,11 @@ fn extension_products_embeddings_and_carrier_promotion() {
             &mut Budget::default(),
             usize::MAX
         )
-        .is_err()
+        .unwrap_err()
+        .code,
+        "refused:ring-carrier"
     );
-    assert!(
+    assert_eq!(
         ring::rows(
             &e,
             Identity::KoalaBearExt8,
@@ -171,7 +173,9 @@ fn extension_products_embeddings_and_carrier_promotion() {
             &mut Budget::default(),
             usize::MAX
         )
-        .is_err()
+        .unwrap_err()
+        .code,
+        "refused:ring-carrier"
     );
 }
 #[test]
@@ -210,7 +214,7 @@ fn exact_cubic_coefficients_and_preflight_failures() {
         );
     }
     let mut budget = Budget { limit: 1, spent: 0 };
-    assert!(
+    assert_eq!(
         ring::affine_sum(
             &e,
             Identity::KoalaBear,
@@ -221,10 +225,12 @@ fn exact_cubic_coefficients_and_preflight_failures() {
             &mut budget,
             usize::MAX
         )
-        .is_err()
+        .unwrap_err()
+        .code,
+        "exhausted:ring-work"
     );
     assert_eq!(budget.spent, 0, "full bulk work refuses before execution");
-    assert!(
+    assert_eq!(
         ring::rows(
             &e,
             Identity::KoalaBear,
@@ -235,9 +241,11 @@ fn exact_cubic_coefficients_and_preflight_failures() {
             &mut Budget::default(),
             usize::MAX
         )
-        .is_err()
+        .unwrap_err()
+        .code,
+        "refused:ring-input-shape"
     );
-    assert!(
+    assert_eq!(
         ring::coefficients(
             &e,
             Identity::KoalaBear,
@@ -247,10 +255,12 @@ fn exact_cubic_coefficients_and_preflight_failures() {
             &mut Budget::default(),
             1
         )
-        .is_err()
+        .unwrap_err()
+        .code,
+        "exhausted:output-bytes"
     );
     let huge = vec![F::ONE; 3 * 23];
-    assert!(
+    assert_eq!(
         ring::coefficients(
             &e,
             Identity::KoalaBear,
@@ -260,7 +270,9 @@ fn exact_cubic_coefficients_and_preflight_failures() {
             &mut Budget::default(),
             usize::MAX
         )
-        .is_err()
+        .unwrap_err()
+        .code,
+        "refused:ring-coefficient-degree"
     );
 }
 #[test]
@@ -269,9 +281,15 @@ fn registry_identity_and_large_two_column_execution() {
     let text = e.canonical();
     let digest = format!("{:x}", Sha256::digest(text.as_bytes()));
     let mut registry = Registry::default();
-    assert!(registry.insert(&"0".repeat(64), &text).is_err());
+    assert_eq!(
+        registry.insert(&"0".repeat(64), &text).unwrap_err().code,
+        "refused:ring-asset-identity"
+    );
     registry.insert(&digest, &text).unwrap();
-    assert!(registry.insert(&digest, &text).is_err());
+    assert_eq!(
+        registry.insert(&digest, &text).unwrap_err().code,
+        "refused:ring-asset-duplicate"
+    );
     assert!(registry.admitted_bytes() > text.len());
     let policy = Policy {
         max_table_elements: 1 << 20,
@@ -363,7 +381,7 @@ fn empty_batches_still_charge_preparation_and_keep_cumulative_work() {
     assert!(work.spent > previous);
     work.limit = work.spent;
     let previous = work.spent;
-    assert!(
+    assert_eq!(
         ring::rows::<F>(
             &e,
             Identity::KoalaBear,
@@ -374,7 +392,9 @@ fn empty_batches_still_charge_preparation_and_keep_cumulative_work() {
             &mut work,
             usize::MAX
         )
-        .is_err()
+        .unwrap_err()
+        .code,
+        "exhausted:ring-work"
     );
     assert_eq!(work.spent, previous);
 }
@@ -432,4 +452,70 @@ fn runner_frames_retain_ring_work_after_a_later_operation_fails() {
     assert_eq!(backend.ring_work_spent(), 36);
     assert_eq!(backend.active_frames(), 0);
     assert_eq!(backend.with_ring_work_limit(0).ring_work_spent(), 36);
+}
+
+#[test]
+fn registry_bounds_text_and_decoded_metadata_before_installation() {
+    let mut registry = Registry::default();
+    assert_eq!(
+        registry
+            .insert("", &" ".repeat(32 * 1024 * 1024 + 1))
+            .unwrap_err()
+            .code,
+        "exhausted:ring-assets-bytes"
+    );
+    assert_eq!(registry.admitted_bytes(), 0);
+    let mut refused = false;
+    for i in 0..32 {
+        let mut nodes = vec![Node::Constant(Identity::KoalaBear, i.to_string()); 8192];
+        let mut level: Vec<usize> = (0..8192).collect();
+        while level.len() > 1 {
+            level = level
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|pair| {
+                    let parent = nodes.len();
+                    nodes.push(Node::Add(pair[0], pair[1]));
+                    parent
+                })
+                .collect();
+        }
+        let expression = Expression::new(vec![], nodes, level).unwrap();
+        let text = expression.canonical();
+        let digest = format!("{:x}", Sha256::digest(text.as_bytes()));
+        let previous = registry.admitted_bytes();
+        if let Err(error) = registry.insert(&digest, &text) {
+            assert_eq!(error.code, "exhausted:ring-assets-bytes");
+            assert_eq!(registry.admitted_bytes(), previous);
+            assert!(
+                previous + text.len() <= 32 * 1024 * 1024,
+                "decoded metadata, not just source text, reaches the bound"
+            );
+            refused = true;
+            break;
+        }
+    }
+    assert!(refused);
+}
+
+#[test]
+fn an_active_frame_cannot_replace_the_expression_registry() {
+    use zkc_runtime::interactive::Backend;
+
+    let program = support::program(&[], &[], vec![], &[], &[]);
+    let controlled = support::Controlled::new(support::backend(Policy::default()));
+    let (result, controlled) = support::run_program(controlled, &program, vec![]);
+    assert!(result.is_ok());
+    let mut backend = controlled.inner;
+    backend.enter_frame(&controlled.frames[0], &[]).unwrap();
+    assert_eq!(backend.active_frames(), 1);
+    assert_eq!(
+        backend
+            .with_ring_assets(Registry::default())
+            .err()
+            .unwrap()
+            .code,
+        "refused:ring-active-backend"
+    );
 }

@@ -115,3 +115,23 @@ def test_expression_asset_authority(toolchain, journal, directory):
     changed_request = write(directory, 'changed-request.json', {
         'format': 'zkc.entry-proof/0', 'public': changed_public})
     journal.run([toolchain.runtime, 'verify', package, pin, changed_request, proof, assets], refuses='proof-header')
+
+
+
+def test_expression_asset_manifest_refusals(toolchain, journal, directory):
+    package, pin, _ = build(toolchain, journal, directory, 'Proof')
+    request = write(directory, 'request.json', {'format': 'zkc.entry-proof/0', 'public': values()})
+    proof = directory / 'proof.bin'
+    arena = directory / 'invalid-utf8.ring.json'
+    arena.write_bytes(b'\xff')
+    for name, manifest, reason in [
+        ('shape', {}, 'ring-assets-format'),
+        ('version', ['zkc.ring-assets/1', []], 'ring-assets-format'),
+        ('utf8', ['zkc.ring-assets/0', [[DIGEST, str(arena)]]], 'ring-assets-utf8'),
+        ('duplicate', ['zkc.ring-assets/0', [[DIGEST, str(PROJECT / 'product.ring.json')]] * 2],
+         'ring-asset-duplicate'),
+    ]:
+        path = write(directory, f'{name}-assets.json', manifest)
+        journal.run([toolchain.runtime, 'prove', package, pin, request, proof,
+                     f'--evaluators={path}'], refuses=reason)
+        assert not proof.exists()

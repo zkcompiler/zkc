@@ -222,11 +222,6 @@ std::vector<int32_t> offsets(const std::vector<BundleOutputFact> &facts,
       result.push_back(read.offset);
   return result;
 }
-std::vector<uint32_t> interactionOutputs(const BundleInteraction &interaction) {
-  std::vector<uint32_t> outputs = interaction.tuple;
-  outputs.push_back(interaction.count);
-  return outputs;
-}
 } // namespace
 
 Expected<Admitted> admitData(const Bundle &bundle,

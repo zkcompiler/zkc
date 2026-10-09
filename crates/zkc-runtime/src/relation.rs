@@ -26,6 +26,8 @@ pub const OFFSET_LIMIT: i32 = 65_536;
 pub const HEIGHT_LIMIT: u32 = 1 << 20;
 pub const COORDINATE_LIMIT: u64 = 1 << 22;
 pub const WORK_LIMIT: u64 = 1 << 26;
+pub const ANALYSIS_WORK_LIMIT: u64 = 1 << 26;
+pub const ANALYSIS_INPUT_LIMIT: u64 = 1 << 22;
 pub const CONTRIBUTION_LIMIT: u64 = 1 << 22;
 pub const RESULT_RECORD_LIMIT: u64 = 1 << 20;
 pub const RESULT_COORDINATE_LIMIT: u64 = 1 << 22;
@@ -35,24 +37,37 @@ pub const SLOT_LIMIT: usize = 4_096;
 pub const PREMISE_LIMIT: usize = 4_096;
 type Result<T> = std::result::Result<T, Error>;
 
-/// Prime characteristic of an installed field; the extension's is its base's.
-fn modulus(field: Identity) -> Option<&'static str> {
-    match field {
-        Identity::KoalaBear | Identity::KoalaBearExt8 => Some("2130706433"),
-        Identity::Bls12381Fr => {
-            Some("52435875175126190479447740508185965837690552500527637822603658699938581184513")
+/// Bound repeated formation scans and retained input facts across all tables.
+#[derive(Default)]
+struct AnalysisBudget {
+    work: u64,
+    inputs: u64,
+}
+impl AnalysisBudget {
+    fn account(
+        &mut self,
+        arena: &Expression,
+        traversals: usize,
+        retained_outputs: usize,
+    ) -> Result<()> {
+        let input_count = arena.inputs().len() as u64;
+        let scan = arena.nodes().len() as u64 + input_count + 1;
+        let traversals = traversals as u64;
+        let retained_outputs = retained_outputs as u64;
+        if traversals > (ANALYSIS_WORK_LIMIT - self.work) / scan
+            || (input_count != 0
+                && retained_outputs > (ANALYSIS_INPUT_LIMIT - self.inputs) / input_count)
+        {
+            return Err(Error("bundle-analysis-limit"));
         }
-        Identity::Bn254Fr => {
-            Some("21888242871839275222246405745257275088548364400416034343698204186575808495617")
-        }
-        Identity::Ristretto255Scalar => {
-            Some("7237005577332262213973186563042994240857116359379907606001950938285454250989")
-        }
-        _ => None,
+        self.work += traversals * scan;
+        self.inputs += retained_outputs * input_count;
+        Ok(())
     }
 }
+
 fn is_prime(field: Identity) -> bool {
-    modulus(field).is_some() && field != Identity::KoalaBearExt8
+    field.field_characteristic().is_some() && field != Identity::KoalaBearExt8
 }
 /// Coordinates per element: `koala-bear.ext8-binomial3` is F_p[X]/(X^8 - 3)
 /// in the ascending basis (docs/spec/domains/values.md).
@@ -65,18 +80,9 @@ pub fn degree(field: Identity) -> Option<usize> {
         None
     }
 }
-fn canonical(field: Identity, text: &str) -> bool {
-    let Some(m) = modulus(field) else {
-        return false;
-    };
-    !text.is_empty()
-        && text.len() <= 256
-        && text.bytes().all(|b| b.is_ascii_digit())
-        && (text.len() == 1 || !text.starts_with('0'))
-        && (text.len() < m.len() || (text.len() == m.len() && text < m))
-}
+
 fn below_modulus(field: Identity, n: u64) -> bool {
-    let (m, n) = (modulus(field).unwrap_or("0"), n.to_string());
+    let (m, n) = (field.field_characteristic().unwrap_or("0"), n.to_string());
     n.len() < m.len() || (n.len() == m.len() && n.as_str() < m)
 }
 fn identity_hex(bytes: &[u8]) -> String {
@@ -169,7 +175,7 @@ fn text(value: &Value, code: &'static str) -> Result<String> {
 fn field(value: &Value) -> Result<Identity> {
     let name = value.as_str().ok_or(Error("bundle-schema"))?;
     let field = Identity::parse(name).map_err(|_| Error("bundle-field"))?;
-    modulus(field).ok_or(Error("bundle-field"))?;
+    field.field_characteristic().ok_or(Error("bundle-field"))?;
     Ok(field)
 }
 fn signed_offset(value: &Value) -> Option<i32> {
@@ -501,7 +507,7 @@ impl Bundle {
             if c.tuple
                 .iter()
                 .chain([&c.count])
-                .any(|f| modulus(*f).is_none())
+                .any(|f| f.field_characteristic().is_none())
             {
                 return Err(Error("bundle-field"));
             }
@@ -512,6 +518,7 @@ impl Bundle {
         unique_names(channels.iter().map(|c| c.name.as_str()))?;
         unique_names(tables.iter().map(|t| t.name.as_str()))?;
         let mut facts = Vec::with_capacity(tables.len());
+        let mut analysis_budget = AnalysisBudget::default();
         for table in &tables {
             check_height(table.height)?;
             if table.groups.len() > GROUP_LIMIT {
@@ -581,6 +588,11 @@ impl Bundle {
                 check_scope(i.parts().2)?;
                 referenced.extend(i.outputs());
             }
+            analysis_budget.account(
+                arena,
+                arena.outputs().len() + referenced.len() + 1,
+                arena.outputs().len(),
+            )?;
             check_outputs_used(arena, &referenced)?;
             let degrees = arena.degrees(&weights)?;
             let mut outputs = Vec::with_capacity(arena.outputs().len());
@@ -1455,7 +1467,9 @@ impl Bundle {
         }
         admitted.work = work;
         for (s, v) in self.publics.iter().zip(&instance.publics) {
-            if v.len() != degree(s.field).unwrap_or(0) || !v.iter().all(|c| canonical(s.field, c)) {
+            if v.len() != degree(s.field).unwrap_or(0)
+                || !v.iter().all(|c| s.field.canonical_field_literal(c))
+            {
                 return Err(Error("bundle-value"));
             }
         }
@@ -1477,7 +1491,7 @@ impl Bundle {
                     }),
                 };
                 if let Some(data) = data
-                    && !data.iter().all(|c| canonical(g.field, c))
+                    && !data.iter().all(|c| g.field.canonical_field_literal(c))
                 {
                     return Err(Error("bundle-value"));
                 }
@@ -2099,6 +2113,7 @@ impl Staged {
                 Premise::CharacteristicExceeds { .. } => {}
             }
         }
+        let mut analysis_budget = AnalysisBudget::default();
         for (t, base) in bundle.tables.iter().enumerate() {
             let mut group_names: BTreeSet<&str> =
                 base.groups.iter().map(|g| g.name.as_str()).collect();
@@ -2138,6 +2153,7 @@ impl Staged {
                 if let Some(extra) = premise_outputs.get(&(p as u32 + 1, t as u32)) {
                     referenced.extend(extra.iter().filter(|o| **o < table.arena.outputs().len()));
                 }
+                analysis_budget.account(&table.arena, referenced.len() + 1, 0)?;
                 check_outputs_used(&table.arena, &referenced)?;
                 if base.read_model == ReadModel::Finite {
                     for a in &table.assertions {
@@ -2151,6 +2167,7 @@ impl Staged {
             }
         }
         staged_check_inputs(bundle, &phases, 0, phases.len(), &global.0, &global.1, true)?;
+        analysis_budget.account(&global.0, global.2.len() + 1, 0)?;
         check_outputs_used(&global.0, &global.2)?;
         for p in &premises {
             let (phase, table, outputs, scope) = match p {
@@ -2173,7 +2190,7 @@ impl Staged {
                     scope,
                 } => (*phase, *table, outputs.as_slice(), *scope),
                 Premise::CharacteristicExceeds { field, bound } => {
-                    if modulus(*field).is_none() || *bound < 1 {
+                    if field.field_characteristic().is_none() || *bound < 1 {
                         return Err(Error("staged-premise"));
                     }
                     continue;
@@ -2687,7 +2704,7 @@ impl Staged {
             ] {
                 for (s, v) in slots.iter().zip(values) {
                     if v.len() != degree(s.field).unwrap_or(0)
-                        || !v.iter().all(|c| canonical(s.field, c))
+                        || !v.iter().all(|c| s.field.canonical_field_literal(c))
                     {
                         return Err(Error("bundle-value"));
                     }
@@ -2695,7 +2712,7 @@ impl Staged {
             }
             for (table, groups) in phase.tables.iter().zip(&data.tables) {
                 for ((_, field, _), columns) in table.groups.iter().zip(groups.iter().flatten()) {
-                    if !columns.iter().all(|c| canonical(*field, c)) {
+                    if !columns.iter().all(|c| field.canonical_field_literal(c)) {
                         return Err(Error("bundle-value"));
                     }
                 }

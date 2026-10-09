@@ -294,22 +294,13 @@ fn attributes(
             if attrs.len() == 1 =>
         {
             natural_syntax(&attrs[0])?;
-            // Exact installed field modulus; no modular reduction at admission.
-            const MODULUS: &str =
-                "52435875175126190479447740508185965837690552500527637822603658699938581184513";
-            let modulus = if rule == AttributeRule::Bn254Decimal {
-                "21888242871839275222246405745257275088548364400416034343698204186575808495617"
-            } else if rule == AttributeRule::KoalaBearDecimal {
-                "2130706433"
-            } else if rule == AttributeRule::RistrettoDecimal {
-                "7237005577332262213973186563042994240857116359379907606001950938285454250989"
-            } else {
-                MODULUS
+            let field = match rule {
+                AttributeRule::Bn254Decimal => super::Identity::Bn254Fr,
+                AttributeRule::KoalaBearDecimal => super::Identity::KoalaBear,
+                AttributeRule::RistrettoDecimal => super::Identity::Ristretto255Scalar,
+                _ => super::Identity::Bls12381Fr,
             };
-            let a = attrs[0].as_str();
-            if decode::canonical_decimal(a)
-                && (a.len() < modulus.len() || (a.len() == modulus.len() && a < modulus))
-            {
+            if field.canonical_field_literal(&attrs[0]) {
                 Ok(())
             } else {
                 Err(err(

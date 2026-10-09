@@ -29,7 +29,10 @@ this adapter; the zkc compiler and runtime never recognize an AIR by name.
 
 ## Build and test
 
-From this directory:
+From the repository root, `just test-plonky3` runs the workspace tests with
+native differential checks. It is an explicit optional suite, separate from
+`just test` and automatic native CI. For individual commands, run from this
+directory:
 
 ```sh
 cargo test --locked --workspace

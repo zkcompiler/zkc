@@ -88,6 +88,13 @@ parameter is exactly 64 lowercase hexadecimal digits. It is part of the program;
 the Host separately admits the referenced arena into an immutable registry.
 No proof message installs or changes an evaluator.
 
+The current compiler checks the operation contract and digest reference; the
+Host admits the referenced arena. The digest does not expose an arithmetic body
+to MLIR optimization. Rewriting or lowering inside an arena would require the
+compiler to retain and admit its contents, derive the resulting identity and
+check the changed interpretation. Bulk evaluation and protocol compilation are
+implemented; compiler transformations of external arena bodies are not.
+
 | Contract | Data operands | Result layout |
 |---|---|---|
 | `ring.point<F>` | One vector with an entry per arena input | One value per ordered output |

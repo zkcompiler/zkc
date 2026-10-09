@@ -531,3 +531,24 @@ fn message_origins_are_unique_complete_and_match_both_participants() {
     seal(&mut drift);
     assert_eq!(admit(&drift).unwrap_err(), "native-proof-wire-map");
 }
+
+#[test]
+fn ring_work_limit_cannot_raise_the_host_ceiling() {
+    let limit = zkc_backends::ring::DEFAULT_WORK_LIMIT;
+    for allowed in [0, limit] {
+        assert!(
+            admit(&deployment())
+                .unwrap()
+                .with_ring_work_limit(allowed)
+                .is_ok()
+        );
+    }
+    assert_eq!(
+        admit(&deployment())
+            .unwrap()
+            .with_ring_work_limit(limit + 1)
+            .err()
+            .unwrap(),
+        "native-proof-ring-work-limit"
+    );
+}

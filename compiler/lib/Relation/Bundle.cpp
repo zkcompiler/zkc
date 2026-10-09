@@ -449,6 +449,19 @@ Error withDetail(Error error, StringRef detail) {
                                   : detail.str() + ": " + r.detail);
   });
 }
+Error AnalysisBudget::account(const ring::Expression &arena,
+                              uint64_t traversals, uint64_t retainedOutputs) {
+  uint64_t inputCount = arena.inputs().size();
+  uint64_t scan = arena.nodes().size() + inputCount + 1;
+  if (traversals > (BundleLimits::analysisWork - work) / scan ||
+      (inputCount &&
+       retainedOutputs > (BundleLimits::analysisInputs - inputs) / inputCount))
+    return zkc::error("bundle-analysis-limit");
+  work += traversals * scan;
+  inputs += retainedOutputs * inputCount;
+  return Error::success();
+}
+
 Error checkOutputsUsed(const ring::Expression &arena,
                        ArrayRef<uint32_t> referenced) {
   std::vector<bool> used(arena.outputs().size(), false);
@@ -521,12 +534,6 @@ Error checkHeight(const BundleHeight &height) {
     return zkc::error("bundle-height");
   return Error::success();
 }
-/// Output positions read by an interaction, in record order.
-std::vector<uint32_t> interactionOutputs(const BundleInteraction &interaction) {
-  std::vector<uint32_t> outputs = interaction.tuple;
-  outputs.push_back(interaction.count);
-  return outputs;
-}
 } // namespace
 
 Bundle::Bundle(std::vector<BundleSlot> publics,
@@ -578,6 +585,7 @@ Expected<Bundle> Bundle::create(std::vector<BundleSlot> publics,
     return error;
 
   std::vector<std::vector<BundleOutputFact>> facts;
+  AnalysisBudget analysisBudget;
   for (const auto &table : tables) {
     auto context = [&](StringRef code) { return zkc::error(code, table.name); };
     if (auto error = checkHeight(table.height))
@@ -643,6 +651,10 @@ Expected<Bundle> Bundle::create(std::vector<BundleSlot> publics,
         return error;
       llvm::append_range(referenced, interactionOutputs(interaction));
     }
+    if (auto error = analysisBudget.account(
+            arena, arena.outputs().size() + referenced.size() + 1,
+            arena.outputs().size()))
+      return withDetail(std::move(error), table.name);
     if (auto error = checkOutputsUsed(arena, referenced))
       return withDetail(std::move(error), table.name);
     auto degrees = arena.degrees(weights);
@@ -1125,54 +1137,17 @@ Expected<Bundle> embedAIR(const AIR &air) {
   if (air.columns())
     groups.push_back(
         {"columns", BundleAuthority::Witness, field, air.columns()});
-  // One shared arena: each constraint's nodes keep their order, shifted by the
-  // nodes already emitted; equal public slots and reads share one input.
-  std::vector<ring::Input> inputs;
+  auto view = air.expressionView();
+  if (!view)
+    return view.takeError();
   std::vector<BundleInput> bindings;
-  std::vector<ring::Node> nodes;
-  std::vector<uint32_t> outputs;
+  for (const auto &input : view->inputs)
+    bindings.push_back(
+        input.kind == AIRExpressionInput::Kind::Public
+            ? BundleInput::publicSlot(input.publicIndex)
+            : BundleInput::read(0, int32_t(input.cell.row), input.cell.column));
   std::vector<BundleAssertion> assertions;
-  std::map<uint32_t, uint32_t> publicInputs;
-  std::map<AIRCell, uint32_t> readInputs;
   for (const auto &constraint : air.constraints()) {
-    uint32_t base = nodes.size();
-    for (const auto &node : constraint.expression) {
-      switch (node.kind) {
-      case AIRKind::Constant:
-        nodes.push_back(ring::Node::literal(field, node.value));
-        break;
-      case AIRKind::Public: {
-        auto [found, inserted] =
-            publicInputs.emplace(node.index, inputs.size());
-        if (inserted) {
-          inputs.push_back({field});
-          bindings.push_back(BundleInput::publicSlot(node.index));
-        }
-        nodes.push_back(ring::Node::slot(found->second));
-        break;
-      }
-      case AIRKind::Read: {
-        auto [found, inserted] = readInputs.emplace(
-            AIRCell{node.offset, node.column}, inputs.size());
-        if (inserted) {
-          inputs.push_back({field});
-          bindings.push_back(
-              BundleInput::read(0, int32_t(node.offset), node.column));
-        }
-        nodes.push_back(ring::Node::slot(found->second));
-        break;
-      }
-      case AIRKind::Add:
-        nodes.push_back(ring::Node::add(base + node.lhs, base + node.rhs));
-        break;
-      case AIRKind::Mul:
-        nodes.push_back(ring::Node::mul(base + node.lhs, base + node.rhs));
-        break;
-      case AIRKind::Neg:
-        nodes.push_back(ring::Node::neg(base + node.lhs));
-        break;
-      }
-    }
     BundleScope scope;
     switch (constraint.scope.kind) {
     case AIRScopeKind::Every:
@@ -1188,13 +1163,8 @@ Expected<Bundle> embedAIR(const AIR &air) {
       scope = {BundleScopeKind::Interior, 0, constraint.scope.lookahead};
       break;
     }
-    assertions.push_back({uint32_t(outputs.size()), scope});
-    outputs.push_back(nodes.size() - 1);
+    assertions.push_back({uint32_t(assertions.size()), scope});
   }
-  auto arena =
-      ring::Expression::create(std::move(inputs), std::move(nodes), outputs);
-  if (!arena)
-    return arena.takeError();
   std::vector<BundleTable> tables;
   tables.push_back(
       {"trace",
@@ -1202,7 +1172,7 @@ Expected<Bundle> embedAIR(const AIR &air) {
        {BundleHeightAuthority::Instance, 1, AIRLimits::height, false},
        BundleReadModel::Finite,
        std::move(groups),
-       std::move(*arena),
+       std::move(view->expression),
        std::move(bindings),
        std::move(assertions),
        {}});

@@ -671,3 +671,23 @@ fn result_and_input_preparation_share_keys_but_recheck_authority_and_loading_quo
         "key-mismatch"
     );
 }
+
+#[test]
+fn ring_work_limit_cannot_raise_the_host_ceiling() {
+    let (raw, _) = fixture("bool");
+    let limit = zkc_backends::ring::DEFAULT_WORK_LIMIT;
+    for allowed in [0, limit] {
+        assert!(
+            host(&raw, HostLimits::default())
+                .with_ring_work_limit(allowed)
+                .is_ok()
+        );
+    }
+    assert_eq!(
+        host(&raw, HostLimits::default())
+            .with_ring_work_limit(limit + 1)
+            .err()
+            .unwrap(),
+        "bundle-ring-work-limit"
+    );
+}

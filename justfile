@@ -81,6 +81,10 @@ test-lean-integration: (fetch-lean "arklib")
 test-lean-clean: (fetch-lean "clean")
     python3 scripts/develop.py lean-clean
 
+# Test the optional AIR adapter, including independent native comparisons.
+test-plonky3:
+    cargo test --locked --manifest-path compiler/adapters/plonky3/Cargo.toml --workspace --all-features
+
 # Rebuild Lean packages without prior project or dependency objects.
 test-lean-fresh:
     python3 scripts/develop.py lean-fresh

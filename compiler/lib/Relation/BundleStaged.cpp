@@ -160,6 +160,7 @@ StagedProgram::create(const Bundle &bundle, std::vector<StagedPhase> phases,
     if (premise.kind != StagedPremise::Kind::CharacteristicExceeds)
       llvm::append_range(premiseOutputs[{premise.phase, premise.table}],
                          premise.outputs);
+  AnalysisBudget analysisBudget;
   for (uint32_t t = 0; t < bundle.tables().size(); ++t) {
     const auto &base = bundle.tables()[t];
     std::set<std::string> groupNames;
@@ -200,6 +201,9 @@ StagedProgram::create(const Bundle &bundle, std::vector<StagedPhase> phases,
         for (uint32_t output : subjects->second)
           if (output < table.arena.outputs().size())
             referenced.push_back(output);
+      if (auto error =
+              analysisBudget.account(table.arena, referenced.size() + 1, 0))
+        return context(std::move(error));
       if (auto error = checkOutputsUsed(table.arena, referenced))
         return context(std::move(error));
       if (base.readModel == BundleReadModel::Finite)
@@ -212,6 +216,9 @@ StagedProgram::create(const Bundle &bundle, std::vector<StagedPhase> phases,
   }
   if (auto error = checkInputs(bundle, phases, 0, phases.size(), global.arena,
                                global.inputs, true))
+    return withDetail(std::move(error), "global");
+  if (auto error =
+          analysisBudget.account(global.arena, global.assertions.size() + 1, 0))
     return withDetail(std::move(error), "global");
   if (auto error = checkOutputsUsed(global.arena, global.assertions))
     return withDetail(std::move(error), "global");
@@ -780,6 +787,31 @@ StagedProgram::evaluate(const Bundle &bundle, const BundleConfiguration &config,
       const auto &table = phases_[p].tables[t];
       if (!state.present || table.assertions.empty())
         continue;
+      struct ReadLayout {
+        uint32_t width = 0;
+        unsigned degree = 0;
+      };
+      std::vector<ReadLayout> readLayouts(table.inputs.size());
+      for (size_t i = 0; i < table.inputs.size(); ++i) {
+        const auto &input = table.inputs[i];
+        if (input.kind != StagedInput::Kind::Read)
+          continue;
+        StringRef field;
+        if (input.phase == 0) {
+          const auto &group = tables[t].groups[input.index];
+          field = group.field;
+          readLayouts[i].width = group.width;
+        } else {
+          const auto &group =
+              phases_[input.phase - 1].tables[t].groups[input.index];
+          field = group.field;
+          readLayouts[i].width = group.width;
+        }
+        auto degree = bundleFieldDegree(field);
+        if (!degree)
+          return degree.takeError();
+        readLayouts[i].degree = *degree;
+      }
       // Evaluate the union of active outputs once per row. Evaluating each
       // assertion separately would multiply arena work by the assertion count
       // while the preflight charges the arena only once.
@@ -816,20 +848,12 @@ StagedProgram::evaluate(const Bundle &bundle, const BundleConfiguration &config,
             const auto &input = table.inputs[index];
             if (input.kind != StagedInput::Kind::Read)
               return scalarInput(input);
-            const auto &group =
-                input.phase == 0
-                    ? StagedGroup{tables[t].groups[input.index].field,
-                                  tables[t].groups[input.index].field,
-                                  tables[t].groups[input.index].width}
-                    : phases_[input.phase - 1].tables[t].groups[input.index];
-            auto degree = bundleFieldDegree(group.field);
-            if (!degree)
-              return degree.takeError();
+            const auto &layout = readLayouts[index];
             const auto &coordinates =
                 input.phase == 0 ? state.groups[input.index]
                                  : groups[input.phase - 1][t][input.index];
             return element(
-                coordinates, *degree, group.width,
+                coordinates, layout.degree, layout.width,
                 readRow(tables[t].readModel, state.height, r, input.offset),
                 input.column);
           };

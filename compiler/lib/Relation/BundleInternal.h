@@ -137,10 +137,25 @@ Scalar element(const std::vector<llvm::APInt> &coordinates, unsigned degree,
 llvm::Error checkColumns(const BundleColumns &, uint64_t elements,
                          const Arithmetic &, std::vector<llvm::APInt> &out);
 
-/// Check a closed-input arena shared by bundle and staged tables: every
-/// declared input used, every output referenced, no duplicate bindings.
+/// Output positions read by an interaction, in record order.
+inline std::vector<uint32_t>
+interactionOutputs(const BundleInteraction &interaction) {
+  std::vector<uint32_t> outputs = interaction.tuple;
+  outputs.push_back(interaction.count);
+  return outputs;
+}
+
+/// Cumulative formation bounds, checked before traversing an arena for each
+/// output or assertion and before retaining per-output input facts.
+struct AnalysisBudget {
+  uint64_t work = 0, inputs = 0;
+  llvm::Error account(const ring::Expression &, uint64_t traversals,
+                      uint64_t retainedOutputs);
+};
+
 /// Re-home a refusal with a diagnostic location, keeping its identifier.
 llvm::Error withDetail(llvm::Error, llvm::StringRef detail);
+/// Every declared input must be used and every output must be referenced.
 llvm::Error checkOutputsUsed(const ring::Expression &,
                              llvm::ArrayRef<uint32_t> referenced);
 

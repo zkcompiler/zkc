@@ -25,6 +25,12 @@ def test_ring_admission_and_identity_agree(toolchain, journal):
             ('ristretto255.scalar', 7237005577332262213973186563042994240857116359379907606001950938285454250989)]:
         add(['zkc.ring/0', [], [['constant', prime, str(modulus-1)]], [0]])
         add(['zkc.ring/0', [], [['constant', prime, str(modulus)]], [0]], False)
+    # A scalar-field association must not admit a group, commitment or service
+    # as a field in an expression arena.
+    for nonfield in ['bls12-381.g1', 'bn254.gt', 'ristretto255.group',
+                     'rows.merkle-keccak256.koala-bear/0',
+                     'merlin3.koala-bear.ext8-binomial3.rejection31le/0']:
+        add(['zkc.ring/0', [nonfield], [], []], False)
     for changed in [
             ['zkc.ring/1', [], [], []], ['zkc.ring/0', [], [], [], []],
             ['zkc.ring/0', [ext], [['input', 0], ['embed', field, 0]], [1]],

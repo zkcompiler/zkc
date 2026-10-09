@@ -238,6 +238,17 @@ formation.
 
 ## Limits
 
+Formation bounds analysis before building output facts or checking each finite
+window (`bundle-analysis-limit`). For an arena with `N` nodes, `I` inputs,
+`O` outputs, and `R` output references in assertions and interactions, a base
+table charges `(O + R + 1) * (N + I + 1)` work and `O * I` retained input facts.
+The totals across the bundle must not exceed 2^26 work and 2^22 input facts.
+Staged tables and the global arena have a separate cumulative work budget of
+2^26, charging `(R + 1) * (N + I + 1)` each; staged `R` includes valid output
+references from recorded premises. They do not retain per-output input facts.
+These conservative shape bounds apply even to cyclic reads and repeated roots;
+they prevent compact schemas from expanding into unbounded analysis metadata.
+
 A bundle or staged program is at most 8 MiB of canonical text with at most 256
 tables, 256 groups per table, 65,536 public slots, 4,096 channels, tuple arity
 64, local keys in [0,4096], and 4,096 checks per table. Each supplied data carrier
@@ -250,7 +261,9 @@ Before any value is parsed, admission also bounds
 the reference evaluation work, `height * (arena nodes + inputs + checks + 1)`
 summed over tables with checks, by 2^26, and the number of interaction
 contributions by 2^22. Staged programs have at most 16 phases and 4,096
-challenge and claim slots per phase.
+challenge and claim slots per phase and at most 4,096 recorded premises.
+Challenge and claim names are unique across all phases. For each table, staged
+group names are unique across all phases and against its base group names.
 
 Before reference evaluation, admission also bounds materialized results by
 2^20 records and 2^22 base coordinates (`bundle-result-limit`). Each scoped

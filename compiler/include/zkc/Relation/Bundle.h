@@ -25,6 +25,8 @@ struct BundleLimits {
   static constexpr uint32_t checks = 4096, name = 128;
   static constexpr uint32_t offset = 65536, height = 1u << 20;
   static constexpr uint64_t coordinates = 1u << 22, work = 1u << 26;
+  static constexpr uint64_t analysisWork = 1u << 26;
+  static constexpr uint64_t analysisInputs = 1u << 22;
   static constexpr uint64_t contributions = 1u << 22;
   static constexpr uint64_t resultRecords = 1u << 20;
   static constexpr uint64_t resultCoordinates = 1u << 22;
