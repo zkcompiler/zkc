@@ -69,11 +69,30 @@ and every ordered output to the same tree at every fuel (`unfold_hom`,
 tree (`unfold_stable`, `unfold_isSome`), and that evaluation and degree
 transfer; [its controls](../Tests/RingExpressionSharing.lean) decide the map of
 the native sharing test and reject a wrong slot, swapped operands, a product by
-zero, a folded sum and an out-of-range image.
-[The transitive axiom audit](../Tests/RingExpression.lean) covers all three
+zero, a folded sum and an out-of-range image. Restricted node maps
+(`unfold_homOn`, `outputs_homOn`) cover dropping the nodes no output reaches.
+[Pointwise maps](../Zkc/Algebra/RingExpression/Pointwise.lean) model a checked
+map of one formula over scalar and rowwise operands: the common row count reads
+every rowwise operand, used or not (`map_shape`, `map_scalars`,
+`map_signature`), a successful map is row-by-row scalar evaluation
+(`map_coordinate`, `map_lanes`), composed formulas may be mapped in one pass
+(`map_substitute`), a subformula over scalar operands has one value for every
+row (`map_hoist`), and a map over polynomial evaluations yields evaluations of
+the substituted polynomial (`map_polynomial`), which Lagrange interpolation
+recovers exactly below the node count and never at or above it
+(`interpolate_polynomial`, `interpolate_ne_polynomial`).
+[Its controls](../Tests/PointwiseMap.lean) run the native map tests' formulas,
+refuse an unread column of another length, compare the fused and two-map forms,
+decide the dead-node map, and prove the `ZMod 17` counterexample in which the
+pointwise products of `X²` with itself interpolate on four nodes to the constant
+one and on eight nodes to `X⁴`.
+[The transitive axiom audit](../Tests/RingExpression.lean) covers all four
 modules. Native DAG admission, field typing, embeddings, JSON encoding, the
-native sharing checker and the KoalaBear/Ext8 provider are checked separately
-and are not subjects of these theorems.
+native sharing checker, the native map realizer and its correspondence reader,
+the KoalaBear/Ext8 kernels and the Ring provider are checked separately and are
+not subjects of these theorems; the
+[native comparison](../../tests/kernels/test_pointwise_polynomials.py) of a
+map, the provider and the coset kernels is bounded evidence on fixed inputs.
 
 The [source-role connection](design/role-execution.md), scoped source-cut and
 resource laws, and [committed Sumcheck connection](design/committed-sumcheck.md)

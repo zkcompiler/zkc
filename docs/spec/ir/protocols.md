@@ -208,6 +208,16 @@ equal-length inputs succeed. A mismatch is a local backend stop of this checked
 operation, like a vector kernel's own shape check. The application is ordered
 and has no purity grant, so an unused result still checks shapes.
 
+Three choices in this body simplify the formula, each with a stated effect:
+expanding callees realizes one map instead of a map per helper, so no
+intermediate column is allocated or shape-checked on its own; a subformula over
+scalar inputs is one scalar operation instead of a row operation with a
+broadcast; a scalar operation whose result the formula never reaches is not
+realized. None of them removes or reorders a shape check, and the participant
+simplifier does not rewrite realized bodies. Their value laws are the
+[pointwise map laws](../domains/vectors.md#pointwise-maps); their effects are
+measured by the [map tests](../../../tests/protocol/test_native_map.py).
+
 The independent map matcher derives the formula again from the retained original
 and walks the actual generated body: guards, operand modes, broadcasts, field and
 vector operations, literals, the returned value and bindings. It also requires

@@ -13,7 +13,17 @@ The [finite-vector contract](../../../docs/spec/domains/vectors.md) uses
 `Zkc.Algebra.linearCombination_rows`, `linearCombination_smul` and
 `linearCombination_product` over a semiring acting on a module. These laws
 describe the selected diagonal mathematics; current kernel validation is
-separate from these formal results. Companion results in
+separate from these formal results.
+The [pointwise map clause](../../../docs/spec/domains/vectors.md#pointwise-maps)
+corresponds to `Zkc.Algebra.RingExpression.map` with `map_coordinate`,
+`map_length`, `map_shape`, `map_scalars` and `map_signature`; the realization
+laws `map_substitute` and `map_hoist` and the restricted arena map
+`Arena.unfold_homOn` describe fusion, scalar hoisting and dead-node removal of
+such maps. The [interpolation sentence](../../../docs/spec/domains/polynomials.md#formal-polynomial-ssa)
+corresponds to `map_polynomial`, `interpolate_polynomial` and
+`interpolate_ne_polynomial`. All are list-model laws over one ring or field;
+the native realizer, its correspondence reader and the installed kernels are
+tested, not proved. Companion results in
 `Zkc.Protocols.InnerProduct.{Folding,Weights}`,
 `Zkc.Protocols.RangeProof.{Relations,Bits}` and
 `Zkc.Protocols.Sumcheck.CubicRound` establish algebraic identities and conditional

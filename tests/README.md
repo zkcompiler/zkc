@@ -55,10 +55,10 @@ representative controls and states their evidence limits.
   Contract conformance compares C++ Contracts, Rust admission and native backend
   signatures, including independently authored witnesses and deliberate drift.
 - `kernels/` compares extension-field arithmetic, sparse matrices, vector
-  scatter and coset evaluation/interpolation/folding against independent
-  integer calculations through `.zkc` Entries, including disabled
-  simplification, storage release and malformed wire inputs. Cargo owns the
-  broader backend/kernel unit suites.
+  scatter, coset evaluation/interpolation/folding and pointwise maps beside the
+  Ring provider and formal products against independent integer calculations
+  through `.zkc` Entries, including disabled simplification, storage release
+  and malformed wire inputs. Cargo owns the broader backend/kernel unit suites.
 - `harness/` checks tool selection, process cancellation, refusal exit statuses,
   concurrent report allocation, installation isolation and command wiring.
 - `support/` provides tool resolution, journals, the Entry helper and direct

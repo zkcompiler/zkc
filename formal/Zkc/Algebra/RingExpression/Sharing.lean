@@ -44,6 +44,12 @@ def before (i : Nat) : Node R I → Bool
   | .add left right | .mul left right => left < i && right < i
   | .neg operand => operand < i
 
+/-- The operand indices, in operand order. -/
+def children : Node R I → List Nat
+  | .constant _ | .input _ => []
+  | .add left right | .mul left right => [left, right]
+  | .neg operand => [operand]
+
 end Node
 
 /-- Nodes in index order. -/
@@ -69,6 +75,28 @@ instance (a : Arena R I) : Decidable a.WellFormed :=
 instance [DecidableEq R] [DecidableEq I] (f : Nat → Nat) (a b : Arena R I) :
     Decidable (a.Hom f b) :=
   inferInstanceAs (Decidable (∀ i (h : i < a.length), b[f i]? = some ((a[i]).map f)))
+
+/-- `live` selects nodes together with every node they reach: each operand of
+a live node is live. -/
+def Closed (live : Nat → Bool) (a : Arena R I) : Prop :=
+  ∀ i (h : i < a.length), live i = true → ∀ j ∈ (a[i]).children, live j = true
+
+/-- A label-preserving node map required on the live nodes only. Nodes outside
+`live` need no image, so a target that drops them is admitted. -/
+def HomOn (live : Nat → Bool) (f : Nat → Nat) (a b : Arena R I) : Prop :=
+  ∀ i (h : i < a.length), live i = true → b[f i]? = some ((a[i]).map f)
+
+instance (live : Nat → Bool) (a : Arena R I) : Decidable (a.Closed live) :=
+  inferInstanceAs (Decidable (∀ i (h : i < a.length), live i = true →
+    ∀ j ∈ (a[i]).children, live j = true))
+
+instance [DecidableEq R] [DecidableEq I] (live : Nat → Bool) (f : Nat → Nat)
+    (a b : Arena R I) : Decidable (a.HomOn live f b) :=
+  inferInstanceAs (Decidable (∀ i (h : i < a.length), live i = true →
+    b[f i]? = some ((a[i]).map f)))
+
+theorem Hom.homOn {f : Nat → Nat} {a b : Arena R I} (hom : a.Hom f b) (live : Nat → Bool) :
+    a.HomOn live f b := fun i h _ => hom i h
 
 /-- Unfold node `i` into the tree model with the given fuel. A well-formed
 arena resolves every node with any fuel above its index. -/
@@ -111,6 +139,51 @@ theorem unfold_hom {f : Nat → Nat} {a b : Arena R I} (wf : a.WellFormed)
     | neg operand =>
       simp only [Node.before, decide_eq_true_eq] at hw
       simp [unfold, ha, hb, Node.map, ih operand (by omega)]
+
+/-- Dead-node elimination. Under a node map that is label preserving on a
+closed live set, every live node unfolds to the same tree as its image; the
+nodes outside the set, which no live node reaches, do not take part. -/
+theorem unfold_homOn {live : Nat → Bool} {f : Nat → Nat} {a b : Arena R I}
+    (wf : a.WellFormed) (closed : a.Closed live) (hom : a.HomOn live f b) :
+    ∀ fuel i, i < a.length → live i = true → a.unfold fuel i = b.unfold fuel (f i) := by
+  intro fuel
+  induction fuel with
+  | zero => intro i _ _; rfl
+  | succ fuel ih =>
+    intro i hi hl
+    have hw := wf i hi
+    have hb := hom i hi hl
+    have hc := closed i hi hl
+    have ha : a[i]? = some a[i] := List.getElem?_eq_getElem hi
+    generalize a[i] = n at hw hb ha hc
+    cases n with
+    | constant value => simp [unfold, ha, hb, Node.map]
+    | input index => simp [unfold, ha, hb, Node.map]
+    | add left right =>
+      simp only [Node.before, Bool.and_eq_true, decide_eq_true_eq] at hw
+      simp only [Node.children, List.mem_cons, forall_eq_or_imp, List.not_mem_nil,
+        false_imp_iff, implies_true, and_true] at hc
+      simp [unfold, ha, hb, Node.map, ih left (by omega) hc.1, ih right (by omega) hc.2]
+    | mul left right =>
+      simp only [Node.before, Bool.and_eq_true, decide_eq_true_eq] at hw
+      simp only [Node.children, List.mem_cons, forall_eq_or_imp, List.not_mem_nil,
+        false_imp_iff, implies_true, and_true] at hc
+      simp [unfold, ha, hb, Node.map, ih left (by omega) hc.1, ih right (by omega) hc.2]
+    | neg operand =>
+      simp only [Node.before, decide_eq_true_eq] at hw
+      simp only [Node.children, List.mem_singleton, forall_eq] at hc
+      simp [unfold, ha, hb, Node.map, ih operand (by omega) hc]
+
+/-- Live ordered outputs, including repeated positions, unfold to the trees of
+their images under a map defined on the live nodes only. -/
+theorem outputs_homOn {live : Nat → Bool} {f : Nat → Nat} {a b : Arena R I}
+    (wf : a.WellFormed) (closed : a.Closed live) (hom : a.HomOn live f b)
+    (fuel : Nat) (outputs : List Nat)
+    (bound : ∀ o ∈ outputs, o < a.length ∧ live o = true) :
+    outputs.map (a.unfold fuel) = (outputs.map f).map (b.unfold fuel) := by
+  rw [List.map_map]
+  exact List.map_congr_left fun o ho =>
+    unfold_homOn wf closed hom fuel o (bound o ho).1 (bound o ho).2
 
 /-- In a well-formed arena the fuel does not matter once it exceeds the index:
 every node has one tree. -/

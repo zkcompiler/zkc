@@ -27,6 +27,15 @@ Interpolation at distinct points returns the unique polynomial of degree below
 the point count. Evaluation followed by interpolation preserves a polynomial
 only under an adequate degree bound. In particular, `mle(T) * mle(U)` generally
 differs away from the Boolean cube from the MLE of pointwise table products.
+For univariate values the same distinction is
+[`interpolate_polynomial` and `interpolate_ne_polynomial`](../../../formal/Zkc/Algebra/RingExpression/Pointwise.lean):
+the interpolant of a formula's pointwise values recovers the substituted
+polynomial when its actual degree is below the node count, and differs when
+its actual degree reaches that count. A structural degree bound below the
+node count is sufficient for recovery. A
+[native comparison](../../../tests/kernels/test_pointwise_polynomials.py) checks
+this on KoalaBear and Ext8 cosets against integer arithmetic: the interpolant of
+pointwise products is the formal product reduced modulo `X^n - s^n`.
 
 The [structured native profile](../ir/mathematics.md)
 defines the concrete SSA signatures and bounded realization. Formal values have

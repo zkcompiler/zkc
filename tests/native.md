@@ -46,7 +46,7 @@ or external prover/verifier compatibility.
 | UniformIndex sampling | [Source, formation and construction](../compiler/test/native_index_sampling.py), [independent transcript replay](../crates/zkc-test-drivers/src/native_index_sampling.rs), [spot-check client](protocol/test_index_sampling.py) |
 | Retry and completion | [Attempt lifecycle](../compiler/test/native_attempts.py), [participant completion](../compiler/test/native_entry_completion.py) |
 | Retained storage and logical work | [Proof-scale openings](protocol/test_retained_storage.py), [native ledgers](../crates/zkc-backends/tests/retained_storage.rs), [Runner ledgers](../crates/zkc-runtime/src/interactive/tests/storage.rs) |
-| Pointwise maps | [Source and comparison controls](../compiler/test/language_map.cpp), [realization schedule and correspondence mutations](../compiler/test/map_realization.cpp), [Host values, shape refusals and height-independent work](protocol/test_native_map.py) |
+| Pointwise maps | [Source and comparison controls](../compiler/test/language_map.cpp), [realization schedule and correspondence mutations](../compiler/test/map_realization.cpp), [Host values, shape refusals, height-independent work and the measured effect of helper inlining, scalar hoisting and dead scalar operations](protocol/test_native_map.py), [agreement of a map with the Ring provider and the coset kernels on KoalaBear/Ext8, with the off-domain interpolation case](kernels/test_pointwise_polynomials.py) |
 | External relation export | [Clean export against finite AIR and ring providers](protocol/test_clean_air_conformance.py) |
 
 ## Independent references and trust

@@ -201,6 +201,16 @@ padded. This is elementwise arithmetic on vectors. It is not substitution into
 formal polynomials: a pointwise product of two tables is not the table of the
 product of their multilinear or univariate interpretations.
 
+The maintained Lean laws are
+[`map_coordinate`, `map_shape`, `map_substitute` and `map_hoist`](../../../formal/Zkc/Algebra/RingExpression/Pointwise.lean):
+a successful map is row-by-row evaluation, unequal rowwise lengths never
+succeed, a formula composed of helpers may be mapped in one pass over the same
+operands, and a subformula over scalar inputs has one value for every row.
+Dropping scalar operations the result never reaches is the restricted node map
+of the [arena sharing laws](../../../formal/Zkc/Algebra/RingExpression/Sharing.lean).
+They establish value equalities in a list model under the stated shape premises;
+the native realization and its checks are separately tested.
+
 ## Representation and execution
 
 A diagonal representation may retain immutable factors and original values

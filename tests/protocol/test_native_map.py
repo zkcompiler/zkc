@@ -197,3 +197,136 @@ def test_native_map_example_combination(toolchain, journal, directory):
     assert result['V']['accepted'] is True
     run(toolchain, journal, directory, package, pin, 'short', roles([1, 2, 3], [4, 5]),
         refuses='entry-run-incomplete')
+
+
+# The map realizer applies three simplifications of its own: it inlines the
+# helpers a formula calls, keeps subformulas over scalar inputs scalar, and
+# drops scalar operations that never reach the result. The participant
+# simplifier never touches a realized local body, so every variant below is
+# compared with and without `--no-simplify` as well. Each variant computes the
+# same rows from the same inputs; the comparisons are of the executed work.
+VARIANTS = {
+    # One map; `square` is inlined and `s + 1` is one scalar operation.
+    'fused': '''fn combine(a: Vector<Fr>, b: Vector<Fr>, c: Vector<Fr>, s: Fr) -> Vector<Fr> {
+  return map residual(each a, each b, each c, s);
+}''',
+    # Two maps: the helper's rows are materialized and mapped again.
+    'split': '''fn combine(a: Vector<Fr>, b: Vector<Fr>, c: Vector<Fr>, s: Fr) -> Vector<Fr> {
+  let squares = map square(each a);
+  return map residual_of_square(each squares, each b, each c, s);
+}''',
+    # The scalar is supplied as a column, so `s + 1` is computed on every row.
+    # The column is a fourth rowwise operand: this form also builds the column
+    # and checks its length, so its measurements include that extra check.
+    'rows': '''fn combine(a: Vector<Fr>, b: Vector<Fr>, c: Vector<Fr>, s: Fr) -> Vector<Fr> {
+  let column = kernel<Fr>("vector.fill", s, kernel<Fr>("vector.length", a));
+  return map residual(each a, each b, each c, each column);
+}''',
+    # A scalar product that never reaches the result.
+    'dead': '''fn combine(a: Vector<Fr>, b: Vector<Fr>, c: Vector<Fr>, s: Fr) -> Vector<Fr> {
+  return map residual_dead(each a, each b, each c, s);
+}''',
+}
+
+PRELUDE = '''module sample;
+domain Fr = field("koala-bear");
+type Vector<F: Field> = builtin("vector", F);
+math fn square<F: Field>(x: F) -> F { return x * x; }
+math fn residual<F: Field>(a: F, b: F, unused: F, s: F) -> F {
+  return (s + 1) * (square(a) - b) + s;
+}
+math fn residual_of_square<F: Field>(sq: F, b: F, unused: F, s: F) -> F {
+  return (s + 1) * (sq - b) + s;
+}
+math fn residual_dead<F: Field>(a: F, b: F, unused: F, s: F) -> F {
+  let dead = s * s;
+  return (s + 1) * (square(a) - b) + s;
+}
+'''
+
+PROTOCOL = '''
+protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, c: Vector<Fr> @P, s: Fr @P)
+    -> (combined: Vector<Fr> @P) {
+  let combined = combine(a, b, c, s);
+  return (combined = combined);
+}
+entry Demo = Run;
+'''
+
+
+def realized_operation_counts(toolchain, journal, directory, name, source):
+    """Operations in the helper formula and in the realized map body.
+
+    The emitted original keeps every helper operation, used or not; the
+    prepared module holds the realized `local.func` the checker admitted.
+    """
+    path = directory / f'{name}.zkc'
+    path.write_text(source)
+    emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
+                           '--entry=sample::Demo', f'--module=sample={path}'])
+    original = directory / f'{name}.mlir'
+    original.write_text(emitted)
+    prepared = journal.run([toolchain.optimizer, '--zkc-prepare-protocol', str(original)])
+    helper = sum(line.count('algebra.field_') + line.count('algebra.constant')
+                 for line in emitted.splitlines())
+    body, inside = 0, False
+    for line in prepared.splitlines():
+        if 'local.func @zkl_map_' in line:
+            inside = True
+        elif inside and line.strip().startswith('return'):
+            inside = False
+        elif inside and ('algebra.exec.' in line or 'local.exec.' in line):
+            body += 1
+    return helper, body
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_realizer_simplifications_change_work_not_values_or_checks(toolchain, journal, directory, flags):
+    rng = random.Random(9043)
+    height = 256
+    a, b, c = ([rng.randrange(MODULUS) for _ in range(height)] for _ in range(3))
+    s = rng.randrange(MODULUS)
+    expected_rows = [((s + 1) * (x * x - y) + s) % MODULUS for x, y in zip(a, b)]
+    usage, values = {}, {}
+    for name, combine in VARIANTS.items():
+        entry = Entry(toolchain, journal, subdirectory(directory, name),
+                      PRELUDE + combine + PROTOCOL, flags)
+        result = report(entry, 'rows', inputs(a, b, c, s))
+        assert result['status'] == 'executed'
+        usage[name] = result['execution']['roles'][0]['usage']
+        values[name] = entry.run('values', inputs(a, b, c, s))['combined']
+        # Every variant still compares the unread column before any arithmetic,
+        # with or without its own simplification.
+        refused = entry.run('unread-mismatch', inputs(a, b, c[:-1], s),
+                            refuses='entry-run-incomplete')
+        assert 'rejected:require' in json.dumps(refused), name
+    assert all(value == vector(expected_rows) for value in values.values())
+    fused, split, rows, dead = (usage[name] for name in ('fused', 'split', 'rows', 'dead'))
+    # Inlining the helper saves the intermediate column and its own shape check.
+    assert fused['instructions'] < split['instructions']
+    assert fused['total_value_bytes'] < split['total_value_bytes']
+    assert fused['logical_bytes'] < split['logical_bytes']
+    # Keeping `s + 1` scalar saves one column of work and one broadcast; the
+    # column form additionally builds and length-checks its fourth operand, so
+    # this difference measures hoisting together with that extra check.
+    assert fused['instructions'] < rows['instructions']
+    assert fused['logical_bytes'] < rows['logical_bytes']
+    # The dead product leaves no trace in the executed work.
+    assert dead == fused
+
+
+def test_realizer_simplifications_are_visible_in_the_realized_body(toolchain, journal, directory):
+    counts = {name: realized_operation_counts(toolchain, journal, directory, name,
+                                              PRELUDE + combine + PROTOCOL)
+              for name, combine in VARIANTS.items()}
+    # The dead helper has one more formula operation and the same realized body.
+    assert counts['dead'][0] == counts['fused'][0] + 1
+    assert counts['dead'][1] == counts['fused'][1]
+    # Fusion realizes one body; the split form realizes two maps and the
+    # helper's own shape check, so it needs more operations overall. The
+    # prepared module counts both bodies here.
+    assert counts['split'][1] > counts['fused'][1]
+    # Supplying the scalar as a column costs a fourth length check with its
+    # comparison and broadcasts instead of scalar arithmetic; the count again
+    # measures both together.
+    assert counts['rows'][1] > counts['fused'][1]
