@@ -120,6 +120,15 @@ query order through nested protocol calls. Independent integer interpolation
 also reconstructs the complete quotient chunks, OOD claims and DEEP word. Native Bundle
 polynomial tests independently check descriptors, degrees and substitutions.
 
+[Adversarial controls](../../tests/protocol/test_air_stark_adversarial.py)
+reach the verifier with a false trace, a compensated opening lie and a
+column whose degree exceeds the declared bound. The
+[statement-authority controls](../../tests/protocol/test_air_statement_authority.py)
+use interval scopes and public columns, and reject a prover's consistent proof
+for different configuration, public-column or scalar inputs. Removing the
+specific known-input or degree-adjustment check admits its corresponding
+counterexample.
+
 These checks establish bounded execution and rejection evidence. A security
 claim still needs a reduction for this exact quotient/opening/FRI composition,
 its degree bounds and batching error, the sampling distribution and abort
