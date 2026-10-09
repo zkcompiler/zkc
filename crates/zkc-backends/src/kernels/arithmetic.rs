@@ -497,6 +497,28 @@ fn dense<S: Family>(
             out.extend_from_slice(slice);
             Ok(vec![S::vector_value(out.into())])
         }
+        "vector.transpose" => {
+            let input = v(0)?;
+            let rows = index(1)?;
+            let columns = index(2)?;
+            let count = rows
+                .checked_mul(columns)
+                .ok_or_else(|| refused("vector-shape"))?;
+            if input.len() != count {
+                return Err(refused("vector-shape"));
+            }
+            let mut out = allocation(count)?;
+            // A zero extent may accompany a huge other extent. Do not loop
+            // over it when there are no coordinates to visit.
+            if count != 0 {
+                for column in 0..columns {
+                    for row in 0..rows {
+                        out.push(input[row * columns + column]);
+                    }
+                }
+            }
+            Ok(vec![S::vector_value(out.into())])
+        }
         "vector.rotate" => {
             let a = v(0)?;
             let k = index(1)?;
@@ -817,6 +839,17 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             "arkworks/vector.slice",
             "dalek/vector.slice",
             "plonky3/vector.slice",
+        ]),
+        field::operation(
+            "vector.transpose",
+            &[Vector, Index, Index],
+            &[Vector],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/vector.transpose",
+            "dalek/vector.transpose",
+            "plonky3/vector.transpose",
         ]),
         field::operation("vector.length", &[Vector], &[Index], AttributeRule::None).implemented_by(
             &[

@@ -184,6 +184,8 @@ def VectorScaleOp : KernelOp<AlgebraDialect, "exec.vector_scale", [OpVectorScale
 
 def VectorScatterSumOp : KernelOp<AlgebraDialect, "exec.vector_scatter_sum", [OpVectorScatterSum]>;
 
+def VectorTransposeOp : KernelOp<AlgebraDialect, "exec.vector_transpose", [OpVectorTranspose]>;
+
 def VectorSliceOp : KernelOp<AlgebraDialect, "exec.vector_slice", [OpVectorSlice]>;
 
 def VectorSplatOp : KernelOp<AlgebraDialect, "exec.vector_splat", [OpVectorSplat]>;

@@ -144,6 +144,16 @@ An empty slice at the end is valid. Out-of-range slices refuse rather than
 truncate, wrap, or pad. The typed Lean slice laws establish bounds, length and
 coordinate preservation; native runtime adequacy remains separately tested.
 
+`vector.transpose<F>(v,rows,columns)` changes a flat row-major `rows × columns`
+matrix into the flat row-major transpose. It requires exactly `rows*columns`
+entries, with checked multiplication, and takes no attributes. The coordinate
+law is `result[column*rows + row] = v[row*columns + column]`. Zero extents admit
+only an empty vector and return immediately, even if the other extent is large.
+Transposing again with exchanged extents restores every coordinate. The selected
+realization visits each element once and checks shape and allocation limits
+before copying. This checked layout operation preserves field identity and
+values; it supplies neither polynomial interpolation nor a change of domain.
+
 `curve.get<G>(xs,i) : groups<G>, index → group:G` selects the group at
 zero-based position `i`; `curve.length<G>(xs) : groups<G> → index` returns
 the actual sequence length, including zero. Both take no operation attributes.

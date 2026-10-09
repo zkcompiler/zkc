@@ -145,7 +145,7 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
     use std::collections::BTreeSet;
     let expected = "
         field.from_index field.sub field.neg field.inverse field.constant field.add field.mul field.equal
-        vector.equal vector.get vector.slice vector.length vector.rotate vector.interleave vector.prefix_product
+        vector.transpose vector.equal vector.get vector.slice vector.length vector.rotate vector.interleave vector.prefix_product
         vector.prefix_sum vector.inverse vector.fill vector.geometric vector.constant vector.scatter_sum
         vector.empty vector.append vector.splat vector.powers vector.add vector.sub vector.mul vector.concat
         vector.kronecker vector.scale vector.sum vector.dot vector.split vector.at vector.length_check
