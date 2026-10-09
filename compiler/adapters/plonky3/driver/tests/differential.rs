@@ -431,3 +431,94 @@ fn a_large_trace_agrees_with_direct_evaluation_and_upstream() {
         );
     }
 }
+
+/// The derived bundle asserts the selector-free cofactor on scope rows. Its
+/// residuals equal the row-indicator residuals there, the export's residuals
+/// vanish off scope, and the violations are the upstream failures.
+fn check_bundle<A>(air: &A, export: &Export, trace: &RowMajorMatrix<F>, publics: &[F], name: &str)
+where
+    A: for<'a> p3_air::Air<p3_air::DebugConstraintBuilder<'a, F>>,
+{
+    use zkc_plonky3_air::bundle::BundleView;
+    let height = trace.height();
+    let assertions = export.assertions.len();
+    let bundle = BundleView::derive(export).unwrap();
+    let view = bind(export, height, publics);
+    let row_law = view.residuals(&view.row_inputs(trace, SelectorLaw::RowIndicator).unwrap());
+    let on_scope = bundle.residuals(export, trace, publics);
+    let mut covered = vec![false; row_law.len()];
+    for (row, assertion, value) in &on_scope {
+        assert_eq!(
+            *value,
+            row_law[row * assertions + assertion],
+            "{name}: row {row}, assertion {assertion}"
+        );
+        covered[row * assertions + assertion] = true;
+    }
+    for (i, residual) in row_law.iter().enumerate() {
+        assert!(
+            covered[i] || *residual == F::ZERO,
+            "{name}: off-scope residual at {i}"
+        );
+    }
+    let found: Vec<(usize, usize)> = on_scope
+        .iter()
+        .filter(|(_, _, v)| *v != F::ZERO)
+        .map(|(r, a, _)| (*r, *a))
+        .collect();
+    assert_eq!(found, upstream_failures(air, trace, publics), "{name}");
+}
+
+#[test]
+fn bundle_translation_preserves_the_row_relation() {
+    for log_height in 0..=6 {
+        let (air, export, trace, publics) = recurrence(log_height);
+        for (name, trace, publics) in cases(&trace, &publics) {
+            check_bundle(
+                &air,
+                &export,
+                &trace,
+                &publics,
+                &format!("height {}, {name}", trace.height()),
+            );
+        }
+    }
+    for height in [1, 2, 8] {
+        for guarded in [false, true] {
+            let air = CounterAir { guarded };
+            let export = zkc_plonky3_air::export(&air, "counter").unwrap();
+            check_bundle(&air, &export, &CounterAir::generate(height), &[], "counter");
+        }
+    }
+}
+
+#[test]
+fn bundle_translation_refuses_combined_selectors_and_oversized_fixed_tables() {
+    use p3_air::{Air, AirBuilder, BaseAir, WindowAccess};
+    use zkc_plonky3_air::bundle::BundleView;
+    struct Combined;
+    impl<T> BaseAir<T> for Combined {
+        fn width(&self) -> usize {
+            1
+        }
+    }
+    impl<AB: AirBuilder> Air<AB> for Combined {
+        fn eval(&self, builder: &mut AB) {
+            let x: AB::Expr = builder.main().current_slice()[0].into();
+            let selector = builder.is_first_row() * builder.is_transition();
+            builder.assert_zero(selector * x);
+        }
+    }
+    let export = zkc_plonky3_air::export(&Combined, "combined").unwrap();
+    assert_eq!(
+        BundleView::derive(&export).unwrap_err().id,
+        "plonky3-bundle-scope"
+    );
+    let (_, mut large, _, _) = recurrence(3);
+    let p = large.layout.preprocessed.as_mut().unwrap();
+    p.height = 1 << 21;
+    assert_eq!(
+        BundleView::derive(&large).unwrap_err().id,
+        "plonky3-bundle-height"
+    );
+}

@@ -8,7 +8,7 @@ use p3_matrix::dense::RowMajorMatrix;
 use zkc_plonky3_air::field::F;
 use zkc_plonky3_air::reference::upstream_failures;
 use zkc_plonky3_air::view::{ClosedView, SelectorLaw, violations};
-use zkc_plonky3_air::{Export, Instance, Refusal, Witness};
+use zkc_plonky3_air::{Export, Instance, Refusal, Witness, bundle};
 use zkc_plonky3_air_client::{CounterAir, RecurrenceAir};
 
 /// Path of each fixture directory relative to the repository root, as written
@@ -79,7 +79,7 @@ fn failures_text(failures: &[(usize, usize)]) -> String {
 /// Exact file contents of one fixture, by file name.
 pub fn files(fixture: &Fixture) -> Vec<(&'static str, String)> {
     let digest = fixture.export.arena.sha256();
-    vec![
+    let mut files = vec![
         ("export.json", fixture.export.to_text()),
         ("arena.json", fixture.export.arena_text()),
         (
@@ -92,7 +92,28 @@ pub fn files(fixture: &Fixture) -> Vec<(&'static str, String)> {
         ("instance.json", fixture.instance.to_text()),
         ("witness.json", fixture.witness.to_text()),
         ("expected.json", failures_text(&fixture.upstream_failures)),
-    ]
+    ];
+    let bundle = bundle::bundle(&fixture.export).expect("maintained fixtures translate");
+    let (text, identity) = bundle::identity(&bundle);
+    files.extend([
+        ("bundle.json", format!("{text}\n")),
+        (
+            "bundle-configuration.json",
+            format!("{}\n", bundle::configuration(&fixture.export, &identity)),
+        ),
+        (
+            "bundle-instance.json",
+            format!(
+                "{}\n",
+                bundle::instance(&fixture.export, &identity, &fixture.instance)
+            ),
+        ),
+        (
+            "bundle-witness.json",
+            format!("{}\n", bundle::witness(&identity, &fixture.witness)),
+        ),
+    ]);
+    files
 }
 
 /// Import a fixture's files independently of its in-memory capture and

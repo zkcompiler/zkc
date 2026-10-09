@@ -11,6 +11,7 @@
 
 pub mod arena;
 pub mod artifact;
+pub mod bundle;
 pub mod capture;
 pub mod field;
 pub mod model;
