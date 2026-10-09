@@ -104,4 +104,3 @@ def test_source_reduction_matches_independent_staged_reference(toolchain, journa
             assert all(block[i] == ZERO for i in active), (kind, t, name)
         ranges = unext(actual['ranges'])
         assert all(v == ZERO for v in ranges)
-
