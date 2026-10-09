@@ -53,3 +53,24 @@ manifest selects no Entry, backend, transcript or setup policy. Assets have
 `{"format": "ring-json", "path": "product.ring.json"}` entries keyed by their
 source names; see [relation inputs](relations.md) for supported formats.
 [Example projects](../../examples/projects/README.md) contain complete manifests.
+
+## Inspect completed declarations
+
+```sh
+zkc check --project=libraries/zkc/zkc.json --declarations
+```
+
+The report's `check.declarations` array lists public mathematical functions,
+local functions and protocols by qualified name. It shows static parameters,
+permissions, input/output types, participant roles, services, completed
+requirements and effects. Inferred natural/capability requirements are marked;
+written effect allowances are separate from actual body effects. Private helpers
+are still checked but are omitted from this view. The report is diagnostic data,
+not an importable interface or a proof of protocol security.
+
+Type errors identify conflicting shapes and related source locations. Unresolved
+statics name the parameter needing an argument or result annotation; ambiguous
+ordered calls list possible owners. Locations use one-based byte columns.
+Excerpts are bounded and escape control/non-ASCII bytes, so caret positions in
+the displayed excerpt can differ from the byte column. Rendering reads captured
+bytes and never opens a diagnostic path.

@@ -27,7 +27,9 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
                 "--compiler" => compiler = value,
                 "--output" => output = Some(value),
                 "--entry" => flags.push(format!("--entry={value}")),
-                "--no-simplify" | "--release-storage" => flags.push(key.to_owned()),
+                "--no-simplify" | "--release-storage" | "--declarations" => {
+                    flags.push(key.to_owned())
+                }
                 "--project" | "--module" | "--asset" => {}
                 _ => unreachable!("validated source option"),
             }

@@ -132,3 +132,50 @@ def test_project_assets_are_captured_and_protected(toolchain, journal, directory
     config['assets']['product']['format'] = 'air-json'
     project.write_text(json.dumps(config))
     journal.run([*command, f'--output={directory}/wrong.entry'], refuses='entry-compilation')
+
+
+def test_completed_declarations_and_actionable_inference_errors(toolchain, journal, directory):
+    library = directory / 'library.zkc'
+    library.write_text('''module library;
+pub math fn zero<F:Field>()->F{return 0;}
+pub fn identity(value:bool)->bool{return value;}
+''')
+    source = directory / 'main.zkc'
+    command = [toolchain.runtime, 'check', f'--compiler={toolchain.compiler}',
+               f'--module=library={library}', f'--module=main={source}']
+    source.write_text('''module main;
+use library::{zero};
+pub fn work()->bool {let unresolved = zero(); return true;}
+''')
+    report = journal.json(command, refuses='entry-compilation')
+    assert "cannot infer static argument 'F'" in report['diagnostics']
+    assert 'library::zero' in report['diagnostics']
+    assert 'note: related source' in report['diagnostics']
+    assert f'{library}:2:' in report['diagnostics']
+    source.write_text('''module main;
+use library::{identity};
+domain F=field("bls12-381.fr");
+pub fn work(value:F)->bool {return identity(value);}
+''')
+    report = journal.json(command, refuses='entry-compilation')
+    assert 'type conflict:' in report['diagnostics'] and 'bool' in report['diagnostics']
+    assert f'{library}:3:' in report['diagnostics']
+    source.write_text('''module main;
+use library::{identity};
+pub protocol Run roles(P,V)(x:bool@(P,V))->(out:bool@V){
+ let unresolved = identity(x);
+ return x;
+}
+''')
+    report = journal.json(command, refuses='entry-compilation')
+    assert 'ambiguous participant (P, V)' in report['diagnostics'] and '@Role' in report['diagnostics']
+    source.write_text(source.read_text().replace('unresolved =', 'unresolved @P ='))
+    checked = journal.json([*command, '--declarations'])['check']
+    declarations = checked['declarations']
+    assert [d['name'] for d in declarations] == ['library::identity', 'library::zero', 'main::Run']
+    assert declarations[-1]['roles'] == ['P', 'V']
+    assert declarations[1]['outputs'][0]['type'] == 'F'
+    assert declarations[1]['parameters'][0]['sort'] == 'Field'
+    assert declarations[0]['effects'] == {'opaque': False, 'stop': False}
+    compact = journal.json(command)['check']
+    assert 'declarations' not in compact

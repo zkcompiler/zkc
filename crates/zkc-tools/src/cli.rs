@@ -19,11 +19,12 @@ const COMMANDS: &[Command] = &[
             Opt::new("--module=MODULE=FILE.zkc").repeated(),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
             Opt::new("--entry=MODULE::ENTRY"),
+            Opt::new("--declarations"),
             Opt::new("--compiler=PATH"),
         ],
         description: "Supply --project (zkc.project/0) or explicit modules/assets. All definitions
 are checked. --entry also checks specialization and mathematical IR correspondence.
-Checking does not execute the protocol or establish its security.",
+--declarations reports completed public callable contracts.\nChecking does not execute the protocol or establish its security.",
     },
     Command {
         name: "compile",

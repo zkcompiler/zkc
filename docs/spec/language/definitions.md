@@ -96,6 +96,17 @@ the exact generated symbol and retained closure identify one specialization.
 Adding an unreachable definition changes capture identity but does not rename
 reachable instances. Template bodies are shared immutably. Specialization has its own work and instance budgets; retained templates do not consume the emitted-declaration allowance. Only reachable body copies are specialized before original emission.
 
+`zkc check --declarations` adds a diagnostic array of completed public callable
+contracts, sorted by qualified name, under `check.declarations`. Callable members
+are visible through their public owner. Each item reports its kind, static
+parameters and permissions, role roster, data/service argument order, typed
+ports, services, requirements, body effects (or abstract allowance), and captured
+module byte span. Natural/capability bounds retain their inferred flags; explicit
+effect allowances remain separate. Type strings are descriptive spellings,
+not a serialization accepted by the checker. The view never supplies linking
+or admission authority. Its unembedded JSON array is bounded by `interfaceBytes`;
+an exceeded bound refuses without publishing a partial result.
+
 ## Types and static terms
 
 ```text

@@ -3,7 +3,10 @@
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguagePackage.h"
+#include "zkc/Language/Diagnostics.h"
+#include "zkc/Language/Inspection.h"
 #include "zkc/Support/Refusal.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -15,6 +18,7 @@ int runLanguageCompiler(int argc, char **argv) {
   std::vector<AssetBuffer> assets;
   std::optional<CapturedProject> captured;
   std::string entry, format;
+  bool declarations = false;
   EntryOptions options;
   Limits limits;
   auto refuse = [&](Error error) {
@@ -22,31 +26,26 @@ int runLanguageCompiler(int argc, char **argv) {
         std::move(error),
         [&](const DiagnosticError &diagnostic) {
           const auto &value = diagnostic.diagnostic();
-          errs() << value.code << ": " << value.message;
-          if (value.primary && captured &&
-              value.primary->module.index < captured->sources().size()) {
-            const auto &source =
-                captured->sources()[value.primary->module.index];
-            unsigned line = 1, column = 1;
-            for (unsigned i = 0; i < value.primary->begin; ++i) {
-              if (source.text[i] == '\n') {
-                ++line;
-                column = 1;
-              } else
-                ++column;
-            }
-            errs() << " at " << source.diagnosticPath << ':' << line << ':'
-                   << column;
+          if (captured)
+            errs() << formatDiagnostics(*captured, {value});
+          else {
+            printEscapedString(StringRef(value.code).take_front(128), errs());
+            errs() << ": ";
+            printEscapedString(StringRef(value.message).take_front(2048),
+                               errs());
+            errs() << '\n';
           }
-          errs() << '\n';
         },
         [&](const CompilationError &diagnostic) {
           for (const auto &refusal : diagnostic.refusals)
             errs() << refusal.code << ": " << refusal.detail << '\n';
-          errs() << diagnostic.message;
-          for (const auto &location : diagnostic.locations)
-            errs() << "at " << location.filename << ':' << location.line << ':'
-                   << location.column << '\n';
+          errs() << diagnostic.message << '\n';
+          for (const auto &location : diagnostic.locations) {
+            errs() << "at ";
+            printEscapedString(StringRef(location.filename).take_front(512),
+                               errs());
+            errs() << ':' << location.line << ':' << location.column << '\n';
+          }
         },
         [&](const ErrorInfoBase &diagnostic) {
           errs() << diagnostic.message() << '\n';
@@ -101,6 +100,12 @@ int runLanguageCompiler(int argc, char **argv) {
       assetTotal += bytes->size();
       assets.push_back(
           {name.str(), format.str(), std::move(*bytes), path.str()});
+    } else if (arg == "--declarations") {
+      if (declarations || command != "language-check")
+        return refuse(
+            error("source.options",
+                  "--declarations is a check option and may appear once"));
+      declarations = true;
     } else if (arg == "--no-simplify")
       options.simplify = false;
     else if (arg == "--release-storage")
@@ -109,15 +114,20 @@ int runLanguageCompiler(int argc, char **argv) {
       return refuse(error("source.options", "unknown language option: " + arg));
   }
   if (format.empty() || (entry.empty() && command != "language-check"))
-    return refuse(
-        error("source.options", "--source-format=zkc is required; output "
-                                "commands also require --entry"));
+    return refuse(error("source.options",
+                        "--source-format=zkc is required; output "
+                        "commands also require --entry"));
   auto captureResult = capture(std::move(sources), std::move(assets),
                                CaptureOptions{format, limits});
   if (!captureResult)
     return refuse(captureResult.takeError());
   captured = std::move(*captureResult);
-  auto project = analyze(*captured).checkedProject();
+  auto analysis = analyze(*captured);
+  if (!analysis.diagnostics().empty()) {
+    errs() << formatDiagnostics(*captured, analysis.diagnostics());
+    return 1;
+  }
+  auto project = analysis.checkedProject();
   if (!project)
     return refuse(project.takeError());
   json::Object checked{{"format", "zkc.source-check/0"},
@@ -125,6 +135,12 @@ int runLanguageCompiler(int argc, char **argv) {
                        {"scope", entry.empty() ? "definitions" : "entry"},
                        {"capture", captured->identity()},
                        {"installation", project->installationIdentity()}};
+  if (declarations) {
+    auto report = inspectDeclarations(*project, limits);
+    if (!report)
+      return refuse(report.takeError());
+    checked["declarations"] = cantFail(json::parse(*report));
+  }
   if (entry.empty()) {
     outs() << json::Value(std::move(checked)) << '\n';
     return 0;

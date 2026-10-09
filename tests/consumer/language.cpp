@@ -1,4 +1,6 @@
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/Diagnostics.h"
+#include "zkc/Language/Inspection.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Project.h"
 #include "zkc/Relation/R1CS.h"
@@ -25,7 +27,7 @@ int main() {
   auto capture = zkc::language::capture(
       {{"m", R"(module m;
     struct Pair<T:Type>{pub first:T,pub second:T}
-    fn swap<T:Type+Copy+Drop>(x:Pair<T>)->Pair<T>{
+    pub fn swap<T:Type+Copy+Drop>(x:Pair<T>)->Pair<T>{
       return Pair<T>{first:x.second,second:x.first};
     }
     fn root<F:Field>(n:index)->F where zkc::algebra::TwoAdicField(F) {
@@ -51,6 +53,14 @@ int main() {
   if (checked->assets().size() != 1 ||
       checked->assets()[0].identity() != relation->identity())
     return 7;
+  auto declarations = zkc::language::inspectDeclarations(*checked);
+  if (!declarations) {
+    llvm::errs() << llvm::toString(declarations.takeError());
+    return 10;
+  }
+  if (declarations->find("m::swap") == std::string::npos ||
+      zkc::language::formatDiagnostics(*capture, {}).size() != 0)
+    return 11;
   auto entry = zkc::language::closeEntry(*checked, "m::Demo");
   if (!entry) {
     llvm::errs() << llvm::toString(entry.takeError());

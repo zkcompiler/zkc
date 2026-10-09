@@ -247,6 +247,10 @@ The compilation APIs are [Language/Project.h](../../compiler/include/zkc/Languag
 The independent reader is [Compiler/LanguageInterface.h](../../compiler/include/zkc/Compiler/LanguageInterface.h).
 Diagnostics retain byte spans; recovery tokens cannot be promoted into checked
 state. The compiler never accepts a caller-constructed checked project.
+[Diagnostics.h](../../compiler/include/zkc/Language/Diagnostics.h) renders bounded
+primary and related spans from captured bytes.
+[Inspection.h](../../compiler/include/zkc/Language/Inspection.h) describes completed
+public callables without rechecking or specializing them.
 
 Target failures retain their phase and generated coordinates. Admission failures
 also identify a related source declaration; later compiler diagnostics use the
