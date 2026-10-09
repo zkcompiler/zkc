@@ -40,7 +40,7 @@ A bundle uses the existing [native runtime](../runtime/bundles.md). Its entry is
 the encoded protocol symbol recorded in the source interface. Runtime inputs
 are supplied using the bundle's physical input layout. For the transfer example,
 P supplies x and c; V supplies its own c. The
-[participant execution control](../../crates/zkc-tools/examples/language_native.rs)
+[participant execution control](../../crates/zkc-test-drivers/src/language_native.rs)
 also demonstrates direct independent runners, changed receive values and the
 existing joint host with independently supplied role inputs.
 Use the named Entry Host for application code. The lower-level bundle interface
@@ -156,7 +156,7 @@ bytes in each request's `setups` map. The Host initializes `vk`; the application
 omits that value from public and role input maps. `pk` uses explicit authenticated
 `ProverMaterial` or a pinned key file. Private key/state values do not acquire
 message or arbitrary constructor permissions. The [composed PCS fixture](../../compiler/test/fixtures/language/pcs_setup.zkc)
-and [Host client](../../crates/zkc-tools/examples/language_native/setups.rs) show two
+and [Host client](../../crates/zkc-test-drivers/src/language_native/setups.rs) show two
 setup slots executing through ordinary kernels and the common runtime.
 
 ## C++ boundaries

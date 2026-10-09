@@ -9,7 +9,7 @@ use zkc_backends::{NativeInputSize, Variant};
 pub(crate) fn check_native_data(
     ty: &PhysicalType,
     request: &InputValue,
-    capacity: crate::host::capacity::NativeCapacity,
+    capacity: crate::host::capacity::Capacity,
 ) -> Result<()> {
     match request {
         InputValue::Wire(bytes) => capacity.check_wire(bytes.len()),

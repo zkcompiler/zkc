@@ -25,6 +25,10 @@ The exact exported graph lives in the compiler's CMake manifest and
 separate from compiler implementation selection. Source Assets and installed
 kernels remain general inputs to that graph.
 
+Native integration clients live in `crates/zkc-test-drivers`;
+[their manifest](../../crates/zkc-test-drivers/README.md) selects test providers.
+The user CLI is built separately with default features.
+
 ## Build ownership
 
 Native manifests own language dependencies, toolchain pins and component graphs.

@@ -14,7 +14,6 @@ pub use session::{Exchange, Hooks, NoHooks, RoleInput, RunLimits, StartError, Wi
 
 mod host;
 pub use host::{
-    HostLimits, HostReport, InputValue, NativeCapacity, PreparedRun, ProverMaterial, RoleInputs,
-    RunHost, RunInputs, SetupAuthority,
+    HostLimits, HostReport, PreparedRun, RoleInputs, RunHost, RunInputs, SetupAuthority,
 };
 pub(crate) mod cli;

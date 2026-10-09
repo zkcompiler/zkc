@@ -48,13 +48,13 @@ def inventory(toolchain):
 def drivers(toolchain):
     return {
         "cpp": toolchain.tool("compiler", "test/zkc-contract_conformance-test"),
-        "rust": toolchain.example("contract_conformance"),
+        "rust": toolchain.driver("contract_conformance"),
     }
 
 
 @pytest.fixture(scope="module")
 def physical_drivers(toolchain, drivers):
-    return {**drivers, "backend": toolchain.example("backend_contract_conformance")}
+    return {**drivers, "backend": toolchain.driver("backend_contract_conformance")}
 
 
 def query(drivers, requests, directory, *, arguments=None):

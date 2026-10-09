@@ -2580,14 +2580,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zkc-test-support"
-version = "0.0.0"
-dependencies = [
- "serde_json",
-]
-
-[[package]]
-name = "zkc-tools"
+name = "zkc-test-drivers"
 version = "0.0.0"
 dependencies = [
  "ark-bls12-381",
@@ -2598,10 +2591,8 @@ dependencies = [
  "ark-poly-commit",
  "ark-serialize",
  "curve25519-dalek",
- "libc",
  "merlin",
  "num-bigint 0.4.8",
- "num-traits",
  "p3-baby-bear",
  "p3-challenger 0.4.3",
  "p3-field 0.4.3",
@@ -2611,6 +2602,28 @@ dependencies = [
  "sha2 0.10.9",
  "sha3",
  "spongefish",
+ "zkc-arkworks",
+ "zkc-backends",
+ "zkc-runtime",
+ "zkc-test-support",
+ "zkc-tools",
+]
+
+[[package]]
+name = "zkc-test-support"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "zkc-tools"
+version = "0.0.0"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "zkc-arkworks",
  "zkc-backends",

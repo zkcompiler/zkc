@@ -29,20 +29,29 @@ let
   pythonTools = pythonSet.mkVirtualEnv "zkc-python-tools" workspace.deps.all;
   environment = import ./environment.nix { inherit pkgs llvm python; };
   sourceFor = import ./source.nix { inherit lib; };
+  # Native packages need shared test helpers, not checkout maintenance commands.
+  nativeSupport = [
+    "scripts/processes.py"
+    "scripts/reporting.py"
+    "scripts/workspace.py"
+    "tests/support"
+  ];
   compiler = pkgs.callPackage ./compiler.nix {
     inherit llvm;
-    source = sourceFor "compiler" [
-      "scripts"
-      "compiler"
-      "tests/support"
-      "examples"
-      "libraries"
-    ];
+    source = sourceFor "compiler" (
+      nativeSupport
+      ++ [
+        "compiler"
+        "examples"
+        "libraries"
+      ]
+    );
     stdenv = llvm.stdenv;
     python3 = python;
   };
   compilerSanitize = compiler.overrideAttrs (old: {
     pname = "zkc-compiler-sanitize";
+    doCheck = true;
     cmakeBuildType = "RelWithDebInfo";
     cmakeFlags = old.cmakeFlags ++ [
       "-DZKC_ENABLE_ASSERTIONS=ON"
@@ -96,17 +105,48 @@ let
       cargo = rust;
       rustc = rust;
     };
-    source = sourceFor "rust" [
-      "scripts"
-      "Cargo.toml"
-      "Cargo.lock"
-      "rust-toolchain.toml"
-      "crates"
-      "tests/run.py"
-      "tests/support"
-      "examples"
-      "libraries"
+    source = sourceFor "rust" (
+      nativeSupport
+      ++ [
+        "Cargo.toml"
+        "Cargo.lock"
+        "rust-toolchain.toml"
+        "crates"
+        "tests/run.py"
+        "examples"
+        "libraries"
+      ]
+    );
+  };
+  testDrivers = tools.overrideAttrs {
+    pname = "zkc-test-drivers";
+    cargoBuildFlags = [
+      "-p"
+      "zkc-test-drivers"
+      "--bins"
     ];
+    meta = {
+      description = "Native integration test drivers";
+      platforms = [ system ];
+    };
+  };
+  testSupport = pkgs.symlinkJoin {
+    name = "zkc-test-tools";
+    paths = [
+      tools
+      testDrivers
+    ];
+  };
+  zkc = pkgs.symlinkJoin {
+    name = "zkc";
+    paths = [ tools ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    postBuild = ''
+      wrapProgram "$out/bin/zkc" --prefix PATH : "${compiler}/bin"
+    '';
+    meta = tools.meta // {
+      description = "zkc compiler and execution CLI";
+    };
   };
   lakeSourcesFor = pkgs.callPackage ./lake-sources.nix { };
   fetchSource = pkgs.callPackage ./external-source.nix { };
@@ -147,12 +187,14 @@ in
     inherit
       compiler
       tools
+      zkc
       formal
       arklib
       llzk
       ;
     lake-sources = lakeSources;
-    default = compiler;
+    default = zkc;
+    test-drivers = testDrivers;
     lean-toolchain = lean;
     rust-toolchain = rust;
     python-tools = pythonTools;
@@ -167,7 +209,17 @@ in
     lean-toolchain-checks = pkgs.callPackage ./checks/lean-toolchain.nix { inherit lean; };
   };
   checks = {
-    inherit compiler;
+    compiler = compiler.overrideAttrs { doCheck = true; };
+    application = pkgs.callPackage ./checks/application.nix {
+      inherit zkc compiler;
+      source = checkSource;
+      python3 = python;
+    };
+    format = pkgs.callPackage ./checks/format.nix {
+      source = checkSource;
+      clang-tools = llvm.clang-tools;
+      python3 = python;
+    };
     sandbox = pkgs.callPackage ./checks/sandbox.nix { python3 = python; };
     git-source = pkgs.callPackage ./checks/git-source.nix { };
     style = pkgs.callPackage ./checks/style.nix {
@@ -185,6 +237,7 @@ in
         environment
         compiler
         tools
+        testSupport
         ;
       source = checkSource;
       python3 = python;
@@ -193,6 +246,7 @@ in
       inherit
         compiler
         tools
+        testSupport
         environment
         ;
       python3 = python;

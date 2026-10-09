@@ -53,9 +53,9 @@ absorptions. Program and metadata size remain independent of runtime trip count.
 
 ### Typed invocation inputs
 
-`NativeDeployment::execute_typed(&ProofInputs, proof)` and
-`execute_attempts_typed(&ProofInputs, policy)` share preparation, issuance,
-execution and cleanup with positional invocation records. The adapter checks
+`NativeDeployment::execute(&ProofInputs, Invocation)` owns preparation, issuance,
+execution and cleanup for proving, verification and bounded attempts.
+`ProofInputs::decode` adapts positional invocation records; it checks
 explicit original port selectors before constructing the typed request. Typed
 vectors follow the admitted public, role-input and service order exactly.
 Context is a byte vector of at most 4096 bytes; provider/transcript budgets retain

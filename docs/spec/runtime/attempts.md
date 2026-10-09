@@ -127,8 +127,9 @@ body would eventually have returned retry.
 
 ## Reports
 
-`NativeDeployment::execute_attempts(inputs, policy)` shares input admission and
-session cleanup with ordinary `execute`. Both return `NativeProofReport`.
+`NativeDeployment::execute(&inputs, Invocation::Attempts(&policy))` shares input
+admission and session cleanup with single-shot execution. It returns
+`NativeProofReport`.
 Its `outputs` field returns copyable original results from the successful final
 attempt, keyed by original output index; failures and cleanup errors leave it
 absent. Private state successors remain with the lifecycle. CLI diagnostics do

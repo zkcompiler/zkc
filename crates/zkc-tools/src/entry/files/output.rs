@@ -2,7 +2,7 @@
 use super::{MAX_REQUEST_BYTES, NamedValues, Result, Value};
 use crate::{
     entry::RoleValues,
-    host::{capacity::NativeCapacity, inputs::hex, request::InputValue},
+    host::{capacity::Capacity, inputs::hex, request::InputValue},
 };
 use serde::{
     Serialize, Serializer,
@@ -48,7 +48,7 @@ fn encode(value: impl Serialize) -> Result<Vec<u8>> {
 // Native wire frames depend on value shape and capacity, not the session domain.
 // Outputs have already been admitted under their role's setup policy; encoding
 // here adds no setup authorization and issues no resources.
-fn backend(capacity: NativeCapacity, setups: zkc_backends::SetupRegistry) -> Result<NativeBackend> {
+fn backend(capacity: Capacity, setups: zkc_backends::SetupRegistry) -> Result<NativeBackend> {
     capacity.validate()?;
     NativeBackend::new(
         capacity.backend(),
@@ -65,7 +65,7 @@ fn backend(capacity: NativeCapacity, setups: zkc_backends::SetupRegistry) -> Res
 pub fn output_setups(
     material: &std::collections::BTreeMap<String, Vec<u8>>,
     authority: &super::SetupAuthority,
-    capacity: NativeCapacity,
+    capacity: Capacity,
 ) -> Result<zkc_backends::SetupRegistry> {
     let mut imports = crate::host::setups::VerifierKeys::new(capacity.backend().ark_bounds());
     output_setups_with(material, authority, capacity, &mut imports)
@@ -73,7 +73,7 @@ pub fn output_setups(
 pub(crate) fn output_setups_with(
     material: &std::collections::BTreeMap<String, Vec<u8>>,
     authority: &super::SetupAuthority,
-    capacity: NativeCapacity,
+    capacity: Capacity,
     imports: &mut crate::host::setups::VerifierKeys,
 ) -> Result<zkc_backends::SetupRegistry> {
     capacity.validate()?;
@@ -100,7 +100,7 @@ pub(crate) fn output_setups_with(
 /// 16 MiB whole-file limit. Private capabilities retain their codec refusal.
 pub fn run_outputs(
     values: &RoleValues,
-    capacity: NativeCapacity,
+    capacity: Capacity,
     setups: zkc_backends::SetupRegistry,
 ) -> Result<Vec<u8>> {
     #[derive(Serialize)]
@@ -140,7 +140,7 @@ pub fn run_outputs(
 /// Encode one proof participant's named results without changing runtime state.
 pub fn proof_outputs(
     values: &NamedValues,
-    capacity: NativeCapacity,
+    capacity: Capacity,
     setups: zkc_backends::SetupRegistry,
 ) -> Result<Vec<u8>> {
     #[derive(Serialize)]
@@ -256,7 +256,7 @@ mod tests {
     use zkc_runtime::interactive::Identity;
     #[test]
     fn pcs_outputs_require_explicit_authenticated_setup_material() {
-        let capacity = NativeCapacity::default();
+        let capacity = Capacity::default();
         let policy = capacity.backend();
         let keys = zkc_arkworks::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
         let table = zkc_arkworks::Table::from_logical_vec(
@@ -300,7 +300,7 @@ mod tests {
     }
     #[test]
     fn private_capabilities_refuse_without_consuming_them() {
-        let capacity = NativeCapacity::default();
+        let capacity = Capacity::default();
         let mut native = backend(capacity, Default::default()).unwrap();
         let value = native
             .issue_rng_for(
@@ -326,7 +326,7 @@ mod tests {
             Native::Field(zkc_backends::Scalar::from(7u64)).into(),
         )]
         .into();
-        let small = NativeCapacity {
+        let small = Capacity {
             wire_bytes: 1,
             ..capacity
         };
@@ -346,7 +346,7 @@ mod tests {
         }
         let outputs = proof_outputs(
             &[("nested".into(), value)].into(),
-            NativeCapacity::default(),
+            Capacity::default(),
             Default::default(),
         )
         .unwrap();
@@ -368,7 +368,7 @@ mod tests {
             ),
         )]
         .into();
-        let bytes = proof_outputs(&values, NativeCapacity::default(), Default::default()).unwrap();
+        let bytes = proof_outputs(&values, Capacity::default(), Default::default()).unwrap();
         let document: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(document["values"]["record"]["index"], u64::MAX);
         let mut nested = Value::Unit;
@@ -378,7 +378,7 @@ mod tests {
         assert_eq!(
             proof_outputs(
                 &[("deep".into(), nested)].into(),
-                NativeCapacity::default(),
+                Capacity::default(),
                 Default::default()
             )
             .unwrap_err(),

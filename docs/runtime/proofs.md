@@ -19,8 +19,11 @@ parses one captured buffer: internal hashes do not authorize an unknown
 artifact. Admission checks structure and installation; source correspondence
 comes from trusted checked compilation.
 
-`execute_typed` and `execute_attempts_typed` accept immutable data and explicit
-provider/key declarations through the same preparation as serialized inputs.
+`execute(&ProofInputs, Invocation)` accepts immutable data and explicit
+provider/key declarations. `Invocation` selects `Prove`, `Verify(&proof)` or
+`Attempts(&policy)`. `ProofInputs::decode` adapts positional records to the same
+typed inputs. Shared `InputValue`, `Capacity` and `ProverMaterial` live in
+`zkc_tools::execution`.
 Public values are canonically bound; private values can avoid a wire roundtrip.
 Reusable `ProverMaterial` shares immutable material across calls while each
 invocation retains its own setup admission, quotas, RNG and live resources.

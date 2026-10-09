@@ -3,9 +3,8 @@ use super::errors::{EntryError as E, EntryPhase as P, EntryResult};
 use super::{
     Interface, NamedValues, Package, RoleInputs, SetupAuthority, arguments, setups, value,
 };
-use crate::proof::{
-    AttemptPolicy, NativeCapacity, NativeDeployment, NativeProofReport, ProofInputs,
-};
+use crate::execution::Capacity;
+use crate::proof::{AttemptPolicy, NativeDeployment, NativeProofReport, ProofInputs};
 use std::collections::BTreeMap;
 use zkc_backends::NativeBackend;
 
@@ -26,14 +25,14 @@ pub enum BindingScope {
 }
 #[derive(Clone, Copy, Debug)]
 pub struct ProofOptions {
-    pub capacity: NativeCapacity,
+    pub capacity: Capacity,
     pub external_work: u64,
     pub binding: BindingPolicy,
 }
 impl Default for ProofOptions {
     fn default() -> Self {
         Self {
-            capacity: NativeCapacity::default(),
+            capacity: Capacity::default(),
             external_work: NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
             binding: BindingPolicy::default(),
         }
@@ -212,7 +211,14 @@ impl ProofEntry {
             .map_err(|e| E::new(P::Request, e))?;
         Ok(self.report(
             self.native
-                .execute_prepared(&inputs, proof, attempts.as_ref(), imports)
+                .execute_prepared(
+                    &inputs,
+                    attempts.as_ref().map_or_else(
+                        || crate::proof::Invocation::one_shot(proof),
+                        crate::proof::Invocation::Attempts,
+                    ),
+                    imports,
+                )
                 .map_err(|e| E::new(P::Preparation, e))?,
             producer,
         ))

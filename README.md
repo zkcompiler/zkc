@@ -59,6 +59,9 @@ checks and bounded tests.
 
 ## Try it
 
+On x86_64 Linux, `nix run . -- --help` runs the packaged CLI, including its
+companion compiler. `nix build` creates `result/bin/zkc`.
+
 The supported development environment is x86_64 Linux with Nix. Follow the
 [setup guide](docs/development/README.md#set-up-the-development-checkout), then
 run from the repository root:

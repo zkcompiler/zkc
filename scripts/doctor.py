@@ -60,17 +60,20 @@ def package_version(name, directory, tested):
         match = re.search(rf'(?m)^[ \t]*set\(\s*{variable}\s+"?(\d+\.\d+\.\d+)"?\s*\)', source)
         return match[1] if match else None
 
-    version = literal_version(path, "PACKAGE_VERSION")
-    if name == "MLIR":
-        # Standalone MLIR packages can leave PACKAGE_VERSION empty. Their
-        # main config still records the exact LLVM version used by CMake.
-        config = Path(directory) / "MLIRConfig.cmake"
-        required = literal_version(config, "LLVM_VERSION")
-        if version and required and version != required:
-            return record | {"status": "fail", "error": "inconsistent MLIR package version metadata"}
-        if not version and required:
-            version = required
-            record["path"] = str(config)
+    try:
+        version = literal_version(path, "PACKAGE_VERSION")
+        if name == "MLIR":
+            # Standalone MLIR packages can leave PACKAGE_VERSION empty. Their
+            # main config still records the exact LLVM version used by CMake.
+            config = Path(directory) / "MLIRConfig.cmake"
+            required = literal_version(config, "LLVM_VERSION")
+            if version and required and version != required:
+                return record | {"status": "fail", "error": "inconsistent MLIR package version metadata"}
+            if not version and required:
+                version = required
+                record["path"] = str(config)
+    except OSError as error:
+        return record | {"status": "fail", "error": str(error)}
     if not version:
         return record | {"status": "fail", "error": "cannot read the selected CMake package version"}
     record["version"] = version
@@ -153,29 +156,42 @@ def main():
     parser.add_argument("--profile", default="release")
     parser.add_argument("--formal", action="store_true", help="also inspect the optional Lean toolchain")
     args = parser.parse_args()
-    try:
-        validate_environment()
-        selected = native_configuration()
-        cached = cached_configuration(args.profile)
-    except ValueError as error:
-        parser.error(str(error))
+    records = []
+
+    def configuration(name, probe, default):
+        try:
+            return probe()
+        except (ValueError, OSError) as error:
+            records.append({"tool": name, "status": "fail", "error": str(error)})
+            return default
+
+    configuration("environment", validate_environment, None)
+    selected = configuration("native-configuration", native_configuration, {})
+    cached = configuration("cmake-cache", lambda: cached_configuration(args.profile), {})
+    outputs = {kind: configuration(kind + "-output", lambda: str(output_directory(kind)), None)
+               for kind in ("compiler", "native")}
+    reports = configuration("reports", lambda: str(reports_root()), None)
+    for name, variable in (("cc", "CC"), ("cxx", "CXX")):
+        command = os.environ.get(variable, "").strip()
+        records.append(inspect(name, [command, "--version"]) if command else
+                       {"tool": name, "status": "fail", "error": f"{variable} is not selected"})
     rust = tomllib.loads((ROOT / "rust-toolchain.toml").read_text())["toolchain"]["channel"]
-    records = [
-        inspect("cc", [selected["CMAKE_C_COMPILER"], "--version"]),
-        inspect("cxx", [selected["CMAKE_CXX_COMPILER"], "--version"]),
+    records.extend([
         rust_version(rust),
         inspect("cmake", ["cmake", "--version"]),
         inspect("ninja", ["ninja", "--version"]),
         inspect("python", [sys.executable, "--version"]),
         inspect("uv", ["uv", "--version"]),
         inspect("just", ["just", "--version"]),
-    ]
+    ])
     if args.formal:
         lean = (ROOT / "formal/lean-toolchain").read_text().strip().split(":v")[-1]
         records.append(inspect("lean", ["lean", "--version"], lean, ROOT / "formal"))
     tested = re.search(r'set\(ZKC_TESTED_LLVM_VERSION\s+"([^"]+)"',
                        (ROOT / "compiler/CMakeLists.txt").read_text())[1]
-    records.insert(0, package_version("MLIR", selected["MLIR_DIR"], tested))
+    mlir = os.environ.get("MLIR_DIR", "").strip()
+    records.insert(0, package_version("MLIR", mlir, tested) if mlir else
+                   {"tool": "mlir", "status": "fail", "error": "MLIR_DIR is not selected"})
     records.append(python_environment())
     note_compiler_major(records)
     # This is an auxiliary tool, not evidence of the package CMake selected.
@@ -199,9 +215,7 @@ def main():
     result = {"status": "pass" if all(r["status"] == "pass" for r in records) else "fail",
               "tools": records,
               "workspace": {"profile": args.profile, "selected_cmake": selected,
-                            "cached_cmake": cached, "outputs": {kind: str(output_directory(kind))
-                                         for kind in ("compiler", "native")},
-                            "reports": str(reports_root())}}
+                            "cached_cmake": cached, "outputs": outputs, "reports": reports}}
     if args.json:
         print(json.dumps(result, indent=2))
     else:

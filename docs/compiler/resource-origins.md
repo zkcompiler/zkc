@@ -146,7 +146,7 @@ repeated acyclic calls and work sharing between demanded queries.
 The [generated execution fixture](../../compiler/test/fixtures/resource-origins/execution.mlir)
 carries RNG and transcript resources through nested common/local loops,
 applications, both Boolean arms and both match tags. The
-[runtime client](../../crates/zkc-tools/examples/resource_origins.rs) checks returned
+[runtime client](../../crates/zkc-test-drivers/src/resource_origins.rs) checks returned
 roots, generations, actual draw/observation/challenge counters, budgets, stop,
 cancellation, backend failure and frame cleanup. Stops are exercised before any
 draw and after transitions inside nested control; cancellation occurs between

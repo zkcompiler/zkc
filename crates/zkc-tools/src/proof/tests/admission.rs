@@ -229,7 +229,7 @@ fn proof_cli_rejects_malformed_pins_before_typed_admission() {
                 let report = crate::cli::run(command, &args);
                 assert!(!crate::cli::succeeded(&report));
                 assert_eq!(report["code"], "native-proof-digest", "{args:?}: {report}");
-                assert_eq!(report["phase"], "admission");
+                assert_eq!(report["phase"], "arguments");
                 assert!(report.get("binding_scope").is_none());
                 assert_eq!(std::fs::read(&proof).unwrap(), b"previous proof");
             }
@@ -332,10 +332,7 @@ fn proof_cli_requires_explicit_header_policy_after_independent_pin_admission() {
         ] {
             let mut invalid = args.clone();
             invalid.extend(options.into_iter().map(String::from));
-            assert_eq!(
-                crate::cli::run(command, &invalid)["code"],
-                "native-proof-option"
-            );
+            assert_eq!(crate::cli::run(command, &invalid)["code"], "cli-option");
             assert_eq!(std::fs::read(&proof).unwrap(), previous);
         }
         let mut allowed = args;
@@ -355,7 +352,10 @@ fn actual_received_decision_and_public_context_govern_verification() {
     let deployment = admit(&deployment()).unwrap();
     for decision in [false, true] {
         let produced = deployment
-            .execute_typed(&request(true, decision, true), None)
+            .execute(
+                &request(true, decision, true),
+                crate::proof::Invocation::one_shot(None),
+            )
             .unwrap();
         assert!(produced.cleanup_errors.is_empty());
         assert_eq!(produced.messages, 2);
@@ -370,7 +370,10 @@ fn actual_received_decision_and_public_context_govern_verification() {
         }
         assert_eq!(&proof[40..], expected);
         let verified = deployment
-            .execute_typed(&request(false, true, true), Some(&proof))
+            .execute(
+                &request(false, true, true),
+                crate::proof::Invocation::one_shot(Some(&proof)),
+            )
             .unwrap();
         assert_eq!(verified.messages, 2);
         assert!(verified.cleanup_errors.is_empty());
@@ -378,7 +381,10 @@ fn actual_received_decision_and_public_context_govern_verification() {
             assert!(verified.outcome.is_ok());
             assert!(matches!(verified.outputs.unwrap()[&3], Value::Bool(true)));
             let changed = deployment
-                .execute_typed(&request(false, true, false), Some(&proof))
+                .execute(
+                    &request(false, true, false),
+                    crate::proof::Invocation::one_shot(Some(&proof)),
+                )
                 .unwrap();
             assert_eq!(changed.outcome.unwrap_err(), "proof-header");
             assert!(changed.outputs.is_none());

@@ -136,7 +136,7 @@ def test_named_run_defaults_and_private_result_files(toolchain, journal, directo
     request['roles']['P']['inputs']['extra'] = True
     write(inputs, request)
     journal.run(command, refuses='entry-input-names')
-    journal.run([*command, '--results=duplicate'], refuses='entry-option')
+    journal.run([*command, '--results=duplicate'], refuses='cli-option')
 
 
 def test_aggregate_file_roundtrip_and_schema_refusals(toolchain, journal, directory):
@@ -187,7 +187,7 @@ def test_generated_bindings_are_an_independent_rust_consumer(toolchain, journal,
         journal.run([toolchain.runtime, 'bindings', package, pin, directory / f'{name}.rs'])
     original = run_package.read_bytes()
     journal.run([toolchain.runtime, 'bindings', run_package, run_pin, run_package], refuses='entry-output-path')
-    journal.run([toolchain.runtime, 'bindings', run_package, run_pin, directory / 'unused.rs', '--setups=missing'], refuses='entry-option')
+    journal.run([toolchain.runtime, 'bindings', run_package, run_pin, directory / 'unused.rs', '--setups=missing'], refuses='cli-option')
     assert run_package.read_bytes() == original
     # This is a consumer crate, not a module compiled under zkc-tools internals.
     (directory / 'Cargo.toml').write_text(f'''[package]
@@ -222,16 +222,16 @@ fn main() {
     let scalar = |n:u8| -> zkc_tools::entry::Value {
         let mut frame=b"ZKCV\x00\x01".to_vec();
         let mut bytes=[0u8;32]; bytes[0]=n; frame.extend_from_slice(&bytes);
-        zkc_tools::run::InputValue::Wire(frame).into()
+        zkc_tools::execution::InputValue::Wire(frame).into()
     };
     // Public API construction, independent of private zkc-tools modules. The
     // actual setup-bearing calls are separately exercised across CLI processes.
-    let key=||zkc_tools::entry::Value::from(zkc_tools::run::InputValue::ProverKeyFile {
+    let key=||zkc_tools::entry::Value::from(zkc_tools::execution::InputValue::ProverKeyFile {
         path:"prover.key".into(), fingerprint:[0;32],
     });
     let input=pcs::PInputs{pk0:key(),pk1:key(),data0:scalar(0),data1:scalar(0)};
     let input:zkc_tools::entry::NamedValues=input.into();
-    assert!(matches!(input.get("pk0").unwrap(),zkc_tools::entry::Value::Leaf(zkc_tools::run::InputValue::ProverKeyFile{..})));
+    assert!(matches!(input.get("pk0").unwrap(),zkc_tools::entry::Value::Leaf(zkc_tools::execution::InputValue::ProverKeyFile{..})));
     let _public=pcs::PublicInputs{claim:pcs::SampleClaim{c:scalar(0),tag:true},point:scalar(0)};
     let _verifier=pcs::VInputs{};
     assert_eq!(pcs::setups::first,"first");
@@ -369,7 +369,8 @@ def test_compilation_preserves_the_selected_executable(toolchain, journal, direc
     original = compiler.read_bytes()
     for selected, output in [(compiler, compiler), (alias, compiler), (alias, alias),
                              (compiler, alias)]:
-        journal.run([toolchain.runtime, 'compile', f'--compiler={selected}',
+        journal.run([toolchain.runtime, 'compile', '--entry=sample::Derived',
+                     f'--module=sample={FIXTURES / "attempts.zkc"}', f'--compiler={selected}',
                      f'--output={output}'], refuses='entry-output-path')
         assert compiler.read_bytes() == original and alias.is_symlink()
 
@@ -380,10 +381,12 @@ def test_compiler_failures_are_bounded_and_do_not_publish(toolchain, journal, di
     compiler.chmod(0o755)
     output = directory / 'existing.entry'
     output.write_bytes(b'unchanged')
-    report = json.loads(journal.run([toolchain.runtime, 'compile', f'--compiler={compiler}', f'--output={output}'], refuses='entry-compilation'))
+    args = [toolchain.runtime, 'compile', '--entry=sample::Derived',
+            f'--module=sample={FIXTURES / "attempts.zkc"}', f'--output={output}']
+    report = json.loads(journal.run([*args, f'--compiler={compiler}'], refuses='entry-compilation'))
     assert report['diagnostics_truncated'] and len(report['diagnostics']) == 65536
     assert output.read_bytes() == b'unchanged'
-    journal.run([toolchain.runtime, 'compile', f'--compiler={directory / "missing"}', f'--output={output}'], refuses='entry-compiler-missing')
+    journal.run([*args, f'--compiler={directory / "missing"}'], refuses='entry-compiler-missing')
 
 
 def test_proof_file_public_inputs_are_authoritative(toolchain, journal, directory):
@@ -440,7 +443,9 @@ def test_compiler_lookup_and_positional_arguments(toolchain, journal, directory)
         args = [toolchain.runtime, command, package, report['package_sha256']]
         if command == 'prove':
             args.append('request.json')
-        journal.run([*args, '--results=output.json'], refuses='entry-usage')
+        journal.run(args, refuses='cli-usage')
+        journal.run([*args, '--results=output.json'],
+                    refuses='cli-usage' if command == 'prove' else 'cli-option')
 
 
 def test_results_encoding_failure_preserves_previous_files(toolchain, journal, directory):
@@ -500,3 +505,50 @@ def test_interface_publication_and_host_share_resource_boundaries(toolchain, jou
     ], refuses='entry-compilation'))
     assert 'source.limit' in result['diagnostics']
     assert not refused.exists()
+
+
+@pytest.mark.parametrize('entry,kind', [('Derived', 'proof'), ('Plain', 'proof'), ('Run', 'run')])
+def test_inspect_authenticates_without_execution(toolchain, journal, directory, entry, kind):
+    package, pin = compile_entry(toolchain, journal, directory, entry)
+    sentinel = package.read_bytes()
+    report = journal.json([toolchain.runtime, 'inspect', package, pin])
+    assert report['format'] == 'zkc.entry-inspection/0' and report['status'] == 'inspected'
+    assert report['phase'] == 'complete' and report['package_sha256'] == pin
+    interface = report['interface']
+    assert interface['entry'] == f'sample::{entry}' and interface['kind'] == kind
+    assert len(interface['toolchain']) == 64 and interface['setups'] == []
+    roles = {role['name']: role for role in interface['roles']}
+    assert set(roles) == {'P', 'V'}
+    assert any(port['name'] == 'done' and port['type'] == 'bool' for port in roles['P']['inputs'])
+    if kind == 'proof':
+        proof = interface['proof']
+        assert proof['prover'] == 'P' and proof['verifier'] == 'V'
+        assert proof['acceptance'] == {'port': 'accepted', 'path': [], 'role': 'V'}
+        assert proof['completion'] == {'port': 'result', 'path': [0], 'role': 'P'}
+        assert proof['public'] == []
+        assert (proof['transcript_suite'] is not None) == (entry == 'Derived')
+    else:
+        assert interface['proof'] is None
+    assert 'execution' not in report and 'capacity' not in report
+    refused = journal.json([toolchain.runtime, 'inspect', package, '0' * 64],
+                           refuses='entry-package-identity')
+    assert 'interface' not in refused
+    assert package.read_bytes() == sentinel
+    missing = directory / 'missing.entry'
+    refused = journal.json([toolchain.runtime, 'inspect', missing, pin, '--results=unused'],
+                           refuses='cli-option')
+    assert refused['phase'] == 'arguments' and refused['message']
+    assert not (directory / 'unused').exists()
+
+
+def test_run_work_limits_apply_and_configuration_files_are_protected(toolchain, journal, directory):
+    package, pin = compile_entry(toolchain, journal, directory, 'Run')
+    inputs = write(directory / 'inputs.json', {'format': 'zkc.entry-run/0', 'session': 'limited',
+        'roles': {'P': {'inputs': {'done': True}}, 'V': {'inputs': {}}}})
+    limits = write(directory / 'limits.json', ['zkc.bundle-limits/0', '0', '1024', '1024', '100000'])
+    sentinel = limits.read_bytes()
+    command = [toolchain.runtime, 'run', f'--limits={limits}', package, pin, inputs]
+    refused = journal.json(command, refuses='entry-run-incomplete')
+    assert refused['phase'] == 'execution'
+    journal.run([*command, f'--results={limits}'], refuses='entry-output-path')
+    assert limits.read_bytes() == sentinel

@@ -27,7 +27,7 @@ impl ProverMaterial {
         bytes: &[u8],
         fingerprint: [u8; 32],
         verifier: &VerifierKey,
-        capacity: super::capacity::NativeCapacity,
+        capacity: super::capacity::Capacity,
     ) -> Result<Self> {
         capacity.validate()?;
         capacity.check_wire(bytes.len())?;
@@ -52,7 +52,7 @@ impl ProverMaterial {
         path: impl AsRef<std::path::Path>,
         fingerprint: [u8; 32],
         verifier: &VerifierKey,
-        capacity: super::capacity::NativeCapacity,
+        capacity: super::capacity::Capacity,
     ) -> Result<Self> {
         capacity.validate()?;
         let bytes = super::inputs::read_regular(path, capacity.wire_bytes).map_err(|e| {
@@ -92,12 +92,12 @@ impl ProverMaterial {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::host::capacity::NativeCapacity;
+    use crate::host::capacity::Capacity;
     #[test]
     fn reusable_material_import_authenticates_and_bounds_before_retention() {
         fn send_sync<T: Send + Sync>() {}
         send_sync::<ProverMaterial>();
-        let capacity = NativeCapacity::default();
+        let capacity = Capacity::default();
         let bounds = capacity.backend().ark_bounds();
         let keys = zkc_arkworks::Keys::setup_for_development(1, &bounds).unwrap();
         let other = zkc_arkworks::Keys::setup_for_development(1, &bounds).unwrap();

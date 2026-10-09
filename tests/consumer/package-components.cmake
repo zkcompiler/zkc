@@ -59,10 +59,11 @@ else()
   message(FATAL_ERROR "Unknown package test mode: ${MODE}")
 endif()
 if(MODE MATCHES "^(repeated|default|tools|compiler)$")
+  # Standalone MLIR exports LLVM_VERSION; MLIR_VERSION is not universal.
   string(APPEND body [=[
 foreach(variable MLIR_CMAKE_DIR MLIR_INCLUDE_DIRS MLIR_TABLEGEN_EXE
     MLIR_PDLL_TABLEGEN_EXE LLVM_CMAKE_DIR LLVM_INCLUDE_DIRS LLVM_DEFINITIONS
-    MLIR_VERSION LLVM_VERSION LLVM_PACKAGE_VERSION)
+    LLVM_VERSION LLVM_PACKAGE_VERSION)
   if(NOT DEFINED ${variable})
     message(FATAL_ERROR "native discovery hid upstream variable: ${variable}")
   endif()

@@ -3,16 +3,14 @@ mod attempts;
 mod inputs;
 mod interface;
 mod messages;
-pub use crate::host::capacity::NativeCapacity;
-pub use crate::host::material::ProverMaterial;
-pub use crate::host::request::InputValue;
+use crate::execution::Capacity;
+use crate::execution::InputValue;
 pub use inputs::ProofInputs;
 mod driver;
 mod entropy;
 mod setups;
 mod wire;
 use crate::host::admission::{Admission, Input, Operand, ResourceInput, entry_values};
-pub use crate::host::inputs::hex;
 use crate::host::inputs::*;
 pub use attempts::{AttemptPolicy, AttemptRecord};
 pub use driver::{ArtifactFailure, ArtifactReport, Produced};
@@ -51,7 +49,7 @@ pub struct NativeDeployment {
     publication: String,
     choices: [bool; 2],
     external_work_limit: u64,
-    capacity: NativeCapacity,
+    capacity: Capacity,
     setups: SetupAuthority,
     entry: NativeProofEntry,
     source: String,
@@ -74,9 +72,26 @@ enum Mode<'a> {
     Verify(&'a [u8]),
     Attempts(attempts::Plan),
 }
-impl<'a> Mode<'a> {
-    fn one_shot(proof: Option<&'a [u8]>) -> Self {
+/// The operation requested by an independently admitted proof participant.
+#[derive(Clone, Copy)]
+pub enum Invocation<'a> {
+    Prove,
+    Verify(&'a [u8]),
+    Attempts(&'a AttemptPolicy),
+}
+impl<'a> Invocation<'a> {
+    pub fn one_shot(proof: Option<&'a [u8]>) -> Self {
         proof.map_or(Self::Prove, Self::Verify)
+    }
+    pub fn is_producer(self) -> bool {
+        !matches!(self, Self::Verify(_))
+    }
+    fn plan(self, host: &NativeDeployment) -> Result<Mode<'a>> {
+        Ok(match self {
+            Self::Prove => Mode::Prove,
+            Self::Verify(proof) => Mode::Verify(proof),
+            Self::Attempts(policy) => Mode::Attempts(policy.check(host)?),
+        })
     }
 }
 #[cfg(feature = "test-utils")]
@@ -94,15 +109,11 @@ fn index(value: &Json) -> Result<usize> {
     Ok(n as usize)
 }
 fn digest(value: &str) -> Result<()> {
-    if value.len() != 64
-        || !value
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-    {
-        return Err("native-proof-digest".into());
-    }
-    Ok(())
+    crate::host::inputs::digest(value)
+        .map(|_| ())
+        .map_err(|_| "native-proof-digest".into())
 }
+
 fn wire_type(value: &str, public: bool) -> Result<LogicalType> {
     let ty = LogicalType::parse(value).map_err(|e| e.to_string())?;
     if !(ty.is_native_message_data()
@@ -300,7 +311,7 @@ impl NativeDeployment {
             publication: expected_sha256.to_owned(),
             choices: [choices[0] == "true", choices[1] == "true"],
             external_work_limit: NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
-            capacity: NativeCapacity::default(),
+            capacity: Capacity::default(),
             setups,
             entry: proof_entry,
             source,
@@ -310,12 +321,12 @@ impl NativeDeployment {
         })
     }
     /// Select invocation capacity independently of deployment/proof bytes.
-    pub fn with_capacity(mut self, capacity: NativeCapacity) -> Result<Self> {
+    pub fn with_capacity(mut self, capacity: Capacity) -> Result<Self> {
         capacity.validate()?;
         self.capacity = capacity;
         Ok(self)
     }
-    pub fn capacity(&self) -> NativeCapacity {
+    pub fn capacity(&self) -> Capacity {
         self.capacity
     }
     pub fn entry(&self) -> &NativeProofEntry {
@@ -353,141 +364,42 @@ impl NativeDeployment {
         Ok(self)
     }
 
-    /// Execute one independently admitted role. Public values, including complete
-    /// verifier key bytes, must be authorized independently of the proof. This
-    /// checks canonicality and consistency, not application authorization.
-    pub fn execute(&self, input: &Json, proof: Option<&[u8]>) -> Result<NativeProofReport> {
-        self.execute_with_entropy(
-            inputs::Request::Encoded(input),
-            Mode::one_shot(proof),
-            &Entropy::System,
-        )
-    }
-    /// Deterministic provider controls keyed by original input/service port.
-    /// No file format or production command selects this test-only path.
-    #[cfg(feature = "test-utils")]
-    pub fn execute_test(
-        &self,
-        input: &Json,
-        proof: Option<&[u8]>,
-        tapes: BTreeMap<usize, Vec<zkc_backends::Scalar>>,
-    ) -> Result<NativeProofReport> {
-        self.execute_with_entropy(
-            inputs::Request::Encoded(input),
-            Mode::one_shot(proof),
-            &test_entropy(tapes)?,
-        )
-    }
-    /// Run bounded attempts. Policy ports use original common-program indices.
-    /// Only a returned Boolean permits retry. The resulting bytes are unpublished.
-    pub fn execute_attempts(
-        &self,
-        input: &Json,
-        policy: &AttemptPolicy,
-    ) -> Result<NativeProofReport> {
-        self.execute_with_entropy(
-            inputs::Request::Encoded(input),
-            Mode::Attempts(policy.check(self)?),
-            &Entropy::System,
-        )
-    }
-    #[cfg(feature = "test-utils")]
-    pub fn execute_attempts_test(
-        &self,
-        input: &Json,
-        policy: &AttemptPolicy,
-        tapes: BTreeMap<usize, Vec<zkc_backends::Scalar>>,
-    ) -> Result<NativeProofReport> {
-        let entropy = test_entropy(tapes)?;
-        self.execute_with_entropy(
-            inputs::Request::Encoded(input),
-            Mode::Attempts(policy.check(self)?),
-            &entropy,
-        )
-    }
-    /// Execute immutable in-process data and explicit provider declarations.
-    /// Public values are authorized independently of the candidate proof.
-    pub fn execute_typed(
+    /// Execute immutable role inputs with an explicit production, verification
+    /// or retry request. Public inputs and setups remain application-authorized.
+    pub fn execute(
         &self,
         input: &ProofInputs,
-        proof: Option<&[u8]>,
-    ) -> Result<NativeProofReport> {
-        self.execute_with_entropy(
-            inputs::Request::Typed(input),
-            Mode::one_shot(proof),
-            &Entropy::System,
-        )
-    }
-    pub fn execute_attempts_typed(
-        &self,
-        input: &ProofInputs,
-        policy: &AttemptPolicy,
-    ) -> Result<NativeProofReport> {
-        self.execute_with_entropy(
-            inputs::Request::Typed(input),
-            Mode::Attempts(policy.check(self)?),
-            &Entropy::System,
-        )
-    }
-    #[cfg(feature = "test-utils")]
-    pub fn execute_typed_test(
-        &self,
-        input: &ProofInputs,
-        proof: Option<&[u8]>,
-        tapes: BTreeMap<usize, Vec<zkc_backends::Scalar>>,
-    ) -> Result<NativeProofReport> {
-        self.execute_with_entropy(
-            inputs::Request::Typed(input),
-            Mode::one_shot(proof),
-            &test_entropy(tapes)?,
-        )
-    }
-    #[cfg(feature = "test-utils")]
-    pub fn execute_attempts_typed_test(
-        &self,
-        input: &ProofInputs,
-        policy: &AttemptPolicy,
-        tapes: BTreeMap<usize, Vec<zkc_backends::Scalar>>,
-    ) -> Result<NativeProofReport> {
-        let entropy = test_entropy(tapes)?;
-        self.execute_with_entropy(
-            inputs::Request::Typed(input),
-            Mode::Attempts(policy.check(self)?),
-            &entropy,
-        )
-    }
-    fn execute_with_entropy(
-        &self,
-        request: inputs::Request<'_>,
-        mode: Mode<'_>,
-        entropy: &Entropy,
+        invocation: Invocation<'_>,
     ) -> Result<NativeProofReport> {
         let mut imports =
             crate::host::setups::VerifierKeys::new(self.capacity.backend().ark_bounds());
-        self.execute_with_imports(request, mode, entropy, &mut imports)
+        self.execute_prepared(input, invocation, &mut imports)
+    }
+    /// Deterministic provider controls for tests. No production command or file
+    /// format selects this feature-gated entry point.
+    #[cfg(feature = "test-utils")]
+    pub fn execute_test(
+        &self,
+        input: &ProofInputs,
+        invocation: Invocation<'_>,
+        tapes: BTreeMap<usize, Vec<zkc_backends::Scalar>>,
+    ) -> Result<NativeProofReport> {
+        let entropy = test_entropy(tapes)?;
+        let mut imports =
+            crate::host::setups::VerifierKeys::new(self.capacity.backend().ark_bounds());
+        self.execute_with_imports(input, invocation.plan(self)?, &entropy, &mut imports)
     }
     pub(crate) fn execute_prepared(
         &self,
         input: &ProofInputs,
-        proof: Option<&[u8]>,
-        attempts: Option<&AttemptPolicy>,
+        invocation: Invocation<'_>,
         imports: &mut crate::host::setups::VerifierKeys,
     ) -> Result<NativeProofReport> {
-        let mode = if let Some(policy) = attempts {
-            Mode::Attempts(policy.check(self)?)
-        } else {
-            Mode::one_shot(proof)
-        };
-        self.execute_with_imports(
-            inputs::Request::Typed(input),
-            mode,
-            &Entropy::System,
-            imports,
-        )
+        self.execute_with_imports(input, invocation.plan(self)?, &Entropy::System, imports)
     }
     fn execute_with_imports(
         &self,
-        request: inputs::Request<'_>,
+        input: &ProofInputs,
         mode: Mode<'_>,
         entropy: &Entropy,
         imports: &mut crate::host::setups::VerifierKeys,
@@ -500,14 +412,6 @@ impl NativeDeployment {
         if proof.is_some_and(|p| p.len() > MAX_PROOF_BYTES) {
             return Err("native-proof-proof-limit".into());
         }
-        let decoded;
-        let input = match request {
-            inputs::Request::Encoded(input) => {
-                decoded = inputs::decode(self, input, proof.is_none())?;
-                &decoded
-            }
-            inputs::Request::Typed(input) => input,
-        };
         let role = if proof.is_none() {
             self.entry.producer()
         } else {

@@ -68,7 +68,7 @@ Two public directory settings select already-built executables:
 | Variable | Checkout default | Contents |
 |---|---|---|
 | `ZKC_COMPILER_BIN` | `build/compiler` | Compiler tools and their test/example subdirectories |
-| `ZKC_NATIVE_BIN` | `target/release` | Rust tools and `examples/` |
+| `ZKC_NATIVE_BIN` | `target/release` | Rust CLI and integration driver binaries |
 
 Explicit directories take precedence over defaults and must be nonempty.
 Relative `ZKC_*` paths are resolved from the checkout root by the test drivers,

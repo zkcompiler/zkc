@@ -48,6 +48,61 @@ jobs:
           path: build/reports/
           retention-days: 14
 
+  native:
+    name: Native build and execution
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-24.04' || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Select native changes
+        id: changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess
+          base = os.environ['BASE']
+          exists = base and subprocess.run(
+              ['git', 'cat-file', '-e', base + '^{commit}'],
+              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+          if not exists:
+              paths = subprocess.check_output(['git', 'ls-files'], text=True).splitlines()
+          else:
+              paths = subprocess.check_output(['git', 'diff', '--name-only', base, os.environ['HEAD']], text=True).splitlines()
+          selected = any(not p.endswith('.md') and re.match(
+              r'^(compiler/|crates/|libraries/|examples/|nix/|scripts/|tests/|Cargo\.|rust-toolchain|flake\.|justfile|\.clang-format|\.github/)', p)
+              for p in paths)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'native={str(selected).lower()}\n')
+          PY
+      - name: Reserve build space
+        if: steps.changes.outputs.native == 'true' && runner.environment == 'github-hosted'
+        run: sudo rm -rf /usr/local/lib/android
+      - uses: ./.github/actions/nix
+        if: steps.changes.outputs.native == 'true'
+      - name: Check Rust, installed application, SDK and C++ formatting
+        if: steps.changes.outputs.native == 'true'
+        run: |
+          mkdir -p build/reports
+          nix build -L --keep-going --no-link \
+            .#checks.x86_64-linux.rust \
+            .#checks.x86_64-linux.application \
+            .#checks.x86_64-linux.compiler-consumer \
+            .#checks.x86_64-linux.format \
+            2>&1 | tee build/reports/native-checks.log
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always() && steps.changes.outputs.native == 'true'
+        with:
+          name: native-checks-${{ github.run_id }}
+          path: build/reports/
+          retention-days: 14
+
+
   main:
     name: Full main packages and checks
     if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'main' || inputs.scope == 'cache')

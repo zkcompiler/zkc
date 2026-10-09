@@ -2,10 +2,11 @@
 
 `zkc` compiles `.zkc` Entry packages through the mathematical compiler and executes
 the resulting `zkc.program/0` with the generic runtime. The public library has
-three owners:
+three execution owners and shared value types:
 
 | Owner | Responsibility |
 |---|---|
+| `execution` | Shared `Capacity`, `InputValue` and immutable `ProverMaterial` |
 | `entry` | Authenticated packages, named input binding, execution and generated Rust data bindings |
 | `run` | Authenticated run bundles, role preparation, scheduling, transport and bounded reports |
 | `proof` | Independently admitted producer/verifier deployments, public binding, proof execution, attempts and setup authority |
@@ -16,11 +17,11 @@ material, operational capacities, setup validation and bounded compiler-process
 execution. No host dispatches on a protocol name.
 
 The `cli` module owns discovery, compilation subprocesses, file transport and
-command reports. Reusable execution APIs remain in the three owners above.
+command reports. One command table owns argument grammar and help. Reusable execution APIs remain in the three owners above.
 
 Use `zkc --help` or `zkc COMMAND --help`. The installed commands are:
 
-- `compile`, `run`, `prove`, `verify`, `bindings`.
+- `compile`, `inspect`, `run`, `prove`, `verify`, `bindings`.
 - `run-bundle`, `prove-bundle`, `verify-bundle`.
 
 An expected SHA-256 comes from trusted compilation or deployment configuration.
@@ -53,12 +54,8 @@ attempt policy use `[instructions, iterations]` work pairs. Setup keys retain
 authenticated registry authority; this crate does not infer setup authorization
 from source text or wire data.
 
-The examples exercise native structured values, nested data, relation composition,
-public iteration, authored and external transcripts, independent proof execution,
-service custody, retries, domains and setup authority. Tests use the generic
-runner and crypto backends; their success is bounded execution evidence.
-
-Build all examples with `cargo build -p zkc-tools --examples --all-features`.
-Run Rust tests with `cargo test --workspace --all-features`. Compiler integration
-supplies generated native artifacts to the examples. Cryptographic conformance
-fixtures are owned by `crates/zkc-test-support/fixtures`.
+The [integration drivers](../zkc-test-drivers/README.md) exercise this SDK against
+compiler-generated programs. They use the generic Runner and installed backends;
+their success is bounded execution evidence. Build the product with
+`cargo build -p zkc-tools --bin zkc`; test providers are disabled by default.
+Run Rust tests with `cargo test --workspace --all-features`.

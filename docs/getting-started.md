@@ -8,6 +8,11 @@ construction. The common Host supplies randomness and executes compiled programs
 
 ## Prepare the tools
 
+On x86_64 Linux, build the installed application with `nix build` and run
+`./result/bin/zkc --help`. It selects its packaged companion compiler without
+a development shell. `--compiler=PATH` overrides that selection explicitly.
+Use `nix run . -- COMMAND ...` for the same application through Nix.
+
 Follow the [development guide](development/README.md) to enter the pinned
 environment and build the tools. Run these commands from the repository root:
 

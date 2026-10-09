@@ -33,7 +33,8 @@ stdenv.mkDerivation {
     "-DMLIR_TABLEGEN_EXE=${llvm.tblgen}/bin/mlir-tblgen"
     "-DBUILD_TESTING=ON"
   ];
-  doCheck = true;
+  # Full compiler validation is checks.compiler; installation does not run tests.
+  doCheck = false;
   postInstall = ''
     mkdir -p "$testSupport/bin/test"
     ln -s "$out/bin/zkc-compile" "$out/bin/zkc-opt" "$out/bin/zkc-tblgen" "$testSupport/bin/"

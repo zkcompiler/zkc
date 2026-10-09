@@ -82,4 +82,4 @@ def test_linear_contractions(toolchain, directory, journal, family, linear):
         _, default = export("default", "--zkc-participant-pipeline")
         assert default == program
 
-    journal.run([toolchain.example("linear_contractions"), candidate, family], keep="native.stdout")
+    journal.run([toolchain.driver("linear_contractions"), candidate, family], keep="native.stdout")

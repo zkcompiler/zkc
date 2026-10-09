@@ -41,7 +41,7 @@ def fetch_lean(deps):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["setup", "configure", "compiler", "rust", "lean",
+    parser.add_argument("operation", choices=["setup", "configure", "compiler", "rust", "test-drivers", "lean",
                                              "fetch-lean", "lean-integration", "lean-fresh", "install", "install-domain", "clean-reports"])
     parser.add_argument("--profile", default="release")
     parser.add_argument("--deps", choices=["main", "arklib"], default="main")
@@ -106,7 +106,9 @@ def execute(args):
     elif args.operation == "lean":
         run(["lake", "build"], cwd=ROOT / "formal")
     elif args.operation == "rust":
-        run(["cargo", "build", "--release", "--locked", "--workspace", "--bins", "--examples", "--all-features"])
+        run(["cargo", "build", "--release", "--locked", "-p", "zkc-tools", "--bin", "zkc"])
+    elif args.operation == "test-drivers":
+        run(["cargo", "build", "--release", "--locked", "-p", "zkc-test-drivers", "--bins"])
     elif args.operation == "install-domain":
         install_domain(args, run)
     elif args.operation == "install":

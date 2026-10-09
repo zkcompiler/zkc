@@ -85,7 +85,7 @@ pub(super) fn proof_inputs(
     role: &RolePorts,
     public: &[InputValue],
     private: NamedValues,
-    capacity: crate::host::capacity::NativeCapacity,
+    capacity: crate::host::capacity::Capacity,
 ) -> Result<Vec<InputValue>, String> {
     use zkc_runtime::interactive::PhysicalType;
     let private = values(interface.named_inputs(role), private, None)?;
@@ -113,7 +113,7 @@ pub(super) fn proof_inputs(
 }
 fn duplicate(
     input: &InputValue,
-    capacity: crate::host::capacity::NativeCapacity,
+    capacity: crate::host::capacity::Capacity,
     copied: &mut usize,
 ) -> Result<InputValue, String> {
     Ok(match input {

@@ -24,11 +24,10 @@ proof marked incomplete. Service budgets, public values, setups and
 
 ## Native deployments
 
-Lower-level callers use `NativeDeployment::execute_attempts(inputs, policy)`
-or its typed form. They authorize an explicit completion port and RNG map:
+Lower-level callers use `NativeDeployment::execute(&inputs, Invocation::Attempts(&policy))`. They authorize an explicit completion port and RNG map:
 
 ```sh
-zkc prove-bundle deployment.json TRUSTED_SHA256 producer.json proof.bin --attempts=attempts.json
+zkc prove-bundle deployment.json TRUSTED_SHA256 producer.json proof.bin --attempt-policy=attempts.json
 zkc verify-bundle deployment.json TRUSTED_SHA256 validator.json proof.bin
 ```
 

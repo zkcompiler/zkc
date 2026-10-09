@@ -1,4 +1,5 @@
 use super::*;
+use crate::execution::ProverMaterial;
 use zkc_runtime::interactive::Identity;
 
 fn request(value: impl Fn() -> InputValue) -> RunInputs {
@@ -538,7 +539,7 @@ fn compound_shape_and_aggregate_limits_refuse_before_payload_decoding() {
 
 #[test]
 fn reusable_material_retains_setup_checks_and_per_invocation_charges() {
-    let capacity = NativeCapacity::default();
+    let capacity = Capacity::default();
     let bounds = capacity.backend().ark_bounds();
     let keys = zkc_arkworks::Keys::setup_for_development(1, &bounds).unwrap();
     let other = zkc_arkworks::Keys::setup_for_development(1, &bounds).unwrap();

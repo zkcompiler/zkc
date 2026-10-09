@@ -1,5 +1,6 @@
 {
   tools,
+  testSupport,
   compiler,
   environment,
   python3,
@@ -8,7 +9,7 @@ tools.overrideAttrs (
   old:
   (environment.outputs {
     compilerBin = "${compiler.testSupport}/bin";
-    nativeBin = "${tools.testSupport}/bin";
+    nativeBin = "${testSupport}/bin";
   })
   // {
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ python3 ];

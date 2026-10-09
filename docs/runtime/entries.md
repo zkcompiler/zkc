@@ -12,6 +12,7 @@ tree with explicit module paths:
 
 ```sh
 zkc compile --entry=example::Proof --module=example=protocol.zkc --output=proof.entry
+zkc inspect proof.entry EXPECTED_SHA256
 zkc prove proof.entry EXPECTED_SHA256 prover.json proof.bin
 zkc verify proof.entry EXPECTED_SHA256 verifier.json proof.bin
 ```
@@ -20,6 +21,10 @@ Store the compilation report's `package_sha256` in trusted deployment
 configuration. `EXPECTED_SHA256` comes from that configuration; rehashing an
 unknown received package does not authorize it. Authored proof jobs require
 `--allow-header-only`. Derived jobs select their suite in source.
+
+`inspect` authenticates the package and reports its checked source interface:
+roles, named ports, services, setup names and proof selections. It does not
+execute a protocol or establish native admission or protocol security.
 
 Run Entries use:
 
@@ -70,6 +75,8 @@ defines exact objects, variants and unknown-field handling.
 Optional `services` and `transcript_budget` override the
 [operational defaults](../spec/runtime/entries.md#attempts-and-operational-defaults).
 Explicit zero remains zero. `--capacity=FILE` selects [capacity limits](../spec/runtime/capacity.md).
+Run Entries also accept `--limits=FILE` for the `zkc.bundle-limits/0`
+[work limits](../spec/runtime/joint.md).
 [Retries](attempts.md) require an Entry completion selection and explicit count.
 
 ## Setup material and authority

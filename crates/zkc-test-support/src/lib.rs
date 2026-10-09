@@ -122,10 +122,8 @@ fn allocate_process_root(base: &Path, pid: u32) -> std::io::Result<PathBuf> {
 
 /// Wire bytes as the lowercase hexadecimal these tests read and write.
 ///
-/// Four test files wrote this same function and four wrote its inverse. The
-/// product has its own, which is not this one: `zkc_tools::proof::hex`
-/// is what a tool prints, and a test that compared against it would be checking
-/// that one expression equals itself.
+/// Kept independent of the Host codec so tests can compare its output against
+/// an independently implemented encoding.
 pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }

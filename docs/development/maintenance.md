@@ -59,8 +59,11 @@ when diagnosing a disagreement.
 ## Workflow scopes and reports
 
 The [test guide](../../tests/README.md) and CI manifests own current scopes.
-Default execution checks cover C++/Rust. Formal checks and external integrations
-are explicit standalone work.
+Automatic CI checks source hygiene, docs and the Python harness. Changes to
+native code, libraries or build configuration also run cached Nix checks for
+Rust tests/Clippy, the installed CLI, an installed C++ SDK consumer and C++
+formatting. Full CTest and protocol integration suites, sanitizers and optional
+formal/external integrations remain explicit workflow scopes.
 
 A direct test driver requires built tools. Report directories are allocated
 independently of shared build trees; concurrent reports do not isolate concurrent

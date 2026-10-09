@@ -36,17 +36,8 @@ def test_every_native_compiler_test_source_has_a_build_target():
 def test_every_repository_path_a_test_file_cites_exists():
     """A test that points at its counterpart should point at something.
 
-    These files explain themselves by naming the test that judges the same
-    subject from another build, and those names go stale in the ordinary way:
-    six of them named a `tests/` file without the `test_` prefix pytest
-    collects by, so the counterpart they pointed at did not exist.
-
-    Docstrings are read through `ast` and comments through `tokenize`, because
-    the sentence that carries such a path usually wraps, and a filter that
-    looked at how a line begins saw the first line of a docstring and none of
-    the rest. A path is only recognised when it names one of the repository's
-    own top-level directories and ends in an extension, so prose cannot be
-    mistaken for one.
+    Read multiline docstrings and comments, recognizing paths under maintained
+    repository directories. This keeps cross-references useful after moves.
     """
     import ast
     import io
@@ -83,15 +74,9 @@ def test_every_formal_check_is_where_the_loop_that_runs_them_looks():
     """`just test-lean` discovers formal checks and consumers; independent CLI
     controls also live under `tests/support/formal/`.
 
-    That is the whole list, so a check is run by being in one of those places,
-    the way a `compiler/test` script is run by being in its directory. What the
-    loop cannot see is a check that stayed behind: these lived in `formal/`,
-    in `formal/Tests/` beside the Lean modules, and in the justfile as fourteen
-    named lines, and adding one meant remembering the list.
-
-    The two scripts still in `formal/` are not checks -- `cache_dependencies`
-    fetches and `reproduce` rebuilds -- and `support/` is shared vocabulary,
-    so neither is run here.
+    Top-level formal scripts provide dependency fetching, source planning and
+    reproduction. Checks belong in discovered directories; shared helpers are
+    not registered as independent checks.
     """
     formal = ROOT / "formal"
     allowed = {"cache_dependencies.py", "reproduce.py", "source_plan_controls.py"}
@@ -112,11 +97,8 @@ def test_every_formal_check_is_where_the_loop_that_runs_them_looks():
 def test_every_recipe_summary_reads_as_one():
     """`just --list` shows the last comment line above a recipe, and only that.
 
-    The lines above it are for someone reading the file, so a block that ends
-    mid-sentence puts a fragment in the listing: `test-compiler` showed "of
-    these is what makes a test here expensive to write." until this was
-    written. A summary starts a sentence, which is what separates it from a
-    continuation line, and is short enough for the listing to hold.
+    Require a short sentence at the end of each recipe's comment block so the
+    command listing shows a complete summary.
     """
     import re
 
@@ -142,7 +124,7 @@ def test_every_recipe_summary_reads_as_one():
     )
 
 
-def test_native_build_covers_tools_and_examples(monkeypatch):
+def test_product_and_driver_builds_are_separate(monkeypatch):
     from harness import load
     import sys
 
@@ -151,7 +133,12 @@ def test_native_build_covers_tools_and_examples(monkeypatch):
     monkeypatch.setattr(developer, "run", lambda args, **kwargs: calls.append(list(map(str, args))))
     monkeypatch.setattr(sys, "argv", ["develop.py", "rust"])
     developer.main()
-    assert calls == [["cargo", "build", "--release", "--locked", "--workspace", "--bins", "--examples", "--all-features"]]
+    monkeypatch.setattr(sys, "argv", ["develop.py", "test-drivers"])
+    developer.main()
+    assert calls == [
+        ["cargo", "build", "--release", "--locked", "-p", "zkc-tools", "--bin", "zkc"],
+        ["cargo", "build", "--release", "--locked", "-p", "zkc-test-drivers", "--bins"],
+    ]
 
 
 def test_documentation_scope_includes_component_guides(monkeypatch):
@@ -171,17 +158,13 @@ def test_native_generator_and_client_pairs_remain_available():
     import tomllib
 
     integration = load("native_integration", "tests/protocol/test_native_mathematical.py")
-    examples = {}
-    for manifest in (ROOT / "crates").glob("*/Cargo.toml"):
-        config = tomllib.loads(manifest.read_text())
-        for entry in config.get("example", []):
-            examples[entry["name"]] = manifest.parent / entry["path"]
-        for path in (manifest.parent / "examples").glob("*.rs"):
-            examples.setdefault(path.stem, path)
+    manifest = ROOT / "crates/zkc-test-drivers/Cargo.toml"
+    config = tomllib.loads(manifest.read_text())
+    drivers = {entry["name"]: manifest.parent / entry["path"] for entry in config["bin"]}
     missing = []
     for generator, example in integration.NATIVE_CASES:
         if not (ROOT / f"compiler/test/{generator}.py").is_file():
             missing.append(f"compiler generator {generator}")
-        if example not in examples or not examples[example].is_file():
-            missing.append(f"Rust example {example}")
+        if example not in drivers or not drivers[example].is_file():
+            missing.append(f"Rust driver {example}")
     assert not missing, "native integration coverage lost its inputs: " + ", ".join(missing)

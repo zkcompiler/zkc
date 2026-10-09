@@ -28,12 +28,21 @@ def test_discovery_without_protocol_inputs(toolchain, directory, tool):
 
 
 @pytest.mark.parametrize("command", ["run-bundle", "prove-bundle", "verify-bundle",
-                                    "compile", "run", "prove", "verify", "bindings"])
+                                    "compile", "inspect", "run", "prove", "verify", "bindings"])
 def test_runtime_command_help(toolchain, directory, command):
     result = run_process([toolchain.runtime, command, "--help"], cwd=directory,
                             capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr
     assert command in result.stdout and "Usage:" in result.stdout
+    later = run_process([toolchain.runtime, command, "missing", "--help"], cwd=directory,
+                        capture_output=True, text=True, timeout=15)
+    assert later.returncode == 0 and later.stdout == result.stdout
+    if command in ("verify", "verify-bundle"):
+        assert "--attempt" not in result.stdout
+    if command == "prove":
+        assert "--attempts=COUNT" in result.stdout
+    if command == "prove-bundle":
+        assert "--attempt-policy=FILE" in result.stdout
 
 
 def test_usage_and_execution_failures_remain_distinct(toolchain, directory):
@@ -48,6 +57,11 @@ def test_usage_and_execution_failures_remain_distinct(toolchain, directory):
         result = invoke(*args)
         assert result.returncode == 2 and "Unknown command" in result.stderr
         assert not result.stdout
+    result = invoke("prove", "missing.entry", "0" * 64, "missing.json", "proof.bin",
+                    "--setups=missing", "--attempts=x")
+    report = json.loads(result.stdout)
+    assert result.returncode == 1 and report["phase"] == "arguments"
+    assert report["code"] == "cli-option" and "count" in report["message"]
     # A real execution command still reports the existing machine-readable refusal.
     result = invoke("run", "missing.entry", "0" * 64, "inputs.json")
     assert result.returncode == 1

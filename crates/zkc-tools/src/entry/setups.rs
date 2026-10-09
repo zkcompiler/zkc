@@ -67,7 +67,7 @@ pub(super) fn proof_authority(
 pub(super) fn check_material(
     interface: &Interface,
     material: &BTreeMap<String, Vec<u8>>,
-    capacity: native::NativeCapacity,
+    capacity: crate::execution::Capacity,
 ) -> Result<()> {
     if material.len() != interface.setups.len() {
         return Err("entry-setup-material".into());
@@ -94,7 +94,7 @@ pub(super) fn check_material(
 pub(super) fn public_keys<'a>(
     interface: &Interface,
     material: &'a BTreeMap<String, Vec<u8>>,
-    capacity: native::NativeCapacity,
+    capacity: crate::execution::Capacity,
 ) -> Result<BTreeMap<u32, &'a [u8]>> {
     check_material(interface, material, capacity)?;
     Ok(interface

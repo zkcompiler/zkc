@@ -1,7 +1,6 @@
 //! Application-owned loading and lifecycle for an authenticated native bundle.
 use super::*;
-pub use crate::host::capacity::NativeCapacity;
-pub use crate::host::material::ProverMaterial;
+use crate::execution::Capacity;
 use crate::host::{
     admission::{Admission, Input, Operand, ResourceInput, entry_values},
     inputs::*,
@@ -16,7 +15,7 @@ use zkc_backends::{
 use zkc_runtime::interactive::{EntryRole, Type, Value as RuntimeValue};
 mod inputs;
 mod report;
-pub use crate::host::request::InputValue;
+use crate::execution::InputValue;
 pub use inputs::{RoleInputs, RunInputs, SetupAuthority};
 pub use report::HostReport;
 
@@ -25,7 +24,7 @@ pub use report::HostReport;
 #[derive(Clone, Copy, Debug)]
 pub struct HostLimits {
     pub bundle: BundleLimits,
-    pub capacity: NativeCapacity,
+    pub capacity: Capacity,
     pub steps: usize,
     pub message_bytes: usize,
     pub total_wire_bytes: usize,
@@ -36,7 +35,7 @@ impl Default for HostLimits {
         let run = RunLimits::default();
         Self {
             bundle: BundleLimits::default(),
-            capacity: NativeCapacity::default(),
+            capacity: Capacity::default(),
             steps: run.steps,
             message_bytes: run.wire_bytes,
             total_wire_bytes: run.total_wire_bytes,
@@ -45,6 +44,22 @@ impl Default for HostLimits {
     }
 }
 impl HostLimits {
+    /// Apply a zkc.bundle-limits/0 document, retaining admission and value capacity.
+    pub fn with_work_limits(mut self, bytes: &[u8]) -> Result<Self> {
+        let value = parse(bytes, 4096)?;
+        let row = array(&value, 5)?;
+        if text(&row[0])? != "zkc.bundle-limits/0" {
+            return Err("bundle-limits-format".into());
+        }
+        let size = |v| usize::try_from(natural(v)?).map_err(|_| "bundle-limits".to_owned());
+        self.steps = size(&row[1])?;
+        self.message_bytes = size(&row[2])?;
+        self.total_wire_bytes = size(&row[3])?;
+        self.external_work = natural(&row[4])?;
+        self.validate()?;
+        Ok(self)
+    }
+
     fn execution(self) -> RunLimits {
         RunLimits {
             steps: self.steps,

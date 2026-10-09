@@ -74,6 +74,41 @@ impl Interface {
             options: package.options(),
         })
     }
+    /// Describe checked source ports and invocation responsibilities without
+    /// admitting native programs or executing any protocol operation.
+    pub fn describe(&self) -> serde_json::Value {
+        use serde_json::json;
+        let port = |p: &raw::Port| json!({"name":p.name, "type":p.display_type, "roles":p.roles});
+        let protocol = self.selected_protocol();
+        let selection = |s: &raw::Selector| {
+            json!({"port":protocol.outputs[s.port as usize].name,
+                   "path":s.path, "role":s.role})
+        };
+        let proof = match &self.document.job {
+            raw::Job::Run {} => None,
+            raw::Job::Proof {
+                prover,
+                verifier,
+                acceptance,
+                completion,
+                ..
+            } => Some(json!({
+                "prover":prover, "verifier":verifier,
+                "public":self.public_ports().map(|p| port(p.definition)).collect::<Vec<_>>(),
+                "acceptance":selection(acceptance),
+                "completion":completion.as_deref().map(selection),
+                "transcript_suite":self.proof().and_then(|p| p.suite.as_deref()),
+            })),
+        };
+        json!({"entry":self.entry(), "protocol":self.protocol(),
+            "kind":if self.is_proof() {"proof"} else {"run"}, "toolchain":self.toolchain(),
+            "roles":self.roles().iter().map(|role| json!({"name":role.name,
+                "inputs":self.named_inputs(role).map(|p| port(p.definition)).collect::<Vec<_>>(),
+                "outputs":self.output_ports(role).map(port).collect::<Vec<_>>(),
+                "services":self.services(role).map(|s| json!({"name":s.name,"contract":s.contract})).collect::<Vec<_>>()
+            })).collect::<Vec<_>>(),
+            "setups":self.setup_names().collect::<Vec<_>>(), "proof":proof})
+    }
     pub fn entry(&self) -> &str {
         &self.document.entry
     }

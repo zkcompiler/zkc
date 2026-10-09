@@ -2,6 +2,7 @@
 use super::{
     AttemptOptions, BindingPolicy, BindingScope, Package, ProofEntry, ProofOptions, RunEntry, files,
 };
+use crate::cli::Arguments;
 use crate::{
     host::{
         inputs::{digest, hex, read_regular as read},
@@ -11,7 +12,7 @@ use crate::{
 };
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeSet, process::Command, time::Duration};
+use std::{process::Command, time::Duration};
 
 type Result<T> = std::result::Result<T, String>;
 struct Options {
@@ -23,7 +24,7 @@ struct Options {
     configuration: Vec<String>,
 }
 impl Options {
-    fn parse(args: &[String], command: &str) -> Result<Self> {
+    fn parse(args: &Arguments<'_>) -> Result<Self> {
         let mut options = Self {
             setups: Default::default(),
             proof: Default::default(),
@@ -32,34 +33,29 @@ impl Options {
             results: None,
             configuration: Vec::new(),
         };
-        let mut seen = BTreeSet::new();
-        for arg in args {
-            let (key, value) = arg.split_once('=').unwrap_or((arg, ""));
-            if !seen.insert(key) {
-                return Err("entry-option".into());
-            }
-            if matches!(key, "--setups" | "--capacity") {
+        for &(key, value) in &args.options {
+            let value = value.unwrap_or("");
+            if matches!(key, "--setups" | "--capacity" | "--limits") {
                 options.configuration.push(value.into());
             }
             match key {
                 "--setups" => options.setups = files::authority(&read(value, 64 * 1024)?)?,
                 "--capacity" => {
-                    let capacity = crate::proof::NativeCapacity::parse(&read(value, 4096)?)?;
+                    let capacity = crate::execution::Capacity::parse(&read(value, 4096)?)?;
                     options.proof.capacity = capacity;
                     options.run.capacity = capacity;
                 }
-                "--allow-header-only" if command != "run" && value.is_empty() => {
-                    options.proof.binding = BindingPolicy::AllowHeaderOnly
-                }
-                "--attempts" if command == "prove" => {
-                    let count = value.parse::<u64>().map_err(|_| "entry-option")?;
+                "--limits" => options.run = options.run.with_work_limits(&read(value, 4096)?)?,
+                "--allow-header-only" => options.proof.binding = BindingPolicy::AllowHeaderOnly,
+                "--attempts" => {
+                    let count = value.parse::<u64>().expect("validated count");
                     options.attempts = Some(AttemptOptions {
                         count,
                         ..Default::default()
                     });
                 }
-                "--results" if !value.is_empty() => options.results = Some(value.into()),
-                _ => return Err("entry-option".into()),
+                "--results" => options.results = Some(value.into()),
+                _ => unreachable!("validated Entry option"),
             }
         }
         Ok(options)
@@ -69,49 +65,33 @@ impl Options {
 pub fn succeeded(report: &Json) -> bool {
     matches!(
         report["status"].as_str(),
-        Some("compiled" | "executed" | "produced" | "accepted" | "generated")
+        Some("compiled" | "inspected" | "executed" | "produced" | "accepted" | "generated")
     )
 }
 /// Reports preserve reached execution and publication state without returning
 /// private values or proof bytes on standard output.
-pub fn run(command: &str, args: &[String]) -> Json {
+pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
     if command == "compile" {
         return compile(args);
     }
+    if command == "inspect" {
+        return inspect(args);
+    }
     let mut report = json!({"format":"zkc.entry-result/0","status":"refused","phase":"arguments"});
     let result = (|| -> Result<()> {
-        let [path, expected, inputs, rest @ ..] = args else {
-            return Err("entry-usage".into());
-        };
-        if [path, expected, inputs]
-            .iter()
-            .any(|value| value.starts_with("--"))
-        {
-            return Err("entry-usage".into());
-        }
-        let (proof_path, flags) = if matches!(command, "run" | "bindings") {
-            (None, rest)
-        } else {
-            let [proof, flags @ ..] = rest else {
-                return Err("entry-usage".into());
-            };
-            if proof.starts_with("--") {
-                return Err("entry-usage".into());
-            }
-            (Some(proof.as_str()), flags)
-        };
-        if command == "bindings" && !rest.is_empty() {
-            return Err("entry-option".into());
-        }
+        let path = args.positional[0];
+        let expected = args.positional[1];
+        let inputs = args.positional[2];
+        let proof_path = args.positional.get(3).copied();
         let pin = digest(expected)?;
-        let options = Options::parse(flags, command)?;
-        let mut protected = vec![path.as_str()];
+        let options = Options::parse(args)?;
+        let mut protected = vec![path];
         protected.extend(options.configuration.iter().map(String::as_str));
         let mut outputs = Vec::new();
         if command == "bindings" {
-            outputs.push(inputs.as_str());
+            outputs.push(inputs);
         } else {
-            protected.push(inputs.as_str());
+            protected.push(inputs);
             if command == "prove" {
                 outputs.extend(proof_path);
             } else {
@@ -242,7 +222,7 @@ pub fn run(command: &str, args: &[String]) -> Json {
             })?;
             report["status"] = json!(if producer { "produced" } else { "accepted" });
         } else {
-            return Err("entry-usage".into());
+            unreachable!("validated Entry command");
         }
         report["phase"] = json!("complete");
         Ok(())
@@ -290,7 +270,7 @@ fn protect_materials<'a>(
     values: impl Iterator<Item = &'a super::Value>,
 ) -> Result<()> {
     use super::Value;
-    use crate::run::InputValue;
+    use crate::execution::InputValue;
     for value in values {
         match value {
             Value::Leaf(InputValue::ProverKeyFile { path, .. }) => {
@@ -310,23 +290,42 @@ fn protect_materials<'a>(
     }
     Ok(())
 }
-fn compile(args: &[String]) -> Json {
+fn inspect(args: &Arguments<'_>) -> Json {
+    let mut report =
+        json!({"format":"zkc.entry-inspection/0", "status":"refused", "phase":"arguments"});
+    let result = (|| -> Result<()> {
+        let pin = digest(args.positional[1])?;
+        report["phase"] = json!("admission");
+        let bytes = read(args.positional[0], Package::MAX_BYTES)?;
+        let package =
+            Package::capture(&bytes, &pin, Package::MAX_BYTES).map_err(|e| e.to_string())?;
+        let interface = super::Interface::read(&package).map_err(|e| e.to_string())?;
+        report["package_sha256"] = json!(hex(package.identity()));
+        report["interface"] = interface.describe();
+        report["phase"] = json!("complete");
+        report["status"] = json!("inspected");
+        Ok(())
+    })();
+    if let Err(code) = result {
+        report["code"] = json!(code);
+    }
+    report
+}
+
+fn compile(args: &Arguments<'_>) -> Json {
     let mut report = json!({"format":"zkc.entry-build/0","status":"refused","phase":"arguments"});
     let result = (|| -> Result<()> {
         let mut compiler = "zkc-compile";
         let mut output = None;
         let mut flags = Vec::new();
         let mut sources = Vec::new();
-        let mut seen = BTreeSet::new();
-        for arg in args {
-            let (key, value) = arg.split_once('=').unwrap_or((arg, ""));
-            if key != "--module" && key != "--asset" && !seen.insert(key) {
-                return Err("entry-option".into());
-            }
+        for &(key, value) in &args.options {
+            let flag = value.map_or_else(|| key.to_owned(), |value| format!("{key}={value}"));
+            let value = value.unwrap_or("");
             match key {
-                "--compiler" if !value.is_empty() => compiler = value,
-                "--output" if !value.is_empty() => output = Some(value),
-                "--entry" | "--module" | "--asset" if !value.is_empty() => {
+                "--compiler" => compiler = value,
+                "--output" => output = Some(value),
+                "--entry" | "--module" | "--asset" => {
                     let path = if key == "--module" {
                         value.split_once('=').map(|(_, path)| path)
                     } else if key == "--asset" {
@@ -337,13 +336,13 @@ fn compile(args: &[String]) -> Json {
                     if let Some(path) = path {
                         sources.push(path);
                     }
-                    flags.push(arg);
+                    flags.push(flag);
                 }
-                "--no-simplify" | "--release-storage" if value.is_empty() => flags.push(arg),
-                _ => return Err("entry-option".into()),
+                "--no-simplify" | "--release-storage" => flags.push(flag),
+                _ => unreachable!("validated Entry option"),
             }
         }
-        let output = output.ok_or("entry-usage")?;
+        let output = output.expect("validated required output");
         let mut destinations = Outputs::new(&[output], &sources).map_err(output_error)?;
         for source in &sources {
             crate::host::io::open_regular(source).map_err(|_| "artifact-io")?;
@@ -460,7 +459,7 @@ mod tests {
         std::fs::write(&results, b"prior results").unwrap();
         let destinations =
             Outputs::new(&[proof.to_str().unwrap(), results.to_str().unwrap()], &[]).unwrap();
-        let capacity = crate::proof::NativeCapacity {
+        let capacity = crate::execution::Capacity {
             wire_bytes: 0,
             ..Default::default()
         };

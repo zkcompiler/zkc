@@ -229,7 +229,7 @@ then a real opening fails check. The failure is intentional evidence of this lim
 For separate development processes, build and run the example:
 
 ```sh
-cargo build --locked --release --example persistent_keys
+cargo build --locked --release -p zkc-arkworks --example persistent_keys
 # DIR must not exist. Setup generates OS-seeded development material once.
 target/release/examples/persistent_keys setup /tmp/pcs-demo 8
 target/release/examples/persistent_keys produce /tmp/pcs-demo

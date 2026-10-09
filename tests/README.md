@@ -16,12 +16,14 @@ maintains independent research models and checks.
 | Installed SDK | `just test-install` | Fresh compiler installation and independent consumer |
 | Installed domain contribution | `just test-install-domain` | Separate base/domain installations and consumers |
 | Documentation | `just test-docs` | Links, fragments and reachability |
-| Rust/Python style | `just lint` | Rust formatting, Clippy and Python lint |
+| Installed CLI | `nix build .#checks.x86_64-linux.application` | Compile, inspect, prove and verify outside the checkout |
+| C++/Rust/Python style | `just lint` | clang-format, Rust formatting, Clippy and Python lint |
 | Broad native integration | `just test` | Compiler, Rust, root integration, installation, docs, lint and demo |
 | Independent Lean research | `just test-lean` | Optional formal build, controls and consumers |
 
 `just setup` prepares locked Python and Cargo dependencies. `just build` builds
-only C++ and Rust. No default build, test, installation or demo invokes a Lean
+only the compiler and default-feature CLI. `just build-test-drivers` separately
+builds integration drivers with test providers; `just test-integration` builds both. No default build, test, installation or demo invokes a Lean
 checker. `just test-sanitize` selects the compiler sanitizer profile.
 
 The driver runs tests against existing outputs without building dependencies:
@@ -69,7 +71,7 @@ representative controls and states their evidence limits.
 ## Tools and reports
 
 `ZKC_COMPILER_BIN` selects the directory containing `zkc-compile` and `zkc-opt`;
-`ZKC_NATIVE_BIN` selects the Rust tools and `examples/` executables. Defaults are
+`ZKC_NATIVE_BIN` selects the Rust CLI and integration driver binaries. Defaults are
 `build/compiler` and `target/release`. With no native override, Cargo's
 `CARGO_TARGET_DIR` selects its `release` directory. Missing tools fail explicitly;
 the harness does not substitute tools from `PATH`.

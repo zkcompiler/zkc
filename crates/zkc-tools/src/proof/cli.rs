@@ -1,59 +1,50 @@
 //! Command-line transport for independently pinned proof bundles.
 use super::*;
 use crate::host::publication::Outputs;
-pub(crate) fn run(produce: bool, args: &[String]) -> Json {
+pub(crate) fn run(produce: bool, args: &crate::cli::Arguments<'_>) -> Json {
     let mut report =
-        json!({"format":"zkc.native-proof-run/0", "status":"refused", "phase":"admission"});
+        json!({"format":"zkc.native-proof-run/0", "status":"refused", "phase":"arguments"});
     let result = (|| -> Result<()> {
-        let [
-            deployment_path,
-            expected_digest,
-            inputs_path,
-            proof_path,
-            options @ ..,
-        ] = args
-        else {
-            return Err("usage: prove-bundle|verify-bundle DEPLOYMENT EXPECTED_SHA256 INPUTS PROOF [--setups=AUTHORITY] [--attempts=POLICY] [--capacity=LIMITS] [--allow-header-only]".into());
-        };
-        let mut protected = vec![deployment_path.as_str(), inputs_path.as_str()];
+        let deployment_path = args.positional[0];
+        let expected_digest =
+            crate::host::inputs::digest(args.positional[1]).map_err(|_| "native-proof-digest")?;
+        let inputs_path = args.positional[2];
+        let proof_path = args.positional[3];
+        let mut protected = vec![deployment_path, inputs_path];
         let mut authority = None;
         let mut attempts = None;
         let mut capacity = None;
         let mut allow_header_only = false;
-        for option in options {
-            if option == "--allow-header-only" && !allow_header_only {
-                allow_header_only = true;
-                continue;
+        for &(name, value) in &args.options {
+            match name {
+                "--allow-header-only" => allow_header_only = true,
+                "--setups" => {
+                    authority = Some(SetupAuthority::parse(&read_regular(
+                        value.unwrap(),
+                        64 * 1024,
+                    )?)?)
+                }
+                "--attempt-policy" => {
+                    attempts = Some(AttemptPolicy::parse(&read_regular(
+                        value.unwrap(),
+                        64 * 1024,
+                    )?)?)
+                }
+                "--capacity" => {
+                    capacity = Some(Capacity::parse(&read_regular(value.unwrap(), 4096)?)?)
+                }
+                _ => unreachable!("validated proof bundle option"),
             }
-            if let Some(path) = option
-                .strip_prefix("--setups=")
-                .filter(|_| authority.is_none())
-            {
-                authority = Some(SetupAuthority::parse(&read_regular(path, 64 * 1024)?)?);
-            } else if let Some(path) = option
-                .strip_prefix("--attempts=")
-                .filter(|_| produce && attempts.is_none())
-            {
-                attempts = Some(AttemptPolicy::parse(&read_regular(path, 64 * 1024)?)?);
-            } else if let Some(path) = option
-                .strip_prefix("--capacity=")
-                .filter(|_| capacity.is_none())
-            {
-                capacity = Some(NativeCapacity::parse(&read_regular(path, 4096)?)?);
-            } else {
-                return Err("native-proof-option".into());
-            }
-            protected.push(option.split_once('=').unwrap().1);
+            protected.extend(value);
         }
         let output_paths = if produce {
-            vec![proof_path.as_str()]
+            vec![proof_path]
         } else {
             Vec::new()
         };
         let mut destinations = Outputs::new(&output_paths, &protected)?;
+        report["phase"] = json!("admission");
         let deployment_bytes = read_regular(deployment_path, INPUT_LIMIT)?;
-        let expected_digest =
-            crate::host::inputs::digest(expected_digest).map_err(|_| "native-proof-digest")?;
         let deployment = NativeDeployment::admit(
             &deployment_bytes,
             &expected_digest,
@@ -71,7 +62,17 @@ pub(crate) fn run(produce: bool, args: &[String]) -> Json {
         report["capacity"] = deployment.capacity().record();
         report["phase"] = json!("inputs");
         let inputs = parse(&read_regular(inputs_path, INPUT_LIMIT)?, INPUT_LIMIT)?;
-        let inputs = inputs::decode(&deployment, &inputs, produce)?;
+        let inputs = ProofInputs::decode(
+            &deployment,
+            &inputs,
+            if let Some(policy) = &attempts {
+                Invocation::Attempts(policy)
+            } else if produce {
+                Invocation::Prove
+            } else {
+                Invocation::Verify(&[])
+            },
+        )?;
         for input in &inputs.inputs {
             if let InputValue::ProverKeyFile { path, .. } = input {
                 destinations.protect([path.as_str()])?;
@@ -83,8 +84,13 @@ pub(crate) fn run(produce: bool, args: &[String]) -> Json {
             Some(read_regular(proof_path, MAX_PROOF_BYTES)?)
         };
         let result = match attempts {
-            Some(policy) => deployment.execute_attempts_typed(&inputs, &policy)?,
-            None => deployment.execute_typed(&inputs, proof.as_deref())?,
+            Some(policy) => {
+                deployment.execute(&inputs, crate::proof::Invocation::Attempts(&policy))?
+            }
+            None => deployment.execute(
+                &inputs,
+                crate::proof::Invocation::one_shot(proof.as_deref()),
+            )?,
         };
         report["phase"] = json!("execution");
         report

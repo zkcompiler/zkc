@@ -80,13 +80,16 @@ shared component changes need both linkage checks. Existing outputs can be selec
 ## Packages and optional work
 
 ```sh
-nix build .#compiler .#tools
+nix build                         # installed CLI with its companion compiler
+nix run . -- --help
+nix build .#compiler .#tools       # separate C++ SDK and runtime CLI
+nix build .#test-drivers           # integration clients with test providers
 nix flake check -L --keep-going
 ```
 
 Nix build/check phases consume hash-checked dependencies without network access.
-Git-backed flake evaluation sees tracked inputs; `path:.` can inspect an
-uncommitted packaging experiment but does not replace correct source selection.
+Git-backed flake evaluation sees tracked inputs; add new source files before
+evaluating their packages. Generated checkout output is excluded.
 The owning flake and test manifests define the exact checks.
 
 Lean has separate build, control and reproduction commands in the
@@ -106,5 +109,5 @@ manifests and toolchains. LLZK remains separate from the main compiler process.
 | Write and validate documentation | [Documentation](documentation.md) |
 
 The shell supplies clangd, clang-format and rust-analyzer. Point clangd at the
-selected build's `compile_commands.json`. Use `cargo fmt`, targeted clang-format,
+selected build's `compile_commands.json`. Use `cargo fmt`, `just fmt-cpp`,
 Ruff and `nix fmt` through their owning scopes; keep unrelated formatting separate.

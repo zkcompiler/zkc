@@ -7,29 +7,16 @@ rustPlatform.buildRustPackage {
   pname = "zkc-tools";
   version = "0.0.0";
   src = source;
-  outputs = [
-    "out"
-    "testSupport"
-  ];
-  cargoHash = "sha256-F32XtlYqUGXij/UQBMLSMEBK0UuuFYcGUCi77QfkKoQ=";
+  cargoHash = "sha256-7Q2o+907/GwQOQZw2os1ZzdbyDiL3DtxyhE4zLkhiec=";
   cargoBuildFlags = [
-    "--workspace"
-    "--bins"
-    "--examples"
-    "--all-features"
+    "-p"
+    "zkc-tools"
+    "--bin"
+    "zkc"
   ];
-  # Native integration tests run separately with the compiler.
+  # Unit and integration checks have independent derivations. The product never
+  # enables test providers through workspace feature unification.
   doCheck = false;
-  postInstall = ''
-    mkdir -p "$testSupport/bin/examples"
-    for executable in "$out/bin/"*; do
-      ln -s "$executable" "$testSupport/bin/"
-    done
-    # Cargo keeps a hashed copy beside each example; install only public names.
-    find target -regextype posix-extended -path '*/release/examples/*' \
-      -type f -executable ! -regex '.*-[0-9a-f]{16}' \
-      -exec cp {} "$testSupport/bin/examples/" \;
-  '';
   meta = {
     description = "Program runtime and common Host tools";
     license = lib.licenses.asl20;

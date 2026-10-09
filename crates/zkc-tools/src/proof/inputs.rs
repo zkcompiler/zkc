@@ -16,105 +16,113 @@ pub struct ProofInputs {
     pub transcript_budget: u64,
 }
 
-pub(super) enum Request<'a> {
-    Encoded(&'a Json),
-    Typed(&'a ProofInputs),
-}
-
-pub(super) fn decode(host: &NativeDeployment, input: &Json, producer: bool) -> Result<ProofInputs> {
-    logical::tree_size(input).map_err(|e| e.to_string())?;
-    let row = array(input, 6)?;
-    if text(&row[0])? != "zkc.native-proof-inputs/0" {
-        return Err("native-proof-inputs".into());
-    }
-    if text(&row[3])?.len() > CONTEXT_LIMIT * 2 {
-        return Err("native-proof-context-limit".into());
-    }
-    let role = if producer {
-        host.entry.producer()
-    } else {
-        host.entry.validator()
-    };
-    let mapping = &host.maps[&role.role];
-    let public_rows = list(&row[1])?;
-    let data_rows = list(&row[2])?;
-    let service_rows = list(&row[4])?;
-    if public_rows.len() != host.public.len() {
-        return Err("native-proof-public-inputs".into());
-    }
-    if data_rows.len() != mapping.data.len() {
-        return Err("native-proof-role-inputs".into());
-    }
-    if service_rows.len() != mapping.services.len() {
-        return Err("native-proof-service-inputs".into());
-    }
-    let public = public_rows
-        .iter()
-        .zip(&host.public)
-        .map(|(row, port)| {
-            let row = array(row, 3)?;
-            if text(&row[0])? != host.entry.validator().role || index(&row[1])? != port.original {
-                return Err("native-proof-public-inputs".into());
-            }
-            Ok(InputValue::Wire(host.capacity.wire(&row[2])?))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let inputs = data_rows
-        .iter()
-        .zip(&mapping.data)
-        .zip(&role.inputs)
-        .map(|((row, port), (_, ty))| {
-            let row = array(row, 2)?;
-            if index(&row[0])? != port.original {
-                return Err("native-proof-role-inputs".into());
-            }
-            let spec = array(&row[1], 2)?;
-            let kind = text(&spec[0])?;
-            if kind != input_kind(ty)? {
-                return Err("native-proof-role-input-kind".into());
-            }
-            Ok(match kind {
-                "wire" => InputValue::Wire(host.capacity.wire(&spec[1])?),
-                "nonce" | "rng" => InputValue::Resource {
-                    budget: budget(&spec[1])?,
-                },
-                "verifier_key" => {
-                    if index(&spec[1])? != port.original {
-                        return Err("native-proof-key-port".into());
-                    }
-                    InputValue::VerifierKey
+impl ProofInputs {
+    /// Decode the positional transport for a selected invocation. Execution still
+    /// validates typed values and prepares all resources before issuing them.
+    pub fn decode(
+        host: &NativeDeployment,
+        input: &Json,
+        invocation: Invocation<'_>,
+    ) -> Result<Self> {
+        // Decode against the selected policy before interpreting positional data.
+        // Execution rechecks caller-owned policy and inputs before preparation.
+        invocation.plan(host)?;
+        let producer = invocation.is_producer();
+        logical::tree_size(input).map_err(|e| e.to_string())?;
+        let row = array(input, 6)?;
+        if text(&row[0])? != "zkc.native-proof-inputs/0" {
+            return Err("native-proof-inputs".into());
+        }
+        if text(&row[3])?.len() > CONTEXT_LIMIT * 2 {
+            return Err("native-proof-context-limit".into());
+        }
+        let role = if producer {
+            host.entry.producer()
+        } else {
+            host.entry.validator()
+        };
+        let mapping = &host.maps[&role.role];
+        let public_rows = list(&row[1])?;
+        let data_rows = list(&row[2])?;
+        let service_rows = list(&row[4])?;
+        if public_rows.len() != host.public.len() {
+            return Err("native-proof-public-inputs".into());
+        }
+        if data_rows.len() != mapping.data.len() {
+            return Err("native-proof-role-inputs".into());
+        }
+        if service_rows.len() != mapping.services.len() {
+            return Err("native-proof-service-inputs".into());
+        }
+        let public = public_rows
+            .iter()
+            .zip(&host.public)
+            .map(|(row, port)| {
+                let row = array(row, 3)?;
+                if text(&row[0])? != host.entry.validator().role || index(&row[1])? != port.original
+                {
+                    return Err("native-proof-public-inputs".into());
                 }
-                "prover_key_file" if producer => {
-                    let material = array(&spec[1], 2)?;
-                    InputValue::ProverKeyFile {
-                        path: text(&material[0])?.to_owned(),
-                        fingerprint: unhex(&material[1])?
-                            .try_into()
-                            .map_err(|_| "native-proof-material-pin")?,
-                    }
-                }
-                _ => return Err("native-proof-role-input-kind".into()),
+                Ok(InputValue::Wire(host.capacity.wire(&row[2])?))
             })
+            .collect::<Result<Vec<_>>>()?;
+        let inputs = data_rows
+            .iter()
+            .zip(&mapping.data)
+            .zip(&role.inputs)
+            .map(|((row, port), (_, ty))| {
+                let row = array(row, 2)?;
+                if index(&row[0])? != port.original {
+                    return Err("native-proof-role-inputs".into());
+                }
+                let spec = array(&row[1], 2)?;
+                let kind = text(&spec[0])?;
+                if kind != input_kind(ty)? {
+                    return Err("native-proof-role-input-kind".into());
+                }
+                Ok(match kind {
+                    "wire" => InputValue::Wire(host.capacity.wire(&spec[1])?),
+                    "nonce" | "rng" => InputValue::Resource {
+                        budget: budget(&spec[1])?,
+                    },
+                    "verifier_key" => {
+                        if index(&spec[1])? != port.original {
+                            return Err("native-proof-key-port".into());
+                        }
+                        InputValue::VerifierKey
+                    }
+                    "prover_key_file" if producer => {
+                        let material = array(&spec[1], 2)?;
+                        InputValue::ProverKeyFile {
+                            path: text(&material[0])?.to_owned(),
+                            fingerprint: unhex(&material[1])?
+                                .try_into()
+                                .map_err(|_| "native-proof-material-pin")?,
+                        }
+                    }
+                    _ => return Err("native-proof-role-input-kind".into()),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let services = service_rows
+            .iter()
+            .zip(&mapping.services)
+            .map(|(row, port)| {
+                let row = array(row, 2)?;
+                if index(&row[0])? != *port {
+                    return Err("native-proof-service-inputs".into());
+                }
+                budget(&row[1])
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(ProofInputs {
+            public,
+            inputs,
+            context: unhex(&row[3])?,
+            services,
+            transcript_budget: budget(&row[5])?,
         })
-        .collect::<Result<Vec<_>>>()?;
-    let services = service_rows
-        .iter()
-        .zip(&mapping.services)
-        .map(|(row, port)| {
-            let row = array(row, 2)?;
-            if index(&row[0])? != *port {
-                return Err("native-proof-service-inputs".into());
-            }
-            budget(&row[1])
-        })
-        .collect::<Result<Vec<_>>>()?;
-    Ok(ProofInputs {
-        public,
-        inputs,
-        context: unhex(&row[3])?,
-        services,
-        transcript_budget: budget(&row[5])?,
-    })
+    }
 }
 
 pub(super) struct Prepared {

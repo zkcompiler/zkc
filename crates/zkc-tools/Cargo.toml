@@ -14,23 +14,6 @@ tempfile.workspace = true
 [lints]
 workspace = true
 [dev-dependencies]
-ark-bn254.workspace = true
-ark-ff.workspace = true
-ark-serialize.workspace = true
-merlin.workspace = true
-spongefish = { workspace = true, features = ["keccak", "zeroize"] }
-curve25519-dalek.workspace = true
-ark-ec.workspace = true
-ark-poly.workspace = true
-p3-field.workspace = true
-sha3.workspace = true
-p3-baby-bear-043.workspace = true
-p3-field-043.workspace = true
-p3-challenger-043.workspace = true
-ark-bls12-381.workspace = true
-ark-poly-commit.workspace = true
-num-bigint.workspace = true
-num-traits.workspace = true
 zkc-test-support.workspace = true
 [[bin]]
 name = "zkc"
@@ -39,105 +22,5 @@ path = "src/main.rs"
 [features]
 test-utils = ["zkc-backends/test-utils"]
 
-[[example]]
-name = "mathematical_services"
-path = "examples/mathematical_services.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "mixed_native"
-path = "examples/mixed_native.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "native_proof"
-path = "examples/native_proof/main.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "native_joint"
-path = "examples/native_joint.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "structured_math"
-path = "examples/structured_math.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "relation_composition"
-path = "examples/relation_composition.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "public_coin"
-path = "examples/public_coin.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "native_iteration"
-path = "examples/native_iteration.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "native_iterated_proof"
-path = "examples/native_iterated_proof/main.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "native_committed_proof"
-path = "examples/native_committed_proof/main.rs"
-required-features = ["test-utils"]
-
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
-
-[[example]]
-name = "resource_origins"
-path = "examples/resource_origins.rs"
-
-[[example]]
-name = "native_attempts"
-path = "examples/native_attempts.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "native_authored_transcripts"
-path = "examples/native_authored_transcripts/main.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "native_structured_proof"
-path = "examples/native_structured_proof.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "native_composed_state"
-path = "examples/native_composed_state/main.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "native_nested_data"
-path = "examples/native_nested_data.rs"
-required-features = ["test-utils"]
-
-[[example]]
-name = "native_relation_bindings"
-path = "examples/native_relation_bindings.rs"
-
-[[example]]
-name = "native_domains"
-path = "examples/native_domains.rs"
-
-[[example]]
-name = "native_setups"
-path = "examples/native_setups.rs"
-
-[[example]]
-name = "native_composition"
-path = "examples/native_composition/main.rs"
-
-[[example]]
-name = "language_native"
-path = "examples/language_native.rs"
-required-features = ["test-utils"]

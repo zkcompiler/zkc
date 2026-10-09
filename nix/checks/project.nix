@@ -5,8 +5,11 @@
   environment,
   just,
   git,
+  cmake,
+  ninja,
   compiler,
   tools,
+  testSupport,
   python3,
   cacert,
 }:
@@ -14,7 +17,7 @@ tools.overrideAttrs (
   old:
   (environment.outputs {
     compilerBin = "${compiler.testSupport}/bin";
-    nativeBin = "${tools.testSupport}/bin";
+    nativeBin = "${testSupport}/bin";
   })
   // {
     pname = "zkc-project-checks";
@@ -27,11 +30,13 @@ tools.overrideAttrs (
       just # Exercised by the command regression test, not the test runner.
       uv
       git
+      cmake
+      ninja
       python3
     ];
+    dontConfigure = true;
     dontBuild = true;
     outputs = [ "out" ];
-    postInstall = "";
     CARGO_NET_OFFLINE = "true";
     UV_PROJECT_ENVIRONMENT = pythonTools;
     UV_NO_SYNC = "1";

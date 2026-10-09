@@ -217,11 +217,16 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         }
         let deployment = admitted.unwrap();
         let inputs = json!(["zkc.native-proof-inputs/0", [], [], "", [], "0"]);
-        let report = deployment.execute(&inputs, None).unwrap();
+        let report = crate::proof::tests::execute(
+            &deployment,
+            &inputs,
+            crate::proof::Invocation::one_shot(None),
+        )
+        .unwrap();
         assert!(report.cleanup_errors.is_empty());
         let proof = report.outcome.unwrap();
         assert_eq!(proof.len(), 40);
-        let request = inputs::decode(&deployment, &inputs, false).unwrap();
+        let request = ProofInputs::decode(&deployment, &inputs, Invocation::Verify(&[])).unwrap();
         let prepared = inputs::prepare(
             &deployment,
             &request,
@@ -259,30 +264,39 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             changed_proof[8..40]
                 .copy_from_slice(&Sha256::digest(logical::encode_tree(&changed).unwrap()));
             assert_eq!(
-                deployment
-                    .execute(&inputs, Some(&changed_proof))
-                    .unwrap()
-                    .outcome
-                    .unwrap_err(),
+                crate::proof::tests::execute(
+                    &deployment,
+                    &inputs,
+                    crate::proof::Invocation::one_shot(Some(&changed_proof))
+                )
+                .unwrap()
+                .outcome
+                .unwrap_err(),
                 "proof-header"
             );
         }
         let mut different_context = inputs.clone();
         different_context[3] = json!("01");
         assert_eq!(
-            deployment
-                .execute(&different_context, Some(&proof))
-                .unwrap()
-                .outcome
-                .unwrap_err(),
+            crate::proof::tests::execute(
+                &deployment,
+                &different_context,
+                crate::proof::Invocation::one_shot(Some(&proof))
+            )
+            .unwrap()
+            .outcome
+            .unwrap_err(),
             "proof-header"
         );
         assert!(
-            deployment
-                .execute(&inputs, Some(&proof))
-                .unwrap()
-                .outcome
-                .is_ok()
+            crate::proof::tests::execute(
+                &deployment,
+                &inputs,
+                crate::proof::Invocation::one_shot(Some(&proof))
+            )
+            .unwrap()
+            .outcome
+            .is_ok()
         );
     }
 }
@@ -429,4 +443,13 @@ fn native_stop_record_retains_the_local_instruction_namespace() {
         json!({"site":"ingress.rounds","function":"count","instruction":"scan"})
     );
     assert_eq!(record["kind"], "Limit");
+}
+
+fn execute(
+    deployment: &crate::proof::NativeDeployment,
+    input: &serde_json::Value,
+    invocation: crate::proof::Invocation<'_>,
+) -> Result<crate::proof::NativeProofReport> {
+    let input = crate::proof::ProofInputs::decode(deployment, input, invocation)?;
+    deployment.execute(&input, invocation)
 }

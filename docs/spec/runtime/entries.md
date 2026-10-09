@@ -197,7 +197,24 @@ trusted `PATH` (default
 `zkc-compile`), reports its resolved path and toolchain, captures its
 bounded package output and publishes exact bytes with their SHA-256. Existing
 packages require a caller-supplied expected digest for `run`, `prove`,
-`verify` and `bindings`. No digest derived from candidate bytes authorizes them.
+`verify`, `inspect` and `bindings`. No digest derived from candidate bytes authorizes them.
+
+`zkc inspect PACKAGE EXPECTED_SHA256` captures and authenticates bounded package
+bytes, then validates the source interface. Its `zkc.entry-inspection/0` report
+contains the package identity, selected Entry/protocol/toolchain, role inputs,
+outputs and service contracts, setup names and proof selections. Port summaries
+carry the source display type and roles. Proof metadata includes named public
+ports, prover/verifier, acceptance/completion selectors (named output, field-index path and role),
+and an optional transcript suite. A run interface has `proof: null`. Inspection performs no native admission,
+key import, resource issuance or execution; execution retains its separate checks.
+
+Command help and syntax admission share one declaration. Options use
+`--name=value` or a bare switch, can precede positionals, and refuse duplicate
+single-use options. `--` ends option parsing. Missing arguments and malformed
+options return `cli-usage` or `cli-option` with a human-readable `message` in
+phase `arguments`, before file access. Exit 0 requires completed success;
+recognized-command refusals return JSON and exit 1. Missing/unknown commands
+exit 2. Help and version exit 0 without reading inputs.
 
 A `zkc.entry-run/0` request has required `format`, `session` and `roles`, plus
 optional `setups` (default empty). Every role record has required `inputs` and

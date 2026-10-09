@@ -19,7 +19,7 @@ from reporting import new_directory  # noqa: E402
 
 BUILDS = {
     "compiler": "just build-compiler",
-    "native": "just build-rust",
+    "native": "just build-rust build-test-drivers",
 }
 
 
@@ -80,9 +80,9 @@ class Toolchain:
     def runtime(self):
         return self.tool("native", "zkc")
 
-    def example(self, name):
-        """A Rust example binary, by its name."""
-        return self.tool("native", str(Path("examples") / name))
+    def driver(self, name):
+        """An integration driver from the dedicated test package."""
+        return self.tool("native", name)
 
 
 # Repeated requests in one process share a directory. Other processes and

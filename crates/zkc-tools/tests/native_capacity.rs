@@ -1,12 +1,12 @@
 //! The application supplies ceilings; carriers cannot raise them.
 use serde_json::json;
-use zkc_tools::proof::NativeCapacity;
-fn parse(value: &serde_json::Value) -> Result<NativeCapacity, String> {
-    NativeCapacity::parse(&serde_json::to_vec(value).unwrap())
+use zkc_tools::execution::Capacity;
+fn parse(value: &serde_json::Value) -> Result<Capacity, String> {
+    Capacity::parse(&serde_json::to_vec(value).unwrap())
 }
 #[test]
 fn strict_capacity_record_and_hard_ceilings() {
-    let default = NativeCapacity::default().record();
+    let default = Capacity::default().record();
     assert_eq!(parse(&default).unwrap().record(), default);
     for (field, limit) in [(1, 1048576u64), (2, 32768), (3, 16777216), (4, 67108864)] {
         let mut at = default.clone();
@@ -44,5 +44,5 @@ fn strict_capacity_record_and_hard_ceilings() {
     let mut extra_work_field = default.clone();
     extra_work_field[5].as_array_mut().unwrap().push(json!("0"));
     assert!(parse(&extra_work_field).is_err());
-    assert!(NativeCapacity::parse(&vec![b' '; 4097]).is_err());
+    assert!(Capacity::parse(&vec![b' '; 4097]).is_err());
 }

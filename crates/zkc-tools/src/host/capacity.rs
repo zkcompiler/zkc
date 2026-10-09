@@ -8,7 +8,7 @@ use zkc_runtime::interactive::{Limits, ValueBudget, WorkBudget};
 /// or lower byte/work ceilings. Neither proof nor deployment data grants this
 /// authority. Setup and provider-specific ceilings keep their existing owners.
 #[derive(Clone, Copy, Debug)]
-pub struct NativeCapacity {
+pub struct Capacity {
     /// Maximum elements in one numeric collection.
     pub elements: usize,
     /// Maximum group elements in one collection.
@@ -22,7 +22,7 @@ pub struct NativeCapacity {
     /// Live retained payload and cumulative allocation charge, in bytes.
     pub values: ValueBudget,
 }
-impl Default for NativeCapacity {
+impl Default for Capacity {
     fn default() -> Self {
         let p = Policy::default();
         Self {
@@ -35,7 +35,7 @@ impl Default for NativeCapacity {
         }
     }
 }
-impl NativeCapacity {
+impl Capacity {
     /// Installed hard ceilings; defaults may be lower. These do not bound peak RSS.
     pub const HARD_MAX: Self = Self {
         elements: 1 << 20,

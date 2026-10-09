@@ -27,9 +27,13 @@ configure profile="release":
 build-compiler profile="release":
     python3 scripts/develop.py compiler --profile "$1"
 
-# Build the native runtime, tools and examples.
+# Build the product CLI with its default features.
 build-rust:
     python3 scripts/develop.py rust
+
+# Build the integration drivers with explicit test providers.
+build-test-drivers:
+    python3 scripts/develop.py test-drivers
 
 # Build the optional independent Lean research package.
 build-lean:
@@ -50,7 +54,7 @@ test-compiler profile="release": (build-compiler profile)
 test-sanitize: (test-compiler "sanitize")
 
 # Run native compiler/Runner/Host integration and harness checks.
-test-integration: build
+test-integration: build build-test-drivers
     python3 tests/run.py integration
 
 # Test command wiring and reporting without compiled project tools.
@@ -93,10 +97,14 @@ test-docs:
 demo: build
     python3 tests/run.py demo
 
-# Check Rust formatting, Clippy and Python lint.
+# Check C++/Rust formatting, Clippy and Python lint.
 lint:
     python3 tests/run.py lint
 
 # Format the Nix definitions with the pinned formatter.
 fmt-nix:
     nix fmt
+
+# Format maintained C++ sources with the selected LLVM toolchain.
+fmt-cpp:
+    python3 scripts/format.py --write

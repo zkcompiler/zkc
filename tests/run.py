@@ -94,6 +94,7 @@ def execute(scope, args):
     elif scope == "demo":
         demo(reports / "demo")
     elif scope == "lint":
+        run([sys.executable, "scripts/format.py"])
         run(["cargo", "fmt", "--all", "--", "--check"])
         run(["cargo", "clippy", "--workspace", "--locked", "--all-targets",
              "--all-features", "--", "-D", "warnings"])
