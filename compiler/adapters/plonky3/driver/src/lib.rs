@@ -11,6 +11,8 @@ use zkc_plonky3_air::view::{ClosedView, SelectorLaw, violations};
 use zkc_plonky3_air::{Export, Instance, Refusal, Witness, bundle};
 use zkc_plonky3_air_client::{CounterAir, RecurrenceAir};
 
+pub mod source;
+
 /// Path of each fixture directory relative to the repository root, as written
 /// into ring-asset manifests.
 pub const FIXTURE_ROOT: &str = "compiler/adapters/plonky3/fixtures";
@@ -22,6 +24,9 @@ pub struct Fixture {
     pub witness: Witness,
     /// Upstream debug-builder failures of this instance and witness.
     pub upstream_failures: Vec<(usize, usize)>,
+    /// Entry requests and expectations for the source client, if it uses
+    /// this fixture.
+    pub source: Vec<(&'static str, String)>,
 }
 
 fn fixture<A>(
@@ -47,6 +52,7 @@ where
         instance,
         witness: Witness { trace },
         upstream_failures,
+        source: vec![],
     })
 }
 
@@ -54,8 +60,15 @@ where
 pub fn fixtures() -> Result<Vec<Fixture>, Refusal> {
     let recurrence = RecurrenceAir { log_height: 3 };
     let (trace, publics) = recurrence.generate(F::from_u32(2), F::from_u32(5));
+    let mut recurrence_fixture = fixture("recurrence", &recurrence, trace.clone(), publics)?;
+    recurrence_fixture.source = source::files(
+        &recurrence,
+        &recurrence_fixture.export,
+        &recurrence_fixture.instance,
+        &trace,
+    )?;
     Ok(vec![
-        fixture("recurrence", &recurrence, trace, publics)?,
+        recurrence_fixture,
         fixture(
             "counter-guarded",
             &CounterAir { guarded: true },
@@ -113,6 +126,7 @@ pub fn files(fixture: &Fixture) -> Vec<(&'static str, String)> {
             format!("{}\n", bundle::witness(&identity, &fixture.witness)),
         ),
     ]);
+    files.extend(fixture.source.iter().cloned());
     files
 }
 

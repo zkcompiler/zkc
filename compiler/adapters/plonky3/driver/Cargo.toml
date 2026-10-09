@@ -19,6 +19,8 @@ p3-air.workspace = true
 p3-field.workspace = true
 p3-koala-bear.workspace = true
 p3-matrix.workspace = true
+# Canonical JSON of the source client's Entry requests and expectations.
+serde_json.workspace = true
 zkc-plonky3-air.workspace = true
 zkc-plonky3-air-client.workspace = true
 zkc-runtime = { workspace = true, optional = true }
@@ -27,7 +29,6 @@ zkc-backends = { workspace = true, optional = true }
 [dev-dependencies]
 # The upstream two-adic domain's Lagrange selectors, as the STARK uses them.
 p3-commit.workspace = true
-serde_json.workspace = true
 
 [[test]]
 name = "native"
