@@ -422,7 +422,7 @@ fn evaluate(w: Vector, c: Vector, p: Vector, h: index) -> Vector {{
 }}
 protocol Check roles(V)(w: Vector @V, c: Vector @V, p: Vector @V, h: index @V)
     -> (out: Vector @V) {{
-  local V let out = evaluate(w, c, p, h);
+  let out @V = evaluate(w, c, p, h);
   return (out = out);
 }}
 entry Run = Check;

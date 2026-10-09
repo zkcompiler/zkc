@@ -28,6 +28,14 @@ are derived views of the same program.
 ## Preparation and projection
 
 Language checks modules, static applications, permissions and Entry closure.
+Its private `TypeInference` solver unifies structural type equations;
+`ExpressionInference` collects them from resolved lexical bindings and completed
+callable signatures. Solved expression types and static arguments feed body
+checking without adding unresolved types to the checked source model. Associated
+types and natural expressions use bounded forward normalization. Body checking
+then evaluates in source order and owns resource use and effects; `Placement`
+separately solves participant constraints. Neither analysis executes source code.
+
 [Translation](../spec/language/translation.md) independently compares emitted
 MLIR against checked source before simplification. The immutable original and
 interface retain logical schemas, availability, services and relation clauses.

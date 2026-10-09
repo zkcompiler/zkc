@@ -36,8 +36,13 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 Language resolves explicit modules and R1CS/AIR Assets, checks generic libraries
 and closes selected Entries. It supports scalar mathematics, Boolean formulas,
 nominal products/variants, static parameters and components, capabilities and
-permissions, formal polynomial intrinsics, local control, messages, services,
-static protocol composition, bounded repetition and conditional completion.
+permissions, lexical scopes and patterns, mutable bindings with inferred region
+state/captures, statement-scoped participant inference, nested ordered calls,
+helper result inference, expression-wide structural type constraints, partial
+static arguments, inferred catalog/natural
+preconditions with explicit contract checking, unified data/service arguments,
+source rejection with `require`, formal polynomial intrinsics, local control,
+messages, services, static protocol composition, bounded repetition and conditional completion.
 Independent source comparison checks emitted MLIR against checked definitions;
 [source semantics](spec/language/README.md) owns exact limits.
 
@@ -51,6 +56,8 @@ for source correspondence; it does not interpret retained MLIR. Maintained
 
 Fixed source arrays use static numeric indexing. Private ingress without an
 admitted validator, member-generic conformance and zero-leaf messages refuse.
+Resource permission inference, implicit role remapping, natural equation solving
+and inversion of associated types are outside the source profile.
 Relation and target/input/output/continuation clauses state intent; declarations
 alone add no runtime guard, satisfaction fact or security theorem.
 
@@ -66,7 +73,7 @@ alone add no runtime guard, satisfaction fact or security theorem.
 | Affine resources and services | Exact-origin analysis, state successors, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |
 | General numerical composition | Installed field/group/vector/matrix, polynomial, pairing and oracle kernels with [composed clients](compiler/mathematics.md) and [changing numeric state](compiler/mathematics.md). These are not complete Groth16, AIR/FRI or range-proof applications. |
 | Relations | Bounded R1CS/AIR data import and Assets, exact [relation bindings](compiler/relations.md), a [native R1CS reduction adapter](compiler/relations.md), and an isolated [Plonky3 AIR adapter](../compiler/adapters/plonky3/README.md) checked differentially against its pinned upstream. Import does not prove upstream source adequacy. |
-| Multi-table relations | [Relation bundles](spec/domains/relation-bundles.md) have independent C++ and Rust admission of deterministic, supplied-data, staged-program and staged-assignment carriers, with bounded reference semantics of the bundle relation and of the separate staged predicate, and an embedding of the finite AIR. The Plonky3 adapter emits bundle artifacts. These carriers are library formats; bundles are not yet Assets, MLIR operations or Entry inputs, and no complete proof protocol consumes them. |
+| Multi-table relations | [Relation bundles](spec/domains/relation-bundles.md) have independent C++ and Rust admission of deterministic, supplied-data, staged-program and staged-assignment carriers, with bounded reference semantics of the bundle relation and of the separate staged predicate, and an embedding of the finite AIR. The Plonky3 adapter emits bundle artifacts. Captured Bundles are source assets with an explicit relation ABI and compiler-visible table evaluation. The disclosed-trace example consumes a single table; whole-Bundle interactions and a complete succinct proof protocol remain later work. |
 | Clean export comparison | A [pinned Clean flat AIR export](../formal/integrations/clean/README.md) is compared with native finite-AIR evaluation and the KoalaBear/Ext8 ring provider on fixed honest, invalid and mutated rows. This checks native agreement on those rows; it does not prove the native decoders correct. |
 | Native proofs | Separate producer/validator execution, derived or authored transcripts, structured framing and authorized setups; [proof contract](compiler/construction.md). One policy covers flat, iterated, PCS and structured programs in `zkc.program/0`. |
 | Attempts and retained work | [Persistent attempts](runtime/attempts.md) retain provider state, failed work and unpublished buffers under explicit application policy. |

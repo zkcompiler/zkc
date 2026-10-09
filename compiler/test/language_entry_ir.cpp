@@ -144,23 +144,21 @@ int main(int argc, char **argv) {
             R"(math fn both(a:bool,b:bool)->bool{return intrinsic("bool.and",a,b);})";
         for (bool repeated : {false, true}) {
           auto text = definitions + R"(
-        protocol Wrapper roles(P,V)(base:G@(P,V),point:G@(P,V),scalar:G::Scalar@P,n:index@(P,V))
-        using(nonces:Random<G::Scalar>@P,challenges:Random<G::Scalar>@V)->(accepted:bool@V){
+        protocol Wrapper roles(P,V)(base:G@(P,V),point:G@(P,V),scalar:G::Scalar@P,n:index@(P,V), nonces:Random<G::Scalar>@P,challenges:Random<G::Scalar>@V)->(accepted:bool@V){
       )";
           if (repeated)
             text += R"(
-          let initial@V=true;
-          let valid=repeat roles(P,V)(i<n,max 3) carry(valid=initial@V)
-              capture(base,point,scalar) using(nonces,challenges){
-            let ok=apply Schnorr<G>(base,point,scalar) using(nonces,challenges);
-            yield(valid=both(valid,ok));
-          };
+          let mut valid@V=true;
+          for _ in 0..n roles(P,V) max 3 {
+            let ok=Schnorr<G>(base,point,scalar, nonces,challenges);
+            valid=both(valid,ok);
+          }
           return(accepted=valid);
         )";
           else
             text += R"(
-          let first=apply Schnorr<G>(base,point,scalar) using(nonces,challenges);
-          let second=apply Schnorr<G>(base,point,scalar) using(nonces,challenges);
+          let first=Schnorr<G>(base,point,scalar, nonces,challenges);
+          let second=Schnorr<G>(base,point,scalar, nonces,challenges);
           return(accepted=both(first,second));
         )";
           text += R"(}
@@ -274,8 +272,8 @@ int main(int argc, char **argv) {
       std::string name(length, 'b');
       auto text =
           "module sample;fn " + name +
-          "(x:bool)->bool{return x;}protocol Round roles(P,V)(x:bool@V)"
-          "->(ok:bool@V){local V let ok=" +
+          "(x:bool)->bool{return x;}protocol Round "
+          "roles(P,V)(x:bool@V)->(ok:bool@V){let ok @V =" +
           name +
           "(x);return(ok=ok);}entry Demo=Round{prover P;verifier V;"
           "public{x};accept ok;construction authored;}entry Session=Round;";

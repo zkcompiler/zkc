@@ -38,6 +38,7 @@ or external prover/verifier compatibility.
 | Boundary | Controls |
 |---|---|
 | Named source Entries | [Language Host](protocol/test_language_host.py), [CLI walkthroughs](protocol/test_developer_commands.py) |
+| Source inference and contracts | [Definition completion, annotations, static holes, service arguments and limits](../compiler/test/language_inference.cpp) |
 | Mathematics and changing state | [Composition](../compiler/test/native_composition.py), [carried state](../compiler/test/native_composed_state.py), [nested data](../compiler/test/native_nested_data.py) |
 | Relation identity and terminals | [Relation bindings](../compiler/test/native_relation_bindings.py) |
 | Relation bundles | [C++ reference](../compiler/test/relation_bundle.cpp), [Rust reference](../crates/zkc-runtime/src/relation_tests.rs) and [cross-language controls](protocol/test_relation_bundle_conformance.py) compare identities, residuals, balances and refusal identifiers on imported AIRs and staged assignments over KoalaBear/Ext8. Resource controls bound declared data and expanded results before evaluation. |

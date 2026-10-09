@@ -15,20 +15,20 @@ fn embed_scalar(value: Base) -> Extension {
   return kernel<Extension>("field.embed", value);
 }
 protocol BaseSumcheck roles(P,V)
-    (values: Vector<Base> @(P,V), claim: Base @V, rounds: index @(P,V))
-    using(challenges: Random<Extension> @V) -> (accepted: bool @V) {
-  local P let prover_values = embed_vector(values);
-  local V let verifier_values = embed_vector(values);
-  local V let expected = embed_scalar(claim);
-  let accepted = apply Sumcheck<Extension,16,Product>
-    (prover_values, verifier_values, expected, rounds) using(challenges);
+    (values: Vector<Base> @(P,V), claim: Base @V, rounds: index @(P,V),
+     challenges: Random<Extension> @V) -> (accepted: bool @V) {
+  let prover_values @P = embed_vector(values);
+  let verifier_values @V = embed_vector(values);
+  let expected @V = embed_scalar(claim);
+  let accepted = Sumcheck<Extension,16,Product>
+    (prover_values, verifier_values, expected, rounds, challenges);
   return (accepted = accepted);
 }
 protocol ExtensionSumcheck roles(P,V)
-    (values: Vector<Extension> @(P,V), claim: Extension @V, rounds: index @(P,V))
-    using(challenges: Random<Extension> @V) -> (accepted: bool @V) {
-  let accepted = apply Sumcheck<Extension,16,Product>
-    (values, values, claim, rounds) using(challenges);
+    (values: Vector<Extension> @(P,V), claim: Extension @V, rounds: index @(P,V),
+     challenges: Random<Extension> @V) -> (accepted: bool @V) {
+  let accepted = Sumcheck<Extension,16,Product>
+    (values, values, claim, rounds, challenges);
   return (accepted = accepted);
 }
 entry BaseRun = BaseSumcheck;

@@ -13,6 +13,7 @@ class Layouts;
 namespace zkc::language::detail {
 struct SyntaxType {
   enum class Kind {
+    Hole,
     Name,
     Builtin,
     Formal,
@@ -58,6 +59,20 @@ struct SyntaxRequirement {
   SyntaxType lhs, rhs;
   Span span;
 };
+struct BindingId {
+  uint32_t index;
+  bool operator<(BindingId other) const { return index < other.index; }
+  bool operator==(BindingId other) const { return index == other.index; }
+};
+struct Pattern {
+  enum class Kind { Name, Ignore, Unit, Tuple, Record } kind = Kind::Name;
+  std::string name;
+  std::optional<SyntaxType> type;
+  std::vector<Pattern> children;
+  std::vector<std::string> labels;
+  std::optional<BindingId> binding;
+  Span span;
+};
 struct Expression {
   enum class Kind {
     Name,
@@ -66,9 +81,7 @@ struct Expression {
     Call,
     Kernel,
     Intrinsic,
-    Apply,
     MethodCall,
-    Repeat,
     FinishIf,
     Add,
     Subtract,
@@ -80,7 +93,8 @@ struct Expression {
     Projection,
     If,
     Match,
-    For
+    For,
+    Block
   } kind;
   std::string text;
   std::vector<uint32_t> children;
@@ -90,24 +104,24 @@ struct Expression {
   std::vector<std::string> labels;
   /// Kernel parameter positions written as asset terms instead of literals.
   std::map<unsigned, SyntaxType> assetParameters;
-  std::vector<std::string> captures;
-  std::vector<std::string> services;
-  std::vector<std::optional<std::vector<std::string>>> carriedRoles;
   std::optional<std::vector<std::string>> roles;
   std::vector<uint32_t> regions;
-  std::vector<std::vector<std::string>> payloads;
+  std::vector<std::vector<Pattern>> payloads;
+  std::optional<BindingId> binding;
+  Pattern index;
 };
 struct Statement {
   enum class Kind {
     Let,
+    Assign,
+    Expression,
     Drop,
     Consume,
-    Require,
-    Alias,
-    Guard
+    Require
   } kind = Kind::Let;
-  std::string name;
-  std::optional<std::vector<std::string>> resultNames;
+  Pattern pattern;
+  bool mutableBinding = false;
+  bool terminated = true;
   std::optional<SyntaxType> type;
   std::optional<std::vector<std::string>> roles;
   std::optional<std::pair<std::string, std::string>> exchange;
@@ -119,6 +133,8 @@ struct SyntaxBody {
   std::vector<Statement> statements;
   std::vector<std::pair<std::string, uint32_t>> results;
   bool stopped = false;
+  bool returned = false;
+  bool region = false;
   std::string stopReason;
   Span span;
 };
@@ -164,6 +180,13 @@ struct SyntaxProofEntry {
   std::string suite;
   Span span;
 };
+struct Binding {
+  std::string name;
+  Span span;
+  bool mutableBinding = false;
+  bool service = false;
+  unsigned scope = 0;
+};
 struct SyntaxDeclaration {
   Declaration::Kind kind;
   /// A domain declaration's target is its sort word; its domain is the
@@ -175,11 +198,17 @@ struct SyntaxDeclaration {
   Span span;
   std::vector<std::string> roles;
   std::vector<SyntaxPort> inputs, outputs, services;
+  std::vector<Declaration::InputSlot> inputOrder;
   std::vector<Expression> expressions;
   // Root body is kept in the first slot; nested bodies use stable indices.
   std::vector<SyntaxBody> bodies;
+  // Resolved lexical identities are private elaboration data, never serialized.
+  std::vector<Binding> bindings;
+  std::vector<BindingId> inputBindings, serviceBindings;
+  bool resolved = false;
   std::vector<SyntaxParameter> parameters;
   std::vector<SyntaxRequirement> requirements;
+  bool explicitRequirements = false;
   std::optional<Permissions> permissions;
   std::optional<Effects> effects;
   std::optional<SyntaxType> definition;

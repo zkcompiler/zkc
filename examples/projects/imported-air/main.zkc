@@ -33,9 +33,9 @@ protocol Trace roles(Evaluator)
      public_data: Vector<Base> @Evaluator, height: index @Evaluator)
     -> (residuals: Vector<Base> @Evaluator, satisfied: bool @Evaluator)
     where Recurrence::Tables <= 1, Recurrence::Channels <= 0 {
-  local Evaluator let residuals = trace_values<Base,0,Recurrence>(
+  let residuals @Evaluator = trace_values<Base,0,Recurrence>(
     trace, configuration, public_data, height);
-  local Evaluator let satisfied = all_zero(residuals);
+  let satisfied @Evaluator = all_zero(residuals);
   return (residuals = residuals, satisfied = satisfied);
 }
 
@@ -64,10 +64,10 @@ protocol RevealTrace roles(P,V)
         in.trace, in.configuration) accept out.accepted;
     } {
   let received = send P -> V(trace);
-  local V let public_data = public_values(x0, y0, final_acc);
-  local V let residuals = trace_values<Base,0,Recurrence>(received,
+  let public_data @V = public_values(x0, y0, final_acc);
+  let residuals @V = trace_values<Base,0,Recurrence>(received,
     configuration, public_data, height);
-  local V let accepted = all_zero(residuals);
+  let accepted @V = all_zero(residuals);
   return (accepted = accepted);
 }
 
@@ -76,15 +76,15 @@ protocol RevealTrace roles(P,V)
 protocol Rows roles(Evaluator)
     (assignments: Vector<Base> @Evaluator, rows: index @Evaluator)
     -> (residuals: Vector<Base> @Evaluator, satisfied: bool @Evaluator) {
-  local Evaluator let residuals = row_values(assignments, rows);
-  local Evaluator let satisfied = all_zero(residuals);
+  let residuals @Evaluator = row_values(assignments, rows);
+  let satisfied @Evaluator = all_zero(residuals);
   return (residuals = residuals, satisfied = satisfied);
 }
 // Slot-major coefficients give output-major residual polynomials.
 protocol Coefficients roles(Evaluator)
     (coefficients: Vector<Base> @Evaluator, width: index @Evaluator)
     -> (residuals: Vector<Base> @Evaluator) {
-  local Evaluator let residuals = coefficient_values(coefficients, width);
+  let residuals @Evaluator = coefficient_values(coefficients, width);
   return (residuals = residuals);
 }
 // One Ext8 assignment per evaluation point; the arena's KoalaBear inputs are
@@ -92,7 +92,7 @@ protocol Coefficients roles(Evaluator)
 protocol Points roles(Evaluator)
     (assignments: Vector<Extension> @Evaluator, points: index @Evaluator)
     -> (residuals: Vector<Extension> @Evaluator) {
-  local Evaluator let residuals = row_values(assignments, points);
+  let residuals @Evaluator = row_values(assignments, points);
   return (residuals = residuals);
 }
 entry RowResiduals = Rows;

@@ -9,7 +9,8 @@ using Substitution = std::map<std::string, Type>;
 
 /// Semantic queries over declaration metadata. The vector object outlives this
 /// view; queries never retain element pointers across specialization. Source
-/// checking supplies the sole lazy-signature hook. Closed queries have none.
+/// checking supplies lazy-signature and requirement-inference hooks. Closed
+/// queries have neither.
 class Semantics {
 public:
   Semantics(const std::vector<Declaration> &, llvm::ArrayRef<Asset>, Work &,
@@ -19,6 +20,12 @@ public:
   Work &work;
   NaturalArithmetic naturals;
   std::optional<Diagnostic> diagnostic;
+  /// Source checking can collect unproved open preconditions. Closed readers
+  /// and conformance checks have no inference scope. Permission queries never
+  /// infer resource authority.
+  std::function<bool(const Declaration *, const CapabilityBound &)>
+      inferCapability;
+  std::function<bool(const Declaration &, const NaturalBound &)> inferNatural;
   struct CallSignature {
     std::vector<Type> inputs, outputs;
     Type resultType() const;

@@ -1,7 +1,6 @@
 module sample;
 domain Fr = field("bls12-381.fr");
-protocol Run roles(P,V)(go: bool @V, x: Fr @(P,V))
-    using(coins: Random<Fr> @V) -> (result: Fr @(P,V)) completes {
+protocol Run roles(P,V)(go: bool @V, x: Fr @(P,V), coins: Random<Fr> @V) -> (result: Fr @(P,V)) completes {
   let () = finish_if @V(go) (result = x);
   let unused = coins.draw();
   return (result = x + x);

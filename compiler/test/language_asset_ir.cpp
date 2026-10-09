@@ -33,7 +33,7 @@ fn evaluate<T: Field, A: Ring>(v: Vector<T>) -> Vector<T> {
   return kernel<T>("ring.point", v; A);
 }
 protocol Run<A: Ring> roles(E)(v: Vector<F>@E)->(r: Vector<F>@E) {
-  local E let r = evaluate<F,A>(v);
+  let r @E = evaluate<F,A>(v);
   return (r=r);
 }
 entry Demo = Run<Product>;

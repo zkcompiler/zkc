@@ -88,25 +88,26 @@ struct Pair<T: Type> { pub left: T, pub right: T }
 math fn square<F: Field>(x: F) -> F { return x * x; }
 fn choose(x: Fr, go: bool) -> Pair<Fr> {
   let squared = square(x);
-  let selected = if go capture(x, squared) {
-    yield squared;
+  let selected = if go {
+    squared
   } else {
-    yield x;
+    x
   };
   return Pair<Fr>{left: x, right: selected};
 }
 protocol Transfer roles(P, V)(x: Fr @P, go: bool @P) -> (result: Pair<Fr> @V) {
-  local P let pair = choose(x, go);
+  let pair = choose(x, go);
   let received = send P -> V(pair);
-  return (result = received);
+  return received;
 }
 entry Demo = Transfer;
 ```
 
 `math fn` describes total algebra. `fn` describes ordered work, including control
-and resources. The protocol explicitly chooses P as the owner of `choose` and
-sends its result. The receiver obtains its actual received components. The record
-becomes two ordered payload leaves, which the interface maps back to named fields.
+and resources. The compiler infers P as the owner of `choose` from its P-only
+arguments. The protocol sends its result. The receiver obtains its actual
+received components. The record becomes two ordered payload leaves, which the
+interface maps back to named fields.
 
 Generic libraries declare the permissions they use. A mathematical parameter
 needs `Copy + Drop`; a protocol message also needs `Share + Wire`. A plain `Type`
@@ -114,10 +115,64 @@ parameter promises none. These permissions are independent. Components select
 interface implementations statically and can seal an associated representation.
 Library clients need neither its representation nor a runtime dispatch table.
 
-Use explicit captures in local `if` and `match`; use `carry` for changing state or
-affine resources in a `for` loop. Defined functions infer effects. Write `!{}` only
-when an effect-free interface is an intended contract. Local owner inference,
-nonlinear dimension inference and arbitrary inequality solving are not required.
+Blocks use lexical names. `if` and `match` produce their final expression;
+`let mut` and whole-name assignment describe changing state. The compiler derives
+captures and loop state, including resource checks. For example:
+
+```text
+let mut sum: Fr = 0;
+for _ in 0..n {
+  sum = sum + x;
+}
+```
+
+Protocol loops additionally spell `roles(P, V) max N`. Protocol calls use ordinary
+call syntax, such as `let result = Round(x, coins);`. Declare the service alongside
+data inputs, for example `(x: F @V, coins: Random<F> @V)`.
+`let alias = coins;` gives the same service another name.
+Defined functions infer effects. Write `!{}` only
+when an effect-free interface is an intended contract. Ordinary calls can nest;
+all calls in one statement must have uniquely determined participants. Use `@P`
+on a binding to resolve ambiguity. Later statements never move an earlier call.
+`require condition;` rejects at its inferred participant when false; a shared
+condition needs an explicit owner, such as `require @V condition;`.
+Nonlinear dimension inference and arbitrary inequality solving remain outside
+this source profile.
+
+Defined helpers can omit result types. Defined helpers and protocols infer
+catalog and natural preconditions when `where` is absent. A written clause is a
+complete contract; `where ()` forbids additional preconditions. Resource
+permissions stay explicit. For example:
+
+```text
+fn first<T: Type + Copy + Drop, N: nat>(xs: [T; N]) {
+  return xs[0];
+}
+fn pairFirst<T: Type + Copy + Drop>(xs: [T; 2]) {
+  return first<_, 2>(xs);
+}
+```
+
+`first` infers result `T` and condition `1 <= N`; the call infers its `_` as `T`.
+An explicit result type remains useful for literals and stable library interfaces.
+
+Type information also flows through nested expressions:
+
+```zkc
+fn identity<T: Type>(x: T) -> T { return x; }
+fn choose<F: Field>(x: F, b: bool) {
+  return identity(if b { 0 } else { x });
+}
+fn samples<F: Field>(x: F) {
+  return identity([0, x]);
+}
+```
+
+`choose` infers result `F`; `samples` infers `[F; 2]`. Reversing the branches or
+array elements does not affect type inference. A statement still needs enough
+information on its own: write `let zero: F = 0;` when no expression supplies the
+field type. A later use of `zero` does not determine that earlier declaration.
+Component choices, protocol role remapping and ambiguous owners stay explicit.
 
 The maintained fixtures cover [arrays](../../compiler/test/fixtures/language/array.zkc),
 [variants](../../compiler/test/fixtures/language/variant.zkc),

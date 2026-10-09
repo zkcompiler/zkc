@@ -1,19 +1,20 @@
 module sample;
 domain Fr = field("bls12-381.fr");
-protocol Round<F: Field + Share + Wire> roles(P, V)(a: F @P, b: F @V)
-    using(coins: Random<F> @V) -> (p: F @P, v: F @V) {
+protocol Round<F: Field + Share + Wire> roles(P, V)(a: F @P, b: F @V, coins: Random<F> @V) -> (p: F @P, v: F @V) {
   let cv = coins.draw();
   let cp = send V -> P(cv);
   return (p = a + cp, v = b + cv);
 }
-protocol Run<N: nat> roles(P, V)(n: index @(P,V), a: Fr @P, b: Fr @V, go: bool @V)
-    using(coins: Random<Fr> @V) -> (p: Fr @P, v: Fr @V) {
-  let (af, bf) = repeat roles(P,V)(i < n, max N)
-      carry(pa = a @P, vb = b @V) capture(go) using(coins) {
-    guard @V go;
-    let (x, y) = apply Round<Fr>(pa, vb) using(coins);
-    yield (pa = x, vb = y);
-  };
-  return (p = af, v = bf);
+protocol Run<N: nat> roles(P, V)(n: index @(P,V), a: Fr @P, b: Fr @V, go: bool @V, coins: Random<Fr> @V) -> (p: Fr @P, v: Fr @V) {
+  let mut pa = a;
+  let mut vb = b;
+  for _ in 0..n roles(P, V) max N {
+    require @V go;
+    let (x, y) = Round<Fr>(pa, vb, coins);
+    pa = x;
+    vb = y;
+  }
+  return (p = pa, v = vb);
 }
+
 entry Demo = Run<4>;

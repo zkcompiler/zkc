@@ -62,7 +62,7 @@ int main() {
          "source.inference");
   refuse(R"(
     math fn needs<N:nat>(x:[F;pow2(N)])->F where 1<=pow2(N){return x[0];}
-    math fn bad<N:nat>(x:[F;pow2(N)])->F{return needs<N>(x);}
+    math fn bad<N:nat>(x:[F;pow2(N)])->F where () {return needs<N>(x);}
   )",
          "source.bound");
   auto bodyOnly = take(check(R"(

@@ -8,7 +8,7 @@ component Box:Boxed { type State:Copy+Drop=bool; fn make(x:bool)->State{return S
 protocol Shapes roles(P)(empty:Empty@P, choice:Cases@P, names:Names@P,
   zero:[bool;0]@P, collision:p::Outputs@P)
   ->(empty:Empty@P, choice:Cases@P, names:Names@P, zero:[bool;0]@P, wrapped:Box::State@P) {
-  local P let wrapped=Box::make(true);
+  let wrapped @P =Box::make(true);
   return(empty=empty,choice=choice,names=names,zero=zero,wrapped=wrapped);
 }
 entry Demo=Shapes;

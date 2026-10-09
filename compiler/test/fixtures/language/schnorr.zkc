@@ -4,8 +4,7 @@ relation DLog<H:Group>(parameter base:H,statement point:H,witness scalar:H::Scal
   return point==base*scalar;
 }
 protocol Schnorr<H:Group+Share+Wire> roles(P,V)
-  (base:H@(P,V),point:H@(P,V),scalar:H::Scalar@P)
-  using(nonces:Random<H::Scalar>@P,challenges:Random<H::Scalar>@V)
+  (base:H@(P,V),point:H@(P,V),scalar:H::Scalar@P, nonces:Random<H::Scalar>@P,challenges:Random<H::Scalar>@V)
   ->(accepted:bool@V)
   where Share(H::Scalar),Wire(H::Scalar)
   spec{target knowledge=DLog<H>(in.base@V,in.point@V,in.scalar) accept out.accepted;}

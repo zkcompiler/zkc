@@ -97,7 +97,7 @@ source(StringRef body = "", StringRef entry = "Run<Product>",
            "where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1") {
   return (Twine(prelude) + body +
           "protocol Run<A: Ring> roles(E)(v: Vector<F>@E)->(ok: bool@E) " +
-          protocolBound + " {\n  local E let ok = shape<F,A>(v);\n" +
+          protocolBound + " {\n  let ok @E = shape<F,A>(v);\n" +
           "  return (ok=ok);\n}\nentry Demo = " + entry + ";\n")
       .str();
 }
@@ -207,7 +207,7 @@ int main() {
         "source.syntax");
     auto twice = source("domain Again = ring(asset product);\n"
                         "protocol Other roles(E)(v: Vector<F>@E)->(ok: bool@E)"
-                        " { local E let ok = shape<F,Again>(v);"
+                        " { let ok @E = shape<F,Again>(v);"
                         " return (ok=ok); }\nentry Second = Other;\n");
     auto first = take(close(twice, {product()}));
     auto second = take(close(twice, {product()}, {}, "sample::Second"));
@@ -313,7 +313,7 @@ int main() {
         source("type Row<A: Ring> = [bool; A::Inputs];\n"
                "fn second(x: Row<Product>) -> bool { return x[1]; }\n"
                "protocol Rows roles(E)(x: Row<Product>@E)->(ok: bool@E)"
-               " { local E let ok = second(x); return (ok=ok); }\n"
+               " { let ok @E = second(x); return (ok=ok); }\n"
                "entry Alias = Rows;\n");
     auto rows = take(close(aliased, {product()}, {}, "sample::Alias"));
     require(rows.protocol().inputs[0].type.kind == Type::Kind::Array &&
@@ -327,7 +327,7 @@ int main() {
         "fn through<T: Field, E: Eval<T>>(v: Vector<T>) -> Vector<T> {"
         " return E::eval(v); }\n"
         "protocol Dispatch roles(E)(v: Vector<F>@E)->(r: Vector<F>@E)"
-        " { local E let r = through<F, Fixed<F, Product>>(v);"
+        " { let r @E = through<F, Fixed<F, Product>>(v);"
         " return (r=r); }\nentry Selected = Dispatch;\n");
     auto dispatched =
         take(close(component, {product()}, {}, "sample::Selected"));
@@ -408,10 +408,10 @@ int main() {
             "source.asset-carrier");
   });
   cases.run("unreachable definitions retain no assets", [] {
-    auto text = rewrite(source("fn trivial<T: Field>(v: Vector<T>) -> bool {"
-                               " return has_length<T, 1>(v); }\n"),
-                        "local E let ok = shape<F,A>(v);",
-                        "local E let ok = trivial<F>(v);");
+    auto text =
+        rewrite(source("fn trivial<T: Field>(v: Vector<T>) -> bool {"
+                       " return has_length<T, 1>(v); }\n"),
+                "let ok @E = shape<F,A>(v);", "let ok @E = trivial<F>(v);");
     require(take(close(text, {product()})).assets().empty(),
             "unused evaluator retained");
   });

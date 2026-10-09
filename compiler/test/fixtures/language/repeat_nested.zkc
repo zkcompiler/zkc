@@ -1,12 +1,13 @@
 module sample;
 domain Fr = field("bls12-381.fr");
 protocol Run roles(P)(n: index @P, m: index @P, x: Fr @P) -> (result: Fr @P) {
-  let result = repeat roles(P)(i < n, max 3) carry(a = x) capture(m, x) {
-    let next = repeat roles(P)(j < m, max 2) carry(b = a) capture(x) {
-      yield (b = b + x);
-    };
-    yield (a = next);
-  };
-  return (result = result);
+  let mut result = x;
+  for _ in 0..n roles(P) max 3 {
+    for _ in 0..m roles(P) max 2 {
+      result = result + x;
+    }
+  }
+  return result;
 }
+
 entry Demo = Run;

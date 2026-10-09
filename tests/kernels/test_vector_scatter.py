@@ -29,7 +29,7 @@ fn scatter(xs:Vector<F>) -> Vector<F> {{
   return kernel<F>("vector.scatter_sum", xs; "5", "3", "1", "3", "1", "4");
 }}
 protocol Run roles(P)(xs:Vector<F>@P) -> (result:Vector<F>@P) {{
-  local P let result = scatter(xs);
+  let result @P = scatter(xs);
   return (result=result);
 }}
 entry Demo=Run;

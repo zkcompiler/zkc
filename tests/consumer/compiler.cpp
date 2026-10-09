@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
     relation Same(statement x:bool,witness y:bool){return x==y;}
     protocol Step roles(P)(x:bool@P)->(r:bool@P)
       spec {output contract=Same(in.x,out.r);}{return(r=x);}
-    protocol Run roles(P)(x:bool@P)->(r:bool@P){let r=apply Step(x);return(r=r);}
+    protocol Run roles(P)(x:bool@P)->(r:bool@P){let r=Step(x);return(r=r);}
     entry Demo=Run;
     protocol Send roles(P,V)(x:bool@P)->(accepted:bool@V){
       let received=send P->V(x);return(accepted=received);
