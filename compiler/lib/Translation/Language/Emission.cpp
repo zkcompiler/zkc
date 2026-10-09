@@ -196,8 +196,8 @@ class Emitter {
         found != realizations.end())
       return found->second;
     std::string identity =
-        "zkc.local.realization/1:" + std::to_string(helper.symbol.size()) +
-        ":" + helper.symbol;
+        "zkc.local.realization:" + std::to_string(helper.symbol.size()) + ":" +
+        helper.symbol;
     auto digest = SHA256::hash(arrayRefFromStringRef(identity));
     std::string name =
         "zkl_realization_" + toHex(ArrayRef<uint8_t>(digest), true);
@@ -815,13 +815,13 @@ public:
             take(formulas.get(helper, logicalInputs, logicalPurposes));
         if (!identity)
           return std::move(failure);
-        kind = "zkc.language.formula/1";
+        kind = "zkc.language.formula";
         key = decl.symbol;
         revision = std::move(*identity);
       } else if (definition.kind == K::R1CS || definition.kind == K::AIR) {
         const auto &asset = project.project().assets()[*definition.asset];
-        kind = definition.kind == K::R1CS ? "zkc.relation.r1cs/1"
-                                          : "zkc.relation.air/1";
+        kind = definition.kind == K::R1CS ? "zkc.relation.r1cs"
+                                          : "zkc.relation.air";
         key = asset.identity().str();
         revision = "1";
       }

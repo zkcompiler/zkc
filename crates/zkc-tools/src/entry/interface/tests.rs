@@ -15,7 +15,7 @@ fn selector(direction: &str, port: u32, role: &str) -> Value {
 }
 fn document() -> Value {
     let boolean = schema("boolean", "bool", json!(["bool"]));
-    json!({"format":"zkc.language-interface/7","setups":[],"capture":digest("capture"),"original":digest("original"),
+    json!({"format":"zkc.language-interface","setups":[],"capture":digest("capture"),"original":digest("original"),
         "toolchain":"test-toolchain","entry":"sample::Proof","protocol":"sample_Protocol",
         "protocols":[{"symbol":"sample_Protocol","roles":["P","V"],
             "inputs":[port("statement",0,json!([0]),json!(["P","V"]),boolean.clone()),
@@ -31,7 +31,7 @@ fn document() -> Value {
             "acceptance":selector("output",0,"V"),"completion":null,"target":"knowledge","construction":{"kind":"authored"}}})
 }
 fn read_text(interface: &str) -> Result<Interface> {
-    let frame = json!({"format":"zkc.entry/1","original":"original","interface":interface,
+    let frame = json!({"format":"zkc.entry","original":"original","interface":interface,
         "artifact":"not interpreted by the metadata reader", "options":{"simplify":true,"release_storage":false}}).to_string();
     let package = Package::capture(
         frame.as_bytes(),
@@ -141,7 +141,7 @@ fn external_interface_bytes_require_canonical_unsigned_integer_indices() {
     }
 }
 #[test]
-fn exact_objects_reject_extra_duplicate_missing_and_old_fields() {
+fn exact_objects_reject_extra_duplicate_missing_fields_and_unknown_formats() {
     for path in [
         "",
         "/job",
@@ -187,7 +187,7 @@ fn exact_objects_reject_extra_duplicate_missing_and_old_fields() {
             "\"kind\":\"authored\",\"kind\":\"authored\"",
         ),
         s.clone() + "{}",
-        s.replace("language-interface/7", "language-interface/6"),
+        s.replace("zkc.language-interface", "invalid.language-interface"),
     ] {
         assert_eq!(read_text(&bad).unwrap_err(), InterfaceError::Format);
     }
@@ -634,9 +634,9 @@ fn malformed_setup_assignments_are_refused() {
     read(&run).unwrap();
     run["setups"][1]["name"] = json!("first");
     assert_eq!(read(&run).unwrap_err(), InterfaceError::Selection);
-    let mut old = valid;
-    old["format"] = json!("zkc.language-interface/5");
-    assert_eq!(read(&old).unwrap_err(), InterfaceError::Format);
+    let mut unknown_format = valid;
+    unknown_format["format"] = json!("invalid.language-interface");
+    assert_eq!(read(&unknown_format).unwrap_err(), InterfaceError::Format);
 }
 
 #[test]
@@ -725,7 +725,7 @@ fn completion_selects_a_prover_boolean_native_output() {
         bad["job"]["completion"][field] = value;
         assert_eq!(read(&bad).unwrap_err(), InterfaceError::Selection);
     }
-    let mut old = doc;
-    old["format"] = json!("zkc.language-interface/6");
-    assert_eq!(read(&old).unwrap_err(), InterfaceError::Format);
+    let mut unknown_format = doc;
+    unknown_format["format"] = json!("invalid.language-interface");
+    assert_eq!(read(&unknown_format).unwrap_err(), InterfaceError::Format);
 }

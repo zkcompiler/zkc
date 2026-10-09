@@ -109,12 +109,12 @@ belongs in the pull request body, which is what survives the squash.
   intended model and is not weakened to match what is built; what is built
   belongs on the [status page](../docs/status.md), not in the
   specification.
-- **Carrier formats.** These may change freely at v0. Update the compiler and
-  native runtime together when their shared executable carrier changes, and
-  keep loading fail closed. Independent formal research is not a compatibility
-  requirement for that carrier.
+- **Internal artifacts.** Internal artifacts have one current schema. Update all
+  producers, readers and fixtures together; do not add compatibility readers,
+  version bumps or migration notes. Keep exact shape and unknown-field validation
+  fail closed. External standards remain governed by their specifications.
 - **Independent implementations.** The compiler and native runtime independently
-  validate the executable program carrier. A change to that surface moves both.
+  validate the executable program carrier. A change to that surface updates both.
   Formal research checks do not establish correspondence with current native
   execution unless an explicit maintained bridge states that claim.
 - **Diagnostics.** Identifiers are the stable surface and message prose is

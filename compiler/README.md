@@ -11,7 +11,7 @@ and closes a selected Entry. Translation emits a mathematical `protocol.module`.
 Preparation expands local applications and protocol applications; projection
 assigns actions and values to participants. Mathematical lowering produces the
 `exec` profile. Representation and kernel selection produce `physical` programs,
-exported as `zkc.program/2` for the generic participant runtime.
+exported as `zkc.program` for the generic participant runtime.
 
 ## Build and validate
 
@@ -35,13 +35,13 @@ For mathematical MLIR, `protocol-bundle` compiles a run. `protocol-checked-bundl
 additionally checks supplied polynomial or public-coin requirements.
 `protocol-public-coin`, `protocol-check-public-coin`, and
 `protocol-check-reductions` expose the corresponding analyses.
-`protocol-proof`, `protocol-construct-proof`, and `protocol-check-proof` retain
-the current native proof policy, descriptor and deployment `/5` only. Retired
-tags `/1` through `/4` and unknown tags refuse. Transcript construction uses
+`protocol-proof`, `protocol-construct-proof`, and `protocol-check-proof` use
+the native proof policy, descriptor and deployment schemas. Unknown tags and
+malformed records refuse. Transcript construction uses
 indexed origin templates, `transcript.native.indexed.challenge` and typed
 `transcript.native.indexed.observe.data`; loops and flat protocols share this
 model. An empty suite selects an authored proof without constructed transcripts.
-`protocol-export` emits a checked physical `zkc.program/2` artifact.
+`protocol-export` emits a checked physical `zkc.program` artifact.
 
 Relation data commands retain R1CS import/export, normalization, inspection,
 matrices, evaluation, and native Sumcheck authoring (`relation-protocol` and
@@ -49,14 +49,11 @@ matrices, evaluation, and native Sumcheck authoring (`relation-protocol` and
 import/export, evaluation and polynomial planning. The isolated
 [LLZK adapter](adapters/llzk) emits relation data.
 
-The `.pir` Frontend, finite table source/plan compiler, `protocol_exec`, old
-construction and claim adapters, source selectors, compatibility readers,
-`protocol-import`, old `protocol-compile`, and source benchmarks are removed.
 There is no JSON-program-to-MLIR importer. `protocol::exportProgram` returns
 checked typed Program records; `protocol::exportModule` returns the checked
 physical JSON carrier. Program codecs read only
-`zkc.program/2`, the physical executable carrier. It has no stage field or reserved
-participant parameter slot; actual participant arguments remain explicit.
+`zkc.program`, the physical executable carrier, with explicit participant
+arguments.
 
 ## Components and ownership
 
@@ -83,9 +80,7 @@ with LLVM alone. Language depends on Contracts and Relation; Program depends on
 Contracts. IR adds MLIR and depends on Program and Relation. Transforms depends
 on IR; Translation depends on IR and Language; Compiler depends on Transforms
 and Translation; Driver depends on Compiler. Compiler does not link CLI Driver.
-Tools imports Driver's dependency closure. There is no `NativeCompiler` component
-or Compiler interface aggregate. Retired `Protocol`, `Frontend`, `FrontendLoading`,
-`Claims`, `ClaimTranslation`, and `CompilerCore` components are not installed.
+Tools imports Driver's dependency closure.
 
 ### Installed package discovery
 
@@ -122,9 +117,9 @@ components with caller-created targets. Consumers invoking installed generators
 explicitly request `Tools`.
 
 `OperationContracts` is a facet aggregate: initialize its fields directly when
-constructing records. Its former convenience factories are removed. Aggregate
-construction does not install an operation or validate its semantics; installed
-queries and contribution admission retain those responsibilities.
+constructing records. Aggregate construction does not install an operation or
+validate its semantics; installed queries and contribution admission retain
+those responsibilities.
 
 `Program/Model.h` contains `zkc::program` records. `LocalDefinitions` is an internal
 structural view used to check mathematical local callables, with `LocalApply`
@@ -138,18 +133,15 @@ it with physical SSA, so consumers can reuse the checked records.
 
 `registerDialects` installs the native dialect set and contributions. The
 protocol, local, data, crypto, algebra, polynomial, oracle, PCS, relation and Plan
-dialects remain. Plan describes native selected representations and kernels;
-the old finite table control dialect is removed. Registration does not grant
-profile admission or transformation correctness.
+dialects are registered. Plan describes native selected representations and
+kernels. Registration does not grant profile admission or transformation correctness.
 
 ## Transformations and checks
 
 The native profile progression is `protocol → participant → exec → physical`.
-Profiles and mandatory formation/export checks select the semantics; there is
-no separate `execution_contract` property. Participants have no static
-`parameters` or `argument_names` property. Stale properties refuse through
-ordinary unknown-property admission; kernel operation parameters remain real
-static operands.
+Profiles and mandatory formation/export checks select the semantics. Participant
+arguments are explicit ports; kernel operation parameters are static operands.
+Unknown properties refuse admission.
 `zkc-opt` exposes individual preparation, projection, polynomial and physical
 passes, and the `zkc-participant-pipeline` convenience pipeline. Its
 `project-only`, `linear-contractions` and `release-storage` options select the
@@ -157,15 +149,14 @@ corresponding native behavior. Explicit binding selections are honored by
 `zkc-select-physical` and the C++ selection APIs. Automatic linear contractions
 are opt-in through the optimizer or C++ selection API; Entry compilation uses
 the default selection policy. Constant-time MSM and diagonal contraction
-implementations remain selectable; `dalek-vartime/curve.msm` and its former
-source-role authorization are not installed.
+implementations are selectable.
 
 Local calls retain structured conditionals, bounded loops, variants, affine
 resources, stopping checks and storage release. Physical planning validates the
 whole proposal before materialization, including per-use layout conversions,
 fixed choices and diagonal contraction groups. Shared primitives such as table
 folding, vector operations, matrix identity checks and PCS kernels remain
-ordinary local operations; they do not reintroduce a source/table executor.
+ordinary local operations.
 
 The native checks compare actual inputs and candidates under declared operation
 meanings. They do not establish backend cryptographic security or general
@@ -177,6 +168,6 @@ types, adapters and reversible local specialization using an installed package.
 
 Native service queries use the four registered random-distribution contracts
 and their Host providers. Arbitrary user-declared request/reply service families
-from the retired table example are not part of this API. Domain contributions
+are outside this API. Domain contributions
 retain logical type/operation declarations, adapters and transformations; a
 logical-only contribution does not acquire a physical implementation implicitly.

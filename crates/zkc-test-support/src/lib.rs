@@ -60,9 +60,7 @@ pub fn evidence(fallback: &str) -> Evidence {
 
 /// A directory a test writes to, which outlives the test.
 ///
-/// It answers `path()` the way a temporary directory does, because that is what
-/// these tests used to hold and the difference worth having is at the end of
-/// the run rather than at the call site.
+/// `path()` exposes the evidence directory; files remain available after the run.
 #[derive(Clone, Debug)]
 pub struct Evidence(PathBuf);
 

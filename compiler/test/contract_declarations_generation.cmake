@@ -164,9 +164,9 @@ declaration_case(unknown-stage [=[
 def Unknown : ZKC_Stage<"EventuallySource">;
 def Bad : ZKC_Operation<"bad.stage", [], [], []> { let stage = Unknown; }
 ]=] "unknown authoring stage")
-declaration_case(retired-effect [=[
-def Bad : ZKC_Operation<"bad.effect", [], [], []> { let effect = "local"; }
-]=] "Value 'effect' unknown")
+declaration_case(unknown-property [=[
+def Bad : ZKC_Operation<"bad.property", [], [], []> { let unexpected = "value"; }
+]=] "Value 'unexpected' unknown")
 declaration_case(duplicate-facet [=[
 def Bad : ZKC_Operation<"bad.facet", [], [], []> { let facets = [PublicReplay, PublicReplay]; }
 ]=] "duplicate semantic facet")

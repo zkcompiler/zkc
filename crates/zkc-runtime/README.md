@@ -1,6 +1,6 @@
 # Native program runtime
 
-`zkc-runtime` admits and executes `zkc.program/2`, the physical program produced
+`zkc-runtime` admits and executes `zkc.program`, the physical program produced
 by the mathematical compiler. `interactive::Admitted` owns the exact admitted
 bytes and the derived typed program. `interactive::Runner` executes one role
 with caller-supplied values and an independently installed backend.
@@ -26,9 +26,6 @@ General helpers retain separate owners:
 
 - `attempt` and `iteration`: bounded generic retry and iteration controllers.
 - `logical`: canonical trees and domain-separated transcript occurrences.
-
-The only program format is `zkc.program/2`. Source-bound participant files, table
-plans, source checkers and compatibility loaders are not public APIs.
 
 Run the crate's tests with `cargo test -p zkc-runtime`. Backend and host tests
 exercise the same interfaces with actual native values and cryptographic kernels.

@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let key = Value::ProverKey(Arc::new(keys.prover_key().clone()));
     let rng = backend.issue_rng_for(Identity::Bls12381Fr, domain, 1)?;
-    let artifact = br#"["zkc.program/2",[["commit","pcs.commit",["multilinear.kzg.bls12-381/1"],"arkworks/pcs.commit"],["draw","random.draw",["bls12-381.fr"],"arkworks/random.draw"]],
+    let artifact = br#"["zkc.program",[["commit","pcs.commit",["multilinear.kzg.bls12-381/1"],"arkworks/pcs.commit"],["draw","random.draw",["bls12-381.fr"],"arkworks/random.draw"]],
       [["function","commit_one",[["pk","prover_key:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1"],["t","table:bls12-381.fr@arkworks.mle-lsb/1"],["rng","rng:bls12-381.fr@host.resource/1"]],["commitment:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1","opening_state:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1","field:bls12-381.fr@arkworks.fr/1","rng:bls12-381.fr@host.resource/1"],
         [["op","commit","commit",[],["pk","t"],["C","state"]],
          ["op","draw","draw",[],["rng"],["r","next"]],

@@ -94,8 +94,6 @@ Lean has separate build, control and reproduction commands in the
 native executable merely by being built. Optional ArkLib and generic
 [LLZK](../../compiler/adapters/llzk/README.md) integrations keep their own
 manifests and toolchains. LLZK remains separate from the main compiler process.
-No Groth16 build or fixture package is part of this workflow.
-
 ## Contributor references
 
 | Task | Owner |

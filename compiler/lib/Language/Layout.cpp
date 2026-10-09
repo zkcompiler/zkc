@@ -19,7 +19,7 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
     return error("source.limit", "schema type identity limit exceeded");
   remaining -= key.size();
   FramedHash hash(remaining);
-  hash.frame("zkc.language.schema/1");
+  hash.frame("zkc.language.schema");
   hash.frame(typeKindName(layout.type.kind));
   hash.frame(toHex(SHA256::hash(arrayRefFromStringRef(key)), true));
   hash.frame(layout.custody ? "1" : "0");

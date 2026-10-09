@@ -39,8 +39,8 @@ has a separate consumer and acceptance conditions in the roadmap.
 | `relation` and protocol binding machinery | Interpreted requirements and residuals associated with actual boundaries |
 | `local` and `plan` | Executable algorithms, representation selection, state, storage and failure contracts |
 
-The Data dialect added by [structured iteration](../spec/profiles/compiler/structured-iteration.md)
-separates general data responsibility from algebra and polynomials. General finite data should not acquire polynomial
+The Data dialect owns [structured iteration](../spec/profiles/compiler/structured-iteration.md)
+and general data operations, separately from algebra and polynomials. General finite data should not acquire polynomial
 semantics merely because the first consumer is Sumcheck.
 
 ## Mathematical objects and finite data
@@ -133,12 +133,9 @@ establish the same failure under insufficient resources.
 
 ## Actual relations, residuals and terminal decisions
 
-Bring the minimum relation connection into this extension. Reuse interpreted
-relation families and actual-instance reduction contracts from the relation
-specification. No general claim language or protocol-composition frontend is
-needed for the first client. The implementation uses an independent versioned
-requirement document and a selected C++ checker, without new generic `relation`
-operations. Actual bindings are derived from original ports and checked against
+The implementation uses interpreted relation families and actual-instance
+reduction contracts from the relation specification. An independent requirement
+document and a selected C++ checker bind those requirements to the program. Actual bindings are derived from original ports and checked against
 candidate SSA; candidate metadata cannot define their meaning.
 
 The selected bindings identify:

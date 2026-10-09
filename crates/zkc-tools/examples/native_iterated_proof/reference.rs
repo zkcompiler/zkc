@@ -47,7 +47,7 @@ impl Oracle<'_> {
             ])
         };
         let template = tree(&json!([
-            "zkc.native-origin-template/1",
+            "zkc.native-origin-template",
             "main",
             path,
             [],
@@ -61,7 +61,7 @@ impl Oracle<'_> {
             "missing authored occurrence {protocol}/{site}"
         );
         tree(&json!([
-            "zkc.native-origin/2",
+            "zkc.native-origin",
             "main",
             path,
             coordinates.iter().map(u64::to_string).collect::<Vec<_>>(),

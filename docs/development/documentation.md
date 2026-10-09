@@ -71,7 +71,7 @@ a mathematical proof, an executable interface and a measurement have different
 responsibilities. Preserve source coordinates and exact theorem premises when
 shortening explanations. Changes to source-language or carrier contracts must move with their actual
 implementation consumers. Independently formalized models retain their own
-subjects; native changes create no automatic formal migration requirement.
+subjects and require an explicit correspondence to support native claims.
 
 ## Validate a documentation change
 

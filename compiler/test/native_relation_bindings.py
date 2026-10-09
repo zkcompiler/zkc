@@ -11,7 +11,7 @@ OUT = records()
 commands = Commands(OUT)
 fixtures = Path(__file__).parent / 'fixtures/mathematical'
 manifest = []
-policy_data = ['zkc.native-proof-policy/5', 'main', 'P', 'V', '1', '', '', ['0', '1'], []]
+policy_data = ['zkc.native-proof-policy', 'main', 'P', 'V', '1', '', '', ['0', '1'], []]
 policy = OUT / 'policy.json'
 policy.write_text(json.dumps(policy_data))
 for family in ['r1cs', 'air']:
@@ -23,8 +23,8 @@ for family in ['r1cs', 'air']:
         with case(name):
             deployment = commands.run([compiler, 'protocol-proof', source, policy, *options])
             envelope = json.loads(deployment)
-            assert envelope[0] == 'zkc.native-proof/5'
-            assert json.loads(envelope[4])[0] == 'zkc.program/2'
+            assert envelope[0] == 'zkc.native-proof'
+            assert json.loads(envelope[4])[0] == 'zkc.program'
             assert len(envelope[4]) < 40000
             (OUT / f'{name}.deployment').write_text(deployment)
             manifest.append(dict(name=name, family=family))
@@ -134,7 +134,7 @@ for family in ['r1cs', 'air']:
         manifest.append(dict(name=f'{family}_derived', family=family))
         requirement = OUT / 'public-coin.json'
         requirement.write_text(json.dumps(dict(
-            format='zkc.public-coin-requirement/1', entry='main', prover='P', verifier='V',
+            format='zkc.public-coin-requirement', entry='main', prover='P', verifier='V',
             service=3, decision=1, bound_inputs=[0, 1],
             draws=[dict(query_site='draw', delivery_site='challenge')])))
         commands.run([compiler, 'protocol-public-coin', path, requirement],

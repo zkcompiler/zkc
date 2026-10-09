@@ -209,7 +209,7 @@ def cmake_controls(args):
         assert f"{outside / 'Nested.h'}|linked/Nested.h" in inventory
         linked.unlink()
         stale = first / "Stale.h.inc"
-        stale.write_text("// Obsolete generated output.\n")
+        stale.write_text("// Unexpected generated output.\n")
         configure(registration("first"))
         assert "Stale.h.inc" not in (args.work / "output/contribution-dependencies.txt").read_text()
         stale.unlink()

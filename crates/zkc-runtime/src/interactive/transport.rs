@@ -59,7 +59,7 @@ impl Origin {
     /// preserves complete region/iteration identity in host diagnostic records.
     pub fn json(&self) -> serde_json::Value {
         serde_json::json!([
-            "zkc.origin/2",
+            "zkc.origin",
             self.session,
             self.entry,
             self.instance,
@@ -107,7 +107,7 @@ pub struct Envelope {
 impl Envelope {
     pub fn domain_bytes(&self) -> Vec<u8> {
         serde_json::to_vec(&serde_json::json!([
-            "zkc.message-domain/2",
+            "zkc.message-domain",
             self.origin.json(),
             self.site,
             self.schema,

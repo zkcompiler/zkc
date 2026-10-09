@@ -12,7 +12,7 @@ validators and backend implementations retain their separate obligations.
 
 ## Signatures, effects and observations
 
-The `zkc.contract-declarations/3` inventory distinguishes constructor-application
+The `zkc.contract-declarations` inventory distinguishes constructor-application
 ports from an explicit complete-Type port (`{"term": index}`). The latter is
 restricted to construction-only observation payloads, with exact static-type and
 representation checks. Source admission does not gain arbitrary operations from
@@ -23,8 +23,8 @@ Declaration presence and authoring stage govern source availability. Semantic
 facets govern sampling, history, guards and resources; source `stop` and `opaque`
 allowances remain explicit. Catalog presence alone grants no purity, totality or
 permission to reorder work. Language catalog identity uses
-`zkc.language-catalog/2`; the [version policy](../status.md#artifact-and-api-versions)
-owns rebuild requirements.
+`zkc.language-catalog`; the [public interface overview](../status.md#current-public-interfaces)
+identifies its consumers.
 
 Operation facets identify actual sampling ports, provider successors, observation
 payloads, history transitions, accepted guards and supported algebraic maps.

@@ -124,7 +124,7 @@ fn program() -> Admitted {
 }
 fn program_with_type(field: &str) -> Admitted {
     let value = json!([
-        "zkc.program/2",
+        "zkc.program",
         [],
         [[
             "function",
@@ -528,7 +528,7 @@ fn local_candidate(body: serde_json::Value) -> Admitted {
     let boolean = "bool@native.bool/1";
     let ports = json!([["lo", index], ["hi", index], ["flag", boolean]]);
     let carrier = json!([
-        "zkc.program/2",
+        "zkc.program",
         [],
         [["function", "f", ports, [index], body, ["f", []]]],
         [[
@@ -671,7 +671,7 @@ fn local_induction_rejects_a_backend_literal_with_the_wrong_type() {
 #[test]
 fn protocol_induction_rejects_a_backend_literal_with_the_wrong_type() {
     let carrier = json!([
-        "zkc.program/2",
+        "zkc.program",
         [],
         [],
         [[

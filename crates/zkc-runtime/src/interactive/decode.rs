@@ -494,7 +494,7 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
     let mut bindings = BTreeMap::new();
     let mut binding_type_bytes = 0usize;
     match string(&a[0])? {
-        "zkc.program/2" => {
+        "zkc.program" => {
             for value in list(&a[1], Limits::DEFINITIONS)? {
                 let r = array(value)?;
                 if r.len() != 4 {
@@ -608,7 +608,7 @@ mod tests {
             .map(|(i, t)| json!([format!("x{i}"), t]))
             .collect();
         serde_json::to_vec(&json!([
-            "zkc.program/2",
+            "zkc.program",
             [],
             [[
                 "function",

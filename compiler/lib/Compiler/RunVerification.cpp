@@ -253,7 +253,7 @@ Error verifyRunBundle(ModuleOp prepared, ModuleOp physical, StringRef bytes,
     return parsed.takeError();
   auto *bundle = parsed->getAsObject();
   if (!bundle || bundle->size() != 5 ||
-      bundle->getString("format") != "zkc.run/1" ||
+      bundle->getString("format") != "zkc.run" ||
       bundle->getString("entry") != entry || !bundle->getString("candidate"))
     return error("run-correspondence");
   auto candidate = *bundle->getString("candidate");

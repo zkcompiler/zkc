@@ -1,4 +1,4 @@
-"""Closed Boolean arithmetic, versioned literals and exact carrier boundaries."""
+"""Closed Boolean arithmetic, canonical literals and exact carrier boundaries."""
 import copy
 import itertools
 import json
@@ -49,7 +49,7 @@ for optimize in (False, True):
     assert "local.bool_constant" not in physical and "plan.bool_constant" in physical
     encoded = commands.source("protocol-export", physical)
     carrier = json.loads(encoded)
-    assert carrier[0] == "zkc.program/2"
+    assert carrier[0] == "zkc.program"
     for a, b, c in itertools.product((False, True), repeat=3):
         assert evaluate(carrier, [a, b, c, 11, 23, 31, 47]) == [
             True, False, a and b, a or b, a != b, a == b, a != b, not a,
@@ -58,8 +58,7 @@ for optimize in (False, True):
     assert json.loads(canonical_program(commands, encoded)) == carrier
 
 mutant = copy.deepcopy(carrier)
-mutant[0] = "zkc.participants/1"
-for p in mutant[3]: p.pop()
+mutant[0] = "invalid.program"
 canonical_program(commands, json.dumps(mutant), refuses="interactive-format")
 for value in ("true", 1, None, []):
     mutant = copy.deepcopy(carrier)
@@ -121,8 +120,8 @@ condition_arm = json.loads(commands.source('protocol-export', bound))
 for a, b, c in itertools.product((False, True), repeat=3):
     assert evaluate(condition_arm, [a, b, c, 11, 23, 31, 47])[8] == (c or b)
 
-# The profile owns the phase boundary; a stale selector is an unknown property.
-commands.verified(physical.replace('#protocol.profile<physical>', '#protocol.profile<physical>, execution_contract="program"'), 'mlir-unknown-property')
+# The profile owns the phase boundary and refuses unknown properties.
+commands.verified(physical.replace('#protocol.profile<physical>', '#protocol.profile<physical>, unexpected="value"'), 'mlir-unknown-property')
 for length in (128, 129):
     named = copy.deepcopy(carrier)
     literal = next(op for f in named[2] for op in f[4] if op[0] == 'bool_constant')

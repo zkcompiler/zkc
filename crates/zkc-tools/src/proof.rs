@@ -118,11 +118,11 @@ fn wire_type(value: &str, public: bool) -> Result<LogicalType> {
 }
 fn wire_codec(ty: &LogicalType) -> Option<String> {
     if PhysicalType::default_for(ty.clone()).is_ok_and(|t| t.has_native_data_frame()) {
-        Some("zkc.native-data/1".into())
+        Some("zkc.native-data".into())
     } else if ty.kind() == Type::VerifierKey {
-        Some("zkc.native-verifier-key/1".into())
+        Some("zkc.native-verifier-key".into())
     } else if ty.field_array_parts().is_some() {
-        Some("zkc.native-field-array/1".into())
+        Some("zkc.native-field-array".into())
     } else {
         ty.codec()
     }
@@ -217,14 +217,14 @@ impl NativeDeployment {
     ) -> Result<Self> {
         let value = parse(bytes, INPUT_LIMIT)?;
         let envelope = array(&value, 9)?;
-        if text(&envelope[0])? != "zkc.native-proof/5" {
+        if text(&envelope[0])? != "zkc.native-proof" {
             return Err("native-proof-format".into());
         }
         let source = text(&envelope[1])?.to_owned();
         digest(&source)?;
         let descriptor = array(&envelope[2], 6)?;
-        if text(&descriptor[0])? != "zkc.native-proof-descriptor/5"
-            || text(&descriptor[2])? != "zkc.native-origin/2"
+        if text(&descriptor[0])? != "zkc.native-proof-descriptor"
+            || text(&descriptor[2])? != "zkc.native-origin"
         {
             return Err("native-proof-descriptor".into());
         }

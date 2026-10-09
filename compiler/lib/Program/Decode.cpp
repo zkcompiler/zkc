@@ -288,7 +288,7 @@ public:
     if (!r || r->empty())
       return error("interactive-shape");
     auto tag = string((*r)[0]);
-    if (tag != "zkc.program/2")
+    if (tag != "zkc.program")
       return error("interactive-format");
     auto result = participants(v);
     if (!problem.empty())

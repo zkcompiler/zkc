@@ -55,10 +55,10 @@ fn frame(sponge: &mut Keccak, tag: u8, label: &[u8], value: &[u8]) {
 impl Transcript {
     pub fn new(suite: &str, root: &[u8]) -> Self {
         let mut t = if suite.starts_with("merlin") {
-            Self::Merlin(Box::new(merlin::Transcript::new(b"zkc.artifact/1")))
+            Self::Merlin(Box::new(merlin::Transcript::new(b"zkc.artifact")))
         } else {
             let mut sponge = Keccak::default();
-            frame(&mut sponge, 0, b"domain", b"zkc.artifact/1");
+            frame(&mut sponge, 0, b"domain", b"zkc.artifact");
             frame(&mut sponge, 0, b"suite", suite.as_bytes());
             Self::Spongefish(Box::new(sponge))
         };
@@ -93,9 +93,9 @@ pub fn root(envelope: &Json, input: &Json) -> Vec<u8> {
         .map(|(v, p)| json!([v[0], v[1], p[2], v[2]]))
         .collect::<Vec<_>>();
     tree(&json!([
-        "zkc.native-proof-binding/5",
+        "zkc.native-proof-binding",
         "sha256",
-        "zkc.native-origin/2",
+        "zkc.native-origin",
         envelope[1],
         policy[1],
         policy[2],

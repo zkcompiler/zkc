@@ -1,7 +1,6 @@
 # Independent reference fixtures
 
-These vectors remain independently useful after retirement of the old source
-Frontend and source-bound execution tests.
+These independently retained vectors support the native and formal checks below.
 
 - `variants/history-contracts.txt` is embedded by `formal/Tests/Variant.lean`
   and included by the formal package's input manifest and reproduction checks.
@@ -16,6 +15,5 @@ optional formal package includes its required vectors without invoking the C++
 compiler or Rust execution toolkit. Current native integration generates its
 programs from mathematical MLIR and `.zkc` source in fresh report directories.
 
-Native backend transcript vectors now live under
-`crates/zkc-test-support/fixtures/`, owned by the Rust workspace. The former
-source-bound artifact-identity KAT has been retired with that format.
+Native backend transcript vectors live under
+`crates/zkc-test-support/fixtures/`, owned by the Rust workspace.

@@ -334,11 +334,11 @@ fn hostile_key_aware_codec_and_exact_length() {
         .is_err()
     );
     assert!(zkc_runtime::interactive::LogicalType::parse("scalar:bls12-381.fr").is_err());
-    // The removed scalar carrier's wire tag cannot be decoded as a nominal field.
-    let mut old_scalar = recv.encode_native_value(&f(1)).unwrap();
-    old_scalar[5] = 8;
+    // An unknown wire kind cannot be decoded as a nominal field.
+    let mut unknown_kind = recv.encode_native_value(&f(1)).unwrap();
+    unknown_kind[5] = 255;
     assert!(
-        recv.decode_native_value(&f(1).physical_type(), &old_scalar)
+        recv.decode_native_value(&f(1).physical_type(), &unknown_kind)
             .is_err()
     );
     assert!(

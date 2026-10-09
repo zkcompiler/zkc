@@ -81,12 +81,12 @@ Successful proof bytes are unchanged when different ceilings are sufficient.
 The CLI reports the effective record, including defaults:
 
 ```text
-["zkc.native-capacity/2", "elements", "groups", "wire_bytes", "value_bytes",
+["zkc.native-capacity", "elements", "groups", "wire_bytes", "value_bytes",
  ["instructions", "iterations"], ["live_bytes", "total_bytes"]]
 ```
 
 All entries are canonical decimal strings. The file is at most 4 KiB and has
-exact arity; unknown fields or versions refuse. Defaults are 65,536 elements,
+exact arity; unknown fields or tags refuse. Defaults are 65,536 elements,
 4,096 collection/aggregate group points, 16 MiB wire, 64 MiB per value/live
 values, a 256 MiB cumulative runtime value charge, one million instructions and
 100,000 iterations. Element/group counts may rise to 1,048,576/32,768. Other

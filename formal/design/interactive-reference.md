@@ -4,7 +4,7 @@
 candidate checker. It is tooling, outside the reusable `Zkc` library. Lake builds
 it as `interactive-protocol`; the whole-package declaration audit explicitly
 includes its types and bodies. `Zkc` never imports this consumer. Its portable
-records are independent of the current `.zkc`/MLIR/`zkc.program/2` pipeline.
+records are independent of the current `.zkc`/MLIR/`zkc.program` pipeline.
 
 ## Components
 
@@ -71,9 +71,8 @@ contracts.
 The arithmetic identities are kernel-checked theorems. Portable decoding,
 admission, projection comparison and interpretation are executable definitions;
 there is no theorem proving checker soundness or elaboration to the separate
-typed `Zkc.Source.Protocol`/`Compiler.Role` languages. Earlier native comparisons
-are historical, unmaintained evidence under their selected observer and service
-contract.
+typed `Zkc.Source.Protocol`/`Compiler.Role` languages. Native correspondence
+requires a separate interpretation of actual execution and provider contracts.
 
 The symbolic PCS checks exact issued subject/point/value records. The real PCS
 verifies a mathematical opening relation and can accept an honestly issued proof

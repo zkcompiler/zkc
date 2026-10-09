@@ -65,8 +65,7 @@ zero/inverted bounds, reached failure paths, affine reuse and capture refusal,
 malformed dormant branches, candidate mutations and artifact reference arithmetic.
 The executable Python controls add generic specialization, nested helpers, both
 candidate stages, physical lifetimes/accounting and recursive artifact identity.
-The former native differential fixtures have been retired; these controls cover
-the independent tools.
+These controls cover the independent tools.
 
 ## Finite local variants
 
@@ -89,7 +88,5 @@ and only the active payload.
 
 `Tests.Variant` exercises formation, active payloads, ownership, stopped execution
 and logical/physical correspondence. `checks/variant_cli.py` exercises the actual
-executable independently. Earlier native variant comparisons covered source
-compilation, outcomes, resource state, requests, allocation and frame cleanup.
-They are historical, unmaintained evidence and provide no current correspondence
-test route.
+executable independently. Native variant correspondence requires its own
+interpretation and validation.

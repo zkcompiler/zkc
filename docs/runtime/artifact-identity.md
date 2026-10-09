@@ -9,7 +9,7 @@ received file does not authorize its contents.
 
 | Identity | Binds |
 |---|---|
-| Entry package | Exact published `zkc.entry/1` bytes, including original/interface, compilation choices and selected artifact |
+| Entry package | Exact published `zkc.entry` bytes, including original/interface, compilation choices and selected artifact |
 | Native deployment or joint bundle | Exact emitted envelope bytes and the executable, policy or schedule they contain |
 | Native proof source | Exact retained UTF-8 mathematical source bytes under the proof profile |
 | Invocation context | The selected policy's canonical public values, application context and authorized setup configuration |
@@ -22,9 +22,8 @@ have their own envelope digest and invocation contract. These identifiers are
 not interchangeable.
 
 Formatting, declaration changes or recompilation can change an exact source or
-publication identity even when mathematical behavior is equivalent. Re-authorize
-changed bytes explicitly. The retired normalized source policy is not an alias
-for native identity and supplies no compatibility guarantee.
+publication identity even when mathematical behavior is equivalent. Authorization
+applies to the exact bytes selected by the trusted digest.
 
 ## Identity is not a proof
 

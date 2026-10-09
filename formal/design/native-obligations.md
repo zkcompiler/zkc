@@ -5,8 +5,8 @@ to the formal models. [Support](../SUPPORT.md) owns theorem scope; the
 [specification](../../docs/spec/README.md) distinguishes current native contracts
 from independent formal subjects. The
 [roadmap](../../docs/roadmap.md#establish-native-correspondence) selects future
-correspondence work. Lean migration is deferred and does not gate implementation
-or require compatibility with these reference structures.
+correspondence work. The reference structures have their own interpretations;
+native claims require an explicit connection to the actual implementation.
 
 ## 1. Preserve useful distinctions
 
@@ -152,8 +152,7 @@ Dialect conversion legality must reflect which semantic information has been
 resolved. A legal-looking generic side-effect annotation does not prove that
 transcript queries commute or correlated randomness can be reused. Supply the
 specific semantic law used by the pass when claiming formal preservation.
-The former native finite-source route has been retired; these research models
-do not define the supported Language/MLIR/program carrier.
+These research models do not define the supported Language/MLIR/program carrier.
 
 ## 5. Theory and tooling for correspondence research
 

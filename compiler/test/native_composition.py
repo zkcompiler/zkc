@@ -24,7 +24,7 @@ for family, suite, service, public, roles, draws in [
         with case(name):
             source = fixtures / (family + ".mlir")
             p = [
-                "zkc.native-proof-policy/5",
+                "zkc.native-proof-policy",
                 "main",
                 *roles,
                 "0",

@@ -424,7 +424,7 @@ fn module(mut functions: Json, mut participants: Json, entries: Json) -> Json {
         json!([key, key, args, format!("arkworks/{key}")])
     })
     .collect();
-    json!(["zkc.program/2", bindings, functions, participants, entries])
+    json!(["zkc.program", bindings, functions, participants, entries])
 }
 
 fn participant(
@@ -568,7 +568,7 @@ fn strict_json_scalars_objects_trailing_and_truncation() {
 #[test]
 fn exact_tags_arities_names_and_limits() {
     let mut j = identity();
-    j[0] = json!("zkc.protocol/2");
+    j[0] = json!("invalid.program");
     reject(&j, ErrorCode::Record);
     let mut j = identity();
     j.as_array_mut().unwrap().push(json!([]));
@@ -602,27 +602,18 @@ fn exact_tags_arities_names_and_limits() {
     );
 }
 #[test]
-fn retired_program_tag_stage_and_parameter_slot_are_distinct_refusals() {
-    // Old tag on the current shape must fail independently of old arities.
-    let mut old_tag = identity();
-    old_tag[0] = json!("zkc.program/1");
-    reject(&old_tag, ErrorCode::Record);
-    for stage in ["physical", "logical", "source", "Physical", ""] {
-        let mut j = identity();
-        j.as_array_mut().unwrap().insert(2, json!(stage));
-        reject(&j, ErrorCode::Record);
+fn unknown_program_format_and_extra_fields_are_distinct_refusals() {
+    let mut unknown_format = identity();
+    unknown_format[0] = json!("invalid.program");
+    reject(&unknown_format, ErrorCode::Record);
+    for extra in [json!("extra"), json!([]), json!([["n", "4"]])] {
+        let mut root = identity();
+        root.as_array_mut().unwrap().insert(2, extra.clone());
+        reject(&root, ErrorCode::Record);
+        let mut participant = identity();
+        participant[3][0].as_array_mut().unwrap().insert(4, extra);
+        reject(&participant, ErrorCode::Record);
     }
-    for parameters in [json!([]), json!([["n", "4"]])] {
-        let mut j = identity();
-        j[3][0].as_array_mut().unwrap().insert(4, parameters);
-        reject(&j, ErrorCode::Record);
-    }
-    // The complete retired grammar also refuses; no compatibility reader.
-    let mut old = identity();
-    old[3][0].as_array_mut().unwrap().insert(4, json!([]));
-    old.as_array_mut().unwrap().insert(2, json!("physical"));
-    old[0] = json!("zkc.program/1");
-    reject(&old, ErrorCode::Record);
 }
 #[test]
 fn binding_records_and_non_nominal_types_rejected() {
@@ -1557,12 +1548,8 @@ fn closed_profile_participants_are_not_an_execution_format() {
         "arkworks.bls12-381/1",
         "reference.group/1",
     ] {
-        // The tag has to be one the decoder accepts. Written with a retired
-        // tag the record would be refused for its tag alone, which is a
-        // different refusal from the one this is about. The three
-        // profiles say the answer does not turn on which profile the record
-        // names; they are not three different refusals.
-        candidate[0] = json!("zkc.program/2");
+        // Keep the format valid so the malformed bindings field is checked.
+        candidate[0] = json!("zkc.program");
         candidate[1] = json!(profile);
         reject(&candidate, ErrorCode::Record);
     }
@@ -1934,7 +1921,7 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
                                         "kernel",
                                         [zkc_test_support::hex(
                                             &crate::logical::encode_tree(&json!([
-                                                "zkc.native-origin-template/1",
+                                                "zkc.native-origin-template",
                                                 "main",
                                                 [],
                                                 [],
@@ -2072,7 +2059,7 @@ fn program_ports_admit_copyable_variants_and_refuse_affine_payloads() {
     let logical = zkc_test_support::variants::logical("Local", json!([["empty", []]]));
     let ty = format!("{logical}@logical.variant/1");
     let mut program = json!([
-        "zkc.program/2",
+        "zkc.program",
         [],
         [],
         [[

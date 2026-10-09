@@ -114,7 +114,7 @@ handoff obligation. Digests identify bytes; they do not authenticate a report.
 ## Independently specified R1CS client
 
 `r1cs-sum-to-point/1` adds a mandatory `relation` containing canonical
-`zkc.relation.r1cs/1` JSON and a mandatory composition requirement. It accepts the
+`zkc.relation.r1cs` JSON and a mandatory composition requirement. It accepts the
 exact source emitted by `authorR1CSSumcheck` for that independently supplied
 relation, ignoring locations only. This pins matrix coefficients, ordered public
 layout, relation identity, assignment construction, zero claim, weight draws,

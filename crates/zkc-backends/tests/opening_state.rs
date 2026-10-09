@@ -31,7 +31,7 @@ fn open_program() -> Vec<u8> {
 }
 
 #[test]
-fn exact_contracts_and_legacy_candidates_fail_closed() {
+fn exact_contracts_and_wrong_operation_arities_fail_closed() {
     let b = ark_backend(None);
     let binding = |contract: &str| zkc_runtime::interactive::OperationBinding {
         contract: contract.into(),
@@ -60,10 +60,10 @@ fn exact_contracts_and_legacy_candidates_fail_closed() {
     assert_eq!(Type::OpeningState.name(), "opening_state");
     assert!(!Type::OpeningState.is_affine());
     assert!(!Type::OpeningState.is_serializable());
-    for old in [
-        op("old", "arkworks/pcs.commit", &["pk", "t"], &["c"]),
+    for malformed in [
+        op("malformed", "arkworks/pcs.commit", &["pk", "t"], &["c"]),
         op(
-            "old",
+            "malformed",
             "arkworks/pcs.open",
             &["pk", "t", "p"],
             &["y", "proof"],
@@ -71,7 +71,7 @@ fn exact_contracts_and_legacy_candidates_fail_closed() {
     ] {
         let bytes = program(
             &[("pk", "prover_key"), ("t", "table"), ("p", "point")],
-            vec![old],
+            vec![malformed],
             &[],
             &[],
         );

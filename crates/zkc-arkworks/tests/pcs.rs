@@ -250,7 +250,7 @@ fn recorded_lean_coordinate_oracle_all_rounds_and_openings() {
             assert_eq!(ta.round_product(&tb).unwrap().as_slice(), q);
             if round == 0 && n >= 2 {
                 // Feed an inverse-permuted logical input: its backend storage
-                // is the original unpermuted vector, reproducing the old defect.
+                // is the original unpermuted vector, violating the coordinate permutation.
                 let permute = |v: &[Scalar]| -> Vec<Scalar> {
                     (0..v.len())
                         .map(|j| v[j.reverse_bits() >> (usize::BITS as usize - n)])

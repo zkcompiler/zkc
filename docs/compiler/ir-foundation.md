@@ -45,6 +45,4 @@ controls substitute receives, terminals, resource roots and same-shaped relation
 data. Code size, compile work, value capacity and execution limits are distinct.
 
 These tests establish bounded implementation behavior. Native Lean correspondence,
-cryptographic security and broader library development remain separate. Old
-Frontend, table and application consumers are retired; the foundation carries no
-requirement to reproduce their old formats or port their protocol libraries.
+cryptographic security and broader library development remain separate.

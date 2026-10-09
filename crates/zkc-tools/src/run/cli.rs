@@ -3,7 +3,8 @@ use super::host::*;
 use crate::host::inputs::*;
 use serde_json::{Value as Json, json};
 pub fn run(args: &[String]) -> Json {
-    let mut report = json!({"format":"zkc.bundle-result/1","status":"refused","phase":"arguments","resources":[]});
+    let mut report =
+        json!({"format":"zkc.bundle-result","status":"refused","phase":"arguments","resources":[]});
     let result = (|| -> Result<()> {
         let [bundle, expected, inputs, options @ ..] = args else {
             return Err("usage: run-bundle BUNDLE EXPECTED_SHA256 INPUTS [--setups=AUTHORITY] [--capacity=LIMITS] [--limits=LIMITS]".into());
@@ -25,7 +26,7 @@ pub fn run(args: &[String]) -> Json {
                 "--limits" => {
                     let value = parse(&read_regular(path, 4096)?, 4096)?;
                     let row = array(&value, 5)?;
-                    if text(&row[0])? != "zkc.bundle-limits/1" {
+                    if text(&row[0])? != "zkc.bundle-limits" {
                         return Err("bundle-limits-format".into());
                     }
                     let size =

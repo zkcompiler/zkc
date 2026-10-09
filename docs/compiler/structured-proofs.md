@@ -1,6 +1,6 @@
 # Structured proof boundaries
 
-Native proof policy `/5` permits one typed message to contain records,
+The native proof policy permits one typed message to contain records,
 alternatives and variable-length numeric data. It reuses nominal variants,
 dynamic field/group tensors and the ordinary interpreter. The exact contract is
 [structured native proof messages](../spec/profiles/compiler/structured-proof-messages.md).
@@ -58,9 +58,9 @@ client, with ordinary PCS kernels.
 Copyability alone does not grant total mathematical operations, a wire codec or
 cross-role availability. Every alternative is checked, including inactive ones.
 No key or live resource can hide inside a message. Existing common generic
-contracts remain constructor applications; the new construction observer uses
-an explicit complete-Type input term. The declaration inventory is version `/2`
-and records that port as `{"term": index}`. The generated executable catalog
+contracts are constructor applications; the construction observer uses
+an explicit complete-Type input term. The `zkc.contract-declarations` inventory
+records that port as `{"term": index}`. The generated executable catalog
 combines common and non-generic declarations without widening common admission.
 
 ## Validation
@@ -79,8 +79,8 @@ combines common and non-generic declarations without widening common admission.
   malformed tags/lengths/canonical leaves, inactive forbidden payloads, aggregate
   counts, retained-byte bounds, depth and setup identity.
 - [Cross-build tests](../../tests/protocol/test_native_mathematical.py) run
-  production and validation as independent CLI processes. Old Lean readers
-  refuse these native formats; they are not a native execution oracle.
+  production and validation as independent CLI processes. Independent Lean
+  models require a separate interpretation to validate native execution.
 
 ## Remaining work
 

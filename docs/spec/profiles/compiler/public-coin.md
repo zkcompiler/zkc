@@ -36,11 +36,11 @@ prover local behavior. A stopped guard is distinct from a returned `false`.
 
 ## Requirement and accepted fragment
 
-`zkc.public-coin-requirement/1` is an exact JSON object:
+`zkc.public-coin-requirement` is an exact JSON object:
 
 ```json
 {
-  "format": "zkc.public-coin-requirement/1",
+  "format": "zkc.public-coin-requirement",
   "entry": "main",
   "prover": "Prover",
   "verifier": "Checker",
@@ -83,7 +83,7 @@ static application admission refuses a callee that contains a statement.
 
 ## Derived report and checking
 
-`zkc.public-coin-view/1` contains:
+`zkc.public-coin-view` contains:
 
 - The entry, roles, service and decision indices.
 - `anchors`: input entries in original port order, then actual V receives and
@@ -124,7 +124,7 @@ are refused too. Neither API checks an arbitrary transformed program.
 `RunOptions.publicCoinRequirement` requests this analysis before
 projection. Its entry must equal the compiled entry. Ordinary projection,
 simplification and lowering remain trusted/tested compiler passes.
-`CompiledRun.publicCoin` returns `zkc.compiled-public-coin/1`, containing
+`CompiledRun.publicCoin` returns `zkc.compiled-public-coin`, containing
 `view`, exact input-text `source_sha256`, emitted `bundle_sha256`, and the
 `simplify`, `release_storage`, `fix_polynomial_factors` options, the actual
 `projection_simplify` setting and ordered `post_analysis_passes`. The compiler
@@ -138,9 +138,9 @@ zkc-compile protocol-check-public-coin source.mlir requirement.json view.json
 zkc-compile protocol-checked-bundle source.mlir --public-coin=requirement.json
 ```
 
-Successful report checking prints `{"format":"zkc.public-coin-checked/1"}`.
+Successful report checking prints `{"format":"zkc.public-coin-checked"}`.
 Checked compilation with a public-coin requirement emits
-`zkc.checked-run/1`: `bundle`, `public_coin`, and `correspondence` (null
+`zkc.checked-run`: `bundle`, `public_coin`, and `correspondence` (null
 unless `--requirements` also requests polynomial correspondence). Polynomial-only
 compilation uses the same wrapper with `public_coin` set to null. For later report
 checking, supply the inner `view`, not the compiled wrapper.

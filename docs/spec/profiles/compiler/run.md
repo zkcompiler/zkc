@@ -41,12 +41,12 @@ bundle carries executable scheduling data. It adds no IR stage or dialect.
 
 ## Bundle and admission
 
-`zkc.run/1` is one JSON object with exactly these mandatory fields:
+`zkc.run` is one JSON object with exactly these mandatory fields:
 
 ```json
 {
-  "format": "zkc.run/1",
-  "candidate": "<exact zkc.program/2 JSON text>",
+  "format": "zkc.run",
+  "candidate": "<exact zkc.program JSON text>",
   "entry": "main",
   "roles": ["Alice", "Bob"],
   "steps": [
@@ -107,7 +107,7 @@ or a source-correspondence certificate.
 
 ## Message admission
 
-`zkc.run/1` embeds exactly `zkc.program/2` and uses the compact schedule
+`zkc.run` embeds exactly `zkc.program` and uses the compact schedule
 contract below. Other bundle or embedded program tags refuse without fallback.
 The bundle admits each complete physical message type supported by the installed
 native codec, including the variable-size frames defined by
@@ -195,7 +195,7 @@ Typed decoding checks exact type, length/header/tag, policy limits and canonical
 parsing in that order. `NativeWireError::Invalid` carries one closed reason:
 Length, Header, Boolean, Scalar or Group. Limit and Backend describe failures
 before accepting a receive. No backend error text is parsed to recover this
-classification. The existing public codec keeps its prior failure precedence.
+classification.
 
 `Runner::complete_receive` applies only to programs with an already
 pending Receive and an exact matching cut. It never polls to expose the request.
@@ -206,7 +206,7 @@ validated and retained using the existing runtime contracts. Runtime instruction
 or retention failure is Limit. Backend validation failure remains Backend,
 including resource failures reported through the existing opaque backend trait.
 Successful binding advances exactly once. Delivered and Stopped both denote an
-accepted completion. Existing `deliver` behavior is unchanged.
+accepted completion.
 
 ## Joint dispatch and handoff
 
@@ -365,7 +365,7 @@ zkc run-bundle BUNDLE EXPECTED_SHA256 INPUTS
 Input JSON is an array:
 
 ```text
-["zkc.bundle-inputs/1", session,
+["zkc.bundle-inputs", session,
   [[role,
     [[position, exact_physical_type, [kind, value]], ...],
     [[service_position, exact_contract, budget], ...]], ...],
@@ -390,7 +390,7 @@ and constructed proof deployments retain their existing transcript contracts.
 Setup authority is application input, separate from invocation key material:
 
 ```text
-["zkc.bundle-setups/1",
+["zkc.bundle-setups",
  [[setup_name, expected_key_id_hex], ...],
  [[role, input_position, setup_name], ...]]
 ```
@@ -408,9 +408,9 @@ Received PCS values select among the authorized registry keys using their native
 headers. The Host does not promise an independently pinned key at each receive
 site; applications must assess this registry-based authority contract.
 
-The capacity file uses `zkc.native-capacity/2`, shared with the native proof host.
+The capacity file uses `zkc.native-capacity`, shared with the native proof host.
 The dispatch/wire file is
-`["zkc.bundle-limits/1", dispatches, message_bytes, total_wire_bytes, external_work_per_role]`.
+`["zkc.bundle-limits", dispatches, message_bytes, total_wire_bytes, external_work_per_role]`.
 Defaults/hard ceilings are 32768 dispatched occurrences, 4096 bytes per message
 and 16 MiB cumulative native wire bytes, with 16777216 external-kernel work units
 per role. Both API and CLI refuse requests above these ceilings without clamping.
@@ -419,7 +419,7 @@ installed bounds. Reports retain the requested admission, capacity and execution
 limits. Per-runner instruction, iteration and retained-value budgets are
 separate from structural schedule size and runtime dispatch occurrences.
 
-`zkc.bundle-result/1` retains the primary outcome, reached schedule, pending-wire
+`zkc.bundle-result` retains the primary outcome, reached schedule, pending-wire
 metadata, role states before/after cancellation, outputs, usage and backend work.
 After issuance begins, ordinary failures return a report and retire every issued
 capability and managed service, including partial initialization. Retirement or

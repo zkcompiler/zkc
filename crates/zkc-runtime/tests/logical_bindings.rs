@@ -271,21 +271,8 @@ fn open_selection_does_not_relax_nominal_requirements() {
 }
 
 #[test]
-fn retired_transcript_contracts_are_not_logical_or_physical_bindings() {
-    for contract in [
-        "transcript.challenge",
-        "transcript.draw_index",
-        "transcript.native.challenge",
-        "transcript.observe.bool",
-        "transcript.native.observe.field",
-        "transcript.native.indexed.observe.bool",
-        "transcript.native.indexed.observe.field",
-        "transcript.native.indexed.observe.group",
-        "transcript.native.indexed.observe.index",
-        "transcript.native.indexed.observe.field_array",
-        "transcript.native.indexed.observe.commitment",
-        "transcript.native.indexed.observe.proof",
-    ] {
+fn unknown_transcript_contracts_are_not_logical_or_physical_bindings() {
+    for contract in ["invalid.transcript", "transcript.native.indexed.unknown"] {
         let b = binding(
             contract,
             &["merlin3.bls12-381.fr64be/1"],
@@ -698,7 +685,7 @@ impl Backend for NoBackend {
 
 fn carrier(b: &OperationBinding) -> serde_json::Value {
     json!([
-        "zkc.program/2",
+        "zkc.program",
         [["op", b.contract, b.arguments, b.implementation]],
         [],
         [[

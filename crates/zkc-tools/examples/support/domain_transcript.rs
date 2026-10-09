@@ -25,7 +25,7 @@ impl<'a> Replay<'a> {
         let root = encoding::root(envelope, input);
         assert_eq!(&proof[..8], b"ZKCPRF01");
         assert_eq!(&proof[8..40], &Sha256::digest(&root)[..]);
-        let mut transcript = merlin::Transcript::new(b"zkc.artifact/1");
+        let mut transcript = merlin::Transcript::new(b"zkc.artifact");
         transcript.append_message(b"binding", &root);
         Self {
             envelope,
@@ -37,19 +37,13 @@ impl<'a> Replay<'a> {
         }
     }
     fn origin(&mut self, data: Json) {
-        let template = encoding::tree(&json!([
-            "zkc.native-origin-template/1",
-            "main",
-            [],
-            [],
-            data
-        ]));
+        let template = encoding::tree(&json!(["zkc.native-origin-template", "main", [], [], data]));
         let hex: String = template.iter().map(|b| format!("{b:02x}")).collect();
         assert_eq!(self.envelope[2][3][self.event], json!([data[0], hex]));
         self.event += 1;
         self.transcript.append_message(
             b"origin",
-            &encoding::tree(&json!(["zkc.native-origin/2", "main", [], [], data])),
+            &encoding::tree(&json!(["zkc.native-origin", "main", [], [], data])),
         );
     }
     pub fn observe(&mut self, site: &str, sender: &str, receiver: &str, wire: &[u8]) {

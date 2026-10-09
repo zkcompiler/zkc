@@ -1,7 +1,4 @@
-# Native API tests and tool-level integration checks. Every test.cpp here is
-# built and named from this one list: two of them used to be declared a
-# directory up, which put their binaries somewhere else and made them look, to
-# anyone reading this file, like sources nothing ran.
+# Native API tests and tool-level integration checks are built and named here.
 #
 # A test name is optional. Without one the file is built but registers no test,
 # which is for an executable a Python test here drives as a tool.

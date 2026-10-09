@@ -56,7 +56,7 @@ json::Value document() {
   // Hand-authored interface and IR: no source checker, layout builder or
   // emitter.
   json::Object root{
-      {"format", "zkc.language-interface/7"},
+      {"format", "zkc.language-interface"},
       {"setups", json::Array{}},
       {"capture", std::string(64, '0')},
       {"original", toHex(SHA256::hash(arrayRefFromStringRef(original)), true)},
@@ -279,10 +279,11 @@ int main() {
         auto &out = *protocol(v).getArray("outputs")->front().getAsObject();
         (*out.getObject("schema"))["kind"] = kind.str();
       });
-    for (StringRef version :
-         {"zkc.language-interface/1", "zkc.language-interface/2",
-          "zkc.language-interface/3"})
-      mutate([&](auto &v) { (*v.getAsObject())["format"] = version.str(); });
+  });
+  cases.run("unknown interface tag refuses with valid fields", [] {
+    mutate([](auto &v) {
+      (*v.getAsObject())["format"] = "invalid.language-interface";
+    });
   });
   cases.run("type identities distinguish phantom and empty element types", [] {
     auto source = compile(R"zkc(module sample;

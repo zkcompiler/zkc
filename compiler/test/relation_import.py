@@ -67,7 +67,7 @@ def container(
 def canonical(field, rows=None, columns=4, outputs=1, inputs=1):
     if rows is None:
         rows = [[[["2", "1"]], [["3", "1"]], [["1", "1"]]]]
-    return ["zkc.relation.r1cs/1", field, str(columns), str(outputs), str(inputs), rows]
+    return ["zkc.relation.r1cs", field, str(columns), str(outputs), str(inputs), rows]
 
 
 directory = records()

@@ -107,13 +107,13 @@ challenge. No test replaces the hash output of either installed Fiat-Shamir suit
 These clients use three admission rules:
 
 1. Source-size validation recognizes runtime-count loops in the single
-   `zkc.program/2` executable contract.
+   `zkc.program` executable contract.
 2. Interactive bundles need an exact carrier match for structured messages.
-   `zkc.run/1` embeds `zkc.program/2`, uses the existing compact
+   `zkc.run` embeds `zkc.program`, uses the existing compact
    schedule validation, and admits the installed variable-size native codecs.
    Fixed-width codecs still require their exact encoded width; all messages
    retain per-message and cumulative byte limits and receiver-side decoding.
-   Only the exact `zkc.run/1` and embedded `zkc.program/2` tags are admitted.
+   Only the exact `zkc.run` and embedded `zkc.program` tags are admitted.
 
 3. Native random-service queries in loop frames use the same program contract,
    retaining the entry/loop frame, service-port and method checks.
@@ -134,7 +134,7 @@ cumulative work, context binding and cleanup.
 It compares normal, unsimplified, storage-release and combined modes. Canonical
 altered messages must reach the authored guard or terminal predicate; malformed
 frames remain typed decode stops. Independent [bundle controls](../../crates/zkc-tools/tests/run.rs)
-cover exact version matching, nested records and alternatives, dynamic leaves,
+cover exact tag and record matching, nested records and alternatives, dynamic leaves,
 actual replacements, wire limits and pending-message cleanup.
 
 [Cross-language tests](../../tests/protocol/test_native_mathematical.py) also run

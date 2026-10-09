@@ -79,7 +79,7 @@ impl Backend for Store {
 }
 fn artifact(body: Json, functions: Json) -> Json {
     json!([
-        "zkc.program/2",
+        "zkc.program",
         [],
         functions,
         [[
@@ -319,7 +319,7 @@ fn bounded_local_condition_skips_unreached_iterations() {
                 .unwrap_err();
             assert!(error.to_string().contains("local-control-yield"));
             changed = program.clone();
-            changed[0] = json!("zkc.participants/1");
+            changed[0] = json!("invalid.program");
             assert!(
                 admit_supplied(&serde_json::to_vec(&changed).unwrap(), &Store::default()).is_err()
             );
@@ -328,18 +328,13 @@ fn bounded_local_condition_skips_unreached_iterations() {
 }
 
 #[test]
-fn false_exits_preserve_every_iteration_and_legacy_records_refuse() {
+fn false_exits_preserve_iterations_and_malformed_records_refuse() {
     let mut r = runner(true, false, None, 1000);
     while r.advance_local_control().unwrap() {}
     assert!(matches!(r.poll(), Action::Returned(_)));
     assert_eq!(r.usage().iterations, 12);
     assert!(r.early_return().is_none());
-    for tag in [
-        "zkc.participants/1",
-        "zkc.native-participants/1",
-        "zkc.native-participants/2",
-        "zkc.native-participants/3",
-    ] {
+    for tag in ["invalid.program", ""] {
         let mut program = artifact(body(false), json!([]));
         program[0] = json!(tag);
         assert!(admit_supplied(&serde_json::to_vec(&program).unwrap(), &Store::default()).is_err());
@@ -357,7 +352,7 @@ fn false_exits_preserve_every_iteration_and_legacy_records_refuse() {
 }
 
 #[test]
-fn removed_source_participant_forms_cannot_enter_native_execution() {
+fn extra_participant_fields_and_malformed_instructions_refuse() {
     let base = artifact(body(false), json!([]));
     for parameters in [json!([["n", "2"]]), json!([["n", ["ingress", "8", []]]])] {
         let mut program = base.clone();

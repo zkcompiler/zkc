@@ -400,7 +400,7 @@ commands.run(
 
 def relation(columns, outputs, inputs, rows):
     return [
-        "zkc.relation.r1cs/1",
+        "zkc.relation.r1cs",
         "bls12-381.fr",
         str(columns),
         str(outputs),

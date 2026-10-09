@@ -1,5 +1,5 @@
 {
-  "profile": "zkc.contract-facet-comparison/1",
+  "profile": "zkc.contract-facet-comparison",
   "consumer_fields": {
     "cpp": [
       "history",

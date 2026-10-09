@@ -72,7 +72,7 @@ impl Writer<'_> {
             ])
         };
         let template = tree(&json!([
-            "zkc.native-origin-template/1",
+            "zkc.native-origin-template",
             self.entry,
             path,
             [],
@@ -83,7 +83,7 @@ impl Writer<'_> {
             hex(&template)
         ])));
         tree(&json!([
-            "zkc.native-origin/2",
+            "zkc.native-origin",
             self.entry,
             path,
             coordinates,

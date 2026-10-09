@@ -36,8 +36,6 @@ compact regions use the maintained generic artifact checker. This example adds
 no phase policy, cryptographic security claim or native correctness theorem.
 
 The [typed language](Language.lean) fixes the representation and provider laws.
-Earlier native differential controls covered invalid replies and well-shaped
-replies that violated a provider's value law. Those controls are historical,
-unmaintained evidence; the native library route has been retired. A Lean typed
+A native provider needs a separate connection to these laws. A Lean typed
 reply cannot contain a malformed value merely to reproduce a host error as a
 logical stop.

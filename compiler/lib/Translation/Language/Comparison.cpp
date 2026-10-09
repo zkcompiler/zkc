@@ -964,7 +964,7 @@ public:
       std::string kind, key, revision;
       switch (definition.kind) {
       case RelationDefinition::Kind::Formula: {
-        kind = "zkc.language.formula/1";
+        kind = "zkc.language.formula";
         key = decl.symbol;
         auto helper = symbols.getSymbolTable(native).lookup<mlir::func::FuncOp>(
             formulaSymbol(decl));
@@ -983,8 +983,8 @@ public:
       case RelationDefinition::Kind::R1CS:
       case RelationDefinition::Kind::AIR:
         kind = definition.kind == RelationDefinition::Kind::R1CS
-                   ? "zkc.relation.r1cs/1"
-                   : "zkc.relation.air/1";
+                   ? "zkc.relation.r1cs"
+                   : "zkc.relation.air";
         key = project.project().assets()[*definition.asset].identity().str();
         revision = "1";
         break;

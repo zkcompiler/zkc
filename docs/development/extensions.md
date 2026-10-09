@@ -56,7 +56,7 @@ unrelated structure valid.
 
 ## Runtime and native implementation
 
-All executable extensions use `zkc.program/2` and the shared Runner. Update C++
+All executable extensions use `zkc.program` and the shared Runner. Update C++
 export and Rust admission for the same exact type/control contract. Hosts retain
 their application responsibilities: authenticated identity, input and setup
 binding, limits, failure reports, cleanup and publication.
@@ -65,7 +65,7 @@ A backend implements the operation's mathematical and representation contracts,
 including malformed input, capacity and partial failure. Test against independent
 expectations from original inputs. Identical schemas and two consumers agreeing
 on the same wrong artifact do not establish source correctness. Native exact
-identity remains authoritative; the single `/5` proof contract adds admission
+identity remains authoritative; the native proof contract adds admission
 and authority requirements to the shared executable.
 
 Domain and kernel contributions remain explicit extensions: declarations need

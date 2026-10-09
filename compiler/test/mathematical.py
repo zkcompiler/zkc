@@ -266,7 +266,7 @@ negative += [
     ("empty common region", empty, "mathematical-formation"),
     ("recursive helper", recursive, "mathematical-formation"),
     ("opaque helper", opaque, "mathematical-formation"),
-    ("finite legacy field is outside this profile", mixed.replace('bls12-381.fr','f7'), "mathematical-formation"),
+    ("uninstalled field is outside this profile", mixed.replace('bls12-381.fr','invalid.field'), "unknown-domain"),
     ("called helper must be private", mixed.replace('private @helper','@helper'), "mathematical-formation"),
     ("unavailable explicit restriction", receives.replace('%one = protocol.exchange', f'%n = protocol.restrict_roles %a {{roles=["Bob"]}} : {F}\n%one = protocol.exchange'), "mathematical-formation"),
 ]

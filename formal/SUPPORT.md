@@ -36,9 +36,8 @@ represented member execution, retaining ingress failures and observations.
 
 The Std-only iteration API proves prefix composition, terminal stability,
 per-body admission/bound transport and complete simulation. The optional
-`iteration-reference` tool exercises this model. Earlier Rust controller and
-resource-retirement comparisons are historical, unmaintained evidence; they do
-not establish correspondence with the current Runner or its resource store.
+`iteration-reference` tool exercises this model. These laws do not establish
+correspondence with the native Runner or its resource store.
 Finite probability laws preserve stopped mass and bound retry tails under
 explicit reached-law assumptions. They prove no concrete protocol's retry rate,
 eventual production or cryptographic security.
@@ -73,8 +72,7 @@ locals instantiate finite typed branches/iterations after reading runtime bounds
 mathematical/RNG/nonce/transcript-state services, explicit group/hash/PCS contracts
 and interpreter-owned PCS custody. A separate source-checked physical local
 interpreter models payload budgets and consuming failures. Raw elaboration
-adequacy and current native correspondence remain unproved. Earlier comparisons
-with retired executors are historical, unmaintained evidence.
+adequacy and current native correspondence remain unproved.
 
 | Capability | Definitions and laws | Consumer and scope |
 |---|---|---|
@@ -319,8 +317,7 @@ actual checked region and proves call/return permission; maintained artifact
 tests exercise both. The table application supplies
 [all-reply summary laws](Examples/TableProtocol/Admission.lean) and
 [artifact permission instances](Tests/TableAdmission.lean). These are model-specific
-artifact laws; the retired native table certificate consumer supplies no current
-execution route.
+artifact laws; they do not establish native execution correspondence.
 
 The finite phase checker joins both branch exits without refining their guards.
 The source's validity-dependent challenge branch therefore uses its proved
@@ -428,8 +425,8 @@ and do not measure maturity.
 The [implementation obligations](design/native-obligations.md) describe future
 MLIR/Rust correspondence work; [implementation status](../docs/status.md) records
 the supported native path. The laws in this library do not themselves prove its
-optimizer, storage runtime or protocol executor. Lean migration is deferred and
-is not a native implementation or compatibility gate.
+optimizer, storage runtime or protocol executor. Native claims require an
+explicit interpretation and correspondence.
 
 The [research agenda](design/formal-questions.md) retains automatic phase-sensitive
 analysis/projection, stronger probability/security transport, FS/duplex/QROM,
@@ -450,9 +447,8 @@ polynomial arithmetic; generic PairingField/G1/G2 formation and source-relative
 endpoint checks; exact matrix identity serialization; and bounded slicing.
 Pairing/group validity and SHA256 retain the named external-service assumptions.
 
-Independent Lean direct transforms are bounded to 128 cells. The retired
-native relation/membership application is not a reproduction route for this
-model. Native relation generation and raw elaboration adequacy remain separate.
+Independent Lean direct transforms are bounded to 128 cells. Native relation
+generation and raw elaboration adequacy remain separate.
 
 ## External representation and schedule boundaries
 
@@ -465,8 +461,7 @@ table adapters; each adapter needs its own representation argument.
 `Tools.Interactive.ExternalReference` is an independently executable schedule
 reference for modeled external Monero/OpenVM transitions. It computes
 state-envelope checks and transition order, using explicit trusted replies for
-exact versioned hash/permutation requests. Earlier native checkpoints are
-historical, unmaintained finite evidence. No primitive security proof, complete
+exact versioned hash/permutation requests. No primitive security proof, complete
 BP+/OpenVM verification or native resource refinement is claimed. Input-selected carrier
 execution likewise reuses the family/count laws without a proved raw-to-typed
 elaboration of the serialized input.

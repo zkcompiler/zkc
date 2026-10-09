@@ -286,7 +286,7 @@ fn run_reduction(
 // This client consumes the exact compiler-owned pair and connector. Hashes bind
 // bytes across the two results; they do not authenticate a forged report.
 fn pair_metadata(a: &serde_json::Value, b: &serde_json::Value) -> Option<Vec<(usize, usize)>> {
-    if a["format"] != "zkc.checked-run/1" || b["format"] != "zkc.checked-run/1" {
+    if a["format"] != "zkc.checked-run" || b["format"] != "zkc.checked-run" {
         return None;
     }
     let left = &a["correspondence"];

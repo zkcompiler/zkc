@@ -16,7 +16,7 @@ impl ProverKey {
         self.inner.material_fingerprint
     }
 
-    /// Encode public proving material with the v1 envelope, kind 4, and
+    /// Encode public proving material with the fixed envelope, kind 4, and
     /// fixed-width compressed points. No witness or opening state is included.
     /// Row lengths are implicit in the positive arity; there are no Vec lengths.
     pub fn to_bytes(&self, bounds: &Bounds) -> Result<Vec<u8>, Error> {

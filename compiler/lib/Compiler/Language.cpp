@@ -102,7 +102,7 @@ const Limits &CheckedOriginal::admissionLimits() const {
 std::string compilerToolchainIdentity() {
   static const std::string identity = [] {
     std::string material;
-    frame(material, "zkc.language-toolchain/1");
+    frame(material, "zkc.language-toolchain");
     frame(material, installedCatalogIdentity());
     frame(material, ZKC_BUILD_ID);
     frame(material, ZKC_LLVM_VERSION);
@@ -215,7 +215,7 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
   storage->toolchain = compilerToolchainIdentity();
   storage->interface = interface.str();
   std::string mapIdentity;
-  frame(mapIdentity, "zkc.language-locations/1");
+  frame(mapIdentity, "zkc.language-locations");
   frame(mapIdentity, entry.project().capture().identity());
   frame(mapIdentity, storage->identity);
   for (const auto &location : storage->report.locations) {
@@ -343,7 +343,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
     auto selected = compiled->policy;
     selected.draws.clear();
     if (!descriptor || descriptor->size() != 6 ||
-        (*deployment)[0].getAsString() != "zkc.native-proof/5" ||
+        (*deployment)[0].getAsString() != "zkc.native-proof" ||
         (*deployment)[1].getAsString() != original.identity() ||
         encodeNativeProofPolicy(selected) !=
             encodeNativeProofPolicy(selection) ||

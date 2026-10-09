@@ -26,7 +26,7 @@ for family in ["product", "cubic", "authored", "structured"]:
                 source, policy = OUT / (name + ".mlir"), OUT / (name + ".policy")
                 source.write_text((FIXTURES / (fixture + ".mlir")).read_text())
                 selected = [
-                    "zkc.native-proof-policy/5",
+                    "zkc.native-proof-policy",
                     "main",
                     "P",
                     "V",
@@ -43,8 +43,8 @@ for family in ["product", "cubic", "authored", "structured"]:
                     [compiler, "protocol-proof", source, policy, *options]
                 )
                 envelope = json.loads(result)
-                assert envelope[0] == "zkc.native-proof/5"
-                assert envelope[2][0] == "zkc.native-proof-descriptor/5"
+                assert envelope[0] == "zkc.native-proof"
+                assert envelope[2][0] == "zkc.native-proof-descriptor"
                 (OUT / (name + ".deployment")).write_text(result)
                 manifest.append(dict(name=name, family=family))
 (OUT / "manifest.json").write_text(json.dumps(manifest))
@@ -64,10 +64,10 @@ for complete in ("true", "false"):
             [compiler, 'protocol-proof', src, OUT / 'authored_0.policy']))
 
 
-with case("retired policy refuses PCS deployments"):
+with case("unknown policy tag refuses PCS deployments"):
     selected = json.loads((OUT / "product_0.policy").read_text())
-    selected[0] = "zkc.native-proof-policy/3"
-    policy = OUT / "old.policy"
+    selected[0] = "invalid.native-proof-policy"
+    policy = OUT / "unknown-tag.policy"
     policy.write_text(json.dumps(selected))
     commands.run([compiler, "protocol-proof", OUT / "product_0.mlir", policy], refuses="native-proof-policy")
 
@@ -99,7 +99,7 @@ module { "protocol.module"() ({
  }) {sym_name="main",function_type=(!pk,i1)->i1,roles=["P","V"],input_roles=[["P"],["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 ''')
-    policy.write_text(json.dumps(["zkc.native-proof-policy/5", "main", "P", "V", "0", "", "", ["1"], []]))
+    policy.write_text(json.dumps(["zkc.native-proof-policy", "main", "P", "V", "0", "", "", ["1"], []]))
     commands.run([compiler, "protocol-proof", src, policy], refuses="native-proof-setup-coverage")
 
 with case("source checking retains terminal and construction provenance"):
@@ -108,7 +108,8 @@ with case("source checking retains terminal and construction provenance"):
     candidate = OUT / "constructed.mlir"
     candidate.write_text(original)
     commands.run([compiler, "protocol-check-proof", src, policy, candidate])
-    candidate.write_text(original.replace("zkc.native-construction/5", "zkc.native-construction/3"))
+    assert "zkc.native-construction" in original
+    candidate.write_text(original.replace("zkc.native-construction", "invalid.native-construction"))
     commands.run([compiler, "protocol-check-proof", src, policy, candidate], refuses="native-proof-candidate")
     candidate.write_text(original.replace("maximum = 8 : i64", "maximum = 9 : i64"))
     assert candidate.read_text() != original
@@ -133,10 +134,10 @@ with case("source checking preserves the terminal acceptance dependency"):
     commands.run([compiler, "protocol-check-proof", src, policy, candidate],
                  refuses="native-proof-correspondence")
 
-with case("retired policy refuses private PCS operands"):
+with case("unknown policy tag refuses before private PCS admission"):
     selected = json.loads((OUT / "unused-key.policy").read_text())
-    selected[0] = "zkc.native-proof-policy/3"
-    policy = OUT / "private-old.policy"
+    selected[0] = "invalid.native-proof-policy"
+    policy = OUT / "private-unknown-tag.policy"
     policy.write_text(json.dumps(selected))
     commands.run([compiler, "protocol-proof", OUT / "unused-key.mlir", policy], refuses="native-proof-policy")
 

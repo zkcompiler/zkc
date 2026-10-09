@@ -35,11 +35,14 @@ fn strict_capacity_record_and_hard_ceilings() {
     let mut extra = default.clone();
     extra.as_array_mut().unwrap().push(json!("unknown"));
     assert!(parse(&extra).is_err());
-    let mut version = default.clone();
-    version[0] = json!("zkc.native-capacity/1");
-    assert_eq!(parse(&version).unwrap_err(), "native-capacity-format");
-    let mut legacy_work = default.clone();
-    legacy_work[5].as_array_mut().unwrap().push(json!("0"));
-    assert!(parse(&legacy_work).is_err());
+    let mut unknown_format = default.clone();
+    unknown_format[0] = json!("invalid.native-capacity");
+    assert_eq!(
+        parse(&unknown_format).unwrap_err(),
+        "native-capacity-format"
+    );
+    let mut extra_work_field = default.clone();
+    extra_work_field[5].as_array_mut().unwrap().push(json!("0"));
+    assert!(parse(&extra_work_field).is_err());
     assert!(NativeCapacity::parse(&vec![b' '; 4097]).is_err());
 }

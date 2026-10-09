@@ -11,8 +11,7 @@ results. These fixtures are shared by backend tests and native transcript exampl
 No compiler or Lean checker is launched by this support crate.
 
 `fixtures/native-proof-binding.json` fixes one native proof invocation tree and
-its literal binary encoding, SHA-256 digest and byte length, with the retired
-binding retained only as a rejection control. The bytes were independently
+its literal binary encoding, SHA-256 digest and byte length. The bytes are independently
 framed from the specified array/string preorder grammar (one tag byte, an
 eight-byte little-endian count, then contents), without a compiler or runtime
 serializer. Host tests compare actual prepared bytes and proof headers to this

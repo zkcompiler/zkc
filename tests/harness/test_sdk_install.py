@@ -185,8 +185,8 @@ if(TARGET Zkc::Transforms OR TARGET Zkc::Compiler)
   message(FATAL_ERROR "IR discovery imported upward components")
 endif()
 find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS Compiler)
-if(TARGET Zkc::Driver OR TARGET Zkc::NativeCompiler)
-  message(FATAL_ERROR "Compiler acquired CLI or retired ownership")
+if(TARGET Zkc::Driver OR TARGET Zkc::zkc-opt)
+  message(FATAL_ERROR "Compiler imported CLI targets")
 endif()
 find_package(ZkcCompiler REQUIRED CONFIG)
 if(NOT ZkcCompiler_Tools_FOUND OR NOT TARGET Zkc::zkc-tblgen)
@@ -247,7 +247,6 @@ endif()
 
 @pytest.mark.parametrize("components,message,options", [
     ("COMPONENTS Unknown", "Unknown ZkcCompiler component: Unknown", ["-DCMAKE_DISABLE_FIND_PACKAGE_LLVM=TRUE"]),
-    ("COMPONENTS NativeCompiler", "Unknown ZkcCompiler component: NativeCompiler", []),
     ("COMPONENTS program", "Unknown ZkcCompiler component: program", []),
     ("COMPONENTS IR", "Dependencies unavailable for ZkcCompiler component: IR", ["-DCMAKE_DISABLE_FIND_PACKAGE_MLIR=TRUE"]),
     ("COMPONENTS Program", "Dependencies unavailable for ZkcCompiler component: Program", ["-DCMAKE_DISABLE_FIND_PACKAGE_LLVM=TRUE"]),

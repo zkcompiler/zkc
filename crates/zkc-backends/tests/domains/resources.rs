@@ -73,7 +73,7 @@ fn canonical_transcript_observations_match_direct_merlin_and_suite_reduction() {
                 &["c".into(), "t2".into()],
             );
             let encoded = b.encode_native_value(&value).unwrap();
-            let mut direct = merlin::Transcript::new(b"zkc.artifact/1");
+            let mut direct = merlin::Transcript::new(b"zkc.artifact");
             direct.append_message(b"binding", &root);
             direct.append_message(b"origin", &native_origin("message", "message", false));
             direct.append_message(b"value", &encoded);

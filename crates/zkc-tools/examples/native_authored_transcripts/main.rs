@@ -63,7 +63,7 @@ fn inputs(envelope: &Json, values: &[Value], producing: bool) -> Json {
         })
         .collect();
     json!([
-        "zkc.native-proof-inputs/1",
+        "zkc.native-proof-inputs",
         public,
         ports,
         "617574686f726564",

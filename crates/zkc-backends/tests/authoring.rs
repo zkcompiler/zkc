@@ -170,11 +170,11 @@ fn unused_retained_bindings_still_require_independent_physical_admission() {
     assert_eq!(error.code, ErrorCode::Signature);
 }
 #[test]
-fn retired_msm_is_uninstalled_and_bindings_cannot_add_authority_facets() {
+fn unknown_implementations_and_extra_authority_facets_are_refused() {
     let b = OperationBinding {
         contract: "curve.msm".into(),
         arguments: vec!["ristretto255.group".into()],
-        implementation: "dalek-vartime/curve.msm".into(),
+        implementation: "invalid/curve.msm".into(),
     };
     assert!(b.signature().is_err());
     assert!(backend(Policy::default()).binding_signature(&b).is_none());

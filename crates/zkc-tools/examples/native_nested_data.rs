@@ -157,7 +157,7 @@ fn inputs(
         .map(|p| json!([p[0], "1"]))
         .collect();
     json!([
-        "zkc.native-proof-inputs/1",
+        "zkc.native-proof-inputs",
         public,
         ports,
         "",
@@ -205,7 +205,7 @@ fn main() {
     std::fs::write(
         directory.join("nested.setups.json"),
         serde_json::to_vec(&json!([
-            "zkc.native-setup-authority/1",
+            "zkc.native-setup-authority",
             [["2", hex(&keys.verifier_key().metadata().key_id())]],
             [["1", "2"], ["3", "2"]]
         ]))
@@ -260,7 +260,7 @@ fn main() {
                 assert_eq!(&proof[8..40], &Sha256::digest(&root)[..]);
                 let mut t = reference::Transcript::new(envelope[2][1][5].as_str().unwrap(), &root);
                 let origin = |event: Json| {
-                    reference::tree(&json!(["zkc.native-origin/2", "main", [], [], event]))
+                    reference::tree(&json!(["zkc.native-origin", "main", [], [], event]))
                 };
                 t.absorb(
                     b"origin",

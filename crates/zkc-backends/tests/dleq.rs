@@ -140,11 +140,11 @@ fn validator() -> Vec<u8> {
 fn root(bases: &Value, publics: &Value, context: &str, backend: &NativeBackend) -> Vec<u8> {
     use zkc_test_support::hex;
     // A bounded TEST root with explicit statement and configuration bytes;
-    // Main supplies the admitted-source/descriptor root in the actual driver.
+    // The proof Host supplies the admitted source and descriptor in execution.
     zkc_runtime::logical::encode_tree(&json!([
         "DLEQ-test-root",
-        "source-fixture-v1",
-        "descriptor-fixture-v1",
+        "source-fixture",
+        "descriptor-fixture",
         context,
         hex(&backend.encode_native_value(bases).unwrap()),
         hex(&backend.encode_native_value(publics).unwrap()),
@@ -226,7 +226,7 @@ fn standalone_runner_dleq_honest_false_statement_proof_and_context() {
         rs.as_ref(),
         &[g.scale(Scalar::from(11)), g.scale(Scalar::from(33))]
     );
-    // Prior research public nonce point fixture (k=11), independent frozen bytes.
+    // Public nonce point fixture (k=11), independent frozen bytes.
     assert_eq!(
         zkc_test_support::hex(&rs[0].to_bytes().unwrap()),
         "80fd75ebcc0a21649e3177bcce15426da0e4f25d6828fbf4038d4d7ed3bd4421de3ef61d70f794687b12b2d571971a55"

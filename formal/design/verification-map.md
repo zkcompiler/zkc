@@ -3,8 +3,8 @@
 This research design develops a future implementation connection for the
 [library](../DESIGN.md). It does not replace the
 [specification](../../docs/spec/README.md) or establish current native
-correspondence. The optional formal tools and formats impose no native
-compatibility or migration gate.
+correspondence. The optional formal tools and formats have independent semantic
+subjects.
 
 The [integrated roadmap](../../docs/roadmap.md) owns current delivery scope and
 sequencing; [support](../SUPPORT.md) records the formal capabilities these
@@ -17,7 +17,7 @@ connection must relate actual source and emitted program data to those meanings,
 then relate execution to explicit backend contracts. Differential tests and
 selected implementation proofs can support different, precisely scoped claims;
 the [native correspondence policy](../../docs/assurance.md#6-native-correspondence-policy)
-does not treat old reference checks as current execution evidence.
+requires an explicit connection to current execution.
 
 | Document | Question answered |
 |---|---|
@@ -27,7 +27,7 @@ does not treat old reference checks as current execution evidence.
 | [References](sources.md) | Primary references behind these chapters, and the limits of what they establish |
 
 The supported execution path is `.zkc` Language → mathematical MLIR
-(`protocol`, `participant`, `exec`, `physical`) → `zkc.program/2` → common Rust
+(`protocol`, `participant`, `exec`, `physical`) → `zkc.program` → common Rust
 Runner and Entry/proof/run Hosts. Formal checking is optional and independent.
 A generated-code route would be separate future work with its own evidence.
 
@@ -36,7 +36,7 @@ A generated-code route would be separate future work with its own evidence.
 ```mermaid
 flowchart TD
   U[.zkc Language] --> M[Mathematical MLIR]
-  M --> C[zkc.program/2]
+  M --> C[zkc.program]
   C --> R[Common Rust Runner and Hosts]
   R --> B[Backend kernels and external primitives]
   B --> X[Actual execution and observations]

@@ -20,7 +20,7 @@ report_path = OUT / "view.json"
 
 def requirement(bound, service, sites, prover="Prover", verifier="Checker"):
     return {
-        "format": "zkc.public-coin-requirement/1",
+        "format": "zkc.public-coin-requirement",
         "entry": "main",
         "prover": prover,
         "verifier": verifier,
@@ -48,7 +48,7 @@ def checked(name, text, req, *flags):
             "protocol-checked-bundle", text, f"--public-coin={requirement_path}", *flags
         )
     )
-    assert result["format"] == "zkc.checked-run/1"
+    assert result["format"] == "zkc.checked-run"
     record = result["public_coin"]
     assert record["source_sha256"] == hashlib.sha256(text.encode()).hexdigest()
     assert (
@@ -124,7 +124,7 @@ assert (
 # The selected relation is unsatisfiable for every w. A statement-only future
 # hash leaves w adaptive: residual sum = (1-tau)(w-1)+tau(w-2) = w-1-tau.
 asset = [
-    "zkc.relation.r1cs/1",
+    "zkc.relation.r1cs",
     "bls12-381.fr",
     "2",
     "0",
@@ -283,7 +283,7 @@ assert (
             report_path,
         ]
     )["format"]
-    == "zkc.public-coin-checked/1"
+    == "zkc.public-coin-checked"
 )
 for change in [
     lambda v: v["draws"][0].update(prefix_length=1),

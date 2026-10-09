@@ -55,8 +55,7 @@ int main() {
       auto bundle = json::parse(result.bundle);
       require(bool(bundle), "bundle is not JSON");
       auto *object = bundle->getAsObject();
-      require(object && object->getString("format") == "zkc.run/1",
-              "bundle version");
+      require(object && object->getString("format") == "zkc.run", "bundle tag");
       auto *steps = object->getArray("steps");
       require(steps && steps->size() == 2,
               "guard became a demand prefix or was erased");

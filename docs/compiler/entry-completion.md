@@ -73,7 +73,7 @@ state from the reached trial. It completes this local loop only.
 
 [Runtime controls](../../crates/zkc-runtime/src/interactive/control_tests.rs)
 exercise flat/nested exits, continuing affine values, wrong control coordinates,
-legacy and malformed records, empty/early-ending local loops, iteration budgets,
+unknown tags and malformed records, empty/early-ending local loops, iteration budgets,
 and injected failures at every returned frame and root result retention.
 
 [Native attempts](../../compiler/test/native_attempts.py) and their

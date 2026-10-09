@@ -57,8 +57,9 @@ search, consistency of arbitrary assumptions, or existence of a native instance.
 
 ## Requirement certificate carrier
 
-The bounded replay interface accepts one request format and one certificate
-format:
+The independent Lean replay interface accepts one request format and one
+certificate format. These model-specific tags are defined by its
+[transport](../../../../formal/Tools/RequirementChecker/Transport.lean):
 
 ```text
 ["zkc.requirements/1", terms, assumptions, implications, goals]
@@ -66,7 +67,7 @@ format:
 ```
 
 Terms are `[null, name]` roots, `[parent_index, member]` projections and
-`["apply", head, child_indices]` applications. Any other version name refuses.
+`["apply", head, child_indices]` applications. Unknown tags refuse.
 Term indices refer only to earlier entries, including every ordered application
 child. Exact duplicate terms refuse; repeated children within one application
 are allowed. Heads, roots and members are nonempty UTF-8 strings of at most 256

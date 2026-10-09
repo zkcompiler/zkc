@@ -15,7 +15,7 @@ Expected<EntryPackage> packageEntry(const CompiledEntry &entry,
   BoundedStream stream(bytes, byteLimit);
   json::OStream out(stream);
   out.object([&] {
-    out.attribute("format", "zkc.entry/1");
+    out.attribute("format", "zkc.entry");
     out.attribute("original", entry.original().bytes());
     out.attribute("interface", entry.original().interfaceJson());
     out.attribute("artifact", entry.bytes());

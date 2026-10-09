@@ -218,8 +218,8 @@ struct MetadataVerifier {
       constructedActions = construction.getAs<ArrayAttr>("actions");
       if (!keys(construction,
                 {"format", "transcript", "removed_services", "actions"}) ||
-          !format || format.getValue() != "zkc.native-construction/5" ||
-          !state || !removed || removed.size() != 1 || !constructedActions)
+          !format || format.getValue() != "zkc.native-construction" || !state ||
+          !removed || removed.size() != 1 || !constructedActions)
         return refuse(record, "invalid native construction mapping");
       auto capability = dyn_cast<local::CapabilityType>(state.getValue());
       if (!capability || !capability.getKind().starts_with("transcript:") ||

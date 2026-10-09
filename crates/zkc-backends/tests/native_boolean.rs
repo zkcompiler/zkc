@@ -7,7 +7,7 @@ use zkc_runtime::interactive::{Action, Runner, StopKind, ValueBudget, admit_supp
 
 fn candidate(value: bool) -> Json {
     json!([
-        "zkc.program/2",
+        "zkc.program",
         [],
         [[
             "function",
@@ -104,10 +104,12 @@ fn formats_shapes_context_and_names_are_independently_checked() {
     let backend = ark_backend(None);
     let refused =
         |value: Json| assert!(admit_supplied(&bytes(&value), &backend).is_err(), "{value}");
-    let mut legacy = candidate(true);
-    legacy[0] = json!("zkc.participants/1");
-    legacy[3][0].as_array_mut().unwrap().pop();
-    refused(legacy);
+    let mut unknown_format = candidate(true);
+    unknown_format[0] = json!("invalid.program");
+    refused(unknown_format);
+    let mut missing_services = candidate(true);
+    missing_services[3][0].as_array_mut().unwrap().pop();
+    refused(missing_services);
     for literal in [json!("true"), json!(1), Json::Null, json!([]), json!({})] {
         let mut value = candidate(true);
         value[2][0][4][0][3] = literal;
@@ -356,7 +358,7 @@ fn program_service_query_executes_and_releases_its_lease() {
         .unwrap();
     let field = "field:bls12-381.fr@arkworks.fr/1";
     let carrier = json!([
-        "zkc.program/2",
+        "zkc.program",
         [],
         [],
         [[
@@ -392,9 +394,9 @@ fn program_service_query_executes_and_releases_its_lease() {
         (state.generation, state.draw_count, state.budget),
         (1, 1, 0)
     );
-    let mut retired = carrier;
-    retired[0] = json!("zkc.service-participants/1");
-    let error = admit_supplied(&bytes(&retired), runner.backend())
+    let mut unknown_format = carrier;
+    unknown_format[0] = json!("invalid.program");
+    let error = admit_supplied(&bytes(&unknown_format), runner.backend())
         .err()
         .unwrap();
     assert_eq!(error.code, zkc_runtime::interactive::ErrorCode::Record);
@@ -405,7 +407,7 @@ fn program_service_query_executes_and_releases_its_lease() {
 fn program_iteration_exhaustion_preserves_the_attempted_loop_coordinate() {
     use zkc_runtime::interactive::{PathElement, WorkBudget};
     let carrier = json!([
-        "zkc.program/2",
+        "zkc.program",
         [],
         [],
         [[

@@ -32,7 +32,7 @@ lake build table-protocol Tests.TableProtocolAudit
 ```
 
 Exact direct lowering is checked over decoded source and plan in this example's
-own format. The native table executor has been retired. Compiler decoding, Rust
+own format. Compiler decoding, Rust
 allocation/kernels, challenge randomness and native code generation remain
 outside these formal laws.
 

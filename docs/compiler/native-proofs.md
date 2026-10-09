@@ -81,7 +81,7 @@ mathematics. Ordinary projection already performs the required specialization.
 
 Projection metadata is not sufficient by itself: retain the original source and
 recompute its dependency/occurrence view when checking the candidate. The
-construction changes the interface. `protocol.projection` carries a versioned
+construction changes the interface. `protocol.projection` carries a checked
 construction map alongside immutable original interfaces/actions and checked
 input/result/action substitutions for the actual candidate. Ordinary projection verification
 still applies when this map is absent. Constructed-profile formation verifies
@@ -110,11 +110,12 @@ operations or unrealized casts cannot slip through a partial conversion.
 
 ## Policy and formats
 
-`zkc.native-proof-policy/5` is the sole proof policy for flat programs, bounded
+`zkc.native-proof-policy` is the sole proof policy for flat programs, bounded
 loops, PCS, structured messages and authored execution. Deployment, descriptor,
-construction metadata and invocation binding also use `/5`. Every proof embeds
-`zkc.program/2`; joint execution uses `zkc.run/1`. This is one proof contract
-within the four IR profiles. Other proof versions have no compatibility reader.
+construction metadata and invocation binding each have one current schema.
+Every proof embeds `zkc.program`; joint execution uses `zkc.run`. This is one
+proof contract within the four IR profiles. Unknown tags and malformed records
+refuse independently.
 
 Generated transcripts use `transcript.native.indexed.challenge` and
 `transcript.native.indexed.observe.data`, with explicit indexed origins even for
@@ -342,5 +343,5 @@ semantics and cryptographic proofs remain separate work.
 New schemes, dynamic protocol composition, differing-root affine joins and
 broader construction recipes require explicit design and admission rules. Existing [structured data](structured-proofs.md), [nested data](nested-data.md),
 [authored transcripts](authored-transcripts.md), [relation bindings](relation-bindings.md)
-and [entry completion](entry-completion.md) already use this pipeline. [Roadmap](../roadmap.md) records further native work;
-retired source/application consumers impose no porting obligation.
+and [entry completion](entry-completion.md) use this pipeline.
+[Roadmap](../roadmap.md) records further native work.

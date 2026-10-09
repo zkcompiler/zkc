@@ -215,42 +215,9 @@ void identities(MLIRContext &context) {
     check(covered.contains(kernel.key),
           "missing independent oracle: " + kernel.key);
 
-  for (StringRef retired : {"transcript.challenge",
-                            "transcript.draw_index",
-                            "transcript.observe.bool",
-                            "transcript.observe.field",
-                            "transcript.observe.table",
-                            "transcript.observe.point",
-                            "transcript.observe.round",
-                            "transcript.observe.commitment",
-                            "transcript.observe.proof",
-                            "transcript.observe.group",
-                            "transcript.observe.groups",
-                            "transcript.observe.matrix",
-                            "transcript.observe.vector",
-                            "transcript.observe.polynomial",
-                            "transcript.observe.index",
-                            "transcript.observe.indices",
-                            "transcript.observe.commitments",
-                            "transcript.native.challenge",
-                            "transcript.native.observe.bool",
-                            "transcript.native.observe.field",
-                            "transcript.native.observe.group",
-                            "transcript.native.indexed.observe.bool",
-                            "transcript.native.indexed.observe.field",
-                            "transcript.native.indexed.observe.group",
-                            "transcript.native.indexed.observe.index",
-                            "transcript.native.indexed.observe.field_array",
-                            "transcript.native.indexed.observe.commitment",
-                            "transcript.native.indexed.observe.proof"}) {
-    check(protocol::boundOperationName(retired).empty(),
-          "retired transcript contract mapped: " + retired);
-  }
   for (StringRef unknown :
-       {"", "field.sum", "algebra.exec.field_add", "Field.add",
-        "field.add.extra", "table.relayout", "transcript.observe",
-        "transcript.observe.", "transcript.observe.uninstalled",
-        "transcript.observe.field.extra", "transcript.observe_field"}) {
+       {"", "invalid.contract", "algebra.exec.field_add", "Field.add",
+        "field.add.extra", "transcript.native.indexed.observe.data.extra"}) {
     check(protocol::boundOperationName(unknown).empty(),
           "unknown contract mapped: " + unknown);
     for (const auto &row : expected)
@@ -258,8 +225,7 @@ void identities(MLIRContext &context) {
             "operation accepted unknown contract: " + unknown);
   }
   for (StringRef unknown :
-       {"", "table.field_add", "field.add", "pir.uninstalled",
-        "plan.execute_kernel", "crypto.exec.transcript_observe.extra"})
+       {"", "invalid.operation", "field.add", "algebra.exec.field_add.extra"})
     for (const auto &row : expected)
       check(!protocol::operationSupportsContract(unknown, row.contract),
             "unmapped operation accepted contract: " + unknown);

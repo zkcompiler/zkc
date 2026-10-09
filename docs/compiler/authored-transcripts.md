@@ -1,10 +1,9 @@
 # Authored transcript boundaries
 
-Native `/5` deployments execute the existing external hash-chain and duplex
+Native proof deployments execute the external hash-chain and duplex
 operations through ordinary mathematical IR, local functions and the general
 interpreter. The [external construction specification](../spec/realization/external-constructions.md)
-owns their semantics. No new dialect, state type, host constructor or proof
-version is needed for these selected clients.
+owns their semantics.
 
 ## Structure and authority
 
@@ -56,9 +55,8 @@ Round/observation counts include 0, 1, 7, 8, 9, 16 and 64. The OpenVM client
 places a noncanonical candidate after success: no later trial touches it.
 Duplicate unused trials still consume work. State validation covers all 72
 in-range duplex cursor pairs, without attesting reachability. The independently
-selected CLI roles receive only their inputs and the final proof. The existing
-Lean reader refuses the native carrier; native Lean interpretation remains
-separate work.
+selected CLI roles receive only their inputs and the final proof. Native Lean
+interpretation remains separate work.
 
 The retained-prefix client uses deterministic test entropy `[0, 0, 3, 7]`.
 Its attempts consume external work `[65, 65, 130]`, advance one RNG by four draws

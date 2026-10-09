@@ -95,7 +95,7 @@ fn origin(path: Json, kind: &str) -> Vec<u8> {
         .map(|p| p[2].clone())
         .collect::<Vec<_>>();
     tree(&json!([
-        "zkc.native-origin/2",
+        "zkc.native-origin",
         "main",
         frames,
         coordinates,
@@ -109,7 +109,7 @@ fn canonical_field(n: u64) -> Vec<u8> {
     b
 }
 fn direct(root: &[u8], paths: &[Json], value: u64) -> Scalar {
-    let mut m = merlin::Transcript::new(b"zkc.artifact/1");
+    let mut m = merlin::Transcript::new(b"zkc.artifact");
     m.append_message(b"binding", root);
     let mut raw = [0; 64];
     for path in paths {
@@ -636,7 +636,7 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
         let tok = backend
             .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 2, &root())
             .unwrap();
-        let mut m = merlin::Transcript::new(b"zkc.artifact/1");
+        let mut m = merlin::Transcript::new(b"zkc.artifact");
         m.append_message(b"binding", &root());
         m.append_message(b"origin", &origin(json!([]), "message"));
         m.append_message(b"value", &bytes);
@@ -665,14 +665,14 @@ fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
         bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
     let message = tree(&json!([
-        "zkc.native-origin/2",
+        "zkc.native-origin",
         "source_entry",
         [["apply", "source_entry", "application"]],
         [],
         ["message", "Round", "commitment", "commitment", "P", "V"]
     ]));
     let query = tree(&json!([
-        "zkc.native-origin/2",
+        "zkc.native-origin",
         "source_entry",
         [["apply", "source_entry", "application"]],
         [],
@@ -686,7 +686,7 @@ fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
             "V"
         ]
     ]));
-    let mut reference = merlin::Transcript::new(b"zkc.artifact/1");
+    let mut reference = merlin::Transcript::new(b"zkc.artifact");
     reference.append_message(b"binding", &root());
     reference.append_message(b"origin", &message);
     reference.append_message(b"value", &canonical_field(7));
@@ -708,7 +708,7 @@ fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
         let mut program: Json = serde_json::from_slice(&program1()).unwrap();
         for (index, bytes) in [(1, &message), (2, &query)] {
             let mut template = logical::decode_tree(bytes).unwrap();
-            template[0] = json!("zkc.native-origin-template/1");
+            template[0] = json!("zkc.native-origin-template");
             program[2][0][4][index][3] = json!([hex(&tree(&template))]);
         }
         program[3][0][3] = json!(role);

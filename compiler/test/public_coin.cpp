@@ -23,7 +23,7 @@ constexpr StringLiteral fixture = R"(module { "protocol.module"() ({
 {sym_name="main",function_type=(!protocol.service_ref<"random.bls12-381.fr/1">)->i1,roles=["P","V"],input_roles=[["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() })";
 constexpr StringLiteral requirement =
-    R"({"format":"zkc.public-coin-requirement/1","entry":"main","prover":"P","verifier":"V","service":0,"decision":0,"bound_inputs":[],"draws":[{"query_site":"draw","delivery_site":"coin"}]})";
+    R"({"format":"zkc.public-coin-requirement","entry":"main","prover":"P","verifier":"V","service":0,"decision":0,"bound_inputs":[],"draws":[{"query_site":"draw","delivery_site":"coin"}]})";
 constexpr StringLiteral helperPrograms = R"mlir(module { "protocol.module"() ({
   func.func private @conjoin(%x: i1, %y: i1) -> i1 {
     %both = arith.andi %x, %y : i1
@@ -162,7 +162,7 @@ void compareProjection(mlir::MLIRContext &context, StringRef source,
                 "standalone projection failed");
   test::require(print(*standalone) == print(*projected),
                 "standalone/prepared projection disagreement");
-  // Reproduce the former native construction sequence, using current passes.
+  // Compare explicit preparation and projection with the prepared handle.
   // Equality here is bounded fixture evidence, not general pass equivalence.
   auto staged = mlir::parseSourceString<mlir::ModuleOp>(source, &context);
   test::require(bool(staged), "staged source parse");
@@ -228,11 +228,11 @@ int preparationCases() {
                   "preparation missed the later unused observation");
     test::require(print(*original) == before,
                   "failed preparation changed source");
-    mlir::PassManager previous(&context);
-    previous.addPass(protocol::createPrepareProtocolPass(false));
+    mlir::PassManager preparation(&context);
+    preparation.addPass(protocol::createPrepareProtocolPass(false));
     degreeRefusal = false;
-    test::require(failed(previous.run(*original)) && degreeRefusal,
-                  "former native preparation missed the observation");
+    test::require(failed(preparation.run(*original)) && degreeRefusal,
+                  "explicit preparation missed the observation");
     test::require(print(*original) == before,
                   "failed staged preparation changed source");
     // Fix the native refusal for both options without imposing equality of

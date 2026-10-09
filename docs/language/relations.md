@@ -35,6 +35,5 @@ with another. Setup integrity, source encoding adequacy and cryptographic securi
 remain separate obligations from parsing and execution.
 
 [Maintained relation JSON](../../examples/relations/README.md) provides data
-examples. Legacy PIR relation code generation is retired; native import and
-source Assets do not depend on it. The optional LLZK integration supplies a
-generic external relation adapter, not a Groth16 application or fixture package.
+examples. The optional LLZK integration supplies a generic external relation
+adapter.

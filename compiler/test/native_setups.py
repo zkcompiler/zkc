@@ -21,7 +21,7 @@ for suffix, options in [
         policy.write_text(
             json.dumps(
                 [
-                    "zkc.native-proof-policy/5",
+                    "zkc.native-proof-policy",
                     "main",
                     "P",
                     "V",
@@ -121,7 +121,7 @@ with case("derived transcript observes two authorized setups"):
     policy.write_text(
         json.dumps(
             [
-                "zkc.native-proof-policy/5",
+                "zkc.native-proof-policy",
                 "main",
                 "P",
                 "V",

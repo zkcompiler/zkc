@@ -3,7 +3,7 @@ use super::*;
 use crate::host::publication::Outputs;
 pub(crate) fn run(produce: bool, args: &[String]) -> Json {
     let mut report =
-        json!({"format":"zkc.native-proof-run/1", "status":"refused", "phase":"admission"});
+        json!({"format":"zkc.native-proof-run", "status":"refused", "phase":"admission"});
     let result = (|| -> Result<()> {
         let [
             deployment_path,

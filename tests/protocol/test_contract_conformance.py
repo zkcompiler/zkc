@@ -31,10 +31,14 @@ def inventory(toolchain):
     declarations = json.loads(run([
         toolchain.tool("compiler", "zkc-tblgen"), "--dump-contract-declarations",
         "-I", ROOT / "compiler/include", ROOT / "compiler/include/zkc/Contracts/Declarations.td"]))
-    assert declarations["format"] == "zkc.contract-declarations/3"
-    assert all("effect" not in operation for operation in declarations["operations"])
+    assert declarations["format"] == "zkc.contract-declarations"
+    operation_fields = {"name", "scope", "stage", "commonGeneric", "parameters",
+                        "inputs", "outputs", "requirements", "facets"}
+    for operation in declarations["operations"]:
+        assert operation_fields <= operation.keys()
+        assert operation.keys() <= operation_fields | {"derivedCounterpart"}
     catalog = json.loads(run([toolchain.tool("compiler", "test/zkc-contract_inventory-test")]))
-    assert catalog["profile"] == "zkc.contract-catalog/1"
+    assert catalog["profile"] == "zkc.contract-catalog"
     profile = json.loads((FIXTURES / "coverage.json").read_text())
     INVENTORY.dispositions(profile, declarations)
     return declarations, catalog, profile
@@ -94,9 +98,9 @@ def binding(contract, arguments=(), implementation="", physical=False):
             "implementation": implementation, "physical": physical}
 
 
-def atomic_baseline():
-    # Preservation floor, not an exact inventory ceiling: valid additions get
-    # tested from the catalog without rewriting a frozen count/digest fixture.
+def required_atomic_types():
+    # Independent coverage floor for installed atomic types. Additional types
+    # are exercised from the complete catalog below.
     families = {
         "": "bool index indices",
         "bls12-381.fr": "field vector polynomial round matrix table point rng nonce",
@@ -124,7 +128,7 @@ def atomic_baseline():
 def test_atomic_formation_and_properties(inventory, drivers, directory):
     declarations, catalog, profile = inventory
     pairs = {(t["kind"], t["domain"]) for t in catalog["logical_types"]}
-    assert atomic_baseline() <= pairs, "lost historical logical pairs"
+    assert required_atomic_types() <= pairs, "missing required logical types"
     assert len(pairs) == len(catalog["logical_types"]), "duplicate catalog pairs"
     candidates = pairs | {(kind, domain["identity"])
                           for kind in profile["types"]["atomic"]
@@ -733,7 +737,7 @@ def expected_facets(operation, group, declarations, policy):
 def test_declared_semantic_facets(inventory, drivers, directory):
     declarations, _, profile = inventory
     policy = json.loads((FIXTURES / "facet-policy.json").read_text())
-    assert policy["profile"] == "zkc.contract-facet-comparison/1"
+    assert policy["profile"] == "zkc.contract-facet-comparison"
     assert policy["consumer_fields"].keys() == drivers.keys()
     dispositions = INVENTORY.dispositions(profile, declarations)
     expected = {operation["name"]: expected_facets(
@@ -959,7 +963,7 @@ def test_actual_origin_template_admission(drivers, directory):
     def template(kind, *, path=(), port="input_2", entry="main", tail=()):
         event = (["query", "Round", "draw", port, "random.bls12-381.fr/1", "draw", "V"]
                  if kind == "query" else ["message", "Round", "response", "response", "P", "V"])
-        return ["zkc.native-origin-template/1", entry, list(path), list(tail), event]
+        return ["zkc.native-origin-template", entry, list(path), list(tail), event]
 
     query_origin = template("query", path=[["repeat", "main", "rounds"], ["apply", "main", "step"]])
     message_origin = template("message")
@@ -979,9 +983,9 @@ def test_actual_origin_template_admission(drivers, directory):
                        ("space-entry", template("query", entry="has space")),
                        ("nonempty-reserved", template("query", tail=["unexpected"]))]:
         specimens.append(("query", name, [origin_tree(tree).hex()], False))
-    old = deepcopy(query_origin)
-    old[0] = "zkc.native-origin/1"
-    specimens.append(("query", "plain-origin-is-not-template", [origin_tree(old).hex()], False))
+    malformed = deepcopy(query_origin)
+    malformed[0] = "invalid.native-origin-template"
+    specimens.append(("query", "unknown-origin-tag", [origin_tree(malformed).hex()], False))
     cases = []
     for kind, name, attributes, expected in specimens:
         contract = "transcript.native.indexed." + ("challenge" if kind == "query" else "observe.data")
@@ -1042,7 +1046,7 @@ def entry_record(child, *, custody=False, permissions=None, name="Record"):
 
 def entry_request(schema, roles, *, setup=False):
     document = {
-        "format": "zkc.language-interface/7", "capture": "1" * 64,
+        "format": "zkc.language-interface", "capture": "1" * 64,
         "original": sha256(b"conformance original").hexdigest(), "toolchain": "conformance",
         "entry": "test::Main", "protocol": "Main", "relations": [], "job": {"kind": "run"},
         "setups": ([{"name": "setup", "inputs": [{"port": 0, "path": []}]}] if setup else []),
@@ -1153,7 +1157,7 @@ def variant_share_witnesses():
         # No production variant builder supplies this independently authored graph.
         nodes = ["zkc.language", "test::Choice", ["0", "1"], "Empty", [], ["3", "4"],
                  "Value", leaf, ["7"], ["6", "8"], ["5", "9"], ["2", "10"]]
-        spelling = "variant:" + json.dumps(["zkc.variant/1", nodes], separators=(",", ":")).encode().hex()
+        spelling = "variant:" + json.dumps(["zkc.variant", nodes], separators=(",", ":")).encode().hex()
         spellings.append(spelling)
         for multi in (False, True):
             permissions = ["Copy", "Drop", "Share"] if multi else ["Copy", "Drop"]

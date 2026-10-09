@@ -54,17 +54,17 @@ pub(super) fn setups(
     let producer_file = save(
         directory,
         "cli-producer.json",
-        &json!({"format":"zkc.entry-proof/1","public":public,"inputs":producer_values,"setups":material}),
+        &json!({"format":"zkc.entry-proof","public":public,"inputs":producer_values,"setups":material}),
     );
     let verifier_file = save(
         directory,
         "cli-verifier.json",
-        &json!({"format":"zkc.entry-proof/1","public":public,"setups":material}),
+        &json!({"format":"zkc.entry-proof","public":public,"setups":material}),
     );
     let authority_file = save(
         directory,
         "cli-authority.json",
-        &json!({"format":"zkc.entry-setups/1","keys":authority.keys.iter().map(|(k,v)|(k.clone(),hex(v))).collect::<std::collections::BTreeMap<_,_>>()}),
+        &json!({"format":"zkc.entry-setups","keys":authority.keys.iter().map(|(k,v)|(k.clone(),hex(v))).collect::<std::collections::BTreeMap<_,_>>()}),
     );
     let package = directory.join("pcs-setup-Prove.entry");
     let bytes = std::fs::read(&package).unwrap();
@@ -122,7 +122,7 @@ pub(super) fn setups(
     let request = save(
         directory,
         "cli-run.json",
-        &json!({"format":"zkc.entry-run/1","session":"setup_files","roles":{"P":{"inputs":producer_values},"V":{"inputs":verifier_values}},"setups":material}),
+        &json!({"format":"zkc.entry-run","session":"setup_files","roles":{"P":{"inputs":producer_values},"V":{"inputs":verifier_values}},"setups":material}),
     );
     let package = directory.join("pcs-setup-Run.entry");
     let bytes = std::fs::read(&package).unwrap();

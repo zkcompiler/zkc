@@ -2,12 +2,12 @@
 
 This chapter defines complete typed messages and setup authorization for the
 single [native proof contract](native-proofs.md). Flat messages, bounded repeats,
-PCS and nested data all use policy `/5`, `zkc.native-origin/2`, `ZKCPRF01` proof
-framing and `zkc.native-proof-inputs/1` invocation records.
+PCS and nested data all use the native proof policy, `zkc.native-origin`, `ZKCPRF01` proof
+framing and `zkc.native-proof-inputs` invocation records.
 
 ## Complete types
 
-`zkc.program/2` carries these values through the existing protocol, participant,
+`zkc.program` carries these values through the existing protocol, participant,
 exec and physical profiles. Proof admission independently checks message,
 input, key and control restrictions. Program admission alone grants no proof
 deployment authority or transport support in another Host.
@@ -100,7 +100,7 @@ neither authenticity nor the expected coordinate: `oracle.check` consumes the
 actual root, caller-supplied width/height/index, row and path. Merkle leaves
 require no KZG setup; their opening state remains local.
 
-Descriptor codec identity is `zkc.native-data/1` for vectors, group vectors,
+Descriptor codec identity is `zkc.native-data` for vectors, group vectors,
 matrices, indices and recursive containers. Fixed scalar/group, PCS and Merkle
 root/path leaves retain their installed ZKCV codec identities. Matching public ZKCV bytes do not equate descriptor codec identities:
 the descriptor separately binds the exact type, representation and consumer.
@@ -158,7 +158,7 @@ Path-specific authority within a host input is outside this profile.
 The CLI selects this configuration with `--setups=PATH`. The bounded format is:
 
 ```text
-["zkc.native-setup-authority/1",
+["zkc.native-setup-authority",
  [["vk_port", "expected_key_id_hex"], ...],
  [["input_port", "vk_port"], ...]]
 ```
@@ -199,7 +199,7 @@ distinct refusal boundaries.
 
 ## Transcript observation
 
-Derived `/5` construction uses one construction-only contract:
+Derived native proof construction uses one construction-only contract:
 
 ```text
 transcript.native.indexed.observe.data<Suite, CompleteLogicalType>
@@ -234,7 +234,7 @@ Admission matches every declared message origin and complete payload type to
 the actual observer helper, including reverse challenge delivery absent from
 proof bytes. A shared contract name or matching event count is insufficient.
 Forward proof messages also match their actual send/receive type and ordering.
-The unchanged source checker separately checks construction correspondence.
+The source checker separately checks construction correspondence.
 
 ## Scope
 

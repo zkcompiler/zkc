@@ -88,7 +88,7 @@ fn inputs(envelope: &Json, case: &Json, producing: bool) -> Json {
         envelope[2][3].as_array().unwrap().len()
     };
     json!([
-        "zkc.native-proof-inputs/1",
+        "zkc.native-proof-inputs",
         public,
         data,
         "",
@@ -272,13 +272,8 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
     helper[1] = json!("unreachable_transition");
     candidate[2].as_array_mut().unwrap().push(helper);
     admitted_mutation_refuses(envelope, &candidate, "native-proof-state-chain");
-    // Retired contracts are no longer well-typed operations. Refuse them at
-    // ordinary admission as well as at deployment admission, even after repinning.
-    for contract in [
-        "transcript.challenge",
-        "transcript.native.challenge",
-        "transcript.native.indexed.observe.group",
-    ] {
+    // Unknown contracts refuse ordinary and deployment admission after repinning.
+    for contract in ["invalid.transcript", "transcript.native.indexed.unknown"] {
         let mut candidate = original.clone();
         let binding = candidate[1]
             .as_array_mut()

@@ -83,7 +83,7 @@ foreach(owner IN LISTS header_owners)
   target_link_libraries(public-headers-${owner} PRIVATE Zkc::${owner})
   target_compile_options(public-headers-${owner} PRIVATE -Wall -Wextra -Werror)
 endforeach()
-foreach(mode required optional optional-native repeated default compiler tools retired
+foreach(mode required optional optional-native repeated default compiler tools
     Support Contracts Program Relation Language)
   add_test(NAME package-${mode} COMMAND ${CMAKE_COMMAND}
     "-DPACKAGE_DIR=${ZkcCompiler_DIR}" "-DMLIR_DIR=${MLIR_DIR}" "-DLLVM_DIR=${LLVM_DIR}"
@@ -94,7 +94,7 @@ foreach(mode required optional optional-native repeated default compiler tools r
 endforeach()
 
 # Optional cross-language boundary: execute the exact installed API output.
-set(ZKC_CONSUMER_RUNTIME "" CACHE FILEPATH "Same-version zkc runtime for artifact execution")
+set(ZKC_CONSUMER_RUNTIME "" CACHE FILEPATH "Matching zkc runtime for artifact execution")
 if(ZKC_CONSUMER_RUNTIME)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   add_test(NAME installed-native-execution COMMAND ${Python3_EXECUTABLE}

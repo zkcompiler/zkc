@@ -1,7 +1,7 @@
 # Native contract conformance
 
 `coverage.json` assigns the installed declarations and type constructors to
-bounded closed-argument probe families. An added or retired declaration must
+bounded closed-argument probe families. A declaration change must
 update this inventory explicitly. `facet-policy.json` records each consumer's
 observable fields and the subset that can be compared.
 
@@ -15,7 +15,7 @@ against agreement caused only by a shared inventory mistake.
 `attribute-admission.json` is an independently authored set of 81 input/outcome
 witnesses. It is not generated from TableGen, either registry, or a production
 validator. The C++ driver calls the binding overload of `checkParameters`; the
-Rust tools example constructs one retained local operation in Program/2 and
+Rust tools example constructs one retained local operation in `zkc.program` and
 calls `admit_supplied` with the installed native backend. Positive controls
 ensure an unrelated carrier or backend refusal cannot satisfy a negative case.
 Operation attributes are positional strings; keyed objects, duplicate request
@@ -48,8 +48,5 @@ package establishes metadata admission only. Source correspondence, actual input
 decoding, setup authority and runtime value/capability checks are outside this
 suite. The minimal operation programs are admitted, not executed.
 
-There is no Lean driver, source program, table executor or compatibility reader
-in this suite. A logical polynomial table value remains a native numerical
-type; checking its kernel signature does not retain the retired table executor.
 These checks establish bounded signature observations, not kernel arithmetic
 correctness or cryptographic security.

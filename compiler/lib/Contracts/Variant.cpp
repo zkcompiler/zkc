@@ -60,7 +60,7 @@ std::optional<std::string> pack(const json::Value &tree) {
   Table table;
   if (!table.intern(tree))
     return std::nullopt;
-  auto text = printJson(json::Array{"zkc.variant/1", std::move(table.nodes)});
+  auto text = printJson(json::Array{"zkc.variant", std::move(table.nodes)});
   if (text.size() > (VariantSpellingBytes - 8) / 2)
     return std::nullopt;
   return "variant:" + toHex(text, true);
@@ -78,7 +78,7 @@ std::optional<json::Value> unpack(StringRef spelling) {
     return std::nullopt;
   }
   auto *root = value->getAsArray();
-  if (!root || root->size() != 2 || (*root)[0].getAsString() != "zkc.variant/1")
+  if (!root || root->size() != 2 || (*root)[0].getAsString() != "zkc.variant")
     return std::nullopt;
   auto *nodes = (*root)[1].getAsArray();
   if (!nodes || nodes->empty() || nodes->size() > MaxNodes)

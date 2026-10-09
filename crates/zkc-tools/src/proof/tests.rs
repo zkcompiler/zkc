@@ -11,7 +11,7 @@ fn nested_wire_permission_is_exact() {
     ] {
         let logical = wire_type(spelling, false).unwrap();
         let physical = PhysicalType::default_for(logical.clone()).unwrap();
-        assert_eq!(wire_codec(&logical).as_deref(), Some("zkc.native-data/1"));
+        assert_eq!(wire_codec(&logical).as_deref(), Some("zkc.native-data"));
         assert_eq!(input_kind(&physical).unwrap(), "wire");
     }
     for spelling in [
@@ -47,7 +47,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         body.push(json!(["bool_constant", "done", "done", true]));
         body.push(json!(["return", values]));
         let candidate = json!([
-            "zkc.program/2",
+            "zkc.program",
             [
                 [
                     "create",
@@ -105,9 +105,9 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         ])
         .to_string();
         let descriptor = json!([
-            "zkc.native-proof-descriptor/5",
+            "zkc.native-proof-descriptor",
             [
-                "zkc.native-proof-policy/5",
+                "zkc.native-proof-policy",
                 "main",
                 "P",
                 "V",
@@ -117,7 +117,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                 [],
                 []
             ],
-            "zkc.native-origin/2",
+            "zkc.native-origin",
             [],
             [],
             []
@@ -128,7 +128,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             json!([["1", "bool"]])
         };
         let deployment = json!([
-            "zkc.native-proof/5",
+            "zkc.native-proof",
             "0".repeat(64),
             descriptor,
             hash(&logical::encode_tree(&descriptor).unwrap()),
@@ -144,42 +144,32 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         .to_string();
         if handling == "consume" {
             let current: Json = serde_json::from_str(&deployment).unwrap();
-            for version in ["1", "2", "3", "4", "6"] {
-                for (field, expected) in [
-                    (0, "native-proof-format"),
-                    (1, "native-proof-descriptor"),
-                    (2, "native-proof-policy"),
-                ] {
-                    let mut old = current.clone();
-                    match field {
-                        0 => old[0] = json!(format!("zkc.native-proof/{version}")),
-                        1 => old[2][0] = json!(format!("zkc.native-proof-descriptor/{version}")),
-                        _ => old[2][1][0] = json!(format!("zkc.native-proof-policy/{version}")),
-                    }
-                    old[3] = json!(hash(&logical::encode_tree(&old[2]).unwrap()));
-                    let bytes = serde_json::to_vec(&old).unwrap();
-                    assert_eq!(
-                        NativeDeployment::admit(
-                            &bytes,
-                            &Sha256::digest(&bytes).into(),
-                            Default::default()
-                        )
-                        .err()
-                        .unwrap(),
-                        expected
-                    );
+            for (field, expected) in [
+                (0, "native-proof-format"),
+                (1, "native-proof-descriptor"),
+                (2, "native-proof-policy"),
+                (3, "native-proof-descriptor"),
+            ] {
+                let mut malformed = current.clone();
+                match field {
+                    0 => malformed[0] = json!("invalid.native-proof"),
+                    1 => malformed[2][0] = json!("invalid.native-proof-descriptor"),
+                    2 => malformed[2][1][0] = json!("invalid.native-proof-policy"),
+                    _ => malformed[2][2] = json!("invalid.native-origin"),
                 }
-            }
-            let mut old = current;
-            old[2][2] = json!("zkc.native-origin/1");
-            old[3] = json!(hash(&logical::encode_tree(&old[2]).unwrap()));
-            let bytes = serde_json::to_vec(&old).unwrap();
-            assert_eq!(
-                NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+                malformed[3] = json!(hash(&logical::encode_tree(&malformed[2]).unwrap()));
+                let bytes = serde_json::to_vec(&malformed).unwrap();
+                assert_eq!(
+                    NativeDeployment::admit(
+                        &bytes,
+                        &Sha256::digest(&bytes).into(),
+                        Default::default()
+                    )
                     .err()
                     .unwrap(),
-                "native-proof-descriptor"
-            );
+                    expected
+                );
+            }
         }
         let admitted = NativeDeployment::admit(
             deployment.as_bytes(),
@@ -226,7 +216,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             continue;
         }
         let deployment = admitted.unwrap();
-        let inputs = json!(["zkc.native-proof-inputs/1", [], [], "", [], "0"]);
+        let inputs = json!(["zkc.native-proof-inputs", [], [], "", [], "0"]);
         let report = deployment.execute(&inputs, None).unwrap();
         assert!(report.cleanup_errors.is_empty());
         let proof = report.outcome.unwrap();
@@ -253,51 +243,40 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             vector["bytes"].as_u64().unwrap() as usize
         );
         assert_eq!(hex(&proof[8..40]), vector["sha256"]);
-        let mut root = logical::decode_tree(&prepared.root).unwrap();
+        let root = logical::decode_tree(&prepared.root).unwrap();
         assert_eq!(root, vector["tree"]);
-        assert_eq!(root[0], "zkc.native-proof-binding/5");
-        let mut retired = proof.clone();
-        retired[8..40].copy_from_slice(&zkc_test_support::unhex(
-            vector["retired_binding"]["sha256"].as_str().unwrap(),
-        ));
-        assert_eq!(
-            deployment
-                .execute(&inputs, Some(&retired))
-                .unwrap()
-                .outcome
-                .unwrap_err(),
-            "proof-header"
-        );
-        // Even under the current tag the removed suffix is not equivalent.
-        let mut padded = root.clone();
-        padded
-            .as_array_mut()
-            .unwrap()
-            .extend([json!([]), json!([]), json!([])]);
-        let mut padded_proof = proof.clone();
-        padded_proof[8..40]
-            .copy_from_slice(&Sha256::digest(logical::encode_tree(&padded).unwrap()));
-        assert_eq!(
-            deployment
-                .execute(&inputs, Some(&padded_proof))
-                .unwrap()
-                .outcome
-                .unwrap_err(),
-            "proof-header"
-        );
-        for version in ["1", "2", "3", "4"] {
-            root[0] = json!(format!("zkc.native-proof-binding/{version}"));
-            let mut old = proof.clone();
-            old[8..40].copy_from_slice(&Sha256::digest(logical::encode_tree(&root).unwrap()));
+        assert_eq!(root[0], "zkc.native-proof-binding");
+        // Bind the complete current invocation, including its context and arity.
+        for field in [0, 3, 4, 10] {
+            let mut changed = root.clone();
+            match field {
+                0 => changed[0] = json!("invalid.native-proof-binding"),
+                3 => changed[3] = json!("1".repeat(64)),
+                4 => changed[4] = json!("other_entry"),
+                _ => changed.as_array_mut().unwrap().push(json!([])),
+            }
+            let mut changed_proof = proof.clone();
+            changed_proof[8..40]
+                .copy_from_slice(&Sha256::digest(logical::encode_tree(&changed).unwrap()));
             assert_eq!(
                 deployment
-                    .execute(&inputs, Some(&old))
+                    .execute(&inputs, Some(&changed_proof))
                     .unwrap()
                     .outcome
                     .unwrap_err(),
                 "proof-header"
             );
         }
+        let mut different_context = inputs.clone();
+        different_context[3] = json!("01");
+        assert_eq!(
+            deployment
+                .execute(&different_context, Some(&proof))
+                .unwrap()
+                .outcome
+                .unwrap_err(),
+            "proof-header"
+        );
         assert!(
             deployment
                 .execute(&inputs, Some(&proof))
@@ -402,9 +381,9 @@ fn domain_inputs_use_current_native_codec() {
 fn setup_authority_parser_rejects_ambiguous_records() {
     let id = "00".repeat(32);
     for value in [
-        json!(["zkc.native-setup-authority/1", [["2", id], ["2", id]], []]),
+        json!(["zkc.native-setup-authority", [["2", id], ["2", id]], []]),
         json!([
-            "zkc.native-setup-authority/1",
+            "zkc.native-setup-authority",
             [["2", id]],
             [["1", "2"], ["1", "2"]]
         ]),
@@ -415,9 +394,9 @@ fn setup_authority_parser_rejects_ambiguous_records() {
         );
     }
     for value in [
-        json!(["zkc.native-setup-authority/1", [["02", id]], []]),
-        json!(["zkc.native-setup-authority/1", [["2", "aF".repeat(32)]], []]),
-        json!(["zkc.native-setup-authority/2", [], []]),
+        json!(["zkc.native-setup-authority", [["02", id]], []]),
+        json!(["zkc.native-setup-authority", [["2", "aF".repeat(32)]], []]),
+        json!(["invalid.native-setup-authority", [], []]),
     ] {
         assert!(SetupAuthority::parse(&serde_json::to_vec(&value).unwrap()).is_err());
     }

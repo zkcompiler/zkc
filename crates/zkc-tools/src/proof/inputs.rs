@@ -24,7 +24,7 @@ pub(super) enum Request<'a> {
 pub(super) fn decode(host: &NativeDeployment, input: &Json, producer: bool) -> Result<ProofInputs> {
     logical::tree_size(input).map_err(|e| e.to_string())?;
     let row = array(input, 6)?;
-    if text(&row[0])? != "zkc.native-proof-inputs/1" {
+    if text(&row[0])? != "zkc.native-proof-inputs" {
         return Err("native-proof-inputs".into());
     }
     if text(&row[3])?.len() > CONTEXT_LIMIT * 2 {
@@ -186,7 +186,7 @@ pub(super) fn prepare(
         }
     }
     let mut root = json!([
-        "zkc.native-proof-binding/5",
+        "zkc.native-proof-binding",
         "sha256",
         host.descriptor[2],
         host.source,

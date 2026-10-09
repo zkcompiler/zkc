@@ -7,10 +7,11 @@ program. The validator receives an authorized public context and a candidate
 proof; it does not require the producer, its witness, or its live resources.
 [Status](../../../status.md) records implementation coverage;
 [native proof compilation](../../../compiler/native-proofs.md) records the
-implementation and executable examples. The sole policy, deployment, descriptor,
-construction map and binding use `/5`; occurrences use `zkc.native-origin/2`.
+implementation and executable examples. Policy, deployment, descriptor,
+construction map and binding each have one current schema; occurrences use
+`zkc.native-origin`.
 Flat programs, loops, PCS and structured messages share this contract and
-`zkc.program/2`. Other proof versions refuse without compatibility decoding.
+`zkc.program`. Unknown tags and malformed records refuse independently.
 
 ## Program, construction and deployment
 
@@ -45,7 +46,7 @@ result maps to an original role/result or a generated transcript successor.
 Removed service ports have no candidate ingress position. Original action
 records remain source facts; a construction map identifies retained, replaced
 and inserted candidate occurrences. The selected native extension stores a
-versioned construction section alongside the original interface in
+checked construction section alongside the original interface in
 `protocol.projection`. It does not overwrite source facts to make a changed
 signature appear to be ordinary projection.
 
@@ -126,7 +127,7 @@ Program identity, candidate identity and invocation binding have different uses:
 
 | Identity | Meaning |
 |---|---|
-| Program | Immutable source plus selected entry, construction, origin policy, logical codecs and logical contract versions |
+| Program | Immutable source plus selected entry, construction, origin policy, logical codecs and logical contract identities |
 | Candidate | Exact participant/physical output plus implementation selections and checked compilation settings |
 | Invocation | Program identity plus canonical actual public values, application context, relation/key/configuration bindings |
 
@@ -311,7 +312,7 @@ preserve those bytes under an explicit different contract.
 Bounds on proof length, each frame, decoded depth/count/shape, integer
 conversion, retained values, work and resource transitions are checked before
 the relevant allocation or consumption. Decode invalidity, limit refusal and
-backend failure remain distinct outcomes. Unknown tags, versions, domains and
+backend failure remain distinct outcomes. Unknown tags, domains and
 codecs refuse. A wrong header/context binding is a profile refusal, distinct
 from a verifier Boolean false result and from malformed payload decoding.
 Capabilities and service references never cross the wire.
@@ -324,7 +325,7 @@ mathematical IR continues to support other role rosters and interactive
 deployments.
 
 Validator external inputs are public data/configuration. Host-created transcript
-state is an internal invocation resource. A versioned proof deployment envelope
+state is an internal invocation resource. The proof deployment envelope
 exports the checked constructed input/result/resource maps and binds them to the
 exact participant artifact. Rust proof admission checks their indices, types,
 roles, suites and creation/disposal policies against that artifact. The native
@@ -333,7 +334,7 @@ carrier admission alone does not establish source correspondence. Original
 source service-port and draw-selector references are checked by the compiler;
 the host checks the constructed maps and event order in the pinned deployment.
 An affine external transcript value or unmapped resource input refuses. Copyable
-external construction state uses the ordinary `/5` data-input contract and
+external construction state uses the ordinary proof data-input contract and
 [authored transition rules](../../realization/external-constructions.md#authored-native-deployment).
 Authored execution
 has no generated transcripts and refuses authored validator transcript inputs.
@@ -469,7 +470,7 @@ The native host accepts this application-owned record alongside a pinned native
 deployment. It is not supplied by a candidate proof or inferred from its header:
 
 ```text
-["zkc.native-attempt-policy/2", completion_original_result,
+["zkc.native-attempt-policy", completion_original_result,
  [[rng_original_input, rng_original_result], ...],
  [attempt_limit, proof_byte_limit],
  [instruction_limit, iteration_limit],
@@ -545,7 +546,7 @@ or a Fiat–Shamir security theorem.
 An indexed native kernel carries the bounded static template:
 
 ```text
-["zkc.native-origin-template/1", entry, [step, ...], [], event]
+["zkc.native-origin-template", entry, [step, ...], [], event]
 event = ["query", protocol, site, service_port, service_contract, method, owner]
       | ["message", protocol, site, schema, sender, receiver]
 step = ["apply", original_caller_protocol, original_apply_site]
@@ -574,7 +575,7 @@ actual induction values of the enclosing repeats, outermost first, with one
 entry per `repeat` step. The final absorbed bytes encode:
 
 ```text
-["zkc.native-origin/2", entry, [step, ...], [iteration_decimal, ...], event]
+["zkc.native-origin", entry, [step, ...], [iteration_decimal, ...], event]
 ```
 
 Each iteration is a canonical unsigned 64-bit decimal string. The vector has
@@ -643,7 +644,7 @@ meaning. The joint driver continues to use its separate count-agreement policy.
 The compiler's policy is an exact array (JSON spelling carries no identity):
 
 ```text
-["zkc.native-proof-policy/5", entry, producer, validator, acceptance,
+["zkc.native-proof-policy", entry, producer, validator, acceptance,
  suite, service, public_inputs, [[query_site, delivery_site], ...]]
 ```
 
@@ -660,7 +661,7 @@ this policy.
 The immutable compiler descriptor is:
 
 ```text
-["zkc.native-proof-descriptor/5", policy, "zkc.native-origin/2",
+["zkc.native-proof-descriptor", policy, "zkc.native-origin",
  [[event_kind, origin_hex], ...],
  [[validator, original_port, logical_type, codec], ...],
  [[message_origin_hex, logical_type, codec], ...]]
@@ -668,13 +669,13 @@ The immutable compiler descriptor is:
 
 Events and messages follow original source order. Public ports follow original
 input order. The descriptor includes the complete selected logical policy,
-origin version, event labels and nominal wire codecs. Candidate implementation
+origin tag, event labels and nominal wire codecs. Candidate implementation
 names and generated helper symbols are absent. The descriptor is encoded with
 the bounded logical tree encoding when hashing or constructing an invocation
 root.
 
 A constructed projection interface adds a `construction` dictionary with
-`format = "zkc.native-construction/5"`, the logical `transcript` type,
+`format = "zkc.native-construction"`, the logical `transcript` type,
 `removed_services` (the original service index), and a complete actual `actions`
 map. All original interface fields, port lists and action records remain
 unchanged. Each participant appends exactly one transcript input and result;
@@ -694,7 +695,7 @@ definitions and metadata, ignoring locations.
 The owned `compileNativeProof` API and `protocol-proof` command return:
 
 ```text
-["zkc.native-proof/5", source_sha256,
+["zkc.native-proof", source_sha256,
  descriptor, descriptor_sha256,
  candidate_json, candidate_sha256,
  [[role, participant_symbol,
@@ -748,7 +749,7 @@ budgets apply before the corresponding allocation or work.
 A role invocation is:
 
 ```text
-["zkc.native-proof-inputs/1",
+["zkc.native-proof-inputs",
  [[validator, original_port, canonical_wire_hex], ...],
  [[original_port, [input_kind, value]], ...],
  context_hex,
@@ -774,7 +775,7 @@ Budgets are explicit application caps and may be lower than the required work.
 The exact invocation root tree is:
 
 ```text
-["zkc.native-proof-binding/5", "sha256", "zkc.native-origin/2", source_sha256,
+["zkc.native-proof-binding", "sha256", "zkc.native-origin", source_sha256,
  entry, producer, validator, descriptor,
  [[validator, original_port, logical_type, canonical_wire_hex], ...],
  context_hex]
@@ -826,7 +827,7 @@ needs the explicit PCS check below.
 The [setup registry contract](structured-proof-messages.md#application-authorized-setups)
 defines exact public-key and input-port authorization, including multiple setups.
 The installed PCS is `multilinear.kzg.bls12-381/1`. A verifier key is immutable
-host input data with descriptor codec `zkc.native-verifier-key/1` and canonical
+host input data with descriptor codec `zkc.native-verifier-key` and canonical
 `ZKCAR006` bytes; keys and opening states never cross the proof wire.
 
 A role input `[original_port, ["verifier_key", public_port]]` selects its

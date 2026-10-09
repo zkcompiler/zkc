@@ -30,7 +30,7 @@ IR
 # This pin comes from our own trusted compilation. Store it with the artifact.
 pin=$(sha256sum "$work_dir/message.bundle" | cut -d ' ' -f 1)
 cat > "$work_dir/inputs.json" <<'JSON'
-["zkc.bundle-inputs/1", "example-session",
+["zkc.bundle-inputs", "example-session",
  [["Alice", [["0", "bool@native.bool/1", ["wire", "5a4b4356010500"]]], []],
   ["Bob", [], []]], []]
 JSON
@@ -98,7 +98,7 @@ binds its source interface to these same execution and proof boundaries.
 This minimal example returns a received Boolean as the selected validator decision.
 It exercises deployment and proof framing; it does not establish a cryptographic
 statement. Real protocols author their equations and guards in the same IR.
-The empty suite selects transcript-free execution under policy `/5`. Both commands
+The empty suite selects transcript-free execution under the native proof policy. Both commands
 explicitly acknowledge header-only binding with `--allow-header-only`.
 
 <!-- executable: native-proof -->
@@ -117,16 +117,16 @@ module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : () -> () }
 IR
 cat > "$work_dir/policy.json" <<'JSON'
-["zkc.native-proof-policy/5", "main", "P", "V", "0", "", "", [], []]
+["zkc.native-proof-policy", "main", "P", "V", "0", "", "", [], []]
 JSON
 "$compiler" protocol-proof "$work_dir/message.mlir" "$work_dir/policy.json" > "$work_dir/deployment.json"
 # Authorize these exact bytes from our own trusted compilation.
 pin=$(sha256sum "$work_dir/deployment.json" | cut -d ' ' -f 1)
 cat > "$work_dir/producer-inputs.json" <<'JSON'
-["zkc.native-proof-inputs/1", [], [["0", ["wire", "5a4b4356010501"]]], "", [], "0"]
+["zkc.native-proof-inputs", [], [["0", ["wire", "5a4b4356010501"]]], "", [], "0"]
 JSON
 cat > "$work_dir/validator-inputs.json" <<'JSON'
-["zkc.native-proof-inputs/1", [], [], "", [], "0"]
+["zkc.native-proof-inputs", [], [], "", [], "0"]
 JSON
 "$native" prove-bundle "$work_dir/deployment.json" "$pin" "$work_dir/producer-inputs.json" "$work_dir/proof.bin" --allow-header-only > "$work_dir/producer.json"
 "$native" verify-bundle "$work_dir/deployment.json" "$pin" "$work_dir/validator-inputs.json" "$work_dir/proof.bin" --allow-header-only > "$work_dir/validator.json"

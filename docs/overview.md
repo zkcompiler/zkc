@@ -23,7 +23,7 @@ relation Assets and installed mathematical kernels.
 Language emits mathematical MLIR. The `protocol` profile carries joint structure
 and participant availability. Projection forms independent `participant`
 programs; `exec` makes demanded computation explicit; `physical` selects admitted
-representations and kernels. The result is `zkc.program/2`.
+representations and kernels. The result is `zkc.program`.
 
 Entry packages, native proof deployments and joint bundles give that executable
 different application interfaces. All use the Rust Runner and installed backend
@@ -47,6 +47,4 @@ implementation correctness remain separate claims. Consult [status](status.md)
 for capabilities and [assurance](assurance.md) for evidence boundaries.
 
 The [roadmap](roadmap.md) develops this model through general mechanisms and
-independent validation. Retired applications and execution paths are available
-in Git history; they impose no requirement to port their libraries, carriers or
-compatibility behavior into the supported implementation.
+independent validation.

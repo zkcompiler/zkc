@@ -133,14 +133,14 @@ json::Value R1CS::encode() const {
   json::Array constraints;
   for (const auto &row : rows)
     constraints.push_back(encodeRow(row));
-  return json::Array{"zkc.relation.r1cs/1",       fieldName,
+  return json::Array{"zkc.relation.r1cs",         fieldName,
                      std::to_string(columnCount), std::to_string(outputCount),
                      std::to_string(inputCount),  std::move(constraints)};
 }
 
 std::string R1CS::identity() const {
   SHA256 hash;
-  hash.update("zkc.relation-subject/1\n");
+  hash.update("zkc.relation-subject\n");
   hash.update(printJson(encode()));
   return toHex(hash.final(), true);
 }
@@ -158,7 +158,7 @@ R1CS R1CS::deduplicate() const {
 Expected<R1CS> decodeR1CS(const json::Value &value) {
   const auto *record = value.getAsArray();
   if (!record || record->size() != 6 ||
-      (*record)[0].getAsString() != "zkc.relation.r1cs/1" ||
+      (*record)[0].getAsString() != "zkc.relation.r1cs" ||
       !(*record)[1].getAsString())
     return zkc::error("relation-format");
   auto columns = count((*record)[2], Limits::columns);

@@ -6,8 +6,7 @@ offers no way to reach the native or the formal build: there is nothing here to
 name one with.
 
 CTest passes the exact file CMake built, through `$<TARGET_FILE:...>`, which no
-directory-and-name rule can get wrong -- and the build directory does hold older
-copies of several of these names from configurations that wrote them elsewhere.
+directory-and-name rule can get wrong.
 Direct invocations use the compiler output directory selected by the shared
 workspace configuration. Either way the path is checked before it is handed
 back, and a tool that is not there is a failure naming the directory searched
@@ -108,10 +107,8 @@ def __getattr__(name):
 def records(case=None):
     """The directory the calling test writes its sources, plans and reports to.
 
-    These tests used to work in a temporary directory and delete it on the way
-    out, which threw away the plans and sources of exactly the run worth
-    reading: the one that failed. What a test writes now stays under the
-    build's reports, where CI keeps it and a developer can open it.
+    Sources and outputs remain under the build's reports so failures retain
+    their evidence for CI and local inspection.
 
     The name is the test's own, which here is the file's: this directory
     registers every `.py` in it under its own name, so there is no convention

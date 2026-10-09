@@ -185,12 +185,12 @@ fn public_codecs_are_exact_and_nominally_typed() {
     let wire = b.encode_native_value(&g).unwrap();
     assert_eq!(&wire[..6], b"ZKCV\x01\x09");
     assert_eq!(wire.len(), 54);
-    // Historical additive-Fr bytes remain malformed G1 bytes; never map the
+    // A scalar-sized payload is malformed for G1; never map the
     // exposed discrete logarithm onto a curve generator.
-    let mut old_group = b"ZKCV\x01\x09".to_vec();
-    old_group.extend(zkc_arkworks::encode_scalar(&Scalar::from(1)).unwrap());
+    let mut malformed_group = b"ZKCV\x01\x09".to_vec();
+    malformed_group.extend(zkc_arkworks::encode_scalar(&Scalar::from(1)).unwrap());
     assert!(
-        b.decode_native_value(&g.physical_type(), &old_group)
+        b.decode_native_value(&g.physical_type(), &malformed_group)
             .is_err()
     );
     assert!(b.decode_native_value(&f(1).physical_type(), &wire).is_err());

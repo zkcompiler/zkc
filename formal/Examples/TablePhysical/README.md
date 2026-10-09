@@ -57,9 +57,9 @@ not proved native costs, elapsed time or a universal profitability claim.
 
 The `lower` command retains the Lean-only `zkc-table-physical-reference` profile.
 The same checker/evaluator also accepts the retained `zkc-table-physical-plan`
-tag. Its former MLIR producer and Rust executor have been retired. Both formats
+tag. Both formats
 use the same typed body and theorem; the tag does not extend the theorem to
-compiled Rust or the current `zkc.program/2` carrier.
+compiled Rust or the current `zkc.program` carrier.
 
 For a candidate carrying that plan tag, `admit` and `run-admitted` also accept
 the installed `table-round/1` profile and source certificate. `admit-entry` and
@@ -82,7 +82,6 @@ reply and a stopped draw that changes state and emits an event.
 The reference's scalar store is unbounded and lacks
 native issuer/generation identity; tables, residuals and points remain mathematical
 values. Ordinary invocation uses the existing finite two-field kernel/provider
-meaning. Earlier native storage/admission and endpoint comparisons are historical,
-unmaintained evidence. Current native correspondence, arbitrary operation
+meaning. Native correspondence, arbitrary operation
 expansion, general endpoint admission and protocol security remain outside this
 result.

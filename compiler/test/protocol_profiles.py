@@ -1,4 +1,4 @@
-"""The four profiles select formation and export; stale properties refuse."""
+"""The four profiles select formation and export; unknown properties refuse."""
 import json
 from commands import Commands
 from tools import records, canonical_program
@@ -20,34 +20,27 @@ def module(profile):
 
 for profile in ('protocol', 'participant', 'exec', 'physical'):
     commands.verified(module(profile))
-    for property in ('execution_contract="program"', 'execution_contract="legacy_participants_v1"', 'unexpected=true'):
-        stale = module(profile).replace(f'#protocol.profile<{profile}>', f'#protocol.profile<{profile}>, {property}')
-        commands.verified(stale, 'mlir-unknown-property')
+    malformed = module(profile).replace(f'#protocol.profile<{profile}>', f'#protocol.profile<{profile}>, unexpected=true')
+    commands.verified(malformed, 'mlir-unknown-property')
 for profile in ('exec', 'physical'):
     for value in ('[]', '["n"]'):
-        stale = module(profile).replace('role="P"', f'role="P", parameters={value}')
-        commands.verified(stale, 'mlir-unknown-property')
-    commands.verified(module(profile).replace('role="P"', 'role="P", argument_names=[]'), 'mlir-unknown-property')
-for retired in ('protocol_exec', 'mlir-unknown-property'):
-    commands.verified(module(retired), 'to be one of')
+        malformed = module(profile).replace('role="P"', f'role="P", unexpected={value}')
+        commands.verified(malformed, 'mlir-unknown-property')
+commands.verified(module('invalid'), 'to be one of')
 native = commands.verified(module('exec'))
 commands.source('protocol-export', native, refuses='native-physical-required')
 native = commands.verified(native, None, '--zkc-select-physical')
 carrier = json.loads(commands.source('protocol-export', native))
-assert carrier[0] == 'zkc.program/2'
+assert carrier[0] == 'zkc.program'
 assert len(carrier) == 5 and len(carrier[3][0]) == 8
 assert json.loads(canonical_program(commands, json.dumps(carrier))) == carrier
-for retired in ('zkc.participants/1', 'zkc.service-participants/1', 'zkc.native-participants/1',
-                'zkc.native-participants/2', 'zkc.native-participants/3', 'zkc.program/1', 'zkc.program/99'):
-    mutant = list(carrier)
-    mutant[0] = retired
-    canonical_program(commands, json.dumps(mutant), refuses='interactive-format')
-for stage in ('physical', 'logical'):
-    mutant = list(carrier)
-    mutant.insert(2, stage)
-    canonical_program(commands, json.dumps(mutant), refuses='interactive-shape')
+mutant = list(carrier)
+mutant[0] = 'invalid.program'
+canonical_program(commands, json.dumps(mutant), refuses='interactive-format')
+mutant = list(carrier)
+mutant.insert(2, [])
+canonical_program(commands, json.dumps(mutant), refuses='interactive-shape')
 commands.verified(module('physical').replace('"protocol.finish"', '"protocol.incomplete"'), 'unregistered operation')
 commands.verified(module('physical').replace('"protocol.finish"() : () -> ()', '"local.stop"() {site="end", reason="reject"} : () -> ()'), 'interactive-callable-terminator')
-for retired in ('protocol-import', 'protocol-compile', 'protocol-prepare', 'protocol-resolve', 'import', 'compile', 'claim-check'):
-    commands.source(retired, '', refuses='unknown-command')
+commands.source('invalid-command', '', refuses='unknown-command')
 print(f'protocol profile checks: {commands.save()}')

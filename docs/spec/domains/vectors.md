@@ -73,7 +73,7 @@ meaning. Storage and library choices belong to the physical representation.
 `matrix.identity_check<F>(M) [digest]` compares SHA-256 of a canonical
 mathematical encoding with one lowercase 64-character hexadecimal attribute.
 The encoding is compact UTF-8 JSON
-`["zkc.matrix/1", fieldName, [rows, columns, entries]]`, with naturals and
+`["zkc.matrix", fieldName, [rows, columns, entries]]`, with naturals and
 coefficients as canonical decimal strings. Entries are ordered `[row,column,value]`
 triples; zero coefficients are omitted. Prime-field values use least nonnegative
 representatives. The installed octic extension encodes its ascending coordinates

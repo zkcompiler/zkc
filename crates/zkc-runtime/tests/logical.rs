@@ -106,12 +106,12 @@ fn hostile_kinds_counts_utf8_depth_and_lengths() {
 fn public_root_strings_have_separate_tree_ceiling() {
     let public_hex = "ab".repeat(8192);
     let root = json!([
-        "zkc.artifact-binding/1",
+        "zkc.artifact-binding",
         [],
         [],
         "",
         [["table", "table:bls12-381.fr", public_hex]],
-        ["zkc.public-configuration/1", [], [], []]
+        ["zkc.public-configuration", [], [], []]
     ]);
     let bytes = encode_tree(&root).unwrap();
     assert_eq!(decode_tree(&bytes).unwrap(), root);
@@ -133,7 +133,7 @@ fn native_origins_have_exact_shapes_and_distinct_event_kinds() {
         bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
     let query = json!([
-        "zkc.native-origin-template/1",
+        "zkc.native-origin-template",
         "main",
         [["apply", "main", "subprotocol"]],
         [],
@@ -186,7 +186,7 @@ fn native_origins_have_exact_shapes_and_distinct_event_kinds() {
     for slot in 0..5 {
         let mut bad = query.clone();
         bad[slot] = match slot {
-            0 => json!("zkc.logical-origin/1"),
+            0 => json!("invalid.native-origin-template"),
             1 => json!(""),
             2 => json!(["contains space"]),
             3 => json!(["0"]),
@@ -195,7 +195,7 @@ fn native_origins_have_exact_shapes_and_distinct_event_kinds() {
         assert!(native_origin_template(&[hex(&encode_tree(&bad).unwrap())], "query").is_err());
     }
     let message = json!([
-        "zkc.native-origin-template/1",
+        "zkc.native-origin-template",
         "main",
         [],
         [],
@@ -213,7 +213,7 @@ fn native_origins_have_exact_shapes_and_distinct_event_kinds() {
 }
 
 #[test]
-fn indexed_native_origins_require_explicit_coordinates_and_separate_versions() {
+fn indexed_native_origins_require_explicit_coordinates_and_template_format() {
     use zkc_runtime::logical::{indexed_native_origin, native_origin_template};
     let encoded = |v: &serde_json::Value| {
         encode_tree(v)
@@ -223,7 +223,7 @@ fn indexed_native_origins_require_explicit_coordinates_and_separate_versions() {
             .collect::<String>()
     };
     let template = json!([
-        "zkc.native-origin-template/1",
+        "zkc.native-origin-template",
         "main",
         [
             ["repeat", "main", "outer"],
@@ -246,7 +246,7 @@ fn indexed_native_origins_require_explicit_coordinates_and_separate_versions() {
     native_origin_template(&attrs, "query").unwrap();
     for coordinates in [vec![0, 0], vec![2, 7], vec![u64::MAX, u64::MAX]] {
         let mut expected = template.clone();
-        expected[0] = json!("zkc.native-origin/2");
+        expected[0] = json!("zkc.native-origin");
         expected[3] = json!(coordinates.iter().map(u64::to_string).collect::<Vec<_>>());
         assert_eq!(
             indexed_native_origin(&attrs, "query", &coordinates).unwrap(),
@@ -259,7 +259,7 @@ fn indexed_native_origins_require_explicit_coordinates_and_separate_versions() {
     for slot in [0, 2, 3, 4] {
         let mut changed = template.clone();
         changed[slot] = match slot {
-            0 => json!("zkc.native-origin/1"),
+            0 => json!("zkc.native-origin"),
             2 => json!([["loop", "main", "outer"]]),
             3 => json!(["0"]),
             _ => json!(["repeat", "main", "outer"]),

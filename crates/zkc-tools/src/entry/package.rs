@@ -93,7 +93,7 @@ impl Package {
         // Only the frame is decoded here. Embedded interface and artifact
         // decoders retain their own structure, work and admission limits.
         let frame: Frame = serde_json::from_slice(bytes).map_err(|_| PackageError::Format)?;
-        if frame.format != "zkc.entry/1" {
+        if frame.format != "zkc.entry" {
             return Err(PackageError::Format);
         }
         if frame.original.len() > ORIGINAL_BYTES
@@ -144,7 +144,7 @@ mod tests {
     use serde_json::json;
 
     fn frame() -> String {
-        json!({"format":"zkc.entry/1","original":"module\n{}",
+        json!({"format":"zkc.entry","original":"module\n{}",
             "interface":"{\"job\":{\"kind\":\"run\"}}", "artifact":"[]",
             "options":{"simplify":true,"release_storage":false}})
         .to_string()
@@ -196,12 +196,12 @@ mod tests {
         assert!(matches!(capture(b"not JSON"), Err(PackageError::Format)));
     }
     #[test]
-    fn strict_frame_rejects_duplicates_unknown_versions_fields_and_types() {
+    fn strict_frame_rejects_duplicates_unknown_formats_fields_and_types() {
         let original = frame();
         for bytes in [
-            original.replace("zkc.entry/1", "zkc.entry/0"),
+            original.replace("zkc.entry", "invalid.entry"),
             original.replacen('{', "{\"extra\":null,", 1),
-            original.replacen('{', "{\"format\":\"zkc.entry/1\",", 1),
+            original.replacen('{', "{\"format\":\"zkc.entry\",", 1),
             original.replace("\"simplify\":true", "\"simplify\":true,\"simplify\":true"),
             original.replace("\"simplify\":true", "\"simplify\":\"true\""),
             original.replace("\"release_storage\":false", "\"other\":false"),
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn carrier_records_require_objects() {
         assert!(matches!(
-            capture(br#"["zkc.entry/1","o","i","a",[true,false]]"#),
+            capture(br#"["zkc.entry","o","i","a",[true,false]]"#),
             Err(PackageError::Format)
         ));
         let value = frame().replace(

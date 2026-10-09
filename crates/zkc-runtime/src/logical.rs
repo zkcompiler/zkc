@@ -1,4 +1,4 @@
-//! Versioned logical construction encoding. Codec validity is not evidence that
+//! Canonical logical construction encoding. Codec validity is not evidence that
 //! an origin or root corresponds to an admitted original source/descriptor.
 use serde_json::{Value, json};
 
@@ -159,7 +159,7 @@ pub fn indexed_native_origin(attrs: &[String], kind: &str, indices: &[u64]) -> R
     if indices.len() != depth || indices.len() > 64 {
         return Err(CodecError("native-origin-coordinates"));
     }
-    tree[0] = json!("zkc.native-origin/2");
+    tree[0] = json!("zkc.native-origin");
     tree[3] = json!(indices.iter().map(u64::to_string).collect::<Vec<_>>());
     if tree_size(&tree)? > 4096 {
         return Err(CodecError("native-origin-limit"));
@@ -202,7 +202,7 @@ pub fn native_origin_template(attrs: &[String], kind: &str) -> Result<Vec<u8>> {
         _ => 0,
     };
     if parts.len() != 5
-        || parts[0] != "zkc.native-origin-template/1"
+        || parts[0] != "zkc.native-origin-template"
         || !name(&parts[1])
         || !parts[2].as_array().is_some_and(|p| {
             p.len() <= 64

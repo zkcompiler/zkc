@@ -27,7 +27,7 @@ including unused ones, through the existing bounded R1CS or AIR reader. Canonica
 relation identity retains constraint content, field, statement layout and AIR row
 scopes. It does not prove a source-circuit interpretation or key/setup correctness.
 
-Capture identity is SHA-256 over the `zkc.capture/2` marker, explicit source format,
+Capture identity is SHA-256 over the `zkc.capture` marker, explicit source format,
 module count, modules sorted by logical path, asset count, and assets sorted by
 name. Module names/text and asset names/formats/exact bytes are included. Every
 component, including the decimal counts, has an unsigned 64-bit little-endian
@@ -872,15 +872,15 @@ operation and operand graph.
 `CheckedOriginal` owns immutable source, original bytes, comparison counts,
 interface, toolchain identity and a bound diagnostic location map. It exposes no
 mutable original IR. The existing compiler receives those bytes and the selected
-protocol symbol. Run jobs emit `zkc.run/1`; proof jobs use native policy/deployment
-version 5. Both contain ordinary `zkc.program/2` participant programs.
+protocol symbol. Run jobs emit `zkc.run`; proof jobs use the native proof policy
+and deployment schemas. Both contain ordinary `zkc.program` participant programs.
 Every protocol in the selected closure passes target preparation.
 
-`zkc.language-interface/7` has exactly these JSON members: `format`, `capture`,
+`zkc.language-interface` has exactly these JSON members: `format`, `capture`,
 `original`, `toolchain`, `entry`, `protocol`, `protocols`, `relations`, `job`,
 `setups`. `protocol`
 selects one symbol from `protocols`. Every original protocol and relation appears
-exactly once. Versions 1–6 and unknown versions refuse.
+exactly once. Unknown tags, missing members and extra members refuse.
 
 A run `job` has only `kind: "run"`. A proof job has exactly `kind: "proof"`,
 `prover`, `verifier`, `public`, `acceptance`, `completion`, `target` and
@@ -911,18 +911,18 @@ A relation record has `symbol`, `inputs` and `definition`. Each formal has `name
 `purpose`, ordered `native` indices and `schema`. Definition records have exactly
 `{kind, function}` for a formula, `{kind}` for an opaque declaration, or
 `{kind, asset}` for R1CS/AIR. Their identity triple comes from the actual native
-declaration. Formula kind is `zkc.language.formula/1`, key is the closed relation
+declaration. Formula kind is `zkc.language.formula`, key is the closed relation
 symbol, and revision is a lowercase SHA-256 representation digest. Its material is
 length-framed in this order: kind, predicate helper symbol, decimal logical input
 count, each full logical schema digest and purpose, decimal transitive helper count,
 then each helper symbol and definition digest, sorted by symbol. A definition digest
-hashes framed `zkc.language.formula-helper/1` and canonical generic MLIR without
+hashes framed `zkc.language.formula-helper` and canonical generic MLIR without
 locations. Frames use unsigned 64-bit little-endian lengths. The closure includes
 the root; shared helper definitions are hashed once per immutable checking phase.
 Printing pins every flag, disables hex output and uses elision thresholds above
 admitted payload sizes, independent of process-global MLIR flags.
 
-The schema digest hashes framed `zkc.language.schema/1`, textual kind, nominal
+The schema digest hashes framed `zkc.language.schema`, textual kind, nominal
 `identity`, custody, Copy/Drop/Share/Wire (each `0` or `1`), leaf count and ordered
 leaf spellings, field count and ordered fields, then alternative count and ordered
 alternatives. Counts and offsets use unsigned decimal text. A field contributes
@@ -931,13 +931,13 @@ field count and fields. Display type spelling is excluded. This binds member nam
 and structure across captures even when nominal names and native leaves agree.
 These identities retain names and printing policy; they are not semantic equivalence.
 The formula helper name is `zkf_` followed by lowercase SHA-256 of the bytes
-`zkc.language.predicate/1:` concatenated with the native declaration key. Its JSON
+`zkc.language.predicate:` concatenated with the native declaration key. Its JSON
 link must equal that derived name. Native formula admission requires a private,
 nonempty body with the declaration's signature and no executable references, then
 checks polynomial observations on bounded detached clones using the original
 helper table. The supplied original is unchanged; limits remain `source.limit`
 and invalid observations are `target.admission` with source attribution.
-Captured kinds are `zkc.relation.r1cs/1` and `zkc.relation.air/1`, with canonical
+Captured kinds are `zkc.relation.r1cs` and `zkc.relation.air`, with canonical
 asset identity as key and `1` as revision. The reader requires the matching
 immutable admitted `RelationAsset` handles, supplied outside this small JSON.
 
@@ -1011,18 +1011,16 @@ project through associated representations, even when structurally copyable.
 exact source interface. This binds source names, nominal schemas, permissions and
 capture/Entry selection. The standalone structural view does not establish source
 correspondence or constructor authority and cannot authorize private input decoding.
-Both readers reject duplicate/unknown keys, wrong versions and malformed metadata.
+Both readers reject duplicate/unknown keys, unknown tags and malformed metadata.
 Object member order is immaterial for semantic interface comparison; admission of
 a published checked original requires canonical bytes. The original identity hashes exact MLIR bytes
 without debug locations under a fixed printing policy. The toolchain identity binds
 the installed catalog, compiler source build identity and actual LLVM/MLIR release.
-The catalog uses `zkc.language-catalog/2` length framing. Kernel rows contain
-their signatures and parameter contracts without a constant local-effect field.
+The catalog uses `zkc.language-catalog` length framing. Kernel rows contain
+their signatures and parameter contracts.
 Source availability still requires an installed declaration at an admitted
 authoring stage, with all applicable semantic-facet and source-effect checks.
-Rebuild v0 interfaces and packages when this catalog identity changes; an old
-authenticated identity does not authorize a new catalog.
-These identify the checked environment; they are not an authenticity signature or
+The identities bind the checked environment; they are not an authenticity signature or
 security claim. The independent comparison binds generated coordinates to source
 spans; diagnostic paths do not affect capture or original identity.
 
@@ -1035,7 +1033,7 @@ retain its original numeric spelling.
 
 ### Published Entry package
 
-`packageEntry` accepts only an owned `CompiledEntry`. It emits `zkc.entry/1`
+`packageEntry` accepts only an owned `CompiledEntry`. It emits `zkc.entry`
 with exactly `format`, `original`, `interface`, `artifact`, and `options`.
 Original MLIR, interface JSON and native run bundle or proof deployment are exact
 strings. Options contain Boolean `simplify` and `release_storage`. The job kind
@@ -1054,7 +1052,7 @@ require the Host to recompile it or establish a security theorem.
 
 ### Rust interface admission
 
-The native Host reads only interface version 7. It checks strict object members,
+The native Host reads `zkc.language-interface`. It checks strict object members,
 including required nullable fields, before using source names. Recursive schema
 validation preserves kind, exact logical identity, permissions, custody, field
 slices and nominal alternatives. Every logical port remains present, including
@@ -1243,9 +1241,9 @@ bounded package output and publishes exact bytes with their SHA-256. Existing
 packages require a caller-supplied expected digest for `run`, `prove`,
 `verify` and `bindings`. No digest derived from candidate bytes authorizes them.
 
-A `zkc.entry-run/1` request has required `format`, `session` and `roles`, plus
+A `zkc.entry-run` request has required `format`, `session` and `roles`, plus
 optional `setups` (default empty). Every role record has required `inputs` and
-optional `services` (default no overrides). A `zkc.entry-proof/1` request has
+optional `services` (default no overrides). A `zkc.entry-proof` request has
 required `format` and `public`, plus optional `inputs` (private value map,
 default empty), `services` (default no overrides), `context` (default empty hex), `transcript_budget` (default absent) and `setups`
 (default empty). Public and input maps use exact logical port names. The file
@@ -1269,11 +1267,11 @@ refuse before execution. File requests have a 16 MiB byte limit, depth at most 7
 allowance including object keys. Decoding rejects duplicate keys, unknown record
 fields, trailing documents and numeric values outside unsigned 64-bit naturals.
 The optional application authority file is bounded by 64 KiB and contains exactly
-`format: "zkc.entry-setups/1"` and `keys`, mapping source slots to expected 32-byte
+`format: "zkc.entry-setups"` and `keys`, mapping source slots to expected 32-byte
 key identities in hex. Authority is separate from invocation material.
 
 Diagnostics omit returned values and proof payloads. Explicit `--results` output
-uses `zkc.entry-outputs/1`, with `roles` for a run or `values` for a proof call.
+uses `zkc.entry-outputs`, with `roles` for a run or `values` for a proof call.
 Serialization uses admitted native capacity, a 16 MiB whole-file limit and only
 installed Wire encodings for native leaves. Every requested output is encoded and
 staged before publication. Preflight, encoding or staging failure preserves all

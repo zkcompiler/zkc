@@ -87,12 +87,11 @@ backend; attempts within that invocation retain its consumed work.
 
 ## Native framing and setup
 
-The `/5` proof profile and `zkc.program/2` admit sequences recursively over the
+The native proof profile and `zkc.program` admit sequences recursively over the
 closed native message grammar. Keys, private state, affine data and unsupported
 provider leaves stay outside that grammar, including inactive alternatives and
-empty sequences. Host programmatic values and `/5` proof `wire` inputs use the
-same exact physical types and codec. Existing older host formats retain their
-own closed constructors.
+empty sequences. Host programmatic values and proof `wire` inputs use the
+same exact physical types and codec.
 
 The sequence frame is:
 
@@ -114,7 +113,7 @@ axes obey the existing matrix dimension limit of 65,536; stored nonzeros cannot
 exceed 1,048,576. A sequence of matrices
 can have different element shapes without changing its element type.
 Native frames apply structured aggregate and peak limits to standalone matrices
-too. The older typed COO codec retains its own accounting.
+too. The typed COO codec has its own accounting.
 
 Decode scans the entire expected frame before allocating payload values or
 performing expensive PCS decoding. Expanded container nodes, numeric entries,

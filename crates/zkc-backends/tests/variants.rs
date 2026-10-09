@@ -35,7 +35,7 @@ fn fixture(ports: Json, results: Json, body: Json) -> Json {
         .map(|(i, _)| format!("out{i}"))
         .collect::<Vec<_>>();
     json!([
-        "zkc.program/2",
+        "zkc.program",
         [
             ["add", "field.add", ["bls12-381.fr"], "arkworks/field.add"],
             [
@@ -230,21 +230,21 @@ fn malformed_descriptors_fail_closed() {
 fn malformed_descriptor_graphs_name_the_failed_check() {
     for (descriptor, detail) in [
         (json!([]), "variant:descriptor"),
-        (json!(["zkc.variant/1"]), "variant:descriptor"),
+        (json!(["zkc.variant"]), "variant:descriptor"),
         // A canonical graph whose root is a lone string, not a variant tree.
-        (json!(["zkc.variant/1", ["x"]]), "variant:descriptor"),
-        (json!(["zkc.variant/2", ["x"]]), "variant:version"),
-        (json!(["zkc.variant/1", []]), "variant:descriptor"),
-        (json!(["zkc.variant/1", [1]]), "variant:graph-node"),
+        (json!(["zkc.variant", ["x"]]), "variant:descriptor"),
+        (json!(["invalid.variant", ["x"]]), "variant:format"),
+        (json!(["zkc.variant", []]), "variant:descriptor"),
+        (json!(["zkc.variant", [1]]), "variant:graph-node"),
         (
-            json!(["zkc.variant/1", ["x", ["01"]]]),
+            json!(["zkc.variant", ["x", ["01"]]]),
             "variant:graph-reference",
         ),
         (
-            json!(["zkc.variant/1", ["x", ["99999999999999999999"]]]),
+            json!(["zkc.variant", ["x", ["99999999999999999999"]]]),
             "variant:graph-reference",
         ),
-        (json!(["zkc.variant/1", [["0"]]]), "variant:graph-reference"),
+        (json!(["zkc.variant", [["0"]]]), "variant:graph-reference"),
     ] {
         refused_as(&raw(descriptor), detail);
     }
@@ -254,10 +254,10 @@ fn malformed_descriptor_graphs_name_the_failed_check() {
     for i in 0..40 {
         nodes.push(json!([i.to_string(), i.to_string()]));
     }
-    refused_as(&raw(json!(["zkc.variant/1", nodes])), "variant:graph-limit");
+    refused_as(&raw(json!(["zkc.variant", nodes])), "variant:graph-limit");
     // One node past the graph's node budget, however small each node is.
     let wide: Vec<Json> = (0..=16384).map(|_| json!("x")).collect();
-    refused_as(&raw(json!(["zkc.variant/1", wide])), "variant:graph-limit");
+    refused_as(&raw(json!(["zkc.variant", wide])), "variant:graph-limit");
     let valid = logical("X", json!([["ok", []]]));
     for (tree, detail) in [
         (json!(["X", [["ok"]]]), "variant:alternative"),
@@ -1033,7 +1033,7 @@ fn shared_descriptor_graph_refusal_corpus() {
         // row is kept here rather than in the fixture.
         let expected = match row[0].as_str().unwrap() {
             "canonical" => continue,
-            "raised-version" => "variant:version",
+            "unknown-format" => "variant:format",
             "forward-reference" | "leading-zero" | "negative-reference" | "missing-reference"
             | "self-reference" => "variant:graph-reference",
             "duplicate-root" | "unused-entry" | "alternate-order" => "variant:canonical",

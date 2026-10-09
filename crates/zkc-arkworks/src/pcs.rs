@@ -264,7 +264,7 @@ impl VerifierKey {
         ))
     }
 
-    /// Encode this public key using the v1 envelope and fixed-size points.
+    /// Encode this public key using the fixed envelope and fixed-size points.
     pub fn to_bytes(&self, bounds: &Bounds) -> Result<Vec<u8>, Error> {
         let mut bytes = codec::start(self.metadata(), Kind::Verifier, bounds)?;
         codec::write(&self.inner.key.g, &mut bytes)?;

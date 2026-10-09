@@ -122,7 +122,7 @@ and [backend adapter](../../../crates/zkc-backends/src/external/README.md).
 
 ## Authored native deployment
 
-The `/5` [native proof profile](../profiles/compiler/native-proofs.md) admits
+The [native proof profile](../profiles/compiler/native-proofs.md) admits
 these transitions through ordinary local functions and its `indices` input and
 message codec. An empty selected suite declares no derived transcript. It does
 not forbid an authored data-state computation. Existing affine transcript inputs

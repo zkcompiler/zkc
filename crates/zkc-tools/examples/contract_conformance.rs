@@ -41,7 +41,7 @@ fn operation_program(binding: &OperationBinding, attributes: &[Value]) -> Option
         .collect();
     let results: Vec<_> = (0..outputs.len()).map(|i| format!("out_{i}")).collect();
     serde_json::to_vec(&json!([
-        "zkc.program/2",
+        "zkc.program",
         [[
             "probe_binding",
             binding.contract,
@@ -92,7 +92,7 @@ fn entry_interface(text: &str) -> Value {
     // Authentication binds this exact inert package. Interface::read validates
     // metadata only; these bytes make no source/artifact correspondence claim.
     let bytes = serde_json::to_vec(&json!({
-        "format": "zkc.entry/1", "original": "conformance original",
+        "format": "zkc.entry", "original": "conformance original",
         "interface": text, "artifact": "conformance metadata only",
         "options": {"simplify": true, "release_storage": false}
     }))

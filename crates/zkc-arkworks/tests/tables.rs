@@ -271,8 +271,8 @@ fn every_boolean_vertex_and_non_symmetric_order() {
 }
 
 #[test]
-fn admission_can_exceed_the_old_finite_runtime_rank_limit() {
-    // The older runtime fixes MAX_RANK=12. This crate's table semantics do not.
+fn admission_uses_the_configured_table_rank_bound() {
+    // Table admission follows the supplied bounds, including rank thirteen.
     let bounds = Bounds::new(13, 8192, 8192 * 32, 0);
     let logical: Vec<_> = (0..8192u64).map(Scalar::from).collect();
     let table = Table::from_logical(&logical, &bounds).unwrap();

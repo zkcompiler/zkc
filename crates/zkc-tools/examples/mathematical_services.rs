@@ -268,10 +268,10 @@ fn main() {
                         .collect(),
                 );
             }
-            6 => artifact[0] = "zkc.participants/1".into(),
+            6 => artifact[0] = "invalid.program".into(),
             7 => {
                 participant.as_array_mut().unwrap().pop();
-                artifact[0] = "zkc.program/2".into();
+                artifact[0] = "zkc.program".into();
             }
             8 => participant[7]
                 .as_array_mut()

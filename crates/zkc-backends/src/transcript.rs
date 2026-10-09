@@ -1,5 +1,5 @@
 //! Suite-specific byte state. The capability store owns this non-Clone wrapper.
-//! Framing is zkc's versioned construction; upstream supplies the duplex and
+//! zkc defines the byte framing; upstream supplies the duplex and
 //! permutation. This is not spongefish's default SHAKE/DomainSeparator protocol.
 use crate::{Result, refused};
 use spongefish::{DuplexSpongeInterface, instantiations::Keccak};
@@ -26,11 +26,11 @@ impl Transcript {
             Identity::Merlin3Fr64Be
             | Identity::Merlin3Ristretto64Le
             | Identity::Merlin3KoalaBearExt8 => {
-                Self::Merlin(merlin::Transcript::new(b"zkc.artifact/1"))
+                Self::Merlin(merlin::Transcript::new(b"zkc.artifact"))
             }
             Identity::Spongefish074KeccakFr64Be => {
                 let mut sponge = Keccak::default();
-                frame(&mut sponge, 0, b"domain", b"zkc.artifact/1");
+                frame(&mut sponge, 0, b"domain", b"zkc.artifact");
                 frame(&mut sponge, 0, b"suite", suite.name().as_bytes());
                 Self::Spongefish(sponge)
             }

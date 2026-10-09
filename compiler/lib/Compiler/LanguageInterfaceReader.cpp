@@ -539,7 +539,7 @@ class Reader {
         found != schemaIdentities.end())
       return found->second;
     FramedHash hash(remaining);
-    hash.frame("zkc.language.schema/1");
+    hash.frame("zkc.language.schema");
     hash.frame(typeKindName(schema.kind));
     hash.frame(schema.identity);
     hash.frame(schema.custody ? "1" : "0");
@@ -670,7 +670,7 @@ class Reader {
         return false;
       auto found = helpers.find(function->str());
       if (found == helpers.end() ||
-          result.externalKind != "zkc.language.formula/1" ||
+          result.externalKind != "zkc.language.formula" ||
           result.key != result.symbol ||
           *function != relation::formulaSymbol(result.key))
         return fail("invalid formula identity or helper");
@@ -702,7 +702,7 @@ class Reader {
       if (!hash(*identity) || result.key != *identity ||
           result.revision != "1" ||
           result.externalKind !=
-              (*kind == "r1cs" ? "zkc.relation.r1cs/1" : "zkc.relation.air/1"))
+              (*kind == "r1cs" ? "zkc.relation.r1cs" : "zkc.relation.air"))
         return fail("captured relation identity differs");
       if (!charge(assets.size() + 1))
         return false;
@@ -1315,7 +1315,7 @@ class Reader {
     if (!format || !capture || !original || !toolchain || !entry || !symbol ||
         !protocols || !relations)
       return false;
-    if (*format != "zkc.language-interface/7" || !hash(*capture) ||
+    if (*format != "zkc.language-interface" || !hash(*capture) ||
         *original != digest || *toolchain != compilerToolchainIdentity())
       return fail("interface format, original or toolchain identity differs");
     SmallVector<StringRef> entryParts;

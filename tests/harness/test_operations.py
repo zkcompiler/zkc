@@ -228,9 +228,8 @@ def test_setup_prepares_only_native_dependencies(monkeypatch):
     assert calls == [["uv", "sync", "--locked"], ["cargo", "fetch", "--locked"]]
 
 
-@pytest.mark.parametrize("scope", ["cross", "artifact", "bench", "evidence", "groth16"])
-def test_retired_scopes_are_not_aliases(scope, tmp_path):
-    result = subprocess.run([sys.executable, str(ROOT / "tests/run.py"), scope],
+def test_unknown_scope_is_rejected(tmp_path):
+    result = subprocess.run([sys.executable, str(ROOT / "tests/run.py"), "invalid-scope"],
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 2 and "invalid choice" in result.stderr
 

@@ -77,8 +77,6 @@ clones whole operations; a partial or reordered dependency list is refused.
 Missing or malformed models, other integer widths,
 vectors, arbitrary predicates, poison/undef and other operations are refused
 before optimization, even when unused. This is not a dialect-wide permission.
-The transitional `protocol.math_and` and `protocol.select_value` operations are
-removed; use `arith.andi` and `arith.select`.
 
 Algebra operation formation is independent of the enclosing protocol and any
 execution implementation. The domain verifier checks nominal field/group
@@ -92,7 +90,7 @@ These operations are total, deterministic, copyable and discardable on their
 logical domains. They are represented by dedicated registered operations with
 MLIR's `Pure` trait. Purity is a positive interpretation of this vocabulary;
 an empty effect list or an installed kernel signature alone cannot establish it.
-The older bound kernel operations keep their separate effects and possible
+Bound kernel operations have their own effects and possible
 stops. Partial arithmetic, resources and unknown operations are outside this
 total vocabulary.
 
@@ -365,7 +363,7 @@ Lowering disables implicit dialect-conversion folding. Total simplification is
 an explicit earlier stage; executable recipes have deterministic sites and
 retain the selected instruction structure. XOR and comparison use existing
 Boolean kernels; selection uses local conditional control with already evaluated
-data captures. A literal uses the separately versioned
+data captures. A literal uses the
 [native participant instruction](program.md).
 
 Full dialect conversion applies registered recipes only in generated local
@@ -409,7 +407,7 @@ Generated local functions are logical definitions with their own identities;
 their `logical_origin` is not a proof of correspondence to the common source.
 Physical backend admission, work limits, representation capacity and host
 failures remain realization obligations. They are not mathematical branches or
-permission to mark old bound kernels pure. Source totality alone does not
+permission to mark bound kernels pure. Source totality alone does not
 establish unconditional equality to a resource-bounded physical execution.
 
 Open replies here are typed logical values. A payload-only FIFO network,
@@ -418,11 +416,10 @@ need a separately selected driver contract. The [native service extension](nativ
 registry-managed root aliases. An affine RNG token is not such a reference
 merely because its value was copied.
 
-The native mathematical source is distinct from the existing source carrier.
-Its supplied participant carrier can be independently admitted and executed
-without a source correspondence claim. Lean implementation and checking for
-this new common profile are deferred until the native core is stable; existing
-Lean-backed source admission retains its existing contract.
+The supplied native participant carrier can be independently admitted and
+executed without a source correspondence claim. A Lean interpretation and
+correspondence for this native profile remain open. Independently formalized
+source models have their own subjects and admission contracts.
 
 ## Conditional completion extension
 

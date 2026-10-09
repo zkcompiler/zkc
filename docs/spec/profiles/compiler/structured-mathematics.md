@@ -134,8 +134,7 @@ custody and codec rules.
 One array exchange is one frame: the six bytes `ZKCV`, version `01`, tag `40`,
 followed by exactly `N` canonical 32-byte little-endian BLS scalar encodings.
 The length is obtained from the expected complete type, not from an untrusted
-length prefix. Total frame size is `6 + 32*N`. Existing Boolean/scalar/group
-frames are unchanged.
+length prefix. Total frame size is `6 + 32*N`.
 
 Decoding checks exact width, header/tag, policy and canonical field elements.
 Retained-value accounting is `32*N + 1280` bytes. The decoder preflights
@@ -158,7 +157,7 @@ The optional checker recognizes the closed polynomial family
 
 ```json
 {
-  "format": "zkc.polynomial-requirements/1",
+  "format": "zkc.polynomial-requirements",
   "requirements": [{
     "id": "public-sumcheck",
     "family": "boolean-sum-to-point/1",
@@ -240,8 +239,8 @@ physical selection. Missing or empty requirements cannot select unchecked mode.
 The selected entry must belong to a checked reduction/terminal pair or its
 [checked static composition](protocol-composition.md#checked-reduction-and-terminal-application).
 
-The wrapper `zkc.checked-run/1` contains the exact ordinary
-`zkc.run/1` bundle JSON as a string plus `correspondence` and `public_coin`
+The wrapper `zkc.checked-run` contains the exact ordinary
+`zkc.run` bundle JSON as a string plus `correspondence` and `public_coin`
 reports. An unrequested report is null. The correspondence
 report binds the exact selected bundle bytes, both companion bundle byte
 digests, source/requirements, selected entry and post-check passes.

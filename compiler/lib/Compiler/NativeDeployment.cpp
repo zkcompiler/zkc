@@ -118,9 +118,9 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
     return actualDescriptor.takeError();
   auto *record = out[2].getAsArray();
   if (!candidate || !record || record->size() != 6 ||
-      (*record)[0].getAsString() != "zkc.native-proof-descriptor/5" ||
+      (*record)[0].getAsString() != "zkc.native-proof-descriptor" ||
       (*record)[1] != encodeNativeProofPolicy(policy) ||
-      out[0].getAsString() != "zkc.native-proof/5" ||
+      out[0].getAsString() != "zkc.native-proof" ||
       out[1].getAsString() != digest(sourceBytes) ||
       *actualDescriptor != *expectedDescriptor ||
       out[3].getAsString() != digest(*actualDescriptor) ||

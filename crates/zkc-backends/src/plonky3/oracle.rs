@@ -91,7 +91,7 @@ struct LeafHash<E> {
 }
 impl<E: Element> LeafHash<E> {
     fn new(shape: Shape) -> Self {
-        let mut header = b"zkc.oracle.keccak256.leaf/1\0".to_vec();
+        let mut header = b"zkc.oracle.keccak256.leaf\0".to_vec();
         header.extend((E::CODEC.len() as u64).to_le_bytes());
         header.extend(E::CODEC.as_bytes());
         header.extend((shape.width as u64).to_le_bytes());
@@ -129,7 +129,7 @@ struct NodeHash;
 impl PseudoCompressionFunction<Digest, 2> for NodeHash {
     fn compress(&self, input: [Digest; 2]) -> Digest {
         Keccak256Hash.hash_iter(
-            b"zkc.oracle.keccak256.node/1\0"
+            b"zkc.oracle.keccak256.node\0"
                 .iter()
                 .copied()
                 .chain(input.into_iter().flatten()),

@@ -36,7 +36,7 @@ Any future noninteractive instantiation must specify when and how it is fixed.
 
 | Candidate | Decision and reason |
 |---|---|
-| Explicit transcript transformation | Selected in the [native proof design](native-proofs.md): analyze retained common source, emit role-local affine calls after projection, and admit exact host-created transcript resources. Selected construction and independent execution are implemented under the single proof policy `/5`. |
+| Explicit transcript transformation | Selected in the [native proof design](native-proofs.md): analyze retained common source, emit role-local affine calls after projection, and admit exact host-created transcript resources. Selected construction and independent execution are implemented under the native proof policy. |
 | Pure deterministic derivation on role-family values | Not selected as the execution representation. It does not preserve affine custody, stopped prefixes or transition accounting by itself. A suite-specific mathematical interpretation can still support later analysis. |
 | Verifier-view analysis | Implemented at the bounded scope below. It detects missing actual input binding on existing clients and changed challenge edges in synthetic controls; it specifies the values a construction must account for. |
 | Algebraic completeness/special soundness | Defer until a client needs an interpreted relation ideal or a two-transcript extraction experiment. Existing scalar Schnorr examples and exact Sumcheck correspondence do not supply that extractor experiment or imply those analyses. |

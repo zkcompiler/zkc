@@ -4,7 +4,7 @@
 #include "llvm/Support/SHA256.h"
 namespace zkc::relation {
 inline std::string formulaSymbol(llvm::StringRef key) {
-  std::string material = "zkc.language.predicate/1:" + key.str();
+  std::string material = "zkc.language.predicate:" + key.str();
   return "zkf_" +
          llvm::toHex(llvm::SHA256::hash(llvm::arrayRefFromStringRef(material)),
                      true);

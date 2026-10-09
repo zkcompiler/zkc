@@ -1,5 +1,5 @@
 {
-  "profile": "zkc.contract-conformance-coverage/1",
+  "profile": "zkc.contract-conformance-coverage",
   "operations": {
     "field": [
       "vector.get",

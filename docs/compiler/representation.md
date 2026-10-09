@@ -53,7 +53,7 @@ conversions and operands separately from proposal validation.
 
 ## Execution and evidence
 
-The emitted `zkc.program/2` executes through the shared Runner. Logical data,
+The emitted `zkc.program` executes through the shared Runner. Logical data,
 physical storage and runtime handles have distinct identities and lifetimes.
 Native custody, value limits, conversion failures and instruction charges remain
 part of the executable contract. Sufficient-capacity mathematical equality does

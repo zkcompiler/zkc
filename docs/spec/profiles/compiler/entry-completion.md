@@ -42,7 +42,7 @@ syntactic final return is inferred.
 
 ## Executable record and control boundary
 
-Only `zkc.program/2` admits:
+Only `zkc.program` admits:
 
 ```text
 ["return_if", site, condition, entry_values, affine_continuations]
@@ -50,7 +50,7 @@ Only `zkc.program/2` admits:
 
 Admission checks the complete participant entry signature even inside nested
 loops. This instruction is not a region terminator: the false path still needs
-a final return or yield. Legacy carriers refuse it.
+a final return or yield.
 
 Inspection exposes a distinct conditional-return boundary. Advancing it checks
 the exact origin and site before work, for both independent and joint execution.
@@ -128,8 +128,7 @@ Only the program format encodes this body as:
 The body's final serialized yield contains the Boolean followed by the carried
 values. A conditional body must end in this yield; a body ending in an
 unconditional stop uses ordinary `for` encoding. Captures are explicit MLIR
-forwarding operands and are omitted by the existing executable encoding. Ordinary
-`for` encoding and behavior are unchanged.
+forwarding operands and are omitted by the executable encoding.
 A false condition ends this local loop, not the local function or participant.
 This supports bounded searches without an unrelated body executing on every
 remaining iteration. It grants no unbounded loop or arbitrary jump.

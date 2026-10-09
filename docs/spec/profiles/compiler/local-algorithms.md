@@ -99,5 +99,5 @@ Dynamic iteration coordinates remain explicit. The compiler compares expanded
 operands, order, attributes and resource flow against retained input; it does not
 accept copied origin metadata as a substitute.
 
-Native artifact identity is exact. No normalized source selector or compatibility
-policy is supplied by this profile.
+Native artifact identity binds exact bytes under the
+[artifact identity contract](../../../runtime/artifact-identity.md).

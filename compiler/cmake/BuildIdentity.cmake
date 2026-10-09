@@ -18,7 +18,7 @@ file(GLOB_RECURSE zkc_identity_inputs CONFIGURE_DEPENDS
 list(APPEND zkc_identity_inputs "${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt")
 list(SORT zkc_identity_inputs)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${zkc_identity_inputs})
-set(zkc_identity_material "zkc.compiler-build/1\n")
+set(zkc_identity_material "zkc.compiler-build\n")
 foreach(input IN LISTS zkc_identity_inputs)
   file(RELATIVE_PATH name "${CMAKE_CURRENT_SOURCE_DIR}" "${input}")
   file(SHA256 "${input}" identity)

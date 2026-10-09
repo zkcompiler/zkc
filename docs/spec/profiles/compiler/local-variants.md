@@ -47,7 +47,7 @@ and its body-dependent evidence remain the owner of that stronger guarantee.
 ## Portable representation
 
 Logical type spelling is `variant:H`, where `H` is lowercase hexadecimal of
-compact UTF-8 JSON `["zkc.variant/1", nodes]`. This is a self-contained content
+compact UTF-8 JSON `["zkc.variant", nodes]`. This is a self-contained content
 graph, not an ambient registry. A node is either a printable ASCII string or an
 array of canonical decimal-string references to earlier nodes. The last node
 is the root. Nodes are interned by exact content in first-use postorder: repeated
@@ -103,15 +103,16 @@ depth or node admission. An inline graph subtree can satisfy a later text lookup
 only after that spelling passes its own expansion bound; the containing graph's
 bound alone is insufficient. This loading policy is separate from portable formation
 and live-value accounting: C++ formation can accept a program that the Rust Host refuses for loading
-capacity; the independent Lean descriptor model has its own admission scope. The executable value charges below remain
-unchanged. Bounded unpack scratch is additional to installed metadata; concurrent
+capacity; the independent Lean descriptor model has its own admission scope.
+Executable values incur the charges below. Bounded unpack scratch is additional
+to installed metadata; concurrent
 loads and allocator overhead are not a process memory guarantee.
 
 The physical spelling appends `@logical.variant/1`; those 18 suffix bytes are
 additional to the logical bound. Payloads still use logical types, whose admitted
 default representations determine their physical values. This profile supplies
-no arbitrary alternative representation and accepts no other descriptor version
-name.
+no arbitrary alternative representation. Unknown descriptor tags and malformed
+records refuse.
 
 The portable instructions are:
 

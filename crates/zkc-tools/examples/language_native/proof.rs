@@ -117,7 +117,7 @@ pub(super) fn run(directory: &Path) {
                         json!([])
                     };
                     json!([
-                        "zkc.native-proof-inputs/1",
+                        "zkc.native-proof-inputs",
                         [["V", "0", base], ["V", "1", point]],
                         data,
                         "",

@@ -1,7 +1,7 @@
 # Entry and native execution hosts
 
 `zkc` compiles `.zkc` Entry packages through the mathematical compiler and executes
-the resulting `zkc.program/2` with the generic runtime. The public library has
+the resulting `zkc.program` with the generic runtime. The public library has
 three owners:
 
 | Owner | Responsibility |
@@ -43,13 +43,13 @@ This opt-in does not replace an independently trusted deployment pin or establis
 cryptographic transcript binding. Low-level native proof execution APIs leave that
 policy to their caller.
 
-Only native proof deployment, descriptor, policy and binding version `/5` is
-installed, with `zkc.native-origin/2`. Flat, iterated, committed and structured
+Native proof deployment, descriptor, policy and binding each have one current
+schema, with `zkc.native-origin` occurrences. Flat, iterated, committed and structured
 programs share this model. Deployment admission requires explicit `SetupAuthority`. Quotas are
 operational ceilings, separate from the semantic binding root. Oversized limit
 requests refuse instead of being silently clamped; public limit types expose
 installed hard maxima and document their independent units. Capacity and
-attempt policy use only `/2` records and `[instructions, iterations]` work pairs. Setup keys retain
+attempt policy use `[instructions, iterations]` work pairs. Setup keys retain
 authenticated registry authority; this crate does not infer setup authorization
 from source text or wire data.
 

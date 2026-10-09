@@ -103,7 +103,7 @@ fn carrier() -> Json {
 }
 fn typed_carrier(ty: &str) -> Json {
     json!([
-        "zkc.program/2",
+        "zkc.program",
         [],
         [[
             "function",
@@ -149,7 +149,7 @@ fn raw() -> Json {
     message_bundle(BOOL)
 }
 fn message_bundle(ty: &str) -> Json {
-    json!({"format":"zkc.run/1", "candidate":typed_carrier(ty).to_string(), "entry":"main", "roles":["Alice","Bob"],
+    json!({"format":"zkc.run", "candidate":typed_carrier(ty).to_string(), "entry":"main", "roles":["Alice","Bob"],
         "steps":[step(0,0,Some(0)),step(0,1,Some(0)),step(1,0,Some(0)),step(0,2,None),step(1,1,None)]})
 }
 fn step(role: usize, instruction: usize, anchor: Option<usize>) -> Json {
@@ -316,11 +316,11 @@ fn admission_refuses_coverage_group_and_envelope_mutations() {
     x["candidate"] = json!(c.to_string());
     cases.push(x);
     let mut x = raw();
-    x["format"] = json!("zkc.run/99");
+    x["format"] = json!("invalid.run");
     cases.push(x);
     let mut x = raw();
     let mut c = carrier();
-    c[0] = json!("zkc.service-participants/1");
+    c[0] = json!("invalid.program");
     x["candidate"] = json!(c.to_string());
     cases.push(x);
     for (index, x) in cases.iter().enumerate() {
@@ -384,7 +384,7 @@ fn outer_decoder_checks_duplicates_unknown_missing_and_bounds() {
 #[test]
 fn coherent_cross_role_reordering_remains_supplied_only() {
     let c = json!([
-        "zkc.program/2",
+        "zkc.program",
         [],
         [[
             "function",
@@ -887,13 +887,13 @@ fn loop_bundle() -> Json {
         })
         .collect();
     let candidate = json!([
-        "zkc.program/2",
+        "zkc.program",
         [],
         [],
         participants,
         [["entry", "main", [["Alice", "a"], ["Bob", "b"]]]]
     ]);
-    json!({"format": "zkc.run/1", "candidate": candidate.to_string(), "entry":"main",
+    json!({"format": "zkc.run", "candidate": candidate.to_string(), "entry":"main",
         "roles":["Alice","Bob"], "steps":[
             {"loop":[step(0,0,Some(0)),step(1,0,Some(0))], "body":[],
              "yield":[step(0,1,None),step(1,1,None)]},
@@ -1118,27 +1118,14 @@ fn entering_native_loop_preserves_count_failure_as_stopped_outcome() {
 }
 
 #[test]
-fn current_formats_refuse_retired_and_unknown_tags() {
+fn unknown_formats_and_wrong_participant_shapes_refuse() {
     admit(&raw()).unwrap();
-    for format in [
-        "zkc.native-run/1",
-        "zkc.native-run/2",
-        "zkc.native-run/3",
-        "zkc.run/2",
-        "zkc.run/99",
-    ] {
+    for format in ["invalid.run", ""] {
         let mut raw = raw();
         raw["format"] = json!(format);
         assert_eq!(admit(&raw).unwrap_err(), BundleError::Format, "{format}");
     }
-    for format in [
-        "zkc.service-participants/1",
-        "zkc.native-participants/1",
-        "zkc.native-participants/2",
-        "zkc.native-participants/3",
-        "zkc.program/1",
-        "zkc.program/99",
-    ] {
+    for format in ["invalid.program", ""] {
         let mut candidate = carrier();
         candidate[0] = json!(format);
         let mut raw = raw();
@@ -1164,7 +1151,6 @@ fn current_formats_refuse_retired_and_unknown_tags() {
         );
     }
     let mut candidate = carrier();
-    candidate[0] = json!("zkc.participants/1");
     for role in candidate[3].as_array_mut().unwrap() {
         role.as_array_mut().unwrap().pop();
     }

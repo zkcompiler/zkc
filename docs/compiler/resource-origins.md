@@ -42,7 +42,7 @@ from both an unknown root and a noncontinuing execution.
 | Affine input | Its own symbolic root. Identity edges require affine values at both ends. |
 | Installed state successor | Follow validated history, sampling and observation pairs. All applicable pairs for an output must identify the same exact input root; unknown or conflicting equations remain unknown. |
 | `local.apply` or protocol-level local call | Resolve the actual definition and substitute actual arguments into its formal-relative summary. Existing placement and call validation remain required. |
-| `protocol.apply` | Summarize the mathematical callee and substitute its actual inputs. Role/application validation and preparation expansion remain unchanged. |
+| `protocol.apply` | Summarize the mathematical callee and substitute its actual inputs under the role/application validation and preparation rules. |
 | `local.if` | Join equal roots from every continuing arm. An explicit stopping arm contributes no returned value. |
 | `local.match` | Join explicit captures the same way. Payload arguments have no inferred relation to an outer root. Existing private-tag history restrictions remain. |
 | `local.for` | Give each affine carried slot a distinct symbol. A backedge preserving that slot proves the initial root, including zero trips. An unknown slot does not discard evidence for other slots. |

@@ -222,7 +222,7 @@ Expected<CapturedProject> capture(std::vector<SourceBuffer> sources,
   storage->sources = std::move(sources);
   storage->format = options.format;
   std::string identity;
-  detail::frame(identity, "zkc.capture/2");
+  detail::frame(identity, "zkc.capture");
   detail::frame(identity, options.format);
   detail::frame(identity, std::to_string(storage->sources.size()));
   for (const auto &source : storage->sources) {
@@ -531,7 +531,7 @@ std::string installedCatalogIdentity() {
     row({"service", service.contract, "draw", service.field});
   std::sort(rows.begin(), rows.end());
   std::string bytes;
-  detail::frame(bytes, "zkc.language-catalog/2");
+  detail::frame(bytes, "zkc.language-catalog");
   for (const auto &row : rows)
     detail::frame(bytes, row);
   return detail::digest(bytes);

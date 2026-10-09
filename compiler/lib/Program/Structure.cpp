@@ -191,7 +191,7 @@ class Structure {
         m.stage != Participants::Stage::Physical)
       fail("source-model-shape");
     return fields(
-        {text("zkc.program/2"), environment(m),
+        {text("zkc.program"), environment(m),
          list(m.functions, [&](const auto &f) { return function(f); }),
          list(m.participants,
               [&](const Participant &p) {

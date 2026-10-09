@@ -501,13 +501,13 @@ fn read<G:Group>(x:Wrapped<G>)->G::Scalar where Wire(G::Scalar){return need(x.x)
               bool(error.diagnostic().primary);
   });
   require(located, "empty message refusal lost its source location");
-  auto oldVersion = emptySchema;
-  (*oldVersion.getAsObject())["format"] = "zkc.language-interface/1";
-  std::string oldBytes;
-  raw_string_ostream(oldBytes) << oldVersion;
-  auto oldInterface = checkInterface(emptyArray, oldBytes);
-  require(bool(oldInterface), "obsolete source interface version accepted");
-  consumeError(std::move(oldInterface));
+  auto malformed = emptySchema;
+  (*malformed.getAsObject())["format"] = "invalid.language-interface";
+  std::string malformedBytes;
+  raw_string_ostream(malformedBytes) << malformed;
+  auto invalidInterface = checkInterface(emptyArray, malformedBytes);
+  require(bool(invalidInterface), "unknown source interface tag accepted");
+  consumeError(std::move(invalidInterface));
 }
 void layoutsAndCorrespondence() {
   auto layoutProject =

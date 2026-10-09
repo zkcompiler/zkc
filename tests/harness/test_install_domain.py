@@ -251,10 +251,9 @@ def test_unconfigured_or_symlink_build_is_refused(driver, tmp_path, kind):
     assert not calls
 
 
-@pytest.mark.parametrize("option", ["--runtime", "--checker"])
-def test_retired_source_execution_options_are_rejected(driver, option):
+def test_unknown_option_is_rejected(driver):
     invoke, calls, _ = driver
     with pytest.raises(SystemExit) as error:
-        invoke(option, "/absent/tool")
+        invoke("--invalid-option", "/absent/tool")
     assert error.value.code == 2
     assert not calls

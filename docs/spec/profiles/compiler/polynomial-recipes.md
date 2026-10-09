@@ -95,7 +95,7 @@ Independent numerical checks cover degree-two and degree-three recipes,
 asymmetric factor tables, zero/one/multiple rounds and changed incoming data.
 They do not prove the expansion for all recipes or Sumcheck soundness.
 The existing fixed-arity polynomial correspondence checker has its own closed
-family and does not certify this new dynamic session. New Lean semantics,
+family and does not certify this dynamic session. A Lean interpretation,
 independent recipe realization checking, committed-original terminals and full
 GKR/batching clients remain separate work. Adding an execution strategy such as
 point evaluation followed by interpolation must preserve this same recipe and

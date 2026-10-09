@@ -1,14 +1,14 @@
 # Native interpreter
 
-`admit_supplied` accepts exactly `zkc.program/2`. It validates all retained
+`admit_supplied` accepts exactly `zkc.program`. It validates all retained
 functions, participant bodies, entries and operation declarations before asking
 the backend to confirm installed signatures. `Admitted` retains the exact bytes
 and immutable typed model. Artifact text cannot install backend code.
 
 An entry maps roles to flat participant definitions. Participants contain local
 calls, service queries, messages, bounded value-counted loops and returns.
-The reserved parameter field must be empty; there are no participant calls,
-source family selectors, loading-time programs or implicit loop parameters.
+Participant arguments and loop operands are explicit. Admission rejects
+participant calls, source family selectors and loading-time programs.
 Local functions support typed arithmetic operations and structured control,
 including conditionals, bounded iteration, variants, storage release and stops.
 

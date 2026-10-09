@@ -79,7 +79,7 @@ private:
 /// parser; decodeR1CS performs relation-shape validation after this transport
 /// check.
 llvm::Expected<llvm::json::Value> parseR1CSText(llvm::StringRef);
-/// Strict canonical, versioned zkc interchange. No witness or generator state.
+/// Strict canonical zkc interchange. No witness or generator state.
 llvm::Expected<R1CS> decodeR1CS(const llvm::json::Value &);
 /// Circom-compatible R1CS v1 container; reject custom gates and unknown
 /// sections. The field is resolved by the exact modulus, never a

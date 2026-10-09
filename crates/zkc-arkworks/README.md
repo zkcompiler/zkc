@@ -75,7 +75,7 @@ copies a group point and metadata and retains no private table. Table Debug
 output omits scalar contents. Original tables are private data but are not
 zeroized on drop. There is no mutable randomness state in commit/open/check.
 
-## Ingress and wire format v1
+## Ingress and wire format
 
 `Bounds::new(max_arity, max_table_elements, max_artifact_bytes,
 max_setup_cells)` is explicit and finite. The last limit is the setup work
@@ -99,7 +99,7 @@ Public PCS objects have an **81-byte envelope**:
 
 | Offset | Width | Meaning |
 |---|---:|---|
-| 0 | 8 | ASCII `ZKCAR006`, the fixed v1 marker |
+| 0 | 8 | ASCII `ZKCAR006`, the fixed wire marker |
 | 8 | 1 | Kind: verifier key = 1, commitment = 2, opening proof = 3, prover key = 4 |
 | 9 | 8 | Arity, unsigned little-endian u64 |
 | 17 | 32 | Setup fingerprint |
@@ -107,8 +107,7 @@ Public PCS objects have an **81-byte envelope**:
 
 The marker selects the crate's exact `PROFILE` (field, scheme/version,
 nonhiding, high-half logical coordinates, bit reversal, unchanged point order,
-identity base/challenge embedding, compressed exact codec). A future profile
-needs a new marker/version. After the envelope:
+identity base/challenge embedding, compressed exact codec). After the envelope:
 
 | Object | Payload | Total size |
 |---|---|---:|

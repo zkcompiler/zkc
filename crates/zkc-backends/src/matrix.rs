@@ -144,7 +144,7 @@ pub(crate) fn from_entries<S: Coefficient>(
 /// Public-data content binding under SHA256, not relation satisfaction or key
 /// provenance. Checked constructors already enforce normalized sorted COO.
 /// Stream compact JSON without retaining a second copy of the matrix:
-/// ["zkc.matrix/1", field, [rowsString, columnsString, [[r,c,coefficient],...]]].
+/// ["zkc.matrix", field, [rowsString, columnsString, [[r,c,coefficient],...]]].
 pub(crate) fn identity_check<S: CanonicalCoefficient>(
     m: &SparseCoo<S>,
     attributes: &[String],
@@ -160,7 +160,7 @@ pub(crate) fn identity_check<S: CanonicalCoefficient>(
         return Err(refused("kernel-attributes"));
     }
     let mut hash = Sha256::new();
-    hash.update(b"[\"zkc.matrix/1\",\"");
+    hash.update(b"[\"zkc.matrix\",\"");
     hash.update(S::IDENTITY.name());
     hash.update(b"\",[\"");
     hash.update(m.rows.to_string());

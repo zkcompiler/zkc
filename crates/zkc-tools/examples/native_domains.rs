@@ -50,14 +50,7 @@ fn inputs(envelope: &Json, values: &[Value], producing: bool) -> Json {
         .iter()
         .map(|p| json!([p[0], "16"]))
         .collect();
-    json!([
-        "zkc.native-proof-inputs/1",
-        public,
-        data,
-        "",
-        services,
-        "32"
-    ])
+    json!(["zkc.native-proof-inputs", public, data, "", services, "32"])
 }
 fn run(
     deployment: &NativeDeployment,
@@ -288,10 +281,10 @@ fn check_suite_mutations(envelope: &Json) {
             .unwrap_err(),
         "native-proof-query-origin"
     );
-    for version in 1..=3 {
-        let mut old = envelope.clone();
-        old[0] = json!(format!("zkc.native-proof/{version}"));
-        let bytes = serde_json::to_vec(&old).unwrap();
+    for format in ["invalid.native-proof", ""] {
+        let mut unknown_format = envelope.clone();
+        unknown_format[0] = json!(format);
+        let bytes = serde_json::to_vec(&unknown_format).unwrap();
         assert_eq!(
             NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
                 .unwrap_err(),

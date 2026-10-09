@@ -40,7 +40,7 @@ FormulaIdentities::definition(mlir::func::FuncOp helper) {
   if (body.overflow())
     return error("source.limit", "formula definition byte limit exceeded");
   FramedHash hash(remaining);
-  hash.frame("zkc.language.formula-helper/1");
+  hash.frame("zkc.language.formula-helper");
   hash.frame(text);
   auto digest = hash.finish();
   if (!digest)
@@ -70,7 +70,7 @@ FormulaIdentities::get(mlir::func::FuncOp predicate,
     append_range(pending, (*value)->dependencies);
   }
   FramedHash hash(remaining);
-  hash.frame("zkc.language.formula/1");
+  hash.frame("zkc.language.formula");
   hash.frame(predicate.getSymName());
   hash.frame(std::to_string(logicalInputs.size()));
   for (auto [identity, purpose] : zip(logicalInputs, purposes)) {

@@ -41,7 +41,7 @@ pub fn encode_tree(tree: Value) -> String {
     }
     let mut nodes = Vec::new();
     intern(tree, &mut nodes, &mut BTreeMap::new());
-    let bytes = serde_json::to_vec(&json!(["zkc.variant/1", nodes])).unwrap();
+    let bytes = serde_json::to_vec(&json!(["zkc.variant", nodes])).unwrap();
     format!(
         "variant:{}",
         bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()

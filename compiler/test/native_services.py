@@ -24,7 +24,7 @@ def project(text, name):
 
 with case("queries survive optimization and split calculation segments"):
     carrier, logical = project(source, "services")
-    assert carrier[0] == "zkc.program/2"
+    assert carrier[0] == "zkc.program"
     alice = next(p for p in carrier[3] if p[3] == "Alice")
     assert alice[7] == [["service_0", "random.bls12-381.fr/1", "0"], ["service_3", "random.bls12-381.fr/1", "3"]]
     assert len(alice[4]) == 2
@@ -84,11 +84,6 @@ for name, old, new in [
                                 if '"protocol.query"(%first, %x)' in line else line for line in mutated.splitlines())
         commands.verified(mutated, "mathematical-formation", "--canonicalize", "--cse")
 
-with case("old carrier refuses service records"):
-    old = copy.deepcopy(carrier)
-    old[0] = "zkc.participants/1"
-    canonical_program(commands, json.dumps(old), refuses="interactive-format")
-
 for name, mutate, reason in [
     ("unknown port", lambda c: next(p for p in c[3] if p[3] == "Alice")[6][2].__setitem__(2, "missing"), "service-query-context"),
     ("service input index", lambda c: next(p for p in c[3] if p[3] == "Alice")[7][0].__setitem__(2, "100"), "service-port-interface"),
@@ -147,14 +142,12 @@ with case("references cannot be forwarded through helpers"):
     mutated = mutated.replace('    %twice =', f'    %forwarded = func.call @ref_helper(%first) : ({reference}) -> {reference}\n    %twice =')
     commands.verified(mutated, "mathematical-formation", "--zkc-project-protocol", "--zkc-lower-math")
 
-with case("old carrier refuses a query even without service records"):
+with case("unknown program tag refuses service queries"):
     mutated = copy.deepcopy(carrier)
-    mutated[0] = "zkc.participants/1"
-    for participant in mutated[3]:
-        participant.pop()
+    mutated[0] = "invalid.program"
     canonical_program(commands, json.dumps(mutated), refuses="interactive-format")
 
-with case("native participants refuse the retired empty parameter slot"):
+with case("participant records refuse an extra empty field"):
     mutated = copy.deepcopy(carrier)
     next(p for p in mutated[3] if p[3] == "Alice").insert(4, [])
     canonical_program(commands, json.dumps(mutated), refuses="interactive-record")

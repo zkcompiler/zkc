@@ -65,7 +65,7 @@ int main() {
   cases.run("current program shape retains actual arguments", [&] {
     auto artifact = program::encode(original);
     auto &root = *artifact.getAsArray();
-    require(root.size() == 5 && root[0].getAsString() == "zkc.program/2",
+    require(root.size() == 5 && root[0].getAsString() == "zkc.program",
             "wrong current root grammar");
     auto &participant = *root[3].getAsArray()->front().getAsArray();
     require(participant.size() == 8 &&
@@ -73,27 +73,22 @@ int main() {
                     original.participants.front().arguments.size(),
             "actual participant arguments were lost");
   });
-  cases.run("old tag refuses independently of root arity", [&] {
+  cases.run("unknown program tag refuses with valid root arity", [&] {
     auto artifact = program::encode(original);
-    (*artifact.getAsArray())[0] = "zkc.program/1";
+    (*artifact.getAsArray())[0] = "invalid.program";
     refuses(program::decode(artifact), "interactive-format");
   });
-  cases.run("retired physical stage slot refuses under current tag", [&] {
+  cases.run("program root refuses an extra field", [&] {
     auto artifact = program::encode(original);
     auto &root = *artifact.getAsArray();
-    root.insert(root.begin() + 2, "physical");
+    root.insert(root.begin() + 2, llvm::json::Array{});
     refuses(program::decode(artifact), "interactive-shape");
   });
-  cases.run("complete retired program grammar has no reader", [&] {
+  cases.run("program root refuses a missing field", [&] {
     auto artifact = program::encode(original);
     auto &root = *artifact.getAsArray();
-    for (auto &value : *root[3].getAsArray()) {
-      auto &participant = *value.getAsArray();
-      participant.insert(participant.begin() + 4, llvm::json::Array{});
-    }
-    root.insert(root.begin() + 2, "physical");
-    root[0] = "zkc.program/1";
-    refuses(program::decode(artifact), "interactive-format");
+    root.pop_back();
+    refuses(program::decode(artifact), "interactive-shape");
   });
   cases.run("unexpanded local.apply is internal to mathematical locals", [&] {
     auto candidate = original;
@@ -253,7 +248,7 @@ int main() {
               "hostile release missed its admission boundary");
     }
   });
-  cases.run("retired participant parameter slot refuses even when empty", [&] {
+  cases.run("participant record refuses an extra empty field", [&] {
     auto artifact = program::encode(original);
     auto &participant =
         *(*artifact.getAsArray())[3].getAsArray()->front().getAsArray();

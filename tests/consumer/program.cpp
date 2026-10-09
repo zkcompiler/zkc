@@ -3,7 +3,7 @@
 #include "zkc/Support/Json.h"
 int main() {
   auto json = zkc::parseJson(
-      R"(["zkc.program/2",[],[],[["participant","p","main","P",[["x","bool@native.bool/1"]],["bool@native.bool/1"],[["return",["x"]]],[]]],[["entry","main",[["P","p"]]]]])");
+      R"(["zkc.program",[],[],[["participant","p","main","P",[["x","bool@native.bool/1"]],["bool@native.bool/1"],[["return",["x"]]],[]]],[["entry","main",[["P","p"]]]]])");
   if (!json) {
     llvm::consumeError(json.takeError());
     return 1;

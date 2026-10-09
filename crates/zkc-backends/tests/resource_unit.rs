@@ -12,7 +12,7 @@ fn ty(domain: &str) -> String {
 }
 fn fixture(ports: Json, results: Json, body: Json, args: Json, names: Json) -> Json {
     json!([
-        "zkc.program/2",
+        "zkc.program",
         [
             [
                 "make",

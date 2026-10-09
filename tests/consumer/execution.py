@@ -31,15 +31,14 @@ def main():
                 assert record["status"] == "refused" and record["code"] == refusal, record
             return record
 
-        for retired in ("run-entry", "produce-native-proof", "validate-native-proof"):
-            result = subprocess.run([args.runtime, retired], capture_output=True,
-                                    text=True, timeout=60)
-            assert result.returncode == 2 and "Unknown command" in result.stderr
-            assert not result.stdout
+        result = subprocess.run([args.runtime, "invalid-command"], capture_output=True,
+                                text=True, timeout=60)
+        assert result.returncode == 2 and "Unknown command" in result.stderr
+        assert not result.stdout
 
         bundle = work / "run.bundle"
         pin = hashlib.sha256(bundle.read_bytes()).hexdigest()
-        inputs = write("bundle.json", ["zkc.bundle-inputs/1", "installed", [
+        inputs = write("bundle.json", ["zkc.bundle-inputs", "installed", [
             ["Solo", [["0", "bool@native.bool/1", ["wire", "5a4b4356010501"]]], []]], []])
         result = run("run-bundle", bundle, pin, inputs)
         assert result["outcome"] == ["completed"] and result["acceptance"] is None
@@ -48,9 +47,9 @@ def main():
 
         deployment = work / "proof.deployment"
         pin = hashlib.sha256(deployment.read_bytes()).hexdigest()
-        producer = write("producer.json", ["zkc.native-proof-inputs/1", [], [
+        producer = write("producer.json", ["zkc.native-proof-inputs", [], [
             ["0", ["wire", "5a4b4356010501"]]], "", [], "0"])
-        validator = write("validator.json", ["zkc.native-proof-inputs/1", [], [], "", [], "0"])
+        validator = write("validator.json", ["zkc.native-proof-inputs", [], [], "", [], "0"])
         proof = work / "proof.bin"
         proof.write_bytes(b"previous proof")
         for command, request in [("prove-bundle", producer), ("verify-bundle", validator)]:
@@ -74,7 +73,7 @@ def main():
             assert "binding_scope" not in refused
         package = work / "run.entry"
         pin = hashlib.sha256(package.read_bytes()).hexdigest()
-        inputs = write("named-run.json", {"format": "zkc.entry-run/1", "session": "installed",
+        inputs = write("named-run.json", {"format": "zkc.entry-run", "session": "installed",
             "roles": {"P": {"inputs": {"x": True}}}})
         outputs = work / "named-results.json"
         result = run("run", package, pin, inputs, f"--results={outputs}")
@@ -84,14 +83,14 @@ def main():
 
         package = work / "proof.entry"
         pin = hashlib.sha256(package.read_bytes()).hexdigest()
-        producer = write("named-producer.json", {"format": "zkc.entry-proof/1",
+        producer = write("named-producer.json", {"format": "zkc.entry-proof",
             "public": {}, "inputs": {"x": True}})
-        verifier = write("named-verifier.json", {"format": "zkc.entry-proof/1", "public": {}})
+        verifier = write("named-verifier.json", {"format": "zkc.entry-proof", "public": {}})
         proof = work / "named-proof.bin"
         run("prove", package, pin, producer, proof, refusal="entry-proof-binding-policy")
         assert run("prove", package, pin, producer, proof, "--allow-header-only")["status"] == "produced"
         assert run("verify", package, pin, verifier, proof, "--allow-header-only")["status"] == "accepted"
-        producer.write_text(json.dumps({"format": "zkc.entry-proof/1", "public": {}, "inputs": {"x": False}}))
+        producer.write_text(json.dumps({"format": "zkc.entry-proof", "public": {}, "inputs": {"x": False}}))
         run("prove", package, pin, producer, proof, "--allow-header-only")
         run("verify", package, pin, verifier, proof, "--allow-header-only", refusal="artifact-rejected")
     print("Installed source Entries, bundle and independent proof execution passed")

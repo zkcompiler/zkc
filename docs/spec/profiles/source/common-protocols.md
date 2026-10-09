@@ -130,7 +130,7 @@ runtime services, inputs, bindings, paths and states. It is not a participant
 projection theorem. The controls use natural-number services to expose binding
 and state behavior; they establish no cryptographic protocol or performance claim.
 
-The [scheduled participant lowering](../compiler/scheduled-participants.md) now
+The [scheduled participant lowering](../compiler/scheduled-participants.md)
 proves complete execution preservation for this grammar and its actual stored
 callees, including fixed loops. Independently callable role-module extraction,
 portable symbols/inputs, role instantiation and source-site resolution remain

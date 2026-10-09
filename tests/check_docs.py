@@ -2,7 +2,7 @@
 """Check this reference's local Markdown links, heading fragments and reachability.
 
 This checks the inline-link/ATX-heading syntax used by these pages. It does not
-fetch external links, check mathematical truth, or rewrite historical documents.
+fetch external links or check mathematical truth.
 """
 
 import argparse

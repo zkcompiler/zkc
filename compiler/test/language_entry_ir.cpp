@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
             "proof Entry compiled as run");
         auto artifact = take(json::parse(compiled.bytes()));
         const auto &deployment = *artifact.getAsArray();
-        require(deployment[0].getAsString() == "zkc.native-proof/5" &&
+        require(deployment[0].getAsString() == "zkc.native-proof" &&
                     deployment[1].getAsString() == checked.identity(),
                 "deployment source identity differs");
         auto &policy = *(*deployment[2].getAsArray())[1].getAsArray();

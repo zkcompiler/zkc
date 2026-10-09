@@ -2,8 +2,8 @@
 
 **Research design.** Read the [boundary map](verification-map.md) first. API and
 format names below describe a possible formal connection, not existing native
-interfaces or a frozen wire ABI. Lean migration is deferred; this design is not
-an implementation or compatibility gate.
+interfaces or a frozen wire ABI. Each native correspondence claim needs an
+explicit interpretation of the actual implementation.
 
 ## 1. One meaning, several useful representations
 
@@ -12,7 +12,7 @@ Keep the semantic effect tree, typed source, MLIR graph and runtime plan distinc
 substitution and analysis. MLIR provides mutable SSA/region infrastructure for
 search and transformation. A formal target plan exposes scheduling and contracted
 operations in a form with a small interpreter. Connecting that model to the
-supported `zkc.program/2` carrier and common Rust Runner requires a separate
+supported `zkc.program` carrier and common Rust Runner requires a separate
 interpretation.
 
 Use the [source architecture](../DESIGN.md#3-mathematical-objects-and-source-representation):
@@ -226,7 +226,7 @@ method; robust security against foreign contexts requires additional hypotheses.
 [S12](sources.md#s12), [S4](sources.md#s4)
 
 A typed target model can describe calls to contracted kernels. Connecting it to
-`zkc.program/2` requires erasure and instruction-dispatch correspondence.
+`zkc.program` requires erasure and instruction-dispatch correspondence.
 Backend selection can happen before validation if its configuration is part of
 the checked subject. Selection after validation needs a theorem covering all
 allowed implementations of the selected contract.

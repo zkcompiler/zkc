@@ -13,7 +13,7 @@ impl SetupAuthority {
     pub fn parse(bytes: &[u8]) -> Result<Self> {
         let value = parse(bytes, 64 * 1024)?;
         let row = array(&value, 3)?;
-        if text(&row[0])? != "zkc.native-setup-authority/1" {
+        if text(&row[0])? != "zkc.native-setup-authority" {
             return Err("native-proof-key-authority".into());
         }
         let mut result = Self::default();

@@ -28,7 +28,7 @@ retained operands.
 The interpretation closure of a claim is the collection of semantic operands
 and premises on which its proposition or use depends. It includes the relevant
 domain, operation meanings and laws, module/source meaning, input binding,
-interface versions, observer, relation and assumptions. Dependencies are
+interface contracts, observer, relation and assumptions. Dependencies are
 selected by their role in that claim, not by proximity in the repository.
 
 A consumer using a name or revision reference MUST resolve it to the actual
@@ -109,7 +109,7 @@ obligation, even when execution refinement holds.
 An open candidate can retain unresolved choices, requirements or evidence.
 Admission means that a specified judgment is usable at its stated scope.
 A sealed artifact fixes a selected subject, interpretations, interface
-versions and evidence or trust references for reproducible use. A concrete
+contracts and evidence or trust references for reproducible use. A concrete
 sealing mechanism supplies its retention and resolution contract; these terms
 alone define no cryptographic sealing operation.
 
@@ -128,7 +128,7 @@ An executable artifact profile distinguishes:
 
 | Field class | Interpretation |
 |---|---|
-| Format and semantic versions | How to decode the artifact and interpret its constructs |
+| Format and semantic identities | How to decode the artifact and interpret its constructs |
 | Mandatory capabilities | Additional facilities required to admit or use it |
 | Realization, rule and claim | What is executed, which checking rule applies, and which proposition is established |
 | Source and context | The consumer-retained subject and its declared dependencies |

@@ -1,5 +1,5 @@
 //! Bounded JSON documents with duplicate-key rejection before typed conversion.
-//! The older array-only carriers retain their narrower parser and contracts.
+//! Array-only carriers use their narrower parser and contracts.
 use serde::{
     Deserialize, Deserializer,
     de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor},

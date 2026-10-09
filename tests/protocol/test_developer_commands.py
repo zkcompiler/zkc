@@ -43,9 +43,8 @@ def test_usage_and_execution_failures_remain_distinct(toolchain, directory):
 
     result = invoke()
     assert result.returncode == 2 and "Usage:" in result.stderr and not result.stdout
-    for args in [("unknown",), ("unknown", "--help"), ("unknown", "a", "b", "c", "d"),
-                 ("produce-native-proof", "--help"), ("validate-native-proof", "--help"),
-                 ("run-entry", "--help")]:
+    for args in [("invalid-command",), ("invalid-command", "--help"),
+                 ("invalid-command", "a", "b", "c", "d")]:
         result = invoke(*args)
         assert result.returncode == 2 and "Unknown command" in result.stderr
         assert not result.stdout

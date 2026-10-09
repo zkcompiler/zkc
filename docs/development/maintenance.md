@@ -37,8 +37,7 @@ when diagnosing a disagreement.
 
 The [test guide](../../tests/README.md) and CI manifests own current scopes.
 Default execution checks cover C++/Rust. Formal checks and external integrations
-are explicit standalone work. Groth16 application/fixture packages and legacy
-Lean-host execution dependencies are retired.
+are explicit standalone work.
 
 A direct test driver requires built tools. Report directories are allocated
 independently of shared build trees; concurrent reports do not isolate concurrent

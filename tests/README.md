@@ -1,7 +1,7 @@
 # Tests
 
 The execution toolkit has one path: `.zkc` source lowers through mathematical
-MLIR to `zkc.program/2`, which the common Runner and Host execute. Root Python
+MLIR to `zkc.program`, which the common Runner and Host execute. Root Python
 tests exercise that path and its installed tools. The optional Lean package
 maintains independent research models and checks.
 
@@ -38,8 +38,7 @@ uv run --no-sync --locked pytest tests --collect-only
 
 `tests/run.py project` is the Nix integration scope: root pytest plus the source
 Entry demo. Nix separately owns compiler, Rust, installed-consumer and style
-checks. The retired `cross`, `artifact`, `bench`, `evidence` and `groth16` scopes
-are not aliases.
+checks.
 
 ## Coverage and ownership
 
@@ -63,11 +62,6 @@ are not aliases.
 - `consumer/` is the separately configured installed C++ SDK consumer.
 - `fixtures/` contains independently retained reference vectors; its README
   identifies their owners.
-
-Source-bound artifacts, `.pir` Frontend tests, table/plan execution,
-compiler-to-old-Lean correspondence and Groth16/snarkjs fixture regeneration
-have been retired. They are not alternative execution scopes. Native vectors,
-matrices and backend numerical kernels remain part of program execution.
 
 ## Tools and reports
 

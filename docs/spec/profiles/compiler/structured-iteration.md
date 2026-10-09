@@ -18,8 +18,8 @@ The mathematical homogeneous containers have no encoding attribute:
 | `tensor<?x!algebra.group<G>>` | `groups:G` |
 | `tensor<Nx!algebra.field<F>>` | `field_array<F,N>`, including `N = 0` |
 
-`!algebra.matrix` is removed. Storage layouts remain physical choices. Matrix
-shape includes both dimensions even when either is zero. Static arrays and
+Storage layouts are physical choices. Matrix shape includes both dimensions
+even when either is zero. Static arrays and
 dynamic vectors have distinct complete identities; no implicit shape cast or
 codec substitution equates them. Empty arrays are data, but cannot construct an
 MLE or a coefficient polynomial. Those constructors still require positive sizes.
@@ -119,7 +119,7 @@ operation/port work have independent bounds. Runtime work and retained storage
 remain separately bounded.
 
 The native carrier count is `['value', ssa_name, maximum_decimal, induction_name]`.
-It is admitted by `zkc.program/2`. This contract requires
+It is admitted by `zkc.program`. This contract requires
 value counts and refuses participant calls, parameters, family selectors,
 participant `stop` and `incomplete` at **every nesting level**. Local stops
 inside local computations retain their existing behavior.

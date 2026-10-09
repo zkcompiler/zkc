@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
   auto source = parseSourceFile<ModuleOp>(argv[1], &context);
   require(bool(source), "fixture parse");
   auto policy = take(parseNativeProofPolicy(
-      R"(["zkc.native-proof-policy/5", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/1", "4", ["0", "2"], [["draw_challenge", "challenge"]]])"));
+      R"(["zkc.native-proof-policy", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/1", "4", ["0", "2"], [["draw_challenge", "challenge"]]])"));
   auto built = take(constructNativeProof(*source, policy));
   auto projected = OwningOpRef<ModuleOp>(cast<ModuleOp>((*source)->clone()));
   PassManager passes(&context);
@@ -261,7 +261,7 @@ int main(int argc, char **argv) {
     auto input = parseSourceString<ModuleOp>(loopFixture, &context);
     require(bool(input), "loop fixture parse");
     auto selected = take(parseNativeProofPolicy(
-        R"(["zkc.native-proof-policy/5","main","P","V","0","merlin3.bls12-381.fr64be/1","2",["0","1"],[["draw","challenge"]]])"));
+        R"(["zkc.native-proof-policy","main","P","V","0","merlin3.bls12-381.fr64be/1","2",["0","1"],[["draw","challenge"]]])"));
     auto construction = take(constructNativeProof(*input, selected));
     SmallVector<zkc::detail::NativeTranscriptEvent> facts;
     auto &sequence = *(*construction.descriptor.getAsArray())[3].getAsArray();
@@ -356,18 +356,14 @@ int main(int argc, char **argv) {
                   "wrong deployment accepted");
         });
       };
-  for (StringRef tag : {"1", "2", "3", "4", "0", "6", "unknown"}) {
-    deploymentMutation(("retired deployment tag " + tag).str(), [&](auto &a) {
-      a[0] = ("zkc.native-proof/" + tag).str();
-    });
-    deploymentMutation(("retired descriptor tag " + tag).str(), [&](auto &a) {
-      (*a[2].getAsArray())[0] = ("zkc.native-proof-descriptor/" + tag).str();
-    });
-    deploymentMutation(("retired policy tag " + tag).str(), [&](auto &a) {
-      (*(*a[2].getAsArray())[1].getAsArray())[0] =
-          ("zkc.native-proof-policy/" + tag).str();
-    });
-  }
+  deploymentMutation("unknown deployment tag",
+                     [](auto &a) { a[0] = "invalid.native-proof"; });
+  deploymentMutation("unknown descriptor tag", [](auto &a) {
+    (*a[2].getAsArray())[0] = "invalid.native-proof-descriptor";
+  });
+  deploymentMutation("unknown policy tag", [](auto &a) {
+    (*(*a[2].getAsArray())[1].getAsArray())[0] = "invalid.native-proof-policy";
+  });
   deploymentMutation("source identity changed",
                      [](auto &a) { a[1] = "changed"; });
   deploymentMutation("participant port map changed", [](auto &a) {

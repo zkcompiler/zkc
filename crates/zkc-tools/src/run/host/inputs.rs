@@ -11,7 +11,7 @@ impl SetupAuthority {
     pub fn parse(bytes: &[u8]) -> Result<Self> {
         let value = parse(bytes, 64 * 1024)?;
         let row = array(&value, 3)?;
-        if text(&row[0])? != "zkc.bundle-setups/1" {
+        if text(&row[0])? != "zkc.bundle-setups" {
             return Err("bundle-setup-format".into());
         }
         let mut result = Self::default();
@@ -131,7 +131,7 @@ pub struct RoleInputs {
 pub(super) fn decode(host: &RunHost, bytes: &[u8]) -> Result<RunInputs> {
     let value = parse(bytes, INPUT_LIMIT)?;
     let root = array(&value, 4)?;
-    if text(&root[0])? != "zkc.bundle-inputs/1" {
+    if text(&root[0])? != "zkc.bundle-inputs" {
         return Err("bundle-input-format".into());
     }
     let session = identifier(&root[1])?.to_owned();

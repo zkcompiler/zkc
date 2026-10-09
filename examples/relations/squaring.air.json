@@ -1,5 +1,5 @@
 {
-  "schema": "zkc.air.v1", "field": "bn254.fr", "columns": 1, "public_inputs": 1,
+  "schema": "zkc.air", "field": "bn254.fr", "columns": 1, "public_inputs": 1,
   "constraints": [
     {"scope": {"kind": "transition", "lookahead": 1}, "nodes": [
       {"op": "read", "offset": 1, "column": 0},

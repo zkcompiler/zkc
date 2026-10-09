@@ -178,7 +178,7 @@ soundness or hiding.
 
 A verifier fixes its intended relation, field and ordered statement independently
 of the prover. A normalized relation digest identifies an encoding under its
-stated version; it is neither a semantic equivalence proof nor evidence that an
+stated format; it is neither a semantic equivalence proof nor evidence that an
 external frontend preserved constraints. Source provenance, mathematical subject
 identity and physical representation identity serve different purposes.
 

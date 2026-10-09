@@ -142,8 +142,8 @@ expanding scope.
 The supported native pipeline has bounded C++ preservation checks, independent
 Rust admission and execution tests. Its actual source semantics, artifact binding
 and runtime interpretation still need a native Lean connection. Existing Lean
-source, direct-plan and table theorems concern independent models; retiring their
-native consumers does not transfer those results to `zkc.program/2`.
+source, direct-plan and table theorems concern independent models. Applying them
+to `zkc.program` requires an explicit interpretation and correspondence.
 
 An independent reference computes expectations from original inputs and the
 selected semantic contract. It must not use the producer's transformation as its
@@ -163,6 +163,6 @@ A finite campaign is empirical evidence, not a universal theorem or a numerical
 bound on remaining bugs. Native formalization can reuse existing laws only after
 connecting their exact subjects and hypotheses to the implementation.
 
-Lean research and its model-specific tools remain separate, with no migration
-requirement. The [roadmap](roadmap.md) sequences native correspondence and
+Lean research and its model-specific tools have their own subjects and contracts.
+The [roadmap](roadmap.md) sequences native correspondence and
 transcript assurance; [status](status.md) owns current tool support.

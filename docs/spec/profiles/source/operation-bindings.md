@@ -29,7 +29,7 @@ The executable retains an explicit operation-binding array alongside its
 local functions, participants and entry points:
 
 ```
-["zkc.program/2", bindings, functions, participants, entries]
+["zkc.program", bindings, functions, participants, entries]
 
 binding = [symbol, logical_contract, static_arguments, implementation]
 ```

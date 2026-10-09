@@ -14,22 +14,21 @@ for i, suite in enumerate(["merlin3.bls12-381.fr64be/1", "spongefish0.7.4.keccak
         name = f"message_{i}{suffix}"
         with case(name):
             policy = OUT / f"{name}.policy"
-            policy.write_text(json.dumps(["zkc.native-proof-policy/5", "main", "Alice", "Bob", "0", suite, "4", ["0", "2", "6", "7", "8"], [["draw_challenge", "challenge"]]]))
+            policy.write_text(json.dumps(["zkc.native-proof-policy", "main", "Alice", "Bob", "0", suite, "4", ["0", "2", "6", "7", "8"], [["draw_challenge", "challenge"]]]))
             result = commands.run([compiler, "protocol-proof", source, policy, *options])
             envelope = json.loads(result)
-            assert envelope[0] == "zkc.native-proof/5"
-            assert envelope[2][0] == "zkc.native-proof-descriptor/5"
-            assert json.loads(envelope[4])[0] == "zkc.program/2"
+            assert envelope[0] == "zkc.native-proof"
+            assert envelope[2][0] == "zkc.native-proof-descriptor"
+            assert json.loads(envelope[4])[0] == "zkc.program"
             (OUT / f"{name}.deployment").write_text(result)
             manifest.append(dict(name=name))
-for version in (1, 2, 3, 4):
-    with case(f"policy {version} refuses structured message"):
-        selected = json.loads((OUT / "message_0.policy").read_text())
-        selected[0] = f"zkc.native-proof-policy/{version}"
-        policy = OUT / f"old_{version}.policy"
-        policy.write_text(json.dumps(selected))
-        commands.run([compiler, "protocol-proof", source, policy], refuses="native-proof-policy")
-# Standalone numeric collections use the same new frame family and carrier.
+with case("unknown policy tag refuses structured message"):
+    selected = json.loads((OUT / "message_0.policy").read_text())
+    selected[0] = "invalid.native-proof-policy"
+    policy = OUT / "unknown-tag.policy"
+    policy.write_text(json.dumps(selected))
+    commands.run([compiler, "protocol-proof", source, policy], refuses="native-proof-policy")
+# Standalone numeric collections use the same frame family and carrier.
 # Wrapping them in a record is not required to select the correct boundary.
 for name, ty in [("vector", "tensor<?x!algebra.field<\"bls12-381.fr\">>"),
                  ("groups", "tensor<?x!algebra.group<\"bls12-381.g1\">>"),
@@ -46,12 +45,12 @@ for name, ty in [("vector", "tensor<?x!algebra.field<\"bls12-381.fr\">>"),
         fixture = OUT / f"{name}.mlir"
         fixture.write_text(text)
         policy = OUT / f"{name}.policy"
-        policy.write_text(json.dumps(["zkc.native-proof-policy/5", "main", "Alice", "Bob", "0", "", "", ["1"], []]))
+        policy.write_text(json.dumps(["zkc.native-proof-policy", "main", "Alice", "Bob", "0", "", "", ["1"], []]))
         deployment = commands.run([compiler, "protocol-proof", fixture, policy])
         envelope = json.loads(deployment)
         (OUT / f"{name}.deployment").write_text(deployment)
         manifest.append(dict(name=name, standalone=name))
-        assert json.loads(envelope[4])[0] == "zkc.program/2"
-        assert envelope[2][5][0][2] == "zkc.native-data/1"
+        assert json.loads(envelope[4])[0] == "zkc.program"
+        assert envelope[2][5][0][2] == "zkc.native-data"
 (OUT / "manifest.json").write_text(json.dumps(manifest))
 counted()

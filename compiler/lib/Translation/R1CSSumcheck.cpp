@@ -349,7 +349,7 @@ json::Value r1csSumcheckRequirements(const R1CS &relation) {
                                    {"reduction_site", "reduce"},
                                    {"terminal_site", "decide"}}},
       {"relation", relation.encode()}};
-  return json::Object{{"format", "zkc.polynomial-requirements/1"},
+  return json::Object{{"format", "zkc.polynomial-requirements"},
                       {"requirements", json::Array{std::move(requirement)}}};
 }
 } // namespace zkc::relation

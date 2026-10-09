@@ -36,7 +36,7 @@ responses before it can share authentication work.
 The installed schemes are `rows.merkle-keccak256.koala-bear/1` and
 `rows.merkle-keccak256.koala-bear.ext8-binomial3/1`. Both use Plonky3 0.5.1's
 binary single-root tree with Keccak-256, one rectangular matrix and cap height
-zero. Leaf hashing binds a versioned leaf tag, field/basis codec, width, height
+zero. Leaf hashing binds a fixed leaf tag, field/basis codec, width, height
 and canonical coordinates. Node hashing uses a distinct tag and two 32-byte
 digests. Missing bottom-layer leaves use upstream zero-digest padding.
 
@@ -71,6 +71,6 @@ not justify treating them as one simultaneous query experiment.
 These are semantic obligations for the authored protocol and its selected
 experiment. The native implementation provides general oracle kernels and
 [composed mathematical clients](../../compiler/mathematical-composition.md).
-It does not provide the retired source-route oracle analysis commands, a complete
-FRI application or a BCS/Fiat–Shamir security theorem. Automatic lowering of an
+It does not provide a complete FRI application or a BCS/Fiat–Shamir security
+theorem. Automatic lowering of an
 arbitrary ideal-oracle IOP remains separate work.

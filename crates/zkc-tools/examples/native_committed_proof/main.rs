@@ -22,7 +22,7 @@ fn authority(keys: &Keys, authored: bool) -> zkc_tools::proof::SetupAuthority {
 fn authority_record(keys: &Keys, authored: bool) -> Json {
     let a = authority(keys, authored);
     json!([
-        "zkc.native-setup-authority/1",
+        "zkc.native-setup-authority",
         a.keys
             .iter()
             .map(|(p, id)| json!([p.to_string(), hex(id)]))
@@ -156,7 +156,7 @@ fn inputs(envelope: &Json, family: &str, keys: &Keys, path: &Path, producing: bo
         })
         .collect();
     json!([
-        "zkc.native-proof-inputs/1",
+        "zkc.native-proof-inputs",
         public,
         data,
         "",

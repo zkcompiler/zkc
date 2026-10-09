@@ -96,7 +96,7 @@ fn direct(root: &[u8], wire: &[u8]) -> ([u8; 64], [u8; 64]) {
 fn direct_frames(root: &[u8], wire: &[u8], message: &[u8], query: &[u8]) -> ([u8; 64], [u8; 64]) {
     let mut t = Keccak::default();
     for data in [
-        frame(0, b"domain", b"zkc.artifact/1"),
+        frame(0, b"domain", b"zkc.artifact"),
         frame(0, b"suite", SUITE.name().as_bytes()),
         frame(1, b"binding", root),
         frame(1, b"origin", message),
@@ -146,7 +146,7 @@ fn independent_frames_vectors_native_sampler_and_fresh_state() {
     // Retain the published raw primitive fixture; it is not a generated contract.
     let raw = |kind| {
         tree(&json!([
-            "zkc.logical-origin/1",
+            "zkc.logical-origin",
             "main",
             "instance",
             [],
