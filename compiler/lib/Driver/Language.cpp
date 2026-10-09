@@ -4,6 +4,7 @@
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguagePackage.h"
 #include "zkc/Support/Refusal.h"
+#include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
@@ -107,10 +108,10 @@ int runLanguageCompiler(int argc, char **argv) {
     else
       return refuse(error("source.options", "unknown language option: " + arg));
   }
-  if (format.empty() || entry.empty())
-    return refuse(error(
-        "source.options",
-        "explicit --source-format=zkc and qualified --entry are required"));
+  if (format.empty() || (entry.empty() && command != "language-check"))
+    return refuse(
+        error("source.options", "--source-format=zkc is required; output "
+                                "commands also require --entry"));
   auto captureResult = capture(std::move(sources), std::move(assets),
                                CaptureOptions{format, limits});
   if (!captureResult)
@@ -119,6 +120,15 @@ int runLanguageCompiler(int argc, char **argv) {
   auto project = analyze(*captured).checkedProject();
   if (!project)
     return refuse(project.takeError());
+  json::Object checked{{"format", "zkc.source-check/0"},
+                       {"status", "checked"},
+                       {"scope", entry.empty() ? "definitions" : "entry"},
+                       {"capture", captured->identity()},
+                       {"installation", project->installationIdentity()}};
+  if (entry.empty()) {
+    outs() << json::Value(std::move(checked)) << '\n';
+    return 0;
+  }
   auto selected = closeEntry(*project, entry);
   if (!selected)
     return refuse(selected.takeError());
@@ -126,7 +136,9 @@ int runLanguageCompiler(int argc, char **argv) {
   if (!original)
     return refuse(original.takeError());
   if (command == "language-check") {
-    outs() << "source, mathematical IR, and correspondence checked\n";
+    checked["entry"] = entry;
+    checked["original"] = original->identity();
+    outs() << json::Value(std::move(checked)) << '\n';
     return 0;
   }
   if (command == "language-emit") {

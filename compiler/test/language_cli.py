@@ -107,6 +107,9 @@ with case('target admission failure names its phase and related source declarati
     source.write_text('module expansion; domain Fr=field("bls12-381.fr");\n' + '\n'.join(helpers) +
                       '\nprotocol Small roles(P)()->(r:Fr@P){return(r=1);}' +
                       '\nprotocol Unused roles(P)()->(r:Fr@P){return(r=f17());}entry Demo=Unused;')
+    definitions = json.loads(commands.run([compiler, 'language-check', '--source-format=zkc',
+                                             f'--module=expansion={source}']))
+    assert definitions['scope'] == 'definitions'
     attempt = commands.attempt([compiler, 'language-check', '--source-format=zkc',
                                 '--entry=expansion::Demo', f'--module=expansion={source}'])
     assert attempt.returncode > 0 and not attempt.stdout

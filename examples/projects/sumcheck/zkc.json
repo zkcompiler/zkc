@@ -1,0 +1,10 @@
+{
+  "format": "zkc.project/0",
+  "modules": {
+    "example": "main.zkc",
+    "sumcheck": "../../../libraries/sumcheck/lib.zkc",
+    "zkc::vector": "../../../libraries/zkc/vector.zkc",
+    "zkc::boolean": "../../../libraries/zkc/boolean.zkc"
+  },
+  "assets": {}
+}

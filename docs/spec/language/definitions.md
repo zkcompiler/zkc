@@ -43,6 +43,24 @@ bound. Caller limits may only lower these ceilings. Analysis rechecks the captur
 against its requested limits before parsing assets. Capture alone supplies no
 protocol ports, runtime matrices or specification binding.
 
+The `zkc` CLI optionally reads a `zkc.project/0` JSON object with exactly
+`format`, `modules` and `assets` fields. `modules` is a nonempty object mapping
+logical names to filenames. `assets` maps names to objects containing exactly
+`format` and `path`. Duplicate keys, unknown fields and duplicate command-line
+names refuse. The manifest is at most 1 MiB, resolved paths at most 4096 bytes,
+and modules plus assets at most 256. Relative paths are anchored at the manifest's
+lexical parent; absolute paths and ordinary symlinks are allowed. Files must be
+regular. The manifest is trusted configuration, not a filesystem sandbox.
+
+`--project` is exclusive with explicit `--module`/`--asset` options. The loader
+passes the resolved map to the same compiler capture boundary; manifest bytes
+and path spelling do not enter capture identity. All inputs, including the
+manifest, are protected from output publication. The loader performs no import
+discovery, dependency download, glob expansion, environment interpolation or
+implicit Entry selection. `zkc check` without `--entry` stops after definition
+checking. Selecting an Entry also checks closure and mathematical correspondence;
+only `compile` produces the executable package.
+
 Qualified references first resolve their root in the enclosing component and
 then the module's visible declarations, including imports. A resolved lexical
 root owns the rest of the path: a missing or private member does not fall back

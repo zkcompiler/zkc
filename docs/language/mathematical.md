@@ -27,8 +27,11 @@ Use the same options with `language-emit` to print checked original MLIR,
 `language-interface` for the selected Entry's named port layout, or
 `language-bundle` for the selected run bundle or proof deployment, or
 `language-package` for the immutable package containing original, interface,
-artifact and compilation options. Every command checks source, target
-admission and source correspondence. Module and Asset capture is explicit. `--no-simplify` and `--release-storage` select
+artifact and compilation options. These Entry commands check source, target
+admission and source correspondence. `language-check` also accepts no `--entry`
+to check definitions alone; the report identifies that narrower scope.
+The application CLI offers `zkc check` with the same behavior and optional
+[project inputs](README.md#project-inputs). Module and Asset capture is explicit. `--no-simplify` and `--release-storage` select
 existing downstream compiler options for bundle production.
 
 `--asset=NAME=FORMAT=FILE` adds explicitly captured relation data. Supported

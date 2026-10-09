@@ -113,6 +113,8 @@ zkc compile --module=schnorr=libraries/schnorr/lib.zkc \
 ```
 
 See the [walkthrough](../docs/getting-started.md) to invoke the compiled Entry.
+Project files can record these maps; see [project inputs](../docs/language/README.md#project-inputs).
+Check the shared math modules with `zkc check --project=libraries/zkc/zkc.json`.
 There is no separate registry or library installation step.
 
 ## Maintain a library

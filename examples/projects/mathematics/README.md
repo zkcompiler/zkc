@@ -7,9 +7,7 @@ For `values = [a, b]`, both compute `(1 - point) * a + point * b`.
 Compile from the repository root:
 
 ```sh
-zkc compile --module=example=examples/projects/mathematics/main.zkc \
-  --module=zkc::vector=libraries/zkc/vector.zkc \
-  --module=zkc::symbolic=libraries/zkc/symbolic.zkc \
+zkc compile --project=examples/projects/mathematics/zkc.json \
   --entry=example::Run --output=mathematics.entry
 ```
 
