@@ -204,3 +204,8 @@ mlir_target_link_libraries(zkc-contract_mappings-test PRIVATE MLIRParser)
 mlir_target_link_libraries(zkc-target_decisions-test PRIVATE MLIRParser)
 
 add_zkc_test(program_codec Program)
+
+add_zkc_test(relation_table_view Relation)
+add_test(NAME relation-table-view COMMAND zkc-relation_table_view-test
+  "${PROJECT_SOURCE_DIR}/adapters/plonky3/fixtures/recurrence")
+set_tests_properties(relation-table-view PROPERTIES LABELS native)

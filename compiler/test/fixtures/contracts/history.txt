@@ -3,6 +3,7 @@ ring.point 0
 ring.rows 0
 ring.coefficients 0
 ring.affine_sum 0
+relation.table_rows 0
 bool.not 0
 bool.or 0
 commitments.append 0

@@ -59,6 +59,7 @@ constexpr ContractRow contractRows[] = {
     {"ring.rows", Plonky3},
     {"ring.coefficients", Plonky3},
     {"ring.affine_sum", Plonky3},
+    {"relation.table_rows", Plonky3},
     {"sequence.empty", Native, Compatibility::Independent},
     {"sequence.append", Native, Compatibility::Independent},
     {"sequence.length", Native, Compatibility::Independent},

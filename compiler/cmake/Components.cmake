@@ -90,6 +90,7 @@ add_zkc_component(Relation
   lib/Relation/Bundle.cpp
   lib/Relation/BundleData.cpp
   lib/Relation/BundleStaged.cpp
+  lib/Relation/BundleTable.cpp
   lib/Relation/Matrices.cpp
 )
 add_zkc_component(Program
