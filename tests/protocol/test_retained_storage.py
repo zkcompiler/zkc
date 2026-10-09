@@ -32,25 +32,25 @@ fn check(root: Root, width: index, height: index, query: index, row: Vector<F>, 
 fn rows(size: index, width: index) -> index {{ return kernel("index.div", size, width); }}
 fn coordinate(i: index, height: index) -> index {{ return kernel("index.mod", i, height); }}
 math fn both(a: bool, b: bool) -> bool {{ return intrinsic("bool.and", a, b); }}
-protocol Cost roles(P,V)(size:index@(P,V), width:index@(P,V), count:index@(P,V))
-    using(coins:Random<E>@V)->(accepted:bool@V) {{
-  local P let values=make(size);
-  local P let tree=commit(values, width);
-  local P let hp=rows(size, width);
-  local V let hv=rows(size, width);
+protocol Cost roles(P,V)(size:index@(P,V), width:index@(P,V), count:index@(P,V),
+    coins:Random<E>@V)->(accepted:bool@V) {{
+  let values @P=make(size);
+  let tree @P=commit(values, width);
+  let hp @P=rows(size, width);
+  let hv @V=rows(size, width);
   let root=send P->V(tree.0);
   let challenge=coins.draw();
   let delivered=send V->P(challenge);
-  let accepted=repeat roles(P,V)(i<count,max 64)
-      carry(ok=true@V) capture(tree,root,width,hp,hv) {{
-    local P let qp=coordinate(i, hp);
-    local V let qv=coordinate(i, hv);
-    local P let opening=open(tree.1, qp);
+  let mut accepted @V = true;
+  for i in 0..count roles(P,V) max 64 {{
+    let qp @P=coordinate(i, hp);
+    let qv @V=coordinate(i, hv);
+    let opening @P=open(tree.1, qp);
     let row=send P->V(opening.0);
     let path=send P->V(opening.1);
-    local V let checked=check(root, width, hv, qv, row, path);
-    yield(ok=both(ok, checked));
-  }};
+    let checked @V=check(root, width, hv, qv, row, path);
+    accepted=both(accepted, checked);
+  }}
   return(accepted=accepted);
 }}
 entry Demo=Cost {{
