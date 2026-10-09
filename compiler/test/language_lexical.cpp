@@ -72,6 +72,14 @@ void refusesCustody(StringRef source) {
           diagnostic);
 }
 void reviewRegressions() {
+  refuses("enum Empty{} fn f(e:Empty)->(){match e{} return ();}",
+          "source.type");
+  refuses("enum One{Only()} fn f(e:One)->(){match e{} return ();}",
+          "source.match");
+  for (StringRef action : {"require", "consume", "drop"})
+    refuses(("fn f()->(){" + action + " {stop \"reject\";};}").str(),
+            "source.unreachable");
+
   for (StringRef source :
        {"fn f(t:Ticket,go:bool)->(){let mut s=t;consume s;if "
         "go{s=Ticket{};consume s;s=Ticket{};}else{s=Ticket{};}consume s;return "

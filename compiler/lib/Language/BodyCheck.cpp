@@ -220,11 +220,17 @@ bool BodyChecker::statements(const SyntaxBody &source) {
     if (s.kind == Statement::Kind::Expression && !s.terminated)
       expected = Type(Type::Kind::Unit);
     auto value = expression(s.expression, expected, 1,
-                            s.kind == Statement::Kind::Expression);
+                            s.kind != Statement::Kind::Let &&
+                                s.kind != Statement::Kind::Assign);
     owner.reset();
     if (!value) {
       if (!body.stopped || checker.types.diagnostic)
         return false;
+      if (s.kind != Statement::Kind::Let && s.kind != Statement::Kind::Assign &&
+          s.kind != Statement::Kind::Expression)
+        return fail("source.unreachable",
+                    "statement action follows an operand that always stops",
+                    s.span);
       continue;
     }
     if (s.kind == Statement::Kind::Guard) {
