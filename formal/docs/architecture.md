@@ -11,9 +11,10 @@ requires its own explicit connection.
 
 ## Packages and dependencies
 
-Use one main Lake package in `formal/`, depending on a pinned Mathlib, and a
-separate optional integration package in `formal/integrations/arklib/`.
-That package depends on the main package and the required ArkLib ecosystem,
+Use one main Lake package in `formal/`, depending on a pinned Mathlib, and
+separate optional integration packages in `formal/integrations/arklib/` and
+`formal/integrations/clean/`.
+The ArkLib package depends on the main package and the required ArkLib ecosystem,
 including VCVio/PolyFun where their actual adapters use them. Core probability
 uses Mathlib distributions and the common monadic execution interface. External
 probabilistic-program and polynomial representations enter through explicit
@@ -50,6 +51,7 @@ Logical areas are not separate repositories or independently versioned packages:
 | `Zkc.Polynomial` | Fixed mathematical objects, evaluation and concrete preparation consumers | Narrow Mathlib and semantic APIs; compilation modules additionally use Compiler |
 | `Zkc.Protocols` | Protocol-specific syntax, algorithms, property instances and compiler applications | The preceding library areas; never a dependency of generic library modules |
 | `integrations/arklib/ZkcArkLib` | Actual external correspondences and external-dependent proofs | Main library and declared external packages; never the reverse |
+| `integrations/clean/ZkcClean` | Export of a Clean flat AIR fragment into the finite AIR model | Main library and the pinned Clean package; never the reverse |
 | `Tests`, `Examples`, tools | API clients, controls and maintenance | Library modules; never imported by library definitions |
 
 Directories organize concepts; the actual module graph determines dependencies.

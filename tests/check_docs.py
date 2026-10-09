@@ -103,7 +103,7 @@ def check(include_components=False):
     formal_pages += formal_reference
     formal_pages += sorted((ROOT / "formal" / "Zkc").rglob("*.md"))
     formal_pages += sorted((ROOT / "formal" / "Examples").rglob("*.md"))
-    formal_pages += sorted((ROOT / "formal" / "integrations" / "arklib").glob("*.md"))
+    formal_pages += sorted((ROOT / "formal" / "integrations").glob("*/*.md"))
     pages = active + formal_pages + [ROOT / p for p in extra]
     if include_components:
         pages = sorted(set(pages) | set(component_pages()))

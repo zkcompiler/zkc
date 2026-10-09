@@ -51,6 +51,15 @@ without changing PIR execution or requiring every protocol to use constraints.
 | Executable relation checking | `Reference.products_check`, `check_correct`, `Binding.layout_bound` | Typed admitted sparse systems and exact inputs; raw field/JSON decoding and native execution are separate |
 | AIR locality and degree | `AIR.Expr.eval_local`, `polynomial_eval`, `polynomial_degree`, `used_read_in_range` | Derived finite reads and conservative trace-variable degree; selector/domain/quotient obligations remain external |
 
+The optional [Clean package](../../integrations/clean/README.md) maps one Clean
+flat AIR component into `AIR.family` with every-row, current-row constraints.
+`ZkcClean.export_expression` equates expression evaluation, `ZkcClean.holds_iff`
+and `table_holds_iff` prove both directions of the relation, and `row_spec` and
+`table_spec` conclude the component's specification under its actual
+assumptions. They require a successful export (no lookup or interaction at any
+depth, in-range variables) and import, a nonempty trace of the exported width
+and one `Environment.data`. No native importer or evaluator is covered.
+
 `Zkc.Relation.Encoding.valid_iff`, `comp` and `terminal_sound` connect actual
 source/target families using both witness directions. The latter preserves the
 selected target reduction's exceptional event; it supplies no probability bound.

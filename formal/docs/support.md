@@ -458,6 +458,22 @@ Pairing/group validity and SHA256 retain the named external-service assumptions.
 Independent Lean direct transforms are bounded to 128 cells. Native relation
 generation and raw elaboration adequacy remain separate.
 
+## External Clean relation export
+
+The optional [Clean package](../integrations/clean/README.md), pinned to Clean
+`b449bf590f93e13827c3c7e747e392d6969aa380`, exports one Clean
+`Air.Flat.Component` into `Zkc.Relation.AIR`. The export refuses lookups and
+channel interactions at any subcircuit depth and variables outside the
+component's width; import checks the field size, canonical constants and
+columns. For a successful export and import, imported expressions evaluate as
+Clean's `Expression.eval`; the AIR relation on a nonempty trace of that width
+holds iff Clean's `Operations.ConstraintsHold` holds on every row, or iff
+upstream `Table.Constraints` holds for a table of that width; and with the
+component's actual `Assumptions`, upstream `weakSoundness` yields its `Spec`.
+The channel-free fragment discharges `FullGuarantees`. Controls refute an
+altered constant, column index and deleted assertion. These are statements
+about Lean terms; native import, evaluation and DAG decoding are not covered.
+
 ## External representation and schedule boundaries
 
 `Zkc.Algebra.Representations` separates raw observations from many-to-one images

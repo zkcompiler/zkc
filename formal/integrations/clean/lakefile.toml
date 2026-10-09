@@ -1,0 +1,31 @@
+name = "zkc_clean"
+version = "0.0.0"
+defaultTargets = ["ZkcClean", "ZkcCleanTests"]
+
+[leanOptions]
+autoImplicit = false
+warningAsError = true
+
+[[require]]
+name = "zkc"
+path = "../.."
+
+[[require]]
+name = "Clean"
+git = "https://github.com/Verified-zkEVM/clean"
+rev = "b449bf590f93e13827c3c7e747e392d6969aa380"
+
+# Clean's library requires module-system importers. A `module` file cannot
+# import the main zkc library, which is not a module-system package, so these
+# libraries import Clean from ordinary files.
+[[lean_lib]]
+name = "ZkcClean"
+roots = ["ZkcClean"]
+globs = ["ZkcClean.+"]
+allowNonModules = true
+
+[[lean_lib]]
+name = "ZkcCleanTests"
+roots = ["TestsClean"]
+globs = ["TestsClean.+"]
+allowNonModules = true
