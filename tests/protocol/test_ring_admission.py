@@ -19,6 +19,8 @@ def test_ring_admission_and_identity_agree(toolchain, journal):
     add(arena)
     add(['zkc.ring/0', [field], [['input', 0], ['embed', ext, 0]], [1]])
     for prime, modulus in [('koala-bear', 2130706433),
+            ('koala-bear.ext8-binomial3', 2130706433),
+            ('bn254.fr', 21888242871839275222246405745257275088548364400416034343698204186575808495617),
             ('bls12-381.fr', 52435875175126190479447740508185965837690552500527637822603658699938581184513),
             ('ristretto255.scalar', 7237005577332262213973186563042994240857116359379907606001950938285454250989)]:
         add(['zkc.ring/0', [], [['constant', prime, str(modulus-1)]], [0]])
@@ -28,6 +30,7 @@ def test_ring_admission_and_identity_agree(toolchain, journal):
             ['zkc.ring/0', [ext], [['input', 0], ['embed', field, 0]], [1]],
             ['zkc.ring/0', [field, ext], [['input', 0], ['input', 1], ['add', 0, 1]], [2]],
             ['zkc.ring/0', [], [['constant', field, '01']], [0]],
+            ['zkc.ring/0', [], [['constant', ext, ['1'] * 8]], [0]],
             ['zkc.ring/0', ['unknown'], [], []]]:
         add(changed, False)
     changed = deepcopy(arena); changed[2][0] = ['input', 2]; add(changed, False)
