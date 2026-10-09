@@ -6,6 +6,21 @@
 using namespace mlir;
 using namespace llvm;
 namespace zkc::algebra {
+bool isRingOperation(Operation &op) {
+  if (op.getNumRegions() || op.getNumResults() != 1)
+    return false;
+  auto field = dyn_cast<FieldType>(op.getResult(0).getType());
+  if (!field)
+    return false;
+  if (isa<ConstantFieldOp>(op))
+    return op.getAttrOfType<StringAttr>("value") && op.getAttrs().size() == 1 &&
+           !op.getNumOperands();
+  return isa<FieldAddOp, SubtractFieldOp, FieldMultiplyOp>(op) &&
+         op.getAttrs().empty() && op.getNumOperands() == 2 &&
+         op.getOperand(0).getType() == field &&
+         op.getOperand(1).getType() == field;
+}
+
 Expected<ring::Expression> describeRingExpression(Block &block,
                                                   ValueRange results) {
   if (block.getNumArguments() > ring::Limits::inputs ||
@@ -27,14 +42,11 @@ Expected<ring::Expression> describeRingExpression(Block &block,
     // Subtraction needs two arena nodes. Bound construction before allocation.
     if (nodes.size() > ring::Limits::nodes - 2)
       return zkc::error("ring-limit");
-    if (op.getNumRegions() || op.getNumResults() != 1 ||
-        !isa<FieldType>(op.getResult(0).getType()))
+    if (!isRingOperation(op))
       return zkc::error("ring-formula-operation");
     auto field = cast<FieldType>(op.getResult(0).getType());
-    if (auto literal = dyn_cast<ConstantFieldOp>(op)) {
+    if (isa<ConstantFieldOp>(op)) {
       auto value = op.getAttrOfType<StringAttr>("value");
-      if (!value || op.getAttrs().size() != 1 || op.getNumOperands())
-        return zkc::error("ring-formula-operation");
       auto node =
           ring::Node::literal(field.getDomain().str(), value.getValue().str());
       // Check unused literals too; pruning cannot admit an invalid scalar body.
@@ -43,11 +55,6 @@ Expected<ring::Expression> describeRingExpression(Block &block,
         return checked.takeError();
       nodes.push_back(std::move(node));
     } else {
-      if (!isa<FieldAddOp, SubtractFieldOp, FieldMultiplyOp>(op) ||
-          !op.getAttrs().empty() || op.getNumOperands() != 2 ||
-          op.getOperand(0).getType() != field ||
-          op.getOperand(1).getType() != field)
-        return zkc::error("ring-formula-operation");
       auto left = values.find(op.getOperand(0));
       auto right = values.find(op.getOperand(1));
       if (left == values.end() || right == values.end())

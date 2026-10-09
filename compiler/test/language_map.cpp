@@ -1,6 +1,8 @@
 #include "support/NativeCases.h"
+#include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Language/Project.h"
+#include <set>
 #include <string>
 
 using namespace llvm;
@@ -61,6 +63,39 @@ Expected<CheckedOriginal> original(StringRef body) {
     return closed.takeError();
   return prepareOriginal(*closed);
 }
+// Refusal identifiers and source locations of a failed preparation.
+struct Located {
+  std::string message;
+  std::vector<std::string> codes;
+  std::vector<zkc::DiagnosticLocation> locations;
+};
+Located located(Expected<CheckedOriginal> result) {
+  require(!result, "expected a refused original");
+  Located found;
+  handleAllErrors(
+      result.takeError(),
+      [&](const zkc::CompilationError &error) {
+        found.message = error.message;
+        for (const auto &refusal : error.refusals)
+          found.codes.push_back(refusal.code);
+        found.locations = error.locations;
+      },
+      [&](const ErrorInfoBase &error) { found.message = error.message(); });
+  return found;
+}
+// Whether `found` names the first occurrence of `needle` in the checked source.
+bool locates(const Located &found, StringRef body, StringRef needle) {
+  auto text = (prelude + body).str();
+  auto at = text.find(needle.str());
+  require(at != std::string::npos, "missing source text " + needle);
+  auto before = StringRef(text).take_front(at);
+  unsigned line = before.count('\n') + 1;
+  unsigned column = at - (before.rfind('\n') + 1) + 1;
+  return llvm::any_of(found.locations, [&](const auto &location) {
+    return location.filename == "map.zkc" && location.line == line &&
+           location.column == column;
+  });
+}
 unsigned occurrences(StringRef text, StringRef needle) {
   unsigned result = 0;
   for (auto at = text.find(needle); at != StringRef::npos;
@@ -87,6 +122,37 @@ int main() {
             "original contains realized vector arithmetic");
     take(compileEntry(checked));
     take(compileEntry(checked, {false, false}));
+  });
+  cases.run("one helper as a scalar and under two masks", [] {
+    auto checked = take(original(
+        "fn rows(a: Vector<Fr>, b: Vector<Fr>, s: Fr) -> Vector<Fr> {\n"
+        "  return map affine(each a, each b, s);\n}\n"
+        "fn toward(a: Vector<Fr>, y: Fr, s: Fr) -> Vector<Fr> {\n"
+        "  return map affine(each a, y, s);\n}\n"
+        "fn single(x: Fr, y: Fr, s: Fr) -> Fr { return affine(x, y, s); }\n"
+        "protocol Demo roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, y: Fr @P,"
+        " s: Fr @P)\n"
+        "    -> (r: Vector<Fr> @P, t: Vector<Fr> @P, q: Fr @P) {\n"
+        "  return (r = rows(a, b, s), t = toward(a, y, s),"
+        " q = single(y, y, s));\n}\n"
+        "entry Run = Demo;\n"));
+    auto bytes = checked.bytes();
+    SmallVector<StringRef> lines;
+    bytes.split(lines, '\n');
+    std::set<std::string> helpers;
+    unsigned declarations = 0;
+    for (auto line : lines)
+      if (line.contains("\"algebra.map_realize\"") ||
+          line.contains("\"local.realize\"")) {
+        ++declarations;
+        auto helper = line.substr(line.find("helper = @"));
+        helpers.insert(helper.substr(0, helper.find_first_of(",}")).str());
+      }
+    require(declarations == 3 && helpers.size() == 1 &&
+                occurrences(bytes, "\"algebra.map_realize\"") == 2,
+            "expected one scalar and two mapped realizations of one helper");
+    // They share the realized helper budget.
+    take(compileEntry(checked));
   });
   cases.run("compilation is deterministic", [] {
     auto first = take(original(program));
@@ -212,16 +278,51 @@ int main() {
   refusal("each outside map",
           "fn f(a: Vector<Fr>) -> Vector<Fr> { return each a; }\n",
           "source.name");
+  // Formation refuses the helper closure while admitting the original; the
+  // refusal names the map expression and its helper.
   cases.run("unsupported scalar operation in a mapped helper", [] {
-    refuses(original("math fn bad<F: Field>(x: F, y: F) -> F {\n"
-                     "  let unused = x == y;\n  return x;\n}\n"
-                     "fn f(a: Vector<Fr>, b: Vector<Fr>) -> Vector<Fr> {\n"
-                     "  return map bad(each a, each b);\n}\n"
-                     "protocol Demo roles(P)(a: Vector<Fr> @P, b: Vector<Fr> "
-                     "@P) -> (r: Vector<Fr> @P) {\n"
-                     "  let r = f(a, b);\n  return (r = r);\n}\n"
-                     "entry Run = Demo;\n"),
-            "algebra-map-formula");
+    constexpr StringLiteral body =
+        "math fn bad<F: Field>(x: F, y: F) -> F {\n"
+        "  let unused = x == y;\n  return x;\n}\n"
+        "fn f(a: Vector<Fr>, b: Vector<Fr>) -> Vector<Fr> {\n"
+        "  return map bad(each a, each b);\n}\n"
+        "protocol Demo roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P) -> "
+        "(r: Vector<Fr> @P) {\n"
+        "  let r = f(a, b);\n  return (r = r);\n}\n"
+        "entry Run = Demo;\n";
+    auto found = located(original(body));
+    require(namesIdentifier(found.message, "algebra-map-formula") &&
+                llvm::is_contained(found.codes, "target.admission"),
+            "unexpected refusal: " + found.message);
+    require(locates(found, body, "map bad(each a, each b)"),
+            "refusal does not locate the map: " + found.message);
+    require(locates(found, body, "math fn bad"),
+            "refusal does not locate the helper: " + found.message);
+  });
+  // Ring limits apply to the expanded formula during preparation. Each
+  // helper doubles the additions of the previous one.
+  cases.run("expanded formula beyond the Ring depth limit", [] {
+    std::string body = "math fn h0<F: Field>(x: F) -> F { return x + 1; }\n";
+    for (unsigned i = 1; i <= 10; ++i)
+      body += "math fn h" + std::to_string(i) + "<F: Field>(x: F) -> F { " +
+              "return h" + std::to_string(i - 1) + "(h" +
+              std::to_string(i - 1) + "(x)); }\n";
+    body += "fn f(a: Vector<Fr>, n: index) -> Vector<Fr> {\n"
+            "  let mut acc = a;\n"
+            "  for _ in 0..n {\n"
+            "    acc = map h10(each acc);\n"
+            "  }\n"
+            "  return acc;\n}\n"
+            "protocol Demo roles(P)(a: Vector<Fr> @P, n: index @P) -> "
+            "(r: Vector<Fr> @P) {\n"
+            "  let r = f(a, n);\n  return (r = r);\n}\n"
+            "entry Run = Demo;\n";
+    auto found = located(original(body));
+    require(llvm::is_contained(found.codes, "algebra-map-formula") &&
+                namesIdentifier(found.message, "ring-depth"),
+            "unexpected refusal: " + found.message);
+    require(locates(found, body, "map h10(each acc)"),
+            "refusal does not locate the map in the loop: " + found.message);
   });
   return cases.result();
 }

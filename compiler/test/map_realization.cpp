@@ -124,11 +124,14 @@ int main(int argc, char **argv) {
     require(first == second, "realization differs between runs");
   });
 
-  auto mutation = [&](StringRef label, function_ref<void(ModuleOp)> change) {
+  // Most edits reach the map matcher; `code` names an earlier owner that
+  // already refuses the candidate during its verification.
+  auto mutation = [&](StringRef label, function_ref<void(ModuleOp)> change,
+                      StringRef code = "algebra-map-correspondence") {
     cases.run(label, [&] {
       auto candidate = copy(*expanded);
       change(*candidate);
-      require(named("algebra-map-correspondence",
+      require(named(code,
                     [&] {
                       return failed(
                           mathematical::verifyMapRealizationsPreserved(
@@ -169,6 +172,68 @@ int main(int argc, char **argv) {
         op->setAttr("value", StringAttr::get(&context, "2"));
     });
   });
+  mutation("move a shape guard after arithmetic", [&](ModuleOp module) {
+    nth(module, "mapped", "control.require")
+        ->moveAfter(nth(module, "mapped", "field.constant"));
+  });
+  mutation("broadcast to another input's length", [&](ModuleOp module) {
+    nth(module, "mapped", "vector.fill")
+        ->setOperand(1,
+                     nth(module, "mapped", "vector.length", 1)->getResult(0));
+  });
+  // Bound operand order, binding arguments and unknown attributes are also
+  // checked by protocol verification before the matcher reads the body.
+  mutation(
+      "swap scale operands",
+      [&](ModuleOp module) {
+        auto *scale = nth(module, "mapped", "vector.scale");
+        auto rows = scale->getOperand(0);
+        scale->setOperand(0, scale->getOperand(1));
+        scale->setOperand(1, rows);
+      },
+      "binding-operation-signature");
+  auto binding = [&](ModuleOp module, StringRef contract) {
+    auto ref = nth(module, "mapped", contract)
+                   ->getAttrOfType<FlatSymbolRefAttr>("binding");
+    return SymbolTable(&module.getBody()->front())
+        .lookup<local::OperationBindingOp>(ref.getValue());
+  };
+  mutation(
+      "bind vector arithmetic in another field",
+      [&](ModuleOp module) {
+        binding(module, "vector.add")
+            ->setAttr("arguments",
+                      ArrayAttr::get(&context, {StringAttr::get(
+                                                   &context, "bls12-381.fr")}));
+      },
+      "binding-operation-signature");
+  mutation(
+      "add an attribute to a bound operation",
+      [&](ModuleOp module) {
+        nth(module, "mapped", "vector.add")
+            ->setAttr("note", StringAttr::get(&context, "extra"));
+      },
+      "interactive-unknown-attribute");
+  mutation(
+      "add an attribute to the realized function",
+      [&](ModuleOp module) {
+        function(module, "mapped")
+            ->setAttr("note", StringAttr::get(&context, "extra"));
+      },
+      "interactive-unknown-attribute");
+  // An installed implementation choice and another origin are valid protocol
+  // IR; only the matcher refuses them.
+  mutation("select a binding implementation", [&](ModuleOp module) {
+    binding(module, "vector.add")
+        ->setAttr("implementation",
+                  StringAttr::get(&context, "plonky3/vector.add"));
+  });
+  mutation("name another origin", [&](ModuleOp module) {
+    function(module, "mapped")
+        ->setAttr("logical_origin",
+                  ArrayAttr::get(&context, {StringAttr::get(&context, "square"),
+                                            ArrayAttr::get(&context, {})}));
+  });
   mutation("add an unused binding", [&](ModuleOp module) {
     OpBuilder builder(&module.getBody()->front().getRegion(0).front(),
                       module.getBody()->front().getRegion(0).front().begin());
@@ -177,30 +242,28 @@ int main(int argc, char **argv) {
         builder.getStrArrayAttr({"koala-bear"}), "");
   });
 
+  // Formation refuses while parsing. A `defended` refusal is also refused by
+  // preparation's formula admission when verification is skipped.
   auto refusal = [&](StringRef label, StringRef text, StringRef code,
-                     bool realize = false) {
+                     bool defended = false) {
     cases.run(label, [&] {
-      std::optional<OwningOpRef<ModuleOp>> module;
-      require(named(code,
-                    [&] {
-                      module = parseSourceString<ModuleOp>(text, &context);
-                      if (!realize)
-                        return !*module;
-                      return bool(*module) &&
-                             failed(
-                                 mathematical::expandMapRealizations(**module));
-                    }),
-              "missing expected refusal identifier " + code);
-      if (realize) {
-        ScopedDiagnosticHandler quiet(&context,
-                                      [](Diagnostic &) { return success(); });
-        uint64_t work = 1000000;
-        auto error = mathematical::checkMapFormulas(**module, work);
-        require(bool(error), "formula admission accepted the map");
-        auto message = llvm::toString(std::move(error));
-        require(message.find(code.str()) != std::string::npos,
-                "formula admission identifier: " + message);
-      }
+      require(
+          named(code,
+                [&] { return !parseSourceString<ModuleOp>(text, &context); }),
+          "missing expected refusal identifier " + code);
+      if (!defended)
+        return;
+      ScopedDiagnosticHandler quiet(&context,
+                                    [](Diagnostic &) { return success(); });
+      auto module =
+          parseSourceString<ModuleOp>(text, ParserConfig(&context, false));
+      require(bool(module), "unverified fixture refused");
+      uint64_t work = 1000000;
+      auto error = mathematical::checkMapFormulas(*module, work);
+      require(bool(error), "formula admission accepted the map");
+      auto message = llvm::toString(std::move(error));
+      require(namesIdentifier(message, code),
+              "formula admission identifier: " + message);
     });
   };
   refusal("missing helper", edit(fixture, "= @formula", "= @missing"),
@@ -228,6 +291,8 @@ int main(int argc, char **argv) {
  algebra.map_realize @wide_map = @wide [true] : (!V)->!V
  algebra.map_realize @mapped)"),
           "algebra-map-signature");
+  // Plain verification reads every operation of the helper closure, used or
+  // not; preparation repeats the check on the expanded formula.
   refusal("unsupported unused scalar operation",
           edit(fixture, "   %dead = ",
                "   %unsupported = \"algebra.field_equal\"(%a,%b) : "
@@ -238,6 +303,108 @@ int main(int argc, char **argv) {
                "   %e = \"algebra.field_equal\"(%x,%x) : (!F,!F)->i1\n"
                "   %r = \"algebra.field_multiply\"(%x,%x)"),
           "algebra-map-formula", true);
+  // Each Ring operation is consistent in its own field, so only formation sees
+  // dead work in another field.
+  refusal("unused constant of another field",
+          edit(fixture, "   %dead = ",
+               "   %foreign = \"algebra.constant\"() {value=\"2\"} : "
+               "()->!algebra.field<\"bls12-381.fr\">\n   %dead = "),
+          "algebra-map-formula");
+  refusal("nested helper result outside the field",
+          edit(edit(fixture, " func.func private @formula", R"(
+ func.func private @wide()->!algebra.field<"koala-bear.ext8-binomial3"> {
+   %w = "algebra.constant"() {value="3"} : ()->!algebra.field<"koala-bear.ext8-binomial3">
+   func.return %w : !algebra.field<"koala-bear.ext8-binomial3">
+ }
+ func.func private @formula)"),
+               "   %dead = ",
+               "   %wide = func.call @wide() : () -> "
+               "!algebra.field<\"koala-bear.ext8-binomial3\">\n   %dead = "),
+          "algebra-map-formula");
+  cases.run("unused helper outside the field is not read", [&] {
+    auto text = edit(fixture, " func.func private @formula", R"(
+ func.func private @test(%x:!F)->i1 {
+   %e = "algebra.field_equal"(%x,%x) : (!F,!F)->i1
+   func.return %e : i1
+ }
+ func.func private @formula)");
+    require(bool(parseSourceString<ModuleOp>(text, &context)),
+            "a helper no map reaches was refused");
+  });
+
+  // Ring limits apply to the expanded formula during preparation. A chain of
+  // operations adds one level each; subtraction adds one more on the path of
+  // its right operand, so `x - acc` grows two levels per step.
+  auto chain = [](unsigned steps, StringRef operation, bool deepRight,
+                  unsigned calls = 1) {
+    std::string text = R"(!F = !algebra.field<"koala-bear">
+!V = tensor<?x!F>
+module { "protocol.module"() ({
+ func.func private @chain(%x:!F)->!F {
+   %v0 = "algebra.field_add"(%x,%x) : (!F,!F)->!F
+)";
+    // %v0 = x + x has depth one; the remaining steps extend it.
+    for (unsigned i = 1; i < steps; ++i) {
+      auto previous = "%v" + std::to_string(i - 1);
+      text += "   %v" + std::to_string(i) + " = \"" + operation.str() + "\"(" +
+              (deepRight ? "%x," + previous : previous + ",%x") +
+              ") : (!F,!F)->!F\n";
+    }
+    text += "   func.return %v" + std::to_string(steps - 1) + " : !F\n }\n";
+    text += " func.func private @outer(%x:!F)->!F {\n   %c0 = func.call "
+            "@chain(%x) : (!F)->!F\n";
+    for (unsigned i = 1; i < calls; ++i)
+      text += "   %c" + std::to_string(i) + " = func.call @chain(%c" +
+              std::to_string(i - 1) + ") : (!F)->!F\n";
+    text += "   func.return %c" + std::to_string(calls - 1) + " : !F\n }\n";
+    text += R"( algebra.map_realize @mapped = @outer [true] : (!V)->!V
+ local.func @work(%a:!V)->!V attributes {logical_origin=["work",[]]} {
+   %r = local.apply @mapped(%a) {site="map"} : (!V)->!V
+   local.return %r : !V
+ }
+ "protocol.func"() ({
+ ^entry(%a:!V):
+   %r = "protocol.local_call"(%a) {callee=@work,role="P",site="work"} : (!V)->!V
+   "protocol.return"(%r) : (!V)->()
+ }) {sym_name="main",function_type=(!V)->!V,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() })";
+    return text;
+  };
+  auto depth = [&](StringRef label, std::string text, bool admitted) {
+    cases.run(label, [&] {
+      auto module = parseSourceString<ModuleOp>(text, &context);
+      require(bool(module), "formation refused a Ring formula");
+      ScopedDiagnosticHandler quiet(&context,
+                                    [](Diagnostic &) { return success(); });
+      uint64_t work = 1000000;
+      auto error = mathematical::checkMapFormulas(*module, work);
+      if (admitted) {
+        require(!error, "formula admission refused: " +
+                            llvm::toString(std::move(error)));
+        require(succeeded(mathematical::expandMapRealizations(*module)),
+                "realization refused an admitted depth");
+        return;
+      }
+      require(bool(error), "formula admission accepted excess depth");
+      auto message = llvm::toString(std::move(error));
+      require(namesIdentifier(message, "algebra-map-formula") &&
+                  namesIdentifier(message, "ring-depth"),
+              "depth refusal identifier: " + message);
+      require(failed(mathematical::expandMapRealizations(*module)),
+              "realization accepted excess depth");
+    });
+  };
+  depth("addition chain at the Ring depth limit",
+        chain(1023, "algebra.field_add", false), true);
+  depth("addition chain beyond the Ring depth limit",
+        chain(1024, "algebra.field_add", false), false);
+  depth("subtrahend chain at the Ring depth limit",
+        chain(512, "algebra.field_subtract", true), true);
+  depth("subtrahend chain beyond the Ring depth limit",
+        chain(513, "algebra.field_subtract", true), false);
+  // Each helper is shallow; their composition is not.
+  depth("expanded helper calls beyond the Ring depth limit",
+        chain(600, "algebra.field_add", false, 2), false);
   cases.run("realization requires the protocol profile", [&] {
     auto module = parseSourceString<ModuleOp>(
         "module { func.func private @empty() {func.return} }", &context);
@@ -289,6 +456,35 @@ module { "protocol.module"() ({
       auto module = parseSourceString<ModuleOp>(text, &context);
       require(bool(module), "affine local body refused " + declaration);
     }
+  });
+
+  // One helper realized as a scalar function and under two row masks. Each
+  // origin names the helper; the declaration symbol and body carry the mask.
+  // Origin arguments are static bindings, so they do not record a mask.
+  cases.run("one helper as a scalar and under two masks", [&] {
+    auto text = edit(fixture, " local.func @work", R"(
+ local.realize @scalar = @formula : (!F,!F,!F,!F)->!F
+ algebra.map_realize @rows = @formula [true, false, false, false] : (!V,!F,!F,!F)->!V
+ local.func @work)");
+    auto module = parseSourceString<ModuleOp>(text, &context);
+    require(bool(module), "shared helper fixture refused");
+    require(succeeded(mathematical::expandMathRealizations(*module)) &&
+                succeeded(mathematical::expandMapRealizations(*module)),
+            "shared helper realizations failed");
+    auto origin =
+        ArrayAttr::get(&context, {StringAttr::get(&context, "formula"),
+                                  ArrayAttr::get(&context, {})});
+    for (StringRef name : {"scalar", "mapped", "rows"})
+      require(function(*module, name)->getAttr("logical_origin") == origin,
+              "realized origin differs for " + name);
+    auto guards = [&](StringRef name) {
+      return llvm::count_if(actions(*module, name), [](auto &action) {
+        return action.first == "control.require";
+      });
+    };
+    require(guards("scalar") == 0 && guards("mapped") == 2 &&
+                guards("rows") == 0,
+            "row masks did not select distinct bodies");
   });
 
   for (bool simplify : {false, true})

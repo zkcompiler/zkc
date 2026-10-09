@@ -6,6 +6,11 @@
 #include "zkc/Contracts/RingExpression.h"
 
 namespace zkc::algebra {
+/// Whether the Ring view admits `op` itself: a field constant with only its
+/// literal, or an attribute-free field addition, subtraction or multiplication
+/// whose operands have its result type. Captures, literal ranges and limits
+/// are checked when a whole block is described.
+bool isRingOperation(mlir::Operation &op);
 /// Interpret a closed scalar SSA block as a formal ring expression. Every
 /// non-terminator operation must be an admitted constant, add, subtract or
 /// multiply, including unused operations. Operands cannot capture outer SSA

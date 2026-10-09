@@ -196,8 +196,10 @@ map(f)(...)[i] = f(..., v_j[i], ..., x_j, ...)
 ```
 
 Every rowwise input must have the same length, which may be zero. A mismatch
-refuses, including for an input that `f` does not read; nothing is truncated or
-padded. This is elementwise arithmetic on vectors. It is not substitution into
+fails the checked map, including for an input that `f` does not read; nothing is
+truncated or padded. The failure has the class of a vector kernel's own shape
+check, not a native protocol rejection; see the
+[source contract](../language/definitions.md#checked-pointwise-maps). This is elementwise arithmetic on vectors. It is not substitution into
 formal polynomials: a pointwise product of two tables is not the table of the
 product of their multilinear or univariate interpretations.
 

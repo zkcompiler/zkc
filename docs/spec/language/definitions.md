@@ -339,12 +339,22 @@ or dynamic dispatch, and every argument remains an ordinary operand for use,
 capture and effect checking.
 
 `map` occurs only in ordinary local functions; protocols call a local wrapper.
-It is checked execution with the [pointwise meaning](../domains/vectors.md#pointwise-maps):
-unequal row counts stop it, so its caller infers `stop`. The helper's expanded
-body may use only field constants, `+`, `-` and `*`; the
-[IR realization](../ir/protocols.md#checked-pointwise-maps) refuses anything else
-with `algebra-map-formula`. Source refusals of a map use `source.map`; a map
-outside local code uses `source.mode`.
+It is checked execution with the [pointwise meaning](../domains/vectors.md#pointwise-maps).
+Unequal row counts fail its ordered shape check. Like a vector kernel's own
+check, this is a backend failure reported as `rejected:require`, not a native
+`reject`, and the caller conservatively infers `stop`. Code that should reject
+unequal lengths natively first requires them equal, for example
+`require(kernel<F>("vector.length", a) == kernel<F>("vector.length", b))`.
+
+Every operation of the helper and of the helpers it calls, used or not, may be
+only a field constant, `+`, `-` or `*` in the map's field. Formation of the
+emitted [IR declaration](../ir/protocols.md#checked-pointwise-maps) refuses
+anything else with `algebra-map-formula`. The expanded formula must also fit the
+[Ring limits](../ir/limits.md), including depth 1,024, where subtraction costs an
+extra level on its right operand; a deeper formula refuses with the same
+identifier when the original is prepared. Both refusals name the source map and
+its helper. Other source refusals of a map use `source.map`; a map outside local
+code uses `source.mode`.
 
 ## Boolean formulas
 

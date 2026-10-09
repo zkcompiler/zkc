@@ -67,6 +67,57 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, s: Fr @P)
 entry Demo = Run;
 '''
 
+# A map inside a loop executes, and checks shapes, once per iteration.
+LOOP = '''module sample;
+domain Fr = field("koala-bear");
+type Vector<F: Field> = builtin("vector", F);
+math fn affine<F: Field>(low: F, high: F, r: F) -> F {
+  return low + (high - low) * r;
+}
+fn repeat(a: Vector<Fr>, b: Vector<Fr>, s: Fr, n: index) -> Vector<Fr> {
+  let mut acc = a;
+  for _ in 0..n {
+    acc = map affine(each acc, each b, s);
+  }
+  return acc;
+}
+protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, s: Fr @P, n: index @P)
+    -> (repeated: Vector<Fr> @P) {
+  let repeated = repeat(a, b, s, n);
+  return (repeated = repeated);
+}
+entry Demo = Run;
+'''
+
+# One helper realized for a scalar call and for two different row masks.
+SHARED = '''module sample;
+domain Fr = field("koala-bear");
+type Vector<F: Field> = builtin("vector", F);
+math fn affine<F: Field>(low: F, high: F, r: F) -> F {
+  return low + (high - low) * r;
+}
+fn pairwise(a: Vector<Fr>, b: Vector<Fr>, s: Fr) -> Vector<Fr> {
+  return map affine(each a, each b, s);
+}
+fn towards(a: Vector<Fr>, y: Fr, s: Fr) -> Vector<Fr> {
+  return map affine(each a, y, s);
+}
+fn single(x: Fr, y: Fr, s: Fr) -> Fr { return affine(x, y, s); }
+protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, x: Fr @P, y: Fr @P,
+                      s: Fr @P)
+    -> (rows: Vector<Fr> @P, toward: Vector<Fr> @P, scalar: Fr @P) {
+  let rows = pairwise(a, b, s);
+  let toward = towards(a, y, s);
+  let scalar = single(x, y, s);
+  return (rows = rows, toward = toward, scalar = scalar);
+}
+entry Demo = Run;
+'''
+
+
+def affine(low, high, r):
+    return (low + (high - low) * r) % MODULUS
+
 
 def vector(values, extension=False):
     width, tag = (32, 27) if extension else (4, 20)
@@ -120,7 +171,8 @@ def test_map_values_broadcasts_and_empty_vectors(toolchain, journal, directory, 
         expected(edge, edge[::-1], edge, MODULUS - 1)
 
 
-def test_map_checks_every_rowwise_shape_before_arithmetic(toolchain, journal, directory):
+# The Host observes only the refusal; the compiler test pins guard order.
+def test_map_refuses_any_rowwise_length_mismatch(toolchain, journal, directory):
     entry = Entry(toolchain, journal, directory, SOURCE)
     good = [1, 2, 3]
     for name, values in [('used', inputs(good, [4, 5], good, 2)),
@@ -138,6 +190,40 @@ def test_unused_map_result_still_checks_shapes(toolchain, journal, directory, fl
     values['b'] = vector([3])
     refused = entry.run('mismatch', values, refuses='entry-run-incomplete')
     assert 'rejected:require' in json.dumps(refused)
+
+
+@pytest.mark.parametrize('flags', [[], ['--release-storage']])
+def test_map_in_a_loop(toolchain, journal, directory, flags):
+    entry = Entry(toolchain, journal, directory, LOOP, flags)
+    rng = random.Random(9151)
+    for height in (0, 3):
+        a, b = ([rng.randrange(MODULUS) for _ in range(height)] for _ in range(2))
+        s = rng.randrange(MODULUS)
+        for rounds in (0, 1, 4):
+            acc = a
+            for _ in range(rounds):
+                acc = [affine(x, y, s) for x, y in zip(acc, b)]
+            values = {'a': vector(a), 'b': vector(b), 's': scalar(s), 'n': rounds}
+            result = entry.run(f'height{height}-rounds{rounds}', values)
+            assert result == {'repeated': vector(acc)}
+    # Without an iteration no map executes, so unequal lengths are not read.
+    values = {'a': vector([1, 2]), 'b': vector([3]), 's': scalar(5), 'n': 0}
+    assert entry.run('mismatch-unread', values) == {'repeated': vector([1, 2])}
+    values['n'] = 2
+    refused = entry.run('mismatch', values, refuses='entry-run-incomplete')
+    assert 'rejected:require' in json.dumps(refused)
+
+
+def test_one_helper_as_scalar_and_under_two_masks(toolchain, journal, directory):
+    entry = Entry(toolchain, journal, directory, SHARED)
+    rng = random.Random(2203)
+    a, b = ([rng.randrange(MODULUS) for _ in range(5)] for _ in range(2))
+    x, y, s = (rng.randrange(MODULUS) for _ in range(3))
+    values = {'a': vector(a), 'b': vector(b), 'x': scalar(x), 'y': scalar(y), 's': scalar(s)}
+    assert entry.run('shared', values) == {
+        'rows': vector([affine(p, q, s) for p, q in zip(a, b)]),
+        'toward': vector([affine(p, y, s) for p in a]),
+        'scalar': scalar(affine(x, y, s))}
 
 
 def test_artifact_and_work_are_independent_of_height(toolchain, journal, directory):

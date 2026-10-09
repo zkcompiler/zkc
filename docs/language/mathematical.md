@@ -159,7 +159,8 @@ An explicit result type remains useful for literals and stable library interface
 Local code can apply a scalar helper to whole vectors without writing a loop:
 `map affine(each low, each high, r)` checks that `low` and `high` have equal
 lengths, then computes every row with bulk vector operations. `r` is shared by
-all rows. The [map contract](../spec/language/definitions.md#checked-pointwise-maps)
+all rows. Unequal lengths end execution like a failed vector kernel; `require`
+equal lengths first when a protocol should reject such inputs. The [map contract](../spec/language/definitions.md#checked-pointwise-maps)
 states the admitted helpers and refusals.
 
 Type information also flows through nested expressions:

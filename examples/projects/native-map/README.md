@@ -9,7 +9,8 @@ the artifact does not grow with the number of rows.
 `Check` gives V four public KoalaBear columns. Each row satisfies a selected gate:
 `output = left * right` where `selector` is one and `output = left + right` where
 it is zero. V maps the gate residual over the columns and accepts when every
-residual is zero. Unequal column lengths stop the map before any arithmetic.
+residual is zero. Unequal column lengths fail the map's shape check before any
+arithmetic; the run ends incomplete instead of reporting a rejection.
 
 `Interactive` shares two Ext8 columns between P and V. V draws a challenge `r`
 and sends it to P, which returns `map combine(each left, each right, r)`, the
