@@ -91,8 +91,9 @@ is supplied by this implementation.
 Hosts prepare inputs and setup material before issuing execution resources.
 The authenticated Entry package carries the ring arenas its program references;
 each arena is admitted and matched to the content digest fixed by the program
-before any invocation. Arena bodies remain Host assets, outside the compiler's
-current IR analysis.
+before any invocation. The compiler also admits captured bodies and derives
+static dimensions. Their arithmetic remains in assets referenced by IR;
+generic IR transformations do not yet traverse those bodies.
 They retain actual message contents, reached failures, resource consumption and
 cleanup outcomes. A validator's acceptance comes from its selected decision,
 not from producer completion. Entry input associations and the Host registry
