@@ -63,3 +63,12 @@ C++/Rust checks remain bounded native evidence. Lean source/direct-plan models
 have their own interpretations and proofs. A connection to `zkc.program/0` needs an
 explicit interpretation. Native semantics and differential/formal connections remain
 separate work under [assurance](../docs/assurance.md).
+
+
+The source machine tests cover both interaction reductions through separate proof
+Hosts, including differing table heights and absent/idle memory. Consistently
+committed false quotient/auxiliary words stop at the verifier identity guard;
+a different configured program with the same final value is rejected by the
+known-input obligation, with an ablation control. Source auxiliary columns and
+claims are compared with the independent staged reference. These tests are
+bounded evidence for the [selected profile](../libraries/air/README.md#whole-bundle-argument).

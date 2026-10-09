@@ -347,3 +347,15 @@ these executions only. The reductions support global `all`-scope interactions
 with Boolean multiset bounds or field-balance counts. Integrating this relation
 and either reduction with a commitment, quotient and low-degree test, and
 stating that protocol's security, are separate work.
+
+
+## Source proof client
+
+The [accumulator-machine project](../../../examples/projects/accumulator-machine/README.md)
+binds this Bundle as an external relation and proves the selected executions
+through source LogUp or grand-product reductions, phased commitments and shared
+FRI. Its proof producer uses ordinary native vector and polynomial operations;
+this adapter remains a reference interpreter and carrier producer. The staged
+expressions here independently check the source reduction's columns, claims and
+scoped residuals. The library guide states the selected profile and remaining
+security obligations.
