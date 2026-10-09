@@ -660,12 +660,13 @@ StagedProgram::evaluate(const Bundle &bundle, const BundleConfiguration &config,
         auto degree = bundleFieldDegree(table.groups[g].field);
         if (!degree)
           return degree.takeError();
-        if ((*data.tables[t])[g].size() !=
-            uint64_t(state.height) * table.groups[g].width * *degree)
-          return context("bundle-group-shape");
-        coordinates += (*data.tables[t])[g].size();
+        uint64_t expected =
+            uint64_t(state.height) * table.groups[g].width * *degree;
+        coordinates += expected;
         if (coordinates > BundleLimits::coordinates)
           return context("bundle-data-limit");
+        if ((*data.tables[t])[g].size() != expected)
+          return context("bundle-group-shape");
       }
       for (const auto &assertion : table.assertions)
         if (auto error = windowAt(

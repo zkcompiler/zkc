@@ -1446,6 +1446,50 @@ static const std::vector<Mutation> SHARED_MUTATIONS = {
      {{0, R"FX(["constant","koala-bear","1"]],[3,8,11)FX",
        R"FX(["constant","koala-bear","2"]],[3,8,11)FX"}},
      "unsatisfied"},
+    {"unknown channel",
+     {{0, R"FX(["field-balance",0,["global"],["all"],[3],5,null])FX",
+       R"FX(["field-balance",3,["global"],["all"],[3],5,null])FX"}},
+     "bundle-channel"},
+    {"tuple arity",
+     {{0, R"FX(["field-balance",0,["global"],["all"],[3],5,null])FX",
+       R"FX(["field-balance",0,["global"],["all"],[3,3],5,null])FX"}},
+     "bundle-tuple-arity"},
+    {"tuple field",
+     {{0, R"FX(["range","field-balance",["koala-bear"],"koala-bear"])FX",
+       R"FX(["range","field-balance",["koala-bear.ext8-binomial3"],"koala-bear"])FX"}},
+     "bundle-tuple-field"},
+    {"count field",
+     {{0, R"FX(["range","field-balance",["koala-bear"],"koala-bear"])FX",
+       R"FX(["range","field-balance",["koala-bear"],"koala-bear.ext8-binomial3"])FX"}},
+     "bundle-count-field"},
+    {"unknown side",
+     {{0, R"FX("push",[3,4])FX", R"FX("sideways",[3,4])FX"}},
+     "bundle-side"},
+    {"local key limit",
+     {{0, R"FX(["field-balance",0,["global"],["all"],[3],5,null])FX",
+       R"FX(["field-balance",0,["local",5000],["all"],[3],5,null])FX"}},
+     "bundle-locality"},
+    {"binding count",
+     {{0, R"FX(,["public",1]],[[0,["first"]])FX", R"FX(],[[0,["first"]])FX"}},
+     "bundle-input-count"},
+    {"assertion output",
+     {{0, R"FX([[0,["first"]])FX", R"FX([[9,["first"]])FX"}},
+     "bundle-output"},
+    {"witness tag",
+     {{3, R"FX(zkc.relation-witness/0)FX", R"FX(zkc.relation-witness/1)FX"}},
+     "bundle-data-schema"},
+    {"configuration table count",
+     {{1, R"FX(,[null,[]]]])FX", R"FX(]])FX"}},
+     "bundle-data-schema"},
+    {"public value count",
+     {{2, R"FX(["0","6"])FX", R"FX(["0"])FX"}},
+     "bundle-public-shape"},
+    {"empty table name",
+     {{0, R"FX(["cpu","required")FX", R"FX(["","required")FX"}},
+     "bundle-name"},
+    {"non-field public slot",
+     {{0, R"FX(["start","koala-bear"])FX", R"FX(["start","bn254.g1"])FX"}},
+     "bundle-field"},
 };
 static std::string sharedOutcome(const std::vector<std::string> &texts) {
   auto bundle = readBundleText(texts[0]);
@@ -1536,6 +1580,135 @@ static void sharedFixtureTests() {
         "shared honest evaluation details match the Rust reference");
 }
 
+//===----------------------------------------------------------------------===//
+// Remaining refusal identifiers
+//===----------------------------------------------------------------------===//
+static void refusalTests() {
+  using K = BundleScopeKind;
+  // Declared heights and widths bound the data before lengths are compared.
+  Arena one;
+  one.out(one.read(KB, 0, 0));
+  auto wide = value(single(one, {{"x", BundleAuthority::Witness, KB, 8}},
+                           {{0, scope(K::All)}},
+                           instanceHeight(1, BundleLimits::height)),
+                    "wide");
+  auto w = data(wide);
+  w.instance.tables[0] = {true, BundleLimits::height, {}};
+  w.witness.tables[0] = std::vector<BundleColumns>{BundleColumns{}};
+  refuses(wide.admit(w.config, w.instance, w.witness), "bundle-data-limit",
+          "declared shape above the coordinate limit");
+  // Programmatic interaction records.
+  auto machineWith = [](std::function<void(std::vector<BundleTable> &)> edit) {
+    auto b = machine();
+    std::vector<BundleTable> tables(b.tables().begin(), b.tables().end());
+    edit(tables);
+    return Bundle::create(b.publics().vec(), b.channels().vec(),
+                          std::move(tables));
+  };
+  refuses(
+      machineWith([](auto &t) { t[0].interactions[0].locality = {false, 3}; }),
+      "bundle-locality", "a global record carries no local key");
+  refuses(machineWith([](auto &t) {
+            t[0].interactions[0].locality = {true, BundleLimits::checks + 1};
+          }),
+          "bundle-locality", "local key limit");
+  refuses(machineWith(
+              [](auto &t) { t[0].interactions[0].side = BundleSide::Pull; }),
+          "bundle-interaction-kind", "field balance has no side");
+  refuses(machineWith([](auto &t) { t[0].interactions[0].channel = 7; }),
+          "bundle-channel", "unknown channel");
+  refuses(machineWith([](auto &t) { t[0].inputs.pop_back(); }),
+          "bundle-input-count", "binding count");
+  refuses(machineWith([](auto &t) { t[0].assertions[0].output = 99; }),
+          "bundle-output", "assertion output position");
+  refuses(machineWith([](auto &t) { t[0].interactions[1].bound.reset(); }),
+          "bundle-multiset-bound", "multiset bound is required");
+  // Data carrier schema.
+  auto bundle = machine();
+  auto d = machineData(bundle);
+  auto text = zkc::printJson(encodeBundleWitness(bundle, d.witness));
+  auto at = text.find("zkc.relation-witness/0");
+  text.replace(at, 22, "zkc.relation-witness/1");
+  refuses(readBundleWitness(bundle, value(readBundleDataJson(text), "json")),
+          "bundle-data-schema", "witness tag");
+  refuses(
+      readBundleWitness(
+          bundle, value(readBundleDataJson("[\"zkc.relation-witness/0\",{}]"),
+                        "object")),
+      "bundle-data-schema", "witness root arity");
+  // Staged formation.
+  auto program = value(logup(bundle), "logup");
+  auto rebuild =
+      [&](std::function<void(std::vector<StagedPhase> &, StagedGlobal &,
+                             std::vector<StagedPremise> &)>
+              edit) {
+        std::vector<StagedPhase> phases(program.phases().begin(),
+                                        program.phases().end());
+        StagedGlobal global = program.global();
+        std::vector<StagedPremise> premises(program.premises().begin(),
+                                            program.premises().end());
+        edit(phases, global, premises);
+        return StagedProgram::create(bundle, std::move(phases),
+                                     std::move(global), std::move(premises));
+      };
+  refuses(rebuild([](auto &p, auto &, auto &) { p.clear(); }), "staged-phases",
+          "a staged program has a phase");
+  refuses(rebuild([](auto &p, auto &, auto &) {
+            p.assign(BundleLimits::phases + 1, p.front());
+          }),
+          "staged-limit", "phase limit");
+  refuses(rebuild([](auto &p, auto &, auto &) { p[0].tables.pop_back(); }),
+          "staged-tables", "one staged table per bundle table");
+  refuses(rebuild([](auto &p, auto &, auto &) {
+            p[0].tables[0].inputs.pop_back();
+          }),
+          "staged-input-count", "staged binding count");
+  refuses(
+      rebuild([](auto &p, auto &, auto &) { p[0].challenges[0].field = EXT; }),
+      "staged-input-field", "challenge field differs from its input");
+  refuses(rebuild([](auto &p, auto &, auto &) {
+            p[0].tables[0].inputs[1] = p[0].tables[0].inputs[0];
+          }),
+          "staged-duplicate-input", "duplicate staged binding");
+  refuses(rebuild([](auto &p, auto &, auto &) {
+            p[0].tables[0].inputs[0].phase = 0;
+          }),
+          "staged-input", "phase zero has no challenges");
+  refuses(rebuild([](auto &, auto &, auto &q) {
+            q.push_back({StagedPremise::Kind::Nonzero, 1, 0, {99}, {}, "", 0});
+          }),
+          "staged-premise", "premise subject out of range");
+  refuses(rebuild([](auto &, auto &, auto &q) {
+            q.push_back({StagedPremise::Kind::AtMostOne, 1, 0, {}, {}, "", 0});
+          }),
+          "staged-premise", "at-most-one needs subjects");
+  auto encoded = zkc::printJson(program.encode());
+  encoded.replace(encoded.find("zkc.relation-staged/0"), 21,
+                  "zkc.relation-staged/1");
+  refuses(readStagedProgram(
+              bundle, value(zkc::parseNaturalJson(encoded, BundleLimits::bytes,
+                                                  16, "x", "y"),
+                            "json")),
+          "staged-schema", "staged tag");
+  // Staged assignment shape.
+  auto honest = logupData(program, 1000, d);
+  auto slots = honest;
+  slots.phases[0].challenges.clear();
+  refuses(program.evaluate(bundle, d.config, d.instance, d.witness, slots),
+          "staged-slot-shape", "missing challenge value");
+  auto phases = honest;
+  phases.phases.push_back(phases.phases[0]);
+  refuses(program.evaluate(bundle, d.config, d.instance, d.witness, phases),
+          "staged-data-shape", "phase count");
+  auto assignment =
+      zkc::printJson(encodeStagedAssignment(bundle, program, honest));
+  assignment.replace(assignment.find("zkc.relation-staged-assignment/0"), 32,
+                     "zkc.relation-staged-assignment/1");
+  refuses(readStagedAssignment(bundle, program,
+                               value(readBundleDataJson(assignment), "json")),
+          "staged-data-schema", "staged assignment tag");
+}
+
 int main() {
   airEmbedding();
   machineTests();
@@ -1546,6 +1719,7 @@ int main() {
   formationTests();
   preflightTests();
   sharedFixtureTests();
+  refusalTests();
   outs() << checks << " checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

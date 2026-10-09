@@ -1380,12 +1380,14 @@ impl Bundle {
                 |groups: &[(usize, &Group)], data: &[Columns], rows: u32| -> Result<()> {
                     for ((_, g), c) in groups.iter().zip(data) {
                         let d = degree(g.field).ok_or(Error("bundle-field"))? as u64;
-                        if c.len() as u64 != u64::from(rows) * u64::from(g.width) * d {
-                            return Err(Error("bundle-group-shape"));
-                        }
-                        coordinates += c.len() as u64;
+                        // The declared shape is bounded before data lengths.
+                        let expected = u64::from(rows) * u64::from(g.width) * d;
+                        coordinates += expected;
                         if coordinates > COORDINATE_LIMIT {
                             return Err(Error("bundle-data-limit"));
+                        }
+                        if c.len() as u64 != expected {
+                            return Err(Error("bundle-group-shape"));
                         }
                     }
                     Ok(())

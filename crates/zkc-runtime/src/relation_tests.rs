@@ -184,6 +184,91 @@ const MUTATIONS: &[(&str, &[Edit], &str)] = &[
         )],
         "unsatisfied",
     ),
+    (
+        "unknown channel",
+        &[(
+            0,
+            r#"["field-balance",0,["global"],["all"],[3],5,null]"#,
+            r#"["field-balance",3,["global"],["all"],[3],5,null]"#,
+        )],
+        "bundle-channel",
+    ),
+    (
+        "tuple arity",
+        &[(
+            0,
+            r#"["field-balance",0,["global"],["all"],[3],5,null]"#,
+            r#"["field-balance",0,["global"],["all"],[3,3],5,null]"#,
+        )],
+        "bundle-tuple-arity",
+    ),
+    (
+        "tuple field",
+        &[(
+            0,
+            r#"["range","field-balance",["koala-bear"],"koala-bear"]"#,
+            r#"["range","field-balance",["koala-bear.ext8-binomial3"],"koala-bear"]"#,
+        )],
+        "bundle-tuple-field",
+    ),
+    (
+        "count field",
+        &[(
+            0,
+            r#"["range","field-balance",["koala-bear"],"koala-bear"]"#,
+            r#"["range","field-balance",["koala-bear"],"koala-bear.ext8-binomial3"]"#,
+        )],
+        "bundle-count-field",
+    ),
+    (
+        "unknown side",
+        &[(0, r#""push",[3,4]"#, r#""sideways",[3,4]"#)],
+        "bundle-side",
+    ),
+    (
+        "local key limit",
+        &[(
+            0,
+            r#"["field-balance",0,["global"],["all"],[3],5,null]"#,
+            r#"["field-balance",0,["local",5000],["all"],[3],5,null]"#,
+        )],
+        "bundle-locality",
+    ),
+    (
+        "binding count",
+        &[(0, r#",["public",1]],[[0,["first"]]"#, r#"],[[0,["first"]]"#)],
+        "bundle-input-count",
+    ),
+    (
+        "assertion output",
+        &[(0, r#"[[0,["first"]]"#, r#"[[9,["first"]]"#)],
+        "bundle-output",
+    ),
+    (
+        "witness tag",
+        &[(3, "zkc.relation-witness/0", "zkc.relation-witness/1")],
+        "bundle-data-schema",
+    ),
+    (
+        "configuration table count",
+        &[(1, r#",[null,[]]]]"#, "]]")],
+        "bundle-data-schema",
+    ),
+    (
+        "public value count",
+        &[(2, r#"["0","6"]"#, r#"["0"]"#)],
+        "bundle-public-shape",
+    ),
+    (
+        "empty table name",
+        &[(0, r#"["cpu","required""#, r#"["","required""#)],
+        "bundle-name",
+    ),
+    (
+        "non-field public slot",
+        &[(0, r#"["start","koala-bear"]"#, r#"["start","bn254.g1"]"#)],
+        "bundle-field",
+    ),
 ];
 
 fn outcome(texts: &[String; 4]) -> String {
@@ -916,5 +1001,199 @@ fn staged_program_is_a_separate_subject() {
     assert_eq!(
         Staged::parse(&bundle, &other).unwrap_err(),
         Error("bundle-relation")
+    );
+}
+
+#[test]
+fn declared_shape_bounds_supplied_data() {
+    // A width-8 group at height 2^20 declares 2^23 coordinates; admission
+    // refuses from the declared shape without any supplied values.
+    let wide = Bundle::parse(&one_table(
+        "finite",
+        json!(["instance", 1, 1 << 20, false]),
+        json!([["x", "witness", "koala-bear", 8]]),
+        json!([["read", 0, "0", 0]]),
+        (json!([["input", 0]]), json!([0])),
+        json!([[0, ["all"]]]),
+        json!([]),
+    ))
+    .unwrap();
+    let id = wide.identity().to_string();
+    let c = Configuration {
+        relation: id.clone(),
+        tables: vec![(None, vec![])],
+    };
+    let i = Instance {
+        relation: id.clone(),
+        publics: vec![],
+        tables: vec![Some((Some(1 << 20), vec![]))],
+    };
+    let w = Witness {
+        relation: id,
+        tables: vec![Some(vec![vec![]])],
+    };
+    assert_eq!(
+        wide.admit(&c, &i, &w).unwrap_err(),
+        Error("bundle-data-limit")
+    );
+}
+
+#[test]
+fn staged_formation_refusals() {
+    let bundle = Bundle::parse(BUNDLE).unwrap();
+    let empty = json!([[], ["zkc.ring/0", [], [], []], [], []]);
+    let cpu = json!([
+        [["z", "koala-bear", 1]],
+        [
+            "zkc.ring/0",
+            ["koala-bear", "koala-bear", "koala-bear"],
+            [
+                ["input", 0],
+                ["input", 1],
+                ["input", 2],
+                ["add", 1, 2],
+                ["neg", 3],
+                ["add", 0, 4]
+            ],
+            [5]
+        ],
+        [
+            ["read", 1, 0, "0", 0],
+            ["read", 0, 0, "0", 0],
+            ["challenge", 1, 0]
+        ],
+        [[0, ["all"]]]
+    ]);
+    let phase = json!([[["alpha", "koala-bear"]], [], [cpu, empty, empty]]);
+    let global = json!([["zkc.ring/0", [], [], []], [], []]);
+    let program =
+        |phases: Value| json!(["zkc.relation-staged/0", IDENTITY, phases, global, []]).to_string();
+    assert!(Staged::parse(&bundle, &program(json!([phase]))).is_ok());
+    let cases = [
+        (program(json!([])), "staged-phases"),
+        (
+            program(Value::Array(vec![phase.clone(); 17])),
+            "staged-limit",
+        ),
+        (
+            program(json!([[[["alpha", "koala-bear"]], [], [cpu, empty]]])),
+            "staged-tables",
+        ),
+        (
+            program(json!([phase])).replacen("zkc.relation-staged/0", "zkc.relation-staged/1", 1),
+            "staged-schema",
+        ),
+        (
+            program(json!([phase])).replacen(r#",["challenge",1,0]]"#, "]", 1),
+            "staged-input-count",
+        ),
+        (
+            program(json!([phase])).replacen(
+                r#"[["alpha","koala-bear"]]"#,
+                r#"[["alpha","koala-bear.ext8-binomial3"]]"#,
+                1,
+            ),
+            "staged-input-field",
+        ),
+        (
+            program(json!([phase])).replacen(r#"["read",0,0,"0",0]"#, r#"["read",1,0,"0",0]"#, 1),
+            "staged-duplicate-input",
+        ),
+    ];
+    for (text, code) in cases {
+        assert_eq!(
+            Staged::parse(&bundle, &text).unwrap_err(),
+            Error(code),
+            "{code}"
+        );
+    }
+}
+
+#[test]
+fn remaining_bundle_refusals() {
+    assert_eq!(
+        Bundle::parse(r#"["zkc.relation-bundle/0",[],[],[]]"#).unwrap_err(),
+        Error("bundle-tables")
+    );
+    let table = r#"["t","required",["fixed",1],"finite",[],["zkc.ring/0",[],[],[]],[],[],[]]"#;
+    let many = format!(
+        r#"["zkc.relation-bundle/0",[],[],[{}]]"#,
+        vec![table; TABLE_LIMIT + 1].join(",")
+    );
+    assert_eq!(Bundle::parse(&many).unwrap_err(), Error("bundle-limit"));
+    let mismatch = one_table(
+        "finite",
+        json!(["instance", 1, 8, false]),
+        json!([["x", "witness", "koala-bear.ext8-binomial3", 1]]),
+        json!([["read", 0, "0", 0]]),
+        (json!([["input", 0]]), json!([0])),
+        json!([[0, ["all"]]]),
+        json!([]),
+    );
+    assert_eq!(
+        Bundle::parse(&mismatch).unwrap_err(),
+        Error("bundle-input-field")
+    );
+    // Table count of a supplied carrier.
+    let bundle = Bundle::parse(BUNDLE).unwrap();
+    let parse = |t: &str| parse_json(t, DATA_BYTE_LIMIT, "x", "y").unwrap();
+    let (c, i, mut w) = (
+        bundle.decode_configuration(&parse(CONFIG)).unwrap(),
+        bundle.decode_instance(&parse(INSTANCE)).unwrap(),
+        bundle.decode_witness(&parse(WITNESS)).unwrap(),
+    );
+    w.tables.pop();
+    assert_eq!(
+        bundle.admit(&c, &i, &w).unwrap_err(),
+        Error("bundle-data-shape")
+    );
+    // Interaction contributions are bounded before balance keys are built.
+    let mut interactions = Vec::new();
+    for _ in 0..5 {
+        interactions.push(json!([
+            "field-balance",
+            0,
+            ["global"],
+            ["all"],
+            [],
+            0,
+            null
+        ]));
+    }
+    let text = json!([
+        "zkc.relation-bundle/0",
+        [],
+        [["bus", "field-balance", [], "koala-bear"]],
+        [[
+            "t",
+            "required",
+            ["instance", 1, 1 << 20, false],
+            "finite",
+            [["x", "witness", "koala-bear", 1]],
+            ["zkc.ring/0", ["koala-bear"], [["input", 0]], [0]],
+            [["read", 0, "0", 0]],
+            [],
+            interactions
+        ]]
+    ])
+    .to_string();
+    let bus = Bundle::parse(&text).unwrap();
+    let id = bus.identity().to_string();
+    let c = Configuration {
+        relation: id.clone(),
+        tables: vec![(None, vec![])],
+    };
+    let i = Instance {
+        relation: id.clone(),
+        publics: vec![],
+        tables: vec![Some((Some(1 << 20), vec![]))],
+    };
+    let w = Witness {
+        relation: id,
+        tables: vec![Some(vec![vec!["x".into(); 1 << 20]])],
+    };
+    assert_eq!(
+        bus.admit(&c, &i, &w).unwrap_err(),
+        Error("bundle-contribution-limit")
     );
 }

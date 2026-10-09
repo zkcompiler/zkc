@@ -308,11 +308,13 @@ Expected<Admitted> admitData(const Bundle &bundle,
         auto expected = length(indices[i], rows);
         if (!expected)
           return expected.takeError();
-        if (groups[i].size() != *expected)
-          return context("bundle-group-shape");
-        coordinates += groups[i].size();
+        // The declared height and width bound the data before its length is
+        // compared, so an oversized shape refuses without supplied values.
+        coordinates += *expected;
         if (coordinates > BundleLimits::coordinates)
           return context("bundle-data-limit");
+        if (groups[i].size() != *expected)
+          return context("bundle-group-shape");
       }
       return Error::success();
     };
