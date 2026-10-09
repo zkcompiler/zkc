@@ -1,0 +1,28 @@
+[package]
+name = "zkc-openvm-relation-driver"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Fixture driver and differential checks for the OpenVM relation adapter"
+
+[[bin]]
+name = "zkc-openvm-relation-fixtures"
+path = "src/main.rs"
+
+[features]
+# Differential checks use the separately built C++ and Rust executables.
+native = []
+
+[dependencies]
+openvm-stark-backend.workspace = true
+p3-field.workspace = true
+serde_json.workspace = true
+zkc-openvm-relation.workspace = true
+
+[[test]]
+name = "native"
+required-features = ["native"]
+
+[lints]
+workspace = true
