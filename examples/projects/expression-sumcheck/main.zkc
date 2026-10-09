@@ -1,21 +1,13 @@
 module example;
-use expression_sumcheck::{Expression, Vector, Sumcheck};
+use expression_sumcheck::{Vector, Sumcheck};
 domain Base = field("koala-bear");
 domain Extension = field("koala-bear.ext8-binomial3");
 
-// This component fixes the separately captured product.ring.json. The protocol
-// is generic over the component; the compiler has no Sumcheck-specific branch.
-component Product<F: Field>: Expression<F> {
-  fn round(low: Vector<F>, high: Vector<F>, rows: index) -> Vector<F> {
-    return kernel<F>("ring.affine_sum", low, high, rows;
-      "1b02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4");
-  }
-  fn evaluate(values: Vector<F>) -> F {
-    let result = kernel<F>("ring.point", values;
-      "1b02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4");
-    return kernel<F>("vector.at", result; "0");
-  }
-}
+// The captured product.ring.json is the summed expression. The library derives
+// the table width and round degree from it; the compiler has no
+// Sumcheck-specific branch.
+domain Product = ring(asset product);
+
 fn embed_vector(values: Vector<Base>) -> Vector<Extension> {
   return kernel<Extension>("vector.embed", values);
 }
@@ -28,14 +20,14 @@ protocol BaseSumcheck roles(P,V)
   let prover_values @P = embed_vector(values);
   let verifier_values @V = embed_vector(values);
   let expected @V = embed_scalar(claim);
-  let accepted = Sumcheck<Extension,16,2,2,Product<Extension>>
+  let accepted = Sumcheck<Extension,16,Product>
     (prover_values, verifier_values, expected, rounds, challenges);
   return (accepted = accepted);
 }
 protocol ExtensionSumcheck roles(P,V)
     (values: Vector<Extension> @(P,V), claim: Extension @V, rounds: index @(P,V),
      challenges: Random<Extension> @V) -> (accepted: bool @V) {
-  let accepted = Sumcheck<Extension,16,2,2,Product<Extension>>
+  let accepted = Sumcheck<Extension,16,Product>
     (values, values, claim, rounds, challenges);
   return (accepted = accepted);
 }

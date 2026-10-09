@@ -1,9 +1,24 @@
 //! Immutable action layouts and observations for executable programs.
 use super::{
-    AdmissionError, Admitted, CutKind, EntryRole, ErrorCode, Origin, PhysicalType, Stop,
-    model::{Body, Instruction, LoopCount, Participant},
+    AdmissionError, Admitted, AttributeRule, CutKind, EntryRole, ErrorCode, Origin, PhysicalType,
+    ResolvedBinding, Stop,
+    model::{Body, Instruction, LocalInstruction, LoopCount, Participant},
 };
-use std::collections::BTreeMap;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
+
+/// A static operation that names an immutable Host asset by content identity.
+/// The binding is the admitted declaration and physical signature; the identity
+/// is the operation's checked attribute. Nothing here says the asset exists.
+#[derive(Clone, Debug)]
+pub struct AssetReference {
+    pub function: String,
+    pub site: String,
+    pub binding: Arc<ResolvedBinding>,
+    pub identity: String,
+}
 
 /// A descriptor of an existing admitted instruction, not an executable program.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -99,7 +114,67 @@ pub enum ProgramState<'a> {
     Stopped(&'a Stop),
 }
 
+fn called_functions(body: &Body, out: &mut BTreeSet<String>) {
+    for instruction in body.iter() {
+        match instruction {
+            Instruction::Local { function, .. } => {
+                out.insert(function.clone());
+            }
+            Instruction::Loop { body, .. } => called_functions(body, out),
+            _ => {}
+        }
+    }
+}
+
 impl Admitted {
+    /// Every asset-naming operation an entry can reach: its participants'
+    /// bodies and nested loop bodies, each called function once, and every
+    /// local region of those functions including branches that an execution
+    /// may never choose. Admission already bounded the program, so this walk
+    /// is bounded by the same limits. A function that no participant of this
+    /// entry calls is not reported.
+    pub fn asset_references(&self, entry: &str) -> Result<Vec<AssetReference>, AdmissionError> {
+        let refuse = |detail| AdmissionError::new(ErrorCode::Record, detail);
+        let roles = self
+            .program
+            .entries
+            .get(entry)
+            .ok_or_else(|| refuse("asset-references-entry"))?;
+        let mut functions = BTreeSet::new();
+        for symbol in roles.values() {
+            called_functions(&self.program.participants[symbol].body, &mut functions);
+        }
+        let mut references = Vec::new();
+        for name in functions {
+            for instruction in LocalInstruction::walk(&self.program.functions[&name].body) {
+                let LocalInstruction::Op {
+                    site,
+                    binding,
+                    attributes,
+                    ..
+                } = instruction
+                else {
+                    continue;
+                };
+                if binding.signature().attributes != AttributeRule::AssetIdentity {
+                    continue;
+                }
+                let [identity] = attributes.as_slice() else {
+                    return Err(refuse("asset-references-attribute"));
+                };
+                references
+                    .try_reserve(1)
+                    .map_err(|_| refuse("asset-references-allocation"))?;
+                references.push(AssetReference {
+                    function: name.clone(),
+                    site: site.clone(),
+                    binding: binding.clone(),
+                    identity: identity.clone(),
+                });
+            }
+        }
+        Ok(references)
+    }
     /// Inspect an admitted program entry in its role map's canonical order.
     pub fn program_entry(&self, entry: &str) -> Result<Vec<ProgramRole>, AdmissionError> {
         let refuse = |detail| AdmissionError::new(ErrorCode::Record, detail);

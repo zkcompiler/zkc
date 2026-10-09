@@ -88,6 +88,10 @@ int main() {
             parameterContract("vector.constant")->fieldTerm == 0 &&
             !parameterContract("field.add")->fieldTerm,
         "field literal domains are declaration-owned");
+  check(parameterContract("ring.point")->assetFormat == "zkc.ring/0" &&
+            parameterContract("ring.rows")->assetFormat == "zkc.ring/0" &&
+            parameterContract("field.add")->assetFormat.empty(),
+        "captured asset families are declaration-owned");
   success(
       checkParameters(BindingApplication{"field.constant", {"koala-bear"}, ""},
                       {"2130706432"}),

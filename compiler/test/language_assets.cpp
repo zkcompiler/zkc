@@ -85,7 +85,7 @@ int main() {
     auto a = r1cs(), b = r1cs();
     b.bytes = zkc::printJson(
         take(zkc::relation::R1CS::create("koala-bear", 2, 1, 0, {})).encode());
-    auto x = take(RelationAsset::read(a)), y = take(RelationAsset::read(b));
+    auto x = take(Asset::read(a)), y = take(Asset::read(b));
     require(x.identity() != y.identity(),
             "public input/output distinction erased");
   });

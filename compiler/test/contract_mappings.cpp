@@ -37,6 +37,7 @@ constexpr ExpectedMapping expected[] = {
     {"ring.rows", "algebra.exec.ring_rows"},
     {"ring.coefficients", "algebra.exec.ring_coefficients"},
     {"ring.affine_sum", "algebra.exec.ring_affine_sum"},
+    {"relation.table_rows", "relation.exec.table_rows"},
     {"transcript.native.indexed.challenge",
      "crypto.exec.indexed_transcript_challenge"},
     {"transcript.native.indexed.observe.data",

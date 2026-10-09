@@ -19,11 +19,14 @@ defined in [protocol bodies](protocols.md#bindings-and-local-control). Imports, 
 must be acyclic. Every declaration is checked, including unused generic bodies.
 
 Capture accepts named assets as explicit bytes alongside modules. Formats are
-`r1cs-json`, `r1cs-binary` and `air-json`; checking never opens a diagnostic path.
-The CLI accepts `--asset=NAME=FORMAT=FILE`. Analysis admits every supplied asset,
-including unused ones, through the existing bounded R1CS or AIR reader. Canonical
+`r1cs-json`, `r1cs-binary`, `air-json`, `ring-json` and `relation-bundle-json`;
+checking never opens a diagnostic path. The CLI accepts `--asset=NAME=FORMAT=FILE`.
+Analysis admits every supplied asset, including unused ones, through the
+existing bounded R1CS, AIR, [ring expression](../domains/ring-expressions.md)
+or [relation bundle](../domains/relation-bundles.md) reader. Canonical
 relation identity retains constraint content, field, statement layout and AIR row
-scopes. It does not prove a source-circuit interpretation or key/setup correctness.
+scopes; a ring or bundle asset's identity is its canonical definition identity.
+Admission does not prove a source-circuit interpretation or key/setup correctness.
 
 Capture identity is SHA-256 over the `zkc.capture` marker, explicit source format,
 module count, modules sorted by logical path, asset count, and assets sorted by
@@ -96,11 +99,50 @@ has one to 32 distinct alternatives. Formal mathematical types have a separate
 
 Domain declarations require an installed identity of the declared catalog sort:
 `field`, `group`, `commitment`, `transcript`, or `codec`. Static parameters use
-`Type`, `Field`, `Group`, `Commitment`, `Transcript`, `Codec`, `nat`, or a selected
-interface. Sort names take precedence in static parameter bounds; elsewhere names
-retain ordinary module resolution. Field and group domains also denote their runtime
-value types. Commitment, transcript and codec domains are static only: they cannot
-be runtime ports, tuple/array elements or arguments to a `Type` parameter.
+`Type`, `Field`, `Group`, `Commitment`, `Transcript`, `Codec`, `Ring`, `Bundle`,
+`nat`, or a selected interface. Sort names take precedence in static parameter
+bounds; elsewhere names retain ordinary module resolution. Field and group
+domains also denote their runtime value types. Commitment, transcript and codec
+domains are static only: they cannot be runtime ports, tuple/array elements or
+arguments to a `Type` parameter.
+
+### Asset domains and projections
+
+```text
+domain Product = ring(asset product);
+domain Recurrence = bundle(asset recurrence);
+fn round<F: Field, A: Ring>(values: Vector<F>) -> Vector<F>
+    where 1 <= A::Inputs, A::Outputs <= 1 {
+  let rows = kernel("index.div", kernel<F>("vector.length", values),
+                    index<A::Inputs>());
+  return kernel<F>("ring.affine_sum", values, values, rows; A);
+}
+```
+
+An asset domain names a captured ring expression (`ring`) or relation bundle
+(`bundle`). The declaration resolves the captured name at definition checking:
+an absent name or an asset of another kind refuses. The domain denotes the
+asset's canonical identity, so two declarations over the same admitted contents
+are the same term. `Ring` and `Bundle` are the static sorts of these terms. They
+are capture-local: an asset term never enters the installed catalog identity,
+never becomes a binding static argument and never names a runtime value. Like
+the other static-only sorts, an asset term cannot be a port, a field, a tuple or
+array element, a native container argument or a `Type` argument, and it has no
+permissions. Instance keys include the asset identity.
+
+Projections derive naturals from the asset, never from the author. A ring term
+`A` has `A::Inputs`, the ordered input count; `A::Outputs`, the output count;
+and `A::Degree`, the largest output degree with every input weighted one. A
+bundle term `B` has `B::Tables`, `B::Publics` and `B::Channels` for a closed term only. A
+closed term yields the constant at once. A generic term yields a distinct
+natural factor that closure substitutes: inference never solves a parameter
+through a projection, and `pow2` of a projection is unsupported. A degree above
+the arena limit is saturated and refuses when it is requested, at definition
+checking for a closed term and at closure for a generic one. Projections take
+part in ordinary natural arithmetic and bounds: `where 1 <= A::Inputs` is
+checked against the closed asset and entailed from a caller's explicit bound
+like any other natural requirement. Associated asset members on interfaces are
+not supported.
 
 Catalog associations project domains, such as `G::Scalar`, `C::ValueField`,
 `C::PointField`, `C::EvaluationField`, `T::ChallengeField`, and
@@ -240,6 +282,19 @@ input/output types follow that signature. Multiple native results form a source
 tuple, and no results form unit. Constant parameters use the contract's own
 validation, including field-literal bounds. A generic field admits only `0` and
 `1` as literals; concrete field parameters are checked against that field.
+
+A contract whose parameter is an asset identity takes an asset term of the
+accepted sort instead of a literal: `kernel<F>("ring.point", v; A)` or
+`; Product`. The parameter declaration's `assetFormat` selects `Ring`
+(`zkc.ring/0`) or `Bundle` (`zkc.relation-bundle/0`); the frontend does not infer
+the family from the operation name. The term may be a declared asset domain or a generic parameter.
+A literal digest, a term of another sort or an asset term at a position that
+takes a literal refuses. The compiler writes the closed term's canonical
+identity into the emitted parameter when the body closes, retains the asset for
+the Entry package, and checks the family's reference rules. Ring substitution
+admits the carrier field and its base field; a Bundle table view checks the
+table index and exact declared column fields. Source comparison compares the closed body's identities
+with the original MLIR, so a changed digest is a correspondence failure.
 
 Generic checking uses completed capability bounds, inherent Field/Group facts and
 installed implications. For example, `where zkc::algebra::TwoAdicField(F)` permits

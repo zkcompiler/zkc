@@ -1,17 +1,20 @@
 //! Source Entry packages and their application-owned authentication boundary.
 //!
 //! Capturing a package authenticates its exact publication bytes. Execution must
-//! additionally admit the native program and bind its interface; retained MLIR
-//! is a compiler-checked subject, not an interpreter input for this host.
+//! additionally admit the native program, bind its interface and admit the
+//! packaged expression assets its program references; retained MLIR is a
+//! compiler-checked subject, not an interpreter input for this host.
 mod decode;
 mod package;
 pub(crate) use package::AuthenticatedArtifact;
-pub use package::{CompileOptions, Package, PackageError};
+pub use package::{CompileOptions, Package, PackageError, PackagedAsset};
 
 mod errors;
 pub use errors::{EntryError, EntryPhase};
 mod interface;
 pub use interface::{Interface, InterfaceError};
+mod assets;
+pub use assets::EntryAssets;
 
 mod value;
 pub use value::Value;

@@ -80,6 +80,67 @@ work or trace size. Each evaluator provider has additional explicit limits and
 failure behavior. Admission or a reference interpreter does not prove native
 backend correspondence or the security of a consuming protocol.
 
+## Structural sharing
+
+A sharing map from an admitted arena `A` to an admitted arena `B` is a function
+`m` from the node indices of `A` to the node indices of `B` such that:
+
+- `B` declares exactly the inputs of `A`, in the same order and with the same
+  fields, including inputs no output uses;
+- each node `A[i]` and its image `B[m(i)]` have the same kind, field, literal
+  and input slot;
+- the operands of `B[m(i)]` are the images of the operands of `A[i]`, in the
+  same operand order;
+- the output list of `B` is the image of the output list of `A` position by
+  position, so it has the same length and repeats where `A` repeats.
+
+Nothing else is required; in particular `B` need not have fewer nodes, and no
+node of `B` outside the image is constrained beyond `B`'s own admission.
+
+Under a sharing map every node of `A` denotes the same formal expression as its
+image, because both unfold to the same tree. Consequently the field fact of each
+node, its degree under every vector of input weights, the inputs used by each
+output position, and every substitution of the selected outputs agree between
+`A` and `B`, and each used input is still fetched once. The map is syntactic:
+`x * 0` is not related to `0`, `1 + 2` is not related to `3`, `a + b` is not
+related to `b + a`, equal literals of different fields are different nodes, and
+a declared input cannot disappear or change position. A relation's definedness
+obligations are therefore the same before and after sharing.
+
+The shared form of `A` walks its nodes in index order and reuses the first node
+with the same kind, field, literal, input slot and already-shared operands,
+recording the reuse in `m`. It is a sharing map whose target contains no two
+identical nodes; it depends only on the node order, costs one ordered lookup
+per node within the formation limits, and sharing a shared arena returns the
+identity map. When any node is reused the shared form has a different canonical
+encoding and therefore a different structural identity. A consumer that
+replaces an arena by its shared form refers to that new identity; the sharing
+map itself is an in-process value and not part of any exchanged format.
+
+A sharing judgment checks the four conditions above directly against the two
+arenas and the map, without reproducing the walk, and refuses on the first
+condition that fails. The compiler's `ring::shareExpression` produces the shared
+form with its map, and `ring::checkSharing` is that judgment, with refusals
+`ring-sharing-inputs`, `ring-sharing-map`, `ring-sharing-node` and
+`ring-sharing-outputs`.
+
+The compiler's `language::shareAsset` applies this transformation to a captured
+ring arena or to every arena in a relation Bundle. Its independent checker also
+requires exact preservation of the Bundle's public slots, channels, table and
+group declarations, authority, height, read model, input bindings, assertion
+scopes and interactions. This preserves the mathematical substitutions and read
+obligations. Resource costs can decrease; equal budget-refusal behavior is not a
+claim.
+
+`zkc-compile asset-share ring-json INPUT` and
+`zkc-compile asset-share relation-bundle-json INPUT` emit the checked canonical
+result. Capture that result with `--asset` when compiling the consuming source.
+The resulting Entry binds its new identity and contents. This is an explicit
+asset transformation; it does not rewrite an already published Entry or run
+implicitly as part of ordinary program simplification. Kind, map-count and
+surrounding-context mismatches refuse as `asset-sharing-kind`,
+`asset-sharing-shape` and `asset-sharing-context`.
+
 ## Native bulk substitution
 
 Four ordered algebra kernels use one SHA-256 asset parameter and the installed
@@ -88,12 +149,16 @@ parameter is exactly 64 lowercase hexadecimal digits. It is part of the program;
 the Host separately admits the referenced arena into an immutable registry.
 No proof message installs or changes an evaluator.
 
-The current compiler checks the operation contract and digest reference; the
-Host admits the referenced arena. The digest does not expose an arithmetic body
-to MLIR optimization. Rewriting or lowering inside an arena would require the
-compiler to retain and admit its contents, derive the resulting identity and
-check the changed interpretation. Bulk evaluation and protocol compilation are
-implemented; compiler transformations of external arena bodies are not.
+Source names an arena through a captured asset domain or a generic `Ring`
+parameter ([asset terms](../language/definitions.md#asset-domains-and-projections)),
+never through a literal digest. The compiler admits the arena, derives its
+input count, output count and unit-weight degree as static naturals, writes the
+canonical identity into the parameter when the body closes, checks the carrier
+field, and retains the arena for the Entry package. The Host independently
+admits the packaged arena under that identity and checks references before
+execution. Structural sharing operates on the shared arena representation
+described above; the arena is not expanded into a second arithmetic
+representation in MLIR.
 
 | Contract | Data operands | Result layout |
 |---|---|---|
@@ -138,18 +203,16 @@ to inputs, outputs and scratch. Sharing an asset or input cannot remove an
 arithmetic work charge. The asset registry separately bounds canonical bytes
 plus decoded metadata to 32 MiB; one arena is at most 8 MiB.
 
-The Entry CLI accepts `--evaluators=PATH` for `run`, `prove`, and `verify`:
-
-```text
-["zkc.ring-assets/0", [["expected_sha256", "path/to/arena.json"], ...]]
-```
-
-Paths are resolved from the invocation's working directory. The manifest is at
-most 64 KiB with at most 256 entries. Each asset must match its expected digest;
-duplicates and missing references refuse. Configuration files are protected
-against output publication to the same path. This registry authenticates arena
-content. Relation authority, input binding and polynomial degree premises remain
-the responsibility of the closed consuming view.
+A source Entry carries its arenas in the authenticated package's
+[`assets` member](../formats/entry.md#published-entry-package), as canonical
+text under the digests its program references. The named Hosts admit those
+bodies into the registry and check every reachable reference
+[before any invocation](../runtime/entries.md#packaged-expression-assets); the
+Entry CLI accepts no separate evaluator manifest. Direct native programs supply
+a registry through the native Host and backend constructors. Either way the
+registry authenticates arena content only. Relation authority, input binding
+and polynomial degree premises remain the responsibility of the closed
+consuming view.
 
 ## Maintained clients and formal laws
 
@@ -171,6 +234,11 @@ authorized instance and a trace; the source program checks shapes and the arena
 identity, not that an assignment is such a view.
 
 `Zkc.Algebra.RingExpression` states tree substitution, homomorphism and exact
-polynomial evaluation/degree laws. `Zkc.Relation.AIR.RingExpression` preserves
+polynomial evaluation/degree laws. `Zkc.Algebra.RingExpression.Sharing` proves
+that a label-preserving node map between untyped arenas unfolds every node and
+every ordered output to the same tree, which is the law behind the sharing
+judgment; field identities and embeddings are outside that model.
+`Zkc.Relation.AIR.RingExpression` preserves
 finite-AIR expression evaluation and its public/read degree weights. Those
-independent models do not yet prove the native DAG decoder or provider correct.
+independent models do not yet prove the native DAG decoder, the native sharing
+checker or the provider correct.

@@ -426,9 +426,10 @@ class Comparison {
     return (!actual.formula && actual.asset &&
             actual.asset->identity() == asset.identity() &&
             actual.key == asset.identity() && actual.revision == "0" &&
-            actual.externalKind == (definition.kind == K::R1CS
-                                        ? "zkc.relation.r1cs/0"
-                                        : "zkc.relation.air/0")) ||
+            actual.externalKind ==
+                (definition.kind == K::R1CS  ? "zkc.relation.r1cs/0"
+                 : definition.kind == K::AIR ? "zkc.relation.air/0"
+                                             : "zkc.relation.bundle/0")) ||
            fail("source captured relation identity differs");
   }
 

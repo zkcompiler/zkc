@@ -150,7 +150,7 @@ public:
 Error inspectApplications(
     StringRef original, StringRef interface,
     function_ref<Error(const ApplicationOccurrence &)> visitor,
-    const Limits &limits, ArrayRef<RelationAsset> assets) {
+    const Limits &limits, ArrayRef<Asset> assets) {
   return detail::withInterface(
       original, interface, limits, assets,
       [&](mlir::ModuleOp module, LanguageInterface &&view) {

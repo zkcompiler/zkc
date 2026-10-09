@@ -94,7 +94,7 @@ fn entry_interface(text: &str) -> Value {
     let bytes = serde_json::to_vec(&json!({
         "format": "zkc.entry/0", "original": "conformance original",
         "interface": text, "artifact": "conformance metadata only",
-        "options": {"simplify": true, "release_storage": false}
+        "options": {"simplify": true, "release_storage": false}, "assets": []
     }))
     .expect("inert package serialization");
     let package = Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES)

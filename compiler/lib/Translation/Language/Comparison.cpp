@@ -1026,9 +1026,12 @@ public:
         break;
       case RelationDefinition::Kind::R1CS:
       case RelationDefinition::Kind::AIR:
+      case RelationDefinition::Kind::Bundle:
         kind = definition.kind == RelationDefinition::Kind::R1CS
                    ? "zkc.relation.r1cs/0"
-                   : "zkc.relation.air/0";
+               : definition.kind == RelationDefinition::Kind::AIR
+                   ? "zkc.relation.air/0"
+                   : "zkc.relation.bundle/0";
         key = project.project().assets()[*definition.asset].identity().str();
         revision = "0";
         break;

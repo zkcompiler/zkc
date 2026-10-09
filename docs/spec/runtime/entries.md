@@ -65,6 +65,53 @@ key input vectors. Native input admission owns key parsing, canonical bytes,
 setup metadata checks and execution budgets. This does not establish honest setup
 generation or authorize a private source representation.
 
+## Packaged expression assets
+
+Both named Hosts take their ring arenas and relation Bundles from the authenticated package's
+[`assets` member](../formats/entry.md#published-entry-package) and from nowhere
+else. After native admission and interface binding, `RunEntry::admit` and
+`ProofEntry::admit` admit every packaged body through its independent ring or
+Bundle reader and backend registry, with their formation, identity, per-item and
+aggregate limits. Registry refusals pass through unchanged, for example
+`refused:ring-asset-identity` when a body does not hash to its expected
+digest. The retained body must also be byte-identical to the admitted
+expression's canonical encoding, or admission returns `entry-asset-canonical`:
+a package carries one representation per asset.
+
+The Host then checks the admitted native program's references against those
+assets. It walks the entry's participants, their nested loop bodies, every
+function they call, and every local region of those functions, including
+branches no execution chooses and loop bodies zero trips never enter. The
+walk uses the admitted typed program; it does not scan artifact text. Each
+operation whose binding carries an asset identity attribute is a reference.
+For `ring.point`, `ring.rows`, `ring.coefficients` and `ring.affine_sum` the
+carrier is the field of the operation's first vector operand, taken from the
+admitted signature. The referenced arena must be admitted, else
+`entry-asset-missing`, and its inputs and facts must be interpretable in that
+carrier under the kernels' own rule, else `entry-asset-carrier`: KoalaBear
+arenas under an Ext8 carrier are permitted, the converse is not.
+For `relation.table_rows`, the Host checks the selected static table index and
+the Bundle view's exact field requirements. It does not promote a base-field
+trace to arbitrary extension-field values. A Bundle relation declaration also
+requires its packaged body; the Host independently checks its derived formal
+ABI, returning `entry-asset-relation` on disagreement. An operation
+of another asset-naming contract returns `entry-asset-contract`. These checks
+complete before any request is converted or any input, key or resource is
+issued; a missing or incompatible asset is never deferred to execution. An
+admitted asset that no reachable operation references is retained and
+reported, not refused.
+
+The admitted registries are installed into the Entry's native run or proof Host
+before the Entry is returned. `RunEntry::assets` and `ProofEntry::assets`
+expose them as `EntryAssets`: admitted identities, each admitted expression or Bundle, the
+checked references with their function, site, binding and identity, and the
+registries themselves. No `RunEntry` or `ProofEntry` method accepts a caller-supplied
+registry, so an application cannot replace or extend the packaged assets on the
+authenticated path. The native `RunHost`, `NativeDeployment` and backend
+registry constructors keep their explicit registry route for direct native
+programs. Asset admission establishes content identity and static reference
+coverage; it is not a judgment about an arena's meaning in the protocol.
+
 ## Named run calls
 
 Rust `entry::RunEntry::admit` retains an authenticated package, validates its
@@ -73,7 +120,8 @@ separate API. Before accepting a run, every logical output must be copyable and
 have no affine custody; unsupported custody returns `entry-output-custody`.
 Every ordinary input must have source `Wire` constructor permission or admission
 returns `entry-input-constructor`. Whole builtin key ports instead use the explicit
-setup route above. These checks precede native bundle admission.
+setup route above. These checks precede native bundle admission, which precedes
+asset admission.
 
 `RunRequest` names every participant and its ordinary/prover-key input ports
 exactly. Its service map supplies optional budget overrides for declared services;
@@ -214,7 +262,9 @@ single-use options. `--` ends option parsing. Missing arguments and malformed
 options return `cli-usage` or `cli-option` with a human-readable `message` in
 phase `arguments`, before file access. Exit 0 requires completed success;
 recognized-command refusals return JSON and exit 1. Missing/unknown commands
-exit 2. Help and version exit 0 without reading inputs.
+exit 2. Help and version exit 0 without reading inputs. `run`, `prove` and
+`verify` accept no evaluator manifest: expression assets come from the
+package, and an `--evaluators` option is an unknown option.
 
 A `zkc.entry-run/0` request has required `format`, `session` and `roles`, plus
 optional `setups` (default empty). Every role record has required `inputs` and
@@ -265,8 +315,9 @@ regenerating or deliberately replacing its pin.
 
 Calls that fail before execution return `EntryError`, whose `phase` identifies
 package authentication, interface reading, setup authority, native admission,
-interface binding, request conversion or native preparation. Phases identify
-where rejection occurred; `code()` identifies the reason. For example, an unknown
-input name fails at `Request`, while an invalid native context or resource budget
-fails at `Preparation`. Native preparation can also reject malformed input values.
+interface binding, asset admission, request conversion or native preparation.
+Phases identify where rejection occurred; `code()` identifies the reason. For
+example, an unknown input name fails at `Request`, a missing packaged arena
+fails at `Assets`, and an invalid native context or resource budget fails at
+`Preparation`. Native preparation can also reject malformed input values.
 Execution failures and cleanup remain in the report.

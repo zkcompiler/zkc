@@ -13,10 +13,6 @@ use zkc_plonky3_air_client::{CounterAir, RecurrenceAir};
 
 pub mod source;
 
-/// Path of each fixture directory relative to the repository root, as written
-/// into ring-asset manifests.
-pub const FIXTURE_ROOT: &str = "compiler/adapters/plonky3/fixtures";
-
 pub struct Fixture {
     pub name: &'static str,
     pub export: Export,
@@ -91,17 +87,9 @@ fn failures_text(failures: &[(usize, usize)]) -> String {
 
 /// Exact file contents of one fixture, by file name.
 pub fn files(fixture: &Fixture) -> Vec<(&'static str, String)> {
-    let digest = fixture.export.arena.sha256();
     let mut files = vec![
         ("export.json", fixture.export.to_text()),
         ("arena.json", fixture.export.arena_text()),
-        (
-            "ring-assets.json",
-            format!(
-                "[\"zkc.ring-assets/0\",[[\"{digest}\",\"{FIXTURE_ROOT}/{}/arena.json\"]]]\n",
-                fixture.name
-            ),
-        ),
         ("instance.json", fixture.instance.to_text()),
         ("witness.json", fixture.witness.to_text()),
         ("expected.json", failures_text(&fixture.upstream_failures)),

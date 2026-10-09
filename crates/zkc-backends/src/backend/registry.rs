@@ -148,6 +148,11 @@ pub(super) fn installed() -> Result<&'static Registry> {
         .get_or_init(|| {
             let mut r = Registry::default();
             r.shaped(crate::ring::CONTRACTS, ring)?;
+            r.family(
+                &[("plonky3/relation.table_rows", "relation.table_rows")],
+                Signature::Custom(crate::relation::signature),
+                relation,
+            )?;
             r.shaped(super::execute::CONTRACTS, basic)?;
             r.shaped(crate::kernels::arithmetic::CONTRACTS, arithmetic)?;
             r.shaped(crate::kernels::conversions::CONTRACTS, conversions)?;
@@ -218,6 +223,15 @@ fn field(i: &Invocation<'_>) -> Option<Identity> {
 }
 fn ring(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::ring::apply(&b.ring_assets, &mut b.ring_work, args, i, &b.core.policy)
+}
+fn relation(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::relation::apply(
+        &b.relation_assets,
+        &mut b.ring_work,
+        args,
+        i,
+        &b.core.policy,
+    )
 }
 pub(crate) fn basic(
     b: &mut NativeBackend,

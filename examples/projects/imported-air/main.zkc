@@ -1,24 +1,74 @@
 module imported_air;
 domain Base = field("koala-bear");
 domain Extension = field("koala-bear.ext8-binomial3");
+domain Export = ring(asset export);
+domain Recurrence = bundle(asset recurrence);
 type Vector<F: Field> = builtin("vector", F);
 
-// Both kernels fix the arena exported from the adapter's recurrence AIR by its
-// canonical SHA-256 identity; the Host admits arena bytes only under it. Which
-// value each arena input receives is decided by the adapter's closed view,
-// which prepares the assignments. This source does not check them.
+// Field, table and relation are static parameters of a reusable table view.
+// All read offsets and assertion scopes come from the captured Bundle.
+fn trace_values<F: Field, Table: nat, B: Bundle>(
+    trace: Vector<F>, configuration: Vector<F>, public_data: Vector<F>,
+    height: index) -> Vector<F> {
+  return kernel<F,Table>("relation.table_rows", trace, configuration,
+    public_data, height; B);
+}
+
+// Polynomial substitution uses the captured arena. These helpers accept
+// prepared assignments; trace-bound relation evaluation is a separate view.
 fn row_values<F: Field>(assignments: Vector<F>, rows: index) -> Vector<F> {
-  return kernel<F>("ring.rows", assignments, rows;
-    "270642322a3f650cca6455ddee6301e17aab1adc9c36e60fb87efd078dc1fd6d");
+  return kernel<F>("ring.rows", assignments, rows; Export);
 }
 fn coefficient_values<F: Field>(coefficients: Vector<F>, width: index) -> Vector<F> {
-  return kernel<F>("ring.coefficients", coefficients, width;
-    "270642322a3f650cca6455ddee6301e17aab1adc9c36e60fb87efd078dc1fd6d");
+  return kernel<F>("ring.coefficients", coefficients, width; Export);
 }
 fn all_zero<F: Field>(values: Vector<F>) -> bool {
   let zero: F = 0;
   let zeros = kernel<F>("vector.fill", zero, kernel<F>("vector.length", values));
   return kernel<F>("vector.equal", values, zeros);
+}
+
+protocol Trace roles(Evaluator)
+    (trace: Vector<Base> @Evaluator, configuration: Vector<Base> @Evaluator,
+     public_data: Vector<Base> @Evaluator, height: index @Evaluator)
+    -> (residuals: Vector<Base> @Evaluator, satisfied: bool @Evaluator)
+    where Recurrence::Tables <= 1, Recurrence::Channels <= 0 {
+  let residuals @Evaluator = trace_values<Base,0,Recurrence>(
+    trace, configuration, public_data, height);
+  let satisfied @Evaluator = all_zero(residuals);
+  return (residuals = residuals, satisfied = satisfied);
+}
+
+// The ABI follows public slots and then groups in Bundle declaration order.
+relation RecurrenceRelation(statement x0: Base, statement y0: Base,
+    statement final_acc: Base, witness trace: Vector<Base>,
+    parameter configuration: Vector<Base>) = bundle(asset recurrence);
+
+fn public_values(x0: Base, y0: Base, final_acc: Base) -> Vector<Base> {
+  let x = kernel<Base>("vector.fill", x0, 1);
+  let y = kernel<Base>("vector.fill", y0, 1);
+  let final = kernel<Base>("vector.fill", final_acc, 1);
+  return kernel<Base>("vector.concat", kernel<Base>("vector.concat", x, y), final);
+}
+
+// A transparent reference protocol: send the complete trace and check it at V.
+// This exercises relation authority and the proof Host, without succinctness
+// or zero knowledge.
+protocol RevealTrace roles(P,V)
+    (trace: Vector<Base> @P, configuration: Vector<Base> @V,
+     x0: Base @V, y0: Base @V, final_acc: Base @V, height: index @V)
+    -> (accepted: bool @V)
+    where Recurrence::Tables <= 1, Recurrence::Channels <= 0
+    spec {
+      target constraints = RecurrenceRelation(in.x0, in.y0, in.final_acc,
+        in.trace, in.configuration) accept out.accepted;
+    } {
+  let received = send P -> V(trace);
+  let public_data @V = public_values(x0, y0, final_acc);
+  let residuals @V = trace_values<Base,0,Recurrence>(received,
+    configuration, public_data, height);
+  let accepted @V = all_zero(residuals);
+  return (accepted = accepted);
 }
 
 // Row-major assignments give row-major residuals, one column per assertion.
@@ -46,5 +96,14 @@ protocol Points roles(Evaluator)
   return (residuals = residuals);
 }
 entry RowResiduals = Rows;
+entry TraceResiduals = Trace;
 entry CoefficientResiduals = Coefficients;
 entry PointResiduals = Points;
+entry DisclosedTraceProof = RevealTrace {
+  prover P;
+  verifier V;
+  public { configuration, x0, y0, final_acc, height };
+  accept accepted;
+  target constraints;
+  construction authored;
+}

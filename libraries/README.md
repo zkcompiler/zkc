@@ -11,7 +11,7 @@ concrete domains, Entries and transcript constructions in
 |---|---|---|
 | [`schnorr`](schnorr/lib.zkc) | `DLog<G>`, `Schnorr<G>` | Discrete-log relation and three-message group protocol |
 | [`sumcheck`](sumcheck/lib.zkc) | `Vector<F>`, `Sumcheck<F, Max>` | Bounded multilinear Sumcheck over a public evaluation table |
-| [`expression_sumcheck`](sumcheck/expression.zkc) | `Expression<F>`, `Sumcheck<F, Max, Width, Degree, E>` | Sumcheck for an expression in public multilinear tables, using a statically selected evaluator |
+| [`expression_sumcheck`](sumcheck/expression.zkc) | `Vector<F>`, `Polynomial<F>`, `Sumcheck<F, Max, A: Ring>` | Sumcheck for a captured ring expression over public multilinear tables |
 
 ### Schnorr
 
@@ -43,20 +43,24 @@ BLS12-381 Fr. Local `sums`, `fold`, `both` and `terminal` helpers remain private
 ### Expression Sumcheck
 
 The expression-based `Sumcheck` takes separate prover and verifier tables, a verifier claim,
-and a shared round count. Tables contain `Width` columns in row-major order.
-Both roles must use the same table, column order, expression component and
+and a shared round count. It is generic over a captured ring expression
+`A: Ring` and requires `1 <= A::Inputs` and exactly one output
+(`1 <= A::Outputs, A::Outputs <= 1`); a client passes an asset domain such as
+`domain Product = ring(asset product)`. Tables contain `A::Inputs` columns in
+row-major order. Both roles must use the same table, column order, arena and
 round count for honest execution. Each round pairs the first and second halves
 of the rows, so the first challenge fixes the most significant Boolean coordinate.
 
-The `Expression` component supplies round-polynomial coefficients and terminal
-evaluation. Its `round` method must return exactly the coefficients of
-`sum_i P(low_i + (high_i - low_i) X)` as a vector padded to `Degree + 1`;
-the vector preserves trailing zeros before transmission. `evaluate` must
-interpret the same expression. V checks the coefficient count and round sum,
-folds its own table, and checks the terminal value. These component laws and
-the degree bound are mathematical premises; the frontend checks their types.
-For the native ring component, `Width` must equal the arena's input count and
-`Degree` its derived degree with every input assigned weight one.
+P sends exactly the coefficients of `sum_i P(low_i + (high_i - low_i) X)`
+through the installed `ring.affine_sum` kernel, padded to `A::Degree + 1`
+where `A::Degree` is the arena's largest output degree with every input
+weighted one; the vector preserves trailing zeros before transmission. V checks
+that coefficient count and the round sum, folds its own table, and checks the
+terminal value through `ring.point` on the final `A::Inputs` factors. The
+compiler derives the width and the degree bound from the admitted arena; no
+author-supplied dimension is involved. The exactness of the kernels and the
+degree bound are mathematical premises of the installed evaluator, not source
+theorems.
 
 The [maintained client](../examples/projects/expression-sumcheck/README.md)
 uses the shared [ring evaluator](../docs/spec/domains/ring-expressions.md)

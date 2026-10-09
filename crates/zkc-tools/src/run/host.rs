@@ -94,6 +94,7 @@ impl HostLimits {
 /// Native admission proves supplied structure, not source-order correspondence.
 pub struct RunHost {
     ring_assets: zkc_backends::ring::Registry,
+    relation_assets: zkc_backends::relation::Registry,
     ring_work_limit: u64,
     bundle: Bundle,
     identity: String,
@@ -143,6 +144,7 @@ impl RunHost {
         authority.check(&bundle)?;
         Ok(Self {
             ring_assets: Default::default(),
+            relation_assets: Default::default(),
             ring_work_limit: zkc_backends::ring::DEFAULT_WORK_LIMIT,
             bundle,
             identity: hex(identity),
@@ -161,6 +163,10 @@ impl RunHost {
     }
     pub fn with_ring_assets(mut self, assets: zkc_backends::ring::Registry) -> Self {
         self.ring_assets = assets;
+        self
+    }
+    pub fn with_relation_assets(mut self, assets: zkc_backends::relation::Registry) -> Self {
+        self.relation_assets = assets;
         self
     }
     pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {

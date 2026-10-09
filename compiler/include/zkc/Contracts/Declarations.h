@@ -100,6 +100,9 @@ struct ParameterContract {
   std::optional<unsigned> maximum;
   /// Scoped Field term used by literal validation; not a root argument index.
   std::optional<unsigned> fieldTerm = {};
+  /// Canonical mathematical carrier named by an AssetIdentity parameter.
+  /// Empty for parameter contracts that do not refer to captured assets.
+  llvm::StringRef assetFormat = {};
 };
 const ParameterContract *parameterContract(llvm::StringRef contract);
 } // namespace zkc::protocol

@@ -62,9 +62,18 @@ Shared [ring-expression laws](spec/core/ring-expressions.md) establish input
 locality, substitution, ring-homomorphism transport, pointwise lane evaluation,
 and exact polynomial evaluation with structural degree bounds. The existing
 finite-AIR expression embedding preserves evaluation and degree weights.
-[The transitive axiom audit](../Tests/RingExpression.lean) covers both modules.
-Native DAG admission, JSON encoding and the KoalaBear/Ext8 provider are checked
-separately and are not subjects of these theorems.
+[Arena sharing](../Zkc/Algebra/RingExpression/Sharing.lean) proves that a
+label-preserving node map from a well-formed untyped arena unfolds every node
+and every ordered output to the same tree at every fuel (`unfold_hom`,
+`outputs_hom`), that fuel above the index does not change a well-formed arena's
+tree (`unfold_stable`, `unfold_isSome`), and that evaluation and degree
+transfer; [its controls](../Tests/RingExpressionSharing.lean) decide the map of
+the native sharing test and reject a wrong slot, swapped operands, a product by
+zero, a folded sum and an out-of-range image.
+[The transitive axiom audit](../Tests/RingExpression.lean) covers all three
+modules. Native DAG admission, field typing, embeddings, JSON encoding, the
+native sharing checker and the KoalaBear/Ext8 provider are checked separately
+and are not subjects of these theorems.
 
 The [source-role connection](design/role-execution.md), scoped source-cut and
 resource laws, and [committed Sumcheck connection](design/committed-sumcheck.md)

@@ -102,6 +102,8 @@ struct Expression {
   Span span;
   std::vector<SyntaxType> arguments;
   std::vector<std::string> labels;
+  /// Kernel parameter positions written as asset terms instead of literals.
+  std::map<unsigned, SyntaxType> assetParameters;
   std::optional<std::vector<std::string>> roles;
   std::vector<uint32_t> regions;
   std::vector<std::vector<Pattern>> payloads;
@@ -187,7 +189,10 @@ struct Binding {
 };
 struct SyntaxDeclaration {
   Declaration::Kind kind;
+  /// A domain declaration's target is its sort word; its domain is the
+  /// installed identity or, for an asset domain, the captured asset name.
   std::string name, domain, target;
+  bool assetDomain = false;
   bool isPublic = false;
   bool completes = false;
   Span span;

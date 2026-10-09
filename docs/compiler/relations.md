@@ -49,6 +49,13 @@ supplied challenges and claims. The Rust `zkc_runtime::relation` module admits
 the same carriers independently and evaluates them through a supplied field
 algebra.
 
+A source declaration `relation R(...) = bundle(asset name);` binds a captured
+bundle. `zkc/Language/RelationABI.h` derives the formal list such a declaration
+must spell from the admitted bundle alone; the source checker compares the
+declaration against it, and the interface reader repeats the derivation
+against the retained interface record and native declaration. The derivation
+is a pure function of the bundle; it carries no evaluator.
+
 ## Declaration and binding
 
 `relation.declare` is a non-callable identity with one function type and an

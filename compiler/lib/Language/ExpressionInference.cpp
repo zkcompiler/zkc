@@ -538,9 +538,12 @@ class ExpressionInference {
     case K::Kernel:
     case K::Intrinsic: {
       std::vector<Type> arguments;
-      auto signature = expr.kind == K::Kernel
-                           ? owner.kernelSignature(expr, arguments)
-                           : owner.intrinsicSignature(expr, arguments);
+      std::vector<std::string> parameters;
+      std::vector<AssetReference> references;
+      auto signature =
+          expr.kind == K::Kernel
+              ? owner.kernelSignature(expr, arguments, parameters, references)
+              : owner.intrinsicSignature(expr, arguments);
       if (!signature)
         break;
       constrain(result.type, signature->resultType(), expr.span);

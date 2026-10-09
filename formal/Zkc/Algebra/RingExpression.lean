@@ -16,6 +16,7 @@ inductive Expr (R : Type*) (Input : Type*) where
   | add (left right : Expr R Input)
   | mul (left right : Expr R Input)
   | neg (operand : Expr R Input)
+  deriving DecidableEq
 
 namespace Expr
 

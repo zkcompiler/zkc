@@ -39,7 +39,8 @@ Offsets are relative to their product or alternative payload.
 A relation record has `symbol`, `inputs` and `definition`. Each formal has `name`,
 `purpose`, ordered `native` indices and `schema`. Definition records have exactly
 `{kind, function}` for a formula, `{kind}` for an opaque declaration, or
-`{kind, asset}` for R1CS/AIR. Their identity triple comes from the actual native
+`{kind, asset}` for a captured R1CS, AIR or bundle, with `kind` spelled `r1cs`,
+`air` or `bundle`. Their identity triple comes from the actual native
 declaration. Formula kind is `zkc.language.formula/0`, key is the closed relation
 symbol, and revision is a lowercase SHA-256 representation digest. Its material is
 length-framed in this order: kind, predicate helper symbol, decimal logical input
@@ -66,9 +67,20 @@ nonempty body with the declaration's signature and no executable references, the
 checks polynomial observations on bounded detached clones using the original
 helper table. The supplied original is unchanged; limits remain `source.limit`
 and invalid observations are `target.admission` with source attribution.
-Captured kinds are `zkc.relation.r1cs/0` and `zkc.relation.air/0`, with canonical
-asset identity as key and `0` as revision. The reader requires the matching
-immutable admitted `RelationAsset` handles, supplied outside this small JSON.
+Captured kinds are `zkc.relation.r1cs/0`, `zkc.relation.air/0` and
+`zkc.relation.bundle/0`, with canonical asset identity as key and `0` as
+revision. The reader requires the matching immutable admitted asset handles,
+supplied outside this small JSON. For a bundle it derives the formal list from
+the admitted bundle, as the
+[protocol contract](../language/protocols.md#bundle-declarations) defines, and
+requires the record to spell exactly that count, each purpose, each logical
+kind and each single native leaf. A Bundle used only in a relation declaration
+is retained in the package's `assets` member. The Rust interface reader checks
+the digest and single-leaf structure; Entry admission then independently derives
+the formal purposes and exact field, Boolean, index and vector types from the
+packaged Bundle. A mismatch returns `entry-asset-relation`. This checks the
+declaration's meaning without evaluating its predicate or proving that the
+protocol's acceptance implies it.
 
 Each clause has `name`, `kind`, `subject`, `residual` and `decision`; absent optional
 fields are JSON null. An application has a relation symbol and ordered `operands`.
@@ -163,18 +175,39 @@ retain its original numeric spelling.
 ## Published Entry package
 
 `packageEntry` accepts only an owned `CompiledEntry`. It emits `zkc.entry/0`
-with exactly `format`, `original`, `interface`, `artifact`, and `options`.
-Original MLIR, interface JSON and native run bundle or proof deployment are exact
-strings. Options contain Boolean `simplify` and `release_storage`. The job kind
-and complete source interface remain in the retained interface, avoiding a second
-name or participant table. Package SHA-256 covers the exact emitted bytes,
-including source capture, selected Entry, toolchain and compilation options.
-Complete Entry aliases can share executable bytes while naming different packages.
+with exactly `format`, `original`, `interface`, `artifact`, `options` and
+`assets`. Original MLIR, interface JSON and native run bundle or proof
+deployment are exact strings. Options contain Boolean `simplify` and
+`release_storage`. The job kind and complete source interface remain in the
+retained interface, avoiding a second name or participant table. Package SHA-256
+covers the exact emitted bytes, including source capture, selected Entry,
+toolchain, compilation options and assets. Complete Entry aliases can share
+executable bytes while naming different packages.
+
+`assets` carries the compiler-visible assets referenced by executable operations
+or Bundle relation declarations. It is an array of pairs `[expected_sha256, body]`: the lowercase
+SHA-256 of the body's canonical encoding and that exact canonical text. Every
+body is a [`zkc.ring/0` arena](../domains/ring-expressions.md) or
+[`zkc.relation-bundle/0`](../domains/relation-bundles.md). The compiler includes
+every required body in strictly ascending digest order, so duplicates cannot
+occur. The package names no asset paths or capture names; executable parameters
+and relation definitions refer to canonical digests.
+An empty array is the exact form when neither names an asset. The member
+is required: a package without it is not `zkc.entry/0`.
 
 The whole escaped package is bounded to 64 MiB; callers may lower this limit.
-The original, interface and artifact retain their own component limits. The
-`language-package` command writes exact package bytes without a trailing newline.
-Package identity is distinct from the original identity used by native proof
-binding. A consumer must obtain its expected package identity independently;
-internal hashes do not authenticate a supplied package. Retaining MLIR does not
-require the Host to recompile it or establish a security theorem.
+The original, interface and artifact retain their own component limits. Assets
+number at most 256, each body is at most the arena's 8 MiB, and all bodies
+together are at most 32 MiB. The Rust reader refuses a
+descending or repeated digest, a digest that is not 64 lowercase hexadecimal
+digits, or a pair of another shape with `entry-package-format`, and an
+exceeded count or byte bound with `entry-package-limit`. Reading checks only
+those bounds as a precheck on text; the Host admits each body and the
+program's references when an Entry is admitted. The combined registries' charge
+of canonical bytes plus decoded metadata is also bounded to 32 MiB, and can
+refuse a package within the transport limit. The `language-package` command writes exact package bytes
+without a trailing newline. Package identity is distinct from the original
+identity used by native proof binding. A consumer must obtain its expected
+package identity independently; internal hashes do not authenticate a supplied
+package. Retaining MLIR does not require the Host to recompile it or establish
+a security theorem.

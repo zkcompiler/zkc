@@ -415,6 +415,13 @@ relation Circuit(statement public: builtin("field_array", Fr, 1),
 relation Trace(statement public: builtin("field_array", Fr, 1),
                witness trace: builtin("matrix", Fr))
   = air(asset trace_constraints);
+relation Machine(statement x0: Base, statement final: Base,
+                 parameter rom_height: index, parameter rom: Vector<Base>,
+                 witness multiplicity: Vector<Base>,
+                 statement cpu_height: index, witness trace: Vector<Base>,
+                 statement log_present: bool, statement log_height: index,
+                 witness log: Vector<Ext>)
+  = bundle(asset machine);
 ```
 
 Opaque identities must be nonempty and cannot use the `zkc.` namespace. They have
@@ -430,3 +437,43 @@ the immutable asset. Dynamic trace shape and work admission are separate from
 predicate truth. Asset paths refer only to explicitly captured bytes. Runtime
 matrix parameters remain ordinary protocol inputs when the author instead defines
 a formula over them.
+
+### Bundle declarations
+
+A bundle declaration binds a captured
+[relation bundle](../domains/relation-bundles.md) and has the signature the
+bundle derives. The derived formals are, in this order: one `statement` formal
+of the slot's exact field per public slot, in slot order; then for each table in
+table order, a `statement bool` presence formal when the table is optional, a
+height `index` formal when the height authority is `config` (`parameter`) or
+`instance` (`statement`) and none for a fixed height, then one
+`builtin("vector", field)` formal per group in group order, over the group's exact
+field, with `witness` for a witness group, `parameter` for a configuration group
+and `statement` for a public group. Channels contribute nothing. The example
+above binds a bundle with public slots `x0` and `final` over `Base`; a required
+table with configuration height, a configuration group and a witness group; a
+required table with instance height and a witness group; and an optional table
+with instance height and one witness group over `Ext`. A declaration must spell
+exactly the derived count, logical types and purposes; formal names are free.
+Field membership is retained per formal, so a bundle over several fields has
+formals over several fields; no field is joined or embedded into another.
+
+An assignment of these formals denotes the bundle's configuration, instance and
+witness carriers: the public formals are the instance's public values in slot
+order; a configuration height formal and the `parameter` vectors of a table
+are its configuration height and groups; a presence formal is the instance's
+presence choice, and a required table is present; an instance height formal and
+the `statement` vectors are its instance height and groups; the `witness`
+vectors are its witness groups. A vector of a present table of height `h` and
+a group of width `w` has exactly `h * w` elements, element `k` being row
+`k / w`, column `k % w`. Configuration data is admitted against its declared
+height whether or not the table is present, as in the bundle chapter. An
+absent optional table has empty `statement` and `witness` vectors and, when its
+height authority is `instance`, a height formal equal to `0`; admitted heights
+are at least `1`, so `0` is the one spelling of an absent height. The relation
+holds for an assignment exactly when the bundle holds for the carriers it
+denotes, including their admission: a vector of another length, an element
+outside its field encoding, a height outside its declared range or power-of-two
+requirement, or a nonempty vector of an absent table makes the relation false.
+As for every relation declaration, the declaration asserts intent; it does not
+evaluate the bundle, add a guard or establish that an Entry proves it.

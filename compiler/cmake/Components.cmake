@@ -39,6 +39,7 @@ add_zkc_component(Contracts
   lib/Contracts/Operations.cpp
   lib/Contracts/Mathematical.cpp
   lib/Contracts/RingExpression.cpp
+  lib/Contracts/RingSharing.cpp
   lib/Contracts/Domains.cpp
   lib/Contracts/Kernels.cpp
   lib/Contracts/NativePolicy.cpp
@@ -48,6 +49,8 @@ add_zkc_component(Contracts
 add_zkc_component(Language
   lib/Language/Types.cpp
   lib/Language/Assets.cpp
+  lib/Language/AssetProperties.cpp
+  lib/Language/AssetClosure.cpp
   lib/Language/Layout.cpp
   lib/Language/Natural.cpp
   lib/Language/Project.cpp
@@ -60,6 +63,7 @@ add_zkc_component(Language
   lib/Language/TypeCheck.cpp
   lib/Language/Signatures.cpp
   lib/Language/Specifications.cpp
+  lib/Language/RelationABI.cpp
   lib/Language/Entries.cpp
   lib/Language/EntrySetups.cpp
   lib/Language/Capabilities.cpp
@@ -94,6 +98,7 @@ add_zkc_component(Relation
   lib/Relation/Bundle.cpp
   lib/Relation/BundleData.cpp
   lib/Relation/BundleStaged.cpp
+  lib/Relation/BundleTable.cpp
   lib/Relation/Matrices.cpp
 )
 add_zkc_component(Program
@@ -185,6 +190,7 @@ add_zkc_component(Transforms
   lib/Target/PhysicalPlan.cpp
 )
 add_zkc_component(Compiler
+  lib/Compiler/AssetSharing.cpp
   lib/Compiler/Language.cpp
   lib/Compiler/LanguagePackage.cpp
   lib/Compiler/LanguageInterface.cpp
@@ -207,6 +213,7 @@ add_zkc_component(Compiler
 )
 add_zkc_component(Driver
   lib/Driver/Language.cpp
+  lib/Driver/Assets.cpp
   lib/Driver/Compiler.cpp
   lib/Driver/Relations.cpp
   lib/Driver/AIR.cpp

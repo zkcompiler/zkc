@@ -78,10 +78,33 @@ int main() {
   NaturalArithmetic shortIdentities(8);
   refuses(shortIdentities.powerOfTwo(take(Natural::atom("long_natural_name"))),
           "source.limit");
+  // Projections are distinct factors: equal only to themselves, retained by
+  // substitution of other atoms, decided only by a lookup over the factor.
+  auto inputs = take(Natural::projection("A", "Inputs")),
+       outputs = take(Natural::projection("A", "Outputs"));
+  check(inputs != outputs && inputs != take(Natural::atom("A")) &&
+        inputs != take(Natural::atom("A::Inputs")));
+  check(inputs.spelling() != outputs.spelling() &&
+        inputs.spelling() != take(Natural::atom("A::Inputs")).spelling());
+  check(add(inputs, inputs) == mul(Natural::constant(2), inputs));
+  check(take(arithmetic.substitute(
+            add(inputs, n),
+            {{"A", Natural::constant(5)}, {"N", Natural::constant(1)}})) ==
+        add(inputs, one));
+  check(take(arithmetic.substitute(
+            mul(inputs, n), [&](const Natural::Factor &factor) {
+              return factor.kind == Natural::Factor::Kind::Projection &&
+                             factor.name == "A" && factor.member == "Inputs"
+                         ? &m
+                         : nullptr;
+            })) == mul(m, n));
+  refuses(arithmetic.powerOfTwo(inputs), "source.natural");
+  refuses(Natural::projection("A", ""), "source.natural");
+  refuses(Natural::projection("", "Inputs"), "source.natural");
   unsigned lookups = 0;
-  auto borrowed = [&](StringRef name) -> const Natural * {
+  auto borrowed = [&](const Natural::Factor &factor) -> const Natural * {
     ++lookups;
-    return name == "N" ? &m : nullptr;
+    return factor.name == "N" ? &m : nullptr;
   };
   check(take(arithmetic.substitute(one, borrowed)) == one && lookups == 0);
   check(take(arithmetic.substitute(n, borrowed)) == m && lookups == 1);
@@ -91,7 +114,7 @@ int main() {
   NaturalArithmetic insufficientCopyWork(8);
   auto largeBinding = take(Natural::atom("large_borrowed_natural_parameter"));
   refuses(insufficientCopyWork.substitute(
-              n, [&](StringRef) { return &largeBinding; }),
+              n, [&](const Natural::Factor &) { return &largeBinding; }),
           "source.limit");
   auto maximum = Natural::constant(std::numeric_limits<uint64_t>::max());
   refuses(arithmetic.add(maximum, one), "source.natural");

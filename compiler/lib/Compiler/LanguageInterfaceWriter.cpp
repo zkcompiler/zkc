@@ -364,7 +364,8 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
             out.attribute("kind", definition.kind == K::Formula  ? "formula"
                                   : definition.kind == K::Opaque ? "opaque"
                                   : definition.kind == K::R1CS   ? "r1cs"
-                                                                 : "air");
+                                  : definition.kind == K::AIR    ? "air"
+                                                                 : "bundle");
             if (definition.kind == K::Formula)
               out.attribute("function", formulaSymbol(decl));
             if (definition.asset)

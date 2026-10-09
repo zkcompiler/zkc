@@ -181,6 +181,12 @@ struct Projection {
   ValueId input;
   std::vector<unsigned> path;
 };
+/// A kernel parameter position that is written from an asset term rather than
+/// a literal. The closed term's identity becomes the parameter at closure.
+struct AssetReference {
+  unsigned position;
+  Type term;
+};
 struct LocalPrimitive {
   std::string contract;
   std::vector<ValueId> operands;
@@ -188,6 +194,8 @@ struct LocalPrimitive {
   std::vector<Type> staticArguments;
   /// Explicit installed contract roots, independent of literal parameters.
   std::optional<std::vector<Type>> bindingArguments;
+  /// Typed asset terms, closed separately from the natural static arguments.
+  std::vector<AssetReference> assetReferences;
   LocalPrimitive(std::string contract, std::vector<ValueId> operands,
                  std::vector<std::string> parameters,
                  std::vector<Type> statics = {})
@@ -230,8 +238,9 @@ struct Body {
   std::vector<std::vector<unsigned>> formationRequirements;
 };
 struct Parameter {
-  enum class Sort { Type, Natural, Component, Domain } sort;
+  enum class Sort { Type, Natural, Component, Domain, Asset } sort;
   std::string name, atom;
+  /// Catalog sort of a Domain parameter or asset sort of an Asset parameter.
   std::string domainSort;
   Permissions permissions;
   std::optional<DeclarationId> interface;
@@ -273,7 +282,7 @@ struct Effects {
 };
 enum class RelationPurpose { Parameter, Statement, Witness };
 struct RelationDefinition {
-  enum class Kind { Formula, Opaque, R1CS, AIR } kind = Kind::Formula;
+  enum class Kind { Formula, Opaque, R1CS, AIR, Bundle } kind = Kind::Formula;
   std::vector<RelationPurpose> purposes;
   std::string externalKind, key, revision;
   std::optional<unsigned> asset;
@@ -347,6 +356,8 @@ struct Declaration {
   std::string name, qualifiedName, symbol;
   bool isPublic = false;
   Span span;
+  /// A domain declaration's catalog or asset term; a definition's elaborated
+  /// representation.
   Type domain;
   std::vector<Parameter> parameters;
   std::vector<NaturalBound> bounds;
@@ -424,7 +435,7 @@ private:
 class CheckedProject {
 public:
   const CapturedProject &capture() const;
-  llvm::ArrayRef<RelationAsset> assets() const;
+  llvm::ArrayRef<Asset> assets() const;
   llvm::ArrayRef<Declaration> declarations() const;
   llvm::ArrayRef<Token> tokens(ModuleId) const;
   llvm::StringRef installationIdentity() const;
@@ -454,6 +465,9 @@ public:
   const CheckedProject &project() const { return checked; }
   const Declaration &entry() const;
   const Declaration &protocol() const;
+  /// Canonical evaluator assets required by reachable closed operations.
+  /// Sorted and deduplicated by definition identity.
+  llvm::ArrayRef<Asset> assets() const;
   /// Original type declarations and the selected Entry's closed instances.
   /// Only the reachable instances have bodies; declaration IDs remain local.
   llvm::ArrayRef<Declaration> declarations() const;

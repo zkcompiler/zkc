@@ -24,6 +24,8 @@ int zkc::runCompiler(int argc, char **argv,
                      const mlir::DialectRegistry &extensions) {
   if (argc >= 2 && StringRef(argv[1]).starts_with("language-"))
     return runLanguageCompiler(argc, argv);
+  if (argc >= 2 && StringRef(argv[1]) == "asset-share")
+    return runAssetSharing(argc, argv);
   mlir::DialectRegistry registry;
   registerDialects(registry);
   extensions.appendTo(registry);
@@ -38,6 +40,8 @@ int zkc::runCompiler(int argc, char **argv,
            "--module=MODULE=FILE.zkc\n"
            "    [--module=MODULE=FILE.zkc ...] [--asset=NAME=FORMAT=FILE ...]\n"
            "    [--no-simplify] [--release-storage]\n\n"
+           "Captured mathematics:\n"
+           "  asset-share ring-json|relation-bundle-json FILE\n\n"
            "Mathematical MLIR and native participant programs:\n"
            "  protocol-export FILE.mlir\n"
            "  protocol-bundle FILE.mlir [--entry=NAME] [--no-simplify] "

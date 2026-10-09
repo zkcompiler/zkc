@@ -770,12 +770,21 @@ private:
       }
       d.target = text().str();
       advance();
-      if (!expect("(") || current().kind != TokenKind::String) {
+      if (!expect("("))
+        return {};
+      // An asset domain names captured bytes; a catalog domain names an
+      // installed identity.
+      d.assetDomain = d.target == "ring" || d.target == "bundle";
+      if (d.assetDomain) {
+        if (!expect("asset") || !path(d.domain))
+          return {};
+      } else if (current().kind != TokenKind::String) {
         fail("source.syntax", "expected installed domain identity string");
         return {};
+      } else {
+        d.domain = text().drop_front().drop_back().str();
+        advance();
       }
-      d.domain = text().drop_front().drop_back().str();
-      advance();
       if (!expect(")") || !expect(";"))
         return {};
     } else if (take("relation")) {
@@ -815,8 +824,11 @@ private:
             d.relation->kind = RelationDefinition::Kind::R1CS;
           else if (take("air"))
             d.relation->kind = RelationDefinition::Kind::AIR;
+          else if (take("bundle"))
+            d.relation->kind = RelationDefinition::Kind::Bundle;
           else {
-            fail("source.relation", "expected opaque, r1cs or air definition");
+            fail("source.relation",
+                 "expected opaque, r1cs, air or bundle definition");
             return {};
           }
           if (!expect("(") || !expect("asset") || !path(d.relation->asset) ||
@@ -1086,13 +1098,22 @@ private:
       }
       if (take(";")) {
         do {
-          if (current().kind != TokenKind::String) {
+          if (current().kind == TokenKind::String) {
+            value.labels.push_back(text().drop_front().drop_back().str());
+            advance();
+          } else if (value.kind == Expression::Kind::Kernel) {
+            // A kernel parameter can be a static asset term; its identity is
+            // written when the enclosing body closes.
+            SyntaxType term;
+            if (!type(term, depth + 1))
+              return {};
+            value.assetParameters.emplace(value.labels.size(), std::move(term));
+            value.labels.emplace_back();
+          } else {
             fail("source.syntax",
-                 "operation parameters must be literal strings");
+                 "intrinsic parameters must be literal strings");
             return {};
           }
-          value.labels.push_back(text().drop_front().drop_back().str());
-          advance();
         } while (take(","));
       }
       if (!expect(")"))

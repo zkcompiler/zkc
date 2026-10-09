@@ -854,10 +854,11 @@ public:
         kind = "zkc.language.formula/0";
         key = decl.symbol;
         revision = std::move(*identity);
-      } else if (definition.kind == K::R1CS || definition.kind == K::AIR) {
+      } else if (definition.kind != K::Opaque) {
         const auto &asset = project.project().assets()[*definition.asset];
-        kind = definition.kind == K::R1CS ? "zkc.relation.r1cs/0"
-                                          : "zkc.relation.air/0";
+        kind = definition.kind == K::R1CS  ? "zkc.relation.r1cs/0"
+               : definition.kind == K::AIR ? "zkc.relation.air/0"
+                                           : "zkc.relation.bundle/0";
         key = asset.identity().str();
         revision = "0";
       }

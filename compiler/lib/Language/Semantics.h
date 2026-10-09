@@ -13,7 +13,7 @@ using Substitution = std::map<std::string, Type>;
 /// queries have neither.
 class Semantics {
 public:
-  Semantics(const std::vector<Declaration> &, Work &,
+  Semantics(const std::vector<Declaration> &, llvm::ArrayRef<Asset>, Work &,
             std::function<bool(DeclarationId)> complete = {});
   void indexDeclaration(const Declaration &);
   void indexParameter(const Parameter &, DeclarationId, unsigned);
@@ -39,6 +39,13 @@ public:
   std::optional<Type> substitute(const Type &, const Substitution &, Span,
                                  unsigned = 1);
   std::optional<Type> associated(const Type &, llvm::StringRef, Span);
+  /// A derived natural of an asset term. A closed term yields the fact of its
+  /// captured asset; a symbolic term yields a projection factor that closure
+  /// substitutes and inference never binds.
+  std::optional<Type> assetProjection(const Type &, llvm::StringRef member,
+                                      Span);
+  /// The captured asset a closed asset term denotes.
+  const Asset *capturedAsset(const Type &, Span);
   std::optional<Permissions> permissions(const Type &, Span,
                                          const Declaration *scope = nullptr,
                                          unsigned = 1);
@@ -67,10 +74,13 @@ public:
                                      llvm::StringRef, Span);
   std::optional<Type> selectedType(const Declaration &,
                                    const SpecificationSelector &);
+  /// Literal parameters are validated unless a parameter is still an open
+  /// asset term; closure validates the written identities.
   std::optional<CallSignature> kernelSignature(llvm::StringRef,
                                                llvm::ArrayRef<Type>,
                                                llvm::ArrayRef<std::string>,
-                                               Span, const Declaration *);
+                                               Span, const Declaration *,
+                                               bool closedParameters = true);
   std::optional<CallSignature>
   intrinsicSignature(const Declaration *, llvm::StringRef, llvm::ArrayRef<Type>,
                      llvm::ArrayRef<std::string>, Span);
@@ -83,11 +93,13 @@ public:
 
 private:
   const std::vector<Declaration> &declarations;
+  llvm::ArrayRef<Asset> assets;
   std::map<std::string, DeclarationId> qualified;
   std::map<std::string, std::pair<DeclarationId, unsigned>> parameters;
   std::function<bool(DeclarationId)> complete;
   unsigned normalizationDepth = 0;
 };
-llvm::Error specialize(std::vector<Declaration> &, Work &, DeclarationId);
+llvm::Error specialize(std::vector<Declaration> &, llvm::ArrayRef<Asset>,
+                       Work &, DeclarationId);
 } // namespace zkc::language::detail
 #endif

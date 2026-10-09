@@ -2,7 +2,7 @@ use super::{
     InterfaceError as E, Result, hash, identifier, raw::*, require, schemas::Schemas, text,
 };
 use std::collections::{BTreeMap, BTreeSet};
-use zkc_runtime::interactive::{LogicalType, ServiceContract};
+use zkc_runtime::interactive::{LogicalType, ServiceContract, Type};
 
 pub(super) struct Checked {
     pub selected: usize,
@@ -63,6 +63,19 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
                             .all(|p| p.schema.kind == Kind::Builtin && p.native.len() == 1),
                     E::Schema,
                 )?;
+            }
+            // The Host does not hold the bundle, so only the shape every
+            // derived formal has is checked: one native leaf that is a field,
+            // Boolean, index or vector. Exact derivation is the compiler's.
+            Definition::Bundle { asset } => {
+                require(hash(asset), E::Schema)?;
+                for input in &relation.inputs {
+                    let scalar =
+                        matches!(input.schema.kind, Kind::Boolean | Kind::Index | Kind::Field);
+                    let vector = input.schema.kind == Kind::Builtin
+                        && schemas.setup_properties(&input.schema.leaves[0])?.0 == Type::Vector;
+                    require(input.native.len() == 1 && (scalar || vector), E::Schema)?;
+                }
             }
         }
     }

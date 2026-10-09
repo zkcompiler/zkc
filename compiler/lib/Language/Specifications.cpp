@@ -1,7 +1,9 @@
 #include "Checker.h"
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/RelationABI.h"
 #include "zkc/Relation/AIR.h"
+#include "zkc/Relation/Bundle.h"
 #include "zkc/Relation/R1CS.h"
 #include <algorithm>
 using namespace llvm;
@@ -75,12 +77,41 @@ bool Checker::relation(Declaration &decl) {
   auto name = sources[decl.id.index]->relation->asset;
   auto found = llvm::find_if(
       output.assets, [&](const auto &asset) { return asset.name() == name; });
-  if (found == output.assets.end() ||
-      (definition.kind == K::R1CS ? !found->r1cs() : !found->air()))
+  bool matched = found != output.assets.end() &&
+                 (definition.kind == K::R1CS  ? found->r1cs() != nullptr
+                  : definition.kind == K::AIR ? found->air() != nullptr
+                                              : found->bundle() != nullptr);
+  if (!matched)
     return types.fail("source.relation",
                       "captured asset is absent or has a different kind",
                       decl.span);
   definition.asset = found - output.assets.begin();
+  if (definition.kind == K::Bundle) {
+    // The bundle alone fixes the signature; the declaration must spell the
+    // derived formals exactly, in order, with their purposes.
+    auto derived = bundleRelationFormals(*found->bundle());
+    if (!types.charge(derived.size() + 1, decl.span))
+      return false;
+    if (decl.inputs.size() != derived.size())
+      return types.fail("source.relation",
+                        "bundle relation declares " +
+                            std::to_string(decl.inputs.size()) +
+                            " formals but its asset ABI derives " +
+                            std::to_string(derived.size()),
+                        decl.span);
+    for (unsigned i = 0; i < derived.size(); ++i) {
+      if (!types.chargeType(decl.inputs[i].type, decl.inputs[i].span))
+        return false;
+      if (definition.purposes[i] != derived[i].purpose ||
+          decl.inputs[i].type != derived[i].type)
+        return types.fail("source.relation",
+                          "bundle relation formal " + std::to_string(i) +
+                              " differs from the derived asset ABI (" +
+                              derived[i].label + ")",
+                          decl.inputs[i].span);
+    }
+    return true;
+  }
   std::string field = found->r1cs() ? found->r1cs()->field().str()
                                     : found->air()->field().str();
   auto array = [&](unsigned count) {

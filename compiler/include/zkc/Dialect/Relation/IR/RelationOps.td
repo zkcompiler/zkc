@@ -39,6 +39,11 @@ def R1CSRelationOp : Op<RelationDialect, "r1cs", [Symbol]> {
   let assemblyFormat = "$sym_name attr-dict";
 }
 
+// Dense assertion residuals of one present table of an admitted relation
+// bundle asset. The bundle body is admitted by the Host under the digest
+// parameter; the compiler checks the contract and the digest reference.
+def TableRowsOp : KernelOp<RelationDialect, "exec.table_rows", [OpRelationTableRows]>;
+
 // A supplied predicate contract. It has no callable interface or body.
 def DeclareOp : Op<RelationDialect, "declare", [Symbol]> {
   let summary = "External relation identity and ordered logical input purposes";

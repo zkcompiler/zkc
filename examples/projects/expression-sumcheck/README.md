@@ -1,10 +1,14 @@
 # Sumcheck over a shared expression
 
 This client computes the sum of `x * y` over a public table of factor values.
-The ordinary [Sumcheck library](../../../libraries/sumcheck/expression.zkc)
-receives a statically selected `Expression` component. That component binds
-the [product arena](product.ring.json) by its canonical SHA-256 identity and
-uses the same native evaluator available to AIR consumers.
+It declares `domain Product = ring(asset product)` over the captured
+[product arena](product.ring.json) and applies the generic
+[Sumcheck library](../../../libraries/sumcheck/expression.zkc) as
+`Sumcheck<Extension, 16, Product>`. The library derives the table width and
+the round-polynomial degree from the arena; the compiler retains the admitted
+contents in the Entry package. A different arena, such as a three-factor
+product, changes the compiled rounds without editing the client or the library.
+The kernels are the same native evaluator available to AIR consumers.
 
 `BaseRun` and `BaseProof` accept KoalaBear values and explicitly embed them in
 Ext8 before the first round. `ExtensionRun` and `Proof` accept Ext8 values.
@@ -25,18 +29,15 @@ Compile from the repository root:
 zkc compile --entry=example::BaseProof \
   --module=example=examples/projects/expression-sumcheck/main.zkc \
   --module=expression_sumcheck=libraries/sumcheck/expression.zkc \
+  --asset=product=ring-json=examples/projects/expression-sumcheck/product.ring.json \
   --output=expression.entry
 ```
 
-Create an evaluator manifest and supply it to each independent Host:
-
-```json
-["zkc.ring-assets/0", [["1b02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4", "examples/projects/expression-sumcheck/product.ring.json"]]]
-```
+Each independent Host admits the packaged expression before execution:
 
 ```sh
-zkc prove expression.entry EXPECTED_SHA256 prover.json proof.bin --evaluators=assets.json
-zkc verify expression.entry EXPECTED_SHA256 verifier.json proof.bin --evaluators=assets.json
+zkc prove expression.entry EXPECTED_SHA256 prover.json proof.bin
+zkc verify expression.entry EXPECTED_SHA256 verifier.json proof.bin
 ```
 
 Use named public inputs `values`, `claim`, and `rounds` in the ordinary
@@ -44,6 +45,7 @@ Use named public inputs `values`, `claim`, and `rounds` in the ordinary
 [integration tests](../../../tests/protocol/test_expression_sumcheck.py)
 construct independent native wire encodings and cover both input fields,
 simplification and storage-release modes, interactive execution, altered
-coefficients, false claims, changed public inputs, and asset substitution.
+coefficients, false claims, changed public inputs, asset substitution, and a
+three-input cubic expression using the same source client.
 See the [ring contract](../../../docs/spec/domains/ring-expressions.md) for
 layouts, exact coefficient semantics, asset admission and work limits.

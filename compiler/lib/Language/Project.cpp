@@ -193,7 +193,8 @@ static Error checkSources(ArrayRef<SourceBuffer> sources,
       return failure("source.asset",
                      "invalid or duplicate captured asset name");
     if (asset.format != "r1cs-json" && asset.format != "r1cs-binary" &&
-        asset.format != "air-json")
+        asset.format != "air-json" && asset.format != "ring-json" &&
+        asset.format != "relation-bundle-json")
       return failure("source.asset", "unknown captured asset format");
   }
   return Error::success();
@@ -256,9 +257,7 @@ CheckedProject::CheckedProject(
 const CapturedProject &CheckedProject::capture() const {
   return storage->capture;
 }
-ArrayRef<RelationAsset> CheckedProject::assets() const {
-  return storage->assets;
-}
+ArrayRef<Asset> CheckedProject::assets() const { return storage->assets; }
 ArrayRef<Declaration> CheckedProject::declarations() const {
   return storage->declarations;
 }
@@ -302,7 +301,7 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits) {
     // Each existing reader has its own structural/work bounds. Aggregate input
     // bytes and file counts are checked before any asset parsing or allocation.
     for (const auto &asset : capture.assets()) {
-      auto value = RelationAsset::read(asset);
+      auto value = Asset::read(asset);
       if (!value)
         return detail::failure("source.asset", "in " + asset.name + ": " +
                                                    toString(value.takeError()));
@@ -373,9 +372,12 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
       auto storage = std::make_shared<detail::ClosedStorage>();
       storage->declarations.assign(project.declarations().begin(),
                                    project.declarations().end());
-      if (auto error = detail::specialize(storage->declarations, work, decl.id))
+      if (auto error = detail::specialize(storage->declarations,
+                                          project.assets(), work, decl.id))
         return error;
       storage->protocol = *storage->declarations[decl.id.index].target;
+      if (auto error = detail::closeAssets(project, *storage, work))
+        return error;
       ClosedEntry entry(project, decl.id, std::move(storage));
       Layouts layouts(entry, limits);
       if (auto error = detail::checkSetups(entry, layouts, work))
@@ -465,6 +467,7 @@ const Declaration &ClosedEntry::entry() const {
 const Declaration &ClosedEntry::protocol() const {
   return storage->declarations[storage->protocol.index];
 }
+ArrayRef<Asset> ClosedEntry::assets() const { return storage->assets; }
 ArrayRef<Declaration> ClosedEntry::declarations() const {
   return storage->declarations;
 }
@@ -525,6 +528,7 @@ std::string installedCatalogIdentity() {
       detail::frame(value, parameters->fieldTerm
                                ? std::to_string(*parameters->fieldTerm)
                                : "none");
+      detail::frame(value, parameters->assetFormat);
     }
     rows.push_back(std::move(value));
   }

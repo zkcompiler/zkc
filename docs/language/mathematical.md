@@ -32,9 +32,11 @@ admission and source correspondence. Module and Asset capture is explicit. `--no
 existing downstream compiler options for bundle production.
 
 `--asset=NAME=FORMAT=FILE` adds explicitly captured relation data. Supported
-formats are `r1cs-json`, `r1cs-binary` and `air-json`; the compiler validates even
-unused assets with the native bounded readers. Capture alone does not attach a
-relation to a protocol or add runtime inputs.
+formats are `r1cs-json`, `r1cs-binary`, `air-json`, `ring-json` and
+`relation-bundle-json`; the compiler validates even unused assets with the
+native bounded readers. Capture alone does not attach a relation to a protocol
+or add runtime inputs; source names an asset through a relation declaration or
+an asset domain.
 
 A bundle uses the existing [native runtime](../runtime/bundles.md). Its entry is
 the encoded protocol symbol recorded in the source interface. Runtime inputs

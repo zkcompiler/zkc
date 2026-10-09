@@ -40,9 +40,11 @@ substitution. Its reusable bulk operations have domain contracts, ordered
 Algebra dialect operations and backend implementations. Their inputs contain no
 protocol rounds, roles, commitments or acceptance decisions. The
 [Sumcheck library](../../libraries/sumcheck/expression.zkc) composes those
-operations with messages, challenges and checks in ordinary source. The Host's
-`--evaluators` manifest installs their admitted expression bodies; the compiler
-currently checks the operation and digest reference, not the arena's contents.
+operations with messages, challenges and checks in ordinary source. The Entry
+package carries their expression bodies and the Host independently admits them
+against the program's digest references. The compiler admits the captured bodies,
+derives their static dimensions and checks explicit structural sharing. Generic
+IR transformations do not yet traverse the arithmetic inside these assets.
 
 A new sampling distribution changes the service contract and its realization;
 putting it inside a protocol helper would hide its randomness and transcript

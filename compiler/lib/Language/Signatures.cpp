@@ -201,7 +201,10 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     auto name = src.constraint.name;
     if (name == "Type")
       p.sort = Parameter::Sort::Type;
-    else if (isDomainSort(name)) {
+    else if (isAssetSort(name)) {
+      p.sort = Parameter::Sort::Asset;
+      p.domainSort = name;
+    } else if (isDomainSort(name)) {
       p.sort = Parameter::Sort::Domain;
       p.domainSort = name;
       if (name == "Field" || name == "Group")

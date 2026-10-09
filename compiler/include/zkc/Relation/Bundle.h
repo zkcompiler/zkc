@@ -264,6 +264,61 @@ struct BundleData {
 BundleData embedAIRData(const Bundle &, const AIRTrace &,
                         llvm::ArrayRef<std::string> statement);
 
+/// One table of a bundle viewed through the installed `relation.table_rows`
+/// kernel: dense row-major assertion residuals over one carrier field. The
+/// view is homogeneous: every bundle public slot, every group of the table
+/// and every assertion output has the carrier field, and every arena node an
+/// assertion needs has the carrier field or, for an extension carrier, its
+/// base field through an explicit embedding. Widths count elements per row;
+/// `coordinates` is the base coordinates per element. The view claims nothing
+/// about interactions, other tables, presence or satisfaction.
+struct BundleTableView {
+  uint32_t table = 0;
+  std::string field;
+  bool optional = false;
+  BundleHeight height;
+  BundleReadModel readModel = BundleReadModel::Finite;
+  uint32_t publicSlots = 0;
+  uint32_t witnessWidth = 0, configWidth = 0, publicWidth = 0;
+  uint32_t assertions = 0;
+  uint32_t degree = 0; // Largest assertion output degree; 0 without assertions.
+  unsigned coordinates = 1;
+};
+/// Element counts of the kernel's operands and result at one height:
+/// witness = height * witnessWidth, configuration = height * configWidth,
+/// publicData = publicSlots + height * publicWidth, results = height *
+/// assertions. Groups of one authority are concatenated in declaration order,
+/// each row-major; public data starts with every bundle public slot.
+struct BundleTableLengths {
+  uint64_t witness = 0, configuration = 0, publicData = 0, results = 0;
+};
+/// The three operands laid out from admitted carriers, as canonical base
+/// coordinates (`coordinates` strings per element).
+struct BundleTableData {
+  uint32_t height = 0;
+  BundleColumns witness, configuration, publicData;
+};
+/// Table index and carrier facts (`relation-table-index`,
+/// `relation-table-carrier`). A compiler closing an asset reference checks
+/// its static table and carrier here before any data exists.
+llvm::Expected<BundleTableView> bundleTableView(const Bundle &, uint32_t table,
+                                                llvm::StringRef carrier);
+/// Height policy, declared data bound, every assertion window at this height,
+/// the reference work bound and the dense result bound, in that order, before
+/// any operand length is compared (`bundle-height`, `bundle-data-limit`,
+/// `bundle-scope-height`, `bundle-window`, `bundle-work-limit`,
+/// `bundle-result-limit`). The work bound charges nothing for a table without
+/// assertions, as bundle admission does.
+llvm::Expected<BundleTableLengths>
+bundleTableLengths(const Bundle &, const BundleTableView &, uint32_t height);
+/// Full bundle admission of the carriers, then the table's data in the
+/// kernel's layout. An absent optional table is not a view
+/// (`relation-table-absent`).
+llvm::Expected<BundleTableData>
+sliceBundleTableData(const Bundle &, const BundleTableView &,
+                     const BundleConfiguration &, const BundleInstance &,
+                     const BundleWitness &);
+
 /// A challenge-dependent constraint program. It references a bundle but never
 /// changes that bundle's meaning: it denotes the challenge-indexed predicate
 /// over the base data, its own phase groups, challenges and received claims.

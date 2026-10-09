@@ -159,7 +159,8 @@
     "fixed": [
       "fixed_vector.dot",
       "fixed_vector.from_vector",
-      "fixed_vector.to_vector"
+      "fixed_vector.to_vector",
+      "relation.table_rows"
     ],
     "transcript": [
       "transcript.native.indexed.challenge",

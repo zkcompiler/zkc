@@ -528,7 +528,7 @@ void installedBindings() {
                 ? "merlin3.koala-bear.ext8-binomial3.rejection31le/0"
             : sort == "Nat" ? "4"
             : sort == "Field" &&
-                    (twoAdic ||
+                    (twoAdic || operation.name == "relation.table_rows" ||
                      StringRef(operation.name).starts_with("ring.") ||
                      StringRef(operation.name).starts_with("fixed_vector."))
                 ? "koala-bear"

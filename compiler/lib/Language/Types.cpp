@@ -1,6 +1,7 @@
 #include "zkc/Language/Types.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cassert>
 using namespace llvm;
 namespace zkc::language {
 Type domainType(StringRef sort, StringRef identity) {
@@ -19,9 +20,20 @@ StringRef domainSort(const Type &type) {
     return "Group";
   return type.kind == Type::Kind::Domain ? StringRef(type.sort) : StringRef();
 }
+bool isAssetSort(StringRef sort) { return sort == "Ring" || sort == "Bundle"; }
+Type assetType(StringRef sort, StringRef identity) {
+  assert(isAssetSort(sort) && "asset terms have a Ring or Bundle sort");
+  Type result(Type::Kind::Asset, identity.str());
+  result.sort = sort.str();
+  return result;
+}
+StringRef assetSort(const Type &type) {
+  return type.kind == Type::Kind::Asset ? StringRef(type.sort) : StringRef();
+}
 bool isStaticOnly(const Type &type) {
   return type.kind == Type::Kind::Natural ||
-         type.kind == Type::Kind::Component || type.kind == Type::Kind::Domain;
+         type.kind == Type::Kind::Component ||
+         type.kind == Type::Kind::Domain || type.kind == Type::Kind::Asset;
 }
 StringRef typeKindName(Type::Kind kind) {
   switch (kind) {
@@ -57,6 +69,8 @@ StringRef typeKindName(Type::Kind kind) {
     return "formal";
   case Type::Kind::Domain:
     return "domain";
+  case Type::Kind::Asset:
+    return "asset";
   }
   llvm_unreachable("unknown source type kind");
 }
@@ -75,7 +89,7 @@ std::string spelling(const Type &type) {
   default:
     break;
   }
-  if (type.kind == K::Domain && !type.symbolic)
+  if ((type.kind == K::Domain || type.kind == K::Asset) && !type.symbolic)
     return StringRef(type.sort).lower() + "<" + type.domain + ">";
   if (type.kind == K::Builtin || type.kind == K::Formal) {
     std::string result =
@@ -118,7 +132,7 @@ std::string typeIdentity(const Type &type) {
   }
   out << type.symbolic << ':';
   frame(type.domain);
-  if (type.kind == Type::Kind::Domain)
+  if (type.kind == Type::Kind::Domain || type.kind == Type::Kind::Asset)
     frame(type.sort);
   frame(type.dimension.spelling());
   out << type.arguments.size() << ':';

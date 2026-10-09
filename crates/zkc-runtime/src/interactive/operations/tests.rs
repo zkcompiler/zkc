@@ -316,7 +316,8 @@ transcript.native.indexed.observe.data 1
 ring.point 0
 ring.rows 0
 ring.coefficients 0
-ring.affine_sum 0";
+ring.affine_sum 0
+relation.table_rows 0";
     let sequences = "sequence.empty 0\nsequence.append 0\nsequence.length 0\nsequence.at 0";
     for line in fixture
         .lines()

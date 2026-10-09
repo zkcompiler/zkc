@@ -10,25 +10,35 @@
 #include <vector>
 
 namespace zkc::language {
-/// A bounded polynomial over natural atoms and powers of two of atoms.
-/// The empty polynomial is zero. Normal forms have nonzero coefficients and
-/// sorted factors. Power exponents are linear before expansion into factors.
+/// A bounded polynomial over natural atoms, powers of two of atoms and
+/// projections of static terms. The empty polynomial is zero. Normal forms have
+/// nonzero coefficients and sorted factors. Power exponents are linear before
+/// expansion into factors.
 class Natural {
 public:
   struct Factor {
-    enum class Kind { Atom, PowerOfTwo } kind;
+    /// A projection names a member of the static term bound to an atom, for
+    /// example an asset's input count. It is never a natural atom itself, so
+    /// nothing is inferred through it; substitution of the atom decides it.
+    enum class Kind { Atom, PowerOfTwo, Projection } kind;
     std::string name;
+    /// Projected member; empty for the other kinds.
+    std::string member;
     bool operator==(const Factor &other) const {
-      return kind == other.kind && name == other.name;
+      return kind == other.kind && name == other.name && member == other.member;
     }
     bool operator<(const Factor &other) const {
-      return kind == other.kind ? name < other.name : kind < other.kind;
+      if (kind != other.kind)
+        return kind < other.kind;
+      return name == other.name ? member < other.member : name < other.name;
     }
   };
   using Monomial = std::vector<Factor>;
   using Terms = std::map<Monomial, uint64_t>;
   static Natural constant(uint64_t);
   static llvm::Expected<Natural> atom(llvm::StringRef);
+  static llvm::Expected<Natural> projection(llvm::StringRef atom,
+                                            llvm::StringRef member);
   const Terms &terms() const { return polynomial; }
   bool operator==(const Natural &other) const {
     return polynomial == other.polynomial;
@@ -55,12 +65,15 @@ public:
   /// refuse. Closed coefficients must fit uint64; symbolic values stay bounded
   /// by the shared normalization limits, not by an assumed value of N_i.
   llvm::Expected<Natural> powerOfTwo(const Natural &);
+  /// Replace atoms by name; projections of unbound atoms are retained.
   llvm::Expected<Natural> substitute(const Natural &,
                                      const std::map<std::string, Natural> &);
   /// Borrow substitutions; unused bindings are neither copied nor normalized.
+  /// The lookup sees the whole factor, so a caller decides projections of a
+  /// bound atom; an unresolved factor is retained with its kind.
   llvm::Expected<Natural>
   substitute(const Natural &,
-             llvm::function_ref<const Natural *(llvm::StringRef)> lookup);
+             llvm::function_ref<const Natural *(const Natural::Factor &)>);
   uint64_t remainingWork() const { return remaining; }
 
 private:

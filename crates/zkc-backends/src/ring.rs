@@ -11,7 +11,8 @@ use zkc_runtime::{
 
 pub const DEFAULT_WORK_LIMIT: u64 = 1 << 28;
 pub const COEFFICIENT_DEGREE_LIMIT: u32 = 64;
-const REGISTRY_BYTE_LIMIT: usize = 32 * 1024 * 1024;
+/// Canonical bytes plus decoded metadata admitted into one registry.
+pub const REGISTRY_BYTE_LIMIT: usize = 32 * 1024 * 1024;
 mod sealed {
     pub trait Sealed {}
     impl Sealed for crate::KoalaBear {}
@@ -72,6 +73,21 @@ impl Registry {
             .cloned()
             .ok_or_else(|| refused("ring-asset-missing"))
     }
+    /// Admitted content identities in ascending order.
+    pub fn identities(&self) -> impl ExactSizeIterator<Item = &str> {
+        self.assets.keys().map(String::as_str)
+    }
+    /// The admitted expression under a content identity, if any.
+    pub fn expression(&self, identity: &str) -> Option<Arc<Expression>> {
+        self.assets.get(identity).cloned()
+    }
+    /// Check one static program reference before any execution: the asset
+    /// must be admitted and interpretable in the operation's carrier field,
+    /// under the same rule the bulk kernels apply at substitution time.
+    pub fn check_reference(&self, identity: &str, carrier: Identity) -> Result<()> {
+        let expression = self.get(identity)?;
+        field_compatible(&expression, carrier)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -88,7 +104,7 @@ impl Default for Budget {
     }
 }
 impl Budget {
-    fn charge(&mut self, work: u64) -> Result<()> {
+    pub(crate) fn charge(&mut self, work: u64) -> Result<()> {
         let next = self
             .spent
             .checked_add(work)

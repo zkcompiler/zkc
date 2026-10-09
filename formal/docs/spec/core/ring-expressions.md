@@ -32,6 +32,24 @@ the bound. If every used input polynomial satisfies its supplied bound, the
 result's natural degree is at most the structural bound. Bounds are premises
 of the interpretation; values at finitely many points cannot establish them.
 
+## Arena sharing
+
+An arena is a list of nodes whose operands are indices; it is well formed when
+every operand index is strictly below the node's own index. Unfolding with a
+fuel bound turns a node into a tree of the model above, or nothing when the
+fuel is exhausted or an index is missing. In a well-formed arena every node
+resolves with any fuel above its index, and the resolved tree does not depend on
+the fuel.
+
+A node map `f` from arena `A` into arena `B` is label preserving when, for every
+index `i` of `A`, the node `B[f i]` exists, carries the same constant or input
+label as `A[i]`, and has operands `f` of the operands of `A[i]`, in order. For
+such a map every node of a well-formed `A` unfolds, at every fuel, to the same
+tree as its image, and an ordered output list, including repeated positions,
+unfolds to the trees of its image list. Evaluation, degree bounds and syntactic
+input lists transfer because they are functions of the tree. The map is purely
+structural: a product by zero, a folded sum or swapped operands are not images.
+
 ## Finite AIR embedding
 
 The existing finite AIR expression maps public inputs and `(offset, column)`
@@ -40,7 +58,8 @@ evaluation, polynomial interpretation and the AIR degree calculation with
 public inputs weighted zero and reads weighted one. It does not alter row
 scopes, turn finite reads into cyclic reads, or discharge read-window checks.
 
-The declarations are in `Zkc.Algebra.RingExpression` and
-`Zkc.Relation.AIR.RingExpression`. The native arena additionally has typed
-field identities, explicit embeddings, DAG sharing, admission limits and byte
-encoding. Correspondence for those representations is a separate obligation.
+The declarations are in `Zkc.Algebra.RingExpression`,
+`Zkc.Algebra.RingExpression.Sharing` and `Zkc.Relation.AIR.RingExpression`. The
+native arena additionally has typed field identities, explicit embeddings,
+admission limits and byte encoding, and its sharing checker is native code.
+Correspondence for those representations is a separate obligation.

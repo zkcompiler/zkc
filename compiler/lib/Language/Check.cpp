@@ -8,7 +8,7 @@ namespace zkc::language::detail {
 Checker::Checker(std::vector<SyntaxModule> syntax, CheckedStorage &output,
                  Work &work)
     : output(output), work(work),
-      types(output.declarations, work,
+      types(output.declarations, output.assets, work,
             [this](DeclarationId id) { return signature(id); }),
       syntax(std::move(syntax)) {}
 Error Checker::run() {
@@ -155,7 +155,27 @@ bool Checker::collect() {
       return types.accept(symbol.takeError(), decl.span);
     decl.symbol = std::move(*symbol);
     types.indexDeclaration(decl);
-    if (source.kind == Declaration::Kind::Domain) {
+    if (source.kind == Declaration::Kind::Domain && source.assetDomain) {
+      // The declaration denotes the captured asset's canonical identity, so
+      // every domain naming the same admitted contents is the same term.
+      if (!types.charge(output.assets.size() + source.domain.size() + 1,
+                        source.span))
+        return false;
+      auto found = llvm::find_if(output.assets, [&](const Asset &asset) {
+        return asset.name() == source.domain;
+      });
+      if (found == output.assets.end())
+        return types.fail("source.asset-reference",
+                          "captured asset is absent: " + source.domain,
+                          source.span);
+      StringRef sort = source.target == "ring" ? "Ring" : "Bundle";
+      if (sort == "Ring" ? !found->ring() : !found->bundle())
+        return types.fail("source.asset-reference",
+                          "captured asset " + source.domain + " is not a " +
+                              source.target,
+                          source.span);
+      decl.domain = assetType(sort, found->identity());
+    } else if (source.kind == Declaration::Kind::Domain) {
       auto sorts = protocol::domainSorts();
       auto sort = llvm::find_if(sorts, [&](const std::string &sort) {
         return StringRef(sort).lower() == source.target;

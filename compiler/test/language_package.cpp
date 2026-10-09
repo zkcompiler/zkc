@@ -33,7 +33,7 @@ int main() {
           auto package = take(packageEntry(entry));
           auto value = take(json::parse(package.bytes()));
           auto *root = value.getAsObject();
-          require(root && root->size() == 5 &&
+          require(root && root->size() == 6 &&
                       root->getString("format") == "zkc.entry/0" &&
                       root->getString("original") == entry.original().bytes() &&
                       root->getString("interface") ==

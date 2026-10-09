@@ -49,6 +49,9 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
       for (const auto &arg : primitive->staticArguments)
         if (!types.chargeType(arg, op.span))
           return false;
+      for (const auto &reference : primitive->assetReferences)
+        if (!types.chargeType(reference.term, op.span))
+          return false;
       if (primitive->bindingArguments)
         for (const auto &arg : *primitive->bindingArguments)
           if (!types.chargeType(arg, op.span))
@@ -74,9 +77,10 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
   return true;
 }
 } // namespace
-llvm::Error specialize(std::vector<Declaration> &declarations, Work &work,
+llvm::Error specialize(std::vector<Declaration> &declarations,
+                       ArrayRef<Asset> assets, Work &work,
                        DeclarationId selected) {
-  Semantics types(declarations, work);
+  Semantics types(declarations, assets, work);
   auto close = [&]() -> bool {
     const unsigned templates = declarations.size();
     std::map<std::string, DeclarationId> instances;
@@ -133,6 +137,18 @@ llvm::Error specialize(std::vector<Declaration> &declarations, Work &work,
           for (auto &argument : primitive->staticArguments)
             if (!closeType(argument, bindings, op.span))
               return false;
+          // A closed asset term writes its identity; the installed parameter
+          // check below then sees an actual digest.
+          for (auto &reference : primitive->assetReferences) {
+            if (!closeType(reference.term, bindings, op.span))
+              return false;
+            if (reference.term.kind != Type::Kind::Asset ||
+                reference.position >= primitive->parameters.size())
+              return types.fail("source.asset-reference",
+                                "closed kernel parameter is not an asset term",
+                                op.span);
+            primitive->parameters[reference.position] = reference.term.domain;
+          }
           if (primitive->bindingArguments) {
             for (auto &argument : *primitive->bindingArguments)
               if (!closeType(argument, bindings, op.span))

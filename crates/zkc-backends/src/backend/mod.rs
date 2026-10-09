@@ -17,6 +17,7 @@ use zkc_runtime::interactive::{Backend, Frame, FrameExit, Invocation};
 /// Configure a verifier key to decode peer PCS bytes.
 pub struct NativeBackend {
     ring_assets: crate::ring::Registry,
+    relation_assets: crate::relation::Registry,
     ring_work: crate::ring::Budget,
     sequence_work: crate::sequence::Budget,
     external_work: crate::external_kernels::Budget,
@@ -25,6 +26,13 @@ pub struct NativeBackend {
     implementations: &'static registry::Registry,
 }
 impl NativeBackend {
+    pub fn with_relation_assets(mut self, assets: crate::relation::Registry) -> Result<Self> {
+        if self.active_frames() != 0 {
+            return Err(crate::refused("relation-active-backend"));
+        }
+        self.relation_assets = assets;
+        Ok(self)
+    }
     pub fn with_ring_assets(mut self, assets: crate::ring::Registry) -> Result<Self> {
         if self.active_frames() != 0 {
             return Err(crate::refused("ring-active-backend"));
@@ -124,6 +132,7 @@ impl NativeBackend {
         setups.validate(&policy)?;
         Ok(Self {
             ring_assets: crate::ring::Registry::default(),
+            relation_assets: crate::relation::Registry::default(),
             ring_work: crate::ring::Budget::default(),
             sequence_work: crate::sequence::Budget::default(),
             external_work: crate::external_kernels::Budget::default(),

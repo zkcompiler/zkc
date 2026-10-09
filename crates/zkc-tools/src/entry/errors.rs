@@ -10,6 +10,9 @@ pub enum EntryPhase {
     Authority,
     Admission,
     Binding,
+    /// A packaged expression asset was refused, or an admitted program names
+    /// an asset the package does not carry in a compatible carrier field.
+    Assets,
     /// The source adapter could not assemble the named request.
     Request,
     /// The native Host refused the assembled invocation, including invalid
