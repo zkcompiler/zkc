@@ -1,0 +1,1 @@
+["zkc.accumulator-machine-run/0",[["add-immediate","5"],["store","0"],["load","1"],["set-immediate","7"],["store","1"],["load","0"],["add-immediate","3"],["store","0"],["load","1"],["add-immediate","2130706431"],["store","1"],["load","0"],["add-immediate","100"],["store","1"],["load","1"],["halt","0"]],"7"]
