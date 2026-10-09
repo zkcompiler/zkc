@@ -133,6 +133,7 @@ per line, each value in compact JSON. Identities are SHA-256 of that text.
 | `arena.json`, `ring-assets.json` | `zkc.ring/0`, `zkc.ring-assets/0` | Exact arena text and an evaluator manifest for the Entry CLI's `--evaluators` |
 | `bundle*.json` | `zkc.relation-bundle/0` and its configuration, instance and witness | Derived relation-bundle carriers |
 | `expected.json` | | Upstream debug-checker failures for the fixture's instance and witness |
+| `source-*.json` | `zkc.entry-run/0` | Recurrence only: requests for the [imported AIR source client](../../../examples/projects/imported-air/README.md) whose vectors the closed view prepares from the export, an instance selecting it and a trace. `source-expected.json` holds direct `Air::eval` values for each. |
 
 Slot bindings are `["main", column, offset]`, `["preprocessed", column, offset]`,
 `["public", index]` and `["selector", kind]`. Assertion `i` is upstream
@@ -176,6 +177,14 @@ value:
   refuses height 32 at its degree limit rather than truncating;
 - native affine sums over row pairs, and Ext8 promotion of base inputs;
 - bundle residuals on scope rows with row-indicator residuals.
+
+The [source client](../../../examples/projects/imported-air/README.md) runs the
+recurrence arena through the common compiler and the Entry Host as an evaluator
+asset. Its requests come from the closed view of the honest trace, one changed
+cell and one changed public value: row assignments under both selector laws,
+slot coefficient polynomials, and Ext8 assignments off the domain. Their
+expectations are direct `Air::eval` values. The driver writes them only if the
+arena interpreter agrees and the nonzero row cells equal the upstream failures.
 
 Controls cover the refusals above, wraparound, stale and self-consistent but
 wrong exports (Montgomery constants, rebound reads, changed fixed columns),

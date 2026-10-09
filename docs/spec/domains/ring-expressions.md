@@ -156,6 +156,13 @@ and checks the terminal expression. No compiler branch recognizes Sumcheck.
 This is a public-table execution client; it does not supply a PCS or a security
 theorem. Existing BLS polynomial-recipe realization is a separate path.
 
+The [imported AIR client](../../../examples/projects/imported-air/README.md)
+binds an arena exported by the [Plonky3 AIR adapter](../../../compiler/adapters/plonky3/README.md)
+and substitutes it by `ring.rows` over KoalaBear and Ext8 and by
+`ring.coefficients`. The adapter's closed view prepares every assignment from an
+authorized instance and a trace; the source program checks shapes and the arena
+identity, not that an assignment is such a view.
+
 `Zkc.Algebra.RingExpression` states tree substitution, homomorphism and exact
 polynomial evaluation/degree laws. `Zkc.Relation.AIR.RingExpression` preserves
 finite-AIR expression evaluation and its public/read degree weights. Those
