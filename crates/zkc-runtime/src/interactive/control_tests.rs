@@ -79,7 +79,7 @@ impl Backend for Store {
 }
 fn artifact(body: Json, functions: Json) -> Json {
     json!([
-        "zkc.program",
+        "zkc.program/2",
         [],
         functions,
         [[

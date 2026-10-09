@@ -5,7 +5,7 @@ use super::*;
 fn deployment() -> Json {
     let boolean = "bool@native.bool/1";
     let candidate = json!([
-        "zkc.program",
+        "zkc.program/2",
         [],
         [],
         [
@@ -42,7 +42,7 @@ fn deployment() -> Json {
     ]);
     let origin = |site| {
         hex(&logical::encode_tree(&json!([
-            "zkc.native-origin-template",
+            "zkc.native-origin-template/1",
             "main",
             [],
             [],
@@ -53,9 +53,9 @@ fn deployment() -> Json {
     let first = origin("first");
     let second = origin("second");
     let descriptor = json!([
-        "zkc.native-proof-descriptor",
+        "zkc.native-proof-descriptor/5",
         [
-            "zkc.native-proof-policy",
+            "zkc.native-proof-policy/5",
             "main",
             "P",
             "V",
@@ -65,7 +65,7 @@ fn deployment() -> Json {
             ["2"],
             []
         ],
-        "zkc.native-origin",
+        "zkc.native-origin/2",
         [["message", first], ["message", second]],
         [["V", "2", "bool", "zkcv.bool/1"]],
         [
@@ -74,7 +74,7 @@ fn deployment() -> Json {
         ]
     ]);
     let mut result = json!([
-        "zkc.native-proof",
+        "zkc.native-proof/5",
         "0".repeat(64),
         descriptor,
         "",
@@ -132,7 +132,7 @@ fn proof_cli_preserves_trusted_inputs_and_publishes_only_to_distinct_regular_pat
     let authority = directory.path().join("authority");
     let raw = deployment().to_string();
     let encoded = json!([
-        "zkc.native-proof-inputs",
+        "zkc.native-proof-inputs/1",
         [["V", "2", "5a4b4356010501"]],
         [
             ["0", ["wire", "5a4b4356010500"]],
@@ -146,7 +146,7 @@ fn proof_cli_preserves_trusted_inputs_and_publishes_only_to_distinct_regular_pat
     .to_string();
     std::fs::write(&bundle, &raw).unwrap();
     std::fs::write(&input, &encoded).unwrap();
-    std::fs::write(&authority, br#"["zkc.native-setup-authority",[],[]]"#).unwrap();
+    std::fs::write(&authority, br#"["zkc.native-setup-authority/1",[],[]]"#).unwrap();
     let args = |destination: &std::path::Path| {
         vec![
             bundle.display().to_string(),
@@ -272,7 +272,7 @@ fn proof_cli_requires_explicit_header_policy_after_independent_pin_admission() {
         std::fs::write(
             path,
             json!([
-                "zkc.native-proof-inputs",
+                "zkc.native-proof-inputs/1",
                 [["V", "2", "5a4b4356010501"]],
                 inputs,
                 "",

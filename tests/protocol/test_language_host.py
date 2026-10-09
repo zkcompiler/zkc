@@ -35,8 +35,8 @@ def test_independent_named_proof_calls(toolchain, journal, directory, entry, sui
     text = (FIXTURES / 'attempts.zkc').read_text()
     source.write_text(text.replace('merlin3.bls12-381.fr64be/1', suite) if suite else text)
     package, pin = compile_entry(toolchain, journal, directory, entry, source)
-    producer = write(directory / 'producer.json', {'format': 'zkc.entry-proof', 'public': {}, 'inputs': {'done': True}})
-    verifier = write(directory / 'verifier.json', {'format': 'zkc.entry-proof', 'public': {}, 'inputs': {}})
+    producer = write(directory / 'producer.json', {'format': 'zkc.entry-proof/1', 'public': {}, 'inputs': {'done': True}})
+    verifier = write(directory / 'verifier.json', {'format': 'zkc.entry-proof/1', 'public': {}, 'inputs': {}})
     proof = directory / 'proof.bin'
     results = directory / 'results.json'
     flags = ['--allow-header-only'] if entry == 'Plain' else []
@@ -72,10 +72,10 @@ def test_independent_named_proof_calls(toolchain, journal, directory, entry, sui
         rejected = json.loads(journal.run([*verifying[:5], bad, *flags, f'--results={results}'], refuses='artifact-rejected'))
         assert rejected['status'] == 'refused' and 'execution' in rejected
     assert results.read_bytes() == unchanged_results
-    write(verifier, {'format': 'zkc.entry-proof', 'public': {}, 'inputs': {}, 'context': '01'})
+    write(verifier, {'format': 'zkc.entry-proof/1', 'public': {}, 'inputs': {}, 'context': '01'})
     rejected_context = json.loads(journal.run([*verifying, f'--results={results}'], refuses='proof-header'))
     assert rejected_context['status'] == 'refused' and results.read_bytes() == unchanged_results
-    write(verifier, {'format': 'zkc.entry-proof', 'public': {}, 'inputs': {}})
+    write(verifier, {'format': 'zkc.entry-proof/1', 'public': {}, 'inputs': {}})
     journal.run([*proving, '--attempts=0'], refuses='native-attempt-limits')
     assert proof.read_bytes() == sentinel
     collision = json.loads(journal.run([*proving, f'--results={proof}'], refuses='entry-output-path'))
@@ -87,24 +87,24 @@ def test_independent_named_proof_calls(toolchain, journal, directory, entry, sui
     assert proof.read_bytes() == sentinel
     journal.run([*proving, f'--results={package}'], refuses='entry-output-path')
     journal.run([*proving, f'--results={producer}'], refuses='entry-output-path')
-    write(producer, {'format': 'zkc.entry-proof', 'public': {}, 'inputs': {'done': False}})
+    write(producer, {'format': 'zkc.entry-proof/1', 'public': {}, 'inputs': {'done': False}})
     refused = json.loads(journal.run(proving, refuses='native-attempt-limit'))
     assert len(refused['execution']['attempts']) == 1
     assert proof.read_bytes() == sentinel
     refused = json.loads(journal.run([*proving, '--attempts=3'], refuses='native-attempt-limit'))
     assert len(refused['execution']['attempts']) == 3
     assert proof.read_bytes() == sentinel
-    write(producer, {'format': 'zkc.entry-proof', 'public': {}, 'inputs': {'done': True}, 'services': {'coins': 0}})
+    write(producer, {'format': 'zkc.entry-proof/1', 'public': {}, 'inputs': {'done': True}, 'services': {'coins': 0}})
     journal.run(proving, refuses='exhausted:resource-budget')
     assert proof.read_bytes() == sentinel
-    producer.write_text('{"format":"zkc.entry-proof","public":{},"inputs":{"done":true,"done":false}}')
+    producer.write_text('{"format":"zkc.entry-proof/1","public":{},"inputs":{"done":true,"done":false}}')
     journal.run(proving, refuses='entry-request-format')
     wrong_pin = '00' * 32
     journal.run([toolchain.runtime, 'prove', package, wrong_pin, producer, proof, *flags], refuses='entry-package-identity')
     if entry == 'Derived':
-        write(producer, {'format': 'zkc.entry-proof', 'public': {}, 'inputs': {'done': True}, 'transcript_budget': 0})
+        write(producer, {'format': 'zkc.entry-proof/1', 'public': {}, 'inputs': {'done': True}, 'transcript_budget': 0})
         journal.run(proving, refuses='exhausted:resource-budget')
-    write(producer, {'format': 'zkc.entry-proof', 'public': {}, 'inputs': {'done': True}})
+    write(producer, {'format': 'zkc.entry-proof/1', 'public': {}, 'inputs': {'done': True}})
     failed_publication = json.loads(journal.run([*proving, f'--results={directory / "missing" / "results"}'], refuses='entry-output-path'))
     assert failed_publication['phase'] == 'arguments' and 'execution' not in failed_publication
     assert proof.read_bytes() == sentinel
@@ -112,7 +112,7 @@ def test_independent_named_proof_calls(toolchain, journal, directory, entry, sui
 
 def test_named_run_defaults_and_private_result_files(toolchain, journal, directory):
     package, pin = compile_entry(toolchain, journal, directory, 'Run')
-    request = {'format': 'zkc.entry-run', 'session': 'cli_controls',
+    request = {'format': 'zkc.entry-run/1', 'session': 'cli_controls',
                'roles': {'P': {'inputs': {'done': True}}, 'V': {'inputs': {}}}}
     inputs = write(directory / 'inputs.json', request)
     outputs = directory / 'outputs.json'
@@ -147,7 +147,7 @@ def test_aggregate_file_roundtrip_and_schema_refusals(toolchain, journal, direct
     payload = {'choice': {'case': 'Data', 'fields': {
         '0': {'case': 'Pair', 'fields': {'0': scalar(7), '1': scalar(11)}},
         '1': [False, None], '2': [scalar(13), scalar(17)]}}, 'marker': True}
-    request = {'format': 'zkc.entry-run', 'session': 'aggregate_files', 'roles': {
+    request = {'format': 'zkc.entry-run/1', 'session': 'aggregate_files', 'roles': {
         'P': {'inputs': {'payload': payload, 'empty': None}}, 'V': {'inputs': {}}}}
     inputs = write(directory / 'inputs.json', request)
     results = directory / 'results.json'
@@ -317,7 +317,7 @@ def test_input_numbers_keep_their_json_shape(toolchain, journal, directory):
     source = directory / 'indices.zkc'
     source.write_text("module sample; protocol Index roles(P)(n:index@P)->(n:index@P){return(n=n);} entry Demo=Index;")
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
-    request = {'format': 'zkc.entry-run', 'session': 'index_files', 'roles': {'P': {'inputs': {'n': 7}}}}
+    request = {'format': 'zkc.entry-run/1', 'session': 'index_files', 'roles': {'P': {'inputs': {'n': 7}}}}
     inputs = write(directory / 'inputs.json', request)
     command = [toolchain.runtime, 'run', package, pin, inputs]
     journal.run(command)
@@ -392,17 +392,17 @@ def test_proof_file_public_inputs_are_authoritative(toolchain, journal, director
                       .replace('Round roles(P,V)(done:bool@P)', 'Round roles(P,V)(done:bool@P,tag:bool@(P,V))')
                       .replace('public{};accept accepted;complete result.ready;', 'public{tag};accept accepted;complete result.ready;', 1))
     package, pin = compile_entry(toolchain, journal, directory, 'Derived', source)
-    producer = write(directory / 'producer.json', {'format': 'zkc.entry-proof', 'public': {'tag': True}, 'inputs': {'done': True}})
-    verifier = write(directory / 'verifier.json', {'format': 'zkc.entry-proof', 'public': {'tag': True}})
+    producer = write(directory / 'producer.json', {'format': 'zkc.entry-proof/1', 'public': {'tag': True}, 'inputs': {'done': True}})
+    verifier = write(directory / 'verifier.json', {'format': 'zkc.entry-proof/1', 'public': {'tag': True}})
     proof = directory / 'proof.bin'
     journal.run([toolchain.runtime, 'prove', package, pin, producer, proof])
     verifying = [toolchain.runtime, 'verify', package, pin, verifier, proof]
     journal.run(verifying)
-    write(verifier, {'format': 'zkc.entry-proof', 'public': {'tag': True}, 'inputs': {'tag': True}})
+    write(verifier, {'format': 'zkc.entry-proof/1', 'public': {'tag': True}, 'inputs': {'tag': True}})
     journal.run(verifying, refuses='entry-input-names')
-    write(verifier, {'format': 'zkc.entry-proof', 'public': {}})
+    write(verifier, {'format': 'zkc.entry-proof/1', 'public': {}})
     journal.run(verifying, refuses='entry-input-names')
-    write(verifier, {'format': 'zkc.entry-proof', 'public': {'tag': False}})
+    write(verifier, {'format': 'zkc.entry-proof/1', 'public': {'tag': False}})
     journal.run(verifying, refuses='proof-header')
     original = source.read_bytes()
     journal.run([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
@@ -424,7 +424,7 @@ def test_compiler_lookup_and_positional_arguments(toolchain, journal, directory)
     local_output = directory / 'zkc-compile'
     same_name = journal.attempt([*args[:-1], '--output=zkc-compile'], cwd=directory, env=env)
     assert same_name.returncode == 0, same_name.stdout + same_name.stderr
-    assert json.loads(local_output.read_text())['format'] == 'zkc.entry'
+    assert json.loads(local_output.read_text())['format'] == 'zkc.entry/1'
     local_output.unlink()
     (directory / 'zkc-compile').symlink_to(toolchain.compiler)
     for path in (None, '', '.'):
@@ -457,8 +457,8 @@ protocol Run roles(P,V)(done:bool@P)->(large:Vector<Fr>@P,accepted:bool@V){
 entry Demo=Run{prover P;verifier V;public{};accept accepted;construction authored;}
 ''')
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
-    producer = write(directory / 'producer.json', {'format': 'zkc.entry-proof', 'public': {}, 'inputs': {'done': True}})
-    verifier = write(directory / 'verifier.json', {'format': 'zkc.entry-proof', 'public': {}})
+    producer = write(directory / 'producer.json', {'format': 'zkc.entry-proof/1', 'public': {}, 'inputs': {'done': True}})
+    verifier = write(directory / 'verifier.json', {'format': 'zkc.entry-proof/1', 'public': {}})
     proof = directory / 'proof.bin'
     results = directory / 'results.json'
     results.write_bytes(b'unchanged')
@@ -487,7 +487,7 @@ def test_interface_publication_and_host_share_resource_boundaries(toolchain, jou
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
     journal.run([toolchain.runtime, 'bindings', package, pin, directory / 'bindings.rs'])
     request = write(directory / 'inputs.json', {
-        'format': 'zkc.entry-run', 'session': 'bounded_interface',
+        'format': 'zkc.entry-run/1', 'session': 'bounded_interface',
         'roles': {'P': {'inputs': {f'a{i}': [None] * 1024 for i in range(7)}}},
     })
     executed = json.loads(journal.run([toolchain.runtime, 'run', package, pin, request]))

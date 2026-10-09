@@ -872,11 +872,11 @@ operation and operand graph.
 `CheckedOriginal` owns immutable source, original bytes, comparison counts,
 interface, toolchain identity and a bound diagnostic location map. It exposes no
 mutable original IR. The existing compiler receives those bytes and the selected
-protocol symbol. Run jobs emit `zkc.run`; proof jobs use the native proof policy
-and deployment schemas. Both contain ordinary `zkc.program` participant programs.
+protocol symbol. Run jobs emit `zkc.run/1`; proof jobs use the native proof policy
+and deployment schemas. Both contain ordinary `zkc.program/2` participant programs.
 Every protocol in the selected closure passes target preparation.
 
-`zkc.language-interface` has exactly these JSON members: `format`, `capture`,
+`zkc.language-interface/7` has exactly these JSON members: `format`, `capture`,
 `original`, `toolchain`, `entry`, `protocol`, `protocols`, `relations`, `job`,
 `setups`. `protocol`
 selects one symbol from `protocols`. Every original protocol and relation appears
@@ -911,18 +911,18 @@ A relation record has `symbol`, `inputs` and `definition`. Each formal has `name
 `purpose`, ordered `native` indices and `schema`. Definition records have exactly
 `{kind, function}` for a formula, `{kind}` for an opaque declaration, or
 `{kind, asset}` for R1CS/AIR. Their identity triple comes from the actual native
-declaration. Formula kind is `zkc.language.formula`, key is the closed relation
+declaration. Formula kind is `zkc.language.formula/1`, key is the closed relation
 symbol, and revision is a lowercase SHA-256 representation digest. Its material is
 length-framed in this order: kind, predicate helper symbol, decimal logical input
 count, each full logical schema digest and purpose, decimal transitive helper count,
 then each helper symbol and definition digest, sorted by symbol. A definition digest
-hashes framed `zkc.language.formula-helper` and canonical generic MLIR without
+hashes framed `zkc.language.formula-helper/1` and canonical generic MLIR without
 locations. Frames use unsigned 64-bit little-endian lengths. The closure includes
 the root; shared helper definitions are hashed once per immutable checking phase.
 Printing pins every flag, disables hex output and uses elision thresholds above
 admitted payload sizes, independent of process-global MLIR flags.
 
-The schema digest hashes framed `zkc.language.schema`, textual kind, nominal
+The schema digest hashes framed `zkc.language.schema/1`, textual kind, nominal
 `identity`, custody, Copy/Drop/Share/Wire (each `0` or `1`), leaf count and ordered
 leaf spellings, field count and ordered fields, then alternative count and ordered
 alternatives. Counts and offsets use unsigned decimal text. A field contributes
@@ -937,7 +937,7 @@ nonempty body with the declaration's signature and no executable references, the
 checks polynomial observations on bounded detached clones using the original
 helper table. The supplied original is unchanged; limits remain `source.limit`
 and invalid observations are `target.admission` with source attribution.
-Captured kinds are `zkc.relation.r1cs` and `zkc.relation.air`, with canonical
+Captured kinds are `zkc.relation.r1cs/1` and `zkc.relation.air/1`, with canonical
 asset identity as key and `1` as revision. The reader requires the matching
 immutable admitted `RelationAsset` handles, supplied outside this small JSON.
 
@@ -1033,7 +1033,7 @@ retain its original numeric spelling.
 
 ### Published Entry package
 
-`packageEntry` accepts only an owned `CompiledEntry`. It emits `zkc.entry`
+`packageEntry` accepts only an owned `CompiledEntry`. It emits `zkc.entry/1`
 with exactly `format`, `original`, `interface`, `artifact`, and `options`.
 Original MLIR, interface JSON and native run bundle or proof deployment are exact
 strings. Options contain Boolean `simplify` and `release_storage`. The job kind
@@ -1052,7 +1052,7 @@ require the Host to recompile it or establish a security theorem.
 
 ### Rust interface admission
 
-The native Host reads `zkc.language-interface`. It checks strict object members,
+The native Host reads `zkc.language-interface/7`. It checks strict object members,
 including required nullable fields, before using source names. Recursive schema
 validation preserves kind, exact logical identity, permissions, custody, field
 slices and nominal alternatives. Every logical port remains present, including
@@ -1241,9 +1241,9 @@ bounded package output and publishes exact bytes with their SHA-256. Existing
 packages require a caller-supplied expected digest for `run`, `prove`,
 `verify` and `bindings`. No digest derived from candidate bytes authorizes them.
 
-A `zkc.entry-run` request has required `format`, `session` and `roles`, plus
+A `zkc.entry-run/1` request has required `format`, `session` and `roles`, plus
 optional `setups` (default empty). Every role record has required `inputs` and
-optional `services` (default no overrides). A `zkc.entry-proof` request has
+optional `services` (default no overrides). A `zkc.entry-proof/1` request has
 required `format` and `public`, plus optional `inputs` (private value map,
 default empty), `services` (default no overrides), `context` (default empty hex), `transcript_budget` (default absent) and `setups`
 (default empty). Public and input maps use exact logical port names. The file
@@ -1267,11 +1267,11 @@ refuse before execution. File requests have a 16 MiB byte limit, depth at most 7
 allowance including object keys. Decoding rejects duplicate keys, unknown record
 fields, trailing documents and numeric values outside unsigned 64-bit naturals.
 The optional application authority file is bounded by 64 KiB and contains exactly
-`format: "zkc.entry-setups"` and `keys`, mapping source slots to expected 32-byte
+`format: "zkc.entry-setups/1"` and `keys`, mapping source slots to expected 32-byte
 key identities in hex. Authority is separate from invocation material.
 
 Diagnostics omit returned values and proof payloads. Explicit `--results` output
-uses `zkc.entry-outputs`, with `roles` for a run or `values` for a proof call.
+uses `zkc.entry-outputs/1`, with `roles` for a run or `values` for a proof call.
 Serialization uses admitted native capacity, a 16 MiB whole-file limit and only
 installed Wire encodings for native leaves. Every requested output is encoded and
 staged before publication. Preflight, encoding or staging failure preserves all

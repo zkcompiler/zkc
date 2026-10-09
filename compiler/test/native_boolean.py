@@ -49,7 +49,7 @@ for optimize in (False, True):
     assert "local.bool_constant" not in physical and "plan.bool_constant" in physical
     encoded = commands.source("protocol-export", physical)
     carrier = json.loads(encoded)
-    assert carrier[0] == "zkc.program"
+    assert carrier[0] == "zkc.program/2"
     for a, b, c in itertools.product((False, True), repeat=3):
         assert evaluate(carrier, [a, b, c, 11, 23, 31, 47]) == [
             True, False, a and b, a or b, a != b, a == b, a != b, not a,

@@ -95,7 +95,7 @@ fn inputs(envelope: &Json, producing: bool, tag: usize, count: usize) -> Json {
         .map(|p| json!([p[0], "1"]))
         .collect();
     json!([
-        "zkc.native-proof-inputs",
+        "zkc.native-proof-inputs/1",
         public,
         data,
         "",
@@ -188,7 +188,7 @@ fn run(directory: &Path) {
             "native-proof-wire-map"
         );
         let original: Json = serde_json::from_str(envelope[4].as_str().unwrap()).unwrap();
-        assert_eq!(original[0], "zkc.program");
+        assert_eq!(original[0], "zkc.program/2");
         for (tag, count) in [(0, 0), (1, 0), (1, 1), (1, 4), (2, 0), (2, 1), (2, 7)] {
             let p = inputs(&envelope, true, tag, count);
             let v = inputs(&envelope, false, tag, count);
@@ -286,11 +286,16 @@ fn verify_reference(envelope: &Json, input: &Json, proof: &[u8], tag: usize, cou
         } else {
             json!(["message", "main", site, site, sender, receiver])
         };
-        let template =
-            reference::tree(&json!(["zkc.native-origin-template", "main", [], [], data]));
+        let template = reference::tree(&json!([
+            "zkc.native-origin-template/1",
+            "main",
+            [],
+            [],
+            data
+        ]));
         assert_eq!(envelope[2][3][event], json!([kind, hex(&template)]));
         event += 1;
-        reference::tree(&json!(["zkc.native-origin", "main", [], [], data]))
+        reference::tree(&json!(["zkc.native-origin/2", "main", [], [], data]))
     };
     let mut position = 40;
     let mut frame = || {
@@ -407,7 +412,7 @@ fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: 
                 ])
             })
             .collect();
-        json!(["zkc.native-proof-inputs", public, data, "", [], "0"])
+        json!(["zkc.native-proof-inputs/1", public, data, "", [], "0"])
     };
     let p = input("Alice");
     let v = input("Bob");

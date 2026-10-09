@@ -1,7 +1,7 @@
 # Entry and native execution hosts
 
 `zkc` compiles `.zkc` Entry packages through the mathematical compiler and executes
-the resulting `zkc.program` with the generic runtime. The public library has
+the resulting `zkc.program/2` with the generic runtime. The public library has
 three owners:
 
 | Owner | Responsibility |
@@ -44,7 +44,7 @@ cryptographic transcript binding. Low-level native proof execution APIs leave th
 policy to their caller.
 
 Native proof deployment, descriptor, policy and binding each have one current
-schema, with `zkc.native-origin` occurrences. Flat, iterated, committed and structured
+schema, with `zkc.native-origin/2` occurrences. Flat, iterated, committed and structured
 programs share this model. Deployment admission requires explicit `SetupAuthority`. Quotas are
 operational ceilings, separate from the semantic binding root. Oversized limit
 requests refuse instead of being silently clamped; public limit types expose

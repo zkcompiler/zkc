@@ -133,7 +133,7 @@ fn native_origins_have_exact_shapes_and_distinct_event_kinds() {
         bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
     let query = json!([
-        "zkc.native-origin-template",
+        "zkc.native-origin-template/1",
         "main",
         [["apply", "main", "subprotocol"]],
         [],
@@ -195,7 +195,7 @@ fn native_origins_have_exact_shapes_and_distinct_event_kinds() {
         assert!(native_origin_template(&[hex(&encode_tree(&bad).unwrap())], "query").is_err());
     }
     let message = json!([
-        "zkc.native-origin-template",
+        "zkc.native-origin-template/1",
         "main",
         [],
         [],
@@ -223,7 +223,7 @@ fn indexed_native_origins_require_explicit_coordinates_and_template_format() {
             .collect::<String>()
     };
     let template = json!([
-        "zkc.native-origin-template",
+        "zkc.native-origin-template/1",
         "main",
         [
             ["repeat", "main", "outer"],
@@ -246,7 +246,7 @@ fn indexed_native_origins_require_explicit_coordinates_and_template_format() {
     native_origin_template(&attrs, "query").unwrap();
     for coordinates in [vec![0, 0], vec![2, 7], vec![u64::MAX, u64::MAX]] {
         let mut expected = template.clone();
-        expected[0] = json!("zkc.native-origin");
+        expected[0] = json!("zkc.native-origin/2");
         expected[3] = json!(coordinates.iter().map(u64::to_string).collect::<Vec<_>>());
         assert_eq!(
             indexed_native_origin(&attrs, "query", &coordinates).unwrap(),
@@ -259,7 +259,7 @@ fn indexed_native_origins_require_explicit_coordinates_and_template_format() {
     for slot in [0, 2, 3, 4] {
         let mut changed = template.clone();
         changed[slot] = match slot {
-            0 => json!("zkc.native-origin"),
+            0 => json!("zkc.native-origin/2"),
             2 => json!([["loop", "main", "outer"]]),
             3 => json!(["0"]),
             _ => json!(["repeat", "main", "outer"]),

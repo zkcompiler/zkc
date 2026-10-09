@@ -1,6 +1,6 @@
 # Native program runtime
 
-`zkc-runtime` admits and executes `zkc.program`, the physical program produced
+`zkc-runtime` admits and executes `zkc.program/2`, the physical program produced
 by the mathematical compiler. `interactive::Admitted` owns the exact admitted
 bytes and the derived typed program. `interactive::Runner` executes one role
 with caller-supplied values and an independently installed backend.

@@ -39,17 +39,17 @@ fn command_help(command: &str) -> Option<&'static str> {
         ),
         "run" => Some(
             "Usage: zkc run PACKAGE EXPECTED_SHA256 INPUTS [--setups=AUTHORITY] [--capacity=LIMITS] [--results=FILE]\n\n\
-             INPUTS is a named zkc.entry-run request. Results are opt-in file output.\n",
+             INPUTS is a named zkc.entry-run/1 request. Results are opt-in file output.\n",
         ),
         "prove" | "verify" => Some(
             "Usage: zkc prove|verify PACKAGE EXPECTED_SHA256 INPUTS PROOF [--setups=AUTHORITY] [--capacity=LIMITS] [--allow-header-only] [--attempts=COUNT] [--results=FILE]\n\n\
-             INPUTS is a named zkc.entry-proof request. Verification supplies no prover witness.\n\
+             INPUTS is a named zkc.entry-proof/1 request. Verification supplies no prover witness.\n\
              Attempts are explicit and producer-only. One-shot proving honors Entry completion.\n\
              Authored jobs require --allow-header-only. Diagnostic reports omit returned values.\n",
         ),
         "run-bundle" => Some(
             "Usage: zkc run-bundle BUNDLE EXPECTED_SHA256 INPUTS [--setups=AUTHORITY] [--capacity=LIMITS] [--limits=LIMITS]\n\n\
-             BUNDLE is protocol-bundle output; INPUTS is a zkc.bundle-inputs array.\n\
+             BUNDLE is protocol-bundle output; INPUTS is a zkc.bundle-inputs/1 array.\n\
              EXPECTED_SHA256 must come from trusted compilation or deployment configuration.\n\
              All roles are prepared before execution resources are issued.\n\
              Completed execution does not interpret protocol acceptance outputs.\n",
@@ -109,7 +109,7 @@ pub fn run(command: &str, args: &[String]) -> serde_json::Value {
 }
 /// Successful exit requires the requested operation and all requested publications.
 pub fn succeeded(report: &serde_json::Value) -> bool {
-    if report["format"] == "zkc.bundle-result" {
+    if report["format"] == "zkc.bundle-result/1" {
         report["status"] == "executed" && report["outcome"][0] == "completed"
     } else {
         crate::entry::cli::succeeded(report)

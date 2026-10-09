@@ -87,7 +87,7 @@ backend; attempts within that invocation retain its consumed work.
 
 ## Native framing and setup
 
-The native proof profile and `zkc.program` admit sequences recursively over the
+The native proof profile and `zkc.program/2` admit sequences recursively over the
 closed native message grammar. Keys, private state, affine data and unsupported
 provider leaves stay outside that grammar, including inactive alternatives and
 empty sequences. Host programmatic values and proof `wire` inputs use the

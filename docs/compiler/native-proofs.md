@@ -110,10 +110,10 @@ operations or unrealized casts cannot slip through a partial conversion.
 
 ## Policy and formats
 
-`zkc.native-proof-policy` is the sole proof policy for flat programs, bounded
+`zkc.native-proof-policy/5` is the sole proof policy for flat programs, bounded
 loops, PCS, structured messages and authored execution. Deployment, descriptor,
 construction metadata and invocation binding each have one current schema.
-Every proof embeds `zkc.program`; joint execution uses `zkc.run`. This is one
+Every proof embeds `zkc.program/2`; joint execution uses `zkc.run/1`. This is one
 proof contract within the four IR profiles. Unknown tags and malformed records
 refuse independently.
 

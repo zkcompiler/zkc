@@ -1,23 +1,26 @@
 # What the implementation supports
 
 The supported implementation is `.zkc` Language → mathematical MLIR
-(`protocol`, `participant`, `exec`, `physical`) → `zkc.program` → a shared Rust
+(`protocol`, `participant`, `exec`, `physical`) → `zkc.program/2` → a shared Rust
 Runner with Entry/proof/joint Hosts. Direct MLIR enters the same compiler.
 [Specification](spec/README.md) defines contracts; this page records support.
 Links identify maintained checks, not a claim that they ran for this revision.
 
 ## Current public interfaces
 
-Internal artifacts use one current schema with exact tags, record shapes and
-unknown-field validation. Their specification owners define the accepted contents.
+Artifacts use one current schema with exact tags, record shapes and unknown-field
+validation. Boundary versions remain fixed during development; equal versions do
+not guarantee compatibility across builds. Their specification owners define the
+accepted contents; the [maintenance policy](development/maintenance.md#format-versions)
+defines when versions change.
 
 | Interface | Contract |
 |---|---|
-| Executable program | [`zkc.program`](spec/profiles/compiler/program.md), a physical participant program |
-| Source Entry | [`zkc.entry` and `zkc.language-interface`](spec/profiles/source/mathematical-language.md#published-entry-package), authenticated source, input/result schemas and selected artifact |
-| Joint execution | [`zkc.run`](spec/profiles/compiler/run.md), participants, schedule and invocation policy |
-| Native proof | [Policy, descriptor, deployment, construction map and invocation binding](spec/profiles/compiler/native-proofs.md), with `zkc.native-origin` occurrences |
-| Installed declarations | [`zkc.contract-declarations` and `zkc.language-catalog`](compiler/operation-contracts.md), declaration inventory and catalog identity |
+| Executable program | [`zkc.program/2`](spec/profiles/compiler/program.md), a physical participant program |
+| Source Entry | [`zkc.entry/1` and `zkc.language-interface/7`](spec/profiles/source/mathematical-language.md#published-entry-package), authenticated source, input/result schemas and selected artifact |
+| Joint execution | [`zkc.run/1`](spec/profiles/compiler/run.md), participants, schedule and invocation policy |
+| Native proof | [Policy, descriptor, deployment, construction map and invocation binding](spec/profiles/compiler/native-proofs.md), with `zkc.native-origin/2` occurrences |
+| Installed declarations | [`zkc.contract-declarations/3`](compiler/operation-contracts.md), declaration inventory; the language catalog contributes an opaque compiler fingerprint |
 
 Use `zkc run`, `prove` and `verify` for named Entries, and `run-bundle`,
 `prove-bundle` and `verify-bundle` for lower-level artifacts. In the C++ SDK,
@@ -38,7 +41,7 @@ static protocol composition, bounded repetition and conditional completion.
 Independent source comparison checks emitted MLIR against checked definitions;
 [source semantics](spec/profiles/source/mathematical-language.md) owns exact limits.
 
-An authenticated `zkc.entry` package retains the original, source interface,
+An authenticated `zkc.entry/1` package retains the original, source interface,
 compilation choices and selected artifact. The Host binds named logical inputs
 and results to the independently admitted program. It trusts compiler publication
 for source correspondence; it does not interpret retained MLIR. Maintained
@@ -59,7 +62,7 @@ alone add no runtime guard, satisfaction fact or security theorem.
 | Affine resources and services | Exact-origin analysis, state successors, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |
 | General numerical composition | Installed field/group/vector/matrix, polynomial, pairing and oracle kernels with [composed clients](compiler/mathematical-composition.md) and [changing numeric state](compiler/composed-state.md). These are not complete Groth16, AIR/FRI or range-proof applications. |
 | Relations | Bounded R1CS/AIR data import and Assets, exact [relation bindings](compiler/relation-bindings.md), and a [native R1CS reduction adapter](compiler/relation-composition.md). Import does not prove upstream source adequacy. |
-| Native proofs | Separate producer/validator execution, derived or authored transcripts, structured framing and authorized setups; [proof contract](compiler/native-proofs.md). One policy covers flat, iterated, PCS and structured programs in `zkc.program`. |
+| Native proofs | Separate producer/validator execution, derived or authored transcripts, structured framing and authorized setups; [proof contract](compiler/native-proofs.md). One policy covers flat, iterated, PCS and structured programs in `zkc.program/2`. |
 | Attempts and retained work | [Persistent attempts](compiler/native-attempts.md) retain provider state, failed work and unpublished buffers under explicit application policy. |
 | Authored transcripts | Explicit external initialization, trial/live checks and snapshots under [authored transcript contracts](compiler/authored-transcripts.md); admission does not prove transcript completeness or snapshot reachability. |
 | Host applications | Named Entry inputs/results, joint bundles, proof jobs, reusable immutable prover material and generated Rust data bindings through the common Hosts; [Entry guide](language/entries.md). |

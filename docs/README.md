@@ -1,7 +1,7 @@
 # Documentation
 
 zkc has one supported implementation model: `.zkc` Language → mathematical MLIR
-(`protocol`, `participant`, `exec`, `physical`) → `zkc.program` → the shared Rust
+(`protocol`, `participant`, `exec`, `physical`) → `zkc.program/2` → the shared Rust
 Runner, installed kernels and Entry/proof/joint Hosts. Direct MLIR authoring uses
 that same pipeline. The independent Lean research library has its own semantic
 subjects and proof boundaries.

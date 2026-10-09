@@ -153,7 +153,7 @@ without that value.
 
 The independent portable consumer in [`Tools.Interactive`](interactive-reference.md)
 checks candidates and runs a source reference in its own format. It does not
-validate the supported `.zkc`/MLIR/`zkc.program` path. Raw decoding, multi-result
+validate the supported `.zkc`/MLIR/`zkc.program/2` path. Raw decoding, multi-result
 elaboration, role remapping, native stack refinement and executable checker
 soundness are not proved by the typed projection theorem. Connecting these laws
 to the common Rust Runner and its Hosts requires a separate interpretation.

@@ -1,5 +1,5 @@
 {
-  "format": "zkc.entry-run",
+  "format": "zkc.entry-run/1",
   "session": "sumcheck_example",
   "roles": {
     "P": {

@@ -14,8 +14,8 @@ for name, fixture in [('evaluate', 'recipe-evaluate'), ('constant', 'constant-su
         for suffix, options in [('', ()), ('_plain', ('--no-simplify',)), ('_release', ('--release-storage',))]:
             result = commands.source('protocol-bundle', source, *options)
             bundle = json.loads(result)
-            assert bundle['format'] == 'zkc.run'
-            assert json.loads(bundle['candidate'])[0] == 'zkc.program'
+            assert bundle['format'] == 'zkc.run/1'
+            assert json.loads(bundle['candidate'])[0] == 'zkc.program/2'
             (OUT / (name + suffix + '.bundle')).write_text(result)
         if 'maximum=8:i64' not in source:
             assert name in ('evaluate', 'data', 'traces')
@@ -94,7 +94,7 @@ module {{ "protocol.module"() ({{
 }}) {{profile=#protocol.profile<protocol>}} : ()->() }}
 '''
     bundle = json.loads(commands.source('protocol-bundle', source))
-    assert bundle['format'] == 'zkc.run'
+    assert bundle['format'] == 'zkc.run/1'
     commands.source('protocol-bundle', source.replace('index=1:i64', 'index=2:i64'), refuses='mathematical-formation')
 with case('preparation retains tensor construction from scalar constants'):
     source = '''!f = !algebra.field<"bls12-381.fr">

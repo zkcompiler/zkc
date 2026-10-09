@@ -109,10 +109,12 @@ belongs in the pull request body, which is what survives the squash.
   intended model and is not weakened to match what is built; what is built
   belongs on the [status page](../docs/status.md), not in the
   specification.
-- **Internal artifacts.** Internal artifacts have one current schema. Update all
-  producers, readers and fixtures together; do not add compatibility readers,
-  version bumps or migration notes. Keep exact shape and unknown-field validation
-  fail closed. External standards remain governed by their specifications.
+- **Formats and identities.** Version persisted or exchanged formats and
+  cryptographic byte constructions. Before stabilization, keep their current
+  version numbers fixed and update producers, readers and fixtures together.
+  Maintain one current schema with exact shape and unknown-field validation;
+  do not add compatibility readers or migration notes. See the
+  [format version policy](../docs/development/maintenance.md#format-versions).
 - **Independent implementations.** The compiler and native runtime independently
   validate the executable program carrier. A change to that surface updates both.
   Formal research checks do not establish correspondence with current native

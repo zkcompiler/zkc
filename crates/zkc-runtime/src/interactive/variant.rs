@@ -63,7 +63,7 @@ fn pack(tree: &Value) -> Result<String> {
     }
     let mut nodes = Vec::new();
     intern(tree, &mut nodes, &mut Default::default(), &mut 0, &mut 0, 0)?;
-    let bytes = serde_json::to_vec(&serde_json::json!(["zkc.variant", nodes]))
+    let bytes = serde_json::to_vec(&serde_json::json!(["zkc.variant/1", nodes]))
         .expect("serializing a JSON value");
     if bytes.len() > (MAX_SPELLING - 8) / 2 {
         return Err(invalid("limit"));
@@ -105,7 +105,7 @@ fn unpack(spelling: &str) -> Result<Value> {
         .as_array()
         .filter(|a| a.len() == 2)
         .ok_or_else(|| invalid("descriptor"))?;
-    if root[0].as_str() != Some("zkc.variant") {
+    if root[0].as_str() != Some("zkc.variant/1") {
         return Err(invalid("format"));
     }
     // A graph with no node is malformed; only a graph past the node budget

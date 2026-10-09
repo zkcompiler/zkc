@@ -21,7 +21,7 @@ pub(super) struct DeploymentPolicy<'a> {
 impl<'a> DeploymentPolicy<'a> {
     pub(super) fn read(value: &'a Json) -> Result<Self> {
         let policy = array(value, 9)?;
-        if text(&policy[0])? != "zkc.native-proof-policy" {
+        if text(&policy[0])? != "zkc.native-proof-policy/5" {
             return Err("native-proof-policy".into());
         }
         let (entry, producer, validator) =

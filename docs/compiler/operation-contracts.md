@@ -12,7 +12,7 @@ validators and backend implementations retain their separate obligations.
 
 ## Signatures, effects and observations
 
-The `zkc.contract-declarations` inventory distinguishes constructor-application
+The `zkc.contract-declarations/3` inventory distinguishes constructor-application
 ports from an explicit complete-Type port (`{"term": index}`). The latter is
 restricted to construction-only observation payloads, with exact static-type and
 representation checks. Source admission does not gain arbitrary operations from

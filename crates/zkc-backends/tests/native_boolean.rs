@@ -7,7 +7,7 @@ use zkc_runtime::interactive::{Action, Runner, StopKind, ValueBudget, admit_supp
 
 fn candidate(value: bool) -> Json {
     json!([
-        "zkc.program",
+        "zkc.program/2",
         [],
         [[
             "function",
@@ -358,7 +358,7 @@ fn program_service_query_executes_and_releases_its_lease() {
         .unwrap();
     let field = "field:bls12-381.fr@arkworks.fr/1";
     let carrier = json!([
-        "zkc.program",
+        "zkc.program/2",
         [],
         [],
         [[
@@ -407,7 +407,7 @@ fn program_service_query_executes_and_releases_its_lease() {
 fn program_iteration_exhaustion_preserves_the_attempted_loop_coordinate() {
     use zkc_runtime::interactive::{PathElement, WorkBudget};
     let carrier = json!([
-        "zkc.program",
+        "zkc.program/2",
         [],
         [],
         [[

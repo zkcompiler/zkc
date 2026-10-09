@@ -143,7 +143,7 @@ impl Invocation<'_> {
     pub fn domain_bytes(&self) -> Vec<u8> {
         let binding = self.binding.declaration();
         serde_json::to_vec(&serde_json::json!([
-            "zkc.local-domain",
+            "zkc.local-domain/3",
             self.frame.origin.json(),
             self.frame.role,
             match &self.frame.kind {
@@ -331,7 +331,7 @@ mod domain_tests {
             max_output_bytes: 1,
         }
         .domain_bytes();
-        let expected = br#"["zkc.local-domain",["zkc.origin","s","main","root",[]],"P","round",["Add",[["F","bls12-381.fr"]]],"op",["field.add",["bls12-381.fr"]],[]]"#;
+        let expected = br#"["zkc.local-domain/3",["zkc.origin/2","s","main","root",[]],"P","round",["Add",[["F","bls12-381.fr"]]],"op",["field.add",["bls12-381.fr"]],[]]"#;
         assert_eq!(bytes, expected);
     }
 }

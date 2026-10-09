@@ -1,6 +1,6 @@
 # Native interpreter
 
-`admit_supplied` accepts exactly `zkc.program`. It validates all retained
+`admit_supplied` accepts exactly `zkc.program/2`. It validates all retained
 functions, participant bodies, entries and operation declarations before asking
 the backend to confirm installed signatures. `Admitted` retains the exact bytes
 and immutable typed model. Artifact text cannot install backend code.

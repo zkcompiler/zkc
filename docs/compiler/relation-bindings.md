@@ -89,7 +89,7 @@ deployment and its embedded program.
 
 ## Limits and next work
 
-- These two clients use BLS12-381 Fr and `zkc.native-proof-policy`. The
+- These two clients use BLS12-381 Fr and `zkc.native-proof-policy/5`. The
   [composition clients](mathematical-composition.md) execute BN254 matrix inputs
   and KoalaBear trace inputs under the same relation-binding contract. Each
   complete type still requires an installed codec.

@@ -50,7 +50,14 @@ fn inputs(envelope: &Json, values: &[Value], producing: bool) -> Json {
         .iter()
         .map(|p| json!([p[0], "16"]))
         .collect();
-    json!(["zkc.native-proof-inputs", public, data, "", services, "32"])
+    json!([
+        "zkc.native-proof-inputs/1",
+        public,
+        data,
+        "",
+        services,
+        "32"
+    ])
 }
 fn run(
     deployment: &NativeDeployment,

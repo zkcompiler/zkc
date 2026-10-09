@@ -130,7 +130,7 @@ pub fn run_outputs(
         }
     }
     encode(Document {
-        format: "zkc.entry-outputs",
+        format: "zkc.entry-outputs/1",
         roles: Roles {
             values,
             backend: &backend,
@@ -150,7 +150,7 @@ pub fn proof_outputs(
     }
     let backend = backend(capacity, setups)?;
     encode(Document {
-        format: "zkc.entry-outputs",
+        format: "zkc.entry-outputs/1",
         values: Named {
             values,
             backend: &backend,
@@ -351,7 +351,7 @@ mod tests {
         )
         .unwrap();
         let values: serde_json::Value = serde_json::from_slice(&outputs).unwrap();
-        let request = serde_json::json!({"format":"zkc.entry-run", "session":"nested", "roles":{"P":{"inputs":values["values"]}}}).to_string();
+        let request = serde_json::json!({"format":"zkc.entry-run/1", "session":"nested", "roles":{"P":{"inputs":values["values"]}}}).to_string();
         assert!(crate::host::document::read(request.as_bytes(), MAX_REQUEST_BYTES).is_ok());
     }
     #[test]

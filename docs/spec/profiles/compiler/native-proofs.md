@@ -9,9 +9,9 @@ proof; it does not require the producer, its witness, or its live resources.
 [native proof compilation](../../../compiler/native-proofs.md) records the
 implementation and executable examples. Policy, deployment, descriptor,
 construction map and binding each have one current schema; occurrences use
-`zkc.native-origin`.
+`zkc.native-origin/2`.
 Flat programs, loops, PCS and structured messages share this contract and
-`zkc.program`. Unknown tags and malformed records refuse independently.
+`zkc.program/2`. Unknown tags and malformed records refuse independently.
 
 ## Program, construction and deployment
 
@@ -470,7 +470,7 @@ The native host accepts this application-owned record alongside a pinned native
 deployment. It is not supplied by a candidate proof or inferred from its header:
 
 ```text
-["zkc.native-attempt-policy", completion_original_result,
+["zkc.native-attempt-policy/2", completion_original_result,
  [[rng_original_input, rng_original_result], ...],
  [attempt_limit, proof_byte_limit],
  [instruction_limit, iteration_limit],
@@ -546,7 +546,7 @@ or a Fiat–Shamir security theorem.
 An indexed native kernel carries the bounded static template:
 
 ```text
-["zkc.native-origin-template", entry, [step, ...], [], event]
+["zkc.native-origin-template/1", entry, [step, ...], [], event]
 event = ["query", protocol, site, service_port, service_contract, method, owner]
       | ["message", protocol, site, schema, sender, receiver]
 step = ["apply", original_caller_protocol, original_apply_site]
@@ -575,7 +575,7 @@ actual induction values of the enclosing repeats, outermost first, with one
 entry per `repeat` step. The final absorbed bytes encode:
 
 ```text
-["zkc.native-origin", entry, [step, ...], [iteration_decimal, ...], event]
+["zkc.native-origin/2", entry, [step, ...], [iteration_decimal, ...], event]
 ```
 
 Each iteration is a canonical unsigned 64-bit decimal string. The vector has
@@ -644,7 +644,7 @@ meaning. The joint driver continues to use its separate count-agreement policy.
 The compiler's policy is an exact array (JSON spelling carries no identity):
 
 ```text
-["zkc.native-proof-policy", entry, producer, validator, acceptance,
+["zkc.native-proof-policy/5", entry, producer, validator, acceptance,
  suite, service, public_inputs, [[query_site, delivery_site], ...]]
 ```
 
@@ -661,7 +661,7 @@ this policy.
 The immutable compiler descriptor is:
 
 ```text
-["zkc.native-proof-descriptor", policy, "zkc.native-origin",
+["zkc.native-proof-descriptor/5", policy, "zkc.native-origin/2",
  [[event_kind, origin_hex], ...],
  [[validator, original_port, logical_type, codec], ...],
  [[message_origin_hex, logical_type, codec], ...]]
@@ -675,7 +675,7 @@ the bounded logical tree encoding when hashing or constructing an invocation
 root.
 
 A constructed projection interface adds a `construction` dictionary with
-`format = "zkc.native-construction"`, the logical `transcript` type,
+`format = "zkc.native-construction/5"`, the logical `transcript` type,
 `removed_services` (the original service index), and a complete actual `actions`
 map. All original interface fields, port lists and action records remain
 unchanged. Each participant appends exactly one transcript input and result;
@@ -695,7 +695,7 @@ definitions and metadata, ignoring locations.
 The owned `compileNativeProof` API and `protocol-proof` command return:
 
 ```text
-["zkc.native-proof", source_sha256,
+["zkc.native-proof/5", source_sha256,
  descriptor, descriptor_sha256,
  candidate_json, candidate_sha256,
  [[role, participant_symbol,
@@ -749,7 +749,7 @@ budgets apply before the corresponding allocation or work.
 A role invocation is:
 
 ```text
-["zkc.native-proof-inputs",
+["zkc.native-proof-inputs/1",
  [[validator, original_port, canonical_wire_hex], ...],
  [[original_port, [input_kind, value]], ...],
  context_hex,
@@ -775,7 +775,7 @@ Budgets are explicit application caps and may be lower than the required work.
 The exact invocation root tree is:
 
 ```text
-["zkc.native-proof-binding", "sha256", "zkc.native-origin", source_sha256,
+["zkc.native-proof-binding/5", "sha256", "zkc.native-origin/2", source_sha256,
  entry, producer, validator, descriptor,
  [[validator, original_port, logical_type, canonical_wire_hex], ...],
  context_hex]
@@ -827,7 +827,7 @@ needs the explicit PCS check below.
 The [setup registry contract](structured-proof-messages.md#application-authorized-setups)
 defines exact public-key and input-port authorization, including multiple setups.
 The installed PCS is `multilinear.kzg.bls12-381/1`. A verifier key is immutable
-host input data with descriptor codec `zkc.native-verifier-key` and canonical
+host input data with descriptor codec `zkc.native-verifier-key/1` and canonical
 `ZKCAR006` bytes; keys and opening states never cross the proof wire.
 
 A role input `[original_port, ["verifier_key", public_port]]` selects its

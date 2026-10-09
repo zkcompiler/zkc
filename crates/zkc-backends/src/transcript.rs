@@ -26,11 +26,11 @@ impl Transcript {
             Identity::Merlin3Fr64Be
             | Identity::Merlin3Ristretto64Le
             | Identity::Merlin3KoalaBearExt8 => {
-                Self::Merlin(merlin::Transcript::new(b"zkc.artifact"))
+                Self::Merlin(merlin::Transcript::new(b"zkc.artifact/1"))
             }
             Identity::Spongefish074KeccakFr64Be => {
                 let mut sponge = Keccak::default();
-                frame(&mut sponge, 0, b"domain", b"zkc.artifact");
+                frame(&mut sponge, 0, b"domain", b"zkc.artifact/1");
                 frame(&mut sponge, 0, b"suite", suite.name().as_bytes());
                 Self::Spongefish(sponge)
             }

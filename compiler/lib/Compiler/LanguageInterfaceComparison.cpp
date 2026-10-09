@@ -413,7 +413,7 @@ class Comparison {
     if (definition.kind == K::Formula)
       return (actual.formula && !actual.asset &&
               *actual.formula == formulaSymbol(decl) &&
-              actual.externalKind == "zkc.language.formula" &&
+              actual.externalKind == "zkc.language.formula/1" &&
               actual.key == decl.symbol) ||
              fail("source predicate binding differs");
     if (definition.kind == K::Opaque)
@@ -427,8 +427,8 @@ class Comparison {
             actual.asset->identity() == asset.identity() &&
             actual.key == asset.identity() && actual.revision == "1" &&
             actual.externalKind == (definition.kind == K::R1CS
-                                        ? "zkc.relation.r1cs"
-                                        : "zkc.relation.air")) ||
+                                        ? "zkc.relation.r1cs/1"
+                                        : "zkc.relation.air/1")) ||
            fail("source captured relation identity differs");
   }
 

@@ -51,7 +51,7 @@ impl AttemptPolicy {
     pub fn parse(bytes: &[u8]) -> Result<Self> {
         let value = super::parse(bytes, 64 * 1024)?;
         let row = array(&value, 6)?;
-        if text(&row[0])? != "zkc.native-attempt-policy" {
+        if text(&row[0])? != "zkc.native-attempt-policy/2" {
             return Err("native-attempt-policy".into());
         }
         let limits = array(&row[3], 2)?;
@@ -94,7 +94,7 @@ impl AttemptPolicy {
             .map(|(i, o)| json!([i.to_string(), o.to_string()]))
             .collect();
         let record = json!([
-            "zkc.native-attempt-policy",
+            "zkc.native-attempt-policy/2",
             self.completion.to_string(),
             pairs,
             [
@@ -525,7 +525,7 @@ mod tests {
     use super::*;
     #[test]
     fn attempt_policy_ingress_is_bounded_and_canonical() {
-        let valid = br#"["zkc.native-attempt-policy","1",[["2","2"]],["4","1024"],["100","10"],["4096","8192"]]"#;
+        let valid = br#"["zkc.native-attempt-policy/2","1",[["2","2"]],["4","1024"],["100","10"],["4096","8192"]]"#;
         let p = AttemptPolicy::parse(valid).unwrap();
         assert_eq!(p.rng, [(2, 2)]);
         assert_eq!(p.identity(), hash(valid));
@@ -541,9 +541,10 @@ mod tests {
             )
             .is_err()
         );
-        let unknown_format = String::from_utf8(valid.to_vec())
-            .unwrap()
-            .replace("zkc.native-attempt-policy", "invalid.native-attempt-policy");
+        let unknown_format = String::from_utf8(valid.to_vec()).unwrap().replace(
+            "zkc.native-attempt-policy/2",
+            "invalid.native-attempt-policy",
+        );
         assert_eq!(
             AttemptPolicy::parse(unknown_format.as_bytes()).unwrap_err(),
             "native-attempt-policy"

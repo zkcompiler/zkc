@@ -24,7 +24,7 @@ def project(text, name):
 
 with case("queries survive optimization and split calculation segments"):
     carrier, logical = project(source, "services")
-    assert carrier[0] == "zkc.program"
+    assert carrier[0] == "zkc.program/2"
     alice = next(p for p in carrier[3] if p[3] == "Alice")
     assert alice[7] == [["service_0", "random.bls12-381.fr/1", "0"], ["service_3", "random.bls12-381.fr/1", "3"]]
     assert len(alice[4]) == 2

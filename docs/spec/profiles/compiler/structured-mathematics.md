@@ -157,7 +157,7 @@ The optional checker recognizes the closed polynomial family
 
 ```json
 {
-  "format": "zkc.polynomial-requirements",
+  "format": "zkc.polynomial-requirements/1",
   "requirements": [{
     "id": "public-sumcheck",
     "family": "boolean-sum-to-point/1",
@@ -239,8 +239,8 @@ physical selection. Missing or empty requirements cannot select unchecked mode.
 The selected entry must belong to a checked reduction/terminal pair or its
 [checked static composition](protocol-composition.md#checked-reduction-and-terminal-application).
 
-The wrapper `zkc.checked-run` contains the exact ordinary
-`zkc.run` bundle JSON as a string plus `correspondence` and `public_coin`
+The wrapper `zkc.checked-run/1` contains the exact ordinary
+`zkc.run/1` bundle JSON as a string plus `correspondence` and `public_coin`
 reports. An unrequested report is null. The correspondence
 report binds the exact selected bundle bytes, both companion bundle byte
 digests, source/requirements, selected entry and post-check passes.

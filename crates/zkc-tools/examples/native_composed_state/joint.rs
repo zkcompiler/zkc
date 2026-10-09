@@ -65,7 +65,7 @@ impl Hooks<NativeBackend> for Audit {
 pub fn run(directory: &Path, family: &str, mode: &str) {
     let bytes = std::fs::read(directory.join(format!("{family}_{mode}.bundle"))).unwrap();
     let raw: Json = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(raw["format"], "zkc.run");
+    assert_eq!(raw["format"], "zkc.run/1");
     let b = Bundle::admit(&bytes, &backend("P", family), BundleLimits::default()).unwrap();
     for format in ["invalid.run", ""] {
         let mut bad = raw.clone();

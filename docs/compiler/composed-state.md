@@ -107,13 +107,13 @@ challenge. No test replaces the hash output of either installed Fiat-Shamir suit
 These clients use three admission rules:
 
 1. Source-size validation recognizes runtime-count loops in the single
-   `zkc.program` executable contract.
+   `zkc.program/2` executable contract.
 2. Interactive bundles need an exact carrier match for structured messages.
-   `zkc.run` embeds `zkc.program`, uses the existing compact
+   `zkc.run/1` embeds `zkc.program/2`, uses the existing compact
    schedule validation, and admits the installed variable-size native codecs.
    Fixed-width codecs still require their exact encoded width; all messages
    retain per-message and cumulative byte limits and receiver-side decoding.
-   Only the exact `zkc.run` and embedded `zkc.program` tags are admitted.
+   Only the exact `zkc.run/1` and embedded `zkc.program/2` tags are admitted.
 
 3. Native random-service queries in loop frames use the same program contract,
    retaining the entry/loop frame, service-port and method checks.

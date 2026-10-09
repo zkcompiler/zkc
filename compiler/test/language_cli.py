@@ -16,7 +16,7 @@ with case('explicit source path retains its original and interface'):
     commands.run([compiler, 'language-check', *options])
     original = commands.run([compiler, 'language-emit', *options])
     interface = json.loads(commands.run([compiler, 'language-interface', *options]))
-    assert interface['format'] == 'zkc.language-interface'
+    assert interface['format'] == 'zkc.language-interface/7'
     assert interface['entry'] == 'transfer::Demo'
     assert interface['protocol'] == 's8_transfer8_Transfer'
     protocol = next(p for p in interface['protocols'] if p['symbol'] == interface['protocol'])
@@ -55,7 +55,7 @@ with case('Entry packages retain exact source, interface and artifact bytes'):
     package_bytes = commands.run([compiler, 'language-package', *options])
     package = json.loads(package_bytes)
     assert set(package) == {'format', 'original', 'interface', 'artifact', 'options'}
-    assert package['format'] == 'zkc.entry'
+    assert package['format'] == 'zkc.entry/1'
     assert package['original'] == commands.run([compiler, 'language-emit', *options])
     assert json.loads(package['interface']) == interface
     assert package['artifact'] == commands.run([compiler, 'language-bundle', *options]).removesuffix('\n')
@@ -264,7 +264,7 @@ for suite, identity in enumerate(('merlin3.bls12-381.fr64be/1',
             for released in (0, 1):
                 flags = ([] if simplified else ['--no-simplify']) + (['--release-storage'] if released else [])
                 deployment = commands.run([compiler, 'language-bundle', *args, *flags])
-                assert json.loads(deployment)[0] == 'zkc.native-proof'
+                assert json.loads(deployment)[0] == 'zkc.native-proof/5'
                 (OUT / f'source-proof-{suite}-{simplified}-{released}.json').write_text(deployment)
                 package = commands.run([compiler, 'language-package', *args, *flags])
                 assert json.loads(package)['artifact'] == deployment.removesuffix('\n')

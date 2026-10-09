@@ -42,7 +42,7 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
     };
     let result_types = if returned.is_empty() { vec![] } else { outputs };
     let mut carrier = json!([
-        "zkc.program",
+        "zkc.program/2",
         [[
             "b",
             binding.contract,
@@ -715,7 +715,7 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
                 // A public wrong-kind wrapper must refuse there without panic.
                 let ty = value.physical_type().spelling();
                 let carrier = serde_json::to_vec(&json!([
-                    "zkc.program",
+                    "zkc.program/2",
                     [],
                     [],
                     [[

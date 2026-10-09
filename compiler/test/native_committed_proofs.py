@@ -26,7 +26,7 @@ for family in ["product", "cubic", "authored", "structured"]:
                 source, policy = OUT / (name + ".mlir"), OUT / (name + ".policy")
                 source.write_text((FIXTURES / (fixture + ".mlir")).read_text())
                 selected = [
-                    "zkc.native-proof-policy",
+                    "zkc.native-proof-policy/5",
                     "main",
                     "P",
                     "V",
@@ -43,8 +43,8 @@ for family in ["product", "cubic", "authored", "structured"]:
                     [compiler, "protocol-proof", source, policy, *options]
                 )
                 envelope = json.loads(result)
-                assert envelope[0] == "zkc.native-proof"
-                assert envelope[2][0] == "zkc.native-proof-descriptor"
+                assert envelope[0] == "zkc.native-proof/5"
+                assert envelope[2][0] == "zkc.native-proof-descriptor/5"
                 (OUT / (name + ".deployment")).write_text(result)
                 manifest.append(dict(name=name, family=family))
 (OUT / "manifest.json").write_text(json.dumps(manifest))
@@ -99,7 +99,7 @@ module { "protocol.module"() ({
  }) {sym_name="main",function_type=(!pk,i1)->i1,roles=["P","V"],input_roles=[["P"],["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 ''')
-    policy.write_text(json.dumps(["zkc.native-proof-policy", "main", "P", "V", "0", "", "", ["1"], []]))
+    policy.write_text(json.dumps(["zkc.native-proof-policy/5", "main", "P", "V", "0", "", "", ["1"], []]))
     commands.run([compiler, "protocol-proof", src, policy], refuses="native-proof-setup-coverage")
 
 with case("source checking retains terminal and construction provenance"):
@@ -108,8 +108,8 @@ with case("source checking retains terminal and construction provenance"):
     candidate = OUT / "constructed.mlir"
     candidate.write_text(original)
     commands.run([compiler, "protocol-check-proof", src, policy, candidate])
-    assert "zkc.native-construction" in original
-    candidate.write_text(original.replace("zkc.native-construction", "invalid.native-construction"))
+    assert "zkc.native-construction/5" in original
+    candidate.write_text(original.replace("zkc.native-construction/5", "invalid.native-construction"))
     commands.run([compiler, "protocol-check-proof", src, policy, candidate], refuses="native-proof-candidate")
     candidate.write_text(original.replace("maximum = 8 : i64", "maximum = 9 : i64"))
     assert candidate.read_text() != original

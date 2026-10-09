@@ -181,7 +181,7 @@ fn joint(bundle: &serde_json::Value, verifier_c: u64) {
         )
     };
     let inputs = json!([
-        "zkc.bundle-inputs",
+        "zkc.bundle-inputs/1",
         "joint-language-test",
         [
             [

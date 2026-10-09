@@ -4,7 +4,7 @@ This profile is the executable output of
 [closed mathematical protocols](mathematical-protocols.md). It uses the local
 control, binding, representation and affine-custody contracts of the existing
 participant machine, together with [service ports](native-services.md).
-The single current format, `zkc.program`, includes Boolean literals,
+The single current format, `zkc.program/2`, includes Boolean literals,
 [structured values and iteration](structured-iteration.md), and
 [structured message admission](structured-proof-messages.md).
 [Joint execution](run.md) supplies a bounded synchronous
@@ -19,7 +19,7 @@ copyable aggregates, empty arrays and dynamic messages share one executable
 contract. Physical selection produces the `physical` profile; no separate
 execution-contract property selects a second interpretation.
 
-The external tag is `zkc.program`, with the five-field root
+The external tag is `zkc.program/2`, with the five-field root
 `[tag, bindings, functions, participants, entries]`. Each participant has exactly
 eight fields:
 
@@ -41,7 +41,7 @@ representations. That internal check is not public serialization admission:
 logical program root. Public checked export runs full MLIR verification, including
 projection metadata and native type policy, before reconstructing the model.
 
-Only the exact `zkc.program` tag and specified record shapes are admitted.
+Only the exact `zkc.program/2` tag and specified record shapes are admitted.
 Unknown tags and wrong record arities refuse independently. See the
 [public interface overview](../../../status.md#current-public-interfaces).
 
@@ -50,7 +50,7 @@ Unknown tags and wrong record arities refuse independently. See the
 Local operation domain bytes are the compact UTF-8 JSON encoding of:
 
 ```text
-["zkc.local-domain", origin, role, local_call_site_or_null,
+["zkc.local-domain/3", origin, role, local_call_site_or_null,
  [logical_definition, logical_arguments], operation_site,
  [operation_contract, operation_arguments], attributes]
 ```

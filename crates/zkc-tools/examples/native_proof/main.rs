@@ -88,7 +88,7 @@ fn inputs(envelope: &Json, case: &Json, producing: bool) -> Json {
         envelope[2][3].as_array().unwrap().len()
     };
     json!([
-        "zkc.native-proof-inputs",
+        "zkc.native-proof-inputs/1",
         public,
         data,
         "",

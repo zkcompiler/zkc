@@ -112,7 +112,7 @@ pub fn transcript_attributes(
     };
     vec![zkc_test_support::hex(
         &zkc_runtime::logical::encode_tree(&json!([
-            "zkc.native-origin-template",
+            "zkc.native-origin-template/1",
             "main",
             [],
             [],
@@ -275,7 +275,7 @@ pub fn participants(mut declarations: Json) -> Result<Vec<u8>, serde_json::Error
         body(&mut p[6]);
     }
     serde_json::to_vec(&json!([
-        "zkc.program",
+        "zkc.program/2",
         bindings.into_values().collect::<Vec<_>>(),
         declarations[0],
         declarations[1],

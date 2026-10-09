@@ -103,7 +103,7 @@ with case("exit operands preserve source correspondence"):
     policy.write_text(
         json.dumps(
             [
-                "zkc.native-proof-policy",
+                "zkc.native-proof-policy/5",
                 "main",
                 "P",
                 "V",

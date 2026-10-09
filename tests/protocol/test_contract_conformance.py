@@ -31,7 +31,7 @@ def inventory(toolchain):
     declarations = json.loads(run([
         toolchain.tool("compiler", "zkc-tblgen"), "--dump-contract-declarations",
         "-I", ROOT / "compiler/include", ROOT / "compiler/include/zkc/Contracts/Declarations.td"]))
-    assert declarations["format"] == "zkc.contract-declarations"
+    assert declarations["format"] == "zkc.contract-declarations/3"
     operation_fields = {"name", "scope", "stage", "commonGeneric", "parameters",
                         "inputs", "outputs", "requirements", "facets"}
     for operation in declarations["operations"]:
@@ -963,7 +963,7 @@ def test_actual_origin_template_admission(drivers, directory):
     def template(kind, *, path=(), port="input_2", entry="main", tail=()):
         event = (["query", "Round", "draw", port, "random.bls12-381.fr/1", "draw", "V"]
                  if kind == "query" else ["message", "Round", "response", "response", "P", "V"])
-        return ["zkc.native-origin-template", entry, list(path), list(tail), event]
+        return ["zkc.native-origin-template/1", entry, list(path), list(tail), event]
 
     query_origin = template("query", path=[["repeat", "main", "rounds"], ["apply", "main", "step"]])
     message_origin = template("message")
@@ -1046,7 +1046,7 @@ def entry_record(child, *, custody=False, permissions=None, name="Record"):
 
 def entry_request(schema, roles, *, setup=False):
     document = {
-        "format": "zkc.language-interface", "capture": "1" * 64,
+        "format": "zkc.language-interface/7", "capture": "1" * 64,
         "original": sha256(b"conformance original").hexdigest(), "toolchain": "conformance",
         "entry": "test::Main", "protocol": "Main", "relations": [], "job": {"kind": "run"},
         "setups": ([{"name": "setup", "inputs": [{"port": 0, "path": []}]}] if setup else []),
@@ -1157,7 +1157,7 @@ def variant_share_witnesses():
         # No production variant builder supplies this independently authored graph.
         nodes = ["zkc.language", "test::Choice", ["0", "1"], "Empty", [], ["3", "4"],
                  "Value", leaf, ["7"], ["6", "8"], ["5", "9"], ["2", "10"]]
-        spelling = "variant:" + json.dumps(["zkc.variant", nodes], separators=(",", ":")).encode().hex()
+        spelling = "variant:" + json.dumps(["zkc.variant/1", nodes], separators=(",", ":")).encode().hex()
         spellings.append(spelling)
         for multi in (False, True):
             permissions = ["Copy", "Drop", "Share"] if multi else ["Copy", "Drop"]

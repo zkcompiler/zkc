@@ -23,9 +23,9 @@ schnorr = schnorr.replace('output_roles=[["Bob"]]', 'output_roles=[["Bob"],["Ali
 fold = (FIXTURES / 'fold-attempt.mlir').read_text()
 for family, source in [('service', schnorr), ('fold', fold)]:
     for i, suite in enumerate(SUITES):
-        policy = (['zkc.native-proof-policy', 'main', 'Alice', 'Bob', '0', suite,
+        policy = (['zkc.native-proof-policy/5', 'main', 'Alice', 'Bob', '0', suite,
                    '4', ['0', '2'], [['draw_challenge', 'challenge']]] if family == 'service' else
-                  ['zkc.native-proof-policy', 'main', 'P', 'V', '0', suite,
+                  ['zkc.native-proof-policy/5', 'main', 'P', 'V', '0', suite,
                    '3', ['0', '1'], [['draw', 'challenge']]])
         for suffix, options in [('', []), ('_plain', ['--no-simplify']),
                                 ('_release', ['--release-storage'])]:
@@ -63,7 +63,7 @@ for fixture in ['attempt-abandonment', 'attempt-abandonment-silent']:
             name = f'{fixture}_{i}{suffix}'
             with case(name):
                 pol = OUT / f'{name}.policy'
-                pol.write_text(json.dumps(['zkc.native-proof-policy', 'main', 'P', 'V', '0', suite,
+                pol.write_text(json.dumps(['zkc.native-proof-policy/5', 'main', 'P', 'V', '0', suite,
                                           '3', ['0', '1'], [['draw', 'challenge']]]))
                 (OUT / f'{name}.deployment').write_text(commands.run([
                     compiler, 'protocol-proof', FIXTURES / f'{fixture}.mlir', pol, *options]))
@@ -89,7 +89,7 @@ for i, suite in enumerate(SUITES):
                                 '%n = "protocol.local_call"(%iszero) {callee=@count,role="P",site="count"} : (i1)->ui64\n'
                                 '   %received_count = protocol.exchange %n {sender="P",receiver="V",site="count_message"} : ui64')
         source = source.replace('"protocol.repeat"(%n,', '"protocol.repeat"(%received_count,')
-        policy = ['zkc.native-proof-policy', 'main', 'P', 'V', '0', suite,
+        policy = ['zkc.native-proof-policy/5', 'main', 'P', 'V', '0', suite,
                   '3', ['0', '1'], [['draw', 'challenge']]]
         src, pol = OUT / f'varying_{i}.mlir', OUT / f'varying_{i}.policy'
         src.write_text(source); pol.write_text(json.dumps(policy))
@@ -104,7 +104,7 @@ with case('wrong same-typed RNG result mapping stays a custody refusal'):
                             '[["P","V"],["P","V"],["P"],["V"],["P"]]')
     source = source.replace('output_roles=[["V"],["P"],["P"]]',
                             'output_roles=[["V"],["P"],["P"],["P"]]')
-    policy = ['zkc.native-proof-policy', 'main', 'P', 'V', '0', SUITES[0],
+    policy = ['zkc.native-proof-policy/5', 'main', 'P', 'V', '0', SUITES[0],
               '3', ['0', '1'], [['draw', 'challenge']]]
     src, pol = OUT / 'swapped.mlir', OUT / 'swapped.policy'
     src.write_text(source); pol.write_text(json.dumps(policy))
@@ -115,7 +115,7 @@ with case('one-shot nonce is not silently reissued by attempts'):
                             '%complete = arith.constant true\n"protocol.return"(%ok,%complete) : (i1,i1)')
     source = source.replace(' -> (i1), roles=', ' -> (i1,i1), roles=')
     source = source.replace('output_roles=[["Bob"]]', 'output_roles=[["Bob"],["Alice"]]')
-    policy = ['zkc.native-proof-policy', 'main', 'Alice', 'Bob', '0', SUITES[0],
+    policy = ['zkc.native-proof-policy/5', 'main', 'Alice', 'Bob', '0', SUITES[0],
               '4', ['0', '2'], [['draw_challenge', 'challenge']]]
     src, pol = OUT / 'nonce.mlir', OUT / 'nonce.policy'
     src.write_text(source); pol.write_text(json.dumps(policy))
@@ -129,7 +129,7 @@ with case('transcript-free header-only proof and deterministic retry boundary'):
       }) {sym_name="main",function_type=(i1)->(i1,i1,i1),roles=["P","V"],input_roles=[["P"]],output_roles=[["V"],["P"],["P"]]} : ()->()
     }) {profile=#protocol.profile<protocol>} : ()->() }
 '''
-    policy = ['zkc.native-proof-policy', 'main', 'P', 'V', '0', '', '', [], []]
+    policy = ['zkc.native-proof-policy/5', 'main', 'P', 'V', '0', '', '', [], []]
     src, pol = OUT / 'empty.mlir', OUT / 'empty.policy'
     src.write_text(source); pol.write_text(json.dumps(policy))
     (OUT / 'empty.deployment').write_text(commands.run([compiler, 'protocol-proof', src, pol]))
@@ -141,7 +141,7 @@ for i, suite in enumerate(SUITES):
         source = source.replace('function_type=(!f,!f,!r,!s)', 'function_type=(!f,!f,!r,!s,!s)')
         source = source.replace('[["P","V"],["P","V"],["P"],["V"]]',
                                 '[["P","V"],["P","V"],["P"],["V"],["P"]]')
-        policy = ['zkc.native-proof-policy', 'main', 'P', 'V', '0', suite,
+        policy = ['zkc.native-proof-policy/5', 'main', 'P', 'V', '0', suite,
                   '3', ['0', '1'], [['draw', 'challenge']]]
         src, pol = OUT / f'mixed_{i}.mlir', OUT / f'mixed_{i}.policy'
         src.write_text(source); pol.write_text(json.dumps(policy))

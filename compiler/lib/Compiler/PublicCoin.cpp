@@ -55,7 +55,7 @@ Expected<Requirement> parseRequirement(StringRef text) {
   if (!o ||
       !keys(*o, {"format", "entry", "prover", "verifier", "service", "decision",
                  "bound_inputs", "draws"}) ||
-      o->getString("format") != "zkc.public-coin-requirement" ||
+      o->getString("format") != "zkc.public-coin-requirement/1" ||
       !name(*o, "entry", r.entry) || !name(*o, "prover", r.prover) ||
       !name(*o, "verifier", r.verifier) || r.prover == r.verifier ||
       !index(*o, "service", r.service) || !index(*o, "decision", r.decision))
@@ -438,7 +438,7 @@ public:
     auto nonStatement = bound;
     nonStatement.reset(statement);
     return json::Object{
-        {"format", "zkc.public-coin-view"},
+        {"format", "zkc.public-coin-view/1"},
         {"entry", r.entry},
         {"prover", r.prover},
         {"verifier", r.verifier},

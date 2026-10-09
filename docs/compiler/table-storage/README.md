@@ -10,4 +10,4 @@ The selected mathematical contracts live in
 [direct logical plans](../../spec/profiles/compiler/direct-plan.md) and
 [complete-result representations](../../spec/realization/representations.md).
 Current execution uses [mathematical MLIR](../protocol-pipeline.md) and
-`zkc.program`.
+`zkc.program/2`.

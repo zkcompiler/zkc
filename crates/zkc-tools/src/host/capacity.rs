@@ -85,7 +85,7 @@ impl NativeCapacity {
     /// semantic binding root; changing a quota cannot change successful values.
     pub fn record(&self) -> Json {
         json!([
-            "zkc.native-capacity",
+            "zkc.native-capacity/2",
             self.elements.to_string(),
             self.groups.to_string(),
             self.wire_bytes.to_string(),
@@ -104,7 +104,7 @@ impl NativeCapacity {
     pub fn parse(bytes: &[u8]) -> Result<Self> {
         let value = parse(bytes, 4096)?;
         let row = array(&value, 7)?;
-        if text(&row[0])? != "zkc.native-capacity" {
+        if text(&row[0])? != "zkc.native-capacity/2" {
             return Err("native-capacity-format".into());
         }
         let size =

@@ -95,7 +95,7 @@ impl HostReport {
     }
     fn json_with_outputs(&self, include_outputs: bool) -> Json {
         let mut diagnostics = self.cleanup_errors.clone();
-        let mut result = json!({"format":"zkc.bundle-result","status":if self.phase=="execution"{"executed"}else{"setup-failed"},"phase":self.phase,"acceptance":null,
+        let mut result = json!({"format":"zkc.bundle-result/1","status":if self.phase=="execution"{"executed"}else{"setup-failed"},"phase":self.phase,"acceptance":null,
             "bundle_sha256":self.identity,"session":self.session,"limits":self.limits,"layout":self.layout,
             "failure":self.failure,"resources":self.resources,"roles":[],"outcome":null,
             "assurance":["authenticated-supplied-schedule","session-freshness-host-obligation","local-only-public-inputs","registry-selected-receive-keys"]});

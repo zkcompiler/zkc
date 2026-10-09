@@ -4,7 +4,7 @@
 candidate checker. It is tooling, outside the reusable `Zkc` library. Lake builds
 it as `interactive-protocol`; the whole-package declaration audit explicitly
 includes its types and bodies. `Zkc` never imports this consumer. Its portable
-records are independent of the current `.zkc`/MLIR/`zkc.program` pipeline.
+records are independent of the current `.zkc`/MLIR/`zkc.program/2` pipeline.
 
 ## Components
 

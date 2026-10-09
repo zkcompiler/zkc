@@ -88,7 +88,7 @@ def check_authored_transcript_commands(toolchain, journal, directory):
     import json
 
     attempt_policy = directory / 'prefix.attempts.json'
-    attempt_policy.write_text(json.dumps(['zkc.native-attempt-policy', '1', [['2', '2']],
+    attempt_policy.write_text(json.dumps(['zkc.native-attempt-policy/2', '1', [['2', '2']],
                                           ['3', '1048576'], ['1000000', '100000'],
                                           ['1048576', '16777216']]))
     prefix_summaries = {}
@@ -199,7 +199,7 @@ def check_native_proof_commands(toolchain, journal, directory):
 
     deployment = directory / 'schnorr_0.deployment'
     unexpected_authority = directory / 'unexpected.setups.json'
-    unexpected_authority.write_text(json.dumps(['zkc.native-setup-authority', [['0', '00' * 32]], []]))
+    unexpected_authority.write_text(json.dumps(['zkc.native-setup-authority/1', [['0', '00' * 32]], []]))
     journal.json([toolchain.runtime, 'verify-bundle', deployment,
                   hashlib.sha256(deployment.read_bytes()).hexdigest(),
                   directory / 'schnorr_0.validator.json', directory / 'schnorr_0.cli.proof',
@@ -277,7 +277,7 @@ def check_native_attempt_commands(toolchain, journal, directory):
             producer = directory / f'{name}.producer.json'
             validator = directory / f'{name}.validator.json'
             proof = directory / f'{name}.cli.proof'
-            policy = ['zkc.native-attempt-policy', '1', [['2', '2']] if family == 'fold' else [],
+            policy = ['zkc.native-attempt-policy/2', '1', [['2', '2']] if family == 'fold' else [],
                       ['4', '16777216'], ['1000000', '100000'], ['67108864', '268435456']]
             policy_path = directory / f'{name}.attempts'
             policy_path.write_text(json.dumps(policy))
@@ -337,7 +337,7 @@ def check_composed_state_commands(toolchain, journal, directory):
             deployment = directory / f'{name}.deployment'
             pin = hashlib.sha256(deployment.read_bytes()).hexdigest()
             proof = directory / f'{name}.cli.proof'
-            policy = ['zkc.native-attempt-policy', '1', [['4', '2']],
+            policy = ['zkc.native-attempt-policy/2', '1', [['4', '2']],
                       ['4', '16777216'], ['1000000', '100000'],
                       ['67108864', '268435456']]
             attempts = directory / f'{name}.attempts'
@@ -429,7 +429,7 @@ def check_composition_commands(toolchain, journal, directory):
     import hashlib
     import json
 
-    capacity = ['zkc.native-capacity', '65536', '8192', '16777216', '67108864',
+    capacity = ['zkc.native-capacity/2', '65536', '8192', '16777216', '67108864',
                 ['1000000', '100000'], ['67108864', '268435456']]
     path = directory / 'capacity.json'
     for name in ['qap-composition', 'air-composition', 'target-accumulation']:
@@ -459,9 +459,9 @@ def check_composition_commands(toolchain, journal, directory):
         assert result['capacity'] == limited
         assert result['stop']['kind'] == 'Limit'
         assert result['stop']['role'] in ('P', 'Prover')
-        assert result['stop']['origin'][0] == 'zkc.origin'
+        assert result['stop']['origin'][0] == 'zkc.origin/2'
         attempt = directory / 'excessive-attempt-policy.json'
-        attempt.write_text(json.dumps(['zkc.native-attempt-policy', '0', [],
+        attempt.write_text(json.dumps(['zkc.native-attempt-policy/2', '0', [],
                                        ['1', '16777216'], capacity[5], capacity[6]]))
         journal.json([toolchain.runtime, 'prove-bundle', *args, producer,
                       proof, *options, option, f'--attempts={attempt}'], refuses='native-attempt-limits')
@@ -500,7 +500,7 @@ def check_bundle_commands(toolchain, journal, directory):
                 data.append([str(i), ty, ['wire', wire]])
             services = [[str(i), service[1], '4'] for i, service in enumerate(role[7])]
             roles.append([role[3], data, services])
-        inputs = ['zkc.bundle-inputs', 'installed-host', roles, []]
+        inputs = ['zkc.bundle-inputs/1', 'installed-host', roles, []]
         if mutate:
             mutate(inputs)
         path = directory / 'bundle.inputs.json'
@@ -508,7 +508,7 @@ def check_bundle_commands(toolchain, journal, directory):
         command = [toolchain.runtime, 'run-bundle', bundle,
                    pin or hashlib.sha256(bundle.read_bytes()).hexdigest(), path, *options]
         result = journal.json(command, **({'refuses': refusal} if refusal else {}))
-        assert result['format'] == 'zkc.bundle-result'
+        assert result['format'] == 'zkc.bundle-result/1'
         assert all(r['active_frames'] == r['live_resource_units'] == 0
                    for r in result.get('roles', []))
         return result
@@ -526,7 +526,7 @@ def check_bundle_commands(toolchain, journal, directory):
     assert result['outcome'] == ['participant-stopped', 1]
     assert [r['state']['transitions'] for r in result['resources']] == [1, 0]
     limits = directory / 'bundle.limits.json'
-    limits.write_text(json.dumps(['zkc.bundle-limits', '0', '4096', '16777216', '16777216']))
+    limits.write_text(json.dumps(['zkc.bundle-limits/1', '0', '4096', '16777216', '16777216']))
     result = invoke('foreign', options=[f'--limits={limits}'], refusal='driver-failed')
     assert result['limits']['execution']['steps'] == 0
     assert [r['state']['transitions'] for r in result['resources']] == [0, 0]
@@ -538,14 +538,14 @@ def check_bundle_commands(toolchain, journal, directory):
     result = invoke('single', pin='00' * 32, refusal='run-Identity')
     assert result['phase'] == 'admission' and result['resources'] == []
     invoke('single', options=['--unknown=unused'], refusal='bundle-option')
-    limits.write_text(json.dumps(['zkc.bundle-limits', '0', '4096', '16777216', '16777217']))
+    limits.write_text(json.dumps(['zkc.bundle-limits/1', '0', '4096', '16777216', '16777217']))
     invoke('single', options=[f'--limits={limits}'], refusal='bundle-limits')
     capacity = directory / 'bundle.capacity.json'
-    capacity.write_text(json.dumps(['zkc.native-capacity', '1048577', '0', '0', '0',
+    capacity.write_text(json.dumps(['zkc.native-capacity/2', '1048577', '0', '0', '0',
                                     ['0', '0'], ['0', '0']]))
     invoke('single', options=[f'--capacity={capacity}'], refusal='native-capacity-limit')
     setups = directory / 'bundle.setups.json'
-    setups.write_text(json.dumps(['zkc.bundle-setups', [], [['Alice', '0', 'missing']]]))
+    setups.write_text(json.dumps(['zkc.bundle-setups/1', [], [['Alice', '0', 'missing']]]))
     invoke('single', options=[f'--setups={setups}'], refusal='bundle-setup-authority')
     # Exact compiler bytes are reusable as the host artifact, without newline repair.
     regenerated = journal.run([toolchain.compiler, 'protocol-bundle', directory / 'foreign.mlir'])

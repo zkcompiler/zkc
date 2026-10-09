@@ -18,7 +18,7 @@ fn native() -> NativeBackend {
 }
 fn program(contract: &str, output: &str) -> Vec<u8> {
     serde_json::to_vec(&json!([
-        "zkc.program",
+        "zkc.program/2",
         [],
         [],
         [[

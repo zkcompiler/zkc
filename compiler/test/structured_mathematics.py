@@ -38,7 +38,7 @@ with case('checked bundles bind original requirements and concrete connector'):
             (OUT / f'{entry}{suffix}.checked.json').write_text(text)
             (OUT / f'{entry}{suffix}.bundle').write_text(result['bundle'])
             report = result['correspondence']
-            assert result['format'] == 'zkc.checked-run'
+            assert result['format'] == 'zkc.checked-run/1'
             assert report['source_sha256'] == hashlib.sha256(source.encode()).hexdigest()
             assert report['requirements_sha256'] == hashlib.sha256(report['requirement_source'].encode()).hexdigest()
             # The digest uses the exact compiler serialization before wrapping.

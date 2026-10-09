@@ -222,7 +222,7 @@ fn inputs(envelope: &Json, values: &[Value], producing: bool) -> Json {
         .map(|p| json!([p[0], ["wire", wire(&p[0])]]))
         .collect::<Vec<_>>();
     let draws = if envelope[2][1][5] == "" { "0" } else { "32" };
-    json!(["zkc.native-proof-inputs", public, ports, "", [], draws])
+    json!(["zkc.native-proof-inputs/1", public, ports, "", [], draws])
 }
 fn execute(
     deployment: &NativeDeployment,

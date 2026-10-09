@@ -685,7 +685,7 @@ impl Backend for NoBackend {
 
 fn carrier(b: &OperationBinding) -> serde_json::Value {
     json!([
-        "zkc.program",
+        "zkc.program/2",
         [["op", b.contract, b.arguments, b.implementation]],
         [],
         [[

@@ -29,7 +29,7 @@ for suffix, options in [("", []), ("_plain", ["--no-simplify"]), ("_release", ["
      "local.condition"(%again,%next#0,%next#1,%state,%width,%choices) : (i1,ui64,i1,!words,ui64,!words)->()''')
         src, pol = OUT / f'{name}.mlir', OUT / f'{name}.policy'
         src.write_text(source)
-        pol.write_text(json.dumps(['zkc.native-proof-policy', 'main', 'P', 'V', '0', '', '', ['0', '1', '2'], []]))
+        pol.write_text(json.dumps(['zkc.native-proof-policy/5', 'main', 'P', 'V', '0', '', '', ['0', '1', '2'], []]))
         (OUT / f'{name}.deployment').write_text(commands.run([compiler, 'protocol-proof', src, pol, *options]))
         manifest.append(dict(name=name, family='openvm', early=True))
 
@@ -63,7 +63,7 @@ with case("conditional loop import and malformed terminators"):
 for family in ("monero", "openvm"):
     source = (fixtures / f"authored-{family}.mlir").read_text()
     policy = OUT / f"{family}.policy"
-    policy.write_text(json.dumps(["zkc.native-proof-policy", "main", "P", "V", "0",
+    policy.write_text(json.dumps(["zkc.native-proof-policy/5", "main", "P", "V", "0",
                                   "", "", ["0", "1", "2"], []]))
     for suffix, options in [("", []), ("_plain", ["--no-simplify"]),
                             ("_release", ["--release-storage"]),
@@ -74,7 +74,7 @@ for family in ("monero", "openvm"):
             src.write_text(source)
             deployment = commands.run([compiler, "protocol-proof", src, policy, *options])
             envelope = json.loads(deployment)
-            assert envelope[0] == "zkc.native-proof"
+            assert envelope[0] == "zkc.native-proof/5"
             assert "external." in envelope[4]
             assert "transcript.native." not in envelope[4]
             assert len(envelope[4]) < 40000
@@ -151,7 +151,7 @@ for suffix, options in [("", []), ("_plain", ["--no-simplify"]), ("_release", ["
    %claim =''').replace('(%ok,%prepared#1,%prepared#2)', '(%ok,%prepared#1,%rng_next)')
         src, pol = OUT / f'{name}.mlir', OUT / f'{name}.policy'
         src.write_text(source)
-        pol.write_text(json.dumps(['zkc.native-proof-policy', 'main', 'P', 'V', '0', '', '', ['0', '1'], []]))
+        pol.write_text(json.dumps(['zkc.native-proof-policy/5', 'main', 'P', 'V', '0', '', '', ['0', '1'], []]))
         (OUT / f'{name}.deployment').write_text(commands.run([compiler, 'protocol-proof', src, pol, *options]))
         manifest.append(dict(name=name, family='prefix', early=True))
 
@@ -160,7 +160,7 @@ for suffix, options in [("", []), ("_plain", ["--no-simplify"]),
     with case(f"retained prefix and guarded suffix{suffix}"):
         name = "prefix" + suffix
         policy = OUT / "prefix.policy"
-        policy.write_text(json.dumps(["zkc.native-proof-policy", "main", "P", "V", "0",
+        policy.write_text(json.dumps(["zkc.native-proof-policy/5", "main", "P", "V", "0",
                                       "", "", ["0", "1"], []]))
         (OUT / f"{name}.deployment").write_text(commands.run([
             compiler, "protocol-proof", fixtures / "authored-prefix.mlir", policy, *options]))

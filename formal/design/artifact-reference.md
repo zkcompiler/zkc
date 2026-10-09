@@ -4,7 +4,7 @@
 construction records defined by [`Tools.Artifact`](../Tools/Artifact/Main.lean).
 It interprets the original generic library or common protocol's validator under
 its selected transcript construction. These records are independent of the
-supported `zkc.program` carrier; this tool is not a native proof Host or a
+supported `zkc.program/2` carrier; this tool is not a native proof Host or a
 validator of the current compiler's output.
 
 ## Module responsibilities

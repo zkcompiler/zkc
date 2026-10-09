@@ -119,7 +119,7 @@ impl Bundle {
     ) -> Result<Self, BundleError> {
         limits.validate()?;
         let raw = super::decode::bundle(bytes, limits)?;
-        if raw.format != "zkc.run" {
+        if raw.format != "zkc.run/1" {
             return Err(BundleError::Format);
         }
         let admitted = admit_supplied(raw.candidate.as_bytes(), backend)

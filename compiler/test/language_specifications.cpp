@@ -158,8 +158,8 @@ int main() {
                 relation.relation->key == "key" &&
                 relation.relation->revision == "revision",
             "opaque predicate acquired a body or different identity");
-    for (StringRef kind :
-         {"", "zkc.language.formula", "zkc.relation.r1cs", "zkc.relation.air"})
+    for (StringRef kind : {"", "zkc.language.formula/1", "zkc.relation.r1cs/1",
+                           "zkc.relation.air/1"})
       refuses(check(("module sample;relation Bad(statement x:bool)=opaque(\"" +
                      kind + "\",\"key\",\"r\");")
                         .str()),

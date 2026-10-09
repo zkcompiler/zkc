@@ -83,7 +83,7 @@ nonzero limit; native transport also enforces the current aggregate data limit.
 
 Generated transcripts use only `transcript.native.indexed.observe.data` and
 `transcript.native.indexed.challenge`. Explicit templates and coordinates encode
-`zkc.native-origin`; executor frame names do not enter these occurrences.
+`zkc.native-origin/2`; executor frame names do not enter these occurrences.
 Generic observations accept the current native message-data grammar, including
 supported cross-domain data. Merlin and Spongefish suites own their exact
 framing and reduction. Authored `external.*` primitives remain separate; see

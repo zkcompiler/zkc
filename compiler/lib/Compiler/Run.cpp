@@ -301,7 +301,7 @@ Expected<std::string> buildRunBundle(ModuleOp prepared, ModuleOp module,
       return error("run-limit");
     roles.push_back(name.str());
   }
-  auto bundle = printJson(json::Object{{"format", "zkc.run"},
+  auto bundle = printJson(json::Object{{"format", "zkc.run/1"},
                                        {"candidate", std::move(encoded)},
                                        {"entry", entry.str()},
                                        {"roles", std::move(roles)},

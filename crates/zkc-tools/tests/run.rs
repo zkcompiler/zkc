@@ -103,7 +103,7 @@ fn carrier() -> Json {
 }
 fn typed_carrier(ty: &str) -> Json {
     json!([
-        "zkc.program",
+        "zkc.program/2",
         [],
         [[
             "function",
@@ -149,7 +149,7 @@ fn raw() -> Json {
     message_bundle(BOOL)
 }
 fn message_bundle(ty: &str) -> Json {
-    json!({"format":"zkc.run", "candidate":typed_carrier(ty).to_string(), "entry":"main", "roles":["Alice","Bob"],
+    json!({"format":"zkc.run/1", "candidate":typed_carrier(ty).to_string(), "entry":"main", "roles":["Alice","Bob"],
         "steps":[step(0,0,Some(0)),step(0,1,Some(0)),step(1,0,Some(0)),step(0,2,None),step(1,1,None)]})
 }
 fn step(role: usize, instruction: usize, anchor: Option<usize>) -> Json {
@@ -384,7 +384,7 @@ fn outer_decoder_checks_duplicates_unknown_missing_and_bounds() {
 #[test]
 fn coherent_cross_role_reordering_remains_supplied_only() {
     let c = json!([
-        "zkc.program",
+        "zkc.program/2",
         [],
         [[
             "function",
@@ -887,13 +887,13 @@ fn loop_bundle() -> Json {
         })
         .collect();
     let candidate = json!([
-        "zkc.program",
+        "zkc.program/2",
         [],
         [],
         participants,
         [["entry", "main", [["Alice", "a"], ["Bob", "b"]]]]
     ]);
-    json!({"format": "zkc.run", "candidate": candidate.to_string(), "entry":"main",
+    json!({"format": "zkc.run/1", "candidate": candidate.to_string(), "entry":"main",
         "roles":["Alice","Bob"], "steps":[
             {"loop":[step(0,0,Some(0)),step(1,0,Some(0))], "body":[],
              "yield":[step(0,1,None),step(1,1,None)]},

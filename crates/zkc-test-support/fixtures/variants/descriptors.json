@@ -3,7 +3,7 @@
     "canonical",
     true,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "X",
         "Some",
@@ -69,7 +69,7 @@
     "forward-reference",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "X",
         "Some",
@@ -102,7 +102,7 @@
     "leading-zero",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "X",
         "Some",
@@ -135,7 +135,7 @@
     "negative-reference",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "X",
         "Some",
@@ -168,7 +168,7 @@
     "missing-reference",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "X",
         "Some",
@@ -201,7 +201,7 @@
     "self-reference",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "X",
         "Some",
@@ -234,7 +234,7 @@
     "duplicate-root",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "X",
         "Some",
@@ -271,7 +271,7 @@
     "unused-entry",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "X",
         "Some",
@@ -305,7 +305,7 @@
     "number-node",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         42,
         "Some",
@@ -338,7 +338,7 @@
     "object-node",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         {},
         "Some",
@@ -371,7 +371,7 @@
     "empty-nominal",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "",
         "Some",
@@ -404,7 +404,7 @@
     "non-ascii",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "é",
         "Some",
@@ -437,7 +437,7 @@
     "physical-payload",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "X",
         "Some",
@@ -470,7 +470,7 @@
     "noncanonical-leaf",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "X",
         "Some",
@@ -503,7 +503,7 @@
     "unknown-leaf",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "X",
         "Some",
@@ -536,7 +536,7 @@
     "exponential-expansion",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         [],
         [
@@ -642,7 +642,7 @@
     "expanded-depth",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "X",
         [
@@ -847,7 +847,7 @@
     "alternate-order",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "Some",
         "X",
@@ -880,7 +880,7 @@
     "expansion-ratio",
     false,
     [
-      "zkc.variant",
+      "zkc.variant/1",
       [
         "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
         [

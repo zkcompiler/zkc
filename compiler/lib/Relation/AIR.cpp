@@ -266,7 +266,7 @@ json::Value AIR::encode() const {
       entry["declared_degree"] = *c.declaredDegree;
     constraints.push_back(std::move(entry));
   }
-  return json::Object{{"schema", "zkc.air"},
+  return json::Object{{"schema", "zkc.air.v1"},
                       {"field", fieldName},
                       {"columns", columnCount},
                       {"public_inputs", publicCount},
@@ -297,7 +297,7 @@ json::Value AIR::analysis() const {
     maxDegree = std::max(maxDegree, fact.degree);
     maxOffset = std::max(maxOffset, fact.maxOffset);
   }
-  return json::Object{{"schema", "zkc.air.analysis"},
+  return json::Object{{"schema", "zkc.air.analysis.v1"},
                       {"field", fieldName},
                       {"columns", columnCount},
                       {"public_inputs", publicCount},
@@ -388,7 +388,7 @@ json::Value AIRPlan::encode() const {
                                        {"read_slots", std::move(slots)}});
   }
   return json::Object{
-      {"schema", "zkc.air.plan"},
+      {"schema", "zkc.air.plan.v1"},
       {"height", height},
       {"analysis", relation.analysis()},
       {"dense_trace_cells", uint64_t(height) * relation.columns()},
@@ -622,7 +622,7 @@ Expected<AIR> readAIR(const json::Value &value) {
   if (!o ||
       !keys(*o,
             {"schema", "field", "columns", "public_inputs", "constraints"}) ||
-      o->getString("schema") != "zkc.air")
+      o->getString("schema") != "zkc.air.v1")
     return zkc::error("air-json-shape");
   auto field = o->getString("field");
   if (!field || Field::primeModulus(*field).empty())

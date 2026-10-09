@@ -12,27 +12,27 @@ const FIELDS: [(&str, &str, &str); 5] = [
     (
         "bls12-381.fr",
         "arkworks",
-        "1169612817a1c82ae6c06ddbfeeb566dfbc5b196c0346c393757c847e9ae0cd1",
+        "b705fd8553a70057dbc07b5591e77dc7328c830cb00ac1de439729e45a829c4a",
     ),
     (
         "ristretto255.scalar",
         "dalek",
-        "3e4672f3610d53c73ada5874eb805910b44b0f3f2b8040657745677275d5ea42",
+        "8ee4645c3fbe10d61447c9b316f45106e83bab4b3541f34706c6af82309da697",
     ),
     (
         "koala-bear",
         "plonky3",
-        "79e83ccdb342c6060a59eee2ae15ed0064845f00b98cb88c450e484544df47bb",
+        "ca6ac1dbd3527b0815a4cb6fc29d0d2c4f2bcfbf9232924362a6c8cbbffda611",
     ),
     (
         "koala-bear.ext8-binomial3",
         "plonky3",
-        "4fd54083f8b0c1921b6168f038f13b34cd889c90216c38868d46b87389284005",
+        "3c3b88a95c23915d5f6b5e09d0aec4a39931171cf54c2b20f42490e0f30fdea4",
     ),
     (
         "bn254.fr",
         "arkworks",
-        "af9c3dfc732282de03959548c9d9c0becad1f196f81991c5433afaceb8a1b3e5",
+        "1bf0ad4a12f8657d39a40e8407721fce89901fb19013004be47d66b49fecdaa4",
     ),
 ];
 fn binding(d: usize) -> OperationBinding {
@@ -75,7 +75,7 @@ fn digest(field: &str, rows: usize, columns: usize, entries: &[(u32, u32, String
         .map(|(r, c, a)| json!([r.to_string(), c.to_string(), a]))
         .collect::<Vec<_>>();
     let bytes = serde_json::to_vec(&json!([
-        "zkc.matrix",
+        "zkc.matrix/1",
         field,
         [rows.to_string(), columns.to_string(), entries]
     ]))

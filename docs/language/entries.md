@@ -47,7 +47,7 @@ A run request names every participant, including those with no inputs:
 
 ```json
 {
-  "format": "zkc.entry-run",
+  "format": "zkc.entry-run/1",
   "session": "example_run",
   "roles": {
     "P": {"inputs": {"done": true}},
@@ -61,7 +61,7 @@ invoked participant's private inputs:
 
 ```json
 {
-  "format": "zkc.entry-proof",
+  "format": "zkc.entry-proof/1",
   "public": {},
   "inputs": {"done": true},
   "context": ""
@@ -124,7 +124,7 @@ global peak-memory or elapsed-time bound.
 Use `--setups=authority.json` with independent expected key identities:
 
 ```json
-{"format":"zkc.entry-setups","keys":{"main":"EXPECTED_KEY_ID_HEX"}}
+{"format":"zkc.entry-setups/1","keys":{"main":"EXPECTED_KEY_ID_HEX"}}
 ```
 
 The request's optional `"setups"` object maps the same slot names to canonical
@@ -148,7 +148,7 @@ and proof payloads. Exit status is zero only when the requested operation finish
 
 Use `--results=FILE` to publish returned logical values. Run files contain a
 `roles` map; proof files contain `values` for the invoked participant. Both use
-`zkc.entry-outputs`. Encoding honors admitted native capacity and a 16 MiB whole
+`zkc.entry-outputs/1`. Encoding honors admitted native capacity and a 16 MiB whole
 file limit. Non-Wire private results cannot be serialized.
 
 All configured input and authority paths name bounded regular files. Symlink

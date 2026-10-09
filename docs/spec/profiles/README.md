@@ -57,7 +57,7 @@ These profiles describe independently formalized programs, analyses, protocols
 and experiments. Their model-specific formats and executable references are not
 additional native compiler or runtime paths. Correspondence applies to the exact
 Lean subjects and premises named by each page; it does not validate `.zkc` or
-`zkc.program`.
+`zkc.program/2`.
 
 | Group | Profile | Selected scope |
 |---|---|---|

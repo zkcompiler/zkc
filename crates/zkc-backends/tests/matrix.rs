@@ -569,7 +569,7 @@ fn matrix_transcript_codec_binds_canonical_bytes_and_refuses_cross_suite_payload
                 &outputs,
                 &["c".into(), "t2".into()],
             );
-            let mut direct = merlin::Transcript::new(b"zkc.artifact");
+            let mut direct = merlin::Transcript::new(b"zkc.artifact/1");
             direct.append_message(b"binding", &root);
             direct.append_message(
                 b"origin",

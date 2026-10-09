@@ -105,7 +105,7 @@ fn inputs(envelope: &Json, family: &str, n: u64, producing: bool) -> Json {
         .map(|p| json!([p[0], "1000"]))
         .collect();
     json!([
-        "zkc.native-proof-inputs",
+        "zkc.native-proof-inputs/1",
         public,
         data,
         "",

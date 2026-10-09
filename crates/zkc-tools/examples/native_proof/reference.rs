@@ -58,14 +58,14 @@ pub fn verify(case: &Json, envelope: &Json, input: &Json, proof: &[u8], nonce: O
             })
             .collect::<Vec<_>>();
         let template = tree(&json!([
-            "zkc.native-origin-template",
+            "zkc.native-origin-template/1",
             entry,
             path,
             [],
             event
         ]));
         assert_eq!(envelope[2][3][event_index], json!([kind, hex(&template)]));
-        let origin = tree(&json!(["zkc.native-origin", entry, path, [], event]));
+        let origin = tree(&json!(["zkc.native-origin/2", entry, path, [], event]));
         event_index += 1;
         origin
     };

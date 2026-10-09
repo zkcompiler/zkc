@@ -78,7 +78,7 @@ pub fn run(command: &str, args: &[String]) -> Json {
     if command == "compile" {
         return compile(args);
     }
-    let mut report = json!({"format":"zkc.entry-result","status":"refused","phase":"arguments"});
+    let mut report = json!({"format":"zkc.entry-result/1","status":"refused","phase":"arguments"});
     let result = (|| -> Result<()> {
         let [path, expected, inputs, rest @ ..] = args else {
             return Err("entry-usage".into());
@@ -311,7 +311,7 @@ fn protect_materials<'a>(
     Ok(())
 }
 fn compile(args: &[String]) -> Json {
-    let mut report = json!({"format":"zkc.entry-build","status":"refused","phase":"arguments"});
+    let mut report = json!({"format":"zkc.entry-build/1","status":"refused","phase":"arguments"});
     let result = (|| -> Result<()> {
         let mut compiler = "zkc-compile";
         let mut output = None;

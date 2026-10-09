@@ -1,7 +1,7 @@
 # Compiler reference
 
 The compiler takes checked `.zkc` source or direct mathematical MLIR through
-`protocol → participant → exec → physical`, then exports `zkc.program`.
+`protocol → participant → exec → physical`, then exports `zkc.program/2`.
 Start with the [pipeline](protocol-pipeline.md); the [implementation design](design.md)
 assigns its internal responsibilities.
 

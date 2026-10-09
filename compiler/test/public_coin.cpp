@@ -23,7 +23,7 @@ constexpr StringLiteral fixture = R"(module { "protocol.module"() ({
 {sym_name="main",function_type=(!protocol.service_ref<"random.bls12-381.fr/1">)->i1,roles=["P","V"],input_roles=[["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() })";
 constexpr StringLiteral requirement =
-    R"({"format":"zkc.public-coin-requirement","entry":"main","prover":"P","verifier":"V","service":0,"decision":0,"bound_inputs":[],"draws":[{"query_site":"draw","delivery_site":"coin"}]})";
+    R"({"format":"zkc.public-coin-requirement/1","entry":"main","prover":"P","verifier":"V","service":0,"decision":0,"bound_inputs":[],"draws":[{"query_site":"draw","delivery_site":"coin"}]})";
 constexpr StringLiteral helperPrograms = R"mlir(module { "protocol.module"() ({
   func.func private @conjoin(%x: i1, %y: i1) -> i1 {
     %both = arith.andi %x, %y : i1

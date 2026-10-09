@@ -53,7 +53,7 @@ def test_linear_contractions(toolchain, directory, journal, family, linear):
 
     candidate, program = export(
         "selected", f"--zkc-participant-pipeline=linear-contractions={str(linear).lower()}")
-    assert program[0] == "zkc.program"
+    assert program[0] == "zkc.program/2"
     bindings = {binding[0]: binding for binding in program[1]}
     assert len(program[3]) == 1
     participant = program[3][0]

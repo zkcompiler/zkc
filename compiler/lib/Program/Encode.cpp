@@ -141,7 +141,7 @@ public:
     auto entries = list(m.entries, [&](const ParticipantEntry &e) -> V {
       return A{"entry", e.name, pairs(e.participants)};
     });
-    return A{"zkc.program", environment(m),
+    return A{"zkc.program/2", environment(m),
              list(m.functions, [&](const auto &f) { return function(f); }),
              std::move(participants), std::move(entries)};
   }

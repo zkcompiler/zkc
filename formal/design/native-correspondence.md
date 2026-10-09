@@ -83,7 +83,7 @@ concrete native subject and an explicit semantic connection. Independent formal
 formats and checks retain their own interpretations and proof boundaries.
 
 For a future connection, drive actual `.zkc`/MLIR compilation and execute the
-emitted `zkc.program` with the common Rust Runner. Relate that execution to an
+emitted `zkc.program/2` with the common Rust Runner. Relate that execution to an
 independent source or target interpretation with stated adequacy. Merely running
 two interpreters on the same wrongly exported object would miss a shared export
 defect.
@@ -116,7 +116,7 @@ failure branch. The arithmetic primitive inside the call may initially remain
 contracted/trusted. Test the wrapper that zkc actually adds, where a mistake
 would invalidate otherwise correct backend mathematics.
 
-The native runtime executes `zkc.program` through the common Runner and
+The native runtime executes `zkc.program/2` through the common Runner and
 Entry/proof/run Hosts. An instruction can invoke a kernel, batch or module action;
 a mandatory dispatch for every field multiplication would unnecessarily constrain performance.
 The interpreter is an execution engine, not an independent Rust authority for

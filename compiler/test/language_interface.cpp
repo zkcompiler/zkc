@@ -56,7 +56,7 @@ json::Value document() {
   // Hand-authored interface and IR: no source checker, layout builder or
   // emitter.
   json::Object root{
-      {"format", "zkc.language-interface"},
+      {"format", "zkc.language-interface/7"},
       {"setups", json::Array{}},
       {"capture", std::string(64, '0')},
       {"original", toHex(SHA256::hash(arrayRefFromStringRef(original)), true)},

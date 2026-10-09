@@ -78,7 +78,14 @@ fn inputs(envelope: &Json, producing: bool, n: u64, a: &[Scalar], g: &[GroupPoin
         .iter()
         .map(|p| json!([p[0], "64"]))
         .collect();
-    json!(["zkc.native-proof-inputs", public, data, "", services, "256"])
+    json!([
+        "zkc.native-proof-inputs/1",
+        public,
+        data,
+        "",
+        services,
+        "256"
+    ])
 }
 fn policy() -> AttemptPolicy {
     AttemptPolicy {

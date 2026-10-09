@@ -107,9 +107,9 @@ pub fn native_origin(kind: &str, site: &str, template: bool) -> Vec<u8> {
     };
     tree(&json!([
         if template {
-            "zkc.native-origin-template"
+            "zkc.native-origin-template/1"
         } else {
-            "zkc.native-origin"
+            "zkc.native-origin/2"
         },
         "main",
         [],
@@ -179,7 +179,7 @@ pub fn program(
     }
     body.push(json!(["return", returns]));
     serde_json::to_vec(&json!([
-        "zkc.program",
+        "zkc.program/2",
         rows,
         [[
             "function",

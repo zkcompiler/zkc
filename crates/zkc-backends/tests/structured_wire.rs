@@ -521,7 +521,7 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
         ]);
         let origin = zkc_test_support::hex(
             &encoding::encode_tree(&json!([
-                "zkc.native-origin-template",
+                "zkc.native-origin-template/1",
                 "main",
                 [],
                 [],
@@ -530,7 +530,7 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
             .unwrap(),
         );
         let program = json!([
-            "zkc.program",
+            "zkc.program/2",
             [[
                 "observe",
                 "transcript.native.indexed.observe.data",

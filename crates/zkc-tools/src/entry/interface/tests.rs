@@ -15,7 +15,7 @@ fn selector(direction: &str, port: u32, role: &str) -> Value {
 }
 fn document() -> Value {
     let boolean = schema("boolean", "bool", json!(["bool"]));
-    json!({"format":"zkc.language-interface","setups":[],"capture":digest("capture"),"original":digest("original"),
+    json!({"format":"zkc.language-interface/7","setups":[],"capture":digest("capture"),"original":digest("original"),
         "toolchain":"test-toolchain","entry":"sample::Proof","protocol":"sample_Protocol",
         "protocols":[{"symbol":"sample_Protocol","roles":["P","V"],
             "inputs":[port("statement",0,json!([0]),json!(["P","V"]),boolean.clone()),
@@ -31,7 +31,7 @@ fn document() -> Value {
             "acceptance":selector("output",0,"V"),"completion":null,"target":"knowledge","construction":{"kind":"authored"}}})
 }
 fn read_text(interface: &str) -> Result<Interface> {
-    let frame = json!({"format":"zkc.entry","original":"original","interface":interface,
+    let frame = json!({"format":"zkc.entry/1","original":"original","interface":interface,
         "artifact":"not interpreted by the metadata reader", "options":{"simplify":true,"release_storage":false}}).to_string();
     let package = Package::capture(
         frame.as_bytes(),
@@ -187,7 +187,7 @@ fn exact_objects_reject_extra_duplicate_missing_fields_and_unknown_formats() {
             "\"kind\":\"authored\",\"kind\":\"authored\"",
         ),
         s.clone() + "{}",
-        s.replace("zkc.language-interface", "invalid.language-interface"),
+        s.replace("zkc.language-interface/7", "invalid.language-interface"),
     ] {
         assert_eq!(read_text(&bad).unwrap_err(), InterfaceError::Format);
     }

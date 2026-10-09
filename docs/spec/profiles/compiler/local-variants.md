@@ -47,7 +47,7 @@ and its body-dependent evidence remain the owner of that stronger guarantee.
 ## Portable representation
 
 Logical type spelling is `variant:H`, where `H` is lowercase hexadecimal of
-compact UTF-8 JSON `["zkc.variant", nodes]`. This is a self-contained content
+compact UTF-8 JSON `["zkc.variant/1", nodes]`. This is a self-contained content
 graph, not an ambient registry. A node is either a printable ASCII string or an
 array of canonical decimal-string references to earlier nodes. The last node
 is the root. Nodes are interned by exact content in first-use postorder: repeated

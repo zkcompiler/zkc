@@ -424,7 +424,7 @@ fn module(mut functions: Json, mut participants: Json, entries: Json) -> Json {
         json!([key, key, args, format!("arkworks/{key}")])
     })
     .collect();
-    json!(["zkc.program", bindings, functions, participants, entries])
+    json!(["zkc.program/2", bindings, functions, participants, entries])
 }
 
 fn participant(
@@ -1549,7 +1549,7 @@ fn closed_profile_participants_are_not_an_execution_format() {
         "reference.group/1",
     ] {
         // Keep the format valid so the malformed bindings field is checked.
-        candidate[0] = json!("zkc.program");
+        candidate[0] = json!("zkc.program/2");
         candidate[1] = json!(profile);
         reject(&candidate, ErrorCode::Record);
     }
@@ -1921,7 +1921,7 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
                                         "kernel",
                                         [zkc_test_support::hex(
                                             &crate::logical::encode_tree(&json!([
-                                                "zkc.native-origin-template",
+                                                "zkc.native-origin-template/1",
                                                 "main",
                                                 [],
                                                 [],
@@ -2059,7 +2059,7 @@ fn program_ports_admit_copyable_variants_and_refuse_affine_payloads() {
     let logical = zkc_test_support::variants::logical("Local", json!([["empty", []]]));
     let ty = format!("{logical}@logical.variant/1");
     let mut program = json!([
-        "zkc.program",
+        "zkc.program/2",
         [],
         [],
         [[

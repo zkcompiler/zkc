@@ -35,7 +35,7 @@ json::Value matrixValues(const R1CS &relation, bool padded) {
 
 std::string matrixIdentity(const R1CS &r, unsigned index, bool padded) {
   auto values = matrixValues(r, padded);
-  return digest(json::Array{"zkc.matrix", r.field().str(),
+  return digest(json::Array{"zkc.matrix/1", r.field().str(),
                             std::move((*values.getAsArray())[index])});
 }
 } // namespace zkc::relation

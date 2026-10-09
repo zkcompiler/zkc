@@ -76,7 +76,7 @@ Expected<SmallVector<Requirement, 1>> parse(StringRef text) {
     return value.takeError();
   auto *object = value->getAsObject();
   if (!object || !keys(*object, {"format", "requirements"}) ||
-      object->getString("format") != "zkc.polynomial-requirements")
+      object->getString("format") != "zkc.polynomial-requirements/1")
     return error("polynomial-requirement-format");
   auto *array = object->getArray("requirements");
   if (!array || array->empty() || array->size() > 64)
@@ -749,7 +749,7 @@ Expected<json::Value> checkPolynomialReductions(ModuleOp original,
   }
   std::string requirementSource, originalIR, candidateIR;
   raw_string_ostream(requirementSource)
-      << json::Value(json::Object{{"format", "zkc.polynomial-requirements"},
+      << json::Value(json::Object{{"format", "zkc.polynomial-requirements/1"},
                                   {"requirements", std::move(canonical)}});
   raw_string_ostream sourceStream(originalIR), candidateStream(candidateIR);
   original.print(sourceStream);
@@ -758,7 +758,7 @@ Expected<json::Value> checkPolynomialReductions(ModuleOp original,
     return toHex(SHA256::hash(arrayRefFromStringRef(value)), true);
   };
   return json::Object{
-      {"format", "zkc.polynomial-correspondence"},
+      {"format", "zkc.polynomial-correspondence/1"},
       {"requirements", std::move(results)},
       {"requirement_source", requirementSource},
       {"requirements_sha256", digest(requirementSource)},

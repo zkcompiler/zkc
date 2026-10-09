@@ -4,11 +4,11 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/JSON.h"
 namespace zkc::program {
-/// Read only zkc.program physical programs. Structural decoding does not
+/// Read only zkc.program/2 physical programs. Structural decoding does not
 /// replace semantic admission.
 llvm::Expected<Participants> decode(const llvm::json::Value &);
 /// Precondition: checkStructure has succeeded for this unchanged program.
-/// Physical-only, preserving the zkc.program carrier and declaration order.
+/// Physical-only, preserving the zkc.program/2 carrier and declaration order.
 llvm::json::Value encode(const Participants &);
 llvm::Error checkStructure(const Participants &);
 } // namespace zkc::program

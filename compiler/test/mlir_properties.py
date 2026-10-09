@@ -80,7 +80,7 @@ for operation in ("poly.exec.fold", "pcs.exec.commit", "oracle.exec.commit", "re
 
 # A relation exercises custom assembly, optional generic printing, typed casts
 # in another exporter, and the shared dialect base outside the protocol family.
-relation = ["zkc.relation.r1cs", "koala-bear", "4", "1", "1",
+relation = ["zkc.relation.r1cs/1", "koala-bear", "4", "1", "1",
             [[[["2", "1"]], [["3", "1"]], [["1", "1"]]]]]
 relation_ir = commands.source("relation-import", json.dumps(relation), "Circuit")
 with case("relation: custom and generic assembly preserve valid properties"):

@@ -65,7 +65,7 @@ int main() {
   cases.run("current program shape retains actual arguments", [&] {
     auto artifact = program::encode(original);
     auto &root = *artifact.getAsArray();
-    require(root.size() == 5 && root[0].getAsString() == "zkc.program",
+    require(root.size() == 5 && root[0].getAsString() == "zkc.program/2",
             "wrong current root grammar");
     auto &participant = *root[3].getAsArray()->front().getAsArray();
     require(participant.size() == 8 &&

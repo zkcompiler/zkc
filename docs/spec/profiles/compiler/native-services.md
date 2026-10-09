@@ -58,7 +58,7 @@ certificate and is not exported in participant JSON.
 
 ### Native carrier
 
-The current carrier is [the program format](program.md), `zkc.program`.
+The current carrier is [the program format](program.md), `zkc.program/2`.
 The root has five fields. Every participant record has an eighth field containing
 service rows `[name, contract, input_index]`, where the index is a canonical
 nonnegative decimal string. Participants without services use an empty list.

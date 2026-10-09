@@ -34,7 +34,7 @@ int main() {
           auto value = take(json::parse(package.bytes()));
           auto *root = value.getAsObject();
           require(root && root->size() == 5 &&
-                      root->getString("format") == "zkc.entry" &&
+                      root->getString("format") == "zkc.entry/1" &&
                       root->getString("original") == entry.original().bytes() &&
                       root->getString("interface") ==
                           entry.original().interfaceJson() &&

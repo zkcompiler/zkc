@@ -5,6 +5,26 @@ inputs used to build them. Prefer current stable releases when upgrading unless
 an actual compatibility constraint requires otherwise. Keep unrelated upgrades
 separate and record selected versions in the owning manifest.
 
+## Format versions
+
+Persisted or exchanged formats and cryptographic byte constructions carry
+versions at their contract boundaries. These include program and Entry carriers,
+Host requests and results, relation formats, proof bindings and transcript
+framing. Opaque compiler fingerprints, generated symbol seeds and in-process
+structures do not need independent format versions.
+
+Before stabilization, keep the existing version numbers fixed during internal
+development. Update producers, readers, examples and fixtures together, including
+independently derived byte and hash vectors when their inputs change. Maintain
+one current schema with strict admission; do not add older readers, compatibility
+layers or migration histories. Equal version numbers do not guarantee that
+artifacts from different development builds are compatible.
+
+Once an external contract is stabilized, review version changes when its encoding,
+interpretation or cryptographic construction changes. Ordinary implementation
+refactoring does not require a format version change. External standards, suite
+identities and dependency releases retain their own version rules.
+
 ## Pins and source ownership
 
 | Boundary | Owner |
