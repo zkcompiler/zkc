@@ -31,8 +31,9 @@ arithmetic is validated against independent relation evaluation in tests.
 
 The generated source is intentionally a bounded reference client. Matrices are
 specialized into existing field operations and arrays. No new relation opcode,
-polynomial representation or runtime protocol scheduler is needed. A later bulk
-matrix kernel requires workloads that distinguish it from this reference path.
+polynomial representation or runtime protocol scheduler is needed. Installed
+[bulk matrix kernels](mathematical-composition.md) are available to other clients;
+this adapter keeps its bounded scalar expansion.
 
 ## Why static application
 
@@ -46,8 +47,9 @@ contract for entry selection, role mapping, actual value handoff, service state
 and failure propagation. This adapter has a static caller, so expanding its
 calls preserves all of those through the existing participant/runtime route.
 The public-table and imported R1CS clients both use the same mechanism.
-Dynamic composition and separately deployed participants remain different future
-requirements, rather than implicit properties of this implementation.
+Dynamic composition and separately invoked reduction/terminal components need
+their own handoff contract. Independent prover/verifier deployment uses the
+existing [native proof path](native-proofs.md).
 
 The checker extends independent requirements with an actual application binding.
 It checks exact composition against the retained source. For R1CS it additionally

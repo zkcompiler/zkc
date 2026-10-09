@@ -1,6 +1,6 @@
 # Compile and verify a protocol
 
-This walkthrough compiles the [Schnorr library](../examples/libraries/schnorr/lib.zkc)
+This walkthrough compiles the [Schnorr library](../libraries/schnorr/lib.zkc)
 and its [Entry](../examples/projects/schnorr/main.zkc), then produces and verifies
 a proof in separate processes. The library defines the group equations, messages
 and random draws. The Entry chooses participants, public inputs and a transcript
@@ -38,7 +38,7 @@ compiler="${ZKC_COMPILER_BIN:-build/compiler}/zkc-compile"
 native="${ZKC_NATIVE_BIN:-${CARGO_TARGET_DIR:-target}/release}"
 
 "$native/zkc" compile --compiler="$compiler" \
-  --module=schnorr=examples/libraries/schnorr/lib.zkc \
+  --module=schnorr=libraries/schnorr/lib.zkc \
   --module=example=examples/projects/schnorr/main.zkc \
   --entry=example::Proof --output="$demo_dir/proof.entry" \
   > "$demo_dir/build.json"

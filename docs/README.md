@@ -16,8 +16,8 @@ subjects and proof boundaries.
 | Study semantics and proofs | [Model guides](guides/README.md) → [specification](spec/README.md) → [formal support](../formal/SUPPORT.md) |
 | Evaluate evidence or future work | [Assurance](assurance.md) → [roadmap](roadmap.md) |
 
-The [maintained projects](../examples/projects/README.md) contain Schnorr and
-Sumcheck clients. [Relation data](language/relations.md) enters through explicit
+The [maintained libraries](../libraries/README.md) provide reusable protocols;
+[example projects](../examples/projects/README.md) select concrete Entries. [Relation data](language/relations.md) enters through explicit
 Assets or relation adapters. [Theory](theory.md) explains the mathematical tools
 behind the model; [rationale](rationale/README.md) records consequential choices.
 

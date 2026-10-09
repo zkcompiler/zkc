@@ -11,6 +11,7 @@ the [common Host](../../docs/language/entries.md). These projects require no
 protocol-specific executor. The [source project checks](../../tests/protocol/test_source_projects.py)
 exercise their commands and invalid inputs/proofs.
 
-[Mathematical IR clients](../../docs/compiler/mathematical-composition.md)
-exercise further computation and data structures directly. They test general
-compiler/runtime composition and are not complete Groth16 or FRI implementations.
+Reusable protocol definitions live in [`libraries/`](../../libraries/README.md).
+Each project owns its concrete domains, Entries and invocation inputs. Keep assets
+used by only one project alongside that project; shared relation-ingress samples
+live in [`relations/`](../relations/README.md).

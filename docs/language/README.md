@@ -6,8 +6,8 @@ common participant compiler and Rust Host.
 
 Start with the [walkthrough](../getting-started.md), then read the
 [mathematical source guide](mathematical.md). The maintained
-[Schnorr and Sumcheck projects](../../examples/projects/README.md) show reusable
-libraries with separately authored clients.
+[Schnorr and Sumcheck projects](../../examples/projects/README.md) use the
+[maintained libraries](../../libraries/README.md) with separately authored Entries.
 
 | Task | Reference |
 |---|---|

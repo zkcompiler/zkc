@@ -30,7 +30,8 @@ new defect in that interactive experiment or a bound on all malicious strategies
 The analysis refuses statement-only binding for this client. Full-assignment
 binding passes and reports the non-statement witness port. Binding is a declared
 view premise: the report does not publish, authenticate or hash that witness.
-Any future noninteractive instantiation must specify when and how it is fixed.
+A noninteractive construction using this client must fix the required values
+before deriving the affected challenge.
 
 ## Alternatives considered
 

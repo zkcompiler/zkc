@@ -175,8 +175,9 @@ independent requirement.
 
 ## Security and formal boundary
 
-The structural fact supplies inputs for a future construction. It supplies no
-freshness/uniformity law, P/V agreement premise, hash codec or application domain,
+Verifier-view analysis and [native transcript construction](native-proofs.md)
+have distinct contracts. The view fact supplies no freshness/uniformity law,
+P/V agreement premise, hash codec or application domain,
 Fiat–Shamir security, round-by-round soundness, algebraic completeness or special
 soundness theorem. Concrete service failure, wire decoding, cancellation and
 resource exhaustion retain the native runtime's outcomes. Trace tests compare

@@ -59,7 +59,6 @@ Native custody, value limits, conversion failures and instruction charges remain
 part of the executable contract. Sufficient-capacity mathematical equality does
 not imply equal exhaustion or allocation behavior at arbitrary runtime caps.
 
-Independent [table research models](table-storage/README.md) and Lean
-[representation laws](../../formal/Zkc/Realization/Simulation.lean) describe
-selected semantic relations. They do not provide another supported execution
-path or prove this compiler's physical lowering correct.
+The independent Lean [representation laws](../../formal/Zkc/Realization/Simulation.lean)
+describe selected semantic relations. Native physical lowering requires its own
+correspondence to those models.

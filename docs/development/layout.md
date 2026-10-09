@@ -4,7 +4,7 @@
 |---|---|
 | `compiler/` | C++ Language, mathematical MLIR, relation adapters, native compilation and installed SDK |
 | `crates/` | Rust Runner, backend bindings, Entry/proof/joint Hosts and CLI |
-| `examples/libraries/` | Maintained `.zkc` Schnorr and Sumcheck libraries |
+| `libraries/` | Reusable `.zkc` libraries, their public interfaces and protocol contracts |
 | `examples/projects/` | Separately authored Entries and invocation inputs |
 | `examples/relations/` | Relation data JSON |
 | `formal/` | Independent Lean research library, model-specific tools and optional integrations |

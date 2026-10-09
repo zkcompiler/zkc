@@ -129,6 +129,10 @@ belongs in the pull request body, which is what survives the squash.
 - **External integrations.** Pin exact sources in the manifest that owns them
   and state the adapter boundary. Code adapted from elsewhere names its source
   in the file that holds it. One reproduced run is not a conformance claim.
+- **Libraries.** Reusable `.zkc` algorithms belong in `libraries/`; concrete
+  Entries belong in `examples/projects/`. Document public exports and protocol
+  assumptions in the [library guide](../libraries/README.md). Exercise changes
+  through the common compiler and Host, including invalid inputs or proofs.
 - **Documentation.** Update whatever the change makes wrong or incomplete,
   in the [document that owns it](../docs/development/documentation.md). A design choice that a reader could reasonably
   have made differently gets a [rationale record](../docs/rationale/README.md)

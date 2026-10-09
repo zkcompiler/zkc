@@ -1,6 +1,6 @@
 # Public-table Sumcheck
 
-The [library](../../libraries/sumcheck/lib.zkc) implements repeated multilinear
+The [library](../../../libraries/sumcheck/lib.zkc) implements repeated multilinear
 Sumcheck using ordinary vector kernels, messages and bounded protocol repetition.
 The [Entry](main.zkc) selects BLS12-381 Fr, at most two rounds, and the installed
 Merlin construction. `Interactive` retains the original exchange.
@@ -19,7 +19,7 @@ exercises a complete terminal decision without requiring a PCS setup.
 From the repository root, with built tools on `PATH`:
 
 ```sh
-zkc compile --module=sumcheck=examples/libraries/sumcheck/lib.zkc \
+zkc compile --module=sumcheck=libraries/sumcheck/lib.zkc \
   --module=example=examples/projects/sumcheck/main.zkc \
   --entry=example::Proof --output=sumcheck.entry
 zkc prove sumcheck.entry EXPECTED_SHA256 examples/projects/sumcheck/prover.json sumcheck.proof

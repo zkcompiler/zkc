@@ -4,7 +4,6 @@ These small fixtures describe mathematical constraints independently of a proof
 protocol:
 
 - [multiply.r1cs.json](multiply.r1cs.json) contains one BN254 rank-one constraint.
-- [scaled.r1cs.json](scaled.r1cs.json) changes its coefficient while preserving the shape.
 - [squaring.air.json](squaring.air.json) constrains an initial trace value and
   consecutive squaring transitions.
 

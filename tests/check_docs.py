@@ -83,7 +83,7 @@ def component_pages():
     """Include component guides without walking build or private dependency trees."""
     ignored = {".git", ".lake", "target", "build", "node_modules", "__pycache__",
                ".cache", ".work", "records"}
-    for folder in (".github", "compiler", "crates", "examples", "tests",
+    for folder in (".github", "compiler", "crates", "examples", "libraries", "tests",
                    "formal/consumers"):
         for directory, children, files in os.walk(ROOT / folder):
             children[:] = sorted(name for name in children if name not in ignored

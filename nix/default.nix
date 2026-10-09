@@ -36,6 +36,7 @@ let
       "compiler"
       "tests/support"
       "examples"
+      "libraries"
     ];
     stdenv = llvm.stdenv;
     python3 = python;
@@ -104,6 +105,7 @@ let
       "tests/run.py"
       "tests/support"
       "examples"
+      "libraries"
     ];
   };
   lakeSourcesFor = pkgs.callPackage ./lake-sources.nix { };

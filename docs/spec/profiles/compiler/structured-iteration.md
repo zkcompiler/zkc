@@ -55,10 +55,9 @@ contract establishes their preconditions. No generic tensor operation gains
 admission just because MLIR accepts its types. Preparation omits upstream tensor
 canonicalization patterns that could change container identity.
 
-The finite aggregate representation covers heterogeneous and optional data.
-A bounded product of optional matrices can have different runtime dimensions.
-It is not a dynamic-length sequence of nested aggregates; that remaining corpus
-requirement must be addressed in later foundation coverage.
+Finite products cover heterogeneous and optional data, including matrices with
+independent runtime dimensions. Runtime-length collections of such values use
+[`data.sequence`](nested-data.md), with its element, permission and framing rules.
 
 ## Common iteration
 

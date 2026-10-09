@@ -25,9 +25,10 @@ this program. They do not own another independently editable expression graph.
 
 Mathematical dependencies remain available for projection, analysis and
 execution through MLIR operations and interfaces, alongside explicit received
-values, stateful queries, stops and resource failures. This does not itself implement
-automatic Fiat–Shamir, algebraic security analyses or parallel execution; each
-has a separate consumer and acceptance conditions in the roadmap.
+values, stateful queries, stops and resource failures.
+[Native proof compilation](native-proofs.md) consumes this structure to derive
+transcripts. Algebraic security analyses and parallel execution require their
+own consumers and correctness conditions.
 
 | Owner | Responsibility in this extension |
 |---|---|
@@ -39,9 +40,10 @@ has a separate consumer and acceptance conditions in the roadmap.
 | `relation` and protocol binding machinery | Interpreted requirements and residuals associated with actual boundaries |
 | `local` and `plan` | Executable algorithms, representation selection, state, storage and failure contracts |
 
-The Data dialect owns [structured iteration](../spec/profiles/compiler/structured-iteration.md)
-and general data operations, separately from algebra and polynomials. General finite data should not acquire polynomial
-semantics merely because the first consumer is Sumcheck.
+The Data dialect owns total data operations. `protocol.repeat` owns
+[structured iteration](../spec/profiles/compiler/structured-iteration.md),
+including role availability and carried state. General finite data has no
+implicit polynomial interpretation.
 
 ## Mathematical objects and finite data
 
@@ -68,7 +70,7 @@ observations:
   coefficients(p, static_length)                      // univariate, bounded
 ```
 
-The executable subset covers degree-two public-table Sumcheck and degree-three
+The maintained clients cover degree-two public-table Sumcheck and degree-three
 [weighted R1CS Sumcheck](relation-composition.md) rounds and small
 univariate coefficient/domain calculations. A generic carrier does not promise
 every polynomial algorithm. Unknown or excessive required bounds reject the
@@ -78,7 +80,8 @@ Static data has fully defined elements and constant in-bounds extraction.
 Shape, field, arity and domain identity are checked separately. Axis `k` denotes `X_k`; a rank-one array flattens the
 Boolean cube in the high-bit order defined by the polynomial specification. Coefficient order and all prefix/suffix orders
 are explicit. Zero arity and degree-zero polynomials are admitted.
-Arrays have positive length; fixing every table axis yields a length-one array.
+MLE and coefficient constructors require nonempty arrays; general data arrays
+can be empty. Fixing every table axis yields a length-one array.
 
 Degree upper bounds come from constructors: MLE contributes at most one per
 variable, multiplication adds bounds, addition takes maxima, and fixing or
@@ -100,25 +103,16 @@ formal polynomial from its domain evaluations.
 | `evaluate(p,x)` | A field value; not an identity or degree certificate |
 
 Polynomial values may flow through transparent acyclic helpers when preparation
-inlines them and exposes their constructors and bounds. Initially, protocol
+inlines them and exposes their constructors and bounds. Protocol
 entry/exchange values are concrete tensors or scalars. Opaque polynomial inputs,
 unresolved polynomial calls and a universal polynomial runtime ABI are excluded.
 
 ### Representation alternatives
 
-Named SSA retains shared nested sums/products and gives both clients one
-formal meaning and projection path. The equally shared table baseline uses
-the same arithmetic and table-folding algorithm. After the same CSE pass,
-factorwise fixing and that baseline each produce 41 additions, 40
-multiplications, 14 subtractions and 16 extractions. Plain lowering plus CSE
-produces 36 additions and 41 multiplications, with the same other counts.
-There is no universal winner.
-
-Factorwise fixing remains opt-in. It exposes shared smaller tables while
-mathematical structure still exists; the evidence does not justify enabling it
-by default. This comparison measures one scalar IR pipeline. Runtime bundles
-and resource costs have separate checks. Automatic selection and a fused table
-consumer require another workload.
+Named SSA preserves sharing in nested sums and products. Factorwise prefix
+fixing remains opt-in; its effect on work and storage depends on the expression
+and selected realization. Mathematical equality alone does not establish a
+performance benefit or equal exhaustion behavior.
 
 Builtin static tensors fit MLIR shape and SSA APIs. A distinct immutable
 `field_array<F,N>` preserves shape through native boundaries. Existing dynamic
@@ -161,7 +155,7 @@ Specification associations stay protected until checked transfer or explicit
 erasure. Absence of runtime effects does not make a required binding disposable
 by generic DCE.
 
-### First correspondence check
+### Reduction correspondence check
 
 Use a closed structural recognizer for the selected verifier reduction and
 terminal. Run it on participant form after admission and helper expansion,
@@ -202,12 +196,12 @@ Honest completeness separately requires a valid initial claim, agreeing role
 inputs including that claim, faithful delivery, and the stated execution
 availability and resource conditions.
 
-The first recognizer does not validate exec/physical lowering. Those compiler
-steps remain trusted and tested within their existing contracts. The connector
-between separate generated entries is initially harness code: its port mapping
-is checked, while faithful value handoff and complete outcome propagation require
-execution tests. A successful structural match is not a native refinement or
-cryptographic security theorem.
+The reduction recognizer checks the selected mathematical relation.
+[Adjacent preservation checks](preservation.md) separately compare projection,
+exec/physical lowering and emitted programs. The composed client uses
+`protocol.apply` to connect reduction and terminal through SSA in one entry;
+[static composition](relation-composition.md) owns that handoff. These native
+checks do not establish a Lean refinement or cryptographic security theorem.
 
 ## Two clients and one useful transformation
 
@@ -220,10 +214,10 @@ the received polynomial, guards its sum at zero/one, queries the challenge,
 sends it to the prover and updates its scalar using that actual challenge.
 
 The prover returns its received prefix, including the final challenge. The
-verifier returns `(T@V, U@V, prefix_V, value_V)`. A separate generated terminal
-entry evaluates the same expression using exactly those returned fields.
-Existing runners plus an explicit connector suffice. A stopped guard, a normally
-returned terminal `false`, a decode error and a resource failure stay distinct.
+verifier returns `(T@V, U@V, prefix_V, value_V)`. The composed entry applies the
+terminal to exactly those returned fields and evaluates the same expression.
+A stopped guard, a normally returned terminal `false`, a decode error and a
+resource failure stay distinct.
 This is a public reference reduction, not a private PCS protocol.
 
 ### Formal product and domain reconstruction

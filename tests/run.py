@@ -54,7 +54,7 @@ def demo(output):
 
     package, proof = output / "proof.entry", output / "proof.bin"
     built = emit("build.json", [tools.runtime, "compile", f"--compiler={tools.compiler}",
-        "--module=schnorr=examples/libraries/schnorr/lib.zkc",
+        "--module=schnorr=libraries/schnorr/lib.zkc",
         "--module=example=examples/projects/schnorr/main.zkc",
         "--entry=example::Proof", f"--output={package}"])
     for command, request, role, expected in [("prove", "prover", "producer", "produced"),

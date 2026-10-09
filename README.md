@@ -14,7 +14,7 @@ records supported capabilities and their limits.
 
 ## A protocol in zkc
 
-The [Schnorr library](examples/libraries/schnorr/lib.zkc) expresses its exchange
+The [Schnorr library](libraries/schnorr/lib.zkc) expresses its exchange
 with explicit roles and random services:
 
 ```text

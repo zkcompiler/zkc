@@ -1,6 +1,6 @@
 # Schnorr source project
 
-[main.zkc](main.zkc) imports the generic [Schnorr library](../../libraries/schnorr/lib.zkc)
+[main.zkc](main.zkc) imports the generic [Schnorr library](../../../libraries/schnorr/lib.zkc)
 and chooses BLS12-381 G1 and the installed Merlin transcript suite. `Proof` is
 noninteractive; `Interactive` uses the same protocol with actual messages and
 managed random services. No application-specific executor is involved.
@@ -9,7 +9,7 @@ The [walkthrough](../../../docs/getting-started.md) runs `Proof`. To select a jo
 interactive run from the repository root, with built tools on `PATH`:
 
 ```sh
-zkc compile --module=schnorr=examples/libraries/schnorr/lib.zkc \
+zkc compile --module=schnorr=libraries/schnorr/lib.zkc \
   --module=example=examples/projects/schnorr/main.zkc \
   --entry=example::Interactive --output=schnorr.entry
 zkc run schnorr.entry EXPECTED_SHA256 examples/projects/schnorr/interactive.json \
