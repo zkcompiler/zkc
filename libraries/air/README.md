@@ -254,8 +254,14 @@ commit consistent false quotients and auxiliary columns. A valid execution of
 another configured program with the same final result is rejected by the known
 configuration obligation; disabling that obligation makes the control pass.
 
-The implementation is a complete executable profile, with small test parameters
-and its own proof encoding. Arbitrary table counts, other interaction profiles,
+The implementation uses small test parameters and its own proof encoding.
+One admission limitation remains: absent fixed-height and configured-height
+tables still pass through polynomial shape checks, including the active-table
+height bound `H`. This can refuse otherwise valid absent tables. Separating
+height-independent table layout from active polynomial admission is needed to
+cover the full optional-table contract above.
+
+Arbitrary table counts, other interaction profiles,
 hiding, production parameter selection, and a security theorem for the exact
 composition remain separate work. The external VM relation also needs an
 adequacy argument connecting its constraints to the intended execution semantics.

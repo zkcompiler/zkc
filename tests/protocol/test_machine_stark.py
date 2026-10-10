@@ -1,8 +1,9 @@
 """The source machine argument through ordinary compilation and proof commands.
 
-These tests cover the selected three-table, Boolean multiplicity profile and
-both interaction reductions. They provide execution and adversarial evidence,
-not a proof of cryptographic soundness or upstream VM compatibility.
+These tests cover the selected three-table, Boolean multiplicity profile, both
+interaction reductions and the interactive entry. They provide execution and
+adversarial evidence, not a proof of cryptographic soundness or upstream VM
+compatibility.
 """
 import importlib.util
 import json
@@ -120,6 +121,35 @@ def test_machine_supports_distinct_heights_and_idle_memory(toolchain, journal, d
 def test_machine_proof_compiler_policies(toolchain, journal, directory, entry, flags):
     package, pin = compile_entry(toolchain, journal, directory, entry, flags=flags)
     prove_and_verify(toolchain, journal, directory, package, pin, 'policy', requests('store-load'))
+
+
+def test_machine_interactive_entry_runs_with_multi_megabyte_participants(toolchain, journal, directory):
+    # The embedded participant exceeds the old 1 MiB producer ceiling and
+    # fits the Program carrier's shared 4 MiB limit. The outer Run bundle
+    # has its own separate limit.
+    package, pin = compile_entry(toolchain, journal, directory, 'Run')
+    bundle = json.loads(json.loads(package.read_text())['artifact'])
+    assert bundle['format'] == 'zkc.run/0' and bundle['roles'] == ['P', 'V']
+    assert 1024 * 1024 < len(bundle['candidate'].encode()) <= 4 * 1024 * 1024
+    pair = requests('store-load')
+    public, private = pair[0]['public'], pair[0]['inputs']
+
+    def run(name, secret):
+        inputs = journal.write(name + '-run.json', {
+            'format': 'zkc.entry-run/0', 'session': 'machine_' + name,
+            'roles': {'P': {'inputs': public | private | secret}, 'V': {'inputs': public}}})
+        outputs = directory / (name + '-outputs.json')
+        return [toolchain.runtime, 'run', package, pin, inputs, f'--results={outputs}'], outputs
+
+    command, outputs = run('honest', {})
+    assert journal.json(command)['status'] == 'executed'
+    assert json.loads(outputs.read_text())['roles']['V'] == {'accepted': True}
+    # The verifier's own checks stop the run on a false witness.
+    command, outputs = run('false-witness', {'cpu': alter_vector(private['cpu'], 0)})
+    report = journal.json(command, refuses='entry-run-incomplete')
+    after = {role['role']: role['after'] for role in report['execution']['roles']}
+    assert after['V'][0] == 'stopped' and after['V'][1]['cause'][0] == 'explicit'
+    assert not outputs.exists()
 
 
 @pytest.mark.parametrize('entry', ['ProofLogUp', 'ProofProduct'])

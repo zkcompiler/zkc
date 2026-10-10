@@ -291,8 +291,11 @@ Expected<std::string> buildRunBundle(ModuleOp prepared, ModuleOp module,
       Schedule().build(*candidate, selected, projection.getCalculations());
   if (!steps)
     return steps.takeError();
+  // The participant carrier's own ceiling, shared with the proof producer and
+  // the Rust readers; checkStructure has already counted the compact encoding
+  // against it, so this re-checks the string actually embedded.
   auto encoded = printJson(program::encode(*candidate));
-  if (encoded.size() > 1024 * 1024)
+  if (encoded.size() > program::artifactByteLimit)
     return error("run-limit");
   json::Array roles;
   for (auto role : selected.getAs<ArrayAttr>("roles")) {

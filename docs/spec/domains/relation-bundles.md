@@ -301,7 +301,8 @@ nor satisfaction.
 | `relation.table_interaction<F, Table>` | `height`, `interaction` | `(kind, channel, side, local, key, begin, end, arity, bounded, bound, tuple_degree, count_degree)` |
 | `relation.table_record_points<F, Table>` | `rows` row-major assignments, `rows` | `rows` row-major record rows of `width` values |
 
-Every result is an `index`. A flag is 0 or 1.
+Policy and descriptor results are `index` values. A flag is 0 or 1.
+Record substitution returns a vector in the selected field carrier.
 
 **Policy.** `optional` is 1 for an optional table. `authority` is 0 for a
 fixed height, 1 for a configured height and 2 for an instance height. `min`,
