@@ -20,7 +20,7 @@ A separate record is useful when a reader could reasonably choose differently
 and the reason needs more than a paragraph beside the definition. Combine choices
 that answer the same question. Keep short reasons with their owning guide or
 specification; independent Lean model choices belong with
-[formal design](../../formal/docs/README.md#design-and-tools).
+[formal design](../../lean/docs/README.md#design-and-tools).
 
 Explain the actual tradeoff with an example or a concrete cost. Link to the
 owning contract and from the page where readers encounter the choice. Use only
@@ -31,7 +31,7 @@ Keep normative definitions, support inventories and plans in their owners.
 Review history, internal work labels and superseded reasoning stay outside the
 public reference. Rewrite or remove a record when the choice changes.
 
-The [documentation checker](../../tests/check_docs.py) checks links to and from
+The [documentation checker](../../common/tests/check_docs.py) checks links to and from
 the owner and flags common process metadata. Editorial review checks whether a
 record adds an explanation rather than repeating the contract. Follow the
 [documentation guide](../development/documentation.md) when consolidating pages.

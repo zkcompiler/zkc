@@ -140,7 +140,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [formal-checks, lean-toolchain-checks, arklib, llzk, compiler-sanitize]
+        package: [lean-checks, lean-toolchain-checks, arklib, llzk, compiler-sanitize]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -183,7 +183,7 @@ jobs:
           cache: "false"
       - name: Require a fresh project store
         run: |
-          for package in formal arklib; do
+          for package in lean arklib; do
             output=$(nix eval --raw ".#$package.outPath")
             if nix-store --check-validity "$output" 2>/dev/null; then
               echo "::error::$package already exists in this store. Configure ZKC_FRESH_RUNNER with an ephemeral runner or a fresh Nix store; disabling cache restore alone does not force source reconstruction."
@@ -193,12 +193,12 @@ jobs:
       - name: Build main and optional Lean packages from sources
         run: |
           mkdir -p build/reports
-          nix build -L .#formal .#arklib --no-link \
+          nix build -L .#lean .#arklib --no-link \
             --option substituters https://cache.nixos.org \
-            2>&1 | tee build/reports/formal-fresh.log
+            2>&1 | tee build/reports/lean-fresh.log
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: formal-fresh-${{ github.run_id }}
+          name: lean-fresh-${{ github.run_id }}
           path: build/reports/
           retention-days: 30

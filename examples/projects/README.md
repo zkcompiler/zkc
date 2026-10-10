@@ -20,7 +20,7 @@ The [common Host](../../docs/runtime/entries.md) compiles source in memory or
 accepts an explicitly pinned package. `prepare` creates missing templates
 under `inputs/<qualified.name>/`; existing values are preserved. Source execution
 uses these paths by default, with explicit overrides available. These projects require no
-protocol-specific executor. The [source project checks](../../tests/protocol/test_source_projects.py)
+protocol-specific executor. The [source project checks](../../common/tests/protocol/test_source_projects.py)
 exercise their commands and invalid inputs/proofs.
 
 Reusable protocol definitions live in [`libraries/`](../../libraries/README.md).

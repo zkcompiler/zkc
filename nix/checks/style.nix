@@ -33,7 +33,7 @@ stdenvNoCC.mkDerivation {
     find . -name '*.nix' -print0 | xargs -0 nixfmt --check
     actionlint -shellcheck="" .github/workflows/*.yml
     ruff check .
-    python3 tests/check_docs.py --all > docs-check.json
+    python3 common/tests/check_docs.py --all > docs-check.json
   '';
   installPhase = ''
     mkdir -p "$out"

@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def sources():
     excluded = {"build", "target", ".cache", ".git"}
-    return sorted(path for folder in (ROOT / "compiler", ROOT / "tests/consumer")
+    return sorted(path for folder in (ROOT / "compiler", ROOT / "common/tests/consumer")
                   for path in folder.rglob("*")
                   if path.suffix in {".h", ".cpp"} and not excluded.intersection(path.relative_to(ROOT).parts))
 

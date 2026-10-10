@@ -1,5 +1,5 @@
-{ runCommand, lean }:
-runCommand "zkc-lean-toolchain-check" { nativeBuildInputs = [ lean ]; } ''
+{ runCommand, leanToolchain }:
+runCommand "zkc-lean-toolchain-check" { nativeBuildInputs = [ leanToolchain ]; } ''
   cat > lakefile.toml <<'EOF'
   name = "native_probe"
   defaultTargets = ["native_probe"]

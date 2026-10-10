@@ -90,7 +90,7 @@ distinct points to determine each bounded-degree polynomial. The adapter's
 `regenerate.py check` reproduces these fixtures byte for byte from pinned
 upstream sources.
 
-The [integration tests](../../../tests/protocol/test_imported_air.py) exercise
+The [integration tests](../../../common/tests/protocol/test_imported_air.py) exercise
 the Entries with default compilation, `--no-simplify` and `--release-storage`.
 Controls cover changed trace, public and configuration values; malformed
 shapes and heights; missing, stale and edited packaged assets; prepared

@@ -35,7 +35,7 @@ own version rules.
 | Main LLVM/MLIR and C++ packages | Compiler CMake requirements and Nix inputs |
 | Rust workspace | Cargo manifests, lockfile, toolchain selection and `nix/rust.nix` vendor hash |
 | Python tooling | `pyproject.toml` and `uv.lock` |
-| Independent Lean package | `formal/lean-toolchain`, Lake manifests and lockfiles |
+| Independent Lean package | `lean/lean-toolchain`, Lake manifests and lockfiles |
 | Optional integrations | Their own manifests, source pins and compatible toolchains |
 
 LLZK remains a generic optional relation adapter with a separate LLVM process.
@@ -43,7 +43,7 @@ Do not link incompatible LLVM versions into the main compiler. Formal source
 builds, reached-axiom audits and optional ArkLib consumers retain their own scopes;
 they are not default native execution prerequisites. `scripts/update-lean-pins.py`
 selects revisions from ArkLib only. The Clean integration's manifest must keep the
-main package's shared revisions and toolchain, which `formal/checks/check_library.py`
+main package's shared revisions and toolchain, which `lean/checks/check_library.py`
 checks; after a Lean or Mathlib change, update it by hand and rerun
 `just test-lean-clean`.
 
@@ -69,7 +69,7 @@ when diagnosing a disagreement.
 
 ## Workflow scopes and reports
 
-The [test guide](../../tests/README.md) and CI manifests own current scopes.
+The [test guide](../../common/tests/README.md) and CI manifests own current scopes.
 Automatic CI checks source hygiene, docs and the Python harness. Changes to
 native code, libraries or build configuration also run cached Nix checks for
 Rust tests/Clippy, the installed CLI, an installed C++ SDK consumer and C++

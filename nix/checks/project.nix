@@ -48,7 +48,7 @@ tools.overrideAttrs (
       runHook preCheck
       export UV_CACHE_DIR="$TMPDIR/uv-cache"
       ${environment.checks}
-      python3 tests/run.py project
+      python3 common/tests/run.py project
       runHook postCheck
     '';
     installPhase = ''

@@ -69,5 +69,5 @@ their separate history restrictions.
 This profile admits bounded local algorithms. General dynamic protocol choice,
 unbounded execution and arbitrary references or closures require additional
 contracts. A local algorithm cannot invent communication to obtain a remote
-value. [Native validation](../../tests/native.md) covers control, custody, cleanup and
+value. [Native validation](../../common/tests/native.md) covers control, custody, cleanup and
 retained-prefix failures; native Lean correspondence remains open.

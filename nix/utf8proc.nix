@@ -6,7 +6,7 @@
   ninja,
 }:
 let
-  pin = (builtins.fromJSON (builtins.readFile ../support/unicode/manifest.json)).normalizers.cpp;
+  pin = (builtins.fromJSON (builtins.readFile ../common/unicode/manifest.json)).normalizers.cpp;
 in
 stdenv.mkDerivation {
   pname = "utf8proc";

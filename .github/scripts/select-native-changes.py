@@ -16,7 +16,7 @@ def main():
         paths = subprocess.check_output(
             ["git", "diff", "--name-only", base, os.environ["HEAD"]], text=True).splitlines()
     selected = any(not path.endswith(".md") and re.match(
-        r"^(compiler/|crates/|libraries/|examples/|support/|nix/|scripts/|tests/|Cargo\.|rust-toolchain|flake\.|justfile|\.clang-format|\.github/)", path)
+        r"^(compiler/|crates/|libraries/|examples/|common/|nix/|scripts/|Cargo\.|rust-toolchain|flake\.|justfile|\.clang-format|\.github/)", path)
         for path in paths)
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
         output.write(f"native={str(selected).lower()}\n")

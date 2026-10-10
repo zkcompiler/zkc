@@ -22,7 +22,7 @@ The compiler checks declared contracts and availability. A relation clause alone
 adds no runtime guard or proof of satisfaction. Backend implementations must
 satisfy their operation and representation contracts; a successful type check
 does not infer cryptographic assumptions. [Status](../status.md) records supported
-syntax and native capabilities, and [model guides](../../formal/docs/guides/README.md) explain
+syntax and native capabilities, and [model guides](../../lean/docs/guides/README.md) explain
 the independent semantic foundations.
 
 ## Project inputs

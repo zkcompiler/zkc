@@ -148,7 +148,7 @@ distinguishes proposals, validation and materialization.
 - [Native contracts and types](../../../compiler/include/zkc/Contracts/Bindings.h)
   and [MLIR planning](../../../compiler/lib/Conversion/Bindings.cpp).
 - [Native preservation checks](../../compiler/verification.md).
-- [Generic static requirements](../../../formal/docs/spec/profiles/source/generic-definitions.md).
+- [Generic static requirements](../../../lean/docs/spec/profiles/source/generic-definitions.md).
 
 This carrier does not implicitly interchange opening protocols with different
 interaction behavior, add mathematical field coercions, or prove the external

@@ -33,7 +33,7 @@ all possible replies. A mathematical equality does not imply equal behavior at
 the same native instruction limit. Each claim retains its own premises.
 
 The independent Lean model has a
-[sound rule-based candidate check](../../formal/docs/native-connection.md#checking-in-the-current-formal-model).
+[sound rule-based candidate check](../../lean/docs/native-connection.md#checking-in-the-current-formal-model).
 Its theorem concerns the exact plan reconstructed by that rule and compared with
 the candidate. Native checks are bounded implementation checks; they are not
 proved instances merely because they follow the same method. The

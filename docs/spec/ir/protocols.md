@@ -8,7 +8,7 @@ role-local inputs, and guards can stop the reached execution prefix.
 [Relations and terminals](../relations.md) define the retained statement and
 explicit terminal checks; [realization](../realization/representations.md) states
 the obligations of a claimed implementation relation. The formal
-[interaction model](../../../formal/docs/spec/language/interaction.md) is a
+[interaction model](../../../lean/docs/spec/language/interaction.md) is a
 parameterized counterpart, not an established interpretation of this IR.
 Implementation coverage and deferred connections belong to [status](../../status.md).
 
@@ -238,7 +238,7 @@ broadcast; a scalar operation whose result the formula never reaches is not
 realized. None of them removes or reorders a shape check, and the participant
 simplifier does not rewrite realized bodies. Their value laws are the
 [pointwise map laws](../domains/vectors.md#pointwise-maps); their effects are
-measured by the [map tests](../../../tests/protocol/test_native_map.py).
+measured by the [map tests](../../../common/tests/protocol/test_native_map.py).
 
 The map matcher derives the formula again from the retained original and reads
 the actual generated body independently of the realizer: guards, operand modes,

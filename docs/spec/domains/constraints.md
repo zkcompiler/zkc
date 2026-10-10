@@ -3,7 +3,7 @@
 Native R1CS/AIR Assets and relation adapters use these field, layout and constraint contracts.
 This chapter states shared laws; a native implementation claim needs its
 actual instance and evidence. Independent formal examples retain their own
-[model scope](../../../formal/docs/spec/README.md).
+[model scope](../../../lean/docs/spec/README.md).
 
 A constraint representation defines a [relation family](../relations.md#relation-families-and-instances).
 Its public layout, mathematical domain and constraints determine which statements
@@ -179,7 +179,7 @@ established. Quotient chunking also needs an explicit degree bound; an
 expression-degree-only rule such as `d-1` chunks is insufficient for general
 scopes.
 
-[`Zkc.Relation.AIR.Polynomial`](../../../formal/Zkc/Relation/AIR/Polynomial.lean)
+[`Zkc.Relation.AIR.Polynomial`](../../../lean/Zkc/Relation/AIR/Polynomial.lean)
 mechanizes the per-constraint divisibility, shift and degree laws. These laws do
 not assert interpolation implementation correctness, FRI proximity, BCS
 soundness or hiding. The
@@ -202,7 +202,7 @@ coefficient-independent program is a reusable consumer, not authentication of
 whatever relation file a prover supplies.
 
 The mathematical correspondence is recorded in
-[the domain map](../../../formal/docs/correspondence/domains.md#relation-domain-foundation).
+[the domain map](../../../lean/docs/correspondence/domains.md#relation-domain-foundation).
 Native ingestion, staging and trust boundaries are described in the
 [compiler guide](../../compiler/relations.md). Neither changes PIR's
 execution model or supplies a general imported-protocol security theorem.

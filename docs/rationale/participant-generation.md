@@ -17,8 +17,8 @@ keeps actual receives distinct; honest transport is a separate premise.
 Dynamic global choice needs its own projection rule. A participant must know
 the branch, have equivalent continuations, or learn the choice through explicit
 communication. Erasing a guard or inventing communication cannot supply that
-rule. The independent [interaction model](../../formal/docs/spec/language/interaction.md)
-and [shared-control reference](../../formal/docs/spec/profiles/source/located-execution.md#actual-agreement-for-shared-control)
+rule. The independent [interaction model](../../lean/docs/spec/language/interaction.md)
+and [shared-control reference](../../lean/docs/spec/profiles/source/located-execution.md#actual-agreement-for-shared-control)
 state their own locality and agreement conditions.
 
 This conservative policy can decline protocols with a valid implementation.
