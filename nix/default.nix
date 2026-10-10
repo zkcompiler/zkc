@@ -90,7 +90,13 @@ let
       inherit llvm shared utf8proc;
       stdenv = llvm.stdenv;
       python3 = python;
-      source = compiler.src;
+      source = sourceFor "compiler" (
+        compilerSource
+        ++ [
+          "scripts/develop.py"
+          "scripts/install_domain.py"
+        ]
+      );
       base = domainCompiler shared false;
       domain = domainCompiler shared true;
     };
