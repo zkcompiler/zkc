@@ -12,6 +12,8 @@ public:
   bool run() {
     if (syntax.resolved)
       return true;
+    if (!elaborateExpressions(checker, syntax))
+      return false;
     for (auto &port : decl.inputs) {
       auto id = bind(port.name, port.span, false, false, true);
       if (!id)

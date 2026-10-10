@@ -3,6 +3,8 @@
 [The source](main.zkc) evaluates a two-element table in two ways: a formal
 multilinear polynomial in `math fn`, and an ordered runtime vector fold in `fn`.
 For `values = [a, b]`, both compute `(1 - point) * a + point * b`.
+The calls use parameter names to make the evaluation point and table inputs
+explicit. Named arguments evaluate in written order.
 
 Compile from the repository root:
 

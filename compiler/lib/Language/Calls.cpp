@@ -4,37 +4,6 @@
 #include <numeric>
 using namespace llvm;
 namespace zkc::language::detail {
-std::optional<std::pair<DeclarationId, std::optional<Type>>>
-BodyChecker::callable(const Expression &expr) {
-  auto parts = StringRef(expr.text).split("::");
-  if (!parts.second.empty())
-    for (auto &parameter : decl.parameters) {
-      if (parameter.name != parts.first || !parameter.interface)
-        continue;
-      SyntaxType term;
-      term.name = parameter.name;
-      term.span = expr.span;
-      auto component = checker.type(decl, term);
-      if (!component)
-        return {};
-      auto &interface = checker.output.declarations[parameter.interface->index];
-      for (auto id : interface.members)
-        if (checker.output.declarations[id.index].name == parts.second)
-          return std::make_pair(id, std::optional<Type>(*component));
-      fail("source.call", "unknown interface member", expr.span);
-      return {};
-    }
-  auto id = checker.resolve(decl, expr.text, expr.span);
-  if (!id)
-    return {};
-  if (checker.output.declarations[id->index].abstract &&
-      checker.output.declarations[id->index].kind !=
-          Declaration::Kind::Associated) {
-    fail("source.call", "abstract call requires a bound component", expr.span);
-    return {};
-  }
-  return std::make_pair(*id, std::optional<Type>{});
-}
 std::optional<ValueId> BodyChecker::call(const Expression &expr,
                                          unsigned depth) {
   if (expr.roles) {
@@ -42,7 +11,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     return {};
   }
   if (expr.text == "index") {
-    if (!local() || expr.arguments.size() != 1 || !expr.children.empty()) {
+    if (!local() || expr.arguments.size() != 1 || !expr.children.empty() ||
+        !expr.staticLabels.empty() || !expr.callLabels.empty()) {
       fail("source.call",
            "index<N>() requires one static natural in local mode", expr.span);
       return {};
@@ -58,7 +28,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
                 Type(Type::Kind::Index), {}, expr.span);
   }
   if (expr.text == "unpack") {
-    if (!local() || expr.children.size() != 1 || !expr.arguments.empty()) {
+    if (!local() || expr.children.size() != 1 || !expr.arguments.empty() ||
+        !expr.callLabels.empty()) {
       fail("source.call", "unpack requires one local value", expr.span);
       return {};
     }
@@ -91,96 +62,68 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     return emit(Construct{{*value}, {}, Construct::Kind::Unpack}, result, {},
                 expr.span);
   }
-  // Enum alternative constructors resolve the nominal type before its label.
-  auto split = StringRef(expr.text).rsplit("::");
-  if (!split.second.empty()) {
-    bool parameterMember = false;
-    for (auto &p : decl.parameters)
-      parameterMember |= p.name == split.first;
-    if (!parameterMember) {
-      auto saved = checker.types.diagnostic;
-      auto id = checker.resolve(decl, split.first, expr.span);
-      if (!id)
-        checker.types.diagnostic = saved;
-      else if (checker.output.declarations[id->index].kind ==
-               Declaration::Kind::Variant) {
-        SyntaxType term;
-        term.name = split.first.str();
-        term.arguments = expr.arguments;
-        term.span = expr.span;
-        auto type = checker.type(decl, term);
-        if (!type)
-          return {};
-        if (restricted(*type) &&
-            !checker.types.constructorAllowed(decl, *type)) {
-          fail("source.private", "variant constructor is restricted",
-               expr.span);
-          return {};
-        }
-        auto alternatives = checker.types.alternatives(*type, expr.span);
-        if (!alternatives)
-          return {};
-        auto alt = llvm::find_if(
-            *alternatives, [&](auto &a) { return a.name == split.second; });
-        if (alt == alternatives->end() ||
-            alt->fields.size() != expr.children.size()) {
-          fail("source.call", "unknown alternative or wrong payload count",
-               expr.span);
-          return {};
-        }
-        if (!local()) {
-          fail("source.mode", "variant construction requires local mode",
-               expr.span);
-          return {};
-        }
-        std::vector<ValueId> args;
-        for (unsigned i = 0; i < expr.children.size(); ++i) {
-          auto v = expression(expr.children[i], alt->fields[i].type, depth + 1);
-          if (!v || !use(*v, expr.span))
-            return {};
-          args.push_back(*v);
-        }
-        return emit(
-            Construct{std::move(args), alt->name, Construct::Kind::Variant},
-            *type, {}, expr.span);
-      }
+  const auto id = uint32_t(&expr - syntax.expressions.data());
+  const auto &target = inference->callees.at(id);
+  auto &callee = checker.output.declarations[target.declaration.index];
+  if (callee.kind == Declaration::Kind::Variant) {
+    auto split = StringRef(expr.text).rsplit("::");
+    const auto &type = inference->expressions.at(id);
+    if (restricted(type) && !checker.types.constructorAllowed(decl, type)) {
+      fail("source.private", "variant constructor is restricted", expr.span);
+      return {};
     }
+    auto alternatives = checker.types.alternatives(type, expr.span);
+    if (!alternatives)
+      return {};
+    auto alt = llvm::find_if(*alternatives,
+                             [&](auto &a) { return a.name == split.second; });
+    if (alt == alternatives->end() ||
+        alt->fields.size() != expr.children.size() ||
+        !expr.callLabels.empty()) {
+      fail("source.call", "unknown alternative or wrong payload count",
+           expr.span);
+      return {};
+    }
+    if (!local()) {
+      fail("source.mode", "variant construction requires local mode",
+           expr.span);
+      return {};
+    }
+    std::vector<ValueId> args;
+    for (unsigned i = 0; i < expr.children.size(); ++i) {
+      auto v = expression(expr.children[i], alt->fields[i].type, depth + 1);
+      if (!v || !use(*v, expr.span))
+        return {};
+      args.push_back(*v);
+    }
+    return emit(Construct{std::move(args), alt->name, Construct::Kind::Variant},
+                type, {}, expr.span);
   }
-  auto target = callable(expr);
-  if (!target)
-    return {};
-  auto &callee = checker.output.declarations[target->first.index];
   if (callee.kind == Declaration::Kind::Associated) {
-    if (!local() || expr.children.size() != 1) {
+    if (!local() || expr.children.size() != 1 || !expr.callLabels.empty()) {
       fail("source.call",
            "associated constructor needs one local representation value",
            expr.span);
       return {};
     }
-    SyntaxType term;
-    term.name = expr.text;
-    term.arguments = expr.arguments;
-    term.span = expr.span;
-    auto type = checker.type(decl, term);
-    if (!type)
-      return {};
-    if (type->kind != Type::Kind::Associated) {
+    const auto &type = inference->expressions.at(id);
+    if (type.kind != Type::Kind::Associated) {
       fail("source.call",
            "associated domains have no representation constructor", expr.span);
       return {};
     }
-    if (!checker.types.constructorAllowed(decl, *type)) {
+    if (!checker.types.constructorAllowed(decl, type)) {
       fail("source.private", "associated constructor is private", expr.span);
       return {};
     }
-    auto fields = checker.types.fields(*type, expr.span);
+    auto fields = checker.types.fields(type, expr.span);
     if (!fields)
       return {};
     auto value =
         expression(expr.children.front(), fields->front().type, depth + 1);
     if (!value || !use(*value, expr.span))
       return {};
-    return emit(Construct{{*value}, {}}, *type, {}, expr.span);
+    return emit(Construct{{*value}, {}}, type, {}, expr.span);
   }
   if (callee.kind != Declaration::Kind::Math &&
       callee.kind != Declaration::Kind::Local) {
@@ -197,24 +140,25 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     fail("source.call", "helper argument count mismatch", expr.span);
     return {};
   }
-  const auto id = uint32_t(&expr - syntax.expressions.data());
   const auto &staticArgs = inference->arguments.at(id);
   auto subst = checker.types.substitution(callee, staticArgs);
-  if (target->second && callee.parent)
+  if (target.component && callee.parent)
     subst.emplace(
         "self:" +
             checker.output.declarations[callee.parent->index].qualifiedName,
-        *target->second);
-  std::vector<ValueId> args;
+        *target.component);
+  const auto &binding = inference->inputs.at(id);
+  std::vector<ValueId> args(callee.inputs.size());
   for (unsigned i = 0; i < expr.children.size(); ++i) {
-    auto type =
-        checker.types.substitute(callee.inputs[i].type, subst, expr.span);
+    const auto parameter = binding[i];
+    auto type = checker.types.substitute(callee.inputs[parameter].type, subst,
+                                         expr.span);
     if (!type || (!math() && !checker.types.executableType(*type, expr.span)))
       return {};
     auto arg = expression(expr.children[i], *type, depth + 1);
     if (!arg || !use(*arg, expr.span))
       return {};
-    args.push_back(*arg);
+    args[parameter] = *arg;
   }
   auto resultType =
       checker.types.substitute(callee.outputs.front().type, subst, expr.span);
@@ -266,7 +210,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     resultComponents = *available;
   }
   auto result = emit(
-      HelperCall{callee.id, std::move(args), staticArgs, target->second, {}},
+      HelperCall{callee.id, std::move(args), staticArgs, target.component, {}},
       *resultType, std::move(resultComponents), expr.span);
   if (result && variable)
     placement->calls.emplace_back(body.operations.size() - 1, *variable);
@@ -278,12 +222,11 @@ std::optional<ValueId> BodyChecker::bulk(const Expression &expr,
     fail("source.mode", "map requires an ordinary local function", expr.span);
     return {};
   }
-  auto target = callable(expr);
-  if (!target)
-    return {};
-  const auto &callee = checker.output.declarations[target->first.index];
+  const auto id = uint32_t(&expr - syntax.expressions.data());
+  const auto &target = inference->callees.at(id);
+  const auto &callee = checker.output.declarations[target.declaration.index];
   if (callee.kind != Declaration::Kind::Math || callee.abstract ||
-      target->second || callee.outputs.size() != 1 ||
+      target.component || callee.outputs.size() != 1 ||
       expr.children.size() != callee.inputs.size() ||
       !llvm::is_contained(expr.each, true)) {
     fail("source.map",
@@ -292,7 +235,6 @@ std::optional<ValueId> BodyChecker::bulk(const Expression &expr,
          expr.span);
     return {};
   }
-  const auto id = uint32_t(&expr - syntax.expressions.data());
   const auto &staticArgs = inference->arguments.at(id);
   auto subst = checker.types.substitution(callee, staticArgs);
   auto field =
@@ -307,10 +249,13 @@ std::optional<ValueId> BodyChecker::bulk(const Expression &expr,
     fail("source.map", "mapped helper must return one scalar field", expr.span);
     return {};
   }
-  std::vector<ValueId> args;
+  const auto &binding = inference->inputs.at(id);
+  std::vector<ValueId> args(callee.inputs.size());
+  std::vector<bool> each(args.size());
   for (unsigned i = 0; i < expr.children.size(); ++i) {
-    auto scalar =
-        checker.types.substitute(callee.inputs[i].type, subst, expr.span);
+    const auto parameter = binding[i];
+    auto scalar = checker.types.substitute(callee.inputs[parameter].type, subst,
+                                           expr.span);
     if (!scalar)
       return {};
     if (*scalar != *field) {
@@ -326,12 +271,13 @@ std::optional<ValueId> BodyChecker::bulk(const Expression &expr,
       fail("source.map", "map argument mode or field differs", expr.span);
       return {};
     }
-    args.push_back(*arg);
+    args[parameter] = *arg;
+    each[parameter] = expr.each[i];
   }
   // Unequal row counts stop this checked application.
   body.mayStop = true;
   return emit(
-      BulkApplication{callee.id, std::move(args), staticArgs, expr.each}, *rows,
-      {}, expr.span);
+      BulkApplication{callee.id, std::move(args), staticArgs, std::move(each)},
+      *rows, {}, expr.span);
 }
 } // namespace zkc::language::detail

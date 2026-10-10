@@ -28,13 +28,21 @@ are derived views of the same program.
 ## Preparation and projection
 
 Language checks modules, static applications, permissions and Entry closure.
-Its private `TypeInference` solver unifies structural type equations;
+Source elaboration expands local Boolean short-circuit operators into ordinary
+conditional regions before lexical resolution. This shares control, capture and
+resource-join checking without introducing synthetic statement inference scopes.
+Total Boolean formulas use existing mathematical operations.
+
+The private `TypeInference` solver unifies structural type equations;
 `ExpressionInference` collects them from resolved lexical bindings and completed
-callable signatures. Solved expression types and static arguments feed body
-checking without adding unresolved types to the checked source model. Associated
-types and natural expressions use bounded forward normalization. Body checking
-then evaluates in source order and owns resource use and effects; `Placement`
-separately solves participant constraints. Neither analysis executes source code.
+callable signatures. A shared argument binder maps authored positions to declared
+parameters for both static and value applications. Inference retains this mapping
+alongside resolved call targets, solved types and static arguments; body checking
+evaluates arguments in written order and then stores the results in declaration
+order. No unresolved types enter the checked source model. Associated types and
+natural expressions use bounded forward normalization. Body checking owns resource
+use and effects; `Placement` separately solves participant constraints. Neither
+analysis executes source code.
 
 [Translation](../spec/language/translation.md) independently compares emitted
 MLIR against checked source before simplification. The immutable original and

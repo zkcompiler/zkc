@@ -57,6 +57,9 @@ add_zkc_component(Language
   lib/Language/Natural.cpp
   lib/Language/Project.cpp
   lib/Language/Syntax.cpp
+  lib/Language/Arguments.cpp
+  lib/Language/Elaboration.cpp
+  lib/Language/Booleans.cpp
   lib/Language/Check.cpp
   lib/Language/Semantics.cpp
   lib/Language/KernelSignatures.cpp
@@ -81,6 +84,7 @@ add_zkc_component(Language
   lib/Language/Expressions.cpp
   lib/Language/TypeInference.cpp
   lib/Language/ExpressionInference.cpp
+  lib/Language/CallResolution.cpp
   lib/Language/Calls.cpp
   lib/Language/Builtins.cpp
   lib/Language/Kernels.cpp

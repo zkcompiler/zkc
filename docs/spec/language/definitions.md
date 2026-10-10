@@ -407,10 +407,30 @@ anything else with `algebra-map-formula`. The expanded formula must also fit the
 [Ring limits](../ir/limits.md), including depth 1,024, where subtraction costs an
 extra level on its right operand; a deeper formula refuses with the same
 identifier when the original is prepared. Both refusals name the source map and
-its helper. Other source refusals of a map use `source.map`; a map outside local
-code uses `source.mode`.
+its helper. Invalid value-argument binding uses `source.call`; invalid static
+binding uses `source.generic`, as for ordinary calls. Other map-specific source
+refusals use `source.map`; a map outside local code uses `source.mode`.
 
 ## Boolean formulas
+
+`!a`, `a && b` and `a || b` accept Boolean operands. Negation evaluates its
+operand once. In a local `fn`, `&&` evaluates its right operand only when the
+left is true; `||` does so only when the left is false. They follow the same
+typing, effects, capture and resource-join rules as local `if` expressions.
+Specifically, `a && b` checks as `if a { b } else { false }`, and `a || b`
+as `if a { true } else { b }`. A noncopyable capture used only on the right
+therefore needs `Drop` on the skipped path.
+Both operands are checked, including a statically skipped operand. A block on
+the right may perform ordered work or stop. Its continuing result must be Boolean.
+
+In `math fn`, relations and protocol formulas, these operators denote total
+mathematics. Both operands retain their dependencies and formation obligations,
+including in `false && x` and `true || x`. Protocol `&&` and `||` operands must
+contain only mathematical work, including inside blocks and unused bindings:
+local calls, service queries, messages, mutation, rejection and control refuse
+with `source.mode`. An empty effect allowance on a local function does not make
+it mathematical. Put conditional execution in a local `fn` and call it from
+the protocol; this does not introduce a conditional message schedule.
 
 Total Boolean operations use the same mathematical helper path as field and
 group expressions. `intrinsic("bool.and", a, b)`, `"bool.or"` and `"bool.xor"`
@@ -422,7 +442,7 @@ operations, not conditional execution. Libraries can expose ordinary functions:
 math fn both(a: bool, b: bool) -> bool {
   return intrinsic("bool.and", a, b);
 }
-math fn negate(a: bool) -> bool { return a == false; }
+math fn negate(a: bool) -> bool { return !a; }
 ```
 
 These helpers can be called in protocols or realized within local code. Their
@@ -581,10 +601,33 @@ consume resources or choose participants. Resource checks and evaluation remain
 in source order; participant inference follows its
 [own statement constraints](protocols.md#participant-meaning).
 
+### Arguments and inference
+
+User-declared helper and protocol parameters accept positional arguments followed
+by named arguments. A named argument is `parameter = expression`; its name belongs
+to the resolved declaration. For example, `pair(right = n, left = flag)` binds
+the same parameters as `pair(flag, n)`, while evaluating `n` before `flag`.
+Every value or managed-service parameter must be supplied exactly once. Unknown
+names, duplicate bindings, missing/excess arguments and a positional argument
+after a named argument refuse with `source.call`. Runtime arguments have no
+defaults. Interface calls use the interface's parameter names; concrete component
+calls use the implementation's names. Renaming a public parameter changes this
+source contract even though parameter names do not affect type conformance.
+
+Argument expressions evaluate once, left to right in written order. Expected
+types, participant demands and service requirements follow the named destination;
+only evaluated operands are arranged in declaration order. The same rule applies
+to maps: `map affine(r = r, high = each ys, low = each xs)` associates `each`
+with its named parameter. Record fields already use their declared names. Variant
+payloads, associated representation constructors and fixed primitive, intrinsic,
+kernel and service-method interfaces retain positional arguments.
+
 Helper and protocol calls infer bare static parameters from data argument types,
-managed-service fields and expected helper results. Omit the entire static list,
-or write one slot per parameter and use `_` for selected holes, as in
-`choose<_, Impl>(value)`. Explicit slots constrain inference. Every hole must
+managed-service fields and expected helper results. Static arguments also accept
+names: `pair<B = index>(flag, n)` fixes `B` and infers other parameters. Omit
+the whole list, supply a positional prefix, select parameters by name, or use `_`
+for a whole slot, as in `choose<_, Impl>(value)`. Positional arguments must precede
+named ones. Explicit slots constrain inference. Every missing slot or hole must
 have one consistent solution; there are no default types, dimensions or component
 implementations. Holes are whole call slots, not nested type syntax or kernel,
 intrinsic, constructor or Entry arguments. There is no global instance search,
@@ -594,6 +637,16 @@ remain fixed. Associated types and compound natural expressions normalize
 forward after their inputs are known, without inferring those inputs from a
 result. Group scaling is written `point * scalar`; it does not infer a group
 from its scalar field.
+
+Types, constructors, relation applications and Entries accept named static
+arguments with complete coverage, such as `Box<T = Fr>` or
+`run Demo = Run<N = 8, F = Fr>;`. These contexts do not infer missing arguments
+or accept holes. Invalid static name binding uses `source.generic`. A bound
+component already supplies its inherited parameters; a member call cannot
+override them. Associated types inherit their component's arguments and accept
+no separate static list. Fixed primitive static interfaces remain positional.
+
+### Components and body modes
 
 An interface declares associated types/domains and math/local member signatures.
 A component selects one interface and defines every member exactly once. Associated
@@ -617,8 +670,10 @@ Opaque runtime intrinsics are not exposed by this profile.
 Bodies use lexical `let` and `let mut` bindings, whole-name assignment, nested
 block expressions and a final `return`. [Body semantics](protocols.md#bindings-and-local-control)
 define scopes, patterns and resource joins. Arithmetic uses
-`*`, `+`, `-`, `==`, parentheses and field/group contracts; operator precedence is
-multiplication, addition/subtraction, then equality. Chained equality needs
+`*`, `+`, `-`, `==`, parentheses and field/group contracts. From highest to
+lowest, operator precedence is `!`, multiplication, addition/subtraction,
+equality, `&&`, then `||`. Binary operators at each level associate left to
+right, except chained equality needs
 parentheses. No implicit field conversion occurs. Field literals need a unique
 expected field from an annotation, operand, call or result. Installed contracts
 check canonical spelling and characteristic bounds without modular reduction.

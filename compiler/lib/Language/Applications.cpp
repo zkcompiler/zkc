@@ -9,10 +9,12 @@ BodyChecker::application(const Expression &expr) {
          expr.span);
     return {};
   }
-  auto target = checker.resolve(decl, expr.text, expr.span);
-  if (!target)
+  const auto id = uint32_t(&expr - syntax.expressions.data());
+  TypeScope types(*this, id, {});
+  if (!types)
     return {};
-  auto &callee = checker.output.declarations[target->index];
+  const auto &target = inference->callees.at(id);
+  auto &callee = checker.output.declarations[target.declaration.index];
   if (callee.kind != Declaration::Kind::Protocol) {
     fail("source.call", "application target must be a protocol", expr.span);
     return {};
@@ -53,55 +55,43 @@ BodyChecker::application(const Expression &expr) {
     llvm::sort(roles);
     return roles;
   };
-  const auto id = uint32_t(&expr - syntax.expressions.data());
-  TypeScope types(*this, id, {});
-  if (!types)
-    return {};
-  std::vector<uint32_t> data;
-  std::vector<ServiceId> managed;
+  const auto &binding = inference->inputs.at(id);
+  const auto &arguments = inference->arguments.at(id);
+  auto substitution = checker.types.substitution(callee, arguments);
+  std::vector<ValueId> operands(callee.inputs.size());
+  std::vector<ServiceId> managed(callee.services.size());
+  // Evaluate authored operands in source order; inputOrder identifies the
+  // destination independently of that order, including managed services.
   for (unsigned i = 0; i < expr.children.size(); ++i) {
     auto child = expr.children[i];
-    if (callee.inputOrder[i].kind == Declaration::InputSlot::Kind::Service) {
+    const auto &slot = callee.inputOrder[binding[i]];
+    if (slot.kind == Declaration::InputSlot::Kind::Service) {
       auto root = service(syntax.expressions[child]);
       if (!root)
         return {};
-      managed.push_back(*root);
+      const auto &actual = body.services[root->index];
+      const auto &expected = callee.services[slot.index];
+      auto field =
+          checker.types.substitute(expected.field, substitution, expr.span);
+      if (!field)
+        return {};
+      if (*field != actual.field || mapping[expected.owner] != actual.owner) {
+        fail("source.service", "managed service field or mapped owner differs",
+             expr.span);
+        return {};
+      }
+      managed[slot.index] = *root;
     } else {
-      data.push_back(child);
+      const auto &port = callee.inputs[slot.index];
+      auto type = checker.types.substitute(port.type, substitution, expr.span);
+      if (!type)
+        return {};
+      auto value = expression(child, *type);
+      if (!value || !demand(*value, mappedRoles(port), expr.span) ||
+          !use(*value, expr.span))
+        return {};
+      operands[slot.index] = *value;
     }
-    if (checker.types.diagnostic)
-      return {};
-  }
-  const auto &arguments = inference->arguments.at(id);
-  auto substitution = checker.types.substitution(callee, arguments);
-  for (unsigned i = 0; i < managed.size(); ++i) {
-    const auto &actual = body.services[managed[i].index];
-    const auto &expected = callee.services[i];
-    auto field =
-        checker.types.substitute(expected.field, substitution, expr.span);
-    if (!field)
-      return {};
-    if (*field != actual.field || mapping[expected.owner] != actual.owner) {
-      fail("source.service", "managed service field or mapped owner differs",
-           expr.span);
-      return {};
-    }
-  }
-  std::vector<ValueId> operands;
-  for (unsigned i = 0; i < data.size(); ++i) {
-    const auto &port = callee.inputs[i];
-    auto type = checker.types.substitute(port.type, substitution, expr.span);
-    if (!type)
-      return {};
-    auto value = expression(data[i], *type);
-    if (!value)
-      return {};
-    auto roles = mappedRoles(port);
-    if (!demand(*value, roles, expr.span))
-      return {};
-    if (!use(*value, expr.span))
-      return {};
-    operands.push_back(*value);
   }
   body.mayStop |= callee.body->mayStop;
   body.opaque |= callee.body->opaque;

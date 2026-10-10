@@ -1,6 +1,8 @@
+#include "Arguments.h"
 #include "BodyCheck.h"
 #include "TypeInference.h"
 #include "llvm/ADT/STLExtras.h"
+#include <cassert>
 using namespace llvm;
 namespace zkc::language::detail {
 /// Collect type equations without evaluating source. BodyChecker remains the
@@ -114,7 +116,7 @@ class ExpressionInference {
                                         parameterName + "' of " +
                                         callee.qualifiedName +
                                         "; supply an explicit static argument "
-                                        "(use _ for other slots) "
+                                        "by name or use _ for other slots, "
                                         "or a result type annotation",
                                     callSpan, {parameterSpan});
         }
@@ -161,28 +163,35 @@ class ExpressionInference {
       parameters.emplace("self:" + interface.qualifiedName,
                          known(*component, expr.span));
     }
+    auto staticBinding =
+        bindArguments(checker.types,
+                      argumentNames<Parameter>(
+                          ArrayRef(callee.parameters).drop_front(inherited)),
+                      expr.arguments.size(), expr.staticLabels, false,
+                      expr.span, "source.generic");
+    if (!staticBinding)
+      return {};
     if (!expr.arguments.empty()) {
-      if (expr.arguments.size() + inherited != callee.parameters.size()) {
-        fail("source.generic", "static argument count differs", expr.span);
-        return {};
-      }
       for (unsigned i = 0; i < expr.arguments.size(); ++i)
         if (expr.arguments[i].kind != SyntaxType::Kind::Hole)
-          types.equal(parameters.at(callee.parameters[inherited + i].atom),
-                      annotation(expr.arguments[i]), expr.span);
+          types.equal(
+              parameters.at(
+                  callee.parameters[inherited + (*staticBinding)[i]].atom),
+              annotation(expr.arguments[i]), expr.span);
     }
     bool protocol = callee.kind == Declaration::Kind::Protocol;
-    if (expr.children.size() !=
-        (protocol ? callee.inputOrder.size() : callee.inputs.size())) {
-      fail("source.call", "call input count differs", expr.span);
+    auto binding =
+        bindArguments(checker.types, inputNames(callee), expr.children.size(),
+                      expr.callLabels, true, expr.span, "source.call");
+    if (!binding)
       return {};
-    }
+    output.inputs.emplace(id, *binding);
     calls.push_back({id, callee.id, parameters});
     for (unsigned i = 0; i < expr.children.size(); ++i) {
       auto slot =
-          protocol
-              ? callee.inputOrder[i]
-              : Declaration::InputSlot{Declaration::InputSlot::Kind::Data, i};
+          protocol ? callee.inputOrder[(*binding)[i]]
+                   : Declaration::InputSlot{Declaration::InputSlot::Kind::Data,
+                                            (*binding)[i]};
       if (slot.kind == Declaration::InputSlot::Kind::Service) {
         auto field = service(expr.children[i]);
         if (field)
@@ -226,9 +235,10 @@ class ExpressionInference {
     auto target = owner.callable(expr);
     if (!target)
       return;
-    const auto &callee = checker.output.declarations[target->first.index];
+    output.callees.emplace(id, *target);
+    const auto &callee = checker.output.declarations[target->declaration.index];
     if (callee.kind != Declaration::Kind::Math || callee.abstract ||
-        target->second) {
+        target->component) {
       fail("source.map", "map selects a static, defined math fn", expr.span);
       return;
     }
@@ -349,8 +359,9 @@ class ExpressionInference {
       return;
     }
     if (expr.text == "unpack" && expr.kind == K::Call) {
-      if (expr.children.size() != 1) {
-        fail("source.call", "unpack requires one value", expr.span);
+      if (expr.children.size() != 1 || !expr.callLabels.empty() ||
+          !expr.arguments.empty()) {
+        fail("source.call", "unpack requires one positional value", expr.span);
         return;
       }
       auto base = child(0);
@@ -372,18 +383,21 @@ class ExpressionInference {
       });
       return;
     }
+    std::optional<ExpressionTypes::Callable> target;
+    if (expr.kind != K::Record) {
+      target = owner.callable(expr);
+      if (!target)
+        return;
+      output.callees.emplace(id, *target);
+    }
     auto split = StringRef(expr.text).rsplit("::");
-    auto nominal = expr.kind == K::Record
-                       ? checker.resolve(decl, expr.text, expr.span, false)
-                   : split.second.empty()
-                       ? std::nullopt
-                       : checker.resolve(decl, split.first, expr.span, false);
     if (expr.kind == K::Record ||
-        (nominal && checker.output.declarations[nominal->index].kind ==
-                        Declaration::Kind::Variant)) {
+        checker.output.declarations[target->declaration.index].kind ==
+            Declaration::Kind::Variant) {
       SyntaxType term;
       term.name = expr.kind == K::Record ? expr.text : split.first.str();
       term.arguments = expr.arguments;
+      term.labels = expr.staticLabels;
       term.span = expr.span;
       auto type = checker.type(decl, term);
       if (!type)
@@ -419,14 +433,12 @@ class ExpressionInference {
       }
       return;
     }
-    auto target = owner.callable(expr);
-    if (!target)
-      return;
-    const auto &callee = checker.output.declarations[target->first.index];
+    const auto &callee = checker.output.declarations[target->declaration.index];
     if (callee.kind == Declaration::Kind::Associated) {
       SyntaxType term;
       term.name = expr.text;
       term.arguments = expr.arguments;
+      term.labels = expr.staticLabels;
       term.span = expr.span;
       auto type = checker.type(decl, term);
       if (!type)
@@ -445,7 +457,7 @@ class ExpressionInference {
     }
     types.equal(
         result.type,
-        packed(application(id, callee, target->second, depth), expr.span),
+        packed(application(id, callee, target->component, depth), expr.span),
         expr.span);
   }
   Result expression(uint32_t id, unsigned depth) {
@@ -469,6 +481,14 @@ class ExpressionInference {
       break;
     case K::Boolean:
       constrain(result.type, Type{}, expr.span);
+      break;
+    case K::Not:
+      llvm_unreachable("Boolean negation must be elaborated before inference");
+    case K::And:
+    case K::Or:
+      constrain(result.type, Type{}, expr.span);
+      constrain(child(0), Type{}, expr.span);
+      constrain(child(1), Type{}, expr.span);
       break;
     case K::Name:
       if (expr.binding)
@@ -680,6 +700,7 @@ public:
 };
 std::optional<ExpressionTypes>
 BodyChecker::inferExpression(uint32_t id, std::optional<Type> expected) {
+  assert(syntax.elaborated && "inference requires elaborated source");
   return ExpressionInference(*this).run(id, std::move(expected));
 }
 BodyChecker::TypeScope::TypeScope(BodyChecker &checker, uint32_t id,

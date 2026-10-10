@@ -44,7 +44,9 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
          expr.span);
     return {};
   }
-  if (expr.kind == K::Kernel) {
+  if (expr.kind == K::And || expr.kind == K::Or) {
+    result = boolean(expr, depth);
+  } else if (expr.kind == K::Kernel) {
     result = kernel(expr, depth);
   } else if (expr.kind == K::Intrinsic) {
     result = intrinsic(expr, depth);
@@ -320,14 +322,8 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
     for (unsigned i = 0; i < expr.children.size(); ++i)
       fields.push_back({std::to_string(i), *element, true, expr.span});
   } else {
-    SyntaxType term;
-    term.name = expr.text;
-    term.arguments = expr.arguments;
-    term.span = expr.span;
-    auto resolved = checker.type(decl, term);
-    if (!resolved)
-      return {};
-    type = *resolved;
+    type =
+        inference->expressions.at(uint32_t(&expr - syntax.expressions.data()));
     if (type.kind != T::Record) {
       fail("source.type", "named field constructor requires a record",
            expr.span);

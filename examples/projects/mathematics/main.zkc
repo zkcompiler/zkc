@@ -11,8 +11,8 @@ math fn symbolic(a: F, b: F, point: F) {
 fn dynamic(values: Vector<F>, point: F) { return sum(fold(values, point)); }
 protocol Compare roles(P)(a: F @P, b: F @P, values: Vector<F> @P, point: F @P)
     -> (formal_result: F @P, runtime_result: F @P) {
-  let formal_result = symbolic(a, b, point);
-  let runtime_result = dynamic(values, point);
+  let formal_result = symbolic(point = point, a = a, b = b);
+  let runtime_result = dynamic(values = values, point = point);
   return (formal_result = formal_result, runtime_result = runtime_result);
 }
 run Run = Compare;

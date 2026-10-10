@@ -22,6 +22,7 @@ private:
   uint32_t statement = 0;
   Placement *placement = nullptr;
   const ExpressionTypes *inference = nullptr;
+  std::set<uint32_t> mathematicalExpressions;
   struct TypeScope {
     BodyChecker &checker;
     const ExpressionTypes *outer;
@@ -65,6 +66,8 @@ private:
   bool local() const { return body.mode == Body::Mode::Local; }
   bool protocol() const { return body.mode == Body::Mode::Protocol; }
   bool fail(llvm::StringRef, const llvm::Twine &, Span);
+  bool mathematicalExpression(uint32_t, unsigned);
+  std::optional<ValueId> boolean(const Expression &, unsigned);
   std::vector<unsigned> allRoles() const;
   std::optional<Components> combine(llvm::ArrayRef<ValueId>, Span);
   std::optional<ValueId> emit(decltype(Operation::action), const Type &,
@@ -140,8 +143,7 @@ private:
                                    unsigned);
   std::optional<std::pair<ValueId, std::vector<unsigned>>> place(uint32_t,
                                                                  unsigned = 1);
-  std::optional<std::pair<DeclarationId, std::optional<Type>>>
-  callable(const Expression &);
+  std::optional<ExpressionTypes::Callable> callable(const Expression &);
 };
 } // namespace zkc::language::detail
 #endif

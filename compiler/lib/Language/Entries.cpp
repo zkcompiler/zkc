@@ -69,8 +69,8 @@ bool Checker::entries() {
             "source.entry",
             "proof declarations require a proof configuration block",
             source.span);
-      auto selected =
-          arguments(entry, definition, source.targetArguments, source.span);
+      auto selected = arguments(entry, definition, source.targetArguments,
+                                source.span, source.targetLabels);
       if (!selected)
         return false;
       height[id.index] = 1;

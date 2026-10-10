@@ -150,12 +150,35 @@ fn first<T: Type + Copy + Drop, N: nat>(xs: [T; N]) {
   return xs[0];
 }
 fn pairFirst<T: Type + Copy + Drop>(xs: [T; 2]) {
-  return first<_, 2>(xs);
+  return first<N = 2>(xs = xs);
 }
 ```
 
-`first` infers result `T` and condition `1 <= N`; the call infers its `_` as `T`.
+`first` infers result `T` and condition `1 <= N`; the call fixes `N` and infers `T`.
 An explicit result type remains useful for literals and stable library interfaces.
+
+Static and value arguments can use declared parameter names. Positional arguments
+come first; every runtime parameter must still be supplied. For example,
+`affine(r = challenge, high = next, low = current)` makes the interpolation roles
+visible. Expressions evaluate in written order even when the parameters are
+reordered. Unspecified static arguments must have one inferred solution; the
+compiler does not choose a field or component by default.
+
+Use `!`, `&&` and `||` for Boolean expressions:
+
+```zkc
+fn checked(go: bool, valid: bool) {
+  return go && { require valid; true };
+}
+math fn formula(a: bool, b: bool) { return !a || b; }
+```
+
+`checked` skips the block when `go` is false. Local Boolean operators use the same
+rules as `if`, including resource checks on both branches. In math functions and
+protocol formulas they describe total mathematics with both dependencies retained.
+Protocol `&&` and `||` reject operands containing ordered work; call a local helper
+when conditional execution is needed. Ordinary function arguments remain eager,
+so calling `both(a, checked(b, c))` still evaluates `checked` before `both`.
 
 Local code can apply a scalar helper to whole vectors without writing a loop:
 `map affine(each low, each high, r)` checks that `low` and `high` have equal

@@ -45,7 +45,8 @@ nominal products/variants, static parameters and components, capabilities and
 permissions, lexical scopes and patterns, mutable bindings with inferred region
 state/captures, statement-scoped participant inference, nested ordered calls,
 helper result inference, expression-wide structural type constraints, partial
-static arguments, inferred catalog/natural
+static arguments with positional or named binding, named value/service arguments,
+local short-circuit Boolean operators and total Boolean formulas, inferred catalog/natural
 preconditions with explicit contract checking, unified data/service arguments,
 source rejection with `require`, formal polynomial intrinsics, checked
 pointwise `map` of scalar helpers over vectors, local control,
