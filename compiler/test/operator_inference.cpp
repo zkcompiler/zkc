@@ -1,11 +1,32 @@
 #include "../lib/Language/BindingWitness.h"
 #include "../lib/Language/OperatorInference.h"
 #include "support/NativeCases.h"
+#include <numeric>
 using namespace zkc::language;
 using namespace zkc::language::detail;
 using zkc::test::require;
 namespace {
 constexpr Span site{{0}, 0, 1};
+using Position = NotationDescriptor::Position;
+using Association = NotationDescriptor::Association;
+std::shared_ptr<const NotationDescriptor>
+descriptor(Position position = Position::Infix, unsigned arity = 2,
+           std::string symbol = "+") {
+  NotationDescriptor value;
+  value.position = position;
+  value.association =
+      position == Position::Infix ? Association::Left : Association::None;
+  value.symbol = std::move(symbol);
+  value.arity = arity;
+  value.precedence = position == Position::Delimited ? 0 : 65;
+  if (position == Position::Infix && value.symbol == "==") {
+    value.association = Association::None;
+    value.precedence = 50;
+  }
+  if (position == Position::Delimited)
+    value.closing = "⟫";
+  return std::make_shared<const NotationDescriptor>(std::move(value));
+}
 Declaration signature(unsigned id, std::vector<Type> inputs, Type output) {
   Declaration result;
   result.id = {id};
@@ -130,14 +151,18 @@ int main() {
           Fixture f;
           f.declarations = {signature(0, {field, field}, field),
                             signature(1, {index, index}, index)};
-          std::vector<OperatorBinding> family{{"+", {{0}, {}}, {}, site},
-                                              {"+", {{1}, {}}, {}, site}};
-          CallBinding witness{{{0}, {}}, {}, {{0}, {1}}, "+", {}, site};
+          auto notation = descriptor();
+          std::vector<OperatorBinding> family{
+              {"+", {{0}, {}}, {}, site, notation},
+              {"+", {{1}, {}}, {}, site, notation}};
+          CallBinding witness{{{0}, {}}, {},   {{0}, {1}}, "+",
+                              {},        site, *notation};
           for (const auto &binding : family)
             witness.family.push_back(
                 operatorBindingKey(binding, f.declarations));
           require(checkOperatorWitness(f.semantics, f.declarations, family,
-                                       witness, {field, field}, field, site),
+                                       *notation, witness, {field, field},
+                                       field, site),
                   "valid scope witness refused");
           if (mutation == 0)
             witness.family.pop_back();
@@ -150,7 +175,8 @@ int main() {
           if (mutation == 4)
             witness.symbol = "*";
           require(!checkOperatorWitness(f.semantics, f.declarations, family,
-                                        witness, {field, field}, field, site) &&
+                                        *notation, witness, {field, field},
+                                        field, site) &&
                       f.semantics.diagnostic &&
                       f.semantics.diagnostic->code == "source.binding-witness",
                   "corrupted scope witness accepted");
@@ -159,17 +185,18 @@ int main() {
   cases.run("operand witness refuses reordered operator input mappings", [&] {
     for (unsigned mutation = 0; mutation < 2; ++mutation) {
       Fixture f;
-      CallBinding witness{{{0}, {}}, {}, {{0}, {1}}, "-", {}, site};
+      auto notation = descriptor(Position::Infix, 2, "-");
+      CallBinding witness{{{0}, {}}, {}, {{0}, {1}}, "-", {}, site, *notation};
       std::vector<unsigned> order{0, 1};
-      require(
-          checkOperatorOperands(f.semantics, witness, order, {{0}, {1}}, site),
-          "valid operands refused");
+      require(checkOperatorOperands(f.semantics, *notation, witness, order,
+                                    {{0}, {1}}, site),
+              "valid operands refused");
       if (mutation == 0)
         std::swap(order[0], order[1]);
       else
         std::swap(witness.operands[0], witness.operands[1]);
-      require(!checkOperatorOperands(f.semantics, witness, order, {{0}, {1}},
-                                     site) &&
+      require(!checkOperatorOperands(f.semantics, *notation, witness, order,
+                                     {{0}, {1}}, site) &&
                   f.semantics.diagnostic &&
                   f.semantics.diagnostic->code == "source.binding-witness",
               "mutated authored operand order accepted");
@@ -204,7 +231,7 @@ int main() {
         Operation op{local, {{2}}, site, 0};
         if (mode == Body::Mode::Protocol)
           op.action = helper;
-        op.binding = CallBinding{{{0}, {}}, {}, {{0}, {1}}, {}, {}, {}};
+        op.binding = CallBinding{{{0}, {}}, {}, {{0}, {1}}, {}, {}, {}, {}};
         require(checkCallAction(f.semantics, f.declarations, body, op),
                 "valid primitive call action refused");
         if (mode == Body::Mode::Local) {
@@ -244,7 +271,8 @@ int main() {
           {{2}},
           site,
           0};
-      operation.binding = CallBinding{{{0}, {}}, {}, {{0}, {1}}, {}, {}, {}};
+      operation.binding =
+          CallBinding{{{0}, {}}, {}, {{0}, {1}}, {}, {}, {}, {}};
       require(checkCallAction(f.semantics, f.declarations, body, operation),
               "valid native call witness refused");
       auto &action = std::get<MathValue>(operation.action);
@@ -287,7 +315,7 @@ int main() {
               else
                 op.action = HelperCall{{0}, {{0}, {1}}, {}, {}, {}};
             }
-            op.binding = CallBinding{{{0}, {}}, {}, {{0}, {1}}, {}, {}, {}};
+            op.binding = CallBinding{{{0}, {}}, {}, {{0}, {1}}, {}, {}, {}, {}};
             require(checkCallAction(f.semantics, f.declarations, body, op),
                     "valid mathematical primitive action refused");
             if (mode == Body::Mode::Local && scalar)
@@ -303,6 +331,334 @@ int main() {
                             "source.binding-witness",
                     "wrong mathematical primitive boundary accepted");
           }
+      });
+  for (const auto &notation :
+       {descriptor(Position::Prefix, 1, "⊖"),
+        descriptor(Position::Postfix, 1, "⊖"), descriptor(),
+        descriptor(Position::Delimited, 1, "⟪"),
+        descriptor(Position::Delimited, 3, "⟪"),
+        descriptor(Position::Delimited, 64, "⟪")}) {
+    cases.run(
+        "notation inference and witness: " + notation->key() + "/" +
+            std::to_string(notation->arity),
+        [&] {
+          Fixture f;
+          std::vector<Type> inputs(notation->arity, field);
+          f.declarations = {signature(0, inputs, field)};
+          std::vector<TypeInference::Variable> variables;
+          std::vector<unsigned> order(notation->arity);
+          std::iota(order.begin(), order.end(), 0);
+          std::vector<ValueId> operands;
+          for (auto i : order) {
+            variables.push_back(f.known(field));
+            operands.push_back({i});
+          }
+          f.operators.add(0, site, variables, f.known(field), {candidate(0)});
+          auto result = f.operators.solve(site, [] { return true; });
+          require(result && result->at(0).constraints.inputs.size() ==
+                                notation->arity,
+                  "notation did not use the ordinary variable-arity solver");
+          std::vector<OperatorBinding> family{
+              {notation->symbol, {{0}, {}}, {}, site, notation}};
+          CallBinding witness{
+              {{0}, {}},
+              {},
+              operands,
+              notation->symbol,
+              {operatorBindingKey(family.front(), f.declarations)},
+              site,
+              *notation};
+          Expression expr;
+          expr.kind = Expression::Kind::NotationCall;
+          expr.span = site;
+          expr.notation = notation;
+          expr.children = order;
+          NotationEnvironment environment{{notation->key(), {notation, site}}};
+          require(checkNotationOccurrence(f.semantics, expr, environment),
+                  "valid lexical descriptor refused");
+          require(checkOperatorWitness(f.semantics, f.declarations, family,
+                                       *notation, witness, inputs, field, site),
+                  "valid notation binding refused");
+          require(checkOperatorOperands(f.semantics, *notation, witness, order,
+                                        operands, site),
+                  "valid notation operand order refused");
+        });
+  }
+  for (unsigned mutation = 0; mutation < 6; ++mutation) {
+    cases.run("descriptor shape mutation " + std::to_string(mutation), [&] {
+      Fixture f;
+      f.declarations = {signature(0, {field, field, field}, field)};
+      auto notation = descriptor(Position::Delimited, 3, "⟪");
+      auto altered = *notation;
+      switch (mutation) {
+      case 0:
+        altered.position = Position::Prefix;
+        break;
+      case 1:
+        altered.symbol = "⟨";
+        break;
+      case 2:
+        altered.closing = "⟩";
+        break;
+      case 3:
+        altered.precedence = 1;
+        break;
+      case 4:
+        altered.association = Association::Right;
+        break;
+      case 5:
+        altered.arity = 2;
+        break;
+      }
+      Expression expr;
+      expr.kind = Expression::Kind::NotationCall;
+      expr.span = site;
+      expr.notation = std::make_shared<const NotationDescriptor>(altered);
+      expr.children = {0, 1, 2};
+      NotationEnvironment environment{{notation->key(), {notation, site}}};
+      require(!checkNotationOccurrence(f.semantics, expr, environment) &&
+                  f.semantics.diagnostic &&
+                  f.semantics.diagnostic->code == "source.binding-witness",
+              "expression descriptor overrode its lexical environment");
+      f.semantics.diagnostic.reset();
+      std::vector<OperatorBinding> family{{"⟪", {{0}, {}}, {}, site, notation}};
+      const auto key = operatorBindingKey(family.front(), f.declarations);
+      auto other = family.front();
+      other.notation = expr.notation;
+      require(operatorBindingKey(other, f.declarations) != key,
+              "canonical family key omitted descriptor shape");
+      CallBinding witness{{{0}, {}}, {},   {{0}, {1}, {2}}, "⟪",
+                          {key},     site, altered};
+      require(!checkOperatorWitness(f.semantics, f.declarations, family,
+                                    *notation, witness, {field, field, field},
+                                    field, site) &&
+                  f.semantics.diagnostic &&
+                  f.semantics.diagnostic->code == "source.binding-witness",
+              "retained descriptor mutation accepted");
+    });
+  }
+  cases.run("notation visibility is independent of operand types", [&] {
+    Fixture f;
+    auto prefix = descriptor(Position::Prefix, 1, "⊖");
+    auto infix = descriptor(Position::Infix, 2, "⊖");
+    Expression expr;
+    expr.kind = Expression::Kind::NotationCall;
+    expr.span = site;
+    expr.notation = prefix;
+    expr.children = {0};
+    NotationEnvironment environment{{infix->key(), {infix, site}}};
+    require(!checkNotationOccurrence(f.semantics, expr, environment) &&
+                f.semantics.diagnostic &&
+                f.semantics.diagnostic->code == "source.binding-witness",
+            "an infix descriptor made an invisible prefix visible");
+  });
+  cases.run(
+      "descriptor identity is structural rather than pointer identity", [&] {
+        Fixture f;
+        auto notation = descriptor(Position::Prefix, 1, "⊖");
+        Expression expr;
+        expr.kind = Expression::Kind::NotationCall;
+        expr.span = site;
+        expr.notation = std::make_shared<const NotationDescriptor>(*notation);
+        expr.children = {0};
+        NotationEnvironment environment{{notation->key(), {notation, site}}};
+        require(checkNotationOccurrence(f.semantics, expr, environment),
+                "equal descriptor values required shared allocation identity");
+        expr.notation.reset();
+        require(!checkNotationOccurrence(f.semantics, expr, environment) &&
+                    f.semantics.diagnostic &&
+                    f.semantics.diagnostic->code == "source.binding-witness",
+                "unfinished notation occurrence was accepted");
+      });
+  for (unsigned mutation = 0; mutation < 7; ++mutation) {
+    cases.run(
+        "notation family integrity mutation " + std::to_string(mutation), [&] {
+          Fixture f;
+          auto notation = descriptor(Position::Delimited, 3, "⟪");
+          f.declarations = {signature(0, {field, field, field}, field),
+                            signature(1, {index, index, index}, index)};
+          std::vector<OperatorBinding> family{
+              {"⟪", {{0}, {}}, {}, site, notation},
+              {"⟪", {{1}, {}}, {}, site, notation}};
+          CallBinding witness{{{0}, {}}, {},   {{0}, {1}, {2}}, "⟪",
+                              {},        site, *notation};
+          for (const auto &binding : family)
+            witness.family.push_back(
+                operatorBindingKey(binding, f.declarations));
+          require(checkOperatorWitness(f.semantics, f.declarations, family,
+                                       *notation, witness,
+                                       {field, field, field}, field, site),
+                  "valid delimiter family refused");
+          switch (mutation) {
+          case 0:
+            family.front().notation.reset();
+            break;
+          case 1:
+            family.front().arguments.push_back(field);
+            break;
+          case 2:
+            family.back().target.declaration = {2};
+            break;
+          case 3:
+            f.declarations.back().inputs.pop_back();
+            break;
+          case 4:
+            f.declarations.back().outputs.clear();
+            break;
+          case 5:
+            witness.notation.reset();
+            break;
+          case 6:
+            witness.operands.pop_back();
+            break;
+          }
+          require(!checkOperatorWitness(f.semantics, f.declarations, family,
+                                        *notation, witness,
+                                        {field, field, field}, field, site) &&
+                      f.semantics.diagnostic &&
+                      f.semantics.diagnostic->code == "source.binding-witness",
+                  "malformed family or retained witness accepted");
+        });
+  }
+  cases.run("forged arity cannot certify its own shortened operands", [&] {
+    Fixture f;
+    auto notation = descriptor(Position::Delimited, 2, "⟪");
+    f.declarations = {signature(0, {field, field, field}, field)};
+    std::vector<OperatorBinding> family{{"⟪", {{0}, {}}, {}, site, notation}};
+    CallBinding witness{{{0}, {}},
+                        {},
+                        {{0}, {1}},
+                        "⟪",
+                        {operatorBindingKey(family.front(), f.declarations)},
+                        site,
+                        *notation};
+    require(!checkOperatorWitness(f.semantics, f.declarations, family,
+                                  *notation, witness, {field, field}, field,
+                                  site) &&
+                f.semantics.diagnostic &&
+                f.semantics.diagnostic->code == "source.binding-witness",
+            "matching forged descriptor and operands bypassed the target "
+            "signature");
+  });
+  for (const auto &notation : {descriptor(Position::Prefix, 2, "⊖"),
+                               descriptor(Position::Postfix, 2, "⊖"),
+                               descriptor(Position::Infix, 1, "⊖"),
+                               descriptor(Position::Delimited, 0, "⟪"),
+                               descriptor(Position::Delimited, 65, "⟪")}) {
+    cases.run(
+        "invalid notation arity: " + notation->key() + "/" +
+            std::to_string(notation->arity),
+        [&] {
+          Fixture f;
+          Expression expr;
+          expr.kind = Expression::Kind::NotationCall;
+          expr.span = site;
+          expr.notation = notation;
+          expr.children.resize(notation->arity);
+          NotationEnvironment environment{{notation->key(), {notation, site}}};
+          require(!checkNotationOccurrence(f.semantics, expr, environment) &&
+                      f.semantics.diagnostic &&
+                      f.semantics.diagnostic->code ==
+                          (notation->arity > 64 ? "source.limit"
+                                                : "source.binding-witness"),
+                  "invalid positional arity accepted");
+        });
+  }
+  cases.run("notation witnesses honor a lowered hole budget", [&] {
+    Fixture f;
+    f.limits.notationHoles = 2;
+    auto notation = descriptor(Position::Delimited, 3, "⟪");
+    Expression expr;
+    expr.kind = Expression::Kind::NotationCall;
+    expr.span = site;
+    expr.notation = notation;
+    expr.children = {0, 1, 2};
+    NotationEnvironment environment{{notation->key(), {notation, site}}};
+    require(!checkNotationOccurrence(f.semantics, expr, environment) &&
+                f.semantics.diagnostic &&
+                f.semantics.diagnostic->code == "source.limit",
+            "witness ignored the caller's notation hole ceiling");
+  });
+  for (const auto &order : std::vector<std::vector<unsigned>>{
+           {2, 1, 0}, {0, 1, 1}, {0, 1}, {0, 1, 3}}) {
+    cases.run(
+        "delimiter operand mapping mutation " + std::to_string(order.back()),
+        [&] {
+          Fixture f;
+          auto notation = descriptor(Position::Delimited, 3, "⟪");
+          CallBinding witness{{{0}, {}}, {},   {{0}, {1}, {2}}, "⟪",
+                              {},        site, *notation};
+          require(!checkOperatorOperands(f.semantics, *notation, witness, order,
+                                         {{0}, {1}, {2}}, site) &&
+                      f.semantics.diagnostic &&
+                      f.semantics.diagnostic->code == "source.binding-witness",
+                  "delimiter mapping lost authored order");
+        });
+  }
+  for (unsigned arity : {1u, 3u}) {
+    cases.run("fixed inputs remain ambiguous at arity " + std::to_string(arity),
+              [&] {
+                Fixture f;
+                std::vector<Type> inputs(arity, field);
+                f.declarations = {signature(0, inputs, field),
+                                  signature(1, inputs, boolean)};
+                std::vector<TypeInference::Variable> variables;
+                for (unsigned i = 0; i < arity; ++i)
+                  variables.push_back(f.known(field));
+                f.operators.add(0, site, variables, f.known(field),
+                                {candidate(0), candidate(1)});
+                f.refusal("source.operator");
+              });
+  }
+  cases.run("only fixed infix equality requires a Boolean result", [&] {
+    for (const auto &symbol : {"==", "≡"}) {
+      Fixture f;
+      auto notation = descriptor(Position::Infix, 2, symbol);
+      f.declarations = {signature(0, {field, field}, field)};
+      std::vector<OperatorBinding> family{
+          {symbol, {{0}, {}}, {}, site, notation}};
+      CallBinding witness{{{0}, {}},
+                          {},
+                          {{0}, {1}},
+                          symbol,
+                          {operatorBindingKey(family.front(), f.declarations)},
+                          site,
+                          *notation};
+      bool accepted =
+          checkOperatorWitness(f.semantics, f.declarations, family, *notation,
+                               witness, {field, field}, field, site);
+      require(accepted == (llvm::StringRef(symbol) != "=="),
+              "Boolean result rule escaped the fixed equality descriptor");
+    }
+  });
+  cases.run(
+      "retained native action rechecks notation arity against its target", [&] {
+        Fixture f;
+        auto notation = descriptor(Position::Delimited, 3, "⟪");
+        f.declarations = {signature(0, {field, field, field}, field)};
+        Body body;
+        body.mode = Body::Mode::Math;
+        body.values = {{field, {}, site},
+                       {field, {}, site},
+                       {field, {}, site},
+                       {field, {}, site}};
+        Operation op{
+            HelperCall{{0}, {{0}, {1}, {2}}, {}, {}, {}}, {{3}}, site, 0};
+        OperatorBinding binding{"⟪", {{0}, {}}, {}, site, notation};
+        op.binding = CallBinding{{{0}, {}},
+                                 {},
+                                 {{0}, {1}, {2}},
+                                 "⟪",
+                                 {operatorBindingKey(binding, f.declarations)},
+                                 site,
+                                 *notation};
+        require(checkCallAction(f.semantics, f.declarations, body, op),
+                "valid delimited helper action refused");
+        op.binding->notation->arity = 2;
+        require(!checkCallAction(f.semantics, f.declarations, body, op) &&
+                    f.semantics.diagnostic &&
+                    f.semantics.diagnostic->code == "source.binding-witness",
+                "action accepted a descriptor with the wrong target arity");
       });
   return cases.result();
 }

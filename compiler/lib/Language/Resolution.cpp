@@ -145,6 +145,14 @@ private:
     if (!bounded(depth, b.span))
       return false;
     b.parent = currentBody;
+    // Boolean control elaboration creates regions after parsing. Those regions
+    // inherit the immutable syntax of the enclosing authored body.
+    if (!b.notationEnvironment) {
+      if (currentBody)
+        b.notationEnvironment = syntax.bodies[*currentBody].notationEnvironment;
+      else if (decl.module.index < checker.notationEnvironments.size())
+        b.notationEnvironment = checker.notationEnvironments[decl.module.index];
+    }
     currentBody = id;
     for (const auto &binding : b.operators) {
       auto value = checker.operatorBinding(decl, binding);

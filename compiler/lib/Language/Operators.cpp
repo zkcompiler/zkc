@@ -4,23 +4,23 @@
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::language::detail {
-StringRef operatorSymbol(Expression::Kind kind) {
-  switch (kind) {
-  case Expression::Kind::Add:
-    return "+";
-  case Expression::Kind::Subtract:
-    return "-";
-  case Expression::Kind::Multiply:
-    return "*";
-  case Expression::Kind::Equal:
-    return "==";
-  default:
-    return {};
-  }
+StringRef operatorSymbol(const Expression &expression) {
+  return expression.kind == Expression::Kind::NotationCall &&
+                 expression.notation
+             ? StringRef(expression.notation->symbol)
+             : StringRef{};
 }
 std::string operatorBindingKey(const OperatorBinding &binding,
                                ArrayRef<Declaration> declarations) {
   std::string key;
+  if (binding.notation) {
+    const auto &notation = *binding.notation;
+    frame(key, notation.key());
+    frame(key, notation.closing);
+    frame(key, std::to_string(static_cast<unsigned>(notation.association)));
+    frame(key, std::to_string(notation.precedence));
+    frame(key, std::to_string(notation.arity));
+  }
   frame(key, declarations[binding.target.declaration.index].qualifiedName);
   frame(key, binding.target.component ? typeIdentity(*binding.target.component)
                                       : "");
@@ -31,20 +31,52 @@ std::string operatorBindingKey(const OperatorBinding &binding,
 std::optional<OperatorBinding>
 Checker::operatorBinding(const Declaration &context,
                          const SyntaxOperator &source) {
+  if (!source.notation || source.symbol != source.notation->symbol) {
+    types.fail("source.operator",
+               "notation declaration has no resolved descriptor", source.span);
+    return {};
+  }
+  const auto &notation = *source.notation;
+  using Position = NotationDescriptor::Position;
+  const auto arity = notation.arity;
+  bool validArity = false;
+  switch (notation.position) {
+  case Position::Prefix:
+  case Position::Postfix:
+    validArity = arity == 1;
+    break;
+  case Position::Infix:
+    validArity = arity == 2;
+    break;
+  case Position::Delimited:
+    if (arity > work.limits.notationHoles) {
+      types.fail("source.limit", "notation hole limit exceeded", source.span);
+      return {};
+    }
+    validArity = arity > 0;
+    break;
+  }
+  if (!validArity) {
+    types.fail("source.operator", "notation descriptor has invalid arity",
+               source.span);
+    return {};
+  }
   auto target = callable(context, source.target.name, source.target.span);
   if (!target)
     return {};
   const auto &callee = output.declarations[target->declaration.index];
   if ((callee.kind != Declaration::Kind::Math &&
        callee.kind != Declaration::Kind::Local) ||
-      callee.inputs.size() != 2 || callee.outputs.size() != 1 ||
+      callee.inputs.size() != arity || callee.outputs.size() != 1 ||
       sources[callee.id.index]->outputs.size() != 1) {
     types.fail("source.operator",
-               "operator target requires two inputs and a written result type",
+               "notation target requires its descriptor's input count and a "
+               "written result type",
                source.span, {callee.span});
     return {};
   }
-  if (source.symbol == "==" && callee.outputs.front().type != Type{}) {
+  if (notation.position == Position::Infix && notation.symbol == "==" &&
+      callee.outputs.front().type != Type{}) {
     types.fail("source.operator", "equality operators require a Boolean result",
                source.span, {callee.span});
     return {};
@@ -71,7 +103,8 @@ Checker::operatorBinding(const Declaration &context,
                     source.target.span, "source.generic");
   if (!positions)
     return {};
-  OperatorBinding result{source.symbol, *target, {}, source.span};
+  OperatorBinding result{
+      source.symbol, *target, {}, source.span, source.notation};
   result.arguments.resize(callee.parameters.size());
   TypeInference equations(types);
   auto signature =
@@ -116,21 +149,42 @@ Checker::operatorCandidates(const Declaration &decl,
                             const SyntaxDeclaration &source,
                             uint32_t expression) {
   const auto &expr = source.expressions[expression];
-  auto symbol = operatorSymbol(expr.kind);
-  if (symbol.empty()) {
+  auto symbol = operatorSymbol(expr);
+  if (symbol.empty() || expr.children.size() != expr.notation->arity) {
     types.fail("source.operator", "expected an operator occurrence", expr.span);
     return {};
   }
+  const auto descriptorKey = expr.notation->key();
   std::vector<OperatorBinding> result;
+  auto include = [&](const OperatorBinding &binding) {
+    if (!binding.notation)
+      return types.fail("source.operator", "notation binding has no descriptor",
+                        expr.span);
+    if (!types.charge(binding.notation->symbol.size() +
+                          binding.notation->closing.size() + 1,
+                      expr.span))
+      return false;
+    if (binding.notation->key() != descriptorKey)
+      return true;
+    if (*binding.notation != *expr.notation || binding.symbol != symbol)
+      return types.fail("source.operator", "notation binding shape differs",
+                        expr.span, {binding.span});
+    result.push_back(binding);
+    return true;
+  };
+  unsigned depth = 0;
   for (auto scope = expr.scope; scope; scope = source.bodies[*scope].parent) {
+    if (*scope >= source.bodies.size() ||
+        ++depth > work.limits.expressionDepth) {
+      types.fail("source.operator", "invalid notation scope", expr.span);
+      return {};
+    }
     const auto &bindings = source.bodies[*scope].resolvedOperators;
     if (!types.charge(bindings.size() + 1, expr.span))
       return {};
-    for (const auto &binding : bindings) {
-      if (binding.symbol != symbol)
-        continue;
-      result.push_back(binding);
-    }
+    for (const auto &binding : bindings)
+      if (!include(binding))
+        return {};
     if (!result.empty())
       break;
   }
@@ -140,8 +194,8 @@ Checker::operatorCandidates(const Declaration &decl,
       return {};
     for (auto site : visibleOperators[decl.module.index]) {
       const auto &binding = moduleOperators.at(site);
-      if (binding.symbol == symbol)
-        result.push_back(binding);
+      if (!include(binding))
+        return {};
     }
   }
   // Canonical identities, rather than import order, determine both overload
