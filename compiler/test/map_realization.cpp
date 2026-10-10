@@ -405,6 +405,62 @@ module { "protocol.module"() ({
   // Each helper is shallow; their composition is not.
   depth("expanded helper calls beyond the Ring depth limit",
         chain(600, "algebra.field_add", false, 2), false);
+  // Admission charges the root helper before cloning it, operations no
+  // result reaches included, and then charges only the callees it expands.
+  // One work unit admits the map; every charged operation costs one more than
+  // its operand and result slots. The root helper is the function (1), the
+  // call (3), each dead addition (4) and the return (2); expanding @square
+  // adds its multiplication (4).
+  auto budgeted = [](unsigned dead) {
+    std::string text = R"(!F = !algebra.field<"koala-bear">
+!V = tensor<?x!F>
+module { "protocol.module"() ({
+ func.func private @square(%x:!F)->!F {
+   %r = "algebra.field_multiply"(%x,%x) : (!F,!F)->!F
+   func.return %r : !F
+ }
+ func.func private @outer(%x:!F)->!F {
+   %s = func.call @square(%x) : (!F)->!F
+)";
+    for (unsigned i = 0; i < dead; ++i)
+      text += "   %d" + std::to_string(i) +
+              " = \"algebra.field_add\"(%x,%x) : (!F,!F)->!F\n";
+    text += R"(   func.return %s : !F
+ }
+ algebra.map_realize @mapped = @outer [true] : (!V)->!V
+ local.func @work(%a:!V)->!V attributes {logical_origin=["work",[]]} {
+   %r = local.apply @mapped(%a) {site="map"} : (!V)->!V
+   local.return %r : !V
+ }
+ "protocol.func"() ({
+ ^entry(%a:!V):
+   %r = "protocol.local_call"(%a) {callee=@work,role="P",site="work"} : (!V)->!V
+   "protocol.return"(%r) : (!V)->()
+ }) {sym_name="main",function_type=(!V)->!V,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() })";
+    return text;
+  };
+  for (unsigned dead : {0u, 3u})
+    cases.run(
+        "exact admission budget with " + Twine(dead) + " dead root operations",
+        [&] {
+          auto module = parseSourceString<ModuleOp>(budgeted(dead), &context);
+          require(bool(module), "budget fixture refused");
+          ScopedDiagnosticHandler quiet(&context,
+                                        [](Diagnostic &) { return success(); });
+          uint64_t exact = 1 + (1 + 3 + 4 * dead + 2) + 4;
+          uint64_t work = exact;
+          auto error = mathematical::checkMapFormulas(*module, work);
+          require(!error,
+                  "exact budget refused: " + llvm::toString(std::move(error)));
+          require(work == 0, "exact budget left work unspent");
+          work = exact - 1;
+          error = mathematical::checkMapFormulas(*module, work);
+          require(bool(error), "short budget admitted the formula");
+          auto message = llvm::toString(std::move(error));
+          require(namesIdentifier(message, "mathematical-expansion-limit"),
+                  "budget refusal identifier: " + message);
+        });
   cases.run("realization requires the protocol profile", [&] {
     auto module = parseSourceString<ModuleOp>(
         "module { func.func private @empty() {func.return} }", &context);

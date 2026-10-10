@@ -79,6 +79,23 @@ LogicalResult inlineHelpers(Operation *program, unsigned &remaining,
   return success();
 }
 
+LogicalResult chargeHelperOperations(Operation *helper, unsigned &remaining,
+                                     uint64_t &indices, uint64_t *work) {
+  auto traversal = helper->walk([&](Operation *op) {
+    uint64_t slots = op->getNumOperands() + op->getNumResults();
+    if (!remaining || slots > indices || (work && slots + 1 > *work)) {
+      diagnostics::emit(op->emitError(), "mathematical-expansion-limit");
+      return WalkResult::interrupt();
+    }
+    --remaining;
+    indices -= slots;
+    if (work)
+      *work -= slots + 1;
+    return WalkResult::advance();
+  });
+  return failure(traversal.wasInterrupted());
+}
+
 namespace {
 class Projector {
   OpBuilder builder;
@@ -613,18 +630,7 @@ LogicalResult checkHelperObservations(protocol_ir::ProtocolModuleOp unit,
     if (!helper || helper.isExternal() || !seen.insert(name).second)
       return diagnostics::emit(unit.emitError(), "mathematical-helper",
                                "expected distinct pure helper bodies");
-    auto traversal = helper.walk([&](Operation *op) {
-      uint64_t slots = op->getNumOperands() + op->getNumResults();
-      if (!remaining || slots > indices || slots + 1 > work) {
-        diagnostics::emit(op->emitError(), "mathematical-expansion-limit");
-        return WalkResult::interrupt();
-      }
-      --remaining;
-      indices -= slots;
-      work -= slots + 1;
-      return WalkResult::advance();
-    });
-    if (traversal.wasInterrupted())
+    if (failed(chargeHelperOperations(helper, remaining, indices, &work)))
       return failure();
     // Detached copies use the immutable source symbol table explicitly.
     // Dependencies and unrelated protocol bodies are never cloned or edited.

@@ -251,6 +251,7 @@ def test_extension_tables_keep_every_coordinate(toolchain, journal, directory):
     ('tampered', 'relation-asset-identity'),
     ('table', 'relation-table-index'),
     ('carrier', 'entry-asset-carrier'),
+    ('non-two-adic', 'refused:bundle-polynomial-two-adic'),
 ])
 def test_host_preflight_checks_every_polynomial_reference(
         toolchain, journal, directory, mutation, code):
@@ -273,8 +274,13 @@ def test_host_preflight_checks_every_polynomial_reference(
                     binding[2][1] = '1'
             candidate = json.dumps(program, separators=(',', ':'))
         else:
-            # A KoalaBear reference to an Ext8 table, under that table's identity.
-            body = json.dumps(extension_bundle(), separators=(',', ':'))
+            if mutation == 'non-two-adic':
+                body = json.loads(BUNDLE)
+                body[3][0][2] = ['fixed', 3]
+            else:
+                # A KoalaBear reference to an Ext8 table, under its own identity.
+                body = extension_bundle()
+            body = json.dumps(body, separators=(',', ':'))
             replacement = sha256(body.encode()).hexdigest()
             candidate = candidate.replace(identity, replacement)
             package['assets'] = [[replacement, body]]

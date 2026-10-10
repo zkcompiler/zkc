@@ -22,6 +22,14 @@ assertion and interaction expressions. Native polynomial, vector and commitment 
 implement their own mathematical contracts. The source modules choose the
 quotient combination, challenge schedule and acceptance conditions.
 
+`vanishing(height,begin,end,x)` evaluates the product over subgroup rows
+`[begin,end)` at any field point, including excluded subgroup roots.
+`vanishing_values` evaluates that same polynomial on the supplied two-adic
+coset. Both use the complement shortcut where its denominator is nonzero;
+the scalar helper falls back at a removable pole, and the vector helper uses
+direct products on intersecting cosets. Full scopes keep geometric evaluation.
+The STARK profiles use disjoint evaluation domains and retain the fast path.
+
 ## Single-table statement and supported relation
 
 `TableArgument<Table,B,LogHeight,LogSize,Queries,Attempts>` proves the assertions
@@ -246,8 +254,14 @@ commit consistent false quotients and auxiliary columns. A valid execution of
 another configured program with the same final result is rejected by the known
 configuration obligation; disabling that obligation makes the control pass.
 
-The implementation is a complete executable profile, with small test parameters
-and its own proof encoding. Arbitrary table counts, other interaction profiles,
+The implementation uses small test parameters and its own proof encoding.
+One admission limitation remains: absent fixed-height and configured-height
+tables still pass through polynomial shape checks, including the active-table
+height bound `H`. This can refuse otherwise valid absent tables. Separating
+height-independent table layout from active polynomial admission is needed to
+cover the full optional-table contract above.
+
+Arbitrary table counts, other interaction profiles,
 hiding, production parameter selection, and a security theorem for the exact
 composition remain separate work. The external VM relation also needs an
 adequacy argument connecting its constraints to the intended execution semantics.

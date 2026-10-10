@@ -96,11 +96,11 @@ impl EntryAssets {
             let binding = reference.binding.declaration();
             // Reachability can repeat one immutable reference many times.
             // Scan its asset once per reference rule and closed binding
-            // arguments; the polynomial kernels share one rule, and so do
-            // the interaction kernels other than the policy.
+            // arguments; the polynomial kernels share one rule, and all
+            // interaction kernels share the height-independent carrier rule.
             let rule = match binding.contract.as_str() {
                 contract if POLYNOMIAL.contains(&contract) => POLYNOMIAL[0],
-                contract if INTERACTION[1..].contains(&contract) => INTERACTION[1],
+                contract if INTERACTION.contains(&contract) => INTERACTION[0],
                 contract => contract,
             };
             if checked.insert((
@@ -152,9 +152,8 @@ const POLYNOMIAL: &[&str] = &[
     "relation.table_point",
     "relation.table_points",
 ];
-/// Contracts of the Bundle interaction view. The height-taking and record
-/// kernels share one reference rule; `relation.table_policy` keeps only its
-/// whole-table carrier admission.
+/// Contracts of the Bundle interaction view. All four share the whole-table
+/// carrier rule; none requires a polynomial domain at reference admission.
 const INTERACTION: &[&str] = &[
     "relation.table_policy",
     "relation.table_interactions",
