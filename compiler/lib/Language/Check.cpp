@@ -16,6 +16,10 @@ Error Checker::run() {
     return error;
   if (!collect() || !imports())
     return types.takeError();
+  for (auto &module : syntax)
+    if (auto error = parseBodies((*output.sources)[module.id.index], module,
+                                 output.tokens[module.id.index], work))
+      return error;
   for (auto &decl : output.declarations)
     if (!decl.abstract && !sources[decl.id.index]->explicitRequirements &&
         (decl.kind == Declaration::Kind::Math ||

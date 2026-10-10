@@ -178,6 +178,14 @@ public:
     return output;
   }
 
+  Error finish(SyntaxModule &syntax) {
+    headersOnly = false;
+    for (auto &declaration : syntax.declarations)
+      if (!finish(declaration))
+        return takeError();
+    return Error::success();
+  }
+
 private:
   const SourceBuffer &source;
   ModuleId module;
@@ -186,6 +194,22 @@ private:
   size_t cursor = 0;
   uint32_t previousEnd = 0;
   std::optional<Diagnostic> diagnostic;
+  bool headersOnly = true;
+  bool finish(SyntaxDeclaration &declaration) {
+    if (auto pending = declaration.deferredBody) {
+      cursor = pending->begin;
+      previousEnd = current().span.begin;
+      if (!body(declaration, pending->protocol, false, pending->depth))
+        return false;
+      if (cursor != pending->end)
+        return fail("source.syntax", "body differs from its declaration range");
+      declaration.deferredBody.reset();
+    }
+    for (auto &member : declaration.members)
+      if (!finish(member))
+        return false;
+    return true;
+  }
   const Token &current() const { return tokens[cursor]; }
   StringRef text() const {
     auto s = current().span;
@@ -1604,6 +1628,27 @@ private:
   }
   std::optional<uint32_t> body(SyntaxDeclaration &decl, bool protocol,
                                bool region, unsigned depth) {
+    if (headersOnly) {
+      const auto begin = cursor;
+      if (!expect("{"))
+        return {};
+      unsigned nesting = 1;
+      while (nesting && !atEnd()) {
+        if (!accept(work.charge(1, current().span)))
+          return {};
+        if (at("{"))
+          ++nesting;
+        else if (at("}"))
+          --nesting;
+        advance();
+      }
+      if (nesting) {
+        fail("source.syntax", "unterminated declaration body");
+        return {};
+      }
+      decl.deferredBody = DeferredBody{begin, cursor, depth, protocol};
+      return 0;
+    }
     if (!bounded(depth) || !expect("{"))
       return {};
     uint32_t id = decl.bodies.size();
@@ -1790,6 +1835,14 @@ private:
 } // namespace
 Expected<SyntaxModule> parse(const SourceBuffer &source, ModuleId module,
                              ArrayRef<Token> tokens, Work &work) {
+  if (auto error = work.charge(tokens.size(), Span{module, 0, 0}))
+    return std::move(error);
   return Parser(source, module, tokens, work).run();
+}
+Error parseBodies(const SourceBuffer &source, SyntaxModule &module,
+                  ArrayRef<Token> tokens, Work &work) {
+  if (auto error = work.charge(tokens.size(), Span{module.id, 0, 0}))
+    return error;
+  return Parser(source, module.id, tokens, work).finish(module);
 }
 } // namespace zkc::language::detail

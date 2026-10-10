@@ -37,6 +37,24 @@ int main() {
     pub fn add<F:Field>(a:Vector<F>, b:Vector<F>)->Vector<F> = primitive("vector.add");
     pub operator + = add;
   )";
+  cases.run("body parsing follows complete module imports and declarations",
+            [&] {
+              auto project = take(check({{"m",
+                                          "module m;" + field + R"(
+          fn f(a:V,b:V)->V{return a+b;}
+          use v;
+          type V=v::Vector<F>;
+        )",
+                                          {}},
+                                         {"v", vector, {}}}));
+              require(localAction(decl(project, "m::f")) == "vector.add",
+                      "forward module declarations changed body binding");
+            });
+  cases.run("unused declaration bodies still undergo complete parsing", [&] {
+    refuses(check(field + "fn unused(a:F)->F{return a + ;}"), "source.name");
+    refuses(check(field + "fn unused(a:F)->F{let nested={a;};return a;"),
+            "source.syntax");
+  });
   cases.run("prelude is installed separately from capture", [&] {
     auto captureValue = take(capture({{"m", "module m;", {}}}));
     auto project = take(analyze(captureValue).checkedProject());

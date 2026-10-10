@@ -218,6 +218,14 @@ struct Binding {
   bool service = false;
   unsigned scope = 0;
 };
+/// Token intervals refer to the module's non-trivia token sequence. Fixed
+/// declaration headers are collected before imports; expression bodies are
+/// parsed only after their module environment is known.
+struct DeferredBody {
+  size_t begin, end;
+  unsigned depth;
+  bool protocol;
+};
 struct SyntaxDeclaration {
   Declaration::Kind kind;
   /// A domain declaration's target is its sort word; its domain is the
@@ -232,6 +240,7 @@ struct SyntaxDeclaration {
   std::vector<SyntaxPort> inputs, outputs, services;
   std::vector<Declaration::InputSlot> inputOrder;
   std::vector<Expression> expressions;
+  std::optional<DeferredBody> deferredBody;
   // Root body is kept in the first slot; nested bodies use stable indices.
   std::vector<SyntaxBody> bodies;
   // Resolved lexical identities are private elaboration data, never serialized.
@@ -281,6 +290,8 @@ struct SyntaxModule {
 llvm::Error lex(const SourceBuffer &, ModuleId, Work &, std::vector<Token> &);
 llvm::Expected<SyntaxModule> parse(const SourceBuffer &, ModuleId,
                                    llvm::ArrayRef<Token>, Work &);
+llvm::Error parseBodies(const SourceBuffer &, SyntaxModule &,
+                        llvm::ArrayRef<Token>, Work &);
 llvm::Error check(std::vector<SyntaxModule>, CheckedStorage &, Work &);
 llvm::Error checkSetups(const ClosedEntry &, Layouts &, Work &);
 llvm::Error checkCapabilityInstallation();
