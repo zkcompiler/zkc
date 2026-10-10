@@ -53,7 +53,9 @@ tools.overrideAttrs (
     '';
     installPhase = ''
       mkdir -p "$out"
-      find build/reports -type f -exec cp --parents {} "$out/" \;
+      # Negative tests can leave unreadable fixtures in their reports.
+      find build/reports -type f -exec chmod u+r {} +
+      find build/reports -type f -exec cp --parents -t "$out" {} +
       mv "$out/build/reports" "$out/reports"
       rmdir "$out/build"
     '';
