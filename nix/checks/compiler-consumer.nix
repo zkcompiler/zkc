@@ -3,12 +3,14 @@
   cmake,
   ninja,
   compiler,
+  source,
   llvm,
   lib,
 }:
 stdenv.mkDerivation {
   name = "zkc-compiler-consumer";
-  src = ../../common/tests/consumer;
+  src = source;
+  sourceRoot = "${source.name}/common/tests/consumer";
   nativeBuildInputs = [
     cmake
     ninja

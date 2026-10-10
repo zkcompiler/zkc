@@ -3,10 +3,6 @@
   pythonTools,
   uv,
   environment,
-  just,
-  git,
-  cmake,
-  ninja,
   compiler,
   tools,
   testSupport,
@@ -27,11 +23,7 @@ tools.overrideAttrs (
     # Rust package's toolchain and offline vendor hooks for that boundary test.
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
       pythonTools
-      just # Exercised by the command regression test, not the test runner.
       uv
-      git
-      cmake
-      ninja
       python3
     ];
     dontConfigure = true;
@@ -48,7 +40,7 @@ tools.overrideAttrs (
       runHook preCheck
       export UV_CACHE_DIR="$TMPDIR/uv-cache"
       ${environment.checks}
-      python3 common/tests/run.py project
+      python3 common/tests/run.py integration
       runHook postCheck
     '';
     installPhase = ''

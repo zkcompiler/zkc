@@ -83,6 +83,8 @@ jobs:
             .#checks.x86_64-linux.rust \
             .#checks.x86_64-linux.application \
             .#checks.x86_64-linux.compiler-consumer \
+            .#checks.x86_64-linux.sdk \
+            .#checks.x86_64-linux.sources \
             .#checks.x86_64-linux.format \
             2>&1 | tee build/reports/native-checks.log
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

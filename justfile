@@ -36,11 +36,11 @@ build-test-drivers:
     python3 scripts/develop.py test-drivers
 
 # Build the optional independent Lean research package.
-build-lean:
-    python3 scripts/develop.py lean
+build-lean deps="main":
+    python3 scripts/develop.py lean --deps "$1"
 
 # Run compiler, Rust, native integration, installation, documentation and lint checks.
-test: test-compiler test-integration test-rust test-install test-docs lint demo
+test: test-harness test-sdk test-compiler test-rust test-integration test-install test-docs lint
 
 # Explicitly remove retained reports when no tests are using them.
 clean-reports:
@@ -53,7 +53,7 @@ test-compiler profile="release": (build-compiler profile)
 # Build and run the native C++ sanitizer tests.
 test-sanitize: (test-compiler "sanitize")
 
-# Run native compiler/Runner/Host integration and harness checks.
+# Run native compiler/Runner/Host integration checks.
 test-integration: build build-test-drivers
     python3 common/tests/run.py integration
 
@@ -61,12 +61,16 @@ test-integration: build build-test-drivers
 test-harness:
     python3 common/tests/run.py harness
 
-# Run Rust tests against the built components.
-test-rust: build
+# Check SDK discovery with small CMake/C++ fixtures.
+test-sdk:
+    python3 common/tests/run.py sdk
+
+# Run the Rust workspace tests.
+test-rust:
     python3 common/tests/run.py rust
 
 # Run optional formal controls and independent Lean consumers.
-test-lean: build-lean
+test-lean: (build-lean "main")
     python3 common/tests/run.py lean
 
 # Fetch pinned main, ArkLib or Clean dependency objects for development.
@@ -74,12 +78,12 @@ fetch-lean deps="main":
     python3 scripts/develop.py fetch-lean --deps "$1"
 
 # Build and check the optional ArkLib integration.
-test-lean-integration: (fetch-lean "arklib")
-    python3 scripts/develop.py lean-integration
+test-lean-integration: (build-lean "arklib")
+    python3 common/tests/run.py lean-integration
 
 # Build the optional Clean integration and check its committed native control.
-test-lean-clean: (fetch-lean "clean")
-    python3 scripts/develop.py lean-clean
+test-lean-clean: (build-lean "clean")
+    python3 common/tests/run.py lean-clean
 
 # Test the optional AIR adapter, including independent native comparisons.
 test-plonky3:
@@ -91,21 +95,17 @@ test-lean-fresh:
 
 # Install the compiler and build an independent SDK consumer.
 test-install prefix="" profile="release": (build-compiler profile)
-    python3 scripts/develop.py install --output "$1" --profile "$2"
+    python3 common/tests/run.py install --output "$1" --profile "$2"
 
 # Check a fresh domain installation and base refusal; opt in to one linkage per run.
 test-install-domain profile="release" *args:
-    python3 scripts/develop.py install-domain --profile "$@"
+    python3 common/tests/run.py install-domain --profile "$@"
 
 # Check documentation links, fragments and reachability.
 test-docs:
     python3 common/tests/run.py docs
 
-# Compile a source Entry and produce and verify its proof.
-demo: build
-    python3 common/tests/run.py demo
-
-# Check C++/Rust formatting, Clippy and Python lint.
+# Check formatting, workflow syntax, Clippy and Python lint.
 lint:
     python3 common/tests/run.py lint
 

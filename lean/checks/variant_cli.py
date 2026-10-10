@@ -15,7 +15,7 @@ FORMAL = Path(__file__).resolve().parents[1]
 TOOL = FORMAL / '.lake/build/bin/interactive-protocol'
 
 
-sys.path.insert(0, str(FORMAL.parent / 'compiler/test/support'))
+sys.path.insert(0, str(FORMAL.parent / 'common/tests/support'))
 from variant_codec import descriptor  # noqa: E402 - standalone fixture import
 
 

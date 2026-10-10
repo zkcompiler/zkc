@@ -19,13 +19,8 @@ environment and build the tools. Run these commands from the repository root:
 ```sh
 nix develop
 just setup
-just demo
+just build
 ```
-
-`just demo` builds its tools, compiles this source and reports `Proof accepted`
-and an output directory. That directory contains the authenticated Entry package,
-`proof.bin`, and separate producer/validator reports. The full integration suite
-is separate from the demo.
 
 The checked-in inputs contain a deliberately public witness, scalar 3, with the
 standard BLS12-381 G1 generator and its scalar multiple. They demonstrate the
@@ -41,7 +36,7 @@ multiple Entries and participant inputs.
 
 ## Follow each boundary
 
-After building, the same steps are:
+After building, run these commands to compile, prove and verify:
 
 <!-- executable: source-proof -->
 ```sh

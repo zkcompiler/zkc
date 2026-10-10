@@ -10,7 +10,7 @@ exports an alternative environment.
 |---|---|---|
 | Nix | `flake.nix`, `flake.lock`, `nix/default.nix` | Pinned inputs and package/check composition |
 | Environment | `nix/environment.nix`, `nix/shell.nix` | Tool paths, development defaults and explicit check environments |
-| Source selection | `nix/source.nix` | Exclude generated/private data; isolate component inputs |
+| Source selection | `nix/sources.nix`, `nix/source.nix` | Declare package/check inputs and exclude generated/private data |
 | Native builds | `compiler/CMakePresets.json`, Cargo/Lake manifests | Build graph, profiles and dependency versions |
 | Workspace operations | `scripts/develop.py`, `scripts/workspace.py` | Explicit setup, profile resolution and mutable checkout paths |
 | Test execution | `common/tests/run.py` and the existing test drivers | Ordered integrations and report routing, shared by local commands and Nix |
@@ -21,6 +21,8 @@ re-enter Nix. Shell entry installs/resolves tools but does not sync Python,
 fetch Lake dependencies, or build the project. Use `just setup` explicitly;
 the same operation is available as
 `nix develop --command python3 scripts/develop.py setup`.
+
+Compiled package source sets exclude Python test orchestration and unrelated integration fixtures. Test derivations add their own inputs. `checks.sources` verifies representative inclusions and exclusions. Documentation, style and harness discovery inspect the full maintained repository; optional Lean integrations have separate source sets. Update the owning list in `nix/sources.nix` when a package or check starts reading a new path.
 
 ## Toolchain and concurrency
 

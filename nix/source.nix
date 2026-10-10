@@ -1,6 +1,11 @@
-# Source boundaries exclude generated/private state and unrelated optional inputs.
+# Filter declared inputs without importing mutable checkout state.
 { lib }:
-name: paths:
+{
+  name,
+  paths,
+  exclude ? [ ],
+  markdown ? false,
+}:
 lib.cleanSourceWith {
   name = "zkc-${name}-source";
   src = lib.cleanSource ../.;
@@ -8,25 +13,13 @@ lib.cleanSourceWith {
     path: type:
     let
       relative = lib.removePrefix "${toString ../.}/" path;
+      under = selected: relative == selected || lib.hasPrefix "${selected}/" relative;
     in
     lib.any (
-      selected:
-      relative == selected
-      || lib.hasPrefix "${selected}/" relative
-      || (type == "directory" && lib.hasPrefix "${relative}/" selected)
+      selected: under selected || (type == "directory" && lib.hasPrefix "${relative}/" selected)
     ) paths
-    # Optional integration edits do not invalidate the main Lean build.
-    && !(name == "lean" && lib.hasPrefix "lean/integrations" relative)
-    && !(
-      builtins.elem name [
-        "lean"
-        "arklib"
-        "compiler"
-        "rust"
-        "llzk"
-      ]
-      && lib.hasSuffix ".md" path
-    )
+    && !(lib.any under exclude)
+    && (markdown || !(lib.hasSuffix ".md" path))
     && !(lib.hasPrefix "result-" (baseNameOf path))
     && !(lib.hasPrefix ".venv" (baseNameOf path))
     && !(builtins.elem (baseNameOf path) [

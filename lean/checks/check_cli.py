@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'common/tests/support'))
 from journal import Journal  # noqa: E402
 from toolchain import reports_root  # noqa: E402
@@ -30,6 +30,27 @@ def main():
         assert report['code'].startswith(f'usage: {name} '), report
     assert journal.json([binaries / 'requirement-checker'], stdin='[]',
                         refuses='requirements-envelope') == ['refused', 'requirements-envelope']
+    # Exercise the Lean executable itself: another language's usage string is
+    # not evidence that this JSON-lines entry point has a caller.
+    contract = binaries / 'contract-conformance'
+    requests = ['{"type":"index"}', '{"type":"unknown"}', 'not json',
+                '{"type":"index","type":"bool"}']
+    replies = journal.run([contract], stdin='\n'.join(requests), keep='contract-requests').splitlines()
+    assert list(map(json.loads, replies)) == [
+        {'accepted': True, 'canonical': 'index', 'copy': True, 'drop': True,
+         'serializable': True, 'default_physical': 'index@native.index/0'},
+        *[{'accepted': False}] * 3,
+    ]
+    binding = {'contract': 'field.add', 'arguments': ['bn254.fr'],
+               'implementation': '', 'physical': False}
+    for arguments, output_type in [([], 'field:bn254.fr'),
+                                   (['--divergent-logical-field-add'], 'bool')]:
+        assert journal.json([contract, *arguments], stdin=json.dumps(binding)) == {
+            'accepted': True, 'physical': False,
+            'inputs': ['field:bn254.fr', 'field:bn254.fr'], 'outputs': [output_type],
+        }
+    usage = journal.attempt([contract, '--unknown'])
+    assert usage.returncode == 2 and not usage.stdout and 'usage:' in usage.stderr
     rows = journal.run([binaries / 'iteration-reference']).splitlines()
     (output / 'iteration.txt').write_text('\n'.join(rows) + '\n')
     assert len(rows) == 1326

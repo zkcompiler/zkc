@@ -138,21 +138,14 @@ class TargetControls(unittest.TestCase):
 
         config = tomllib.loads((ROOT / "lakefile.toml").read_text())
         executables = [entry["name"] for entry in config.get("lean_exe", [])]
-        repository = ROOT.parent
-        # Only files that could invoke one. The lakefile names every executable
-        # twice by construction -- once declared, once a default target -- so
-        # counting it made this pass for everything; and this file's own prose
-        # mentions two of them.
+        # Only maintained Lean check callers count. A Rust/C++ usage string
+        # can name the same binary without ever invoking the Lean executable.
         callers = "".join(
-            path.read_text(errors="replace")
-            for folder in ("lean", "common/tests", "crates", "compiler", ".github")
-            for path in sorted((repository / folder).rglob("*"))
-            if path.is_file()
-            and path.suffix in {".py", ".rs", ".yml"}
-            and path != Path(__file__).resolve()
-            and ".lake" not in path.parts
-            and "target" not in path.parts
-        ) + (repository / "justfile").read_text()
+            path.read_text()
+            for folder in ("checks", "consumers")
+            for path in sorted((ROOT / folder).rglob("*.py"))
+            if path != Path(__file__).resolve()
+        )
         unrun = [name for name in executables if name not in callers]
         self.assertEqual(
             unrun,
