@@ -30,6 +30,13 @@ std::vector<int32_t> readOffsets(const BundleOutputFact &fact) {
     result.push_back(read.offset);
   return result;
 }
+Error checkFields(const BundleTable &t, const std::set<uint32_t> &outputs,
+                  StringRef carrier, StringRef base) {
+  std::vector<uint32_t> positions(outputs.begin(), outputs.end());
+  CarrierCheck check{carrier, base};
+  auto visited = t.arena.evaluate<char>(positions, check);
+  return visited ? Error::success() : visited.takeError();
+}
 } // namespace
 
 Error bundle::checkAssertionFields(const BundleTable &t, StringRef carrier,
@@ -37,10 +44,18 @@ Error bundle::checkAssertionFields(const BundleTable &t, StringRef carrier,
   std::set<uint32_t> outputs;
   for (const auto &assertion : t.assertions)
     outputs.insert(assertion.output);
-  std::vector<uint32_t> positions(outputs.begin(), outputs.end());
-  CarrierCheck check{carrier, base};
-  auto visited = t.arena.evaluate<char>(positions, check);
-  return visited ? Error::success() : visited.takeError();
+  return checkFields(t, outputs, carrier, base);
+}
+
+Error bundle::checkOutputFields(const BundleTable &t, StringRef carrier,
+                                StringRef base) {
+  std::set<uint32_t> outputs;
+  for (const auto &assertion : t.assertions)
+    outputs.insert(assertion.output);
+  for (const auto &interaction : t.interactions)
+    for (auto output : interactionOutputs(interaction))
+      outputs.insert(output);
+  return checkFields(t, outputs, carrier, base);
 }
 
 Expected<BundleTableView> bundleTableView(const Bundle &bundle, uint32_t table,
@@ -98,6 +113,13 @@ Error checkBundleTableReference(const Bundle &bundle, StringRef contract,
       contract == "relation.table_scope" ||
       contract == "relation.table_point" || contract == "relation.table_points")
     return checkBundlePolynomialTable(bundle, table, carrier);
+  if (contract == "relation.table_policy" ||
+      contract == "relation.table_interactions" ||
+      contract == "relation.table_interaction" ||
+      contract == "relation.table_record_points") {
+    auto coordinates = admitBundleTableCarrier(bundle, table, carrier);
+    return coordinates ? Error::success() : coordinates.takeError();
+  }
   return zkc::error("relation-table-contract", contract);
 }
 

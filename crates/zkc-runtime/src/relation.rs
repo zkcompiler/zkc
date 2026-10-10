@@ -12,8 +12,10 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+mod interaction;
 mod polynomial;
 mod table;
+pub use interaction::{InteractionDescriptor, InteractionView};
 pub use polynomial::{
     POLYNOMIAL_SIZE_LIMIT, PolynomialArena, PolynomialInput, PolynomialShape, PolynomialView,
 };
@@ -340,11 +342,12 @@ impl Interaction {
             } => (*channel, *locality, *scope, tuple, *multiplicity),
         }
     }
-    fn outputs(&self) -> Vec<usize> {
+    fn output_indices(&self) -> impl Iterator<Item = usize> + Clone + '_ {
         let (_, _, _, tuple, count) = self.parts();
-        let mut outputs = tuple.to_vec();
-        outputs.push(count);
-        outputs
+        tuple.iter().copied().chain(std::iter::once(count))
+    }
+    fn outputs(&self) -> Vec<usize> {
+        self.output_indices().collect()
     }
 }
 #[derive(Clone, Debug)]

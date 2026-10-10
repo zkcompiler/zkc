@@ -11,6 +11,7 @@
 #include "zkc/Compiler/Run.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/LogicalTree.h"
 #include "zkc/Support/MLIRInput.h"
@@ -250,7 +251,7 @@ compileNativeProof(StringRef text, StringRef filename,
   if (!exported)
     return diagnostics.failure(exported.takeError());
   auto candidate = printJson(*exported);
-  if (candidate.size() > 1024 * 1024)
+  if (candidate.size() > program::artifactByteLimit)
     return diagnostics.failure(error("native-proof-candidate-limit"));
   auto root = *result->module->getOps<protocol_ir::ProtocolModuleOp>().begin();
   auto projection =

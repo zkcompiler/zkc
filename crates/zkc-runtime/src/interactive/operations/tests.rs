@@ -323,6 +323,10 @@ relation.table_input 0
 relation.table_scope 0
 relation.table_point 0
 relation.table_points 0
+relation.table_policy 0
+relation.table_interactions 0
+relation.table_interaction 0
+relation.table_record_points 0
 vector.transpose 0";
     let sequences = "sequence.empty 0\nsequence.append 0\nsequence.length 0\nsequence.at 0";
     for line in fixture

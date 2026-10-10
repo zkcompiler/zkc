@@ -133,9 +133,11 @@ permissions. Instance keys include the asset identity.
 Projections derive naturals from the asset, never from the author. A ring term
 `A` has `A::Inputs`, the ordered input count; `A::Outputs`, the output count;
 and `A::Degree`, the largest output degree with every input weighted one. A
-bundle term `B` has `B::Tables`, `B::Publics` and `B::Channels` for a closed term only. A
-closed term yields the constant at once. A generic term yields a distinct
-natural factor that closure substitutes: inference never solves a parameter
+bundle term `B` has `B::Tables`, `B::Publics` and `B::Channels`, its table,
+public slot and channel counts. A
+closed term yields the constant at once. A generic term of either sort yields a
+distinct natural factor that closure substitutes from the captured asset, also
+through a renamed parameter: inference never solves a parameter
 through a projection, and `pow2` of a projection is unsupported. A degree above
 the arena limit is saturated and refuses when it is requested, at definition
 checking for a closed term and at closure for a generic one. Projections take
@@ -296,7 +298,10 @@ admits the carrier field and its base field; a Bundle table view checks the
 table index and exact declared column fields. The Bundle
 [polynomial view](../domains/relation-bundles.md#compiler-visible-polynomial-view)
 also admits the carrier's base field and requires a height policy that admits
-a power of two `n >= 2` whose root of order `n` the carrier installs. Source comparison compares the closed body's identities
+a power of two `n >= 2` whose root of order `n` the carrier installs. The
+[interaction view](../domains/relation-bundles.md#compiler-visible-interaction-view)
+extends that carrier check to every interaction output; its policy kernel
+needs no such height. Source comparison compares the closed body's identities
 with the original MLIR, so a changed digest is a correspondence failure.
 
 Generic checking uses completed capability bounds, inherent Field/Group facts and
@@ -576,8 +581,9 @@ once. Variant construction uses `Choice::Some<Fr>(x)` in local code.
 
 Requests can lower these ceilings, never raise them. Checks refuse before charged
 work or recursive-depth budgets are exceeded; no truncated result is returned.
-Definition checking, specialization, layouts, emission, comparison, predicate admission
-and interface serialization each have a work budget. The capture-wide specification
+Capture lexing, parsing and definition checking share one work budget.
+Specialization, layouts, emission, comparison, predicate admission and interface
+serialization each have a separate work budget. The capture-wide specification
 inventory has a separate phase budget from per-Entry interface comparison. The interface writer bounds traversal even when repeated empty types
 have no native leaves; its result must also pass the bounded interface reader.
 
@@ -591,10 +597,14 @@ have no native leaves; its result must also pass the bounded interface reader.
 | Declarations; source or emitted operations | 10,000; 100,000 |
 | Static instances; aggregate leaves/array length | 4096; 1024 |
 | Natural monomials; factors per monomial | 1024; 64 |
-| Charged work per phase | 1,000,000 |
+| Charged work per phase | 4,000,000 |
 | Emitted MLIR; interface JSON | 16 MiB; 4 MiB |
 | Encoded symbol; diagnostic path bytes | 4096 each |
 | Location records, five 64-bit coordinates each | 16 MiB |
+
+The work ceiling accommodates composed source libraries while preserving charges
+for each traversal. File, type, instance, operation and output ceilings remain
+independent; a higher work allowance does not admit a larger type or deeper call.
 
 Parse depth bounds both recursive parsing and constructed type/natural syntax
 trees, including operator chains.

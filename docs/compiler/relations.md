@@ -31,7 +31,10 @@ The optional [LLZK adapter](../../compiler/adapters/llzk/README.md) owns its sep
 source subset and compatible toolchain. The optional
 [Plonky3 AIR adapter](../../compiler/adapters/plonky3/README.md) captures AIRs on a
 pinned Plonky3 release into shared ring-expression views with a feature inventory
-and refuses features it does not represent. Successful import cannot detect a
+and refuses features it does not represent. The
+[accumulator-machine adapter](../../compiler/adapters/accumulator-machine/README.md)
+exports executions of a small external machine as a multi-table Bundle and emits
+staged interaction reductions from its channel descriptors. Successful import cannot detect a
 constraint already lost by an external frontend.
 
 ## Relation bundles

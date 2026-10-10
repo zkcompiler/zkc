@@ -54,6 +54,8 @@ representative controls and states their evidence limits.
   a previous CTest run cannot satisfy their inputs.
   Contract conformance compares C++ Contracts, Rust admission and native backend
   signatures, including independently authored witnesses and deliberate drift.
+  Relation-bundle and machine relation tests send the same carriers to the C++
+  and Rust evaluators and require identical reports.
 - `kernels/` compares extension-field arithmetic, sparse matrices, vector
   scatter, coset evaluation/interpolation/folding and pointwise maps beside the
   Ring provider and formal products against independent integer calculations

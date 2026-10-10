@@ -118,6 +118,24 @@ analyzeBundlePolynomials(const Bundle &, uint32_t table,
 llvm::Error checkBundlePolynomialTable(const Bundle &, uint32_t table,
                                        llvm::StringRef carrier);
 
+/// Whole-table carrier admission: the polynomial carrier admission, with
+/// every arena node any output needs visited, interaction outputs included
+/// (`relation-table-index`, `relation-table-carrier`). It is the static rule
+/// of `relation.table_policy`, which therefore exposes the declared policy
+/// of a table whatever heights the polynomial view could interpret. Under a
+/// prime carrier it refuses any extension public slot, group or output.
+/// Returns the carrier's base coordinates per element.
+llvm::Expected<unsigned> admitBundleTableCarrier(const Bundle &, uint32_t table,
+                                                 llvm::StringRef carrier);
+
+/// Static reference rule of the interaction kernels
+/// `relation.table_interactions`, `relation.table_interaction` and
+/// `relation.table_record_points`: the whole-table carrier admission.
+/// Height policy, interaction windows and limits are execution checks.
+/// Record substitution needs no polynomial domain or two-adic premise.
+llvm::Error checkBundleInteractionTable(const Bundle &, uint32_t table,
+                                        llvm::StringRef carrier);
+
 /// The viewed table's arena, re-derived from the admitted Bundle. A view of
 /// another bundle or table is refused (`bundle-polynomial-relation`); the
 /// view is descriptive and never a replacement subject.

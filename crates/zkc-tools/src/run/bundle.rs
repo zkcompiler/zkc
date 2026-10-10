@@ -24,7 +24,7 @@ impl Default for BundleLimits {
 impl BundleLimits {
     pub const HARD_MAX: Self = Self {
         bytes: 16 * 1024 * 1024,
-        candidate_bytes: 1024 * 1024,
+        candidate_bytes: zkc_runtime::interactive::Limits::ARTIFACT_BYTES,
         roles: 1024,
         steps: 32768,
         depth: 256,

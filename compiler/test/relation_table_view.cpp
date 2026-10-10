@@ -417,5 +417,60 @@ int main(int argc, char **argv) {
                     checkBundleTableReference(recurrence, "ring.point", 0, KB)),
                 "relation-table-contract");
       });
+  cases.run(
+      "interaction premises visit every output and policies need no domain",
+      [] {
+        // An Ext8 tuple output over KoalaBear columns: the assertion-only
+        // polynomial admission lifts the table into KoalaBear, but the
+        // whole-table admission of the interaction kernels does not.
+        auto interaction = bundle(R"(["zkc.relation-bundle/0",[],
+      [["c","field-balance",["koala-bear.ext8-binomial3"],"koala-bear"]],
+      [["i","required",["fixed",4],"finite",
+        [["w","witness","koala-bear",2]],
+        ["zkc.ring/0",["koala-bear","koala-bear"],
+         [["input",0],["input",1],["embed","koala-bear.ext8-binomial3",1],
+          ["constant","koala-bear","1"]],[0,2,3]],
+        [["read",0,"0",0],["read",0,"0",1]],[[0,["all"]]],
+        [["field-balance",0,["global"],["all"],[1],2,null]]]]])");
+        const StringRef interactionKernels[] = {"relation.table_interactions",
+                                                "relation.table_interaction",
+                                                "relation.table_record_points"};
+        take(accepted(checkBundleTableReference(
+            interaction, "relation.table_points", 0, KB)));
+        refuses(admitBundleTableCarrier(interaction, 0, KB),
+                "relation-table-carrier");
+        for (StringRef contract : interactionKernels)
+          refuses(
+              accepted(checkBundleTableReference(interaction, contract, 0, KB)),
+              "relation-table-carrier");
+        refuses(accepted(checkBundleTableReference(
+                    interaction, "relation.table_policy", 0, KB)),
+                "relation-table-carrier");
+        require(take(admitBundleTableCarrier(interaction, 0, EXT)) == 8,
+                "an Ext8 carrier has eight base coordinates");
+        for (StringRef contract : interactionKernels)
+          take(accepted(
+              checkBundleTableReference(interaction, contract, 0, EXT)));
+        refuses(accepted(checkBundleTableReference(
+                    interaction, "relation.table_policy", 1, EXT)),
+                "relation-table-index");
+        // Interaction metadata and substitution need no polynomial domain.
+        for (StringRef height : {R"(["fixed",1])", R"(["fixed",12])",
+                                 R"(["instance",5,7,false])"}) {
+          auto table = bundle(chain(1, height));
+          take(accepted(checkBundleTableReference(
+              table, "relation.table_policy", 0, KB)));
+          for (StringRef contract : interactionKernels)
+            take(accepted(checkBundleTableReference(table, contract, 0, KB)));
+        }
+        auto recurrence = bundle(read("bundle.json"));
+        for (StringRef field : {StringRef(KB), StringRef(EXT)}) {
+          take(accepted(checkBundleTableReference(
+              recurrence, "relation.table_policy", 0, field)));
+          for (StringRef contract : interactionKernels)
+            take(accepted(
+                checkBundleTableReference(recurrence, contract, 0, field)));
+        }
+      });
   return cases.result();
 }

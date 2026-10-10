@@ -7,12 +7,7 @@ int main() {
   auto input = llvm::MemoryBuffer::getSTDIN();
   if (!input)
     return 2;
-  auto json = zkc::parseJson((*input)->getBuffer());
-  if (!json) {
-    llvm::errs() << llvm::toString(json.takeError());
-    return 1;
-  }
-  auto program = zkc::program::decode(*json);
+  auto program = zkc::program::parse((*input)->getBuffer());
   if (!program) {
     llvm::errs() << llvm::toString(program.takeError());
     return 1;

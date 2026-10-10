@@ -67,7 +67,7 @@ positional decoding, static typing, installed-kernel admission and immutable
 custody. `Admitted::program_entry` supplies the action layout and resolved send
 operand types; Tools does not decode participant instructions separately.
 
-Installed ceilings and defaults are 16 MiB outer bytes, 1 MiB decoded candidate bytes, 1024 roles,
+Installed ceilings and defaults are 16 MiB outer bytes, 4 MiB decoded candidate bytes, 1024 roles,
 32768 static dispatch steps including returns, outer nesting 256, 250000 outer JSON nodes,
 and 4096 decoded UTF-8 bytes per ordinary string. A host may lower these through
 `BundleLimits`; higher requests refuse with `BundleError::Limit`. Byte/depth/node limits precede JSON

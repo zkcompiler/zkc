@@ -3,6 +3,12 @@
 
 using namespace llvm;
 namespace zkc::program {
+Expected<Participants> parse(StringRef text) {
+  auto json = parseJson(text, artifactByteLimit);
+  if (!json)
+    return json.takeError();
+  return decode(*json);
+}
 namespace {
 using A = json::Array;
 using V = json::Value;

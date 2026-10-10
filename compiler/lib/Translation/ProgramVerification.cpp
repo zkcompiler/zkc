@@ -400,10 +400,7 @@ Expected<program::Participants> verifyProgramArtifact(Operation *subject,
   auto module = dyn_cast<protocol_ir::ProtocolModuleOp>(subject);
   if (!module)
     return error("artifact-correspondence-subject");
-  auto json = parseJson(bytes);
-  if (!json)
-    return json.takeError();
-  auto decoded = program::decode(*json);
+  auto decoded = program::parse(bytes);
   if (!decoded)
     return decoded.takeError();
   auto *program = &*decoded;

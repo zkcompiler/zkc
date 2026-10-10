@@ -47,9 +47,12 @@ Expected<AIRPolynomialParameters> twoAdicPolynomialParameters(uint32_t height) {
   return AIRPolynomialParameters{height, height, height - 1};
 }
 
-Expected<unsigned> admitBundlePolynomialCarrier(const Bundle &bundle,
-                                                uint32_t table,
-                                                StringRef carrier) {
+namespace {
+/// The carrier admission shared by the polynomial and interaction kernels:
+/// the outputs visited are every assertion output, plus every interaction
+/// output when `interactions` is set.
+Expected<unsigned> admitCarrier(const Bundle &bundle, uint32_t table,
+                                StringRef carrier, bool interactions) {
   if (table >= bundle.tables().size())
     return zkc::error("relation-table-index");
   auto shape = presentation(carrier);
@@ -68,18 +71,14 @@ Expected<unsigned> admitBundlePolynomialCarrier(const Bundle &bundle,
   for (const auto &group : t.groups)
     if (!lifts(group.field))
       return zkc::error("relation-table-carrier", t.name + "." + group.name);
-  if (auto error = checkAssertionFields(t, carrier, base))
+  if (auto error = interactions ? checkOutputFields(t, carrier, base)
+                                : checkAssertionFields(t, carrier, base))
     return std::move(error);
   return shape->degree;
 }
-
-Error checkBundlePolynomialTable(const Bundle &bundle, uint32_t table,
-                                 StringRef carrier) {
-  if (auto coordinates = admitBundlePolynomialCarrier(bundle, table, carrier);
-      !coordinates)
-    return coordinates.takeError();
-  // The least power of two of at least 2 in the policy decides: when it
-  // exceeds the maximum or has no root of its order, so does every larger one.
+/// The least power of two of at least 2 in the policy decides: when it
+/// exceeds the maximum or has no root of its order, so does every larger one.
+Error twoAdicPremise(const Bundle &bundle, uint32_t table, StringRef carrier) {
   const auto &t = bundle.tables()[table];
   const uint64_t least = PowerOf2Ceil(std::max<uint64_t>(t.height.min, 2));
   auto shape = presentation(carrier);
@@ -87,6 +86,34 @@ Error checkBundlePolynomialTable(const Bundle &bundle, uint32_t table,
     return shape.takeError();
   if (least > t.height.max || !twoAdicDomain(carrier, *shape, uint32_t(least)))
     return zkc::error("bundle-polynomial-two-adic", t.name);
+  return Error::success();
+}
+} // namespace
+
+Expected<unsigned> admitBundlePolynomialCarrier(const Bundle &bundle,
+                                                uint32_t table,
+                                                StringRef carrier) {
+  return admitCarrier(bundle, table, carrier, false);
+}
+
+Expected<unsigned> admitBundleTableCarrier(const Bundle &bundle, uint32_t table,
+                                           StringRef carrier) {
+  return admitCarrier(bundle, table, carrier, true);
+}
+
+Error checkBundlePolynomialTable(const Bundle &bundle, uint32_t table,
+                                 StringRef carrier) {
+  if (auto coordinates = admitBundlePolynomialCarrier(bundle, table, carrier);
+      !coordinates)
+    return coordinates.takeError();
+  return twoAdicPremise(bundle, table, carrier);
+}
+
+Error checkBundleInteractionTable(const Bundle &bundle, uint32_t table,
+                                  StringRef carrier) {
+  if (auto coordinates = admitBundleTableCarrier(bundle, table, carrier);
+      !coordinates)
+    return coordinates.takeError();
   return Error::success();
 }
 

@@ -1,0 +1,35 @@
+module inspect_reduction;
+use air_polynomial::{Vector, Indices, index_get, index_length, empty, concat, slice};
+use air_interaction::{Interactions, Layout, Reduction, LogUp, GrandProduct, interactions,
+  range_constraints};
+domain E = field("koala-bear.ext8-binomial3");
+
+// Openings on the table's own rows: column j rotated left by its rotation.
+fn rows_openings(columns: Vector<E>, layout: Layout, height: index) -> Vector<E> {
+  let mut result = empty<E>();
+  for opening in 0..index_length(layout.opened) {
+    let column = slice(columns, index_get(layout.opened, opening) * height, height);
+    result = concat(result, kernel<E>("vector.rotate", column, index_get(layout.rotations, opening)));
+  }
+  return result;
+}
+fn inspect<R: Reduction<E>>(channels: index, channel: Indices, side: Indices, arity: Indices,
+    tuple_degree: Indices, count_degree: Indices, values: Vector<E>, height: index,
+    challenges: Vector<E>) -> (Vector<E>, Vector<E>, Vector<E>, Vector<E>) {
+  let records = interactions(channels, channel, side, arity, tuple_degree, count_degree);
+  let layout = R::layout(records, height);
+  let built = R::build(records, values, height, challenges);
+  let openings = rows_openings(built.0, layout, height);
+  let residuals = R::constraints(records, values, openings, height, challenges, built.1);
+  return (built.0, built.1, residuals, range_constraints(records, values, height));
+}
+protocol Inspect<R: Reduction<E>> roles(P)(channels: index @P, channel: Indices @P,
+    side: Indices @P, arity: Indices @P, tuple_degree: Indices @P, count_degree: Indices @P,
+    values: Vector<E> @P, height: index @P, challenges: Vector<E> @P)
+    -> (columns: Vector<E> @P, claims: Vector<E> @P, residuals: Vector<E> @P, ranges: Vector<E> @P) {
+  let result @P = inspect<R>(channels, channel, side, arity, tuple_degree, count_degree, values,
+    height, challenges);
+  return (columns = result.0, claims = result.1, residuals = result.2, ranges = result.3);
+}
+entry LogUpRun = Inspect<LogUp<E>>;
+entry ProductRun = Inspect<GrandProduct<E>>;

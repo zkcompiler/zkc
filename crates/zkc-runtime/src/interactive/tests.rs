@@ -588,6 +588,16 @@ fn exact_tags_arities_names_and_limits() {
     let mut j = identity();
     j[3][0][6] = json!([["opaque", "anything"]]);
     reject(&j, ErrorCode::Record);
+    // The raw byte ceiling is inclusive and belongs to the program format.
+    // Padding does not increase structural nodes or executable instructions.
+    let mut padded = serde_json::to_vec(&identity()).unwrap();
+    padded.resize(Limits::ARTIFACT_BYTES, b' ');
+    assert!(admit_supplied(&padded, &Mock::new()).is_ok());
+    padded.push(b' ');
+    assert_eq!(
+        admit_supplied(&padded, &Mock::new()).unwrap_err().code,
+        ErrorCode::Limit
+    );
     let huge = vec![b' '; Limits::ARTIFACT_BYTES + 1];
     assert_eq!(
         admit_supplied(&huge, &Mock::new()).unwrap_err().code,

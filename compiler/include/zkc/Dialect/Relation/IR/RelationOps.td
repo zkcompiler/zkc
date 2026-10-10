@@ -51,6 +51,14 @@ def TableInputOp : KernelOp<RelationDialect, "exec.table_input", [OpRelationTabl
 def TableScopeOp : KernelOp<RelationDialect, "exec.table_scope", [OpRelationTableScope]>;
 def TablePointOp : KernelOp<RelationDialect, "exec.table_point", [OpRelationTablePoint]>;
 def TablePointsOp : KernelOp<RelationDialect, "exec.table_points", [OpRelationTablePoints]>;
+// Interaction view of one table of an admitted relation bundle asset: the
+// declared height policy, interaction descriptors and record substitutions.
+// The compiler checks the static table and carrier premises, and for the
+// height-taking and record kernels the two-adic height premise.
+def TablePolicyOp : KernelOp<RelationDialect, "exec.table_policy", [OpRelationTablePolicy]>;
+def TableInteractionsOp : KernelOp<RelationDialect, "exec.table_interactions", [OpRelationTableInteractions]>;
+def TableInteractionOp : KernelOp<RelationDialect, "exec.table_interaction", [OpRelationTableInteraction]>;
+def TableRecordPointsOp : KernelOp<RelationDialect, "exec.table_record_points", [OpRelationTableRecordPoints]>;
 
 // A supplied predicate contract. It has no callable interface or body.
 def DeclareOp : Op<RelationDialect, "declare", [Symbol]> {

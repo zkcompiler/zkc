@@ -282,7 +282,7 @@ same-type message-site permutation cannot inherit another occurrence's label.
 The inner descriptor/candidate digests are consistency checks; only the
 independently authenticated exact-file digest authorizes the deployment.
 The deployment and complete proof are each at most 16 MiB; the participant
-candidate is at most 1 MiB.
+candidate is at most 4 MiB, under the [program carrier ceiling](program.md#carrier-size).
 
 The `zkc prove-bundle` and `verify-bundle` file adapters require bounded regular
 inputs, including deployment, invocation, authority, capacity, attempt-policy and

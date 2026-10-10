@@ -108,20 +108,57 @@ int main() {
                             "interactive-external-body"),
             "wrong undefined callable refusal");
   });
-  cases.run("decoder bounds programmatic strings before semantic admission",
-            [&] {
-              // Direct JSON values exercise Program's own size bound
-              // independently of the text parser's byte limit. LLVM writes
-              // backspace/form feed as six bytes, so these shorter strings also
-              // exceed the encoded-size ceiling.
-              for (char value : {'x', '\b', '\f'}) {
-                auto json = program::encode(original);
-                auto &functions = *(*json.getAsArray())[2].getAsArray();
-                (*functions.front().getAsArray())[1] =
-                    std::string(value == 'x' ? 1048576 : 174763, value);
-                refuses(program::decode(json), "source-limit");
-              }
-            });
+  cases.run(
+      "decoder bounds programmatic strings before semantic admission", [&] {
+        // Direct JSON values exercise Program's own size bound
+        // independently of the text parser's byte limit. LLVM writes
+        // backspace/form feed as six bytes, so these shorter strings also
+        // exceed the encoded-size ceiling.
+        for (char value : {'x', '\b', '\f'}) {
+          auto json = program::encode(original);
+          auto &functions = *(*json.getAsArray())[2].getAsArray();
+          (*functions.front().getAsArray())[1] =
+              std::string(value == 'x' ? program::artifactByteLimit
+                                       : program::artifactByteLimit / 6 + 1,
+                          value);
+          refuses(program::decode(json), "source-limit");
+        }
+      });
+  cases.run("compact node budget is independent of bytes", [&] {
+    for (size_t count : {20000u, 24000u}) {
+      auto candidate = original;
+      auto &body = candidate.functions.front().body;
+      program::Instruction release;
+      release.value = program::Release{program::Names(16, "x")};
+      body.assign(count, release);
+      // Each release is ["release", [sixteen names]]: 19 JSON nodes.
+      // Both programs remain below the byte ceiling; only the larger one
+      // exceeds the node ceiling, before semantic names/custody admission.
+      if (count == 20000) {
+        if (auto e = program::checkStructure(candidate))
+          throw std::runtime_error(llvm::toString(std::move(e)));
+        require(printJson(program::encode(candidate)).size() <
+                    program::artifactByteLimit,
+                "node control unexpectedly exhausted bytes");
+      } else {
+        auto refusal = program::checkStructure(candidate);
+        require(bool(refusal), "node ceiling was not enforced");
+        require(
+            namesIdentifier(llvm::toString(std::move(refusal)), "source-limit"),
+            "unexpected node-ceiling refusal");
+      }
+    }
+  });
+  cases.run("program text bounds use their format owner", [&] {
+    auto text = encoded(original);
+    text.resize(program::artifactByteLimit, ' ');
+    auto parsed = take(program::parse(text));
+    require(program::encode(parsed) == program::encode(original),
+            "padding changed the decoded program");
+    refuses(parseJson(text), "byte-limit");
+    text.push_back(' ');
+    refuses(program::parse(text), "byte-limit");
+  });
   cases.run("native logical origin arguments round trip", [&] {
     auto candidate = original;
     calculation(candidate).origin->arguments = {{"F", "bls12-381.fr"}};

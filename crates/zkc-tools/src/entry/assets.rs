@@ -96,9 +96,11 @@ impl EntryAssets {
             let binding = reference.binding.declaration();
             // Reachability can repeat one immutable reference many times.
             // Scan its asset once per reference rule and closed binding
-            // arguments; the polynomial kernels share one rule.
+            // arguments; the polynomial kernels share one rule, and all
+            // interaction kernels share the height-independent carrier rule.
             let rule = match binding.contract.as_str() {
                 contract if POLYNOMIAL.contains(&contract) => POLYNOMIAL[0],
+                contract if INTERACTION.contains(&contract) => INTERACTION[0],
                 contract => contract,
             };
             if checked.insert((
@@ -149,6 +151,14 @@ const POLYNOMIAL: &[&str] = &[
     "relation.table_scope",
     "relation.table_point",
     "relation.table_points",
+];
+/// Contracts of the Bundle interaction view. All four share the whole-table
+/// carrier rule; none requires a polynomial domain at reference admission.
+const INTERACTION: &[&str] = &[
+    "relation.table_policy",
+    "relation.table_interactions",
+    "relation.table_interaction",
+    "relation.table_record_points",
 ];
 
 /// Each asset family owns its reference rule. A ring operation substitutes its
@@ -202,10 +212,10 @@ fn check(
                     _ => e.to_string(),
                 })
         }
-        // The polynomial kernels take the carrier from their field argument:
-        // only the point substitutions have field-valued operands. The check
-        // allocates nothing.
-        contract if POLYNOMIAL.contains(&contract) => {
+        // The polynomial and interaction kernels take the carrier from their
+        // field argument: only the point substitutions have field-valued
+        // operands. The check allocates nothing.
+        contract if POLYNOMIAL.contains(&contract) || INTERACTION.contains(&contract) => {
             let declaration = reference.binding.declaration();
             let (Some(carrier), Some(table)) = (
                 declaration
@@ -219,14 +229,20 @@ fn check(
             ) else {
                 return Err("entry-asset-contract".into());
             };
-            relations
-                .polynomial_reference(&reference.identity, table, carrier)
-                .map(|_| ())
-                .map_err(|e| match e.code.as_str() {
-                    "refused:relation-asset-missing" => "entry-asset-missing".into(),
-                    "refused:relation-table-carrier" => "entry-asset-carrier".into(),
-                    _ => e.to_string(),
-                })
+            if INTERACTION.contains(&contract) {
+                relations
+                    .interaction_reference(&reference.identity, table, carrier)
+                    .map(|_| ())
+            } else {
+                relations
+                    .polynomial_reference(&reference.identity, table, carrier)
+                    .map(|_| ())
+            }
+            .map_err(|e| match e.code.as_str() {
+                "refused:relation-asset-missing" => "entry-asset-missing".into(),
+                "refused:relation-table-carrier" => "entry-asset-carrier".into(),
+                _ => e.to_string(),
+            })
         }
         _ => Err("entry-asset-contract".into()),
     }

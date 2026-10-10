@@ -12,7 +12,9 @@ separate [staged program](#staged-challenge-dependent-programs).
 A bundle defines a [relation family](../relations.md#relation-families-and-instances).
 It does not select a domain, selector convention, quotient, commitment or proof
 protocol; a [polynomial view](#polynomial-view-of-one-table) of one table
-derives degree bounds under selected parameters without changing the relation.
+derives degree bounds under selected parameters without changing the relation,
+and an [interaction view](#compiler-visible-interaction-view) exposes its
+interaction records without interpreting them.
 Importing a bundle from an external system is a separate adequacy claim;
 structural identity is not semantic equivalence.
 
@@ -251,7 +253,9 @@ carrier `F` (`relation-table-carrier`). An output used only by interactions is
 neither checked nor evaluated. An input it alone uses keeps its descriptor
 and its column; the point substitutions ignore its value. The kernels claim
 nothing about interactions, presence or whole-Bundle satisfaction; a consumer
-must exclude or separately discharge them.
+must exclude or separately discharge them. The
+[interaction view](#compiler-visible-interaction-view) exposes the
+interaction records over the same arena inputs.
 
 When a body closes, the compiler checks the carrier admission and that the
 height policy admits a power of two `n >= 2` whose root of order `n` the
@@ -279,6 +283,122 @@ shared by every row; nothing is retained between invocations. No charge or
 allocation grows with the height. The result and scratch elements of one batch share the
 [element ceiling](../runtime/capacity.md), 65,536 by default, so a large
 evaluation domain may need several calls.
+
+## Compiler-visible interaction view
+
+Four kernels expose one table's declared height policy and its interaction
+records to a source library that builds its own reduction. They have the same
+roots `<F, Table>`, Bundle asset parameter and installed KoalaBear or Ext8
+provider as the polynomial view. They report the Bundle's declarations and
+substitute its existing arena. They apply no scope, multiplicity range,
+balance, locality, challenge or reduction, and they decide neither presence
+nor satisfaction.
+
+| Contract | Data operands | Results |
+|---|---|---|
+| `relation.table_policy<F, Table>` | none | `(optional, authority, min, max, power_of_two)` |
+| `relation.table_interactions<F, Table>` | `height` | `(count, width)` |
+| `relation.table_interaction<F, Table>` | `height`, `interaction` | `(kind, channel, side, local, key, begin, end, arity, bounded, bound, tuple_degree, count_degree)` |
+| `relation.table_record_points<F, Table>` | `rows` row-major assignments, `rows` | `rows` row-major record rows of `width` values |
+
+Policy and descriptor results are `index` values. A flag is 0 or 1.
+Record substitution returns a vector in the selected field carrier.
+
+**Policy.** `optional` is 1 for an optional table. `authority` is 0 for a
+fixed height, 1 for a configured height and 2 for an instance height. `min`,
+`max` and `power_of_two` are the declared policy: a fixed height `h` reports
+`min = max = h` and `power_of_two = 0`. A range reports its own bounds and
+flag. It is not narrowed to the heights that the polynomial view can
+interpret, which are only powers of two of at least 2. The answer takes no
+height and does not depend on presence or supplied data, so a consumer can
+check the configured height of an absent table, whose configuration is still
+admitted, against the same policy.
+
+**Interactions.** `count` is the number of the table's interactions and
+`width` is the sum over them of `arity + 1`. A descriptor reports one
+interaction (`relation-table-interaction-index`):
+
+- `kind` is 0 for a field balance and 1 for a multiset; `channel` is its
+  channel position;
+- `side` is 0 for a push and 1 for a pull; a field balance has no side and
+  reports 0;
+- `local` is 1 for a local interaction, whose key is `key`. A global
+  interaction reports `local = 0` and `key = 0`. Key 0 is a valid local key, so
+  only the flag distinguishes the two;
+- `begin` and `end` are the active rows of its scope at the height, as for
+  `relation.table_scope`;
+- `arity` is its tuple length, which may be zero;
+- `bounded` is 1 when a bound is recorded. A multiset always has its bound
+  `1 <= bound < p`. A field balance reports its declared count bound, which may
+  be any 64-bit natural including 0, and `bounded = 0, bound = 0` when it
+  declares none. A declared field-balance bound is a recorded premise and
+  never part of satisfaction;
+- `tuple_degree` is the largest read degree of its tuple outputs, 0 without
+  any. `count_degree` is the read degree of its count or multiplicity output.
+  Degrees are the Bundle's output facts: every read weighs one and every
+  public slot zero, whatever the group's authority.
+
+These facts suffice to refuse every form a reduction does not support and to
+bound the degree of a reduction constraint. They describe the relation; they
+are not a soundness claim about any reduction.
+
+**Records.** `relation.table_record_points` takes the same row-major
+assignments as `relation.table_points`: one value per arena input, in the
+table's input order, including inputs that only assertions read. Each result
+row holds, for each interaction in declaration order, its tuple outputs in
+tuple order and then its count or multiplicity output. An output used by
+several records, or twice in one tuple, is repeated. Rows, inputs and
+interactions may each be zero; a length other than `rows * inputs` is
+`relation-table-point-shape`. Under an Ext8 carrier, KoalaBear inputs,
+constants and operations lift exactly as for the point substitutions, and the
+results keep every coordinate.
+
+A record value is only a substituted output. At a point outside the table's
+rows a multiplicity has no natural interpretation, and on a row it is still a
+field element: the kernel does not check `n <= bound`. No scope gates any
+row; the caller combines records with the active rows the descriptor reports.
+Any multiplicity range, locality, side combination or balance argument is the
+consumer's own obligation, as are presence and the satisfaction of the
+table's assertions.
+
+**Static rules.** The interaction kernels use a whole-table carrier admission
+(`admitBundleTableCarrier`): the polynomial carrier admission, extended to
+every arena node any output needs, interaction outputs included
+(`relation-table-index`, `relation-table-carrier`). Under KoalaBear it
+therefore refuses a table with an Ext8 public slot, group, assertion or
+interaction output, while the polynomial kernels admit a KoalaBear table with
+an Ext8 interaction-only output. All four interaction kernels use this
+admission (`checkBundleInteractionTable`). Record substitution and metadata
+require no polynomial domain; a protocol chooses its domain separately. The
+compiler reports these refusals as `source.asset-carrier` and
+`source.asset-table`, as for the polynomial view, and the Host independently
+repeats them for every reachable reference before execution.
+
+**Heights.** `relation.table_interactions` and `relation.table_interaction`
+check, in this order: the declared height bounds and optional power-of-two
+restriction (`bundle-height`), every
+assertion and interaction window at the height (`bundle-scope-height`,
+`bundle-window`), the declared data bound of the
+[polynomial view](#compiler-visible-polynomial-view) (`bundle-data-limit`) and,
+when the table has interactions, `h * (nodes + inputs + width + 1) <= 2^26`
+(`bundle-work-limit`). An interaction window that is undefined at a height
+therefore refuses there even when every assertion window is defined. The
+record substitution takes no height and checks no window: the caller chooses
+the points.
+
+**Resources.** Every invocation repeats its allocation-free static rule.
+Policy and descriptors then charge
+`W = nodes + inputs + groups + public slots + assertions + width + reads + 1`
+units to the shared ring work budget before anything height dependent. Here
+`reads` counts the derived read facts of each assertion output and of each
+tuple and count output of each interaction. `relation.table_record_points`
+first checks its shape, then its result against the element and value policy
+and the output allowance, and then the result, node scratch and prepared
+record sub-DAG together against the value policy. The sub-DAG is bounded by
+the arena's admission charge plus 32 bytes per record value. It charges
+`W + rows * (nodes + inputs + width + 1)` as one charge and only then prepares
+the sub-DAG of the distinct record outputs, once per invocation and shared by
+every row.
 
 ## Carrier
 

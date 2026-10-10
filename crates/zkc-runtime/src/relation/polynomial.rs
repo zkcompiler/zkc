@@ -35,10 +35,10 @@ pub struct PolynomialInput {
 
 /// A table field substituted in the carrier: the carrier itself, or KoalaBear
 /// in its installed degree-eight extension.
-fn lifts(field: Identity, carrier: Identity) -> bool {
+pub(super) fn lifts(field: Identity, carrier: Identity) -> bool {
     field == carrier || (carrier == Identity::KoalaBearExt8 && field == Identity::KoalaBear)
 }
-fn kind(authority: Authority) -> u64 {
+pub(super) fn kind(authority: Authority) -> u64 {
     match authority {
         Authority::Witness => 1,
         Authority::Config => 2,
@@ -55,22 +55,79 @@ pub struct PolynomialView<'a> {
     table: usize,
     field: Identity,
 }
-/// The assertion sub-DAG of one table, prepared for substitution. It keeps
-/// the table's input numbering.
+/// The sub-DAG of selected outputs of one table, prepared for substitution:
+/// the assertions of a polynomial view or the records of an interaction view.
+/// It keeps the table's input numbering.
 #[derive(Clone, Debug)]
 pub struct PolynomialArena {
-    arena: Expression,
-    outputs: Vec<usize>,
+    pub(super) arena: Expression,
+    pub(super) outputs: Vec<usize>,
 }
 impl PolynomialArena {
     pub fn arena(&self) -> &Expression {
         &self.arena
     }
-    /// For each assertion in order, the node of its output in `arena()`.
+    /// For each emitted slot in order, the node of its output in `arena()`.
     pub fn outputs(&self) -> &[usize] {
         &self.outputs
     }
 }
+/// Some power-of-two height of at least 2 is admitted by the policy. On the
+/// subgroup of order h, rotation by `offset mod h` realizes a cyclic read
+/// exactly and a finite read wherever its window is defined. KoalaBear has
+/// two-adicity 24, so every power-of-two height up to HEIGHT_LIMIT has that
+/// subgroup.
+pub(super) fn two_adic_premise(t: &Table) -> Result<()> {
+    if u64::from(t.height.min.max(2)).next_power_of_two() > u64::from(t.height.max) {
+        return Err(Error("bundle-polynomial-two-adic"));
+    }
+    Ok(())
+}
+/// The height checks every height-taking view kernel starts with: a
+/// power-of-two height of at least 2 that the policy admits.
+pub(super) fn checked_height(t: &Table, height: u64) -> Result<u32> {
+    if height < 2 || !height.is_power_of_two() {
+        return Err(Error("bundle-polynomial-two-adic"));
+    }
+    u32::try_from(height)
+        .ok()
+        .filter(|h| (t.height.min..=t.height.max).contains(h))
+        .ok_or(Error("bundle-height"))
+}
+/// Element widths of the table's witness, configuration and public matrices,
+/// after checking that its declared data at this height, with every public
+/// slot, stays within the coordinate bound.
+pub(super) fn data_widths(bundle: &Bundle, t: &Table, height: u64) -> Result<[u64; 3]> {
+    // Below HEIGHT_LIMIT, 256 groups of width 2^16 and 2^16 slots of eight
+    // coordinates, these products and sums cannot overflow.
+    let element = |field| degree(field).expect("admitted field") as u64;
+    let mut widths = [0; 3];
+    let mut coordinates = bundle.publics.iter().map(|s| element(s.field)).sum::<u64>();
+    for g in &t.groups {
+        widths[kind(g.authority) as usize - 1] += u64::from(g.width);
+        coordinates += height * u64::from(g.width) * element(g.field);
+    }
+    if coordinates > COORDINATE_LIMIT {
+        return Err(Error("bundle-data-limit"));
+    }
+    Ok(widths)
+}
+/// A window is an interval condition: the extreme offsets of the outputs'
+/// reads decide it.
+pub(super) fn window(
+    t: &Table,
+    facts: &[OutputFact],
+    scope: Scope,
+    h: u32,
+    outputs: &[usize],
+) -> Result<()> {
+    let offsets = outputs
+        .iter()
+        .flat_map(|p| facts[*p].reads.iter().map(|r| r.1));
+    let extremes = [offsets.clone().min(), offsets.max()];
+    window_at(scope, t.read_model, h, &extremes.map(|o| o.unwrap_or(0)))
+}
+
 impl Bundle {
     /// Static premises shared by the polynomial kernels: table index, an
     /// installed carrier, carrier compatibility of every public slot, table
@@ -95,13 +152,7 @@ impl Bundle {
         {
             return Err(Error("relation-table-carrier"));
         }
-        // On the subgroup of order h, rotation by `offset mod h` realizes a
-        // cyclic read exactly and a finite read wherever its window is defined.
-        // KoalaBear has two-adicity 24, so every power-of-two height up to
-        // HEIGHT_LIMIT has that subgroup.
-        if u64::from(t.height.min.max(2)).next_power_of_two() > u64::from(t.height.max) {
-            return Err(Error("bundle-polynomial-two-adic"));
-        }
+        two_adic_premise(t)?;
         Ok(PolynomialView {
             bundle: self,
             table,
@@ -169,37 +220,12 @@ impl PolynomialView<'_> {
     /// quotient bounds. Nothing is allocated.
     fn profile(&self, height: u64) -> Result<(u32, PolynomialShape)> {
         let t = self.definition();
-        if height < 2 || !height.is_power_of_two() {
-            return Err(Error("bundle-polynomial-two-adic"));
-        }
-        let h = u32::try_from(height)
-            .ok()
-            .filter(|h| (t.height.min..=t.height.max).contains(h))
-            .ok_or(Error("bundle-height"))?;
+        let h = checked_height(t, height)?;
         let facts = &self.bundle.facts[self.table];
         for a in &t.assertions {
-            // A window is an interval condition: the extreme offsets decide it.
-            let offsets = facts[a.output].reads.iter().map(|r| r.1);
-            let extremes = [offsets.clone().min(), offsets.max()];
-            window_at(a.scope, t.read_model, h, &extremes.map(|o| o.unwrap_or(0)))?;
+            window(t, facts, a.scope, h, &[a.output])?;
         }
-        // Below HEIGHT_LIMIT, 256 groups of width 2^16 and 2^16 slots of eight
-        // coordinates, these products and sums cannot overflow.
-        let element = |field| degree(field).expect("admitted field") as u64;
-        let mut widths = [0; 3];
-        let mut coordinates = self
-            .bundle
-            .publics
-            .iter()
-            .map(|s| element(s.field))
-            .sum::<u64>();
-        for g in &t.groups {
-            widths[kind(g.authority) as usize - 1] += u64::from(g.width);
-            coordinates += height * u64::from(g.width) * element(g.field);
-        }
-        if coordinates > COORDINATE_LIMIT {
-            return Err(Error("bundle-data-limit"));
-        }
+        let widths = data_widths(self.bundle, t, height)?;
         if !t.assertions.is_empty() && height * self.point_work() > WORK_LIMIT {
             return Err(Error("bundle-work-limit"));
         }

@@ -1,6 +1,7 @@
-//! One present table of an immutable Bundle asset: assertion residuals over
-//! actual columns, and the polynomial view's shape, input descriptors, scopes
-//! and point substitutions.
+//! One table of an immutable Bundle asset: assertion residuals over actual
+//! columns, the polynomial view's shape, input descriptors, scopes and point
+//! substitutions, and the interaction view's declared policy, interaction
+//! descriptors and record substitutions.
 use super::*;
 
 pub(super) const CONTRIBUTION: Contribution = Contribution {
@@ -59,6 +60,38 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
             ),
         )
         .implemented_by(&["plonky3/relation.table_points"]),
+        Contract::new(
+            "relation.table_policy",
+            (&[], &[Type::Index; 5], AttributeRule::AssetIdentity),
+        )
+        .implemented_by(&["plonky3/relation.table_policy"]),
+        Contract::new(
+            "relation.table_interactions",
+            (
+                &[Type::Index],
+                &[Type::Index; 2],
+                AttributeRule::AssetIdentity,
+            ),
+        )
+        .implemented_by(&["plonky3/relation.table_interactions"]),
+        Contract::new(
+            "relation.table_interaction",
+            (
+                &[Type::Index, Type::Index],
+                &[Type::Index; 12],
+                AttributeRule::AssetIdentity,
+            ),
+        )
+        .implemented_by(&["plonky3/relation.table_interaction"]),
+        Contract::new(
+            "relation.table_record_points",
+            (
+                &[Type::Vector, Type::Index],
+                &[Type::Vector],
+                AttributeRule::AssetIdentity,
+            ),
+        )
+        .implemented_by(&["plonky3/relation.table_record_points"]),
     ],
     resolve,
     select: support::select_nominal,

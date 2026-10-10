@@ -2,6 +2,7 @@ module air_polynomial;
 
 pub type Vector<F: Field> = builtin("vector", F);
 pub type Polynomial<F: Field> = builtin("polynomial", F);
+pub type Indices = builtin("indices");
 
 pub fn length<F: Field>(values: Vector<F>) -> index {
   return kernel<F>("vector.length", values);
@@ -46,6 +47,37 @@ pub fn plus(left: index, right: index) -> index { return left + right; }
 pub fn equal<F: Field>(left: F, right: F) -> bool { return left == right; }
 pub fn yes() -> bool { return true; }
 pub fn maximum(left: index, right: index) -> index { return if less(left, right) { right } else { left }; }
+pub fn index_list() -> Indices { return kernel("indices.empty"); }
+pub fn index_push(values: Indices, value: index) -> Indices {
+  return kernel("indices.append", values, value);
+}
+pub fn index_get(values: Indices, position: index) -> index {
+  return kernel("indices.at", values, position);
+}
+pub fn index_length(values: Indices) -> index { return kernel("indices.length", values); }
+pub fn index_concat(left: Indices, right: Indices) -> Indices {
+  let mut result = left;
+  for position in 0..index_length(right) { result = index_push(result, index_get(right, position)); }
+  return result;
+}
+// A power of two in [2, 2^LogMaximum], checked without bit operations.
+pub fn two_adic<LogMaximum: nat>(height: index) -> bool {
+  let mut candidate: index = 2;
+  let mut found = false;
+  for _ in 0..index<LogMaximum>() {
+    found = if candidate == height { true } else { found };
+    candidate = candidate * 2;
+  }
+  return found;
+}
+// Coefficient blocks of length `height` needed by a quotient C/Z_A, where C
+// has degree at most degree*(height-1) and A has `active` rows. Zero means
+// exact divisibility forces C to vanish, as in relation.table_shape.
+pub fn chunks_for(degree: index, height: index, active: index) -> index {
+  let numerator = degree * (height - 1);
+  return if less(numerator, active) { 0 }
+    else { kernel("index.div", numerator - active, height) + 1 };
+}
 
 // Binary exponentiation is logarithmic in the public exponent. The fixed
 // loop bound covers the u64 index carrier, without allocating its powers.

@@ -1,0 +1,639 @@
+module air_bundle;
+use air_stark::{Base, Extension, Outside};
+use air_polynomial::{Vector, Indices, length, empty, append, concat, get, slice, fill, add,
+  scale, multiply, less, not, both, point, natural, transpose, extend_columns, column_at,
+  split_quotient, disjoint_coset, recombine, maximum, two_adic, chunks_for, yes,
+  index_list, index_push, index_get, index_length, index_concat};
+use air_table::{Shape, shape, claims, domain_assignments, assertion_scopes, divide_scopes,
+  combine_scopes, known_inputs, opening_claims, deep_reads, deep_read_values, deep_columns,
+  deep_column_values, same_rotation};
+use air_interaction::{Interactions, Layout, Reduction, interactions, no_interactions,
+  range_constraints};
+use fri::{Positions, LowDegree};
+
+domain TraceRows = commitment("rows.merkle-keccak256.koala-bear/0");
+domain ExtensionRows = commitment("rows.merkle-keccak256.koala-bear.ext8-binomial3/0");
+type Root<C: Commitment> = builtin("commitment", C);
+type Opening<C: Commitment> = builtin("opening_state", C);
+type Path<C: Commitment> = builtin("proof", C);
+fn commit<C: Commitment>(rows: Vector<C::ValueField>, width: index)
+    -> (Root<C>, Opening<C>) { return kernel<C>("oracle.commit", rows, width); }
+fn open<C: Commitment>(state: Opening<C>, position: index)
+    -> (Vector<C::ValueField>, Path<C>) { return kernel<C>("oracle.open", state, position); }
+fn authenticate<C: Commitment>(root: Root<C>, width: index, size: index,
+    position: index, row: Vector<C::ValueField>, path: Path<C>) -> bool {
+  return kernel<C>("oracle.check", root, width, size, position, row, path);
+}
+fn embed_vector(values: Vector<Base>) -> Vector<Extension> {
+  return kernel<Extension>("vector.embed", values);
+}
+fn embed_scalar(value: Base) -> Extension { return kernel<Extension>("field.embed", value); }
+fn at_position(values: Positions, position: index) -> index {
+  return kernel("indices.at", values, position);
+}
+fn at_value(values: Vector<Extension>, position: index) -> Extension {
+  return kernel<Extension>("vector.get", values, position);
+}
+fn same_index(left: index, right: index) -> bool { return left == right; }
+// The profile's count field is KoalaBear, of characteristic 2^31 - 2^24 + 1.
+fn characteristic() -> index { return 2130706433; }
+
+// One table's verifier-known data. `height` is the table's configured or
+// instance height; an absent instance-height table has height 0. Matrices are
+// row-major, with the groups of one authority concatenated on each row in
+// declaration order.
+pub struct TableStatement {
+  pub present: bool,
+  pub height: index,
+  pub configuration: Vector<Base>,
+  pub public_columns: Vector<Base>
+}
+pub struct Statement {
+  pub tables: [TableStatement; 3],
+  pub public_data: Vector<Base>,
+  pub shift: Base
+}
+
+// Authority 0 is fixed, 1 configured and 2 instance.
+pub struct Policy {
+  pub optional: bool,
+  pub authority: index,
+  pub minimum: index,
+  pub maximum: index
+}
+fn policy<Table: nat, B: Bundle>() -> Policy {
+  let facts = kernel<Base,Table>("relation.table_policy"; B);
+  return Policy { optional: facts.0 == 1, authority: facts.1, minimum: facts.2,
+    maximum: facts.3 };
+}
+// The table's own range, within this profile's two-adic domains: a power of
+// two in [2, 2^MaxLogHeight]. Powers of two also satisfy a power-of-two policy.
+fn admitted<MaxLogHeight: nat>(rule: Policy, height: index) -> bool {
+  return both(both(not(less(height, rule.minimum)), not(less(rule.maximum, height))),
+    two_adic<MaxLogHeight>(height));
+}
+// The interactions of a present table. This profile reduces only global
+// multiset records active on every row, with multiplicity bound one; any other
+// interaction is refused before any record is evaluated.
+fn table_records<Table: nat, B: Bundle>(height: index, channels: index) -> Interactions {
+  let totals = kernel<Base,Table>("relation.table_interactions", height; B);
+  let mut channel = index_list();
+  let mut side = index_list();
+  let mut arity = index_list();
+  let mut tuple_degree = index_list();
+  let mut count_degree = index_list();
+  for interaction in 0..totals.0 {
+    let facts = kernel<Base,Table>("relation.table_interaction", height, interaction; B);
+    require both(both(facts.0 == 1, facts.3 == 0),
+      both(both(facts.5 == 0, facts.6 == height), both(facts.8 == 1, facts.9 == 1)));
+    channel = index_push(channel, facts.1);
+    side = index_push(side, facts.2);
+    arity = index_push(arity, facts.7);
+    tuple_degree = index_push(tuple_degree, facts.10);
+    count_degree = index_push(count_degree, facts.11);
+  }
+  let result = interactions(channels, channel, side, arity, tuple_degree, count_degree);
+  require result.width == totals.1;
+  return result;
+}
+// Tuple coordinates and multiplicities of every interaction at `rows` ordered
+// input assignments, as contiguous record columns.
+fn record_points<Table: nat, B: Bundle>(assignments: Vector<Extension>, rows: index,
+    width: index) -> Vector<Extension> {
+  let points = kernel<Extension,Table>("relation.table_record_points", assignments, rows; B);
+  return transpose(points, rows, width);
+}
+
+// What both roles derive from a table's statement. Constraint scopes are the
+// assertions', then one bound-1 range per record, then the reduction's.
+pub struct TableLayout {
+  pub present: bool,
+  pub height: index,
+  pub facts: Shape,
+  pub records: Interactions,
+  pub reduction: Layout,
+  pub chunks: index,
+  pub begin: Indices,
+  pub end: Indices
+}
+fn no_shape() -> Shape {
+  return Shape { witness: 0, configuration: 0, public_columns: 0, public_slots: 0,
+    inputs: 0, assertions: 0, chunks: 0 };
+}
+fn present_layout<Table: nat, B: Bundle, R: Reduction<Extension>>(facts: Shape,
+    height: index, channels: index) -> TableLayout {
+  let records = table_records<Table,B>(height, channels);
+  let reduction = R::layout(records, height);
+  let assertions = assertion_scopes<Base,Table,B>(height);
+  let mut begin = assertions.0;
+  let mut end = assertions.1;
+  let mut chunks = facts.chunks;
+  for interaction in 0..records.count {
+    begin = index_push(begin, 0);
+    end = index_push(end, height);
+    chunks = maximum(chunks,
+      chunks_for(2 * index_get(records.count_degree, interaction), height, height));
+  }
+  for constraint in 0..index_length(reduction.degree) {
+    let active = index_get(reduction.end, constraint) - index_get(reduction.begin, constraint);
+    chunks = maximum(chunks, chunks_for(index_get(reduction.degree, constraint), height, active));
+  }
+  return TableLayout { present: true, height, facts, records, reduction, chunks,
+    begin: index_concat(begin, reduction.begin), end: index_concat(end, reduction.end) };
+}
+fn absent_layout<R: Reduction<Extension>>(channels: index) -> TableLayout {
+  let records = no_interactions(channels);
+  return TableLayout { present: false, height: 0, facts: no_shape(), records,
+    reduction: R::layout(records, 0), chunks: 0, begin: index_list(), end: index_list() };
+}
+// Admission follows the Bundle's presence and height rules. A required table
+// is present; an absent instance-height table has height 0; configuration data
+// is admitted against its height whether or not the table is present.
+fn admit_table<Table: nat, B: Bundle, R: Reduction<Extension>, MaxLogHeight: nat>(
+    statement: TableStatement, channels: index, size: index) -> TableLayout {
+  let rule = policy<Table,B>();
+  let height = statement.height;
+  require if rule.optional { true } else { statement.present };
+  let sized = if statement.present { true } else { not(rule.authority == 2) };
+  require if sized { admitted<MaxLogHeight>(rule, height) } else { height == 0 };
+  let facts = if sized { shape<Base,Table,B>(height) } else { no_shape() };
+  require length(statement.configuration) == height * facts.configuration;
+  let layout = if statement.present {
+      require length(statement.public_columns) == height * facts.public_columns;
+      present_layout<Table,B,R>(facts, height, channels)
+    } else {
+      require length(statement.public_columns) == 0;
+      absent_layout<R>(channels)
+    };
+  // The honest quotient has chunks of the table's height on the common domain.
+  require not(less(size, layout.chunks * layout.height));
+  return layout;
+}
+fn side_total(layout: TableLayout, channel: index, side: index) -> index {
+  let mut total: index = 0;
+  for interaction in 0..layout.records.count {
+    if both(index_get(layout.records.channel, interaction) == channel,
+        index_get(layout.records.side, interaction) == side) {
+      total = total + layout.height;
+    }
+  }
+  return total;
+}
+pub fn admit<B: Bundle, R: Reduction<Extension>, MaxLogHeight: nat, LogSize: nat>(
+    statement: Statement) -> [TableLayout; 3] {
+  let channels = natural<B::Channels>();
+  let size = natural<pow2(LogSize)>();
+  require length(statement.public_data) == natural<B::Publics>();
+  require disjoint_coset(natural<pow2(MaxLogHeight)>(), size, statement.shift);
+  let layouts = [admit_table<0,B,R,MaxLogHeight>(statement.tables[0], channels, size),
+    admit_table<1,B,R,MaxLogHeight>(statement.tables[1], channels, size),
+    admit_table<2,B,R,MaxLogHeight>(statement.tables[2], channels, size)];
+  // Natural count totals of each channel side, before any challenge.
+  for channel in 0..channels {
+    let push = side_total(layouts[0], channel, 0) + side_total(layouts[1], channel, 0) +
+      side_total(layouts[2], channel, 0);
+    let pull = side_total(layouts[0], channel, 1) + side_total(layouts[1], channel, 1) +
+      side_total(layouts[2], channel, 1);
+    require R::admits(push, pull, characteristic());
+  }
+  require both(not(base_width(layouts) == 0), not(auxiliary_width(layouts) == 0));
+  return layouts;
+}
+fn base_width(layouts: [TableLayout; 3]) -> index {
+  return layouts[0].facts.witness + layouts[1].facts.witness + layouts[2].facts.witness;
+}
+fn auxiliary_width(layouts: [TableLayout; 3]) -> index {
+  return layouts[0].reduction.columns + layouts[1].reduction.columns +
+    layouts[2].reduction.columns;
+}
+fn quotient_width(layouts: [TableLayout; 3]) -> index {
+  return layouts[0].chunks + layouts[1].chunks + layouts[2].chunks;
+}
+fn split<F: Field>(values: Vector<F>, first: index, second: index, third: index)
+    -> [Vector<F>; 3] {
+  require length(values) == first + second + third;
+  return [slice(values, 0, first), slice(values, first, second),
+    slice(values, first + second, third)];
+}
+fn schedule<B: Bundle, MaxLogHeight: nat, Queries: nat, Attempts: nat>(rounds: index,
+    queries: index, attempts: index, channels: index) -> bool {
+  return both(both(rounds == natural<MaxLogHeight>(), queries == natural<Queries>()),
+    both(attempts == natural<Attempts>(), channels == natural<B::Channels>()));
+}
+
+// Prover state. Columns are contiguous; `assignments` holds every ordered
+// arena input at every point of the common domain D, row-major.
+pub struct Extended {
+  pub trace: Vector<Extension>,
+  pub configuration: Vector<Extension>,
+  pub public_columns: Vector<Extension>,
+  pub trace_lde: Vector<Base>,
+  pub assignments: Vector<Extension>
+}
+pub struct Auxiliary {
+  pub columns: Vector<Extension>,
+  pub lde: Vector<Extension>,
+  pub claims: Vector<Extension>
+}
+pub struct Opened {
+  pub inputs: Vector<Extension>,
+  pub auxiliary: Vector<Extension>,
+  pub quotient: Vector<Extension>
+}
+fn nothing() -> Vector<Extension> { return empty<Extension>(); }
+
+// Phase 1: witness columns interpolated on the table's own subgroup and
+// extended to D. These are the only base columns any later phase reads.
+fn extend_table<Table: nat, B: Bundle>(witness: Vector<Base>, statement: TableStatement,
+    layout: TableLayout, data: Vector<Extension>, shift: Base, size: index) -> Extended {
+  return if layout.present {
+    let height = layout.height;
+    let facts = layout.facts;
+    require length(witness) == height * facts.witness;
+    let trace = transpose(witness, height, facts.witness);
+    let configuration = transpose(statement.configuration, height, facts.configuration);
+    let public_columns = transpose(statement.public_columns, height, facts.public_columns);
+    let trace_lde = extend_columns(trace, facts.witness, height, shift, size);
+    let configuration_lde = extend_columns(configuration, facts.configuration, height, shift, size);
+    let public_lde = extend_columns(public_columns, facts.public_columns, height, shift, size);
+    let assignments = domain_assignments<Extension,Table,B>(embed_vector(trace_lde),
+      embed_vector(configuration_lde), embed_vector(public_lde), data, height, size);
+    Extended { trace: embed_vector(trace), configuration: embed_vector(configuration),
+      public_columns: embed_vector(public_columns), trace_lde, assignments }
+  } else {
+    require length(witness) == 0;
+    Extended { trace: nothing(), configuration: nothing(), public_columns: nothing(),
+      trace_lde: empty<Base>(), assignments: nothing() }
+  };
+}
+fn extend_tables<B: Bundle>(witness: [Vector<Base>; 3], statement: Statement,
+    layouts: [TableLayout; 3], data: Vector<Extension>, size: index) -> [Extended; 3] {
+  return [extend_table<0,B>(witness[0], statement.tables[0], layouts[0], data, statement.shift, size),
+    extend_table<1,B>(witness[1], statement.tables[1], layouts[1], data, statement.shift, size),
+    extend_table<2,B>(witness[2], statement.tables[2], layouts[2], data, statement.shift, size)];
+}
+fn base_rows(extended: [Extended; 3], layouts: [TableLayout; 3], size: index) -> Vector<Base> {
+  let columns = concat(concat(extended[0].trace_lde, extended[1].trace_lde), extended[2].trace_lde);
+  return transpose(columns, base_width(layouts), size);
+}
+
+// Phase 2: records on the table's rows come from the same committed witness
+// values; the reduction builds its auxiliary columns and claims from them.
+fn auxiliary_table<Table: nat, B: Bundle, R: Reduction<Extension>>(extended: Extended,
+    layout: TableLayout, data: Vector<Extension>, challenges: Vector<Extension>,
+    shift: Extension, size: index) -> Auxiliary {
+  return if layout.present {
+    let height = layout.height;
+    let committed = extended.trace;
+    let assignments = domain_assignments<Extension,Table,B>(committed, extended.configuration,
+      extended.public_columns, data, height, height);
+    let values = record_points<Table,B>(assignments, height, layout.records.width);
+    let built = R::build(layout.records, values, height, challenges);
+    let lde = extend_columns(built.0, layout.reduction.columns, height, shift, size);
+    Auxiliary { columns: built.0, lde, claims: built.1 }
+  } else { Auxiliary { columns: nothing(), lde: nothing(), claims: nothing() } };
+}
+fn auxiliary_tables<B: Bundle, R: Reduction<Extension>>(extended: [Extended; 3],
+    layouts: [TableLayout; 3], data: Vector<Extension>, challenges: Vector<Extension>,
+    shift: Extension, size: index) -> [Auxiliary; 3] {
+  return [auxiliary_table<0,B,R>(extended[0], layouts[0], data, challenges, shift, size),
+    auxiliary_table<1,B,R>(extended[1], layouts[1], data, challenges, shift, size),
+    auxiliary_table<2,B,R>(extended[2], layouts[2], data, challenges, shift, size)];
+}
+fn auxiliary_rows(tables: [Auxiliary; 3], layouts: [TableLayout; 3], size: index)
+    -> Vector<Extension> {
+  let columns = concat(concat(tables[0].lde, tables[1].lde), tables[2].lde);
+  return transpose(columns, auxiliary_width(layouts), size);
+}
+fn accumulated<R: Reduction<Extension>>(layouts: [TableLayout; 3],
+    claim_values: [Vector<Extension>; 3], channels: index) -> Vector<Extension> {
+  let first = R::fold(layouts[0].records, claim_values[0], R::start(channels));
+  let second = R::fold(layouts[1].records, claim_values[1], first);
+  return R::fold(layouts[2].records, claim_values[2], second);
+}
+// Every table's claims in table order, then the reduction's global claims.
+fn all_claims<R: Reduction<Extension>>(tables: [Auxiliary; 3], layouts: [TableLayout; 3],
+    channels: index) -> Vector<Extension> {
+  let own = [tables[0].claims, tables[1].claims, tables[2].claims];
+  let global = R::global(accumulated<R>(layouts, own, channels), channels);
+  return concat(concat(concat(own[0], own[1]), own[2]), global);
+}
+fn table_claims<R: Reduction<Extension>>(claim_values: Vector<Extension>, layouts: [TableLayout; 3],
+    channels: index) -> [Vector<Extension>; 4] {
+  let first = layouts[0].reduction.claims;
+  let second = layouts[1].reduction.claims;
+  let third = layouts[2].reduction.claims;
+  let global = R::global_claims(channels);
+  require length(claim_values) == first + second + third + global;
+  return [slice(claim_values, 0, first), slice(claim_values, first, second),
+    slice(claim_values, first + second, third), slice(claim_values, first + second + third, global)];
+}
+// Each channel closes over the claims of present tables only.
+fn closes<R: Reduction<Extension>>(layouts: [TableLayout; 3], claim_values: Vector<Extension>,
+    channels: index) -> bool {
+  let parts = table_claims<R>(claim_values, layouts, channels);
+  let own = [parts[0], parts[1], parts[2]];
+  return R::close(accumulated<R>(layouts, own, channels), parts[3], channels);
+}
+
+// Phase 3: one quotient per table over D, chunked by the table's height.
+fn rotated(columns: Vector<Extension>, reduction: Layout, size: index, blowup: index)
+    -> Vector<Extension> {
+  let mut result = nothing();
+  for opening in 0..index_length(reduction.opened) {
+    let column = slice(columns, index_get(reduction.opened, opening) * size, size);
+    result = concat(result, kernel<Extension>("vector.rotate", column,
+      index_get(reduction.rotations, opening) * blowup));
+  }
+  return result;
+}
+fn quotient_table<Table: nat, B: Bundle, R: Reduction<Extension>>(extended: Extended,
+    auxiliary: Auxiliary, claim_values: Vector<Extension>, layout: TableLayout,
+    challenges: Vector<Extension>, shift: Extension, size: index, alpha: Extension)
+    -> Vector<Extension> {
+  return if layout.present {
+    let height = layout.height;
+    let blowup = kernel("index.div", size, height);
+    let residuals = kernel<Extension,Table>("relation.table_points", extended.assignments, size; B);
+    let values = record_points<Table,B>(extended.assignments, size, layout.records.width);
+    let openings = rotated(auxiliary.lde, layout.reduction, size, blowup);
+    let numerators = concat(concat(transpose(residuals, size, layout.facts.assertions),
+        range_constraints(layout.records, values, size)),
+      R::constraints(layout.records, values, openings, size, challenges, claim_values));
+    let quotient = divide_scopes(numerators, layout.begin, layout.end, height, shift, size, alpha);
+    split_quotient(quotient, shift, size, height, layout.chunks)
+  } else { nothing() };
+}
+fn quotient_tables<B: Bundle, R: Reduction<Extension>>(extended: [Extended; 3],
+    tables: [Auxiliary; 3], claim_values: Vector<Extension>, layouts: [TableLayout; 3],
+    challenges: Vector<Extension>, shift: Extension, size: index, alpha: Extension,
+    channels: index) -> [Vector<Extension>; 3] {
+  let own = table_claims<R>(claim_values, layouts, channels);
+  return [quotient_table<0,B,R>(extended[0], tables[0], own[0], layouts[0], challenges, shift, size, alpha),
+    quotient_table<1,B,R>(extended[1], tables[1], own[1], layouts[1], challenges, shift, size, alpha),
+    quotient_table<2,B,R>(extended[2], tables[2], own[2], layouts[2], challenges, shift, size, alpha)];
+}
+fn quotient_rows(chunks: [Vector<Extension>; 3], layouts: [TableLayout; 3], size: index)
+    -> Vector<Extension> {
+  return transpose(concat(concat(chunks[0], chunks[1]), chunks[2]), quotient_width(layouts), size);
+}
+
+// Phase 4: values at zeta and its rotations. The ordered input vector feeds
+// both the assertions and the interaction records.
+fn open_table<Table: nat, B: Bundle>(extended: Extended, auxiliary: Auxiliary,
+    chunks: Vector<Extension>, layout: TableLayout, data: Vector<Extension>,
+    zeta: Extension, shift: Extension, size: index) -> Opened {
+  return if layout.present {
+    let height = layout.height;
+    let inputs = claims<Extension,Table,B>(extended.trace, extended.configuration,
+      extended.public_columns, data, height, zeta);
+    let mut values = nothing();
+    for opening in 0..index_length(layout.reduction.opened) {
+      let x = zeta * point<Extension>(1, height, index_get(layout.reduction.rotations, opening));
+      values = append(values, column_at(auxiliary.columns,
+        index_get(layout.reduction.opened, opening), height, x, 1));
+    }
+    Opened { inputs, auxiliary: values,
+      quotient: opening_claims(chunks, layout.chunks, shift, size, zeta) }
+  } else { Opened { inputs: nothing(), auxiliary: nothing(), quotient: nothing() } };
+}
+fn open_tables<B: Bundle>(extended: [Extended; 3], tables: [Auxiliary; 3],
+    chunks: [Vector<Extension>; 3], layouts: [TableLayout; 3], data: Vector<Extension>,
+    zeta: Extension, shift: Extension, size: index) -> [Opened; 3] {
+  return [open_table<0,B>(extended[0], tables[0], chunks[0], layouts[0], data, zeta, shift, size),
+    open_table<1,B>(extended[1], tables[1], chunks[1], layouts[1], data, zeta, shift, size),
+    open_table<2,B>(extended[2], tables[2], chunks[2], layouts[2], data, zeta, shift, size)];
+}
+fn joined(opened: [Opened; 3]) -> Opened {
+  return Opened {
+    inputs: concat(concat(opened[0].inputs, opened[1].inputs), opened[2].inputs),
+    auxiliary: concat(concat(opened[0].auxiliary, opened[1].auxiliary), opened[2].auxiliary),
+    quotient: concat(concat(opened[0].quotient, opened[1].quotient), opened[2].quotient) };
+}
+fn separated(inputs: Vector<Extension>, auxiliary: Vector<Extension>,
+    quotient: Vector<Extension>, layouts: [TableLayout; 3]) -> [Opened; 3] {
+  let first = split(inputs, layouts[0].facts.inputs, layouts[1].facts.inputs,
+    layouts[2].facts.inputs);
+  let second = split(auxiliary, index_length(layouts[0].reduction.opened),
+    index_length(layouts[1].reduction.opened), index_length(layouts[2].reduction.opened));
+  let third = split(quotient, layouts[0].chunks, layouts[1].chunks, layouts[2].chunks);
+  return [Opened { inputs: first[0], auxiliary: second[0], quotient: third[0] },
+    Opened { inputs: first[1], auxiliary: second[1], quotient: third[1] },
+    Opened { inputs: first[2], auxiliary: second[2], quotient: third[2] }];
+}
+fn check_table<Table: nat, B: Bundle, R: Reduction<Extension>>(layout: TableLayout,
+    statement: TableStatement, data: Vector<Extension>, opened: Opened,
+    challenges: Vector<Extension>, claim_values: Vector<Extension>, zeta: Extension,
+    alpha: Extension) -> bool {
+  return if layout.present {
+    let height = layout.height;
+    let facts = layout.facts;
+    let configuration = embed_vector(transpose(statement.configuration, height,
+      facts.configuration));
+    let public_columns = embed_vector(transpose(statement.public_columns, height,
+      facts.public_columns));
+    let known = known_inputs<Extension,Table,B>(opened.inputs, configuration, public_columns,
+      data, height, zeta);
+    let residuals = kernel<Extension,Table>("relation.table_point", opened.inputs; B);
+    let values = record_points<Table,B>(opened.inputs, 1, layout.records.width);
+    let numerators = concat(concat(residuals, range_constraints(layout.records, values, 1)),
+      R::constraints(layout.records, values, opened.auxiliary, 1, challenges, claim_values));
+    let combined = combine_scopes(numerators, layout.begin, layout.end, height, zeta, alpha);
+    both(known, combined == recombine(opened.quotient, height, zeta))
+  } else { yes() };
+}
+fn identities<B: Bundle, R: Reduction<Extension>>(layouts: [TableLayout; 3],
+    statement: Statement, data: Vector<Extension>, opened: [Opened; 3],
+    challenges: Vector<Extension>, claim_values: Vector<Extension>, zeta: Extension,
+    alpha: Extension, channels: index) -> bool {
+  let own = table_claims<R>(claim_values, layouts, channels);
+  return both(both(
+      check_table<0,B,R>(layouts[0], statement.tables[0], data, opened[0], challenges, own[0], zeta, alpha),
+      check_table<1,B,R>(layouts[1], statement.tables[1], data, opened[1], challenges, own[1], zeta, alpha)),
+    check_table<2,B,R>(layouts[2], statement.tables[2], data, opened[2], challenges, own[2], zeta, alpha));
+}
+
+// Phase 5: one DEEP word over every opened base, auxiliary and quotient
+// column of every present table, in table order, with successive powers of rho.
+fn deep_table<Table: nat, B: Bundle>(extended: Extended, auxiliary: Auxiliary,
+    chunks: Vector<Extension>, layout: TableLayout, opened: Opened, shift: Extension,
+    size: index, zeta: Extension, rho: Extension, result: Vector<Extension>,
+    weight: Extension) -> (Vector<Extension>, Extension) {
+  return if layout.present {
+    let height = layout.height;
+    let reads = deep_reads<Extension,Table,B>(embed_vector(extended.trace_lde), opened.inputs,
+      height, shift, size, zeta, rho, result, weight);
+    let terms = deep_columns(auxiliary.lde, layout.reduction.opened, layout.reduction.rotations,
+      opened.auxiliary, height, shift, size, zeta, rho, reads.0, reads.1);
+    let quotient = same_rotation(layout.chunks, 0);
+    deep_columns(chunks, quotient.0, quotient.1, opened.quotient, height, shift, size, zeta,
+      rho, terms.0, terms.1)
+  } else { (result, weight) };
+}
+fn deep_tables<B: Bundle>(extended: [Extended; 3], tables: [Auxiliary; 3],
+    chunks: [Vector<Extension>; 3], layouts: [TableLayout; 3], opened: [Opened; 3],
+    shift: Extension, size: index, zeta: Extension, rho: Extension, adjustment: Extension)
+    -> Vector<Extension> {
+  let first = deep_table<0,B>(extended[0], tables[0], chunks[0], layouts[0], opened[0], shift,
+    size, zeta, rho, fill<Extension>(0, size), 1);
+  let second = deep_table<1,B>(extended[1], tables[1], chunks[1], layouts[1], opened[1], shift,
+    size, zeta, rho, first.0, first.1);
+  let third = deep_table<2,B>(extended[2], tables[2], chunks[2], layouts[2], opened[2], shift,
+    size, zeta, rho, second.0, second.1);
+  let xs = kernel<Extension>("poly.domain_points", shift, size);
+  return multiply(third.0, add(fill<Extension>(1, size), scale(xs, adjustment)));
+}
+fn deep_table_value<Table: nat, B: Bundle>(layout: TableLayout, base_row: Vector<Extension>,
+    auxiliary_row: Vector<Extension>, quotient_row: Vector<Extension>, opened: Opened,
+    x: Extension, zeta: Extension, rho: Extension, result: Extension, weight: Extension)
+    -> (Extension, Extension) {
+  return if layout.present {
+    let height = layout.height;
+    let reads = deep_read_values<Extension,Table,B>(base_row, opened.inputs, height, x, zeta,
+      rho, result, weight);
+    let terms = deep_column_values(auxiliary_row, layout.reduction.opened,
+      layout.reduction.rotations, opened.auxiliary, height, x, zeta, rho, reads.0, reads.1);
+    let quotient = same_rotation(layout.chunks, 0);
+    deep_column_values(quotient_row, quotient.0, quotient.1, opened.quotient, height, x, zeta,
+      rho, terms.0, terms.1)
+  } else { (result, weight) };
+}
+fn deep_tables_value<B: Bundle>(layouts: [TableLayout; 3], base_row: Vector<Base>,
+    auxiliary_row: Vector<Extension>, quotient_row: Vector<Extension>, opened: [Opened; 3],
+    x: Extension, zeta: Extension, rho: Extension, adjustment: Extension) -> Extension {
+  let bases = split(embed_vector(base_row), layouts[0].facts.witness, layouts[1].facts.witness,
+    layouts[2].facts.witness);
+  let auxiliaries = split(auxiliary_row, layouts[0].reduction.columns,
+    layouts[1].reduction.columns, layouts[2].reduction.columns);
+  let quotients = split(quotient_row, layouts[0].chunks, layouts[1].chunks, layouts[2].chunks);
+  let first = deep_table_value<0,B>(layouts[0], bases[0], auxiliaries[0], quotients[0],
+    opened[0], x, zeta, rho, 0, 1);
+  let second = deep_table_value<1,B>(layouts[1], bases[1], auxiliaries[1], quotients[1],
+    opened[1], x, zeta, rho, first.0, first.1);
+  let third = deep_table_value<2,B>(layouts[2], bases[2], auxiliaries[2], quotients[2],
+    opened[2], x, zeta, rho, second.0, second.1);
+  return third.0 * (1 + adjustment * x);
+}
+
+// Interaction challenges: a shift and a compression per channel, in channel
+// order. They are drawn only after every base column is committed.
+pub protocol Challenges<B: Bundle> roles(P,V)(channel_count: index @(P,V),
+    coins: Random<Extension> @V)
+    -> (challengesP: Vector<Extension> @P, challengesV: Vector<Extension> @V)
+    where 1 <= B::Channels {
+  let mut challengesP @P = nothing();
+  let mut challengesV @V = nothing();
+  for _ in 0..channel_count roles(P,V) max B::Channels {
+    let gammaV = coins.draw();
+    let gammaP = send V -> P(gammaV);
+    let deltaV = coins.draw();
+    let deltaP = send V -> P(deltaV);
+    let nextV @V = append(append(challengesV, gammaV), deltaV);
+    let nextP @P = append(append(challengesP, gammaP), deltaP);
+    challengesV = nextV;
+    challengesP = nextP;
+  }
+  return (challengesP = challengesP, challengesV = challengesV);
+}
+
+// A nonhiding argument for a whole three-table Bundle: every present table's
+// assertions, the bound-1 range of every multiset record, and every channel's
+// multiset equality through the selected reduction. All tables share the LDE
+// domain D = s<g_N>, N = 2^LogSize; each keeps its own height h_t, at most
+// H = 2^MaxLogHeight. One FRI instance tests the combined DEEP word at degree
+// below H. See the library README for the extraction argument and its bounds.
+pub protocol ThreeTableArgument<B: Bundle, R: Reduction<Extension>,
+    MaxLogHeight: nat, LogSize: nat, Queries: nat, Attempts: nat> roles(P,V)
+    (witness: [Vector<Base>; 3] @P, statementP: Statement @P, statementV: Statement @V,
+     round_count: index @(P,V), query_count: index @(P,V), attempt_count: index @(P,V),
+     channel_count: index @(P,V), coins: Random<Extension> @V) -> (accepted: bool @V)
+    where B::Tables <= 3, 3 <= B::Tables, 1 <= B::Channels, 1 <= MaxLogHeight,
+      MaxLogHeight+1 <= LogSize, 1 <= Queries, 1 <= Attempts {
+  let scheduledV @V = schedule<B,MaxLogHeight,Queries,Attempts>(round_count, query_count,
+    attempt_count, channel_count);
+  require @V scheduledV;
+  let layoutsV @V = admit<B,R,MaxLogHeight,LogSize>(statementV);
+  let scheduledP @P = schedule<B,MaxLogHeight,Queries,Attempts>(round_count, query_count,
+    attempt_count, channel_count);
+  require @P scheduledP;
+  let layoutsP @P = admit<B,R,MaxLogHeight,LogSize>(statementP);
+  let sizeP @P = natural<pow2(LogSize)>();
+  let sizeV @V = natural<pow2(LogSize)>();
+  let shiftP @P = embed_scalar(statementP.shift);
+  let shiftV @V = embed_scalar(statementV.shift);
+  let dataP @P = embed_vector(statementP.public_data);
+  let dataV @V = embed_vector(statementV.public_data);
+  let extendedP @P = extend_tables<B>(witness, statementP, layoutsP, dataP, sizeP);
+  let base_tree @P = commit<TraceRows>(base_rows(extendedP, layoutsP, sizeP), base_width(layoutsP));
+  let base_root = send P -> V(base_tree.0);
+  let (challengesP, challengesV) = Challenges<B>(channel_count, coins);
+  let tablesP @P = auxiliary_tables<B,R>(extendedP, layoutsP, dataP, challengesP, shiftP, sizeP);
+  let auxiliary_tree @P = commit<ExtensionRows>(auxiliary_rows(tablesP, layoutsP, sizeP),
+    auxiliary_width(layoutsP));
+  let auxiliary_root = send P -> V(auxiliary_tree.0);
+  let proposed_claims @P = all_claims<R>(tablesP, layoutsP, channel_count);
+  let received_claims = send P -> V(proposed_claims);
+  let closed @V = closes<R>(layoutsV, received_claims, channel_count);
+  require @V closed;
+  let alphaV = coins.draw();
+  let alphaP = send V -> P(alphaV);
+  let chunksP @P = quotient_tables<B,R>(extendedP, tablesP, proposed_claims, layoutsP, challengesP,
+    shiftP, sizeP, alphaP, channel_count);
+  let quotient_tree @P = commit<ExtensionRows>(quotient_rows(chunksP, layoutsP, sizeP),
+    quotient_width(layoutsP));
+  let quotient_root = send P -> V(quotient_tree.0);
+  let (zetaP, zetaV) = Outside<Extension,MaxLogHeight,LogSize,Attempts>(shiftP, shiftV,
+    attempt_count, coins);
+  let openedP @P = open_tables<B>(extendedP, tablesP, chunksP, layoutsP, dataP, zetaP, shiftP,
+    sizeP);
+  let proposed @P = joined(openedP);
+  let opened_inputs = send P -> V(proposed.inputs);
+  let opened_auxiliary = send P -> V(proposed.auxiliary);
+  let opened_quotient = send P -> V(proposed.quotient);
+  let openedV @V = separated(opened_inputs, opened_auxiliary, opened_quotient, layoutsV);
+  let identity_ok @V = identities<B,R>(layoutsV, statementV, dataV, openedV, challengesV, received_claims,
+    zetaV, alphaV, channel_count);
+  require @V identity_ok;
+  let rhoV = coins.draw();
+  let rhoP = send V -> P(rhoV);
+  let adjustmentV = coins.draw();
+  let adjustmentP = send V -> P(adjustmentV);
+  let reduced @P = deep_tables<B>(extendedP, tablesP, chunksP, layoutsP, openedP, shiftP, sizeP, zetaP,
+    rhoP, adjustmentP);
+  let (fri_ok, positionsP, positionsV, valuesV) =
+    LowDegree<ExtensionRows,LogSize,0,MaxLogHeight,Queries>(reduced, shiftP, shiftV, round_count,
+      query_count, coins);
+  require @V fri_ok;
+  let base_widthV @V = base_width(layoutsV);
+  let auxiliary_widthV @V = auxiliary_width(layoutsV);
+  let quotient_widthV @V = quotient_width(layoutsV);
+  for query in 0..query_count roles(P,V) max Queries {
+    let indexP @P = at_position(positionsP, query);
+    let indexV @V = at_position(positionsV, query);
+    let base_open @P = open<TraceRows>(base_tree.1, indexP);
+    let auxiliary_open @P = open<ExtensionRows>(auxiliary_tree.1, indexP);
+    let quotient_open @P = open<ExtensionRows>(quotient_tree.1, indexP);
+    let base_row = send P -> V(base_open.0);
+    let base_path = send P -> V(base_open.1);
+    let auxiliary_row = send P -> V(auxiliary_open.0);
+    let auxiliary_path = send P -> V(auxiliary_open.1);
+    let quotient_row = send P -> V(quotient_open.0);
+    let quotient_path = send P -> V(quotient_open.1);
+    let base_ok @V = authenticate<TraceRows>(base_root, base_widthV, sizeV, indexV, base_row,
+      base_path);
+    require @V base_ok;
+    let auxiliary_ok @V = authenticate<ExtensionRows>(auxiliary_root, auxiliary_widthV, sizeV,
+      indexV, auxiliary_row, auxiliary_path);
+    require @V auxiliary_ok;
+    let quotient_ok @V = authenticate<ExtensionRows>(quotient_root, quotient_widthV, sizeV,
+      indexV, quotient_row, quotient_path);
+    require @V quotient_ok;
+    let x @V = point(shiftV, sizeV, indexV);
+    let expected @V = deep_tables_value<B>(layoutsV, base_row, auxiliary_row, quotient_row, openedV, x,
+      zetaV, rhoV, adjustmentV);
+    let actual @V = at_value(valuesV, query);
+    require @V expected == actual;
+  }
+  let accepted @V = yes();
+  return (accepted = accepted);
+}

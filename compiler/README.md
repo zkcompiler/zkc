@@ -48,7 +48,9 @@ Relation data commands retain R1CS import/export, normalization, inspection,
 matrices, evaluation, and native Sumcheck authoring (`relation-protocol` and
 `relation-requirements`). The `relation-air-*` commands retain AIR inspection,
 import/export, evaluation and polynomial planning. The isolated
-[LLZK adapter](adapters/llzk) emits relation data.
+[LLZK adapter](adapters/llzk) emits relation data. The external
+[accumulator-machine adapter](adapters/accumulator-machine/README.md) emits an
+example multi-table Bundle with staged reductions.
 
 There is no JSON-program-to-MLIR importer. `protocol::exportProgram` returns
 checked typed Program records; `protocol::exportModule` returns the checked
