@@ -50,7 +50,7 @@ just test-lean-clean         # the optional Clean package and its native control
 `test_checks.py` fails if a declared library or executable is not one of them,
 so neither this page nor a workflow keeps its own list. What `just test-lean`
 runs is discovered by [the shared test driver](../common/tests/run.py) from
-`checks/*.py` and `consumers/*/check.py`. Fixture-helper controls live in `checks/check_cli.py`. The recipe builds the formal prerequisites before running it.
+`checks/*.py` and `consumers/*/check.py`. Independent executable controls live in `checks/check_cli.py`, including contract admission, JSON-lines framing and invalid arguments. The recipe builds the formal prerequisites before running it.
 
 Build each optional library separately from `lean/integrations/arklib` or
 `lean/integrations/clean` with `lake build`. The main build checks every

@@ -23,8 +23,8 @@ stdenvNoCC.mkDerivation {
     mkdir -p common/tests
     cp -R ${lean.library}/share/zkc/common/tests/fixtures common/tests/fixtures
     chmod -R u+w lean
-    cp -R ${source}/lean/integrations lean/
-    chmod -R u+w lean/integrations
+    cp -R ${source}/lean/. lean/
+    chmod -R u+w lean
     cd lean
     mkdir -p integrations/arklib/.lake/packages
     for dependency in ${lakeSources}/*; do
