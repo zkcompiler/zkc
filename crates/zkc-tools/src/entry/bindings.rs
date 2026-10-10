@@ -236,14 +236,19 @@ impl Generator {
             self.add(format!("#[allow(non_snake_case)]\nimpl ::core::convert::From<{name}> for ::zkc_tools::entry::Value {{fn from(value: {name})->Self {{match value {{\n"))?;
             for (source, arm, fields) in &arms {
                 self.add(format!("{name}:: {arm}{{"))?;
-                for f in fields {
-                    self.add(format!("{},", f.name))?;
+                // Source field names can resolve to variants or constants in
+                // Rust patterns; bind each field to a generated local instead.
+                for (index, f) in fields.iter().enumerate() {
+                    self.add(format!("{}: __zkc_field_{index},", f.name))?;
                 }
                 self.add(format!(
                     "}}=>Self::Variant{{alternative: {source:?}.into(),fields:["
                 ))?;
-                for f in fields {
-                    self.add(format!("({:?}.into(),{}.into()),", f.source, f.name))?;
+                for (index, f) in fields.iter().enumerate() {
+                    self.add(format!(
+                        "({:?}.into(),__zkc_field_{index}.into()),",
+                        f.source
+                    ))?;
                 }
                 self.add("].into()},\n")?;
             }

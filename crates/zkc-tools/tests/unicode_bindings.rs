@@ -35,20 +35,31 @@ fn package() -> Package {
         .map(|(i, name)| json!({"name":name,"offset":i,"schema":boolean}))
         .collect();
     let key = "数学::Choice";
+    let payload_names = [
+        "α",
+        "None",
+        "Some",
+        "Ok",
+        "Err",
+        "PROVER",
+        "VERIFIER",
+        "PACKAGE_SHA256",
+    ];
     let native = zkc_test_support::variants::encode_tree(json!([
         [
             "zkc.language",
             zkc_tools::source_names::encode_nominal_identity(key)
         ],
         [
-            ["case00000000", ["bool"]],
+            ["case00000000", vec!["bool"; payload_names.len()]],
             ["case00000001", []],
             ["case00000002", []]
         ]
     ]));
     let mut variant = schema("variant", key, json!([native]));
     variant["alternatives"] = json!([
-        {"name":"有値","fields":[{"name":"α","offset":0,"schema":boolean}]},
+        {"name":"有値","fields":payload_names.iter().enumerate().map(|(index, name)|
+            json!({"name":name,"offset":index,"schema":boolean})).collect::<Vec<_>>()},
         {"name":"Self","fields":[]},{"name":"__zkc_e69c89e580a4","fields":[]}
     ]);
     let mut collision = schema("record", "Record", json!([]));
@@ -129,11 +140,22 @@ fn main() {
     assert!(fields.contains_key("α") && fields.contains_key("__zkc_ceb1") && fields.contains_key("𐐀"));
     let record = Record::try_from(data).unwrap();
     assert!(record.__zkc_ceb1 && !record.__zkc_5f5f7a6b635f63656231);
-    let choice = __zkc_e695b0e5ada63a3a43686f696365::__zkc_e69c89e580a4 { __zkc_ceb1: true };
+    let choice = __zkc_e695b0e5ada63a3a43686f696365::__zkc_e69c89e580a4 {
+        __zkc_ceb1: true, None: false, Some: true, Ok: false, Err: true,
+        PROVER: false, VERIFIER: true, PACKAGE_SHA256: false,
+    };
     let value: ::zkc_tools::entry::Value = choice.into();
     let ::zkc_tools::entry::Value::Variant { alternative, fields } = &value else { panic!() };
     assert_eq!(alternative, "有値"); assert!(fields.contains_key("α"));
+    for name in ["None", "Some", "Ok", "Err", "PROVER", "VERIFIER", "PACKAGE_SHA256"] {
+        assert!(fields.contains_key(name), "missing source field {name}");
+    }
     let choice = __zkc_e695b0e5ada63a3a43686f696365::try_from(value).unwrap();
+    let __zkc_e695b0e5ada63a3a43686f696365::__zkc_e69c89e580a4 {
+        None: none_value, Some: some_value, PROVER: prover_value,
+        VERIFIER: verifier_value, ..
+    } = &choice else { panic!() };
+    assert!(!*none_value && *some_value && !*prover_value && *verifier_value);
     let input = __zkc_e5bdb9496e70757473 { data: record, choice, collision: Record2 {}, reserved: PROVER2 {} };
     let (role, inputs) = input.into_role();
     assert_eq!(role, "役"); assert!(inputs.inputs.contains_key("choice"));
