@@ -155,7 +155,6 @@ bool Checker::imports() {
   }
   if (auto prelude = modules.find("zkc::prelude"); prelude != modules.end()) {
     const auto id = prelude->second.index;
-    visibleOperators[id].clear();
     if (!syntax[id].imports.empty())
       return types.fail("source.import",
                         "installed prelude cannot import captured modules",

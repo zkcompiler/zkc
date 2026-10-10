@@ -160,6 +160,20 @@ int main() {
               value.getAsObject()->getString("visibility") == "public",
               "includeInstallation implicitly included private/local bindings");
       });
+  cases.run("prelude bindings remain visible in their own scope", [] {
+    auto view = report(inventory(), {false, true});
+    const auto &scope = find(array(view, "scopes"), "module", "zkc::prelude");
+    const auto *visible = scope.getArray("visible_bindings");
+    const auto *exported = scope.getArray("exported_bindings");
+    require(scope.getString("kind") == "module" && visible && exported &&
+                !exported->empty() && *visible == *exported,
+            "prelude scope lost its own bindings");
+    std::set<int64_t> unique;
+    for (const auto &value : *visible)
+      require(unique.insert(*value.getAsInteger()).second,
+              "prelude binding was injected twice");
+    referencesClose(view);
+  });
   cases.run(
       "reexports retain original binding and authored UTF-8 byte operands", [] {
         auto project = inventory();

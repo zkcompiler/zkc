@@ -306,6 +306,11 @@ private:
       }
       descriptor->symbol = text().str();
       advance();
+      auto firstHole = decodeSourceScalar(text(), 0);
+      if (firstHole && firstHole->value == *closer) {
+        fail("source.notation", "notation requires at least one hole");
+        return {};
+      }
       do {
         if (result.holes.size() >= work.limits.notationHoles) {
           fail("source.limit", "notation hole limit exceeded");
@@ -1352,13 +1357,14 @@ private:
     Span span = current().span;
     Expression value;
     value.span = span;
-    if (take("!")) {
+    if (at("!")) {
       value.kind = Expression::Kind::Not;
       if (minimum > 75) {
         fail("source.notation-precedence",
              "weak prefix requires parentheses in this operand");
         return {};
       }
+      advance();
       auto operand = expression(decl, depth + 1, 75, records);
       if (!operand)
         return {};

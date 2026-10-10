@@ -121,6 +121,21 @@ int main() {
     refuses(syntax("operator postfix(60) ⊤=f;operator infixl(60) ⊤=f;", "a"),
             "source.notation-conflict");
   });
+  cases.run("weak fixed prefix diagnostic identifies the operator", [&] {
+    const std::string prefix = "operator infixl(80) ⊗=f;";
+    const std::string expression = "a⊗!b";
+    const std::string source = "module m;" + prefix +
+                               "fn f(a:bool,b:bool,c:bool)->bool{return " +
+                               expression + ";}";
+    auto parsed = syntax(prefix, expression);
+    require(!parsed, "weak prefix unexpectedly parsed");
+    auto diagnostic = diagnose(parsed.takeError());
+    require(diagnostic && diagnostic->code == "source.notation-precedence" &&
+                diagnostic->primary &&
+                diagnostic->primary->begin == source.find('!') &&
+                diagnostic->primary->end == source.find('!') + 1,
+            "weak prefix diagnostic did not identify the operator");
+  });
   cases.run("delimiter holes preserve shape and nesting", [&] {
     hasShape("notation ⟪ left,right ⟫=f(left,right);", "⟪a,⟪b,c⟫⟫",
              "⟪(a,⟪(b,c))");
@@ -130,8 +145,9 @@ int main() {
       refuses(syntax("notation ⟪ left,right ⟫=f(left,right);", expression),
               "source.notation-delimiter");
     for (StringRef definition :
-         {"notation ⟪ a,a ⟫=f(a,a);", "notation ⟪ a,b ⟫=f(b,a);",
-          "notation ⟪ a,b ⟫=f(a,a);", "notation ⟪ a,b ⟩=f(a,b);"})
+         {"notation ⟪ ⟫=f();", "notation ⟪ a,a ⟫=f(a,a);",
+          "notation ⟪ a,b ⟫=f(b,a);", "notation ⟪ a,b ⟫=f(a,a);",
+          "notation ⟪ a,b ⟩=f(a,b);"})
       refuses(syntax(definition, "a"), "source.notation");
   });
   cases.run("fixed grammar and binder reservations", [&] {
