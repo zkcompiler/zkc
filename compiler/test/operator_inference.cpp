@@ -175,6 +175,61 @@ int main() {
               "mutated authored operand order accepted");
     }
   });
+  cases.run("named call input mappings must be permutations", [&] {
+    for (const auto &mapping :
+         std::vector<std::vector<unsigned>>{{0, 0}, {0, 2}, {0}}) {
+      Fixture f;
+      require(checkCallInputMapping(f.semantics, {1, 0}, 2, site),
+              "valid named mapping refused");
+      require(!checkCallInputMapping(f.semantics, mapping, 2, site) &&
+                  f.semantics.diagnostic &&
+                  f.semantics.diagnostic->code == "source.binding-witness",
+              "invalid named mapping accepted");
+    }
+  });
+  cases.run("local and protocol call actions retain primitive identity", [&] {
+    for (auto mode : {Body::Mode::Local, Body::Mode::Protocol})
+      for (unsigned mutation = 0; mutation < 3; ++mutation) {
+        Fixture f;
+        f.declarations = {signature(0, {index, index}, index)};
+        auto &callee = f.declarations.front();
+        callee.kind = Declaration::Kind::Local;
+        callee.primitive = PrimitiveDefinition{"index.add", {}};
+        Body body;
+        body.mode = mode;
+        body.values = {{index, {}, site}, {index, {}, site}, {index, {}, site}};
+        LocalPrimitive local{"index.add", {{0}, {1}}, {}};
+        local.bindingArguments = std::vector<Type>{};
+        HelperCall helper{{0}, {{0}, {1}}, {}, {}, {}};
+        Operation op{local, {{2}}, site, 0};
+        if (mode == Body::Mode::Protocol)
+          op.action = helper;
+        op.binding = CallBinding{{{0}, {}}, {}, {{0}, {1}}, {}, {}, {}};
+        require(checkCallAction(f.semantics, f.declarations, body, op),
+                "valid primitive call action refused");
+        if (mode == Body::Mode::Local) {
+          auto &action = std::get<LocalPrimitive>(op.action);
+          if (mutation == 0)
+            action.contract = "index.sub";
+          if (mutation == 1)
+            action.bindingArguments->push_back(field);
+          if (mutation == 2)
+            op.action = helper;
+        } else {
+          auto &action = std::get<HelperCall>(op.action);
+          if (mutation == 0)
+            action.callee = {1};
+          if (mutation == 1)
+            action.arguments.push_back(field);
+          if (mutation == 2)
+            op.action = local;
+        }
+        require(!checkCallAction(f.semantics, f.declarations, body, op) &&
+                    f.semantics.diagnostic &&
+                    f.semantics.diagnostic->code == "source.binding-witness",
+                "mutated primitive call action accepted");
+      }
+  });
   cases.run("native action is checked independently of call resolution", [&] {
     for (unsigned mutation = 0; mutation < 4; ++mutation) {
       Fixture f;
@@ -207,5 +262,47 @@ int main() {
               "corrupted native call witness accepted");
     }
   });
+  cases.run(
+      "mathematical primitive actions agree across executable modes", [&] {
+        for (bool scalar : {false, true})
+          for (auto mode : {Body::Mode::Local, Body::Mode::Protocol}) {
+            Fixture f;
+            auto type = scalar ? field : boolean;
+            auto identity = scalar ? "field.add" : "bool.and";
+            auto mathIdentity = scalar ? zkc::MathematicalIdentity::FieldAdd
+                                       : zkc::MathematicalIdentity::BooleanAnd;
+            f.declarations = {signature(0, {type, type}, type)};
+            f.declarations.front().primitive =
+                PrimitiveDefinition{identity, scalar ? std::vector<Type>{field}
+                                                     : std::vector<Type>{}};
+            Body body;
+            body.mode = mode;
+            body.values = {
+                {type, {}, site}, {type, {}, site}, {type, {}, site}};
+            Operation op{
+                MathValue{mathIdentity, {{0}, {1}}, {}}, {{2}}, site, 0};
+            if (mode == Body::Mode::Local) {
+              if (scalar)
+                op.action = LocalPrimitive{identity, {{0}, {1}}, {}};
+              else
+                op.action = HelperCall{{0}, {{0}, {1}}, {}, {}, {}};
+            }
+            op.binding = CallBinding{{{0}, {}}, {}, {{0}, {1}}, {}, {}, {}};
+            require(checkCallAction(f.semantics, f.declarations, body, op),
+                    "valid mathematical primitive action refused");
+            if (mode == Body::Mode::Local && scalar)
+              std::get<LocalPrimitive>(op.action).bindingArguments =
+                  std::vector<Type>{field};
+            else if (mode == Body::Mode::Local)
+              op.action = LocalPrimitive{identity, {{0}, {1}}, {}};
+            else
+              op.action = HelperCall{{0}, {{0}, {1}}, {}, {}, {}};
+            require(!checkCallAction(f.semantics, f.declarations, body, op) &&
+                        f.semantics.diagnostic &&
+                        f.semantics.diagnostic->code ==
+                            "source.binding-witness",
+                    "wrong mathematical primitive boundary accepted");
+          }
+      });
   return cases.result();
 }

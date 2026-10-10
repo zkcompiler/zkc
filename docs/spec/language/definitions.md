@@ -733,13 +733,17 @@ written result; a tuple can represent multiple native results. Invalid declarati
 use `source.primitive` or the more specific installed-contract diagnostic.
 
 The installed scalar prelude provides field addition/subtraction/multiplication/
-equality, group addition/scaling/equality, Boolean equality, and local index
+equality, group addition/scaling/equality, Boolean equality, and ordered index
 addition/subtraction/multiplication/equality. Group scaling is `point * scalar`.
 Total scalar calls emit mathematical or local primitive operations directly.
 Index arithmetic retains possible failure; index equality is total. Ordered
 vector operations retain shape checks and stop behavior. Calls to ordered
 primitives in protocols keep the participant-owned helper boundary. Formal
 intrinsics called from local code retain the existing realization boundary.
+Retained helper calls, including mapped primitives, count toward the call-depth
+limit; directly emitted primitive operations add no helper edge.
+The prelude is excluded from capture file/byte limits, but its parsing and
+checking count toward token, declaration and work limits for the invocation.
 `!`, `&&` and `||` keep their fixed Boolean control/formula semantics and are not
 redefined by library equality bindings.
 

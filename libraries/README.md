@@ -54,7 +54,8 @@ for mathematical formulas and resource checks.
 
 The [mathematics client](../examples/projects/mathematics/README.md) compares
 formal evaluation and vector arithmetic. The embedded scalar prelude supplies
-field arithmetic, group addition and `point * scalar` scaling. Its named functions
+field arithmetic and equality, group addition/equality and `point * scalar`
+scaling, Boolean equality, and index arithmetic/equality. Its named functions
 and operators share the compiler's native operation identities. Asset-specific
 ring operations and component-specific PCS operations stay in their owning
 libraries, using explicit asset/component parameters and installed kernels.

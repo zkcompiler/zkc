@@ -198,6 +198,25 @@ Checker::operatorWitnessFamily(const Declaration &decl,
   return result;
 }
 
+bool checkCallInputMapping(Semantics &types, ArrayRef<unsigned> mapping,
+                           unsigned inputs, Span span) {
+  if (!types.charge(mapping.size() + 1, span))
+    return false;
+  auto refuse = [&] {
+    return types.fail("source.binding-witness",
+                      "call input mapping is not a permutation", span);
+  };
+  if (mapping.size() != inputs)
+    return refuse();
+  std::vector<bool> seen(inputs);
+  for (auto input : mapping) {
+    if (input >= inputs || seen[input])
+      return refuse();
+    seen[input] = true;
+  }
+  return true;
+}
+
 bool checkOperatorOperands(Semantics &types, const CallBinding &witness,
                            ArrayRef<unsigned> parameterOrder,
                            ArrayRef<ValueId> authoredOperands, Span span) {

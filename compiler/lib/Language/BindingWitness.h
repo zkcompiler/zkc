@@ -13,6 +13,8 @@ bool checkOperatorWitness(Semantics &, llvm::ArrayRef<Declaration>,
 bool checkOperatorOperands(Semantics &, const CallBinding &,
                            llvm::ArrayRef<unsigned> parameterOrder,
                            llvm::ArrayRef<ValueId> authoredOperands, Span);
+bool checkCallInputMapping(Semantics &, llvm::ArrayRef<unsigned>,
+                           unsigned inputs, Span);
 bool checkCallAction(Semantics &, llvm::ArrayRef<Declaration>, const Body &,
                      const Operation &);
 } // namespace zkc::language::detail

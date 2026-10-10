@@ -130,15 +130,6 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     fail("source.call", "expected a mathematical or local helper", expr.span);
     return {};
   }
-  if (callee.primitive &&
-      llvm::is_contained(
-          std::initializer_list<StringRef>{"index.add", "index.sub",
-                                           "index.mul", "index.equal"},
-          StringRef(callee.primitive->identity)) &&
-      !local()) {
-    fail("source.mode", "index primitives require local mode", expr.span);
-    return {};
-  }
   bool ordered = callee.kind == Declaration::Kind::Local;
   if (ordered && math()) {
     fail("source.mode", "ordered calls require local or protocol mode",
@@ -156,8 +147,9 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   std::vector<ValueId> args(callee.inputs.size());
   std::vector<ValueId> authoredOperands;
   if (binding.size() != expr.children.size() ||
-      llvm::any_of(binding, [&](unsigned i) { return i >= args.size(); })) {
-    fail("source.binding-witness", "call input mapping differs", expr.span);
+      !checkCallInputMapping(checker.types, binding, args.size(), expr.span)) {
+    if (!checker.types.diagnostic)
+      fail("source.binding-witness", "call input mapping differs", expr.span);
     return {};
   }
   for (unsigned i = 0; i < expr.children.size(); ++i) {
@@ -262,7 +254,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   };
   // Ordered protocol calls retain the participant-owned call boundary. In
   // local code, primitive functions use exactly the registered operation.
-  if (callee.primitive && !(ordered && protocol())) {
+  if (callee.primitive &&
+      primitiveCallIsInline(body.mode, callee.primitive->identity)) {
     const auto &primitive = *callee.primitive;
     const auto *mathematical = mathematicalIntrinsic(primitive.identity);
     std::vector<Type> roots;
@@ -279,14 +272,10 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
                                 mathematical->scalar ? std::vector<Type>{}
                                                      : std::move(roots)},
                       std::move(resultComponents));
-    if (!mathematical || mathematical->scalar) {
-      LocalPrimitive action{primitive.identity, std::move(args), {}};
-      if (!mathematical)
-        action.bindingArguments = std::move(roots);
-      return emitCall(std::move(action), {});
-    }
-    // Formal intrinsics keep the existing realization path when called from
-    // executable source; scalar primitives require no helper application.
+    LocalPrimitive action{primitive.identity, std::move(args), {}};
+    if (!mathematical)
+      action.bindingArguments = std::move(roots);
+    return emitCall(std::move(action), {});
   }
   auto result = emitCall(
       HelperCall{callee.id, std::move(args), staticArgs, target.component, {}},
@@ -321,6 +310,13 @@ std::optional<ValueId> BodyChecker::bulk(const Expression &expr,
   const auto &binding = inference->inputs.at(id);
   std::vector<ValueId> args(callee.inputs.size());
   std::vector<bool> each(args.size());
+  if (binding.size() != expr.children.size() ||
+      expr.each.size() != expr.children.size() ||
+      !checkCallInputMapping(checker.types, binding, args.size(), expr.span)) {
+    if (!checker.types.diagnostic)
+      fail("source.binding-witness", "map input mapping differs", expr.span);
+    return {};
+  }
   for (unsigned i = 0; i < expr.children.size(); ++i) {
     const auto parameter = binding[i];
     auto scalar = checker.types.substitute(callee.inputs[parameter].type, subst,

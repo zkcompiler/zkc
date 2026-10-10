@@ -145,14 +145,15 @@ class ExpressionInference {
       // Complete only the selected target. The ordinary body checker owns
       // cycles, permissions, requirements and execution modes after selection.
       if (!callee.abstract) {
-        if (!checker.body(
-                callee.id,
-                owner.callDepth +
-                    (checker.sources[callee.id.index]->primitive ? 0 : 1)))
+        const auto &primitive = checker.sources[callee.id.index]->primitive;
+        unsigned edge =
+            primitive && primitiveCallIsInline(owner.body.mode, *primitive) ? 0
+                                                                            : 1;
+        if (!checker.body(callee.id, owner.callDepth + edge))
           return false;
-        checker.bodyHeights[decl.id.index] = std::max(
-            checker.bodyHeights[decl.id.index],
-            checker.bodyHeights[callee.id.index] + (callee.primitive ? 0 : 1));
+        checker.bodyHeights[decl.id.index] =
+            std::max(checker.bodyHeights[decl.id.index],
+                     checker.bodyHeights[callee.id.index] + edge);
       }
       calls.push_back({id, callee.id, std::move(signature.parameters)});
     }
@@ -209,14 +210,16 @@ class ExpressionInference {
                                     const std::vector<bool> &rows = {}) {
     const auto &expr = syntax.expressions[id];
     if (!callee.abstract) {
-      if (!checker.body(
-              callee.id,
-              owner.callDepth +
-                  (checker.sources[callee.id.index]->primitive ? 0 : 1)))
+      const auto &primitive = checker.sources[callee.id.index]->primitive;
+      unsigned edge = expr.kind != K::Map && primitive &&
+                              primitiveCallIsInline(owner.body.mode, *primitive)
+                          ? 0
+                          : 1;
+      if (!checker.body(callee.id, owner.callDepth + edge))
         return {};
-      checker.bodyHeights[decl.id.index] = std::max(
-          checker.bodyHeights[decl.id.index],
-          checker.bodyHeights[callee.id.index] + (callee.primitive ? 0 : 1));
+      checker.bodyHeights[decl.id.index] =
+          std::max(checker.bodyHeights[decl.id.index],
+                   checker.bodyHeights[callee.id.index] + edge);
     }
     auto constraints = instantiateCallable(types, checker.types, callee,
                                            {callee.id, component}, expr.span);

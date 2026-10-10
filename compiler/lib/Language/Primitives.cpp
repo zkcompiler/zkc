@@ -194,6 +194,12 @@ mathematicalRoots(Semantics &types, const Declaration &decl,
 }
 } // namespace
 
+bool primitiveCallIsInline(Body::Mode mode, StringRef identity) {
+  const auto *math = mathematicalIntrinsic(identity);
+  return math ? mode != Body::Mode::Local || math->scalar
+              : mode == Body::Mode::Local;
+}
+
 bool Checker::primitiveBody(Declaration &decl, Body &body) {
   const auto &identity = *sources[decl.id.index]->primitive;
   const auto *mathematical = mathematicalIntrinsic(identity);

@@ -87,6 +87,70 @@ int main() {
                     .identity == zkc::MathematicalIdentity::FieldAdd,
             "math identity changed");
   });
+  cases.run("protocol index primitives retain owned helper calls", [&] {
+    auto project = take(check(R"(
+      protocol Run roles(P)(a:index@P,b:index@P)->(sum:index@P,same:bool@P){
+        let sum@P=a+b;let same@P=a==b;return(sum,same);
+      }
+      run Demo=Run;
+    )"));
+    const auto &body = *decl(project, "m::Run").body;
+    require(body.mayStop, "protocol erased index arithmetic failure");
+    require(llvm::count_if(body.operations,
+                           [](const auto &op) {
+                             return std::holds_alternative<HelperCall>(
+                                 op.action);
+                           }) == 2,
+            "protocol index calls lost their helper boundaries");
+    take(prepareOriginal(take(closeEntry(project, "m::Demo"))));
+  });
+  cases.run("primitive helper boundaries count toward source call depth", [&] {
+    Limits limits;
+    limits.callDepth = 1;
+    for (StringRef source :
+         {"math fn both(a:bool,b:bool)->bool=primitive(\"bool.and\");fn "
+          "f(a:bool,b:bool)->bool{return both(a,b);}",
+          "protocol Run roles(P)(a:index@P,b:index@P)->(r:index@P){return "
+          "a+b;}",
+          "protocol Run roles(P)(a:index@P,b:index@P)->(r:index@P){return "
+          "zkc::prelude::index_add(a,b);}"}) {
+      refuses(check(source, limits), "source.limit");
+      limits.callDepth = 2;
+      take(check(source, limits));
+      limits.callDepth = 1;
+    }
+    take(check(field + "fn f(a:F,b:F)->F{return a+b;}", limits));
+    take(check("fn f(a:index,b:index)->index{return a+b;}", limits));
+    refuses(check(field +
+                      "type V=builtin(\"vector\",F);fn f(a:V,b:V)->V{return "
+                      "map zkc::prelude::field_add(each a,each b);}",
+                  limits),
+            "source.limit");
+  });
+  cases.run("primitive call depth agrees at Entry closure", [&] {
+    for (const auto &[source, depth] :
+         std::vector<std::pair<std::string, unsigned>>{
+             {"protocol Run roles(P)(a:index@P,b:index@P)->(r:index@P){return "
+              "a+b;}run Demo=Run;",
+              2},
+             {"math fn both(a:bool,b:bool)->bool=primitive(\"bool.and\");fn "
+              "f(a:bool,b:bool)->bool{return both(a,b);}protocol Run "
+              "roles(P)(a:bool@P,b:bool@P)->(r:bool@P){return f(a,b);}run "
+              "Demo=Run;",
+              3},
+             {field +
+                  "type V=builtin(\"vector\",F);fn f(a:V,b:V)->V{return map "
+                  "zkc::prelude::field_add(each a,each b);}protocol Run "
+                  "roles(P)(a:V@P,b:V@P)->(r:V@P){return f(a,b);}run Demo=Run;",
+              3}}) {
+      Limits limits;
+      limits.callDepth = depth - 1;
+      refuses(check(source, limits), "source.limit");
+      limits.callDepth = depth;
+      auto project = take(check(source, limits));
+      take(closeEntry(project, "m::Demo", limits));
+    }
+  });
   for (StringRef import :
        {"use v;", "use v as vec;", "use v::{Vector,operator +};"})
     cases.run("operator activation: " + import, [&] {
@@ -195,6 +259,19 @@ int main() {
            {"fn f(a:F,b:F)->F=primitive(\"field.add\");", "source.primitive"},
            {"math fn f(a:F,b:F)->F=primitive(\"unknown.operation\");",
             "source.primitive"},
+           {"math fn f(a:F,b:F)=primitive(\"field.add\");", "source.primitive"},
+           {"fn f(a:index,b:index)->index=primitive(\"index.equal\");",
+            "source.primitive"},
+           {"math fn "
+            "f<G:Group,T:Field>(a:G,b:T)->G=primitive(\"curve.scale\");",
+            "source.primitive"},
+           {"type A<T:Field,N:nat>=builtin(\"field_array\",T,N);math fn "
+            "f<T:Field,N:nat,I:nat>(a:A<T,N>)->T=primitive(\"array.at\");",
+            "source.primitive"},
+           {"type V=builtin(\"vector\",F);fn f(a:V,b:V)->V !{} = "
+            "primitive(\"vector.add\");",
+            "source.effect"},
+           {"fn f()->index=primitive(\"index.constant\");", "source.kernel"},
            {"operator + = f;fn f(a:F,b:F){return a;}", "source.operator"},
            {"operator == = f;fn f(a:F,b:F)->F{return a;}", "source.operator"},
            {"fn f(a:F,b:F)->F{let x=a;operator + = f;return a;}",
@@ -212,6 +289,11 @@ int main() {
             "source.duplicate");
     refuses(check(field + "math fn bad(F:F,b:F)->F=primitive(\"field.add\");"),
             "source.shadow");
+  });
+  cases.run("installation declarations respect invocation limits", [&] {
+    Limits limits;
+    limits.declarations = 1;
+    refuses(check("", limits), "source.limit");
   });
   cases.run("explicit component operators retain their definition binding",
             [&] {
