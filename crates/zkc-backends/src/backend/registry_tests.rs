@@ -1010,6 +1010,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "curve.equal",
         "curve.generator",
         "curve.get",
+        "curve.identity",
         "curve.length",
         "curve.msm",
         "curve.neg",

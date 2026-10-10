@@ -464,6 +464,9 @@ class Emitter {
           case MathematicalIdentity::GroupAdd:
             name = "algebra.group_add";
             break;
+          case MathematicalIdentity::GroupIdentity:
+            name = "algebra.group_identity";
+            break;
           case MathematicalIdentity::GroupScale:
             name = "algebra.group_scale";
             break;

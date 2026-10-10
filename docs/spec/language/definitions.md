@@ -560,6 +560,18 @@ source checker to emit their producing operations in authored order. It does
 not independently reconstruct those collection computations. Parser, resolver,
 inference and native runtime adequacy remain outside this extraction check.
 
+## Group identity
+
+In a `math fn`, `intrinsic<G>("curve.identity")` is the total identity of `G`.
+It takes exactly one static group argument, no value arguments and no attributes,
+and requires `zkc::curve::ScalarAction(G)`. A generic `Group` sort alone does not
+discharge this capability. A mathematical primitive declaration can infer its
+static group from its result: `math fn zero<G: Group>() -> G where
+zkc::curve::ScalarAction(G) = primitive("curve.identity");`.
+Calling that helper from ordinary `fn` code realizes the same nullary native
+operation with its usual possible resource exhaustion. The shared
+`zkc::curve::identity<G>()` wrapper uses this primitive declaration.
+
 ## Boolean formulas
 
 `!a`, `a && b` and `a || b` accept Boolean operands. Negation evaluates its

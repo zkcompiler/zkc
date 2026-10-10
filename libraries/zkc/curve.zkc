@@ -1,0 +1,5 @@
+module zkc::curve;
+
+// Total mathematical zero; the native realization retains allocation limits.
+pub math fn identity<G: Group>() -> G where zkc::curve::ScalarAction(G)
+  = primitive("curve.identity");

@@ -10,6 +10,7 @@ enum class MathematicalIdentity {
   FieldAdd,
   FieldMultiply,
   FieldEqual,
+  GroupIdentity,
   GroupAdd,
   GroupScale,
   GroupEqual,

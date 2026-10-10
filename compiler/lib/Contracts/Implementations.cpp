@@ -184,6 +184,7 @@ constexpr ContractRow contractRows[] = {
     {"curve.split", Arkworks | Dalek},
     {"curve.concat", Arkworks | Dalek},
     {"curve.generator", Arkworks | Dalek},
+    {"curve.identity", Arkworks | Dalek},
     {"curve.add", Arkworks | Dalek},
     {"curve.scale", Arkworks | Dalek},
     {"curve.equal", Arkworks | Dalek},

@@ -100,6 +100,7 @@
       "curve.split",
       "curve.concat",
       "curve.generator",
+      "curve.identity",
       "curve.add",
       "curve.scale",
       "curve.equal",

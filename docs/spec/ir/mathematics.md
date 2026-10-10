@@ -25,6 +25,7 @@ The following flat operations are total on their verified types:
 
 | Operation | Signature and judgment |
 |---|---|
+| `algebra.group_identity` | No operands; identity of the nominal result group with scalar action |
 | `algebra.constant` | Canonical field literal string to scalar |
 | `algebra.field_subtract` | Two scalars in one field to their difference |
 | `tensor.from_elements` | Exactly `N` field operands to the static array |
@@ -75,6 +76,13 @@ installed `field.constant` contract to validate canonical literals; a separate
 domain literal contract is not part of this implementation.
 
 ## Realization
+
+The nullary `algebra.group_identity : !algebra.group<"G">` lowers to
+`algebra.exec.group_identity` bound to `curve.identity<G>`. The producer reads
+`G` from the result type; the independent recipe checker verifies the exact
+contract, nominal group, empty operands/parameters and result. Provider selection
+then applies ordinary group representation restrictions. See the
+[group identity laws](../domains/values.md#group-identity).
 
 `zkc-eliminate-polynomials` operates on a verified participant candidate. It
 realizes observations through field arithmetic, static extraction and packing,

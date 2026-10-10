@@ -2,8 +2,10 @@ format = "zkc.project/0"
 
 [modules]
 "zkc::boolean" = "boolean.zkc"
+"zkc::curve" = "curve.zkc"
 "zkc::field_array" = "field_array.zkc"
 "zkc::matrix" = "matrix.zkc"
 "zkc::polynomial" = "polynomial.zkc"
+"zkc::sequence" = "sequence.zkc"
 "zkc::symbolic" = "symbolic.zkc"
 "zkc::vector" = "vector.zkc"

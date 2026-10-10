@@ -64,6 +64,8 @@ mlir_target_link_libraries(zkc-language_polynomial-test PRIVATE MLIRParser)
 add_test(NAME language-polynomial COMMAND zkc-language_polynomial-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/language/polynomial.zkc")
 set_tests_properties(language-polynomial PROPERTIES LABELS native)
+add_zkc_test(group_identity Compiler group-identity)
+mlir_target_link_libraries(zkc-group_identity-test PRIVATE MLIRParser)
 add_zkc_test(language_boolean Compiler language-boolean)
 add_zkc_test(language_map Compiler language-map)
 add_zkc_test(language_reductions Language language-reductions)

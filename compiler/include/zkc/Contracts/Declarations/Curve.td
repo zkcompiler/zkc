@@ -103,6 +103,17 @@ def OpCurveGenerator : ZKC_Operation<"curve.generator", [OpCurveGeneratorG, OpCu
 def ExportCurveGenerator : ZKC_OperationExport<"zkc::curve", "generator",
     OpCurveGenerator, []>;
 
+def OpCurveIdentityG : ZKC_Root<"G", GroupDomain>;
+def OpCurveIdentityScalar : ZKC_Project<OpCurveIdentityG, GroupScalar>;
+def OpCurveIdentity : ZKC_Operation<"curve.identity", [OpCurveIdentityG, OpCurveIdentityScalar],
+    [], [ZKC_Apply<TypeGroup, [OpCurveIdentityG]>],
+    [ZKC_Holds<CapabilityScalarAction, [OpCurveIdentityG]>]> {
+  int ordinal = 161;
+  let facets = [PublicReplay];
+}
+def ExportCurveIdentity : ZKC_OperationExport<"zkc::curve", "identity",
+    OpCurveIdentity, []>;
+
 def OpCurveAddG : ZKC_Root<"G", GroupDomain>;
 def OpCurveAddScalar : ZKC_Project<OpCurveAddG, GroupScalar>;
 def OpCurveAdd : ZKC_Operation<"curve.add", [OpCurveAddG, OpCurveAddScalar],

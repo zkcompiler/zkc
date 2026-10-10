@@ -215,7 +215,7 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
         poly.table_arity poly.product_sum poly.product_round poly.boundary poly.round_evaluate poly.fold poly.evaluate
         poly.empty_point poly.append_point
         curve.neg curve.nonidentity curve.msm curve.scale_each curve.vector_add curve.concat curve.vector_scale
-        curve.split curve.generator curve.add curve.scale curve.equal curve.empty curve.append curve.at
+        curve.split curve.generator curve.identity curve.add curve.scale curve.equal curve.empty curve.append curve.at
         curve.get curve.length curve.commit curve.response
         pcs.commit pcs.open pcs.check pcs.equal
         transcript.native.indexed.observe.data

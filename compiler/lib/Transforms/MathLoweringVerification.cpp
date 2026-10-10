@@ -271,6 +271,9 @@ class LoweringVerifier {
       return take("field_array.from_vector", ValueRange{vector},
                   {field, length});
     }
+    if (auto identity = dyn_cast<algebra::GroupIdentityOp>(source))
+      return take("curve.identity", {},
+                  {identity.getResult().getType().getDomain()});
     if (isa<algebra::PairingOp>(source)) {
       auto group = cast<algebra::GroupType>(source->getOperand(0).getType());
       auto field = protocol::installedDomains().associatedIdentity(

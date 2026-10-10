@@ -37,6 +37,8 @@ def CurveEqualOp : KernelOp<AlgebraDialect, "exec.group_equal", [OpCurveEqual]>;
 
 def CurveGeneratorOp : KernelOp<AlgebraDialect, "exec.group_generator", [OpCurveGenerator]>;
 
+def CurveIdentityOp : KernelOp<AlgebraDialect, "exec.group_identity", [OpCurveIdentity]>;
+
 def CurveGetOp : KernelOp<AlgebraDialect, "exec.group_get", [OpCurveGet]>;
 
 def CurveLengthOp : KernelOp<AlgebraDialect, "exec.group_length", [OpCurveLength]>;
@@ -77,6 +79,14 @@ def FixedVectorToVectorOp : KernelOp<AlgebraDialect, "exec.fixed_vector_to_vecto
                                    [OpFixedVectorToVector]>;
 
 def GroupAddOp : TotalMathOp<AlgebraDialect, "group_add", Group, Group, Group, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
+
+def GroupIdentityOp : Op<AlgebraDialect, "group_identity",
+    [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let summary = "The identity of the result's nominal group";
+  let results = (outs Group:$value);
+  let hasVerifier = 1;
+  let assemblyFormat = "attr-dict `:` type($value)";
+}
 
 def GroupEqualOp : TotalMathOp<AlgebraDialect, "group_equal", Group, Group, I1, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
 

@@ -15,6 +15,7 @@ concrete domains, Entries and transcript constructions in
 | [`zkc::field_array`](zkc/field_array.zkc) | `Array`, from_vector/get | Fixed-length field arrays with checked native construction and dynamic access |
 | [`zkc::polynomial`](zkc/polynomial.zkc) | `Polynomial`, from_coefficients/evaluate/boundary | Runtime univariate polynomial data; boundary is p(0) + p(1) |
 | [`zkc::symbolic`](zkc/symbolic.zkc) | `Array`, `Polynomial`, pack/get/mle/from_coefficients/coefficients/evaluate/fix_prefix/sum_suffix/fix_table/add/multiply/constant | Total formal polynomial expressions |
+| [`zkc::curve`](zkc/curve.zkc) | identity | Total group zero with `ScalarAction(G)`; native realization retains resource limits |
 | [`zkc::boolean`](zkc/boolean.zkc) | both/either/different/negate | Total Boolean formulas; eager operands |
 | [`schnorr`](schnorr/lib.zkc) | `DLog<G>`, `Schnorr<G>` | Discrete-log relation and three-message group protocol |
 | [`sumcheck`](sumcheck/lib.zkc) | `Sumcheck<F, Max>` | Bounded multilinear Sumcheck over a public evaluation table |
@@ -84,6 +85,10 @@ scaling, Boolean equality, and index arithmetic/equality. Its named functions
 and operators share the compiler's native operation identities. Asset-specific
 ring operations and component-specific PCS operations stay in their owning
 libraries, using explicit asset/component parameters and installed kernels.
+
+Use `zkc::curve::identity<G>()` for a nullary mathematical group zero. Its
+result fixes the exact group; no point is needed, including for empty sums.
+This is distinct from the native generator and empty group-vector operations.
 
 Import a whole math module to enable its public operators, for example
 `use zkc::vector as vec;`. Vector `+` calls `add`; vector `*` calls `scale` with

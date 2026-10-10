@@ -35,7 +35,7 @@ bool isCalculationContract(StringRef contract) {
           "matrix.dimension", "indices.length",  "index.constant",
           "index.equal",      "index.less",      "sequence.empty",
           "sequence.append",  "sequence.length", "bool.and",
-          "bool.or",          "bool.not"},
+          "bool.or",          "bool.not",        "curve.identity"},
       contract);
 }
 namespace {
@@ -111,6 +111,11 @@ public:
 // and dependencies without selecting an executable contract.
 protocol::BindingApplication algebraBinding(Operation *op) {
   protocol::BindingApplication result;
+  if (auto identity = dyn_cast<algebra::GroupIdentityOp>(op)) {
+    result.contract = "curve.identity";
+    result.arguments = {identity.getResult().getType().getDomain().str()};
+    return result;
+  }
   if (isa<zkc::algebra::SubtractFieldOp>(op))
     result.contract = "field.sub";
   if (isa<zkc::algebra::FieldAddOp>(op))

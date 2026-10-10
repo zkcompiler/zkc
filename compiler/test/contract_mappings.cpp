@@ -196,6 +196,7 @@ constexpr ExpectedMapping expected[] = {
     {"random.draw", "crypto.exec.random_draw"},
     {"pcs.equal", "pcs.exec.equal"},
     {"curve.generator", "algebra.exec.group_generator"},
+    {"curve.identity", "algebra.exec.group_identity"},
     {"curve.add", "algebra.exec.group_add"},
     {"curve.scale", "algebra.exec.group_scale"},
     {"curve.equal", "algebra.exec.group_equal"},

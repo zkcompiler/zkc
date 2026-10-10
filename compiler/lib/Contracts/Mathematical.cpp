@@ -9,6 +9,7 @@ llvm::ArrayRef<MathematicalIntrinsic> mathematicalIntrinsics() {
       {"field.sub", I::FieldSubtract, D::Field, 0, false, true},
       {"field.mul", I::FieldMultiply, D::Field, 0, false, true},
       {"field.equal", I::FieldEqual, D::Field, 0, false, true},
+      {"curve.identity", I::GroupIdentity, D::Group, 0, false, true},
       {"curve.add", I::GroupAdd, D::Group, 0, false, true},
       {"curve.scale", I::GroupScale, D::Group, 0, false, true},
       {"curve.equal", I::GroupEqual, D::Group, 0, false, true},

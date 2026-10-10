@@ -26,6 +26,11 @@ Semantics::intrinsicSignature(const Declaration *scope, StringRef name,
       return {};
     }
     const auto &group = arguments.front();
+    if (intrinsic->identity == MathematicalIdentity::GroupIdentity) {
+      if (!entails(scope, {"ScalarAction", {group}, span}, "source.intrinsic"))
+        return {};
+      return CallSignature{{}, {group}};
+    }
     auto right = intrinsic->identity == MathematicalIdentity::GroupScale
                      ? associated(group, "Scalar", span)
                      : std::optional(group);

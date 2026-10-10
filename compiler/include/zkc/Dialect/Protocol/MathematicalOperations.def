@@ -8,6 +8,7 @@ ZKC_MATH_OPERATION(algebra::FieldAddOp, Total, Context::Protocol | Context::Part
 ZKC_MATH_OPERATION(algebra::FieldMultiplyOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(algebra::FieldEqualOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(algebra::GroupAddOp, Total, Context::Protocol | Context::Participant | Context::Helper)
+ZKC_MATH_OPERATION(algebra::GroupIdentityOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(algebra::GroupScaleOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(algebra::GroupEqualOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(algebra::PairingOp, Total, Context::Protocol | Context::Participant | Context::Helper)

@@ -73,6 +73,31 @@ checked exponentiation for inverses. It asserts no unproved Lean field instance
 or native adequacy theorem. Generic formal PIR semantics remains parameterized
 by mathematical fields and the embedding laws required by each consumer.
 
+## Group identity
+
+`curve.identity<G> : () → group:G` returns the identity of the exact nominal
+`G` and requires `ScalarAction(G)`, including its associated scalar field,
+consistently with the other native curve operations. It has no operands or
+attributes. For every group value `P` and associated scalar `s`, its denotation
+`0_G` satisfies `0_G + P = P`, `P + 0_G = P`, `s · 0_G = 0_G`, and
+`0 · P = 0_G`. Empty group sums and empty supported MSMs denote this value.
+Neither `curve.generator` nor an empty group vector denotes a group identity.
+
+The total mathematical operation is `algebra.group_identity`, whose result type
+supplies the nominal group. It has no source effects or operand dependencies.
+Its checked native recipe is exactly the nullary `curve.identity<G>` binding;
+substituting a generator, another group, or a provider/codec for another group
+is invalid. The native realization retains the ordinary allocation/output
+limits and may exhaust resources. Totality of the mathematical denotation does
+not make native allocation infallible.
+
+The installed providers are `dalek/curve.identity` for `ristretto255.group` and
+`arkworks/curve.identity` for `bls12-381.g1`, `bn254.g1`, `bn254.g2`, and
+`bn254.gt`. Identity uses the same group representations and canonical codecs
+as other operations in each family. For GT it is multiplicative one; it is not
+extension-field zero. Dense GT vectors and BLS12-381 G2/GT are not installed.
+These are native profile contracts, without a native adequacy or security proof.
+
 ## Pairing field capabilities
 
 `PairingField(F)` implies `Field(F)` and declares distinct associated groups

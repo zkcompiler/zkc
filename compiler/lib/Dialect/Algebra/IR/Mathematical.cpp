@@ -54,6 +54,16 @@ LogicalResult zkc::algebra::FieldEqualOp::verify() {
 LogicalResult zkc::algebra::GroupAddOp::verify() {
   return verifyGroup(*this, false, false);
 }
+LogicalResult zkc::algebra::GroupIdentityOp::verify() {
+  auto group = getResult().getType().getDomain();
+  const auto &domains = protocol::installedDomains();
+  if (domains.identitySort(group) != "Group" ||
+      !domains.hasFact("ScalarAction", {group.str()}) ||
+      domains.identitySort(domains.associatedIdentity(group, "Scalar")) !=
+          "Field")
+    return refuse(*this, "expected an admitted group with scalar action");
+  return success();
+}
 LogicalResult zkc::algebra::GroupScaleOp::verify() {
   return verifyGroup(*this, false, true);
 }
@@ -63,6 +73,12 @@ LogicalResult zkc::algebra::GroupEqualOp::verify() {
 } // namespace zkc
 
 namespace zkc::algebra {
+std::optional<MathematicalIdentity> GroupIdentityOp::getMathematicalIdentity() {
+  return MathematicalIdentity::GroupIdentity;
+}
+llvm::SmallVector<unsigned> GroupIdentityOp::getOperandDependencies(unsigned) {
+  return {};
+}
 std::optional<MathematicalIdentity> FieldAddOp::getMathematicalIdentity() {
   return MathematicalIdentity::FieldAdd;
 }

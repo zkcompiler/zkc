@@ -507,6 +507,8 @@ def test_logical_signatures_without_implementation(inventory, drivers, directory
 def test_explicit_semantic_witnesses(drivers, directory):
     # Independently authored signatures keep a shared inventory error visible.
     witnesses = [
+        *(("curve.identity", [group], [], [f"group:{group}"])
+          for group in ("ristretto255.group", "bls12-381.g1", "bn254.g1", "bn254.g2", "bn254.gt")),
         ("field.add", ["koala-bear"], ["field:koala-bear"] * 2, ["field:koala-bear"]),
         *(("vector.product", [field], [f"vector:{field}"], [f"field:{field}"])
           for field in ("bls12-381.fr", "bn254.fr", "ristretto255.scalar",
