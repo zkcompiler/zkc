@@ -12,6 +12,10 @@ zkc-arkworks.workspace = true
 sha2.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
+unicode-normalization.workspace = true
+[build-dependencies]
+sha2.workspace = true
+serde_json.workspace = true
 [lints]
 workspace = true
 [dev-dependencies]

@@ -59,7 +59,8 @@ impl<'a> Schemas<'a> {
                 if values.len() != 2 || values[0].as_str()? != "zkc.language" {
                     return None;
                 }
-                let key = values[1].as_str()?;
+                let key =
+                    crate::source_names::decode_nominal_identity(values[1].as_str()?, 256 * 1024)?;
                 (!key.is_empty()).then(|| format!("{:x}", Sha256::digest(key.as_bytes())))
             });
             self.leaves.insert(
@@ -137,9 +138,18 @@ impl<'a> Schemas<'a> {
                 schema.alternatives.len() == descriptor.alternatives().len(),
                 E::Schema,
             )?;
-            for (actual, expected) in schema.alternatives.iter().zip(descriptor.alternatives()) {
+            let mut names = BTreeSet::new();
+            for (index, (actual, expected)) in schema
+                .alternatives
+                .iter()
+                .zip(descriptor.alternatives())
+                .enumerate()
+            {
                 require(
-                    identifier(&actual.name) && actual.name == expected.label(),
+                    identifier(&actual.name)
+                        && names.insert(&actual.name)
+                        && expected.label()
+                            == crate::source_names::native_alternative_name(index as u32),
                     E::Schema,
                 )?;
                 let payload: Vec<_> = expected
