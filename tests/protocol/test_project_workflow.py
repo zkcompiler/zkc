@@ -239,7 +239,7 @@ def test_human_stops_use_source_participant_names(toolchain, journal, directory)
     for operation, options in [('run', []), ('verify', ['--allow-header-only'])]:
         human = journal.attempt([arg for arg in command(toolchain, operation, *options) if arg != '--json'],
                                 cwd=directory)
-        assert human.returncode != 0
+        assert human.returncode > 0
         assert 'Stopped 検証者:' in human.stderr
         assert 'Stopped role00000001:' not in human.stderr
 
