@@ -11,6 +11,7 @@
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
+#include "zkc/Language/Names.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Language.h"
 #include "llvm/ADT/StringExtras.h"
@@ -39,11 +40,10 @@ bool strings(mlir::Attribute attr, ArrayRef<std::string> expected) {
   }
   return true;
 }
-bool roleSet(mlir::Attribute value, const Declaration &decl,
-             ArrayRef<unsigned> indices) {
+bool roleSet(mlir::Attribute value, ArrayRef<unsigned> indices) {
   std::vector<std::string> expected;
   for (auto i : indices)
-    expected.push_back(decl.roles[i]);
+    expected.push_back(nativeRoleName(i));
   return strings(value, expected);
 }
 class Comparator {
@@ -84,6 +84,16 @@ class Comparator {
     }
     remaining -= n;
     return true;
+  }
+  std::optional<std::string> alternative(const Layout &layout, StringRef name) {
+    for (unsigned i = 0; i < layout.alternatives.size(); ++i) {
+      if (!charge(layout.alternatives[i].name.size() + 1))
+        return {};
+      if (layout.alternatives[i].name == name)
+        return nativeAlternativeName(i);
+    }
+    fail("unknown source variant alternative");
+    return {};
   }
   bool record(mlir::Operation &op, Span source) {
     if (auto loc = mlir::dyn_cast<mlir::FileLineColLoc>(op.getLoc())) {
@@ -329,7 +339,7 @@ class Comparator {
           if (slice->offset + i >= block.getNumArguments())
             return fail("statement operand is outside the entry signature");
           operands.push_back(block.getArgument(slice->offset + i));
-          selectors.push_back(decl.roles[operand.role]);
+          selectors.push_back(nativeRoleName(operand.role));
         }
       }
       auto acceptance = take(layouts.select(decl, proof->acceptance));
@@ -405,12 +415,16 @@ class Comparator {
           }
           if (source.values[op.results.front().index].type.kind ==
               Type::Kind::Variant) {
+            auto label =
+                alternative(*resultLayouts.front(), construct->alternative);
+            if (!label)
+              return false;
             auto *actual =
                 next(block, cursor, op.span, "local.variant_inject", input, 1);
             if (!actual)
               return false;
             if (!attributes(*actual, {"alternative", "site"}) ||
-                !string(*actual, "alternative", construct->alternative) ||
+                !string(*actual, "alternative", *label) ||
                 !string(*actual, "site", site))
               return fail("variant alternative differs");
             result.push_back(actual->getResult(0));
@@ -529,7 +543,7 @@ class Comparator {
                         : std::initializer_list<StringRef>{"callee"}) ||
             (local && !string(*actual, "site", site)) ||
             (owned && (!call->owner ||
-                       !string(*actual, "role", decl.roles[*call->owner]))))
+                       !string(*actual, "role", nativeRoleName(*call->owner)))))
           return fail("call target, mode, owner or site differs");
         result = Values(actual->getResults());
       } else if (auto *bulk = std::get_if<BulkApplication>(&op.action)) {
@@ -585,7 +599,7 @@ class Comparator {
           return false;
         if (!attributes(*actual, {"method", "owner", "site"}) ||
             !string(*actual, "method", query->bound ? "index" : "draw") ||
-            !string(*actual, "owner", decl.roles[port.owner]) ||
+            !string(*actual, "owner", nativeRoleName(port.owner)) ||
             !string(*actual, "site", site))
           return fail("managed query method, owner or occurrence differs");
         result = Values(actual->getResults());
@@ -610,7 +624,7 @@ class Comparator {
         if (!actual)
           return false;
         if (!attributes(*actual, {"owner", "site"}) ||
-            !string(*actual, "owner", decl.roles[completion->owner]) ||
+            !string(*actual, "owner", nativeRoleName(completion->owner)) ||
             !string(*actual, "site", site) ||
             actual->getResultTypes() != mlir::TypeRange(successors))
           return fail("completion owner, site or affine successors differ");
@@ -636,7 +650,7 @@ class Comparator {
           return false;
         if (protocol) {
           if (!attributes(*actual, {"owner", "site"}) ||
-              !string(*actual, "owner", decl.roles[*check->owner]) ||
+              !string(*actual, "owner", nativeRoleName(*check->owner)) ||
               !string(*actual, "site", site))
             return fail("require owner or occurrence differs");
         } else {
@@ -676,7 +690,7 @@ class Comparator {
         auto callee = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
         std::vector<std::string> mapped;
         for (auto role : application->roles)
-          mapped.push_back(decl.roles[role]);
+          mapped.push_back(nativeRoleName(role));
         if (!attributes(*actual, {"callee", "site", "roles"}) || !callee ||
             callee.getValue() != target.symbol ||
             !string(*actual, "site", site) ||
@@ -695,8 +709,8 @@ class Comparator {
           if (!sent)
             return false;
           if (!attributes(*sent, {"sender", "receiver", "site"}) ||
-              !string(*sent, "sender", decl.roles[exchange->sender]) ||
-              !string(*sent, "receiver", decl.roles[exchange->receiver]) ||
+              !string(*sent, "sender", nativeRoleName(exchange->sender)) ||
+              !string(*sent, "receiver", nativeRoleName(exchange->receiver)) ||
               !string(*sent, "site", site + "_" + std::to_string(i)))
             return fail("message occurrence differs");
           auto *received =
@@ -705,7 +719,7 @@ class Comparator {
           if (!received)
             return false;
           if (!attributes(*received, {"roles"}) ||
-              !roleSet(received->getAttr("roles"), decl, {exchange->receiver}))
+              !roleSet(received->getAttr("roles"), {exchange->receiver}))
             return fail("message receiver restriction differs");
           result.push_back(received->getResult(0));
         }
@@ -716,7 +730,7 @@ class Comparator {
           if (!actual)
             return false;
           if (!attributes(*actual, {"roles"}) ||
-              !roleSet(actual->getAttr("roles"), decl, restriction->roles))
+              !roleSet(actual->getAttr("roles"), restriction->roles))
             return fail("role restriction differs");
           result.push_back(actual->getResult(0));
         }
@@ -742,14 +756,14 @@ class Comparator {
                 repeat->maximum.closedValue() ||
             !carried || !carried.getType().isSignlessInteger(64) ||
             carried.getValue().getZExtValue() != leaves.size() ||
-            !roleSet(actual->getAttr("roles"), decl, repeat->roles) ||
+            !roleSet(actual->getAttr("roles"), repeat->roles) ||
             !carriedRoles || carriedRoles.size() != leaves.size())
           return fail(
               "repeat site, maximum, roles or carried interface differs");
         unsigned flat = 0;
         for (unsigned i = 0; i < op.results.size(); ++i)
           for (unsigned j = 0; j < resultLayouts[i]->leaves.size(); ++j)
-            if (!roleSet(carriedRoles[flat++], decl,
+            if (!roleSet(carriedRoles[flat++],
                          source.values[op.results[i].index].components))
               return fail("repeat carried roles differ");
         if (!llvm::hasSingleElement(actual->getRegion(0)) ||
@@ -760,11 +774,18 @@ class Comparator {
       } else if (auto *control = std::get_if<LocalControl>(&op.action)) {
         auto input = flatten(control->operands);
         bool match = control->kind == LocalControl::Kind::Match;
+        std::vector<std::string> labels;
         if (match) {
           auto subject = take(
               layouts.get(source.values[control->operands.front().index].type));
           if (!subject)
             return false;
+          for (const auto &name : control->alternatives) {
+            auto label = alternative(**subject, name);
+            if (!label)
+              return false;
+            labels.push_back(std::move(*label));
+          }
           if ((**subject).custody) {
             if (!retire(block, cursor, input.front(), op.span, site + "_match"))
               return false;
@@ -784,8 +805,7 @@ class Comparator {
                 match ? std::initializer_list<StringRef>{"site", "alternatives"}
                       : std::initializer_list<StringRef>{"site"}) ||
             !string(*actual, "site", site) ||
-            (match &&
-             !strings(actual->getAttr("alternatives"), control->alternatives)))
+            (match && !strings(actual->getAttr("alternatives"), labels)))
           return fail("control site or alternative order differs");
         for (unsigned i = 0; i < control->regions.size(); ++i)
           if (!llvm::hasSingleElement(actual->getRegion(i)) ||
@@ -965,7 +985,7 @@ public:
           llvm::append_range(leaves, (**layout).leaves);
           for (unsigned i = 0; i < (**layout).leaves.size(); ++i)
             if (protocol && (!roles || flat >= roles.size() ||
-                             !roleSet(roles[flat++], decl, port.roles)))
+                             !roleSet(roles[flat++], port.roles)))
               return error("source.correspondence",
                            "flattened port roles differ");
         }
@@ -982,8 +1002,7 @@ public:
           auto type = mlir::dyn_cast<protocol_ir::ServiceReferenceType>(
               nativeTypes[leaves.size() + i]);
           if (!type || type.getContract() != port.contract || !roles ||
-              flat >= roles.size() ||
-              !roleSet(roles[flat++], decl, {port.owner}))
+              flat >= roles.size() || !roleSet(roles[flat++], {port.owner}))
             return error("source.correspondence",
                          "managed port signature differs");
         }
@@ -992,7 +1011,10 @@ public:
       }
       mathematical::Availability availability;
       if (protocol) {
-        if (!strings(function.getAttr("roles"), decl.roles))
+        std::vector<std::string> roster;
+        for (unsigned i = 0; i < decl.roles.size(); ++i)
+          roster.push_back(nativeRoleName(i));
+        if (!strings(function.getAttr("roles"), roster))
           return error("source.correspondence", "participant roster differs");
         if (mlir::failed(mathematical::analyze(
                 mlir::cast<protocol_ir::MathematicalOp>(function), availability,

@@ -3,6 +3,8 @@
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/LanguageInspection.h"
+#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Support/Json.h"
@@ -17,8 +19,8 @@ using zkc::test::require;
 using zkc::test::take;
 namespace {
 CheckedOriginal original(StringRef source, StringRef entry = "sample::Demo") {
-  auto capture =
-      take(language::capture({{"sample", source.str(), "proof.zkc"}}));
+  auto capture = take(language::capture(
+      {{entry.rsplit("::").first.str(), source.str(), "proof.zkc"}}));
   auto checked = take(analyze(capture).checkedProject());
   return take(prepareOriginal(take(closeEntry(checked, entry))));
 }
@@ -38,6 +40,144 @@ int main(int argc, char **argv) {
     require(bool(module), "invalid mathematical original");
     return module;
   };
+  cases.run(
+      "Unicode source emission preserves public keys and ordinal native roles",
+      [&] {
+        auto checked = original(R"zkc(module 数学;
+domain Fr=field("bls12-381.fr");
+enum Choice {Some(bool),case00000000(bool)}
+struct 記録 {pub 値:Choice}
+fn 構築(値:bool)->Choice{return Choice::case00000000(値);}
+fn 選択(値:Choice)->bool{return match 値 {case00000000(x)=>{ x},Some(x)=>{ x}};}
+protocol 子 roles(送信,受信)(値:Choice@送信)->(結果:Choice@受信){
+  let 結果=send 送信->受信(値);return(結果=結果);
+}
+protocol 実行 roles(検証,role00000000)(入力:bool@role00000000,乱数:Random<Fr>@検証)
+  ->(結果:記録@検証,真偽:bool@検証){
+  let 値 @role00000000 =構築(入力);
+  let 受信値=子 roles(role00000000,検証)(値);
+  let 真偽 @検証 =選択(受信値);
+  let 未使用=乱数.draw();
+  require @検証 真偽;
+  return(結果=記録{値:受信値},真偽=真偽);
+}
+run 公開=実行;)zkc",
+                                "数学::公開");
+        const auto &p = checked.interface().selectedProtocol();
+        require(p.roles == std::vector<std::string>({"検証", "role00000000"}) &&
+                    p.inputs[0].name == "入力" && p.outputs[0].name == "結果" &&
+                    p.services[0].name == "乱数" && p.services[0].owner == 0,
+                "source interface replaced Unicode keys with native labels");
+        const auto &schema = *p.outputs[0].schema->fields[0].schema;
+        require(p.outputs[0].schema->fields[0].name == "値" &&
+                    schema.alternatives[0].name == "Some" &&
+                    schema.alternatives[1].name == "case00000000",
+                "public fields or alternatives changed");
+        auto descriptor = protocol::decodeVariant(schema.leaves[0]);
+        require(descriptor &&
+                    descriptor->alternatives[0].label == "case00000000" &&
+                    descriptor->alternatives[1].label == "case00000001",
+                "native case labels did not use declaration order");
+        // The nested enum's identity, including its Unicode module, is
+        // authenticated.
+        require((*descriptor->nominal.getAsArray())[0].getAsString() ==
+                    "zkc.language",
+                "variant nominal namespace differs");
+        auto hex = *(*descriptor->nominal.getAsArray())[1].getAsString();
+        require(hex == toHex(fromHex(hex), true) &&
+                    StringRef(fromHex(hex)).contains("数学::Choice") &&
+                    toHex(SHA256::hash(arrayRefFromStringRef(fromHex(hex))),
+                          true) == schema.identity,
+                "nominal preimage did not preserve exact UTF-8");
+        require(
+            checked.bytes().contains("alternative = \"case00000001\"") &&
+                checked.bytes().contains(
+                    "alternatives = [\"case00000001\", \"case00000000\"]"),
+            "constructor or authored match order lost its declared ordinal");
+        auto read =
+            take(readInterface(checked.bytes(), checked.interfaceJson()));
+        if (auto error = compareInterface(checked.entry(), read))
+          throw std::runtime_error(toString(std::move(error)));
+        auto repeated = take(prepareOriginal(checked.entry()));
+        require(repeated.bytes() == checked.bytes() &&
+                    repeated.interfaceJson() == checked.interfaceJson(),
+                "Unicode source publication is not deterministic");
+        unsigned applications = 0;
+        if (auto error = inspectApplications(
+                checked,
+                [&](const ApplicationOccurrence &application) -> Error {
+                  ++applications;
+                  require(application.roles == ArrayRef<unsigned>({1, 0}) &&
+                              application.caller.roles[0] == "検証" &&
+                              application.callee.roles[0] == "送信",
+                          "nested application bound source spelling as a "
+                          "native role");
+                  return Error::success();
+                }))
+          throw std::runtime_error(toString(std::move(error)));
+        require(applications == 1, "nested Unicode application omitted");
+        for (StringRef operation : {"local.variant_inject", "local.match"}) {
+          auto module = parse(checked.bytes());
+          bool changed = false;
+          module->walk([&](mlir::Operation *op) {
+            if (changed || op->getName().getStringRef() != operation)
+              return;
+            changed = true;
+            if (operation == "local.variant_inject")
+              op->setAttr("alternative",
+                          mlir::StringAttr::get(&context, "case00000000"));
+            else
+              op->setAttr(
+                  "alternatives",
+                  mlir::ArrayAttr::get(
+                      &context,
+                      {mlir::StringAttr::get(&context, "case00000000"),
+                       mlir::StringAttr::get(&context, "case00000001")}));
+          });
+          require(changed && succeeded(mlir::verify(*module)),
+                  "case mutation must remain valid native IR");
+          refuses(compareOriginal(checked.entry(), *module),
+                  "source.correspondence");
+        }
+        take(compileEntry(checked));
+      });
+  cases.run(
+      "Unicode proof roles and setup metadata bind native selection", [&] {
+        auto checked = original(R"zkc(module sample;
+domain C=commitment("multilinear.kzg.bls12-381/0");
+type PK=builtin("prover_key",C);type VK=builtin("verifier_key",C);
+protocol 実行 roles(検証,証明)(鍵:VK@検証,秘密:PK@証明)->(受理:bool@検証){
+  let 受理 @検証 =true;return(受理=受理);
+}
+proof 公開=実行{setup 設定{鍵,秘密};prover 証明;verifier 検証;
+  public{鍵};accept 受理;construction authored;})zkc",
+                                "sample::公開");
+        const auto &view = checked.interface();
+        require(view.setups[0].name == "設定" && view.proof->prover == 1 &&
+                    view.proof->verifier == 0 &&
+                    view.selectedProtocol().outputs[0].name == "受理",
+                "source proof metadata lost Unicode names or order");
+        auto compiled = take(compileEntry(checked));
+        const auto &policy =
+            std::get<CompiledNativeProof>(compiled.artifact()).policy;
+        require(policy.producer == "role00000001" &&
+                    policy.validator == "role00000000",
+                "proof selection used source role spelling or conventional P/V "
+                "order");
+        auto changed = take(json::parse(checked.interfaceJson()));
+        auto &slot =
+            *changed.getAsObject()->getArray("setups")->front().getAsObject();
+        slot["name"] = "setup00000000";
+        auto decoded = take(readInterface(checked.bytes(), printJson(changed)));
+        auto mismatch = compareInterface(checked.entry(), decoded);
+        require(bool(mismatch), "source setup was replaced by a native label");
+        require(namesIdentifier(toString(std::move(mismatch)),
+                                "source.correspondence"),
+                "setup rename refused in the wrong phase");
+        slot["name"] = "é";
+        refuses(readInterface(checked.bytes(), printJson(changed)),
+                "source.interface");
+      });
   cases.run("source proof compilation retains exact Entry selections", [&] {
     auto checked = original(source);
     const auto &view = checked.interface();
@@ -48,12 +188,13 @@ int main(int argc, char **argv) {
     unsigned statements = 0;
     module->walk([&](protocol_ir::StatementOp statement) {
       ++statements;
-      require(statement.getSelectors() ==
-                  mlir::ArrayAttr::get(&context,
-                                       {mlir::StringAttr::get(&context, "V"),
-                                        mlir::StringAttr::get(&context, "V"),
-                                        mlir::StringAttr::get(&context, "P")}),
-              "statement participants differ");
+      require(
+          statement.getSelectors() ==
+              mlir::ArrayAttr::get(
+                  &context, {mlir::StringAttr::get(&context, "role00000001"),
+                             mlir::StringAttr::get(&context, "role00000001"),
+                             mlir::StringAttr::get(&context, "role00000000")}),
+          "statement participants differ");
       require(statement.getAcceptance() == 0 &&
                   statement.getInputs().size() == 3,
               "statement layout differs");
@@ -74,6 +215,8 @@ int main(int argc, char **argv) {
                 "deployment source identity differs");
         auto &policy = *(*deployment[2].getAsArray())[1].getAsArray();
         require(policy[1].getAsString() == checked.entry().protocol().symbol &&
+                    policy[2].getAsString() == "role00000000" &&
+                    policy[3].getAsString() == "role00000001" &&
                     policy[6].getAsString() == "4" &&
                     policy[8].getAsArray()->size() == 1,
                 "derived native policy differs");
@@ -295,9 +438,9 @@ int main(int argc, char **argv) {
             statement.setOperand(0, statement.getInputs()[1]);
           else
             statement.setSelectorsAttr(mlir::ArrayAttr::get(
-                &context, {mlir::StringAttr::get(&context, "P"),
-                           mlir::StringAttr::get(&context, "V"),
-                           mlir::StringAttr::get(&context, "P")}));
+                &context, {mlir::StringAttr::get(&context, "role00000000"),
+                           mlir::StringAttr::get(&context, "role00000001"),
+                           mlir::StringAttr::get(&context, "role00000000")}));
           require(succeeded(mlir::verify(*module)),
                   "statement mutation is ill-formed");
           refuses(compareOriginal(checked.entry(), *module),
@@ -334,7 +477,8 @@ int main(int argc, char **argv) {
             if (change == 1)
               selectors.pop_back();
             else
-              selectors.push_back(mlir::StringAttr::get(&context, "P"));
+              selectors.push_back(
+                  mlir::StringAttr::get(&context, "role00000000"));
             statement.setSelectorsAttr(
                 mlir::ArrayAttr::get(&context, selectors));
           }
