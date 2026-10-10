@@ -94,6 +94,32 @@ not subjects of these theorems; the
 [native comparison](../../tests/kernels/test_pointwise_polynomials.py) of a
 map, the provider and the coset kernels is bounded evidence on fixed inputs.
 
+[Finite vector product](../Zkc/Algebra/FiniteVectors.lean) has bounded list value
+laws for empty and singleton inputs, concatenation under a combined length bound,
+repetition, and a zero factor. The general laws need a monoid; the zero-factor law
+needs a monoid with zero. These laws neither model native output capacity nor
+extend the independent interactive operation reader.
+
+[Finite map reductions](../Zkc/Algebra/RingExpression/Reductions.lean) establish
+sum/product denotation over every admitted row (`mapSum_ok`, `mapProduct_ok`,
+`mapSum_eq`, `mapProduct_eq`), identities for admitted zero-row maps, and
+propagation of map refusals. Mismatched rows prevent success even if unused;
+the specific `vector-shape` code requires valid signature and bounded lengths.
+`mapSum_mul_eq_dot` equates multiplication-map then sum with the independently
+defined checked `FiniteVectors.dot`, using arbitrary selected operand positions
+and admission of the entire original operand list. Extra rows and scalars are
+retained; shape agreement of only the selected pair is insufficient.
+[Focused controls and declaration audit](../Tests/RingExpressionReductions.lean)
+cover sum 31 and product 210 for `[2,3]` and `[5,7]`, empty identities, affine
+scalar capture values, interleaved unused operands, admission order, and
+counterexamples to dropping guards or truncating rows. The
+[formal specification](spec/core/ring-expressions.md#finite-map-reductions)
+states the premises. Product uses `List.prod` independently of native product.
+Formal `vector-shape` is not native `rejected:require`; native failure-code
+equality, compiler/parser/runtime correspondence, resource refinement and
+security are outside these laws. Source hygiene and capture snapshot/order
+remain native checker obligations, not properties of this list model.
+
 The [source-role connection](design/role-execution.md), scoped source-cut and
 resource laws, and [committed Sumcheck connection](design/committed-sumcheck.md)
 state typed mathematical results. `Tools.Interactive` is a separate executable

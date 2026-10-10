@@ -155,18 +155,19 @@ bool Checker::retainNotations() {
     auto &record = records.scopes[scope];
     for (const auto &import : module.imports) {
       if (!types.charge(import.names.size() + import.operators.size() +
-                            import.notations.size() +
+                            import.notations.size() + import.reductions.size() +
                             (import.alias ? import.alias->size() : 0) + 1,
                         import.span))
         return false;
-      for (const auto *names :
-           {&import.names, &import.operators, &import.notations})
+      for (const auto *names : {&import.names, &import.operators,
+                                &import.notations, &import.reductions})
         for (const auto &name : *names)
           if (!types.charge(name.size(), import.span))
             return false;
       record.imports.push_back({modules.at(import.module), import.span,
                                 import.alias, import.names, import.operators,
-                                import.notations, import.isPublic});
+                                import.notations, import.reductions,
+                                import.isPublic});
     }
     for (auto original : visibleOperators[module.id.index]) {
       if (!types.charge(1, record.span))
@@ -400,6 +401,16 @@ bool Checker::retainNotations() {
     };
     if (declaration.body && !emitted(*declaration.body, 1))
       return false;
+    if (!types.charge(output.declarations.size() - sources.size(),
+                      declaration.span))
+      return false;
+    for (unsigned index = sources.size(); index < output.declarations.size();
+         ++index) {
+      const auto &helper = output.declarations[index];
+      if (helper.generatedReduction->enclosing.index == owner &&
+          !emitted(*helper.body, 1))
+        return false;
+    }
     // Authored operand text can contain an entire nested block. Excluding just
     // the inner occurrence would still expose its private declaration through
     // the outer one's text. Merge hidden byte intervals before marking records.

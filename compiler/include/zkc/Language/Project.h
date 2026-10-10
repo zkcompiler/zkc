@@ -246,6 +246,14 @@ struct CallBinding {
   std::optional<Span> origin;
   std::optional<NotationDescriptor> notation;
 };
+/// Extraction evidence. Input slots name resolved lexical BindingIds; ignored
+/// rows have no binding. Expression values refer to the generated Math body.
+/// Immutable authored evidence is retained separately by CheckedProject.
+struct ReductionBinding {
+  uint32_t source;
+  std::vector<std::optional<uint32_t>> inputs;
+  std::vector<std::pair<uint32_t, ValueId>> expressions;
+};
 struct Operation {
   std::variant<MathValue, HelperCall, BulkApplication, Exchange, Restriction,
                Construct, Projection, LocalPrimitive, Consume, LocalControl,
@@ -257,6 +265,7 @@ struct Operation {
   Span span;
   uint32_t statement;
   std::optional<CallBinding> binding = {};
+  std::optional<ReductionBinding> reduction = {};
 };
 struct Body {
   enum class Mode { Math, Local, Protocol } mode;
@@ -378,6 +387,10 @@ struct PrimitiveDefinition {
   std::string identity;
   std::vector<Type> arguments;
 };
+struct GeneratedReduction {
+  DeclarationId enclosing;
+  uint32_t ordinal;
+};
 struct Declaration {
   enum class Kind {
     Domain,
@@ -432,6 +445,7 @@ struct Declaration {
   std::vector<InputSlot> inputOrder;
   std::shared_ptr<const Body> body;
   bool anonymous = false;
+  std::optional<GeneratedReduction> generatedReduction;
   std::optional<Span> specificationBlock;
   std::optional<RelationDefinition> relation;
   std::vector<SpecificationClause> specifications;
@@ -487,6 +501,10 @@ private:
                                                  const CaptureOptions &);
 };
 
+/// Independently validate finite binder extraction against retained source.
+llvm::Error checkReductionElaboration(const CheckedProject &,
+                                      const Limits & = {});
+
 /// Only successful analysis can construct this immutable owning handle.
 class CheckedProject {
 public:
@@ -507,6 +525,8 @@ public:
 
 private:
   friend class Layouts;
+  friend llvm::Error checkReductionElaboration(const CheckedProject &,
+                                               const Limits &);
   explicit CheckedProject(std::shared_ptr<const detail::CheckedStorage>);
   std::shared_ptr<const detail::CheckedStorage> storage;
   friend Analysis analyze(const CapturedProject &, const Limits &);

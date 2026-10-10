@@ -297,6 +297,7 @@ fn pair_metadata(a: &serde_json::Value, b: &serde_json::Value) -> Option<Vec<(us
         "bundles_sha256",
         "requirements",
         "post_check_passes",
+        "fuse_vector_reductions",
     ] {
         if left[key] != right[key] {
             return None;

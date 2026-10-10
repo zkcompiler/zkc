@@ -52,7 +52,8 @@ primitive definitions and an embedded scalar prelude,
 local short-circuit Boolean operators and total Boolean formulas, inferred catalog/natural
 preconditions with explicit contract checking, unified data/service arguments,
 source rejection with `require`, formal polynomial intrinsics, checked
-pointwise `map` of scalar helpers over vectors, local control,
+pointwise `map` of scalar helpers over vectors, finite field-vector reductions,
+local control,
 messages, services, static protocol composition, bounded repetition and conditional completion.
 Independent source comparison checks emitted MLIR against checked definitions;
 [source semantics](spec/language/README.md) owns exact limits.
@@ -70,8 +71,16 @@ admitted validator, member-generic conformance and zero-leaf messages refuse.
 Abstract member-generic signatures can be checked and inspected, but components
 implementing them are not supported.
 Resource permission inference, implicit role remapping, natural equation solving
-and inversion of associated types are outside the source profile. Finite reduction
-binders remain unsupported; `∑` and `∏` are reserved. The staged parser resolves
+and inversion of associated types are outside the source profile.
+[Finite reduction binders](spec/language/definitions.md#finite-vector-reductions)
+support named reducers and library-owned `∑`/`∏`, explicit strict zip and
+immutable same-field scalar captures in module-level local functions. Protocols
+call those functions; direct protocol, math-function and component-member binders
+are outside this profile. Nested binders, arbitrary collections,
+effectful/non-ring scalar bodies and aggregate or mutable captures are outside
+this profile. Generated helpers retain lexical identities and counted bounds;
+a separate extraction witness precedes source-to-IR comparison.
+The staged parser resolves
 notation environments after imports and before bodies. Callable notation uses
 ordinary signature constraints and authored evaluation order, with descriptor
 arity and scope checked by the independent binding witness. No formal
@@ -108,6 +117,7 @@ alone add no runtime guard, satisfaction fact or security theorem.
 | Shared expression evaluation | Captured [Ring and Bundle terms](spec/language/definitions.md#asset-domains-and-projections), derived static dimensions, retained Entry assets and independent Host preflight. [Checked structural sharing](spec/domains/ring-expressions.md#structural-sharing) preserves ordered substitution and read obligations. The [generic Sumcheck library](../libraries/README.md#expression-sumcheck) derives its width and degree from its Ring parameter; it remains a public-table client without a PCS or native security theorem. |
 | Source clients of imported AIR | The [imported AIR client](../examples/projects/imported-air/README.md) checks actual trace, configuration and public inputs. The [AIR STARK client](../examples/projects/air-stark/README.md) adds base-field trace commitments, scoped extension-field quotient chunks, OOD/DEEP equations and FRI through ordinary source libraries and separate proof Hosts. The single-table profile covers one present table's assertions; the machine profile adds whole-Bundle Boolean multiset interactions. Security reductions for both remain separate work. |
 | Pointwise vector maps | Source `map` applies one static scalar `math fn` over installed field vectors through [checked bulk vector operations](spec/ir/protocols.md#checked-pointwise-maps): shapes first and O(formula) code. The matcher reads the generated body independently but shares the realizer's formula derivation. Shape mismatches are backend failures (`rejected:require`); field constants, addition, subtraction and multiplication are limited to Ring depth 1,024. The [KoalaBear/Ext8 comparison](../tests/kernels/test_pointwise_polynomials.py) checks maps, Ring rows and coefficients, and coset kernels against integer arithmetic, including the off-domain interpolation distinction. [Lean map laws](../formal/Zkc/Algebra/RingExpression/Pointwise.lean) cover values, refusals and realization for a list model, without native correspondence. There is no dedicated row kernel, backend ABI or first-class function value. |
+| Finite vector reductions | [Source binders](spec/language/definitions.md#finite-vector-reductions) use the same maps and ordinary reducer calls. Native `vector.product` has empty identity one on BLS12-381 Fr, BN254 Fr, Ristretto scalar, KoalaBear and KoalaBear Ext8, with independent C++/Rust admission and normal resource charges. Default-false [fusion](spec/ir/protocols.md#optional-vector-reduction-fusion) handles adjacent single-use multiply-map/native-sum with every original row guard retained. Its relation is values and ordered shape refusals under sufficient resources, not equal exhaustion or a memory bound. Independent [Lean map/reduction laws](../formal/docs/spec/core/ring-expressions.md) do not establish source extraction or native runtime correspondence. |
 | Calls, roles and control | Static application, role projection, structured local control, nested repetition and [conditional completion](compiler/control.md). General dynamic protocol composition remains open. |
 | Structured values | Products, alternatives, extents, checked indexing and [nested immutable data](compiler/mathematics.md), including independently shaped matrices; affine sequence elements are excluded. |
 | Affine resources and services | Exact-origin analysis, state successors, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |

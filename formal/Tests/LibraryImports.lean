@@ -8,6 +8,7 @@ import Zkc.Algebra.LinearCombination
 import Zkc.Algebra.MultisetFingerprint
 import Zkc.Algebra.Representations
 import Zkc.Algebra.RingExpression.Pointwise
+import Zkc.Algebra.RingExpression.Reductions
 import Zkc.Algebra.RingExpression.Sharing
 import Zkc.Algebra.RingExpression
 import Zkc.Compiler.Admission
@@ -452,6 +453,7 @@ import Tests.ResourceUnit
 import Tests.ResourceView
 import Tests.ResultBundle
 import Tests.RingExpression
+import Tests.RingExpressionReductions
 import Tests.RingExpressionSharing
 import Tests.RoleDriver
 import Tests.RoleIsolation

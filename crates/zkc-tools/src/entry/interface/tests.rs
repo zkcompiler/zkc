@@ -32,7 +32,7 @@ fn document() -> Value {
 }
 fn read_text(interface: &str) -> Result<Interface> {
     let frame = json!({"format":"zkc.entry/0","original":"original","interface":interface,
-        "artifact":"not interpreted by the metadata reader", "options":{"simplify":true,"release_storage":false},
+        "artifact":"not interpreted by the metadata reader", "options":{"simplify":true,"release_storage":false,"fuse_vector_reductions":false},
         "assets":[]}).to_string();
     let package = Package::capture(
         frame.as_bytes(),

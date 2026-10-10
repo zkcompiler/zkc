@@ -110,6 +110,7 @@ struct Expression {
     Kernel,
     Intrinsic,
     Map,
+    ReductionMap,
     MethodCall,
     FinishIf,
     NotationCall,
@@ -146,6 +147,8 @@ struct Expression {
   std::shared_ptr<const NotationDescriptor> notation;
   unsigned height = 1;
   bool grouped = false;
+  bool reductionCall = false;
+  uint32_t reducerExpression = 0, reductionOrdinal = 0;
 };
 struct Statement {
   enum class Kind {
@@ -285,7 +288,7 @@ struct Import {
   std::vector<std::string> names;
   Span span;
   std::optional<std::string> alias;
-  std::vector<std::string> operators, notations;
+  std::vector<std::string> operators, notations, reductions;
   bool isPublic = false;
 };
 std::string operatorBindingKey(const OperatorBinding &,

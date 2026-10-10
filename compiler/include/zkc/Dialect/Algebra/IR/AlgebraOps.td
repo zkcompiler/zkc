@@ -196,6 +196,7 @@ def VectorSplitOp : KernelOp<AlgebraDialect, "exec.vector_split", [OpVectorSplit
 def VectorSubOp : KernelOp<AlgebraDialect, "exec.vector_sub", [OpVectorSub]>;
 
 def VectorSumOp : KernelOp<AlgebraDialect, "exec.vector_sum", [OpVectorSum]>;
+def VectorProductOp : KernelOp<AlgebraDialect, "exec.vector_product", [OpVectorProduct]>;
 
 def BooleanAndOp : KernelOp<AlgebraDialect, "exec.bool_and", [OpBoolAnd]>;
 

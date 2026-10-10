@@ -54,8 +54,9 @@ their fixed grammar. Word operators, arbitrary ASCII strings, multi-scalar
 symbols and combining-mark operators are not admitted. A letter such as `ᵀ`
 does not become an operator; use a named function.
 
-`∑` and `∏` are reserved for future binders and cannot be declared as operators.
-Their reservation supplies no sum, product or reduction semantics.
+`∑` and `∏` are reserved for [finite reduction bindings](notation.md) and cannot
+be declared as ordinary operators. Their spelling alone selects no reducer; a
+visible library or local `reduction` binding supplies the callable.
 
 Custom delimiters are non-ASCII matching pairs from Unicode 17
 `BidiBrackets.txt`. The opener has category `Ps` and the closer `Pe`; both are

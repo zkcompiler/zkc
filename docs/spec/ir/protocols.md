@@ -268,6 +268,67 @@ checked storage releases under the selected execution contract. An authored
 partial inverse stays in a local function; a preceding mathematical guard does
 not make inversion a total operation.
 
+### Optional vector reduction fusion
+
+`--fuse-vector-reductions` is disabled by default. It selects a preparation
+rewrite independently of mathematical simplification and storage release. The
+disabled path keeps the existing realization/expansion sequence, executable
+operations and occurrence sites. The enabled path uses the existing
+`algebra.map_realize`, `local.apply` and typed native vector reduction operations;
+it introduces no separate mathematical graph or runtime callback.
+The C++ preparation/project pass factories and `PreparedProtocol::prepare`
+take the same default-false `fuseVectorReductions` choice. Direct
+`zkc-prepare-protocol` and `zkc-project-protocol` pass invocations expose the
+`fuse-vector-reductions` Boolean option separately from `simplify`.
+
+After polynomial and mathematical realization, checked local helper expansion
+runs in `RetainMaps` mode. It substitutes ordinary helpers while retaining only
+calls to admitted map declarations. An independent virtual-substitution check
+compares the original and actual candidate, including retained calls and their
+identities. This exposes maps and native reducers inside ordinary library
+wrappers without changing their ordered context. All map helper operations,
+including unused operations and declarations, remain subject to formula admission.
+
+The admitted fusion has all of these premises:
+
+- A retained map call and its typed native `vector.sum` consumer are adjacent
+  in the same block; the mapped result has exactly one use.
+  The consumer's logical binding is `vector.sum` in the same field, with no
+  operation attributes or fixed backend implementation.
+- After admitted scalar helper expansion, the live formula is exactly a
+  multiplication of two row input slots of the same field. The slots may be
+  equal. Scalar factors, additions, other reducers and general reassociation
+  are outside this rule.
+- The replacement keeps the complete original ordered shape-check prefix,
+  including unused rows, before one typed `vector.dot` on the selected inputs.
+  Collection and scalar operand evaluations remain in place.
+
+The checker reads the retained original formula and actual replacement and
+checks operation/binding identities, fields, guards, operands, result uses,
+sites, full occurrence paths, surrounding code and declaration inventory. It
+does not authorize motion across effects, regions or custom reducers, nor
+replacement of a custom reducer based on its source name or notation. Only an
+exposed operation sequence meeting the concrete native rule can match.
+
+Residual maps use ordinary map realization. Checked `Finish` expansion removes
+the remaining helper calls before freezing executable local definitions. Both
+expansion phases retain original call/guard associations and full occurrence
+paths, including paths whose emitted names are hashed; a previously encoded
+site is not encoded again as an original leaf. Expansion and origin limits are
+cumulative across phases. The strict local snapshot remains after preparation;
+later mathematical simplification, projection and lowering preserve it.
+
+The execution relation is equal values and equal ordered shape refusals under
+the declared vector contracts and sufficient resources. The replacement has its
+own instruction and storage charges: it retains the guard prefix and charges
+dot instead of a materialized vector multiply followed by sum. This changes
+allocation and instruction behavior. It does not promise equal exhaustion,
+arbitrary backend-failure equivalence, a general resource refinement theorem or
+lower peak memory. Resource comparisons must report instruction work, logical
+value bytes, retained/live storage and cumulative allocation separately.
+
+### Admitted type uses
+
 The initial type-use policy is closed:
 
 | Logical types | Native mathematical use |

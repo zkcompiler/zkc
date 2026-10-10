@@ -99,9 +99,12 @@ Error Checker::run() {
   }
   if (!entries())
     return types.takeError();
-  if (!retainNotations())
+  inferredContracts.clear();
+  types.inferCapability = {};
+  types.inferNatural = {};
+  if (!finalizeReductions() || !retainNotations() || !retainReductionSources())
     return types.takeError();
-  return Error::success();
+  return checkReductions(output, work);
 }
 bool Checker::bindingName(const Declaration &decl, StringRef name, Span span) {
   if (visible[decl.module.index].count(name.str()) ||

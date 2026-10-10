@@ -28,36 +28,39 @@ int main() {
   for (StringRef job : {"sample::Session", "sample::Proof"})
     cases.run(job + ": package binds exact components and options", [&] {
       for (bool simplify : {false, true})
-        for (bool release : {false, true}) {
-          auto entry = compile(job, {simplify, release});
-          auto package = take(packageEntry(entry));
-          auto value = take(json::parse(package.bytes()));
-          auto *root = value.getAsObject();
-          require(root && root->size() == 6 &&
-                      root->getString("format") == "zkc.entry/0" &&
-                      root->getString("original") == entry.original().bytes() &&
-                      root->getString("interface") ==
-                          entry.original().interfaceJson() &&
-                      root->getString("artifact") == entry.bytes(),
-                  "package changed or omitted checked bytes");
-          auto *options = root->getObject("options");
-          require(options && options->size() == 2 &&
-                      options->getBoolean("simplify") == simplify &&
-                      options->getBoolean("release_storage") == release,
-                  "package changed compilation choices");
-          require(
-              package.identity() ==
-                  toHex(SHA256::hash(arrayRefFromStringRef(package.bytes())),
-                        true),
-              "package identity does not bind exact publication");
-          auto same = take(packageEntry(entry, package.bytes().size()));
-          require(same.bytes() == package.bytes(),
-                  "boundary changed package bytes");
-          refuses(packageEntry(entry, package.bytes().size() - 1),
-                  "source.package-limit");
-          refuses(packageEntry(entry, entryPackageByteLimit + 1),
-                  "source.package-limit");
-        }
+        for (bool release : {false, true})
+          for (bool fuse : {false, true}) {
+            auto entry = compile(job, {simplify, release, fuse});
+            auto package = take(packageEntry(entry));
+            auto value = take(json::parse(package.bytes()));
+            auto *root = value.getAsObject();
+            require(root && root->size() == 6 &&
+                        root->getString("format") == "zkc.entry/0" &&
+                        root->getString("original") ==
+                            entry.original().bytes() &&
+                        root->getString("interface") ==
+                            entry.original().interfaceJson() &&
+                        root->getString("artifact") == entry.bytes(),
+                    "package changed or omitted checked bytes");
+            auto *options = root->getObject("options");
+            require(options && options->size() == 3 &&
+                        options->getBoolean("simplify") == simplify &&
+                        options->getBoolean("release_storage") == release &&
+                        options->getBoolean("fuse_vector_reductions") == fuse,
+                    "package changed compilation choices");
+            require(
+                package.identity() ==
+                    toHex(SHA256::hash(arrayRefFromStringRef(package.bytes())),
+                          true),
+                "package identity does not bind exact publication");
+            auto same = take(packageEntry(entry, package.bytes().size()));
+            require(same.bytes() == package.bytes(),
+                    "boundary changed package bytes");
+            refuses(packageEntry(entry, package.bytes().size() - 1),
+                    "source.package-limit");
+            refuses(packageEntry(entry, entryPackageByteLimit + 1),
+                    "source.package-limit");
+          }
     });
   cases.run(
       "complete aliases preserve executable but change publication Entry", [&] {

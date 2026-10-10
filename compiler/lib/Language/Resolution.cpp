@@ -119,7 +119,8 @@ private:
       auto mark = undo.size();
       ++scope;
       std::set<std::string> seen;
-      if (expr.kind == Expression::Kind::For &&
+      if ((expr.kind == Expression::Kind::For ||
+           expr.kind == Expression::Kind::ReductionMap) &&
           !pattern(expr.index, false, false, seen, depth + 1))
         return false;
       if (expr.kind == Expression::Kind::Match)

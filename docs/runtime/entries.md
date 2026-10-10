@@ -35,8 +35,14 @@ zkc run run.zkpkg EXPECTED_SHA256 inputs.json --results=results.json
 Use `--project=zkc.toml` for an explicit [project map](../language/README.md#project-inputs),
 or repeat `--module=NAME=FILE` and `--asset=NAME=FORMAT=FILE` to capture dependencies.
 `--compiler=PATH` selects a trusted compiler; otherwise it resolves from absolute
-directories in trusted `PATH`. `--no-simplify` and `--release-storage` choose
-compilation options without skipping source comparison. Maintained
+directories in trusted `PATH`. `--no-simplify`, `--release-storage` and
+`--fuse-vector-reductions` choose compilation options without skipping source
+comparison. Fusion is disabled by default; it can replace an eligible
+multiply-map/sum with shape guards and dot under the
+[preparation contract](../spec/ir/protocols.md#optional-vector-reduction-fusion).
+Its values and ordered shape refusals agree under sufficient resources, while
+resource exhaustion can differ. The package records the choice, including for
+proof Entries. `zkc check` rejects this executable optimization option. Maintained
 [projects](../../examples/projects/README.md) provide complete inputs and commands.
 
 ## Source names and native labels

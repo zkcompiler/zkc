@@ -5,6 +5,7 @@ pub type Vector<F: Field> = builtin("vector", F);
 pub fn length<F: Field>(values: Vector<F>) -> index = primitive("vector.length");
 pub fn get<F: Field>(values: Vector<F>, position: index) -> F = primitive("vector.get");
 pub fn sum<F: Field>(values: Vector<F>) -> F = primitive("vector.sum");
+pub fn product<F: Field>(values: Vector<F>) -> F = primitive("vector.product");
 pub fn split<F: Field>(values: Vector<F>) -> (Vector<F>, Vector<F>) = primitive("vector.split");
 pub fn add<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> = primitive("vector.add");
 pub fn hadamard<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> = primitive("vector.mul");
@@ -29,3 +30,6 @@ pub operator * = scale;
 
 pub operator infixl(70) ⊙ = hadamard;
 pub notation ⟪ left, right ⟫ = dot(left, right);
+
+pub reduction ∑ = sum;
+pub reduction ∏ = product;

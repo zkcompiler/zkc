@@ -32,6 +32,15 @@ Error insertNotation(NotationEnvironment &environment,
     if (auto found = environment.find(other.key()); found != environment.end())
       return conflict(found->second.span);
   }
+  if (descriptor.position == Position::Prefix ||
+      descriptor.position == Position::Reduction) {
+    auto other = descriptor;
+    other.position = descriptor.position == Position::Prefix
+                         ? Position::Reduction
+                         : Position::Prefix;
+    if (auto found = environment.find(other.key()); found != environment.end())
+      return conflict(found->second.span);
+  }
   if (environment.size() >= work.limits.notationDescriptors)
     return failure("source.limit", "notation descriptor limit exceeded",
                    syntax.span);
@@ -98,7 +107,9 @@ Error resolveNotationSyntax(std::vector<SyntaxOperator> &bindings,
       return error;
     std::shared_ptr<const NotationDescriptor> selected;
     for (const auto &[key, syntax] : environment) {
-      if (syntax.descriptor->symbol != binding.symbol)
+      if (syntax.descriptor->position == Position::Reduction ||
+          syntax.descriptor->position == Position::Delimited ||
+          syntax.descriptor->symbol != binding.symbol)
         continue;
       if (selected)
         return failure("source.notation-ambiguous",

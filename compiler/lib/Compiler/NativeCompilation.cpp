@@ -96,7 +96,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   OwningOpRef<ModuleOp> original;
   if (options.polynomialRequirements)
     original = cast<ModuleOp>(result->module->getOperation()->clone());
-  auto preparation = mathematical::PreparedProtocol::prepare(*result->module);
+  auto preparation = mathematical::PreparedProtocol::prepare(
+      *result->module, options.fuseVectorReductions);
   if (!preparation || diagnostics.hasErrors())
     return diagnostics.failure();
   auto prepared = preparation->snapshot();
@@ -107,7 +108,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
     return diagnostics.failure();
   if (options.polynomialRequirements) {
     auto checked = checkPolynomialReductions(*original, *result->module,
-                                             *options.polynomialRequirements);
+                                             *options.polynomialRequirements,
+                                             options.fuseVectorReductions);
     if (!checked)
       return diagnostics.failure(checked.takeError());
     bool covered = false;
@@ -146,6 +148,7 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
     object["entry"] = options.entry;
     object["simplify"] = options.simplify;
     object["release_storage"] = options.releaseStorage;
+    object["fuse_vector_reductions"] = options.fuseVectorReductions;
     object["fix_polynomial_factors"] = options.fixPolynomialFactors;
     json::Array passes;
     if (options.simplify) {
@@ -193,11 +196,13 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
                      {"bundle_sha256", digest(*bundle)},
                      {"simplify", options.simplify},
                      {"release_storage", options.releaseStorage},
+                     {"fuse_vector_reductions", options.fuseVectorReductions},
                      {"fix_polynomial_factors", options.fixPolynomialFactors}});
     // Describe semantic pipeline stages with their public pass names. This is
     // not a PassManager execution trace: preparation is implicit here, and
     // projection consumes the privately owned prepared subject above.
     json::Array passes;
+    passes.push_back("zkc-prepare-protocol");
     passes.push_back("zkc-project-protocol");
     if (options.simplify)
       passes.push_back("zkc-simplify-participant");
@@ -234,12 +239,14 @@ compileNativeProof(StringRef text, StringRef filename,
   auto original = std::move(*parsed);
   if (!policy) {
     auto selected = selectNativeProofDraws(
-        *original, std::get<NativeProofSelection>(options.policy).policy);
+        *original, std::get<NativeProofSelection>(options.policy).policy,
+        options.fuseVectorReductions);
     if (!selected)
       return diagnostics.failure(selected.takeError());
     policy = std::move(*selected);
   }
-  auto constructed = constructNativeProof(*original, *policy);
+  auto constructed =
+      constructNativeProof(*original, *policy, options.fuseVectorReductions);
   if (!constructed)
     return diagnostics.failure(constructed.takeError());
   result->module = std::move(constructed->module);
@@ -317,7 +324,8 @@ compileNativeProof(StringRef text, StringRef filename,
       "zkc.native-proof/0", digest(text), constructed->descriptor,
       digest(*descriptorBytes), candidate, digest(candidate), std::move(maps),
       json::Array{options.simplify ? "true" : "false",
-                  options.releaseStorage ? "true" : "false"},
+                  options.releaseStorage ? "true" : "false",
+                  options.fuseVectorReductions ? "true" : "false"},
       json::Array(constructed->wireSites)});
   auto encoded = printJson(deployment);
   if (encoded.size() > 16 * 1024 * 1024)

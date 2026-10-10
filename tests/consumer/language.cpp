@@ -28,6 +28,12 @@ int main() {
       {{"m", R"(module m;
     pub operator infixl(65) ⊕ = zkc::prelude::index_add;
     pub fn 合成(α:index,β:index)->index{return α⊕β;}
+    pub type Vector<F:Field>=builtin("vector",F);
+    pub fn sum<F:Field>(xs:Vector<F>)->F=primitive("vector.sum");
+    pub reduction ∑=sum;
+    pub fn weighted<F:Field>(xs:Vector<F>,α:F)->F {
+      return ∑ [x in xs] {x*α};
+    }
     struct Pair<T:Type>{pub first:T,pub second:T}
     pub fn swap<T:Type+Copy+Drop>(x:Pair<T>)->Pair<T>{
       return Pair<T>{first:x.second,second:x.first};
@@ -52,6 +58,10 @@ int main() {
     llvm::errs() << llvm::toString(checked.takeError());
     return 2;
   }
+  if (auto error = zkc::language::checkReductionElaboration(*checked)) {
+    llvm::errs() << llvm::toString(std::move(error));
+    return 17;
+  }
   if (checked->assets().size() != 1 ||
       checked->assets()[0].identity() != relation->identity())
     return 7;
@@ -69,7 +79,9 @@ int main() {
     return 15;
   }
   if (notations->find("m::合成") == std::string::npos ||
-      notations->find("⊕") == std::string::npos)
+      notations->find("⊕") == std::string::npos ||
+      notations->find("∑") == std::string::npos ||
+      notations->find("m::weighted") == std::string::npos)
     return 16;
   auto selected = zkc::language::selectEntry(*checked, "Demo");
   if (!selected) {

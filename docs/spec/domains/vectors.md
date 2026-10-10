@@ -118,6 +118,7 @@ operation at compilation time; they do not create extra executed index values.
 | `vector.add/sub/mul(a,b)` | Elementwise operation, requiring equal lengths |
 | `vector.scale(v,x)` | Ordered scalar multiples, preserving length |
 | `vector.sum(v)` | Sum of entries; empty sum is zero |
+| `vector.product(v)` | Product of entries; empty product is one |
 | `vector.dot(a,b)` | Sum of pairwise products, requiring equal lengths; empty sum is zero |
 | `vector.kronecker(a,b)` | Left-major products: result at `i*length(b)+j` is `a[i]*b[j]` |
 | `vector.matvec(A,x) [rows,columns,transpose]` | Flat row-major matrix with exactly `rows*columns` entries; `transpose` is `0` or `1`. Forward input has `columns` entries; transposed input has `rows` entries. Returns the ordinary product or pullback, including empty-sum cases |
@@ -129,6 +130,13 @@ also introduces an occurrence and resource charges, so that replacement is not
 an unconditional execution-preserving canonicalization. Similarly, replacing
 flat `matvec` with a matrix constructor and contraction requires a stated shape,
 failure-order and resource relation.
+
+`vector.product<F>` takes exactly one vector and returns one scalar of the same
+nominal field, with no operation attributes. It is distinct from pairwise
+`vector.mul(a,b)`, which returns a vector and requires equal lengths, and from
+`prefix_product`, which returns every inclusive prefix. Product accepts zeros,
+singleton and repeated entries. Empty input still produces and charges a scalar
+output through ordinary native resource admission.
 
 ## Dynamic sequence operations
 
@@ -212,6 +220,34 @@ Dropping scalar operations the result never reaches is the restricted node map
 of the [arena sharing laws](../../../formal/Zkc/Algebra/RingExpression/Sharing.lean).
 They establish value equalities in a list model under the stated shape premises;
 the native realization and its checks are separately tested.
+
+## Finite map reductions
+
+For admitted same-length row operands and scalar operands of one field, let
+`mapped = map(f)(operands)`. Define:
+
+```text
+mapSum(f, operands)     = sum(mapped)
+mapProduct(f, operands) = product(mapped)
+```
+
+The checked map's admission precedes either reduction. A formula that ignores a
+row still requires that row's length to agree with every other row. Matched
+empty rows yield zero for sum and one for product; an absent rowwise operand
+or a mismatched unused row does not become an empty identity. Map refusals
+propagate before the reducer obtains a value.
+
+If the formula is exactly `row_a * row_b`, its sum equals `dot(row_a,row_b)`
+after admission of the entire original operand list. A rewrite must preserve
+all original ordered shape guards, even when the dot itself uses only two of
+several row inputs. The [optional native fusion contract](../ir/protocols.md#optional-vector-reduction-fusion)
+states the restricted rewrite and its resource relation.
+
+The independent [Lean reduction model](../../../formal/docs/spec/core/ring-expressions.md)
+proves list-value, empty, unused-row refusal and error-propagation laws under
+its stated admission premises. It does not prove native compiler correspondence,
+source capture snapshots or runtime adequacy. Source binding and evaluation
+order belong to the [finite reduction contract](../language/definitions.md#finite-vector-reductions).
 
 ## Representation and execution
 

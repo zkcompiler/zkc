@@ -31,6 +31,16 @@ written directly inside `fn` remains an ordered primitive. A `map` emits one
 `algebra.map_realize` per helper instance and row mask, named from both, and an
 ordered `local.apply`; comparison checks the helper, mask, signature and site and
 accounts for every declaration.
+
+Finite reduction binders emit the same map declaration for a private generated
+scalar helper, followed by the selected ordinary reducer call. Row inputs and
+ordered scalar capture snapshots are explicit operands. Generated helper
+identity includes its enclosing declaration and binder occurrence; specialization
+retains its original lexical and notation selections. The
+[extraction witness](definitions.md#finite-vector-reductions) checks this graph
+against retained authored syntax before emission. No callback interpreter or
+general binder IR is introduced.
+
 Protocols become `protocol.func`, with explicit `protocol.local_call` for owned calls.
 Total operations use their admitted dialect identities; ordered operations use
 existing executable bindings. No additional protocol interpreter is introduced.
@@ -109,8 +119,9 @@ It consumes every definition and operation, including unused work, and checks
 layouts, operands, bindings, modes, helper targets, roles, sites, captures, carry,
 variant arms, custody and returns. The comparison never calls emission. Both consume the checked graph; this
 comparison does not independently establish lexical elaboration correctness.
-Before translation, callable operators and delimiter notation also pass the separate
-[binding witness check](definitions.md#library-defined-operators). It validates
+Before translation, callable operators, delimiter notation and reduction bindings
+also pass the separate [binding witness check](definitions.md#library-defined-operators).
+It validates
 resolution evidence against the lexical family and native action; it does not
 prove the parser, name resolver or complete source semantics. An equivalent
 but differently structured rewrite can refuse. Inputs, receives, restrictions,

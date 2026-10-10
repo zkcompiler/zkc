@@ -91,7 +91,7 @@ fn deployment() -> Json {
             ],
             ["V", "v", [["2", "bool"]], [["3", "bool"]], [], "0"]
         ],
-        ["true", "false"],
+        ["true", "false", "false"],
         [[first, "first"], [second, "second"]]
     ]);
     seal(&mut result);
@@ -551,4 +551,24 @@ fn ring_work_limit_cannot_raise_the_host_ceiling() {
             .unwrap(),
         "native-proof-ring-work-limit"
     );
+}
+
+#[test]
+fn deployment_compilation_choices_have_exact_boolean_shape() {
+    let original = deployment();
+    for choices in [
+        json!(["true", "false"]),
+        json!(["true", "false", "false", "false"]),
+        json!(["true", "false", false]),
+        json!(["true", "false", "invalid"]),
+    ] {
+        let mut changed = original.clone();
+        changed[7] = choices;
+        assert!(admit(&changed).is_err());
+    }
+    for fuse in [false, true] {
+        let mut changed = original.clone();
+        changed[7][2] = json!(if fuse { "true" } else { "false" });
+        assert_eq!(admit(&changed).unwrap().choices, [true, false, fuse]);
+    }
 }

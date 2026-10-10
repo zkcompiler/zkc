@@ -221,6 +221,12 @@ pub(super) const CONTRACTS: &[Contract] = &[
             "plonky3/vector.sum",
         ],
     ),
+    Contract::selectable("vector.product", (&[Vector], &[Field], AttributeRule::None))
+        .implemented_by(&[
+            "arkworks/vector.product",
+            "dalek/vector.product",
+            "plonky3/vector.product",
+        ]),
     Contract::selectable(
         "vector.dot",
         (&[Vector, Vector], &[Field], AttributeRule::None),

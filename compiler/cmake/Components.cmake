@@ -101,6 +101,8 @@ add_zkc_component(Language
   lib/Language/ExpressionInference.cpp
   lib/Language/CallResolution.cpp
   lib/Language/Calls.cpp
+  lib/Language/Reductions.cpp
+  lib/Language/ReductionWitness.cpp
   lib/Language/Builtins.cpp
   lib/Language/Kernels.cpp
   lib/Language/Intrinsics.cpp
@@ -201,6 +203,7 @@ add_zkc_component(Transforms
   lib/Transforms/MathLowering.cpp
   lib/Transforms/MathRealizations.cpp
   lib/Transforms/MapRealizations.cpp
+  lib/Transforms/VectorReductions.cpp
   lib/Transforms/PolynomialRecipes.cpp
   lib/Transforms/PolynomialRecipeVerification.cpp
   lib/Transforms/PolynomialLowering.cpp

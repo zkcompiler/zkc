@@ -68,6 +68,34 @@ avoid repeated scalar-frame capture charges. [Representation](representation.md)
 owns implementation selection; [capacity](../spec/runtime/capacity.md) owns
 operational limits.
 
+## Finite vector reductions
+
+Source binders and ordinary authored `map` plus reducer calls reach the same
+retained `algebra.map_realize` and typed vector kernels. Native `vector.product`
+reduces one vector to a same-field scalar, including the empty identity one;
+it is separate from elementwise multiplication. The
+[source contract](../spec/language/definitions.md#finite-vector-reductions)
+owns binder scope, captures and generated-helper extraction.
+
+Optional `--fuse-vector-reductions` exposes admitted maps through checked
+`RetainMaps` local expansion, recognizes adjacent single-use multiply-map/sum,
+and replaces it with all original shape guards followed by dot. Residual maps
+and helpers finish through the ordinary realization path before the strict
+local snapshot. Independent checks compare both expansion stages and the
+actual fused candidate with their originals, retaining full occurrence paths.
+The [IR contract](../spec/ir/protocols.md#optional-vector-reduction-fusion)
+defines exact eligibility and shared bounds.
+
+Fusion is disabled by default and independent of simplify/release-storage
+choices. `EntryOptions`, `RunOptions` and `NativeProofOptions` carry the same
+`fuseVectorReductions` Boolean to preparation; proof construction and polynomial
+correspondence checking also receive that choice. Fusion compares values and
+ordered shape refusals under sufficient resources; changed allocation and
+instruction charges may change exhaustion.
+No general optimization theorem, backend-failure equivalence or peak-memory
+improvement follows. The independent Lean reduction laws cover their list
+model, with no source capture or native runtime adequacy theorem.
+
 ## Protocol and relation consumers
 
 Public-table and weighted R1CS Sumcheck clients expose formal polynomial recipes,

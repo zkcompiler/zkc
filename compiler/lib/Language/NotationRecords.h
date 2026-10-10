@@ -28,7 +28,7 @@ struct NotationImportRecord {
   ModuleId module;
   Span span;
   std::optional<std::string> alias;
-  std::vector<std::string> names, operators, notations;
+  std::vector<std::string> names, operators, notations, reductions;
   bool isPublic = false;
 };
 struct NotationScopeRecord {

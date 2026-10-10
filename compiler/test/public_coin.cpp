@@ -280,12 +280,22 @@ int main() {
   mlir::DialectRegistry registry;
   RunOptions options;
   options.publicCoinRequirement = requirement.str();
-  auto result = compileRun(fixture, "public-coin.mlir", options, registry);
-  require(bool(result) && result->publicCoin && !result->correspondence,
-          "checked invocation");
-  auto compiled = json::parse(*result->publicCoin);
-  require(bool(compiled) && *compiled->getAsObject()->get("view") == report,
-          "same unsimplified view");
+  for (bool fuse : {false, true}) {
+    options.fuseVectorReductions = fuse;
+    auto result = compileRun(fixture, "public-coin.mlir", options, registry);
+    require(bool(result) && result->publicCoin && !result->correspondence,
+            "checked invocation");
+    auto compiled = json::parse(*result->publicCoin);
+    require(bool(compiled) && *compiled->getAsObject()->get("view") == report,
+            "same unsimplified view");
+    require(compiled->getAsObject()->getBoolean("fuse_vector_reductions") ==
+                fuse,
+            "compiled public-coin record lost preparation choice");
+    auto *passes = compiled->getAsObject()->getArray("post_analysis_passes");
+    require(passes && !passes->empty() &&
+                passes->front().getAsString() == "zkc-prepare-protocol",
+            "compiled view omitted preparation before projection");
+  }
   options.entry = "absent";
   auto refused = compileRun(fixture, "public-coin.mlir", options, registry);
   require(!refused, "entry mismatch accepted");

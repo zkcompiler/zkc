@@ -1,0 +1,23 @@
+module example;
+use zkc::vector as vec;
+domain Fr = field("koala-bear");
+
+fn weighted<F: Field>(left: vec::Vector<F>, right: vec::Vector<F>) -> F {
+  return ∑ [(x, y) in zip(left, right)] { x * y };
+}
+fn named<F: Field>(left: vec::Vector<F>, right: vec::Vector<F>) -> F {
+  return reduce vec::sum [(x, y) in zip(left, right)] { x * y };
+}
+fn shifted_product<F: Field>(values: vec::Vector<F>, α: F) -> F {
+  return ∏ [x in values] { x + α };
+}
+protocol Reductions roles(P)
+    (left: vec::Vector<Fr> @P, right: vec::Vector<Fr> @P, α: Fr @P)
+    -> (symbolic: Fr @P, named: Fr @P, dot: Fr @P, product: Fr @P) {
+  let symbolic = weighted(left, right);
+  let ordinary = named(left, right);
+  let dot = vec::dot(left, right);
+  let product = shifted_product(left, α);
+  return (symbolic = symbolic, named = ordinary, dot = dot, product = product);
+}
+run Demo = Reductions;

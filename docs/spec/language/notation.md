@@ -1,6 +1,7 @@
 # Mathematical notation
 
-This native contract defines callable operators and paired-delimiter calls.
+This native contract defines callable operators, paired-delimiter calls and
+finite-vector reduction bindings.
 The [lexical profile](lexical.md#mathematical-tokens) admits their tokens;
 [definition checking](definitions.md#library-defined-operators) owns callable
 selection and native checks. [Status](../../status.md#source-and-application-boundary)
@@ -12,6 +13,7 @@ records implementation coverage.
 [pub] operator SYMBOL = CALLABLE;
 [pub] operator FIXITY(PRECEDENCE) SYMBOL = CALLABLE;
 [pub] notation OPENER HOLE ("," HOLE)* CLOSER = CALLABLE(HOLE, ...);
+[pub] reduction SYMBOL = CALLABLE;
 ```
 
 `FIXITY` is `infixl`, `infixr`, `infix`, `prefix` or `postfix`. The first three
@@ -32,6 +34,12 @@ for `⊙`. It binds a target to that descriptor; callable arity and operand type
 never choose syntax. An explicit declaration creates a descriptor or repeats
 an identical visible shape. Prefix and infix may share a symbol. Postfix and
 infix may not share one symbol in the same environment.
+
+A reduction descriptor has its own position, one semantic data operand (the
+mapped vector), and fixed bracket/body syntax. Its symbol is `∑` or `∏`;
+it has no user-selected precedence, holes or association. A prefix and a
+reduction descriptor cannot share a token. An `operator` declaration or selector
+does not bind or import a reduction descriptor.
 
 The fixed grammar is:
 
@@ -102,15 +110,40 @@ participant ownership and mode/effect checks. A local vector operation remains
 invalid in a `math fn`, even when written with mathematical symbols. Declaring
 a symbol asserts no algebraic law and adds no optimizer or proof rule.
 
+## Finite reduction syntax
+
+```text
+reduce CALLABLE [NAME in COLLECTION] { SCALAR_BODY }
+reduce CALLABLE [(NAME, NAME, ...) in zip(COLLECTION, COLLECTION, ...)] { SCALAR_BODY }
+SYMBOL [NAME in COLLECTION] { SCALAR_BODY }
+SYMBOL [(NAME, NAME, ...) in zip(COLLECTION, COLLECTION, ...)] { SCALAR_BODY }
+```
+
+`CALLABLE` is an ordinary static callable reference with optional static
+arguments. `SYMBOL` requires a visible reduction binding. A row name may be `_`;
+tuple binders require at least two rows and exactly the same number of explicit
+`zip` operands. There is no implicit zip or arbitrary pattern comprehension.
+The braces delimit a scalar expression block; its row names are scoped only to
+that block. These forms can occur as ordinary expressions.
+
+The library declarations are `pub reduction ∑ = sum;` and
+`pub reduction ∏ = product;`. Their targets are defined static local callables
+of type `Vector<F> -> F`, with one written scalar result and no service inputs.
+Ordinary callable inference, lexical identity and effects remain in force;
+a reduction symbol supplies neither an algebraic law nor permission to
+substitute another reducer. The [source reduction contract](definitions.md#finite-vector-reductions)
+defines collection evaluation, captures, body admission and helper extraction.
+
 ## Imports and lexical scope
 
 `use zkc::vector as vec;` activates the module's public notation and imports a
 module alias. `use zkc::vector::{Vector, dot};` imports only those named exports.
-Selectors `operator ⊙` and `notation ⟪` explicitly import notation; an operator
-selector imports all exported fixities for its token. For example:
+Selectors `operator ⊙`, `notation ⟪` and `reduction ∑` explicitly import their
+respective bindings; an operator selector imports all exported operator fixities
+for its token. For example:
 
 ```zkc
-use zkc::vector::{Vector, operator ⊙, notation ⟪};
+use zkc::vector::{Vector, operator ⊙, notation ⟪, reduction ∑};
 ```
 
 These selectors require the corresponding public exports. A qualified named
@@ -132,6 +165,10 @@ fallback to outer targets. Prefix and infix families remain separate. Local
 replacement cannot change an inherited shape or repair conflicting module
 imports. Component dictionaries remain explicit.
 
+Reduction bindings follow the same module, reexport and declaration-prefix
+rules. `reduction ∑ = my_sum;` in a block replaces that descriptor's inherited
+family; an unsuitable target never selects the outer library sum instead.
+
 ## Staging and retained evidence
 
 Capture validation and lexing precede fixed declaration headers and opaque body
@@ -147,6 +184,10 @@ authored operands and the selected ordinary call. Callable selection and the
 independent [binding witness](definitions.md#library-defined-operators) use the
 same descriptor arity; the witness reconstructs the lexical family independently
 of the solver. Specialization preserves definition-site selection.
+Reduction extraction also preserves the original body scope and its selected
+notation occurrences in generated helpers. Its separate
+[extraction witness](definitions.md#finite-vector-reductions) precedes native
+source-to-IR comparison.
 
 ## Inspection
 

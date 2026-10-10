@@ -15,6 +15,7 @@ namespace zkc {
 /// compilation.
 llvm::Expected<llvm::json::Value>
 checkPolynomialReductions(mlir::ModuleOp original, mlir::ModuleOp candidate,
-                          llvm::StringRef requirements);
+                          llvm::StringRef requirements,
+                          bool fuseVectorReductions = false);
 } // namespace zkc
 #endif

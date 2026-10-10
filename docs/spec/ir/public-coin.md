@@ -102,6 +102,8 @@ static application admission refuses a callee that contains a statement.
 - `statement_inputs`, `bound_non_statement_inputs`, and
   `prover_unavailable_bound_inputs`, each in increasing port order.
 - `source_ir_sha256`, `prepared_ir_sha256`, and `requirement_sha256`.
+  The prepared identity uses the source analysis view with default preparation;
+  it does not identify a separately fused compilation candidate.
 
 IR identities hash the default MLIR printing of the admitted original module
 and unsimplified prepared module; locations are omitted. The requirement hash
@@ -128,9 +130,22 @@ projection. Its entry must equal the compiled entry. Ordinary projection,
 simplification and lowering remain trusted/tested compiler passes.
 `CompiledRun.publicCoin` returns `zkc.compiled-public-coin/0`, containing
 `view`, exact input-text `source_sha256`, emitted `bundle_sha256`, and the
-`simplify`, `release_storage`, `fix_polynomial_factors` options, the actual
-`projection_simplify` setting and ordered `post_analysis_passes`. The compiler
+`simplify`, `release_storage`, `fuse_vector_reductions`, `fix_polynomial_factors`
+options, the actual `projection_simplify` setting and ordered
+`post_analysis_passes`. The compiler
 returns no partial executable on failure.
+
+`fuse_vector_reductions` defaults to false and records the selected
+[local preparation rewrite](protocols.md#optional-vector-reduction-fusion).
+The standalone public-coin view remains an analysis of its own unsimplified
+prepared subject. The compiled report lists `zkc-prepare-protocol` before
+projection in `post_analysis_passes`, because optional fusion occurs there.
+It is independent of participant simplification and storage release. Polynomial
+correspondence compilation and `checkPolynomialReductions` forward the same
+preparation choice and record `fuse_vector_reductions` in the correspondence
+report. `protocol-check-reductions` accepts the matching option for comparison
+with a supplied candidate. A report does not make local fusion a Fiat–Shamir
+reduction or general resource-preservation theorem.
 
 The CLI supports:
 
