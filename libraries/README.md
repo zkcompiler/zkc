@@ -10,6 +10,7 @@ concrete domains, Entries and transcript constructions in
 | Module | Public exports | Contract |
 |---|---|---|
 | [`zkc::vector`](zkc/vector.zkc) | `Vector`, length/get/sum/product/split/add/hadamard/scale/dot/fill/fold/has_length, reduction bindings `∑`/`∏` | Ordered finite vectors; fold pairs contiguous halves |
+| [`zkc::sequence`](zkc/sequence.zkc) | `Sequence`, empty/append/length/get | Immutable sequences of executable Copy + Drop elements, including source products |
 | [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, get/multiply/transpose_multiply/bilinear/rows/columns | Ordered sparse matrix operations |
 | [`zkc::field_array`](zkc/field_array.zkc) | `Array`, from_vector/get | Fixed-length field arrays with checked native construction and dynamic access |
 | [`zkc::polynomial`](zkc/polynomial.zkc) | `Polynomial`, from_coefficients/evaluate/boundary | Runtime univariate polynomial data; boundary is p(0) + p(1) |
@@ -44,6 +45,18 @@ Both are ordinary native functions; fixed field arrays currently execute only
 over BLS12-381 Fr. This `Array` has the same type as `zkc::symbolic::Array`.
 The symbolic module's static `get<F, N, I>` retains its mathematical bound
 requirement. A dynamic `index` alone establishes no such bound.
+
+`zkc::sequence::Sequence<T>` stores executable `Copy + Drop` values, including
+records, tuples, fixed source arrays, unit and nested sequences. `empty<T>()`
+creates an empty sequence, `append(values, value)` returns the extended sequence,
+`length(values)` returns an index, and `get(values, position)` stops when the
+zero-based position is out of bounds. These are ordinary ordered `fn` primitives.
+Products are packed only at the sequence element boundary; functions taking or
+returning records still use the ordinary source ABI. Generic helpers retain the
+written Copy/Drop requirements. Private fields and restricted constructors retain
+their module authority, and sequence formation grants no Wire permission.
+Native JSON/wire codecs retain the packed variant's nominal descriptor and ordered
+payload; decoding does not construct private source values through a Wire boundary.
 
 `zkc::symbolic::Polynomial<F, N>` is a formal expression with `N` variables.
 `zkc::polynomial::Polynomial<F>` is runtime univariate coefficient data. Use

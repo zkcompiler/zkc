@@ -1,0 +1,8 @@
+module zkc::sequence;
+
+pub type Sequence<T: Type + Copy + Drop> = builtin("sequence", T);
+
+pub fn empty<T: Type + Copy + Drop>() -> Sequence<T> = primitive("sequence.empty");
+pub fn append<T: Type + Copy + Drop>(values: Sequence<T>, value: T) -> Sequence<T> = primitive("sequence.append");
+pub fn length<T: Type + Copy + Drop>(values: Sequence<T>) -> index = primitive("sequence.length");
+pub fn get<T: Type + Copy + Drop>(values: Sequence<T>, position: index) -> T = primitive("sequence.at");

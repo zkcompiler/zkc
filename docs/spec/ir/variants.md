@@ -44,6 +44,18 @@ controls explicit storage release and transformations; successful portable
 admission alone cannot justify removing a required source use. Library checking
 and its body-dependent evidence remain the owner of that stronger guarantee.
 
+## Contextual source products
+
+The source sequence boundary uses the existing variant format for `Pack(T)` as
+specified by [native source data](../language/definitions.md#native-data-and-library-kernels).
+This single-alternative carrier stores the ordinary ordered source ABI leaves,
+including zero payload leaves for empty products. Its separate nominal namespace
+retains the complete source type identity. It adds neither a runtime type nor a
+new operation contract, and does not change ordinary record ports or source
+variant alternatives. Local adaptation uses `local.variant_inject` and a
+single-arm `local.match` with an identity yield; mathematical adaptation uses
+`data.make` and one `data.get` per ordinary leaf.
+
 ## Portable representation
 
 Logical type spelling is `variant:H`, where `H` is lowercase hexadecimal of

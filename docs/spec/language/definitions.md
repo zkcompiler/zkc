@@ -349,9 +349,34 @@ policy owns mathematical and shared-data eligibility. Copy and Drop alone do not
 admit runtime polynomial data into `math fn`, including through an aggregate or
 a generic helper instantiated for ordered execution.
 
-A `sequence` element is a scalar or another admitted native data type. Source
-records, variants, products and private representations require their own
-layout-preserving packing contract; they cannot be passed as native Type roots.
+A `sequence` element must be executable source data with `Copy` and `Drop`.
+These bounds are checked at generic definition checking as well as closure.
+Its carrier is `sequence<Pack(T)>`. `Pack(T)` retains an existing single native
+carrier for scalars, containers and source variants. A source record, tuple,
+array, unit or concrete associated product uses a canonical single-alternative
+native variant. Its nominal identity is `["zkc.language.pack",
+encodeNominalIdentity(typeIdentity(T))]`, and its sole alternative has native
+label `case00000000` and the ordinary flattened leaves in declaration/index order.
+Empty products have an empty payload. Full source identity distinguishes nominal
+records and their static instantiations; normalized export aliases agree.
+Native descriptor depth, payload and byte bounds still apply.
+
+This is contextual packing: ordinary source ports, calls, projections and
+returns keep their flattened ABI. No native generic fixed-array type is implied.
+The four installed `sequence.empty`, `sequence.append`, `sequence.length` and
+`sequence.at` kernel/primitive contracts accept these logical element types and
+bind the exact concrete `Pack(T)` identity. Append packs its element; lookup
+unpacks to the ordinary ABI. Other native Type roots retain their existing
+admission rules. Local packing uses variant injection and a single-arm match
+whose yield preserves every payload position. Mathematical adapters use
+`data.make` and ordered `data.get` projections. Independent source comparison
+checks the actual operations, fields, binding identities and result mappings.
+
+Packing conveys no field access or constructor authority. Sequence permissions
+are the logical element permissions, so neither an otherwise serializable
+private representation nor explicit nominal permission restrictions gain Wire.
+Affine/non-Drop values, formal data and managed services cannot be elements.
+Existing source variant construction and match semantics are unchanged.
 Managed services are separate from these data types. Container permissions retain
 element permissions, and concrete external boundaries require native message
 admission. A symbolic message shape still needs an admitted codec at closure.

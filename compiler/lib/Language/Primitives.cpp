@@ -52,7 +52,7 @@ nativeRoots(Semantics &types, const Declaration &decl, StringRef identity) {
       return types.fail("source.limit", "primitive scheme depth exceeded",
                         decl.span);
     if (!types.chargeType(value, decl.span) || id >= terms.size() ||
-        !matchesStaticSort(value, scope.sorts[id]))
+        !matchesKernelStaticSort(identity, value, scope.sorts[id]))
       return false;
     if (terms[id] && *terms[id] != value)
       return false;

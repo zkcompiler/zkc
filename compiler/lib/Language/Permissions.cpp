@@ -163,6 +163,20 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
       fail("source.builtin", toString(formed.takeError()), span);
       return {};
     }
+    if (type.domain == "sequence") {
+      const auto &element = type.arguments.front();
+      auto child = permissions(element, span, scope, depth + 1);
+      if (!child)
+        return {};
+      if (!child->copy || !child->drop) {
+        fail("source.sequence", "sequence element requires Copy and Drop",
+             span);
+        return {};
+      }
+      if (!executableType(element, span, depth + 1))
+        return {};
+      return child;
+    }
     if (!symbolic(type)) {
       auto native = builtinLayout(type);
       if (!native) {

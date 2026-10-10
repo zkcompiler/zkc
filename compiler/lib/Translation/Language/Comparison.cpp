@@ -213,8 +213,8 @@ class Comparator {
     usedBindings.insert(found->first);
     std::vector<std::string> args;
     if (expected.bindingArguments) {
-      auto roots =
-          take(kernelArguments(expected.contract, *expected.bindingArguments));
+      auto roots = take(layouts.kernelArguments(expected.contract,
+                                                *expected.bindingArguments));
       if (!roots)
         return {};
       args = std::move(*roots);
@@ -494,12 +494,59 @@ class Comparator {
           return fail("extra mathematical attributes");
         result = Values(actual->getResults());
       } else if (auto *local = std::get_if<LocalPrimitive>(&op.action)) {
+        auto operands = flatten(local->operands);
+        auto outputs = leaves;
+        std::optional<PackedLayout> packed;
+        if (isSequenceKernel(local->contract)) {
+          if (!local->bindingArguments || local->bindingArguments->size() != 1)
+            return fail("sequence binding requires its element type");
+          packed = take(layouts.packed(local->bindingArguments->front()));
+          if (!packed)
+            return false;
+          if (local->contract == "sequence.append" && packed->product) {
+            const auto &fields = values[local->operands[1].index];
+            auto *actual =
+                next(block, cursor, op.span, "local.variant_inject", fields, 1);
+            if (!actual)
+              return false;
+            if (!attributes(*actual, {"alternative", "site"}) ||
+                !string(*actual, "alternative", packed->alternative) ||
+                !string(*actual, "site", site + "_pack") ||
+                !types(actual->getResultTypes(), {packed->carrier.spelling()}))
+              return fail("sequence element packing differs");
+            operands = values[local->operands[0].index];
+            operands.push_back(actual->getResult(0));
+          }
+          if (local->contract == "sequence.at")
+            outputs = {packed->carrier.spelling()};
+        }
         auto checked =
-            primitive(block, cursor, *local, flatten(local->operands), leaves,
-                      op.span, site);
+            primitive(block, cursor, *local, operands, outputs, op.span, site);
         if (!checked)
           return false;
         result = std::move(*checked);
+        if (packed && packed->product && local->contract == "sequence.at") {
+          auto *actual = next(block, cursor, op.span, "local.match", result,
+                              leaves.size(), 1);
+          if (!actual)
+            return false;
+          if (!attributes(*actual, {"alternatives", "site"}) ||
+              !strings(actual->getAttr("alternatives"),
+                       {packed->alternative}) ||
+              !string(*actual, "site", site + "_unpack") ||
+              !types(actual->getResultTypes(), leaves) ||
+              !llvm::hasSingleElement(actual->getRegion(0)))
+            return fail("sequence element unpacking differs");
+          auto &arm = actual->getRegion(0).front();
+          if (!types(arm.getArgumentTypes(), packed->flat->leaves))
+            return false;
+          auto armCursor = arm.begin();
+          auto *yield = next(arm, armCursor, op.span, "local.yield",
+                             arm.getArguments(), 0);
+          if (!yield || !attributes(*yield, {}) || armCursor != arm.end())
+            return fail("sequence payload result mapping differs");
+          result = Values(actual->getResults());
+        }
       } else if (auto *call = std::get_if<HelperCall>(&op.action)) {
         auto &target = project.declarations()[call->callee.index];
         bool local = target.kind == Declaration::Kind::Local ||

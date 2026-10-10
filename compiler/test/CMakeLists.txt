@@ -84,6 +84,8 @@ add_zkc_test(language_lexical Compiler language-lexical)
 add_zkc_test(language_placement Compiler language-placement)
 add_zkc_test(language_types Compiler language-types)
 mlir_target_link_libraries(zkc-language_types-test PRIVATE MLIRParser)
+add_zkc_test(language_sequence Compiler language-sequence)
+mlir_target_link_libraries(zkc-language_sequence-test PRIVATE MLIRParser)
 add_zkc_test(language Compiler language-api)
 mlir_target_link_libraries(zkc-language-test PRIVATE MLIRParser)
 target_compile_definitions(zkc-language-test PRIVATE

@@ -16,6 +16,7 @@
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Language.h"
+#include "zkc/Translation/Packing.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
 #include <set>
@@ -149,7 +150,7 @@ class Emitter {
     }
     std::vector<std::string> arguments;
     if (statics) {
-      auto roots = take(kernelArguments(contract, *statics));
+      auto roots = take(layouts.kernelArguments(contract, *statics));
       if (!roots)
         return {};
       arguments = std::move(*roots);
@@ -539,15 +540,57 @@ class Emitter {
           return false;
         result = Values(actual->getResults());
       } else if (auto *local = std::get_if<LocalPrimitive>(&op.action)) {
+        auto operands = flatten(local->operands);
+        std::optional<PackedLayout> packed;
+        auto outputs = resultTypes;
+        if (isSequenceKernel(local->contract)) {
+          if (!local->bindingArguments ||
+              local->bindingArguments->size() != 1) {
+            failure = error("source.emission",
+                            "sequence binding requires its element type");
+            return false;
+          }
+          packed = take(layouts.packed(local->bindingArguments->front()));
+          if (!packed)
+            return false;
+          if (local->contract == "sequence.append") {
+            if (packed->product && ++operations > limits.operations) {
+              failure =
+                  error("source.limit", "emitted operation limit exceeded");
+              return false;
+            }
+            auto item = take(emitPack(builder, location, *packed,
+                                      values[local->operands[1].index],
+                                      PackingMode::Local, site + "_pack"));
+            if (!item)
+              return false;
+            operands = values[local->operands[0].index];
+            operands.push_back(*item);
+          }
+          if (local->contract == "sequence.at")
+            outputs = {protocol::decodeBoundType(&context, packed->carrier)};
+        }
         auto emitted = primitive(
-            local->contract, flatten(local->operands), resultTypes,
-            local->parameters, site,
+            local->contract, operands, outputs, local->parameters, site,
             local->bindingArguments
                 ? std::optional<ArrayRef<Type>>(*local->bindingArguments)
                 : std::nullopt);
         if (!emitted)
           return false;
         result = std::move(*emitted);
+        if (packed && local->contract == "sequence.at") {
+          operations += packed->product ? 2 : 0;
+          if (operations > limits.operations) {
+            failure = error("source.limit", "emitted operation limit exceeded");
+            return false;
+          }
+          auto flat =
+              take(emitUnpack(builder, location, *packed, result.front(),
+                              PackingMode::Local, site + "_unpack"));
+          if (!flat)
+            return false;
+          result = std::move(*flat);
+        }
       } else if (auto *call = std::get_if<HelperCall>(&op.action)) {
         const auto &target = project.declarations()[call->callee.index];
         auto operands = flatten(call->operands);
@@ -970,6 +1013,98 @@ public:
   }
 };
 } // namespace
+namespace {
+Expected<SmallVector<mlir::Type>> packedLeafTypes(mlir::MLIRContext *context,
+                                                  const PackedLayout &layout) {
+  SmallVector<mlir::Type> types;
+  for (const auto &leaf : layout.flat->leaves) {
+    if (!leaf.data())
+      return error("source.layout", "packed payload contains formal data");
+    auto bound = protocol::parseBoundType(*leaf.data(), false);
+    if (!bound)
+      return bound.takeError();
+    auto type = protocol::decodeBoundType(context, *bound);
+    if (!type)
+      return error("source.layout", "packed payload dialect unavailable");
+    types.push_back(type);
+  }
+  return types;
+}
+} // namespace
+Expected<mlir::Value> emitPack(mlir::OpBuilder &builder,
+                               mlir::Location location,
+                               const PackedLayout &layout,
+                               mlir::ValueRange leaves, PackingMode mode,
+                               StringRef site) {
+  auto types = packedLeafTypes(builder.getContext(), layout);
+  if (!types)
+    return types.takeError();
+  if (leaves.getTypes() != mlir::TypeRange(*types))
+    return error("source.layout", "pack operands differ from the flat layout");
+  auto carrier =
+      protocol::decodeBoundType(builder.getContext(), layout.carrier);
+  if (!carrier)
+    return error("source.layout", "packed carrier dialect unavailable");
+  if (!layout.product) {
+    if (leaves.size() != 1 || leaves.front().getType() != carrier)
+      return error("source.layout", "native element carrier differs");
+    return leaves.front();
+  }
+  mlir::OperationState state(location, mode == PackingMode::Local
+                                           ? "local.variant_inject"
+                                           : "data.make");
+  state.addTypes(carrier);
+  state.addOperands(leaves);
+  state.addAttribute("alternative", builder.getStringAttr(layout.alternative));
+  if (mode == PackingMode::Local)
+    state.addAttribute("site", builder.getStringAttr(site));
+  return builder.create(state)->getResult(0);
+}
+Expected<SmallVector<mlir::Value>>
+emitUnpack(mlir::OpBuilder &builder, mlir::Location location,
+           const PackedLayout &layout, mlir::Value value, PackingMode mode,
+           StringRef site) {
+  auto types = packedLeafTypes(builder.getContext(), layout);
+  if (!types)
+    return types.takeError();
+  auto carrier =
+      protocol::decodeBoundType(builder.getContext(), layout.carrier);
+  if (!carrier || value.getType() != carrier)
+    return error("source.layout", "unpack operand differs from its carrier");
+  if (!layout.product) {
+    if (types->size() != 1 || types->front() != carrier)
+      return error("source.layout", "native element flat layout differs");
+    return SmallVector<mlir::Value>{value};
+  }
+  if (mode == PackingMode::Mathematical) {
+    SmallVector<mlir::Value> leaves;
+    for (unsigned i = 0; i < types->size(); ++i) {
+      mlir::OperationState state(location, "data.get");
+      state.addOperands(value);
+      state.addTypes((*types)[i]);
+      state.addAttribute("index", builder.getI64IntegerAttr(i));
+      leaves.push_back(builder.create(state)->getResult(0));
+    }
+    return leaves;
+  }
+  mlir::OperationState state(location, "local.match");
+  state.addOperands(value);
+  state.addTypes(*types);
+  state.addAttribute("site", builder.getStringAttr(site));
+  state.addAttribute("alternatives",
+                     builder.getStrArrayAttr({layout.alternative}));
+  state.addRegion()->push_back(new mlir::Block());
+  auto *match = builder.create(state);
+  auto &arm = match->getRegion(0).front();
+  for (auto type : *types)
+    arm.addArgument(type, location);
+  mlir::OpBuilder::InsertionGuard guard(builder);
+  builder.setInsertionPointToEnd(&arm);
+  mlir::OperationState yield(location, "local.yield");
+  yield.addOperands(arm.getArguments());
+  builder.create(yield);
+  return SmallVector<mlir::Value>(match->getResults());
+}
 Expected<std::string> emitOriginal(const ClosedEntry &project,
                                    mlir::MLIRContext &context,
                                    const Limits &limits) {

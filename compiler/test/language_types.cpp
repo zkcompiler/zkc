@@ -1069,9 +1069,8 @@ void nativeData() {
           "source.builtin");
   refuses(prefix + "type Bad=builtin(\"resource_unit\");" + unit,
           "source.builtin");
-  refuses(prefix + "struct Secret{x:Fr}type Bad=builtin(\"sequence\",Secret);" +
-              unit,
-          "source.builtin");
+  check(prefix +
+        "struct Secret{x:Fr}type Values=builtin(\"sequence\",Secret);" + unit);
   refuses(library + R"(
     fn bad<F:Field>(x:F)->F{return kernel<F>("field.inverse",x);}
     math fn caller<F:Field>(x:F)->F{return bad(x);}
@@ -1120,7 +1119,7 @@ void nativeData() {
     struct Secret{pub value:Fr}
     fn bad(x:Secret)->index{return kernel<Secret>("sequence.length",x);}
   )" + unit,
-          "source.kernel");
+          "source.type");
   // Full constructor and argument identities distinguish static instances.
   auto fr = Type(Type::Kind::Field, "bls12-381.fr");
   auto other = Type(Type::Kind::Field, "koala-bear");

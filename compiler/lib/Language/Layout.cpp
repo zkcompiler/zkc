@@ -75,6 +75,90 @@ Layouts::Layouts(const ClosedEntry &entry, const Limits &limits)
       state(
           std::make_unique<State>(entry.storage->declarations, this->limits)) {}
 Layouts::~Layouts() = default;
+Layouts::Layouts(const std::vector<Declaration> &declarations,
+                 const Limits &limits)
+    : definitions(declarations), limits(limits),
+      state(std::make_unique<State>(declarations, this->limits)) {}
+Expected<protocol::BoundType>
+detail::Semantics::nativeLayout(const Type &type) {
+  if (isNativeData(type) &&
+      !(type.kind == Type::Kind::Builtin && type.domain == "sequence"))
+    return builtinLayout(type);
+  auto limits = work.limits;
+  limits.work -= work.used;
+  Layouts layouts(declarations, limits);
+  auto result = layouts.packed(type);
+  auto charged = work.charge(layouts.state->work.used);
+  if (!result) {
+    consumeError(std::move(charged));
+    return result.takeError();
+  }
+  if (charged)
+    return std::move(charged);
+  return std::move(result->carrier);
+}
+Expected<PackedLayout> Layouts::packed(const Type &type) {
+  auto flat = get(type);
+  if (!flat)
+    return flat.takeError();
+  return pack(*flat);
+}
+Expected<PackedLayout> Layouts::pack(std::shared_ptr<const Layout> flat) {
+  if (!isSequenceElement(flat->type) || flat->formal || flat->custody ||
+      !flat->permissions.copy || !flat->permissions.drop)
+    return error("source.sequence",
+                 "sequence element requires executable Copy and Drop data");
+  using K = Type::Kind;
+  bool product = flat->type.kind == K::Record || flat->type.kind == K::Tuple ||
+                 flat->type.kind == K::Array || flat->type.kind == K::Unit ||
+                 flat->type.kind == K::Associated;
+  if (!product) {
+    if (flat->leaves.size() != 1 || !flat->leaves.front().data())
+      return error("source.layout", "native element requires one data leaf");
+    auto carrier =
+        protocol::parseBoundType(*flat->leaves.front().data(), false);
+    if (!carrier)
+      return carrier.takeError();
+    return PackedLayout{std::move(flat), std::move(*carrier), false, {}};
+  }
+  auto identity = typeIdentity(flat->type);
+  if (identity.size() > protocol::VariantSpellingBytes / 2)
+    return error("source.limit", "packed nominal encoding exceeds byte limit");
+  if (auto e = charge(2 * identity.size() + flat->leaves.size()))
+    return std::move(e);
+  protocol::VariantAlternative alternative{nativeAlternativeName(0), {}};
+  for (const auto &leaf : flat->leaves) {
+    if (!leaf.data())
+      return error("source.sequence",
+                   "sequence element contains a formal leaf");
+    if (auto e = charge(leaf.cost()))
+      return std::move(e);
+    alternative.payload.push_back(*leaf.data());
+  }
+  protocol::VariantDescriptor descriptor{
+      json::Array{"zkc.language.pack", encodeNominalIdentity(identity)},
+      {alternative}};
+  auto encoded = protocol::encodeVariant(descriptor);
+  if (!encoded)
+    return error("source.limit",
+                 "packed product exceeds native descriptor limits");
+  auto carrier = protocol::parseBoundType(*encoded, false);
+  if (!carrier)
+    return carrier.takeError();
+  return PackedLayout{std::move(flat), std::move(*carrier), true,
+                      alternative.label};
+}
+Expected<std::vector<std::string>>
+Layouts::kernelArguments(StringRef contract, ArrayRef<Type> arguments) {
+  return language::kernelArguments(
+      contract, arguments,
+      [&](const Type &type) -> Expected<protocol::BoundType> {
+        auto layout = packed(type);
+        if (!layout)
+          return layout.takeError();
+        return std::move(layout->carrier);
+      });
+}
 Error Layouts::charge(uint64_t n) { return state->work.charge(n); }
 Expected<LayoutSlice> Layouts::select(const Declaration &decl,
                                       const SpecificationSelector &selector) {
@@ -266,7 +350,16 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     result->formal = true;
     result->leaves = {PolynomialLayout{field->identity, arity.closedValue()}};
   } else if (type.kind == K::Builtin) {
-    auto native = builtinLayout(type);
+    auto native = builtinLayout(
+        type, [&](const Type &element) -> Expected<protocol::BoundType> {
+          auto flat = build(element, depth + 1);
+          if (!flat)
+            return flat.takeError();
+          auto packed = pack(*flat);
+          if (!packed)
+            return packed.takeError();
+          return std::move(packed->carrier);
+        });
     if (!native)
       return native.takeError();
     auto policy = protocol::nativeTypePolicy(*native);
