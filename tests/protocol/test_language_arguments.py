@@ -31,7 +31,7 @@ run Demo=Run;
     entry = Entry(toolchain, journal, directory, source, flags)
     for go in (False, True):
         assert entry.run(str(go), {'go': go}) == {
-            'result': [go, 1, 2, go, 2, go, 2],
+            'result': [go, '1', '2', go, '2', go, '2'],
         }
 
 
@@ -53,7 +53,7 @@ protocol Run roles(P)(first:bool@P,second:bool@P)->(r:index@P){{
 run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
-    assert entry.run('success', {'first': False, 'second': False}) == {'r': 3}
+    assert entry.run('success', {'first': False, 'second': False}) == {'r': '3'}
     for first, reason in [(True, 'abort'), (False, 'reject')]:
         report = entry.run(reason, {'first': first, 'second': True},
                            refuses='entry-run-incomplete')
@@ -109,7 +109,7 @@ run Demo=Run;
         expected = not a or b and not c
         assert entry.run(f'{a}-{b}-{c}', {'a': a, 'b': b, 'c': c}) == {
             'formula_result': expected, 'local': expected, 'common': expected,
-            'state': [a and b, a or b, 1 if a else 2],
+            'state': [a and b, a or b, '1' if a else '2'],
         }
 
 

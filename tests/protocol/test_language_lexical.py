@@ -34,8 +34,8 @@ run Demo=Run;
     for x in (0, 7):
         for b in (False, True):
             assert entry.run(f'{x}-{b}', {'x': x, 'b': b}) == {
-                'sum': x, 'double': 2 * x, 'selected': 0 if b else x + 1,
-                'last': x + 2, 'state': x + 2,
+                'sum': str(x), 'double': str(2 * x), 'selected': str(0 if b else x + 1),
+                'last': str(x + 2), 'state': str(x + 2),
             }
 
 
@@ -55,7 +55,7 @@ run Demo=Run;
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run_roles('different-components', {
         'P': {'inputs': {'shared': 2, 'p': 3}}, 'V': {'inputs': {'shared': 9}},
-    }) == {'P': {'r': 5}, 'V': {'s': 9}}
+    }) == {'P': {'r': '5'}, 'V': {'s': '9'}}
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
@@ -118,8 +118,8 @@ run Demo=Run;
             for go in (False, True):
                 expected = (n * (n - 1) // 2 if go else n) + n * m + 2
                 assert entry.run(f'{n}-{m}-{go}', {'n': n, 'm': m, 'go': go}) == {
-                    'local_total': expected, 'local_bound': 0,
-                    'total': expected + n, 'bound': 0,
+                    'local_total': str(expected), 'local_bound': '0',
+                    'total': str(expected + n), 'bound': '0',
                 }
     entry.run('over-bound', {'n': 9, 'm': 0, 'go': False}, refuses='entry-run-incomplete')
 
@@ -163,7 +163,7 @@ run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source)
     for go in (False, True):
-        assert entry.run(f'empty-{go}', {'n': 0, 'go': go}) == {'result': 0}
+        assert entry.run(f'empty-{go}', {'n': 0, 'go': go}) == {'result': '0'}
         report = entry.run(f'stop-{go}', {'n': 2, 'go': go}, refuses='entry-run-incomplete')
         assert ('reject' if go else 'abort') in str(report)
 
@@ -201,7 +201,7 @@ run Demo=Run;
                 report = entry.run(f'{go}-{halt}', inputs, refuses='entry-run-incomplete')
                 assert ('reject' if go else 'abort') in str(report)
             else:
-                assert entry.run(f'{go}-{halt}', inputs) == {'result': 14}
+                assert entry.run(f'{go}-{halt}', inputs) == {'result': '14'}
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
@@ -216,7 +216,7 @@ protocol Run roles(P)(x:index@P,first:bool@P,second:bool@P)->(r:index@P){
 run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
-    assert entry.run('pass', {'x': 7, 'first': True, 'second': True}) == {'r': 14}
+    assert entry.run('pass', {'x': 7, 'first': True, 'second': True}) == {'r': '14'}
     stopped = entry.run('source-stop', {'x': 7, 'first': False, 'second': False},
                         refuses='entry-run-incomplete')
     assert stopped['execution']['roles'][0]['before'][1]['cause'] == [
@@ -299,7 +299,7 @@ run Demo=Run;
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run_roles('separate-owners', {
         'P': {'inputs': {'x': 7, 'y': 2}}, 'V': {'inputs': {'x': 11}},
-    }) == {'P': {'sum': 9, 'difference': 5, 'product': 14}, 'V': {'same': True}}
+    }) == {'P': {'sum': '9', 'difference': '5', 'product': '14'}, 'V': {'same': True}}
     entry.run_roles('underflow', {
         'P': {'inputs': {'x': 1, 'y': 2}}, 'V': {'inputs': {'x': 11}},
     }, refuses='entry-run-incomplete')

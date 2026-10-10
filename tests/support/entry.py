@@ -1,5 +1,7 @@
 """Compile a .zkc Entry and run it through the ordinary common Host commands."""
 
+from input_files import input_files
+
 import json
 
 
@@ -9,7 +11,7 @@ class Entry:
         path = directory / 'kernels.zkc'
         path.write_text(source)
         self.package = directory / 'kernels.zkpkg'
-        report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                                f'--module=sample={path}', 'sample::Demo',
                                f'--output={self.package}', *flags])
         self.pin = report['package_sha256']
@@ -19,13 +21,9 @@ class Entry:
         return result if refuses else result['P']
 
     def run_roles(self, name, roles, *, refuses=None):
-        request = self.journal.write(f'{name}.inputs.json', {
-            'format': 'zkc.entry-run/0', 'session': 'kernel_controls',
-            'roles': roles,
-        })
+        request = input_files(self.journal, f'{name}.inputs.json', session='kernel_controls', roles=roles)
         output = self.directory / f'{name}.outputs.json'
-        report = self.journal.json([self.tools.runtime, 'run', self.package,
-                                   self.pin, request, f'--results={output}'], refuses=refuses)
+        report = self.journal.json([self.tools.runtime, '--json', 'run', f'--package={self.package}', f'--sha256={self.pin}', *request, f'--results={output}'], refuses=refuses)
         if refuses:
             assert report['status'] == 'refused'
             assert not output.exists(), 'failed execution published output values'

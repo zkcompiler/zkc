@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from entry import Entry
-from octic_reference import P, ZERO, ONE, add, mul, power, coordinates
+from octic_reference import P, ZERO, ONE, add, mul, power
 
 ROOT = Path(__file__).resolve().parents[2]
 ARENA = ROOT / 'examples/projects/expression-sumcheck/product.ring.json'
@@ -60,11 +60,9 @@ run Demo = Run;
 
 
 def wire(kind, value, extension):
-    tag = ({'field': 26, 'vector': 27} if extension else {'field': 19, 'vector': 20})[kind]
-    values = [value] if kind == 'field' else value
-    payload = b'' if kind == 'field' else len(values).to_bytes(4, 'little')
-    payload += b''.join(coordinates(v if extension else v[:1]) for v in values)
-    return (b'ZKCV\x00' + bytes([tag]) + payload).hex()
+    def scalar(v):
+        return [str(x) for x in v] if extension else str(v[0])
+    return scalar(value) if kind == 'field' else [scalar(v) for v in value]
 
 
 def evaluate(coefficients, point):
@@ -132,10 +130,10 @@ def test_map_ring_provider_and_formal_product_agree(toolchain, journal, director
                     wire('vector', pointwise, extension),  # ring.rows of the arena
                     wire('vector', formal, extension),  # ring.coefficients: the formal product
                     wire('vector', reduced, extension),  # interpolant of the pointwise products
-                    len(reduced),
+                    str(len(reduced)),
                     wire('field', evaluate(reduced, z), extension),
                     wire('field', evaluate(formal, z), extension),
-                    2]  # Product::Degree, with every input weighted one
+                    '2']  # Product::Degree, with every input weighted one
         assert result == expected, (width, n)
         assert len(formal) == 2 * width - 1 and len(reduced) <= n
         # Off the coset the interpolant and the formal product agree only when recovered.

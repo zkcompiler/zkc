@@ -136,7 +136,7 @@ per line, each value in compact JSON. Identities are SHA-256 of that text.
 | `arena.json` | `zkc.ring/0` | Exact arena text, captured by the source compiler with `--asset=export=ring-json=FILE` and retained in the authenticated Entry package |
 | `bundle*.json` | `zkc.relation-bundle/0` and its configuration, instance and witness | Derived relation-bundle carriers |
 | `expected.json` | | Upstream debug-checker failures for the fixture's instance and witness |
-| `source-*.json` | `zkc.entry-run/0` | Recurrence only: requests for the [imported AIR source client](../../../examples/projects/imported-air/README.md). Trace requests keep witness, configuration and public values separate; polynomial requests carry assignments prepared by the closed view. `source-expected.json` holds direct `Air::eval` values for each. |
+| `source-*.json` | Entry input maps | Recurrence only: participant inputs for the [imported AIR source client](../../../examples/projects/imported-air/README.md). Trace requests keep witness, configuration and public values separate; polynomial requests carry assignments prepared by the closed view. `source-expected.json` holds direct `Air::eval` values for each. |
 
 Slot bindings are `["main", column, offset]`, `["preprocessed", column, offset]`,
 `["public", index]` and `["selector", kind]`. Assertion `i` is upstream

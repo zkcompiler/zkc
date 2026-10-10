@@ -27,7 +27,7 @@ pub struct RunRequest {
 /// only evaluator source; no caller-supplied registry can replace them.
 pub struct RunEntry {
     package: Package,
-    interface: Interface,
+    interface: super::BoundInterface,
     assets: EntryAssets,
     native: RunHost,
 }
@@ -41,7 +41,8 @@ impl RunEntry {
         limits: HostLimits,
         setups: SetupAuthority,
     ) -> EntryResult<Self> {
-        let interface = Interface::read(&package).map_err(|e| E::new(P::Interface, e))?;
+        let interface =
+            crate::entry::BoundInterface::read(&package).map_err(|e| E::new(P::Interface, e))?;
         if interface.is_proof() {
             return Err(E::new(P::Admission, "entry-job-kind"));
         }
@@ -84,6 +85,15 @@ impl RunEntry {
     pub fn limits(&self) -> HostLimits {
         self.native.limits()
     }
+    pub(crate) fn output_types(
+        &self,
+    ) -> impl Iterator<Item = &zkc_runtime::interactive::PhysicalType> {
+        self.native
+            .bundle()
+            .roles()
+            .iter()
+            .flat_map(|role| &role.entry.outputs)
+    }
 
     /// Names cover every role and input exactly. Missing service allowances use
     /// DEFAULT_DRAW_BUDGET; explicit zero is preserved. Empty logical
@@ -94,6 +104,10 @@ impl RunEntry {
             self.native.limits().capacity.backend().ark_bounds(),
         );
         self.prepare_with(request, &mut imports)
+    }
+    /// Apply execution's input preparation without issuing resources or executing.
+    pub fn check_inputs(&self, request: RunRequest) -> EntryResult<()> {
+        self.prepare(request).map(drop)
     }
     pub(crate) fn prepare_with(
         &self,

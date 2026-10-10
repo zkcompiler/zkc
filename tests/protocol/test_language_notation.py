@@ -3,6 +3,7 @@
 import pytest
 
 from entry import Entry
+from input_files import input_files
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
@@ -38,8 +39,8 @@ run Demo=Run;
     entry = Entry(toolchain, journal, directory, source, flags)
     for initial in (0, 2, 5):
         expected = (initial + 3) * 100 + (initial + 2) * 10 + initial + 1
-        assert entry.run(f'initial-{initial}', {'initial': initial}) == {
-            'result': [expected, initial + 3, initial + 4, initial + 4],
+        assert entry.run(f'initial-{initial}', {'initial': str(initial)}) == {
+            'result': [str(n) for n in (expected, initial + 3, initial + 4, initial + 4)],
         }
 
 
@@ -54,8 +55,8 @@ protocol 実行 roles(参加者)(α:index@参加者,β₂:index@参加者)->(結
 run Demo=実行;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
-    assert entry.run_roles('unicode', {'参加者': {'inputs': {'α': 4, 'β₂': 7}}}) == {
-        '参加者': {'結果': {'case': '完了', 'fields': {'0': 11}}},
+    assert entry.run_roles('unicode', {'参加者': {'inputs': {'α': '4', 'β₂': '7'}}}) == {
+        '参加者': {'結果': {'case': '完了', 'fields': {'0': '11'}}},
     }
 
 
@@ -86,28 +87,26 @@ def test_published_vector_notation_project(toolchain, journal, directory, flags)
     root = Path(__file__).resolve().parents[2]
     package = directory / 'notation.zkpkg'
     built = journal.json([
-        toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
         f'--project={root}/examples/projects/mathematical-notation/zkc.toml',
         'example::Run', f'--output={package}', *flags,
     ])
 
     def scalar(n):
-        return (b'ZKCV\0\x01' + n.to_bytes(32, 'little')).hex()
+        return str(n)
 
     def vector(values):
-        return (b'ZKCV\0\x42' + len(values).to_bytes(4, 'little')
-                + b''.join(n.to_bytes(32, 'little') for n in values)).hex()
+        return [str(n) for n in values]
 
-    inputs = journal.write('input.json', {
-        'format': 'zkc.entry-run/0', 'session': 'mathematical_notation',
-        'roles': {'P': {'inputs': {
+    inputs = input_files(journal, 'notation', session='mathematical_notation', roles={
+        'P': {'inputs': {
             'a': vector([2, 3]), 'b': vector([5, 7]),
             'weights': vector([11, 13]), 'α': scalar(2),
-        }}},
+        }},
     })
     output = directory / 'output.json'
-    report = journal.json([toolchain.runtime, 'run', package,
-                           built['package_sha256'], inputs, f'--results={output}'])
+    report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
+                           f"--sha256={built['package_sha256']}", *inputs, f'--results={output}'])
     assert report['status'] == 'executed'
     assert json.loads(output.read_text())['roles']['P'] == {
         'symbolic': scalar(231), 'named_result': scalar(231),
@@ -123,7 +122,7 @@ pub operator infixl(60) ⊕=合成;
 pub fn 公開(α:index,β:index)->index{return α⊕β;}
 fn 内部(α:index,β:index)->index{return α⊕β;}
 ''', encoding='utf-8')
-    command = [toolchain.runtime, 'check', f'--compiler={toolchain.compiler}',
+    command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
                f'--module=数学={source}', '--notations']
     public = journal.json(command)['notations']
     assert public['format'] == 'zkc.notations/0'
@@ -132,3 +131,28 @@ fn 内部(α:index,β:index)->index{return α⊕β;}
     full = journal.json([*command, '--notation-private', '--notation-installation'])['notations']
     assert full['include_private'] and full['include_installation']
     assert any(value['owner'] == '数学::内部' for value in full['occurrences'])
+
+    human = journal.attempt([arg for arg in command if arg != '--json'])
+    assert human.returncode == 0 and '数学::公開' in human.stdout
+
+
+def test_notation_example_runs_with_its_supplied_inputs(toolchain, journal, directory):
+    import json
+    from pathlib import Path
+    import shutil
+
+    root = Path(__file__).resolve().parents[2]
+    project = directory / 'examples/projects/mathematical-notation'
+    shutil.copytree(root / 'examples/projects/mathematical-notation', project,
+                    ignore=shutil.ignore_patterns('build'))
+    shutil.copytree(root / 'libraries', directory / 'libraries')
+    runtime = [toolchain.runtime, '--json']
+    compiler = f'--compiler={toolchain.compiler}'
+    checked = journal.json([*runtime, 'check', '--notations', compiler], cwd=project)
+    assert checked['notations']['format'] == 'zkc.notations/0'
+    journal.json([*runtime, 'inputs', 'check', '--operation=run', compiler], cwd=project)
+    journal.json([*runtime, 'run', compiler], cwd=project)
+    results = json.loads((project / 'build/zkc/example.Run.results.json').read_text())
+    assert results['roles']['P'] == {
+        'symbolic': '231', 'named_result': '231', 'pointwise': ['10', '21'],
+    }

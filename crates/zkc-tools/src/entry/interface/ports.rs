@@ -165,9 +165,7 @@ impl Interface {
     pub(in crate::entry) fn roles(&self) -> &[RolePorts] {
         &self.ports.roles
     }
-    pub(in crate::entry) fn role(&self, name: &str) -> Option<&RolePorts> {
-        self.roles().iter().find(|r| r.name == name)
-    }
+
     pub(in crate::entry) fn proof(&self) -> Option<&ProofPorts> {
         self.ports.proof.as_ref()
     }

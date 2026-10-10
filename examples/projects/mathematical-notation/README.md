@@ -18,10 +18,14 @@ For `a = [2, 3]`, `b = [5, 7]`, `weights = [11, 13]` and `α = 2`, both scalar
 outputs are `231`, and the pointwise output is `[10, 21]` in BLS12-381 Fr.
 
 ```sh
-zkc check --project=examples/projects/mathematical-notation/zkc.toml --notations
-zkc compile --project=examples/projects/mathematical-notation/zkc.toml \
-  example::Run --output=mathematical-notation.zkpkg
+cd examples/projects/mathematical-notation
+zkc check --notations
+zkc inputs check --operation=run
+zkc run
 ```
+
+The supplied [input map](inputs/example.Run/P.json) contains these values.
+`run` writes named outputs to `build/zkc/example.Run.results.json`.
 
 `α` is a source identifier with exact NFC spelling. Input and output JSON keep
 those source names. Source locations count UTF-8 bytes; editor clients convert

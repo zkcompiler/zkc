@@ -23,7 +23,7 @@ def main():
             return path
 
         def run(*command, refusal=None):
-            result = subprocess.run([args.runtime, *command], capture_output=True,
+            result = subprocess.run([args.runtime, '--json', *command], capture_output=True,
                                     text=True, timeout=60)
             assert result.returncode == (1 if refusal else 0), result.stdout + result.stderr
             record = json.loads(result.stdout)
@@ -31,7 +31,7 @@ def main():
                 assert record["status"] == "refused" and record["code"] == refusal, record
             return record
 
-        result = subprocess.run([args.runtime, "invalid-command"], capture_output=True,
+        result = subprocess.run([args.runtime, '--json', "invalid-command"], capture_output=True,
                                 text=True, timeout=60)
         assert result.returncode == 2 and "Unknown command" in result.stderr
         assert not result.stdout
@@ -73,26 +73,27 @@ def main():
             assert "binding_scope" not in refused
         package = work / "run.zkpkg"
         pin = hashlib.sha256(package.read_bytes()).hexdigest()
-        inputs = write("named-run.json", {"format": "zkc.entry-run/0", "session": "installed",
-            "roles": {"P": {"inputs": {"x": True}}}})
+        inputs = write("P.json", {"x": True})
         outputs = work / "named-results.json"
-        result = run("run", package, pin, inputs, f"--results={outputs}")
+        running = ["run", f"--package={package}", f"--sha256={pin}", "--session=installed", f"--input=P={inputs}"]
+        result = run(*running, f"--results={outputs}")
         assert result["status"] == "executed"
         assert json.loads(outputs.read_text())["roles"]["P"] == {"r": True}
-        run("run", package, "00" * 32, inputs, refusal="entry-package-identity")
+        run("run", f"--package={package}", "--sha256=" + "00" * 32,
+            "--session=installed", f"--input=P={inputs}", refusal="entry-package-identity")
 
         package = work / "proof.zkpkg"
         pin = hashlib.sha256(package.read_bytes()).hexdigest()
-        producer = write("named-producer.json", {"format": "zkc.entry-proof/0",
-            "public": {}, "inputs": {"x": True}})
-        verifier = write("named-verifier.json", {"format": "zkc.entry-proof/0", "public": {}})
+        witness = write("witness.json", {"x": True})
         proof = work / "named-proof.bin"
-        run("prove", package, pin, producer, proof, refusal="entry-proof-binding-policy")
-        assert run("prove", package, pin, producer, proof, "--allow-header-only")["status"] == "produced"
-        assert run("verify", package, pin, verifier, proof, "--allow-header-only")["status"] == "accepted"
-        producer.write_text(json.dumps({"format": "zkc.entry-proof/0", "public": {}, "inputs": {"x": False}}))
-        run("prove", package, pin, producer, proof, "--allow-header-only")
-        run("verify", package, pin, verifier, proof, "--allow-header-only", refusal="artifact-rejected")
+        proving = ["prove", f"--package={package}", f"--sha256={pin}", f"--witness={witness}", f"--output={proof}"]
+        verifying = ["verify", f"--package={package}", f"--sha256={pin}", f"--proof={proof}", "--allow-header-only"]
+        run(*proving, refusal="entry-proof-binding-policy")
+        assert run(*proving, "--allow-header-only")["status"] == "produced"
+        assert run(*verifying)["status"] == "accepted"
+        witness.write_text(json.dumps({"x": False}))
+        run(*proving, "--allow-header-only")
+        run(*verifying, refusal="artifact-rejected")
     print("Installed source Entries, bundle and independent proof execution passed")
 
 

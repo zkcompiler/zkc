@@ -19,17 +19,15 @@ exercises a complete terminal decision without requiring a PCS setup.
 From the repository root, with built tools on `PATH`:
 
 ```sh
-zkc compile --project=examples/projects/sumcheck/zkc.toml \
-  example::Proof --output=sumcheck.zkpkg
-zkc prove sumcheck.zkpkg EXPECTED_SHA256 examples/projects/sumcheck/prover.json sumcheck.proof
-zkc verify sumcheck.zkpkg EXPECTED_SHA256 examples/projects/sumcheck/verifier.json sumcheck.proof
+zkc prove --project=examples/projects/sumcheck/zkc.toml
+zkc verify --project=examples/projects/sumcheck/zkc.toml
 ```
 
-`EXPECTED_SHA256` comes from trusted compilation. Both requests authorize the
-same public table, claim and round count. No private inputs are needed for this
-public example. The [Entry guide](../../../docs/runtime/entries.md) explains
-request encoding and limits. Compiling `example::Interactive` and passing
-[interactive.json](interactive.json) to `run` exercises both live roles.
+Both invocations read the public table, claim and round count from the selected
+Entry's input directory. This public
+example needs no witness file. The [Entry guide](../../../docs/runtime/entries.md)
+explains input encodings and limits. Use `zkc run` from this project to select
+`example::Interactive`, read both participant maps and run with a fresh session.
 
 The source and CLI tests check both successful execution and changed claims,
 insufficient rounds, actual transcript messages and proof truncation. These are

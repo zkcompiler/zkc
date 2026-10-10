@@ -1,8 +1,8 @@
-//! Entry requests for the maintained `.zkc` source client in
+//! Entry input maps for the maintained `.zkc` source client in
 //! `examples/projects/imported-air`, with direct `Air::eval` expectations.
 //!
-//! Trace requests keep witness, configuration and public values separate;
-//! the native Bundle view supplies their read bindings. Polynomial requests
+//! Trace inputs keep witness, configuration and public values separate;
+//! the native Bundle view supplies their read bindings. Polynomial inputs
 //! contain prepared assignments under the fixture's selected export. The
 //! expectations come from `Air::eval` through the reference builders, never
 //! from the exported arena. The adapter's arena interpreter and the upstream
@@ -21,45 +21,10 @@ use zkc_plonky3_air::reference::{
 use zkc_plonky3_air::view::{ClosedView, Openings, SelectorLaw, violations};
 use zkc_plonky3_air::{Export, Instance, Refusal};
 
-/// The source client's run Entries take one role; each case names its ports.
-const ROLE: &str = "Evaluator";
-const SESSION: &str = "imported_air_recurrence";
-
-/// `ZKCV` frame tags of KoalaBear and Ext8 vectors.
-const BASE_VECTOR_TAG: u8 = 20;
-const EXTENSION_VECTOR_TAG: u8 = 27;
-
-fn frame(tag: u8, count: usize, words: impl Iterator<Item = u32>) -> Value {
-    let mut bytes = b"ZKCV\0".to_vec();
-    bytes.push(tag);
-    let count = u32::try_from(count).expect("view limits bound vector lengths");
-    bytes.extend(count.to_le_bytes());
-    for word in words {
-        bytes.extend(word.to_le_bytes());
-    }
-    Value::String(bytes.iter().map(|b| format!("{b:02x}")).collect())
-}
-
-fn base_vector(values: &[F]) -> Value {
-    frame(
-        BASE_VECTOR_TAG,
-        values.len(),
-        values.iter().map(|v| v.as_canonical_u32()),
-    )
-}
-
 fn coordinates(value: &Ext8) -> impl Iterator<Item = u32> + '_ {
     BasedVectorSpace::<F>::as_basis_coefficients_slice(value)
         .iter()
         .map(|c| c.as_canonical_u32())
-}
-
-fn extension_vector(values: &[Ext8]) -> Value {
-    frame(
-        EXTENSION_VECTOR_TAG,
-        values.len(),
-        values.iter().flat_map(coordinates),
-    )
 }
 
 fn decimals(values: &[F]) -> Value {
@@ -71,14 +36,6 @@ fn extension_decimals(values: &[Ext8]) -> Value {
         .iter()
         .map(|v| Value::from_iter(coordinates(v).map(|c| c.to_string())))
         .collect()
-}
-
-fn request(inputs: Value) -> String {
-    canonical(&json!({
-        "format": "zkc.entry-run/0",
-        "roles": {ROLE: {"inputs": inputs}},
-        "session": SESSION,
-    }))
 }
 
 fn law_name(law: SelectorLaw) -> &'static str {
@@ -123,7 +80,9 @@ where
         "zero locus differs from the upstream debug checker"
     );
     Ok((
-        request(json!({"assignments": base_vector(&assignments), "rows": trace.height()})),
+        canonical(
+            &json!({"assignments": decimals(&assignments), "rows": trace.height().to_string()}),
+        ),
         json!({
             "entry": "RowResiduals",
             "law": law_name(law),
@@ -154,11 +113,11 @@ where
         .map(|table| table.values.as_slice())
         .unwrap_or(&[]);
     Ok((
-        request(json!({
-            "trace": base_vector(&trace.values),
-            "configuration": base_vector(configuration),
-            "public_data": base_vector(&instance.public_values),
-            "height": trace.height(),
+        canonical(&json!({
+            "trace": decimals(&trace.values),
+            "configuration": decimals(configuration),
+            "public_data": decimals(&instance.public_values),
+            "height": trace.height().to_string(),
         })),
         expected,
     ))
@@ -224,7 +183,7 @@ where
         );
     }
     Ok((
-        request(json!({"coefficients": base_vector(&coefficients), "width": width})),
+        canonical(&json!({"coefficients": decimals(&coefficients), "width": width.to_string()})),
         json!({
             "entry": "CoefficientResiduals",
             "evaluations": evaluations.iter().map(|e| decimals(e)).collect::<Vec<_>>(),
@@ -275,7 +234,9 @@ where
         direct.extend(expected);
     }
     Ok((
-        request(json!({"assignments": extension_vector(&assignments), "points": points.len()})),
+        canonical(
+            &json!({"assignments": extension_decimals(&assignments), "points": points.len().to_string()}),
+        ),
         json!({
             "entry": "PointResiduals",
             "points": extension_decimals(&points),
@@ -284,7 +245,7 @@ where
     ))
 }
 
-/// Requests `source-CASE.json` and their expectations `source-expected.json`.
+/// Input maps `source-CASE.json` and their expectations `source-expected.json`.
 ///
 /// The changed trace adds one to `x` on row zero, which the last row also reads
 /// through the wrap; the changed statement adds one to the public `x0`.

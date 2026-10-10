@@ -11,12 +11,11 @@ MODULES = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
 
 
 def scalar(n):
-    return (b'ZKCV\0\x01' + n.to_bytes(32, 'little')).hex()
+    return str(n)
 
 
 def vector(values):
-    return (b'ZKCV\0\x42' + len(values).to_bytes(4, 'little')
-            + b''.join(n.to_bytes(32, 'little') for n in values)).hex()
+    return [str(n) for n in values]
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
@@ -82,17 +81,15 @@ run Demo=Run;
         source = source.replace('zkc::matrix::multiply(m,v)', 'm*v')
         source = source.replace('zkc::vector::dot(v,v)', '⟪v,v⟫')
         source = source.replace('zkc::vector::add(v,zkc::vector::scale(v,a))', 'v+v*a')
-    # [1 2; 0 3], independent native sparse-matrix encoding.
-    entries = [(0, 0, 1), (0, 1, 2), (1, 1, 3)]
-    matrix = (b'ZKCV\0\x17' + b''.join(n.to_bytes(4, 'little') for n in (2, 2, 3))
-              + b''.join(r.to_bytes(4, 'little') + c.to_bytes(4, 'little')
-                         + v.to_bytes(32, 'little') for r, c, v in entries)).hex()
+    # [1 2; 0 3], sparse entries in row-major order.
+    matrix = {'rows': '2', 'columns': '2', 'entries': [
+        ['0', '0', '1'], ['0', '1', '2'], ['1', '1', '3']]}
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     inputs = {'m': matrix, 'v': vector([2, 3]), 'a': scalar(2), 'b': scalar(3), 'x': scalar(4)}
     result = entry.run('valid', inputs)
     assert result['analytic'] == [scalar(n) for n in (9, 16, 6, 59, 37, 23, 18, 29, 15)]
     assert result['numeric'] == [scalar(6), scalar(4), scalar(13), True,
-        vector([8, 9]), vector([2, 13]), scalar(43), 2, 2, scalar(14), scalar(7), vector([6, 9])]
+        vector([8, 9]), vector([2, 13]), scalar(43), '2', '2', scalar(14), scalar(7), vector([6, 9])]
     assert result['logic'] == [False, True, False, True]
     report = entry.run('odd-table', inputs | {'v': vector([2, 3, 4])},
                        refuses='entry-run-incomplete')

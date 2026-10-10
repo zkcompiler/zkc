@@ -4,9 +4,11 @@ use serde_json::Value as Json;
 pub(super) fn canonical_name(name: &str) -> bool {
     name.rsplit_once("::")
         .is_some_and(|(module, _)| module.len() <= 2048)
-        && name
-            .split("::")
-            .all(|part| part.len() <= 128 && crate::source_names::is_source_identifier(part))
+        && name.split("::").all(identifier)
+}
+
+pub(super) fn identifier(name: &str) -> bool {
+    name.len() <= 128 && crate::source_names::is_source_identifier(name)
 }
 
 pub(super) fn matches(request: Option<&str>, canonical: &str) -> bool {

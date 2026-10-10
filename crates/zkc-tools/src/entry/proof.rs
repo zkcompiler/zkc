@@ -54,6 +54,13 @@ impl Default for AttemptOptions {
         }
     }
 }
+/// Select the input side independently of the presence of a witness file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProofOperation {
+    Prove,
+    Verify,
+}
+
 /// Public values are the application's independently authorized statement. The
 /// private map supplies only the invoked role's nonpublic inputs. The adapter
 /// assembles shared operands and native admission checks canonical agreement.
@@ -71,7 +78,7 @@ pub struct ProofRequest {
 /// evaluator source.
 pub struct ProofEntry {
     package: Package,
-    interface: Interface,
+    interface: super::BoundInterface,
     assets: EntryAssets,
     native: NativeDeployment,
     scope: BindingScope,
@@ -118,7 +125,8 @@ impl ProofEntry {
         options: ProofOptions,
         setups: SetupAuthority,
     ) -> EntryResult<Self> {
-        let interface = Interface::read(&package).map_err(|e| E::new(P::Interface, e))?;
+        let interface =
+            crate::entry::BoundInterface::read(&package).map_err(|e| E::new(P::Interface, e))?;
         let proof = interface
             .proof()
             .ok_or_else(|| E::new(P::Admission, "entry-job-kind"))?;
@@ -176,6 +184,21 @@ impl ProofEntry {
     pub fn binding_scope(&self) -> BindingScope {
         self.scope
     }
+    pub(crate) fn output_types(
+        &self,
+        operation: ProofOperation,
+    ) -> &[zkc_runtime::interactive::PhysicalType] {
+        let role = match operation {
+            ProofOperation::Prove => self.native.entry().producer(),
+            ProofOperation::Verify => self.native.entry().validator(),
+        };
+        // The admitted map covers original outputs, excluding any transcript
+        // state added by derivation. Only original outputs reach file encoding.
+        let count = self.native.source_interface().roles[&role.role]
+            .outputs
+            .len();
+        &role.outputs[..count]
+    }
     pub fn prove(&self, request: ProofRequest) -> EntryResult<ProofReport> {
         self.execute(request, None, None)
     }
@@ -209,26 +232,7 @@ impl ProofEntry {
         imports: &mut crate::host::setups::VerifierKeys,
     ) -> EntryResult<ProofReport> {
         let producer = proof.is_none();
-        let attempts = if producer && (attempts.is_some() || self.completion.is_some()) {
-            let options = attempts.unwrap_or_default();
-            let completion = self
-                .completion
-                .ok_or_else(|| E::new(P::Request, "entry-attempt-completion"))?;
-            let capacity = self.native.capacity();
-            Some(AttemptPolicy {
-                completion,
-                // Source randomness enters through managed services; no affine RNG ports.
-                rng: Vec::new(),
-                limits: zkc_runtime::attempt::Limits {
-                    attempts: options.count,
-                    proof_bytes: options.proof_bytes,
-                },
-                work: capacity.work,
-                values: capacity.values,
-            })
-        } else {
-            None
-        };
+        let attempts = self.attempt_policy(producer, attempts)?;
         let inputs = self
             .inputs(request, producer)
             .map_err(|e| E::new(P::Request, e))?;
@@ -245,6 +249,64 @@ impl ProofEntry {
                 .map_err(|e| E::new(P::Preparation, e))?,
             producer,
         ))
+    }
+    /// Validate and load inputs under the same setup, shape and capacity rules
+    /// as execution. No randomness, transcript or proof parsing occurs here.
+    pub fn check_inputs(
+        &self,
+        request: ProofRequest,
+        operation: ProofOperation,
+        attempts: Option<AttemptOptions>,
+    ) -> EntryResult<()> {
+        let producer = operation == ProofOperation::Prove;
+        if !producer && attempts.is_some() {
+            return Err(E::new(P::Request, "entry-attempt-operation"));
+        }
+        let attempts = self.attempt_policy(producer, attempts)?;
+        let inputs = self
+            .inputs(request, producer)
+            .map_err(|e| E::new(P::Request, e))?;
+        let invocation = attempts.as_ref().map_or_else(
+            || {
+                if producer {
+                    crate::proof::Invocation::Prove
+                } else {
+                    crate::proof::Invocation::Verify(&[])
+                }
+            },
+            crate::proof::Invocation::Attempts,
+        );
+        self.native
+            .check_inputs(&inputs, invocation)
+            .map_err(|e| E::new(P::Preparation, e))
+    }
+    fn attempt_policy(
+        &self,
+        producer: bool,
+        attempts: Option<AttemptOptions>,
+    ) -> EntryResult<Option<AttemptPolicy>> {
+        Ok(
+            if producer && (attempts.is_some() || self.completion.is_some()) {
+                let options = attempts.unwrap_or_default();
+                let completion = self
+                    .completion
+                    .ok_or_else(|| E::new(P::Request, "entry-attempt-completion"))?;
+                let capacity = self.native.capacity();
+                Some(AttemptPolicy {
+                    completion,
+                    // Source randomness enters through managed services; no affine RNG ports.
+                    rng: Vec::new(),
+                    limits: zkc_runtime::attempt::Limits {
+                        attempts: options.count,
+                        proof_bytes: options.proof_bytes,
+                    },
+                    work: capacity.work,
+                    values: capacity.values,
+                })
+            } else {
+                None
+            },
+        )
     }
     fn inputs(&self, request: ProofRequest, producer: bool) -> Result<ProofInputs> {
         let role = &self.interface.roles()[if producer { self.roles.0 } else { self.roles.1 }];

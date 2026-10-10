@@ -95,12 +95,14 @@ input types; use a named call or an explicit local binding to resolve ambiguity.
 ## Inspect notation and locations
 
 The source inspection view is `zkc check --notations`, separate from
-`--declarations` and package `zkc inspect`. Its public inventory describes
+`--declarations` and `zkc inspect`. Its public inventory describes
 descriptors, bindings, scopes and occurrences. `--notation-private` includes
 captured private/local records; `--notation-installation` independently includes
 installation records. The C++ surface is `inspectNotations` with
 `NotationInspectionOptions.includePrivate` and `includeInstallation`, both false
 by default. Both CLI visibility switches require `--notations`. The default inventory includes public captured declarations.
+Use `--json` for the structured command report, whose `notations` member contains
+this inventory.
 
 The `zkc.notations/0` view is diagnostic data, bounded to 8 MiB. Canonical named-call
 renderings explain selected targets and operand order; they are not a promise

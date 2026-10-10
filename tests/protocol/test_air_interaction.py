@@ -4,6 +4,8 @@ The reference constructs its own expression arenas and row-major witnesses;
 the source builds columns with generic vector operations. This compares their
 values, claim order and scoped residuals for both reductions on all tables.
 """
+
+from input_files import input_files
 import json
 from pathlib import Path
 
@@ -16,21 +18,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def ext_vector(values):
-    return (b'ZKCV\x00\x1b' + len(values).to_bytes(4, 'little')
-            + b''.join(x.to_bytes(4, 'little') for v in values for x in v)).hex()
+    return [[str(x) for x in row] for row in values]
 
 
-def unext(hexed):
-    raw = bytes.fromhex(hexed)
-    assert raw[:6] == b'ZKCV\x00\x1b'
-    n = int.from_bytes(raw[6:10], 'little')
-    xs = [int.from_bytes(raw[10 + 4 * i:14 + 4 * i], 'little') for i in range(8 * n)]
-    return [tuple(xs[8 * i:8 * i + 8]) for i in range(n)]
+def unext(values):
+    return [tuple(map(int, row)) for row in values]
 
 
 def indices(values):
-    return (b'ZKCV\x00\x44' + len(values).to_bytes(4, 'little')
-            + b''.join(v.to_bytes(8, 'little') for v in values)).hex()
+    return [str(v) for v in values]
 
 
 def record_columns(reduction, t, table, height, data, publics):
@@ -54,7 +50,7 @@ def test_source_reduction_matches_independent_staged_reference(toolchain, journa
     configuration, instance, witness = machine.carriers(bundle, rows)
     publics = [decode(slot[1], v) for slot, v in zip(bundle[1], instance[2])]
     package = directory / 'reduction.zkpkg'
-    report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
         f'--module=inspect_reduction={ROOT}/tests/protocol/sources/interaction-reduction.zkc',
         f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
         f'--module=air_interaction={ROOT}/libraries/air/interaction.zkc',
@@ -75,11 +71,9 @@ def test_source_reduction_matches_independent_staged_reference(toolchain, journa
             'count_degree': indices([1] * len(interactions)),
             'values': ext_vector(values), 'height': height,
             'challenges': ext_vector(challenges)}
-        request = journal.write(f'{entry}-{t}.json', {
-            'format': 'zkc.entry-run/0', 'session': f'{entry}{t}',
-            'roles': {'P': {'inputs': inputs}}})
+        request = input_files(journal, f'{entry}-{t}.json', session=f'{entry}{t}', roles={'P': {'inputs': inputs}})
         result = directory / f'{entry}-{t}.out.json'
-        journal.json([toolchain.runtime, 'run', package, pin, request, f'--results={result}'])
+        journal.json([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={result}'])
         actual = json.loads(result.read_text())['roles']['P']
         columns = unext(actual['columns'])
         width = len(reduction.columns[t])

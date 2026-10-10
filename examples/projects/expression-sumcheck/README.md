@@ -23,26 +23,23 @@ fail the terminal shape check; too many fail the next input-shape preflight.
 The result is a public-table protocol with direct terminal evaluation, without
 a polynomial commitment or a claimed soundness/Fiat–Shamir theorem.
 
-Compile from the repository root:
+From this project directory, create `public.json`:
 
-```sh
-zkc compile --project=examples/projects/expression-sumcheck/zkc.toml \
-  example::BaseProof --output=expression.zkpkg
+```json
+{"values":["1","2","3","4","5","6","7","8"],"claim":"100","rounds":"2"}
 ```
 
-Each independent Host admits the packaged expression before execution:
+Then run either proof Entry explicitly:
 
 ```sh
-zkc prove expression.zkpkg EXPECTED_SHA256 prover.json proof.bin
-zkc verify expression.zkpkg EXPECTED_SHA256 verifier.json proof.bin
+zkc prove BaseProof --public=public.json --output=proof.bin
+zkc verify BaseProof --public=public.json --proof=proof.bin
 ```
 
-Use named public inputs `values`, `claim`, and `rounds` in the ordinary
-`zkc.entry-proof/0` request. The maintained
-[integration tests](../../../tests/protocol/test_expression_sumcheck.py)
-construct independent native wire encodings and cover both input fields,
-simplification and storage-release modes, interactive execution, altered
-coefficients, false claims, changed public inputs, asset substitution, and a
-three-input cubic expression using the same source client.
+Each independent Host admits the packaged expression before execution. The
+[integration tests](../../../tests/protocol/test_expression_sumcheck.py) cover
+both input fields, compiler policies, interactive execution, altered coefficients,
+false claims, changed public inputs, asset substitution and a three-input cubic
+expression using the same source client.
 See the [ring contract](../../../docs/spec/domains/ring-expressions.md) for
 layouts, exact coefficient semantics, asset admission and work limits.

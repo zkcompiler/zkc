@@ -6,6 +6,7 @@ hand from the Bundle text; point values are compared with the recurrence's
 constraints, written from its AIR definition and evaluated in the independent
 integer model of `koala-bear.ext8-binomial3`.
 """
+from input_files import input_files, decimal_values
 import json
 from hashlib import sha256
 from pathlib import Path
@@ -68,18 +69,11 @@ def source(field='Extension', table=0):
 
 
 def frame(values, extension=False):
-    words = [w for v in values for w in v] if extension else values
-    return (b'ZKCV\0' + bytes([27 if extension else 20]) + len(values).to_bytes(4, 'little')
-            + b''.join(w.to_bytes(4, 'little') for w in words)).hex()
+    return [[str(w) for w in v] for v in values] if extension else [str(v) for v in values]
 
 
 def unframe(text, extension=False):
-    data = bytes.fromhex(text)
-    assert data[:6] == b'ZKCV\0' + bytes([27 if extension else 20])
-    count = int.from_bytes(data[6:10], 'little')
-    assert len(data) == 10 + count * (32 if extension else 4)
-    words = [int.from_bytes(data[i:i + 4], 'little') for i in range(10, len(data), 4)]
-    return [words[i:i + 8] for i in range(0, len(words), 8)] if extension else words
+    return [[int(w) for w in v] for v in text] if extension else [int(v) for v in text]
 
 
 def base(n):
@@ -120,7 +114,7 @@ class Client:
         module.write_text(text)
         asset = journal.write('bundle.json', bundle) if bundle else RECURRENCE / 'bundle.json'
         self.package = directory / 'polynomial.zkpkg'
-        report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                                f'--module=polynomial_view={module}',
                                f'--asset=recurrence=relation-bundle-json={asset}',
                                'polynomial_view::Polynomial',
@@ -128,11 +122,9 @@ class Client:
         self.pin = None if refuses else report['package_sha256']
 
     def run(self, name, inputs, refuses=None):
-        request = {'format': 'zkc.entry-run/0', 'session': 'relation_table_polynomial',
-                   'roles': {'Evaluator': {'inputs': inputs}}}
-        path = self.journal.write(f'{name}.request.json', request)
+        path = input_files(self.journal, name, roles={'Evaluator': {'inputs': inputs}})
         output = self.directory / f'{name}.outputs.json'
-        command = [self.tools.runtime, 'run', self.package, self.pin, path, f'--results={output}']
+        command = [self.tools.runtime, '--json', 'run', f'--package={self.package}', f'--sha256={self.pin}', *path, f'--results={output}']
         report = self.journal.json(command, cwd=ROOT, refuses=refuses)
         if refuses:
             assert report['status'] == 'refused'
@@ -179,9 +171,9 @@ def test_shape_descriptors_scopes_and_points_match_independent_derivations(
         ood = points(10 + case, 11)
         row = [v[0] for v in points(30 + case, 11)]
         actual = client.run(f'view-{case}', inputs(8, slot, assertion, ood, row))
-        journal.check(f'shape {case}', actual['shape'] == SHAPE)
-        journal.check(f'input {slot}', actual['input'] == INPUTS[slot])
-        journal.check(f'scope {assertion}', actual['scope'] == SCOPES[assertion])
+        journal.check(f'shape {case}', actual['shape'] == decimal_values(SHAPE))
+        journal.check(f'input {slot}', actual['input'] == decimal_values(INPUTS[slot]))
+        journal.check(f'scope {assertion}', actual['scope'] == decimal_values(SCOPES[assertion]))
         journal.check(f'Ext8 point {case} equals the integer model',
                       unframe(actual['ood_values'], extension=True) == reference(ood))
         journal.check(f'base point {case} equals its embedding',
@@ -241,7 +233,7 @@ def test_extension_tables_keep_every_coordinate(toolchain, journal, directory):
     request = inputs(ood=ood)
     request['base'] = frame(other, extension=True)
     actual = client.run('extension', request)
-    assert actual['shape'] == SHAPE
+    assert actual['shape'] == decimal_values(SHAPE)
     assert unframe(actual['ood_values'], extension=True) == reference(ood)
     assert unframe(actual['base_values'], extension=True) == reference(other)
 

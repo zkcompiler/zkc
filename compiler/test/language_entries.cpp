@@ -137,6 +137,30 @@ int main() {
     refuses(selectEntry(empty, ""), "source.entry");
     refuses(selectEntry(sole, std::string(4096, 'a')), "source.limit");
   });
+  cases.run("execution kind filters only omitted selectors", [] {
+    auto captured = take(capture({{"a",
+                                   R"(module a;
+          protocol T roles(P)()->(){return();}run Job=T;)",
+                                   {}},
+                                  {"b",
+                                   R"(module b;
+          protocol T roles(P,V)(ok:bool@V)->(ok:bool@V){return ok;}
+          proof Job=T{prover P;verifier V;public{ok};accept ok;construction authored;})",
+                                   {}}}));
+    auto project = take(analyze(captured).checkedProject());
+    for (auto kind : {EntryKind::Run, EntryKind::Proof}) {
+      auto selected = take(selectEntry(project, "", {}, kind));
+      require(project.declarations()[selected.index].entryKind() == kind,
+              "omitted selector ignored execution kind");
+      refuses(selectEntry(project, "Job", {}, kind), "source.entry");
+    }
+    take(closeEntry(project, "b::Job", {}, EntryKind::Proof));
+    refuses(selectEntry(project, "a::Job", {}, EntryKind::Proof),
+            "source.entry-kind");
+    refuses(selectEntry(project, "b::Job", {}, EntryKind::Run),
+            "source.entry-kind");
+    refuses(selectEntry(project, "", {}), "source.entry");
+  });
   cases.run("ambiguity diagnostics retain late matching Entries", [] {
     std::string early = "module a;protocol T roles(P)()->(){return();}";
     for (unsigned i = 0; i < 20; ++i)

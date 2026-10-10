@@ -33,7 +33,7 @@ the real C++ checker and a real backend AttributeRule while preserving ports.
 The latter must refuse with the runtime's Backend admission category.
 
 Share witnesses compare actual C++ `nativeTypePolicy` against actual Rust Entry
-`Package::capture` / `Interface::read` admission. The test constructs input
+`Package::capture` / `BoundInterface::read` admission. The test constructs input
 metadata, nested records/sequences/variant arms, setup selectors, nominal custody
 and role placement. It supplies no shared normative permission or custody enum.
 Native formation, Share and Entry schema availability are separate observations:

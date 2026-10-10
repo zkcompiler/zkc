@@ -5,6 +5,8 @@ interaction reductions and the interactive entry. They provide execution and
 adversarial evidence, not a proof of cryptographic soundness or upstream VM
 compatibility.
 """
+
+from input_files import input_files
 import importlib.util
 import json
 from pathlib import Path
@@ -28,11 +30,11 @@ def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None
         path.write_text(source)
     package = directory / f'{entry}.zkpkg'
     if source is None and not edits and asset is None:
-        report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                                f'--project={EXAMPLE}/zkc.toml',
                                f'accumulator_machine::{entry}', f'--output={package}', *flags])
         return package, report['package_sha256']
-    command = [toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+    command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                f'--module=accumulator_machine={path}',
                f'--asset=machine=relation-bundle-json={asset or FIXTURES / "bundle.json"}',
                f'accumulator_machine::{entry}', f'--output={package}', *flags]
@@ -54,15 +56,15 @@ def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None
 
 
 def requests(run, **options):
-    return prepare.run_requests(json.loads((FIXTURES / run / 'run.json').read_text()), **options)
+    return prepare.run_inputs(json.loads((FIXTURES / run / 'run.json').read_text()), **options)
 
 
 def prove_and_verify(toolchain, journal, directory, package, pin, name, pair):
-    prover = journal.write(name + '-prover.json', pair[0])
-    verifier = journal.write(name + '-verifier.json', pair[1])
+    prover = input_files(journal, name + '-prover', public=pair[0], witness=pair[1])
+    verifier = input_files(journal, name + '-verifier', public=pair[0])
     proof = directory / (name + '.proof')
-    produced = journal.json([toolchain.runtime, 'prove', package, pin, prover, proof])
-    checked = journal.json([toolchain.runtime, 'verify', package, pin, verifier, proof])
+    produced = journal.json([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *prover, f'--output={proof}'])
+    checked = journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'])
     assert produced['status'] == 'produced'
     assert checked['status'] == 'accepted'
     return proof, verifier
@@ -76,14 +78,10 @@ def test_machine_proofs_produce_and_verify(toolchain, journal, directory, entry)
         prove_and_verify(toolchain, journal, directory, package, pin, run, requests(run))
 
 
-def alter_vector(text, position, value=None):
-    data = bytearray.fromhex(text)
-    assert data[:6] == b'ZKCV\x00\x14'
-    offset = 10 + 4 * position
-    assert offset + 4 <= len(data)
-    old = int.from_bytes(data[offset:offset + 4], 'little')
-    data[offset:offset + 4] = ((old + 1) % prepare.machine.P if value is None else value).to_bytes(4, 'little')
-    return data.hex()
+def alter_vector(values, position, value=None):
+    changed = list(values)
+    changed[position] = str((int(values[position]) + 1) % prepare.machine.P if value is None else value)
+    return changed
 
 
 def proof_messages(proof):
@@ -115,9 +113,9 @@ def test_machine_supports_distinct_heights_and_idle_memory(toolchain, journal, d
     # instructions, and the optional memory table can be present but idle.
     document[1] += [['add-immediate', '123']] * 4
     for present in [False, True]:
-        pair = prepare.run_requests(document, memory_clocks=16, memory_present=present)
-        assert (pair[0]['public']['cpu_height'], pair[0]['public']['program_height'],
-                pair[0]['public']['memory_height']) == (4, 8, 32)
+        pair = prepare.run_inputs(document, memory_clocks=16, memory_present=present)
+        assert (pair[0]['cpu_height'], pair[0]['program_height'],
+                pair[0]['memory_height']) == ('4', '8', '32')
         prove_and_verify(toolchain, journal, directory, package, pin, f'idle-{present}', pair)
 
 
@@ -137,14 +135,12 @@ def test_machine_interactive_entry_runs_with_multi_megabyte_participants(toolcha
     assert bundle['format'] == 'zkc.run/0' and bundle['roles'] == ['role00000000', 'role00000001']
     assert 1024 * 1024 < len(bundle['candidate'].encode()) <= 4 * 1024 * 1024
     pair = requests('store-load')
-    public, private = pair[0]['public'], pair[0]['inputs']
+    public, private = pair[0], pair[1]
 
     def run(name, secret):
-        inputs = journal.write(name + '-run.json', {
-            'format': 'zkc.entry-run/0', 'session': 'machine_' + name,
-            'roles': {'P': {'inputs': public | private | secret}, 'V': {'inputs': public}}})
+        inputs = input_files(journal, name + '-run.json', session='machine_' + name, roles={'P': {'inputs': public | private | secret}, 'V': {'inputs': public}})
         outputs = directory / (name + '-outputs.json')
-        return [toolchain.runtime, 'run', package, pin, inputs, f'--results={outputs}'], outputs
+        return [toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *inputs, f'--results={outputs}'], outputs
 
     command, outputs = run('honest', {})
     assert journal.json(command)['status'] == 'executed'
@@ -161,9 +157,9 @@ def test_machine_interactive_entry_runs_with_multi_megabyte_participants(toolcha
 def test_machine_rejects_false_relations_and_profiles(toolchain, journal, directory, entry):
     package, pin = compile_entry(toolchain, journal, directory, entry)
     pair = requests('store-load')
-    public, private = pair[0]['public'], pair[0]['inputs']
+    public, private = pair[0], pair[1]
     honest, _ = prove_and_verify(toolchain, journal, directory, package, pin, 'honest', pair)
-    foreign = requests('store-load-initial-seven')[0]['inputs']
+    foreign = requests('store-load-initial-seven')[1]
     changes = [
         ('cpu-arithmetic', {}, {'cpu': alter_vector(private['cpu'], 0)}),
         ('cpu-short', {}, {'cpu': prepare.vector([])}),
@@ -187,17 +183,15 @@ def test_machine_rejects_false_relations_and_profiles(toolchain, journal, direct
         ('wrong-attempts', {'attempt_count': 7}, {}),
     ]
     for name, shared, secret in changes:
-        prover = journal.write(name + '-prover.json', {'format': 'zkc.entry-proof/0',
-                               'public': public | shared, 'inputs': private | secret})
-        verifier = journal.write(name + '-verifier.json', {'format': 'zkc.entry-proof/0',
-                                 'public': public | shared, 'inputs': {}})
+        prover = input_files(journal, name + '-prover.json', public=public | shared, witness=private | secret)
+        verifier = input_files(journal, name + '-verifier.json', public=public | shared, witness={})
         proof = directory / (name + '.proof')
-        made = journal.attempt([toolchain.runtime, 'prove', package, pin, prover, proof])
+        made = journal.attempt([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *prover, f'--output={proof}'])
         if made.returncode == 0:
             # In particular, cross-table balance is a verifier obligation;
             # producing a transcript does not assert that it will be accepted.
             report = assert_refused(journal.attempt(
-                [toolchain.runtime, 'verify', package, pin, verifier, proof]))
+                [toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}']))
             assert report['code'].startswith('artifact-stopped'), (name, report)
         else:
             report = assert_refused(made)
@@ -205,7 +199,7 @@ def test_machine_rejects_false_relations_and_profiles(toolchain, journal, direct
             assert not proof.exists()
         if shared:
             assert_refused(journal.attempt(
-                [toolchain.runtime, 'verify', package, pin, verifier, honest]))
+                [toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={honest}']))
 
 
 @pytest.mark.parametrize('entry', ['ProofLogUp', 'ProofProduct'])
@@ -230,13 +224,13 @@ def test_machine_authenticates_all_commitment_phases(toolchain, journal, directo
         candidate = directory / f'message-{position}.proof'
         candidate.write_bytes(repack(original, altered))
         report = assert_refused(journal.attempt(
-            [toolchain.runtime, 'verify', package, pin, verifier, candidate]))
+            [toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}']))
         assert report['code'].startswith('artifact-stopped'), (position, report)
     for name, data, code in [('truncated', original[:-1], 'proof-truncated'),
                              ('trailing', original + b'\x00', 'proof-trailing')]:
         path = directory / (name + '.proof')
         path.write_bytes(data)
-        journal.run([toolchain.runtime, 'verify', package, pin, verifier, path], refuses=code)
+        journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={path}'], refuses=code)
 
 
 def check_transcript_schedule(package):
@@ -297,8 +291,9 @@ def test_machine_refuses_other_interaction_profiles(toolchain, journal, director
             record[3] = ['first']
     asset = journal.write('bundle.json', bundle)
     package, pin = compile_entry(toolchain, journal, directory, 'ProofLogUp', asset=asset)
-    producer = journal.write('prover.json', requests('store-load')[0])
+    public, witness = requests('store-load')
+    producer = input_files(journal, 'prover', public=public, witness=witness)
     proof = directory / 'unsupported.proof'
-    report = assert_refused(journal.attempt([toolchain.runtime, 'prove', package, pin, producer, proof]))
+    report = assert_refused(journal.attempt([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}']))
     assert report['code'].startswith('artifact-stopped'), report
     assert not proof.exists()

@@ -60,20 +60,20 @@ run Demo=Run;
     cases.append(('wraparound', 2, 3, [(0, 1, modulus - 1), (1, 0, modulus - 2), (1, 2, 3)],
                   [modulus - 1, 5, 7], [2, modulus - 1]))
     for name, rows, columns, entries, x, y in cases:
-        inputs = {'m': matrix_wire(matrix_tag, width, rows, columns, entries),
-                  'x': vector_wire(vector_tag, width, x), 'y': vector_wire(vector_tag, width, y)}
+        inputs = {'m': {'wire': matrix_wire(matrix_tag, width, rows, columns, entries)},
+                  'x': [str(v) for v in x], 'y': [str(v) for v in y]}
         dense = [[0] * columns for _ in range(rows)]
         for r, c, coefficient in entries:
             dense[r][c] = coefficient
         mv = [sum(dense[r][c] * x[c] for c in range(columns)) % modulus for r in range(rows)]
         tv = [sum(y[r] * dense[r][c] for r in range(rows)) % modulus for c in range(columns)]
         bi = sum(y[r] * dense[r][c] * x[c] for r in range(rows) for c in range(columns)) % modulus
-        scalar = (b'ZKCV\x00' + bytes([scalar_tag]) + bi.to_bytes(width, 'little')).hex()
-        assert entry.run(name, inputs)['result'] == [vector_wire(vector_tag, width, mv),
-            vector_wire(vector_tag, width, tv), scalar, (rows, columns) == (2, 3)]
+        scalar = str(bi)
+        assert entry.run(name, inputs)['result'] == [[str(v) for v in mv],
+            [str(v) for v in tv], scalar, (rows, columns) == (2, 3)]
 
     for name, port, values in [('bad-columns', 'x', [1, 2]), ('bad-rows', 'y', [1])]:
-        report = entry.run(name, inputs | {port: vector_wire(vector_tag, width, values)},
+        report = entry.run(name, inputs | {port: [str(v) for v in values]},
                            refuses='entry-run-incomplete')
         assert 'matrix-shape' in str(report)
     for name, bad in [
@@ -81,6 +81,6 @@ run Demo=Run;
         ('unsorted', [(1, 1, 1), (0, 1, 2)]), ('outside', [(0, 3, 1)]),
         ('noncanonical', [(0, 1, modulus)]),
     ]:
-        entry.run(name, inputs | {'m': matrix_wire(matrix_tag, width, 2, 3, bad)}, refuses=True)
-    entry.run('truncated', inputs | {'m': inputs['m'][:-2]}, refuses=True)
-    entry.run('trailing', inputs | {'m': inputs['m'] + '00'}, refuses=True)
+        entry.run(name, inputs | {'m': {'wire': matrix_wire(matrix_tag, width, 2, 3, bad)}}, refuses=True)
+    entry.run('truncated', inputs | {'m': {'wire': inputs['m']['wire'][:-2]}}, refuses=True)
+    entry.run('trailing', inputs | {'m': {'wire': inputs['m']['wire'] + '00'}}, refuses=True)

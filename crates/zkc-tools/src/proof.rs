@@ -418,6 +418,28 @@ impl NativeDeployment {
     ) -> Result<NativeProofReport> {
         self.execute_with_imports(input, invocation.plan(self)?, &Entropy::System, imports)
     }
+    /// Admit and load a complete invocation without issuing resources or
+    /// interpreting proof bytes. Both execution and input checks use this stage.
+    pub fn check_inputs(&self, input: &ProofInputs, invocation: Invocation<'_>) -> Result<()> {
+        invocation.plan(self)?;
+        let mut imports =
+            crate::host::setups::VerifierKeys::new(self.capacity.backend().ark_bounds());
+        self.prepare_inputs(input, invocation.is_producer(), &mut imports)
+            .map(|_| ())
+    }
+    fn prepare_inputs(
+        &self,
+        input: &ProofInputs,
+        producer: bool,
+        imports: &mut crate::host::setups::VerifierKeys,
+    ) -> Result<inputs::Prepared> {
+        let role = if producer {
+            self.entry.producer()
+        } else {
+            self.entry.validator()
+        };
+        inputs::prepare(self, input, role, producer, imports)
+    }
     fn execute_with_imports(
         &self,
         input: &ProofInputs,
@@ -445,7 +467,7 @@ impl NativeDeployment {
             planned,
             root,
             binding,
-        } = inputs::prepare(self, input, role, proof.is_none(), imports)?;
+        } = self.prepare_inputs(input, proof.is_none(), imports)?;
         let policy = self.capacity.backend();
         let transcript_budget = input.transcript_budget;
         let service_budgets = input.services.iter().copied();

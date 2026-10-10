@@ -12,6 +12,7 @@ covers the interaction forms the machine does not use. Agreement on these
 carriers is evidence about the kernels, not a reduction or a proof.
 """
 from hashlib import sha256
+from input_files import input_files
 import json
 from pathlib import Path
 
@@ -113,18 +114,11 @@ def source(table, field='Base', sub='Base', text=SOURCE):
 
 
 def frame(values, extension=False):
-    words = [w for v in values for w in v] if extension else values
-    return (b'ZKCV\0' + bytes([27 if extension else 20]) + len(values).to_bytes(4, 'little')
-            + b''.join(w.to_bytes(4, 'little') for w in words)).hex()
+    return [[str(w) for w in v] for v in values] if extension else [str(v) for v in values]
 
 
 def unframe(text, extension=False):
-    data = bytes.fromhex(text)
-    assert data[:6] == b'ZKCV\0' + bytes([27 if extension else 20])
-    count = int.from_bytes(data[6:10], 'little')
-    assert len(data) == 10 + count * (32 if extension else 4)
-    words = [int.from_bytes(data[i:i + 4], 'little') for i in range(10, len(data), 4)]
-    return [words[i:i + 8] for i in range(0, len(words), 8)] if extension else words
+    return [[int(w) for w in v] for v in text] if extension else [int(v) for v in text]
 
 
 def points(seed, n):
@@ -150,7 +144,7 @@ class Client:
         module.write_text(text)
         asset = journal.write('bundle.json', bundle) if bundle else MACHINE / 'bundle.json'
         self.package = directory / 'interactions.zkpkg'
-        report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                                f'--module=interaction_view={module}',
                                f'--asset=machine=relation-bundle-json={asset}',
                                'interaction_view::Interactions',
@@ -158,18 +152,22 @@ class Client:
         self.pin = None if refuses else report['package_sha256']
 
     def run(self, name, inputs, refuses=None):
-        request = {'format': 'zkc.entry-run/0', 'session': 'relation_table_interactions',
-                   'roles': {'Evaluator': {'inputs': inputs}}}
-        path = self.journal.write(f'{name}.request.json', request)
+        path = input_files(self.journal, name, roles={'Evaluator': {'inputs': inputs}})
         output = self.directory / f'{name}.outputs.json'
-        command = [self.tools.runtime, 'run', self.package, self.pin, path, f'--results={output}']
+        command = [self.tools.runtime, '--json', 'run', f'--package={self.package}', f'--sha256={self.pin}', *path, f'--results={output}']
         report = self.journal.json(command, cwd=ROOT, refuses=refuses)
         if refuses:
             assert report['status'] == 'refused'
             assert not output.exists(), 'a refused run published outputs'
             return report
         assert report['status'] == 'executed'
-        return json.loads(output.read_text())['roles']['Evaluator']
+        values = json.loads(output.read_text())['roles']['Evaluator']
+        for key in ('descriptor', 'counts', 'policy'):
+            if key in values:
+                values[key] = [int(v) for v in values[key]]
+        if 'facts' in values:
+            values['facts'] = int(values['facts'])
+        return values
 
     def repackage(self, package):
         text = json.dumps(package, separators=(',', ':'))

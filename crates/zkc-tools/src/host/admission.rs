@@ -53,6 +53,10 @@ pub(crate) fn entry_values<'a>(
         .collect()
 }
 
+pub(crate) enum KeySource<'a> {
+    Path(&'a str),
+    File(&'a super::input_file::InputFile),
+}
 pub(crate) enum Input<'a> {
     Native {
         ty: PhysicalType,
@@ -72,7 +76,7 @@ pub(crate) enum Input<'a> {
         estimate: usize,
     },
     Key {
-        path: &'a str,
+        source: KeySource<'a>,
         fingerprint: [u8; 32],
         verifier: Arc<VerifierKey>,
     },
@@ -197,6 +201,23 @@ impl<'a> Admission<'a> {
             selected,
         })
     }
+    pub(super) fn file_wire(
+        &mut self,
+        file: &super::input_file::InputFile,
+        sha256: &[u8; 32],
+        limit: usize,
+    ) -> Result<Vec<u8>> {
+        let remaining = self.limits.work - self.work;
+        let bytes = file.read(limit.min(remaining)).map_err(|e| match e {
+            super::io::ReadError::Limit if remaining < limit => "artifact-input-work-limit",
+            super::io::ReadError::Limit => "entry-input-reference-byte-limit",
+            _ => "entry-input-reference",
+        })?;
+        if <[u8; 32]>::from(Sha256::digest(&bytes)) != *sha256 {
+            return Err("entry-input-reference-digest".into());
+        }
+        Ok(bytes)
+    }
     pub fn add(&mut self, input: Input<'a>) -> Result<usize> {
         let estimate = input.estimate()?;
         if self.inputs.len() + self.private_values >= self.limits.values {
@@ -286,7 +307,7 @@ impl<'a> Admission<'a> {
                 | Input::NativeWire { .. }
                 | Input::Variant { .. }) => native::load(backend, input)?,
                 Input::Key {
-                    path,
+                    source,
                     fingerprint,
                     verifier,
                 } => {
@@ -295,7 +316,14 @@ impl<'a> Admission<'a> {
                     // Freeze precisely this named file into bounded owned bytes.
                     // Never reopen between SHA and import. Even a cache hit must
                     // satisfy this path's current captured bytes and declared pin.
-                    let bytes = read_regular(path, limit).map_err(|e| {
+                    let bytes = match source {
+                        KeySource::Path(path) => read_regular(path, limit),
+                        KeySource::File(file) => file.read(limit).map_err(|e| match e {
+                            super::io::ReadError::Limit => "artifact-byte-limit".into(),
+                            _ => "entry-input-reference".into(),
+                        }),
+                    }
+                    .map_err(|e| {
                         if e == "artifact-byte-limit" && remaining < policy.max_wire_bytes {
                             "artifact-input-work-limit".into()
                         } else {
@@ -376,7 +404,7 @@ mod tests {
         let mut plan = Admission::new(LoadLimits::default()).unwrap();
         for verifier in [first.verifier_key(), other.verifier_key()] {
             plan.add(Input::Key {
-                path: path.to_str().unwrap(),
+                source: KeySource::Path(path.to_str().unwrap()),
                 fingerprint: first.prover_key().material_fingerprint(),
                 verifier: Arc::new(verifier.clone()),
             })

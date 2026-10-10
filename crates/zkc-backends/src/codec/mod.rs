@@ -1,6 +1,8 @@
 //! Current native wire codec and setup requirements.
 pub(crate) mod native;
-pub use native::{NativeInputSize, NativeWireError, has_native_wire, native_wire_size};
+pub use native::{
+    NativeInputSize, NativeWireError, has_native_wire, native_wire_size, readable_wire,
+};
 use zkc_runtime::interactive::{Identity, LogicalType, Type};
 pub fn requires_setup(ty: LogicalType) -> bool {
     ty.sequence_element()

@@ -18,6 +18,7 @@ int runLanguageCompiler(int argc, char **argv) {
   std::optional<CapturedProject> captured;
   ArrayRef<SourceBuffer> diagnosticSources;
   std::string entry, format;
+  std::optional<EntryKind> entryKind;
   bool declarations = false;
   bool notations = false;
   NotationInspectionOptions notationOptions;
@@ -76,6 +77,13 @@ int runLanguageCompiler(int argc, char **argv) {
         return refuse(error("source.options",
                             "Entry selection must be nonempty and unique"));
       entry = arg.str();
+    } else if (arg.consume_front("--entry-kind=")) {
+      if (entryKind || (arg != "run" && arg != "proof") ||
+          command == "language-check")
+        return refuse(
+            error("source.options",
+                  "expected one --entry-kind=run|proof for Entry compilation"));
+      entryKind = arg == "run" ? EntryKind::Run : EntryKind::Proof;
     } else if (arg.consume_front("--module=")) {
       auto [name, path] = arg.split('=');
       if (name.empty() || path.empty() || path.size() > 4096 ||
@@ -183,7 +191,7 @@ int runLanguageCompiler(int argc, char **argv) {
     outs() << json::Value(std::move(checked)) << '\n';
     return 0;
   }
-  auto selected = closeEntry(*project, entry);
+  auto selected = closeEntry(*project, entry, limits, entryKind);
   if (!selected)
     return refuse(selected.takeError());
   auto original = prepareOriginal(*selected);

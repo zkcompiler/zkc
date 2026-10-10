@@ -9,15 +9,13 @@ import random
 import pytest
 
 from entry import Entry
-from octic_reference import P, ZERO, ONE, add, mul, coordinates
+from octic_reference import P, ZERO, ONE, add, mul
 
 
 def wire(kind, value, extension):
-    tag = ({'field': 26, 'vector': 27} if extension else {'field': 19, 'vector': 20})[kind]
-    values = [value] if kind == 'field' else value
-    payload = b'' if kind == 'field' else len(values).to_bytes(4, 'little')
-    payload += b''.join(coordinates(v if extension else v[:1]) for v in values)
-    return (b'ZKCV\x00' + bytes([tag]) + payload).hex()
+    def scalar(v):
+        return [str(x) for x in v] if extension else str(v[0])
+    return scalar(value) if kind == 'field' else [scalar(v) for v in value]
 
 
 def direct(coefficients, point):
@@ -75,7 +73,7 @@ run Demo=Run;
                   'beta': wire('field', beta, extension), 'n': n, 'query': n - 1}
         assert entry.run(f'coset-{n}', inputs)['result'] == [wire('vector', values, extension),
             wire('vector', cs, extension), wire('vector', folded, extension),
-            wire('field', values[-1], extension), len(cs)]
+            wire('field', values[-1], extension), str(len(cs))]
 
     inputs = {'cs': wire('vector', [ONE], extension), 'shift': wire('field', ONE, extension),
               'beta': wire('field', ONE, extension), 'n': 4, 'query': 0}
@@ -105,5 +103,5 @@ run Demo=Run;
     entry = Entry(toolchain, journal, directory, source)
     for query in (0, P + 1, 2**64 - 1):
         outputs = entry.run_roles(str(query), {'P': {'inputs': {'q': query}}, 'V': {'inputs': {}}})
-        expected = (b'ZKCV\x00\x44' + (2).to_bytes(4, 'little') + query.to_bytes(8, 'little') * 2).hex()
-        assert outputs == {'P': {}, 'V': {'result': expected, 'count': 2}}
+        expected = [str(query)] * 2
+        assert outputs == {'P': {}, 'V': {'result': expected, 'count': '2'}}
