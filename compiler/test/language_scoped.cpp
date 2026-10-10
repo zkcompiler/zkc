@@ -1,0 +1,349 @@
+#include "support/NativeCases.h"
+#include "zkc/Language/Inspection.h"
+#include "zkc/Language/Project.h"
+using namespace llvm;
+using namespace zkc::language;
+using namespace zkc::test;
+namespace {
+const std::string prelude = R"(module m;
+domain Fr=field("koala-bear");
+type Vector<F:Field>=builtin("vector",F);
+fn get<F:Field>(xs:Vector<F>,i:index)->F=primitive("vector.get");
+math fn apply_math<A:Type+Copy+Drop,B:Type+Copy+Drop>(x:A,body:scoped math fn(A)->B)->B{return body(x);}
+math fn forward_math<A:Type+Copy+Drop,B:Type+Copy+Drop>(x:A,body:scoped math fn(A)->B)->B{return apply_math(x,body);}
+fn apply<A:Type,B:Type>(x:A,body:scoped fn(A)->B !{stop})->B !{stop}{return body(x);}
+fn forward<A:Type,B:Type>(x:A,body:scoped fn(A)->B !{stop})->B !{stop}{return apply(x,body);}
+)";
+Expected<CheckedProject> check(StringRef source) {
+  auto captured = capture({{"m", prelude + source.str(), "scoped.zkc"}});
+  if (!captured)
+    return captured.takeError();
+  return analyze(*captured).checkedProject();
+}
+void succeeds(StringRef source) {
+  auto project = take(check(source));
+  if (!project.entries().empty()) {
+    auto closed = take(closeEntry(project, "m::Run"));
+    for (const auto &decl : closed.declarations())
+      if (decl.body) {
+        require(decl.scopedInputs.empty(), "scoped signature survived closure");
+        require(decl.body->scopedBindings.empty(),
+                "scoped bindings survived closure");
+        for (const auto &op : decl.body->operations)
+          require(!std::holds_alternative<ScopedInvoke>(op.action),
+                  "scoped invocation survived closure");
+      }
+  }
+}
+} // namespace
+int main() {
+  Cases cases;
+  cases.run("generic Local apply and forwarding", [] {
+    succeeds(R"(
+protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return(r=forward(x,fun y=>y+a));}
+run Run=Demo;)");
+  });
+  cases.run("generic Math apply and forwarding", [] {
+    succeeds(R"(
+protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return(r=forward_math(x,fun y=>y+a));}
+run Run=Demo;)");
+  });
+  cases.run("component nested scoped capture and record projections", [] {
+    succeeds(R"(
+interface Transform<F:Field>{fn adjust(x:F)->F !{};fn run(x:F,body:scoped fn(F)->F !{stop})->F !{stop};}
+component Increment<F:Field>:Transform<F>{
+ fn adjust(x:F)->F !{}{return x+1;}
+ fn run(x:F,body:scoped fn(F)->F !{stop})->F !{stop}{return forward(x,fun y=>body(adjust(y)));}
+}
+fn through<F:Field,C:Transform<F>>(x:F,body:scoped fn(F)->F !{stop})->F !{stop}{return C::run(x,body);}
+struct Parameters<F:Field>{pub shift:F,pub table:Vector<F>}
+protocol Demo roles(P,V)(x:Fr@(P,V),parameters:Parameters<Fr>@P,position:index@P)->(r:Fr@P){
+ let result=through<Fr,Increment<Fr>>(x,fun y=>forward(y,fun z=>get(parameters.table,position)+z+parameters.shift));
+ return(r=result);
+}
+run Run=Demo;)");
+  });
+  cases.run("Local callback has short circuit inside protocol", [] {
+    succeeds(R"(
+fn fail(x:bool)->bool !{stop}{require x;return x;}
+protocol Demo roles(P)(x:bool@P)->(r:bool@P){return(r=apply(x,fun y=>false && fail(y)));}
+run Run=Demo;)");
+  });
+  cases.run("multiple inputs and tuple destructuring", [] {
+    succeeds(R"(
+fn two(x:Fr,y:Fr,body:scoped fn(Fr,Fr)->Fr !{})->Fr !{}{return body(x,y);}
+fn pair(x:(Fr,Fr),body:scoped fn((Fr,Fr))->Fr !{})->Fr !{}{return body(x);}
+fn example(x:Fr,y:Fr)->Fr{return two(x,y,fun a b=>a+b)+pair((x,y),fun (a,b)=>a-b);}
+protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){return(r=example(x,y));}run Run=Demo;)");
+  });
+  cases.run("affine explicit parameters and mutable callback state", [] {
+    succeeds(R"(
+struct Token:Drop {}
+fn carry(x:Token,n:index)->Token{return forward(x,fun y=>{let mut state=y;for _ in 0..n {let old=state;consume old;state=Token{};}state});}
+fn work(n:index)->bool{let value=carry(Token{},n);consume value;return true;}
+protocol Demo roles(P)(n:index@P)->(r:bool@P){return work(n);}run Run=Demo;
+)");
+  });
+  cases.run("Math Boolean callback inside protocol formula", [] {
+    succeeds(R"(
+protocol Demo roles(P,V)(x:bool@(P,V))->(r:bool@(P,V)){return true && apply_math(x,fun y=>y || false);}run Run=Demo;
+)");
+  });
+  cases.run("unused contextual callback and all-stopping callback", [] {
+    succeeds(R"(
+fn ignore<A:Type+Drop,B:Type+Copy+Drop>(x:A,body:scoped fn(A)->B !{stop},fallback:B)->B !{}{return fallback;}
+fn work(x:Fr)->Fr{return ignore(x,fun _=>{stop "reject";},x);}
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}run Run=Demo;
+)");
+  });
+
+  const std::vector<std::pair<std::string, std::string>> refusals = {
+      {"fn f(x:Fr,b:scoped fn(Fr)->Fr)->Fr{return x;}", "source.effect"},
+      {"fn f(x:Fr,b:scoped math fn(Fr)->Fr !{stop})->Fr{return x;}",
+       "source.effect"},
+      {"fn f(x:Fr)->Fr{return apply_math(x,fun y=>get(([],),0));}",
+       "source.type"},
+      {"fn f(x:Fr,b:scoped fn(Fr)->Fr !{})->Fr{return b;}", "source.scoped"},
+      {"fn f(x:Fr)->Fr{let b=fun y=>y;return x;}", "source.scoped"},
+      {"fn f(x:Fr)->Fr{let mut a=x;return apply(x,fun y=>{a=y;y});}",
+       "source.scoped-capture"},
+      {"fn unused<A:Type>(x:A,b:scoped fn(A)->A !{})->A{return b(true);}",
+       "source.type"},
+      {"math fn f(x:Fr,b:scoped fn(Fr)->Fr !{})->Fr{return b(x);}",
+       "source.mode"},
+      {"fn stop_value(x:Fr)->Fr !{stop}{stop \"reject\";} fn "
+       "f(x:Fr)->Fr{return apply_math(x,fun y=>stop_value(y));}",
+       "source.mode"},
+      {"fn clean(x:Fr,b:scoped fn(Fr)->Fr !{})->Fr !{}{return b(x);} fn "
+       "stop_value(x:Fr)->Fr !{stop}{stop \"reject\";} fn f(x:Fr)->Fr{return "
+       "clean(x,fun y=>stop_value(y));}",
+       "source.effect"},
+      {"fn f(x:Fr,b:scoped fn(Fr)->Fr !{})->Fr{return apply_math(x,b);}",
+       "source.scoped"},
+      {"protocol Demo "
+       "roles(P,V)(x:Fr@(P,V),a:Fr@P,b:Fr@V)->(r:Fr@P){return(r=apply(x,fun "
+       "y=>y+a+b));}run Run=Demo;",
+       "source.roles"},
+      {"protocol Demo "
+       "roles(P,V)(x:Fr@(P,V))->(r:Fr@(P,V)){return(r=apply(x,fun y=>y));}run "
+       "Run=Demo;",
+       "source.roles"},
+      {"fn identity(x:Fr)->Fr{return x;} protocol Demo "
+       "roles(P,V)(x:Fr@(P,V))->(r:Fr@P){return(r=apply_math(identity(x),fun "
+       "_=>0));}run Run=Demo;",
+       "source.owner"},
+      {"protocol Demo "
+       "roles(P,V)(x:Fr@P,a:Fr@P,b:Fr@V)->(r:Fr@P){return(r=apply_math(x,fun "
+       "_=>{let dead=a+b;0}));}run Run=Demo;",
+       "source.roles"},
+      {"fn f(x:Fr)->Fr{return apply(x,fun (a,b)=>a+b);}", "source.type"},
+      {"fn f(x:Fr)->Fr{return apply(x,fun a b=>a+b);}", "source.scoped"},
+      {"fn f(x:Fr)->Fr{return apply(x,fun y=>f(y));}", "source.cycle"},
+      {"struct Token:Drop {} fn f(x:Fr,t:Token)->Fr{return apply(x,fun "
+       "y=>{consume t;y});}",
+       "source.scoped-capture"},
+      {"struct Token:Copy {} fn f(x:Fr,t:Token)->Fr{return apply(x,fun "
+       "y=>{consume t;y});}",
+       "source.scoped-capture"},
+      {"struct Token:Drop {} fn f(t:Token)->(Token,Token){return apply(t,fun "
+       "y=>(y,y));}",
+       "source.move"},
+      {"protocol Demo roles(P)(x:Fr@P,coins:Random<Fr>@P)->(r:Fr@P){return "
+       "apply(x,fun y=>y+coins.draw());}run Run=Demo;",
+       "source.scoped-capture"},
+      {"interface I{fn f(x:Fr,b:scoped fn(Fr)->Fr !{})->Fr !{};}component "
+       "C:I{fn f(x:Fr,b:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{return b(x);}}",
+       "source.conformance"},
+      {"fn unused<A:Type+Copy+Drop>(x:A)->A{return apply_math(x,fun y=>{let "
+       "bad:bool=y;y});}",
+       "source.type"},
+  };
+  for (unsigned i = 0; i < refusals.size(); ++i)
+    cases.run("scoped refusal " + std::to_string(i),
+              [&] { refuses(check(refusals[i].first), refusals[i].second); });
+  cases.run("scoped expansion respects closed instance and depth bounds", [] {
+    auto project = take(check(R"(
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return forward(x,fun y=>forward(y,fun z=>z+x));}run Run=Demo;
+)"));
+    Limits limits;
+    limits.instances = 2;
+    refuses(closeEntry(project, "m::Run", limits), "source.limit");
+    limits = Limits{};
+    limits.callDepth = 2;
+    refuses(closeEntry(project, "m::Run", limits), "source.limit");
+    limits = Limits{};
+    limits.work = 1;
+    auto error = checkScopedElaboration(project, limits);
+    require(bool(error), "capture witness ignored lowered work bound");
+    require(toString(std::move(error)).find("source.limit") !=
+                std::string::npos,
+            "wrong witness budget refusal");
+  });
+  cases.run("declaration inspection separates scoped and runtime inputs", [] {
+    auto project = take(check("pub fn export_body(x:Fr,body:scoped fn(Fr)->Fr "
+                              "!{stop})->Fr !{stop}{return body(x);}"));
+    auto json = take(inspectDeclarations(project));
+    require(StringRef(json).contains("\"scoped_inputs\"") &&
+                StringRef(json).contains("\"scoped\"") &&
+                StringRef(json).contains("\"stop\""),
+            "scoped inspection contract missing");
+  });
+  cases.run("forwarded scoped selection mutation is rejected", [] {
+    auto project = take(check(R"(
+fn chain(x:Fr,first:scoped fn(Fr)->Fr !{stop},second:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{return second(first(x));}
+protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return chain(x,fun y=>y+a,fun y=>y*b);}run Run=Demo;
+)"));
+    auto closed = take(closeEntry(project, "m::Run"));
+    bool changed = false;
+    for (const auto &decl : closed.declarations())
+      if (decl.body && decl.name == "chain") {
+        auto &candidate = const_cast<Declaration &>(decl);
+        std::swap(candidate.scopedArguments[0], candidate.scopedArguments[1]);
+        changed = true;
+      }
+    require(changed, "missing selected chain");
+    auto error = checkScopedSpecialization(closed);
+    require(bool(error), "swapped static callback targets accepted");
+    require(toString(std::move(error)).find("source.scoped-specialization") !=
+                std::string::npos,
+            "wrong static target refusal");
+  });
+  const std::string captured = R"(
+protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return(r=forward(x,fun y=>{let dead=a+b;y+a-b}));}
+run Run=Demo;)";
+  for (bool specialized : {false, true})
+    for (unsigned mutation = 0; mutation < 4; ++mutation)
+      cases.run(
+          std::string(specialized ? "specialized" : "authored") +
+              " scoped call mapping mutation " + std::to_string(mutation),
+          [&] {
+            auto project = take(check(R"(
+fn chain(x:Fr,first:scoped fn(Fr)->Fr !{stop},second:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{return second(first(x));}
+protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return chain(second=fun y=>y*b,x=x,first=fun y=>y+a);}run Run=Demo;
+)"));
+            auto closed = take(closeEntry(project, "m::Run"));
+            auto declarations =
+                specialized ? closed.declarations() : project.declarations();
+            bool changed = false;
+            for (const auto &decl : declarations)
+              if (decl.name == "Demo" && decl.body) {
+                auto body = std::make_shared<Body>(*decl.body);
+                const_cast<Declaration &>(decl).body = body;
+                for (auto &operation : body->operations)
+                  if (operation.binding && operation.binding->scopedSource) {
+                    auto &binding = *operation.binding;
+                    if (mutation == 0)
+                      binding.scopedSource.reset();
+                    if (mutation == 1)
+                      std::swap(binding.argumentOrder[0],
+                                binding.argumentOrder[1]);
+                    if (mutation == 2)
+                      std::swap(binding.scopedArguments[0],
+                                binding.scopedArguments[1]);
+                    if (mutation == 3) {
+                      std::swap(binding.scopedArguments[0],
+                                binding.scopedArguments[1]);
+                      if (!specialized) {
+                        auto &call = std::get<HelperCall>(operation.action);
+                        std::swap(call.scopedArguments[0],
+                                  call.scopedArguments[1]);
+                      }
+                      // Specialization has erased static arguments;
+                      // preserved source evidence must still agree.
+                    }
+                    changed = true;
+                    break;
+                  }
+              }
+            require(changed, "missing scoped call mapping evidence");
+            auto error = specialized ? checkScopedSpecialization(closed)
+                                     : checkScopedElaboration(project);
+            require(bool(error), "corrupted scoped call mapping accepted");
+            require(toString(std::move(error))
+                            .find(specialized ? "source.scoped-specialization"
+                                              : "source.scoped-witness") !=
+                        std::string::npos,
+                    "wrong scoped call mapping refusal");
+          });
+  for (unsigned mutation = 0; mutation < 7; ++mutation)
+    cases.run("capture witness mutation " + std::to_string(mutation), [&] {
+      auto project = take(check(captured));
+      Declaration *declaration = nullptr;
+      for (const auto &decl : project.declarations())
+        if (decl.name == "Demo")
+          declaration = &const_cast<Declaration &>(decl);
+      auto body = std::make_shared<Body>(*declaration->body);
+      declaration->body = body;
+      auto &binding = body->scopedBindings.front();
+      auto computation =
+          std::make_shared<ScopedComputation>(*binding.computation);
+      binding.computation = computation;
+      if (mutation == 0)
+        std::swap(binding.captures[0], binding.captures[1]);
+      if (mutation == 1)
+        std::swap(computation->captures[0].binding,
+                  computation->captures[1].binding);
+      if (mutation == 2)
+        computation->captures[0].path.push_back(0);
+      if (mutation == 3)
+        computation->signature.allowance.mayStop = false;
+      if (mutation == 4)
+        binding.source.reset();
+      if (mutation == 5)
+        body->scopedBindings.push_back(binding);
+      if (mutation == 6)
+        body->scopedBindings.clear();
+      auto error = checkScopedElaboration(project);
+      require(bool(error), "corrupted capture witness accepted");
+      require(toString(std::move(error)).find("source.scoped-witness") !=
+                  std::string::npos,
+              "wrong capture refusal");
+    });
+  for (unsigned mutation = 0; mutation < 7; ++mutation)
+    cases.run(
+        "specialization mapping mutation " + std::to_string(mutation), [&] {
+          auto project = take(check(captured));
+          auto closed = take(closeEntry(project, "m::Run"));
+          Declaration *selected = nullptr;
+          for (const auto &decl : closed.declarations())
+            if (decl.body &&
+                (mutation == 0 || mutation == 5
+                     ? decl.kind == Declaration::Kind::Protocol
+                 : mutation == 1 ? decl.name == "forward"
+                                 : decl.scopedOrigin.has_value())) {
+              selected = &const_cast<Declaration &>(decl);
+              break;
+            }
+          require(selected != nullptr, "missing candidate");
+          auto body = std::make_shared<Body>(*selected->body);
+          selected->body = body;
+          if (mutation == 0 || mutation == 1) {
+            for (auto &op : body->operations)
+              if (auto *call = std::get_if<HelperCall>(&op.action)) {
+                if (call->operands.size() >= 3) {
+                  std::swap(call->operands[1], call->operands[2]);
+                  break;
+                }
+              }
+          }
+          if (mutation == 2)
+            body->operations.erase(body->operations.begin());
+          if (mutation == 3)
+            selected->scopedOrigin->second += 1;
+          if (mutation == 4)
+            selected->inputs.back().type = Type{};
+          if (mutation == 5)
+            for (auto &op : body->operations)
+              if (auto *call = std::get_if<HelperCall>(&op.action))
+                call->owner = 99;
+          if (mutation == 6)
+            body->operations.push_back(body->operations.front());
+          auto error = checkScopedSpecialization(closed);
+          require(bool(error), "corrupted specialization accepted");
+          require(
+              toString(std::move(error)).find("source.scoped-specialization") !=
+                  std::string::npos,
+              "wrong specialization refusal");
+        });
+  return cases.result();
+}

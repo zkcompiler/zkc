@@ -144,6 +144,8 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
                                                 *arm.body, callDepth);
     auto &nested = *arm.checker;
     nested.inference = inference;
+    if (!inheritScoped(nested))
+      return {};
     if (loop) {
       auto value = nested.input(Type(Type::Kind::Index), {}, expr.index.span);
       if (!value)
@@ -303,6 +305,7 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
       return {};
     body.mayStop |= arm.body->mayStop;
     body.opaque |= arm.body->opaque;
+    body.parameterizedSummary |= arm.body->parameterizedSummary;
     operation.regions.push_back(arm.body);
   }
   auto packed = emit(std::move(operation), packedType, {}, expr.span);

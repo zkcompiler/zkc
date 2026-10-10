@@ -126,8 +126,11 @@ closure roots, even when execution never calls them. An
 unselected Entry's target-admission failure does not invalidate another Entry;
 source errors in any definition still reject analysis.
 
-An instance key contains the qualified declaration name and canonical static
-arguments, with each component length framed. A declaration fixes its body mode.
+An instance key contains the qualified declaration name, canonical static
+arguments and selected scoped helper identities, with each component length
+framed. Scoped helper identities retain their lexical body and component
+substitution. Runtime capture values and caller participants are operands, not
+instance-key components. A declaration fixes its body mode.
 Declaration symbols use the [UTF-8 segment encoding](translation.md#source-and-native-names)
 for ASCII and Unicode names alike. Concrete instances retain that symbol when
 it fits the native 128-byte identifier limit. Longer paths and specializations use `zkl_`
@@ -920,6 +923,121 @@ check canonical spelling and characteristic bounds without modular reduction.
 For an abstract field, only the universally valid literals `0` and `1` are admitted.
 Boolean literals need no domain. Record construction supplies every field exactly
 once. Variant construction uses `Choice::Some<Fr>(x)` in local code.
+
+## Scoped computations
+
+Named Math and Local functions, including interface/component members, may take
+statically bound, nonescaping computations as a separate input category:
+
+```zkc
+math fn apply_math<A: Type + Copy + Drop, B: Type + Copy + Drop>(
+  value: A, body: scoped math fn(A) -> B
+) -> B {
+  return body(value);
+}
+
+fn apply<A: Type, B: Type>(value: A, body: scoped fn(A) -> B !{stop}) -> B !{stop} {
+  return body(value);
+}
+
+fn forward<A: Type, B: Type>(value: A, body: scoped fn(A) -> B !{stop}) -> B !{stop} {
+  return apply(value, body);
+}
+```
+
+`scoped` is not a runtime `Type`. A scoped argument is a literal computation or
+an in-scope scoped parameter. It cannot be bound by `let`, put in a product or
+variant, returned, sent, used as a data argument, or selected by runtime control.
+Protocol signatures and Entry ports cannot expose it. A protocol body may call
+a named function with a literal scoped argument. Invocation and forwarding
+select a statically known body; there is no dynamic dispatch or closure ABI.
+
+The literal syntax is `fun x => expression` or `fun x => { statements; result }`.
+`fun x y => expression` binds two inputs. `fun (x, y) => expression` destructures
+one tuple input; it does not curry the function. Ordinary binding patterns,
+including `_`, apply. Input and result types are inferred contextually using
+the ordinary expression solver and the receiving scoped signature. Generic
+functions and their literal computations are checked even when unused. Their
+explicit generic permissions and bounds remain necessary; call sites do not
+repair malformed definitions.
+
+A signature fixes the body's mode. `scoped math fn(A) -> B` is total Math;
+`scoped fn(A) -> B !{...}` is ordered Local and requires an explicit effect
+allowance, including `!{}` when empty. The existing `stop` and `opaque` effect
+names apply. Math signatures cannot allow ordered effects. A forwarded parameter
+must have matching mode, input types and result type; its effect allowance must
+fit within the receiver's allowance. Interface conformance checks the scoped
+signatures and authored input categories. An invocation contributes the declared
+allowance to generic checking even if a particular supplied body uses fewer
+effects. A Local computation cannot be invoked in Math. Component members retain
+lexical member resolution, notation and `self`, including through nested lambdas.
+
+Local literals use ordinary blocks, `if`, `match`, loops, mutable local state,
+stopping and short-circuit Boolean semantics. A Local literal authored in a
+protocol still short circuits. A Math literal authored in a Local function
+remains total; dead intermediates must satisfy typing and formation rules.
+Control syntax never changes a literal's selected mode.
+
+Free data places are captured by lexical binding identity and projection path.
+Whole aggregate captures subsume their descendant projections; sibling
+projections remain distinct even when their types match. Captures are ordered
+by their first authored use. Every captured type requires both `Copy` and `Drop`.
+Immutable records, tuples, arrays, vectors and matrices follow these same rules;
+there is no scalar-only capture restriction. A mutable Copy binding is captured
+as its current immutable value. Captures are evaluated once, when the literal's
+argument position is reached. Named arguments reorder parameter binding but
+preserve written evaluation order. Repeated invocation reuses these snapshots;
+a nested literal takes its own snapshots when its enclosing code reaches it.
+
+A literal cannot write an outer binding or capture a managed service. Its own
+explicit inputs and locally carried state follow the ordinary affine rules and
+need not be Copy. A static scoped capture may refer to an enclosing scoped
+parameter; its selected body and runtime environment are forwarded explicitly.
+No runtime function value is stored in that environment.
+
+For a direct protocol call to a Local accepting function, eager data arguments
+and every runtime capture constrain one common owner. P-only captures can select
+P when a data argument is shared with V. Incompatible captures or an unresolved
+owner refuse. A constant Math callback's result does not choose the owner of an
+eager Local argument: `apply_math(local_identity(shared), fun _ => 0)` still
+requires an independently determined owner for `local_identity(shared)`.
+
+The shared summary query uses the checked `Body`. It separates result
+dependencies, formation obligations (including dead intermediates), and effects.
+An unresolved scoped formal is marked as parameterized; it is never treated as
+a concrete constant. Math summaries compose under the selected bodies and
+capture mappings. Equal formation dependency sets may be deduplicated; this
+does not omit operation coverage. Local placement uses all eager operands and
+captures independently of mathematical result dependencies.
+
+Closure materializes ordinary private helpers with explicit capture inputs and
+specializes accepting functions with the selected helpers. Their hidden data
+inputs follow ordinary data inputs; forwarding passes the matching environment
+in that order. The key includes the lexical body, closed static/component
+context, signature/layout and recursively selected scoped captures. Runtime
+values and caller roles do not prevent code reuse. Scoped invocations are gone
+before MLIR emission. Expansion, flattened environments, summary work and helper
+instances count against the ordinary work, operation, depth and instance bounds.
+Cycles and excessive completed-instance call heights refuse.
+
+Independent capture checking walks retained resolved syntax to reconstruct
+free places and compares actual capture slots, snapshot projections, types,
+roles, lexical identity and occurrence coverage. A separate specialization
+checker relates checked bodies to the actual candidate under explicit static,
+scoped and SSA substitutions; it does not call the specializer. It checks helper
+selection, hidden operands, forwarding, control regions, owners, effects and
+every operation, including dead work. Missing or duplicate occurrence evidence
+refuses. These executable checks do not constitute a theorem about the parser
+or complete elaboration semantics.
+
+Declaration inspection reports `scoped_inputs` separately from `inputs`, with
+name, mode, input/result types and effect allowance. `input_order` retains
+`data`, `service` and `scoped` categories. This diagnostic view does not add
+runtime interface fields. The [computation library](../../../libraries/zkc/computation.zkc)
+and [component example](../../../examples/projects/scoped-computations/README.md)
+exercise user-defined apply/forward combinators. General finite domains and
+fold syntax are separate from this foundation; the existing finite-vector
+reduction profile above remains unchanged.
 
 ## Bounds and scope
 

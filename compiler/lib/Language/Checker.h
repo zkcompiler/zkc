@@ -60,6 +60,9 @@ public:
   };
   std::vector<PendingReduction> pendingReductions;
   std::vector<std::shared_ptr<ReductionSource>> reductionSources;
+  std::vector<std::shared_ptr<ScopedSource>> scopedSources;
+  std::vector<std::shared_ptr<ScopedCallSource>> scopedCalls;
+  bool retainScopedSources();
   bool finalizeReductions();
   bool retainReductionSources();
 

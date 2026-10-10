@@ -369,6 +369,54 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         (input ? decl.inputs : decl.outputs).push_back(std::move(p));
       }
     }
+    for (const auto &src : source.scopedInputs) {
+      if (!bindingName(decl, src.name, src.span) ||
+          llvm::any_of(decl.inputs,
+                       [&](const auto &p) { return p.name == src.name; }) ||
+          llvm::any_of(decl.scopedInputs,
+                       [&](const auto &p) { return p.name == src.name; }))
+        return types.diagnostic
+                   ? false
+                   : types.fail("source.duplicate", "duplicate scoped input",
+                                src.span);
+      const auto &written = *src.scoped;
+      ScopedSignature signature{written.mode, {}, {}, written.allowance};
+      if (signature.mode == ScopedSignature::Mode::Math &&
+          (signature.allowance.mayStop || signature.allowance.opaque))
+        return types.fail("source.effect",
+                          "Math scoped signatures cannot allow ordered effects",
+                          src.span);
+      for (const auto &input : written.inputs) {
+        auto value = type(decl, input, depth + 1);
+        if (!value)
+          return false;
+        if (!valueType(*value))
+          return types.fail("source.type", "scoped inputs must be data",
+                            src.span);
+        signature.inputs.push_back(*value);
+      }
+      auto result = type(decl, written.result, depth + 1);
+      if (!result)
+        return false;
+      if (!valueType(*result))
+        return types.fail("source.type", "scoped result must be data",
+                          src.span);
+      signature.result = *result;
+      if (signature.mode == ScopedSignature::Mode::Math) {
+        for (const auto &input : signature.inputs)
+          if (!types.mathematicalData(input, src.span, &decl))
+            return false;
+        if (!types.mathematicalData(signature.result, src.span, &decl))
+          return false;
+      } else {
+        for (const auto &input : signature.inputs)
+          if (!types.executableType(input, src.span))
+            return false;
+        if (!types.executableType(signature.result, src.span))
+          return false;
+      }
+      decl.scopedInputs.push_back({src.name, std::move(signature), src.span});
+    }
     for (const auto &src : source.services) {
       if (decl.kind != Declaration::Kind::Protocol ||
           src.type.kind != SyntaxType::Kind::Name ||

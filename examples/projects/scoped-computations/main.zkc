@@ -1,0 +1,42 @@
+module example;
+use zkc::computation as computation;
+use zkc::vector as vec;
+
+domain Fr = field("koala-bear");
+
+interface Transform<F: Field> {
+  fn adjust(value: F) -> F !{};
+  fn run(value: F, body: scoped fn(F) -> F !{stop}) -> F !{stop};
+}
+
+component Increment<F: Field>: Transform<F> {
+  fn adjust(value: F) -> F !{} { return value + 1; }
+  fn run(value: F, body: scoped fn(F) -> F !{stop}) -> F !{stop} {
+    return computation::forward(value, fun x => body(adjust(x)));
+  }
+}
+
+fn through<F: Field, C: Transform<F>>(
+  value: F, body: scoped fn(F) -> F !{stop}
+) -> F !{stop} {
+  return C::run(value, body);
+}
+
+struct Parameters<F: Field> {
+  pub shift: F,
+  pub table: vec::Vector<F>
+}
+
+protocol Compute roles(P, V)(
+  shared: Fr @(P, V), parameters: Parameters<Fr> @P, position: index @P
+) -> (result: Fr @P) {
+  let result = through<Fr, Increment<Fr>>(
+    shared,
+    fun x => computation::forward(
+      x, fun y => vec::get(parameters.table, position) + y + parameters.shift
+    )
+  );
+  return result;
+}
+
+run Demo = Compute;

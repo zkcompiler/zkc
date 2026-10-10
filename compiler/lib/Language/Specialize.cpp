@@ -1,3 +1,5 @@
+#include "BodyMapping.h"
+#include "BodySummary.h"
 #include "Semantics.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/Services.h"
@@ -20,6 +22,23 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
   for (const auto &requirement : body.formationRequirements)
     if (!types.charge(requirement.size() + 1, span))
       return false;
+  for (const auto &binding : body.scopedBindings) {
+    if (!types.charge(binding.captures.size() + binding.scopedCaptures.size() +
+                          1,
+                      binding.span) ||
+        !types.chargeType(binding.signature.result, binding.span))
+      return false;
+    for (const auto &input : binding.signature.inputs)
+      if (!types.chargeType(input, binding.span))
+        return false;
+    // The immutable nested Body is charged when its helper is instantiated.
+    // Captured-place metadata is copied here with the containing binding.
+    if (binding.computation)
+      for (const auto &capture : binding.computation->captures)
+        if (!types.charge(capture.path.size() + 1, capture.firstUse) ||
+            !types.chargeType(capture.type, capture.firstUse))
+          return false;
+  }
   for (const auto &service : body.services)
     if (!types.charge(service.name.size() + service.contract.size() + 1,
                       service.span) ||
@@ -30,7 +49,9 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
       return false;
     if (op.binding) {
       const auto &binding = *op.binding;
-      if (!types.charge(binding.operands.size() + binding.symbol.size() + 1,
+      if (!types.charge(binding.operands.size() + binding.symbol.size() +
+                            binding.argumentOrder.size() +
+                            binding.scopedArguments.size() + 1,
                         op.span))
         return false;
       if (binding.notation &&
@@ -116,11 +137,17 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
     std::set<std::string> active;
     std::map<std::string, std::string> symbolKeys;
     uint64_t count = 0;
-    std::function<std::optional<DeclarationId>(DeclarationId, ArrayRef<Type>,
-                                               unsigned)>
+    struct Environment {
+      DeclarationId helper;
+      std::vector<ValueId> captures;
+    };
+    std::map<std::pair<unsigned, unsigned>, DeclarationId> scopedTemplates;
+    std::vector<DeclarationId> generatedTemplates;
+    std::function<std::optional<DeclarationId>(
+        DeclarationId, ArrayRef<Type>, unsigned, ArrayRef<DeclarationId>)>
         instantiate;
     std::function<bool(Body &, const Substitution &, Body::Mode, unsigned,
-                       unsigned &)>
+                       unsigned &, const std::vector<Environment> &)>
         closeBody;
     auto closeType = [&](Type &type, const Substitution &bindings, Span span) {
       auto result = types.substitute(type, bindings, span);
@@ -142,7 +169,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                         port.span);
     };
     closeBody = [&](Body &body, const Substitution &bindings, Body::Mode mode,
-                    unsigned depth, unsigned &height) {
+                    unsigned depth, unsigned &height,
+                    const std::vector<Environment> &environment) {
       body.mode = mode;
       for (auto &service : body.services)
         if (!closeService(service, bindings))
@@ -158,7 +186,129 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         if (mode == Body::Mode::Local)
           value.components.clear();
       }
+      std::vector<std::optional<Environment>> resolved(
+          body.scopedBindings.size());
+      std::function<std::optional<Environment>(unsigned, unsigned)>
+          resolveScoped =
+              [&](unsigned index,
+                  unsigned nestedDepth) -> std::optional<Environment> {
+        if (index >= body.scopedBindings.size() ||
+            nestedDepth > work.limits.callDepth) {
+          types.fail("source.limit", "scoped environment expansion limit",
+                     body.values.empty() ? Span{} : body.values.front().span);
+          return {};
+        }
+        if (resolved[index])
+          return resolved[index];
+        const auto &binding = body.scopedBindings[index];
+        if (!types.charge(binding.captures.size() +
+                              binding.scopedCaptures.size() + 1,
+                          binding.span))
+          return {};
+        if (binding.parameter) {
+          if (*binding.parameter >= environment.size()) {
+            types.fail("source.scoped", "unbound scoped formal", binding.span);
+            return {};
+          }
+          return resolved[index] = environment[*binding.parameter];
+        }
+        const auto &computation = *binding.computation;
+        std::vector<DeclarationId> selected;
+        auto operands = binding.captures;
+        for (auto capture : binding.scopedCaptures) {
+          auto value = resolveScoped(capture, nestedDepth + 1);
+          if (!value)
+            return {};
+          selected.push_back(value->helper);
+          operands.insert(operands.end(), value->captures.begin(),
+                          value->captures.end());
+        }
+        auto identity = std::make_pair(computation.lexicalOwner.index,
+                                       computation.expression);
+        auto found = scopedTemplates.find(identity);
+        DeclarationId source;
+        if (found == scopedTemplates.end()) {
+          Declaration helper = declarations[computation.lexicalOwner.index];
+          helper.id = {uint32_t(declarations.size())};
+          source = helper.id;
+          helper.parent = computation.lexicalOwner;
+          helper.kind =
+              computation.signature.mode == ScopedSignature::Mode::Math
+                  ? Declaration::Kind::Math
+                  : Declaration::Kind::Local;
+          helper.name =
+              "scoped<" + std::to_string(computation.expression) + ">";
+          helper.qualifiedName += "::" + helper.name;
+          helper.symbol = "zks_" + digest(helper.qualifiedName);
+          helper.isPublic = false;
+          helper.anonymous = true;
+          helper.abstract = false;
+          helper.primitive.reset();
+          helper.specifications.clear();
+          helper.specificationBlock.reset();
+          helper.relation.reset();
+          helper.target.reset();
+          helper.completes = false;
+          helper.scopedOrigin =
+              std::make_pair(computation.lexicalOwner, computation.expression);
+          helper.roles.clear();
+          helper.services.clear();
+          helper.members.clear();
+          helper.inputs.clear();
+          helper.outputs.clear();
+          helper.inputOrder.clear();
+          helper.scopedInputs.clear();
+          helper.body = computation.body;
+          helper.effectAllowance = computation.signature.allowance;
+          for (unsigned i = 0; i < helper.body->inputs; ++i)
+            helper.inputs.push_back({"input" + std::to_string(i),
+                                     helper.body->values[i].type,
+                                     {},
+                                     binding.span});
+          helper.outputs.push_back(
+              {"result", computation.signature.result, {}, binding.span});
+          for (const auto &capture : helper.body->scopedBindings)
+            if (capture.parameter)
+              helper.scopedInputs.push_back(
+                  {"body" + std::to_string(*capture.parameter),
+                   capture.signature, capture.span});
+          declarations.push_back(std::move(helper));
+          generatedTemplates.push_back(source);
+          scopedTemplates.emplace(identity, source);
+        } else
+          source = found->second;
+        std::vector<Type> arguments;
+        for (const auto &parameter : declarations[source.index].parameters) {
+          auto argument = types.substitute(parameterType(parameter), bindings,
+                                           binding.span);
+          if (!argument)
+            return {};
+          arguments.push_back(*argument);
+        }
+        auto helper = instantiate(source, arguments, depth + 1, selected);
+        if (!helper)
+          return {};
+        height = std::max(height, heights.at(helper->index) + 1);
+        return resolved[index] = Environment{*helper, std::move(operands)};
+      };
+      // Even unused callback bodies are closed and checked. Creating a static
+      // helper here does not execute the callback or move its capture
+      // snapshots.
+      for (unsigned i = 0; i < body.scopedBindings.size(); ++i)
+        if (!resolveScoped(i, 1))
+          return false;
       for (auto &op : body.operations) {
+        if (auto *invoke = std::get_if<ScopedInvoke>(&op.action)) {
+          auto selected = resolveScoped(invoke->binding, 1);
+          if (!selected)
+            return false;
+          auto operands = invoke->operands;
+          operands.insert(operands.end(), selected->captures.begin(),
+                          selected->captures.end());
+          op.action =
+              HelperCall{selected->helper, std::move(operands), {}, {}, {}, {}};
+          continue;
+        }
         if (!types.charge(1, op.span))
           return false;
         if (op.binding) {
@@ -258,7 +408,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             target = *origin;
           }
           auto instance =
-              instantiate(target, application->arguments, depth + 1);
+              instantiate(target, application->arguments, depth + 1, {});
           if (!instance)
             return false;
           height = std::max(height, heights.at(instance->index) + 1);
@@ -292,7 +442,18 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             target = *found;
             call->arguments = call->component->arguments;
           }
-          auto instance = instantiate(target, call->arguments, depth + 1);
+          std::vector<DeclarationId> selected;
+          for (auto argument : call->scopedArguments) {
+            auto value = resolveScoped(argument, 1);
+            if (!value)
+              return false;
+            selected.push_back(value->helper);
+            call->operands.insert(call->operands.end(), value->captures.begin(),
+                                  value->captures.end());
+          }
+          auto instance =
+              instantiate(target, call->arguments, depth + 1, selected);
+          call->scopedArguments.clear();
           if (!instance)
             return false;
           height = std::max(height, heights.at(instance->index) + 1);
@@ -306,7 +467,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             bulk->arguments = declarations[target.index].staticArguments;
             target = *origin;
           }
-          auto instance = instantiate(target, bulk->arguments, depth + 1);
+          auto instance = instantiate(target, bulk->arguments, depth + 1, {});
           if (!instance)
             return false;
           height = std::max(height, heights.at(instance->index) + 1);
@@ -357,24 +518,55 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                               op.span);
           repeat->maximum = maximum.dimension;
           auto copy = std::make_shared<Body>(*repeat->region);
-          if (!closeBody(*copy, bindings, Body::Mode::Protocol, depth, height))
+          if (!closeBody(*copy, bindings, Body::Mode::Protocol, depth, height,
+                         {}))
             return false;
           repeat->region = std::move(copy);
         } else if (auto *control = std::get_if<LocalControl>(&op.action)) {
+          std::vector<Value> hidden;
+          for (const auto &entry : environment)
+            for (auto operand : entry.captures) {
+              control->operands.push_back(operand);
+              hidden.push_back(body.values[operand.index]);
+            }
           for (auto &region : control->regions) {
             auto copy = std::make_shared<Body>(*region);
-            if (!closeBody(*copy, bindings, Body::Mode::Local, depth, height))
+            auto inputs = appendBodyInputs(*copy, hidden);
+            auto nested = environment;
+            unsigned offset = 0;
+            for (auto &entry : nested)
+              for (auto &operand : entry.captures)
+                operand = inputs[offset++];
+            if (!closeBody(*copy, bindings, Body::Mode::Local, depth, height,
+                           nested))
               return false;
             region = std::move(copy);
           }
         }
       }
+      body.scopedBindings.clear();
+      if (mode == Body::Mode::Math) {
+        std::vector<Dependencies> inputs;
+        for (unsigned i = 0; i < body.inputs; ++i)
+          inputs.push_back({{i}, false});
+        auto summary = summarizeBody(types, declarations, body, {}, inputs, {});
+        if (!summary || summary->parameterized)
+          return false;
+        body.formationRequirements.clear();
+        for (unsigned i = 0; i < body.values.size(); ++i)
+          body.values[i].components = summary->values[i].inputs;
+        for (const auto &requirement : summary->formation)
+          body.formationRequirements.push_back(requirement.inputs);
+        body.parameterizedSummary = false;
+      }
       if (mode == Body::Mode::Local)
         body.formationRequirements.clear();
+      body.parameterizedSummary = false;
       return true;
     };
-    instantiate = [&](DeclarationId origin, ArrayRef<Type> args,
-                      unsigned depth) -> std::optional<DeclarationId> {
+    instantiate =
+        [&](DeclarationId origin, ArrayRef<Type> args, unsigned depth,
+            ArrayRef<DeclarationId> scoped) -> std::optional<DeclarationId> {
       const auto &source = declarations[origin.index];
       if (depth > work.limits.callDepth) {
         types.fail("source.limit", "closed call depth limit exceeded",
@@ -412,6 +604,16 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         if (!types.chargeType(arg, source.span))
           return {};
         detail::frame(key, typeIdentity(arg));
+      }
+      if (scoped.size() != source.scopedInputs.size()) {
+        types.fail("source.scoped", "specialization scoped arity differs",
+                   source.span);
+        return {};
+      }
+      for (auto selected : scoped) {
+        frame(key, declarations[selected.index].symbol);
+        if (!types.charge(1, source.span))
+          return {};
       }
       auto known = instances.find(key);
       if (known != instances.end()) {
@@ -483,10 +685,11 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       result.origin = origin;
       result.members.clear();
       result.staticArguments.assign(args.begin(), args.end());
+      result.scopedArguments.assign(scoped.begin(), scoped.end());
       // Native participant carriers bound identifiers to 128 bytes. Reuse the
       // instance key for long declaration paths instead of narrowing source
       // names.
-      if (!args.empty() || result.symbol.size() > 128)
+      if (!args.empty() || !scoped.empty() || result.symbol.size() > 128)
         result.symbol = "zkl_" + detail::digest(key);
       if (result.symbol.size() > work.limits.symbolBytes) {
         types.fail("source.limit", "specialized symbol exceeds byte limit",
@@ -501,9 +704,12 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       }
       declarations.push_back(result);
       auto bindings = types.substitution(result, args);
-      if (result.parent && declarations[result.parent->index].kind ==
-                               Declaration::Kind::Component) {
-        auto &parent = declarations[result.parent->index];
+      auto lexicalParent = result.parent;
+      while (lexicalParent && declarations[lexicalParent->index].kind !=
+                                  Declaration::Kind::Component)
+        lexicalParent = declarations[lexicalParent->index].parent;
+      if (lexicalParent) {
+        auto &parent = declarations[lexicalParent->index];
         Type self(Type::Kind::Component, parent.qualifiedName);
         self.arguments.assign(args.begin(),
                               args.begin() + parent.parameters.size());
@@ -525,7 +731,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         for (auto &argument : subject.arguments)
           if (!closeType(argument, bindings, subject.span))
             return false;
-        auto selected = instantiate(subject.relation, subject.arguments, 1);
+        auto selected = instantiate(subject.relation, subject.arguments, 1, {});
         if (!selected)
           return false;
         subject.relation = *selected;
@@ -552,7 +758,29 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       if (result.body) {
         assert(result.body->mode == mode && "declaration body mode changed");
         auto body = std::make_shared<Body>(*result.body);
-        if (!closeBody(*body, bindings, mode, depth, height))
+        std::vector<Value> hidden;
+        std::vector<Environment> environment;
+        for (unsigned i = 0; i < scoped.size(); ++i) {
+          const auto &helper = declarations[scoped[i].index];
+          Environment selected{scoped[i], {}};
+          for (unsigned j = result.scopedInputs[i].signature.inputs.size();
+               j < helper.inputs.size(); ++j) {
+            auto port = helper.inputs[j];
+            port.name = "capture" + std::to_string(hidden.size());
+            result.inputs.push_back(port);
+            hidden.push_back({port.type, {}, port.span});
+          }
+          environment.push_back(std::move(selected));
+        }
+        if (!types.charge(hidden.size() + 1, result.span))
+          return {};
+        auto inputs = appendBodyInputs(*body, hidden);
+        unsigned offset = 0;
+        for (unsigned i = 0; i < scoped.size(); ++i)
+          for (unsigned j = result.scopedInputs[i].signature.inputs.size();
+               j < declarations[scoped[i].index].inputs.size(); ++j)
+            environment[i].captures.push_back(inputs[offset++]);
+        if (!closeBody(*body, bindings, mode, depth, height, environment))
           return {};
         if (result.kind == Declaration::Kind::Math ||
             result.kind == Declaration::Kind::Relation)
@@ -561,6 +789,12 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
               return {};
         result.body = std::move(body);
       }
+      result.scopedInputs.clear();
+      result.inputOrder.clear();
+      for (unsigned i = 0; i < result.inputs.size(); ++i)
+        result.inputOrder.push_back({Declaration::InputSlot::Kind::Data, i});
+      for (unsigned i = 0; i < result.services.size(); ++i)
+        result.inputOrder.push_back({Declaration::InputSlot::Kind::Service, i});
       result.parameters.clear();
       result.bounds.clear();
       result.permissionBounds.clear();
@@ -576,7 +810,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
     if (!target)
       return types.fail("source.entry", "Entry has no checked target",
                         declarations[selected.index].span);
-    auto instance = instantiate(*target, args, 1);
+    auto instance = instantiate(*target, args, 1, {});
     if (!instance)
       return false;
     if (!types.checkProofEntry(declarations[selected.index],
@@ -603,6 +837,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         return false;
     }
     declarations[selected.index].target = *instance;
+    for (auto id : generatedTemplates)
+      declarations[id.index].body.reset();
     for (unsigned i = 0; i < templates; ++i)
       declarations[i].body.reset();
     return true;

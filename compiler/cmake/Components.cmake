@@ -90,6 +90,12 @@ add_zkc_component(Language
   lib/Language/Resolution.cpp
   lib/Language/ResourceUsage.cpp
   lib/Language/Bindings.cpp
+  lib/Language/BodySummary.cpp
+  lib/Language/BodyMapping.cpp
+  lib/Language/ScopedSpecialization.cpp
+  lib/Language/ScopedWitness.cpp
+  lib/Language/Scoped.cpp
+  lib/Language/FreePlaces.cpp
   lib/Language/Regions.cpp
   lib/Language/BodyCheck.cpp
   lib/Language/Placement.cpp

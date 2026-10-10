@@ -1,6 +1,7 @@
 #ifndef ZKC_LANGUAGE_BODYCHECK_H
 #define ZKC_LANGUAGE_BODYCHECK_H
 #include "Checker.h"
+#include "FreePlaces.h"
 #include "Placement.h"
 #include "TypeInference.h"
 namespace zkc::language::detail {
@@ -9,6 +10,7 @@ public:
   BodyChecker(Checker &, Declaration &, const SyntaxDeclaration &, Body &,
               unsigned);
   bool run(const SyntaxBody &, std::vector<Port> &, bool protocol);
+  bool addScoped(BindingId, const ScopedSignature &, Span);
   bool addService(BindingId, const ServicePort &);
   bool addInput(BindingId, const Type &, std::vector<unsigned>, Span);
 
@@ -57,6 +59,11 @@ private:
     std::vector<std::pair<std::vector<unsigned>, ValueId>> pieces;
   };
   std::map<BindingId, BindingState> bindings;
+  std::map<BindingId, unsigned> scoped;
+  std::optional<unsigned> scopedArgument(uint32_t, const ScopedSignature &,
+                                         unsigned);
+  std::optional<ValueId> invokeScoped(const Expression &, unsigned);
+  bool inheritScoped(BodyChecker &);
   std::map<BindingId, ServiceId> services;
   std::optional<ServiceId> service(const Expression &);
   struct Uses {
@@ -107,18 +114,6 @@ private:
                                bool allowUntypedStop);
   std::optional<std::pair<BindingId, std::vector<unsigned>>>
   sourcePlace(uint32_t, unsigned = 1);
-  struct FreePlace {
-    BindingId binding;
-    std::vector<unsigned> path;
-    bool operator<(const FreePlace &other) const {
-      return binding == other.binding ? path < other.path
-                                      : binding < other.binding;
-    }
-  };
-  struct RegionInputs {
-    std::set<FreePlace> places;
-    std::set<BindingId> writes, services;
-  };
   std::optional<RegionInputs> regionInputs(const Expression &);
   std::optional<std::set<BindingId>> regionStates(const RegionInputs &, Span);
   std::optional<ValueId> capturePlace(const FreePlace &, Span);

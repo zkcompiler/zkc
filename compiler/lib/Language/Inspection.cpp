@@ -96,13 +96,31 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                      {"type", type(bound.type)},
                      {"permissions", permissions(bound.permissions)},
                      {"inferred", false}});
+  json::Array scoped;
+  for (const auto &parameter : decl.scopedInputs) {
+    json::Array inputs;
+    for (const auto &input : parameter.signature.inputs)
+      inputs.push_back(type(input));
+    scoped.push_back(json::Object{
+        {"name", parameter.name},
+        {"mode", parameter.signature.mode == ScopedSignature::Mode::Math
+                     ? "math"
+                     : "local"},
+        {"inputs", std::move(inputs)},
+        {"result", type(parameter.signature.result)},
+        {"effect_allowance",
+         json::Object{{"stop", parameter.signature.allowance.mayStop},
+                      {"opaque", parameter.signature.allowance.opaque}}}});
+  }
   json::Array roster, order;
   for (const auto &role : decl.roles)
     roster.push_back(role);
   for (const auto &slot : decl.inputOrder)
     order.push_back(json::Object{
-        {"kind",
-         slot.kind == Declaration::InputSlot::Kind::Data ? "data" : "service"},
+        {"kind", slot.kind == Declaration::InputSlot::Kind::Data ? "data"
+                 : slot.kind == Declaration::InputSlot::Kind::Scoped
+                     ? "scoped"
+                     : "service"},
         {"index", slot.index}});
   bool ordered = decl.kind != Declaration::Kind::Math;
   Effects effects =
@@ -121,6 +139,7 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
       {"roles", std::move(roster)},
       {"input_order", std::move(order)},
       {"inputs", ports(decl.inputs)},
+      {"scoped_inputs", std::move(scoped)},
       {"outputs", ports(decl.outputs)},
       {"services", std::move(services)},
       {"requirements", std::move(requirements)},

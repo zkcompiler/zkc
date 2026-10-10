@@ -14,7 +14,17 @@ and owners enter the checked graph. Type and resource uses are checked in source
 order without guessing owners. Checks that depend on component sets run after
 selection. Closing an Entry substitutes already checked bodies;
 it never reparses templates. Closed instances are memoized by declaration, mode
-and exact static type identity. Only closed definitions enter original MLIR.
+and exact static type identity, including selected scoped helper identities.
+Only closed definitions enter original MLIR.
+
+[Scoped computations](definitions.md#scoped-computations) retain the same checked
+`Body` representation as named helpers. Closure introduces private Math or Local
+helpers and explicit data inputs for capture snapshots. Accepting functions gain
+hidden capture inputs after their ordinary inputs; forwarding and nested control
+regions receive the corresponding environment operands. The selected code and
+its lexical static context determine the instance; runtime captures and caller
+participants do not. A scoped parameter has no runtime value or MLIR function
+type, and every scoped invocation becomes an ordinary helper call before emission.
 
 Math helpers become private `func.func` definitions. A selected formula relation
 adds a non-callable `relation.declare` and a private Boolean `func.func`; its exact
@@ -112,6 +122,18 @@ keys retain their meanings; cross-build byte equality is not promised. Producers
 readers and fixtures use one current version-0 schema, without legacy readers.
 
 ## Independent source comparison
+
+Scoped extraction and closure have separate executable checks before emission
+and before comparison. Capture checking reconstructs places from retained source
+syntax rather than trusting the producer's capture list. Specialization checking
+walks the checked source and actual closed candidate under explicit substitutions;
+it never calls specialization or compares two generated expected bodies. Equal
+typed capture swaps, altered projection paths, incorrect forwarding environments,
+changed lexical helper selections and missing/duplicate source occurrences refuse.
+The relation checks every actual operation and recomputes Math dependencies and
+formation obligations. These checks complement ordinary definition checking;
+they are not a complete independent parser/type checker or a formal correctness
+proof.
 
 Before simplification, the compiler reparses exact emitted bytes, verifies the
 whole native module and independently compares actual SSA with checked source.

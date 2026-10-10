@@ -21,12 +21,29 @@ bool BodyChecker::mathematicalExpression(uint32_t id, unsigned depth) {
   switch (expr.kind) {
   case K::NotationCall:
   case K::Call: {
+    if (expr.binding) {
+      auto binding = scoped.find(*expr.binding);
+      if (binding == scoped.end() ||
+          body.scopedBindings[binding->second].signature.mode !=
+              ScopedSignature::Mode::Math)
+        return refuse();
+      break;
+    }
     auto callee = inference->callees.find(id);
     if (callee == inference->callees.end() ||
         checker.output.declarations[callee->second.declaration.index].kind !=
             Declaration::Kind::Math)
       return refuse();
     break;
+  }
+  case K::Lambda: {
+    auto signature = inference->scopedSignatures.find(id);
+    // Deferred code is checked by the ordinary Body checker in its declared
+    // mode. It is not an eagerly evaluated Boolean operand.
+    return signature != inference->scopedSignatures.end() &&
+                   signature->second.mode == ScopedSignature::Mode::Math
+               ? true
+               : refuse();
   }
   case K::Name:
   case K::Decimal:
@@ -66,7 +83,8 @@ bool BodyChecker::mathematicalExpression(uint32_t id, unsigned depth) {
 }
 std::optional<ValueId> BodyChecker::boolean(const Expression &expr,
                                             unsigned depth) {
-  // Local operators have already become ordinary conditional regions.
+  if (local())
+    return control(expr, Type{}, depth, false);
   std::vector<ValueId> operands;
   for (auto child : expr.children) {
     if (protocol() && !mathematicalExpression(child, depth + 1))

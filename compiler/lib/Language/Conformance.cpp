@@ -163,6 +163,32 @@ bool Checker::conformance(DeclarationId id) {
                               provided->span);
         }
       }
+      if (required.scopedInputs.size() != provided->scopedInputs.size() ||
+          required.inputOrder.size() != provided->inputOrder.size())
+        return types.fail("source.conformance", "scoped member arity differs",
+                          provided->span);
+      for (unsigned i = 0; i < required.inputOrder.size(); ++i)
+        if (required.inputOrder[i].kind != provided->inputOrder[i].kind ||
+            required.inputOrder[i].index != provided->inputOrder[i].index)
+          return types.fail("source.conformance",
+                            "member input categories differ", provided->span);
+      for (unsigned i = 0; i < required.scopedInputs.size(); ++i) {
+        auto expected = required.scopedInputs[i].signature;
+        for (auto &input : expected.inputs) {
+          auto value = types.substitute(input, bindings, provided->span);
+          if (!value)
+            return false;
+          input = *value;
+        }
+        auto value =
+            types.substitute(expected.result, bindings, provided->span);
+        if (!value)
+          return false;
+        expected.result = *value;
+        if (!(expected == provided->scopedInputs[i].signature))
+          return types.fail("source.conformance",
+                            "scoped member signature differs", provided->span);
+      }
       auto allowance = required.effectAllowance.value_or(
           Effects{required.kind == Declaration::Kind::Local,
                   required.kind == Declaration::Kind::Local});

@@ -9,6 +9,7 @@ concrete domains, Entries and transcript constructions in
 
 | Module | Public exports | Contract |
 |---|---|---|
+| [`zkc::computation`](zkc/computation.zkc) | apply_math/forward_math/apply/forward/twice | Generic statically bound scoped computations; explicit fixed modes and Local effect allowances |
 | [`zkc::vector`](zkc/vector.zkc) | `Vector`, length/get/sum/product/split/add/hadamard/scale/dot/fill/fold/has_length, reduction bindings `∑`/`∏` | Ordered finite vectors; fold pairs contiguous halves |
 | [`zkc::sequence`](zkc/sequence.zkc) | `Sequence`, empty/append/length/get | Immutable sequences of executable Copy + Drop elements, including source products |
 | [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, get/multiply/transpose_multiply/bilinear/rows/columns | Ordered sparse matrix operations |
@@ -25,6 +26,12 @@ concrete domains, Entries and transcript constructions in
 | [`air_interaction`, `air_bundle`](air/README.md#whole-bundle-argument) | `Reduction<F>`, `LogUp<F>`, `GrandProduct<F>`, `ThreeTableArgument` | Three-table multiset arguments with phased auxiliary commitments and shared FRI |
 
 ### Mathematics
+
+`zkc::computation` demonstrates ordinary user-defined combinators. Its Math
+functions accept total scoped bodies; its Local functions allow `stop` and
+support affine explicit inputs. Captures require Copy+Drop and become explicit
+private-helper arguments. The [component client](../examples/projects/scoped-computations/README.md)
+forwards nested callbacks with record/vector captures and a checked lookup.
 
 Import only the modules a client needs. Native `fn` definitions retain ordered
 execution and the kernels' possible stop behavior: vector split/fold requires a

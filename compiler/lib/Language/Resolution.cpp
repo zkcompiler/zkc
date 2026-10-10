@@ -26,6 +26,13 @@ public:
         return false;
       syntax.serviceBindings.push_back(*id);
     }
+    for (auto &port : decl.scopedInputs) {
+      auto id = bind(port.name, port.span, false, false, true);
+      if (!id)
+        return false;
+      syntax.bindings[id->index].scoped = true;
+      syntax.scopedBindings.push_back(*id);
+    }
     if (!syntax.primitive && !body(0, 1))
       return false;
     syntax.resolved = true;
@@ -76,7 +83,7 @@ private:
       }
     }
     BindingId id{uint32_t(syntax.bindings.size())};
-    syntax.bindings.push_back({name.str(), span, mut, service, scope});
+    syntax.bindings.push_back({name.str(), span, mut, service, false, scope});
     undo.emplace_back(name.str(),
                       prior == names.end()
                           ? std::nullopt
@@ -112,8 +119,16 @@ private:
       expr.binding = lookup(expr.text, expr.span);
       return expr.binding.has_value();
     }
-    for (auto child : expr.children)
-      if (!expression(child, depth + 1))
+    if (expr.kind == Expression::Kind::Call) {
+      auto found = names.find(expr.text);
+      if (found != names.end())
+        expr.binding = found->second;
+    }
+    for (unsigned i = 0; i < expr.children.size(); ++i)
+      if (!((expr.kind == Expression::Kind::And ||
+             expr.kind == Expression::Kind::Or) &&
+            i == 1) &&
+          !expression(expr.children[i], depth + 1))
         return false;
     for (unsigned i = 0; i < expr.regions.size(); ++i) {
       auto mark = undo.size();
@@ -123,7 +138,8 @@ private:
            expr.kind == Expression::Kind::ReductionMap) &&
           !pattern(expr.index, false, false, seen, depth + 1))
         return false;
-      if (expr.kind == Expression::Kind::Match)
+      if (expr.kind == Expression::Kind::Match ||
+          expr.kind == Expression::Kind::Lambda)
         for (auto &p : expr.payloads[i])
           if (!pattern(p, false, false, seen, depth + 1))
             return false;

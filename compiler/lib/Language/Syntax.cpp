@@ -1018,7 +1018,33 @@ private:
       do {
         SyntaxPort p;
         p.span = current().span;
-        if (!name(p.name) || !expect(":") || !type(p.type))
+        if (!name(p.name) || !expect(":"))
+          return false;
+        if (take("scoped")) {
+          SyntaxScopedSignature signature;
+          signature.mode = take("math") ? ScopedSignature::Mode::Math
+                                        : ScopedSignature::Mode::Local;
+          if (!expect("fn") || !expect("("))
+            return false;
+          if (!at(")"))
+            do {
+              SyntaxType input;
+              if (!type(input))
+                return false;
+              signature.inputs.push_back(std::move(input));
+            } while (take(",") && !at(")"));
+          if (!expect(")") || !expect("->") || !type(signature.result))
+            return false;
+          SyntaxDeclaration allowance;
+          if (signature.mode == ScopedSignature::Mode::Local && !at("!"))
+            return fail(
+                "source.effect",
+                "Local scoped signatures require an explicit effect allowance");
+          if (!effects(allowance))
+            return false;
+          signature.allowance = allowance.effects.value_or(Effects{});
+          p.scoped = std::move(signature);
+        } else if (!type(p.type))
           return false;
         if (roles && (!expect("@") || !roleList(p.roles)))
           return false;
@@ -1275,17 +1301,24 @@ private:
         return {};
       if (!ports(d.inputs, protocol))
         return {};
-      if (protocol) {
+      {
         auto ports = std::move(d.inputs);
         d.inputs.clear();
         for (auto &port : ports) {
-          bool service = port.type.kind == SyntaxType::Kind::Name &&
+          bool service = protocol && port.type.kind == SyntaxType::Kind::Name &&
                          port.type.name == "Random";
-          auto &selected = service ? d.services : d.inputs;
-          d.inputOrder.push_back({service
-                                      ? Declaration::InputSlot::Kind::Service
-                                      : Declaration::InputSlot::Kind::Data,
-                                  unsigned(selected.size())});
+          if (port.scoped && protocol) {
+            fail("source.scoped", "protocol ports cannot be scoped arguments");
+            return {};
+          }
+          auto &selected = port.scoped ? d.scopedInputs
+                           : service   ? d.services
+                                       : d.inputs;
+          d.inputOrder.push_back(
+              {port.scoped ? Declaration::InputSlot::Kind::Scoped
+               : service   ? Declaration::InputSlot::Kind::Service
+                           : Declaration::InputSlot::Kind::Data,
+               unsigned(selected.size())});
           selected.push_back(std::move(port));
         }
       }
@@ -1376,8 +1409,37 @@ private:
     Expression value;
     value.span = span;
     auto reductionNotation = notation(text(), Position::Reduction);
-    if (reductionNotation ||
-        (at("reduce") && (isIdentifier(look(1)) || look(1) == "::"))) {
+    if (take("fun")) {
+      value.kind = Expression::Kind::Lambda;
+      value.payloads.emplace_back();
+      while (!at("=>") && !atEnd()) {
+        auto binder = pattern(depth + 1);
+        if (!binder)
+          return {};
+        value.payloads.front().push_back(std::move(*binder));
+      }
+      if (!expect("=>"))
+        return {};
+      if (at("{")) {
+        auto region = body(decl, false, true, depth + 1);
+        if (!region)
+          return {};
+        value.regions.push_back(*region);
+      } else {
+        SyntaxBody region;
+        region.region = true;
+        region.span = current().span;
+        region.notationEnvironment = notationEnvironment;
+        auto result = expression(decl, depth + 1);
+        if (!result)
+          return {};
+        region.results.emplace_back("", *result);
+        region.span.end = previousEnd;
+        value.regions.push_back(decl.bodies.size());
+        decl.bodies.push_back(std::move(region));
+      }
+    } else if (reductionNotation ||
+               (at("reduce") && (isIdentifier(look(1)) || look(1) == "::"))) {
       if (reductionDepth) {
         fail("source.reduction", "nested reductions are not admitted");
         return {};

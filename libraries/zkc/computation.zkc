@@ -1,0 +1,26 @@
+module zkc::computation;
+
+// Static user combinators. Captured data becomes explicit private helper inputs.
+pub math fn apply_math<A: Type + Copy + Drop, B: Type + Copy + Drop>(
+  value: A, body: scoped math fn(A) -> B
+) -> B {
+  return body(value);
+}
+
+pub math fn forward_math<A: Type + Copy + Drop, B: Type + Copy + Drop>(
+  value: A, body: scoped math fn(A) -> B
+) -> B {
+  return apply_math(value, body);
+}
+
+pub fn apply<A: Type, B: Type>(value: A, body: scoped fn(A) -> B !{stop}) -> B !{stop} {
+  return body(value);
+}
+
+pub fn forward<A: Type, B: Type>(value: A, body: scoped fn(A) -> B !{stop}) -> B !{stop} {
+  return apply(value, body);
+}
+
+pub fn twice<A: Type>(value: A, body: scoped fn(A) -> A !{stop}) -> A !{stop} {
+  return body(body(value));
+}

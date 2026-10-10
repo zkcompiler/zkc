@@ -132,12 +132,41 @@ struct CallableReference {
   DeclarationId declaration;
   std::optional<Type> component;
 };
+/// Scoped signatures are static argument contracts, never runtime Types.
+struct Effects {
+  bool mayStop = false;
+  bool opaque = false;
+  bool operator!=(const Effects &other) const { return !(*this == other); }
+  bool operator==(const Effects &other) const {
+    return mayStop == other.mayStop && opaque == other.opaque;
+  }
+};
+struct ScopedSignature {
+  enum class Mode { Math, Local } mode;
+  std::vector<Type> inputs;
+  Type result;
+  Effects allowance;
+  bool operator==(const ScopedSignature &other) const {
+    return mode == other.mode && inputs == other.inputs &&
+           result == other.result && allowance == other.allowance;
+  }
+};
+struct ScopedParameter {
+  std::string name;
+  ScopedSignature signature;
+  Span span;
+};
+struct ScopedInvoke {
+  unsigned binding;
+  std::vector<ValueId> operands;
+};
 struct HelperCall {
   DeclarationId callee;
   std::vector<ValueId> operands;
   std::vector<Type> arguments;
   std::optional<Type> component;
   std::optional<unsigned> owner;
+  std::vector<unsigned> scopedArguments = {};
 };
 /// A checked pointwise application of a static scalar math helper in local
 /// code. Each operand is either a whole vector of the helper's field, one row
@@ -245,6 +274,10 @@ struct CallBinding {
   std::vector<std::string> family;
   std::optional<Span> origin;
   std::optional<NotationDescriptor> notation;
+  /// Source occurrence and complete authored argument mapping for scoped calls.
+  std::optional<unsigned> scopedSource = {};
+  std::vector<unsigned> argumentOrder = {};
+  std::vector<unsigned> scopedArguments = {};
 };
 /// Extraction evidence. Input slots name resolved lexical BindingIds; ignored
 /// rows have no binding. Expression values refer to the generated Math body.
@@ -254,11 +287,36 @@ struct ReductionBinding {
   std::vector<std::optional<uint32_t>> inputs;
   std::vector<std::pair<uint32_t, ValueId>> expressions;
 };
+struct CaptureSlot {
+  uint32_t binding;
+  std::vector<unsigned> path;
+  Type type;
+  Span firstUse;
+};
+struct ScopedComputation {
+  DeclarationId lexicalOwner;
+  uint32_t expression;
+  ScopedSignature signature;
+  std::vector<CaptureSlot> captures;
+  std::vector<uint32_t> scopedCaptures;
+  std::shared_ptr<const Body> body;
+};
+/// Parameter is an index in the body's static scoped environment. A literal
+/// carries data snapshots and references to that body's scoped bindings.
+struct ScopedBinding {
+  ScopedSignature signature;
+  std::optional<unsigned> parameter;
+  std::shared_ptr<const ScopedComputation> computation;
+  std::vector<ValueId> captures;
+  std::vector<unsigned> scopedCaptures;
+  Span span;
+  std::optional<uint32_t> source;
+};
 struct Operation {
   std::variant<MathValue, HelperCall, BulkApplication, Exchange, Restriction,
                Construct, Projection, LocalPrimitive, Consume, LocalControl,
                ProtocolApplication, ServiceQuery, Require, ProtocolRepeat,
-               ProtocolCompletion>
+               ProtocolCompletion, ScopedInvoke>
       action;
   /// Each result has its own type and participant availability.
   std::vector<ValueId> results;
@@ -270,6 +328,7 @@ struct Operation {
 struct Body {
   enum class Mode { Math, Local, Protocol } mode;
   std::vector<ServicePort> services;
+  std::vector<ScopedBinding> scopedBindings;
   std::vector<Value> values;
   std::vector<Operation> operations;
   std::vector<ValueId> results;
@@ -277,6 +336,8 @@ struct Body {
   bool stopped = false;
   std::string stopReason;
   bool mayStop = false, opaque = false;
+  /// True when a scoped formal prevents a concrete dependency summary.
+  bool parameterizedSummary = false;
   /// Includes intermediate dependencies of unused mathematical work.
   std::vector<std::vector<unsigned>> formationRequirements;
 };
@@ -317,11 +378,6 @@ struct CapabilityBound {
   std::vector<Type> arguments;
   Span span;
   bool inferred = false;
-};
-/// Upper bounds on the observable effects of a callable.
-struct Effects {
-  bool mayStop = false;
-  bool opaque = false;
 };
 enum class RelationPurpose { Parameter, Statement, Witness };
 struct RelationDefinition {
@@ -433,13 +489,17 @@ struct Declaration {
   /// A closed definition records its template and exact static substitution.
   std::optional<DeclarationId> origin;
   std::vector<Type> staticArguments;
+  /// Closed helper selections, independent of runtime capture values.
+  std::vector<DeclarationId> scopedArguments;
+  std::optional<std::pair<DeclarationId, uint32_t>> scopedOrigin;
   std::vector<std::string> roles;
   std::vector<Port> inputs, outputs;
+  std::vector<ScopedParameter> scopedInputs;
   std::vector<ServicePort> services;
-  /// Protocol source arguments in written order. Data and managed identities
-  /// remain separate in the checked body and native signatures.
+  /// Source arguments in written order. Data, managed services and static
+  /// scoped computations remain separate input categories.
   struct InputSlot {
-    enum class Kind { Data, Service } kind;
+    enum class Kind { Data, Service, Scoped } kind;
     unsigned index;
   };
   std::vector<InputSlot> inputOrder;
@@ -507,6 +567,12 @@ private:
 llvm::Error checkReductionElaboration(const CheckedProject &,
                                       const Limits & = {});
 
+/// Check retained source places against actual capture extraction and
+/// snapshots.
+llvm::Error checkScopedElaboration(const CheckedProject &, const Limits & = {});
+/// Relate source bodies and environments to the actual closed candidate.
+llvm::Error checkScopedSpecialization(const ClosedEntry &, const Limits & = {});
+
 /// Only successful analysis can construct this immutable owning handle.
 class CheckedProject {
 public:
@@ -527,6 +593,8 @@ public:
 
 private:
   friend class Layouts;
+  friend llvm::Error checkScopedElaboration(const CheckedProject &,
+                                            const Limits &);
   friend llvm::Error checkReductionElaboration(const CheckedProject &,
                                                const Limits &);
   explicit CheckedProject(std::shared_ptr<const detail::CheckedStorage>);

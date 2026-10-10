@@ -61,7 +61,8 @@ local short-circuit Boolean operators and total Boolean formulas, inferred catal
 preconditions with explicit contract checking, unified data/service arguments,
 source rejection with `require`, formal polynomial intrinsics, checked
 pointwise `map` of scalar helpers over vectors, finite field-vector reductions,
-local control,
+statically bound scoped Math/Local callbacks with generic apply/forward and
+component wrappers, local control,
 messages, services, static protocol composition, bounded repetition and conditional completion.
 Independent source comparison checks emitted MLIR against checked definitions;
 [source semantics](spec/language/README.md) owns exact limits.
@@ -80,6 +81,16 @@ Abstract member-generic signatures can be checked and inspected, but components
 implementing them are not supported.
 Resource permission inference, implicit role remapping, natural equation solving
 and inversion of associated types are outside the source profile.
+[Scoped computations](spec/language/definitions.md#scoped-computations) use the
+ordinary checked Body and type solver. Projection-aware Copy+Drop captures,
+mutable snapshots, static scoped captures and lexical component resolution close
+to ordinary private helpers with explicit environment inputs. Independent
+capture and specialization checks reject mapping and coverage mutations before
+source-to-MLIR comparison. Compiler and native tests cover fixed modes, effects,
+owner inference, forwarding, aggregate captures and authored evaluation order.
+Runtime function values, escaping computations, outer writes and captured
+services are unsupported. General finite-domain and fold syntax remain separate
+work; existing finite-vector reductions retain the following restrictions.
 [Finite reduction binders](spec/language/definitions.md#finite-vector-reductions)
 support named reducers and library-owned `∑`/`∏`, explicit strict zip and
 immutable same-field scalar captures in module-level local functions. Protocols

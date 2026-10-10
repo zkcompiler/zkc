@@ -2,6 +2,7 @@ format = "zkc.project/0"
 
 [modules]
 "zkc::boolean" = "boolean.zkc"
+"zkc::computation" = "computation.zkc"
 "zkc::curve" = "curve.zkc"
 "zkc::field_array" = "field_array.zkc"
 "zkc::matrix" = "matrix.zkc"

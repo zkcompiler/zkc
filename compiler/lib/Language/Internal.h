@@ -66,6 +66,12 @@ struct SyntaxSelector {
   std::optional<std::string> role;
   Span span;
 };
+struct SyntaxScopedSignature {
+  ScopedSignature::Mode mode;
+  std::vector<SyntaxType> inputs;
+  SyntaxType result;
+  Effects allowance;
+};
 struct SyntaxPort {
   std::string name;
   SyntaxType type;
@@ -74,6 +80,7 @@ struct SyntaxPort {
   bool isPublic = true;
   std::optional<RelationPurpose> purpose;
   std::optional<SyntaxSelector> binding;
+  std::optional<SyntaxScopedSignature> scoped;
 };
 struct SyntaxParameter {
   std::string name;
@@ -104,6 +111,7 @@ struct Pattern {
 struct Expression {
   enum class Kind {
     Name,
+    Lambda,
     Decimal,
     Boolean,
     Call,
@@ -229,6 +237,7 @@ struct Binding {
   Span span;
   bool mutableBinding = false;
   bool service = false;
+  bool scoped = false;
   unsigned scope = 0;
 };
 /// Token intervals refer to the module's non-trivia token sequence. Fixed
@@ -250,7 +259,7 @@ struct SyntaxDeclaration {
   bool completes = false;
   Span span;
   std::vector<std::string> roles;
-  std::vector<SyntaxPort> inputs, outputs, services;
+  std::vector<SyntaxPort> inputs, outputs, services, scopedInputs;
   std::vector<Declaration::InputSlot> inputOrder;
   std::vector<Expression> expressions;
   std::optional<DeferredBody> deferredBody;
@@ -258,7 +267,7 @@ struct SyntaxDeclaration {
   std::vector<SyntaxBody> bodies;
   // Resolved lexical identities are private elaboration data, never serialized.
   std::vector<Binding> bindings;
-  std::vector<BindingId> inputBindings, serviceBindings;
+  std::vector<BindingId> inputBindings, serviceBindings, scopedBindings;
   bool resolved = false;
   bool elaborated = false;
   std::vector<SyntaxParameter> parameters;

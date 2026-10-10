@@ -37,9 +37,75 @@ class ExpressionInference {
   std::vector<Call> calls;
   ExpressionTypes output;
   std::optional<uint32_t> reductionSite;
+  std::optional<Body::Mode> scopedMode;
+  unsigned scopedDepth = 0;
+  struct ScopedEquations {
+    ScopedSignature::Mode mode;
+    std::vector<Variable> inputs;
+    Variable result;
+    Effects allowance;
+  };
+  std::map<uint32_t, ScopedEquations> scopedEquations;
+  std::optional<ScopedSignature> scopedSignature(const Expression &expr) {
+    if (!expr.binding)
+      return {};
+    auto found = owner.scoped.find(*expr.binding);
+    if (found != owner.scoped.end())
+      return owner.body.scopedBindings[found->second].signature;
+    return {};
+  }
+  void scopedArgument(uint32_t id, const ScopedSignature &signature,
+                      const TypeInference::Parameters &parameters,
+                      unsigned depth) {
+    const auto &expr = syntax.expressions[id];
+    ScopedEquations equations{
+        signature.mode,
+        {},
+        types.instantiate(signature.result, parameters, expr.span),
+        signature.allowance};
+    for (const auto &input : signature.inputs)
+      equations.inputs.push_back(
+          types.instantiate(input, parameters, expr.span));
+    if (expr.kind == K::Name) {
+      auto actual = scopedSignature(expr);
+      if (!actual || actual->mode != signature.mode ||
+          (actual->allowance.mayStop && !signature.allowance.mayStop) ||
+          (actual->allowance.opaque && !signature.allowance.opaque) ||
+          actual->inputs.size() != signature.inputs.size()) {
+        fail("source.scoped", "scoped forwarding contract differs", expr.span);
+        return;
+      }
+      for (unsigned i = 0; i < actual->inputs.size(); ++i)
+        constrain(equations.inputs[i], actual->inputs[i], expr.span);
+      constrain(equations.result, actual->result, expr.span);
+    } else if (expr.kind == K::Lambda) {
+      if (expr.payloads.front().size() != equations.inputs.size()) {
+        fail("source.scoped", "lambda binder count differs from scoped inputs",
+             expr.span);
+        return;
+      }
+      for (unsigned i = 0; i < equations.inputs.size(); ++i)
+        bind(expr.payloads.front()[i], equations.inputs[i], depth + 1);
+      auto previous = scopedMode;
+      scopedMode = signature.mode == ScopedSignature::Mode::Math
+                       ? Body::Mode::Math
+                       : Body::Mode::Local;
+      ++scopedDepth;
+      auto result = region(expr.regions.front(), depth + 1);
+      --scopedDepth;
+      if (!result.stopped)
+        types.equal(result.type, equations.result, expr.span);
+      scopedMode = previous;
+    } else {
+      fail("source.scoped", "expected a lambda or scoped parameter", expr.span);
+      return;
+    }
+    scopedEquations.emplace(id, std::move(equations));
+  }
   struct CallContext {
     Body::Mode mode;
     std::optional<uint32_t> reduction;
+    unsigned scopedDepth;
   };
   std::map<uint32_t, CallContext> contexts;
   bool accountCall(uint32_t id, const Declaration &callee,
@@ -52,7 +118,7 @@ class ExpressionInference {
         !mapped && primitive && primitiveCallIsInline(context.mode, *primitive)
             ? 0
             : 1;
-    unsigned extra = context.reduction ? 1 : 0;
+    unsigned extra = context.scopedDepth + (context.reduction ? 1 : 0);
     if (!checker.body(callee.id, owner.callDepth + extra + edge))
       return false;
     unsigned height = checker.bodyHeights[callee.id.index] + edge;
@@ -255,7 +321,6 @@ class ExpressionInference {
             parameters.at(
                 callee.parameters[inherited + (*staticBinding)[i]].atom),
             annotation(expr.arguments[i]), expr.span);
-    bool protocol = callee.kind == Declaration::Kind::Protocol;
     auto binding =
         bindArguments(checker.types, inputNames(callee), expr.children.size(),
                       expr.callLabels, true, expr.span, "source.call");
@@ -264,10 +329,10 @@ class ExpressionInference {
     output.inputs.emplace(id, *binding);
     calls.push_back({id, callee.id, parameters});
     for (unsigned i = 0; i < expr.children.size(); ++i) {
-      auto slot =
-          protocol ? callee.inputOrder[(*binding)[i]]
-                   : Declaration::InputSlot{Declaration::InputSlot::Kind::Data,
-                                            (*binding)[i]};
+      auto slot = !callee.inputOrder.empty()
+                      ? callee.inputOrder[(*binding)[i]]
+                      : Declaration::InputSlot{
+                            Declaration::InputSlot::Kind::Data, (*binding)[i]};
       if (slot.kind == Declaration::InputSlot::Kind::Service) {
         auto field = service(expr.children[i]);
         if (field)
@@ -275,7 +340,7 @@ class ExpressionInference {
                                         parameters, expr.span,
                                         callee.services[slot.index].span),
                       known(*field, expr.span), expr.span);
-      } else {
+      } else if (slot.kind == Declaration::InputSlot::Kind::Data) {
         auto parameter = constraints.inputs[slot.index];
         auto argument = expression(expr.children[i], depth + 1);
         if (!rows.empty()) {
@@ -293,6 +358,14 @@ class ExpressionInference {
         types.equal(parameter, argument.type, expr.span);
       }
     }
+    for (unsigned i = 0; i < expr.children.size(); ++i)
+      if (!callee.inputOrder.empty()) {
+        auto slot = callee.inputOrder[(*binding)[i]];
+        if (slot.kind == Declaration::InputSlot::Kind::Scoped)
+          scopedArgument(expr.children[i],
+                         callee.scopedInputs[slot.index].signature, parameters,
+                         depth + 1);
+      }
     std::vector<Variable> results;
     for (auto result : constraints.outputs)
       results.push_back(rows.empty() ? result : vectorOf(result, expr.span));
@@ -425,6 +498,19 @@ class ExpressionInference {
     auto child = [&](unsigned i) {
       return expression(expr.children[i], depth + 1).type;
     };
+    if (expr.binding && expr.kind == K::Call) {
+      auto signature = scopedSignature(expr);
+      if (!signature || !expr.arguments.empty() || !expr.callLabels.empty() ||
+          expr.roles || expr.children.size() != signature->inputs.size()) {
+        fail("source.scoped", "expected a positional scoped invocation",
+             expr.span);
+        return;
+      }
+      for (unsigned i = 0; i < signature->inputs.size(); ++i)
+        constrain(child(i), signature->inputs[i], expr.span);
+      constrain(result.type, signature->result, expr.span);
+      return;
+    }
     if (expr.text == "index" && expr.kind == K::Call) {
       constrain(result.type, Type(T::Index), expr.span);
       return;
@@ -542,9 +628,10 @@ class ExpressionInference {
     if (auto it = expressions.find(id); it != expressions.end())
       return it->second;
     const auto &expr = syntax.expressions[id];
-    contexts.emplace(
-        id, CallContext{reductionSite ? Body::Mode::Math : owner.body.mode,
-                        reductionSite});
+    contexts.emplace(id, CallContext{reductionSite
+                                         ? Body::Mode::Math
+                                         : scopedMode.value_or(owner.body.mode),
+                                     reductionSite, scopedDepth});
     Result result{types.fresh(expr.span)};
     if (checker.types.diagnostic ||
         depth > checker.work.limits.expressionDepth ||
@@ -571,8 +658,15 @@ class ExpressionInference {
       constrain(child(0), Type{}, expr.span);
       constrain(child(1), Type{}, expr.span);
       break;
+    case K::Lambda:
+      fail("source.scoped",
+           "scoped computations cannot escape an argument position", expr.span);
+      break;
     case K::Name:
-      if (expr.binding)
+      if (expr.binding && syntax.bindings[expr.binding->index].scoped)
+        fail("source.scoped", "scoped parameters have no runtime value",
+             expr.span);
+      else if (expr.binding)
         types.equal(result.type, binding(*expr.binding, expr.span), expr.span);
       else
         fail("source.name", "expected a data binding: " + expr.text, expr.span);
@@ -624,7 +718,8 @@ class ExpressionInference {
       break;
     }
     case K::ReductionMap: {
-      if (reductionSite || owner.body.mode != Body::Mode::Local) {
+      if (reductionSite ||
+          scopedMode.value_or(owner.body.mode) != Body::Mode::Local) {
         fail(
             "source.mode",
             "finite reductions require local code outside a scalar binder body",
@@ -795,6 +890,20 @@ public:
       output.covered.insert(id);
       if (auto type = types.get(value.type, syntax.expressions[id].span))
         output.expressions.emplace(id, std::move(*type));
+    }
+    for (const auto &[id, equations] : scopedEquations) {
+      ScopedSignature signature{equations.mode, {}, {}, equations.allowance};
+      for (auto input : equations.inputs) {
+        auto type = types.get(input, syntax.expressions[id].span);
+        if (!type)
+          return {};
+        signature.inputs.push_back(*type);
+      }
+      auto result = types.get(equations.result, syntax.expressions[id].span);
+      if (!result)
+        return {};
+      signature.result = *result;
+      output.scopedSignatures.emplace(id, std::move(signature));
     }
     if (checker.types.diagnostic)
       return {};

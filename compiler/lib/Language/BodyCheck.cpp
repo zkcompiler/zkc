@@ -187,7 +187,7 @@ bool BodyChecker::statements(const SyntaxBody &source) {
       ++statement;
       continue;
     }
-    if (expr.kind == Expression::Kind::Call) {
+    if (expr.kind == Expression::Kind::Call && !expr.binding) {
       auto target = checker.resolve(decl, expr.text, expr.span, false);
       if (checker.types.diagnostic)
         return false;
@@ -529,6 +529,11 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   for (unsigned i = 0; i < decl.services.size(); ++i)
     if (!check.addService(sources[id.index]->serviceBindings[i],
                           decl.services[i]))
+      return false;
+  for (unsigned i = 0; i < decl.scopedInputs.size(); ++i)
+    if (!check.addScoped(sources[id.index]->scopedBindings[i],
+                         decl.scopedInputs[i].signature,
+                         decl.scopedInputs[i].span))
       return false;
   if (!check.run(sources[id.index]->bodies.front(), decl.outputs,
                  result.mode == Body::Mode::Protocol))

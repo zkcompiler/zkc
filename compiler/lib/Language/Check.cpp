@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "ScopedWitness.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include <algorithm>
@@ -102,8 +103,11 @@ Error Checker::run() {
   inferredContracts.clear();
   types.inferCapability = {};
   types.inferNatural = {};
-  if (!finalizeReductions() || !retainNotations() || !retainReductionSources())
+  if (!finalizeReductions() || !retainNotations() ||
+      !retainReductionSources() || !retainScopedSources())
     return types.takeError();
+  if (auto error = checkScopedSources(output, work))
+    return error;
   return checkReductions(output, work);
 }
 bool Checker::bindingName(const Declaration &decl, StringRef name, Span span) {

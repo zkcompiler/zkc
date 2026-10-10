@@ -1180,6 +1180,10 @@ Expected<Correspondence> compareOriginal(const ClosedEntry &project,
     return e;
   if (auto e = checkReductionElaboration(project.project(), limits))
     return e;
+  if (auto e = checkScopedElaboration(project.project(), limits))
+    return e;
+  if (auto e = checkScopedSpecialization(project, limits))
+    return e;
   if (project.project().installationIdentity() != installedCatalogIdentity())
     return error("source.environment",
                  "source was checked against another installed catalog");

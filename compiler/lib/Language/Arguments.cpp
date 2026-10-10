@@ -55,12 +55,14 @@ bindArguments(Semantics &semantics, ArrayRef<StringRef> parameters,
   return result;
 }
 std::vector<StringRef> inputNames(const Declaration &decl) {
-  if (decl.kind != Declaration::Kind::Protocol)
+  if (decl.inputOrder.empty())
     return argumentNames<Port>(decl.inputs);
   std::vector<StringRef> result;
   for (const auto &slot : decl.inputOrder)
     result.push_back(slot.kind == Declaration::InputSlot::Kind::Data
                          ? decl.inputs[slot.index].name
+                     : slot.kind == Declaration::InputSlot::Kind::Scoped
+                         ? decl.scopedInputs[slot.index].name
                          : decl.services[slot.index].name);
   return result;
 }

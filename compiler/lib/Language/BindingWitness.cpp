@@ -416,6 +416,7 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
   }
   if (binding.arguments.size() != callee.parameters.size() ||
       binding.operands.size() != callee.inputs.size() ||
+      binding.scopedArguments.size() != callee.scopedInputs.size() ||
       callee.outputs.size() != 1 || operation.results.size() != 1 ||
       operation.results.front().index >= body.values.size())
     return refuse();
@@ -444,6 +445,7 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
     return (action && action->callee.index == callee.id.index &&
             action->arguments == binding.arguments &&
             action->component == binding.target.component &&
+            action->scopedArguments == binding.scopedArguments &&
             sameOperands(action->operands, binding.operands)) ||
            refuse();
   }

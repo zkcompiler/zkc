@@ -1,5 +1,7 @@
 #include "BindingWitness.h"
 #include "BodyCheck.h"
+#include "BodySummary.h"
+#include "ScopedWitness.h"
 #include "zkc/Language/Builtins.h"
 #include <algorithm>
 #include <numeric>
@@ -7,6 +9,8 @@ using namespace llvm;
 namespace zkc::language::detail {
 std::optional<ValueId> BodyChecker::call(const Expression &expr,
                                          unsigned depth) {
+  if (expr.binding)
+    return invokeScoped(expr, depth);
   if (expr.roles) {
     fail("source.call", "role mappings belong to protocol calls", expr.span);
     return {};
@@ -149,14 +153,32 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   const auto &binding = inference->inputs.at(id);
   std::vector<ValueId> args(callee.inputs.size());
   std::vector<ValueId> authoredOperands;
+  std::vector<unsigned> scopedArgs(callee.scopedInputs.size());
+  std::vector<ValueId> captureOperands;
   if (binding.size() != expr.children.size() ||
-      !checkCallInputMapping(checker.types, binding, args.size(), expr.span)) {
+      !checkCallInputMapping(checker.types, binding,
+                             args.size() + scopedArgs.size(), expr.span)) {
     if (!checker.types.diagnostic)
       fail("source.binding-witness", "call input mapping differs", expr.span);
     return {};
   }
   for (unsigned i = 0; i < expr.children.size(); ++i) {
-    const auto parameter = binding[i];
+    auto slot = callee.inputOrder.empty()
+                    ? Declaration::InputSlot{Declaration::InputSlot::Kind::Data,
+                                             binding[i]}
+                    : callee.inputOrder[binding[i]];
+    if (slot.kind == Declaration::InputSlot::Kind::Scoped) {
+      const auto &signature = inference->scopedSignatures.at(expr.children[i]);
+      auto argument = scopedArgument(expr.children[i], signature, depth + 1);
+      if (!argument)
+        return {};
+      scopedArgs[slot.index] = *argument;
+      const auto &binding = body.scopedBindings[*argument];
+      captureOperands.insert(captureOperands.end(), binding.captures.begin(),
+                             binding.captures.end());
+      continue;
+    }
+    const auto parameter = slot.index;
     auto type = checker.types.substitute(callee.inputs[parameter].type, subst,
                                          expr.span);
     if (!type || (!math() && !checker.types.executableType(*type, expr.span)))
@@ -171,16 +193,11 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
       checker.types.substitute(callee.outputs.front().type, subst, expr.span);
   if (!resultType)
     return {};
-  std::vector<unsigned> dependencies;
+
   if (!callee.abstract) {
-    if (callee.kind == Declaration::Kind::Math)
-      dependencies =
-          callee.body->values[callee.body->results.front().index].components;
     body.mayStop |= callee.body->mayStop;
     body.opaque |= callee.body->opaque;
   } else {
-    dependencies.resize(args.size());
-    std::iota(dependencies.begin(), dependencies.end(), 0);
     auto effects = callee.effectAllowance.value_or(Effects{ordered, ordered});
     body.mayStop |= effects.mayStop;
     body.opaque |= effects.opaque;
@@ -194,29 +211,71 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
         return {};
       resultComponents = std::move(*chosen);
       variable = resultComponents.owners.front();
-      for (auto arg : args)
+      auto operands = args;
+      operands.insert(operands.end(), captureOperands.begin(),
+                      captureOperands.end());
+      for (auto arg : operands)
         if (!placement->together(resultComponents, components(arg), expr.span))
           return {};
     }
   } else {
-    auto substituteDependencies = [&](ArrayRef<unsigned> indices) {
-      std::vector<ValueId> selected;
-      for (auto i : indices)
-        selected.push_back(args[i]);
-      return combine(selected, expr.span);
-    };
-    if (callee.body)
-      for (auto &requirement : callee.body->formationRequirements) {
-        auto required = substituteDependencies(requirement);
-        if (!required)
-          return std::optional<ValueId>{};
+    std::vector<Dependencies> sourceValues;
+    for (unsigned i = 0; i < body.values.size(); ++i)
+      sourceValues.push_back({{i}, false});
+    std::vector<ScopedSummaryBinding> selected;
+    for (auto argument : scopedArgs) {
+      auto binding = summarizeScopedBinding(checker.types, body, argument, {},
+                                            sourceValues, {});
+      if (!binding)
+        return {};
+      selected.push_back(std::move(*binding));
+    }
+    std::vector<Dependencies> inputs;
+    for (auto arg : args)
+      inputs.push_back({{arg.index}, false});
+    std::vector<Dependencies> formation;
+    Dependencies result;
+    if (callee.body) {
+      auto summary = summarizeBody(checker.types, checker.output.declarations,
+                                   *callee.body, subst, inputs, selected);
+      if (!summary)
+        return {};
+      result = summary->results.front();
+      formation = std::move(summary->formation);
+      body.parameterizedSummary |= summary->parameterized;
+    } else {
+      for (auto arg : args)
+        result.inputs.push_back(arg.index);
+      result.parameterized = !scopedArgs.empty();
+    }
+    auto apply =
+        [&](const Dependencies &dependency) -> std::optional<Components> {
+      if (protocol() && dependency.parameterized) {
+        fail("source.scoped-summary",
+             "protocol placement needs a concrete scoped summary", expr.span);
+        return {};
       }
-    auto available = substituteDependencies(dependencies);
+      std::vector<ValueId> operands;
+      for (auto index : dependency.inputs)
+        operands.push_back({index});
+      return combine(operands, expr.span);
+    };
+    for (const auto &requirement : formation)
+      if (!apply(requirement))
+        return {};
+    auto available = apply(result);
     if (!available)
       return {};
     resultComponents = *available;
   }
   CallBinding evidence{target, staticArgs, args, {}, {}, {}, {}};
+  if (!scopedArgs.empty()) {
+    evidence.scopedSource = checker.scopedCalls.size();
+    evidence.argumentOrder = binding;
+    evidence.scopedArguments = scopedArgs;
+    checker.scopedCalls.push_back(std::make_shared<ScopedCallSource>(
+        ScopedCallSource{decl.id, target.declaration, id, {}, scoped}));
+  }
   if (expr.kind == Expression::Kind::NotationCall &&
       (!expr.notation || !inference->operators.count(id))) {
     fail("source.binding-witness", "notation call has no selected binding",
@@ -292,9 +351,13 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
       action.bindingArguments = std::move(roots);
     return emitCall(std::move(action), {});
   }
-  auto result = emitCall(
-      HelperCall{callee.id, std::move(args), staticArgs, target.component, {}},
-      std::move(resultComponents));
+  auto result = emitCall(HelperCall{callee.id,
+                                    std::move(args),
+                                    staticArgs,
+                                    target.component,
+                                    {},
+                                    scopedArgs},
+                         std::move(resultComponents));
   if (result && variable)
     placement->calls.emplace_back(body.operations.size() - 1, *variable);
   return result;

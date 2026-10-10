@@ -1119,6 +1119,10 @@ Expected<std::string> emitOriginal(const ClosedEntry &project,
       })) > limits.declarations)
     return error("source.limit",
                  "checked project exceeds requested emission limits");
+  if (auto e = checkScopedElaboration(project.project(), limits))
+    return e;
+  if (auto e = checkScopedSpecialization(project, limits))
+    return e;
   if (!hasProtocolDialects(context))
     return error("source.dialects",
                  "native dialects must be loaded before source emission");
