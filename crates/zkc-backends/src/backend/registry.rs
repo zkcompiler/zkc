@@ -149,7 +149,7 @@ pub(super) fn installed() -> Result<&'static Registry> {
             let mut r = Registry::default();
             r.shaped(crate::ring::CONTRACTS, ring)?;
             r.family(
-                &[("plonky3/relation.table_rows", "relation.table_rows")],
+                crate::relation::IMPLEMENTATIONS,
                 Signature::Custom(crate::relation::signature),
                 relation,
             )?;

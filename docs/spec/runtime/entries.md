@@ -92,7 +92,14 @@ carrier under the kernels' own rule, else `entry-asset-carrier`: KoalaBear
 arenas under an Ext8 carrier are permitted, the converse is not.
 For `relation.table_rows`, the Host checks the selected static table index and
 the Bundle view's exact field requirements. It does not promote a base-field
-trace to arbitrary extension-field values. A Bundle relation declaration also
+trace to arbitrary extension-field values. For `relation.table_shape`,
+`relation.table_input`, `relation.table_scope`, `relation.table_point` and
+`relation.table_points`, the carrier is the binding's field argument. These
+contracts share one rule, checked once per asset, table and carrier without
+allocating: the static table index, the
+[polynomial view's](../domains/relation-bundles.md#compiler-visible-polynomial-view)
+carrier rule, which lets a KoalaBear table be substituted in Ext8, and that
+the height policy admits a power of two of at least 2. A Bundle relation declaration also
 requires its packaged body; the Host independently checks its derived formal
 ABI, returning `entry-asset-relation` on disagreement. An operation
 of another asset-naming contract returns `entry-asset-contract`. These checks

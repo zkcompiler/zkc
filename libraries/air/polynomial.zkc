@@ -1,0 +1,199 @@
+module air_polynomial;
+
+pub type Vector<F: Field> = builtin("vector", F);
+pub type Polynomial<F: Field> = builtin("polynomial", F);
+
+pub fn length<F: Field>(values: Vector<F>) -> index {
+  return kernel<F>("vector.length", values);
+}
+pub fn empty<F: Field>() -> Vector<F> { return kernel<F>("vector.empty"); }
+pub fn append<F: Field>(values: Vector<F>, value: F) -> Vector<F> {
+  return kernel<F>("vector.append", values, value);
+}
+pub fn concat<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> {
+  return kernel<F>("vector.concat", left, right);
+}
+pub fn get<F: Field>(values: Vector<F>, position: index) -> F {
+  return kernel<F>("vector.get", values, position);
+}
+pub fn slice<F: Field>(values: Vector<F>, start: index, count: index) -> Vector<F> {
+  return kernel<F>("vector.slice", values, start, count);
+}
+pub fn fill<F: Field>(value: F, count: index) -> Vector<F> {
+  return kernel<F>("vector.fill", value, count);
+}
+pub fn add<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> {
+  return kernel<F>("vector.add", left, right);
+}
+pub fn scale<F: Field>(values: Vector<F>, factor: F) -> Vector<F> {
+  return kernel<F>("vector.scale", values, factor);
+}
+pub fn multiply<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> {
+  return kernel<F>("vector.mul", left, right);
+}
+math fn add_product<F: Field>(current: F, term: F, weight: F) -> F {
+  return current + term * weight;
+}
+pub fn accumulate<F: Field>(current: Vector<F>, term: Vector<F>, weight: F) -> Vector<F> {
+  return map add_product<F>(each current, each term, weight);
+}
+pub fn inverse<F: Field>(value: F) -> F { return kernel<F>("field.inverse", value); }
+pub fn less(left: index, right: index) -> bool { return kernel("index.less", left, right); }
+pub fn not(value: bool) -> bool { return kernel("bool.not", value); }
+pub math fn both(left: bool, right: bool) -> bool { return intrinsic("bool.and", left, right); }
+pub fn natural<N: nat>() -> index { return index<N>(); }
+pub fn plus(left: index, right: index) -> index { return left + right; }
+pub fn equal<F: Field>(left: F, right: F) -> bool { return left == right; }
+pub fn yes() -> bool { return true; }
+pub fn maximum(left: index, right: index) -> index { return if less(left, right) { right } else { left }; }
+
+// Binary exponentiation is logarithmic in the public exponent. The fixed
+// loop bound covers the u64 index carrier, without allocating its powers.
+pub fn power<F: Field>(base: F, exponent: index) -> F {
+  let mut remaining = exponent;
+  let mut factor = base;
+  let mut result: F = 1;
+  for _ in 0..64 {
+    let bit = kernel("index.mod", remaining, 2);
+    if bit == 1 { result = result * factor; }
+    factor = factor * factor;
+    remaining = kernel("index.div", remaining, 2);
+  }
+  return result;
+}
+pub fn point<F: Field>(shift: F, size: index, position: index) -> F {
+  return kernel<F>("poly.domain_point", shift, size, position);
+}
+pub fn interpolate<F: Field>(values: Vector<F>, shift: F) -> Polynomial<F> {
+  return kernel<F>("poly.coset_interpolate", values, shift);
+}
+pub fn evaluate<F: Field>(polynomial: Polynomial<F>, position: F) -> F {
+  return kernel<F>("poly.univariate_evaluate", polynomial, position);
+}
+pub fn evaluate_coset<F: Field>(polynomial: Polynomial<F>, shift: F, size: index) -> Vector<F> {
+  return kernel<F>("poly.coset_evaluate", polynomial, shift, size);
+}
+pub fn transpose<F: Field>(values: Vector<F>, rows: index, columns: index) -> Vector<F> {
+  return kernel<F>("vector.transpose", values, rows, columns);
+}
+
+// Columns are contiguous here. Commitments use the transpose, with rows
+// contiguous. Keeping the layout conversion explicit avoids scalar append
+// loops over every matrix coordinate.
+pub fn extend_columns<F: Field>(columns: Vector<F>, count: index,
+    height: index, shift: F, size: index) -> Vector<F> {
+  require length(columns) == height * count;
+  let mut extended = empty<F>();
+  for column in 0..count {
+    let evaluations = slice(columns, column * height, height);
+    let polynomial = interpolate(evaluations, 1);
+    extended = concat(extended, evaluate_coset(polynomial, shift, size));
+  }
+  return extended;
+}
+pub fn column_at<F: Field>(columns: Vector<F>, column: index, size: index,
+    position: F, shift: F) -> F {
+  return evaluate(interpolate(slice(columns, column * size, size), shift), position);
+}
+
+// The active scope is an interval [begin,end) of the trace subgroup. All,
+// first, last and almost-all scopes use the smaller of the interval and its
+// complement. At a complement root the quotient has a removable pole; use
+// the direct product there. General intervals retain their linear cost.
+pub fn vanishing<F: Field>(height: index, begin: index, end: index, x: F) -> F {
+  require both(not(less(end, begin)), not(less(height, end)));
+  let count = end - begin;
+  let complement = height - count;
+  let use_complement = less(complement, count);
+  let mut product: F = 1;
+  if use_complement {
+    for row in 0..begin { product = product * (x - point<F>(1, height, row)); }
+    for row in end..height { product = product * (x - point<F>(1, height, row)); }
+    if product == 0 {
+      product = 1;
+      for row in begin..end { product = product * (x - point<F>(1, height, row)); }
+    } else {
+      product = (power(x, height) - 1) * inverse(product);
+    }
+  } else {
+    for row in begin..end { product = product * (x - point<F>(1, height, row)); }
+  }
+  return product;
+}
+
+pub fn disjoint_coset<F: Field>(height: index, size: index, shift: F) -> bool {
+  // H is a subgroup of the size-N domain. s^N != 1 excludes H from sK.
+  let valid_root = kernel<F>("poly.domain_root", size);
+  let valid_trace_root = kernel<F>("poly.domain_root", height);
+  return both(both(not(shift == 0), not(power(shift, size) == 1)),
+    both(not(valid_root == 0), not(valid_trace_root == 0)));
+}
+pub fn outside_domains<F: Field>(height: index, size: index, shift: F, x: F) -> bool {
+  return both(not(power(x, height) == 1), not(power(x, size) == power(shift, size)));
+}
+
+// A polynomial of degree below count*width is split into coefficient blocks.
+// The padding is only representation padding, never a change in degree bound.
+pub fn split_quotient<F: Field>(values: Vector<F>, shift: F, size: index,
+    width: index, count: index) -> Vector<F> {
+  let coefficients = kernel<F>("poly.coefficients", interpolate(values, shift));
+  let actual = length(coefficients);
+  let capacity = width * count;
+  require not(less(capacity, actual));
+  let padded = concat(coefficients, fill<F>(0, capacity - actual));
+  let mut columns = empty<F>();
+  for block in 0..count {
+    let polynomial = kernel<F>("poly.from_coefficients", slice(padded, block * width, width));
+    columns = concat(columns, evaluate_coset(polynomial, shift, size));
+  }
+  return columns;
+}
+pub fn recombine<F: Field>(claims: Vector<F>, height: index, x: F) -> F {
+  let stride = power(x, height);
+  let mut weight: F = 1;
+  let mut result: F = 0;
+  for column in 0..length(claims) {
+    result = result + weight * get(claims, column);
+    weight = weight * stride;
+  }
+  return result;
+}
+
+// Vector form of the same interval vanishing polynomial. The subgroup
+// polynomial is evaluated geometrically, so full/interior scopes take work
+// linear in the coset size on disjoint domains. Two two-adic cosets intersect
+// exactly when shift^max(height,size) = 1. On an intersecting coset, use the
+// direct product to avoid inverting zero at complement roots. A full scope
+// has denominator one and keeps the geometric evaluation on every coset.
+pub fn vanishing_values<F: Field>(height: index, begin: index, end: index,
+    shift: F, size: index) -> Vector<F> {
+  require both(not(less(end, begin)), not(less(height, end)));
+  let count = end - begin;
+  let complement = height - count;
+  let use_complement = if less(complement, count) {
+    if complement == 0 { true }
+    else { not(power(shift, maximum(height, size)) == 1) }
+  } else { false };
+  let points = kernel<F>("poly.domain_points", shift, size);
+  let mut product = fill<F>(1, size);
+  if use_complement {
+    for row in 0..begin {
+      let factor = kernel<F>("vector.sub", points, fill(point<F>(1, height, row), size));
+      product = multiply(product, factor);
+    }
+    for row in end..height {
+      let factor = kernel<F>("vector.sub", points, fill(point<F>(1, height, row), size));
+      product = multiply(product, factor);
+    }
+    let root = kernel<F>("poly.domain_root", size);
+    let monomials = scale(kernel<F>("vector.geometric", power(root, height), size), power(shift, height));
+    let full = kernel<F>("vector.sub", monomials, fill<F>(1, size));
+    product = multiply(full, kernel<F>("vector.inverse", product));
+  } else {
+    for row in begin..end {
+      let factor = kernel<F>("vector.sub", points, fill(point<F>(1, height, row), size));
+      product = multiply(product, factor);
+    }
+  }
+  return product;
+}

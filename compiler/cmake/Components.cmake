@@ -99,6 +99,7 @@ add_zkc_component(Relation
   lib/Relation/BundleData.cpp
   lib/Relation/BundleStaged.cpp
   lib/Relation/BundleTable.cpp
+  lib/Relation/BundlePolynomial.cpp
   lib/Relation/Matrices.cpp
 )
 add_zkc_component(Program

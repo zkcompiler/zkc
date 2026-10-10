@@ -1,4 +1,5 @@
 #include "BundleInternal.h"
+#include "zkc/Relation/BundlePolynomial.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/MathExtras.h"
@@ -9,8 +10,6 @@ namespace zkc::relation {
 using namespace bundle;
 
 namespace {
-/// Field compatibility of every arena node an assertion needs, visited
-/// through the arena's own evaluation order without arithmetic.
 struct CarrierCheck {
   StringRef carrier, base;
   Expected<char> ok(StringRef field) const {
@@ -32,6 +31,17 @@ std::vector<int32_t> readOffsets(const BundleOutputFact &fact) {
   return result;
 }
 } // namespace
+
+Error bundle::checkAssertionFields(const BundleTable &t, StringRef carrier,
+                                   StringRef base) {
+  std::set<uint32_t> outputs;
+  for (const auto &assertion : t.assertions)
+    outputs.insert(assertion.output);
+  std::vector<uint32_t> positions(outputs.begin(), outputs.end());
+  CarrierCheck check{carrier, base};
+  auto visited = t.arena.evaluate<char>(positions, check);
+  return visited ? Error::success() : visited.takeError();
+}
 
 Expected<BundleTableView> bundleTableView(const Bundle &bundle, uint32_t table,
                                           StringRef carrier) {
@@ -64,20 +74,31 @@ Expected<BundleTableView> bundleTableView(const Bundle &bundle, uint32_t table,
     width += group.width; // At most 256 groups of width 65,536.
   }
   const auto &facts = bundle.facts()[table];
-  std::set<uint32_t> outputs;
   for (const auto &assertion : t.assertions) {
     const auto &fact = facts[assertion.output];
     if (fact.field != carrier)
       return zkc::error("relation-table-carrier", t.name);
     view.degree = std::max(view.degree, fact.degree);
-    outputs.insert(assertion.output);
   }
   view.assertions = t.assertions.size();
-  CarrierCheck check{carrier, shape->degree == 1 ? StringRef() : shape->prime};
-  std::vector<uint32_t> positions(outputs.begin(), outputs.end());
-  if (auto visited = t.arena.evaluate<char>(positions, check); !visited)
-    return visited.takeError();
+  if (auto error = checkAssertionFields(
+          t, carrier, shape->degree == 1 ? StringRef() : shape->prime))
+    return std::move(error);
   return view;
+}
+
+Error checkBundleTableReference(const Bundle &bundle, StringRef contract,
+                                uint32_t table, StringRef carrier) {
+  if (contract == "relation.table_rows") {
+    auto view = bundleTableView(bundle, table, carrier);
+    return view ? Error::success() : view.takeError();
+  }
+  if (contract == "relation.table_shape" ||
+      contract == "relation.table_input" ||
+      contract == "relation.table_scope" ||
+      contract == "relation.table_point" || contract == "relation.table_points")
+    return checkBundlePolynomialTable(bundle, table, carrier);
+  return zkc::error("relation-table-contract", contract);
 }
 
 Expected<BundleTableLengths>

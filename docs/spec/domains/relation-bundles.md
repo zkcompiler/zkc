@@ -11,8 +11,10 @@ separate [staged program](#staged-challenge-dependent-programs).
 
 A bundle defines a [relation family](../relations.md#relation-families-and-instances).
 It does not select a domain, selector convention, quotient, commitment or proof
-protocol. Importing a bundle from an external system is a separate adequacy
-claim; structural identity is not semantic equivalence.
+protocol; a [polynomial view](#polynomial-view-of-one-table) of one table
+derives degree bounds under selected parameters without changing the relation.
+Importing a bundle from an external system is a separate adequacy claim;
+structural identity is not semantic equivalence.
 
 ## Compiler-visible table evaluation
 
@@ -62,6 +64,221 @@ missing, duplicate or mismatched assets (`relation-asset-missing`,
 decoded metadata, including derived per-output read facts, share a 32 MiB
 registry allowance (`relation-assets-bytes`). Named Entries combine this
 allowance with their Ring assets.
+
+## Polynomial view of one table
+
+A polynomial view interprets one **present table** of an admitted Bundle under
+the [finite-scope law](constraints.md#polynomial-interpretation-of-finite-scopes)
+of the finite AIR: every column of every group denotes an interpolation
+polynomial `T` of degree at most `trace_degree` over distinct domain points for
+the rows, a read at signed offset `k` denotes `T(g^k X)`, and an assertion on
+scope `S` requires its numerator to be divisible by the vanishing polynomial
+`Z_S` of the scope's rows. Degrees weigh every read one and every public slot
+zero, whatever the group's authority, exactly as the Bundle's facts do. For a
+cyclic table the view adds a native wrap rule, stated below, that the finite
+law and its formal model do not cover. The
+native analysis is `analyzeBundlePolynomials` in
+[`Relation/BundlePolynomial.h`](../../../compiler/include/zkc/Relation/BundlePolynomial.h).
+Its parameters `height`, `domain_size` and `trace_degree` and their law
+`1 <= height <= domain_size <= 2^24` and `domain_size - 1 <= trace_degree <=
+2^24` are shared with the finite AIR analysis (`air-polynomial-height`,
+`air-polynomial-domain-size`, `air-polynomial-trace-degree`).
+
+From the Bundle's retained facts, without materializing any row, the view
+derives:
+
+- every group's exact width, authority and field, with the sorted distinct
+  offsets its active assertions read;
+- the ordered binding list of the table arena, one entry per arena input.
+  Evaluating only active outputs requests exactly the bindings whose read or
+  public slot appears in the subject lists below; the others are never read;
+- the sorted distinct `(group, offset, column)` reads and the sorted public
+  slots of active assertions: the opening subjects, with their signed shifts;
+- per assertion its output, scope, read degree `d`, active rows `[begin, end)`
+  at the height, selector degree `domain_size - |S|`, numerator degree
+  `d * trace_degree`, and quotient degree `d * trace_degree - |S|` exactly
+  when the numerator degree reaches `|S|`; otherwise an exactly divisible
+  numerator must be zero. An empty scope is inactive: it imposes no quotient
+  and contributes no subject. The complement form
+  `numerator + selector - domain_size` agrees with the quotient degree;
+- the largest quotient degree over active assertions and the number of
+  coefficient blocks of length `domain_size` sufficient for each individual
+  active quotient, `floor(quotient_degree / domain_size) + 1`, and hence for
+  any linear combination of them. The count is zero when no active assertion
+  has a quotient. This is not a soundness claim about random assertion
+  batching;
+- the identity of the table arena. The arena itself stays borrowed from the
+  admitted Bundle: `bundlePolynomialArena` re-derives it and refuses a view of
+  another bundle or table (`bundle-polynomial-relation`).
+
+The **carrier admission** (`admitBundlePolynomialCarrier`) requires every
+Bundle public slot, every group of the table and every arena node an assertion
+needs to have the carrier field or, for an extension carrier, its base field,
+which is then interpreted in the extension (`relation-table-index`,
+`relation-table-carrier`). An extension field is never narrowed, and outputs
+used only by interactions are not visited. The analysis admits any presented
+field; unlike the actual-row view of `relation.table_rows`, which keeps exact
+declared fields, it lets a KoalaBear table be analyzed in Ext8. A view records
+the carrier and its base coordinates; each group keeps its declared field.
+
+Checks run in this order: the carrier admission, the parameter law, the
+table's height policy (`bundle-height`), the domain rule, and every assertion
+window at the height (`bundle-scope-height`, `bundle-window`). A finite read is defined only on its scope, so the shifted
+polynomial realizes it only there; a finite table may pad its domain beyond
+its height, which never adds active rows. A cyclic read wraps in the height
+domain, which `T(g^k X)` realizes on every row only when the row points are
+the whole subgroup of order `height`. A cyclic table therefore requires
+`domain_size = height`, a power of two at least 2 that the carrier's prime
+subfield admits as the order of a two-adic root (`bundle-polynomial-domain`).
+An unsupported domain or embedding refuses; nothing is reinterpreted silently.
+
+The selected initial profile is **two-adic natural**: `height = domain_size =
+n` for a power of two `n >= 2`, `trace_degree = n - 1`, and row `i` at the
+`i`-th power of the installed two-adic root of order `n`
+(`twoAdicPolynomialParameters`, `bundle-polynomial-two-adic`). A view has this
+profile only when its carrier installs that root. Under it the
+selectors of `first`, `last` and `interior(0, 1)` have degrees `n - 1`,
+`n - 1` and `1`, the unnormalized complementary vanishing polynomials. Any
+other checked parameters are the general profile, which a later library may
+restrict; `interval` scopes are analyzed, but a verifier's evaluation of their
+vanishing polynomial is linear in the scope.
+
+The deterministic `zkc.relation-bundle-polynomial-analysis/0` encoding records
+these facts for adapters and source clients. A view of an optional table
+applies only when the instance makes it present. The view establishes no
+whole-Bundle interaction, presence, satisfaction, commitment, batching or
+proof claim. On a finite table, per-assertion divisibility is the
+[per-constraint law](constraints.md#polynomial-interpretation-of-finite-scopes)
+with its formal model. The cyclic wrap rule has no Lean model; its evidence is
+the bounded coefficient check of the recurrence fixture recorded in the
+[native validation map](../../../tests/native.md).
+
+## Compiler-visible polynomial view
+
+Five kernels describe one present table to a source library that constructs
+its own polynomial protocol. Each has roots `<F, Table>` like
+`relation.table_rows`, the same Bundle asset parameter, and the installed
+KoalaBear or Ext8 provider. They derive facts from the admitted Bundle and
+substitute its existing arena. They select no domain shift, challenge,
+quotient combination, commitment or proof, and they check no interaction.
+
+| Contract | Data operands | Results |
+|---|---|---|
+| `relation.table_shape<F, Table>` | `height` | `(witness_width, config_width, public_width, public_slots, inputs, assertions, quotient_chunks)` |
+| `relation.table_input<F, Table>` | `height`, `input` | `(kind, column, rotation)` |
+| `relation.table_scope<F, Table>` | `height`, `assertion` | `(begin, end)` |
+| `relation.table_point<F, Table>` | one value per arena input | one value per assertion, in assertion order |
+| `relation.table_points<F, Table>` | `rows` row-major assignments, `rows` | `rows` row-major results, one column per assertion |
+
+**Domain.** A table of height `h` is interpreted on the multiplicative
+subgroup of order `h`: row `r` is `g^r` for a generator `g`, and each column
+polynomial has degree at most `h - 1`. The height must be a power of two of
+at least 2 (`bundle-polynomial-two-adic`) and must meet the table's policy
+(`bundle-height`). As for `relation.table_rows`, the calling protocol supplies
+a configured or instance height from that authority. A read at signed offset
+`o` is the shifted polynomial `T(g^o X)`. Because `g` has order `h`, this is
+exactly a cyclic read. A finite read agrees with it on every row where its
+window is defined. Every assertion's window is checked at the height
+(`bundle-scope-height`, `bundle-window`). A domain larger than the height is
+not this view.
+
+**Shape.** Widths sum the element widths of each authority's groups.
+Each authority forms one combined matrix, row-major over the sum of its group
+widths in declaration order. Column `c` of group `g` is combined column
+`offset_g + c`, where `offset_g` sums the widths of earlier groups of the same
+authority. This layout deliberately differs from `relation.table_rows`, whose
+operands concatenate each group's own row-major array. A source adapter owns
+any packing between the two. `public_slots` counts every Bundle public slot;
+`inputs` and `assertions` count the arena inputs and the table's assertions.
+
+`quotient_chunks` counts chunks of length `h`. Suppose an assertion has derived
+degree `d` and a nonempty set `A` of active rows. Its interpretation has degree
+at most `d(h-1)`. When `d(h-1) >= |A|`, its quotient by `Z_A` has degree at
+most `d(h-1) - |A|` and fits in `floor((d(h-1) - |A|) / h) + 1` chunks.
+Otherwise exact divisibility forces the interpretation to be zero
+([finite scopes](constraints.md#polynomial-interpretation-of-finite-scopes)).
+The result is the maximum over assertions and at least 1, including for a
+table without assertions: exactly `max(1, quotient_chunks)` of the
+[analysis](#polynomial-view-of-one-table) at `twoAdicPolynomialParameters(h)`,
+whose zero means that no active assertion has a quotient. A fixture shared by
+the native analysis and backend tests pins this relation. It bounds each
+quotient and therefore any fixed linear combination; it is not a claim about
+random batching.
+
+The shape also bounds three quantities. The table's declared data at this
+height, together with every public slot, is at most `2^22` base coordinates
+(`bundle-data-limit`). When there are assertions,
+`h * (nodes + inputs + assertions + 1)` is at most `2^26`
+(`bundle-work-limit`). `quotient_chunks * h` is at most `2^24`
+(`bundle-polynomial-limit`). The checks run in this order: two-adic height,
+height policy, windows, data, work and quotient size.
+`relation.table_input` and `relation.table_scope` apply the same checks at
+their height before they read an index.
+
+**Inputs.** There is one descriptor per ordered arena input
+(`relation-table-input-index`). Kind 0 is a Bundle public slot, with `column`
+equal to the slot and `rotation` 0. Kinds 1, 2 and 3 are witness,
+configuration and public-group reads. A read's `column` is in the combined
+matrix of its authority, and `rotation` is its signed offset reduced modulo
+`h`: offset `-1` at height 8 is rotation 7.
+
+**Scopes.** `relation.table_scope` returns the active rows `[begin, end)` of
+an assertion's scope, as in [rows and windows](#rows-and-windows). An empty
+interior scope is `(0, 0)`; an empty interval keeps its start
+(`relation-table-assertion-index`).
+
+**Points.** `relation.table_point` takes exactly one value per arena input
+(`relation-table-point-shape`). It substitutes them through the shared ring
+substitution and returns the assertion outputs in assertion order, repeating
+an output that two assertions share. It applies no row mask, selector,
+vanishing polynomial or division, and it claims no satisfaction. Under an
+Ext8 carrier a KoalaBear table is interpreted in Ext8: inputs, constants and
+operations lift to the extension, substitution points may be any extension
+values and results keep every coordinate. An Ext8 table admits only its Ext8
+carrier; nothing is narrowed or coerced from another field.
+
+`relation.table_points` applies the same substitution to `rows` assignments
+at once. Its first operand is row-major with one column per arena input; its
+result is row-major with one column per assertion, in assertion order. One row
+is exactly `relation.table_point`. Rows, inputs and assertions may each be
+zero; a length other than `rows * inputs` is `relation-table-point-shape`.
+Like `relation.table_point`, it selects no domain: the caller chooses the
+points, for example a coset of a larger domain, and applies any selector or
+division itself.
+
+**Carrier and interactions.** The analysis's carrier admission applies with
+carrier `F` (`relation-table-carrier`). An output used only by interactions is
+neither checked nor evaluated. An input it alone uses keeps its descriptor
+and its column; the point substitutions ignore its value. The kernels claim
+nothing about interactions, presence or whole-Bundle satisfaction; a consumer
+must exclude or separately discharge them.
+
+When a body closes, the compiler checks the carrier admission and that the
+height policy admits a power of two `n >= 2` whose root of order `n` the
+carrier installs. Table and height failures report `source.asset-table`;
+carrier failures report `source.asset-carrier`. This rule names a capability,
+not a provider: only the installed KoalaBear and Ext8 providers implement the
+kernels. The Host independently checks the same premises once per reachable
+asset, table and carrier before execution, without allocating.
+Height-dependent checks happen during execution.
+
+Every invocation first repeats the allocation-free static check, which visits
+at most the public slots, groups and assertions it charges for. Shape, input
+and scope then charge
+`W = nodes + inputs + groups + public slots + assertions + assertion reads + 1`
+units to the shared ring work budget before their height profile, where
+assertion reads count the derived read facts of each assertion's output.
+`relation.table_point` charges `W + U` with
+`U = nodes + inputs + assertions + 1`, and `relation.table_points` charges
+`W + rows * U`, as one charge. Before it, a point substitution checks its shape, its result against the element and
+value policy and the invocation's output allowance, and the result together
+with node scratch and the prepared assertion sub-DAG against the value policy.
+The sub-DAG is bounded by its arena's admission charge plus 32 bytes per
+assertion. It is prepared only after the charge, once per invocation and
+shared by every row; nothing is retained between invocations. No charge or
+allocation grows with the height. The result and scratch elements of one batch share the
+[element ceiling](../runtime/capacity.md), 65,536 by default, so a large
+evaluation domain may need several calls.
 
 ## Carrier
 

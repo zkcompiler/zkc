@@ -35,6 +35,28 @@ struct AIRPolynomialAnalysis {
   llvm::json::Value encode() const;
 };
 
+/// The parameter law shared by the finite AIR analysis and the bundle
+/// polynomial view: height in [1, sizeLimit], domainSize in [height,
+/// sizeLimit] and traceDegree in [domainSize - 1, sizeLimit]
+/// (`air-polynomial-height`, `air-polynomial-domain-size`,
+/// `air-polynomial-trace-degree`).
+llvm::Error checkAIRPolynomialParameters(AIRPolynomialParameters);
+/// The scoped quotient law for one check of conservative degree `degree`
+/// whose active original rows are [begin, end) under checked parameters:
+/// selector degree domainSize - |S|, numerator degree degree * traceDegree,
+/// and quotient degree numerator - |S| exactly when the numerator reaches |S|.
+/// The complement form numerator + selector - domainSize agrees. Window
+/// adequacy of the active rows is the caller's obligation.
+AIRPolynomialConstraint scopedQuotientBound(AIRPolynomialParameters,
+                                            uint32_t begin, uint32_t end,
+                                            uint32_t degree);
+/// Coefficient chunks of length domainSize that hold one quotient of this
+/// degree: the block split Q(X) = sum_k X^(k*domainSize) Q_k(X).
+inline uint64_t quotientChunkCount(uint64_t quotientDegree,
+                                   uint32_t domainSize) {
+  return quotientDegree / domainSize + 1;
+}
+
 /// Work is bounded by relation syntax, independent of height. Unlike the
 /// selective evaluator, this does not materialize a per-row schedule.
 llvm::Expected<AIRPolynomialAnalysis>

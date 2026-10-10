@@ -22,6 +22,8 @@ std::optional<int32_t> signedOffset(const llvm::json::Value &);
 std::string printOffset(int32_t);
 std::optional<std::string> string(const llvm::json::Value &);
 
+llvm::StringRef authorityName(BundleAuthority);
+llvm::json::Value encodeHeight(const BundleHeight &);
 llvm::Error checkScope(const BundleScope &);
 llvm::json::Value encodeScope(const BundleScope &);
 llvm::Expected<BundleScope> readScope(const llvm::json::Value &);
@@ -152,6 +154,13 @@ struct AnalysisBudget {
   llvm::Error account(const ring::Expression &, uint64_t traversals,
                       uint64_t retainedOutputs);
 };
+
+/// Every arena node the table's assertions need has field `carrier` or, when
+/// `base` is nonempty, `base` (`relation-table-carrier`). Nodes are visited
+/// in the arena's own evaluation order, without arithmetic; outputs used only
+/// by interactions are not visited.
+llvm::Error checkAssertionFields(const BundleTable &, llvm::StringRef carrier,
+                                 llvm::StringRef base);
 
 /// Re-home a refusal with a diagnostic location, keeping its identifier.
 llvm::Error withDetail(llvm::Error, llvm::StringRef detail);

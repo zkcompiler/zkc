@@ -161,7 +161,12 @@
       "fixed_vector.dot",
       "fixed_vector.from_vector",
       "fixed_vector.to_vector",
-      "relation.table_rows"
+      "relation.table_rows",
+      "relation.table_shape",
+      "relation.table_input",
+      "relation.table_scope",
+      "relation.table_point",
+      "relation.table_points"
     ],
     "transcript": [
       "transcript.native.indexed.challenge",

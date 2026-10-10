@@ -319,6 +319,13 @@ sliceBundleTableData(const Bundle &, const BundleTableView &,
                      const BundleConfiguration &, const BundleInstance &,
                      const BundleWitness &);
 
+/// The static reference rule of an installed Bundle kernel contract: the
+/// dense table view for `relation.table_rows`, `checkBundlePolynomialTable`
+/// (BundlePolynomial.h) for the polynomial kernels, and
+/// `relation-table-contract` otherwise.
+llvm::Error checkBundleTableReference(const Bundle &, llvm::StringRef contract,
+                                      uint32_t table, llvm::StringRef carrier);
+
 /// A challenge-dependent constraint program. It references a bundle but never
 /// changes that bundle's meaning: it denotes the challenge-indexed predicate
 /// over the base data, its own phase groups, challenges and received claims.

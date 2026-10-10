@@ -12,7 +12,7 @@ use super::{Interface, Package};
 use std::sync::Arc;
 use zkc_backends::{relation::Registry as RelationRegistry, ring::Registry};
 use zkc_runtime::{
-    interactive::{Admitted, AssetReference, Type},
+    interactive::{Admitted, AssetReference, Identity, Type},
     relation::Bundle,
     ring::Expression,
 };
@@ -95,9 +95,14 @@ impl EntryAssets {
         for reference in &references {
             let binding = reference.binding.declaration();
             // Reachability can repeat one immutable reference many times.
-            // Scan its asset once per contract and closed binding arguments.
+            // Scan its asset once per reference rule and closed binding
+            // arguments; the polynomial kernels share one rule.
+            let rule = match binding.contract.as_str() {
+                contract if POLYNOMIAL.contains(&contract) => POLYNOMIAL[0],
+                contract => contract,
+            };
             if checked.insert((
-                binding.contract.as_str(),
+                rule,
                 binding.arguments.as_slice(),
                 reference.identity.as_str(),
             )) {
@@ -136,6 +141,15 @@ impl EntryAssets {
         &self.relations
     }
 }
+
+/// Contracts of the Bundle polynomial view, which share one reference rule.
+const POLYNOMIAL: &[&str] = &[
+    "relation.table_shape",
+    "relation.table_input",
+    "relation.table_scope",
+    "relation.table_point",
+    "relation.table_points",
+];
 
 /// Each asset family owns its reference rule. A ring operation substitutes its
 /// arena over the field of its first vector operand, so that field is the
@@ -181,6 +195,32 @@ fn check(
                 .ok_or("entry-asset-contract")?;
             relations
                 .table_reference(&reference.identity, table, carrier)
+                .map(|_| ())
+                .map_err(|e| match e.code.as_str() {
+                    "refused:relation-asset-missing" => "entry-asset-missing".into(),
+                    "refused:relation-table-carrier" => "entry-asset-carrier".into(),
+                    _ => e.to_string(),
+                })
+        }
+        // The polynomial kernels take the carrier from their field argument:
+        // only the point substitutions have field-valued operands. The check
+        // allocates nothing.
+        contract if POLYNOMIAL.contains(&contract) => {
+            let declaration = reference.binding.declaration();
+            let (Some(carrier), Some(table)) = (
+                declaration
+                    .arguments
+                    .first()
+                    .and_then(|field| Identity::parse(field).ok()),
+                declaration
+                    .arguments
+                    .get(1)
+                    .and_then(|index| index.parse().ok()),
+            ) else {
+                return Err("entry-asset-contract".into());
+            };
+            relations
+                .polynomial_reference(&reference.identity, table, carrier)
                 .map(|_| ())
                 .map_err(|e| match e.code.as_str() {
                     "refused:relation-asset-missing" => "entry-asset-missing".into(),
