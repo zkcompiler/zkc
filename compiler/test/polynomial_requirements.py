@@ -200,4 +200,22 @@ with case("unused invalid polynomial observation precedes folding and requiremen
     invalid = source.replace(marker, extra + marker)
     checked("{", program=invalid, refuses="polynomial-formation")
 
+
+
+with case("fusion preparation choice is explicit in independent and compiled reports"):
+    requirement_path.write_text(canonical)
+    fused = commands.verified(source, None,
+                              "--zkc-project-protocol=simplify=false fuse-vector-reductions=true")
+    candidate_path.write_text(fused)
+    checked_report = json.loads(commands.run([
+        compiler, "protocol-check-reductions", source_path, requirement_path,
+        candidate_path, "--fuse-vector-reductions",
+    ]))
+    assert checked_report["fuse_vector_reductions"] is True
+    compiled = json.loads(commands.source(
+        "protocol-checked-bundle", source, "--entry=reduction",
+        f"--requirements={requirement_path}", "--fuse-vector-reductions",
+    ))
+    assert compiled["correspondence"]["fuse_vector_reductions"] is True
+
 print(f"polynomial requirements: {counted()} cases")
