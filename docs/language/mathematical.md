@@ -27,8 +27,11 @@ Use the same options with `language-emit` to print checked original MLIR,
 `language-interface` for the selected Entry's named port layout, or
 `language-bundle` for the selected run bundle or proof deployment, or
 `language-package` for the immutable package containing original, interface,
-artifact and compilation options. Every command checks source, target
-admission and source correspondence. Module and Asset capture is explicit. `--no-simplify` and `--release-storage` select
+artifact and compilation options. These Entry commands check source, target
+admission and source correspondence. `language-check` also accepts no `--entry`
+to check definitions alone; the report identifies that narrower scope.
+The application CLI offers `zkc check` with the same behavior and optional
+[project inputs](README.md#project-inputs). Module and Asset capture is explicit. `--no-simplify` and `--release-storage` select
 existing downstream compiler options for bundle production.
 
 `--asset=NAME=FORMAT=FILE` adds explicitly captured relation data. Supported
@@ -251,6 +254,10 @@ The compilation APIs are [Language/Project.h](../../compiler/include/zkc/Languag
 The independent reader is [Compiler/LanguageInterface.h](../../compiler/include/zkc/Compiler/LanguageInterface.h).
 Diagnostics retain byte spans; recovery tokens cannot be promoted into checked
 state. The compiler never accepts a caller-constructed checked project.
+[Diagnostics.h](../../compiler/include/zkc/Language/Diagnostics.h) renders bounded
+primary and related spans from captured bytes.
+[Inspection.h](../../compiler/include/zkc/Language/Inspection.h) describes completed
+public callables without rechecking or specializing them.
 
 Target failures retain their phase and generated coordinates. Admission failures
 also identify a related source declaration; later compiler diagnostics use the

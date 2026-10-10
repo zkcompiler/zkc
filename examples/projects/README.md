@@ -7,12 +7,14 @@
 | [Expression Sumcheck](expression-sumcheck/README.md) | Generic Sumcheck over a captured ring asset with KoalaBear/Ext8 Entries | Exact round coefficients, extension-field challenges and public-table terminal evaluation |
 | [AIR STARK](air-stark/README.md) | Captured Plonky3 AIR with quotient, DEEP and FRI libraries | Separate prover/verifier Hosts over base-field trace commitments and extension-field claims |
 | [Accumulator machine](accumulator-machine/README.md) | External CPU/program/memory relation with LogUp or grand-product reductions | Whole-Bundle proof through phased auxiliary commitments, OOD/DEEP and shared FRI |
+| [Mathematics](mathematics/README.md) | Formal polynomial and runtime vector helpers | Formal evaluation compared with a shared affine fold |
 | [Native map](native-map/README.md) | Row formulas applied to whole KoalaBear/Ext8 columns with checked `map` | A gate check over public columns and an interactive challenge combination |
 | [FRI](fri/README.md) | Generic binary FRI with authenticated rows | Commitments, extension-field folding challenges, simultaneous queries and a bounded terminal polynomial |
 | [Imported AIR](imported-air/README.md) | Captured Plonky3 AIR expression and relation Bundle | Actual trace checks and a disclosed-trace proof, plus coefficient and Ext8 point views |
 
-The [walkthrough](../../docs/getting-started.md) runs the Schnorr project. Compile
-explicit `--module=NAME=FILE` mappings, then invoke the selected package through
+The [walkthrough](../../docs/getting-started.md) runs the Schnorr project. Each project has an explicit `zkc.json` source and asset map. Run
+`zkc check --project=examples/projects/NAME/zkc.json --declarations`, then
+compile with the same `--project` and a selected `--entry`. Invoke the package through
 the [common Host](../../docs/runtime/entries.md). These projects require no
 protocol-specific executor. The [source project checks](../../tests/protocol/test_source_projects.py)
 exercise their commands and invalid inputs/proofs.

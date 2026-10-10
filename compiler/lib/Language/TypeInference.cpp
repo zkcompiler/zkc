@@ -1,11 +1,12 @@
 #include "TypeInference.h"
+#include "zkc/Language/Diagnostics.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::language::detail {
 TypeInference::Variable TypeInference::fresh(Span span) {
   types.charge(1, span);
   auto id = nodes.size();
-  nodes.push_back({unsigned(id), 0, {}, {}});
+  nodes.push_back({unsigned(id), 0, span, {}, {}});
   return id;
 }
 TypeInference::Variable TypeInference::root(Variable id) {
@@ -38,11 +39,17 @@ TypeInference::Variable TypeInference::known(const Type &type, Span span) {
 TypeInference::Variable TypeInference::instantiate(const Type &type,
                                                    const Parameters &parameters,
                                                    Span span) {
-  return instantiate(type, parameters, span, 1);
+  return instantiate(type, parameters, span, span, 1);
 }
 TypeInference::Variable TypeInference::instantiate(const Type &type,
                                                    const Parameters &parameters,
-                                                   Span span, unsigned depth) {
+                                                   Span span, Span origin) {
+  return instantiate(type, parameters, span, origin, 1);
+}
+TypeInference::Variable TypeInference::instantiate(const Type &type,
+                                                   const Parameters &parameters,
+                                                   Span span, Span origin,
+                                                   unsigned depth) {
   if (types.diagnostic || depth > types.work.limits.typeDepth ||
       !types.charge(1, span)) {
     if (!types.diagnostic)
@@ -59,17 +66,18 @@ TypeInference::Variable TypeInference::instantiate(const Type &type,
   if (!parameters.empty() &&
       (type.kind == Type::Kind::Associated || !domainSort(type).empty()) &&
       !type.arguments.empty()) {
-    auto base =
-        instantiate(type.arguments.front(), parameters, span, depth + 1);
+    auto base = instantiate(type.arguments.front(), parameters, span, origin,
+                            depth + 1);
     auto result = fresh(span);
+    nodes[result].origin = origin;
     auto name = StringRef(type.domain).rsplit("::").second.str();
-    defer([this, base, result, name, span] {
+    defer([this, base, result, name, span, origin] {
       auto input = get(base, span);
       if (!input)
         return false;
       auto output = types.associated(*input, name, span);
       if (output)
-        equal(result, known(*output, span), span);
+        equal(result, instantiate(*output, {}, span, origin), span);
       return true;
     });
     return result;
@@ -84,7 +92,8 @@ TypeInference::Variable TypeInference::instantiate(const Type &type,
     }
     if (!dependencies.empty()) {
       auto result = fresh(span);
-      defer([this, result, type, dependencies, span] {
+      nodes[result].origin = origin;
+      defer([this, result, type, dependencies, span, origin] {
         Substitution substitution;
         for (auto &[name, variable] : dependencies) {
           auto value = get(variable, span);
@@ -94,7 +103,7 @@ TypeInference::Variable TypeInference::instantiate(const Type &type,
         }
         auto output = types.substitute(type, substitution, span);
         if (output)
-          equal(result, known(*output, span), span);
+          equal(result, instantiate(*output, {}, span, origin), span);
         return true;
       });
       return result;
@@ -102,7 +111,8 @@ TypeInference::Variable TypeInference::instantiate(const Type &type,
   }
   std::vector<Variable> arguments;
   for (const auto &argument : type.arguments)
-    arguments.push_back(instantiate(argument, parameters, span, depth + 1));
+    arguments.push_back(
+        instantiate(argument, parameters, span, origin, depth + 1));
   if (type.kind == Type::Kind::Array) {
     Type dimension(Type::Kind::Natural);
     dimension.dimension = type.dimension;
@@ -114,9 +124,12 @@ TypeInference::Variable TypeInference::instantiate(const Type &type,
       dimension.domain = terms.begin()->first.front().name;
       dimension.symbolic = true;
     }
-    arguments.push_back(instantiate(dimension, parameters, span, depth + 1));
+    arguments.push_back(
+        instantiate(dimension, parameters, span, origin, depth + 1));
   }
-  return shape(type, std::move(arguments), span);
+  auto result = shape(type, std::move(arguments), span);
+  nodes[result].origin = origin;
+  return result;
 }
 bool TypeInference::occurs(Variable needle, Variable id, Span span,
                            unsigned depth) {
@@ -149,14 +162,36 @@ bool TypeInference::equal(Variable a, Variable b, Span span, unsigned depth) {
     return true;
   const auto left = nodes[a], right = nodes[b];
   auto kinds = left.kinds & right.kinds;
+  auto conflict = [&] {
+    auto describe = [](const Node &node) {
+      if (node.head) {
+        if (node.head->kind == Type::Kind::Tuple)
+          return std::string("tuple with ") +
+                 std::to_string(node.arguments.size()) + " elements";
+        if (node.head->kind == Type::Kind::Array)
+          return std::string("array");
+        return formatType(*node.head);
+      }
+      std::string choices;
+      for (unsigned kind = 0; kind <= unsigned(Type::Kind::Asset); ++kind)
+        if (node.kinds & (uint32_t(1) << kind)) {
+          if (!choices.empty())
+            choices += " or ";
+          choices += typeKindName(Type::Kind(kind));
+        }
+      return choices;
+    };
+    return types.fail("source.type",
+                      "type conflict: " + describe(left) + " versus " +
+                          describe(right),
+                      span, {left.origin, right.origin});
+  };
   if (!kinds)
-    return types.fail("source.type", "expression type constraints conflict",
-                      span);
+    return conflict();
   if (left.head && right.head) {
     if (*left.head != *right.head ||
         left.arguments.size() != right.arguments.size())
-      return types.fail("source.type", "expression type constraints conflict",
-                        span);
+      return conflict();
     for (unsigned i = 0; i < left.arguments.size(); ++i)
       if (!equal(left.arguments[i], right.arguments[i], span, depth + 1))
         return false;
@@ -173,6 +208,7 @@ bool TypeInference::equal(Variable a, Variable b, Span span, unsigned depth) {
   if (!nodes[a].head) {
     nodes[a].head = nodes[b].head;
     nodes[a].arguments = nodes[b].arguments;
+    nodes[a].origin = nodes[b].origin;
   }
   nodes[a].kinds = kinds;
   ++revision;
@@ -190,7 +226,8 @@ bool TypeInference::requireKinds(Variable id,
   mask &= node.kinds;
   if (!mask)
     return types.fail("source.type",
-                      "expression needs a compatible scalar type", span);
+                      "expression needs a compatible scalar type", span,
+                      {node.origin});
   if (mask != node.kinds) {
     node.kinds = mask;
     ++revision;

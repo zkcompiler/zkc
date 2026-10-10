@@ -19,8 +19,7 @@ exercises a complete terminal decision without requiring a PCS setup.
 From the repository root, with built tools on `PATH`:
 
 ```sh
-zkc compile --module=sumcheck=libraries/sumcheck/lib.zkc \
-  --module=example=examples/projects/sumcheck/main.zkc \
+zkc compile --project=examples/projects/sumcheck/zkc.json \
   --entry=example::Proof --output=sumcheck.entry
 zkc prove sumcheck.entry EXPECTED_SHA256 examples/projects/sumcheck/prover.json sumcheck.proof
 zkc verify sumcheck.entry EXPECTED_SHA256 examples/projects/sumcheck/verifier.json sumcheck.proof

@@ -1,15 +1,15 @@
 module expression_sumcheck;
 
-pub type Vector<F: Field> = builtin("vector", F);
-pub type Polynomial<F: Field> = builtin("polynomial", F);
+use zkc::vector::{Vector, split, length, fold, has_length};
+use zkc::polynomial::{from_coefficients, boundary, evaluate};
 
 // The captured arena A fixes one closed expression and its ordered factor
 // slots. Values are row-major assignments with A::Inputs columns. Round
 // returns the exact coefficient sum over affine pairs; terminal substitutes
 // the final factor values and reads the single output.
 fn round<F: Field, A: Ring>(values: Vector<F>) -> Vector<F> {
-  let halves = kernel<F>("vector.split", values);
-  let rows = kernel("index.div", kernel<F>("vector.length", halves.0),
+  let halves = split(values);
+  let rows = kernel("index.div", length(halves.0),
                     index<A::Inputs>());
   return kernel<F>("ring.affine_sum", halves.0, halves.1, rows; A);
 }
@@ -17,30 +17,6 @@ fn terminal<F: Field, A: Ring>(values: Vector<F>) -> F {
   let result = kernel<F>("ring.point", values; A);
   return kernel<F>("vector.at", result; "0");
 }
-// One row of a fold: the affine line through low and high, at r.
-math fn interpolate<F: Field>(low: F, high: F, r: F) -> F {
-  return low + (high - low) * r;
-}
-// Fixes the most significant Boolean coordinate at the challenge. The map is
-// checked bulk vector work over both halves, not an interpolated polynomial.
-fn fold<F: Field>(values: Vector<F>, challenge: F) -> Vector<F> {
-  let halves = kernel<F>("vector.split", values);
-  return map interpolate(each halves.0, each halves.1, challenge);
-}
-fn polynomial<F: Field>(value: Vector<F>) -> Polynomial<F> {
-  return kernel<F>("poly.from_coefficients", value);
-}
-fn has_length<F: Field, N: nat>(value: Vector<F>) -> bool {
-  return kernel<F>("vector.length", value) == index<N>();
-}
-fn boundary<F: Field>(value: Polynomial<F>) -> F {
-  return kernel<F>("poly.univariate_boundary", value);
-}
-fn evaluate<F: Field>(value: Polynomial<F>, point: F) -> F {
-  return kernel<F>("poly.univariate_evaluate", value, point);
-}
-fn equal<F: Field>(left: F, right: F) -> bool { return left == right; }
-
 // Public factor tables, MSB-first variable order. The verifier folds the public
 // factors and checks the exact terminal expression. The table width and the
 // round-polynomial degree are derived from the captured arena: each round
@@ -58,11 +34,11 @@ pub protocol Sumcheck<F: Field+Share+Wire, Max: nat, A: Ring> roles(P,V)
   for i in 0..rounds roles(P,V) max Max {
     let proposed @P = round<F,A>(tableP);
     let received = send P -> V(proposed);
-    let actual @V = polynomial(received);
+    let actual @V = from_coefficients(received);
     let size_ok @V = has_length<F,A::Degree+1>(received);
     require @V size_ok;
     let total @V = boundary(actual);
-    let sum_ok @V = equal(current, total);
+    let sum_ok @V = current == total;
     require @V sum_ok;
     let cv = challenges.draw();
     let cp = send V -> P(cv);
@@ -76,6 +52,6 @@ pub protocol Sumcheck<F: Field+Share+Wire, Max: nat, A: Ring> roles(P,V)
   let size_ok @V = has_length<F,A::Inputs>(tableV);
   require @V size_ok;
   let evaluated @V = terminal<F,A>(tableV);
-  let accepted @V = equal(evaluated, current);
+  let accepted @V = evaluated == current;
   return (accepted = accepted);
 }

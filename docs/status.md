@@ -33,6 +33,9 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 
 ## Source and application boundary
 
+`zkc check` checks definitions without an Entry; `--entry` also checks closure
+and mathematical correspondence. `zkc check` and `compile` accept explicit
+[project manifests](language/README.md#project-inputs) or module/asset maps.
 Language resolves explicit modules and R1CS/AIR Assets, checks generic libraries
 and closes selected Entries. It supports scalar mathematics, Boolean formulas,
 nominal products/variants, static parameters and components, capabilities and
@@ -57,6 +60,8 @@ for source correspondence; it does not interpret retained MLIR. Maintained
 
 Fixed source arrays use static numeric indexing. Private ingress without an
 admitted validator, member-generic conformance and zero-leaf messages refuse.
+Abstract member-generic signatures can be checked and inspected, but components
+implementing them are not supported.
 Resource permission inference, implicit role remapping, natural equation solving
 and inversion of associated types are outside the source profile.
 Relation and target/input/output/continuation clauses state intent; declarations

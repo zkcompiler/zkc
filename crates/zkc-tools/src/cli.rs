@@ -1,4 +1,4 @@
-//! Command discovery and argument admission over the Entry and bundle transports.
+//! Command discovery and argument admission for source, Entry and bundle tools.
 mod arguments;
 pub(crate) use arguments::Arguments;
 use arguments::{Command, OptionSpec as Opt};
@@ -11,19 +11,36 @@ const PROOF: &str = "INPUTS is a zkc.entry-proof/0 request. Verification supplie
 const BUNDLE_PROOF: &str = "DEPLOYMENT is zkc-compile protocol-proof output. EXPECTED_SHA256 must come from\ntrusted compilation or deployment configuration. INPUTS supplies public bindings\nand one role's invocation values. Authored transcripts require --allow-header-only.";
 const COMMANDS: &[Command] = &[
     Command {
+        name: "check",
+        summary: "Check source definitions and optionally a selected Entry",
+        positional: "",
+        options: &[
+            Opt::new("--project=FILE"),
+            Opt::new("--module=MODULE=FILE.zkc").repeated(),
+            Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
+            Opt::new("--entry=MODULE::ENTRY"),
+            Opt::new("--declarations"),
+            Opt::new("--compiler=PATH"),
+        ],
+        description: "Supply --project (zkc.project/0) or explicit modules/assets. All definitions
+are checked. --entry also checks specialization and mathematical IR correspondence.
+--declarations reports completed public callable contracts.\nChecking does not execute the protocol or establish its security.",
+    },
+    Command {
         name: "compile",
         summary: "Compile .zkc source to an authenticated Entry package",
         positional: "",
         options: &[
             Opt::new("--entry=MODULE::ENTRY").required(),
-            Opt::new("--module=MODULE=FILE.zkc").required().repeated(),
+            Opt::new("--module=MODULE=FILE.zkc").repeated(),
+            Opt::new("--project=FILE"),
             Opt::new("--output=PACKAGE").required(),
             Opt::new("--compiler=PATH"),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
             Opt::new("--no-simplify"),
             Opt::new("--release-storage"),
         ],
-        description: "Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
+        description: "Supply --project (zkc.project/0) or explicit modules/assets.\nCompilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
     },
     Command {
         name: "inspect",
@@ -143,6 +160,7 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
         Err(error) => {
             let format = match name {
                 "compile" => "zkc.entry-build/0",
+                "check" => "zkc.source-check/0",
                 "inspect" => "zkc.entry-inspection/0",
                 "run-bundle" => "zkc.bundle-result/0",
                 "prove-bundle" | "verify-bundle" => "zkc.native-proof-run/0",
@@ -153,6 +171,7 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
         }
     };
     match name {
+        "compile" | "check" => crate::source::run(name, &args),
         "run-bundle" => crate::run::cli::run(&args),
         "prove-bundle" | "verify-bundle" => crate::proof::cli::run(name == "prove-bundle", &args),
         _ => crate::entry::cli::run(name, &args),
@@ -163,7 +182,18 @@ pub fn succeeded(report: &serde_json::Value) -> bool {
     if report["format"] == "zkc.bundle-result/0" {
         report["status"] == "executed" && report["outcome"][0] == "completed"
     } else {
-        crate::entry::cli::succeeded(report)
+        matches!(
+            report["status"].as_str(),
+            Some(
+                "checked"
+                    | "compiled"
+                    | "inspected"
+                    | "executed"
+                    | "produced"
+                    | "accepted"
+                    | "generated"
+            )
+        )
     }
 }
 

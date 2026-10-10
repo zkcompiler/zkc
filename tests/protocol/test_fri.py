@@ -55,6 +55,11 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, terminal_log=0,
     path = directory / 'fri.zkc'
     path.write_text(source)
     package = directory / f'{entry}.entry'
+    if text is None and library == LIBRARY and (log_size, terminal_log, rounds, queries) == (5, 0, 3, 8):
+        report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+                               f'--project={EXAMPLE.parent}/zkc.json',
+                               f'--entry=example::{entry}', f'--output={package}', *flags])
+        return package, report['package_sha256']
     report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
                            f'--module=example={path}', f'--module=fri={library}',
                            f'--entry=example::{entry}', f'--output={package}', *flags])

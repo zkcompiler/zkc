@@ -67,10 +67,8 @@ proof's V inputs determine the public statement and configuration.
 From the repository root:
 
 ```sh
-zkc compile --entry=imported_air::TraceResiduals \
-  --module=imported_air=examples/projects/imported-air/main.zkc \
-  --asset=export=ring-json=compiler/adapters/plonky3/fixtures/recurrence/arena.json \
-  --asset=recurrence=relation-bundle-json=compiler/adapters/plonky3/fixtures/recurrence/bundle.json \
+zkc compile --project=examples/projects/imported-air/zkc.json \
+  --entry=imported_air::TraceResiduals \
   --output=trace.entry
 zkc run trace.entry EXPECTED_SHA256 \
   compiler/adapters/plonky3/fixtures/recurrence/source-trace-changed-trace.json \

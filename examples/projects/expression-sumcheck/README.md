@@ -26,11 +26,8 @@ a polynomial commitment or a claimed soundness/Fiat–Shamir theorem.
 Compile from the repository root:
 
 ```sh
-zkc compile --entry=example::BaseProof \
-  --module=example=examples/projects/expression-sumcheck/main.zkc \
-  --module=expression_sumcheck=libraries/sumcheck/expression.zkc \
-  --asset=product=ring-json=examples/projects/expression-sumcheck/product.ring.json \
-  --output=expression.entry
+zkc compile --project=examples/projects/expression-sumcheck/zkc.json \
+  --entry=example::BaseProof --output=expression.entry
 ```
 
 Each independent Host admits the packaged expression before execution:

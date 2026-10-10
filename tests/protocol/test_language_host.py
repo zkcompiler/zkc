@@ -383,10 +383,10 @@ def test_compiler_failures_are_bounded_and_do_not_publish(toolchain, journal, di
     output.write_bytes(b'unchanged')
     args = [toolchain.runtime, 'compile', '--entry=sample::Derived',
             f'--module=sample={FIXTURES / "attempts.zkc"}', f'--output={output}']
-    report = json.loads(journal.run([*args, f'--compiler={compiler}'], refuses='entry-compilation'))
+    report = json.loads(journal.run([*args, f'--compiler={compiler}'], refuses='source-compilation'))
     assert report['diagnostics_truncated'] and len(report['diagnostics']) == 65536
     assert output.read_bytes() == b'unchanged'
-    journal.run([*args, f'--compiler={directory / "missing"}'], refuses='entry-compiler-missing')
+    journal.run([*args, f'--compiler={directory / "missing"}'], refuses='source-compiler-missing')
 
 
 def test_proof_file_public_inputs_are_authoritative(toolchain, journal, directory):
@@ -437,7 +437,7 @@ def test_compiler_lookup_and_positional_arguments(toolchain, journal, directory)
         else:
             env['PATH'] = path
         result = journal.attempt(args, cwd=directory, env=env)
-        assert result.returncode == 1 and json.loads(result.stdout)['code'] == 'entry-compiler-missing'
+        assert result.returncode == 1 and json.loads(result.stdout)['code'] == 'source-compiler-missing'
     package = directory / 'demo.entry'
     for command in ('prove', 'bindings'):
         args = [toolchain.runtime, command, package, report['package_sha256']]
@@ -502,7 +502,7 @@ def test_interface_publication_and_host_share_resource_boundaries(toolchain, jou
     result = json.loads(journal.run([
         toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
         f'--module=sample={source}', '--entry=sample::Demo', f'--output={refused}',
-    ], refuses='entry-compilation'))
+    ], refuses='source-compilation'))
     assert 'source.limit' in result['diagnostics']
     assert not refused.exists()
 

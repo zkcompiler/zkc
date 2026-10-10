@@ -58,12 +58,17 @@ def test_documented_air_stark_requests(journal, directory):
 
 def compile_entry(toolchain, journal, directory, *, log_size=5, queries=8,
                   flags=(), entry='Proof', source=None, table=TABLE, stark=STARK):
+    package = directory / f'{entry}.entry'
+    if source is None and log_size == 5 and queries == 8 and table == TABLE and stark == STARK:
+        report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+                               f'--project={EXAMPLE.parent}/zkc.json',
+                               f'--entry=air_stark_example::{entry}', f'--output={package}', *flags])
+        return package, report['package_sha256']
     source = EXAMPLE.read_text() if source is None else source
     source = source.replace('TableArgument<0,Recurrence,3,5,8,8>',
                             f'TableArgument<0,Recurrence,3,{log_size},{queries},8>')
     path = directory / 'main.zkc'
     path.write_text(source)
-    package = directory / f'{entry}.entry'
     command = [toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
                f'--module=air_stark_example={path}',
                f'--module=air_stark={stark}',

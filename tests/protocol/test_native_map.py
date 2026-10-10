@@ -244,7 +244,7 @@ def test_artifact_and_work_are_independent_of_height(toolchain, journal, directo
 def build(toolchain, journal, directory, entry):
     package = directory / f'{entry}.entry'
     result = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-                           f'--module=example={PROJECT}/main.zkc',
+                           f'--project={PROJECT}/zkc.json',
                            f'--entry=example::{entry}', f'--output={package}'])
     return package, result['package_sha256']
 

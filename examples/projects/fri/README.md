@@ -14,8 +14,9 @@ The source uses ordinary protocol calls, loops and installed mathematical and
 oracle operations. No FRI-specific compiler or Host dispatch is involved.
 
 ```sh
-zkc compile --module=example=examples/projects/fri/main.zkc \
-  --module=fri=libraries/fri/lib.zkc --entry=example::Proof --output=fri.entry
+zkc compile \
+  --project=examples/projects/fri/zkc.json \
+  --entry=example::Proof --output=fri.entry
 ```
 
 `Run` exposes interactive execution. `Proof` derives verifier randomness through

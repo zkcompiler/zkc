@@ -17,12 +17,7 @@ From the repository root, with the built `zkc` and `zkc-compile` on `PATH`:
 
 ```sh
 zkc compile --compiler=zkc-compile \
-  --module=air_stark_example=examples/projects/air-stark/main.zkc \
-  --module=air_stark=libraries/air/stark.zkc \
-  --module=air_table=libraries/air/table.zkc \
-  --module=air_polynomial=libraries/air/polynomial.zkc \
-  --module=fri=libraries/fri/lib.zkc \
-  --asset=recurrence=relation-bundle-json=compiler/adapters/plonky3/fixtures/recurrence/bundle.json \
+  --project=examples/projects/air-stark/zkc.json \
   --entry=air_stark_example::Proof --output=air-stark.entry
 ```
 

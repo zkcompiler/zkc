@@ -24,14 +24,7 @@ python3 examples/projects/accumulator-machine/prepare.py \
   build/machine-requests
 
 zkc compile --compiler=build/compiler/zkc-compile \
-  --module=accumulator_machine=examples/projects/accumulator-machine/main.zkc \
-  --module=air_bundle=libraries/air/bundle.zkc \
-  --module=air_interaction=libraries/air/interaction.zkc \
-  --module=air_stark=libraries/air/stark.zkc \
-  --module=air_table=libraries/air/table.zkc \
-  --module=air_polynomial=libraries/air/polynomial.zkc \
-  --module=fri=libraries/fri/lib.zkc \
-  --asset=machine=relation-bundle-json=compiler/adapters/accumulator-machine/fixtures/bundle.json \
+  --project=examples/projects/accumulator-machine/zkc.json \
   --entry=accumulator_machine::ProofLogUp --output=build/machine.entry
 
 zkc prove build/machine.entry PACKAGE_SHA256 \
