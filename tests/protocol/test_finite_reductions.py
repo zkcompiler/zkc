@@ -303,3 +303,22 @@ def test_fusion_flag_is_compile_only(toolchain, journal, directory):
                  f'--module=sample={source}', '--fuse-vector-reductions'], refuses='source.options')
     journal.json([toolchain.runtime, 'check', f'--compiler={toolchain.compiler}',
                   f'--module=sample={source}', '--fuse-vector-reductions'], refuses=True)
+
+
+@pytest.mark.parametrize('flags', OPTIONS[:2])
+def test_binder_and_body_shadowing_keep_outer_values(toolchain, journal, directory, flags):
+    source = '''module sample;
+domain F=field("koala-bear");
+type Vector<E:Field>=builtin("vector",E);
+fn sum(v:Vector<F>)->F=primitive("vector.sum");
+fn work(a:Vector<F>,x:F,α:F)->(F,F){
+  let total=reduce sum [x in a] {let x=x+1; x*α};
+  return(total,x);
+}
+protocol Run roles(P)(a:Vector<F>@P,x:F@P,α:F@P)->(result:(F,F)@P){return work(a,x,α);}
+run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    assert entry.run('shadowed', {'a': vector_wire(20, [2, 3]), 'x': field_wire(19, 77),
+                                 'α': field_wire(19, 5)})['result'] == [
+                                     field_wire(19, 35), field_wire(19, 77)]
