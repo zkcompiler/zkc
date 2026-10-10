@@ -52,9 +52,14 @@ def main():
     args = parser.parse_args()
     root = args.root
     packages = {}
-    for name in ("lean/lake-manifest.json", "lean/integrations/arklib/lake-manifest.json"):
+    for name in ("lean/lake-manifest.json", "lean/integrations/arklib/lake-manifest.json",
+                 "lean/integrations/clean/lake-manifest.json"):
         for package in json.loads((root / name).read_text())["packages"]:
             if package["type"] == "git":
+                previous = packages.get(package["rev"])
+                if previous and previous["url"] != package["url"]:
+                    raise ValueError(f"inconsistent Git URLs for {package['name']}: "
+                                     f"{previous['url']} and {package['url']}")
                 packages[package["rev"]] = package
     update(root / "nix/lake-sources.json", list(packages.values()), args.refresh)
     llzk = json.loads((root / "compiler/adapters/llzk/pins.json").read_text())["llzk-current"]

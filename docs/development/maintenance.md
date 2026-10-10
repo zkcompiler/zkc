@@ -38,14 +38,61 @@ own version rules.
 | Independent Lean package | `lean/lean-toolchain`, Lake manifests and lockfiles |
 | Optional integrations | Their own manifests, source pins and compatible toolchains |
 
+`rust-toolchain.toml` selects the exact Rust release for rustup, Nix and CI.
+`nix/default.nix` selects the Python and LLVM package families; `flake.lock`
+resolves their releases. Python packages resolve through `uv.lock`. Update the
+CMake tested LLVM version with the Nix selection; other compatible LLVM patches
+remain supported and are reported by doctor. No parallel version inventory is
+maintained in CI or just.
+
 LLZK remains a generic optional relation adapter with a separate LLVM process.
-Do not link incompatible LLVM versions into the main compiler. Formal source
-builds, reached-axiom audits and optional ArkLib consumers retain their own scopes;
-they are not default native execution prerequisites. `scripts/update-lean-pins.py`
-selects revisions from ArkLib only. The Clean integration's manifest must keep the
-main package's shared revisions and toolchain, which `lean/checks/check_library.py`
-checks; after a Lean or Mathlib change, update it by hand and rerun
-`just test-lean-clean`.
+Do not link incompatible LLVM versions into the main compiler. OpenVM retains
+its upstream Plonky3 family and RNG types in its separate adapter workspace;
+these are compatibility constraints, not accidental duplicate pins.
+
+## Lean dependency sets
+
+The main package owns the Lean and Mathlib selection. ArkLib and Clean remain
+separate Lake packages so their dependencies do not enter ordinary native or
+main Lean builds. All maintained packages use one Lean toolchain and identical
+revisions for every shared dependency, including dependencies shared only by
+integrations such as CompPoly. Separate packages do not make incompatible
+Lean libraries composable.
+
+Select an exact stable Mathlib commit and compatible integration commits:
+
+```sh
+python3 scripts/update-lean-pins.py --mathlib MATHLIB_COMMIT --arklib ARKLIB_COMMIT --clean CLEAN_COMMIT
+```
+
+Omitted integration arguments retain their current revisions. Mathlib selects
+the Lean release. The helper updates the three toolchain files, the direct
+requirements and Lake manifests, verifies the resolved dependency set, and
+refreshes Nix source hashes. It does not build proofs or download Mathlib's
+compiled cache. A failed resolution leaves its changes for inspection.
+
+The integration lakefiles explicitly select the main Mathlib revision after
+other requirements. Clean also selects the CompPoly revision shared with
+ArkLib. When upstream requirements change, reconcile these ordinary Lake
+requirements before accepting the upgrade. The helper refuses conflicting
+resolved revisions; it does not silently choose a winner. Lake lockfiles and
+Nix hashes are committed, while `.lake` output is not.
+
+Run the main build, both integration builds, independent consumers and
+reached-axiom audits after changing this set. A successful resolution alone is
+not compatibility evidence. If a current stable release cannot build a
+maintained integration without changing its meaning, retain the newest
+compatible set and record the concrete constraint here. Do not suppress proof
+checks or add a second dependency manager to force an upgrade.
+
+The maintained set currently retains Lean/Mathlib 4.33.1 and the ArkLib,
+VCVio and Clean revisions recorded in the Lake manifests. The 4.34.1 upgrade
+built the main package, but ArkLib 4.34.0 selects a VCVio revision that deprecates the discrete
+probability API (`probOutput`, `probEvent` and `Pr[...]`) still used by the
+maintained bridges. Retaining the earlier VCVio/PolyFun revisions with Lean 4.34.1
+also fails upstream reducibility and proof checks. Upgrade this set together
+with an explicit probability-interface migration; do not mix toolchains or
+relax the owned warning/axiom checks to accept it.
 
 ## Upgrade and validate
 

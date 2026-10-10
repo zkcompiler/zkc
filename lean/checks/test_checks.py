@@ -543,6 +543,27 @@ class CleanIntegrationControls(unittest.TestCase):
                                  (work / reproduce.INTEGRATION / ".lake/packages/CompPoly").resolve())
                 self.assertEqual((packages / "mathlib").resolve(), (work / ".lake/packages/mathlib").resolve())
 
+    def test_library_check_compares_dependencies_shared_only_by_integrations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            integrations = {}
+            for name, revision in (("arklib", "b"), ("clean", "c")):
+                package = root / name
+                package.mkdir()
+                integrations[name] = (package, (), ("CompPoly",))
+                (package / "lake-manifest.json").write_text(json.dumps({"packages": [
+                    {"type": "git", "name": "mathlib", "rev": "a"},
+                    {"type": "git", "name": "CompPoly", "rev": revision}]}))
+            (root / "lake-manifest.json").write_text(json.dumps({"packages": [
+                {"type": "git", "name": "mathlib", "rev": "a"}]}))
+            for path in (root, *(entry[0] for entry in integrations.values())):
+                (path / "lean-toolchain").write_text("leanprover/lean4:v4.34.1\n")
+            with patch.object(check_library, "ROOT", root), \
+                 patch.object(check_library, "INTEGRATIONS", integrations):
+                self.assertEqual(check_library.package_pins(["arklib"]), {"mathlib": "a"})
+                with self.assertRaisesRegex(ValueError, "incompatible shared dependency: CompPoly in clean"):
+                    check_library.package_pins(["arklib", "clean"])
+
     def test_library_check_refuses_a_diverging_pin(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
