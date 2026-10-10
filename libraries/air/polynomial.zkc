@@ -45,6 +45,7 @@ pub fn natural<N: nat>() -> index { return index<N>(); }
 pub fn plus(left: index, right: index) -> index { return left + right; }
 pub fn equal<F: Field>(left: F, right: F) -> bool { return left == right; }
 pub fn yes() -> bool { return true; }
+pub fn maximum(left: index, right: index) -> index { return if less(left, right) { right } else { left }; }
 
 // Binary exponentiation is logarithmic in the public exponent. The fixed
 // loop bound covers the u64 index carrier, without allocating its powers.
@@ -97,7 +98,8 @@ pub fn column_at<F: Field>(columns: Vector<F>, column: index, size: index,
 
 // The active scope is an interval [begin,end) of the trace subgroup. All,
 // first, last and almost-all scopes use the smaller of the interval and its
-// complement. General intervals retain their explicit linear verifier cost.
+// complement. At a complement root the quotient has a removable pole; use
+// the direct product there. General intervals retain their linear cost.
 pub fn vanishing<F: Field>(height: index, begin: index, end: index, x: F) -> F {
   require both(not(less(end, begin)), not(less(height, end)));
   let count = end - begin;
@@ -107,7 +109,12 @@ pub fn vanishing<F: Field>(height: index, begin: index, end: index, x: F) -> F {
   if use_complement {
     for row in 0..begin { product = product * (x - point<F>(1, height, row)); }
     for row in end..height { product = product * (x - point<F>(1, height, row)); }
-    product = (power(x, height) - 1) * inverse(product);
+    if product == 0 {
+      product = 1;
+      for row in begin..end { product = product * (x - point<F>(1, height, row)); }
+    } else {
+      product = (power(x, height) - 1) * inverse(product);
+    }
   } else {
     for row in begin..end { product = product * (x - point<F>(1, height, row)); }
   }
@@ -154,13 +161,19 @@ pub fn recombine<F: Field>(claims: Vector<F>, height: index, x: F) -> F {
 
 // Vector form of the same interval vanishing polynomial. The subgroup
 // polynomial is evaluated geometrically, so full/interior scopes take work
-// linear in the coset size rather than in height times coset size.
+// linear in the coset size on disjoint domains. Two two-adic cosets intersect
+// exactly when shift^max(height,size) = 1. On an intersecting coset, use the
+// direct product to avoid inverting zero at complement roots. A full scope
+// has denominator one and keeps the geometric evaluation on every coset.
 pub fn vanishing_values<F: Field>(height: index, begin: index, end: index,
     shift: F, size: index) -> Vector<F> {
   require both(not(less(end, begin)), not(less(height, end)));
   let count = end - begin;
   let complement = height - count;
-  let use_complement = less(complement, count);
+  let use_complement = if less(complement, count) {
+    if complement == 0 { true }
+    else { not(power(shift, maximum(height, size)) == 1) }
+  } else { false };
   let points = kernel<F>("poly.domain_points", shift, size);
   let mut product = fill<F>(1, size);
   if use_complement {
