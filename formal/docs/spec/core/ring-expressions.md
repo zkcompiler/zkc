@@ -86,6 +86,44 @@ successful map (`map_hoist`). Dead nodes: an arena node that no output reaches
 is covered by the restricted node maps of the sharing section. None of these
 laws removes a shape check; each applies to the same operand list.
 
+## Finite map reductions
+
+`mapSum` and `mapProduct` first run the checked map, propagate any refusal,
+and then apply `List.sum` or `List.prod` to its result. For an admitted formula
+signature and `rowCount operands = .ok n`, their values are respectively the
+sum and product of `Expr.eval (fun j => Operand.read operands j i) e` over
+every row `i = 0, …, n-1` (`mapSum_eq`, `mapProduct_eq`). Conversely, successful
+reduction implies those signature and row-count premises and that denotation
+(`mapSum_ok`, `mapProduct_ok`). Scalars supply the same value at every row.
+
+An admitted zero-row map gives sum zero and product one (`mapSum_empty`,
+`mapProduct_empty`). These identities do not admit an operand list with no
+rowwise operands or excuse a missing formula input. Admission retains the
+existing order: signature, all rowwise length limits, presence of a rowwise
+operand, then agreement with the first rowwise length. Thus unequal rows
+prevent either reduction from succeeding, even when ignored by the formula
+(`mapSum_shape`, `mapProduct_shape`). The exact `vector-shape` refusal requires
+the earlier signature and limit checks to pass (`mapSum_shape_code`,
+`mapProduct_shape_code`); arbitrary map refusals propagate through
+`mapSum_error` and `mapProduct_error`.
+
+`mapSum_mul_eq_dot` selects two row operands at arbitrary positions in the
+original list. Given successful `rowCount` on that entire list, summing the
+map of their multiplication equals the independent `FiniteVectors.dot` of
+the two lists. The proof derives both selected lengths and bounds from full
+admission and relates indexed row evaluation to checked zipped multiplication.
+Other operands, including unused rows and scalar values, remain in the map;
+admitting only the two selected rows is insufficient. This is a conditional
+value law, not an unconditional replacement that drops original guards.
+
+These models use one commutative ring and immutable list/scalar values. They
+do not model binder parsing, source hygiene, capture order or snapshotting;
+those remain native checker obligations. Formal shape failure is
+`vector-shape`, whereas the native map guard reports `rejected:require`.
+There is no native failure-code equality, compiler/runtime correspondence,
+resource refinement or security theorem here. The independent product uses
+`List.prod` and makes no claim about a native product implementation.
+
 ## Pointwise values and interpolation
 
 Mapping a formula over the lists of values that input polynomials take at
@@ -112,7 +150,8 @@ scopes, turn finite reads into cyclic reads, or discharge read-window checks.
 
 The declarations are in `Zkc.Algebra.RingExpression`,
 `Zkc.Algebra.RingExpression.Sharing`, `Zkc.Algebra.RingExpression.Pointwise`
-and `Zkc.Relation.AIR.RingExpression`. The native arena additionally has typed
+and `Zkc.Algebra.RingExpression.Reductions`, and the AIR embedding is in
+`Zkc.Relation.AIR.RingExpression`. The native arena additionally has typed
 field identities, explicit embeddings, admission limits and byte encoding, and
 its sharing checker is native code; the native map realizer and its
 correspondence reader are native code as well. Correspondence for those
