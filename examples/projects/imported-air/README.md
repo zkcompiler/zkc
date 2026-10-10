@@ -70,13 +70,13 @@ From the repository root:
 zkc compile --project=examples/projects/imported-air/zkc.toml \
   imported_air::TraceResiduals \
   --output=trace.zkpkg
-zkc run trace.zkpkg EXPECTED_SHA256 \
-  compiler/adapters/plonky3/fixtures/recurrence/source-trace-changed-trace.json \
+zkc run --package=trace.zkpkg --sha256=EXPECTED_SHA256 --session=recurrence \
+  --input=Evaluator=compiler/adapters/plonky3/fixtures/recurrence/source-trace-changed-trace.json \
   --results=results.json
 ```
 
 Use the package digest returned by `compile`. `results.json` has format
-`zkc.entry-outputs/0`; vectors are framed KoalaBear or Ext8 values. The package
+`zkc.entry-outputs/0`; vectors contain decimal KoalaBear values or Ext8 coordinate arrays. The package
 contains its assets, so subsequent execution does not depend on fixture paths.
 
 ## Maintained evidence
@@ -100,5 +100,5 @@ bounds. Native tests separately cover finite and cyclic windows, scopes,
 column authorities, exact field compatibility and execution limits.
 
 These are executable correspondence checks on maintained cases. They do not
-prove adapter adequacy or native implementation correctness. Quotient
-construction, commitments, lookups and FRI remain later protocol work.
+prove adapter adequacy or native implementation correctness. The [STARK example](../air-stark/README.md) composes quotient construction,
+commitments and FRI with the same imported relation.

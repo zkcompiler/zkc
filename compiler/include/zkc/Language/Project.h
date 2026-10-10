@@ -433,12 +433,14 @@ llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
                                         const CaptureOptions &);
 Analysis analyze(const CapturedProject &, const Limits & = {});
 /// Select from checked declarations: exact qualified name, unique short name,
-/// or the sole Entry when the selector is empty. Never selects by execution
-/// kind.
+/// or the sole eligible Entry when the selector is empty. An explicit name is
+/// resolved before checking its kind, so filtering cannot hide ambiguity.
 llvm::Expected<DeclarationId> selectEntry(const CheckedProject &,
-                                          llvm::StringRef, const Limits & = {});
+                                          llvm::StringRef, const Limits & = {},
+                                          std::optional<EntryKind> = {});
 llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &, llvm::StringRef,
-                                       const Limits & = {});
+                                       const Limits & = {},
+                                       std::optional<EntryKind> = {});
 
 class CapturedProject {
 public:
@@ -507,8 +509,9 @@ private:
   CheckedProject checked;
   DeclarationId selected;
   std::shared_ptr<const detail::ClosedStorage> storage;
-  friend llvm::Expected<ClosedEntry>
-  closeEntry(const CheckedProject &, llvm::StringRef, const Limits &);
+  friend llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &,
+                                                llvm::StringRef, const Limits &,
+                                                std::optional<EntryKind>);
 };
 llvm::Expected<std::string> encodeSymbol(llvm::StringRef qualifiedName,
                                          const Limits & = {});

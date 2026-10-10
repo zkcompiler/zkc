@@ -1,7 +1,7 @@
 //! Bounded JSON documents with duplicate-key rejection before typed conversion.
 //! Array-only carriers use their narrower parser and contracts.
 use serde::{
-    Deserialize, Deserializer,
+    Deserializer,
     de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor},
 };
 use serde_json::{Map, Value};
@@ -11,45 +11,47 @@ use std::fmt;
 // and request envelopes add four; this admits every supported logical shape.
 pub(crate) const MAX_DEPTH: usize = 72;
 
-pub(crate) fn read(bytes: &[u8], limit: usize) -> Result<Value, String> {
-    if bytes.len() > limit {
-        return Err("entry-request-limit".into());
-    }
-    natural_numbers(bytes)?;
-    let mut remaining = 200_000;
-    let mut decoder = serde_json::Deserializer::from_slice(bytes);
-    let value = Node {
-        remaining: &mut remaining,
-        depth: 0,
-    }
-    .deserialize(&mut decoder)
-    .map_err(|_| "entry-request-format")?;
-    decoder.end().map_err(|_| "entry-request-format")?;
-    Ok(value)
+pub(crate) struct Budget {
+    bytes: usize,
+    nodes: usize,
 }
-// Preserve arbitrary input objects during typed record conversion. Value's own
-// Deserialize interprets serde's private numeric map key, including when replaying
-// an already checked Value tree. Logical inputs must retain their literal shape.
-pub(crate) fn values<'de, D: Deserializer<'de>>(
-    decoder: D,
-) -> Result<std::collections::BTreeMap<String, Value>, D::Error> {
-    struct Literal(Value);
-    impl<'de> Deserialize<'de> for Literal {
-        fn deserialize<D: Deserializer<'de>>(decoder: D) -> Result<Self, D::Error> {
-            Node {
-                remaining: &mut 200_000,
-                depth: 0,
-            }
-            .deserialize(decoder)
-            .map(Self)
+impl Budget {
+    pub fn new(bytes: usize) -> Self {
+        Self {
+            bytes,
+            nodes: 200_000,
         }
     }
-    Ok(
-        std::collections::BTreeMap::<String, Literal>::deserialize(decoder)?
-            .into_iter()
-            .map(|(name, value)| (name, value.0))
-            .collect(),
-    )
+    pub fn remaining_bytes(&self) -> usize {
+        self.bytes
+    }
+    pub fn read(&mut self, bytes: &[u8]) -> Result<Value, String> {
+        self.bytes = self
+            .bytes
+            .checked_sub(bytes.len())
+            .ok_or("entry-request-limit")?;
+        natural_numbers(bytes)?;
+        let mut decoder = serde_json::Deserializer::from_slice(bytes);
+        let mut limited = false;
+        let value = Node {
+            remaining: &mut self.nodes,
+            limited: &mut limited,
+            depth: 0,
+        }
+        .deserialize(&mut decoder)
+        .map_err(|_| {
+            if limited {
+                "entry-request-limit"
+            } else {
+                "entry-request-format"
+            }
+        })?;
+        decoder.end().map_err(|_| "entry-request-format")?;
+        Ok(value)
+    }
+}
+pub(crate) fn read(bytes: &[u8], limit: usize) -> Result<Value, String> {
+    Budget::new(limit).read(bytes)
 }
 // Invocation numbers are u64 naturals. Check their lexical form before serde's
 // arbitrary-precision extension can present a large number as a private map.
@@ -90,18 +92,20 @@ fn natural_numbers(bytes: &[u8]) -> Result<(), String> {
 }
 struct Node<'a> {
     remaining: &'a mut usize,
+    limited: &'a mut bool,
     depth: usize,
 }
 impl<'de> DeserializeSeed<'de> for Node<'_> {
     type Value = Value;
     fn deserialize<D: Deserializer<'de>>(self, decoder: D) -> Result<Value, D::Error> {
         if self.depth > MAX_DEPTH {
+            *self.limited = true;
             return Err(de::Error::custom("document depth"));
         }
-        *self.remaining = self
-            .remaining
-            .checked_sub(1)
-            .ok_or_else(|| de::Error::custom("document nodes"))?;
+        *self.remaining = self.remaining.checked_sub(1).ok_or_else(|| {
+            *self.limited = true;
+            de::Error::custom("document nodes")
+        })?;
         decoder.deserialize_any(self)
     }
 }
@@ -135,6 +139,7 @@ impl<'de> Visitor<'de> for Node<'_> {
         let mut values = Vec::new();
         while let Some(value) = sequence.next_element_seed(Node {
             remaining: self.remaining,
+            limited: self.limited,
             depth: self.depth + 1,
         })? {
             values.push(value);
@@ -147,12 +152,13 @@ impl<'de> Visitor<'de> for Node<'_> {
             if values.contains_key(&name) {
                 return Err(de::Error::custom("duplicate key"));
             }
-            *self.remaining = self
-                .remaining
-                .checked_sub(1)
-                .ok_or_else(|| de::Error::custom("document nodes"))?;
+            *self.remaining = self.remaining.checked_sub(1).ok_or_else(|| {
+                *self.limited = true;
+                de::Error::custom("document nodes")
+            })?;
             let value = fields.next_value_seed(Node {
                 remaining: self.remaining,
+                limited: self.limited,
                 depth: self.depth + 1,
             })?;
             values.insert(name, value);
@@ -185,9 +191,15 @@ mod tests {
         let at = "[".repeat(MAX_DEPTH) + "0" + &"]".repeat(MAX_DEPTH);
         assert!(read(at.as_bytes(), 4096).is_ok());
         let over = format!("[{at}]");
-        assert!(read(over.as_bytes(), 4096).is_err());
+        assert_eq!(
+            read(over.as_bytes(), 4096).unwrap_err(),
+            "entry-request-limit"
+        );
         let wide = "[".to_owned() + &vec!["0"; 200_000].join(",") + "]";
-        assert!(read(wide.as_bytes(), wide.len()).is_err());
+        assert_eq!(
+            read(wide.as_bytes(), wide.len()).unwrap_err(),
+            "entry-request-limit"
+        );
         for bytes in [b"[\"\xff\"]".as_slice(), b"1e999", b"NaN"] {
             assert!(read(bytes, 4096).is_err());
         }

@@ -41,6 +41,6 @@ run Demo=Run;
     for number, values in enumerate(cases):
         expected = [0, (values[1] + values[3]) % modulus, 0,
                     (values[0] + values[2]) % modulus, values[4]]
-        assert entry.run(f'case{number}', {'xs': wire(values, tag, width)})['result'] == wire(expected, tag, width)
-    entry.run('wrong-length', {'xs': wire([1, 2], tag, width)}, refuses='entry-run-incomplete')
-    entry.run('truncated-wire', {'xs': wire([1] * 5, tag, width)[:-2]}, refuses=True)
+        assert entry.run(f'case{number}', {'xs': {'wire': wire(values, tag, width)}})['result'] == [str(x) for x in expected]
+    entry.run('wrong-length', {'xs': {'wire': wire([1, 2], tag, width)}}, refuses='entry-run-incomplete')
+    entry.run('truncated-wire', {'xs': {'wire': wire([1] * 5, tag, width)[:-2]}}, refuses=True)

@@ -32,6 +32,12 @@ standard BLS12-381 G1 generator and its scalar multiple. They demonstrate the
 compiler and Host, and must not be used as secret application data. Each proof
 call obtains fresh randomness from the common runtime.
 
+For everyday source development, `zkc inspect example::Proof`, `zkc inputs init
+example::Proof`, and `zkc prove example::Proof --public=... --witness=...
+--output=proof.bin` work from the project directory. Execution compiles in memory.
+See the [project workflow](runtime/entries.md#project-workflow) for input templates,
+multiple Entries and participant inputs.
+
 ## Follow each boundary
 
 After building, the same steps are:
@@ -48,11 +54,14 @@ native="${ZKC_NATIVE_BIN:-${CARGO_TARGET_DIR:-target}/release}"
   example::Proof --output="$demo_dir/proof.zkpkg" \
   > "$demo_dir/build.json"
 pin=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["package_sha256"])' "$demo_dir/build.json")
-"$native/zkc" prove "$demo_dir/proof.zkpkg" "$pin" \
-  examples/projects/schnorr/prover.json "$demo_dir/proof.bin" \
+"$native/zkc" prove --package="$demo_dir/proof.zkpkg" --sha256="$pin" \
+  --public=examples/projects/schnorr/inputs/example.Proof/public.json \
+  --witness=examples/projects/schnorr/inputs/example.Proof/witness.json \
+  --output="$demo_dir/proof.bin" \
   > "$demo_dir/producer.json"
-"$native/zkc" verify "$demo_dir/proof.zkpkg" "$pin" \
-  examples/projects/schnorr/verifier.json "$demo_dir/proof.bin" \
+"$native/zkc" verify --package="$demo_dir/proof.zkpkg" --sha256="$pin" \
+  --public=examples/projects/schnorr/inputs/example.Proof/public.json \
+  --proof="$demo_dir/proof.bin" \
   > "$demo_dir/validator.json"
 cat "$demo_dir/validator.json"
 printf '\nDemo files: %s\n' "$demo_dir"

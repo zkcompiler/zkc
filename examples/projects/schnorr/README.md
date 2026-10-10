@@ -9,16 +9,15 @@ The [walkthrough](../../../docs/getting-started.md) runs `Proof`. To select a jo
 interactive run from the repository root, with built tools on `PATH`:
 
 ```sh
-zkc compile --project=examples/projects/schnorr/zkc.toml \
-  example::Interactive --output=schnorr.zkpkg
-zkc run schnorr.zkpkg EXPECTED_SHA256 examples/projects/schnorr/interactive.json \
+zkc run example::Interactive --project=examples/projects/schnorr/zkc.toml \
+  --session=schnorr \
+  --input=P=examples/projects/schnorr/inputs/example.Interactive/P.json \
+  --input=V=examples/projects/schnorr/inputs/example.Interactive/V.json \
   --results=results.json
 ```
 
-Use the `package_sha256` from trusted compilation for `EXPECTED_SHA256`. The
-returned `V.accepted` is the verifier's decision; a completed run can return false.
-The inputs use the public demonstration witness 3. Group and scalar strings
-include the complete canonical native wire frame.
+The returned `V.accepted` is the verifier's decision; a completed run can return false.
+The inputs use the public demonstration witness 3. Scalars are decimal strings; group values contain canonical element bytes.
 
 The relation and target retain the statement/witness association for analysis.
 They add no implicit guard or knowledge theorem. The executed verifier equation,

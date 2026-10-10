@@ -91,6 +91,24 @@ impl Outputs {
         }
         self.check()
     }
+    /// Preserve the identity of an input already opened through a directory
+    /// capability. No path lookup can redirect this protection.
+    pub(crate) fn protect_metadata(&mut self, metadata: &fs::Metadata) -> Result<()> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            self.protected.push(Identity {
+                location: PathBuf::new(),
+                target: None,
+                inode: Some((metadata.dev(), metadata.ino())),
+            });
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = metadata;
+        }
+        self.check()
+    }
     fn check(&self) -> Result<()> {
         let current = self
             .protected_paths
@@ -141,6 +159,28 @@ impl Outputs {
             file.persist(path)
                 .map(|_| ())
                 .map_err(|_| IO_ERROR.to_owned())
+        })
+    }
+    /// Initialization never replaces existing files, including races after the
+    /// preflight. A later filesystem failure still reports partial publication.
+    pub(crate) fn create(&self, bytes: &[(&str, &[u8])], report: &mut Json) -> Result<()> {
+        for path in &self.paths {
+            match path.symlink_metadata() {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+                _ => {
+                    report["conflict"] = serde_json::json!(path);
+                    return Err("entry-output-exists".into());
+                }
+            }
+        }
+        self.publish_with(bytes, report, |file, path| {
+            file.persist_noclobber(path).map(|_| ()).map_err(|e| {
+                if e.error.kind() == std::io::ErrorKind::AlreadyExists {
+                    "entry-output-exists".into()
+                } else {
+                    IO_ERROR.into()
+                }
+            })
         })
     }
     fn publish_with(

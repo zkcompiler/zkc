@@ -7,8 +7,26 @@ const SETUPS: Opt = Opt::new("--setups=AUTHORITY");
 const CAPACITY: Opt = Opt::new("--capacity=LIMITS");
 const HEADER: Opt = Opt::new("--allow-header-only");
 const RESULTS: Opt = Opt::new("--results=FILE");
-const PROOF: &str = "INPUTS is a zkc.entry-proof/0 request. Verification supplies no prover witness.\nAuthored jobs require --allow-header-only. Returned values require --results.\nExpression assets come from the package; no evaluator manifest is accepted.";
 const BUNDLE_PROOF: &str = "DEPLOYMENT is zkc-compile protocol-proof output. EXPECTED_SHA256 must come from\ntrusted compilation or deployment configuration. INPUTS supplies public bindings\nand one role's invocation values. Authored transcripts require --allow-header-only.";
+// Source and pinned package modes share spelling, but cannot be combined.
+macro_rules! entry_options {
+    (@inspection $($extra:expr),* $(,)?) => {
+        &[
+            Opt::new("--project=FILE"),
+            Opt::new("--module=MODULE=FILE.zkc").repeated(),
+            Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
+            Opt::new("--compiler=PATH"),
+            Opt::new("--package=FILE"),
+            Opt::new("--sha256=PIN").hex(Some(32)),
+            $($extra),*
+        ]
+    };
+    ($($extra:expr),* $(,)?) => {
+        entry_options!(@inspection Opt::new("--no-simplify"),
+            Opt::new("--release-storage"), $($extra),*)
+    };
+}
+const ENTRY: &str = "Select ENTRY by unique short or qualified name. With no name, execution selects the\nsole Entry of the required kind. Use project discovery, --project or explicit modules.\nPinned execution uses --package and --sha256 together and no source options.\nReadable JSON files contain named values only; omitted files require empty input maps.";
 const COMMANDS: &[Command] = &[
     Command {
         name: "check",
@@ -42,45 +60,108 @@ Select an Entry by unique short name or qualified module::Name. The report lists
         description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.\nProject output defaults to build/zkc/<qualified.name>.zkpkg beside the manifest.\nExplicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
     },
     Command {
-        name: "inspect",
-        summary: "Show an authenticated package's checked interface",
-        positional: "PACKAGE EXPECTED_SHA256",
+        name: "init",
+        summary: "Create a minimal source project",
+        positional: "[DIRECTORY]",
         options: &[],
-        description: "Show Entry metadata, ports, services and setups without executing the package.\nEXPECTED_SHA256 must come from trusted compilation or deployment configuration.\nInspection checks metadata consistency; it does not admit executable programs.",
+        description: "Create zkc.toml, protocol.zkc and main.zkc without replacing existing files.",
+    },
+    Command {
+        name: "inspect",
+        summary: "Show a checked Entry interface and input schema",
+        positional: "[ENTRY]",
+        options: entry_options!(@inspection),
+        description: ENTRY,
+    },
+    Command {
+        name: "inputs init",
+        summary: "Generate empty input templates for one Entry",
+        positional: "[ENTRY]",
+        options: entry_options!(@inspection Opt::new("--output=DIRECTORY")),
+        description: "Create only required files under inputs/<qualified.name>/ in a project.\nPackage and explicit-module modes require --output. Existing files are never replaced.\nNull placeholders need values; no witness, dynamic length or variant is invented.",
+    },
+    Command {
+        name: "inputs check",
+        summary: "Prepare invocation inputs without execution",
+        positional: "[ENTRY]",
+        options: entry_options!(
+            Opt::new("--operation=run|prove|verify"),
+            Opt::new("--session=LABEL"),
+            Opt::new("--input=ROLE=FILE").repeated(),
+            Opt::new("--public=FILE"),
+            Opt::new("--witness=FILE"),
+            Opt::new("--service=ROLE.NAME=COUNT").unsigned().repeated(),
+            Opt::new("--key=SLOT=FILE").repeated(),
+            Opt::new("--context=HEX").hex(None),
+            Opt::new("--transcript-budget=COUNT").unsigned(),
+            SETUPS,
+            CAPACITY,
+            HEADER,
+            Opt::new("--limits=LIMITS"),
+            Opt::new("--attempts=COUNT").unsigned(),
+        ),
+        description: "--operation is required. Apply the same inputs and policies as execution.\nChecks setup material and native inputs; issues no resources and executes no protocol.\nVerification checks never open witness data or proof bytes.",
     },
     Command {
         name: "run",
-        summary: "Run a source Entry with named inputs",
-        positional: "PACKAGE EXPECTED_SHA256 INPUTS",
-        options: &[SETUPS, CAPACITY, Opt::new("--limits=LIMITS"), RESULTS],
-        description: "INPUTS is a zkc.entry-run/0 request. --limits reads zkc.bundle-limits/0.\nReturned values require --results. All roles are prepared before execution.\nExpression assets come from the package; no evaluator manifest is accepted.",
+        summary: "Compile and execute a run Entry",
+        positional: "[ENTRY]",
+        options: entry_options!(
+            Opt::new("--session=LABEL"),
+            Opt::new("--input=ROLE=FILE").repeated(),
+            Opt::new("--service=ROLE.NAME=COUNT").unsigned().repeated(),
+            Opt::new("--key=SLOT=FILE").repeated(),
+            SETUPS,
+            CAPACITY,
+            Opt::new("--limits=LIMITS"),
+            RESULTS,
+        ),
+        description: ENTRY,
     },
     Command {
         name: "prove",
-        summary: "Produce a proof from a source Entry",
-        positional: "PACKAGE EXPECTED_SHA256 INPUTS PROOF",
-        options: &[
+        summary: "Compile a proof Entry and produce a proof",
+        positional: "[ENTRY]",
+        options: entry_options!(
+            Opt::new("--public=FILE"),
+            Opt::new("--witness=FILE"),
+            Opt::new("--output=PROOF"),
+            Opt::new("--service=ROLE.NAME=COUNT").unsigned().repeated(),
+            Opt::new("--key=SLOT=FILE").repeated(),
+            Opt::new("--context=HEX").hex(None),
+            Opt::new("--transcript-budget=COUNT").unsigned(),
             SETUPS,
             CAPACITY,
             HEADER,
             Opt::new("--attempts=COUNT").unsigned(),
             RESULTS,
-        ],
-        description: PROOF,
+        ),
+        description: ENTRY,
     },
     Command {
         name: "verify",
-        summary: "Verify a proof with independent named public inputs",
-        positional: "PACKAGE EXPECTED_SHA256 INPUTS PROOF",
-        options: &[SETUPS, CAPACITY, HEADER, RESULTS],
-        description: PROOF,
+        summary: "Verify a proof with independently supplied public inputs",
+        positional: "[ENTRY]",
+        options: entry_options!(
+            Opt::new("--public=FILE"),
+            Opt::new("--proof=FILE"),
+            Opt::new("--service=ROLE.NAME=COUNT").unsigned().repeated(),
+            Opt::new("--key=SLOT=FILE").repeated(),
+            Opt::new("--context=HEX").hex(None),
+            Opt::new("--transcript-budget=COUNT").unsigned(),
+            SETUPS,
+            CAPACITY,
+            HEADER,
+            RESULTS,
+        ),
+        description: ENTRY,
     },
     Command {
         name: "bindings",
         summary: "Generate Rust data bindings pinned to an Entry",
-        positional: "PACKAGE EXPECTED_SHA256 OUTPUT.rs",
-        options: &[],
-        description: "Generate named Rust data structures and an admission helper. Execution uses\nthe common Entry Host; protocol algorithms are not emitted.",
+        positional: "[ENTRY]",
+        options: entry_options!(Opt::new("--output=FILE.rs")),
+        description: "Generate typed inputs and an admission helper for the compiled package.\nProtocol execution uses the common Entry Host.",
     },
     Command {
         name: "run-bundle",
@@ -118,6 +199,17 @@ fn help() -> String {
 
 /// Handle discovery without opening inputs or starting execution.
 pub fn discover(args: &[String]) -> Option<i32> {
+    if args.first().is_some_and(|s| s == "inputs") {
+        if args.len() == 1 || args[1] == "--help" || args[1] == "-h" {
+            println!(
+                "Usage: zkc inputs init|check [ENTRY] [OPTIONS]\nUse zkc inputs COMMAND --help for details."
+            );
+            return Some(if args.len() == 1 { 2 } else { 0 });
+        }
+        let mut flattened = vec![format!("inputs {}", args[1])];
+        flattened.extend_from_slice(&args[2..]);
+        return discover(&flattened);
+    }
     match args {
         [] => {
             eprint!("{}", help());
@@ -131,7 +223,7 @@ pub fn discover(args: &[String]) -> Option<i32> {
             println!("zkc {}", env!("CARGO_PKG_VERSION"));
             Some(0)
         }
-        [name, ..] if command(name).is_none() => {
+        [name, ..] if name != "inputs" && command(name).is_none() => {
             eprintln!("Unknown command '{name}'. Run zkc --help for commands.");
             Some(2)
         }
@@ -151,6 +243,12 @@ pub fn discover(args: &[String]) -> Option<i32> {
 /// Run a named command without process exit or printing. Structural argument
 /// errors are reported before file access, with a stable code and a message.
 pub fn run(name: &str, args: &[String]) -> serde_json::Value {
+    if name == "inputs" {
+        let Some((subcommand, rest)) = args.split_first() else {
+            return serde_json::json!({"status":"refused","phase":"arguments","code":"cli-usage"});
+        };
+        return run(&format!("inputs {subcommand}"), rest);
+    }
     let Some(spec) = command(name) else {
         return serde_json::json!({"status":"refused", "phase":"arguments", "code":"unknown-command"});
     };
@@ -161,6 +259,7 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
                 "compile" => "zkc.entry-build/0",
                 "check" => "zkc.source-check/0",
                 "inspect" => "zkc.entry-inspection/0",
+                "init" | "inputs init" => "zkc.project-init/0",
                 "run-bundle" => "zkc.bundle-result/0",
                 "prove-bundle" | "verify-bundle" => "zkc.native-proof-run/0",
                 _ => "zkc.entry-result/0",
@@ -170,7 +269,7 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
         }
     };
     match name {
-        "compile" | "check" => crate::source::run(name, &args),
+        "compile" | "check" => crate::project::cli::run(name, &args),
         "run-bundle" => crate::run::cli::run(&args),
         "prove-bundle" | "verify-bundle" => crate::proof::cli::run(name == "prove-bundle", &args),
         _ => crate::entry::cli::run(name, &args),
@@ -191,6 +290,8 @@ pub fn succeeded(report: &serde_json::Value) -> bool {
                     | "produced"
                     | "accepted"
                     | "generated"
+                    | "initialized"
+                    | "inputs-checked"
             )
         )
     }
@@ -206,11 +307,7 @@ mod tests {
     #[test]
     fn argument_errors_are_consistent_and_precede_io() {
         for spec in COMMANDS {
-            let invalid = if matches!(spec.name, "check" | "compile") {
-                args(&["one", "two"])
-            } else {
-                vec![]
-            };
+            let invalid = args(&["one", "two", "three", "four", "five"]);
             let report = run(spec.name, &invalid);
             assert_eq!(report["phase"], "arguments", "{}", spec.name);
             assert_eq!(report["code"], "cli-usage");
@@ -219,6 +316,25 @@ mod tests {
             assert_eq!(report["code"], "cli-option");
             assert_eq!(report["phase"], "arguments");
         }
+        for option in [
+            "--module=foo",
+            "--asset=a=b",
+            "--service=P.x=abc",
+            "--context=zz",
+            "--sha256=bad",
+        ] {
+            let report = run("prove", &args(&["--project=/missing/zkc.toml", option]));
+            assert_eq!(report["phase"], "arguments", "{option}");
+            assert_eq!(report["code"], "cli-option", "{option}");
+        }
+        for name in ["inspect", "inputs init"] {
+            assert!(!command(name).unwrap().help().contains("--no-simplify"));
+            assert!(!command(name).unwrap().help().contains("--release-storage"));
+        }
+        assert_eq!(
+            run("init", &args(&["--unknown"]))["format"],
+            "zkc.project-init/0"
+        );
     }
     #[test]
     fn flags_values_duplicates_and_producer_options_are_checked_once() {
@@ -246,19 +362,16 @@ mod tests {
                 "cli-option"
             );
         }
-        let values = args(&["--results=out", "p", "h", "i", "o", "--allow-header-only"]);
-        assert_eq!(
-            prove.parse(&values).unwrap().positional,
-            ["p", "h", "i", "o"]
-        );
-        let values = args(&["--", "-p", "h"]);
+        let values = args(&["--results=out", "Example", "--allow-header-only"]);
+        assert_eq!(prove.parse(&values).unwrap().positional, ["Example"]);
+        let values = args(&["--", "-p"]);
         assert_eq!(
             command("inspect")
                 .unwrap()
                 .parse(&values)
                 .unwrap()
                 .positional,
-            ["-p", "h"]
+            ["-p"]
         );
     }
     #[test]

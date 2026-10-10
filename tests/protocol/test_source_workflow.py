@@ -224,7 +224,7 @@ def test_relative_project_and_module_paths_share_the_callers_directory(toolchain
     assert checked['scope'] == 'entry' and checked['entry'] == 'main::Job'
     assert 'declarations' in checked and 'check' not in checked
     explicit = journal.json([*command, '--module=main=main.zkc', 'main::Job', '--declarations'], cwd=directory)
-    assert checked.pop("project") == "zkc.toml"
+    assert checked.pop("project") == str(directory / "zkc.toml")
     assert checked == explicit
     before = source.read_bytes()
     journal.run([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',

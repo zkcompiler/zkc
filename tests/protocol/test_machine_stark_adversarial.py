@@ -4,6 +4,7 @@ Mutations change prover computations before commitment, so all hashes and
 transcript challenges remain consistent. Exact source guards identify which
 verifier obligation rejects. Honest controls retain the modified prover.
 """
+from input_files import input_files
 import json
 import re
 
@@ -55,12 +56,12 @@ def stopped_at(report, package, name):
 
 
 def rejected_proof(toolchain, journal, directory, package, pin, pair, name, guard):
-    producer = journal.write(name + '-prover.json', pair[0])
-    verifier = journal.write(name + '-verifier.json', pair[1])
+    producer = input_files(journal, name + '-prover', public=pair[0], witness=pair[1])
+    verifier = input_files(journal, name + '-verifier', public=pair[0])
     proof = directory / (name + '.proof')
-    made = journal.json([toolchain.runtime, 'prove', package, pin, producer, proof])
+    made = journal.json([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
     assert made['status'] == 'produced'
-    result = journal.attempt([toolchain.runtime, 'verify', package, pin, verifier, proof])
+    result = journal.attempt([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'])
     stopped_at(assert_refused(result), package, guard)
 
 
@@ -71,7 +72,7 @@ def test_machine_false_quotient_is_rejected_at_identity(toolchain, journal, dire
     pair = requests('store-load')
     # Row zero is an add, so changing only its clock violates CPU initial and
     # transition assertions while leaving all program and RAM tuples intact.
-    pair[0]['inputs']['cpu'] = alter_vector(pair[0]['inputs']['cpu'], 1)
+    pair[1]['cpu'] = alter_vector(pair[1]['cpu'], 1)
     rejected_proof(toolchain, journal, directory, package, pin, pair, 'false-clock', 'identity')
 
 
@@ -100,9 +101,9 @@ def test_machine_known_configuration_binds_a_consistent_other_execution(toolchai
     original = json.loads((FIXTURES / 'arithmetic-only/run.json').read_text())
     original[1][0][1] = '11'
     original[1][1][1] = str(prepare.machine.P - 2)
-    foreign = prepare.run_requests(original)
+    foreign = prepare.run_inputs(original)
     pair = requests('arithmetic-only')
-    pair[0]['inputs'] = foreign[0]['inputs']
+    pair = pair[0], foreign[1]
     source = (EXAMPLE / 'main.zkc').read_text()
     old = '  let statementP @P = statement(initial, final, cpu_height, program_height, instructions,'
     new = '  let statementP @P = statement(initial, final, cpu_height, program_height, other_program(instructions),'

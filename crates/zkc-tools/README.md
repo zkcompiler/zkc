@@ -1,11 +1,11 @@
 # Entry and native execution hosts
 
 `zkc` compiles `.zkc` Entry packages through the mathematical compiler and executes
-the resulting `zkc.program/0` with the generic runtime. The public library has
-three execution owners and shared value types:
+the resulting `zkc.program/0` with the generic runtime. The public library separates project compilation, execution owners and shared values:
 
 | Owner | Responsibility |
 |---|---|
+| `project` | Manifest discovery, explicit source maps, Entry selection and bounded compiler invocation |
 | `execution` | Shared `Capacity`, `InputValue` and immutable `ProverMaterial` |
 | `entry` | Authenticated packages, named input binding, execution and generated Rust data bindings |
 | `run` | Authenticated run bundles, role preparation, scheduling, transport and bounded reports |
@@ -16,12 +16,17 @@ Private `host` helpers own byte ingress, native input admission, immutable prove
 material, operational capacities, setup validation and bounded compiler-process
 execution. No host dispatches on a protocol name.
 
-The `cli` module owns discovery, compilation subprocesses, file transport and
-command reports. One command table owns argument grammar and help. Reusable execution APIs remain in the three owners above.
+The `cli` module owns command grammar, help and reports. Project/compiler APIs
+return typed results; CLI adapters coordinate them with Entry preparation and
+publication. `entry::Interface` is a checked logical view; `BoundInterface` binds
+that view to a package. `entry::inputs` derives readable input groups and schemas
+from the same view, with explicit opt-in file resolution. Native value import
+and resource accounting remain in the common Host.
 
 Use `zkc --help` or `zkc COMMAND --help`. The installed commands are:
 
-- `compile`, `inspect`, `run`, `prove`, `verify`, `bindings`.
+- `init`, `check`, `compile`, `inspect`, `inputs init`, `inputs check`.
+- `run`, `prove`, `verify`, `bindings`.
 - `run-bundle`, `prove-bundle`, `verify-bundle`.
 
 An expected SHA-256 comes from trusted compilation or deployment configuration.

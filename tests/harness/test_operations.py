@@ -215,7 +215,7 @@ def test_demo_writes_under_current_run_reports(monkeypatch, tmp_path):
                 package.write_bytes(b"package")
                 stdout.write(json.dumps({"package_sha256": "0" * 64}))
             elif args[1] in {"prove", "verify"}:
-                Path(args[-1]).write_bytes(b"proof")
+                Path(args[-1].split("=", 1)[1]).write_bytes(b"proof")
                 stdout.write(json.dumps({"status": "produced" if args[1] == "prove" else "accepted"}))
 
     monkeypatch.setattr(runner, "run", run)

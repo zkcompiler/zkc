@@ -550,7 +550,7 @@ fn main() {
             zkc_tools::entry::Package::MAX_BYTES,
         )
         .unwrap();
-        let interface = zkc_tools::entry::Interface::read(&package)
+        let interface = zkc_tools::entry::BoundInterface::read(&package)
             .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         if !interface.is_proof() && interface.setup_names().len() == 0 {
             let artifact = package.artifact().as_bytes();

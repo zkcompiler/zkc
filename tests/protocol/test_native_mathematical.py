@@ -556,22 +556,26 @@ def check_bundle_commands(toolchain, journal, directory):
 
 def check_source_setup_commands(toolchain, journal, directory):
     import hashlib
-    import json
     package = directory / 'pcs-setup-Prove.zkpkg'
     pin = hashlib.sha256(package.read_bytes()).hexdigest()
-    authority = f'--setups={directory / "cli-authority.json"}'
+    settings = [f'--setups={directory / "cli-authority.json"}',
+                *[f'--key={p.stem.removeprefix("cli-vk-")}={p}' for p in sorted(directory.glob('cli-vk-*.bin'))]]
     proof = directory / 'separate-cli-pcs-proof.bin'
-    journal.run([toolchain.runtime, 'prove', package, pin, directory / 'cli-producer.json', proof, authority, '--allow-header-only'])
-    journal.run([toolchain.runtime, 'verify', package, pin, directory / 'cli-verifier.json', proof, authority, '--allow-header-only'])
+    target = [f'--package={package}', f'--sha256={pin}', *settings,
+              f'--public={directory / "cli-public.json"}', '--allow-header-only']
+    producing = [toolchain.runtime, 'prove', *target, f'--witness={directory / "cli-witness.json"}']
+    journal.run([*producing, f'--output={proof}'])
+    journal.run([toolchain.runtime, 'verify', *target, f'--proof={proof}'])
     key = directory / 'cli-pk-0.bin'
     unchanged = key.read_bytes()
-    for output in ([key], [proof, f'--results={key}']):
-        report = json.loads(journal.run([toolchain.runtime, 'prove', package, pin,
-            directory / 'cli-producer.json', *output, authority, '--allow-header-only'], refuses='entry-output-path'))
+    for output in ([f'--output={key}'], [f'--output={proof}', f'--results={key}']):
+        report = journal.json([*producing, *output], refuses='entry-output-path')
         assert 'execution' not in report and key.read_bytes() == unchanged
     package = directory / 'pcs-setup-Run.zkpkg'
     pin = hashlib.sha256(package.read_bytes()).hexdigest()
-    command = [toolchain.runtime, 'run', package, pin, directory / 'cli-run.json', authority]
+    command = [toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}',
+               '--session=setup_files', f'--input=P={directory / "cli-P.json"}',
+               f'--input=V={directory / "cli-V.json"}', *settings]
     journal.run(command)
-    report = json.loads(journal.run([*command, f'--results={key}'], refuses='entry-output-path'))
+    report = journal.json([*command, f'--results={key}'], refuses='entry-output-path')
     assert 'execution' not in report and key.read_bytes() == unchanged

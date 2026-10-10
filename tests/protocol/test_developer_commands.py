@@ -57,16 +57,18 @@ def test_usage_and_execution_failures_remain_distinct(toolchain, directory):
         result = invoke(*args)
         assert result.returncode == 2 and "Unknown command" in result.stderr
         assert not result.stdout
-    result = invoke("prove", "missing.zkpkg", "0" * 64, "missing.json", "proof.bin",
+    result = invoke("prove", "--package=missing.zkpkg", "--sha256=" + "0" * 64,
+                    "--witness=missing.json", "--output=proof.bin",
                     "--setups=missing", "--attempts=x")
     report = json.loads(result.stdout)
     assert result.returncode == 1 and report["phase"] == "arguments"
-    assert report["code"] == "cli-option" and "count" in report["message"]
+    assert report["code"] == "cli-option" and "--attempts" in report["message"]
     # A real execution command still reports the existing machine-readable refusal.
-    result = invoke("run", "missing.zkpkg", "0" * 64, "inputs.json")
+    result = invoke("run", "--package=missing.zkpkg", "--sha256=" + "0" * 64,
+                    "--session=missing", "--input=P=inputs.json")
     assert result.returncode == 1
     report = json.loads(result.stdout)
-    assert report["status"] == "refused" and report["code"]
+    assert report["status"] == "refused" and report["code"] == "artifact-io"
 
 
 def test_demo_entry_point(toolchain, directory, journal):

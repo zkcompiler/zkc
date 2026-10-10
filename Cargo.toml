@@ -21,6 +21,8 @@ num-bigint = "=0.4.8"
 tempfile = "=3.27.0"
 # Nonblocking regular-file ingress for native hosts.
 libc = "=0.2.189"
+# Safe directory-relative input references; reuses the locked tempfile dependency.
+rustix = { version = "=1.1.4", features = ["fs"] }
 zkc-test-support = { path = "crates/zkc-test-support" }
 
 # Native integration versions are owned here; each crate selects its features.

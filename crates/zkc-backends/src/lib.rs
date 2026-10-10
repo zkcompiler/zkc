@@ -25,7 +25,8 @@ pub use plonky3::{KoalaBear, KoalaBearExt8, parse_decimal as parse_koala_bear_de
 
 pub use backend::{EntryPolicy, NativeBackend, PortConstraint};
 pub use codec::{
-    NativeInputSize, NativeWireError, has_native_wire, native_wire_size, requires_setup,
+    NativeInputSize, NativeWireError, has_native_wire, native_wire_size, readable_wire,
+    requires_setup,
 };
 pub use resource::{Capability, CapabilityObservation, Domain, LogicalUnit};
 pub use setups::SetupRegistry;

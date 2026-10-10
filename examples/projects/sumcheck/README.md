@@ -19,17 +19,17 @@ exercises a complete terminal decision without requiring a PCS setup.
 From the repository root, with built tools on `PATH`:
 
 ```sh
-zkc compile --project=examples/projects/sumcheck/zkc.toml \
-  example::Proof --output=sumcheck.zkpkg
-zkc prove sumcheck.zkpkg EXPECTED_SHA256 examples/projects/sumcheck/prover.json sumcheck.proof
-zkc verify sumcheck.zkpkg EXPECTED_SHA256 examples/projects/sumcheck/verifier.json sumcheck.proof
+zkc prove example::Proof --project=examples/projects/sumcheck/zkc.toml \
+  --public=examples/projects/sumcheck/inputs/example.Proof/public.json --output=sumcheck.proof
+zkc verify example::Proof --project=examples/projects/sumcheck/zkc.toml \
+  --public=examples/projects/sumcheck/inputs/example.Proof/public.json --proof=sumcheck.proof
 ```
 
-`EXPECTED_SHA256` comes from trusted compilation. Both requests authorize the
-same public table, claim and round count. No private inputs are needed for this
-public example. The [Entry guide](../../../docs/runtime/entries.md) explains
-request encoding and limits. Compiling `example::Interactive` and passing
-[interactive.json](interactive.json) to `run` exercises both live roles.
+Both invocations supply the public table, claim and round count. This public
+example needs no witness file. The [Entry guide](../../../docs/runtime/entries.md)
+explains input encodings and limits. Select `example::Interactive` with
+`--session=sumcheck` and `--input=P=inputs/example.Interactive/P.json` and
+`--input=V=inputs/example.Interactive/V.json` from this project to run both roles.
 
 The source and CLI tests check both successful execution and changed claims,
 insufficient rounds, actual transcript messages and proof truncation. These are

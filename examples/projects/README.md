@@ -14,13 +14,15 @@
 
 The [walkthrough](../../docs/getting-started.md) runs the Schnorr project. Each project has an explicit `zkc.toml` source and asset map. Run
 `zkc check --project=examples/projects/NAME/zkc.toml --declarations`, then
-compile with the same `--project` and a selected `--entry`. Invoke the package through
-the [common Host](../../docs/runtime/entries.md). These projects require no
+select an Entry by positional name for `inspect`, `run`, `prove` or `verify`.
+The [common Host](../../docs/runtime/entries.md) compiles source in memory or
+accepts an explicitly pinned package. `inputs init ENTRY` generates templates
+under `inputs/<qualified.name>/`; fill and explicitly select those files. These projects require no
 protocol-specific executor. The [source project checks](../../tests/protocol/test_source_projects.py)
 exercise their commands and invalid inputs/proofs.
 
 Reusable protocol definitions live in [`libraries/`](../../libraries/README.md).
 Each project owns its concrete domains, Entries and invocation inputs. Keep assets
 used by only one project alongside that project; shared relation-ingress samples
-live in [`relations/`](../relations/README.md). Assets and requests an adapter
+live in [`relations/`](../relations/README.md). Assets and input maps an adapter
 derives stay beside the export it checks them against.

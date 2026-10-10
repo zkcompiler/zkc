@@ -27,9 +27,13 @@ Use the same options with `language-emit` to print checked original MLIR,
 `language-interface` for the selected Entry's named port layout, or
 `language-bundle` for the selected run bundle or proof deployment, or
 `language-package` for the immutable package containing original, interface,
-artifact and compilation options. These Entry commands check source, target
-admission and source correspondence. `language-check` also accepts no `--entry`
+artifact and compilation options. These Entry commands check source and original
+IR correspondence; bundle/package commands also lower and admit the executable
+target. `language-check` also accepts no `--entry`
 to check definitions alone; the report identifies that narrower scope.
+Output commands accept `--entry-kind=run|proof` to restrict the eligible kind.
+An explicit name is resolved before kind checking; filtering cannot hide an
+ambiguous short name. With no name, exactly one eligible Entry is required.
 The application CLI offers `zkc check` with the same behavior and optional
 [project inputs](README.md#project-inputs). Module and Asset capture is explicit. `--no-simplify` and `--release-storage` select
 existing downstream compiler options for bundle production.

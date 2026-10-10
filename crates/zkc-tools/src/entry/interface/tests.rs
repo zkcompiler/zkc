@@ -40,7 +40,7 @@ fn read_text(interface: &str) -> Result<Interface> {
         Package::MAX_BYTES,
     )
     .unwrap();
-    Interface::read(&package)
+    crate::entry::BoundInterface::read(&package).map(|view| view.into_view())
 }
 fn read(value: &Value) -> Result<Interface> {
     read_text(&value.to_string())
@@ -793,4 +793,35 @@ fn completion_selects_a_prover_boolean_native_output() {
     let mut unknown_format = doc;
     unknown_format["format"] = json!("invalid.language-interface");
     assert_eq!(read(&unknown_format).unwrap_err(), InterfaceError::Format);
+}
+
+#[test]
+fn readable_input_groups_share_the_checked_interface_and_require_opt_in_resolution() {
+    use crate::entry::inputs::Decoder;
+    let interface = read(&document()).unwrap();
+    let groups = interface.input_groups();
+    assert_eq!(
+        groups.iter().map(|g| g.name()).collect::<Vec<_>>(),
+        vec!["public", "witness"]
+    );
+    assert_eq!(groups[0].template(), json!({"statement":null}));
+    assert_eq!(groups[1].template(), json!({"witness":null}));
+    let mut decoder = Decoder::new(Default::default()).unwrap();
+    assert!(
+        decoder
+            .decode(&groups[0], br#"{"statement":true}"#, None)
+            .is_ok()
+    );
+    for (bytes,code,path) in [
+        (br#"{}"#.as_slice(),"entry-input-names","public.statement"),
+        (br#"{"statement":true,"extra":false}"#,"entry-input-names","public.extra"),
+        (br#"{"statement":null}"#,"entry-input-unfilled","public.statement"),
+        (br#"{"statement":1}"#,"entry-input-shape","public.statement"),
+        (br#"{"statement":true,"statement":false}"#,"entry-request-format","public"),
+        (br#"{"statement":{"file":"value.zkcv","sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}"#,"entry-input-reference","public.statement"),
+    ] {
+        let error=decoder.decode(&groups[0],bytes,None).unwrap_err();
+        assert_eq!(error.code,code);
+        assert_eq!(error.path,path);
+    }
 }

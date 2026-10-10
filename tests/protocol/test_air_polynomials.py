@@ -1,10 +1,12 @@
 """Source AIR polynomial helpers against independent extension arithmetic."""
+
+from input_files import input_files
 import json
 from pathlib import Path
 
 import pytest
 
-from octic_reference import P, ONE, ZERO, add, mul, power, coordinates
+from octic_reference import P, ONE, ZERO, add, mul, power
 
 ROOT = Path(__file__).resolve().parents[2]
 LIBRARY = ROOT / 'libraries/air/polynomial.zkc'
@@ -26,9 +28,8 @@ run Demo=Run;
 
 
 def wire(values, scalar=False):
-    return (b'ZKCV\x00' + bytes([26 if scalar else 27])
-            + (b'' if scalar else len(values).to_bytes(4, 'little'))
-            + b''.join(coordinates(v) for v in values)).hex()
+    rows = [[str(w) for w in v] for v in values]
+    return rows[0] if scalar else rows
 
 
 def points(size, shift=ONE):
@@ -88,11 +89,9 @@ def test_scope_polynomials_on_intersecting_cosets(toolchain, journal, directory,
         for begin, end in [(0, 7), (1, 8), (1, 7), (0, 8), (3, 3), (2, 5)]:
             inputs = {'height': height, 'begin': begin, 'end': end, 'size': size,
                       'shift': wire([shift], True), 'samples': wire(samples)}
-            request = journal.write('inputs.json', {'format': 'zkc.entry-run/0',
-                'session': 'scope_roots', 'roles': {'P': {'inputs': inputs}}})
+            request = input_files(journal, 'inputs.json', session='scope_roots', roles={'P': {'inputs': inputs}})
             output = directory / 'outputs.json'
-            journal.run([toolchain.runtime, 'run', package, report['package_sha256'], request,
-                         f'--results={output}'])
+            journal.run([toolchain.runtime, 'run', f'--package={package}', f'--sha256={report['package_sha256']}', *request, f'--results={output}'])
             actual = json.loads(output.read_text())['roles']['P']
             roots = subgroup[begin:end]
             assert actual['scope'] == wire([zero_polynomial_at(roots, at) for at in coset])
@@ -122,10 +121,9 @@ def test_scope_polynomials_and_column_extensions(toolchain, journal, directory, 
             inputs = {'height': height, 'begin': begin, 'end': end, 'size': size,
                       'shift': wire([SHIFT], True), 'x': wire([x], True),
                       'values': wire(columns), 'width': len(polynomials)}
-            request = journal.write('inputs.json', {'format': 'zkc.entry-run/0', 'session': 'air_math',
-                                                  'roles': {'P': {'inputs': inputs}}})
+            request = input_files(journal, 'inputs.json', session='air_math', roles={'P': {'inputs': inputs}})
             output = directory / 'outputs.json'
-            journal.run([toolchain.runtime, 'run', package, pin, request, f'--results={output}'])
+            journal.run([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={output}'])
             values = json.loads(output.read_text())['roles']['P']
             roots = subgroup[begin:end]
             assert values['scope'] == wire([zero_polynomial_at(roots, at) for at in coset])
@@ -137,9 +135,8 @@ def test_scope_polynomials_and_column_extensions(toolchain, journal, directory, 
                 assert zero_polynomial_at(roots, x) == add(power(x, height), [P - 1] + [0] * 7)
 
     for change in [{'begin': 5, 'end': 2}, {'end': height + 1}, {'values': wire(columns[:-1])}]:
-        request = journal.write('invalid.json', {'format': 'zkc.entry-run/0', 'session': 'air_math',
-            'roles': {'P': {'inputs': inputs | change}}})
-        refused = journal.json([toolchain.runtime, 'run', package, pin, request],
+        request = input_files(journal, 'invalid.json', session='air_math', roles={'P': {'inputs': inputs | change}})
+        refused = journal.json([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', *request],
                                refuses='entry-run-incomplete')
         cause = refused['execution']['roles'][0]['after'][1]['cause']
         assert cause[0] == 'explicit' and cause[1]['text'] == 'reject'

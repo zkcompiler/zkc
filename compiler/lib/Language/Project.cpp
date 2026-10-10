@@ -361,7 +361,8 @@ std::vector<DeclarationId> CheckedProject::entries() const {
   return result;
 }
 Expected<DeclarationId> selectEntry(const CheckedProject &project,
-                                    StringRef name, const Limits &limits) {
+                                    StringRef name, const Limits &limits,
+                                    std::optional<EntryKind> kind) {
   if (auto error = checkLimits(limits))
     return std::move(error);
   if (name.size() > limits.moduleBytes + limits.identifierBytes + 2)
@@ -370,6 +371,16 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
       project.declarations().size() > limits.declarations)
     return detail::failure("source.limit",
                            "checked project exceeds requested limits");
+  auto eligible = [&](DeclarationId id) {
+    return !kind || project.declarations()[id.index].entryKind() == *kind;
+  };
+  auto selected = [&](DeclarationId id) -> Expected<DeclarationId> {
+    if (!eligible(id))
+      return detail::failure("source.entry-kind",
+                             "selected Entry has the wrong execution kind",
+                             project.declarations()[id.index].span);
+    return id;
+  };
   if (name.contains("::")) {
     for (const auto &decl : project.declarations())
       if (decl.qualifiedName == name) {
@@ -377,21 +388,24 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
           return detail::failure("source.entry",
                                  "selection must name an Entry declaration",
                                  decl.span);
-        return decl.id;
+        return selected(decl.id);
       }
   }
   auto candidates = project.entries();
   std::vector<DeclarationId> matches;
   for (auto id : candidates)
-    if (name.empty() || project.declarations()[id.index].name == name)
+    if (name.empty() ? eligible(id)
+                     : project.declarations()[id.index].name == name)
       matches.push_back(id);
   if (matches.size() == 1)
-    return matches.front();
+    return selected(matches.front());
   if (candidates.empty())
     return detail::failure("source.entry",
                            "project has no Entries; declare run or proof");
   std::string message;
-  if (matches.empty())
+  if (matches.empty() && name.empty())
+    message = "no Entry of the required execution kind; available Entries:";
+  else if (matches.empty())
     message = "unknown Entry: " + name.str() + "; available Entries:";
   else if (name.empty())
     message = "multiple Entries; select one by name. Candidates:";
@@ -412,8 +426,9 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
   return detail::failure("source.entry", message);
 }
 Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
-                                 const Limits &limits) {
-  auto selected = selectEntry(project, name, limits);
+                                 const Limits &limits,
+                                 std::optional<EntryKind> kind) {
+  auto selected = selectEntry(project, name, limits, kind);
   if (!selected)
     return selected.takeError();
   const auto &decl = project.declarations()[selected->index];

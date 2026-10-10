@@ -9,7 +9,7 @@ import random
 import pytest
 
 from entry import Entry
-from octic_reference import P, ZERO, add, mul, power, coordinates
+from octic_reference import P, ZERO, add, mul, power
 
 X = [0, 1] + [0] * 6
 X7 = [0] * 7 + [1]
@@ -38,16 +38,12 @@ run Demo = Run;
 
 
 def wire(kind, value):
-    header = b'ZKCV\x00' + bytes([{'field': 26, 'vector': 27, 'matrix': 30}[kind]])
     if kind == 'field':
-        payload = coordinates(value)
-    elif kind == 'vector':
-        payload = len(value).to_bytes(4, 'little') + b''.join(map(coordinates, value))
-    else:
-        payload = b''.join(x.to_bytes(4, 'little') for x in [2, 2, len(value)])
-        payload += b''.join(r.to_bytes(4, 'little') + c.to_bytes(4, 'little') + coordinates(a)
-                            for r, c, a in value)
-    return (header + payload).hex()
+        return [str(x) for x in value]
+    if kind == 'vector':
+        return [wire('field', x) for x in value]
+    return {'rows': '2', 'columns': '2',
+            'entries': [[str(r), str(c), wire('field', a)] for r, c, a in value]}
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])

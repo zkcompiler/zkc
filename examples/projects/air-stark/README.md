@@ -21,20 +21,23 @@ zkc compile --compiler=zkc-compile \
   air_stark_example::Proof --output=air-stark.zkpkg
 ```
 
-Prepare public and private requests from the retained upstream run, then prove
+Prepare public and witness inputs from the retained upstream run, then prove
 and verify using the `package_sha256` returned by compilation:
 
 ```sh
 python3 examples/projects/air-stark/prepare.py build/air-stark
-zkc prove air-stark.zkpkg "$PACKAGE_SHA256" build/air-stark/prover.json build/air-stark/proof.bin
-zkc verify air-stark.zkpkg "$PACKAGE_SHA256" build/air-stark/verifier.json build/air-stark/proof.bin
+zkc prove --package=air-stark.zkpkg --sha256="$PACKAGE_SHA256" \
+  --public=build/air-stark/public.json --witness=build/air-stark/witness.json \
+  --output=build/air-stark/proof.bin
+zkc verify --package=air-stark.zkpkg --sha256="$PACKAGE_SHA256" \
+  --public=build/air-stark/public.json --proof=build/air-stark/proof.bin
 ```
 
 `Run` is the interactive Entry. `Proof` applies the installed Merlin transcript
 suite to the same protocol. See the [proof Host](../../../docs/runtime/README.md)
 for result files and execution limits. The
 [executable tests](../../../tests/protocol/test_air_stark.py) exercise these
-requests, independent producer/consumer invocations and rejection cases.
+inputs, independent producer/consumer invocations and rejection cases.
 Fixture values come from the adapter's direct AIR execution.
 
 The example names a constraints target and restricts the Bundle to one table

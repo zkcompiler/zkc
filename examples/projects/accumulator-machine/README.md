@@ -21,20 +21,21 @@ From the repository root, with the compiler and CLI already built:
 ```sh
 python3 examples/projects/accumulator-machine/prepare.py \
   compiler/adapters/accumulator-machine/fixtures/store-load/run.json \
-  build/machine-requests
+  build/machine-inputs
 
 zkc compile --compiler=build/compiler/zkc-compile \
   --project=examples/projects/accumulator-machine/zkc.toml \
   accumulator_machine::ProofLogUp --output=build/machine.zkpkg
 
-zkc prove build/machine.zkpkg PACKAGE_SHA256 \
-  build/machine-requests/prover.json build/machine.proof
-zkc verify build/machine.zkpkg PACKAGE_SHA256 \
-  build/machine-requests/verifier.json build/machine.proof
+zkc prove --package=build/machine.zkpkg --sha256=PACKAGE_SHA256 \
+  --public=build/machine-inputs/public.json --witness=build/machine-inputs/witness.json \
+  --output=build/machine.proof
+zkc verify --package=build/machine.zkpkg --sha256=PACKAGE_SHA256 \
+  --public=build/machine-inputs/public.json --proof=build/machine.proof
 ```
 
 Use the `package_sha256` printed by compilation in place of `PACKAGE_SHA256`.
-Choose `ProofProduct` at compilation for the other reduction. The request
+Choose `ProofProduct` at compilation for the other reduction. The input
 format is the same. The maintained tests run these commands with isolated tools
 and reports. `prepare.py --memory-clocks 16 --memory-present` exercises a longer,
 present memory schedule, including a run with no memory instruction.

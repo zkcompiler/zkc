@@ -102,6 +102,14 @@ fn false_output_and_bounded_work_keep_complete_reports() {
 fn partial_issuance_retires_earlier_roots_without_entering_frames() {
     let (raw, input) = fixture("rng:bls12-381.fr");
     let host = host(&raw, HostLimits::default());
+    let prepared = host.prepare(input.to_string().as_bytes()).unwrap();
+    assert!(
+        prepared
+            .roles
+            .iter()
+            .all(|r| r.backend.live_resource_units() == 0 && r.backend.active_frames() == 0)
+    );
+    drop(prepared);
     let mut attempts = 0;
     let report = host
         .prepare(input.to_string().as_bytes())

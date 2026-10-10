@@ -11,6 +11,10 @@ validation preserves kind, exact logical identity, permissions, custody, field
 slices and nominal alternatives. Every logical port remains present, including
 zero-leaf values. Selectors and Entry choices must agree with those schemas.
 
+`Interface` is this checked logical view, also available from source inspection
+before executable lowering. `BoundInterface` adds authenticated package identity
+and compile options; only that bound view can bind a native deployment.
+
 Compiler publication and both readers bound interface bytes at 4 MiB, JSON
 nesting at 256 and lexical nodes
 at 200,000 before typed decoding. Scalar tokens have at most ten bytes; encoded
@@ -54,8 +58,9 @@ slot exactly. The Host authenticates and imports them through its existing bound
 setup loader. Whole verifier-key inputs are initialized automatically: applications
 omit them from both named role inputs and named public values. Supplying a second
 value under that port name refuses. Prover-key inputs remain explicit named
-`Value::Leaf` values containing authenticated `ProverMaterial` or a
-`ProverKeyFile` with an independently expected material fingerprint. Other
+`Value::Leaf` values containing authenticated `ProverMaterial`, a `ProverKeyFile`
+path, or a descriptor-backed `ProverKeyInput`. Both file forms require an
+independently expected material fingerprint. Other
 constructors, including arbitrary native key values, refuse.
 
 Each invocation checks prover material against its assigned slot. Immutable
@@ -149,7 +154,9 @@ field names follow the declared payload order. The checked schema supplies all
 native slices and nominal descriptors; display type strings are not executable
 layout descriptions.
 
-Ordinary leaves use `entry::Value::Leaf(InputValue::Native(...))` or `Wire`.
+Ordinary leaves use `entry::Value::Leaf` with `InputValue::Native`, `Wire`, or
+`WireFile`. `WireFile` retains an opened regular descriptor and an expected
+SHA-256; common Host preparation reads and authenticates it under input limits.
 The admitted source schema's `Wire` constructor permission applies recursively
 through products and alternative payloads. A matching native representation does
 not confer private constructor authority. Source randomness comes through named
@@ -160,7 +167,8 @@ checks complete types, aggregate collection counts and retention before decoding
 or constructing payload containers.
 
 `prepare` consumes the named request and returns a single-use plan backed by the
-same native Host. `execute` retains the complete native outcome, usage and cleanup
+same native Host, before any resource issuance. `check_inputs` applies that
+preparation and discards the unexecuted plan. `execute` retains the complete native outcome, usage and cleanup
 report. On complete execution with successful cleanup, it reconstructs all named
 results, including empty products. Other outcomes publish no complete logical
 result; they remain visible in the native report. An unexpected reconstruction
@@ -255,61 +263,121 @@ budgets and native hard limits still apply.
 
 ## File adapters and Rust bindings
 
-The CLI and generated bindings use the same named Hosts. `zkc compile` invokes
-a compiler selected by an explicit path or absolute directories in the caller's
-trusted `PATH` (default
-`zkc-compile`), reports its resolved path and toolchain, captures its
-bounded package output and publishes exact bytes with their SHA-256. Existing
-packages require a caller-supplied expected digest for `run`, `prove`,
-`verify`, `inspect` and `bindings`. No digest derived from candidate bytes authorizes them.
+The CLI and generated bindings use the same named Hosts. The public
+`project::{Project, Compiler, Selection}` API owns project resolution and bounded
+compiler invocation. A compiler is selected explicitly or through absolute
+directories in trusted `PATH`. Source execution compiles in memory, captures the
+exact returned package bytes, and reports their identity and compiler provenance.
+`compile` additionally publishes those bytes. Existing packages require the
+pair `--package=FILE --sha256=EXPECTED`; this mode refuses source options and
+Entry positionals. A digest derived from candidate bytes never authorizes them.
 
-`zkc inspect PACKAGE EXPECTED_SHA256` captures and authenticates bounded package
-bytes, then validates the source interface. Its `zkc.entry-inspection/0` report
-contains the package identity, selected Entry/protocol/toolchain, role inputs,
-outputs and service contracts, setup names and proof selections. Port summaries
-carry the source display type and roles. Proof metadata includes named public
-ports, prover/verifier, acceptance/completion selectors (named output, field-index path and role),
-and an optional transcript suite. A run interface has `proof: null`. Inspection performs no native admission,
-key import, resource issuance or execution; execution retains its separate checks.
+Omitted Entry names select the unique eligible Entry. Run commands filter to
+run Entries; prove/verify commands filter to proof Entries. Other commands
+consider both kinds. Explicit short names must be unique across kinds before
+checking eligibility. Qualified names resolve exactly. `inputs check` requires
+`--operation=run|prove|verify` and uses that operation's eligibility and input rules.
+
+`Interface` is the checked logical source view. `BoundInterface` additionally
+binds it to the package's artifact identity and compile options. `inspect` and `inputs init`
+can obtain the logical view directly from `language-interface`, before executable
+lowering. Package inspection validates the captured package view. Neither path
+performs native admission, key import, resource issuance or execution.
+`zkc.entry-inspection/0` reports Entry/protocol/toolchain, role ports, services,
+setup names, proof selections and input group schemas. Input schemas are derived
+from that same checked Interface, not a separately persisted authority. Each
+input reports whether its source permission and installed native representation
+allow construction. This descriptive flag does not replace native admission.
 
 Command help and syntax admission share one declaration. Options use
-`--name=value` or a bare switch, can precede positionals, and refuse duplicate
-single-use options. `--` ends option parsing. Missing arguments and malformed
-options return `cli-usage` or `cli-option` with a human-readable `message` in
-phase `arguments`, before file access. Exit 0 requires completed success;
-recognized-command refusals return JSON and exit 1. Missing/unknown commands
-exit 2. Help and version exit 0 without reading inputs. `run`, `prove` and
-`verify` accept no evaluator manifest: expression assets come from the
-package, and an `--evaluators` option is an unknown option.
+`--name=value` or bare switches; repeated single-use options refuse. `--` ends
+option parsing. Syntax errors return `cli-usage` or `cli-option` before file
+access. Recognized-command refusals return JSON and exit 1; missing or unknown
+commands exit 2. Help/version exit 0 without input access. Successful execution
+requires the complete outcome, including acceptance when applicable.
 
-A `zkc.entry-run/0` request has required `format`, `session` and `roles`, plus
-optional `setups` (default empty). Every role record has required `inputs` and
-optional `services` (default no overrides). A `zkc.entry-proof/0` request has
-required `format` and `public`, plus optional `inputs` (private value map,
-default empty), `services` (default no overrides), `context` (default empty hex), `transcript_budget` (default absent) and `setups`
-(default empty). Public and input maps use exact logical port names. The file
-adapter fills shared role operands from `public`; `inputs` cannot repeat or
-override public names. Independent callers still provide their own public maps. Setup
-material maps slot names to canonical verifier-key bytes in hex. Whole VK ports
-are omitted from value maps. A whole prover-key port supplies exactly `path`
-and `sha256`; key paths resolve from the invoking process working directory.
+### Input documents
 
-Values use Boolean JSON for Boolean source values, unsigned 64-bit integers for
-indices, null for unit, arrays for tuples/fixed arrays, and exact named objects
-for records. A variant has exactly `case` (the alternative name) and `fields`
-(a named object, including numeric field names for positional payloads).
-Associated representations are transparent. Installed mathematical leaves use
-hex of their complete canonical native wire frame. Native decoding retains its
-exact type, canonicality, setup and quota checks. Typed Rust ingress avoids this
-file encoding and retains its independent immutable-value validation.
+Input files are exact port-name maps. Proof commands take `--public=FILE` and,
+for proving only, `--witness=FILE`. Public values initialize both participant
+operands; witness maps cannot repeat public names. Independent verifiers provide
+their own public map. Run commands take `--session=LABEL` and repeat
+`--input=ROLE=FILE`; shared source ports remain separate role-local values.
+A group with no ports can omit its file. Unit and empty-product ports remain
+required even though they have no native leaves. Unknown fields, roles and
+repeated role files refuse. Verification rejects `--witness` before file access.
 
-The optional application authority file contains exactly
-`format: "zkc.entry-setups/0"` and `keys`, mapping source slots to expected
-32-byte key identities in hex. Authority is separate from invocation material.
+Booleans use JSON Boolean values; unit uses null; tuples and arrays use arrays;
+records use exact field-name objects. Variants contain exactly `case` and `fields`,
+with numeric names for positional fields. Associated representations are
+transparent. Fields and indices use canonical unsigned decimal strings: zero is
+`"0"`, other values have no leading zeros. Signs, fractions, exponents, numeric
+JSON and out-of-range values refuse; there is no modular reduction.
 
-[File admission and publication](publication.md) defines request limits,
-regular-file and path checks, output formats, staging, replacement, diagnostics
-and success status.
+The native codec supplies readable forms for installed mathematical leaves:
+field/group vectors and index collections use arrays; KoalaBear Ext8 uses eight
+ascending base-field coordinates, with a base-field string accepted as an
+embedding. A sparse matrix has exactly `rows`, `columns` and `entries`; each
+entry is `[row,column,coefficient]`, in the native canonical sparse order.
+Group elements use `{"bytes":"lowercase-canonical-element-hex"}`. The explicit
+fallback `{"wire":"lowercase-complete-native-frame-hex"}` remains type checked.
+Sequences recursively use their element codec. These forms allocate bounded
+wire bytes; the common Host performs native scanning, retention estimation,
+canonical decoding, setup validation and cumulative work accounting. They do not
+add constructors for nonimportable custody values or internal polynomial types.
+
+A native leaf can instead contain exactly `file` and `sha256`. This authenticates
+complete native-frame bytes. A whole prover-key input contains exactly `file`
+and `fingerprint`, identifying canonical imported key material. Each document
+gets its own parent directory capability. References are relative slash-separated
+paths with no empty, dot, parent, backslash or NUL components. Every intermediate
+directory and final regular file is opened without following symlinks. The Host
+reads the retained descriptor under its existing wire/key and aggregate limits;
+it never reopens the reference path. This resolver is supported on Unix; other
+platforms refuse references. Explicit application resolvers are opt-in through
+`entry::inputs::Resolver`; the pure decoder has no filesystem access by default.
+Invocation JSON shares a 16 MiB byte limit, 200,000-node limit and depth limit 72;
+references share a limit of 1,024; operating-system descriptor limits may refuse
+earlier with `entry-input-descriptor-limit`. Excess reference count returns
+`entry-input-reference-limit`; an oversized referenced value returns
+`entry-input-reference-byte-limit`. Repeated paths within one document
+share one retained descriptor. Missing or invalid document paths return
+`entry-input-document`; reference digest mismatch returns `entry-input-reference-digest`.
+Document byte, node and depth exhaustion return `entry-request-limit`.
+Diagnostics name a logical input path when
+readable decoding or reference resolution fails, without printing input values.
+
+Whole verifier-key ports are omitted from maps and supplied via `--key=SLOT=FILE`.
+Independent authority comes from `--setups=FILE`, containing exactly
+`format: "zkc.entry-setups/0"` and a `keys` map of expected setup identities.
+Service overrides use `--service=ROLE.NAME=COUNT`; context and transcript budget
+use `--context=HEX` and `--transcript-budget=COUNT`. Options unsupported by an
+operation refuse before input access. `inputs check` shares native input
+preparation, including key authority and bounds, with execution. It executes no
+protocol, issues no resources and parses no proof. It does not check satisfaction
+of a protocol's predicate or establish acceptance.
+
+### Initialization and publication
+
+`init` creates `zkc.toml`, `protocol.zkc` and `main.zkc` for a minimal index echo.
+Its next commands explicitly select the created manifest.
+`inputs init` selects one Entry and creates only its nonempty input groups under
+`inputs/<qualified.name>/` beside the manifest. Explicit-module and package modes
+require `--output=DIRECTORY`. Static products retain their schema shape; unknown
+leaves are null placeholders; prover keys show `file` and `fingerprint` placeholders.
+Non-unit null inputs return `entry-input-unfilled`. Dynamic sizes and variant alternatives are never
+guessed. No command automatically discovers witness files. Initialization never
+replaces an existing file, including a file created after preflight. Multi-file
+publication reports exactly which files succeeded if a later publication fails.
+The report pairs generated `commands` with `requirements`: `allow_header_only`
+indicates explicit policy acknowledgement, and `setups` lists slots requiring
+independent `--setups` authority and `--key` material. Neither is synthesized.
+
+[File admission and publication](publication.md) defines regular-file checks,
+protected output paths, result formats, staging and diagnostics. Opened input
+and reference descriptors also protect their file identities from output aliasing.
+Readable result values use the same native encodings as inputs where export is
+permitted. Typed Rust ingress retains its independent immutable-value checks.
 
 Generated Rust modules pin the exact package digest and delegate admission to the
 common Host. They provide named participant/public input and output structures,

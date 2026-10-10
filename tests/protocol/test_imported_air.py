@@ -6,6 +6,8 @@ from the exported arena. These tests read the
 committed fixtures and never build the optional adapter; its fixture check
 regenerates the same files from the pinned upstream AIR.
 """
+
+from input_files import input_files
 import json
 from hashlib import sha256
 from pathlib import Path
@@ -25,19 +27,11 @@ SLOTS = len(EXPORT['slots'])
 
 
 def frame(values, extension=False):
-    words = [w for v in values for w in v] if extension else values
-    return (b'ZKCV\0' + bytes([27 if extension else 20]) + len(values).to_bytes(4, 'little')
-            + b''.join(w.to_bytes(4, 'little') for w in words)).hex()
+    return [[str(w) for w in v] for v in values] if extension else [str(v) for v in values]
 
 
 def unframe(text, extension=False):
-    data = bytes.fromhex(text)
-    assert data[:6] == b'ZKCV\0' + bytes([27 if extension else 20])
-    count = int.from_bytes(data[6:10], 'little')
-    assert len(data) == 10 + count * (32 if extension else 4)
-    words = [int.from_bytes(data[i:i + 4], 'little') for i in range(10, len(data), 4)]
-    assert all(w < P for w in words)
-    return [words[i:i + 8] for i in range(0, len(words), 8)] if extension else words
+    return [[int(w) for w in v] for v in text] if extension else [int(v) for v in text]
 
 
 def numbers(value):
@@ -70,7 +64,11 @@ def evaluate(coefficients, point):
 
 
 def maintained(case):
-    return json.loads((RECURRENCE / f'source-{case}.json').read_text())
+    values = json.loads((RECURRENCE / f'source-{case}.json').read_text())
+    for name in ('height', 'width', 'rows', 'points'):
+        if name in values:
+            values[name] = int(values[name])
+    return values
 
 
 class Client:
@@ -85,9 +83,9 @@ class Client:
         self.pin = report['package_sha256']
 
     def run(self, name, request, refuses=None):
-        path = self.journal.write(f'{name}.request.json', request)
+        path = input_files(self.journal, name, roles={'Evaluator': {'inputs': request}})
         output = self.directory / f'{name}.outputs.json'
-        command = [self.tools.runtime, 'run', self.package, self.pin, path, f'--results={output}']
+        command = [self.tools.runtime, 'run', f'--package={self.package}', f'--sha256={self.pin}', *path, f'--results={output}']
         report = self.journal.json(command, cwd=ROOT, refuses=refuses)
         if refuses:
             assert report['status'] == 'refused'
@@ -152,7 +150,7 @@ def test_maintained_requests_match_direct_evaluation(toolchain, journal, directo
     for name, expected in cases.items():
         request = maintained(name)
         actual = client.run(name, request)
-        inputs = request['roles']['Evaluator']['inputs']
+        inputs = request
         if entry in ('TraceResiduals', 'RowResiduals'):
             check_rows(journal, name, expected, actual)
         elif entry == 'CoefficientResiduals':
@@ -167,8 +165,8 @@ def test_maintained_requests_match_direct_evaluation(toolchain, journal, directo
 def test_row_and_coefficient_layouts():
     # The same 112 cells are 8 row-major assignments or 14 slot polynomials of
     # width 8. Only the operation and the view that prepared them decide which.
-    rows = maintained('rows-honest')['roles']['Evaluator']['inputs']
-    coefficients = maintained('coefficients-honest')['roles']['Evaluator']['inputs']
+    rows = maintained('rows-honest')
+    coefficients = maintained('coefficients-honest')
     assert len(unframe(rows['assignments'])) == rows['rows'] * SLOTS
     assert len(unframe(coefficients['coefficients'])) == coefficients['width'] * SLOTS
     assert len(numbers(EXPECTED['rows-honest']['residuals'])) == rows['rows'] * ASSERTIONS
@@ -177,19 +175,19 @@ def test_row_and_coefficient_layouts():
 def test_wrong_shapes_refuse_before_evaluation(toolchain, journal, directory):
     rows = Client(toolchain, journal, directory, 'RowResiduals')
     request = maintained('rows-honest')
-    inputs = request['roles']['Evaluator']['inputs']
+    inputs = request
     cells = unframe(inputs['assignments'])
     for name, change in [('short', {'assignments': frame(cells[:-1])}),
                          ('long', {'assignments': frame(cells + [0])}),
                          ('row-count', {'rows': inputs['rows'] - 1})]:
         changed = json.loads(json.dumps(request))
-        changed['roles']['Evaluator']['inputs'].update(change)
+        changed.update(change)
         report = rows.run(f'rows-{name}', changed, refuses='entry-run-incomplete')
         journal.check(f'rows {name}: ring-input-shape', stopped(report) == 'refused:ring-input-shape')
 
     polynomials = Client(toolchain, journal, directory, 'CoefficientResiduals')
     request = maintained('coefficients-honest')
-    inputs = request['roles']['Evaluator']['inputs']
+    inputs = request
     cells = unframe(inputs['coefficients'])
     for name, change, cause in [
             ('width', {'width': inputs['width'] + 1}, 'refused:ring-input-shape'),
@@ -198,21 +196,20 @@ def test_wrong_shapes_refuse_before_evaluation(toolchain, journal, directory):
             ('provider-width', {'coefficients': frame([0] * SLOTS * 66), 'width': 66},
              'refused:ring-coefficient-width')]:
         changed = json.loads(json.dumps(request))
-        changed['roles']['Evaluator']['inputs'].update(change)
+        changed.update(change)
         report = polynomials.run(f'coefficients-{name}', changed, refuses='entry-run-incomplete')
         journal.check(f'coefficients {name}: {cause}', stopped(report) == cause)
 
     points = Client(toolchain, journal, directory, 'PointResiduals')
     request = maintained('points-honest')
-    inputs = request['roles']['Evaluator']['inputs']
+    inputs = request
     changed = json.loads(json.dumps(request))
-    changed['roles']['Evaluator']['inputs']['assignments'] = frame(
+    changed['assignments'] = frame(
         unframe(inputs['assignments'], extension=True)[:-1], extension=True)
     report = points.run('points-short', changed, refuses='entry-run-incomplete')
     journal.check('points short: ring-input-shape', stopped(report) == 'refused:ring-input-shape')
-    # A KoalaBear frame is not an Ext8 vector.
-    changed['roles']['Evaluator']['inputs']['assignments'] = maintained('rows-honest')[
-        'roles']['Evaluator']['inputs']['assignments']
+    # Extension coordinates require the exact native degree.
+    changed['assignments'] = [['1', '0']]
     points.run('points-base-frame', changed, refuses=True)
 
 
@@ -247,7 +244,7 @@ def test_satisfied_describes_only_the_supplied_assignment(toolchain, journal, di
     # AIR rests on the adapter's view of an authorized instance and its trace.
     client = Client(toolchain, journal, directory, 'RowResiduals')
     request = maintained('rows-changed-trace')
-    inputs = request['roles']['Evaluator']['inputs']
+    inputs = request
     inputs['assignments'] = frame([0] * (inputs['rows'] * SLOTS))
     actual = client.run('zero-assignment', request)
     assert actual['satisfied'] is True
@@ -258,7 +255,7 @@ def test_trace_view_uses_bound_reads_configuration_and_scopes(toolchain, journal
     client = Client(toolchain, journal, directory, 'TraceResiduals')
     request = maintained('trace-honest')
     changed = json.loads(json.dumps(request))
-    inputs = changed['roles']['Evaluator']['inputs']
+    inputs = changed
     configuration = unframe(inputs['configuration'])
     configuration[0] += 1
     inputs['configuration'] = frame(configuration)
@@ -271,7 +268,7 @@ def test_trace_view_uses_bound_reads_configuration_and_scopes(toolchain, journal
     assert actual['satisfied'] is False
 
     changed = json.loads(json.dumps(request))
-    inputs = changed['roles']['Evaluator']['inputs']
+    inputs = changed
     inputs['trace'] = frame([0] * len(unframe(inputs['trace'])))
     actual = client.run('zero-trace', changed)
     assert actual['satisfied'] is False
@@ -281,9 +278,9 @@ def test_trace_view_uses_bound_reads_configuration_and_scopes(toolchain, journal
 def test_trace_view_refuses_fabricated_assignments_and_wrong_shapes(toolchain, journal, directory):
     client = Client(toolchain, journal, directory, 'TraceResiduals')
     request = maintained('trace-honest')
-    inputs = request['roles']['Evaluator']['inputs']
+    inputs = request
     cases = [
-        ('prepared', 'trace', maintained('rows-honest')['roles']['Evaluator']['inputs']['assignments'],
+        ('prepared', 'trace', maintained('rows-honest')['assignments'],
          'relation-table-witness-shape'),
         ('zero-prepared', 'trace', frame([0] * (SLOTS * inputs['height'])),
          'relation-table-witness-shape'),
@@ -296,7 +293,7 @@ def test_trace_view_refuses_fabricated_assignments_and_wrong_shapes(toolchain, j
     ]
     for name, port, value, cause in cases:
         changed = json.loads(json.dumps(request))
-        changed['roles']['Evaluator']['inputs'][port] = value
+        changed[port] = value
         report = client.run(name, changed, refuses='entry-run-incomplete')
         assert stopped(report) == f'refused:{cause}'
 
@@ -305,21 +302,18 @@ def test_trace_view_refuses_fabricated_assignments_and_wrong_shapes(toolchain, j
 def test_disclosed_trace_proof_uses_verifier_data_and_packaged_relation(
         toolchain, journal, directory, flags):
     client = Client(toolchain, journal, directory, 'DisclosedTraceProof', flags)
-    inputs = maintained('trace-honest')['roles']['Evaluator']['inputs']
+    inputs = maintained('trace-honest')
     def scalar(n):
-        return (b'ZKCV\0' + bytes([19]) + n.to_bytes(4, 'little')).hex()
+        return str(n)
 
     x0, y0, final_acc = unframe(inputs['public_data'])
     public = {'configuration': inputs['configuration'], 'height': inputs['height'],
               'x0': scalar(x0), 'y0': scalar(y0), 'final_acc': scalar(final_acc)}
-    producer = journal.write('producer.json', {'format': 'zkc.entry-proof/0',
-        'public': public, 'inputs': {'trace': inputs['trace']}})
-    verifier = journal.write('verifier.json', {'format': 'zkc.entry-proof/0', 'public': public})
+    producer = input_files(journal, 'producer.json', public=public, witness={'trace': inputs['trace']})
+    verifier = input_files(journal, 'verifier.json', public=public)
     proof = directory / 'trace.bin'
-    journal.json([toolchain.runtime, 'prove', client.package, client.pin, producer, proof,
-                  '--allow-header-only'])
-    result = journal.json([toolchain.runtime, 'verify', client.package, client.pin, verifier, proof,
-                           '--allow-header-only'])
+    journal.json([toolchain.runtime, 'prove', f'--package={client.package}', f'--sha256={client.pin}', *producer, f'--output={proof}', '--allow-header-only'])
+    result = journal.json([toolchain.runtime, 'verify', f'--package={client.package}', f'--sha256={client.pin}', *verifier, f'--proof={proof}', '--allow-header-only'])
     assert result['status'] == 'accepted'
     package = json.loads(client.package.read_text())
     interface = json.loads(package['interface'])
@@ -331,14 +325,11 @@ def test_disclosed_trace_proof_uses_verifier_data_and_packaged_relation(
     assert asset[0] == relation['definition']['asset'] == sha256(asset[1].encode()).hexdigest()
     assert json.loads(asset[1])[0] == 'zkc.relation-bundle/0'
 
-    bad_trace = maintained('trace-changed-trace')['roles']['Evaluator']['inputs']['trace']
-    producer = journal.write('invalid-producer.json', {'format': 'zkc.entry-proof/0',
-        'public': public, 'inputs': {'trace': bad_trace}})
+    bad_trace = maintained('trace-changed-trace')['trace']
+    producer = input_files(journal, 'invalid-producer.json', public=public, witness={'trace': bad_trace})
     invalid = directory / 'invalid-trace.bin'
-    journal.json([toolchain.runtime, 'prove', client.package, client.pin, producer, invalid,
-                  '--allow-header-only'])
-    journal.json([toolchain.runtime, 'verify', client.package, client.pin, verifier, invalid,
-                  '--allow-header-only'], refuses='artifact-rejected')
+    journal.json([toolchain.runtime, 'prove', f'--package={client.package}', f'--sha256={client.pin}', *producer, f'--output={invalid}', '--allow-header-only'])
+    journal.json([toolchain.runtime, 'verify', f'--package={client.package}', f'--sha256={client.pin}', *verifier, f'--proof={invalid}', '--allow-header-only'], refuses='artifact-rejected')
 
 
 @pytest.mark.parametrize('extra', ['table', 'channel'])

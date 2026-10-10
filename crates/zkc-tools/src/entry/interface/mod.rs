@@ -47,21 +47,48 @@ pub struct Interface {
     types: BTreeMap<String, LogicalType>,
     ports: ports::Ports,
     pub(in crate::entry) setups: Vec<Setup>,
+}
+/// Package provenance plus its checked logical view. Only this type can bind a
+/// native deployment. A source inspection cannot construct it.
+#[derive(Debug)]
+pub struct BoundInterface {
+    view: Interface,
     artifact: String,
     options: super::CompileOptions,
 }
-impl Interface {
+impl std::ops::Deref for BoundInterface {
+    type Target = Interface;
+    fn deref(&self) -> &Interface {
+        &self.view
+    }
+}
+impl BoundInterface {
     pub fn read(package: &Package) -> Result<Self> {
-        preflight::check(package.interface().as_bytes())?;
-        let mut decoder = serde_json::Deserializer::from_str(package.interface());
-        // Lexical nesting is bounded above; schema nesting has its own smaller
-        // bound. The default serde limit also counts intervening records/arrays.
+        let original = format!("{:x}", Sha256::digest(package.original().as_bytes()));
+        let view = Interface::decode(package.interface().as_bytes(), Some(&original))?;
+        Ok(Self {
+            view,
+            artifact: crate::host::inputs::hex(package.authenticated_artifact().identity()),
+            options: package.options(),
+        })
+    }
+    pub fn into_view(self) -> Interface {
+        self.view
+    }
+}
+impl Interface {
+    pub(crate) fn from_compiler(bytes: &[u8]) -> Result<Self> {
+        Self::decode(bytes, None)
+    }
+    fn decode(bytes: &[u8], original: Option<&str>) -> Result<Self> {
+        preflight::check(bytes)?;
+        let mut decoder = serde_json::Deserializer::from_slice(bytes);
         decoder.disable_recursion_limit();
         let document: raw::Interface =
             serde::Deserialize::deserialize(&mut decoder).map_err(|_| InterfaceError::Format)?;
         decoder.end().map_err(|_| InterfaceError::Format)?;
-        let original = format!("{:x}", Sha256::digest(package.original().as_bytes()));
-        let checked = validate::check(&document, &original)?;
+        require(hash(&document.original), InterfaceError::Identity)?;
+        let checked = validate::check(&document, original.unwrap_or(&document.original))?;
         let ports =
             ports::Ports::new(&document, checked.selected, &checked.types, &checked.setups)?;
         Ok(Self {
@@ -70,8 +97,6 @@ impl Interface {
             selected: checked.selected,
             types: checked.types,
             setups: checked.setups,
-            artifact: crate::host::inputs::hex(package.authenticated_artifact().identity()),
-            options: package.options(),
         })
     }
     /// Describe checked source ports and invocation responsibilities without
@@ -107,7 +132,8 @@ impl Interface {
                 "outputs":self.output_ports(role).map(port).collect::<Vec<_>>(),
                 "services":self.services(role).map(|s| json!({"name":s.name,"contract":s.contract})).collect::<Vec<_>>()
             })).collect::<Vec<_>>(),
-            "setups":self.setup_names().collect::<Vec<_>>(), "proof":proof})
+            "setups":self.setup_names().collect::<Vec<_>>(), "proof":proof,
+            "input_groups":self.input_groups().iter().map(|g|g.describe()).collect::<Vec<_>>()})
     }
     pub fn entry(&self) -> &str {
         &self.document.entry

@@ -1,5 +1,5 @@
 //! Explicit source inputs. Imports never perform filesystem discovery.
-use crate::{cli::Arguments, host::io};
+use crate::host::io;
 use serde::Deserialize;
 use std::{
     collections::BTreeMap,
@@ -12,7 +12,7 @@ const FILES: usize = 256;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Project {
+struct Manifest {
     format: String,
     modules: BTreeMap<String, String>,
     #[serde(default)]
@@ -20,38 +20,48 @@ struct Project {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Asset {
-    format: String,
-    path: String,
+pub struct Asset {
+    pub format: String,
+    pub path: String,
 }
 
-pub(super) struct Inputs {
-    pub flags: Vec<String>,
-    /// Includes the manifest: publication must not overwrite any input.
-    pub paths: Vec<String>,
-    pub manifest: Option<PathBuf>,
+/// Explicit source paths, made absolute when loaded. Imports are resolved only
+/// from these maps; later changes to the working directory do not retarget them.
+pub struct Project {
+    pub(crate) flags: Vec<String>,
+    pub(crate) paths: Vec<String>,
+    pub(crate) manifest: Option<PathBuf>,
 }
-impl Inputs {
-    pub fn load(args: &Arguments<'_>) -> Result<Self> {
-        let manifest = args
-            .options
-            .iter()
-            .find(|(k, _)| *k == "--project")
-            .and_then(|(_, v)| *v);
-        let explicit = args
-            .options
-            .iter()
-            .any(|(k, _)| matches!(*k, "--module" | "--asset"));
-        if manifest.is_some() && explicit {
-            return Err("cli-usage".into());
-        }
-        let manifest = match manifest {
-            Some(path) => Some(PathBuf::from(path)),
-            None if explicit => None,
-            None => Some(discover()?),
-        };
-        let mut modules = BTreeMap::new();
-        let mut assets = BTreeMap::new();
+impl Project {
+    pub fn discover() -> Result<Self> {
+        Self::load(discover()?)
+    }
+    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
+        Self::from_parts(
+            Some(path.as_ref().to_owned()),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+    }
+    pub fn explicit(
+        modules: BTreeMap<String, String>,
+        assets: BTreeMap<String, Asset>,
+    ) -> Result<Self> {
+        Self::from_parts(None, modules, assets)
+    }
+    pub fn manifest(&self) -> Option<&Path> {
+        self.manifest.as_deref()
+    }
+    pub fn paths(&self) -> impl Iterator<Item = &str> {
+        self.paths.iter().map(String::as_str)
+    }
+    fn from_parts(
+        manifest: Option<PathBuf>,
+        mut modules: BTreeMap<String, String>,
+        mut assets: BTreeMap<String, Asset>,
+    ) -> Result<Self> {
+        let base = std::env::current_dir().map_err(|_| "source-project-io")?;
+        let manifest = manifest.map(|path| base.join(path));
         let mut result = Self {
             flags: vec![],
             paths: vec![],
@@ -62,7 +72,8 @@ impl Inputs {
                 io::ReadError::Limit => "source-project-limit",
                 io::ReadError::Io(_) => "source-project-io",
             })?;
-            let project: Project = toml::from_slice(&bytes).map_err(|_| "source-project-format")?;
+            let project: Manifest =
+                toml::from_slice(&bytes).map_err(|_| "source-project-format")?;
             if project.format != "zkc.project/0" || project.modules.is_empty() {
                 return Err("source-project-format".into());
             }
@@ -82,49 +93,22 @@ impl Inputs {
             result
                 .paths
                 .push(path.to_str().ok_or("source-project-format")?.into());
-        } else {
-            for &(key, value) in &args.options {
-                let value = value.unwrap_or("");
-                let duplicate = match key {
-                    "--module" => {
-                        let (name, path) = value.split_once('=').ok_or("source-project-format")?;
-                        modules.insert(name.into(), path.into()).is_some()
-                    }
-                    "--asset" => {
-                        let (name, rest) = value.split_once('=').ok_or("source-project-format")?;
-                        let (format, path) = rest.split_once('=').ok_or("source-project-format")?;
-                        assets
-                            .insert(
-                                name.into(),
-                                Asset {
-                                    format: format.into(),
-                                    path: path.into(),
-                                },
-                            )
-                            .is_some()
-                    }
-                    _ => false,
-                };
-                if duplicate {
-                    return Err("source-project-duplicate".into());
-                }
-            }
         }
         if modules.is_empty() {
-            return Err("cli-usage".into());
+            return Err("source-project-format".into());
         }
         if modules.len() + assets.len() > FILES {
             return Err("source-project-limit".into());
         }
         for (name, path) in modules {
             validate_name(&name)?;
-            validate_path(&path)?;
+            let path = resolve(&base, &path)?;
             result.flags.push(format!("--module={name}={path}"));
             result.paths.push(path);
         }
         for (name, asset) in assets {
             validate_name(&name)?;
-            validate_path(&asset.path)?;
+            let path = resolve(&base, &asset.path)?;
             if !matches!(
                 asset.format.as_str(),
                 "r1cs-json" | "r1cs-binary" | "air-json" | "ring-json" | "relation-bundle-json"
@@ -133,8 +117,8 @@ impl Inputs {
             }
             result
                 .flags
-                .push(format!("--asset={name}={}={}", asset.format, asset.path));
-            result.paths.push(asset.path);
+                .push(format!("--asset={name}={}={path}", asset.format));
+            result.paths.push(path);
         }
         Ok(result)
     }
@@ -172,4 +156,29 @@ fn discover() -> Result<PathBuf> {
         }
     }
     Err("source-project-missing".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explicit_paths_keep_their_loading_directory() {
+        let base = std::env::current_dir().unwrap();
+        let project = Project::explicit(
+            BTreeMap::from([("example".into(), "main.zkc".into())]),
+            BTreeMap::from([(
+                "relation".into(),
+                Asset {
+                    format: "air-json".into(),
+                    path: "air.json".into(),
+                },
+            )]),
+        )
+        .unwrap();
+        assert_eq!(
+            project.paths().map(PathBuf::from).collect::<Vec<_>>(),
+            [base.join("main.zkc"), base.join("air.json")]
+        );
+    }
 }

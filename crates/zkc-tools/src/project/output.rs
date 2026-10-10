@@ -1,14 +1,30 @@
 //! Default project output naming. Publication remains owned by the Host.
-use super::project::Inputs;
+use super::Project;
 
 type Result<T> = std::result::Result<T, String>;
 
-pub(super) fn default_path(inputs: &Inputs, entry: &str) -> Result<String> {
+pub(super) fn default_path(inputs: &Project, entry: &str) -> Result<String> {
     let manifest = inputs.manifest.as_ref().ok_or("source-output-required")?;
+    let name = portable_name(entry, ".zkpkg")?;
+    let parent = manifest
+        .parent()
+        .ok_or("source-project-format")?
+        .join("build/zkc");
+    let path = parent.join(&name);
+    let text = path
+        .to_str()
+        .filter(|s| s.len() <= 4096)
+        .ok_or("source-output-name")?;
+    std::fs::create_dir_all(&parent).map_err(|_| "source-output-directory")?;
+    check_collision(&parent, &name)?;
+    Ok(text.into())
+}
+
+pub(crate) fn portable_name(entry: &str, suffix: &str) -> Result<String> {
     if !super::selection::canonical_name(entry) {
         return Err("source-entry-selection".into());
     }
-    let name = format!("{}.zkpkg", entry.replace("::", "."));
+    let name = format!("{}{suffix}", entry.replace("::", "."));
     // Keep the convention usable on common filesystems. Callers can select a
     // shorter explicit output for long source names or reserved device names.
     let stem = name.split('.').next().unwrap().to_ascii_uppercase();
@@ -20,16 +36,13 @@ pub(super) fn default_path(inputs: &Inputs, entry: &str) -> Result<String> {
     {
         return Err("source-output-name".into());
     }
-    let parent = manifest
-        .parent()
-        .ok_or("source-project-format")?
-        .join("build/zkc");
-    let path = parent.join(&name);
-    let text = path
-        .to_str()
-        .filter(|s| s.len() <= 4096)
-        .ok_or("source-output-name")?;
-    std::fs::create_dir_all(&parent).map_err(|_| "source-output-directory")?;
+    Ok(name)
+}
+
+pub(crate) fn check_collision(parent: &std::path::Path, name: &str) -> Result<()> {
+    if !parent.exists() {
+        return Ok(());
+    }
     // The canonical name owns its exact filename, so obsolete or damaged build
     // output can be regenerated. Refuse case-folded collisions on every host to
     // keep the convention portable without interpreting previous package bytes.
@@ -37,10 +50,10 @@ pub(super) fn default_path(inputs: &Inputs, entry: &str) -> Result<String> {
         let existing = existing.map_err(|_| "source-output-directory")?.file_name();
         if existing
             .to_str()
-            .is_some_and(|other| other != name && other.eq_ignore_ascii_case(&name))
+            .is_some_and(|other| other != name && other.eq_ignore_ascii_case(name))
         {
             return Err("source-output-collision".into());
         }
     }
-    Ok(text.into())
+    Ok(())
 }

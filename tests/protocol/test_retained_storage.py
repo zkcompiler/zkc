@@ -6,6 +6,8 @@ every row. Storage counts each allocation once however often it is captured
 or passed, while each opening still charges the row and path it reads. Every
 run states its capacity record, and the report repeats the record it used.
 """
+
+from input_files import input_files
 import hashlib
 import json
 
@@ -91,26 +93,21 @@ class Case:
 
     def files(self, count, capacity):
         self.runs += 1
-        request = self.journal.write(f'request-{self.runs}.json', {
-            'format': 'zkc.entry-proof/0', 'context': '',
-            'public': {'size': ROWS * self.width, 'width': self.width, 'count': count},
-            'inputs': {}})
+        request = input_files(self.journal, f'request-{self.runs}.json', context='', public={'size': ROWS * self.width, 'width': self.width, 'count': count}, witness={})
         limits = self.journal.write(f'capacity-{self.runs}.json', capacity)
         return request, f'--capacity={limits}', self.directory / f'proof-{self.runs}.bin'
 
     def prove(self, count, capacity=None, refuses=None):
         capacity = capacity or self.capacity
         request, option, proof = self.files(count, capacity)
-        report = self.journal.json([self.runtime, 'prove', self.package, self.pin,
-                                    request, proof, option], refuses=refuses)
+        report = self.journal.json([self.runtime, 'prove', f'--package={self.package}', f'--sha256={self.pin}', *request, f'--output={proof}', option], refuses=refuses)
         if 'execution' in report:
             assert report['capacity'] == capacity
         return report, proof
 
     def verify(self, count, proof):
         request, option, _ = self.files(count, self.capacity)
-        report = self.journal.json([self.runtime, 'verify', self.package, self.pin,
-                                    request, proof, option])
+        report = self.journal.json([self.runtime, 'verify', f'--package={self.package}', f'--sha256={self.pin}', *request, f'--proof={proof}', option])
         assert report['status'] == 'accepted' and report['capacity'] == self.capacity
         return report
 

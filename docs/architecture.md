@@ -79,8 +79,10 @@ checks and installed consumers enforce this direction.
 ## Runtime and application authority
 
 An Entry package retains the source interface, original mathematical program,
-compilation choices and selected artifact. A trusted application supplies the
-expected package digest. The Rust Host binds named inputs to the independently
+compilation choices and selected artifact. Local source commands trust the
+selected project and compiler and capture the returned package bytes. Deployed
+applications supply an independently authorized expected package digest.
+The Rust Host binds named inputs to the independently
 admitted program; it trusts the compiler publication for source correspondence.
 It does not interpret the retained MLIR.
 

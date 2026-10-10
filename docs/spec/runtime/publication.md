@@ -17,25 +17,28 @@ file limit. Non-Wire private results cannot be serialized.
 
 ## File admission
 
-Request files have a 16 MiB byte limit, depth at most 72 and a 200,000-node
-allowance including object keys. Decoding rejects duplicate keys, unknown record
+Entry input documents share a 16 MiB byte limit and a 200,000-node allowance
+including object keys per invocation; each document has depth at most 72. Decoding rejects duplicate keys, unknown record
 fields, trailing documents and numeric values outside unsigned 64-bit naturals.
 The application authority file is bounded by 64 KiB.
 [Entry file adapters](entries.md#file-adapters-and-rust-bindings) define request,
 value and `zkc.entry-setups/0` authority schemas.
 
-All configured input and authority paths name bounded regular files. Symlink
-inputs resolve to a regular descriptor; FIFOs, devices and other nonregular
-inputs refuse. Byte-slice APIs remain available for applications that own their
+All configured input and authority paths name bounded regular files. Explicit authority, package and policy paths may resolve symlinks to regular
+files. On Unix, Entry JSON document names and references refuse final symlinks; confined
+reference traversal also refuses intermediate symlinks. FIFOs, devices and
+other nonregular inputs refuse. Byte-slice APIs remain available for applications that own their
 transport. Compile sources and assets also require regular files, with capture
 limits enforced by the compiler.
 
 ## Output publication
 
 Output paths must differ from each other and all input/configuration paths,
-including referenced prover-key files. Existing symlink outputs and nonregular
+including opened native-value and prover-key references. Descriptor identities
+remain protected after their original path is replaced. Existing symlink outputs and nonregular
 destinations refuse. Canonical directory aliases and, on Unix, existing hardlink aliases
-also refuse. Destination parents must already exist. The plan is rechecked
+also refuse. Execution destination parents must already exist. Project and input initialization
+create their destination directories and publish without replacing existing files. The plan is rechecked
 before publication. These are trusted configuration checks; concurrent hostile
 filesystem mutation is outside this contract.
 

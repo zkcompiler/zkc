@@ -4,6 +4,8 @@ Every case compiles source through the common compiler and runs the package
 through the ordinary Entry Host. Expected values are computed here, row by row,
 independently of the compiler's bulk realization.
 """
+
+from input_files import input_files
 import json
 import random
 from pathlib import Path
@@ -120,13 +122,11 @@ def affine(low, high, r):
 
 
 def vector(values, extension=False):
-    width, tag = (32, 27) if extension else (4, 20)
-    return (b'ZKCV\x00' + bytes([tag]) + len(values).to_bytes(4, 'little')
-            + b''.join(v.to_bytes(4, 'little').ljust(width, b'\x00') for v in values)).hex()
+    return [[str(v)] + ["0"] * 7 for v in values] if extension else [str(v) for v in values]
 
 
 def scalar(value):
-    return (b'ZKCV\x00\x13' + value.to_bytes(4, 'little')).hex()
+    return str(value)
 
 
 def expected(a, b, c, s):
@@ -149,12 +149,9 @@ def subdirectory(directory, name):
 
 
 def report(entry, name, values):
-    request = entry.journal.write(f'{name}.inputs.json', {
-        'format': 'zkc.entry-run/0', 'session': 'map_controls',
-        'roles': {'P': {'inputs': values}}})
+    request = input_files(entry.journal, name, roles={'P': {'inputs': values}})
     output = entry.directory / f'{name}.outputs.json'
-    return entry.journal.json([entry.tools.runtime, 'run', entry.package, entry.pin,
-                               request, f'--results={output}'])
+    return entry.journal.json([entry.tools.runtime, 'run', f'--package={entry.package}', f'--sha256={entry.pin}', *request, f'--results={output}'])
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
@@ -250,11 +247,9 @@ def build(toolchain, journal, directory, entry):
 
 
 def run(toolchain, journal, directory, package, pin, name, roles, refuses=None):
-    request = journal.write(f'{name}.json', {'format': 'zkc.entry-run/0',
-                                             'session': 'native_map_example', 'roles': roles})
+    request = input_files(journal, f'{name}.json', session='native_map_example', roles=roles)
     output = directory / f'{name}.outputs.json'
-    result = journal.json([toolchain.runtime, 'run', package, pin, request,
-                           f'--results={output}'], refuses=refuses)
+    result = journal.json([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={output}'], refuses=refuses)
     return result if refuses else json.loads(output.read_text())['roles']
 
 

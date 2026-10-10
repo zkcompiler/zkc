@@ -80,7 +80,10 @@ pub(super) fn flatten(schema: &Schema, value: Value, out: &mut Vec<InputValue>) 
             Kind::Boolean | Kind::Index | Kind::Field | Kind::Group | Kind::Builtin,
             Value::Leaf(value),
         ) => {
-            if !matches!(value, InputValue::Native(_) | InputValue::Wire(_)) {
+            if !matches!(
+                value,
+                InputValue::Native(_) | InputValue::Wire(_) | InputValue::WireFile { .. }
+            ) {
                 return Err("entry-input-kind".into());
             }
             out.push(value);

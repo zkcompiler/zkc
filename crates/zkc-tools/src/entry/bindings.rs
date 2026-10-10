@@ -1,6 +1,6 @@
 //! Rust data bindings for a trusted Entry publication. No protocol code is emitted.
 use super::{
-    Interface, Package,
+    Package,
     interface::raw::{Field, Kind, Port, Schema},
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -295,7 +295,7 @@ impl Generator {
 /// trusted package. Mathematical leaves use entry::Value and keep native checks;
 /// this is not protocol algorithm generation or a new authority source.
 pub fn rust(package: &Package) -> Result<String> {
-    let interface = Interface::read(package).map_err(|e| e.to_string())?;
+    let interface = crate::entry::BoundInterface::read(package).map_err(|e| e.to_string())?;
     super::arguments::check_ports(&interface)?;
     let mut generator = Generator {
         names: Names::default(),

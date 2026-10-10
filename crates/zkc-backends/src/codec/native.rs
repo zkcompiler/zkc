@@ -6,8 +6,10 @@ mod domains;
 mod input;
 pub use input::NativeInputSize;
 mod pcs;
+mod readable;
 mod structured;
 use crate::{NativeBackend, Policy, Value};
+pub use readable::readable_wire;
 use zkc_runtime::interactive::{
     BackendError, DecodeReason, PhysicalType, Type, Value as RuntimeValue,
 };

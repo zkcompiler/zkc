@@ -12,8 +12,9 @@ policy, budget and report rules.
 Select a completion result in the Entry declaration, then request a bounded count:
 
 ```sh
-zkc prove proof.zkpkg EXPECTED_SHA256 prover.json proof.bin --attempts=3
-zkc verify proof.zkpkg EXPECTED_SHA256 verifier.json proof.bin
+zkc prove --package=proof.zkpkg --sha256=EXPECTED_SHA256 \
+  --public=public.json --witness=witness.json --output=proof.bin --attempts=3
+zkc verify --package=proof.zkpkg --sha256=EXPECTED_SHA256 --public=public.json --proof=proof.bin
 ```
 
 Source Entries use persistent managed providers. They expose no affine RNG input

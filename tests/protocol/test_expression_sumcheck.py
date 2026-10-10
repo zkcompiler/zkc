@@ -1,4 +1,6 @@
 """A generic Sumcheck library uses closed ring assets through ordinary Entries."""
+
+from input_files import input_files
 import json
 from hashlib import sha256
 from pathlib import Path
@@ -17,13 +19,7 @@ def write(directory, name, value):
 
 
 def values(extension=True, claim=100, rounds=2, table=tuple(range(1, 9))):
-    # Independent wire construction, with four row-major assignments to x*y.
-    def scalar(n):
-        return n.to_bytes(4, 'little') + (bytes(28) if extension else b'')
-    vector = (b'ZKCV\0' + bytes([27 if extension else 20])
-              + len(table).to_bytes(4, 'little') + b''.join(scalar(n) for n in table))
-    field = b'ZKCV\0' + bytes([26 if extension else 19]) + scalar(claim)
-    return {'values': vector.hex(), 'claim': field.hex(), 'rounds': rounds}
+    return {'values': [str(n) for n in table], 'claim': str(claim), 'rounds': str(rounds)}
 
 
 def build(toolchain, journal, directory, entry, flags=(), arena=None):
@@ -44,20 +40,20 @@ def build(toolchain, journal, directory, entry, flags=(), arena=None):
 @pytest.mark.parametrize('extension', [False, True])
 def test_expression_sumcheck_independent_proof(toolchain, journal, directory, flags, extension):
     package, pin = build(toolchain, journal, directory, 'Proof' if extension else 'BaseProof', flags)
-    request = write(directory, 'request.json', {'format': 'zkc.entry-proof/0', 'public': values(extension)})
+    request = input_files(journal, 'request.json', public=values(extension))
     proof = directory / 'proof.bin'
-    produced = json.loads(journal.run([toolchain.runtime, 'prove', package, pin, request, proof]))
-    checked = json.loads(journal.run([toolchain.runtime, 'verify', package, pin, request, proof]))
+    produced = json.loads(journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}']))
+    checked = json.loads(journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}']))
     assert checked['status'] == 'accepted'
     assert produced['execution']['ring_work'] > checked['execution']['ring_work'] > 0
     truncated = directory / 'truncated.bin'
     truncated.write_bytes(proof.read_bytes()[:-1])
-    journal.run([toolchain.runtime, 'verify', package, pin, request, truncated], refuses='proof-truncated')
+    journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={truncated}'], refuses='proof-truncated')
     altered = bytearray(proof.read_bytes())
     altered[-32] ^= 1  # A canonical coefficient change, preserving framing.
     changed = directory / 'changed.bin'
     changed.write_bytes(altered)
-    journal.run([toolchain.runtime, 'verify', package, pin, request, changed], refuses='artifact-stopped')
+    journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={changed}'], refuses='artifact-stopped')
 
 
 @pytest.mark.parametrize('extension', [False, True])
@@ -65,13 +61,11 @@ def test_expression_sumcheck_interactive_fields(toolchain, journal, directory, e
     entry = 'ExtensionRun' if extension else 'BaseRun'
     package, pin = build(toolchain, journal, directory, entry)
     inputs = values(extension)
-    request = write(directory, 'run.json', {'format': 'zkc.entry-run/0',
-        'session': 'expression_sumcheck_test', 'roles': {
+    request = input_files(journal, 'run.json', session='expression_sumcheck_test', roles={
             'P': {'inputs': {k: v for k, v in inputs.items() if k != 'claim'}},
-            'V': {'inputs': inputs}}})
+            'V': {'inputs': inputs}})
     output = directory / 'output.json'
-    result = json.loads(journal.run([toolchain.runtime, 'run', package, pin, request,
-                                   f'--results={output}']))
+    result = json.loads(journal.run([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={output}']))
     assert result['status'] == 'executed'
     assert json.loads(output.read_text())['roles']['V']['accepted'] is True
 
@@ -80,46 +74,43 @@ def test_expression_sumcheck_interactive_fields(toolchain, journal, directory, e
 @pytest.mark.parametrize('table,claim', [([1, 2, 3, 4, 1, 2, 3, 4], 28), ([0] * 8, 0)])
 def test_expression_sumcheck_retains_zero_coefficients(toolchain, journal, directory, extension, table, claim):
     package, pin = build(toolchain, journal, directory, 'Proof' if extension else 'BaseProof')
-    request = write(directory, 'request.json', {'format': 'zkc.entry-proof/0',
-        'public': values(extension=extension, table=table, claim=claim)})
+    request = input_files(journal, 'request.json', public=values(extension=extension, table=table, claim=claim))
     proof = directory / 'proof.bin'
-    journal.run([toolchain.runtime, 'prove', package, pin, request, proof])
-    checked = json.loads(journal.run([toolchain.runtime, 'verify', package, pin, request, proof]))
+    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'])
+    checked = json.loads(journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}']))
     assert checked['status'] == 'accepted'
 
 
 @pytest.mark.parametrize('claim,rounds', [(101, 2), (100, 1), (100, 3)])
 def test_expression_sumcheck_actual_claim_and_terminal_shape(toolchain, journal, directory, claim, rounds):
     package, pin = build(toolchain, journal, directory, 'Proof')
-    request = write(directory, 'request.json', {'format': 'zkc.entry-proof/0',
-                                             'public': values(claim=claim, rounds=rounds)})
+    request = input_files(journal, 'request.json', public=values(claim=claim, rounds=rounds))
     proof = directory / 'proof.bin'
     if rounds == 3:
         # A third fold cannot split the final factor row into two assignments.
-        journal.run([toolchain.runtime, 'prove', package, pin, request, proof], refuses='ring-input-shape')
+        journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'], refuses='ring-input-shape')
     else:
-        journal.run([toolchain.runtime, 'prove', package, pin, request, proof])
-        journal.run([toolchain.runtime, 'verify', package, pin, request, proof], refuses='artifact-stopped')
+        journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'])
+        journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}'], refuses='artifact-stopped')
 
 
 def test_expression_asset_authority(toolchain, journal, directory):
     package, pin = build(toolchain, journal, directory, 'Proof')
-    request = write(directory, 'request.json', {'format': 'zkc.entry-proof/0', 'public': values()})
+    request = input_files(journal, 'request.json', public=values())
     proof = directory / 'proof.bin'
     frame = json.loads(package.read_text())
     assert len(frame['assets']) == 1 and frame['assets'][0][0] == DIGEST
     assert json.loads(frame['assets'][0][1]) == json.loads((PROJECT / 'product.ring.json').read_text())
-    journal.run([toolchain.runtime, 'prove', package, pin, request, proof])
+    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'])
     changed_public = values(claim=101)
-    changed_request = write(directory, 'changed-request.json', {
-        'format': 'zkc.entry-proof/0', 'public': changed_public})
-    journal.run([toolchain.runtime, 'verify', package, pin, changed_request, proof], refuses='proof-header')
+    changed_request = input_files(journal, 'changed-request.json', public=changed_public)
+    journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *changed_request, f'--proof={proof}'], refuses='proof-header')
 
 
 
 def test_expression_package_asset_refusals(toolchain, journal, directory):
     package, pin = build(toolchain, journal, directory, 'Proof')
-    request = write(directory, 'request.json', {'format': 'zkc.entry-proof/0', 'public': values()})
+    request = input_files(journal, 'request.json', public=values())
     for name in ['missing', 'substitution', 'noncanonical', 'duplicate', 'field-absent']:
         frame = json.loads(package.read_text())
         reason = 'entry-package-format'
@@ -141,9 +132,9 @@ def test_expression_package_asset_refusals(toolchain, journal, directory):
         path = write(directory, f'{name}.zkpkg', frame)
         changed_pin = sha256(path.read_bytes()).hexdigest()
         proof = directory / f'{name}.proof'
-        journal.run([toolchain.runtime, 'prove', path, changed_pin, request, proof], refuses=reason)
+        journal.run([toolchain.runtime, 'prove', f'--package={path}', f'--sha256={changed_pin}', *request, f'--output={proof}'], refuses=reason)
         assert not proof.exists()
-        journal.run([toolchain.runtime, 'prove', path, pin, request, proof],
+        journal.run([toolchain.runtime, 'prove', f'--package={path}', f'--sha256={pin}', *request, f'--output={proof}'],
                     refuses='entry-package-identity')
 
 
@@ -156,11 +147,10 @@ def test_expression_dimensions_and_degree_follow_captured_contents(toolchain, jo
     package, pin = build(toolchain, journal, directory, 'Proof', arena=arena_path)
     table = tuple(range(1, 13))
     claim = sum(table[i] * table[i + 1] * table[i + 2] for i in range(0, 12, 3))
-    request = write(directory, 'cubic-request.json', {'format': 'zkc.entry-proof/0',
-        'public': values(table=table, claim=claim)})
+    request = input_files(journal, 'cubic-request.json', public=values(table=table, claim=claim))
     proof = directory / 'cubic.proof'
-    journal.run([toolchain.runtime, 'prove', package, pin, request, proof])
-    result = json.loads(journal.run([toolchain.runtime, 'verify', package, pin, request, proof]))
+    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'])
+    result = json.loads(journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}']))
     assert result['status'] == 'accepted'
 
 
@@ -173,16 +163,15 @@ def test_compiler_asset_sharing_reduces_work_without_changing_sumcheck(toolchain
     shared.write_text(journal.run([toolchain.compiler, 'asset-share', 'ring-json', authored]))
     rewritten = json.loads(shared.read_text())
     assert rewritten[1] == arena[1] and len(rewritten[2]) == 4 < len(arena[2])
-    request = write(directory, 'sharing-request.json', {'format': 'zkc.entry-proof/0',
-        'public': values(claim=200)})
+    request = input_files(journal, 'sharing-request.json', public=values(claim=200))
     results = []
     identities = []
     for name, path in [('authored', authored), ('shared', shared)]:
         package, pin = build(toolchain, journal, directory, 'Proof', arena=path)
         identities.append(json.loads(package.read_text())['assets'][0][0])
         proof = directory / f'{name}.proof'
-        produced = json.loads(journal.run([toolchain.runtime, 'prove', package, pin, request, proof]))
-        verified = json.loads(journal.run([toolchain.runtime, 'verify', package, pin, request, proof]))
+        produced = json.loads(journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}']))
+        verified = json.loads(journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}']))
         assert verified['status'] == 'accepted'
         results.append((produced['execution']['ring_work'], verified['execution']['ring_work']))
     assert identities[0] != identities[1]

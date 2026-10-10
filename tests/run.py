@@ -57,10 +57,11 @@ def demo(output):
         "--module=schnorr=libraries/schnorr/lib.zkc",
         "--module=example=examples/projects/schnorr/main.zkc",
         "example::Proof", f"--output={package}"])
-    for command, request, role, expected in [("prove", "prover", "producer", "produced"),
-                                              ("verify", "verifier", "validator", "accepted")]:
-        report = emit(f"{role}.json", [tools.runtime, command, package, built["package_sha256"],
-            ROOT / f"examples/projects/schnorr/{request}.json", proof])
+    inputs = ROOT / "examples/projects/schnorr/inputs/example.Proof"
+    for command, role, expected in [("prove", "producer", "produced"), ("verify", "validator", "accepted")]:
+        flags = [f"--witness={inputs / 'witness.json'}", f"--output={proof}"] if command == "prove" else [f"--proof={proof}"]
+        report = emit(f"{role}.json", [tools.runtime, command, f"--package={package}",
+            f"--sha256={built['package_sha256']}", f"--public={inputs / 'public.json'}", *flags])
         if report["status"] != expected:
             raise RuntimeError(f"{command} did not report {expected}; see {output}")
     print(f"Proof accepted: {proof.stat().st_size} bytes. Files: {output}", flush=True)
