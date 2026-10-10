@@ -1,28 +1,28 @@
 {
   tools,
-  testSupport,
-  compiler,
   environment,
   python3,
 }:
-tools.overrideAttrs (
-  old:
-  (environment.outputs {
-    compilerBin = "${compiler.testSupport}/bin";
-    nativeBin = "${testSupport}/bin";
-  })
-  // {
-    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ python3 ];
-    CARGO_NET_OFFLINE = "true";
-    pname = "zkc-rust-checks";
-    doCheck = true;
-    checkPhase = ''
-      runHook preCheck
-      ${environment.checks}
-      cargo fmt --all -- --check
-      cargo clippy --workspace --locked --offline --all-targets --all-features -- -D warnings
-      python3 tests/run.py rust
-      runHook postCheck
-    '';
-  }
-)
+tools.overrideAttrs (old: {
+  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ python3 ];
+  CARGO_NET_OFFLINE = "true";
+  pname = "zkc-rust-checks";
+  # Cargo tests build their own targets. The installed release CLI and native
+  # execution clients are checked by application and project, respectively.
+  dontBuild = true;
+  doCheck = true;
+  checkPhase = ''
+    runHook preCheck
+    ${environment.checks}
+    cargo fmt --all -- --check
+    cargo clippy --workspace --locked --offline --all-targets --all-features -- -D warnings
+    python3 tests/run.py rust
+    runHook postCheck
+  '';
+  installPhase = ''
+    runHook preInstall
+    mkdir -p "$out"
+    cp -R build/reports "$out/reports"
+    runHook postInstall
+  '';
+})

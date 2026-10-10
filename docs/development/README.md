@@ -30,6 +30,8 @@ access. The demo compiles the maintained Schnorr Entry and independently proves
 and verifies it. [Getting started](../getting-started.md) gives the exact commands
 and input-authority boundary.
 
+Development operations expose their supported options through `python3 scripts/develop.py OPERATION --help`; options for another operation are rejected before preparation or execution.
+
 Outside Nix, provide compatible `CC`, `CXX`, `MLIR_DIR` and, when needed,
 `LLVM_CONFIG`. Recreate a CMake build directory when changing compiler or ABI.
 `just doctor` reports selected versions, output paths and cache/toolchain differences.

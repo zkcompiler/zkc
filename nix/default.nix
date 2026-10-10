@@ -250,12 +250,7 @@ in
       python3 = python;
     };
     rust = pkgs.callPackage ./checks/rust.nix {
-      inherit
-        compiler
-        tools
-        testSupport
-        environment
-        ;
+      inherit tools environment;
       python3 = python;
     };
   };
