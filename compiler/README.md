@@ -28,7 +28,10 @@ that prefix to check every component and installed public header.
 `zkc-compile --help` lists the supported commands. The primary Language commands
 are `language-check`, `language-emit`, `language-interface`, `language-bundle`,
 and `language-package`, with explicit `--module=NAME=FILE.zkc`, selected Entry,
-and optional `--asset=NAME=FORMAT=FILE` inputs. Language Assets retain binary R1CS
+and optional `--asset=NAME=FORMAT=FILE` inputs. `language-check` may omit the
+Entry to check definitions alone; `--declarations` reports completed public
+callable contracts. `zkc check` and `compile` also accept an explicit
+[project map](../docs/language/README.md#project-inputs). Language Assets retain binary R1CS
 and AIR data ingress without generating an intermediate authored language.
 
 For mathematical MLIR, `protocol-bundle` compiles a run. `protocol-checked-bundle`

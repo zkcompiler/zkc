@@ -47,6 +47,8 @@ add_zkc_component(Contracts
   lib/Contracts/Representations.cpp
 )
 add_zkc_component(Language
+  lib/Language/Diagnostics.cpp
+  lib/Language/Inspection.cpp
   lib/Language/Types.cpp
   lib/Language/Assets.cpp
   lib/Language/AssetProperties.cpp

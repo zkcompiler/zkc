@@ -28,6 +28,7 @@ add_zkc_test(language_interface Compiler language-interface)
 add_zkc_test(language_assets Language language-assets)
 add_zkc_test(language_expression_assets Language language-expression-assets)
 target_compile_definitions(zkc-language_expression_assets-test PRIVATE
+  ZKC_MATH_LIBRARIES="${PROJECT_SOURCE_DIR}/../libraries/zkc"
   ZKC_SUMCHECK_LIBRARY="${PROJECT_SOURCE_DIR}/../libraries/sumcheck/expression.zkc"
   ZKC_EXPRESSION_SUMCHECK_PROJECT="${PROJECT_SOURCE_DIR}/../examples/projects/expression-sumcheck")
 add_zkc_test(language_asset_ir Compiler language-asset-ir)
@@ -54,6 +55,7 @@ add_zkc_test(language_map Compiler language-map)
 mlir_target_link_libraries(zkc-language_boolean-test PRIVATE MLIRParser)
 add_zkc_test(language_capabilities Compiler language-capabilities)
 add_zkc_test(language_inference Compiler language-inference)
+add_zkc_test(language_presentation Language language-presentation)
 add_zkc_test(language_lexical Compiler language-lexical)
 add_zkc_test(language_placement Compiler language-placement)
 add_zkc_test(language_types Compiler language-types)

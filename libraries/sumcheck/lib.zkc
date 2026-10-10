@@ -1,20 +1,14 @@
 module sumcheck;
 
-pub type Vector<F: Field> = builtin("vector", F);
+use zkc::vector::{Vector, split, sum, fold, length};
+use zkc::boolean::{both};
+
 fn sums<F: Field>(values: Vector<F>) {
-  let halves = kernel<F>("vector.split", values);
-  return (kernel<F>("vector.sum", halves.0), kernel<F>("vector.sum", halves.1));
+  let halves = split(values);
+  return (sum(halves.0), sum(halves.1));
 }
-fn fold<F: Field>(values: Vector<F>, challenge: F) {
-  let halves = kernel<F>("vector.split", values);
-  let low = kernel<F>("vector.scale", halves.0, 1 - challenge);
-  let high = kernel<F>("vector.scale", halves.1, challenge);
-  return kernel<F>("vector.add", low, high);
-}
-math fn both(a: bool, b: bool) { return intrinsic("bool.and", a, b); }
 fn terminal<F: Field>(values: Vector<F>, claim: F) {
-  let size = kernel<F>("vector.length", values);
-  return both(size == 1, kernel<F>("vector.sum", values) == claim);
+  return both(length(values) == 1, sum(values) == claim);
 }
 
 // Multilinear public-table Sumcheck. V evaluates the public table directly at

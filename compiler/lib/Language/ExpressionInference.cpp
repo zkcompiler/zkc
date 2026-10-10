@@ -47,7 +47,10 @@ class ExpressionInference {
     if (auto it = bindings.find(id); it != bindings.end())
       return it->second;
     if (auto it = owner.bindings.find(id); it != owner.bindings.end()) {
-      auto value = known(it->second.type, span);
+      auto value = known(it->second.type,
+                         it->second.value
+                             ? owner.body.values[it->second.value->index].span
+                             : span);
       bindings.emplace(id, value);
       return value;
     }
@@ -95,13 +98,26 @@ class ExpressionInference {
       Substitution substitution;
       for (const auto &[name, variable] : call.parameters) {
         auto value = types.get(variable, callSpan);
-        if (!value)
-          return checker.types.diagnostic
-                     ? false
-                     : fail(
-                           "source.inference",
-                           "static argument needs an explicit type or argument",
-                           callSpan);
+        if (!value) {
+          if (checker.types.diagnostic)
+            return false;
+          auto parameter = llvm::find_if(
+              callee.parameters,
+              [atom = name](const Parameter &p) { return p.atom == atom; });
+          auto parameterName =
+              parameter != callee.parameters.end() ? parameter->name : name;
+          auto parameterSpan = parameter != callee.parameters.end()
+                                   ? parameter->span
+                                   : callee.span;
+          return checker.types.fail("source.inference",
+                                    "cannot infer static argument '" +
+                                        parameterName + "' of " +
+                                        callee.qualifiedName +
+                                        "; supply an explicit static argument "
+                                        "(use _ for other slots) "
+                                        "or a result type annotation",
+                                    callSpan, {parameterSpan});
+        }
         substitution.emplace(name, *value);
       }
       std::vector<Type> arguments;
@@ -171,11 +187,13 @@ class ExpressionInference {
         auto field = service(expr.children[i]);
         if (field)
           types.equal(types.instantiate(callee.services[slot.index].field,
-                                        parameters, expr.span),
+                                        parameters,
+                                        callee.services[slot.index].span),
                       known(*field, expr.span), expr.span);
       } else {
-        auto parameter = types.instantiate(callee.inputs[slot.index].type,
-                                           parameters, expr.span);
+        auto parameter =
+            types.instantiate(callee.inputs[slot.index].type, parameters,
+                              callee.inputs[slot.index].span);
         auto argument = expression(expr.children[i], depth + 1);
         if (!rows.empty()) {
           // Report a missing or extra `each` before unifying the two modes.
@@ -194,7 +212,7 @@ class ExpressionInference {
     }
     std::vector<Variable> results;
     for (const auto &port : callee.outputs) {
-      auto result = types.instantiate(port.type, parameters, expr.span);
+      auto result = types.instantiate(port.type, parameters, port.span);
       results.push_back(rows.empty() ? result : vectorOf(result, expr.span));
     }
     return results;

@@ -26,6 +26,7 @@ public:
 private:
   struct Node {
     unsigned parent, rank = 0;
+    Span origin;
     std::optional<Type> head;
     std::vector<Variable> arguments;
     uint32_t kinds = ~uint32_t(0);

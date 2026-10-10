@@ -33,6 +33,9 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 
 ## Source and application boundary
 
+`zkc check` checks definitions without an Entry; `--entry` also checks closure
+and mathematical correspondence. `zkc check` and `compile` accept explicit
+[project manifests](language/README.md#project-inputs) or module/asset maps.
 Language resolves explicit modules and R1CS/AIR Assets, checks generic libraries
 and closes selected Entries. It supports scalar mathematics, Boolean formulas,
 nominal products/variants, static parameters and components, capabilities and

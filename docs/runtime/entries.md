@@ -32,7 +32,8 @@ Run Entries use:
 zkc run run.entry EXPECTED_SHA256 inputs.json --results=results.json
 ```
 
-Repeat `--module=NAME=FILE` and `--asset=NAME=FORMAT=FILE` to capture dependencies.
+Use `--project=zkc.json` for an explicit [project map](../language/README.md#project-inputs),
+or repeat `--module=NAME=FILE` and `--asset=NAME=FORMAT=FILE` to capture dependencies.
 `--compiler=PATH` selects a trusted compiler; otherwise it resolves from absolute
 directories in trusted `PATH`. `--no-simplify` and `--release-storage` choose
 compilation options without skipping source comparison. Maintained

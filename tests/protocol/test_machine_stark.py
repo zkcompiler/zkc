@@ -27,6 +27,11 @@ def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None
         path = directory / 'main.zkc'
         path.write_text(source)
     package = directory / f'{entry}.entry'
+    if source is None and not edits and asset is None:
+        report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+                               f'--project={EXAMPLE}/zkc.json',
+                               f'--entry=accumulator_machine::{entry}', f'--output={package}', *flags])
+        return package, report['package_sha256']
     command = [toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
                f'--module=accumulator_machine={path}',
                f'--asset=machine=relation-bundle-json={asset or FIXTURES / "bundle.json"}',

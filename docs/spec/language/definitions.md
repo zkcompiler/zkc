@@ -43,6 +43,24 @@ bound. Caller limits may only lower these ceilings. Analysis rechecks the captur
 against its requested limits before parsing assets. Capture alone supplies no
 protocol ports, runtime matrices or specification binding.
 
+The `zkc` CLI optionally reads a `zkc.project/0` JSON object with exactly
+`format`, `modules` and `assets` fields. `modules` is a nonempty object mapping
+logical names to filenames. `assets` maps names to objects containing exactly
+`format` and `path`. Duplicate keys, unknown fields and duplicate command-line
+names refuse. The manifest is at most 1 MiB, resolved paths at most 4096 bytes,
+and modules plus assets at most 256. Relative paths are anchored at the manifest's
+lexical parent; absolute paths and ordinary symlinks are allowed. Files must be
+regular. The manifest is trusted configuration, not a filesystem sandbox.
+
+`--project` is exclusive with explicit `--module`/`--asset` options. The loader
+passes the resolved map to the same compiler capture boundary; manifest bytes
+and path spelling do not enter capture identity. All inputs, including the
+manifest, are protected from output publication. The loader performs no import
+discovery, dependency download, glob expansion, environment interpolation or
+implicit Entry selection. `zkc check` without `--entry` stops after definition
+checking. Selecting an Entry also checks closure and mathematical correspondence;
+only `compile` produces the executable package.
+
 Qualified references first resolve their root in the enclosing component and
 then the module's visible declarations, including imports. A resolved lexical
 root owns the rest of the path: a missing or private member does not fall back
@@ -77,6 +95,25 @@ of that encoded definition symbol. This origin is shared across specializations;
 the exact generated symbol and retained closure identify one specialization.
 Adding an unreachable definition changes capture identity but does not rename
 reachable instances. Template bodies are shared immutably. Specialization has its own work and instance budgets; retained templates do not consume the emitted-declaration allowance. Only reachable body copies are specialized before original emission.
+
+`zkc check --declarations` adds a diagnostic array of completed public callable
+contracts, sorted by qualified name, under `declarations`. Callable members
+are visible through their public owner. Members identify that owner and mark
+inherited static parameters; `abstract` distinguishes interface declarations
+from definitions with bodies. Each item reports its kind, static
+parameters and permissions, role roster, data/service argument order, typed
+ports, services, requirements, body effects (or abstract allowance), and captured
+module byte span. Natural/capability bounds retain their inferred flags; explicit
+or inherited effect allowances remain separate; abstract declarations always
+include their effective allowance, including the default. Type and natural
+strings are descriptive mathematical spellings,
+not a serialization accepted by the checker. The view never supplies linking
+or admission authority. Its unembedded JSON array is bounded by `interfaceBytes`;
+an exceeded bound refuses without publishing a partial result.
+
+The direct compiler and CLI emit the same flat `zkc.source-check/0` successful
+result. It records `status`, `phase`, `scope`, `capture`, `installation`, optional
+`declarations`, and `entry`/`original` for Entry scope. The CLI adds `compiler`.
 
 ## Types and static terms
 
@@ -546,7 +583,8 @@ runtime component dispatch or inference through noninjective associations.
 Each call has fresh inference variables; the enclosing definition's parameters
 remain fixed. Associated types and compound natural expressions normalize
 forward after their inputs are known, without inferring those inputs from a
-result. Group scaling likewise does not infer a group from its scalar field.
+result. Group scaling is written `point * scalar`; it does not infer a group
+from its scalar field.
 
 An interface declares associated types/domains and math/local member signatures.
 A component selects one interface and defines every member exactly once. Associated
@@ -555,7 +593,10 @@ by their representation. Associated `Field` and `Group` declarations expose thei
 selected domain. Conformance checks callable modes, types, permissions, natural
 preconditions and effect allowances. An implementation cannot require more than
 its interface allows. Interfaces and components may have static parameters;
-member-specific generic parameters require a further conformance contract and refuse.
+abstract signatures may declare member-specific generic parameters, but component
+conformance currently refuses them; implementing them requires a further contract.
+`Component::method<F, ...>(value)` supplies the component parameters directly;
+`C::method(value)` through a bound component uses the parameters already in `C`.
 Records and variants are module declarations. An abstract call or type projection
 requires a bound component; a free interface name cannot select an implementation.
 

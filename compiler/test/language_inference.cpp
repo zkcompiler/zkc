@@ -365,5 +365,27 @@ int main() {
     require(work(400) < 3 * work(200),
             "type inference work grew with all previously bound names");
   });
+  cases.run(
+      "service patterns and implicit else preserve inference boundaries", [] {
+        for (StringRef pattern : {"_", "(a,b)"})
+          refuses(check("domain F=field(\"bls12-381.fr\");"
+                        "protocol Run roles(P)(coins:Random<F>@P)->(x:bool@P){"
+                        "let result @P ={let " +
+                        pattern.str() + "=coins;true};return result;}"),
+                  "source.service");
+        take(check("fn f(b:bool)->bool{let u={if b{stop "
+                   "\"reject\";}true};return u;}"));
+      });
+  cases.run("component and interface arities remain independent", [] {
+    compile(R"(
+      domain F=field("bls12-381.fr");domain G=group("bls12-381.g1");
+      interface Increment<T:Field>{math fn add(x:T)->T;}
+      component Plus<T:Field,H:Group>:Increment<T>{math fn add(x:T)->T{return x+1;}}
+      math fn indirect<T:Field,C:Increment<T>>(x:T)->T{return C::add(x);}
+      protocol Run roles(P)(x:F@P)->(r:F@P){
+        return Plus::add<F,G>(x)+indirect<F,Plus<F,G>>(x);
+      }entry Demo=Run;
+    )");
+  });
   return cases.result();
 }

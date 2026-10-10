@@ -9,12 +9,48 @@ concrete domains, Entries and transcript constructions in
 
 | Module | Public exports | Contract |
 |---|---|---|
+| [`zkc::vector`](zkc/vector.zkc) | `Vector`, length/get/sum/split/add/scale/dot/fill/fold/has_length | Ordered finite vectors; fold pairs contiguous halves |
+| [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, multiply/transpose_multiply/bilinear/rows/columns | Ordered sparse matrix operations |
+| [`zkc::polynomial`](zkc/polynomial.zkc) | `Polynomial`, from_coefficients/evaluate/boundary | Runtime univariate polynomial data; boundary is p(0) + p(1) |
+| [`zkc::symbolic`](zkc/symbolic.zkc) | `Array`, `Polynomial`, pack/get/mle/from_coefficients/coefficients/evaluate/fix_prefix/sum_suffix/fix_table/add/multiply/constant | Total formal polynomial expressions |
+| [`zkc::boolean`](zkc/boolean.zkc) | both/either/different/negate | Total Boolean formulas; eager operands |
 | [`schnorr`](schnorr/lib.zkc) | `DLog<G>`, `Schnorr<G>` | Discrete-log relation and three-message group protocol |
-| [`sumcheck`](sumcheck/lib.zkc) | `Vector<F>`, `Sumcheck<F, Max>` | Bounded multilinear Sumcheck over a public evaluation table |
+| [`sumcheck`](sumcheck/lib.zkc) | `Sumcheck<F, Max>` | Bounded multilinear Sumcheck over a public evaluation table |
+| [`expression_sumcheck`](sumcheck/expression.zkc) | `Sumcheck<F, Max, A: Ring>` | Sumcheck for a captured ring expression over public multilinear tables |
 | [`fri`](fri/lib.zkc) | `LowDegree<C, LogSize, TerminalLog, Rounds, Queries>` | Binary FRI over a natural-order two-adic coset |
 | [`air_polynomial`, `air_table`, `air_stark`](air/README.md) | Scope polynomials, Bundle opening equations and `TableArgument` | A nonhiding KoalaBear/Ext8 argument for one present table, composed with FRI |
 | [`air_interaction`, `air_bundle`](air/README.md#whole-bundle-argument) | `Reduction<F>`, `LogUp<F>`, `GrandProduct<F>`, `ThreeTableArgument` | Three-table multiset arguments with phased auxiliary commitments and shared FRI |
-| [`expression_sumcheck`](sumcheck/expression.zkc) | `Vector<F>`, `Polynomial<F>`, `Sumcheck<F, Max, A: Ring>` | Sumcheck for a captured ring expression over public multilinear tables |
+
+### Mathematics
+
+Import only the modules a client needs. Native `fn` wrappers retain ordered
+execution and the kernels' possible stop behavior: vector split/fold requires a
+positive even length, point access checks bounds, arithmetic checks lengths,
+and matrix products check dimensions. `fold` applies a scalar affine formula
+through native `map` after splitting; both Sumcheck libraries use this definition.
+It fixes one Boolean coordinate of an evaluation table. FRI folding additionally
+uses its coset points and keeps its separate domain-specific operation.
+`has_length<F, N>` compares the dynamic
+length with explicit static `N`; it does not resize or pad a vector.
+
+`zkc::symbolic::Polynomial<F, N>` is a formal expression with `N` variables.
+`zkc::polynomial::Polynomial<F>` is runtime univariate coefficient data. Use
+qualified paths when both occur in one module. Formal MLEs use MSB-first Boolean
+coordinates. `mle<F, N>` keeps `N` explicit because inferring it would invert
+`pow2(N)`; ordinary field, array and result inference still applies. Coefficients
+are increasing powers; formal coefficient extraction checks its degree premise.
+`fix_prefix` substitutes leading coordinates; `sum_suffix` sums trailing Boolean
+coordinates. `fix_table` performs the same prefix substitution on an MLE table.
+Their static arguments name the remaining arity and the fixed/summed arity;
+these choices stay explicit when their sum alone would not determine them.
+Generic preconditions are completed from the intrinsic contracts and checked
+at each call. These modules select no field, commitment or transcript.
+
+The [mathematics client](../examples/projects/mathematics/README.md) compares
+formal evaluation and runtime folding. Group arithmetic already has ordinary
+`+`, `-` and scaling as `point * scalar`; no duplicate group wrapper is needed. Asset-specific
+ring operations and component-specific PCS operations stay in their owning
+libraries, using explicit asset/component parameters and installed kernels.
 
 ### Schnorr
 
@@ -41,7 +77,8 @@ fixes the table's most significant coordinate.
 V retains and folds its public table for the terminal check. This library does
 not hide the polynomial or use a commitment. The field requires `Field`, `Share`
 and `Wire` with the selected vector kernels installed. The example uses
-BLS12-381 Fr. Local `sums`, `fold`, `both` and `terminal` helpers remain private.
+BLS12-381 Fr. Vector folding and Boolean formulas use the shared modules; `sums` and
+`terminal` are private protocol helpers.
 
 ### Expression Sumcheck
 
@@ -138,6 +175,8 @@ zkc compile --module=schnorr=libraries/schnorr/lib.zkc \
 ```
 
 See the [walkthrough](../docs/getting-started.md) to invoke the compiled Entry.
+Project files can record these maps; see [project inputs](../docs/language/README.md#project-inputs).
+Check the shared math modules with `zkc check --project=libraries/zkc/zkc.json`.
 There is no separate registry or library installation step.
 
 ## Maintain a library

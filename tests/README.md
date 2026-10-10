@@ -16,7 +16,7 @@ maintains independent research models and checks.
 | Installed SDK | `just test-install` | Fresh compiler installation and independent consumer |
 | Installed domain contribution | `just test-install-domain` | Separate base/domain installations and consumers |
 | Documentation | `just test-docs` | Links, fragments and reachability |
-| Installed CLI | `nix build .#checks.x86_64-linux.application` | Compile, inspect, prove and verify outside the checkout |
+| Installed CLI | `nix build .#checks.x86_64-linux.application` | Check source, compile, inspect, prove and verify outside the checkout |
 | C++/Rust/Python style | `just lint` | clang-format, Rust formatting, Clippy and Python lint |
 | Broad native integration | `just test` | Compiler, Rust, root integration, installation, docs, lint and demo |
 | Plonky3 AIR adapter | `just test-plonky3` | Pinned upstream adapter and native differential controls |

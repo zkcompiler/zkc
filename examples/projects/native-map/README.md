@@ -20,7 +20,8 @@ received one. The challenge is a scalar shared by every row.
 From the repository root, with built tools on `PATH`:
 
 ```sh
-zkc compile --module=example=examples/projects/native-map/main.zkc \
+zkc compile \
+  --project=examples/projects/native-map/zkc.json \
   --entry=example::Check --output=native-map.entry
 ```
 

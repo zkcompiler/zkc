@@ -31,8 +31,12 @@ def check(binary, compiler, output):
 
     invoke("help", "--help")
     invoke("version", "--version")
-    arguments = ["compile", "--entry=example::Proof", "--module=schnorr=schnorr.zkc",
-                 "--module=example=main.zkc", "--output=proof.entry"]
+    (output / "zkc.json").write_text(json.dumps({"format": "zkc.project/0",
+        "modules": {"schnorr": "schnorr.zkc", "example": "main.zkc"}, "assets": {}}))
+    checked = json.loads(invoke("check", "check", "--project=zkc.json", "--declarations"))
+    assert checked["status"] == "checked" and checked["scope"] == "definitions"
+    assert any(d["name"] == "schnorr::Schnorr" for d in checked["declarations"])
+    arguments = ["compile", "--entry=example::Proof", "--project=zkc.json", "--output=proof.entry"]
     built = json.loads(invoke("compile", *arguments))
     assert Path(built["compiler"]).resolve() == compiler.resolve()
     # An explicit selection must remain usable through the package wrapper.
@@ -53,6 +57,35 @@ def check(binary, compiler, output):
     refused = json.loads(invoke("truncated", "verify", "proof.entry", pin,
                                "verifier.json", "proof.bin", success=False))
     assert refused["status"] == "refused"
+
+    # The shared fold crosses source-library, generic map and native realization
+    # boundaries. Exercise it with the installed compiler, outside the checkout.
+    shutil.copyfile(ROOT / "examples/projects/mathematics/main.zkc", output / "mathematics.zkc")
+    for name in ("vector", "symbolic"):
+        shutil.copyfile(ROOT / f"libraries/zkc/{name}.zkc", output / f"{name}.zkc")
+    (output / "mathematics.json").write_text(json.dumps({"format": "zkc.project/0", "modules": {
+        "example": "mathematics.zkc", "zkc::vector": "vector.zkc", "zkc::symbolic": "symbolic.zkc"
+    }, "assets": {}}))
+    checked = json.loads(invoke("math-check", "check", "--project=mathematics.json",
+                                "--entry=example::Run", "--declarations"))
+    assert checked["scope"] == "entry"
+    assert any(d["name"] == "zkc::vector::fold" for d in checked["declarations"])
+    compiled = json.loads(invoke("math-compile", "compile", "--project=mathematics.json",
+                                 "--entry=example::Run", "--output=mathematics.entry"))
+
+    def scalar(value):
+        return (b"ZKCV\x00\x01" + value.to_bytes(32, "little")).hex()
+
+    values = (b"ZKCV\x00\x42" + (2).to_bytes(4, "little")
+              + (2).to_bytes(32, "little") + (3).to_bytes(32, "little")).hex()
+    (output / "mathematics-inputs.json").write_text(json.dumps({"format": "zkc.entry-run/0",
+        "session": "installed_math", "roles": {"P": {"inputs": {
+            "a": scalar(2), "b": scalar(3), "point": scalar(4), "values": values}}}}))
+    executed = json.loads(invoke("math-run", "run", "mathematics.entry", compiled["package_sha256"],
+                                 "mathematics-inputs.json", "--results=mathematics-results.json"))
+    assert executed["status"] == "executed"
+    result = json.loads((output / "mathematics-results.json").read_text())
+    assert result["roles"]["P"] == {"formal_result": scalar(6), "runtime_result": scalar(6)}
     print(json.dumps({"status": "pass", "binary": str(binary), "compiler": str(compiler)}))
 
 

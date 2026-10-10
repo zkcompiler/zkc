@@ -1,11 +1,12 @@
 #include "TypeInference.h"
+#include "zkc/Language/Diagnostics.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::language::detail {
 TypeInference::Variable TypeInference::fresh(Span span) {
   types.charge(1, span);
   auto id = nodes.size();
-  nodes.push_back({unsigned(id), 0, {}, {}});
+  nodes.push_back({unsigned(id), 0, span, {}, {}});
   return id;
 }
 TypeInference::Variable TypeInference::root(Variable id) {
@@ -149,14 +150,36 @@ bool TypeInference::equal(Variable a, Variable b, Span span, unsigned depth) {
     return true;
   const auto left = nodes[a], right = nodes[b];
   auto kinds = left.kinds & right.kinds;
+  auto conflict = [&] {
+    auto describe = [](const Node &node) {
+      if (node.head) {
+        if (node.head->kind == Type::Kind::Tuple)
+          return std::string("tuple with ") +
+                 std::to_string(node.arguments.size()) + " elements";
+        if (node.head->kind == Type::Kind::Array)
+          return std::string("array");
+        return formatType(*node.head);
+      }
+      std::string choices;
+      for (unsigned kind = 0; kind <= unsigned(Type::Kind::Asset); ++kind)
+        if (node.kinds & (uint32_t(1) << kind)) {
+          if (!choices.empty())
+            choices += " or ";
+          choices += typeKindName(Type::Kind(kind));
+        }
+      return choices;
+    };
+    return types.fail("source.type",
+                      "type conflict: " + describe(left) + " versus " +
+                          describe(right),
+                      span, {left.origin, right.origin});
+  };
   if (!kinds)
-    return types.fail("source.type", "expression type constraints conflict",
-                      span);
+    return conflict();
   if (left.head && right.head) {
     if (*left.head != *right.head ||
         left.arguments.size() != right.arguments.size())
-      return types.fail("source.type", "expression type constraints conflict",
-                        span);
+      return conflict();
     for (unsigned i = 0; i < left.arguments.size(); ++i)
       if (!equal(left.arguments[i], right.arguments[i], span, depth + 1))
         return false;
@@ -173,6 +196,7 @@ bool TypeInference::equal(Variable a, Variable b, Span span, unsigned depth) {
   if (!nodes[a].head) {
     nodes[a].head = nodes[b].head;
     nodes[a].arguments = nodes[b].arguments;
+    nodes[a].origin = nodes[b].origin;
   }
   nodes[a].kinds = kinds;
   ++revision;
@@ -190,7 +214,8 @@ bool TypeInference::requireKinds(Variable id,
   mask &= node.kinds;
   if (!mask)
     return types.fail("source.type",
-                      "expression needs a compatible scalar type", span);
+                      "expression needs a compatible scalar type", span,
+                      {node.origin});
   if (mask != node.kinds) {
     node.kinds = mask;
     ++revision;

@@ -80,9 +80,7 @@ class Client:
         self.tools, self.journal, self.directory = toolchain, journal, directory
         self.package = directory / f'{entry}.entry'
         report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-                               f'--module=imported_air={PROJECT}/main.zkc',
-                               f'--asset=export=ring-json={RECURRENCE}/arena.json',
-                               f'--asset=recurrence=relation-bundle-json={RECURRENCE}/bundle.json',
+                               f'--project={PROJECT}/zkc.json',
                                f'--entry=imported_air::{entry}', f'--output={self.package}', *flags])
         self.pin = report['package_sha256']
 
