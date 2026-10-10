@@ -23,7 +23,7 @@ def main():
             return path
 
         def run(*command, refusal=None):
-            result = subprocess.run([args.runtime, *command], capture_output=True,
+            result = subprocess.run([args.runtime, '--json', *command], capture_output=True,
                                     text=True, timeout=60)
             assert result.returncode == (1 if refusal else 0), result.stdout + result.stderr
             record = json.loads(result.stdout)
@@ -31,7 +31,7 @@ def main():
                 assert record["status"] == "refused" and record["code"] == refusal, record
             return record
 
-        result = subprocess.run([args.runtime, "invalid-command"], capture_output=True,
+        result = subprocess.run([args.runtime, '--json', "invalid-command"], capture_output=True,
                                 text=True, timeout=60)
         assert result.returncode == 2 and "Unknown command" in result.stderr
         assert not result.stdout

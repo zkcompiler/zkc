@@ -37,9 +37,8 @@ impl Target {
         }
         Ok(())
     }
-    pub fn load(args: &Arguments<'_>, outputs: &mut Outputs, report: &mut Json) -> Result<Self> {
+    pub fn load(args: &Arguments<'_>, report: &mut Json) -> Result<Self> {
         if let Some(path) = args.value("--package") {
-            outputs.protect([path])?;
             let expected = args.value("--sha256").expect("validated package pin");
             let pin = digest(expected)?;
             let bytes = read(path, Package::MAX_BYTES)?;
@@ -54,7 +53,6 @@ impl Target {
             })
         } else {
             let source = Source::load(args)?;
-            source.protect(outputs)?;
             source.describe(report);
             Ok(Self::Project(source))
         }

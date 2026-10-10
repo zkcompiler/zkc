@@ -1,5 +1,5 @@
 use super::*;
-use std::{collections::BTreeMap, path::Path};
+use std::collections::BTreeMap;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Operation {
     Run,
@@ -44,9 +44,16 @@ impl Operation {
         if forbidden.iter().any(|f| args.has(f)) {
             return Err("cli-option".into());
         }
-        if self == Self::Run && !args.has("--session")
-            || !checking && self == Self::Prove && !args.has("--output")
-            || !checking && self == Self::Verify && !args.has("--proof")
+        if args.has("--no-results") && args.has("--results") {
+            return Err("cli-option".into());
+        }
+        let explicit = ["--package", "--module", "--asset"]
+            .iter()
+            .any(|flag| args.has(flag));
+        if !checking
+            && explicit
+            && ((self == Self::Prove && !args.has("--output"))
+                || (self == Self::Verify && !args.has("--proof")))
         {
             return Err("cli-usage".into());
         }
@@ -151,30 +158,27 @@ impl Options {
     pub fn request(
         &mut self,
         interface: &Interface,
-        args: &Arguments<'_>,
+        invocation: &super::invocation::Invocation,
         operation: Operation,
         documents: &mut files::Documents,
         report: &mut Json,
     ) -> Result<Request> {
-        let mut load = |group: &super::super::inputs::InputGroup<'_>, path: Option<&str>| {
-            documents.load(group, path.map(Path::new)).map_err(|e| {
-                report["input_path"] = json!(e.path);
-                e.code
-            })
+        let mut load = |group: &super::super::inputs::InputGroup<'_>,
+                        path: Option<&std::path::PathBuf>| {
+            documents
+                .load(group, path.map(|p| p.as_path()))
+                .map_err(|e| {
+                    report["input_path"] = json!(e.path);
+                    if let Some(path) = path {
+                        report["input_file"] = json!(path);
+                    }
+                    e.code
+                })
         };
         if operation == Operation::Run {
-            let mut paths = BTreeMap::new();
-            for (_, value) in args.options.iter().filter(|(k, _)| *k == "--input") {
-                let (role, path) = assignment(value.unwrap())?;
-                if !interface.roles().iter().any(|r| r.name == role)
-                    || paths.insert(role, path).is_some()
-                {
-                    return Err("entry-input-roles".into());
-                }
-            }
             let mut roles = BTreeMap::new();
             for group in interface.input_groups() {
-                let input = load(&group, paths.remove(group.name()))?;
+                let input = load(&group, invocation.inputs.get(group.name()))?;
                 roles.insert(
                     group.name().into(),
                     RoleInputs {
@@ -187,15 +191,15 @@ impl Options {
                 return Err("entry-service-names".into());
             }
             Ok(Request::Run(RunRequest {
-                session: args.value("--session").unwrap().into(),
+                session: invocation.session.clone().expect("resolved run session"),
                 roles,
                 setups: std::mem::take(&mut self.material),
             }))
         } else {
             let groups = interface.input_groups();
-            let public = load(&groups[0], args.value("--public"))?;
+            let public = load(&groups[0], invocation.inputs.get("public"))?;
             let private = if operation == Operation::Prove {
-                load(&groups[1], args.value("--witness"))?
+                load(&groups[1], invocation.inputs.get("witness"))?
             } else {
                 Default::default()
             };

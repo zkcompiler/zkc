@@ -16,8 +16,9 @@ The [walkthrough](../../docs/getting-started.md) runs the Schnorr project. Each 
 `zkc check --project=examples/projects/NAME/zkc.toml --declarations`, then
 select an Entry by positional name for `inspect`, `run`, `prove` or `verify`.
 The [common Host](../../docs/runtime/entries.md) compiles source in memory or
-accepts an explicitly pinned package. `inputs init ENTRY` generates templates
-under `inputs/<qualified.name>/`; fill and explicitly select those files. These projects require no
+accepts an explicitly pinned package. `prepare` creates missing templates
+under `inputs/<qualified.name>/`; existing values are preserved. Source execution
+uses these paths by default, with explicit overrides available. These projects require no
 protocol-specific executor. The [source project checks](../../tests/protocol/test_source_projects.py)
 exercise their commands and invalid inputs/proofs.
 

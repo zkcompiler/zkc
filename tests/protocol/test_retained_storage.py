@@ -85,7 +85,7 @@ class Case:
         source = directory / 'retained.zkc'
         source.write_text(SOURCE.format(field=field))
         self.package = directory / 'retained.zkpkg'
-        report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                                f'--module=sample={source}', 'sample::Demo',
                                f'--output={self.package}'])
         self.pin = report['package_sha256']
@@ -100,14 +100,14 @@ class Case:
     def prove(self, count, capacity=None, refuses=None):
         capacity = capacity or self.capacity
         request, option, proof = self.files(count, capacity)
-        report = self.journal.json([self.runtime, 'prove', f'--package={self.package}', f'--sha256={self.pin}', *request, f'--output={proof}', option], refuses=refuses)
+        report = self.journal.json([self.runtime, '--json', 'prove', f'--package={self.package}', f'--sha256={self.pin}', *request, f'--output={proof}', option], refuses=refuses)
         if 'execution' in report:
             assert report['capacity'] == capacity
         return report, proof
 
     def verify(self, count, proof):
         request, option, _ = self.files(count, self.capacity)
-        report = self.journal.json([self.runtime, 'verify', f'--package={self.package}', f'--sha256={self.pin}', *request, f'--proof={proof}', option])
+        report = self.journal.json([self.runtime, '--json', 'verify', f'--package={self.package}', f'--sha256={self.pin}', *request, f'--proof={proof}', option])
         assert report['status'] == 'accepted' and report['capacity'] == self.capacity
         return report
 

@@ -151,7 +151,7 @@ def subdirectory(directory, name):
 def report(entry, name, values):
     request = input_files(entry.journal, name, roles={'P': {'inputs': values}})
     output = entry.directory / f'{name}.outputs.json'
-    return entry.journal.json([entry.tools.runtime, 'run', f'--package={entry.package}', f'--sha256={entry.pin}', *request, f'--results={output}'])
+    return entry.journal.json([entry.tools.runtime, '--json', 'run', f'--package={entry.package}', f'--sha256={entry.pin}', *request, f'--results={output}'])
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
@@ -240,7 +240,7 @@ def test_artifact_and_work_are_independent_of_height(toolchain, journal, directo
 
 def build(toolchain, journal, directory, entry):
     package = directory / f'{entry}.zkpkg'
-    result = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+    result = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                            f'--project={PROJECT}/zkc.toml',
                            f'example::{entry}', f'--output={package}'])
     return package, result['package_sha256']
@@ -249,7 +249,7 @@ def build(toolchain, journal, directory, entry):
 def run(toolchain, journal, directory, package, pin, name, roles, refuses=None):
     request = input_files(journal, f'{name}.json', session='native_map_example', roles=roles)
     output = directory / f'{name}.outputs.json'
-    result = journal.json([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={output}'], refuses=refuses)
+    result = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={output}'], refuses=refuses)
     return result if refuses else json.loads(output.read_text())['roles']
 
 

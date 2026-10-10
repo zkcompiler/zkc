@@ -50,7 +50,7 @@ def test_source_reduction_matches_independent_staged_reference(toolchain, journa
     configuration, instance, witness = machine.carriers(bundle, rows)
     publics = [decode(slot[1], v) for slot, v in zip(bundle[1], instance[2])]
     package = directory / 'reduction.zkpkg'
-    report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
         f'--module=inspect_reduction={ROOT}/tests/protocol/sources/interaction-reduction.zkc',
         f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
         f'--module=air_interaction={ROOT}/libraries/air/interaction.zkc',
@@ -73,7 +73,7 @@ def test_source_reduction_matches_independent_staged_reference(toolchain, journa
             'challenges': ext_vector(challenges)}
         request = input_files(journal, f'{entry}-{t}.json', session=f'{entry}{t}', roles={'P': {'inputs': inputs}})
         result = directory / f'{entry}-{t}.out.json'
-        journal.json([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={result}'])
+        journal.json([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={result}'])
         actual = json.loads(result.read_text())['roles']['P']
         columns = unext(actual['columns'])
         width = len(reduction.columns[t])

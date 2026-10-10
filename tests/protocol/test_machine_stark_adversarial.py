@@ -59,9 +59,9 @@ def rejected_proof(toolchain, journal, directory, package, pin, pair, name, guar
     producer = input_files(journal, name + '-prover', public=pair[0], witness=pair[1])
     verifier = input_files(journal, name + '-verifier', public=pair[0])
     proof = directory / (name + '.proof')
-    made = journal.json([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
+    made = journal.json([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
     assert made['status'] == 'produced'
-    result = journal.attempt([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'])
+    result = journal.attempt([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'])
     stopped_at(assert_refused(result), package, guard)
 
 

@@ -30,11 +30,11 @@ def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None
         path.write_text(source)
     package = directory / f'{entry}.zkpkg'
     if source is None and not edits and asset is None:
-        report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                                f'--project={EXAMPLE}/zkc.toml',
                                f'accumulator_machine::{entry}', f'--output={package}', *flags])
         return package, report['package_sha256']
-    command = [toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+    command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                f'--module=accumulator_machine={path}',
                f'--asset=machine=relation-bundle-json={asset or FIXTURES / "bundle.json"}',
                f'accumulator_machine::{entry}', f'--output={package}', *flags]
@@ -63,8 +63,8 @@ def prove_and_verify(toolchain, journal, directory, package, pin, name, pair):
     prover = input_files(journal, name + '-prover', public=pair[0], witness=pair[1])
     verifier = input_files(journal, name + '-verifier', public=pair[0])
     proof = directory / (name + '.proof')
-    produced = journal.json([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *prover, f'--output={proof}'])
-    checked = journal.json([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'])
+    produced = journal.json([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *prover, f'--output={proof}'])
+    checked = journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'])
     assert produced['status'] == 'produced'
     assert checked['status'] == 'accepted'
     return proof, verifier
@@ -140,7 +140,7 @@ def test_machine_interactive_entry_runs_with_multi_megabyte_participants(toolcha
     def run(name, secret):
         inputs = input_files(journal, name + '-run.json', session='machine_' + name, roles={'P': {'inputs': public | private | secret}, 'V': {'inputs': public}})
         outputs = directory / (name + '-outputs.json')
-        return [toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', *inputs, f'--results={outputs}'], outputs
+        return [toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *inputs, f'--results={outputs}'], outputs
 
     command, outputs = run('honest', {})
     assert journal.json(command)['status'] == 'executed'
@@ -186,12 +186,12 @@ def test_machine_rejects_false_relations_and_profiles(toolchain, journal, direct
         prover = input_files(journal, name + '-prover.json', public=public | shared, witness=private | secret)
         verifier = input_files(journal, name + '-verifier.json', public=public | shared, witness={})
         proof = directory / (name + '.proof')
-        made = journal.attempt([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *prover, f'--output={proof}'])
+        made = journal.attempt([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *prover, f'--output={proof}'])
         if made.returncode == 0:
             # In particular, cross-table balance is a verifier obligation;
             # producing a transcript does not assert that it will be accepted.
             report = assert_refused(journal.attempt(
-                [toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}']))
+                [toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}']))
             assert report['code'].startswith('artifact-stopped'), (name, report)
         else:
             report = assert_refused(made)
@@ -199,7 +199,7 @@ def test_machine_rejects_false_relations_and_profiles(toolchain, journal, direct
             assert not proof.exists()
         if shared:
             assert_refused(journal.attempt(
-                [toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={honest}']))
+                [toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={honest}']))
 
 
 @pytest.mark.parametrize('entry', ['ProofLogUp', 'ProofProduct'])
@@ -224,13 +224,13 @@ def test_machine_authenticates_all_commitment_phases(toolchain, journal, directo
         candidate = directory / f'message-{position}.proof'
         candidate.write_bytes(repack(original, altered))
         report = assert_refused(journal.attempt(
-            [toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}']))
+            [toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}']))
         assert report['code'].startswith('artifact-stopped'), (position, report)
     for name, data, code in [('truncated', original[:-1], 'proof-truncated'),
                              ('trailing', original + b'\x00', 'proof-trailing')]:
         path = directory / (name + '.proof')
         path.write_bytes(data)
-        journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={path}'], refuses=code)
+        journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={path}'], refuses=code)
 
 
 def check_transcript_schedule(package):
@@ -293,6 +293,6 @@ def test_machine_refuses_other_interaction_profiles(toolchain, journal, director
     public, witness = requests('store-load')
     producer = input_files(journal, 'prover', public=public, witness=witness)
     proof = directory / 'unsupported.proof'
-    report = assert_refused(journal.attempt([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}']))
+    report = assert_refused(journal.attempt([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}']))
     assert report['code'].startswith('artifact-stopped'), report
     assert not proof.exists()

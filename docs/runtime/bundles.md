@@ -34,7 +34,7 @@ cat > "$work_dir/inputs.json" <<'JSON'
  [["Alice", [["0", "bool@native.bool/0", ["wire", "5a4b4356000500"]]], []],
   ["Bob", [], []]], []]
 JSON
-"$native" run-bundle "$work_dir/message.bundle" "$pin" "$work_dir/inputs.json"
+"$native" --json run-bundle "$work_dir/message.bundle" "$pin" "$work_dir/inputs.json"
 ```
 
 The result is `status: executed`, `outcome: ["completed"]`, and Bob returns the
@@ -128,8 +128,8 @@ JSON
 cat > "$work_dir/validator-inputs.json" <<'JSON'
 ["zkc.native-proof-inputs/0", [], [], "", [], "0"]
 JSON
-"$native" prove-bundle "$work_dir/deployment.json" "$pin" "$work_dir/producer-inputs.json" "$work_dir/proof.bin" --allow-header-only > "$work_dir/producer.json"
-"$native" verify-bundle "$work_dir/deployment.json" "$pin" "$work_dir/validator-inputs.json" "$work_dir/proof.bin" --allow-header-only > "$work_dir/validator.json"
+"$native" --json prove-bundle "$work_dir/deployment.json" "$pin" "$work_dir/producer-inputs.json" "$work_dir/proof.bin" --allow-header-only > "$work_dir/producer.json"
+"$native" --json verify-bundle "$work_dir/deployment.json" "$pin" "$work_dir/validator-inputs.json" "$work_dir/proof.bin" --allow-header-only > "$work_dir/validator.json"
 cat "$work_dir/validator.json"
 printf 'Proof files: %s\n' "$work_dir"
 ```

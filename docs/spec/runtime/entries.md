@@ -290,18 +290,56 @@ input reports whether its source permission and installed native representation
 allow construction. This descriptive flag does not replace native admission.
 
 Command help and syntax admission share one declaration. Options use
-`--name=value` or bare switches; repeated single-use options refuse. `--` ends
+`--name=value` or bare switches; repeated single-use options refuse. A global
+`--json` and one command-level `--json` select the same output mode. `--` ends
 option parsing. Syntax errors return `cli-usage` or `cli-option` before file
-access. Recognized-command refusals return JSON and exit 1; missing or unknown
-commands exit 2. Help/version exit 0 without input access. Successful execution
+access. `--json`, either before or after the command, selects a structured report
+on standard output. Otherwise successful summaries use standard output and
+refusals use standard error. Recognized-command refusals exit 1; missing or unknown
+commands exit 2. Help/version remain text and exit 0 without input access. Successful execution
 requires the complete outcome, including acceptance when applicable.
+
+### Project defaults
+
+`Project::layout()` owns manifest-relative paths. A canonical `a::B` Entry maps
+to `a.B`; nonportable names and case-folded collisions refuse. The same checks
+apply to input group filenames; explicit input paths bypass the filename convention. Explicit paths
+override each input group or artifact independently and are relative to the
+invocation's working directory. Package and explicit-module modes have no project
+defaults. No command searches alternative filenames or selects a newest file.
+
+- Required proof groups use `inputs/<qualified.name>/public.json` and
+  `witness.json`. Only proving selects witness inputs.
+- Required run groups use `inputs/<qualified.name>/<Role>.json`.
+- Compilation uses `build/zkc/<qualified.name>.zkpkg`.
+- Proving writes and verification reads `build/zkc/<qualified.name>.zkproof`.
+- Runs publish values to `build/zkc/<qualified.name>.results.json`. Proof
+  commands publish named values only with explicit `--results`.
+
+`run --no-results` disables result publication and conflicts with `--results`.
+This option does not bypass native output custody checks. Requested output
+codecs are checked before execution; value-dependent encoding bounds still apply.
+
+Default output directories are created as needed. Explicit output parents must
+exist. All resolved inputs, proofs, sources, reference descriptors and policy
+files participate in the same output-alias checks, whether selected explicitly
+or by convention. Missing or malformed selected files refuse without fallback.
+`inputs check` selects the same input groups but no proof input or output paths.
+CLI path resolution and output preflight use the `invocation` report phase,
+after obtaining the selected interface and before native admission or execution.
+
+Every CLI run without `--session` draws 16 bytes from operating-system randomness
+and uses their lowercase hex spelling as its session. Failure to obtain randomness
+returns `entry-session-random`. The resolved session is reported and supplied to
+the Host once; explicit sessions remain unchanged. Typed `RunRequest` callers
+continue to supply sessions themselves.
 
 ### Input documents
 
 Input files are exact port-name maps. Proof commands take `--public=FILE` and,
 for proving only, `--witness=FILE`. Public values initialize both participant
 operands; witness maps cannot repeat public names. Independent verifiers provide
-their own public map. Run commands take `--session=LABEL` and repeat
+their own public map. Run commands optionally take `--session=LABEL` and repeat
 `--input=ROLE=FILE`; shared source ports remain separate role-local values.
 A group with no ports can omit its file. Unit and empty-product ports remain
 required even though they have no native leaves. Unknown fields, roles and
@@ -359,17 +397,31 @@ of a protocol's predicate or establish acceptance.
 
 ### Initialization and publication
 
-`init` creates `zkc.toml`, `protocol.zkc` and `main.zkc` for a minimal index echo.
-Its next commands explicitly select the created manifest.
+`new DIRECTORY` creates an absent directory. `init [DIRECTORY]` requires an
+existing directory and defaults to the current directory. Both require the
+companion compiler and create `zkc.toml`, `protocol.zkc`, `main.zkc` and input
+templates for a minimal index echo. Existing manifests and conflicting source
+files refuse without overwriting them.
+
+`prepare [ENTRY]` uses the current manifest. With no selector it plans all declared
+Entries; a library with none succeeds without publication. `Compiler::prepare`
+returns checked interfaces and template contents before any files are published.
+Planning uses the logical Interface and does not require executable lowering.
+Existing regular input files are preserved byte for byte, regardless of contents;
+symlinks, directories and other nonregular destinations refuse. Preparation
+neither migrates obsolete maps nor removes inputs of deleted Entries. `check`
+remains source-only; `inputs check` admits actual input values.
+
 `inputs init` selects one Entry and creates only its nonempty input groups under
 `inputs/<qualified.name>/` beside the manifest. Explicit-module and package modes
 require `--output=DIRECTORY`. Static products retain their schema shape; unknown
 leaves are null placeholders; prover keys show `file` and `fingerprint` placeholders.
 Non-unit null inputs return `entry-input-unfilled`. Dynamic sizes and variant alternatives are never
-guessed. No command automatically discovers witness files. Initialization never
+guessed. Verification never selects witness files. Template publication never
 replaces an existing file, including a file created after preflight. Multi-file
 publication reports exactly which files succeeded if a later publication fails.
-The report pairs generated `commands` with `requirements`: `allow_header_only`
+The `inputs init` report pairs generated `commands` with `requirements`;
+`prepare`, `new` and `init` report requirements per Entry. `allow_header_only`
 indicates explicit policy acknowledgement, and `setups` lists slots requiring
 independent `--setups` authority and `--key` material. Neither is synthesized.
 

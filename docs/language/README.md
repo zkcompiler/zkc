@@ -57,6 +57,8 @@ array lists canonical names and `run`/`proof` kinds. Selecting an Entry also
 checks its closure, Protocol IR and source correspondence. A definitions check
 alone does not establish that every specialization can compile. Neither form
 executes a protocol. `scope` distinguishes `definitions` from `entry`.
+Use `--json` to read these fields programmatically. For input templates and
+execution defaults, see the [project workflow](../runtime/entries.md#project-workflow).
 
 A selector is a qualified name or a unique short name across all captured
 modules. `compile` can omit it when exactly one Entry exists. Aliases count as

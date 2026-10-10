@@ -31,7 +31,7 @@ def build(toolchain, journal, directory, entry, flags=(), arena=None):
         f'--module=zkc::polynomial={ROOT}/libraries/zkc/polynomial.zkc',
         f'--module=example={PROJECT}/main.zkc', f'--asset=product=ring-json={arena}'])
     report = json.loads(journal.run([
-        toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}', *modules,
+        toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}', *modules,
         f'example::{entry}', f'--output={package}', *flags]))
     return package, report['package_sha256']
 
@@ -42,18 +42,18 @@ def test_expression_sumcheck_independent_proof(toolchain, journal, directory, fl
     package, pin = build(toolchain, journal, directory, 'Proof' if extension else 'BaseProof', flags)
     request = input_files(journal, 'request.json', public=values(extension))
     proof = directory / 'proof.bin'
-    produced = json.loads(journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}']))
-    checked = json.loads(journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}']))
+    produced = json.loads(journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}']))
+    checked = json.loads(journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}']))
     assert checked['status'] == 'accepted'
     assert produced['execution']['ring_work'] > checked['execution']['ring_work'] > 0
     truncated = directory / 'truncated.bin'
     truncated.write_bytes(proof.read_bytes()[:-1])
-    journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={truncated}'], refuses='proof-truncated')
+    journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={truncated}'], refuses='proof-truncated')
     altered = bytearray(proof.read_bytes())
     altered[-32] ^= 1  # A canonical coefficient change, preserving framing.
     changed = directory / 'changed.bin'
     changed.write_bytes(altered)
-    journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={changed}'], refuses='artifact-stopped')
+    journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={changed}'], refuses='artifact-stopped')
 
 
 @pytest.mark.parametrize('extension', [False, True])
@@ -65,7 +65,7 @@ def test_expression_sumcheck_interactive_fields(toolchain, journal, directory, e
             'P': {'inputs': {k: v for k, v in inputs.items() if k != 'claim'}},
             'V': {'inputs': inputs}})
     output = directory / 'output.json'
-    result = json.loads(journal.run([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={output}']))
+    result = json.loads(journal.run([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *request, f'--results={output}']))
     assert result['status'] == 'executed'
     assert json.loads(output.read_text())['roles']['V']['accepted'] is True
 
@@ -76,8 +76,8 @@ def test_expression_sumcheck_retains_zero_coefficients(toolchain, journal, direc
     package, pin = build(toolchain, journal, directory, 'Proof' if extension else 'BaseProof')
     request = input_files(journal, 'request.json', public=values(extension=extension, table=table, claim=claim))
     proof = directory / 'proof.bin'
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'])
-    checked = json.loads(journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}']))
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'])
+    checked = json.loads(journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}']))
     assert checked['status'] == 'accepted'
 
 
@@ -88,10 +88,10 @@ def test_expression_sumcheck_actual_claim_and_terminal_shape(toolchain, journal,
     proof = directory / 'proof.bin'
     if rounds == 3:
         # A third fold cannot split the final factor row into two assignments.
-        journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'], refuses='ring-input-shape')
+        journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'], refuses='ring-input-shape')
     else:
-        journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'])
-        journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}'], refuses='artifact-stopped')
+        journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'])
+        journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}'], refuses='artifact-stopped')
 
 
 def test_expression_asset_authority(toolchain, journal, directory):
@@ -101,10 +101,10 @@ def test_expression_asset_authority(toolchain, journal, directory):
     frame = json.loads(package.read_text())
     assert len(frame['assets']) == 1 and frame['assets'][0][0] == DIGEST
     assert json.loads(frame['assets'][0][1]) == json.loads((PROJECT / 'product.ring.json').read_text())
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'])
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'])
     changed_public = values(claim=101)
     changed_request = input_files(journal, 'changed-request.json', public=changed_public)
-    journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *changed_request, f'--proof={proof}'], refuses='proof-header')
+    journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *changed_request, f'--proof={proof}'], refuses='proof-header')
 
 
 
@@ -132,9 +132,9 @@ def test_expression_package_asset_refusals(toolchain, journal, directory):
         path = write(directory, f'{name}.zkpkg', frame)
         changed_pin = sha256(path.read_bytes()).hexdigest()
         proof = directory / f'{name}.proof'
-        journal.run([toolchain.runtime, 'prove', f'--package={path}', f'--sha256={changed_pin}', *request, f'--output={proof}'], refuses=reason)
+        journal.run([toolchain.runtime, '--json', 'prove', f'--package={path}', f'--sha256={changed_pin}', *request, f'--output={proof}'], refuses=reason)
         assert not proof.exists()
-        journal.run([toolchain.runtime, 'prove', f'--package={path}', f'--sha256={pin}', *request, f'--output={proof}'],
+        journal.run([toolchain.runtime, '--json', 'prove', f'--package={path}', f'--sha256={pin}', *request, f'--output={proof}'],
                     refuses='entry-package-identity')
 
 
@@ -149,8 +149,8 @@ def test_expression_dimensions_and_degree_follow_captured_contents(toolchain, jo
     claim = sum(table[i] * table[i + 1] * table[i + 2] for i in range(0, 12, 3))
     request = input_files(journal, 'cubic-request.json', public=values(table=table, claim=claim))
     proof = directory / 'cubic.proof'
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'])
-    result = json.loads(journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}']))
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'])
+    result = json.loads(journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}']))
     assert result['status'] == 'accepted'
 
 
@@ -170,8 +170,8 @@ def test_compiler_asset_sharing_reduces_work_without_changing_sumcheck(toolchain
         package, pin = build(toolchain, journal, directory, 'Proof', arena=path)
         identities.append(json.loads(package.read_text())['assets'][0][0])
         proof = directory / f'{name}.proof'
-        produced = json.loads(journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}']))
-        verified = json.loads(journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}']))
+        produced = json.loads(journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}']))
+        verified = json.loads(journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}']))
         assert verified['status'] == 'accepted'
         results.append((produced['execution']['ring_work'], verified['execution']['ring_work']))
     assert identities[0] != identities[1]

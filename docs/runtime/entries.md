@@ -10,19 +10,22 @@ Keep reusable protocols in libraries or `protocol.zkc`, concrete Entries in
 allows protocols and Entries in the same file.
 
 ```sh
-zkc init my-project
+zkc new my-project
 cd my-project
 zkc check
-zkc inspect
-zkc inputs init
+# Edit the source, then prepare any new input files.
+zkc prepare
 ```
 
-The scaffold contains an index echo protocol. Fill `inputs/example.Main/P.json`
+`new` creates a directory; `init` initializes an existing directory (the current
+directory by default). Both create an index echo protocol, its Entry and an input
+template. They refuse an existing project or conflicting files.
+Fill `inputs/example.Main/P.json`
 with `{"value":"7"}`, then run:
 
 ```sh
-zkc inputs check --operation=run --session=example --input=P=inputs/example.Main/P.json
-zkc run --session=example --input=P=inputs/example.Main/P.json --results=results.json
+zkc inputs check --operation=run
+zkc run
 ```
 
 Commands discover the nearest `zkc.toml`. Use `--project=FILE` to select another
@@ -31,13 +34,20 @@ project, or explicit `--module=NAME=FILE` and `--asset=NAME=FORMAT=FILE` mapping
 from absolute directories in trusted `PATH`. Execution compiles in memory and
 reports the resulting package identity. It does not publish an intermediate package.
 
+`check` checks source without requiring input values. `prepare` checks input
+interfaces and creates missing templates for all Entries, or one named Entry.
+It preserves existing regular files byte for byte, including stale or unfilled
+ones. It does not validate or migrate their contents. After changing a port,
+update its input map or remove that file and run `prepare` again. Use `inspect`
+for the current schema and `inputs check` to validate actual values.
+
 With several Entries, supply a unique short name or `module::Name`:
 
 ```sh
-zkc inputs init example::Proof
-zkc prove example::Proof --public=inputs/example.Proof/public.json \
-  --witness=inputs/example.Proof/witness.json --output=proof.bin
-zkc verify example::Proof --public=inputs/example.Proof/public.json --proof=proof.bin
+zkc prepare example::Proof
+# Fill the generated public and witness maps.
+zkc prove example::Proof
+zkc verify example::Proof
 ```
 
 Omitted names require one eligible Entry: `run` considers run Entries;
@@ -45,11 +55,39 @@ Omitted names require one eligible Entry: `run` considers run Entries;
 and `inputs init` consider both kinds. An explicitly ambiguous short name
 requires qualification. A unique Entry of the wrong kind is an error.
 
-`inputs init` creates only required files, never overwrites them, and selects
-one Entry per call. Null leaves are unfilled placeholders, except for actual
-unit values. It does not invent dynamic lengths or choose variant cases.
-Its report includes command arguments and additional `requirements`: an authored
-proof needs explicit `--allow-header-only`, and each setup slot needs independent
+### Paths and sessions
+
+| Purpose | Default beside `zkc.toml` | Override |
+|---|---|---|
+| Proof public inputs | `inputs/<qualified.name>/public.json` | `--public=FILE` |
+| Prover witness inputs | `inputs/<qualified.name>/witness.json` | `--witness=FILE` |
+| Run participant inputs | `inputs/<qualified.name>/<Role>.json` | `--input=ROLE=FILE` |
+| Compiled package | `build/zkc/<qualified.name>.zkpkg` | `--output=FILE` |
+| Produced or verified proof | `build/zkc/<qualified.name>.zkproof` | `--output=FILE` / `--proof=FILE` |
+| Run output values | `build/zkc/<qualified.name>.results.json` | `--results=FILE` |
+
+For `example::Proof`, the qualified filename is `example.Proof`. Explicit paths
+are relative to the working directory and override only that group or artifact.
+Missing or malformed selected files fail; there is no search for alternate files.
+Default output directories are created as needed. Prove and verify write named
+output values only when `--results` is supplied.
+For a run that needs no result file, use `--no-results`; it conflicts with
+`--results`. This also allows execution when a returned value has no file codec.
+
+Package and explicit-module modes require explicit input paths and proof paths;
+they do not borrow defaults from a nearby project. A run without `--session`
+receives a fresh random session identifier, shown in its report. An explicit
+session is used exactly as supplied; callers are responsible for its freshness.
+
+### Input templates
+
+`inputs init` is the lower-level, single-Entry template command. It accepts an
+explicit output directory and refuses existing files. `prepare` is the usual
+project command. Both create only required groups. Null leaves are unfilled
+placeholders, except for actual unit values. Neither command invents dynamic
+lengths or chooses variant cases. `inputs init` reports suggested command arguments.
+All initialization commands report additional `requirements`: an authored proof
+needs explicit `--allow-header-only`, and each setup slot needs independent
 `--setups` authority and `--key` material. Initialization never grants those permissions.
 `inspect` describes the schema, choices and whether each input has an installed
 constructor. `inputs check --operation=...`
@@ -63,7 +101,7 @@ Input files are plain maps with exact source port names. Proofs have one public
 map and a separate prover witness map. Verification accepts no witness file.
 Runs use `--input=ROLE=FILE` for each role with inputs; omitted empty groups are
 filled automatically. A shared source port remains a separate role-local input
-in a run. Files are always selected explicitly, with no implicit witness lookup.
+in a run. Project paths follow the table above; verification never opens a witness map.
 
 | Source value | JSON |
 |---|---|
@@ -128,14 +166,22 @@ authorizes incoming PCS values. Material does not establish its own authority.
 
 ## Reports and Rust applications
 
-Standard output contains outcomes, resource use, stops and publication results.
+Commands print a human-readable summary by default; refusals go to standard
+error. Use `--json` for a structured report on standard output, including outcomes,
+resource use, stops and publication results. Help and version remain text.
+Proof commands report the proof's SHA-256 as well as the package identity.
 `--results=FILE` writes readable named values using `zkc.entry-outputs/0`.
 [Publication](../spec/runtime/publication.md) defines bounds, protected paths,
 per-file replacement and partial publication reports. Failures never trigger
 automatic reexecution.
+An encoding or staging failure preserves previous files; a later `verify` still
+reads the selected existing proof. Check the command outcome and reported digest.
 
 The public `project::{Project, Compiler, Selection}` API resolves source projects
-and returns checked interfaces or packages. `entry::Interface` describes logical
+and returns checked interfaces or packages. `Project::layout()` supplies standard
+paths. `Compiler::prepare()` returns a `Preparation` of checked interfaces and
+`Template` files; the CLI publishes it through the common Host.
+`entry::Interface` describes logical
 inputs; `BoundInterface` ties that view to a package. `entry::inputs::Decoder`
 accepts readable maps, with an optional explicit file resolver. Typed applications
 can construct `RoleInputs`, `RunRequest` and `ProofRequest` directly and invoke

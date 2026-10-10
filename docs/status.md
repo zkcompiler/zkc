@@ -37,10 +37,13 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 `zkc.toml` supplies the module/asset map; the CLI discovers the nearest manifest.
 Commands accept unique short or qualified Entry names. Execution filters omitted
 names by run/proof kind; inspection and compilation require a single Entry.
-`init` creates separate protocol and Entry files; `inputs init` creates required
-readable maps per Entry. `inputs check` shares native preparation without
+`new` and `init` create separate protocol and Entry files with input templates;
+`prepare` creates missing maps while preserving existing values. Manifest-relative
+paths supply omitted inputs, proof files and run results. Runs obtain a fresh
+session unless supplied explicitly. `inputs check` shares native preparation without
 execution. Source execution compiles in memory; pinned package mode is explicit.
-The public Rust `project` API owns project and compiler access.
+The public Rust `project` API owns project/compiler access, path layout and
+preparation plans. Commands print human summaries; automation uses `--json`.
 `zkc check` reports canonical Entry names and checks definitions without selection; a positional Entry selector also checks closure
 and mathematical correspondence. `zkc check` and `compile` accept explicit
 [project manifests](language/README.md#project-inputs) or module/asset maps.

@@ -16,7 +16,7 @@ FIXTURES = ROOT / 'compiler/test/fixtures/language'
 
 def compile_entry(toolchain, journal, directory, entry, source=None):
     package = directory / f'{entry}.zkpkg'
-    args = [toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+    args = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
             f'--module=sample={source or FIXTURES / "attempts.zkc"}',
             f'sample::{entry}', f'--output={package}']
     report = json.loads(journal.run(args))
@@ -42,9 +42,9 @@ def test_independent_named_proof_calls(toolchain, journal, directory, entry, sui
     results = directory / 'results.json'
     target = [f'--package={package}', f'--sha256={pin}']
     flags = ['--allow-header-only'] if entry == 'Plain' else []
-    proving = [toolchain.runtime, 'prove', *target, f'--witness={witness}', f'--output={proof}', *flags]
+    proving = [toolchain.runtime, '--json', 'prove', *target, f'--witness={witness}', f'--output={proof}', *flags]
     def verify(path=proof, *extra):
-        return [toolchain.runtime, 'verify', *target, f'--proof={path}', *flags, *extra]
+        return [toolchain.runtime, '--json', 'verify', *target, f'--proof={path}', *flags, *extra]
     if entry == 'Plain':
         journal.run(proving[:-1], refuses='entry-proof-binding-policy')
     produced = journal.json([*proving, f'--results={results}'])
@@ -94,13 +94,13 @@ def test_independent_named_proof_calls(toolchain, journal, directory, entry, sui
     assert proof.read_bytes() == sentinel
     witness.write_text('{"done":true,"done":false}')
     journal.run(proving, refuses='entry-request-format')
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={"00" * 32}',
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={"00" * 32}',
                  f'--witness={witness}', f'--output={proof}', *flags], refuses='entry-package-identity')
     write(witness, {'done': True})
     if entry == 'Derived':
         journal.run([*proving, '--transcript-budget=0'], refuses='exhausted:resource-budget')
     failed_publication = journal.json([*proving, f'--results={directory / "missing" / "results"}'], refuses='entry-output-path')
-    assert failed_publication['phase'] == 'arguments' and 'execution' not in failed_publication
+    assert failed_publication['phase'] == 'invocation' and 'execution' not in failed_publication
     assert proof.read_bytes() == sentinel
 
 
@@ -108,7 +108,7 @@ def test_named_run_defaults_and_private_result_files(toolchain, journal, directo
     package, pin = compile_entry(toolchain, journal, directory, 'Run')
     inputs = write(directory / 'P.json', {'done': True})
     outputs = directory / 'outputs.json'
-    command = [toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}',
+    command = [toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}',
                '--session=cli_controls', f'--input=P={inputs}', f'--results={outputs}']
     report = journal.json(command)
     assert report['status'] == 'executed'
@@ -133,7 +133,7 @@ def test_aggregate_file_roundtrip_and_schema_refusals(toolchain, journal, direct
         '1': [False, None], '2': ['13', '17']}}, 'marker': True}
     inputs = write(directory / 'P.json', {'payload': payload, 'empty': None})
     results = directory / 'results.json'
-    command = [toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}',
+    command = [toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}',
                '--session=aggregate_files', f'--input=P={inputs}', f'--results={results}']
     journal.run(command)
     outputs = json.loads(results.read_text())['roles']
@@ -159,17 +159,17 @@ def test_generated_bindings_are_an_independent_rust_consumer(toolchain, journal,
     collision.write_text('module p;pub struct Outputs {pub flag:bool}')
     shapes_package = shapes_dir / 'Demo.zkpkg'
     shapes_report = json.loads(journal.run([
-        toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
         f'--module=sample={FIXTURES / "host_bindings.zkc"}', f'--module=p={collision}',
         'sample::Demo', f'--output={shapes_package}',
     ]))
     shapes_pin = shapes_report['package_sha256']
     pcs_package, pcs_pin = compile_entry(toolchain, journal, directory, 'Prove', FIXTURES / 'pcs_setup.zkc')
     for name, package, pin in [('run', run_package, run_pin), ('proof', proof_package, proof_pin), ('shapes', shapes_package, shapes_pin), ('pcs', pcs_package, pcs_pin)]:
-        journal.run([toolchain.runtime, 'bindings', f'--package={package}', f'--sha256={pin}', f'--output={directory / f'{name}.rs'}'])
+        journal.run([toolchain.runtime, '--json', 'bindings', f'--package={package}', f'--sha256={pin}', f'--output={directory / f'{name}.rs'}'])
     original = run_package.read_bytes()
-    journal.run([toolchain.runtime, 'bindings', f'--package={run_package}', f'--sha256={run_pin}', f'--output={run_package}'], refuses='entry-output-path')
-    journal.run([toolchain.runtime, 'bindings', f'--package={run_package}', f'--sha256={run_pin}', f'--output={directory / 'unused.rs'}', '--setups=missing'], refuses='cli-option')
+    journal.run([toolchain.runtime, '--json', 'bindings', f'--package={run_package}', f'--sha256={run_pin}', f'--output={run_package}'], refuses='entry-output-path')
+    journal.run([toolchain.runtime, '--json', 'bindings', f'--package={run_package}', f'--sha256={run_pin}', f'--output={directory / 'unused.rs'}', '--setups=missing'], refuses='cli-option')
     assert run_package.read_bytes() == original
     # This is a consumer crate, not a module compiled under zkc-tools internals.
     (directory / 'Cargo.toml').write_text(f'''[package]
@@ -300,7 +300,7 @@ def test_input_numbers_keep_their_json_shape(toolchain, journal, directory):
     source.write_text("module sample; protocol Index roles(P)(n:index@P)->(n:index@P){return(n=n);} run Demo=Index;")
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
     inputs = write(directory / 'P.json', {'n': '7'})
-    command = [toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}',
+    command = [toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}',
                '--session=index_files', f'--input=P={inputs}']
     journal.run(command)
     for value in [7, {'$serde_json::private::Number': '7'}, '07', '+7', '18446744073709551616']:
@@ -317,10 +317,10 @@ def test_file_jobs_refuse_unconnected_streams(toolchain, journal, directory):
     fifo = directory / 'fifo'
     os.mkfifo(fifo)
     # There is no writer. Refusal precedes any protocol resource issuance.
-    report = json.loads(journal.run([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', '--session=fifo', f'--input=P={fifo}'],
+    report = json.loads(journal.run([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', '--session=fifo', f'--input=P={fifo}'],
                                    refuses='entry-input-document', timeout=10))
     assert report['phase'] == 'inputs' and 'execution' not in report
-    journal.run([toolchain.runtime, 'run', f'--package={fifo}', f'--sha256={pin}', '--session=fifo', f'--input=P={fifo}'], refuses='artifact-io', timeout=10)
+    journal.run([toolchain.runtime, '--json', 'run', f'--package={fifo}', f'--sha256={pin}', '--session=fifo', f'--input=P={fifo}'], refuses='artifact-io', timeout=10)
 
 
 def test_bindings_refuse_outputs_without_host_export(toolchain, journal, directory):
@@ -332,10 +332,10 @@ def test_bindings_refuse_outputs_without_host_export(toolchain, journal, directo
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
     bindings = directory / 'bindings.rs'
     bindings.write_bytes(b'unchanged')
-    journal.run([toolchain.runtime, 'bindings', f'--package={package}', f'--sha256={pin}', f'--output={bindings}'],
+    journal.run([toolchain.runtime, '--json', 'bindings', f'--package={package}', f'--sha256={pin}', f'--output={bindings}'],
                 refuses='entry-output-custody')
     assert bindings.read_bytes() == b'unchanged'
-    journal.run([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', '--session=restricted'],
+    journal.run([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', '--session=restricted'],
                 refuses='entry-output-custody')
 
 
@@ -350,7 +350,7 @@ def test_compilation_preserves_the_selected_executable(toolchain, journal, direc
     original = compiler.read_bytes()
     for selected, output in [(compiler, compiler), (alias, compiler), (alias, alias),
                              (compiler, alias)]:
-        journal.run([toolchain.runtime, 'compile', 'sample::Derived',
+        journal.run([toolchain.runtime, '--json', 'compile', 'sample::Derived',
                      f'--module=sample={FIXTURES / "attempts.zkc"}', f'--compiler={selected}',
                      f'--output={output}'], refuses='entry-output-path')
         assert compiler.read_bytes() == original and alias.is_symlink()
@@ -362,7 +362,7 @@ def test_compiler_failures_are_bounded_and_do_not_publish(toolchain, journal, di
     compiler.chmod(0o755)
     output = directory / 'existing.zkpkg'
     output.write_bytes(b'unchanged')
-    args = [toolchain.runtime, 'compile', 'sample::Derived',
+    args = [toolchain.runtime, '--json', 'compile', 'sample::Derived',
             f'--module=sample={FIXTURES / "attempts.zkc"}', f'--output={output}']
     report = json.loads(journal.run([*args, f'--compiler={compiler}'], refuses='source-compilation'))
     assert report['diagnostics_truncated'] and len(report['diagnostics']) == 65536
@@ -379,11 +379,11 @@ def test_proof_file_public_inputs_are_authoritative(toolchain, journal, director
     producer = input_files(journal, (directory / 'producer.json').name, public={'tag': True}, witness={'done': True})
     verifier = input_files(journal, (directory / 'verifier.json').name, public={'tag': True})
     proof = directory / 'proof.bin'
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
-    verifying = [toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}']
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
+    verifying = [toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}']
     journal.run(verifying)
     witness = write(directory / 'duplicate-public.json', {'done': True, 'tag': True})
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}',
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}',
                  f'--public={directory / "producer.public.json"}', f'--witness={witness}',
                  f'--output={proof}'], refuses='entry-input-names')
     journal.run([*verifying, f'--witness={witness}'], refuses='cli-option')
@@ -392,7 +392,7 @@ def test_proof_file_public_inputs_are_authoritative(toolchain, journal, director
     write(directory / 'verifier.public.json', {'tag': False})
     journal.run(verifying, refuses='proof-header')
     original = source.read_bytes()
-    journal.run([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+    journal.run([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                  f'--module=sample={source}', 'sample::Derived', f'--output={source}'],
                 refuses='entry-output-path')
     assert source.read_bytes() == original
@@ -401,7 +401,7 @@ def test_proof_file_public_inputs_are_authoritative(toolchain, journal, director
 def test_compiler_lookup_and_positional_arguments(toolchain, journal, directory):
     source = directory / 'source.zkc'
     source.write_text('module sample; protocol Run roles(P)(b:bool@P)->(b:bool@P){return(b=b);} run Demo=Run;')
-    args = [toolchain.runtime, 'compile', '--module=sample=source.zkc', 'sample::Demo', '--output=demo.zkpkg']
+    args = [toolchain.runtime, '--json', 'compile', '--module=sample=source.zkc', 'sample::Demo', '--output=demo.zkpkg']
     env = dict(os.environ, PATH=str(toolchain.compiler.parent))
     result = journal.attempt(args, cwd=directory, env=env)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -424,7 +424,7 @@ def test_compiler_lookup_and_positional_arguments(toolchain, journal, directory)
         assert result.returncode == 1 and json.loads(result.stdout)['code'] == 'source-compiler-missing'
     package = directory / 'demo.zkpkg'
     for command in ('prove', 'bindings'):
-        args = [toolchain.runtime, command, package, report['package_sha256']]
+        args = [toolchain.runtime, '--json', command, package, report['package_sha256']]
         if command == 'prove':
             args.append('request.json')
         journal.run(args, refuses='cli-usage')
@@ -451,18 +451,18 @@ proof Demo=Run{prover P;verifier V;public{};accept accepted;construction authore
     proof = directory / 'proof.bin'
     results = directory / 'results.json'
     results.write_bytes(b'unchanged')
-    baseline = json.loads(journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', '--allow-header-only']))
+    baseline = json.loads(journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', '--allow-header-only']))
     accepted_proof = proof.read_bytes()
     proof.write_bytes(b'existing proof')
     limits = baseline['capacity']
     limits[3] = '64'
     capacity = write(directory / 'capacity.json', limits)
-    report = json.loads(journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', '--allow-header-only', f'--capacity={capacity}', f'--results={results}'], refuses='entry-output-encoding'))
+    report = json.loads(journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', '--allow-header-only', f'--capacity={capacity}', f'--results={results}'], refuses='entry-output-encoding'))
     assert report['phase'] == 'results' and not report.get('proof_published', False)
     assert proof.read_bytes() == b'existing proof'
     assert results.read_bytes() == b'unchanged'
     proof.write_bytes(accepted_proof)
-    journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}', '--allow-header-only', f'--results={results}'])
+    journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}', '--allow-header-only', f'--results={results}'])
     assert json.loads(results.read_text())['values']['accepted'] is True
 
 
@@ -473,14 +473,14 @@ def test_interface_publication_and_host_share_resource_boundaries(toolchain, jou
         return f'module sample;protocol Run roles(P)({ports})->(){{return();}}run Demo=Run;'
     source.write_text(program(7))
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
-    journal.run([toolchain.runtime, 'bindings', f'--package={package}', f'--sha256={pin}', f'--output={directory / 'bindings.rs'}'])
+    journal.run([toolchain.runtime, '--json', 'bindings', f'--package={package}', f'--sha256={pin}', f'--output={directory / 'bindings.rs'}'])
     request = input_files(journal, (directory / 'inputs.json').name, session='bounded_interface', roles={'P': {'inputs': {f'a{i}': [None] * 1024 for i in range(7)}}})
-    executed = json.loads(journal.run([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', *request]))
+    executed = json.loads(journal.run([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *request]))
     assert executed['status'] == 'executed'
     source.write_text(program(9))
     refused = directory / 'oversized.zkpkg'
     result = json.loads(journal.run([
-        toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
         f'--module=sample={source}', 'sample::Demo', f'--output={refused}',
     ], refuses='source-compilation'))
     assert 'source.limit' in result['diagnostics']
@@ -491,7 +491,7 @@ def test_interface_publication_and_host_share_resource_boundaries(toolchain, jou
 def test_inspect_authenticates_without_execution(toolchain, journal, directory, entry, kind):
     package, pin = compile_entry(toolchain, journal, directory, entry)
     sentinel = package.read_bytes()
-    report = journal.json([toolchain.runtime, 'inspect', f'--package={package}', f'--sha256={pin}'])
+    report = journal.json([toolchain.runtime, '--json', 'inspect', f'--package={package}', f'--sha256={pin}'])
     assert report['format'] == 'zkc.entry-inspection/0' and report['status'] == 'inspected'
     assert report['phase'] == 'complete' and report['package_sha256'] == pin
     interface = report['interface']
@@ -510,12 +510,12 @@ def test_inspect_authenticates_without_execution(toolchain, journal, directory, 
     else:
         assert interface['proof'] is None
     assert 'execution' not in report and 'capacity' not in report
-    refused = journal.json([toolchain.runtime, 'inspect', f'--package={package}', f'--sha256={'0' * 64}'],
+    refused = journal.json([toolchain.runtime, '--json', 'inspect', f'--package={package}', f'--sha256={'0' * 64}'],
                            refuses='entry-package-identity')
     assert 'interface' not in refused
     assert package.read_bytes() == sentinel
     missing = directory / 'missing.zkpkg'
-    refused = journal.json([toolchain.runtime, 'inspect', f'--package={missing}', f'--sha256={pin}', '--results=unused'],
+    refused = journal.json([toolchain.runtime, '--json', 'inspect', f'--package={missing}', f'--sha256={pin}', '--results=unused'],
                            refuses='cli-option')
     assert refused['phase'] == 'arguments' and refused['message']
     assert not (directory / 'unused').exists()
@@ -526,7 +526,7 @@ def test_run_work_limits_apply_and_configuration_files_are_protected(toolchain, 
     inputs = input_files(journal, (directory / 'inputs.json').name, session='limited', roles={'P': {'inputs': {'done': True}}, 'V': {'inputs': {}}})
     limits = write(directory / 'limits.json', ['zkc.bundle-limits/0', '0', '1024', '1024', '100000'])
     sentinel = limits.read_bytes()
-    command = [toolchain.runtime, 'run', f'--limits={limits}', f'--package={package}', f'--sha256={pin}', *inputs]
+    command = [toolchain.runtime, '--json', 'run', f'--limits={limits}', f'--package={package}', f'--sha256={pin}', *inputs]
     refused = journal.json(command, refuses='entry-run-incomplete')
     assert refused['phase'] == 'execution'
     journal.run([*command, f'--results={limits}'], refuses='entry-output-path')
@@ -553,8 +553,8 @@ proof Proof=Check{{prover P;verifier V;public{{}};accept accepted;construction a
     producer = input_files(journal, (directory / 'producer.json').name, public={}, witness={'produce': True, 'accept': True})
     verifier = input_files(journal, (directory / 'verifier.json').name, public={}, witness={})
     proof = directory / 'proof.bin'
-    proving = [toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', '--allow-header-only']
-    verifying = [toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}', '--allow-header-only']
+    proving = [toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', '--allow-header-only']
+    verifying = [toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}', '--allow-header-only']
     assert journal.json(proving)['status'] == 'produced'
     assert journal.json(verifying)['status'] == 'accepted'
     input_files(journal, 'producer', public={}, witness={'produce': True, 'accept': False})

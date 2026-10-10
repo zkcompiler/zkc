@@ -1,6 +1,7 @@
 //! Thin command orchestration over project compilation and the shared Entry Host.
 mod initialize;
 mod inputs;
+mod invocation;
 mod target;
 use super::{
     AttemptOptions, BindingPolicy, BindingScope, BoundInterface, Interface, Package, ProofEntry,
@@ -17,13 +18,14 @@ use crate::{
 };
 use inputs::{Operation, Options, Request};
 use serde_json::{Value as Json, json};
+use sha2::{Digest, Sha256};
 use target::Target;
 type Result<T> = std::result::Result<T, String>;
 
 pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
     let format = match command {
         "inspect" => "zkc.entry-inspection/0",
-        "inputs init" | "init" => "zkc.project-init/0",
+        "inputs init" | "init" | "new" | "prepare" => "zkc.project-init/0",
         _ => "zkc.entry-result/0",
     };
     let mut report = json!({"format":format,"status":"refused","phase":"arguments"});
@@ -33,8 +35,11 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
     report
 }
 fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()> {
-    if command == "init" {
-        return initialize::project(args, report);
+    if matches!(command, "init" | "new") {
+        return initialize::project(command, args, report);
+    }
+    if command == "prepare" {
+        return initialize::prepare(args, report);
     }
     Target::validate(args)?;
     let checking = command == "inputs check";
@@ -53,27 +58,7 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
     if command == "bindings" && !args.has("--output") {
         return Err("cli-usage".into());
     }
-    let mut protected = Vec::new();
-    for &(key, value) in &args.options {
-        let value = value.unwrap_or("");
-        match key {
-            "--setups" | "--capacity" | "--limits" | "--public" | "--witness" | "--proof" => {
-                protected.push(value)
-            }
-            "--input" | "--key" => protected.push(inputs::assignment(value)?.1),
-            _ => {}
-        }
-    }
-    let outputs: Vec<_> = if command == "inputs init" {
-        vec![]
-    } else {
-        [args.value("--output"), args.value("--results")]
-            .into_iter()
-            .flatten()
-            .collect()
-    };
-    let mut destinations = Outputs::new(&outputs, &protected)?;
-    let target = Target::load(args, &mut destinations, report)?;
+    let target = Target::load(args, report)?;
     let name = args.positional.first().copied();
     if matches!(command, "inspect" | "inputs init") {
         report["phase"] = json!("interface");
@@ -87,11 +72,13 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
         report["phase"] = json!("complete");
         return Ok(());
     }
-    let mut options = Options::parse(args)?;
     report["phase"] = json!("compilation");
     let package = target.compile(name, operation.map(Operation::kind), report)?;
     if command == "bindings" {
         let source = super::bindings::rust(&package)?;
+        let mut destinations = Outputs::new(&[args.value("--output").unwrap()], &[])?;
+        target.protect(&mut destinations)?;
+        invocation::protect_options(args, &mut destinations)?;
         report["phase"] = json!("publication");
         destinations.publish(&[("bindings", source.as_bytes())], report)?;
         report["status"] = json!("generated");
@@ -99,6 +86,17 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
         return Ok(());
     }
     let operation = operation.expect("execution command");
+    let view = BoundInterface::read(&package).map_err(|e| e.to_string())?;
+    report["entry"] = json!(view.entry());
+    report["phase"] = json!("invocation");
+    let layout = match &target {
+        Target::Project(source) => source.project.layout(),
+        Target::Package { .. } => None,
+    };
+    let invocation =
+        invocation::Invocation::resolve(&view, layout.as_ref(), args, operation, checking, report)?;
+    let mut destinations = invocation.destinations(&target, args)?;
+    let mut options = Options::parse(args)?;
     report["setups"] = json!(
         options
             .setups
@@ -111,11 +109,17 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
     let mut documents = files::Documents::new(options.proof.capacity)?;
     if operation == Operation::Run {
         let host = RunEntry::admit(package, options.run, options.setups.clone())?;
+        invocation.check_results(host.output_types())?;
         report["entry"] = json!(host.interface().entry());
         report["capacity"] = host.limits().capacity.record();
         report["phase"] = json!("inputs");
-        let Request::Run(request) =
-            options.request(host.interface(), args, operation, &mut documents, report)?
+        let Request::Run(request) = options.request(
+            host.interface(),
+            &invocation,
+            operation,
+            &mut documents,
+            report,
+        )?
         else {
             unreachable!()
         };
@@ -127,7 +131,7 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
             let mut imports = crate::host::setups::VerifierKeys::new(
                 host.limits().capacity.backend().ark_bounds(),
             );
-            let output_setups = if args.has("--results") {
+            let output_setups = if invocation.results.is_some() {
                 files::output_setups_with(
                     &request.setups,
                     &options.setups,
@@ -150,7 +154,7 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
                     .failure
                     .unwrap_or_else(|| "entry-run-incomplete".into())
             })?;
-            if args.has("--results") {
+            if invocation.results.is_some() {
                 report["phase"] = json!("results");
                 let encoded = files::run_outputs(&outputs, host.limits().capacity, output_setups)?;
                 report["phase"] = json!("publication");
@@ -160,6 +164,14 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
         }
     } else {
         let host = ProofEntry::admit(package, options.proof, options.setups.clone())?;
+        invocation.check_results(
+            host.output_types(if operation == Operation::Prove {
+                ProofOperation::Prove
+            } else {
+                ProofOperation::Verify
+            })
+            .iter(),
+        )?;
         report["entry"] = json!(host.interface().entry());
         report["binding_scope"] = json!(match host.binding_scope() {
             BindingScope::Transcript => "transcript",
@@ -167,8 +179,13 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
         });
         report["capacity"] = options.proof.capacity.record();
         report["phase"] = json!("inputs");
-        let Request::Proof(request) =
-            options.request(host.interface(), args, operation, &mut documents, report)?
+        let Request::Proof(request) = options.request(
+            host.interface(),
+            &invocation,
+            operation,
+            &mut documents,
+            report,
+        )?
         else {
             unreachable!()
         };
@@ -188,7 +205,7 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
             let mut imports = crate::host::setups::VerifierKeys::new(
                 options.proof.capacity.backend().ark_bounds(),
             );
-            let output_setups = if args.has("--results") {
+            let output_setups = if invocation.results.is_some() {
                 files::output_setups_with(
                     &request.setups,
                     &options.setups,
@@ -200,12 +217,20 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
             };
             let proof = if operation == Operation::Verify {
                 Some(read(
-                    args.value("--proof").unwrap(),
+                    invocation
+                        .proof
+                        .as_ref()
+                        .unwrap()
+                        .to_str()
+                        .ok_or("entry-input-document")?,
                     crate::proof::MAX_PROOF_BYTES,
                 )?)
             } else {
                 None
             };
+            if let Some(bytes) = &proof {
+                report["proof_sha256"] = json!(hex(&Sha256::digest(bytes)));
+            }
             let result =
                 host.execute_with(request, proof.as_deref(), options.attempts, &mut imports)?;
             report["phase"] = json!("execution");
@@ -219,7 +244,9 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
             let proof = (operation == Operation::Prove)
                 .then(|| result.native.outcome.as_ref().unwrap().as_slice());
             publish_proof(&destinations, proof, report, || {
-                args.has("--results")
+                invocation
+                    .results
+                    .is_some()
                     .then(|| {
                         files::proof_outputs(
                             result.outputs.as_ref().unwrap(),
@@ -251,6 +278,7 @@ fn publish_proof(
     let mut publications = Vec::new();
     if let Some(proof) = proof {
         report["proof_bytes"] = json!(proof.len());
+        report["proof_sha256"] = json!(hex(&Sha256::digest(proof)));
         publications.push(("proof", proof));
     }
     if let Some(values) = &values {

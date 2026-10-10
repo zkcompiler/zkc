@@ -9,14 +9,12 @@ The [walkthrough](../../../docs/getting-started.md) runs `Proof`. To select a jo
 interactive run from the repository root, with built tools on `PATH`:
 
 ```sh
-zkc run example::Interactive --project=examples/projects/schnorr/zkc.toml \
-  --session=schnorr \
-  --input=P=examples/projects/schnorr/inputs/example.Interactive/P.json \
-  --input=V=examples/projects/schnorr/inputs/example.Interactive/V.json \
-  --results=results.json
+zkc run --project=examples/projects/schnorr/zkc.toml
 ```
 
-The returned `V.accepted` is the verifier's decision; a completed run can return false.
+The command selects the unique run Entry, reads its participant maps and writes
+`build/zkc/example.Interactive.results.json` beside the manifest. The returned
+`V.accepted` is the verifier's decision; a completed run can return false.
 The inputs use the public demonstration witness 3. Scalars are decimal strings; group values contain canonical element bytes.
 
 The relation and target retain the statement/witness association for analysis.

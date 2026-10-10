@@ -77,7 +77,7 @@ class Client:
     def __init__(self, toolchain, journal, directory, entry, flags=()):
         self.tools, self.journal, self.directory = toolchain, journal, directory
         self.package = directory / f'{entry}.zkpkg'
-        report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                                f'--project={PROJECT}/zkc.toml',
                                f'imported_air::{entry}', f'--output={self.package}', *flags])
         self.pin = report['package_sha256']
@@ -85,7 +85,7 @@ class Client:
     def run(self, name, request, refuses=None):
         path = input_files(self.journal, name, roles={'Evaluator': {'inputs': request}})
         output = self.directory / f'{name}.outputs.json'
-        command = [self.tools.runtime, 'run', f'--package={self.package}', f'--sha256={self.pin}', *path, f'--results={output}']
+        command = [self.tools.runtime, '--json', 'run', f'--package={self.package}', f'--sha256={self.pin}', *path, f'--results={output}']
         report = self.journal.json(command, cwd=ROOT, refuses=refuses)
         if refuses:
             assert report['status'] == 'refused'
@@ -312,8 +312,8 @@ def test_disclosed_trace_proof_uses_verifier_data_and_packaged_relation(
     producer = input_files(journal, 'producer.json', public=public, witness={'trace': inputs['trace']})
     verifier = input_files(journal, 'verifier.json', public=public)
     proof = directory / 'trace.bin'
-    journal.json([toolchain.runtime, 'prove', f'--package={client.package}', f'--sha256={client.pin}', *producer, f'--output={proof}', '--allow-header-only'])
-    result = journal.json([toolchain.runtime, 'verify', f'--package={client.package}', f'--sha256={client.pin}', *verifier, f'--proof={proof}', '--allow-header-only'])
+    journal.json([toolchain.runtime, '--json', 'prove', f'--package={client.package}', f'--sha256={client.pin}', *producer, f'--output={proof}', '--allow-header-only'])
+    result = journal.json([toolchain.runtime, '--json', 'verify', f'--package={client.package}', f'--sha256={client.pin}', *verifier, f'--proof={proof}', '--allow-header-only'])
     assert result['status'] == 'accepted'
     package = json.loads(client.package.read_text())
     interface = json.loads(package['interface'])
@@ -328,8 +328,8 @@ def test_disclosed_trace_proof_uses_verifier_data_and_packaged_relation(
     bad_trace = maintained('trace-changed-trace')['trace']
     producer = input_files(journal, 'invalid-producer.json', public=public, witness={'trace': bad_trace})
     invalid = directory / 'invalid-trace.bin'
-    journal.json([toolchain.runtime, 'prove', f'--package={client.package}', f'--sha256={client.pin}', *producer, f'--output={invalid}', '--allow-header-only'])
-    journal.json([toolchain.runtime, 'verify', f'--package={client.package}', f'--sha256={client.pin}', *verifier, f'--proof={invalid}', '--allow-header-only'], refuses='artifact-rejected')
+    journal.json([toolchain.runtime, '--json', 'prove', f'--package={client.package}', f'--sha256={client.pin}', *producer, f'--output={invalid}', '--allow-header-only'])
+    journal.json([toolchain.runtime, '--json', 'verify', f'--package={client.package}', f'--sha256={client.pin}', *verifier, f'--proof={invalid}', '--allow-header-only'], refuses='artifact-rejected')
 
 
 @pytest.mark.parametrize('extra', ['table', 'channel'])
@@ -345,7 +345,7 @@ def test_reference_protocol_refuses_relations_with_additional_obligations(
     else:
         bundle[2].append(['extra', 'field-balance', ['koala-bear'], 'koala-bear'])
     asset = journal.write(f'{extra}.bundle.json', bundle)
-    journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
         f'--module=imported_air={PROJECT}/main.zkc',
         f'--asset=export=ring-json={RECURRENCE}/arena.json',
         f'--asset=recurrence=relation-bundle-json={asset}',
@@ -416,7 +416,7 @@ protocol Check roles(V)(w: Vector @V, c: Vector @V, p: Vector @V, h: index @V)
 }}
 run Run = Check;
 ''')
-    journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
         f'--module=reference={source}',
         f'--asset=recurrence=relation-bundle-json={RECURRENCE}/bundle.json',
         'reference::Run', f'--output={directory}/reference.zkpkg'], refuses=code)

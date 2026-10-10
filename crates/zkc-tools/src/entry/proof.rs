@@ -184,6 +184,21 @@ impl ProofEntry {
     pub fn binding_scope(&self) -> BindingScope {
         self.scope
     }
+    pub(crate) fn output_types(
+        &self,
+        operation: ProofOperation,
+    ) -> &[zkc_runtime::interactive::PhysicalType] {
+        let role = match operation {
+            ProofOperation::Prove => self.native.entry().producer(),
+            ProofOperation::Verify => self.native.entry().validator(),
+        };
+        // The admitted map covers original outputs, excluding any transcript
+        // state added by derivation. Only original outputs reach file encoding.
+        let count = self.native.source_interface().roles[&role.role]
+            .outputs
+            .len();
+        &role.outputs[..count]
+    }
     pub fn prove(&self, request: ProofRequest) -> EntryResult<ProofReport> {
         self.execute(request, None, None)
     }

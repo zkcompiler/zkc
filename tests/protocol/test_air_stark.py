@@ -56,7 +56,7 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, queries=8,
                   flags=(), entry='Proof', source=None, table=TABLE, stark=STARK):
     package = directory / f'{entry}.zkpkg'
     if source is None and log_size == 5 and queries == 8 and table == TABLE and stark == STARK:
-        report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                                f'--project={EXAMPLE.parent}/zkc.toml',
                                f'air_stark_example::{entry}', f'--output={package}', *flags])
         return package, report['package_sha256']
@@ -65,7 +65,7 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, queries=8,
                             f'TableArgument<0,Recurrence,3,{log_size},{queries},8>')
     path = directory / 'main.zkc'
     path.write_text(source)
-    command = [toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+    command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                f'--module=air_stark_example={path}',
                f'--module=air_stark={stark}',
                f'--module=air_table={table}',
@@ -108,8 +108,8 @@ def test_external_air_stark_produces_and_verifies(toolchain, journal, directory,
     producer = request(journal, 'producer', public, private)
     verifier = request(journal, 'verifier', public)
     proof = directory / 'proof.bin'
-    produced = journal.json([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
-    checked = journal.json([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'])
+    produced = journal.json([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
+    checked = journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'])
     assert produced['status'] == 'produced' and checked['status'] == 'accepted'
     # Trace root, quotient root, two OOD claims, 3 FRI roots and terminal,
     # then four FRI messages per round/query and four table-opening messages.
@@ -123,7 +123,7 @@ def test_stark_checks_statement_trace_schedule_and_shape(toolchain, journal, dir
     public, private = inputs()
     honest_proof = directory / 'honest.bin'
     producer = request(journal, 'honest', public, private)
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={honest_proof}'])
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={honest_proof}'])
     trace, configuration = unpack(private['trace']), unpack(public['configuration'])
     changed_trace = trace.copy()
     changed_trace[4 * 3 + 1] = (changed_trace[4 * 3 + 1] + 1) % P
@@ -151,9 +151,9 @@ def test_stark_checks_statement_trace_schedule_and_shape(toolchain, journal, dir
         candidate = directory / f'{name}.bin'
         p = request(journal, name + '-producer', changed_public, changed_private)
         v = request(journal, name + '-verifier', changed_public)
-        made = journal.attempt([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *p, f'--output={candidate}'])
+        made = journal.attempt([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *p, f'--output={candidate}'])
         if made.returncode == 0:
-            journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *v, f'--proof={candidate}'],
+            journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *v, f'--proof={candidate}'],
                         refuses='artifact-stopped')
         else:
             assert made.returncode > 0
@@ -166,7 +166,7 @@ def test_stark_checks_statement_trace_schedule_and_shape(toolchain, journal, dir
         if public_change:
             # Statement binding also rejects an honest proof replayed against
             # changed public data, even before any AIR equation is checked.
-            replay = journal.attempt([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *v, f'--proof={honest_proof}'])
+            replay = journal.attempt([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *v, f'--proof={honest_proof}'])
             assert replay.returncode > 0
             assert json.loads(replay.stdout)['status'] == 'refused'
 
@@ -177,7 +177,7 @@ def test_stark_authenticates_claims_roots_and_late_openings(toolchain, journal, 
     producer = request(journal, 'producer', public, private)
     verifier = request(journal, 'verifier', public)
     proof = directory / 'honest.bin'
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
     original = proof.read_bytes()
     messages = frames(original)
     # Every table/FRI root, both OOD vectors, terminal, and all four final
@@ -191,13 +191,13 @@ def test_stark_authenticates_claims_roots_and_late_openings(toolchain, journal, 
             payload[-1] ^= 1
         candidate = directory / f'message-{position}.bin'
         candidate.write_bytes(replace_frame(original, position, payload))
-        journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}'],
+        journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}'],
                     refuses='artifact-stopped')
     for name, value, code in [('truncated', original[:-1], 'proof-truncated'),
                               ('trailing', original + b'\x00', 'proof-trailing')]:
         candidate = directory / f'{name}.bin'
         candidate.write_bytes(value)
-        journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}'], refuses=code)
+        journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}'], refuses=code)
 
 
 def test_stark_transcript_orders_commitments_claims_and_queries(toolchain, journal):
@@ -288,8 +288,8 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
     producer = request(journal, 'producer', public, private)
     verifier = request(journal, 'verifier', public)
     proof = directory / 'dishonest.bin'
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
-    report = journal.json([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'],
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
+    report = journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'],
                           refuses='artifact-stopped')
     stop = report['execution']['stop']
     assert stop['role'] == 'V' and stop['kind'] == 'Explicit("reject")'
@@ -340,7 +340,7 @@ def test_outside_sampler_excludes_domains_selects_first_and_exhausts(toolchain, 
         r = input_files(journal, name + '.json', session=name, roles={'V': {'inputs': {'values': extension_wire(candidates),
                                       'shift': extension_wire([base(3)], True)}}})
         output = directory / f'{name}.output.json'
-        report = journal.json([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', *r, f'--results={output}'],
+        report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *r, f'--results={output}'],
                               refuses=None if succeeds else 'entry-run-incomplete')
         if succeeds:
             actual = json.loads(output.read_text())['roles']['V']['selected']
@@ -482,7 +482,7 @@ def test_air_quotient_openings_and_deep_word_match_independent_polynomials(
                    [('shift', base(3)), ('alpha', alpha), ('zeta', zeta), ('rho', rho), ('eta', eta)]})
     r = input_files(journal, 'inspect.json', session='polynomial-reference', roles={'P': {'inputs': values}})
     result = directory / 'inspect.output.json'
-    journal.run([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', *r, f'--results={result}'])
+    journal.run([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *r, f'--results={result}'])
     actual = json.loads(result.read_text())['roles']['P']
     assert actual['valid'] is True
     for name, expected in [('quotient', quotient), ('chunks', chunk_values), ('opened', opened),

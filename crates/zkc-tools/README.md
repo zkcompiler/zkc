@@ -5,7 +5,7 @@ the resulting `zkc.program/0` with the generic runtime. The public library separ
 
 | Owner | Responsibility |
 |---|---|
-| `project` | Manifest discovery, explicit source maps, Entry selection and bounded compiler invocation |
+| `project` | Manifest discovery, source maps, Entry selection, standard paths, template plans and bounded compiler invocation |
 | `execution` | Shared `Capacity`, `InputValue` and immutable `ProverMaterial` |
 | `entry` | Authenticated packages, named input binding, execution and generated Rust data bindings |
 | `run` | Authenticated run bundles, role preparation, scheduling, transport and bounded reports |
@@ -23,9 +23,15 @@ that view to a package. `entry::inputs` derives readable input groups and schema
 from the same view, with explicit opt-in file resolution. Native value import
 and resource accounting remain in the common Host.
 
+`Project::layout()` resolves standard project paths. `Compiler::prepare()` returns
+checked interfaces and `Template` files without publishing them; the CLI creates
+missing templates through the Host's no-clobber publication API. Execution first
+resolves explicit options and defaults, then uses the same input decoder and
+admission path. Human output and `--json` render the same command report.
+
 Use `zkc --help` or `zkc COMMAND --help`. The installed commands are:
 
-- `init`, `check`, `compile`, `inspect`, `inputs init`, `inputs check`.
+- `new`, `init`, `prepare`, `check`, `compile`, `inspect`, `inputs init`, `inputs check`.
 - `run`, `prove`, `verify`, `bindings`.
 - `run-bundle`, `prove-bundle`, `verify-bundle`.
 

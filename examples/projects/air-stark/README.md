@@ -22,7 +22,7 @@ zkc compile --compiler=zkc-compile \
 ```
 
 Prepare public and witness inputs from the retained upstream run, then prove
-and verify using the `package_sha256` returned by compilation:
+and verify using the `Package SHA-256` shown by compilation (`package_sha256` with `--json`):
 
 ```sh
 python3 examples/projects/air-stark/prepare.py build/air-stark

@@ -19,17 +19,15 @@ exercises a complete terminal decision without requiring a PCS setup.
 From the repository root, with built tools on `PATH`:
 
 ```sh
-zkc prove example::Proof --project=examples/projects/sumcheck/zkc.toml \
-  --public=examples/projects/sumcheck/inputs/example.Proof/public.json --output=sumcheck.proof
-zkc verify example::Proof --project=examples/projects/sumcheck/zkc.toml \
-  --public=examples/projects/sumcheck/inputs/example.Proof/public.json --proof=sumcheck.proof
+zkc prove --project=examples/projects/sumcheck/zkc.toml
+zkc verify --project=examples/projects/sumcheck/zkc.toml
 ```
 
-Both invocations supply the public table, claim and round count. This public
+Both invocations read the public table, claim and round count from the selected
+Entry's input directory. This public
 example needs no witness file. The [Entry guide](../../../docs/runtime/entries.md)
-explains input encodings and limits. Select `example::Interactive` with
-`--session=sumcheck` and `--input=P=inputs/example.Interactive/P.json` and
-`--input=V=inputs/example.Interactive/V.json` from this project to run both roles.
+explains input encodings and limits. Use `zkc run` from this project to select
+`example::Interactive`, read both participant maps and run with a fresh session.
 
 The source and CLI tests check both successful execution and changed claims,
 insufficient rounds, actual transcript messages and proof truncation. These are

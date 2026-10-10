@@ -101,7 +101,7 @@ def check_authored_transcript_commands(toolchain, journal, directory):
         options = ['--allow-header-only']
         if case['family'] == 'prefix':
             options.append(f'--attempt-policy={attempt_policy}')
-        produced = journal.json([toolchain.runtime, 'prove-bundle', *args,
+        produced = journal.json([toolchain.runtime, '--json', 'prove-bundle', *args,
                                  directory / f'{name}.producer.json', proof, *options])
         assert produced['status'] == 'produced', produced
         assert produced['binding_scope'] == 'header'
@@ -122,7 +122,7 @@ def check_authored_transcript_commands(toolchain, journal, directory):
                 prefix_summaries[early] = summary
             else:
                 assert summary == prefix_summaries[early]
-        checked = journal.json([toolchain.runtime, 'verify-bundle', *args,
+        checked = journal.json([toolchain.runtime, '--json', 'verify-bundle', *args,
                                 directory / f'{name}.validator.json', proof, '--allow-header-only'])
         assert checked['status'] == 'accepted', checked
         assert checked['external_work_limit'] == 16777216
@@ -141,10 +141,10 @@ def check_nested_proof_commands(toolchain, journal, directory):
         options = [f'--setups={directory / "nested.setups.json"}'] if case['family'] == 'batched-openings' else []
         if case['family'] in ('batched-openings', 'ragged-matrices', 'matrix'):
             options.append('--allow-header-only')
-        produced = journal.json([toolchain.runtime, 'prove-bundle', *args,
+        produced = journal.json([toolchain.runtime, '--json', 'prove-bundle', *args,
                                  directory / f'{name}.producer.json', proof, *options])
         assert produced['status'] == 'produced'
-        checked = journal.json([toolchain.runtime, 'verify-bundle', *args,
+        checked = journal.json([toolchain.runtime, '--json', 'verify-bundle', *args,
                                 directory / f'{name}.validator.json', proof, *options])
         assert checked['status'] == 'accepted'
         assert proof.read_bytes() == (directory / f'{name}.proof').read_bytes()
@@ -166,20 +166,20 @@ def check_native_proof_commands(toolchain, journal, directory):
         if name == 'authored':
             proof.write_bytes(b'previous proof')
             for command, request in [('prove-bundle', producer), ('verify-bundle', validator)]:
-                refused = journal.json([toolchain.runtime, command, *args, request, proof],
+                refused = journal.json([toolchain.runtime, '--json', command, *args, request, proof],
                                        refuses='native-proof-binding-policy')
                 assert refused['phase'] == 'admission' and refused['binding_scope'] == 'header'
                 assert proof.read_bytes() == b'previous proof'
             missing = directory / 'authored.policy-unpublished'
-            journal.json([toolchain.runtime, 'prove-bundle', *args, producer, missing],
+            journal.json([toolchain.runtime, '--json', 'prove-bundle', *args, producer, missing],
                          refuses='native-proof-binding-policy')
             assert not missing.exists()
-        report = journal.json([toolchain.runtime, 'prove-bundle', *args, producer, proof, *options])
+        report = journal.json([toolchain.runtime, '--json', 'prove-bundle', *args, producer, proof, *options])
         assert report['status'] == 'produced'
         assert report['binding_scope'] == ('header' if name == 'authored' else 'transcript')
-        report = journal.json([toolchain.runtime, 'verify-bundle', *args, validator, proof, *options])
+        report = journal.json([toolchain.runtime, '--json', 'verify-bundle', *args, validator, proof, *options])
         assert report['status'] == 'accepted'
-        report = journal.json([toolchain.runtime, 'verify-bundle', deployment, '0' * 64,
+        report = journal.json([toolchain.runtime, '--json', 'verify-bundle', deployment, '0' * 64,
                                validator, proof], refuses='native-proof-deployment-binding')
         assert report['phase'] == 'admission'
         bad = directory / f'{name}.bad-inputs.json'
@@ -190,22 +190,22 @@ def check_native_proof_commands(toolchain, journal, directory):
             inputs[4][0][1] = '0'
         bad.write_text(json.dumps(inputs))
         before = proof.read_bytes()
-        report = journal.json([toolchain.runtime, 'prove-bundle', *args, bad, proof, *options],
+        report = journal.json([toolchain.runtime, '--json', 'prove-bundle', *args, bad, proof, *options],
                               refuses='exhausted')
         assert report['status'] == 'refused'
         assert proof.read_bytes() == before, 'failed production replaced a complete proof'
         missing = directory / f'{name}.unpublished'
-        journal.json([toolchain.runtime, 'prove-bundle', *args, bad, missing, *options], refuses='exhausted')
+        journal.json([toolchain.runtime, '--json', 'prove-bundle', *args, bad, missing, *options], refuses='exhausted')
         assert not missing.exists(), 'failed production published a partial proof'
 
     deployment = directory / 'schnorr_0.deployment'
     unexpected_authority = directory / 'unexpected.setups.json'
     unexpected_authority.write_text(json.dumps(['zkc.native-setup-authority/0', [['0', '00' * 32]], []]))
-    journal.json([toolchain.runtime, 'verify-bundle', deployment,
+    journal.json([toolchain.runtime, '--json', 'verify-bundle', deployment,
                   hashlib.sha256(deployment.read_bytes()).hexdigest(),
                   directory / 'schnorr_0.validator.json', directory / 'schnorr_0.cli.proof',
                   f'--setups={unexpected_authority}'], refuses='native-proof-key-authority')
-    assert 'EXPECTED_SHA256' in journal.run([toolchain.runtime, 'prove-bundle', '--help'])
+    assert 'EXPECTED_SHA256' in journal.run([toolchain.runtime, '--json', 'prove-bundle', '--help'])
 
 
 def check_iterated_proof_commands(toolchain, journal, directory):
@@ -219,17 +219,17 @@ def check_iterated_proof_commands(toolchain, journal, directory):
             producer = directory / f'{name}.producer.json'
             validator = directory / f'{name}.validator.json'
             proof = directory / f'{name}.cli.proof'
-            assert journal.json([toolchain.runtime, 'prove-bundle', *args, producer, proof])['status'] == 'produced'
-            assert journal.json([toolchain.runtime, 'verify-bundle', *args, validator, proof])['status'] == 'accepted'
+            assert journal.json([toolchain.runtime, '--json', 'prove-bundle', *args, producer, proof])['status'] == 'produced'
+            assert journal.json([toolchain.runtime, '--json', 'verify-bundle', *args, validator, proof])['status'] == 'accepted'
             bad = directory / f'{name}.poor.json'
             inputs = json.loads(producer.read_text())
             inputs[5] = '0'
             bad.write_text(json.dumps(inputs))
             before = proof.read_bytes()
-            journal.json([toolchain.runtime, 'prove-bundle', *args, bad, proof], refuses='exhausted')
+            journal.json([toolchain.runtime, '--json', 'prove-bundle', *args, bad, proof], refuses='exhausted')
             assert proof.read_bytes() == before
             absent = directory / f'{name}.absent'
-            journal.json([toolchain.runtime, 'prove-bundle', *args, bad, absent], refuses='exhausted')
+            journal.json([toolchain.runtime, '--json', 'prove-bundle', *args, bad, absent], refuses='exhausted')
             assert not absent.exists()
 
 
@@ -246,15 +246,15 @@ def check_committed_proof_commands(toolchain, journal, directory):
         authority = directory / f'{name}.setups.json'
         pin = f'--setups={authority}'
         options = ['--allow-header-only'] if case['family'] in ('authored', 'structured') else []
-        journal.json([toolchain.runtime, 'prove-bundle', *args, producer, proof], refuses='native-proof-key-authority')
+        journal.json([toolchain.runtime, '--json', 'prove-bundle', *args, producer, proof], refuses='native-proof-key-authority')
         assert not proof.exists()
-        assert journal.json([toolchain.runtime, 'prove-bundle', *args, producer, proof, pin, *options])['status'] == 'produced'
-        assert journal.json([toolchain.runtime, 'verify-bundle', *args, validator, proof, pin, *options])['status'] == 'accepted'
+        assert journal.json([toolchain.runtime, '--json', 'prove-bundle', *args, producer, proof, pin, *options])['status'] == 'produced'
+        assert journal.json([toolchain.runtime, '--json', 'verify-bundle', *args, validator, proof, pin, *options])['status'] == 'accepted'
         wrong = json.loads(authority.read_text())
         wrong[1][0][1] = '00' * 32
         wrong_authority = directory / f'{name}.wrong-setups.json'
         wrong_authority.write_text(json.dumps(wrong))
-        journal.json([toolchain.runtime, 'verify-bundle', *args, validator, proof, *options,
+        journal.json([toolchain.runtime, '--json', 'verify-bundle', *args, validator, proof, *options,
                       f'--setups={wrong_authority}'], refuses='key-mismatch')
         bad = directory / f'{name}.missing-key.json'
         inputs = json.loads(producer.read_text())
@@ -262,7 +262,7 @@ def check_committed_proof_commands(toolchain, journal, directory):
         key[1][1][0] = str(directory / 'missing.pk')
         bad.write_text(json.dumps(inputs))
         before = proof.read_bytes()
-        journal.json([toolchain.runtime, 'prove-bundle', *args, bad, proof, pin, *options], refuses='artifact-io')
+        journal.json([toolchain.runtime, '--json', 'prove-bundle', *args, bad, proof, pin, *options], refuses='artifact-io')
         assert proof.read_bytes() == before
 
 
@@ -283,7 +283,7 @@ def check_native_attempt_commands(toolchain, journal, directory):
                       ['67108864', '268435456']]
             policy_path = directory / f'{name}.attempts'
             policy_path.write_text(json.dumps(policy))
-            args = [toolchain.runtime, 'prove-bundle', deployment, pin, producer, proof,
+            args = [toolchain.runtime, '--json', 'prove-bundle', deployment, pin, producer, proof,
                     f'--attempt-policy={policy_path}']
             report = journal.json(args)
             assert report['status'] == 'produced'
@@ -291,7 +291,7 @@ def check_native_attempt_commands(toolchain, journal, directory):
             assert report['attempts'][-1]['decision'] == 'complete'
             assert report['cleanup_errors'] == []
             assert len(report['attempt_policy_sha256']) == 64
-            accepted = journal.json([toolchain.runtime, 'verify-bundle', deployment,
+            accepted = journal.json([toolchain.runtime, '--json', 'verify-bundle', deployment,
                                      pin, validator, proof])
             assert accepted['status'] == 'accepted'
             assert 'proof_bytes' not in accepted
@@ -307,7 +307,7 @@ def check_native_attempt_commands(toolchain, journal, directory):
             args[-2] = missing
             journal.json(args, refuses='Limit')
             assert not missing.exists()
-            journal.json([toolchain.runtime, 'verify-bundle', deployment, pin, validator,
+            journal.json([toolchain.runtime, '--json', 'verify-bundle', deployment, pin, validator,
                           proof, f'--attempt-policy={policy_path}'], refuses='cli-option')
 
 
@@ -325,8 +325,8 @@ def check_structured_proof_commands(toolchain, journal, directory):
             producer = directory / f'{stem}.producer.json'
             validator = directory / f'{stem}.validator.json'
             proof = directory / f'{stem}.cli.proof'
-            assert journal.json([toolchain.runtime, 'prove-bundle', deployment, pin, producer, proof, *options])['status'] == 'produced'
-            assert journal.json([toolchain.runtime, 'verify-bundle', deployment, pin, validator, proof, *options])['status'] == 'accepted'
+            assert journal.json([toolchain.runtime, '--json', 'prove-bundle', deployment, pin, producer, proof, *options])['status'] == 'produced'
+            assert journal.json([toolchain.runtime, '--json', 'verify-bundle', deployment, pin, validator, proof, *options])['status'] == 'accepted'
 
 
 def check_composed_state_commands(toolchain, journal, directory):
@@ -344,13 +344,13 @@ def check_composed_state_commands(toolchain, journal, directory):
                       ['67108864', '268435456']]
             attempts = directory / f'{name}.attempts'
             attempts.write_text(json.dumps(policy))
-            args = [toolchain.runtime, 'prove-bundle', deployment, pin,
+            args = [toolchain.runtime, '--json', 'prove-bundle', deployment, pin,
                     directory / f'{name}.producer.json', proof, f'--attempt-policy={attempts}']
             result = journal.json(args)
             assert result['status'] == 'produced'
             assert result['attempts'][-1]['decision'] == 'complete'
             assert result['cleanup_errors'] == []
-            assert journal.json([toolchain.runtime, 'verify-bundle', deployment,
+            assert journal.json([toolchain.runtime, '--json', 'verify-bundle', deployment,
                                  pin, directory / f'{name}.validator.json', proof])['status'] == 'accepted'
             original = proof.read_bytes()
             policy[4][0] = '0'
@@ -374,14 +374,14 @@ def check_relation_binding_commands(toolchain, journal, directory):
         # Only the explicitly derived fixtures request compiler transcript construction.
         options = [] if name.endswith('_derived') else ['--allow-header-only']
         proof = directory / f'{name}.cli.proof'
-        report = journal.json([toolchain.runtime, 'prove-bundle', *args,
+        report = journal.json([toolchain.runtime, '--json', 'prove-bundle', *args,
                                directory / f'{name}.producer.json', proof, *options])
         assert report['status'] == 'produced', report
-        report = journal.json([toolchain.runtime, 'verify-bundle', *args,
+        report = journal.json([toolchain.runtime, '--json', 'verify-bundle', *args,
                                directory / f'{name}.validator.json', proof, *options])
         assert report['status'] == 'accepted', report
         assert proof.read_bytes() == (directory / f'{name}.proof').read_bytes()
-        journal.json([toolchain.runtime, 'verify-bundle', deployment, '0' * 64,
+        journal.json([toolchain.runtime, '--json', 'verify-bundle', deployment, '0' * 64,
                       directory / f'{name}.validator.json', proof],
                      refuses='native-proof-deployment-binding')
 
@@ -402,10 +402,10 @@ def check_domain_commands(toolchain, journal, directory, setups):
         proof = directory / f'{name}.cli.proof'
         producer = directory / f'{name}.producer.json'
         validator = directory / f'{name}.validator.json'
-        produced = journal.json([toolchain.runtime, 'prove-bundle', *args,
+        produced = journal.json([toolchain.runtime, '--json', 'prove-bundle', *args,
                                  producer, proof, *options])
         assert produced['status'] == 'produced'
-        report = journal.json([toolchain.runtime, 'verify-bundle', *args,
+        report = journal.json([toolchain.runtime, '--json', 'verify-bundle', *args,
                                validator, proof, *options], refuses=case.get('refusal'))
         if case.get('early'):
             assert produced['return_at']['site'] == 'finish_P'
@@ -416,13 +416,13 @@ def check_domain_commands(toolchain, journal, directory, setups):
             assert report['return_at'] is None
         assert report['status'] == ('refused' if 'refusal' in case else 'accepted')
         if setups:
-            journal.json([toolchain.runtime, 'verify-bundle', *args,
+            journal.json([toolchain.runtime, '--json', 'verify-bundle', *args,
                           validator, proof], refuses='native-proof-key-authority')
-            journal.json([toolchain.runtime, 'verify-bundle', *args,
+            journal.json([toolchain.runtime, '--json', 'verify-bundle', *args,
                           validator, proof, *options, '--key-id=' + '0' * 64],
                          refuses='cli-option')
         # The host still requires an independently authorized deployment pin.
-        journal.json([toolchain.runtime, 'verify-bundle', deployment,
+        journal.json([toolchain.runtime, '--json', 'verify-bundle', deployment,
                       '0' * 64, validator, proof, *options],
                      refuses='native-proof-deployment-binding')
 
@@ -443,12 +443,12 @@ def check_composition_commands(toolchain, journal, directory):
         validator = directory / f'{name}.validator.json'
         path.write_text(json.dumps(capacity))
         option = f'--capacity={path}'
-        result = journal.json([toolchain.runtime, 'prove-bundle', *args,
+        result = journal.json([toolchain.runtime, '--json', 'prove-bundle', *args,
                                producer, proof, *options, option])
         assert result['status'] == 'produced'
         assert result['capacity'] == capacity
         assert proof.read_bytes() == (directory / f'{name}.proof').read_bytes()
-        result = journal.json([toolchain.runtime, 'verify-bundle', *args,
+        result = journal.json([toolchain.runtime, '--json', 'verify-bundle', *args,
                                validator, proof, *options, option])
         assert result['status'] == 'accepted'
         assert result['capacity'] == capacity
@@ -456,7 +456,7 @@ def check_composition_commands(toolchain, journal, directory):
         limited = json.loads(json.dumps(capacity))
         limited[5][0] = '0'
         path.write_text(json.dumps(limited))
-        result = journal.json([toolchain.runtime, 'prove-bundle', *args,
+        result = journal.json([toolchain.runtime, '--json', 'prove-bundle', *args,
                                producer, proof, *options, option], refuses='Limit')
         assert result['capacity'] == limited
         assert result['stop']['kind'] == 'Limit'
@@ -465,19 +465,19 @@ def check_composition_commands(toolchain, journal, directory):
         attempt = directory / 'excessive-attempt-policy.json'
         attempt.write_text(json.dumps(['zkc.native-attempt-policy/0', '0', [],
                                        ['1', '16777216'], capacity[5], capacity[6]]))
-        journal.json([toolchain.runtime, 'prove-bundle', *args, producer,
+        journal.json([toolchain.runtime, '--json', 'prove-bundle', *args, producer,
                       proof, *options, option, f'--attempt-policy={attempt}'], refuses='native-attempt-limits')
         assert proof.read_bytes() == original
         missing = directory / f'{name}.unpublished'
-        journal.json([toolchain.runtime, 'prove-bundle', *args,
+        journal.json([toolchain.runtime, '--json', 'prove-bundle', *args,
                       producer, missing, *options, option], refuses='Limit')
         assert not missing.exists()
         limited[2] = '32769'
         path.write_text(json.dumps(limited))
-        journal.json([toolchain.runtime, 'prove-bundle', *args,
+        journal.json([toolchain.runtime, '--json', 'prove-bundle', *args,
                       producer, missing, *options, option], refuses='native-capacity-limit')
         path.write_text(json.dumps(capacity))
-        journal.json([toolchain.runtime, 'prove-bundle', *args,
+        journal.json([toolchain.runtime, '--json', 'prove-bundle', *args,
                       producer, missing, *options, option, option], refuses='cli-option')
         assert not missing.exists()
 
@@ -507,7 +507,7 @@ def check_bundle_commands(toolchain, journal, directory):
             mutate(inputs)
         path = directory / 'bundle.inputs.json'
         path.write_text(json.dumps(inputs))
-        command = [toolchain.runtime, 'run-bundle', bundle,
+        command = [toolchain.runtime, '--json', 'run-bundle', bundle,
                    pin or hashlib.sha256(bundle.read_bytes()).hexdigest(), path, *options]
         result = journal.json(command, **({'refuses': refusal} if refusal else {}))
         assert result['format'] == 'zkc.bundle-result/0'
@@ -563,9 +563,9 @@ def check_source_setup_commands(toolchain, journal, directory):
     proof = directory / 'separate-cli-pcs-proof.bin'
     target = [f'--package={package}', f'--sha256={pin}', *settings,
               f'--public={directory / "cli-public.json"}', '--allow-header-only']
-    producing = [toolchain.runtime, 'prove', *target, f'--witness={directory / "cli-witness.json"}']
+    producing = [toolchain.runtime, '--json', 'prove', *target, f'--witness={directory / "cli-witness.json"}']
     journal.run([*producing, f'--output={proof}'])
-    journal.run([toolchain.runtime, 'verify', *target, f'--proof={proof}'])
+    journal.run([toolchain.runtime, '--json', 'verify', *target, f'--proof={proof}'])
     key = directory / 'cli-pk-0.bin'
     unchanged = key.read_bytes()
     for output in ([f'--output={key}'], [f'--output={proof}', f'--results={key}']):
@@ -573,7 +573,7 @@ def check_source_setup_commands(toolchain, journal, directory):
         assert 'execution' not in report and key.read_bytes() == unchanged
     package = directory / 'pcs-setup-Run.zkpkg'
     pin = hashlib.sha256(package.read_bytes()).hexdigest()
-    command = [toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}',
+    command = [toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}',
                '--session=setup_files', f'--input=P={directory / "cli-P.json"}',
                f'--input=V={directory / "cli-V.json"}', *settings]
     journal.run(command)

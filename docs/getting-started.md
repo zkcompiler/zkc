@@ -32,9 +32,10 @@ standard BLS12-381 G1 generator and its scalar multiple. They demonstrate the
 compiler and Host, and must not be used as secret application data. Each proof
 call obtains fresh randomness from the common runtime.
 
-For everyday source development, `zkc inspect example::Proof`, `zkc inputs init
-example::Proof`, and `zkc prove example::Proof --public=... --witness=...
---output=proof.bin` work from the project directory. Execution compiles in memory.
+For everyday source development, start with `zkc new my-project` or `zkc init` in
+an existing directory. After editing source, run `zkc check` and `zkc prepare`, then
+fill the input maps. From a project directory, `zkc prove` and `zkc verify` select
+the unique proof Entry and its standard input and output paths. Execution compiles in memory.
 See the [project workflow](runtime/entries.md#project-workflow) for input templates,
 multiple Entries and participant inputs.
 
@@ -48,18 +49,18 @@ demo_dir=$(mktemp -d)
 compiler="${ZKC_COMPILER_BIN:-build/compiler}/zkc-compile"
 native="${ZKC_NATIVE_BIN:-${CARGO_TARGET_DIR:-target}/release}"
 
-"$native/zkc" compile --compiler="$compiler" \
+"$native/zkc" --json compile --compiler="$compiler" \
   --module=schnorr=libraries/schnorr/lib.zkc \
   --module=example=examples/projects/schnorr/main.zkc \
   example::Proof --output="$demo_dir/proof.zkpkg" \
   > "$demo_dir/build.json"
 pin=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["package_sha256"])' "$demo_dir/build.json")
-"$native/zkc" prove --package="$demo_dir/proof.zkpkg" --sha256="$pin" \
+"$native/zkc" --json prove --package="$demo_dir/proof.zkpkg" --sha256="$pin" \
   --public=examples/projects/schnorr/inputs/example.Proof/public.json \
   --witness=examples/projects/schnorr/inputs/example.Proof/witness.json \
   --output="$demo_dir/proof.bin" \
   > "$demo_dir/producer.json"
-"$native/zkc" verify --package="$demo_dir/proof.zkpkg" --sha256="$pin" \
+"$native/zkc" --json verify --package="$demo_dir/proof.zkpkg" --sha256="$pin" \
   --public=examples/projects/schnorr/inputs/example.Proof/public.json \
   --proof="$demo_dir/proof.bin" \
   > "$demo_dir/validator.json"
@@ -94,6 +95,7 @@ theorem for this complete executable path remain separate work.
 `zkc --help`, `zkc COMMAND --help`, `zkc-compile --help` and `zkc-opt --help`
 describe installed commands. `--version` reports manifest versions; record the
 source revision separately when comparing builds. Help/version do not read
-protocol inputs. Unknown commands exit 2; execution refusals return structured
-JSON and exit 1. Inspect the reported outcome and acceptance, not just proof
+protocol inputs. Unknown commands exit 2; execution refusals exit 1. Commands
+print human summaries by default; `--json` selects structured reports for scripts.
+Inspect the reported outcome and acceptance, not just proof
 production.

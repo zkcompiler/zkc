@@ -1,5 +1,6 @@
 //! Command syntax shared by help and argument admission. No file I/O occurs here.
 use std::collections::BTreeSet;
+const JSON: OptionSpec = OptionSpec::new("--json");
 
 #[derive(Clone, Copy)]
 pub(super) struct OptionSpec {
@@ -74,7 +75,7 @@ impl Command {
             usage.push(' ');
             usage.push_str(self.positional);
         }
-        for option in self.options {
+        for option in self.options.iter().chain([&JSON]) {
             let syntax = if option.repeated {
                 format!("{} ...", option.syntax)
             } else {
@@ -104,7 +105,12 @@ impl Command {
             let (name, value) = arg
                 .split_once('=')
                 .map_or((arg.as_str(), None), |(name, value)| (name, Some(value)));
-            let Some(spec) = self.options.iter().find(|spec| spec.name() == name) else {
+            let Some(spec) = self
+                .options
+                .iter()
+                .chain([&JSON])
+                .find(|spec| spec.name() == name)
+            else {
                 return Err(error(
                     "cli-option",
                     format!("{} does not accept {name}", self.name),

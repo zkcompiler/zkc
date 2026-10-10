@@ -17,7 +17,7 @@ def read(project, group, entry='Proof'):
 
 def build(toolchain, journal, directory, project, entry, flags):
     package = directory / f'{entry}.zkpkg'
-    report = json.loads(journal.run([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+    report = json.loads(journal.run([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
         f'--project={ROOT}/examples/projects/{project}/zkc.toml',
         f'example::{entry}', f'--output={package}', *flags]))
     return package, report['package_sha256']
@@ -30,17 +30,17 @@ def test_library_entry_runs_and_independent_proofs(toolchain, journal, directory
     producer = input_files(journal, 'producer', public=read(project, 'public'), witness=read(project, 'witness'))
     verifier = input_files(journal, 'verifier', public=read(project, 'public'))
     proof = directory / 'proof.bin'
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
-    report = json.loads(journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}']))
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
+    report = json.loads(journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}']))
     assert report['status'] == 'accepted' and report['binding_scope'] == 'transcript'
     truncated = directory / 'truncated.bin'
     truncated.write_bytes(proof.read_bytes()[:-1])
-    journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={truncated}'], refuses='proof-truncated')
+    journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={truncated}'], refuses='proof-truncated')
 
     package, pin = build(toolchain, journal, directory, project, 'Interactive', flags)
     inputs = input_files(journal, 'interactive', roles={role: {'inputs': read(project, role, 'Interactive')} for role in ['P', 'V']})
     outputs = directory / 'outputs.json'
-    report = json.loads(journal.run([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', *inputs, f'--results={outputs}']))
+    report = json.loads(journal.run([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *inputs, f'--results={outputs}']))
     assert report['status'] == 'executed'
     assert json.loads(outputs.read_text())['roles']['V']['accepted'] is True
 
@@ -59,8 +59,8 @@ def test_source_protocols_reject_false_inputs(toolchain, journal, directory, pro
     producer = input_files(journal, 'producer', public=public, witness=witness)
     verifier = input_files(journal, 'verifier', public=public)
     proof = directory / 'proof.bin'
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
-    journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'], refuses='artifact-rejected')
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
+    journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'], refuses='artifact-rejected')
 
 
 def test_sumcheck_uses_received_coefficients_and_actual_claim(toolchain, journal, directory):
@@ -70,17 +70,17 @@ def test_sumcheck_uses_received_coefficients_and_actual_claim(toolchain, journal
     producer = input_files(journal, 'producer', public=public, witness=witness)
     verifier = input_files(journal, 'verifier', public=public)
     proof = directory / 'proof.bin'
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
-    rejected = json.loads(journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'], refuses='artifact-stopped'))
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
+    rejected = json.loads(journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'], refuses='artifact-stopped'))
     assert rejected['execution']['stop']['role'] == 'V'
     assert rejected['execution']['stop']['kind'] == 'Explicit("reject")'
     producer = input_files(journal, 'producer', public=read('sumcheck', 'public'))
     verifier = input_files(journal, 'verifier', public=read('sumcheck', 'public'))
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
     changed = bytearray(proof.read_bytes())
     changed[-32] ^= 1  # Canonical final coefficient, with its framing intact.
     proof.write_bytes(changed)
-    journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'], refuses='artifact-stopped')
+    journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'], refuses='artifact-stopped')
 
 
 def test_published_source_walkthrough(toolchain, journal, directory):

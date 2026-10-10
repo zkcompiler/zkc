@@ -57,11 +57,11 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, terminal_log=0,
     path.write_text(source)
     package = directory / f'{entry}.zkpkg'
     if text is None and library == LIBRARY and (log_size, terminal_log, rounds, queries) == (5, 0, 3, 8):
-        report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                                f'--project={EXAMPLE.parent}/zkc.toml',
                                f'example::{entry}', f'--output={package}', *flags])
         return package, report['package_sha256']
-    report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                            f'--module=example={path}', f'--module=fri={library}',
                            f'example::{entry}', f'--output={package}', *flags])
     return package, report['package_sha256']
@@ -151,9 +151,9 @@ def test_fri_polynomials_prove_and_verify(toolchain, journal, directory, flags, 
         producer = request(journal, name, word(coefficients, log_size), rounds=rounds, queries=queries)
         verifier = request(journal, name + '-verify', rounds=rounds, queries=queries)
         proof = directory / f'{name}.bin'
-        made = journal.json([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
+        made = journal.json([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
         assert made['status'] == 'produced'
-        checked = journal.json([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'])
+        checked = journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'])
         assert checked['status'] == 'accepted'
         assert len(messages(proof.read_bytes())) == rounds + 1 + 4 * rounds * queries
 
@@ -166,7 +166,7 @@ def test_fri_rejects_altered_commitments_openings_and_terminal(toolchain, journa
     producer = request(journal, 'producer', word(FULL_DEGREE, 5))
     verifier = request(journal, 'verifier')
     proof = directory / 'honest.bin'
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
     original = proof.read_bytes()
     frames = messages(original)
     rounds, queries = 3, 8
@@ -192,7 +192,7 @@ def test_fri_rejects_altered_commitments_openings_and_terminal(toolchain, journa
         """Verification refuses, stopping at one of the named guards and iterations."""
         path = directory / f'{name}.bin'
         path.write_bytes(changes if isinstance(changes, bytes) else replace_messages(original, changes))
-        said = journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={path}'], refuses=reason)
+        said = journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={path}'], refuses=reason)
         if outcomes:
             assert rejected(json.loads(said), sites) in outcomes
 
@@ -262,9 +262,9 @@ def test_fri_rejects_dishonest_folds_and_terminal(toolchain, journal, directory,
     producer = request(journal, 'producer', word(FULL_DEGREE, 5))
     verifier = request(journal, 'verifier')
     proof = directory / f'{name}.bin'
-    made = journal.json([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
+    made = journal.json([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
     assert made['status'] == 'produced'
-    checked = journal.json([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'],
+    checked = journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'],
                            refuses='artifact-stopped')
     assert rejected(checked, sites) == (guard, loops)
 
@@ -315,16 +315,16 @@ def test_fri_checks_schedule_shape_and_degree(toolchain, journal, directory):
     values = word([ONE, SHIFT], 5)
     honest = request(journal, 'producer', values)
     proof = directory / 'honest.bin'
-    journal.run([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *honest, f'--output={proof}'])
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *honest, f'--output={proof}'])
 
     def malformed(name, producer, change, guard, refusal='artifact-stopped'):
         # Proving drives only P; V owns the schedule predicate, so a malformed
         # public schedule may produce a proof but verification must refuse.
         candidate = directory / f'{name}.bin'
-        completed = journal.attempt([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={candidate}'])
+        completed = journal.attempt([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={candidate}'])
         if completed.returncode == 0:
             verifier = request(journal, name + '-verify', **change)
-            said = journal.run([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}'],
+            said = journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={candidate}'],
                                refuses='artifact-stopped')
             assert rejected(json.loads(said), sites) == (guard, [])
         else:
@@ -351,7 +351,7 @@ def test_fri_checks_schedule_shape_and_degree(toolchain, journal, directory):
     counts = {'round_count': 3, 'query_count': 8}
     inputs = input_files(journal, 'mismatched-shift.json', session='fri_shift_mismatch', roles={'P': {'inputs': counts | {'shift': wire([SHIFT], scalar=True), 'word': wire(values)}},
                   'V': {'inputs': counts | {'shift': wire([[5, 2, 0, 0, 0, 0, 0, 0]], scalar=True)}}})
-    report = journal.json([toolchain.runtime, 'run', f'--package={run_package}', f'--sha256={run_pin}', *inputs],
+    report = journal.json([toolchain.runtime, '--json', 'run', f'--package={run_package}', f'--sha256={run_pin}', *inputs],
                           refuses='entry-run-incomplete')
     after = {role['role']: role['after'] for role in report['execution']['roles']}
     assert after['V'][0] == 'stopped' and after['V'][1]['cause'][0] == 'explicit'
@@ -384,7 +384,7 @@ def test_fri_returns_exact_authenticated_query_values(toolchain, journal, direct
     package, pin = compile_entry(toolchain, journal, directory, entry='Run', text=text)
     inputs = input_files(journal, 'run.json', session='fri_query_binding', roles={'P': {'inputs': shared | {'word': wire(cubic)}}, 'V': {'inputs': shared}})
     outputs = directory / 'outputs.json'
-    report = journal.json([toolchain.runtime, 'run', f'--package={package}', f'--sha256={pin}', *inputs, f'--results={outputs}'])
+    report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}', f'--sha256={pin}', *inputs, f'--results={outputs}'])
     assert report['status'] == 'executed'
     exact(json.loads(outputs.read_text())['roles']['V'], cubic)
 
@@ -400,9 +400,9 @@ def test_fri_returns_exact_authenticated_query_values(toolchain, journal, direct
         proof = directory / f'{name}.bin'
         prover_results = directory / f'{name}-prover-results.json'
         verifier_results = directory / f'{name}-verifier-results.json'
-        made = journal.json([toolchain.runtime, 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', f'--results={prover_results}'])
+        made = journal.json([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', f'--results={prover_results}'])
         assert made['status'] == 'produced'
-        checked = journal.json([toolchain.runtime, 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}', f'--results={verifier_results}'])
+        checked = journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}', f'--results={verifier_results}'])
         assert checked['status'] == 'accepted'
         result = json.loads(verifier_results.read_text())['values']
         assert set(result) == {'accepted', 'positions', 'values'}

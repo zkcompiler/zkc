@@ -1,7 +1,9 @@
 //! Command discovery and argument admission for source, Entry and bundle tools.
 mod arguments;
+mod render;
 pub(crate) use arguments::Arguments;
 use arguments::{Command, OptionSpec as Opt};
+pub use render::human;
 
 const SETUPS: Opt = Opt::new("--setups=AUTHORITY");
 const CAPACITY: Opt = Opt::new("--capacity=LIMITS");
@@ -26,7 +28,10 @@ macro_rules! entry_options {
             Opt::new("--release-storage"), $($extra),*)
     };
 }
-const ENTRY: &str = "Select ENTRY by unique short or qualified name. With no name, execution selects the\nsole Entry of the required kind. Use project discovery, --project or explicit modules.\nPinned execution uses --package and --sha256 together and no source options.\nReadable JSON files contain named values only; omitted files require empty input maps.";
+const ENTRY: &str = "Select ENTRY by unique short or qualified name. With no name, execution selects the\nsole Entry of the required kind. Use project discovery, --project or explicit modules.\nPinned execution uses --package and --sha256 together and no source options.\nProject inputs default to inputs/<qualified.name>/. Proofs default to
+build/zkc/<qualified.name>.zkproof; run results use .results.json. Explicit paths win.
+Outside a project, input and proof paths must be explicit unless the input group is empty.
+Run sessions are generated when omitted. Use run --no-results to skip result publication.";
 const COMMANDS: &[Command] = &[
     Command {
         name: "check",
@@ -60,11 +65,28 @@ Select an Entry by unique short name or qualified module::Name. The report lists
         description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.\nProject output defaults to build/zkc/<qualified.name>.zkpkg beside the manifest.\nExplicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
     },
     Command {
+        name: "new",
+        summary: "Create a project in a new directory",
+        positional: "DIRECTORY",
+        options: &[Opt::new("--compiler=PATH")],
+        description: "Create a minimal source project and its input templates. The directory must not exist.",
+    },
+    Command {
         name: "init",
-        summary: "Create a minimal source project",
+        summary: "Initialize a project in an existing directory",
         positional: "[DIRECTORY]",
-        options: &[],
-        description: "Create zkc.toml, protocol.zkc and main.zkc without replacing existing files.",
+        options: &[Opt::new("--compiler=PATH")],
+        description: "Initialize the current or selected directory with source and input templates.
+Existing projects and conflicting files refuse; use prepare for an existing project.",
+    },
+    Command {
+        name: "prepare",
+        summary: "Prepare missing input templates for project Entries",
+        positional: "[ENTRY]",
+        options: &[Opt::new("--project=FILE"), Opt::new("--compiler=PATH")],
+        description: "Prepare all declared Entries, or one selected Entry. Repeated calls preserve existing files.
+Values, dynamic lengths and variant cases must be filled by the user.
+Use inputs check to validate existing input contents; no protocol is executed.",
     },
     Command {
         name: "inspect",
@@ -115,6 +137,7 @@ Select an Entry by unique short name or qualified module::Name. The report lists
             CAPACITY,
             Opt::new("--limits=LIMITS"),
             RESULTS,
+            Opt::new("--no-results"),
         ),
         description: ENTRY,
     },
@@ -193,7 +216,7 @@ fn help() -> String {
     for command in COMMANDS {
         text.push_str(&format!("  {:<24} {}\n", command.name, command.summary));
     }
-    text.push_str("\nOptions:\n  -h, --help                Show help\n  --version                 Show the package version\n\nUse 'zkc COMMAND --help' for arguments; use zkc-compile for direct IR.\nDocumentation: https://github.com/zkcompiler/zkc/tree/main/docs\n");
+    text.push_str("\nOptions:\n  -h, --help                Show help\n  --version                 Show the package version\n  --json                    Print a structured command report\n\nUse 'zkc COMMAND --help' for arguments; use zkc-compile for direct IR.\nDocumentation: https://github.com/zkcompiler/zkc/tree/main/docs\n");
     text
 }
 
@@ -252,14 +275,14 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
     let Some(spec) = command(name) else {
         return serde_json::json!({"status":"refused", "phase":"arguments", "code":"unknown-command"});
     };
-    let args = match spec.parse(args) {
+    let mut args = match spec.parse(args) {
         Ok(args) => args,
         Err(error) => {
             let format = match name {
                 "compile" => "zkc.entry-build/0",
                 "check" => "zkc.source-check/0",
                 "inspect" => "zkc.entry-inspection/0",
-                "init" | "inputs init" => "zkc.project-init/0",
+                "init" | "new" | "prepare" | "inputs init" => "zkc.project-init/0",
                 "run-bundle" => "zkc.bundle-result/0",
                 "prove-bundle" | "verify-bundle" => "zkc.native-proof-run/0",
                 _ => "zkc.entry-result/0",
@@ -268,6 +291,9 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
                 "code":error.code, "message":error.message});
         }
     };
+    // Presentation is shared by all commands; execution adapters only receive
+    // options that affect the requested operation.
+    args.options.retain(|(key, _)| *key != "--json");
     match name {
         "compile" | "check" => crate::project::cli::run(name, &args),
         "run-bundle" => crate::run::cli::run(&args),
@@ -291,6 +317,7 @@ pub fn succeeded(report: &serde_json::Value) -> bool {
                     | "accepted"
                     | "generated"
                     | "initialized"
+                    | "prepared"
                     | "inputs-checked"
             )
         )

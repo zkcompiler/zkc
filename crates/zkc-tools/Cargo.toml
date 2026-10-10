@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 [dependencies]
 toml.workspace = true
+rand.workspace = true
 serde = { workspace = true, features = ["derive"] }
 zkc-runtime.workspace = true
 zkc-backends.workspace = true

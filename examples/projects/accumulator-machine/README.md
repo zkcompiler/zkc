@@ -34,7 +34,7 @@ zkc verify --package=build/machine.zkpkg --sha256=PACKAGE_SHA256 \
   --public=build/machine-inputs/public.json --proof=build/machine.proof
 ```
 
-Use the `package_sha256` printed by compilation in place of `PACKAGE_SHA256`.
+Use the `Package SHA-256` shown by compilation (`package_sha256` with `--json`) in place of `PACKAGE_SHA256`.
 Choose `ProofProduct` at compilation for the other reduction. The input
 format is the same. The maintained tests run these commands with isolated tools
 and reports. `prepare.py --memory-clocks 16 --memory-present` exercises a longer,

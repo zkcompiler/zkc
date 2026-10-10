@@ -28,13 +28,14 @@ def test_discovery_without_protocol_inputs(toolchain, directory, tool):
 
 
 @pytest.mark.parametrize("command", ["run-bundle", "prove-bundle", "verify-bundle",
-                                    "compile", "inspect", "run", "prove", "verify", "bindings"])
+                                    "new", "init", "prepare", "check", "compile", "inspect",
+                                    "run", "prove", "verify", "bindings"])
 def test_runtime_command_help(toolchain, directory, command):
-    result = run_process([toolchain.runtime, command, "--help"], cwd=directory,
+    result = run_process([toolchain.runtime, '--json', command, "--help"], cwd=directory,
                             capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr
     assert command in result.stdout and "Usage:" in result.stdout
-    later = run_process([toolchain.runtime, command, "missing", "--help"], cwd=directory,
+    later = run_process([toolchain.runtime, '--json', command, "missing", "--help"], cwd=directory,
                         capture_output=True, text=True, timeout=15)
     assert later.returncode == 0 and later.stdout == result.stdout
     if command in ("verify", "verify-bundle"):
@@ -47,11 +48,14 @@ def test_runtime_command_help(toolchain, directory, command):
 
 def test_usage_and_execution_failures_remain_distinct(toolchain, directory):
     def invoke(*args):
-        return run_process([toolchain.runtime, *args], cwd=directory,
+        return run_process([toolchain.runtime, '--json', *args], cwd=directory,
                               capture_output=True, text=True, timeout=15)
 
     result = invoke()
     assert result.returncode == 2 and "Usage:" in result.stderr and not result.stdout
+    for flag in ("--help", "--version"):
+        result = invoke(flag)
+        assert result.returncode == 0 and 'zkc' in result.stdout and not result.stderr
     for args in [("invalid-command",), ("invalid-command", "--help"),
                  ("invalid-command", "a", "b", "c", "d")]:
         result = invoke(*args)
@@ -113,5 +117,5 @@ def test_published_mathematical_walkthrough(marker, toolchain, directory, journa
                                  (proof, "native-proof-deployment-binding", "00" * 32)]:
         candidate = output / "invalid.bin"
         candidate.write_bytes(data)
-        journal.json([toolchain.runtime, "verify-bundle", deployment, expected,
+        journal.json([toolchain.runtime, '--json', "verify-bundle", deployment, expected,
                       output / "validator-inputs.json", candidate, "--allow-header-only"], refuses=code)

@@ -85,6 +85,15 @@ impl RunEntry {
     pub fn limits(&self) -> HostLimits {
         self.native.limits()
     }
+    pub(crate) fn output_types(
+        &self,
+    ) -> impl Iterator<Item = &zkc_runtime::interactive::PhysicalType> {
+        self.native
+            .bundle()
+            .roles()
+            .iter()
+            .flat_map(|role| &role.entry.outputs)
+    }
 
     /// Names cover every role and input exactly. Missing service allowances use
     /// DEFAULT_DRAW_BUDGET; explicit zero is preserved. Empty logical

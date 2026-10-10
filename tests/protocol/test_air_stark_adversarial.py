@@ -126,7 +126,7 @@ def build(toolchain, journal, directory, name, *, main=None, asset=None, edits=(
     label, bundle = asset or ('recurrence', FIXTURE / 'bundle.json')
     arguments.append(f'--asset={label}=relation-bundle-json={bundle}')
     package = where / 'Proof.zkpkg'
-    report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+    report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                            *arguments, 'air_stark_example::Proof', f'--output={package}'])
     emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
                            '--entry=air_stark_example::Proof', *arguments])
@@ -138,7 +138,7 @@ def prove(toolchain, journal, variant, name, public, private):
     label = f'{variant.package.parent.name}-{name}'
     producer = request(journal, label + '-producer', public, private)
     proof = variant.package.with_name(name + '.bin')
-    made = journal.json([toolchain.runtime, 'prove', f'--package={variant.package}', f'--sha256={variant.pin}', *producer, f'--output={proof}'])
+    made = journal.json([toolchain.runtime, '--json', 'prove', f'--package={variant.package}', f'--sha256={variant.pin}', *producer, f'--output={proof}'])
     assert made['status'] == 'produced'
     assert len(frames(proof.read_bytes())) == 8 + 16 * public['query_count']
     return proof
@@ -147,7 +147,7 @@ def prove(toolchain, journal, variant, name, public, private):
 def verify(toolchain, journal, variant, name, public, proof, *, refuses=None):
     label = f'{variant.package.parent.name}-{name}'
     verifier = request(journal, label + '-verifier', public)
-    return journal.json([toolchain.runtime, 'verify', f'--package={variant.package}', f'--sha256={variant.pin}', *verifier, f'--proof={proof}'],
+    return journal.json([toolchain.runtime, '--json', 'verify', f'--package={variant.package}', f'--sha256={variant.pin}', *verifier, f'--proof={proof}'],
                         refuses=refuses)
 
 
@@ -172,7 +172,7 @@ def test_false_trace_with_truncated_quotient_stops_at_identity(toolchain, journa
     shipped = build(toolchain, journal, directory, 'shipped')
     producer = request(journal, 'shipped-false-producer', public, false_private)
     refused = shipped.package.with_name('false.bin')
-    made = journal.attempt([toolchain.runtime, 'prove', f'--package={shipped.package}', f'--sha256={shipped.pin}', *producer, f'--output={refused}'])
+    made = journal.attempt([toolchain.runtime, '--json', 'prove', f'--package={shipped.package}', f'--sha256={shipped.pin}', *producer, f'--output={refused}'])
     assert made.returncode == 1 and not refused.exists()
     report = json.loads(made.stdout)
     assert report['status'] == 'refused' and report['code'].startswith('artifact-stopped:')

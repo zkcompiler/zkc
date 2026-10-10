@@ -2,14 +2,15 @@
 use serde_json::Value as Json;
 
 pub(super) fn canonical_name(name: &str) -> bool {
-    name.contains("::")
-        && name.split("::").all(|part| {
-            let mut bytes = part.bytes();
-            bytes
-                .next()
-                .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
-                && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
-        })
+    name.contains("::") && name.split("::").all(identifier)
+}
+
+pub(super) fn identifier(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    bytes
+        .next()
+        .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+        && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
 pub(super) fn matches(request: Option<&str>, canonical: &str) -> bool {

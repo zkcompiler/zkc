@@ -156,7 +156,16 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
             report["package_sha256"] = json!(hex(package.identity()));
             let path = match output {
                 Some(path) => path.to_owned(),
-                None => super::output::default_path(&source.project, view.entry())?,
+                None => {
+                    let path = source
+                        .project
+                        .layout()
+                        .ok_or("source-output-required")?
+                        .artifact(view.entry(), super::Artifact::Package)?;
+                    std::fs::create_dir_all(path.parent().unwrap())
+                        .map_err(|_| "source-output-directory")?;
+                    path.to_str().ok_or("source-output-name")?.to_owned()
+                }
             };
             destinations = Outputs::new(&[&path], &[])?;
             source.protect(&mut destinations)?;

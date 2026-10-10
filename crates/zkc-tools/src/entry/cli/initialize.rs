@@ -1,48 +1,82 @@
 use super::*;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-pub(super) fn project(args: &Arguments<'_>, report: &mut Json) -> Result<()> {
-    let directory = Path::new(args.positional.first().copied().unwrap_or("."));
-    std::fs::create_dir_all(directory).map_err(|_| "entry-output-directory")?;
-    let contents = [
-        (
-            "zkc.toml",
-            r#"format = "zkc.project/0"
+use crate::project::{Compiler, Project, Template, input_path};
 
-[modules]
-example = "main.zkc"
-example_protocol = "protocol.zkc"
-"#,
-        ),
-        (
-            "protocol.zkc",
-            r#"module example_protocol;
-
-pub protocol Echo roles(P)(value: index @P) -> (result: index @P) {
-  return value;
-}
-"#,
-        ),
-        (
-            "main.zkc",
-            r#"module example;
-use example_protocol::{Echo};
-
-run Main = Echo;
-"#,
-        ),
-    ];
-    create(directory, &contents, report, |_| Ok(()))?;
+pub(super) fn project(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()> {
+    let directory = std::path::absolute(args.positional.first().copied().unwrap_or("."))
+        .map_err(|_| "source-project-io")?;
+    directory.to_str().ok_or("source-project-format")?;
     let manifest = directory.join("zkc.toml");
-    let project = format!("--project={}", manifest.display());
+    let compiler = Compiler::new(args.value("--compiler").unwrap_or("zkc-compile"))
+        .map_err(|e| crate::project::cli::compiler_error(report, e))?;
+    if command == "new" {
+        std::fs::create_dir(&directory).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::AlreadyExists {
+                if manifest.symlink_metadata().is_ok() {
+                    "source-project-exists"
+                } else if directory.is_dir() {
+                    "source-directory-exists"
+                } else {
+                    "source-project-directory"
+                }
+            } else {
+                "source-project-io"
+            }
+        })?;
+    } else if !directory.is_dir() {
+        return Err("source-project-directory".into());
+    }
+    if manifest.symlink_metadata().is_ok() {
+        return Err("source-project-exists".into());
+    }
     report["project"] = json!(manifest);
-    report["next"] = json!([
-        ["zkc", "check", &project],
-        ["zkc", "inputs", "init", &project]
-    ]);
+    report["mode"] = json!("project");
+    report["compiler"] = json!(compiler.path());
+    create(&Template::scaffold(&directory), false, report, |_| Ok(()))?;
+    let project = Project::load(&manifest)?;
+    report["phase"] = json!("preparation");
+    let plan = compiler
+        .prepare(&project, None)
+        .map_err(|e| crate::project::cli::compiler_error(report, e))?;
+    create(&plan.templates, true, report, |outputs| {
+        outputs.protect(project.paths())
+    })?;
+    describe_plan(&plan.entries, report);
     report["status"] = json!("initialized");
     report["phase"] = json!("complete");
     Ok(())
+}
+
+pub(super) fn prepare(args: &Arguments<'_>, report: &mut Json) -> Result<()> {
+    let source = crate::project::cli::Source::load(args)?;
+    source.describe(report);
+    report["phase"] = json!("preparation");
+    let plan = source
+        .compiler
+        .prepare(&source.project, args.positional.first().copied())
+        .map_err(|e| crate::project::cli::compiler_error(report, e))?;
+    create(&plan.templates, true, report, |outputs| {
+        source.protect(outputs)
+    })?;
+    describe_plan(&plan.entries, report);
+    report["status"] = json!("prepared");
+    report["phase"] = json!("complete");
+    Ok(())
+}
+
+fn describe_plan(interfaces: &[Interface], report: &mut Json) {
+    report["entries"] = json!(interfaces.iter().map(|interface| json!({
+        "name": interface.entry(),
+        "input_groups": interface.input_groups().iter().map(|g| g.describe()).collect::<Vec<_>>(),
+        "requirements": requirements(interface),
+    })).collect::<Vec<_>>());
+}
+fn requirements(interface: &Interface) -> Json {
+    json!({
+        "allow_header_only": interface.proof().is_some_and(|p| p.suite.is_none()),
+        "setups": interface.setup_names().collect::<Vec<_>>(),
+    })
 }
 pub(super) fn inputs(
     target: &Target,
@@ -53,38 +87,23 @@ pub(super) fn inputs(
     let directory = match args.value("--output") {
         Some(path) => PathBuf::from(path),
         None => match target {
-            Target::Project(source) => {
-                let manifest = source.project.manifest().ok_or("source-output-required")?;
-                let name = crate::project::output::portable_name(interface.entry(), "")?;
-                let parent = manifest
-                    .parent()
-                    .ok_or("source-project-format")?
-                    .join("inputs");
-                crate::project::output::check_collision(&parent, &name)?;
-                parent.join(name)
-            }
+            Target::Project(source) => source
+                .project
+                .layout()
+                .ok_or("source-output-required")?
+                .inputs(interface.entry())?,
             Target::Package { .. } => return Err("source-output-required".into()),
         },
     };
+    let project_defaults =
+        matches!(target, Target::Project(source) if source.project.layout().is_some());
     let groups = interface.input_groups();
-    let contents: Vec<_> = groups
-        .iter()
-        .filter(|g| !g.is_empty())
-        .map(|g| {
-            (
-                format!("{}.json", g.name()),
-                serde_json::to_string_pretty(&g.template()).expect("serializable template") + "\n",
-            )
-        })
-        .collect();
-    std::fs::create_dir_all(&directory).map_err(|_| "entry-output-directory")?;
-    let borrowed: Vec<_> = contents
-        .iter()
-        .map(|(name, body)| (name.as_str(), body.as_str()))
-        .collect();
-    create(&directory, &borrowed, report, |outputs| {
-        target.protect(outputs)
-    })?;
+    create(
+        &Template::inputs(&directory, interface)?,
+        false,
+        report,
+        |outputs| target.protect(outputs),
+    )?;
     report["input_groups"] = json!(groups.iter().map(|g| g.describe()).collect::<Vec<_>>());
     let selection: Vec<String> = match target {
         Target::Project(source) => {
@@ -103,12 +122,12 @@ pub(super) fn inputs(
             vec![format!("--package={path}"), format!("--sha256={pin}")]
         }
     };
-    let file = |name: &str| {
-        format!(
+    let file = |name: &str| -> Result<String> {
+        Ok(format!(
             "--{}={}",
             name,
-            directory.join(format!("{name}.json")).display()
-        )
+            input_path(&directory, name)?.display()
+        ))
     };
     let mut commands = Vec::new();
     for command in if interface.is_proof() {
@@ -120,27 +139,28 @@ pub(super) fn inputs(
         args.extend(selection.clone());
         if interface.is_proof() {
             if !groups[0].is_empty() {
-                args.push(file("public"));
+                args.push(file("public")?);
             }
             if command == "prove" && !groups[1].is_empty() {
-                args.push(file("witness"));
+                args.push(file("witness")?);
             }
-            args.push(
-                if command == "prove" {
-                    "--output=proof.zkproof"
-                } else {
-                    "--proof=proof.zkproof"
-                }
-                .into(),
-            );
+            if !project_defaults {
+                args.push(
+                    if command == "prove" {
+                        "--output=proof.zkproof"
+                    } else {
+                        "--proof=proof.zkproof"
+                    }
+                    .into(),
+                );
+            }
         } else {
-            args.push("--session=example".into());
             for group in &groups {
                 if !group.is_empty() {
                     args.push(format!(
                         "--input={}={}",
                         group.name(),
-                        directory.join(format!("{}.json", group.name())).display()
+                        input_path(&directory, group.name())?.display()
                     ));
                 }
             }
@@ -148,37 +168,60 @@ pub(super) fn inputs(
         commands.push(args);
     }
     report["commands"] = json!(commands);
-    report["requirements"] = json!({
-        "allow_header_only": interface.proof().is_some_and(|p| p.suite.is_none()),
-        "setups": interface.setup_names().collect::<Vec<_>>(),
-    });
+    report["requirements"] = requirements(interface);
     report["status"] = json!("initialized");
     report["phase"] = json!("complete");
     Ok(())
 }
 fn create(
-    directory: &Path,
-    contents: &[(&str, &str)],
+    templates: &[Template],
+    preserve: bool,
     report: &mut Json,
     protect: impl FnOnce(&mut Outputs) -> Result<()>,
 ) -> Result<()> {
-    let paths = contents
+    use std::io::ErrorKind;
+    let mut pending = Vec::new();
+    let mut preserved = Vec::new();
+    let mut names = std::collections::BTreeSet::new();
+    for template in templates {
+        let path = template.path.to_str().ok_or("entry-output-path")?;
+        if !names.insert(path.to_ascii_lowercase()) {
+            return Err("source-output-collision".into());
+        }
+        match template.path.symlink_metadata() {
+            Err(e) if e.kind() == ErrorKind::NotFound => pending.push(template),
+            Ok(metadata) if preserve && metadata.is_file() => preserved.push(path),
+            Ok(_) => {
+                report["conflict"] = json!(path);
+                return Err("entry-output-exists".into());
+            }
+            Err(_) => return Err("artifact-publish-io".into()),
+        }
+    }
+    for template in &pending {
+        std::fs::create_dir_all(template.path.parent().ok_or("entry-output-path")?)
+            .map_err(|_| "entry-output-directory")?;
+    }
+    let paths = pending
         .iter()
-        .map(|(name, _)| {
-            directory
-                .join(name)
-                .to_str()
-                .map(str::to_owned)
-                .ok_or("entry-output-path")
-        })
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    let mut outputs = Outputs::new(&paths.iter().map(String::as_str).collect::<Vec<_>>(), &[])?;
+        .map(|t| t.path.to_str().unwrap())
+        .collect::<Vec<_>>();
+    let mut outputs = Outputs::new(&paths, &[])?;
     protect(&mut outputs)?;
-    let bytes = contents
+    let bytes = pending
         .iter()
-        .map(|(name, body)| (*name, body.as_bytes()))
+        .map(|t| (t.path.to_str().unwrap(), t.contents.as_bytes()))
         .collect::<Vec<_>>();
     outputs.create(&bytes, report)?;
-    report["files"] = json!(paths);
+    let files = report
+        .as_object_mut()
+        .unwrap()
+        .entry("files")
+        .or_insert_with(|| json!([]));
+    files
+        .as_array_mut()
+        .unwrap()
+        .extend(paths.iter().map(|p| json!(p)));
+    report["preserved"] = json!(preserved);
     Ok(())
 }

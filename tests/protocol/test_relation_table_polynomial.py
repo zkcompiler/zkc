@@ -114,7 +114,7 @@ class Client:
         module.write_text(text)
         asset = journal.write('bundle.json', bundle) if bundle else RECURRENCE / 'bundle.json'
         self.package = directory / 'polynomial.zkpkg'
-        report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                                f'--module=polynomial_view={module}',
                                f'--asset=recurrence=relation-bundle-json={asset}',
                                'polynomial_view::Polynomial',
@@ -124,7 +124,7 @@ class Client:
     def run(self, name, inputs, refuses=None):
         path = input_files(self.journal, name, roles={'Evaluator': {'inputs': inputs}})
         output = self.directory / f'{name}.outputs.json'
-        command = [self.tools.runtime, 'run', f'--package={self.package}', f'--sha256={self.pin}', *path, f'--results={output}']
+        command = [self.tools.runtime, '--json', 'run', f'--package={self.package}', f'--sha256={self.pin}', *path, f'--results={output}']
         report = self.journal.json(command, cwd=ROOT, refuses=refuses)
         if refuses:
             assert report['status'] == 'refused'
