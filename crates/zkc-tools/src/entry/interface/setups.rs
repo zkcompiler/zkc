@@ -6,6 +6,7 @@ use zkc_runtime::interactive::Type;
 #[derive(Debug)]
 pub(in crate::entry) struct Setup {
     pub name: String,
+    pub native_name: String,
     pub inputs: BTreeSet<usize>,
     pub verifier_keys: BTreeSet<usize>,
 }
@@ -44,7 +45,7 @@ pub(super) fn check(
     let mut names = BTreeSet::new();
     let mut covered = BTreeSet::new();
     let mut result = Vec::new();
-    for slot in &document.setups {
+    for (index, slot) in document.setups.iter().enumerate() {
         schemas.charge(1 + slot.name.len() + slot.inputs.len())?;
         require(
             identifier(&slot.name) && names.insert(&slot.name) && !slot.inputs.is_empty(),
@@ -52,6 +53,7 @@ pub(super) fn check(
         )?;
         let mut setup = Setup {
             name: slot.name.clone(),
+            native_name: crate::source_names::native_setup_name(index as u32),
             inputs: BTreeSet::new(),
             verifier_keys: BTreeSet::new(),
         };

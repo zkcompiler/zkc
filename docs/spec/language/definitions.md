@@ -6,10 +6,10 @@ This native contract defines captured modules, declarations, types and source bo
 
 A capture is a nonempty map from logical module paths to exact UTF-8 bytes.
 Each file starts with `module path;` matching its captured name. Module paths
-use `::`; identifiers match `[A-Za-z_][A-Za-z0-9_]*`. Keywords are reserved except
-contextual `run`, `proof`, `operator`, `as` and `primitive`. These words have
-special meaning only in their declaration/import positions.
-Comments start with `//`. Tokens retain trivia and byte spans.
+use `::`; every segment follows the [Unicode 17 identifier profile](lexical.md).
+Names retain exact NFC UTF-8 bytes, with no silent normalization. The lexical
+contract also defines contextual keywords, ASCII strings, UTF-8 comments and
+mathematical tokens. Tokens retain trivia and original UTF-8 byte spans.
 
 Module declarations are private unless prefixed with `pub`. Interface/component
 members are exposed through their owner; associated representations retain their
@@ -82,14 +82,19 @@ resource-limit diagnostics.
 ### Module imports and operator scope
 
 `use zkc::vector;` imports the alias `vector` and that module's public operator
-bindings. `use zkc::vector as vec;` changes the alias. A selected import such as
+and delimiter bindings. `use zkc::vector as vec;` changes the alias. A selected
+import such as
 `use zkc::vector::{Vector, add};` imports only those names;
 `use zkc::vector::{Vector, operator +};` also imports the selected public operator
-family. A qualified reference alone activates no operators. `pub use` reexports
-the selected names, aliases and bindings with their original identities; ordinary
+family, including all exported fixities for the token. `notation ⟪` selects a
+public delimiter shape. A qualified reference alone activates no notation.
+`pub use` reexports the selected names, aliases and bindings with their original identities; ordinary
 imports remain private. Duplicate imports of the same identity are harmless.
 Conflicting names/aliases, missing exports and import cycles refuse. Captured
-module ordering and import ordering do not choose overloads.
+module ordering and import ordering do not choose overloads. Exported bindings
+carry their resolved descriptors, including those introduced privately; their
+targets must still be public. [Notation scope](notation.md#imports-and-lexical-scope)
+defines descriptor conflicts, whole-module visibility and local replacement.
 
 The reserved `zkc::prelude` module belongs to the compiler installation. Its exact
 source is embedded and included in installation identity. Captures cannot supply
@@ -104,6 +109,11 @@ captured inputs.
 
 ## Definition checking and Entry closure
 
+Analysis first collects fixed declaration headers and body token ranges, resolves
+the existing import graph, then parses bodies under immutable notation environments.
+It checks unused bodies too; [staging](notation.md#staging-and-retained-evidence)
+defines declaration-prefix collection and work accounting.
+
 Analysis completes each callable's contract from its declaration and body,
 then checks applications against that contract. Callers never determine a
 definition's inferred result or preconditions. The resulting `CheckedProject`
@@ -117,7 +127,8 @@ source errors in any definition still reject analysis.
 
 An instance key contains the qualified declaration name and canonical static
 arguments, with each component length framed. A declaration fixes its body mode.
-Concrete instances retain the encoded declaration symbol when
+Declaration symbols use the [UTF-8 segment encoding](translation.md#source-and-native-names)
+for ASCII and Unicode names alike. Concrete instances retain that symbol when
 it fits the native 128-byte identifier limit. Longer paths and specializations use `zkl_`
 followed by the complete SHA-256 key digest; distinct keys that produce the same
 symbol are refused. No declaration-table index enters the symbol. Local logical
@@ -149,6 +160,8 @@ an exceeded bound refuses without publishing a partial result.
 The direct compiler and CLI emit the same flat `zkc.source-check/0` successful
 result. It records `status`, `phase`, `scope`, `capture`, `installation`, optional
 `declarations`, and `entry`/`original` for Entry scope. The CLI adds `compiler`.
+The separate [notation inspection view](notation.md#inspection) describes syntax
+environments and occurrences; it does not change callable declaration records.
 
 ## Types and static terms
 
@@ -674,23 +687,24 @@ no separate static list. Fixed primitive static interfaces remain positional.
 
 ### Library-defined operators
 
-The fixed ASCII binary operators `+`, `-`, `*` and `==` resolve to ordinary
-callable signatures. A module declares `pub operator + = add;`; a private
-binding omits `pub`. Targets must be mathematical or local functions with exactly
-two data inputs and one **written** result type. Equality requires a Boolean
-result. Protocols are not operator targets. Public bindings may expose only
-public targets. Unused declarations and bindings are checked too.
+Operators and paired-delimiter notation resolve to ordinary callable signatures.
+The [notation contract](notation.md) defines declarations, fixity, exact binding
+powers, delimiter holes and scope. A target must be mathematical or local, have
+one written result type and exactly the descriptor's number of data inputs:
+two for infix, one for prefix/postfix, and one per delimiter hole. Only reserved
+`==` requires a Boolean result. Protocols and implicit services are not targets.
+Public bindings require public targets. Unused bindings are checked too.
 
 A block can begin with `operator + = A::add;`, where `A` is an explicit component
-parameter, or with bindings to other visible functions. Targets accept partial
-static arguments, names and holes, for example `operator * = scale<F = F>;`.
-Bindings precede executable statements. The nearest block declaring a symbol
-replaces its entire outer family; nested blocks inherit it. Resolution never
-falls back to an outer family because a local target has unsuitable types.
-Component parameters supply dictionaries explicitly; there is no instance search.
+parameter, or with other callable bindings. Targets accept partial static
+arguments, names and holes, such as `operator * = scale<F = F>;`. The nearest
+block declaring a descriptor replaces its entire inherited callable family;
+there is no fallback based on operand types. Target names resolve at the binding's
+definition site. Component dictionaries are explicit, with no instance search.
 
-Named calls and operators share signature constraints. Each statement is solved
-as one problem, including expected results, literals and nested calls. Existing
+Named, operator and delimited calls share signature constraints. Candidates are
+filtered by descriptor arity before input-coherence checking. Each statement is
+solved as one problem, including expected results, literals and nested calls. Existing
 `let` boundaries remain: a later statement cannot resolve an earlier one.
 Structural contexts such as `match` propagate constraints from uniquely viable
 signatures before reading their scrutinee type. They still require a known
@@ -704,13 +718,15 @@ limit. Incomplete inference uses `source.inference`; missing or ambiguous operat
 meanings use `source.operator`; exhausted search uses `source.limit`.
 
 Only the selected target proceeds through ordinary body, cycle, permission,
-requirement, effect and participant checks. Both operands evaluate once in written
-order. Definition checking retains the chosen target, statics, component, source
-binding and canonical visible family. A separate structural checker re-enumerates
-the lexical family from the checked scope, checks input coherence and authored
-operand order, compares the inferred result, and validates the emitted native
-action without invoking the overload solver or its candidate enumerator. Inconsistent evidence refuses with
-`source.binding-witness`. Specialization substitutes static arguments and retains
+requirement, effect and participant checks. Every operand evaluates once in written
+order. Collecting constraints evaluates no operand and introduces no synthetic
+`let` boundary. Definition checking retains the chosen target, statics, component,
+source binding and canonical visible family. A separate structural checker re-enumerates
+the descriptor-specific lexical family from the checked scope, validates descriptor
+identity, arity and binding origin, checks input coherence and the complete authored
+operand-order vector `[0, ..., arity - 1]`, compares the inferred result, and
+validates the emitted native action without invoking the overload solver or its
+candidate enumerator. Inconsistent evidence refuses with `source.binding-witness`. Specialization substitutes static arguments and retains
 the definition's target/family identities; it never resolves notation in a caller's
 scope. This executable check is not a formal proof of elaboration correctness.
 
@@ -770,12 +786,10 @@ Opaque runtime intrinsics are not exposed by this profile.
 
 Bodies use lexical `let` and `let mut` bindings, whole-name assignment, nested
 block expressions and a final `return`. [Body semantics](protocols.md#bindings-and-local-control)
-define scopes, patterns and resource joins. Arithmetic uses
-`*`, `+`, `-`, `==`, parentheses and field/group contracts. From highest to
-lowest, operator precedence is `!`, multiplication, addition/subtraction,
-equality, `&&`, then `||`. Binary operators at each level associate left to
-right, except chained equality needs
-parentheses. No implicit field conversion occurs. Field literals need a unique
+define scopes, patterns and resource joins. Arithmetic retains the fixed
+`*`, `+`, `-` and `==` descriptors and field/group contracts; imported notation
+adds callable spellings under the [binding-power rules](notation.md#expression-association).
+Chained equality requires parentheses. No implicit field conversion occurs. Field literals need a unique
 expected field from an annotation, operand, call or result. Installed contracts
 check canonical spelling and characteristic bounds without modular reduction.
 For an abstract field, only the universally valid literals `0` and `1` are admitted.
@@ -805,6 +819,8 @@ have no native leaves; its result must also pass the bounded interface reader.
 | Charged work per phase | 4,000,000 |
 | Emitted MLIR; interface JSON | 16 MiB; 4 MiB |
 | Encoded symbol; diagnostic path bytes | 4096 each |
+| Active notation descriptor keys per environment; delimiter holes | 4096; 64 |
+| Notation inspection JSON | 8 MiB |
 | Location records, five 64-bit coordinates each | 16 MiB |
 
 The work ceiling accommodates composed source libraries while preserving charges
@@ -812,7 +828,9 @@ for each traversal. File, type, instance, operation and output ceilings remain
 independent; a higher work allowance does not admit a larger type or deeper call.
 
 Parse depth bounds both recursive parsing and constructed type/natural syntax
-trees, including operator chains.
+trees, including operator chains. [Notation limits](notation.md#bounds) also
+count fixed Boolean descriptors, retain environment/hole maxima and recheck
+lowered limits before reuse of a checked project.
 
 The comparator performs whole-module admission once before comparing SSA. Target
 admission, expansion and execution retain their own limits. A checked source may

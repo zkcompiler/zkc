@@ -1155,8 +1155,11 @@ def variant_share_witnesses():
                                ("opening_state:rows.merkle-keccak256.koala-bear/0", "builtin", False)]:
         # A literal canonical postorder graph for Choice = Empty | Value(leaf).
         # No production variant builder supplies this independently authored graph.
-        nodes = ["zkc.language", "test::Choice", ["0", "1"], "Empty", [], ["3", "4"],
-                 "Value", leaf, ["7"], ["6", "8"], ["5", "9"], ["2", "10"]]
+        # Native identity carries the hex preimage and cases follow roster order;
+        # the logical schema below retains the source alternative names.
+        nodes = ["zkc.language", "test::Choice".encode().hex(), ["0", "1"],
+                 "case00000000", [], ["3", "4"], "case00000001", leaf, ["7"],
+                 ["6", "8"], ["5", "9"], ["2", "10"]]
         spelling = "variant:" + json.dumps(["zkc.variant/0", nodes], separators=(",", ":")).encode().hex()
         spellings.append(spelling)
         for multi in (False, True):

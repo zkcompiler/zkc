@@ -4,6 +4,7 @@ mod host;
 pub mod proof;
 pub mod run;
 mod source;
+pub mod source_names;
 
 /// Command discovery and file transport. Applications use entry, proof, or run.
 pub mod cli;

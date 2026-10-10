@@ -3,6 +3,7 @@
 
 #include "zkc/Contracts/Mathematical.h"
 #include "zkc/Language/Assets.h"
+#include "zkc/Language/Notation.h"
 #include "zkc/Language/Types.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
@@ -61,6 +62,8 @@ struct Limits {
   uint64_t importDepth = 64, callDepth = 64;
   uint64_t declarations = 10000, operations = 100000, work = 4000000;
   uint64_t irBytes = 16777216, symbolBytes = 4096;
+  uint64_t notationDescriptors = 4096, notationHoles = 64;
+  uint64_t notationInspectionBytes = 8388608;
   uint64_t interfaceBytes = 4194304, locationBytes = 16777216;
   uint64_t typeDepth = 32, typeNodes = 100000, instances = 4096;
   uint64_t aggregateLeaves = 1024, naturalTerms = 1024, naturalFactors = 64;
@@ -241,6 +244,7 @@ struct CallBinding {
   std::string symbol;
   std::vector<std::string> family;
   std::optional<Span> origin;
+  std::optional<NotationDescriptor> notation;
 };
 struct Operation {
   std::variant<MathValue, HelperCall, BulkApplication, Exchange, Restriction,
@@ -453,6 +457,7 @@ class CapturedProject;
 class CheckedProject;
 class Analysis;
 class ClosedEntry;
+struct NotationInspectionOptions;
 llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
                                         const CaptureOptions & = {});
 llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
@@ -495,6 +500,8 @@ public:
   uint64_t checkedWork() const;
   uint64_t checkedDeclarations() const;
   uint64_t checkedOperations() const;
+  uint64_t checkedNotationDescriptors() const;
+  uint64_t checkedNotationHoles() const;
   /// All named Entries (including aliases), sorted by qualified name.
   std::vector<DeclarationId> entries() const;
 
@@ -503,6 +510,9 @@ private:
   explicit CheckedProject(std::shared_ptr<const detail::CheckedStorage>);
   std::shared_ptr<const detail::CheckedStorage> storage;
   friend Analysis analyze(const CapturedProject &, const Limits &);
+  friend llvm::Expected<std::string>
+  inspectNotations(const CheckedProject &, const NotationInspectionOptions &,
+                   const Limits &);
 };
 
 /// Recovery tokens and diagnostics cannot be promoted to checked state.

@@ -1083,8 +1083,9 @@ int main(int argc, char **argv) {
   });
   mutation(full, "helper target", [](auto module) {
     auto *call = first(module, "func.call");
-    call->setAttr("callee", mlir::FlatSymbolRefAttr::get(module.getContext(),
-                                                         "s7_algebra5_other"));
+    call->setAttr("callee",
+                  mlir::FlatSymbolRefAttr::get(
+                      module.getContext(), "s7h616c67656272615h6f74686572"));
   });
   mutation(full, "helper operand order", [](auto module) {
     auto *call = first(module, "func.call");
@@ -1093,8 +1094,9 @@ int main(int argc, char **argv) {
   });
   mutation(full, "combined helper edit", [](auto module) {
     auto *call = first(module, "func.call");
-    call->setAttr("callee", mlir::FlatSymbolRefAttr::get(module.getContext(),
-                                                         "s7_algebra5_other"));
+    call->setAttr("callee",
+                  mlir::FlatSymbolRefAttr::get(
+                      module.getContext(), "s7h616c67656272615h6f74686572"));
     auto a = call->getOperand(0), b = call->getOperand(1);
     call->setOperands({b, a});
   });

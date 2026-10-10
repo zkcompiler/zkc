@@ -44,11 +44,64 @@ with exact nominal identity and payload layouts. A noncopyable restricted nomina
 or associated value has a leading `resource_unit` custody leaf even when its data
 is empty. Custody slot identities use the complete SHA-256 digest of canonical source type identity, with collision refusal; traversal order does not affect them. Empty unrestricted products have no leaves, but remain logical values.
 
-Qualified symbol components encode as `s` followed by each component's decimal
-byte length, `_`, and spelling. `example::Transfer` becomes `s7_example8_Transfer`.
-Specialized symbols use the [framed semantic key](definitions.md#definition-checking-and-entry-closure). Ordered site identities
-use a per-function preorder occurrence counter, with bounded leaf suffixes where
-one logical operation expands. Whitespace and comments do not affect these sites.
+## Source and native names
+
+Source names follow the [Unicode profile](lexical.md); native identities retain
+their existing ASCII grammars. Language owns the conversion through
+[Names.h](../../../compiler/include/zkc/Language/Names.h), with an independent
+implementation in Rust Entry tooling. No source/native mapping supplied by an
+application is accepted.
+
+A declaration symbol is `s` followed by one frame for each qualified source
+segment: its original UTF-8 byte length in decimal without leading zeros, `h`,
+then lowercase hex of its exact bytes. `m::α` becomes `s1h6d2hceb1`;
+`m::A` becomes `s1h6d1h41`. The same encoding applies to every ASCII and Unicode
+segment. Expansion is checked against `symbolBytes` before allocation.
+Specialized symbols and long native names retain the
+[framed semantic key and collision checks](definitions.md#definition-checking-and-entry-closure).
+
+Each admitted ordered roster determines native labels by zero-based ordinal:
+
+| Source roster | Native spelling |
+|---|---|
+| Protocol participants | `role` plus eight lowercase hexadecimal digits |
+| Entry setup slots | `setup` plus eight lowercase hexadecimal digits |
+| Variant alternatives | `case` plus eight lowercase hexadecimal digits |
+
+The first two participants are `role00000000` and `role00000001`. ASCII source
+names use these labels too; a source name that looks like a native label gains
+no special treatment. Roster count and uniqueness are checked before derivation.
+The authenticated order alone establishes correspondence, never a spelling guess
+or a separately supplied mapping.
+
+Emission and independent comparison translate every role use, including call
+substitutions, selectors and proof choices. Source interfaces retain source role,
+setup and alternative names. Their readers compare those ordered rosters against
+the derived native labels. Variant constructors, matches and value codecs use
+`case` ordinals, while logical layouts keep original alternative names. Entry
+admission translates both setup authority keys and setup material keys, as well
+as role inputs and results. Native Runner and PIR consumers use native labels;
+Entry commands expose source names.
+
+A native variant's nominal identity is the pair
+`["zkc.language", lowercase_hex(full_preimage)]`. The preimage is the complete
+original UTF-8 canonical source type key, including statics. It is not replaced
+by a chosen label or just a digest. Both interface readers require canonical
+lowercase even-length hex, bound encoded and decoded sizes before allocation,
+decode valid UTF-8 and hash those exact bytes to check the logical identity.
+Custody continues to use the full source type-key digest.
+
+Ordered site identities use a per-function preorder occurrence counter, with
+bounded leaf suffixes where one logical operation expands. Whitespace and comments
+do not affect those sites. Operation/domain IDs, backend service strings, asset
+keys and hashes retain their existing grammars.
+
+This encoding changes generated labels and compiled artifact/transcript bytes
+for ASCII source as well as Unicode source. Source evaluation and public Entry
+keys retain their meanings; cross-build byte equality is not promised. Producers,
+readers and fixtures use one current version-0 schema, without legacy readers.
+
+## Independent source comparison
 
 Before simplification, the compiler reparses exact emitted bytes, verifies the
 whole native module and independently compares actual SSA with checked source.
@@ -56,7 +109,7 @@ It consumes every definition and operation, including unused work, and checks
 layouts, operands, bindings, modes, helper targets, roles, sites, captures, carry,
 variant arms, custody and returns. The comparison never calls emission. Both consume the checked graph; this
 comparison does not independently establish lexical elaboration correctness.
-Before translation, library operators also pass the separate
+Before translation, callable operators and delimiter notation also pass the separate
 [binding witness check](definitions.md#library-defined-operators). It validates
 resolution evidence against the lexical family and native action; it does not
 prove the parser, name resolver or complete source semantics. An equivalent

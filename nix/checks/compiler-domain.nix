@@ -4,6 +4,7 @@
   ninja,
   python3,
   llvm,
+  utf8proc,
   lib,
   source,
   base,
@@ -21,6 +22,7 @@ stdenv.mkDerivation {
   buildInputs = [
     llvm.mlir
     llvm.llvm.dev
+    utf8proc
   ];
   dontConfigure = true;
   dontBuild = true;

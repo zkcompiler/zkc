@@ -14,8 +14,13 @@ Checker::Checker(std::vector<SyntaxModule> syntax, CheckedStorage &output,
 Error Checker::run() {
   if (auto error = checkCapabilityInstallation())
     return error;
-  if (!collect() || !imports())
+  if (!collect() || !imports() || !prepareNotationSyntax())
     return types.takeError();
+  for (auto &module : syntax)
+    if (auto error = parseBodies((*output.sources)[module.id.index], module,
+                                 output.tokens[module.id.index],
+                                 notationEnvironments[module.id.index], work))
+      return error;
   for (auto &decl : output.declarations)
     if (!decl.abstract && !sources[decl.id.index]->explicitRequirements &&
         (decl.kind == Declaration::Kind::Math ||
@@ -93,6 +98,8 @@ Error Checker::run() {
       return types.takeError();
   }
   if (!entries())
+    return types.takeError();
+  if (!retainNotations())
     return types.takeError();
   return Error::success();
 }

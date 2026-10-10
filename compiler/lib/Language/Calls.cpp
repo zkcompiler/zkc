@@ -11,7 +11,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     fail("source.call", "role mappings belong to protocol calls", expr.span);
     return {};
   }
-  if (expr.text == "index") {
+  if (expr.kind == Expression::Kind::Call && expr.text == "index") {
     if (!local() || expr.arguments.size() != 1 || !expr.children.empty() ||
         !expr.staticLabels.empty() || !expr.callLabels.empty()) {
       fail("source.call",
@@ -28,7 +28,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     return emit(LocalPrimitive{"index.constant", {}, {}, {*value}},
                 Type(Type::Kind::Index), {}, expr.span);
   }
-  if (expr.text == "unpack") {
+  if (expr.kind == Expression::Kind::Call && expr.text == "unpack") {
     if (!local() || expr.children.size() != 1 || !expr.arguments.empty() ||
         !expr.callLabels.empty()) {
       fail("source.call", "unpack requires one local value", expr.span);
@@ -213,17 +213,29 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
       return {};
     resultComponents = *available;
   }
-  CallBinding evidence{target, staticArgs, args, {}, {}, {}};
+  CallBinding evidence{target, staticArgs, args, {}, {}, {}, {}};
+  if (expr.kind == Expression::Kind::NotationCall &&
+      (!expr.notation || !inference->operators.count(id))) {
+    fail("source.binding-witness", "notation call has no selected binding",
+         expr.span);
+    return {};
+  }
   if (auto found = inference->operators.find(id);
       found != inference->operators.end()) {
-    evidence.symbol = operatorSymbol(expr.kind).str();
+    if (expr.kind != Expression::Kind::NotationCall || !expr.notation) {
+      fail("source.binding-witness",
+           "notation binding has no source descriptor", expr.span);
+      return {};
+    }
+    evidence.symbol = operatorSymbol(expr).str();
+    evidence.notation = *expr.notation;
     evidence.family = found->second.family;
     evidence.origin = found->second.binding;
-    if (!checkOperatorOperands(checker.types, evidence, binding,
-                               authoredOperands, expr.span))
-      return {};
     auto visible = checker.operatorWitnessFamily(decl, syntax, id);
     if (!visible)
+      return {};
+    if (!checkOperatorOperands(checker.types, *expr.notation, evidence, binding,
+                               authoredOperands, expr.span))
       return {};
     std::vector<Type> inputTypes;
     for (auto arg : args)
@@ -235,8 +247,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
       return {};
     }
     if (!checkOperatorWitness(checker.types, checker.output.declarations,
-                              *visible, evidence, inputTypes, *inferred,
-                              expr.span))
+                              *visible, *expr.notation, evidence, inputTypes,
+                              *inferred, expr.span))
       return {};
   }
   auto emitCall = [&](decltype(Operation::action) action,

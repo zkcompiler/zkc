@@ -26,6 +26,8 @@ int main() {
   }
   auto capture = zkc::language::capture(
       {{"m", R"(module m;
+    pub operator infixl(65) ⊕ = zkc::prelude::index_add;
+    pub fn 合成(α:index,β:index)->index{return α⊕β;}
     struct Pair<T:Type>{pub first:T,pub second:T}
     pub fn swap<T:Type+Copy+Drop>(x:Pair<T>)->Pair<T>{
       return Pair<T>{first:x.second,second:x.first};
@@ -61,6 +63,14 @@ int main() {
   if (declarations->find("m::swap") == std::string::npos ||
       zkc::language::formatDiagnostics({}, &*capture).size() != 0)
     return 11;
+  auto notations = zkc::language::inspectNotations(*checked);
+  if (!notations) {
+    llvm::errs() << llvm::toString(notations.takeError());
+    return 15;
+  }
+  if (notations->find("m::合成") == std::string::npos ||
+      notations->find("⊕") == std::string::npos)
+    return 16;
   auto selected = zkc::language::selectEntry(*checked, "Demo");
   if (!selected) {
     llvm::errs() << llvm::toString(selected.takeError());
@@ -88,7 +98,7 @@ int main() {
     return 4;
   }
   return (*layout)->fields.size() == 2 && (*layout)->leaves.size() == 2 &&
-                 entry->protocol().symbol == "s1_m3_Run"
+                 entry->protocol().symbol == "s1h6d3h52756e"
              ? 0
              : 5;
 }

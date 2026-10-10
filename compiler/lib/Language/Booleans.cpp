@@ -19,10 +19,7 @@ bool BodyChecker::mathematicalExpression(uint32_t id, unsigned depth) {
   };
   using K = Expression::Kind;
   switch (expr.kind) {
-  case K::Add:
-  case K::Subtract:
-  case K::Multiply:
-  case K::Equal:
+  case K::NotationCall:
   case K::Call: {
     auto callee = inference->callees.find(id);
     if (callee == inference->callees.end() ||

@@ -19,12 +19,20 @@ const COMMANDS: &[Command] = &[
             Opt::new("--module=MODULE=FILE.zkc").repeated(),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
             Opt::new("--declarations"),
+            Opt::new("--notations"),
+            Opt::new("--notation-private"),
+            Opt::new("--notation-installation"),
             Opt::new("--compiler=PATH"),
         ],
-        description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.
+        description:
+            "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.
 All definitions are checked; ENTRY also checks closure and Protocol IR correspondence.
 Select an Entry by unique short name or qualified module::Name. The report lists Entries.
---declarations reports completed public callable contracts.\nChecking does not execute the protocol or establish its security.",
+--declarations reports completed public callable contracts.
+--notations reports diagnostic syntax metadata. Add --notation-private for local/private
+records or --notation-installation for installation records; both require --notations.
+Syntax metadata is not a native interface. Named-call views are tooling aids,
+not capture-preserving rewrites.\nChecking does not execute the protocol or establish its security.",
     },
     Command {
         name: "compile",
@@ -169,6 +177,17 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
                 "code":error.code, "message":error.message});
         }
     };
+    if name == "check"
+        && !args.options.iter().any(|(name, _)| *name == "--notations")
+        && args
+            .options
+            .iter()
+            .any(|(name, _)| matches!(*name, "--notation-private" | "--notation-installation"))
+    {
+        return serde_json::json!({"format":"zkc.source-check/0", "status":"refused",
+            "phase":"arguments", "code":"cli-option",
+            "message":"notation visibility options require --notations"});
+    }
     match name {
         "compile" | "check" => crate::source::run(name, &args),
         "run-bundle" => crate::run::cli::run(&args),
@@ -201,6 +220,37 @@ mod tests {
     use super::*;
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|s| (*s).into()).collect()
+    }
+
+    #[test]
+    fn notation_flags_are_check_only_unique_and_require_the_inventory() {
+        let check = command("check").unwrap();
+        assert!(check.parse(&args(&["--notations"])).is_ok());
+        let values = args(&[
+            "--notations",
+            "--notation-private",
+            "--notation-installation",
+        ]);
+        let parsed = check.parse(&values).unwrap();
+        assert_eq!(parsed.options.len(), 3);
+        for flag in [
+            "--notations",
+            "--notation-private",
+            "--notation-installation",
+        ] {
+            assert_eq!(run("compile", &args(&[flag]))["code"], "cli-option");
+            assert_eq!(run("check", &args(&[flag, flag]))["code"], "cli-option");
+            assert_eq!(
+                run("check", &[format!("{flag}=true")])["code"],
+                "cli-option"
+            );
+            assert_eq!(run("check", &[format!("{flag}=")])["code"], "cli-option");
+        }
+        for flag in ["--notation-private", "--notation-installation"] {
+            let report = run("check", &args(&[flag, "--project=does-not-exist.toml"]));
+            assert_eq!(report["code"], "cli-option");
+            assert_eq!(report["phase"], "arguments");
+        }
     }
 
     #[test]

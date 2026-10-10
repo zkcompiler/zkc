@@ -82,7 +82,9 @@ The checked project exposes all Entry declaration IDs sorted by qualified name.
 `selectEntry` and `closeEntry` share these rules: an exact qualified name must
 name an Entry; a short name must match exactly one Entry's terminal identifier;
 an empty selector requires exactly one Entry across the capture. Complete
-aliases remain distinct candidates. Missing or ambiguous selections refuse with
+aliases remain distinct candidates. Selectors use exact NFC names under the
+[Unicode source profile](lexical.md); no normalization or confusable-name matching
+is performed. Missing or ambiguous selections refuse with
 `source.entry` and list canonical candidate names and kinds. Adding candidates
 cannot silently change a previously successful selection to another Entry.
 

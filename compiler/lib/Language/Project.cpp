@@ -6,6 +6,7 @@
 #include "zkc/Contracts/Relation.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Layout.h"
+#include "zkc/Language/Names.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/ConvertUTF.h"
@@ -49,6 +50,9 @@ std::optional<StringRef> exceededLimit(const Limits &limits,
   CHECK_LIMIT(work);
   CHECK_LIMIT(irBytes);
   CHECK_LIMIT(symbolBytes);
+  CHECK_LIMIT(notationDescriptors);
+  CHECK_LIMIT(notationHoles);
+  CHECK_LIMIT(notationInspectionBytes);
   CHECK_LIMIT(interfaceBytes);
   CHECK_LIMIT(locationBytes);
   CHECK_LIMIT(typeDepth);
@@ -116,11 +120,8 @@ bool isReserved(StringRef name) {
       "each"};
   return words.count(name) || isUnsupported(name);
 }
-bool isIdentifier(StringRef name) {
-  if (name.empty() || !(isAlpha(name.front()) || name.front() == '_'))
-    return false;
-  return llvm::all_of(name, [](char c) { return isAlnum(c) || c == '_'; });
-}
+bool isIdentifier(StringRef name) { return isSourceIdentifier(name); }
+
 bool isPath(StringRef path, const Limits &limits) {
   if (path.empty() || path.size() > limits.moduleBytes)
     return false;
@@ -193,7 +194,9 @@ static Error checkSources(ArrayRef<SourceBuffer> sources,
         asset.bytes.size() > limits.assetTotalBytes - total)
       return failure("source.limit", "captured asset byte limit exceeded");
     total += asset.bytes.size();
-    if (!isPath(asset.name, limits) || !names.insert(asset.name).second)
+    if (!llvm::all_of(asset.name,
+                      [](unsigned char byte) { return byte < 128; }) ||
+        !isPath(asset.name, limits) || !names.insert(asset.name).second)
       return failure("source.asset",
                      "invalid or duplicate captured asset name");
     if (asset.format != "r1cs-json" && asset.format != "r1cs-binary" &&
@@ -277,6 +280,12 @@ ArrayRef<Token> CheckedProject::tokens(ModuleId id) const {
 StringRef CheckedProject::installationIdentity() const {
   return storage->installation;
 }
+uint64_t CheckedProject::checkedNotationDescriptors() const {
+  return storage->notationDescriptors;
+}
+uint64_t CheckedProject::checkedNotationHoles() const {
+  return storage->notationHoles;
+}
 uint64_t CheckedProject::checkedWork() const { return storage->work; }
 uint64_t CheckedProject::checkedDeclarations() const {
   return storage->declarationCount;
@@ -346,6 +355,8 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits) {
     checked->work = work.used;
     checked->declarationCount = work.declarations;
     checked->operationCount = work.operations;
+    checked->notationDescriptors = work.notationDescriptors;
+    checked->notationHoles = work.notationHoles;
     output->checked = CheckedProject(checked);
     return Error::success();
   };
@@ -362,16 +373,15 @@ Expected<std::string> encodeSymbol(StringRef path, const Limits &limits) {
     return detail::failure("source.limit", "qualified name limit exceeded");
   SmallVector<StringRef> parts;
   path.split(parts, "::");
-  std::string symbol = "s";
   for (auto part : parts) {
     if (part.size() > limits.identifierBytes || !detail::isIdentifier(part) ||
         detail::isReserved(part))
       return detail::failure("source.name", "invalid qualified name");
-    symbol += std::to_string(part.size()) + "_" + part.str();
-    if (symbol.size() > limits.symbolBytes)
-      return detail::failure("source.limit", "symbol byte limit exceeded");
   }
-  return symbol;
+  auto symbol = encodeSourceSymbol(path, limits.symbolBytes);
+  if (!symbol)
+    return detail::failure("source.limit", "symbol byte limit exceeded");
+  return *symbol;
 }
 std::vector<DeclarationId> CheckedProject::entries() const {
   std::vector<DeclarationId> result;
@@ -391,7 +401,9 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
   if (name.size() > limits.moduleBytes + limits.identifierBytes + 2)
     return detail::failure("source.limit", "Entry name byte limit exceeded");
   if (project.checkedWork() > limits.work ||
-      project.checkedDeclarations() > limits.declarations)
+      project.checkedDeclarations() > limits.declarations ||
+      project.checkedNotationDescriptors() > limits.notationDescriptors ||
+      project.checkedNotationHoles() > limits.notationHoles)
     return detail::failure("source.limit",
                            "checked project exceeds requested limits");
   if (name.contains("::")) {
@@ -553,6 +565,7 @@ std::string installedCatalogIdentity() {
       detail::frame(value, field);
     rows.push_back(std::move(value));
   };
+  row({"source-name-profile", sourceNameProfileIdentity()});
   row({"prelude", "zkc::prelude", detail::digest(installedPrelude)});
   const auto &catalog = protocol::installedDomains();
   for (const auto &domain : catalog.allDomains()) {

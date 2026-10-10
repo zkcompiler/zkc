@@ -17,7 +17,8 @@ exported as `zkc.program/0` for the generic participant runtime.
 
 Use the repository [development guide](../docs/development/README.md) and
 [test guide](../tests/README.md#selecting-checks). A matching LLVM/MLIR installation
-is required. Configure CMake with `-S compiler -B BUILD -DMLIR_DIR=...`; build
+and utf8proc 2.12.0 are required. Configure CMake with
+`-S compiler -B BUILD -DMLIR_DIR=... -Dutf8proc_DIR=...`; build
 with `cmake --build BUILD -j4` and run `ctest --test-dir BUILD --output-on-failure`.
 The same source supports static and shared libraries. Install into a fresh prefix
 with `cmake --install BUILD --prefix PREFIX` and build `tests/consumer` against
@@ -30,7 +31,11 @@ are `language-check`, `language-emit`, `language-interface`, `language-bundle`,
 and `language-package`, with explicit `--module=NAME=FILE.zkc`, selected Entry,
 and optional `--asset=NAME=FORMAT=FILE` inputs. `language-check` may omit the
 Entry to check definitions alone; `--declarations` reports completed public
-callable contracts. `zkc check` and `compile` also accept an explicit
+callable contracts. The separate
+[notation inspection surface](../docs/language/notation.md#inspect-notation-and-locations)
+provides `--notations` and explicit private/installation visibility options; its
+completion status is tracked in [status](../docs/status.md#source-and-application-boundary).
+`zkc check` and `compile` also accept an explicit
 [project map](../docs/language/README.md#project-inputs). Language Assets retain binary R1CS
 and AIR data ingress without generating an intermediate authored language.
 
@@ -81,10 +86,10 @@ Header paths are relative to `zkc/`. C++ namespaces express semantic subjects;
 The `Tools` package component imports `Zkc::zkc-compile`, `Zkc::zkc-opt` and
 `Zkc::zkc-tblgen`; it has no `Zkc::Tools` library target.
 
-Support, Contracts, Relation, Language and Program discover, compile and link
-with LLVM alone. Language depends on Contracts and Relation; Program depends on
-Contracts. IR adds MLIR and depends on Program and Relation. Transforms depends
-on IR; Translation depends on IR and Language; Compiler depends on Transforms
+Support, Contracts, Relation and Program use LLVM without MLIR. Language also
+requires the pinned external utf8proc library for NFC; it depends on Contracts
+and Relation and still has no MLIR dependency. Program depends on Contracts.
+IR adds MLIR and depends on Program and Relation. Transforms depends on IR; Translation depends on IR and Language; Compiler depends on Transforms
 and Translation; Driver depends on Compiler. Compiler does not link CLI Driver.
 Tools imports Driver's dependency closure.
 
@@ -104,6 +109,29 @@ LLVM-only requests. Native components additionally discover MLIR and installed
 contribution dependencies. The SDK retains these external installations rather
 than bundling them. Static and shared libraries use the same component contract;
 install into a fresh prefix and relocate the entire prefix together.
+
+For source capture, checking and inspection without MLIR:
+
+```cmake
+find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS Language)
+add_executable(source_client main.cpp)
+target_link_libraries(source_client PRIVATE Zkc::Language)
+```
+
+Provide utf8proc 2.12.0 through `CMAKE_PREFIX_PATH` or `utf8proc_DIR` as well as
+the matching LLVM installation. Language discovery requires that exact version
+and its `utf8proc::utf8proc` CMake target for both static and shared consumers;
+the SDK does not bundle the dependency. A missing or incompatible dependency
+makes Language and its dependent components unavailable. A preloaded target or
+explicit package directory cannot silently select a different version. This
+request works with `CMAKE_DISABLE_FIND_PACKAGE_MLIR=TRUE`.
+
+The [Unicode manifest](../support/unicode/manifest.json) pins raw UCD hashes and
+normalizers: utf8proc 2.12.0 for C++, `unicode-normalization` 0.1.25 for Rust.
+Classification is generated offline from Unicode 17.0.0 inputs, independently
+of either normalizer's repertoire. The manifest, generator and raw inputs enter
+compiler build identity. NFC preserves exact admitted source spelling; see the
+[lexical contract](../docs/spec/language/lexical.md).
 
 Component names are case-sensitive. Unknown required components make discovery
 fail; optional unknown components report `ZkcCompiler_<component>_FOUND=FALSE`.

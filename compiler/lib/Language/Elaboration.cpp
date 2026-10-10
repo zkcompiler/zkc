@@ -15,6 +15,7 @@ bool elaborateExpressions(Checker &checker, SyntaxDeclaration &syntax) {
                            (kind != K::And && kind != K::Or)))
       continue;
     auto expression = syntax.expressions[i];
+    expression.notation.reset();
     if (!checker.types.charge(4, expression.span))
       return false;
     Expression literal;

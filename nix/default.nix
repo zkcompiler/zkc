@@ -7,6 +7,7 @@ let
   };
   inherit (pkgs) lib;
   llvm = pkgs.llvmPackages_23;
+  utf8proc = pkgs.callPackage ./utf8proc.nix { stdenv = llvm.stdenv; };
   rust = pkgs.rust-bin.fromRustupToolchainFile ../rust-toolchain.toml;
   rustDev = rust.override {
     extensions =
@@ -37,13 +38,14 @@ let
     "tests/support"
   ];
   compiler = pkgs.callPackage ./compiler.nix {
-    inherit llvm;
+    inherit llvm utf8proc;
     source = sourceFor "compiler" (
       nativeSupport
       ++ [
         "compiler"
         "examples"
         "libraries"
+        "support/unicode"
       ]
     );
     stdenv = llvm.stdenv;
@@ -93,7 +95,7 @@ let
   domainCheck =
     shared:
     pkgs.callPackage ./checks/compiler-domain.nix {
-      inherit llvm shared;
+      inherit llvm shared utf8proc;
       stdenv = llvm.stdenv;
       python3 = python;
       source = compiler.src;
@@ -112,6 +114,7 @@ let
         "Cargo.lock"
         "rust-toolchain.toml"
         "crates"
+        "support/unicode"
         # Native relation tests consume the maintained compiler and adapter fixtures.
         "compiler/test/fixtures/relation/polynomial-chunks.json"
         "compiler/adapters/accumulator-machine/fixtures"
@@ -299,6 +302,7 @@ in
       llvm
       python
       environment
+      utf8proc
       ;
     rust = rustDev;
   };

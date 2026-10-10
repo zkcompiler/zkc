@@ -39,6 +39,20 @@ directories in trusted `PATH`. `--no-simplify` and `--release-storage` choose
 compilation options without skipping source comparison. Maintained
 [projects](../../examples/projects/README.md) provide complete inputs and commands.
 
+## Source names and native labels
+
+Entry requests and logical outputs use the original NFC source names, including
+Unicode participants, ports, fields, alternatives and setup slots. They do not
+silently normalize names. Raw UTF-8 and valid equivalent JSON escapes identify
+the same decoded name. Use the names reported by `inspect`.
+
+The authenticated interface maps those names by declaration order to native
+`role00000000`, `setup00000000` and `case00000000` labels (eight lowercase hex
+digits, starting at zero). This applies to ASCII source too. Direct Runner/PIR
+APIs and `run-bundle`, `prove-bundle` and `verify-bundle` use the native artifact's
+labels; `run`, `prove` and `verify` perform the source-name conversion. Applications
+cannot supply an alternative renaming table.
+
 ## Named inputs
 
 A run request names every participant, including those without inputs:
@@ -89,6 +103,8 @@ Run Entries also accept `--limits=FILE` for the `zkc.bundle-limits/0`
 ```
 
 The request's `setups` map supplies canonical verifier-key bytes for those slots.
+Both this material map and the authority file use source slot names. The Entry
+Host translates both to the same authenticated native setup labels.
 Omit verifier-key input ports: the Host initializes them through checked Entry
 associations. Prover-key inputs use a pinned file or Rust `ProverMaterial`.
 File paths resolve from the invoking process's working directory.
@@ -106,6 +122,9 @@ logical results using `zkc.entry-outputs/0`; non-Wire private values cannot be
 serialized. [Publication](../spec/runtime/publication.md) defines file limits,
 path admission, staging, per-file replacement and partial publication reports.
 A publication failure never triggers automatic reexecution.
+The nested `execution` diagnostic retains native report labels, including
+ordinal participants; logical result maps retain source names. The Rust report's
+`native` member follows the same native-report contract.
 
 ## Rust applications
 
@@ -128,6 +147,9 @@ zkc bindings proof.zkpkg EXPECTED_SHA256 bindings.rs
 The module pins that package and provides named input/output structures, setup
 and service constants, `into_inputs`, `into_role` and `take`. Mathematical leaves
 use `entry::Value`; native admission still checks domain, permissions and setup.
-The bindings contain no protocol arithmetic or custom interpreter. Regenerate
+Generated Rust identifiers use `__zkc_` plus full UTF-8 byte hex for Unicode,
+Rust keywords and source names beginning with that reserved prefix; an allocator
+also resolves generated-name collisions. Serialized keys and role constants keep
+original source names. The bindings contain no protocol arithmetic or custom interpreter. Regenerate
 them when the authorized package changes. The [tools crate](../../crates/zkc-tools/README.md)
 owns the API inventory.

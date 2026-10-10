@@ -33,6 +33,11 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
       if (!types.charge(binding.operands.size() + binding.symbol.size() + 1,
                         op.span))
         return false;
+      if (binding.notation &&
+          !types.charge(binding.notation->symbol.size() +
+                            binding.notation->closing.size() + 1,
+                        op.span))
+        return false;
       for (const auto &member : binding.family)
         if (!types.charge(member.size() + 1, op.span))
           return false;

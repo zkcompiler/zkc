@@ -94,6 +94,11 @@ int main() {
     a.bytes = "invalid";
     refuses(capture({source()}, {a, a}, {}), "source.asset");
   });
+  cases.run("Unicode source names do not widen captured asset keys", [] {
+    auto a = r1cs();
+    a.name = "回路";
+    refuses(capture({source()}, {a}, {}), "source.asset");
+  });
   cases.run("unknown asset format refuses", [] {
     auto a = r1cs();
     a.format = "guess";
