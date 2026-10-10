@@ -22,7 +22,7 @@ fetch Lake dependencies, or build the project. Use `just setup` explicitly;
 the same operation is available as
 `nix develop --command python3 scripts/develop.py setup`.
 
-Native product source sets exclude Python test orchestration and unrelated integration fixtures. Test derivations add their own inputs. `checks.sources` verifies representative inclusions and exclusions. Documentation, style and harness discovery inspect the full maintained repository; optional Lean integrations have separate source sets. Update the owning list in `nix/sources.nix` when a package or check starts reading a new path.
+Compiled package source sets exclude Python test orchestration and unrelated integration fixtures. Test derivations add their own inputs. `checks.sources` verifies representative inclusions and exclusions. Documentation, style and harness discovery inspect the full maintained repository; optional Lean integrations have separate source sets. Update the owning list in `nix/sources.nix` when a package or check starts reading a new path.
 
 ## Toolchain and concurrency
 

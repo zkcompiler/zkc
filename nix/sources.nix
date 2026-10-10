@@ -38,8 +38,7 @@ let
     "compiler/adapters/accumulator-machine/fixtures"
     "compiler/adapters/plonky3/fixtures/recurrence"
   ];
-  lean = [
-    "lean"
+  leanFixtures = [
     "common/tests/fixtures/variants/history-contracts.txt"
     "common/tests/fixtures/blocks"
   ];
@@ -106,21 +105,35 @@ let
         ];
       markdown = true;
     };
-    lean = {
-      paths = lean;
-      exclude = [ "lean/integrations" ];
-    };
-    arklib.paths = [ "lean/integrations/arklib" ];
-    leanChecks.paths =
-      lean
-      ++ runner
-      ++ [
-        "common/tests/support"
-        "common/tests/fixtures/variants"
-        "common/tests/fixtures/clean/air-control.json"
-        "justfile"
-        "examples/relations/multiply.r1cs.json"
-      ];
+    lean.paths = [
+      "lean/lakefile.toml"
+      "lean/lake-manifest.json"
+      "lean/lean-toolchain"
+      "lean/Zkc.lean"
+      "lean/Zkc"
+      "lean/Tests"
+      "lean/Examples"
+      "lean/Tools"
+      "common/tests/fixtures/variants/history-contracts.txt"
+    ];
+    arklib.paths = [
+      "lean/integrations/arklib"
+      "lean/checks/check_clients.py"
+      "lean/clients"
+      "lean/support/lake.py"
+      "lean/support/evidence.py"
+    ];
+    leanChecks.paths = [
+      "lean"
+    ]
+    ++ leanFixtures
+    ++ runner
+    ++ [
+      "common/tests/support"
+      "common/tests/fixtures/variants"
+      "common/tests/fixtures/clean/air-control.json"
+      "examples/relations/multiply.r1cs.json"
+    ];
     llzk.paths = [
       "compiler/adapters/llzk"
       "compiler/include/zkc/Support/MLIRInput.h"
