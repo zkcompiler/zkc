@@ -1,3 +1,4 @@
+#include "BindingWitness.h"
 #include "BodyCheck.h"
 #include "zkc/Language/Builtins.h"
 #include <algorithm>
@@ -129,6 +130,15 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     fail("source.call", "expected a mathematical or local helper", expr.span);
     return {};
   }
+  if (callee.primitive &&
+      llvm::is_contained(
+          std::initializer_list<StringRef>{"index.add", "index.sub",
+                                           "index.mul", "index.equal"},
+          StringRef(callee.primitive->identity)) &&
+      !local()) {
+    fail("source.mode", "index primitives require local mode", expr.span);
+    return {};
+  }
   bool ordered = callee.kind == Declaration::Kind::Local;
   if (ordered && math()) {
     fail("source.mode", "ordered calls require local or protocol mode",
@@ -144,6 +154,12 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
         *target.component);
   const auto &binding = inference->inputs.at(id);
   std::vector<ValueId> args(callee.inputs.size());
+  std::vector<ValueId> authoredOperands;
+  if (binding.size() != expr.children.size() ||
+      llvm::any_of(binding, [&](unsigned i) { return i >= args.size(); })) {
+    fail("source.binding-witness", "call input mapping differs", expr.span);
+    return {};
+  }
   for (unsigned i = 0; i < expr.children.size(); ++i) {
     const auto parameter = binding[i];
     auto type = checker.types.substitute(callee.inputs[parameter].type, subst,
@@ -154,6 +170,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     if (!arg || !use(*arg, expr.span))
       return {};
     args[parameter] = *arg;
+    authoredOperands.push_back(*arg);
   }
   auto resultType =
       checker.types.substitute(callee.outputs.front().type, subst, expr.span);
@@ -204,9 +221,76 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
       return {};
     resultComponents = *available;
   }
-  auto result = emit(
+  CallBinding evidence{target, staticArgs, args, {}, {}, {}};
+  if (auto found = inference->operators.find(id);
+      found != inference->operators.end()) {
+    evidence.symbol = operatorSymbol(expr.kind).str();
+    evidence.family = found->second.family;
+    evidence.origin = found->second.binding;
+    if (!checkOperatorOperands(checker.types, evidence, binding,
+                               authoredOperands, expr.span))
+      return {};
+    auto visible = checker.operatorWitnessFamily(decl, syntax, id);
+    if (!visible)
+      return {};
+    std::vector<Type> inputTypes;
+    for (auto arg : args)
+      inputTypes.push_back(body.values[arg.index].type);
+    auto inferred = inferredType(id);
+    if (!inferred) {
+      fail("source.binding-witness", "operator result type is unresolved",
+           expr.span);
+      return {};
+    }
+    if (!checkOperatorWitness(checker.types, checker.output.declarations,
+                              *visible, evidence, inputTypes, *inferred,
+                              expr.span))
+      return {};
+  }
+  auto emitCall = [&](decltype(Operation::action) action,
+                      Components available) -> std::optional<ValueId> {
+    auto value =
+        emit(std::move(action), *resultType, std::move(available), expr.span);
+    if (!value)
+      return {};
+    auto &operation = body.operations.back();
+    operation.binding = evidence;
+    if (!checkCallAction(checker.types, checker.output.declarations, body,
+                         operation))
+      return {};
+    return value;
+  };
+  // Ordered protocol calls retain the participant-owned call boundary. In
+  // local code, primitive functions use exactly the registered operation.
+  if (callee.primitive && !(ordered && protocol())) {
+    const auto &primitive = *callee.primitive;
+    const auto *mathematical = mathematicalIntrinsic(primitive.identity);
+    std::vector<Type> roots;
+    for (const auto &root : primitive.arguments) {
+      auto value = checker.types.substitute(root, subst, expr.span);
+      if (!value)
+        return {};
+      roots.push_back(std::move(*value));
+    }
+    if (!local())
+      return emitCall(MathValue{mathematical->identity,
+                                std::move(args),
+                                {},
+                                mathematical->scalar ? std::vector<Type>{}
+                                                     : std::move(roots)},
+                      std::move(resultComponents));
+    if (!mathematical || mathematical->scalar) {
+      LocalPrimitive action{primitive.identity, std::move(args), {}};
+      if (!mathematical)
+        action.bindingArguments = std::move(roots);
+      return emitCall(std::move(action), {});
+    }
+    // Formal intrinsics keep the existing realization path when called from
+    // executable source; scalar primitives require no helper application.
+  }
+  auto result = emitCall(
       HelperCall{callee.id, std::move(args), staticArgs, target.component, {}},
-      *resultType, std::move(resultComponents), expr.span);
+      std::move(resultComponents));
   if (result && variable)
     placement->calls.emplace_back(body.operations.size() - 1, *variable);
   return result;

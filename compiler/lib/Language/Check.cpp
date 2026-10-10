@@ -46,6 +46,8 @@ Error Checker::run() {
   for (unsigned i = 0; i < output.declarations.size(); ++i)
     if (!signature(DeclarationId{i}))
       return types.takeError();
+  if (!prepareOperators())
+    return types.takeError();
   if (!relationIdentities())
     return types.takeError();
   bodyState.resize(output.declarations.size());
@@ -96,6 +98,7 @@ Error Checker::run() {
 }
 bool Checker::bindingName(const Declaration &decl, StringRef name, Span span) {
   if (visible[decl.module.index].count(name.str()) ||
+      aliases[decl.module.index].count(name.str()) ||
       llvm::any_of(decl.parameters, [&](auto &p) { return p.name == name; }))
     return types.fail(
         "source.shadow",
@@ -118,7 +121,7 @@ bool Checker::collect() {
     decl.span = source.span;
     decl.qualifiedName =
         (parent ? output.declarations[parent->index].qualifiedName
-                : output.capture.sources()[module.index].module) +
+                : (*output.sources)[module.index].module) +
         "::" + source.name;
     decl.isPublic = source.isPublic;
     decl.abstract = source.abstract;
@@ -201,68 +204,11 @@ bool Checker::collect() {
     return true;
   };
   for (auto &module : syntax) {
-    modules.emplace(output.capture.sources()[module.id.index].module,
-                    module.id);
+    modules.emplace((*output.sources)[module.id.index].module, module.id);
     for (auto &decl : module.declarations)
       if (!add(decl, module.id, {}))
         return false;
   }
-  return true;
-}
-bool Checker::imports() {
-  std::vector<std::vector<unsigned>> edges(syntax.size());
-  for (auto &module : syntax)
-    for (auto &import : module.imports) {
-      if (!types.charge(import.names.size() + 1, import.span))
-        return false;
-      auto target = modules.find(import.module);
-      if (target == modules.end())
-        return types.fail("source.import",
-                          "module was not explicitly captured: " +
-                              import.module,
-                          import.span);
-      edges[module.id.index].push_back(target->second.index);
-      for (auto &name : import.names) {
-        auto found = qualified.find(import.module + "::" + name);
-        if (found == qualified.end())
-          return types.fail("source.import",
-                            "unknown imported declaration: " + name,
-                            import.span);
-        auto &decl = output.declarations[found->second.index];
-        if (!decl.isPublic)
-          return types.fail("source.private",
-                            "cannot import private declaration: " + name,
-                            import.span, {decl.span});
-        if (!visible[module.id.index].emplace(name, decl.id).second)
-          return types.fail("source.duplicate",
-                            "import conflicts with visible name: " + name,
-                            import.span);
-      }
-    }
-  std::vector<unsigned> active(syntax.size()), height(syntax.size());
-  std::function<bool(unsigned, unsigned)> visit = [&](unsigned i,
-                                                      unsigned depth) {
-    Span span{ModuleId{i}, 0, 0};
-    if (depth > work.limits.importDepth)
-      return types.fail("source.limit", "import depth limit exceeded", span);
-    if (active[i] == 1)
-      return types.fail("source.cycle", "cyclic module imports", span);
-    if (active[i] == 2)
-      return depth - 1 + height[i] <= work.limits.importDepth ||
-             types.fail("source.limit", "import depth limit exceeded", span);
-    active[i] = 1;
-    height[i] = 1;
-    for (auto edge : edges[i]) {
-      if (!types.charge(1, span) || !visit(edge, depth + 1))
-        return false;
-      height[i] = std::max(height[i], height[edge] + 1);
-    }
-    active[i] = 2;
-    return true;
-  };
-  for (unsigned i = 0; i < syntax.size(); ++i)
-    if (!visit(i, 1))
-      return false;
   return true;
 }
 std::optional<DeclarationId> Checker::resolve(const Declaration &context,
@@ -284,6 +230,7 @@ std::optional<DeclarationId> Checker::resolve(const Declaration &context,
     return {};
   };
   std::optional<DeclarationId> root;
+  std::optional<ModuleId> moduleRoot;
   if (!absolute) {
     for (auto parent = context.parent; parent;
          parent = output.declarations[parent->index].parent) {
@@ -297,6 +244,9 @@ std::optional<DeclarationId> Checker::resolve(const Declaration &context,
       auto found = visible[context.module.index].find(head.str());
       if (found != visible[context.module.index].end())
         root = found->second;
+      else if (auto alias = aliases[context.module.index].find(head.str());
+               alias != aliases[context.module.index].end())
+        moduleRoot = alias->second;
     }
   }
   // Descend actual declaration members. A same-named captured module is not
@@ -312,8 +262,23 @@ std::optional<DeclarationId> Checker::resolve(const Declaration &context,
         return {};
       tail = next.second;
     }
-  } else if (auto found = qualified.find(name.str()); found != qualified.end())
+  } else if (moduleRoot) {
+    resolved = moduleMember(*moduleRoot, tail, span);
+  } else if (auto found = qualified.find(name.str());
+             found != qualified.end()) {
     resolved = found->second;
+  } else {
+    auto prefix = name.contains("::") ? name.rsplit("::").first : StringRef{};
+    while (!prefix.empty()) {
+      auto module = modules.find(prefix.str());
+      if (module != modules.end()) {
+        resolved = moduleMember(module->second,
+                                name.drop_front(prefix.size() + 2), span);
+        break;
+      }
+      prefix = prefix.contains("::") ? prefix.rsplit("::").first : StringRef{};
+    }
+  }
   if (!resolved) {
     if (required)
       types.fail("source.name", "unknown declaration: " + name, span);

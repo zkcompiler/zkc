@@ -1,0 +1,2 @@
+// Embedded installation source. This is never read from a source capture.
+static constexpr char installedPrelude[] = R"zkc(@zkc_prelude_source@)zkc";

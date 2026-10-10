@@ -1,5 +1,7 @@
 #include "Arguments.h"
 #include "BodyCheck.h"
+#include "CallableConstraints.h"
+#include "OperatorInference.h"
 #include "TypeInference.h"
 #include "llvm/ADT/STLExtras.h"
 #include <cassert>
@@ -26,9 +28,11 @@ class ExpressionInference {
   Declaration &decl;
   const SyntaxDeclaration &syntax;
   TypeInference types;
+  std::unique_ptr<OperatorInference> operators;
   std::map<BindingId, Variable> bindings;
   std::map<BindingId, Type> services;
   std::map<uint32_t, Result> expressions;
+  std::vector<uint32_t> expressionOrder;
   std::vector<Call> calls;
   ExpressionTypes output;
 
@@ -88,9 +92,70 @@ class ExpressionInference {
     fail("source.service", "expected a managed service binding", expr.span);
     return {};
   }
-  bool finishCalls(unsigned begin, Span span) {
-    if (!types.solve(span))
+  bool finishCalls(unsigned begin, unsigned firstExpression, Span span) {
+    std::optional<Diagnostic> incompleteCall;
+    auto selected = operators->solve(span, [&] {
+      bool complete = true;
+      for (unsigned i = begin; i < calls.size(); ++i) {
+        const auto &call = calls[i];
+        const auto &callee = checker.output.declarations[call.target.index];
+        CallableConstraints constraints{
+            output.callees.at(call.expression), call.parameters, {}, {}};
+        auto arguments =
+            callableArguments(types, checker.types, callee, constraints, span);
+        complete &= arguments.has_value();
+        if (!arguments && !checker.types.diagnostic && !incompleteCall) {
+          for (const auto &parameter : callee.parameters)
+            if (!types.get(call.parameters.at(parameter.atom), span)) {
+              checker.types.fail(
+                  "source.inference",
+                  "cannot infer static argument '" + parameter.name + "' of " +
+                      callee.qualifiedName +
+                      "; supply an explicit static argument or a result type "
+                      "annotation",
+                  syntax.expressions[call.expression].span, {parameter.span});
+              incompleteCall = std::move(checker.types.diagnostic);
+              checker.types.diagnostic.reset();
+              break;
+            }
+        }
+      }
+      for (unsigned i = firstExpression; i < expressionOrder.size(); ++i) {
+        auto id = expressionOrder[i];
+        const auto &value = expressions.at(id);
+        if (!value.stopped)
+          complete &=
+              types.get(value.type, syntax.expressions[id].span).has_value();
+      }
+      return complete;
+    });
+    if (!selected) {
+      if (incompleteCall && checker.types.diagnostic &&
+          checker.types.diagnostic->code == "source.inference")
+        checker.types.diagnostic = std::move(incompleteCall);
       return false;
+    }
+    for (auto &[id, selection] : *selected) {
+      auto &signature = selection.constraints;
+      auto &callee =
+          checker.output.declarations[signature.target.declaration.index];
+      output.callees.emplace(id, signature.target);
+      output.operators.at(id).binding = selection.binding;
+      output.inputs.emplace(id, std::vector<unsigned>{0, 1});
+      // Complete only the selected target. The ordinary body checker owns
+      // cycles, permissions, requirements and execution modes after selection.
+      if (!callee.abstract) {
+        if (!checker.body(
+                callee.id,
+                owner.callDepth +
+                    (checker.sources[callee.id.index]->primitive ? 0 : 1)))
+          return false;
+        checker.bodyHeights[decl.id.index] = std::max(
+            checker.bodyHeights[decl.id.index],
+            checker.bodyHeights[callee.id.index] + (callee.primitive ? 0 : 1));
+      }
+      calls.push_back({id, callee.id, std::move(signature.parameters)});
+    }
     for (unsigned i = begin; i < calls.size(); ++i) {
       auto &call = calls[i];
       if (call.checked)
@@ -144,25 +209,24 @@ class ExpressionInference {
                                     const std::vector<bool> &rows = {}) {
     const auto &expr = syntax.expressions[id];
     if (!callee.abstract) {
-      if (!checker.body(callee.id, owner.callDepth + 1))
+      if (!checker.body(
+              callee.id,
+              owner.callDepth +
+                  (checker.sources[callee.id.index]->primitive ? 0 : 1)))
         return {};
-      checker.bodyHeights[decl.id.index] =
-          std::max(checker.bodyHeights[decl.id.index],
-                   checker.bodyHeights[callee.id.index] + 1);
+      checker.bodyHeights[decl.id.index] = std::max(
+          checker.bodyHeights[decl.id.index],
+          checker.bodyHeights[callee.id.index] + (callee.primitive ? 0 : 1));
     }
-    TypeInference::Parameters parameters;
-    for (const auto &parameter : callee.parameters)
-      parameters.emplace(parameter.atom, types.fresh(expr.span));
+    auto constraints = instantiateCallable(types, checker.types, callee,
+                                           {callee.id, component}, expr.span);
+    if (checker.types.diagnostic)
+      return {};
+    const auto &parameters = constraints.parameters;
     unsigned inherited = 0;
-    if (component && callee.parent) {
-      const auto &interface = checker.output.declarations[callee.parent->index];
-      inherited = interface.parameters.size();
-      for (unsigned i = 0; i < inherited; ++i)
-        constrain(parameters.at(interface.parameters[i].atom),
-                  component->arguments[i], expr.span);
-      parameters.emplace("self:" + interface.qualifiedName,
-                         known(*component, expr.span));
-    }
+    if (component && callee.parent)
+      inherited =
+          checker.output.declarations[callee.parent->index].parameters.size();
     auto staticBinding =
         bindArguments(checker.types,
                       argumentNames<Parameter>(
@@ -198,9 +262,7 @@ class ExpressionInference {
                                         callee.services[slot.index].span),
                       known(*field, expr.span), expr.span);
       } else {
-        auto parameter =
-            types.instantiate(callee.inputs[slot.index].type, parameters,
-                              expr.span, callee.inputs[slot.index].span);
+        auto parameter = constraints.inputs[slot.index];
         auto argument = expression(expr.children[i], depth + 1);
         if (!rows.empty()) {
           // Report a missing or extra `each` before unifying the two modes.
@@ -218,11 +280,8 @@ class ExpressionInference {
       }
     }
     std::vector<Variable> results;
-    for (const auto &port : callee.outputs) {
-      auto result =
-          types.instantiate(port.type, parameters, expr.span, port.span);
+    for (auto result : constraints.outputs)
       results.push_back(rows.empty() ? result : vectorOf(result, expr.span));
-    }
     return results;
   }
   Variable vectorOf(Variable element, Span span) {
@@ -302,6 +361,10 @@ class ExpressionInference {
         continue;
       }
       auto firstCall = calls.size();
+      auto firstExpression = expressionOrder.size();
+      auto enclosingOperators = std::move(operators);
+      operators = std::make_unique<OperatorInference>(
+          types, checker.types, checker.output.declarations);
       auto value = expression(statement.expression, depth + 1);
       if (statement.type)
         types.equal(value.type, annotation(*statement.type), statement.span);
@@ -316,8 +379,9 @@ class ExpressionInference {
         constrain(value.type, Type(T::Unit), statement.span);
       // Authored statements are inference boundaries. A later statement or an
       // enclosing result cannot retroactively supply an earlier let's type.
-      if (!finishCalls(firstCall, statement.span))
+      if (!finishCalls(firstCall, firstExpression, statement.span))
         return value;
+      operators = std::move(enclosingOperators);
       if (value.stopped) {
         if ((statement.kind == Statement::Kind::Let ||
              statement.kind == Statement::Kind::Assign) &&
@@ -362,7 +426,7 @@ class ExpressionInference {
         auto type = types.get(base, span);
         if (!type)
           return false;
-        auto fields = checker.types.fields(*type, span);
+        auto fields = checker.types.structuralFields(*type, span);
         if (fields) {
           Type unpacked(fields->empty() ? T::Unit : T::Tuple);
           for (const auto &field : *fields)
@@ -372,7 +436,7 @@ class ExpressionInference {
                                                 : unpacked,
                     span);
         }
-        return true;
+        return fields.has_value() || checker.types.diagnostic.has_value();
       });
       return;
     }
@@ -503,14 +567,10 @@ class ExpressionInference {
         auto type = types.get(base, expr.span);
         if (!type)
           return false;
-        auto index =
-            checker.types.fieldIndex(decl, *type, expr.text, expr.span);
-        auto field = index ? checker.types.projectedType(decl, *type, {*index},
-                                                         expr.span)
-                           : std::nullopt;
+        auto field = checker.types.projectionType(*type, expr.text, expr.span);
         if (field)
           constrain(result.type, *field, expr.span);
-        return true;
+        return field.has_value() || checker.types.diagnostic.has_value();
       });
       break;
     }
@@ -531,35 +591,20 @@ class ExpressionInference {
     case K::Equal:
     case K::Multiply: {
       auto left = child(0), right = child(1);
-      if (expr.kind == K::Equal)
-        constrain(result.type, Type{}, expr.span);
-      else
-        types.equal(result.type, left, expr.span);
-      if (expr.kind != K::Multiply)
-        types.equal(left, right, expr.span);
-      else {
-        types.defer([this, left, right, span = expr.span] {
-          auto type = types.get(left, span);
-          if (!type) {
-            // Numeric expressions cannot be groups, so a scalar multiplier
-            // supplies their type even through nested calls and arithmetic.
-            auto scalar = types.get(right, span);
-            if (!types.allows(left, T::Group) ||
-                (scalar && scalar->kind == T::Index)) {
-              types.equal(left, right, span);
-              return true;
-            }
-            return false;
-          }
-          if (type->kind == T::Group) {
-            auto scalar = checker.types.associated(*type, "Scalar", span);
-            if (scalar)
-              constrain(right, *scalar, span);
-          } else
-            types.equal(left, right, span);
-          return true;
-        });
+      auto visible = checker.operatorCandidates(decl, syntax, id);
+      if (!visible)
+        break;
+      std::vector<OperatorInference::Candidate> candidates;
+      ExpressionTypes::Operator witness;
+      for (auto &binding : *visible) {
+        witness.family.push_back(
+            operatorBindingKey(binding, checker.output.declarations));
+        candidates.push_back(
+            {binding.target, std::move(binding.arguments), binding.span});
       }
+      output.operators.emplace(id, std::move(witness));
+      operators->add(id, expr.span, {left, right}, result.type,
+                     std::move(candidates));
       break;
     }
     case K::Block:
@@ -572,7 +617,8 @@ class ExpressionInference {
         constrain(condition, Type{}, expr.span);
       std::optional<std::vector<Alternative>> alternatives;
       if (expr.kind == K::Match) {
-        types.solve(expr.span);
+        if (!operators->propagate(expr.span))
+          break;
         auto type = types.get(condition, expr.span);
         if (!type) {
           if (!checker.types.diagnostic)
@@ -674,19 +720,22 @@ class ExpressionInference {
     }
     }
     expressions.emplace(id, result);
+    expressionOrder.push_back(id);
     return result;
   }
 
 public:
   explicit ExpressionInference(BodyChecker &owner)
       : owner(owner), checker(owner.checker), decl(owner.decl),
-        syntax(owner.syntax), types(checker.types) {}
+        syntax(owner.syntax), types(checker.types),
+        operators(std::make_unique<OperatorInference>(
+            types, checker.types, checker.output.declarations)) {}
   std::optional<ExpressionTypes> run(uint32_t id,
                                      std::optional<Type> expected) {
     auto result = expression(id, 1);
     if (expected)
       constrain(result.type, *expected, syntax.expressions[id].span);
-    if (!finishCalls(0, syntax.expressions[id].span))
+    if (!finishCalls(0, 0, syntax.expressions[id].span))
       return {};
     for (const auto &[id, value] : expressions) {
       output.covered.insert(id);

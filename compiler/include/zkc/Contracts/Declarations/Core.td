@@ -133,7 +133,3 @@ def OpControlRequire : ZKC_Operation<"control.require", [],
 }
 def ExportControlRequire : ZKC_OperationExport<"zkc::core", "require",
     OpControlRequire, ["bool"]>;
-
-def OperatorIndexAdd12 : ZKC_Operator<"+", [TypeIndex, TypeIndex], OpIndexAdd, [0, 1]>;
-def OperatorIndexSub13 : ZKC_Operator<"-", [TypeIndex, TypeIndex], OpIndexSub, [0, 1]>;
-def OperatorIndexMul14 : ZKC_Operator<"*", [TypeIndex, TypeIndex], OpIndexMul, [0, 1]>;

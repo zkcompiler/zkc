@@ -30,12 +30,11 @@ pub math fn sum_suffix<F: Field, N: nat, C: nat>(value: Polynomial<F, N + C>) ->
 pub math fn fix_table<F: Field, N: nat, K: nat>(values: Array<F, pow2(N + K)>, prefix: [F; K]) -> Array<F, pow2(N)> {
   return intrinsic<F, N, K>("poly.fix_table", values, prefix);
 }
-pub math fn add<F: Field, N: nat>(left: Polynomial<F, N>, right: Polynomial<F, N>) -> Polynomial<F, N> {
-  return intrinsic<F, N>("poly.add", left, right);
-}
-pub math fn multiply<F: Field, N: nat>(left: Polynomial<F, N>, right: Polynomial<F, N>) -> Polynomial<F, N> {
-  return intrinsic<F, N>("poly.multiply", left, right);
-}
+pub math fn add<F: Field, N: nat>(left: Polynomial<F, N>, right: Polynomial<F, N>) -> Polynomial<F, N> = primitive("poly.add");
+pub math fn multiply<F: Field, N: nat>(left: Polynomial<F, N>, right: Polynomial<F, N>) -> Polynomial<F, N> = primitive("poly.multiply");
 pub math fn constant<F: Field, N: nat>(value: F) -> Polynomial<F, N> {
   return intrinsic<F, N>("poly.constant", value);
 }
+
+pub operator + = add;
+pub operator * = multiply;

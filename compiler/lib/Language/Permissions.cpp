@@ -340,6 +340,45 @@ bool Semantics::ingress(const Type &type, Span span) {
                "external input requires Wire or an admitted ingress validator",
                span));
 }
+std::optional<std::vector<TypeField>>
+Semantics::structuralFields(const Type &type, Span span) {
+  if (!chargeType(type, span))
+    return {};
+  if (type.kind == Type::Kind::Array && !type.dimension.isClosed())
+    return {};
+  if (type.kind == Type::Kind::Associated) {
+    const auto *decl = typeDeclaration(type);
+    if (decl && decl->abstract)
+      return {};
+  }
+  return fields(type, span);
+}
+std::optional<Type> Semantics::projectionType(const Type &type, StringRef name,
+                                              Span span) {
+  if (!chargeType(type, span))
+    return {};
+  if (type.kind == Type::Kind::Array) {
+    unsigned index;
+    if ((name.size() > 1 && name.front() == '0') ||
+        name.getAsInteger(10, index)) {
+      fail("source.index", "fixed arrays require a static numeric index", span);
+      return {};
+    }
+    // Even a closed out-of-bounds access is a validity check, not an overload
+    // selection rule. Body checking discharges it for the chosen signature.
+    return type.arguments.front();
+  }
+  auto product = structuralFields(type, span);
+  if (!product)
+    return {};
+  auto found = llvm::find_if(
+      *product, [&](const auto &field) { return field.name == name; });
+  if (found == product->end()) {
+    fail("source.field", "unknown field: " + name, span);
+    return {};
+  }
+  return found->type;
+}
 std::optional<Type> Semantics::projectedType(const Declaration &decl, Type type,
                                              ArrayRef<unsigned> path,
                                              Span span) {

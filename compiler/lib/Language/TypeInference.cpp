@@ -1,6 +1,7 @@
 #include "TypeInference.h"
 #include "zkc/Language/Diagnostics.h"
 #include "llvm/ADT/STLExtras.h"
+#include <cassert>
 using namespace llvm;
 namespace zkc::language::detail {
 TypeInference::Variable TypeInference::fresh(Span span) {
@@ -13,11 +14,6 @@ TypeInference::Variable TypeInference::root(Variable id) {
   auto parent = id;
   while (nodes[parent].parent != parent)
     parent = nodes[parent].parent;
-  while (nodes[id].parent != id) {
-    auto next = nodes[id].parent;
-    nodes[id].parent = parent;
-    id = next;
-  }
   return parent;
 }
 TypeInference::Variable
@@ -202,6 +198,8 @@ bool TypeInference::equal(Variable a, Variable b, Span span, unsigned depth) {
   }
   if (nodes[a].rank < nodes[b].rank)
     std::swap(a, b);
+  if (!save(a, span) || !save(b, span))
+    return false;
   nodes[b].parent = a;
   if (nodes[a].rank == nodes[b].rank)
     ++nodes[a].rank;
@@ -222,13 +220,16 @@ bool TypeInference::requireKinds(Variable id,
   uint32_t mask = 0;
   for (auto kind : kinds)
     mask |= uint32_t(1) << unsigned(kind);
-  auto &node = nodes[root(id)];
+  id = root(id);
+  auto &node = nodes[id];
   mask &= node.kinds;
   if (!mask)
     return types.fail("source.type",
                       "expression needs a compatible scalar type", span,
                       {node.origin});
   if (mask != node.kinds) {
+    if (!save(id, span))
+      return false;
     node.kinds = mask;
     ++revision;
   }
@@ -283,5 +284,45 @@ bool TypeInference::solve(Span span) {
     }
   } while (before != revision);
   return !types.diagnostic;
+}
+bool TypeInference::save(Variable id, Span span) {
+  if (!recording)
+    return true;
+  const auto &node = nodes[id];
+  if (!types.charge(node.arguments.size() + 1, span) ||
+      (node.head && !types.chargeType(*node.head, span)))
+    return false;
+  trail.emplace_back(id, node);
+  return true;
+}
+std::optional<TypeInference::Checkpoint> TypeInference::checkpoint(Span span) {
+  if (!types.charge(pending.size() + 1, span))
+    return {};
+  recording = true;
+  Checkpoint result;
+  result.nodeCount = nodes.size();
+  result.trailSize = trail.size();
+  result.pending = pending;
+  result.revision = revision;
+  result.owner = this;
+  return result;
+}
+bool TypeInference::restore(const Checkpoint &state, Span span) {
+  if (state.owner != this || state.trailSize > trail.size() ||
+      state.nodeCount > nodes.size())
+    return types.fail("source.internal",
+                      "invalid inference rollback checkpoint", span);
+  if (!types.charge(trail.size() - state.trailSize + state.pending.size() + 1,
+                    span))
+    return false;
+  while (trail.size() > state.trailSize) {
+    auto &saved = trail.back();
+    nodes[saved.first] = std::move(saved.second);
+    trail.pop_back();
+  }
+  nodes.resize(state.nodeCount);
+  pending = state.pending;
+  revision = state.revision;
+  return true;
 }
 } // namespace zkc::language::detail

@@ -661,7 +661,10 @@ fn identity(x:C::Out)->C::Out{return x;}
 )");
   Layouts nestedLayouts(nestedRepresentation);
   auto nested = must(nestedLayouts.get(
-      nestedRepresentation.declarations().back().outputs.front().type));
+      llvm::find_if(nestedRepresentation.declarations(),
+                    [](const auto &decl) { return decl.name == "identity"; })
+          ->outputs.front()
+          .type));
   require(nested->permissions.copy && nested->leaves.size() == 2,
           "component representation retained an unresolved self projection");
   auto associatedLayout = original(prefix + R"(

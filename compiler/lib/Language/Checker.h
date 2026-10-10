@@ -29,7 +29,17 @@ public:
             llvm::ArrayRef<ArgumentLabel> = {});
 
   bool bindingName(const Declaration &, llvm::StringRef, Span);
+  std::optional<CallableReference> callable(const Declaration &,
+                                            llvm::StringRef, Span);
+  std::optional<OperatorBinding> operatorBinding(const Declaration &,
+                                                 const SyntaxOperator &);
+  std::optional<std::vector<OperatorBinding>>
+  operatorCandidates(const Declaration &, const SyntaxDeclaration &, uint32_t);
+  std::optional<std::vector<OperatorBinding>>
+  operatorWitnessFamily(const Declaration &, const SyntaxDeclaration &,
+                        uint32_t);
   bool body(DeclarationId, unsigned);
+  bool primitiveBody(Declaration &, Body &);
   bool relation(Declaration &);
 
   std::map<unsigned, std::vector<SpecificationSelector>> inlineBindings;
@@ -49,6 +59,11 @@ private:
   std::map<std::string, ModuleId> modules;
   std::map<std::string, DeclarationId> qualified;
   std::vector<std::map<std::string, DeclarationId>> visible;
+  std::vector<std::map<std::string, DeclarationId>> exportedNames;
+  std::vector<std::map<std::string, ModuleId>> aliases, exportedAliases;
+  using OperatorSite = std::pair<unsigned, unsigned>;
+  std::vector<std::vector<OperatorSite>> visibleOperators, exportedOperators;
+  std::map<OperatorSite, OperatorBinding> moduleOperators;
   std::vector<unsigned> signatureState;
   std::set<const Declaration *> inferredContracts;
   unsigned signatureDepth = 0;
@@ -66,6 +81,9 @@ private:
                        llvm::ArrayRef<SyntaxSetupSlot>);
   bool collect();
   bool imports();
+  bool prepareOperators();
+  std::optional<DeclarationId> moduleMember(ModuleId, llvm::StringRef, Span,
+                                            unsigned = 1);
   bool signature(DeclarationId, unsigned = 1);
   bool conformance(DeclarationId);
   bool requirements(Declaration &);

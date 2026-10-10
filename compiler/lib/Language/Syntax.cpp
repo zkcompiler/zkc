@@ -95,7 +95,7 @@ public:
         tokens.push_back(token);
   }
   Expected<SyntaxModule> run() {
-    SyntaxModule output{module, {}, {}};
+    SyntaxModule output{module, {}, {}, {}};
     std::string moduleName;
     if (!expect("module") || !path(moduleName) || !expect(";"))
       return takeError();
@@ -105,15 +105,17 @@ public:
       return takeError();
     }
     while (!atEnd() && !diagnostic) {
-      if (take("use")) {
+      if (at("use") || (at("pub") && look(1) == "use")) {
         Import import;
         import.span = current().span;
+        import.isPublic = take("pub");
+        advance(); // use
         if (!name(import.module))
           break;
-        bool separator = false;
+        bool selected = false;
         while (take("::")) {
           if (at("{")) {
-            separator = true;
+            selected = true;
             break;
           }
           std::string part;
@@ -123,21 +125,35 @@ public:
         }
         if (diagnostic)
           break;
-        if (!separator || !expect("{")) {
-          fail("source.syntax", "expected import list");
-          break;
-        }
-        if (at("}")) {
-          fail("source.syntax", "import list must be nonempty");
-          break;
-        }
-        do {
-          std::string value;
-          if (!name(value))
+        if (selected) {
+          advance(); // {
+          if (at("}")) {
+            fail("source.syntax", "import list must be nonempty");
             break;
-          import.names.push_back(std::move(value));
-        } while (take(",") && !at("}"));
-        if (diagnostic || !expect("}") || !expect(";"))
+          }
+          do {
+            std::string value;
+            if (at("operator") && operatorSymbol(look(1))) {
+              advance();
+              value = text().str();
+              advance();
+              import.operators.push_back(std::move(value));
+            } else {
+              if (!name(value))
+                break;
+              import.names.push_back(std::move(value));
+            }
+          } while (take(",") && !at("}"));
+          if (diagnostic || !expect("}"))
+            break;
+        } else {
+          import.alias = StringRef(import.module).rsplit("::").second.str();
+          if (import.alias->empty())
+            import.alias = import.module;
+          if (take("as") && !name(*import.alias))
+            break;
+        }
+        if (!expect(";"))
           break;
         import.span.end = previousEnd;
         if (import.module.size() > work.limits.moduleBytes) {
@@ -145,6 +161,11 @@ public:
           break;
         }
         output.imports.push_back(std::move(import));
+      } else if (operatorHeader() || (at("pub") && operatorHeader(1))) {
+        auto binding = operatorBinding();
+        if (!binding)
+          break;
+        output.operators.push_back(std::move(*binding));
       } else {
         auto decl = declaration(false, false, 1);
         if (!decl)
@@ -169,6 +190,43 @@ private:
   StringRef text() const {
     auto s = current().span;
     return StringRef(source.text).slice(s.begin, s.end);
+  }
+  StringRef look(unsigned offset) const {
+    if (cursor + offset >= tokens.size())
+      return {};
+    auto span = tokens[cursor + offset].span;
+    return StringRef(source.text).slice(span.begin, span.end);
+  }
+  static bool operatorSymbol(StringRef symbol) {
+    return symbol == "+" || symbol == "-" || symbol == "*" || symbol == "==";
+  }
+  bool operatorHeader(unsigned offset = 0) const {
+    return look(offset) == "operator" && operatorSymbol(look(offset + 1)) &&
+           look(offset + 2) == "=";
+  }
+  std::optional<SyntaxOperator> operatorBinding() {
+    SyntaxOperator result;
+    result.span = current().span;
+    result.isPublic = take("pub");
+    if (!expect("operator") || !operatorSymbol(text())) {
+      fail("source.operator", "expected an existing binary operator");
+      return {};
+    }
+    result.symbol = text().str();
+    advance();
+    if (!expect("="))
+      return {};
+    result.target.span = current().span;
+    if (!path(result.target.name, false, true) ||
+        !staticArguments(result.target.arguments, result.target.labels, 1) ||
+        !expect(";"))
+      return {};
+    result.target.span.end = previousEnd;
+    result.span.end = previousEnd;
+    if (!accept(work.count(work.declarations, work.limits.declarations,
+                           "operator declaration count", result.span)))
+      return {};
+    return result;
   }
   bool at(StringRef value) const { return text() == value; }
   bool atEnd() const { return current().kind == TokenKind::End; }
@@ -1060,6 +1118,17 @@ private:
       if (abstract) {
         if (!expect(";"))
           return {};
+      } else if (take("=")) {
+        if (protocol || d.outputs.size() != 1) {
+          fail("source.primitive",
+               "primitive functions require a written result type");
+          return {};
+        }
+        std::string identity;
+        if (!expect("primitive") || !expect("(") || !string(identity) ||
+            !expect(")") || !expect(";"))
+          return {};
+        d.primitive = std::move(identity);
       } else if (!body(d, protocol, false, 1))
         return {};
     }
@@ -1543,6 +1612,23 @@ private:
     b.span = current().span;
     b.region = region;
     while (!atEnd() && !at("}")) {
+      if (operatorHeader() || (at("pub") && operatorHeader(1))) {
+        if (!b.statements.empty()) {
+          fail("source.operator",
+               "local operators must precede runtime statements");
+          return {};
+        }
+        auto binding = operatorBinding();
+        if (!binding)
+          return {};
+        if (binding->isPublic) {
+          fail("source.operator", "local operator bindings cannot be public");
+          return {};
+        }
+        b.operators.push_back(std::move(*binding));
+        continue;
+      }
+
       if (take("stop")) {
         if (protocol || current().kind != TokenKind::String) {
           fail("source.mode", "local stop requires a reason string");

@@ -2,18 +2,14 @@ module zkc::matrix;
 use zkc::vector::{Vector};
 
 pub type Matrix<F: Field> = builtin("matrix", F);
-pub fn multiply<F: Field>(matrix: Matrix<F>, values: Vector<F>) -> Vector<F> {
-  return kernel<F>("matrix.mul_vector", matrix, values);
-}
-pub fn transpose_multiply<F: Field>(matrix: Matrix<F>, values: Vector<F>) -> Vector<F> {
-  return kernel<F>("matrix.transpose_mul_vector", matrix, values);
-}
-pub fn bilinear<F: Field>(matrix: Matrix<F>, left: Vector<F>, right: Vector<F>) -> F {
-  return kernel<F>("matrix.bilinear", matrix, left, right);
-}
+pub fn multiply<F: Field>(matrix: Matrix<F>, values: Vector<F>) -> Vector<F> = primitive("matrix.mul_vector");
+pub fn transpose_multiply<F: Field>(matrix: Matrix<F>, values: Vector<F>) -> Vector<F> = primitive("matrix.transpose_mul_vector");
+pub fn bilinear<F: Field>(matrix: Matrix<F>, left: Vector<F>, right: Vector<F>) -> F = primitive("matrix.bilinear");
 pub fn rows<F: Field>(matrix: Matrix<F>) -> index {
   return kernel<F>("matrix.dimension", matrix; "0");
 }
 pub fn columns<F: Field>(matrix: Matrix<F>) -> index {
   return kernel<F>("matrix.dimension", matrix; "1");
 }
+
+pub operator * = multiply;

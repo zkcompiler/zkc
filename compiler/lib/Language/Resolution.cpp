@@ -26,7 +26,7 @@ public:
         return false;
       syntax.serviceBindings.push_back(*id);
     }
-    if (!body(0, 1))
+    if (!syntax.primitive && !body(0, 1))
       return false;
     syntax.resolved = true;
     return true;
@@ -39,6 +39,7 @@ private:
   std::map<std::string, BindingId> names;
   std::vector<std::pair<std::string, std::optional<BindingId>>> undo;
   unsigned scope = 0;
+  std::optional<uint32_t> currentBody;
   bool fail(StringRef code, const Twine &message, Span span) {
     return checker.types.fail(code, message, span);
   }
@@ -104,6 +105,7 @@ private:
   }
   bool expression(uint32_t id, unsigned depth) {
     auto &expr = syntax.expressions[id];
+    expr.scope = currentBody;
     if (!bounded(depth, expr.span))
       return false;
     if (expr.kind == Expression::Kind::Name) {
@@ -142,6 +144,14 @@ private:
     auto &b = syntax.bodies[id];
     if (!bounded(depth, b.span))
       return false;
+    b.parent = currentBody;
+    currentBody = id;
+    for (const auto &binding : b.operators) {
+      auto value = checker.operatorBinding(decl, binding);
+      if (!value)
+        return false;
+      b.resolvedOperators.push_back(std::move(*value));
+    }
     for (auto &s : b.statements) {
       if (!expression(s.expression, depth))
         return false;
@@ -168,6 +178,7 @@ private:
     for (auto &[name, value] : b.results)
       if (!expression(value, depth))
         return false;
+    currentBody = b.parent;
     return true;
   }
 };

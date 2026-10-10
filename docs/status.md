@@ -46,6 +46,8 @@ permissions, lexical scopes and patterns, mutable bindings with inferred region
 state/captures, statement-scoped participant inference, nested ordered calls,
 helper result inference, expression-wide structural type constraints, partial
 static arguments with positional or named binding, named value/service arguments,
+library-defined ASCII operators with import activation and local component
+bindings, catalog-checked primitive definitions and an embedded scalar prelude,
 local short-circuit Boolean operators and total Boolean formulas, inferred catalog/natural
 preconditions with explicit contract checking, unified data/service arguments,
 source rejection with `require`, formal polynomial intrinsics, checked
@@ -67,7 +69,10 @@ admitted validator, member-generic conformance and zero-leaf messages refuse.
 Abstract member-generic signatures can be checked and inspected, but components
 implementing them are not supported.
 Resource permission inference, implicit role remapping, natural equation solving
-and inversion of associated types are outside the source profile.
+and inversion of associated types are outside the source profile. Unicode
+operators, custom fixity, delimited notation and reduction binders are not yet
+supported. Operator resolution has an independent executable binding check; no
+formal elaboration-correctness theorem is claimed.
 Relation and target/input/output/continuation clauses state intent; declarations
 alone add no runtime guard, satisfaction fact or security theorem.
 

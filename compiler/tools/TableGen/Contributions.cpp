@@ -31,13 +31,6 @@ std::string semanticKey(const Record *r) {
   } else if (r->isSubClassOf("ZKC_Implication")) {
     reference("premise");
     reference("conclusion");
-  } else if (r->isSubClassOf("ZKC_Operator")) {
-    part(r->getValueAsString("symbol"));
-    for (const auto *operand : r->getValueAsListOfDefs("operands"))
-      part(operand->getValueAsString("name"));
-    reference("operation");
-    for (auto index : r->getValueAsListOfInts("order"))
-      part(std::to_string(index));
   } else if (r->isSubClassOf("ZKC_Member")) {
     const auto *owner = r->getValueAsDef("owner");
     part(owner->getValueAsDef("kind")->getValueAsString("name"));

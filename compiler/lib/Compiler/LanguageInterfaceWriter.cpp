@@ -12,9 +12,9 @@ namespace {
 std::string digest(StringRef bytes) {
   return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
 }
-Error writeInterface(json::OStream &out, BoundedStream &stream,
-                     const ClosedEntry &entry, StringRef original,
-                     StringRef toolchain, const Limits &limits) {
+Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
+                     StringRef original, StringRef toolchain,
+                     const Limits &limits) {
   Layouts layouts(entry, limits);
   struct Ports {
     std::vector<std::shared_ptr<const Layout>> inputs, outputs;
@@ -42,6 +42,7 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
         (input ? record.inputs : record.outputs).push_back(*layout);
       }
   }
+  json::OStream out(stream);
   uint64_t remaining = limits.work;
   bool limited = false, formal = false;
   auto charge = [&](uint64_t work) {
@@ -391,9 +392,7 @@ Expected<std::string> emitInterface(const ClosedEntry &entry,
                                     const Limits &limits) {
   std::string result;
   BoundedStream stream(result, limits.interfaceBytes);
-  json::OStream out(stream);
-  if (auto error =
-          writeInterface(out, stream, entry, original, toolchain, limits))
+  if (auto error = writeInterface(stream, entry, original, toolchain, limits))
     return std::move(error);
   return result;
 }

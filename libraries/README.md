@@ -23,7 +23,7 @@ concrete domains, Entries and transcript constructions in
 
 ### Mathematics
 
-Import only the modules a client needs. Native `fn` wrappers retain ordered
+Import only the modules a client needs. Native `fn` definitions retain ordered
 execution and the kernels' possible stop behavior: vector split/fold requires a
 positive even length, point access checks bounds, arithmetic checks lengths,
 and matrix products check dimensions. `fold` applies a scalar affine formula
@@ -53,10 +53,25 @@ is false. See the [Boolean rules](../docs/spec/language/definitions.md#boolean-f
 for mathematical formulas and resource checks.
 
 The [mathematics client](../examples/projects/mathematics/README.md) compares
-formal evaluation and runtime folding. Group arithmetic already has ordinary
-`+`, `-` and scaling as `point * scalar`; no duplicate group wrapper is needed. Asset-specific
+formal evaluation and vector arithmetic. The embedded scalar prelude supplies
+field arithmetic, group addition and `point * scalar` scaling. Its named functions
+and operators share the compiler's native operation identities. Asset-specific
 ring operations and component-specific PCS operations stay in their owning
 libraries, using explicit asset/component parameters and installed kernels.
+
+Import a whole math module to enable its public operators, for example
+`use zkc::vector as vec;`. Vector `+` calls `add`; vector `*` calls `scale` with
+the scalar on the right. Matrix `*` calls `multiply` on a matrix and vector.
+Formal polynomial `+`/`*` call symbolic `add`/`multiply`. Dot products remain named
+`vec::dot(a, b)`. Importing `::{Vector, add}` alone enables no operators; add
+`operator +` to that list when desired. The
+[operator contract](../docs/spec/language/definitions.md#library-defined-operators)
+defines ambiguity and local replacement rules.
+
+These functions use `primitive` bodies when their ports determine the installed
+scheme. Algorithms and operations with explicit attributes retain ordinary bodies.
+Both paths reach the same native mathematical/vector contracts; imports control
+source notation and do not install new runtime semantics.
 
 ### Schnorr
 
