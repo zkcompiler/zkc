@@ -78,6 +78,8 @@ formal/external integrations remain explicit workflow scopes.
 
 The Rust check runs Cargo formatting, Clippy and workspace tests directly. It does not build the release CLI or depend on C++ tools and release test drivers. The application and project checks own those execution boundaries. Keep these derivations independent so Rust checks can run alongside the compiler build and reuse their result after unrelated C++ changes.
 
+The installed compiler package builds the CLI and SDK with `BUILD_TESTING=OFF`. `checks.compiler` builds and runs the full CTest suite and exports its test helpers for the project integration check. Sanitizers use that testing configuration; domain installation checks use the installed compiler configuration.
+
 When investigating CI time, compare job and step timings first, then the Nix build log's derivation phases. Separate dependency downloads, project compilation and test execution; a binary cache hit for dependencies does not reuse compilation of changed project sources. Retain the automatic checks when optimizing their dependency graph. Full CTest and protocol integration remain available through the manual `main` scope.
 
 A direct test driver requires built tools. Report directories are allocated
