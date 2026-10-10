@@ -1,0 +1,27 @@
+[package]
+name = "zkc-openvm-relation"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Relation-level export of a pinned OpenVM subsystem as zkc relation-bundle carriers"
+
+[dependencies]
+openvm-circuit.workspace = true
+openvm-circuit-primitives.workspace = true
+openvm-instructions.workspace = true
+openvm-rv32im-circuit.workspace = true
+openvm-rv32im-transpiler.workspace = true
+openvm-stark-backend.workspace = true
+openvm-cpu-backend.workspace = true
+p3-air.workspace = true
+p3-field.workspace = true
+p3-koala-bear.workspace = true
+p3-matrix.workspace = true
+p3-symmetric.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

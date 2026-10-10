@@ -1,0 +1,45 @@
+# Standalone OpenVM relation adapter workspace. Its upstream pins and lockfile
+# are separate from the root native workspace; no OpenVM or Plonky3 0.4.3 type
+# enters the shared compiler or runtime model.
+[workspace]
+members = ["exporter", "driver"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+# openvm-org/openvm at commit f08bf2836409f3c0a5f6b6cfe73eb177a8a3e8c8 (workspace
+# version 2.1.0, 2026-09-18; MIT OR Apache-2.0). Its Cargo.lock pins the
+# stark-backend source described below.
+openvm-circuit = { git = "https://github.com/openvm-org/openvm.git", rev = "f08bf2836409f3c0a5f6b6cfe73eb177a8a3e8c8", default-features = false, features = ["test-utils"] }
+openvm-circuit-primitives = { git = "https://github.com/openvm-org/openvm.git", rev = "f08bf2836409f3c0a5f6b6cfe73eb177a8a3e8c8", default-features = false }
+openvm-instructions = { git = "https://github.com/openvm-org/openvm.git", rev = "f08bf2836409f3c0a5f6b6cfe73eb177a8a3e8c8", default-features = false }
+openvm-rv32im-circuit = { git = "https://github.com/openvm-org/openvm.git", rev = "f08bf2836409f3c0a5f6b6cfe73eb177a8a3e8c8", default-features = false }
+openvm-rv32im-transpiler = { git = "https://github.com/openvm-org/openvm.git", rev = "f08bf2836409f3c0a5f6b6cfe73eb177a8a3e8c8", default-features = false }
+# openvm-org/stark-backend at commit d667af5929d0ea9e5194adf639d6bddeb8c10f9a
+# ("release: v2.0.1"; MIT OR Apache-2.0). Its tree is byte-identical to tag
+# v2.0.1 (362c7ad8c6b042b320471a137e3eadec7ec69a44) and to crates.io 2.0.1.
+openvm-stark-backend = { git = "https://github.com/openvm-org/stark-backend.git", branch = "main", default-features = false }
+openvm-cpu-backend = { git = "https://github.com/openvm-org/stark-backend.git", branch = "main", default-features = false }
+# The Plonky3 family OpenVM pins; the root workspace pins the same 0.4.3
+# release for its OpenVM transcript operations.
+p3-air = { version = "=0.4.3", default-features = false }
+p3-field = { version = "=0.4.3", default-features = false }
+p3-koala-bear = { version = "=0.4.3", default-features = false }
+p3-matrix = { version = "=0.4.3", default-features = false }
+p3-symmetric = { version = "=0.4.3", default-features = false }
+rand = "=0.9.5"
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+zkc-openvm-relation = { path = "exporter" }
+
+# OpenVM declares its stark-backend dependency as `branch = "main"`. Cargo
+# refuses a patch that points at the same git source, so the exact commit is
+# fixed by this workspace's lockfile: it records 362c7ad8c6b042b320471a137e3eadec7ec69a44
+# (tag v2.0.1), whose tree is identical to the commit OpenVM's own lockfile
+# selects. `cargo --locked` refuses any other resolution.
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
