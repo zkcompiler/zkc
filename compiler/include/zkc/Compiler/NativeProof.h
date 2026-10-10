@@ -22,7 +22,8 @@ llvm::json::Value encodeNativeProofPolicy(const NativeProofPolicy &policy);
 /// ordering. Returns a complete strict policy without mutating the source.
 llvm::Expected<NativeProofPolicy>
 selectNativeProofDraws(mlir::ModuleOp source,
-                       const NativeProofPolicy &selection);
+                       const NativeProofPolicy &selection,
+                       bool fuseVectorReductions = false);
 struct NativeProofConstruction {
   mlir::OwningOpRef<mlir::ModuleOp> module;
   llvm::json::Value descriptor;
@@ -34,12 +35,14 @@ struct NativeProofConstruction {
 /// role-local transcripts. No source IR is mutated and no cryptographic theorem
 /// is asserted. An empty suite selects the authored no-transcript profile.
 llvm::Expected<NativeProofConstruction>
-constructNativeProof(mlir::ModuleOp source, const NativeProofPolicy &policy);
+constructNativeProof(mlir::ModuleOp source, const NativeProofPolicy &policy,
+                     bool fuseVectorReductions = false);
 /// Construct with an independent projected-to-constructed postcondition, then
 /// compare the entire supplied candidate, including SSA and retained records,
 /// ignoring locations. Source policy/occurrence admission remains a premise.
 llvm::Error checkNativeProof(mlir::ModuleOp source, mlir::ModuleOp candidate,
-                             const NativeProofPolicy &policy);
+                             const NativeProofPolicy &policy,
+                             bool fuseVectorReductions = false);
 /// Request service-based occurrence selection inside the owned compiler
 /// context. The policy fixes every choice except draws, which must be empty.
 struct NativeProofSelection {
@@ -48,6 +51,7 @@ struct NativeProofSelection {
 struct NativeProofOptions {
   std::variant<std::string, NativeProofSelection> policy;
   bool simplify = true, releaseStorage = false;
+  bool fuseVectorReductions = false;
 };
 struct CompiledNativeProof {
   Compilation compilation;

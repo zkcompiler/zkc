@@ -39,7 +39,8 @@ int zkc::runCompiler(int argc, char **argv,
            "    --source-format=zkc [--entry=NAME] "
            "--module=MODULE=FILE.zkc\n"
            "    [--module=MODULE=FILE.zkc ...] [--asset=NAME=FORMAT=FILE ...]\n"
-           "    [--no-simplify] [--release-storage]\n"
+           "    [--no-simplify] [--release-storage] "
+           "[--fuse-vector-reductions]\n"
            "    language-check may omit --entry to check definitions alone.\n"
            "    Output commands select the sole Entry when --entry is "
            "omitted.\n"
@@ -55,19 +56,21 @@ int zkc::runCompiler(int argc, char **argv,
            "Protocol IR and native participant programs:\n"
            "  protocol-export FILE.mlir\n"
            "  protocol-bundle FILE.mlir [--entry=NAME] [--no-simplify] "
-           "[--release-storage]\n"
+           "[--release-storage] [--fuse-vector-reductions]\n"
            "    [--fix-polynomial-factors]\n"
            "  protocol-checked-bundle FILE.mlir [--requirements=FILE] "
            "[--public-coin=FILE]\n"
            "  protocol-check-reductions SOURCE.mlir REQUIREMENTS.json "
-           "CANDIDATE.mlir\n"
+           "CANDIDATE.mlir [--fuse-vector-reductions]\n"
            "  protocol-public-coin SOURCE.mlir REQUIREMENT.json\n"
            "  protocol-check-public-coin SOURCE.mlir REQUIREMENT.json "
            "REPORT.json\n"
            "  protocol-proof FILE.mlir POLICY [--no-simplify] "
-           "[--release-storage]\n"
-           "  protocol-construct-proof FILE.mlir POLICY\n"
-           "  protocol-check-proof FILE.mlir POLICY CANDIDATE.mlir\n\n"
+           "[--release-storage] [--fuse-vector-reductions]\n"
+           "  protocol-construct-proof FILE.mlir POLICY "
+           "[--fuse-vector-reductions]\n"
+           "  protocol-check-proof FILE.mlir POLICY CANDIDATE.mlir "
+           "[--fuse-vector-reductions]\n\n"
            "Relation data (binary R1CS or canonical JSON):\n"
            "  relation-read | relation-inspect | relation-matrices FILE\n"
            "  relation-import FILE [SYMBOL] | relation-export FILE.mlir\n"
@@ -114,6 +117,8 @@ int zkc::runCompiler(int argc, char **argv,
           options.simplify = false;
         else if (option == "--release-storage")
           options.releaseStorage = true;
+        else if (option == "--fuse-vector-reductions")
+          options.fuseVectorReductions = true;
         else
           return fail(error("native-proof-options"));
       }
@@ -124,7 +129,10 @@ int zkc::runCompiler(int argc, char **argv,
       return 0;
     }
     bool check = mode == "protocol-check-proof";
-    if (argc != (check ? 5 : 4) || !mlirNestingWithinLimit(*source))
+    const int required = check ? 5 : 4;
+    const bool fuse = argc == required + 1 &&
+                      StringRef(argv[required]) == "--fuse-vector-reductions";
+    if ((argc != required && !fuse) || !mlirNestingWithinLimit(*source))
       return fail(error("native-proof-options"));
     auto policy = parseNativeProofPolicy(*selected);
     if (!policy)
@@ -144,11 +152,11 @@ int zkc::runCompiler(int argc, char **argv,
           mlir::parseSourceString<mlir::ModuleOp>(*bytes, &context);
       if (!candidate)
         return fail(error("native-proof-candidate"));
-      if (auto e = checkNativeProof(*original, *candidate, *policy))
+      if (auto e = checkNativeProof(*original, *candidate, *policy, fuse))
         return fail(std::move(e));
       outs() << "[\"zkc.native-proof-checked/0\"]\n";
     } else {
-      auto constructed = constructNativeProof(*original, *policy);
+      auto constructed = constructNativeProof(*original, *policy, fuse);
       if (!constructed)
         return fail(constructed.takeError());
       constructed->module->print(outs());
@@ -189,7 +197,9 @@ int zkc::runCompiler(int argc, char **argv,
     return 0;
   }
   if (mode == "protocol-check-reductions") {
-    if (argc != 5)
+    const bool fuse =
+        argc == 6 && StringRef(argv[5]) == "--fuse-vector-reductions";
+    if (argc != 5 && !fuse)
       return fail(error("polynomial-requirement-options"));
     auto source = readInput(argv[2], 16 * 1024 * 1024);
     if (!source)
@@ -210,7 +220,7 @@ int zkc::runCompiler(int argc, char **argv,
     if (!original || !proposed)
       return fail(error("polynomial-correspondence-module"));
     auto checked =
-        checkPolynomialReductions(*original, *proposed, *requirements);
+        checkPolynomialReductions(*original, *proposed, *requirements, fuse);
     if (!checked)
       return fail(checked.takeError());
     outs() << *checked << '\n';
@@ -230,6 +240,8 @@ int zkc::runCompiler(int argc, char **argv,
         options.simplify = false;
       else if (argument == "--release-storage")
         options.releaseStorage = true;
+      else if (argument == "--fuse-vector-reductions")
+        options.fuseVectorReductions = true;
       else if (argument == "--fix-polynomial-factors")
         options.fixPolynomialFactors = true;
       else if (mode == "protocol-checked-bundle" &&

@@ -19,6 +19,8 @@ struct RunOptions {
   /// unsimplified common source before projection; bind the view to this
   /// bundle.
   std::optional<std::string> publicCoinRequirement;
+  /// Checked multiply-map/sum fusion; may change resource exhaustion.
+  bool fuseVectorReductions = false;
 };
 /// Owns the final physical module, including retained statement/interface
 /// metadata, and a complete zkc.run/0 bundle for the selected entry.

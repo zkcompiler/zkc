@@ -11,7 +11,7 @@ use zkc_runtime::interactive::{LogicalType, PhysicalType};
 fn package(document: &Value, artifact: &str) -> Package {
     let bytes =
         json!({"format":"zkc.entry/0", "original":"original", "interface":document.to_string(),
-        "artifact":artifact,"options":{"simplify":true,"release_storage":false},"assets":[]})
+        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"fuse_vector_reductions":false},"assets":[]})
         .to_string();
     Package::capture(
         bytes.as_bytes(),
@@ -564,7 +564,7 @@ fn proof_fixture() -> (Value, String) {
                 ""
             ]
         ],
-        ["true", "false"],
+        ["true", "false", "false"],
         []
     ])
     .to_string();
@@ -730,4 +730,48 @@ fn unicode_setup_material_is_injected_into_both_independent_proof_requests() {
             .is_err()
         );
     }
+}
+
+#[test]
+fn proof_package_binds_every_compilation_choice_to_the_deployment() {
+    let (doc, artifact) = proof_fixture();
+    let original = package(&doc, &artifact);
+    for key in ["simplify", "release_storage", "fuse_vector_reductions"] {
+        let mut frame: Value = serde_json::from_slice(original.bytes()).unwrap();
+        frame["options"][key] = json!(!frame["options"][key].as_bool().unwrap());
+        let raw = frame.to_string();
+        let changed = Package::capture(
+            raw.as_bytes(),
+            &Sha256::digest(raw.as_bytes()).into(),
+            Package::MAX_BYTES,
+        )
+        .unwrap();
+        let options = ProofOptions {
+            binding: BindingPolicy::AllowHeaderOnly,
+            ..Default::default()
+        };
+        let refused = ProofEntry::admit(changed, options, SetupAuthority::default());
+        assert_eq!(
+            refused.err().unwrap().to_string(),
+            "entry-interface-native-binding",
+            "{key}"
+        );
+    }
+    let mut frame: Value = serde_json::from_slice(original.bytes()).unwrap();
+    frame["options"]["fuse_vector_reductions"] = json!(true);
+    let mut deployment: Value = serde_json::from_str(&artifact).unwrap();
+    deployment[7][2] = json!("true");
+    frame["artifact"] = json!(deployment.to_string());
+    let raw = frame.to_string();
+    let changed = Package::capture(
+        raw.as_bytes(),
+        &Sha256::digest(raw.as_bytes()).into(),
+        Package::MAX_BYTES,
+    )
+    .unwrap();
+    let options = ProofOptions {
+        binding: BindingPolicy::AllowHeaderOnly,
+        ..Default::default()
+    };
+    assert!(ProofEntry::admit(changed, options, SetupAuthority::default()).is_ok());
 }

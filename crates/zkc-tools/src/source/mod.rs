@@ -37,6 +37,7 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
                 "--output" => output = Some(value),
                 "--no-simplify"
                 | "--release-storage"
+                | "--fuse-vector-reductions"
                 | "--declarations"
                 | "--notations"
                 | "--notation-private"

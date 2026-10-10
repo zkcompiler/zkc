@@ -65,7 +65,12 @@ impl Interface {
         require(
             native.publication == self.artifact
                 && native.source == self.original()
-                && native.choices == [self.options.simplify, self.options.release_storage]
+                && native.choices
+                    == [
+                        self.options.simplify,
+                        self.options.release_storage,
+                        self.options.fuse_vector_reductions,
+                    ]
                 && entry.entry() == p.symbol
                 && &entry.producer().role == prover
                 && &entry.validator().role == verifier
