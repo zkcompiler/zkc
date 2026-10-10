@@ -392,6 +392,100 @@ fn unicode_setup_material_reaches_native_admission_and_results() {
     };
     assert!(entry.prepare(request).is_err());
 }
+#[test]
+fn distinct_setup_slots_preserve_authority_and_reject_swapped_material() {
+    let logical = "verifier_key:multilinear.kzg.bls12-381/0";
+    let mut ty = schema("builtin", logical, json!([logical]));
+    ty["permissions"] = json!(["Copy", "Drop"]);
+    let (mut doc, artifact) = run_fixture(&ty, &["受信者"], &["role00000000"]);
+    for (direction, name) in [("inputs", "入力₂"), ("outputs", "結果₂")] {
+        doc["protocols"][0][direction]
+            .as_array_mut()
+            .unwrap()
+            .push(port(name, 1, json!([1]), json!(["受信者"]), ty.clone()));
+    }
+    doc["setups"] = json!([
+        {"name":"setup00000001","inputs":[{"port":0,"path":[]}]},
+        {"name":"鍵₂","inputs":[{"port":1,"path":[]}]}
+    ]);
+    let mut artifact: Value = serde_json::from_str(&artifact).unwrap();
+    let mut candidate: Value =
+        serde_json::from_str(artifact["candidate"].as_str().unwrap()).unwrap();
+    candidate[3][0][4]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(["y", physical(logical)]));
+    candidate[3][0][5]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(physical(logical)));
+    candidate[3][0][6] = json!([["return", ["x", "y"]]]);
+    artifact["candidate"] = json!(candidate.to_string());
+    let capacity = crate::execution::Capacity::default();
+    let bounds = capacity.backend().ark_bounds();
+    let keys = [
+        zkc_arkworks::Keys::setup_for_development(1, &bounds).unwrap(),
+        zkc_arkworks::Keys::setup_for_development(2, &bounds).unwrap(),
+    ];
+    let identities = keys
+        .each_ref()
+        .map(|key| key.verifier_key().metadata().key_id());
+    assert_ne!(identities[0], identities[1]);
+    let bytes = keys
+        .each_ref()
+        .map(|key| key.verifier_key().to_bytes(&bounds).unwrap());
+    let authority = SetupAuthority {
+        keys: [
+            ("setup00000001".into(), identities[0]),
+            ("鍵₂".into(), identities[1]),
+        ]
+        .into(),
+    };
+    let interface = read(&doc).unwrap();
+    let native = entry::setups::run_authority(&interface, authority.clone()).unwrap();
+    assert_eq!(
+        native.keys,
+        [
+            ("setup00000000".into(), identities[0]),
+            ("setup00000001".into(), identities[1])
+        ]
+        .into()
+    );
+    let entry = RunEntry::admit(
+        package(&doc, &artifact.to_string()),
+        HostLimits::default(),
+        authority,
+    )
+    .unwrap();
+    let request = |swapped: bool| RunRequest {
+        session: "distinct_setups".into(),
+        roles: [("受信者".into(), entry::RoleInputs::default())].into(),
+        setups: [
+            ("setup00000001".into(), bytes[usize::from(swapped)].clone()),
+            ("鍵₂".into(), bytes[usize::from(!swapped)].clone()),
+        ]
+        .into(),
+    };
+    let report = entry.prepare(request(false)).unwrap().execute();
+    assert!(report.is_success());
+    let outputs = report.outputs.unwrap();
+    for (name, identity) in [("結果", identities[0]), ("結果₂", identities[1])] {
+        let entry::Value::Leaf(crate::execution::InputValue::Native(value)) =
+            &outputs["受信者"][name]
+        else {
+            panic!("native key");
+        };
+        let zkc_backends::Value::VerifierKey(key) = value.as_ref() else {
+            panic!("verifier key");
+        };
+        assert_eq!(key.metadata().key_id(), identity);
+    }
+    assert!(
+        entry.prepare(request(true)).is_err(),
+        "swapped material bypassed setup authority"
+    );
+}
+
 fn proof_fixture() -> (Value, String) {
     let boolean = physical("bool");
     let candidate = json!([

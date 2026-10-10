@@ -31,7 +31,7 @@ with case('explicit source path retains its original and interface'):
     interface = json.loads(commands.run([compiler, 'language-interface', *options]))
     assert interface['format'] == 'zkc.language-interface/0'
     assert interface['entry'] == 'transfer::Demo'
-    assert interface['protocol'] == 's8_transfer8_Transfer'
+    assert interface['protocol'] == 's8h7472616e736665728h5472616e73666572'
     protocol = next(p for p in interface['protocols'] if p['symbol'] == interface['protocol'])
     assert protocol['clauses'] == []
     assert [p['name'] for p in protocol['outputs']] == ['first', 'second', 'delta', 'ok']
@@ -61,7 +61,7 @@ for optimized in (0, 1):
             bundle = commands.run([compiler, 'language-bundle', *options, *flags])
             value = json.loads(bundle)
             assert value['entry'] == interface['protocol']
-            assert value['roles'] == ['P', 'V']
+            assert value['roles'] == ['role00000000', 'role00000001']
             (OUT / f'transfer-{optimized}-{released}.bundle').write_text(bundle)
 
 with case('Entry packages retain exact source, interface and artifact bytes'):
@@ -93,7 +93,7 @@ with case('same-signature protocols execute through distinct Entries'):
         args = ['--source-format=zkc', f'--entry=entries::{name}', f'--module=entries={source}']
         bundle = commands.run([compiler, 'language-bundle', *args])
         value = json.loads(bundle)
-        assert value['entry'] == f's7_entries{len(protocol)}_{protocol}'
+        assert value['entry'] == f's7h656e7472696573{len(protocol)}h{protocol.encode().hex()}'
         (OUT / f'{name}.bundle').write_text(bundle)
         selected = json.loads(commands.run([compiler, 'language-interface', *args]))
         assert selected['entry'] == f'entries::{name}'

@@ -343,6 +343,10 @@ Bindings emit no protocol algorithm or new execution/authority implementation.
 Generated source is bounded by 16 MiB. Reauthorizing a different package requires
 regenerating or deliberately replacing its pin.
 
+The report's `native` member and the CLI's nested `execution` diagnostic retain
+native participant and case labels. Source-name conversion applies to logical
+request/result maps; it does not rewrite the native execution evidence format.
+
 ## Error phases
 
 Calls that fail before execution return `EntryError`, whose `phase` identifies

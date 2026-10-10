@@ -35,12 +35,15 @@ Error insertNotation(NotationEnvironment &environment,
   if (environment.size() >= work.limits.notationDescriptors)
     return failure("source.limit", "notation descriptor limit exceeded",
                    syntax.span);
-  if (descriptor.arity > work.limits.notationHoles)
+  if (descriptor.position == Position::Delimited &&
+      descriptor.arity > work.limits.notationHoles)
     return failure("source.limit", "notation hole limit exceeded", syntax.span);
   environment.emplace(descriptor.key(), syntax);
   work.notationDescriptors =
       std::max<uint64_t>(work.notationDescriptors, environment.size());
-  work.notationHoles = std::max<uint64_t>(work.notationHoles, descriptor.arity);
+  if (descriptor.position == Position::Delimited)
+    work.notationHoles =
+        std::max<uint64_t>(work.notationHoles, descriptor.arity);
   return Error::success();
 }
 } // namespace
@@ -75,6 +78,8 @@ Error resolveNotationSyntax(std::vector<SyntaxOperator> &bindings,
   for (const auto &[key, syntax] : environment) {
     if (auto error = work.charge(1, syntax.span))
       return error;
+    if (syntax.descriptor->position != Position::Delimited)
+      continue;
     if (syntax.descriptor->arity > work.limits.notationHoles)
       return failure("source.limit", "notation hole limit exceeded",
                      syntax.span);

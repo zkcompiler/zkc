@@ -208,33 +208,31 @@ int main() {
           reexported |= id.getAsInteger() == selected;
         require(reexported, "reexport allocated a replacement binding ID");
       });
-  cases.run(
-      "unemitted stopped operands have no fabricated selected binding", [] {
-        auto project = check({{"m", R"(module m;
+  cases.run("guaranteed-stop operands reject before inspection", [] {
+    auto captured = take(capture({{"m", R"(module m;
       pub math fn combine<F:Field>(lhs:F,rhs:F)->F{return lhs+rhs;}
       pub operator infixl(70) ⊙ = combine;
       pub fn stopped<F:Field>(lhs:F,rhs:F)->F{
-        return {stop "halt";} ⊙ (lhs ⊙ rhs);
-      }
+        return {stop "reject";} ⊙ (lhs ⊙ rhs);
+      })",
+                                   "stopped.zkc"}}));
+    refuses(analyze(captured).checkedProject(), "source.unreachable");
+  });
+  cases.run("stopping targets retain their actual checked call binding", [] {
+    auto project = check({{"m", R"(module m;
+      pub fn stopping<F:Field>(lhs:F,rhs:F)->F{stop "reject";}
+      pub operator infixl(70) ⊙ = stopping;
+      pub fn f<F:Field>(lhs:F,rhs:F)->F{return lhs ⊙ rhs;}
     )",
-                               "stopped.zkc"}});
-        auto view = report(project);
-        unsigned count = 0;
-        for (const auto &value : array(view, "occurrences")) {
-          auto &occurrence = *value.getAsObject();
-          if (occurrence.getString("owner") != "m::stopped")
-            continue;
-          ++count;
-          require(occurrence.getString("state") == "not-emitted" &&
-                      !occurrence.getInteger("selected_binding") &&
-                      !occurrence.getObject("named_call"),
-                  "stopped expression fabricated emission evidence");
-          for (const auto &operand : *occurrence.getArray("operands"))
-            require(!operand.getAsObject()->getInteger("runtime_value"),
-                    "unemitted operand fabricated a runtime value");
-        }
-        require(count == 2, "unexecuted notation occurrences were dropped");
-      });
+                           "stopped.zkc"}});
+    const auto view = report(project);
+    const auto &occurrence = find(array(view, "occurrences"), "owner", "m::f");
+    require(occurrence.getString("state") == "emitted" &&
+                occurrence.getInteger("selected_binding") &&
+                occurrence.getObject("named_call")->getString("target") ==
+                    "m::stopping",
+            "runtime stop behavior erased checked selection evidence");
+  });
   cases.run(
       "nested emitted regions retain binding evidence and region IDs", [] {
         auto project = check({{"m", R"(module m;

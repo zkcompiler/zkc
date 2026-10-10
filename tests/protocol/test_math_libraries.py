@@ -80,6 +80,7 @@ run Demo=Run;
         source = source.replace('zkc::symbolic::multiply(linear,linear)', 'linear*linear')
         source = source.replace('zkc::symbolic::add(linear,constant)', 'linear+constant')
         source = source.replace('zkc::matrix::multiply(m,v)', 'm*v')
+        source = source.replace('zkc::vector::dot(v,v)', '⟪v,v⟫')
         source = source.replace('zkc::vector::add(v,zkc::vector::scale(v,a))', 'v+v*a')
     # [1 2; 0 3], independent native sparse-matrix encoding.
     entries = [(0, 0, 1), (0, 1, 2), (1, 1, 3)]

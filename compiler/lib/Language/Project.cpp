@@ -194,7 +194,9 @@ static Error checkSources(ArrayRef<SourceBuffer> sources,
         asset.bytes.size() > limits.assetTotalBytes - total)
       return failure("source.limit", "captured asset byte limit exceeded");
     total += asset.bytes.size();
-    if (!isPath(asset.name, limits) || !names.insert(asset.name).second)
+    if (!llvm::all_of(asset.name,
+                      [](unsigned char byte) { return byte < 128; }) ||
+        !isPath(asset.name, limits) || !names.insert(asset.name).second)
       return failure("source.asset",
                      "invalid or duplicate captured asset name");
     if (asset.format != "r1cs-json" && asset.format != "r1cs-binary" &&

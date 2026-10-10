@@ -55,6 +55,8 @@ add_zkc_component(Language
   lib/Language/Names.cpp
   lib/Language/Diagnostics.cpp
   lib/Language/Inspection.cpp
+  lib/Language/NotationInspection.cpp
+  lib/Language/NotationRecords.cpp
   lib/Language/Types.cpp
   lib/Language/Assets.cpp
   lib/Language/AssetProperties.cpp

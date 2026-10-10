@@ -36,6 +36,9 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
           break;
         offset += next->bytes;
       }
+      if (offset - begin > work.limits.identifierBytes)
+        return failure("source.limit", "identifier byte limit exceeded",
+                       Span{module, uint32_t(begin), uint32_t(offset)});
       if (!isSourceNFC(text.slice(begin, offset)))
         return failure("source.nfc", "source identifiers require NFC spelling",
                        Span{module, uint32_t(begin), uint32_t(offset)});
@@ -43,9 +46,6 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
         return failure("source.unsupported",
                        "feature is outside this source fragment: " +
                            text.slice(begin, offset),
-                       Span{module, uint32_t(begin), uint32_t(offset)});
-      if (offset - begin > work.limits.identifierBytes)
-        return failure("source.limit", "identifier byte limit exceeded",
                        Span{module, uint32_t(begin), uint32_t(offset)});
     } else if (isDigit(c)) {
       kind = TokenKind::Decimal;
@@ -273,7 +273,7 @@ private:
   }
   bool operatorHeader(unsigned offset = 0) const {
     return (look(offset) == "operator" &&
-            (operatorSymbol(look(offset + 1)) ||
+            ((operatorSymbol(look(offset + 1)) && look(offset + 2) == "=") ||
              (fixity(look(offset + 1)) && look(offset + 2) == "("))) ||
            (look(offset) == "notation" && delimiter(look(offset + 1)));
   }
@@ -1804,8 +1804,9 @@ private:
           continue;
         if (infix->association == Association::None ||
             operand.notation->association != infix->association) {
-          fail(infix->symbol == "==" ? "source.syntax"
-                                     : "source.notation-association",
+          fail(infix->symbol == "==" && operand.notation->symbol == "=="
+                   ? "source.syntax"
+                   : "source.notation-association",
                "equal-precedence nonassociative or mixed-association chains "
                "require parentheses");
           return {};
@@ -1918,7 +1919,7 @@ private:
     b.parent = currentScope;
     auto previousScope = currentScope;
     auto previousEnvironment = notationEnvironment;
-    auto restore = llvm::make_scope_exit([&] {
+    auto restore = llvm::scope_exit([&] {
       currentScope = previousScope;
       notationEnvironment = previousEnvironment;
     });

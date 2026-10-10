@@ -152,7 +152,7 @@ of the solver. Specialization preserves definition-site selection.
 
 `inspectNotations(CheckedProject, NotationInspectionOptions, Limits)` is the
 read-only Language inspection surface. `NotationInspectionOptions` has
-`includePrivate` and `includeInstallation`, both false by default. The intended
+`includePrivate` and `includeInstallation`, both false by default. The
 CLI view is `zkc check --notations`; `--notation-private` includes captured
 private/local records and `--notation-installation` includes installation records.
 Both visibility switches require `--notations` and apply only to source checking.

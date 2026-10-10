@@ -18,9 +18,13 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--llvm-dir", required=True)
     parser.add_argument("--utf8proc-dir", required=True)
+    parser.add_argument("--c-compiler", required=True)
+    parser.add_argument("--cxx-compiler", required=True)
     args = parser.parse_args()
-    source = Path(__file__).resolve().parent
-    common = [f"-DLLVM_DIR={args.llvm_dir}", f"-Dutf8proc_DIR={args.utf8proc_dir}"]
+    source = Path(__file__).resolve().parents[1] / "names"
+    common = [f"-DLLVM_DIR={args.llvm_dir}", f"-Dutf8proc_DIR={args.utf8proc_dir}",
+              f"-DCMAKE_C_COMPILER={args.c_compiler}",
+              f"-DCMAKE_CXX_COMPILER={args.cxx_compiler}"]
     wrong = args.output / "wrong-utf8proc"
     wrong.mkdir(parents=True, exist_ok=True)
     (wrong / "utf8proc-config-version.cmake").write_text(

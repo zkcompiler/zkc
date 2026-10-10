@@ -35,9 +35,12 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
             match key {
                 "--compiler" => compiler = value,
                 "--output" => output = Some(value),
-                "--no-simplify" | "--release-storage" | "--declarations" => {
-                    flags.push(key.to_owned())
-                }
+                "--no-simplify"
+                | "--release-storage"
+                | "--declarations"
+                | "--notations"
+                | "--notation-private"
+                | "--notation-installation" => flags.push(key.to_owned()),
                 "--project" | "--module" | "--asset" => {}
                 _ => unreachable!("validated source option"),
             }

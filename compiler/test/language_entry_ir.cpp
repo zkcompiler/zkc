@@ -92,8 +92,8 @@ run 公開=実行;)zkc",
         require(
             checked.bytes().contains("alternative = \"case00000001\"") &&
                 checked.bytes().contains(
-                    "alternatives = [\"case00000001\", \"case00000000\"]"),
-            "constructor or authored match order lost its declared ordinal");
+                    "alternatives = [\"case00000000\", \"case00000001\"]"),
+            "constructor or normalized match order lost its declared ordinal");
         auto read =
             take(readInterface(checked.bytes(), checked.interfaceJson()));
         if (auto error = compareInterface(checked.entry(), read))
@@ -131,13 +131,19 @@ run 公開=実行;)zkc",
                   "alternatives",
                   mlir::ArrayAttr::get(
                       &context,
-                      {mlir::StringAttr::get(&context, "case00000000"),
-                       mlir::StringAttr::get(&context, "case00000001")}));
+                      {mlir::StringAttr::get(&context, "case00000001"),
+                       mlir::StringAttr::get(&context, "case00000000")}));
           });
-          require(changed && succeeded(mlir::verify(*module)),
-                  "case mutation must remain valid native IR");
-          refuses(compareOriginal(checked.entry(), *module),
-                  "source.correspondence");
+          require(changed, "case mutation did not find its operation");
+          if (operation == "local.match") {
+            require(failed(mlir::verify(*module)),
+                    "native match must reject reordered alternatives");
+          } else {
+            require(succeeded(mlir::verify(*module)),
+                    "constructor mutation must remain valid native IR");
+            refuses(compareOriginal(checked.entry(), *module),
+                    "source.correspondence");
+          }
         }
         take(compileEntry(checked));
       });

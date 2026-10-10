@@ -87,7 +87,7 @@ readers. The [source/native contract](spec/language/translation.md#source-and-na
 and [SDK dependencies](../compiler/README.md#installed-package-discovery) own the
 encoding and pinned Unicode/NFC boundary.
 
-Notation inspection is being completed. Its specified public surface is
+Checked notation inspection is available through
 `inspectNotations` with `NotationInspectionOptions.includePrivate` and
 `includeInstallation`, and `zkc check --notations` with `--notation-private` and
 `--notation-installation`. The version-0 diagnostic view covers descriptors,

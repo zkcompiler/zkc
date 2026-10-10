@@ -5,7 +5,7 @@ Names and notation are separate choices. Unicode names follow the
 are ordinary callable bindings under the
 [notation contract](../spec/language/notation.md). Named APIs remain available.
 [Status](../status.md#source-and-application-boundary) records implementation
-coverage, including the inspection surface still being completed.
+coverage.
 
 ## Names and editor input
 
@@ -94,14 +94,13 @@ input types; use a named call or an explicit local binding to resolve ambiguity.
 
 ## Inspect notation and locations
 
-The planned source inspection view is `zkc check --notations`, separate from
+The source inspection view is `zkc check --notations`, separate from
 `--declarations` and package `zkc inspect`. Its public inventory describes
 descriptors, bindings, scopes and occurrences. `--notation-private` includes
 captured private/local records; `--notation-installation` independently includes
 installation records. The C++ surface is `inspectNotations` with
 `NotationInspectionOptions.includePrivate` and `includeInstallation`, both false
-by default. Both CLI visibility switches require `--notations`. Check
-[status](../status.md#source-and-application-boundary) before depending on availability.
+by default. Both CLI visibility switches require `--notations`. The default inventory includes public captured declarations.
 
 The `zkc.notations/0` view is diagnostic data, bounded to 8 MiB. Canonical named-call
 renderings explain selected targets and operand order; they are not a promise

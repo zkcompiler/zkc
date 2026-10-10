@@ -41,7 +41,7 @@ compilation options without skipping source comparison. Maintained
 
 ## Source names and native labels
 
-Entry commands and public JSON use the original NFC source names, including
+Entry requests and logical outputs use the original NFC source names, including
 Unicode participants, ports, fields, alternatives and setup slots. They do not
 silently normalize names. Raw UTF-8 and valid equivalent JSON escapes identify
 the same decoded name. Use the names reported by `inspect`.
@@ -122,6 +122,9 @@ logical results using `zkc.entry-outputs/0`; non-Wire private values cannot be
 serialized. [Publication](../spec/runtime/publication.md) defines file limits,
 path admission, staging, per-file replacement and partial publication reports.
 A publication failure never triggers automatic reexecution.
+The nested `execution` diagnostic retains native report labels, including
+ordinal participants; logical result maps retain source names. The Rust report's
+`native` member follows the same native-report contract.
 
 ## Rust applications
 

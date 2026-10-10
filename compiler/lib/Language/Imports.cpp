@@ -168,6 +168,10 @@ bool Checker::imports() {
       visibleOperators[i].insert(visibleOperators[i].end(),
                                  exportedOperators[id].begin(),
                                  exportedOperators[id].end());
+      llvm::sort(visibleOperators[i]);
+      visibleOperators[i].erase(
+          std::unique(visibleOperators[i].begin(), visibleOperators[i].end()),
+          visibleOperators[i].end());
     }
   }
   return true;
