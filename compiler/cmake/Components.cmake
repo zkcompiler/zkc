@@ -50,7 +50,9 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Prelude.zkc" zkc_prelude_sou
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Prelude.zkc")
 configure_file(lib/Language/Prelude.inc.in generated/Prelude.inc @ONLY)
+include(${CMAKE_CURRENT_LIST_DIR}/Unicode.cmake)
 add_zkc_component(Language
+  lib/Language/Names.cpp
   lib/Language/Diagnostics.cpp
   lib/Language/Inspection.cpp
   lib/Language/Types.cpp
@@ -107,6 +109,8 @@ add_zkc_component(Language
   lib/Language/Specialize.cpp
 )
 target_link_libraries(ZkcLanguage PUBLIC ZkcContracts)
+target_link_libraries(ZkcLanguage PRIVATE utf8proc::utf8proc)
+add_dependencies(ZkcLanguage ZkcSourceNameDataGen)
 add_zkc_component(Relation
   lib/Relation/R1CS.cpp
   lib/Relation/R1CSBinary.cpp

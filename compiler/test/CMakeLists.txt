@@ -44,6 +44,15 @@ set_tests_properties(language-entry-ir PROPERTIES LABELS native)
 add_zkc_test(language_specification_ir Compiler language-specification-ir)
 mlir_target_link_libraries(zkc-language_specification_ir-test PRIVATE MLIRParser)
 add_zkc_test(language_natural Language language-natural)
+add_zkc_test(language_names Language language-names)
+target_link_libraries(zkc-language_names-test PRIVATE utf8proc::utf8proc)
+target_compile_definitions(zkc-language_names-test PRIVATE
+  ZKC_UNICODE_DATA="${ZKC_UNICODE_SOURCE_DIR}/17.0.0")
+add_test(NAME unicode-sdk
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/names/sdk.py"
+    --output "${CMAKE_CURRENT_BINARY_DIR}/unicode-sdk"
+    --llvm-dir "${LLVM_DIR}" --utf8proc-dir "${utf8proc_DIR}")
+set_tests_properties(unicode-sdk PROPERTIES LABELS native)
 add_zkc_test(language_power Compiler language-power)
 add_zkc_test(language_polynomial Compiler)
 mlir_target_link_libraries(zkc-language_polynomial-test PRIVATE MLIRParser)
