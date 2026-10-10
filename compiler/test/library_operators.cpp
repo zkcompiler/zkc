@@ -276,6 +276,21 @@ int main() {
                    {"m", "module m;use v;fn f(v:bool)->bool{return v;}", {}}}),
             "source.shadow");
   });
+  for (StringRef import : {"use v as T;", "use r::{T};"})
+    for (StringRef source :
+         {"fn id<T:Type>(x:T)->T{return x;}",
+          "interface I<T:Type>{fn f(x:T)->T;}",
+          "interface I{fn f(T:bool)->bool;}", "fn f(T:bool)->bool{return T;}"})
+      cases.run("signature alias shadowing: " + import + source, [&] {
+        refuses(check({{"v", "module v;", {}},
+                       {"r", "module r;pub use v as T;", {}},
+                       {"m", "module m;" + import.str() + source.str(), {}}}),
+                "source.shadow");
+      });
+  cases.run("abstract inputs cannot shadow static parameters", [&] {
+    refuses(check("interface I<T:Type>{fn f(T:bool)->bool;}"), "source.shadow");
+    refuses(check("interface I{fn f<T:Type>(T:bool)->bool;}"), "source.shadow");
+  });
   cases.run("effects and body modes cannot select an overload", [&] {
     refuses(check(field + R"(
       math fn total(a:F,b:F)->F{return a;}

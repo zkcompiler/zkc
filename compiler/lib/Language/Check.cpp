@@ -100,9 +100,10 @@ bool Checker::bindingName(const Declaration &decl, StringRef name, Span span) {
   if (visible[decl.module.index].count(name.str()) ||
       aliases[decl.module.index].count(name.str()) ||
       llvm::any_of(decl.parameters, [&](auto &p) { return p.name == name; }))
-    return types.fail(
-        "source.shadow",
-        "binding shadows a visible declaration or static parameter", span);
+    return types.fail("source.shadow",
+                      "binding shadows a visible declaration, module alias or "
+                      "static parameter",
+                      span);
   return true;
 }
 bool Checker::collect() {
