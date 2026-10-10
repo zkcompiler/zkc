@@ -252,7 +252,8 @@ run Demo=Run;
     assert entry.run_roles('zero', roles(0, False))['V'] == {'r': True}
     assert entry.run_roles('pass', roles(1, True))['V'] == {'r': True}
     report = entry.run_roles('stop', roles(1, False), refuses='entry-run-incomplete')
-    stopped = next(role for role in report['execution']['roles'] if role['role'] == owner)
+    native_owner = f'role{("P", "V").index(owner):08x}'
+    stopped = next(role for role in report['execution']['roles'] if role['role'] == native_owner)
     assert stopped['before'][1]['cause'] == ['explicit', {'omitted_bytes': 0, 'text': 'reject'}]
     assert 'loop-count-disagreement' not in str(report)
     assert 'provenance' not in str(report)
@@ -281,3 +282,24 @@ run Demo=Run;
     report = entry.run_roles('second-draw-exhausts', {'P': {'inputs': {'go': True}, 'services': {'coins': 1}}},
                              refuses='entry-run-incomplete')
     assert 'exhausted' in str(report)
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
+def test_protocol_index_operators_keep_participant_ownership_and_failure(
+    toolchain, journal, directory, flags,
+):
+    source = '''module sample;
+protocol Run roles(P,V)(x:index@(P,V),y:index@P)
+  ->(sum:index@P,difference:index@P,product:index@P,same:bool@V){
+  let sum@P=x+y;let difference@P=x-y;let product@P=x*y;
+  let same@V=x==x;return(sum,difference,product,same);
+}
+run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    assert entry.run_roles('separate-owners', {
+        'P': {'inputs': {'x': 7, 'y': 2}}, 'V': {'inputs': {'x': 11}},
+    }) == {'P': {'sum': '9', 'difference': '5', 'product': '14'}, 'V': {'same': True}}
+    entry.run_roles('underflow', {
+        'P': {'inputs': {'x': 1, 'y': 2}}, 'V': {'inputs': {'x': 11}},
+    }, refuses='entry-run-incomplete')

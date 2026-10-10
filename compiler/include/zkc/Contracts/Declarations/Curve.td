@@ -211,10 +211,6 @@ def OpCurveResponse : ZKC_Operation<"curve.response", [OpCurveResponseF],
 def ExportCurveResponse : ZKC_OperationExport<"zkc::curve", "response",
     OpCurveResponse, ["field0", "field1", "nonce"]>;
 
-def OperatorCurveAdd4 : ZKC_Operator<"+", [TypeGroup, TypeGroup], OpCurveAdd, [0, 1]>;
-def OperatorCurveNeg5 : ZKC_Operator<"-", [TypeGroup], OpCurveNeg, [0]>;
-def OperatorCurveScale6 : ZKC_Operator<"*", [TypeGroup, TypeField], OpCurveScale, [0, 1]>;
-def OperatorCurveScale7 : ZKC_Operator<"*", [TypeField, TypeGroup], OpCurveScale, [1, 0]>;
 
 // A reusable pairing result is a prime-order target group element, not a
 // Miller-loop accumulator or an arbitrary extension-field element.

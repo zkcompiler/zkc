@@ -209,11 +209,4 @@ class ZKC_OperationExport<string m, string n, ZKC_Operation op,
   ZKC_Operation operation = op;
   list<string> inputLabels = labels;
 }
-class ZKC_Operator<string hook, list<ZKC_Type> heads, ZKC_Operation op,
-                   list<int> permutation> : ZKC_Declaration {
-  string symbol = hook;
-  list<ZKC_Type> operands = heads;
-  ZKC_Operation operation = op;
-  list<int> order = permutation;
-}
 #endif

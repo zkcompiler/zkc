@@ -11,11 +11,14 @@ file(GLOB_RECURSE zkc_identity_inputs CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.td"
   "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.def"
   "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.inc"
+  "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.in"
+  "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.zkc"
   "${CMAKE_CURRENT_SOURCE_DIR}/tools/*.h"
   "${CMAKE_CURRENT_SOURCE_DIR}/tools/*.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/*.cmake"
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/*.in")
 list(APPEND zkc_identity_inputs "${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt")
+list(APPEND zkc_identity_inputs ${zkc_unicode_inputs})
 list(SORT zkc_identity_inputs)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${zkc_identity_inputs})
 set(zkc_identity_material "zkc.compiler-build\n")

@@ -6,6 +6,7 @@
 #include "zkc/Contracts/Relation.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Layout.h"
+#include "zkc/Language/Names.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/ConvertUTF.h"
@@ -14,6 +15,7 @@
 
 using namespace llvm;
 namespace zkc::language {
+#include "Prelude.inc"
 char DiagnosticError::ID;
 DiagnosticError::DiagnosticError(Diagnostic diagnostic)
     : value(std::move(diagnostic)) {}
@@ -48,6 +50,9 @@ std::optional<StringRef> exceededLimit(const Limits &limits,
   CHECK_LIMIT(work);
   CHECK_LIMIT(irBytes);
   CHECK_LIMIT(symbolBytes);
+  CHECK_LIMIT(notationDescriptors);
+  CHECK_LIMIT(notationHoles);
+  CHECK_LIMIT(notationInspectionBytes);
   CHECK_LIMIT(interfaceBytes);
   CHECK_LIMIT(locationBytes);
   CHECK_LIMIT(typeDepth);
@@ -115,11 +120,8 @@ bool isReserved(StringRef name) {
       "each"};
   return words.count(name) || isUnsupported(name);
 }
-bool isIdentifier(StringRef name) {
-  if (name.empty() || !(isAlpha(name.front()) || name.front() == '_'))
-    return false;
-  return llvm::all_of(name, [](char c) { return isAlnum(c) || c == '_'; });
-}
+bool isIdentifier(StringRef name) { return isSourceIdentifier(name); }
+
 bool isPath(StringRef path, const Limits &limits) {
   if (path.empty() || path.size() > limits.moduleBytes)
     return false;
@@ -163,6 +165,10 @@ static Error checkSources(ArrayRef<SourceBuffer> sources,
   uint64_t total = 0;
   std::set<StringRef> names;
   for (const auto &source : sources) {
+    if (source.origin != SourceOrigin::Captured ||
+        source.module == "zkc::prelude")
+      return failure("source.module",
+                     "zkc::prelude is reserved for installation sources");
     if (source.diagnosticPath.size() > 4096)
       return failure("source.limit", "diagnostic path byte limit exceeded");
     if (source.text.size() > limits.fileBytes ||
@@ -188,7 +194,9 @@ static Error checkSources(ArrayRef<SourceBuffer> sources,
         asset.bytes.size() > limits.assetTotalBytes - total)
       return failure("source.limit", "captured asset byte limit exceeded");
     total += asset.bytes.size();
-    if (!isPath(asset.name, limits) || !names.insert(asset.name).second)
+    if (!llvm::all_of(asset.name,
+                      [](unsigned char byte) { return byte < 128; }) ||
+        !isPath(asset.name, limits) || !names.insert(asset.name).second)
       return failure("source.asset",
                      "invalid or duplicate captured asset name");
     if (asset.format != "r1cs-json" && asset.format != "r1cs-binary" &&
@@ -256,6 +264,10 @@ CheckedProject::CheckedProject(
 const CapturedProject &CheckedProject::capture() const {
   return storage->capture;
 }
+ArrayRef<SourceBuffer> CheckedProject::sources() const {
+  return *storage->sources;
+}
+ArrayRef<SourceBuffer> Analysis::sources() const { return *storage->sources; }
 ArrayRef<Asset> CheckedProject::assets() const { return storage->assets; }
 ArrayRef<Declaration> CheckedProject::declarations() const {
   return storage->declarations;
@@ -268,7 +280,19 @@ ArrayRef<Token> CheckedProject::tokens(ModuleId id) const {
 StringRef CheckedProject::installationIdentity() const {
   return storage->installation;
 }
+uint64_t CheckedProject::checkedNotationDescriptors() const {
+  return storage->notationDescriptors;
+}
+uint64_t CheckedProject::checkedNotationHoles() const {
+  return storage->notationHoles;
+}
 uint64_t CheckedProject::checkedWork() const { return storage->work; }
+uint64_t CheckedProject::checkedDeclarations() const {
+  return storage->declarationCount;
+}
+uint64_t CheckedProject::checkedOperations() const {
+  return storage->operationCount;
+}
 Analysis::Analysis(std::shared_ptr<const detail::AnalysisStorage> storage)
     : storage(std::move(storage)) {}
 ArrayRef<Diagnostic> Analysis::diagnostics() const {
@@ -290,6 +314,13 @@ Expected<CheckedProject> Analysis::checkedProject() const {
 Analysis analyze(const CapturedProject &capture, const Limits &limits) {
   auto output = std::make_shared<detail::AnalysisStorage>();
   auto checked = std::make_shared<detail::CheckedStorage>(capture);
+  auto sources = std::make_shared<std::vector<SourceBuffer>>(
+      capture.sources().begin(), capture.sources().end());
+  sources->push_back({"zkc::prelude", installedPrelude,
+                      "<installation>/zkc/prelude.zkc",
+                      SourceOrigin::Installation});
+  checked->sources = sources;
+  output->sources = sources;
   detail::Work work{limits};
   auto run = [&]() -> Error {
     if (auto error = checkLimits(limits))
@@ -306,14 +337,14 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits) {
                                                    toString(value.takeError()));
       checked->assets.push_back(std::move(*value));
     }
-    checked->tokens.resize(capture.sources().size());
+    checked->tokens.resize(sources->size());
     std::vector<detail::SyntaxModule> modules;
-    for (unsigned i = 0; i < capture.sources().size(); ++i) {
-      if (auto error = detail::lex(capture.sources()[i], ModuleId{i}, work,
-                                   checked->tokens[i]))
+    for (unsigned i = 0; i < sources->size(); ++i) {
+      if (auto error =
+              detail::lex((*sources)[i], ModuleId{i}, work, checked->tokens[i]))
         return error;
-      auto syntax = detail::parse(capture.sources()[i], ModuleId{i},
-                                  checked->tokens[i], work);
+      auto syntax =
+          detail::parse((*sources)[i], ModuleId{i}, checked->tokens[i], work);
       if (!syntax)
         return syntax.takeError();
       modules.push_back(std::move(*syntax));
@@ -322,6 +353,10 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits) {
       return error;
     checked->installation = installedCatalogIdentity();
     checked->work = work.used;
+    checked->declarationCount = work.declarations;
+    checked->operationCount = work.operations;
+    checked->notationDescriptors = work.notationDescriptors;
+    checked->notationHoles = work.notationHoles;
     output->checked = CheckedProject(checked);
     return Error::success();
   };
@@ -338,16 +373,15 @@ Expected<std::string> encodeSymbol(StringRef path, const Limits &limits) {
     return detail::failure("source.limit", "qualified name limit exceeded");
   SmallVector<StringRef> parts;
   path.split(parts, "::");
-  std::string symbol = "s";
   for (auto part : parts) {
     if (part.size() > limits.identifierBytes || !detail::isIdentifier(part) ||
         detail::isReserved(part))
       return detail::failure("source.name", "invalid qualified name");
-    symbol += std::to_string(part.size()) + "_" + part.str();
-    if (symbol.size() > limits.symbolBytes)
-      return detail::failure("source.limit", "symbol byte limit exceeded");
   }
-  return symbol;
+  auto symbol = encodeSourceSymbol(path, limits.symbolBytes);
+  if (!symbol)
+    return detail::failure("source.limit", "symbol byte limit exceeded");
+  return *symbol;
 }
 std::vector<DeclarationId> CheckedProject::entries() const {
   std::vector<DeclarationId> result;
@@ -368,7 +402,9 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
   if (name.size() > limits.moduleBytes + limits.identifierBytes + 2)
     return detail::failure("source.limit", "Entry name byte limit exceeded");
   if (project.checkedWork() > limits.work ||
-      project.declarations().size() > limits.declarations)
+      project.checkedDeclarations() > limits.declarations ||
+      project.checkedNotationDescriptors() > limits.notationDescriptors ||
+      project.checkedNotationHoles() > limits.notationHoles)
     return detail::failure("source.limit",
                            "checked project exceeds requested limits");
   auto eligible = [&](DeclarationId id) {
@@ -544,6 +580,8 @@ std::string installedCatalogIdentity() {
       detail::frame(value, field);
     rows.push_back(std::move(value));
   };
+  row({"source-name-profile", sourceNameProfileIdentity()});
+  row({"prelude", "zkc::prelude", detail::digest(installedPrelude)});
   const auto &catalog = protocol::installedDomains();
   for (const auto &domain : catalog.allDomains()) {
     row({"domain", domain.identity, domain.sort, domain.modulus,
@@ -567,7 +605,9 @@ std::string installedCatalogIdentity() {
          std::to_string(intrinsic.naturals),
          intrinsic.domainPoints ? "domain" : "none",
          intrinsic.domain == MathematicalIntrinsic::Domain::Boolean ? "bool"
-                                                                    : "field"});
+         : intrinsic.domain == MathematicalIntrinsic::Domain::Group ? "group"
+                                                                    : "field",
+         intrinsic.scalar ? "scalar" : "intrinsic"});
   for (const auto &kernel : protocol::kernels()) {
     std::string value;
     detail::frame(value, "kernel");

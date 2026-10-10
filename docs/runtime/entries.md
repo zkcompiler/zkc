@@ -19,7 +19,8 @@ zkc prepare
 
 `new` creates a directory; `init` initializes an existing directory (the current
 directory by default). Both create an index echo protocol, its Entry and an input
-template. They refuse an existing project or conflicting files.
+template. They refuse an existing project or conflicting source files and preserve
+existing regular input files.
 Fill `inputs/example.Main/P.json`
 with `{"value":"7"}`, then run:
 
@@ -66,8 +67,9 @@ requires qualification. A unique Entry of the wrong kind is an error.
 | Produced or verified proof | `build/zkc/<qualified.name>.zkproof` | `--output=FILE` / `--proof=FILE` |
 | Run output values | `build/zkc/<qualified.name>.results.json` | `--results=FILE` |
 
-For `example::Proof`, the qualified filename is `example.Proof`. Explicit paths
-are relative to the working directory and override only that group or artifact.
+For `example::Proof`, the qualified filename is `example.Proof`. Unicode source
+names retain their exact spelling in default filenames. Explicit paths are
+relative to the working directory and override only that group or artifact.
 Missing or malformed selected files fail; there is no search for alternate files.
 Default output directories are created as needed. Prove and verify write named
 output values only when `--results` is supplied.
@@ -94,6 +96,18 @@ constructor. `inputs check --operation=...`
 uses the same native preparation as execution, including setup and capacity
 checks, but runs no protocol and issues no resources. Successful preparation
 is not proof acceptance or a protocol security judgment.
+
+## Source names and native labels
+
+Entry inputs and logical outputs retain exact NFC source names, including Unicode
+participants, ports, fields, alternatives and setup slots. Raw UTF-8 and equivalent
+JSON escapes identify the same decoded name. Use the names reported by `inspect`.
+
+The authenticated interface maps names by declaration order to native
+`role00000000`, `setup00000000` and `case00000000` labels (eight lowercase hex
+digits, starting at zero), including ASCII source names. Direct Runner/PIR APIs
+and Bundle commands use native labels; Entry commands convert source names.
+Applications cannot supply an alternative renaming table.
 
 ## Input values
 
@@ -145,6 +159,8 @@ Use `--service=ROLE.NAME=COUNT`, `--transcript-budget=COUNT` and `--context=HEX`
 for invocation settings. Explicit zero budgets remain zero. `--capacity=FILE`
 sets [native limits](../spec/runtime/capacity.md); run Entries also accept
 `--limits=FILE` for [work limits](../spec/runtime/joint.md).
+`prove` accepts services of the selected prover; `verify` accepts services of the
+selected verifier. Other roles refuse.
 [Retries](attempts.md) require an Entry completion selection and an explicit count.
 
 ## Setup authority
@@ -155,7 +171,8 @@ sets [native limits](../spec/runtime/capacity.md); run Entries also accept
 {"format":"zkc.entry-setups/0","keys":{"main":"EXPECTED_KEY_ID_HEX"}}
 ```
 
-Supply verifier-key bytes separately with `--key=main=main.vk`. Whole verifier-key
+Supply verifier-key bytes separately with `--key=main=main.vk`. Both material and authority use source slot names; the Host maps them to the
+same authenticated native setup labels. Whole verifier-key
 ports are initialized by the Host and omitted from input maps. A prover-key input
 uses `{"file":"main.pk","fingerprint":"EXPECTED_MATERIAL_ID_HEX"}`. Its
 fingerprint identifies imported key material; it is distinct from a file SHA-256.
@@ -188,11 +205,19 @@ can construct `RoleInputs`, `RunRequest` and `ProofRequest` directly and invoke
 `RunEntry` or `ProofEntry`. Their preparation, native execution and authority
 checks are shared with the CLI. Both provide `check_inputs` without execution.
 
+The nested `execution` diagnostics and Rust `native` report retain native labels;
+logical result maps retain source names.
+
 ```sh
 zkc bindings --package=proof.zkpkg --sha256=EXPECTED_SHA256 --output=bindings.rs
 ```
 
-Bindings pin the package and provide named Rust inputs and outputs. They contain
-no protocol algorithm or custom interpreter. Use `is_success` or `into_result`
-to check complete execution and acceptance. The [tools crate](../../crates/zkc-tools/README.md)
-lists APIs; [Entry contracts](../spec/runtime/entries.md) specify exact behavior.
+The module pins that package and provides named input/output structures, setup
+and service constants, `into_inputs`, `into_role` and `take`. Mathematical leaves
+use `entry::Value`; native admission still checks domain, permissions and setup.
+Generated Rust identifiers use `__zkc_` plus full UTF-8 byte hex for Unicode,
+Rust keywords and source names beginning with that reserved prefix; an allocator
+also resolves generated-name collisions. Serialized keys and role constants keep
+original source names. The bindings contain no protocol arithmetic or custom interpreter. Regenerate
+them when the authorized package changes. The [tools crate](../../crates/zkc-tools/README.md)
+owns the API inventory.

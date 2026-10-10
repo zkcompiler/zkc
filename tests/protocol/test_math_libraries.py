@@ -19,7 +19,8 @@ def vector(values):
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
-def test_shared_math_and_runtime_data(toolchain, journal, directory, flags):
+@pytest.mark.parametrize('notation', [False, True])
+def test_shared_math_and_runtime_data(toolchain, journal, directory, flags, notation):
     source = '''module sample;
 use zkc::vector::{Vector};
 use zkc::matrix::{Matrix};
@@ -60,10 +61,11 @@ fn numerical(m:Matrix<F>,v:Vector<F>,a:F,x:F) {
   return (zkc::vector::get(folded,0),zkc::vector::sum(repeated),
           zkc::vector::dot(v,v),zkc::vector::has_length<F,2>(v),
           product,transpose,bilinear,zkc::matrix::rows(m),zkc::matrix::columns(m),
-          zkc::polynomial::evaluate(polynomial,x),zkc::polynomial::boundary(polynomial));
+          zkc::polynomial::evaluate(polynomial,x),zkc::polynomial::boundary(polynomial),
+          zkc::vector::add(v,zkc::vector::scale(v,a)));
 }
 protocol Run roles(P)(m:Matrix<F>@P,v:Vector<F>@P,a:F@P,b:F@P,x:F@P)
- ->(analytic:(F,F,F,F,F,F,F,F,F)@P,numeric:(F,F,F,bool,Vector<F>,Vector<F>,F,index,index,F,F)@P,
+ ->(analytic:(F,F,F,F,F,F,F,F,F)@P,numeric:(F,F,F,bool,Vector<F>,Vector<F>,F,index,index,F,F,Vector<F>)@P,
     logic:(bool,bool,bool,bool)@P) {
   let computed=numerical(m,v,a,x);
   return (analytic=symbolic(a,b,x),numeric=computed,
@@ -72,6 +74,13 @@ protocol Run roles(P)(m:Matrix<F>@P,v:Vector<F>@P,a:F@P,b:F@P,x:F@P)
 }
 run Demo=Run;
 '''
+    if notation:
+        source = source.replace('module sample;', 'module sample;use zkc::vector;use zkc::matrix;use zkc::symbolic as algebra;')
+        source = source.replace('zkc::symbolic::multiply(linear,linear)', 'linear*linear')
+        source = source.replace('zkc::symbolic::add(linear,constant)', 'linear+constant')
+        source = source.replace('zkc::matrix::multiply(m,v)', 'm*v')
+        source = source.replace('zkc::vector::dot(v,v)', '⟪v,v⟫')
+        source = source.replace('zkc::vector::add(v,zkc::vector::scale(v,a))', 'v+v*a')
     # [1 2; 0 3], sparse entries in row-major order.
     matrix = {'rows': '2', 'columns': '2', 'entries': [
         ['0', '0', '1'], ['0', '1', '2'], ['1', '1', '3']]}
@@ -80,7 +89,7 @@ run Demo=Run;
     result = entry.run('valid', inputs)
     assert result['analytic'] == [scalar(n) for n in (9, 16, 6, 59, 37, 23, 18, 29, 15)]
     assert result['numeric'] == [scalar(6), scalar(4), scalar(13), True,
-        vector([8, 9]), vector([2, 13]), scalar(43), '2', '2', scalar(14), scalar(7)]
+        vector([8, 9]), vector([2, 13]), scalar(43), '2', '2', scalar(14), scalar(7), vector([6, 9])]
     assert result['logic'] == [False, True, False, True]
     report = entry.run('odd-table', inputs | {'v': vector([2, 3, 4])},
                        refuses='entry-run-incomplete')

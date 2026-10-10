@@ -1,0 +1,71 @@
+{
+  "schema": "zkc.source-name-profile/0",
+  "unicode_version": "17.0.0",
+  "profile": "zkc.source-names/0",
+  "identifier_start_additions": [
+    "005F"
+  ],
+  "identifier_continue_additions": [
+    "2080..2089"
+  ],
+  "identifier_exclusions": [
+    "Default_Ignorable_Code_Point",
+    "Bidi_Control"
+  ],
+  "normalization": "NFC",
+  "operator_category": "Sm",
+  "operator_reserved": [
+    "2211",
+    "220F"
+  ],
+  "delimiter_categories": [
+    "Ps",
+    "Pe"
+  ],
+  "normalization_test_rows": 20034,
+  "normalizers": {
+    "cpp": {
+      "name": "utf8proc",
+      "version": "2.12.0",
+      "url": "https://codeload.github.com/JuliaStrings/utf8proc/tar.gz/refs/tags/v2.12.0",
+      "sha256": "f564011d38b2888d583d510b08e69ffa15aa117155db1b9b49ef1dfe1fa25111",
+      "license": "MIT"
+    },
+    "rust": {
+      "name": "unicode-normalization",
+      "version": "0.1.25"
+    }
+  },
+  "files": [
+    {
+      "url": "https://www.unicode.org/Public/17.0.0/ucd/BidiBrackets.txt",
+      "sha256": "dadbaf38a0d0246e5b805bf8725cb81b7c621f93d030595635f5ba2c2f179428",
+      "file": "BidiBrackets.txt"
+    },
+    {
+      "file": "DerivedCoreProperties.txt",
+      "url": "https://www.unicode.org/Public/17.0.0/ucd/DerivedCoreProperties.txt",
+      "sha256": "24c7fed1195c482faaefd5c1e7eb821c5ee1fb6de07ecdbaa64b56a99da22c08"
+    },
+    {
+      "file": "NormalizationTest.txt",
+      "url": "https://www.unicode.org/Public/17.0.0/ucd/NormalizationTest.txt",
+      "sha256": "5019ffd530751a741900c849c0e010332f142a3612234639bd200b82138a87db"
+    },
+    {
+      "file": "PropList.txt",
+      "url": "https://www.unicode.org/Public/17.0.0/ucd/PropList.txt",
+      "sha256": "130dcddcaadaf071008bdfce1e7743e04fdfbc910886f017d9f9ac931d8c64dd"
+    },
+    {
+      "file": "UnicodeData.txt",
+      "url": "https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt",
+      "sha256": "2e1efc1dcb59c575eedf5ccae60f95229f706ee6d031835247d843c11d96470c"
+    }
+  ],
+  "license": {
+    "file": "LICENSE.txt",
+    "url": "https://www.unicode.org/license.txt",
+    "sha256": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96"
+  }
+}

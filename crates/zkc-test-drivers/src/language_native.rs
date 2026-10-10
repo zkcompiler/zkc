@@ -186,11 +186,11 @@ fn joint(bundle: &serde_json::Value, verifier_c: u64) {
         "joint-language-test",
         [
             [
-                "P",
+                "role00000000",
                 [["0", ty, ["wire", wire(2)]], ["1", ty, ["wire", wire(3)]]],
                 []
             ],
-            ["V", [["0", ty, ["wire", wire(verifier_c)]]], []]
+            ["role00000001", [["0", ty, ["wire", wire(verifier_c)]]], []]
         ],
         []
     ]);
@@ -202,7 +202,7 @@ fn joint(bundle: &serde_json::Value, verifier_c: u64) {
     assert_eq!(result["outcome"], json!(["completed"]));
     assert!(report.cleanup_errors.is_empty());
     let verifier = &report.execution.as_ref().unwrap().roles[1];
-    assert_eq!(verifier.role, "V");
+    assert_eq!(verifier.role, "role00000001");
     expect_field(&verifier.outputs[0], 7);
     expect_field(&verifier.outputs[1], 9);
     expect_field(&verifier.outputs[2], 7 - verifier_c);
@@ -211,12 +211,12 @@ fn joint(bundle: &serde_json::Value, verifier_c: u64) {
         session: "joint-language-test".into(),
         roles: vec![
             RoleInputs {
-                role: "P".into(),
+                role: "role00000000".into(),
                 inputs: vec![InputValue::from(field(2)), InputValue::from(field(3))],
                 services: vec![],
             },
             RoleInputs {
-                role: "V".into(),
+                role: "role00000001".into(),
                 inputs: vec![InputValue::from(field(verifier_c))],
                 services: vec![],
             },
@@ -227,36 +227,38 @@ fn joint(bundle: &serde_json::Value, verifier_c: u64) {
 }
 fn service_backend(
     bundle: &serde_json::Value,
+    role: &str,
     registry: &ServiceRegistry,
     root: &ServiceReference,
 ) -> NativeBackend {
-    service_backends(bundle, registry, std::slice::from_ref(root))
+    service_backends(bundle, role, registry, std::slice::from_ref(root))
 }
 fn service_backends(
     bundle: &serde_json::Value,
+    role: &str,
     registry: &ServiceRegistry,
     roots: &[ServiceReference],
 ) -> NativeBackend {
     let admitted = Bundle::admit(
         bundle.to_string().as_bytes(),
-        &backend(bundle, "V"),
+        &backend(bundle, role),
         BundleLimits::default(),
     )
     .unwrap();
-    let role = admitted
+    let participant = admitted
         .roles()
         .iter()
-        .find(|role| role.entry.role == "V")
+        .find(|participant| participant.entry.role == role)
         .unwrap();
-    assert_eq!(role.entry.services.len(), roots.len());
-    let ports = role
+    assert_eq!(participant.entry.services.len(), roots.len());
+    let ports = participant
         .entry
         .services
         .iter()
         .zip(roots)
         .map(|(port, root)| (port.name.clone(), root.clone()))
         .collect();
-    backend(bundle, "V")
+    backend(bundle, role)
         .with_services(registry.clone(), ports)
         .unwrap()
 }
@@ -266,10 +268,16 @@ fn repeated_queries(bundle: &serde_json::Value, conditional: bool) {
     } else {
         &[(0, false), (1, true), (3, true), (3, false), (5, true)]
     };
+    // The conditional fixture declares only V; the repeated fixture declares P,V.
+    let verifier_role = if conditional {
+        "role00000000"
+    } else {
+        "role00000001"
+    };
     for &(n, go) in cases {
         let registry = ServiceRegistry::new(Policy::default());
         let root = registry
-            .issue_test_tape("V", 4, (1..=4).map(Scalar::from).collect())
+            .issue_test_tape(verifier_role, 4, (1..=4).map(Scalar::from).collect())
             .unwrap();
         let values = if conditional {
             vec![Value::Bool(go)]
@@ -278,9 +286,9 @@ fn repeated_queries(bundle: &serde_json::Value, conditional: bool) {
         };
         let mut verifier = start(
             bundle,
-            "V",
+            verifier_role,
             values,
-            service_backend(bundle, &registry, &root),
+            service_backend(bundle, verifier_role, &registry, &root),
         );
         let expected_draws = if conditional {
             let values = returned(&mut verifier);
@@ -300,7 +308,7 @@ fn repeated_queries(bundle: &serde_json::Value, conditional: bool) {
             }
             0
         } else {
-            let mut prover = runner(bundle, "P", vec![Value::Index(n), field(2)]);
+            let mut prover = runner(bundle, "role00000000", vec![Value::Index(n), field(2)]);
             for i in 0..n {
                 let value = send(&mut verifier);
                 expect_field(&value, i + 1);
@@ -324,23 +332,23 @@ fn ordered_services(bundle: &serde_json::Value) {
         let registry = ServiceRegistry::new(Policy::default());
         let first = registry
             .issue_test_tape(
-                "V",
+                "role00000001",
                 3,
                 vec![Scalar::from(1), Scalar::from(2), Scalar::from(3)],
             )
             .unwrap();
         let second = registry
-            .issue_test_tape("V", 1, vec![Scalar::from(7)])
+            .issue_test_tape("role00000001", 1, vec![Scalar::from(7)])
             .unwrap();
         let roots = [first, second];
         let mut verifier = start(
             bundle,
-            "V",
+            "role00000001",
             vec![Value::Bool(go)],
-            service_backends(bundle, &registry, &roots),
+            service_backends(bundle, "role00000001", &registry, &roots),
         );
         if go {
-            let mut prover = runner(bundle, "P", vec![]);
+            let mut prover = runner(bundle, "role00000000", vec![]);
             let value = send(&mut verifier);
             expect_field(&value, 9);
             receive(&mut prover, value);
@@ -371,15 +379,15 @@ fn completion_queries(bundle: &serde_json::Value, nested: bool) {
     for go in [false, true] {
         let registry = ServiceRegistry::new(Policy::default());
         let root = registry
-            .issue_test_tape("V", 4, (1..=4).map(Scalar::from).collect())
+            .issue_test_tape("role00000001", 4, (1..=4).map(Scalar::from).collect())
             .unwrap();
         let mut verifier = start(
             bundle,
-            "V",
+            "role00000001",
             vec![Value::Bool(go), field(7)],
-            service_backend(bundle, &registry, &root),
+            service_backend(bundle, "role00000001", &registry, &root),
         );
-        let mut prover = runner(bundle, "P", vec![field(3)]);
+        let mut prover = runner(bundle, "role00000000", vec![field(3)]);
         expect_field(&returned(&mut prover)[0], 6);
         expect_field(&returned(&mut verifier)[0], if go { 7 } else { 14 });
         assert_eq!(verifier.early_return().is_some(), go);
@@ -407,12 +415,12 @@ fn managed_queries(bundle: &serde_json::Value) {
     for go in [false, true] {
         let registry = ServiceRegistry::new(Policy::default());
         let root = registry
-            .issue_test_tape("V", 2, vec![Scalar::from(3), Scalar::from(7)])
+            .issue_test_tape("role00000001", 2, vec![Scalar::from(3), Scalar::from(7)])
             .unwrap();
-        let provider = service_backend(bundle, &registry, &root);
-        let mut verifier = start(bundle, "V", vec![Value::Bool(go)], provider);
+        let provider = service_backend(bundle, "role00000001", &registry, &root);
+        let mut verifier = start(bundle, "role00000001", vec![Value::Bool(go)], provider);
         if go {
-            let mut prover = runner(bundle, "P", vec![]);
+            let mut prover = runner(bundle, "role00000000", vec![]);
             let challenge = send(&mut verifier);
             expect_field(&challenge, 7);
             receive(&mut prover, challenge);
@@ -441,8 +449,12 @@ fn native_data(directory: &Path, optimized: u32) {
     };
     let dynamic = load("dynamic");
     for count in [2, 6] {
-        let mut prover = runner(&dynamic, "P", vec![field(3), Value::Index(count)]);
-        let mut verifier = runner(&dynamic, "V", vec![]);
+        let mut prover = runner(
+            &dynamic,
+            "role00000000",
+            vec![field(3), Value::Index(count)],
+        );
+        let mut verifier = runner(&dynamic, "role00000001", vec![]);
         receive(&mut verifier, send(&mut prover));
         receive(&mut verifier, send(&mut prover));
         assert!(returned(&mut prover).is_empty());
@@ -451,7 +463,11 @@ fn native_data(directory: &Path, optimized: u32) {
         expect_field(&result[1], 3 * count / 2);
     }
     for count in [0, 1, 3] {
-        let mut prover = runner(&dynamic, "P", vec![field(3), Value::Index(count)]);
+        let mut prover = runner(
+            &dynamic,
+            "role00000000",
+            vec![field(3), Value::Index(count)],
+        );
         let Action::Stopped(stop) = next(&mut prover) else {
             panic!("invalid split length did not stop");
         };
@@ -462,7 +478,7 @@ fn native_data(directory: &Path, optimized: u32) {
     let matrix = load("matrix");
     let mut prover = runner(
         &matrix,
-        "P",
+        "role00000000",
         vec![
             Value::matrix(
                 2,
@@ -474,7 +490,7 @@ fn native_data(directory: &Path, optimized: u32) {
             Value::Vector(vec![Scalar::from(2), Scalar::from(3), Scalar::from(5)].into()),
         ],
     );
-    let mut verifier = runner(&matrix, "V", vec![]);
+    let mut verifier = runner(&matrix, "role00000001", vec![]);
     receive(&mut verifier, send(&mut prover));
     receive(&mut verifier, send(&mut prover));
     assert!(returned(&mut prover).is_empty());
@@ -493,8 +509,8 @@ fn native_data(directory: &Path, optimized: u32) {
             )
             .unwrap(),
         );
-        let mut prover = runner(&trace, "P", vec![data]);
-        let mut verifier = runner(&trace, "V", vec![]);
+        let mut prover = runner(&trace, "role00000000", vec![data]);
+        let mut verifier = runner(&trace, "role00000001", vec![]);
         receive(&mut verifier, send(&mut prover));
         assert!(returned(&mut prover).is_empty());
         assert!(matches!(returned(&mut verifier)[0], Value::Index(n)
@@ -504,7 +520,7 @@ fn native_data(directory: &Path, optimized: u32) {
     for count in 0..=2 {
         let mut prover = runner(
             &rounds,
-            "P",
+            "role00000000",
             vec![
                 Value::Vector((1..=4).map(Scalar::from).collect::<Vec<_>>().into()),
                 Value::Index(count),
@@ -512,10 +528,15 @@ fn native_data(directory: &Path, optimized: u32) {
         );
         let registry = ServiceRegistry::new(Policy::default());
         let root = registry
-            .issue_test_tape("V", 2, vec![Scalar::from(2), Scalar::from(3)])
+            .issue_test_tape("role00000001", 2, vec![Scalar::from(2), Scalar::from(3)])
             .unwrap();
-        let backend = service_backend(&rounds, &registry, &root);
-        let mut verifier = start(&rounds, "V", vec![field(10), Value::Index(count)], backend);
+        let backend = service_backend(&rounds, "role00000001", &registry, &root);
+        let mut verifier = start(
+            &rounds,
+            "role00000001",
+            vec![field(10), Value::Index(count)],
+            backend,
+        );
         for _ in 0..count {
             receive(&mut verifier, send(&mut prover));
             receive(&mut verifier, send(&mut prover));
@@ -584,8 +605,8 @@ fn main() {
                 (5, false, (7, 9, 2, true)),
                 (3, true, (13, 17, 10, false)),
             ] {
-                let mut prover = runner(&bundle, "P", vec![field(2), field(3)]);
-                let mut verifier = runner(&bundle, "V", vec![field(verifier_c)]);
+                let mut prover = runner(&bundle, "role00000000", vec![field(2), field(3)]);
+                let mut verifier = runner(&bundle, "role00000001", vec![field(verifier_c)]);
                 let first = send(&mut prover);
                 let second = send(&mut prover);
                 expect_field(&first, 7);
@@ -607,7 +628,7 @@ fn main() {
         ordered_services(&load(&format!("service_order-{optimized}.bundle")));
         let values = returned(&mut runner(
             &load(&format!("dispatch-{optimized}.bundle")),
-            "P",
+            "role00000000",
             vec![field(2), field(7)],
         ));
         expect_field(&values[0], 2);
@@ -621,7 +642,7 @@ fn main() {
             for go in [false, true] {
                 let mut participant = runner(
                     &load(&format!("completion_affine-{optimized}.bundle")),
-                    "P",
+                    "role00000000",
                     vec![Value::Index(n), Value::Bool(go), field(7)],
                 );
                 let values = returned(&mut participant);
@@ -632,14 +653,14 @@ fn main() {
             }
             let values = returned(&mut runner(
                 &load(&format!("repeat_affine-{optimized}.bundle")),
-                "P",
+                "role00000000",
                 vec![Value::Index(n), field(7)],
             ));
             expect_field(&values[0], 7);
             for m in [0, 1, 2] {
                 let values = returned(&mut runner(
                     &load(&format!("repeat_nested-{optimized}.bundle")),
-                    "P",
+                    "role00000000",
                     vec![Value::Index(n), Value::Index(m), field(3)],
                 ));
                 expect_field(&values[0], 3 * (1 + n * m));
@@ -652,8 +673,8 @@ fn main() {
             true,
         );
         let bundle = load(&format!("application-{optimized}.bundle"));
-        let mut prover = runner(&bundle, "P", vec![field(2), field(3)]);
-        let mut verifier = runner(&bundle, "V", vec![field(5), field(7)]);
+        let mut prover = runner(&bundle, "role00000000", vec![field(2), field(3)]);
+        let mut verifier = runner(&bundle, "role00000001", vec![field(5), field(7)]);
         let p = returned(&mut prover);
         let v = returned(&mut verifier);
         assert_eq!(p.len(), 1);
@@ -670,10 +691,10 @@ fn main() {
         let group = load(&format!("relation_group-Demo-{optimized}.bundle"));
         let mut prover = runner(
             &group,
-            "P",
+            "role00000000",
             vec![Value::Curve(GroupPoint::generator()), field(3)],
         );
-        let mut verifier = runner(&group, "V", vec![]);
+        let mut verifier = runner(&group, "role00000001", vec![]);
         let point = send(&mut prover);
         receive(&mut verifier, point);
         assert!(returned(&mut prover).is_empty());
@@ -684,8 +705,8 @@ fn main() {
 
         let sumcheck = load(&format!("relation_sumcheck-Demo-{optimized}.bundle"));
         for claim in [5, 99] {
-            let mut prover = runner(&sumcheck, "P", vec![field(2), field(3)]);
-            let mut verifier = runner(&sumcheck, "V", vec![field(claim), field(7)]);
+            let mut prover = runner(&sumcheck, "role00000000", vec![field(2), field(3)]);
+            let mut verifier = runner(&sumcheck, "role00000001", vec![field(claim), field(7)]);
             let challenge = send(&mut verifier);
             receive(&mut prover, challenge);
             let evaluation = send(&mut prover);
@@ -699,7 +720,7 @@ fn main() {
         let products = load(&format!(
             "relation_sumcheck-ProductControl-{optimized}.bundle"
         ));
-        let result = returned(&mut runner(&products, "P", vec![field(2)]));
+        let result = returned(&mut runner(&products, "role00000000", vec![field(2)]));
         // Product of MLEs is x*x; MLE of the pointwise product is x.
         expect_field(&result[0], 4);
         expect_field(&result[1], 2);
@@ -717,18 +738,18 @@ fn main() {
                 .chain([statement, one, public, witness])
                 .map(field)
                 .collect();
-            let result = returned(&mut runner(&r1cs, "P", inputs));
+            let result = returned(&mut runner(&r1cs, "role00000000", inputs));
             assert!(matches!(result[0], Value::Bool(actual) if actual == expected));
         }
     }
     for (name, expected) in [("One", 4), ("Two", 6), ("Alias", 4)] {
         let bundle = load(&format!("{name}.bundle"));
-        let mut participant = runner(&bundle, "P", vec![field(3)]);
+        let mut participant = runner(&bundle, "role00000000", vec![field(3)]);
         let result = returned(&mut participant);
         assert_eq!(result.len(), 1);
         expect_field(&result[0], expected);
     }
-    let mut helpers = runner(&load("Math.bundle"), "P", vec![field(3)]);
+    let mut helpers = runner(&load("Math.bundle"), "role00000000", vec![field(3)]);
     let values = returned(&mut helpers);
     expect_field(&values[0], 4);
     assert!(matches!(values[1], Value::Bool(true)));
@@ -739,7 +760,7 @@ fn main() {
                 for (a, b, x) in [(2, 3, 5), (0, 1, 0), (4, 9, 2)] {
                     let result = returned(&mut runner(
                         &bundle,
-                        "P",
+                        "role00000000",
                         vec![field(a), field(b), field(x)],
                     ));
                     let expected = [
@@ -763,7 +784,11 @@ fn main() {
         for a in [false, true] {
             for b in [false, true] {
                 let bundle = bundle("boolean_formula");
-                let mut p = runner(&bundle, "P", vec![Value::Bool(a), Value::Bool(b)]);
+                let mut p = runner(
+                    &bundle,
+                    "role00000000",
+                    vec![Value::Bool(a), Value::Bool(b)],
+                );
                 let result = returned(&mut p);
                 assert_eq!(result.len(), 8);
                 for (value, expected) in result
@@ -780,24 +805,24 @@ fn main() {
             ("associated", vec![field(3)], 3),
             ("associated_domain", vec![field(3)], 6),
         ] {
-            let result = returned(&mut runner(&bundle(name), "P", inputs));
+            let result = returned(&mut runner(&bundle(name), "role00000000", inputs));
             assert_eq!(result.len(), 1);
             expect_field(&result[0], expected);
         }
         for n in [0, 1, 5] {
             let result = returned(&mut runner(
                 &bundle("loop"),
-                "P",
+                "role00000000",
                 vec![field(3), Value::Index(n)],
             ));
             expect_field(&result[0], n * 3);
         }
-        assert!(returned(&mut runner(&bundle("resource"), "P", vec![])).is_empty());
+        assert!(returned(&mut runner(&bundle("resource"), "role00000000", vec![])).is_empty());
         for n in [0, 1, 5] {
             for go in [false, true] {
                 let mut resource = runner(
                     &bundle("resource_control"),
-                    "P",
+                    "role00000000",
                     vec![Value::Index(n), Value::Bool(go)],
                 );
                 match next(&mut resource) {
@@ -819,13 +844,17 @@ fn main() {
             for b in [false, true] {
                 let result = returned(&mut runner(
                     &bundle("bool"),
-                    "P",
+                    "role00000000",
                     vec![Value::Bool(a), Value::Bool(b)],
                 ));
                 assert!(matches!(result[0], Value::Bool(actual) if actual == (a == b)));
             }
-            let mut prover = runner(&bundle("branch"), "P", vec![field(3), Value::Bool(a)]);
-            let mut verifier = runner(&bundle("branch"), "V", vec![]);
+            let mut prover = runner(
+                &bundle("branch"),
+                "role00000000",
+                vec![field(3), Value::Bool(a)],
+            );
+            let mut verifier = runner(&bundle("branch"), "role00000001", vec![]);
             let value = send(&mut prover);
             expect_field(&value, if a { 6 } else { 3 });
             receive(&mut verifier, value);
@@ -834,10 +863,10 @@ fn main() {
         }
         let mut prover = runner(
             &bundle("group"),
-            "P",
+            "role00000000",
             vec![Value::Curve(GroupPoint::generator()), field(3)],
         );
-        let mut verifier = runner(&bundle("group"), "V", vec![]);
+        let mut verifier = runner(&bundle("group"), "role00000001", vec![]);
         receive(&mut verifier, send(&mut prover));
         assert!(matches!(&returned(&mut verifier)[0], Value::Curve(point)
             if *point == GroupPoint::generator().scale(Scalar::from(4u64))));
@@ -851,7 +880,7 @@ fn main() {
             for name in ["variant", "variant_custody"] {
                 let mut local = runner(
                     &bundle(name),
-                    "P",
+                    "role00000000",
                     vec![
                         field(3),
                         field(7),
@@ -864,18 +893,18 @@ fn main() {
             }
             let mut prover = runner(
                 &bundle("variant_wire"),
-                "P",
+                "role00000000",
                 vec![field(3), field(7), Value::Bool(a), Value::Bool(b)],
             );
-            let mut verifier = runner(&bundle("variant_wire"), "V", vec![field(11)]);
+            let mut verifier = runner(&bundle("variant_wire"), "role00000001", vec![field(11)]);
             receive(&mut verifier, send(&mut prover));
             expect_field(&returned(&mut verifier)[0], expected);
             assert!(returned(&mut prover).is_empty());
         }
-        let index = returned(&mut runner(&bundle("index"), "P", vec![]));
+        let index = returned(&mut runner(&bundle("index"), "role00000000", vec![]));
         assert!(matches!(index.as_slice(), [Value::Index(3)]));
-        let mut prover = runner(&bundle("record"), "P", vec![field(3), field(7)]);
-        let mut verifier = runner(&bundle("record"), "V", vec![]);
+        let mut prover = runner(&bundle("record"), "role00000000", vec![field(3), field(7)]);
+        let mut verifier = runner(&bundle("record"), "role00000001", vec![]);
         receive(&mut verifier, send(&mut prover));
         receive(&mut verifier, send(&mut prover));
         let result = returned(&mut verifier);

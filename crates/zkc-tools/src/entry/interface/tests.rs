@@ -387,8 +387,11 @@ fn products_empty_values_and_nominal_variants_preserve_structure() {
     assert_eq!(read(&bad).unwrap_err(), InterfaceError::Schema);
     let key = "sample::Choice";
     let spelling = zkc_test_support::variants::encode_tree(json!([
-        ["zkc.language", key],
-        [["Empty", []], ["Flag", ["bool"]]]
+        [
+            "zkc.language",
+            crate::source_names::encode_nominal_identity(key)
+        ],
+        [["case00000000", []], ["case00000001", ["bool"]]]
     ]));
     let mut variant = schema("variant", key, json!([spelling]));
     variant["alternatives"] = json!([{"name":"Empty","fields":[]}, {"name":"Flag","fields":[{"name":"0","offset":0,"schema":boolean}]}]);
@@ -666,9 +669,9 @@ fn setup_selectors_derive_native_maps_independently() {
     assert_eq!(
         run.inputs,
         [
-            (("P".into(), 0), "pcs".into()),
-            (("V".into(), 0), "pcs".into()),
-            (("V".into(), 1), "pcs".into())
+            (("role00000000".into(), 0), "setup00000000".into()),
+            (("role00000001".into(), 0), "setup00000000".into()),
+            (("role00000001".into(), 1), "setup00000000".into())
         ]
         .into()
     );
@@ -825,3 +828,4 @@ fn readable_input_groups_share_the_checked_interface_and_require_opt_in_resoluti
         assert_eq!(error.path,path);
     }
 }
+mod unicode;

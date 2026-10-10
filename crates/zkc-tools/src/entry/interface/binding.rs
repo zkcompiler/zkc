@@ -18,7 +18,7 @@ impl BoundInterface {
             E::NativeBinding,
         )?;
         for (role, actual) in self.roles().iter().zip(bundle.roles()) {
-            let expected = &role.name;
+            let expected = &role.native_name;
             let entry = &actual.entry;
             require(&entry.role == expected, E::NativeBinding)?;
             let inputs = leaves(self.input_ports(role).map(|p| p.definition));
@@ -56,8 +56,8 @@ impl BoundInterface {
     pub fn check_proof(&self, deployment: &NativeDeployment) -> Result<()> {
         let p = &self.document.protocols[self.selected];
         let proof = self.proof().ok_or(E::NativeBinding)?;
-        let prover = &self.roles()[proof.prover].name;
-        let verifier = &self.roles()[proof.verifier].name;
+        let prover = &self.roles()[proof.prover].native_name;
+        let verifier = &self.roles()[proof.verifier].native_name;
         let native = deployment.source_interface();
         let entry = deployment.entry();
         let suite = proof.suite.as_deref();
@@ -81,7 +81,7 @@ impl BoundInterface {
             native.public.iter().map(|p| (p.original, &p.logical)),
         )?;
         for ports in self.roles() {
-            let role = &ports.name;
+            let role = &ports.native_name;
             let actual = native.roles.get(role).ok_or(E::NativeBinding)?;
             self.ports(
                 &leaves(self.input_ports(ports).map(|p| p.definition)),

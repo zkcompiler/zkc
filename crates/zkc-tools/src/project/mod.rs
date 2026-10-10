@@ -2,7 +2,9 @@
 mod manifest;
 pub use manifest::{Asset, Project};
 mod compiler;
-pub use compiler::{Checked, Compiler, Entry, EntryKind, Error, Selection};
+pub use compiler::{
+    CheckOptions, Checked, Compiler, Entry, EntryKind, Error, NotationOptions, Selection,
+};
 pub(crate) mod cli;
 mod layout;
 pub use layout::{Artifact, Layout, input_path};

@@ -170,12 +170,7 @@ fn require(condition: bool, error: InterfaceError) -> Result<()> {
     if condition { Ok(()) } else { Err(error) }
 }
 fn identifier(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 128
-        && (value.as_bytes()[0].is_ascii_alphabetic() || value.starts_with('_'))
-        && value
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || c == b'_')
+    value.len() <= 128 && crate::source_names::is_source_identifier(value)
 }
 fn hash(value: &str) -> bool {
     value.len() == 64

@@ -111,6 +111,9 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
   json::Object result{
       {"name", decl.qualifiedName},
       {"abstract", decl.abstract},
+      {"definition", decl.primitive  ? "primitive"
+                     : decl.abstract ? "abstract"
+                                     : "body"},
       {"kind", !ordered                                ? "math"
                : decl.kind == Declaration::Kind::Local ? "local"
                                                        : "protocol"},
@@ -124,10 +127,15 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
       {"effects",
        json::Object{{"stop", effects.mayStop}, {"opaque", effects.opaque}}},
       {"source",
-       json::Object{
-           {"module", project.capture().sources()[decl.module.index].module},
-           {"begin", decl.span.begin},
-           {"end", decl.span.end}}}};
+       json::Object{{"module", project.sources()[decl.module.index].module},
+                    {"origin", project.sources()[decl.module.index].origin ==
+                                       SourceOrigin::Installation
+                                   ? "installation"
+                                   : "captured"},
+                    {"begin", decl.span.begin},
+                    {"end", decl.span.end}}}};
+  if (decl.primitive)
+    result["primitive"] = decl.primitive->identity;
   if (decl.effectAllowance || decl.abstract) {
     auto allowance = decl.effectAllowance.value_or(Effects{ordered, ordered});
     result["effect_allowance"] =
@@ -172,6 +180,11 @@ Expected<std::string> inspectDeclarations(const CheckedProject &project,
     return std::move(failure);
   std::vector<const Declaration *> declarations;
   for (const auto &decl : project.declarations()) {
+    // The project inventory describes captured modules. Installed definitions
+    // remain available through the checked source/declaration API.
+    if (project.sources()[decl.module.index].origin ==
+        SourceOrigin::Installation)
+      continue;
     if (decl.kind != Declaration::Kind::Math &&
         decl.kind != Declaration::Kind::Local &&
         decl.kind != Declaration::Kind::Protocol)

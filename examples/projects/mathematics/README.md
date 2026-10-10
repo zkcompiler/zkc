@@ -1,7 +1,10 @@
 # Mathematical libraries
 
 [The source](main.zkc) evaluates a two-element table in two ways: a formal
-multilinear polynomial in `math fn`, and an ordered runtime vector fold in `fn`.
+multilinear polynomial in `math fn`, and ordered runtime vector arithmetic in `fn`.
+The `vec` module alias activates vector operators; `low * (1 - point) + high * point`
+uses the same native functions as `vec::scale` and `vec::add`, including length
+checks. The split requires a positive even vector length.
 For `values = [a, b]`, both compute `(1 - point) * a + point * b`.
 The calls use parameter names to make the evaluation point and table inputs
 explicit. Named arguments evaluate in written order. `mle<N = 1>` fixes the

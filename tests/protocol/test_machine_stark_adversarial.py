@@ -43,14 +43,15 @@ def guards(package):
     (entry,) = [f for f in functions.values() if not f['guards'] and len(f['applies']) == 1]
     ((symbol, call),) = entry['applies']
     sites = functions[symbol]['guards']
-    assert [owner for owner, _ in sites] == ['V', 'P', 'V', 'V', 'V', 'V', 'V', 'V', 'V']
+    assert [owner for owner, _ in sites] == [
+        'role00000001', 'role00000000', *(['role00000001'] * 7)]
     names = ['profile', 'prover-profile', 'closure', 'identity', 'fri', 'base', 'auxiliary', 'quotient', 'deep']
     return {name: call + '_' + site for name, (_, site) in zip(names, sites, strict=True)}
 
 
 def stopped_at(report, package, name):
     stop = report['execution']['stop']
-    assert stop['role'] == 'V' and stop['kind'] == 'Explicit("reject")', stop
+    assert stop['role'] == 'role00000001' and stop['kind'] == 'Explicit("reject")', stop
     chain = re.fullmatch(r'(?:apply_\d+_)+((?:s\d+_)*s\d+)', stop['site'])[1]
     assert chain == guards(package)[name], stop
 

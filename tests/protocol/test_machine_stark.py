@@ -132,7 +132,7 @@ def test_machine_interactive_entry_runs_with_multi_megabyte_participants(toolcha
     # has its own separate limit.
     package, pin = compile_entry(toolchain, journal, directory, 'Run')
     bundle = json.loads(json.loads(package.read_text())['artifact'])
-    assert bundle['format'] == 'zkc.run/0' and bundle['roles'] == ['P', 'V']
+    assert bundle['format'] == 'zkc.run/0' and bundle['roles'] == ['role00000000', 'role00000001']
     assert 1024 * 1024 < len(bundle['candidate'].encode()) <= 4 * 1024 * 1024
     pair = requests('store-load')
     public, private = pair[0], pair[1]
@@ -149,7 +149,7 @@ def test_machine_interactive_entry_runs_with_multi_megabyte_participants(toolcha
     command, outputs = run('false-witness', {'cpu': alter_vector(private['cpu'], 0)})
     report = journal.json(command, refuses='entry-run-incomplete')
     after = {role['role']: role['after'] for role in report['execution']['roles']}
-    assert after['V'][0] == 'stopped' and after['V'][1]['cause'][0] == 'explicit'
+    assert after['role00000001'][0] == 'stopped' and after['role00000001'][1]['cause'][0] == 'explicit'
     assert not outputs.exists()
 
 
@@ -258,11 +258,12 @@ def check_transcript_schedule(package):
     for (query, delivery), i in zip(policy[8], draws, strict=True):
         assert query.endswith('_' + events[i][2][2])
         assert delivery.endswith('_' + events[i + 1][2][2])
-        assert events[i][2][5:7] == ['index' if i == 23 else 'draw', 'V']
+        assert events[i][2][5:7] == ['index' if i == 23 else 'draw', 'role00000001']
     assert events[23][3] == ['64']
     for i, (kind, _, event, bound) in enumerate(events):
         if kind == 'message':
-            assert event[4:6] == (['V', 'P'] if i - 1 in draws else ['P', 'V'])
+            assert event[4:6] == (['role00000001', 'role00000000'] if i - 1 in draws
+                                  else ['role00000000', 'role00000001'])
             assert bound == []
     assert events[1][1] == events[2][1] == events[3][1] == events[4][1]
     assert len({events[i][1] for i in [1, 10, 19, 23, 25, 29]}) == 6

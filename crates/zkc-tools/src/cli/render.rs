@@ -76,10 +76,13 @@ pub fn human(report: &Value) -> String {
                 let stopped = [&role["before"], &role["after"]]
                     .into_iter()
                     .find(|state| state[0] == "stopped");
-                if let Some(state) = stopped {
-                    writeln!(text, "Stopped {}: {}", role["role"], state[1]).unwrap();
+                if let (Some(state), Some(name)) = (stopped, role["role"].as_str()) {
+                    stop(&mut text, report, name, &state[1]);
                 }
             }
+        }
+        if let Some(role) = execution["stop"]["role"].as_str() {
+            stop(&mut text, report, role, &execution["stop"]["kind"]);
         }
         if report["code"] == "entry-input-document" || report["code"] == "entry-input-missing" {
             text.push_str("Check the selected input paths; use zkc prepare to create missing project templates.\n");
@@ -140,7 +143,7 @@ pub fn human(report: &Value) -> String {
     {
         text.push_str("Use zkc prepare when input templates are needed.\n");
     }
-    for key in ["interface", "declarations"] {
+    for key in ["interface", "declarations", "notations"] {
         if !report[key].is_null() {
             writeln!(
                 text,
@@ -161,6 +164,12 @@ pub fn human(report: &Value) -> String {
         }
     }
     text
+}
+fn stop(text: &mut String, report: &Value, native_role: &str, reason: &Value) {
+    let name = report["role_names"][native_role]
+        .as_str()
+        .unwrap_or(native_role);
+    writeln!(text, "Stopped {name}: {reason}").unwrap();
 }
 fn requirements(requirements: &Value, text: &mut String) {
     if requirements["allow_header_only"] == true {

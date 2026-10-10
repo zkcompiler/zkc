@@ -86,7 +86,7 @@ std::string indices(ArrayRef<int64_t> values) {
 struct Model {
   DeclarationOrder order;
   Records sorts, types, operations, members, capabilities, rules, typeExports,
-      operationExports, operators, families, familyCases, associatedTypes,
+      operationExports, families, familyCases, associatedTypes,
       capabilityExports;
   explicit Model(const RecordKeeper &records)
       : order(records), sorts(order.sort("ZKC_Sort")),
@@ -96,7 +96,6 @@ struct Model {
         rules(order.sort("ZKC_Implication")),
         typeExports(order.sort("ZKC_TypeExport")),
         operationExports(order.sort("ZKC_OperationExport")),
-        operators(order.sort("ZKC_Operator")),
         families(order.sort("ZKC_TypeFamily")),
         familyCases(order.sort("ZKC_TypeFamilyCase")),
         associatedTypes(order.sort("ZKC_AssociatedType")),
@@ -252,38 +251,6 @@ void Model::validate() {
     for (auto label : labels)
       require(identifier(label) && seen.insert(label.str()).second, r,
               "invalid or duplicate input label");
-  }
-  std::set<std::vector<std::string>> tuples;
-  for (const auto *r : operators) {
-    auto symbol = r->getValueAsString("symbol");
-    auto *op = r->getValueAsDef("operation");
-    auto heads = r->getValueAsListOfDefs("operands");
-    auto inputs = op->getValueAsListOfDefs("inputs");
-    auto order = r->getValueAsListOfInts("order");
-    require((symbol == "+" || symbol == "-" || symbol == "*") &&
-                (heads.size() == 2 || (symbol == "-" && heads.size() == 1)),
-            r, "unsupported operator hook or arity");
-    require(name(op->getValueAsDef("stage")) == "Source" &&
-                any_of(operationExports,
-                       [&](const auto *e) {
-                         return e->getValueAsDef("operation") == op;
-                       }),
-            r, "operator requires an exported source operation");
-    require(order.size() == inputs.size() && heads.size() == inputs.size() &&
-                op->getValueAsListOfDefs("outputs").size() == 1,
-            r, "operator signature arity mismatch");
-    std::set<int64_t> ports;
-    std::vector<std::string> tuple{symbol.str()};
-    for (const auto *h : heads)
-      tuple.push_back(name(h).str());
-    require(tuples.insert(tuple).second, r, "duplicate operator tuple");
-    for (auto [i, port] : enumerate(order)) {
-      require(port >= 0 && size_t(port) < heads.size() &&
-                  ports.insert(port).second,
-              r, "operator order must be a port bijection");
-      require(inputs[i]->getValueAsDef("constructor") == heads[port], r,
-              "operator operand constructor mismatch");
-    }
   }
 }
 void Model::validateOperation(const Record *op) {
@@ -873,14 +840,6 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
     os << "{" << quote(r->getValueAsString("module")) << ", " << quote(name(r))
        << ", " << quote(name(r->getValueAsDef("capability"))) << "},\n";
   os << "}; return values; }\n";
-  os << "llvm::ArrayRef<SourceOperatorBinding> sourceOperatorBindings() "
-        "{\nstatic const std::vector<SourceOperatorBinding> values = {\n";
-  for (const auto *r : m.operators)
-    os << "{" << quote(r->getValueAsString("symbol")) << ", "
-       << names(r->getValueAsListOfDefs("operands")) << ", "
-       << quote(name(r->getValueAsDef("operation"))) << ", "
-       << indices(r->getValueAsListOfInts("order")) << "},\n";
-  os << "}; return values; }\n";
 }
 // An inert inspection view. It exposes declaration structure, never executable
 // callbacks or an admission claim. Native/formal interpretation stays separate.
@@ -906,8 +865,8 @@ json::Object inventory(const Model &m) {
   for (const auto *sort : m.sorts)
     sorts.push_back(name(sort));
   result["sorts"] = std::move(sorts);
-  json::Array types, ops, members, rules, capabilities, exports, operators,
-      families, associatedTypes;
+  json::Array types, ops, members, rules, capabilities, exports, families,
+      associatedTypes;
   for (const auto *t : m.types)
     types.push_back(
         json::Object{{"name", name(t)},
@@ -1025,25 +984,12 @@ json::Object inventory(const Model &m) {
         json::Object{{"module", r->getValueAsString("module")},
                      {"name", name(r)},
                      {"predicate", name(r->getValueAsDef("capability"))}});
-  for (const auto *r : m.operators) {
-    json::Array heads, order;
-    for (const auto *t : r->getValueAsListOfDefs("operands"))
-      heads.push_back(name(t));
-    for (auto i : r->getValueAsListOfInts("order"))
-      order.push_back(i);
-    operators.push_back(
-        json::Object{{"symbol", r->getValueAsString("symbol")},
-                     {"operands", std::move(heads)},
-                     {"contract", name(r->getValueAsDef("operation"))},
-                     {"order", std::move(order)}});
-  }
   result["types"] = std::move(types);
   result["operations"] = std::move(ops);
   result["members"] = std::move(members);
   result["rules"] = std::move(rules);
   result["capabilities"] = std::move(capabilities);
   result["exports"] = std::move(exports);
-  result["operators"] = std::move(operators);
   result["families"] = std::move(families);
   result["associatedTypes"] = std::move(associatedTypes);
   return result;

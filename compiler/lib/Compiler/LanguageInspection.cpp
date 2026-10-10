@@ -1,6 +1,7 @@
 #include "zkc/Compiler/LanguageInspection.h"
 #include "LanguageInterface.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Language/Names.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringMap.h"
@@ -69,10 +70,11 @@ class Inspection {
       auto name = mlir::cast<mlir::StringAttr>(role).getValue();
       if (!charge(caller.roles.size()))
         return limit();
-      auto found = llvm::find(caller.roles, name);
-      if (found == caller.roles.end())
+      unsigned index = 0;
+      while (index < caller.roles.size() && name != nativeRoleName(index))
+        ++index;
+      if (index == caller.roles.size())
         return error("source.interface", "application role is absent");
-      unsigned index = found - caller.roles.begin();
       if (!seen.insert(index).second)
         return error("source.interface", "application roles are not distinct");
       roles.push_back(index);

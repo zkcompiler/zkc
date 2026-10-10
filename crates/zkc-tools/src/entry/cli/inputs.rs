@@ -239,8 +239,5 @@ pub(super) fn assignment(value: &str) -> Result<(&str, &str)> {
     Ok((name, path))
 }
 fn identifier(value: &str) -> bool {
-    let mut b = value.bytes();
-    b.next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == b'_')
-        && b.all(|c| c.is_ascii_alphanumeric() || c == b'_')
+    value.len() <= 128 && crate::source_names::is_source_identifier(value)
 }

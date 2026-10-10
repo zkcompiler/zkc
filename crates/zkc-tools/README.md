@@ -28,6 +28,9 @@ checked interfaces and `Template` files without publishing them; the CLI creates
 missing templates through the Host's no-clobber publication API. Execution first
 resolves explicit options and defaults, then uses the same input decoder and
 admission path. Human output and `--json` render the same command report.
+`Compiler::check()` accepts `CheckOptions` for declaration and notation inventories;
+`NotationOptions` selects private and installation records. These are diagnostic
+views and do not change execution semantics.
 
 Use `zkc --help` or `zkc COMMAND --help`. The installed commands are:
 

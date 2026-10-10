@@ -19,11 +19,16 @@ from test_air_stark import (EXAMPLE, FIXTURE, P, ROOT, STARK, TABLE, frames, inp
 POLYNOMIAL = ROOT / 'libraries/air/polynomial.zkc'
 FRI = ROOT / 'libraries/fri/lib.zkc'
 # The guards of TableArgument and of LowDegree in source order, each named by
-# its owner and the number of loops around it, as the FRI tests name theirs.
-TABLE_GUARDS = [('profile', 'V', 0), ('prover_profile', 'P', 0), ('identity', 'V', 0),
-                ('fri', 'V', 0), ('trace', 'V', 1), ('quotient', 'V', 1), ('deep', 'V', 1)]
-FRI_GUARDS = [('schedule', 'V', 0), ('input', 'P', 0), ('final_degree', 'V', 0),
-              ('low', 'V', 2), ('high', 'V', 2), ('chain', 'V', 2), ('terminal', 'V', 1)]
+# its native owner and the number of loops around it, as the FRI tests name theirs.
+# Both source rosters are (P,V), so their native owners have ordinals 0 and 1.
+TABLE_GUARDS = [('profile', 'role00000001', 0), ('prover_profile', 'role00000000', 0),
+                ('identity', 'role00000001', 0), ('fri', 'role00000001', 0),
+                ('trace', 'role00000001', 1), ('quotient', 'role00000001', 1),
+                ('deep', 'role00000001', 1)]
+FRI_GUARDS = [('schedule', 'role00000001', 0), ('input', 'role00000000', 0),
+              ('final_degree', 'role00000001', 0), ('low', 'role00000001', 2),
+              ('high', 'role00000001', 2), ('chain', 'role00000001', 2),
+              ('terminal', 'role00000001', 1)]
 GUARD = re.compile(r'"protocol\.guard"\(%\d+(?:#\d+)?\) <\{owner = "(\w+)", site = "(s\d+)"\}>')
 APPLY = re.compile(r'"protocol\.apply"\(.*\) <\{callee = @(\w+), roles = \[[^\]]*\], site = "(s\d+)"\}>')
 FUNCTION = re.compile(r'"(protocol|local)\.func"\(\) <\{.*sym_name = "(\w+)"')
@@ -84,15 +89,16 @@ def emitted_sites(emitted):
 
 def local_symbol(variant, module, name):
     """The generated symbol of one source function, by its retained origin."""
-    (symbol,) = [symbol for origin, symbol in variant.functions.items()
-                 if re.search(rf'{module}\d+_{name}$', origin)]
+    expected = 's' + ''.join(f'{len(part.encode())}h{part.encode().hex()}'
+                             for part in (module, name))
+    (symbol,) = [symbol for origin, symbol in variant.functions.items() if origin == expected]
     return symbol
 
 
 def rejected(report, guards):
     """The guard at which V stopped, 'name' or 'fri.name', and the loop iterations around it."""
     stop = report['execution']['stop']
-    assert report['status'] == 'refused' and stop['role'] == 'V', stop
+    assert report['status'] == 'refused' and stop['role'] == 'role00000001', stop
     assert stop['kind'] == 'Explicit("reject")', stop
     path = stop['origin'][4]
     assert path[-1] == ['if', 'guard_control', 'else'], path
@@ -177,7 +183,7 @@ def test_false_trace_with_truncated_quotient_stops_at_identity(toolchain, journa
     report = json.loads(made.stdout)
     assert report['status'] == 'refused' and report['code'].startswith('artifact-stopped:')
     stop = report['execution']['stop']
-    assert stop['role'] == 'P' and stop['kind'] == 'Explicit("reject")', stop
+    assert stop['role'] == 'role00000000' and stop['kind'] == 'Explicit("reject")', stop
     assert stop['local']['function'] == local_symbol(shipped, 'air_polynomial', 'split_quotient')
 
     truncating = build(toolchain, journal, directory, 'truncating', edits=[TRUNCATION])

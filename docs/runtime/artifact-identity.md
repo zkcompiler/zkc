@@ -30,6 +30,15 @@ Formatting, declaration changes or recompilation can change an exact source or
 publication identity even when mathematical behavior is equivalent. Authorization
 applies to the exact bytes selected by the trusted digest.
 
+Source/native name encoding contributes to these bytes. Source declarations use
+UTF-8 segment hex symbols and roster-derived role/setup/case labels for ASCII as
+well as Unicode names. This changes compiled artifact and transcript bytes even
+when public source keys and evaluation remain the same. The
+[encoding contract](../spec/language/translation.md#source-and-native-names)
+retains version `0` with one current schema and no legacy readers. Regenerate
+packages, trusted deployment pins and generated bindings together when adopting
+an authorized compiler publication.
+
 ## Identity is not a proof
 
 A digest binds content under its cryptographic assumption. It does not prove

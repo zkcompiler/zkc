@@ -2,6 +2,7 @@
 import json
 import os
 from hashlib import sha256
+from pathlib import Path
 
 
 def command(toolchain, *arguments):
@@ -158,6 +159,89 @@ def test_prepare_all_entries_preserves_data_and_checks_current_shapes(toolchain,
     empty = journal.json(command(toolchain, 'prepare'), cwd=directory)
     assert empty['entries'] == [] and empty['files'] == []
     assert other.exists(), 'obsolete user inputs are never removed'
+
+
+def test_unicode_project_paths_and_explicit_role_inputs(toolchain, journal, directory):
+    (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\n"数学"="main.zkc"\n')
+    (directory / 'main.zkc').write_text('''module 数学;
+      fn 増加(α:index)->index{return α+1;}
+      protocol 計算 roles(参加者)(α:index@参加者)->(結果:index@参加者){return 増加(α);}
+      run 実行₂=計算;
+    ''')
+    assert journal.json(command(toolchain, 'check'), cwd=directory)['status'] == 'checked'
+    prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
+    value = directory / 'inputs/数学.実行₂/参加者.json'
+    assert prepared['files'] == [str(value)]
+    assert json.loads(value.read_text()) == {'α': None}
+    # Escaped keys and raw source names address the same port without normalization.
+    value.write_text('{"\\u03b1":"7"}')
+    assert journal.json(command(toolchain, 'prepare'), cwd=directory)['preserved'] == [str(value)]
+    for name in ([], ['実行₂'], ['数学::実行₂']):
+        report = journal.json(command(toolchain, 'run', *name), cwd=directory)
+        result = directory / 'build/zkc/数学.実行₂.results.json'
+        assert report['inputs'] == {'参加者': str(value)}
+        assert report['results'] == str(result)
+        assert json.loads(result.read_text())['roles'] == {'参加者': {'結果': '8'}}
+    package = journal.json(command(toolchain, 'compile'), cwd=directory)
+    assert package['output'] == str(directory / 'build/zkc/数学.実行₂.zkpkg')
+    alternate = directory / 'alternate.json'
+    alternate.write_text('{"α":"10"}')
+    report = journal.json(command(toolchain, 'run', '--input=参加者=alternate.json'), cwd=directory)
+    assert json.loads(Path(report['results']).read_text())['roles']['参加者']['結果'] == '11'
+    journal.json(command(toolchain, 'run', '--input=role00000000=alternate.json'),
+                 cwd=directory, refuses='entry-input-roles')
+    journal.json(command(toolchain, 'run', '--input=参加者=alternate.json',
+                         '--input=参加者=alternate.json'), cwd=directory, refuses='entry-input-roles')
+
+
+def test_unicode_proof_names_and_service_options(toolchain, journal, directory):
+    (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\n"数学"="main.zkc"\n')
+    (directory / 'main.zkc').write_text('''module 数学;
+      domain F=field("bls12-381.fr");
+      protocol 計算 roles(証明者,検証者)(秘密:bool@証明者,乱数:Random<F>@証明者)
+          ->(受理:bool@検証者){
+        let nonce=乱数.draw();
+        let message=send 証明者->検証者(nonce);
+        let ok=send 証明者->検証者(秘密);
+        return ok && message==message;
+      }
+      proof 証明₂=計算{prover 証明者;verifier 検証者;public{};accept 受理;construction authored;}
+    ''')
+    journal.json(command(toolchain, 'prepare'), cwd=directory)
+    witness = directory / 'inputs/数学.証明₂/witness.json'
+    witness.write_text('{"秘密":true}')
+    options = ['--allow-header-only']
+    journal.json(command(toolchain, 'prove', *options, '--service=証明者.乱数=0'),
+                 cwd=directory, refuses='exhausted:resource-budget')
+    produced = journal.json(command(toolchain, 'prove', *options, '--service=証明者.乱数=1'), cwd=directory)
+    assert produced['output'] == str(directory / 'build/zkc/数学.証明₂.zkproof')
+    witness.unlink()
+    assert journal.json(command(toolchain, 'verify', *options), cwd=directory)['status'] == 'accepted'
+    journal.json(command(toolchain, 'verify', *options, '--service=role00000001.乱数=1'),
+                 cwd=directory, refuses='entry-service-names')
+
+
+def test_human_stops_use_source_participant_names(toolchain, journal, directory):
+    (directory / 'zkc.toml').write_text('format="zkc.project/0"\n[modules]\nexample="main.zkc"\n')
+    (directory / 'main.zkc').write_text('''module example;
+      protocol Test roles(証明者,検証者)(ok:bool@証明者)->(accepted:bool@検証者){
+        let received=send 証明者->検証者(ok);require received;return received;
+      }
+      run Interactive=Test;
+      proof Proof=Test{prover 証明者;verifier 検証者;public{};accept accepted;construction authored;}
+    ''')
+    journal.json(command(toolchain, 'prepare'), cwd=directory)
+    (directory / 'inputs/example.Interactive/証明者.json').write_text('{"ok":false}')
+    (directory / 'inputs/example.Proof/witness.json').write_text('{"ok":false}')
+    failed = journal.json(command(toolchain, 'run'), cwd=directory, refuses='entry-run-incomplete')
+    assert failed['role_names'] == {'role00000000': '証明者', 'role00000001': '検証者'}
+    journal.json(command(toolchain, 'prove', '--allow-header-only'), cwd=directory)
+    for operation, options in [('run', []), ('verify', ['--allow-header-only'])]:
+        human = journal.attempt([arg for arg in command(toolchain, operation, *options) if arg != '--json'],
+                                cwd=directory)
+        assert human.returncode != 0
+        assert 'Stopped 検証者:' in human.stderr
+        assert 'Stopped role00000001:' not in human.stderr
 
 
 def test_default_proof_paths_do_not_discover_other_files(toolchain, journal, directory):

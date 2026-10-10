@@ -8,6 +8,7 @@
 | [AIR STARK](air-stark/README.md) | Captured Plonky3 AIR with quotient, DEEP and FRI libraries | Separate prover/verifier Hosts over base-field trace commitments and extension-field claims |
 | [Accumulator machine](accumulator-machine/README.md) | External CPU/program/memory relation with LogUp or grand-product reductions | Whole-Bundle proof through phased auxiliary commitments, OOD/DEEP and shared FRI |
 | [Mathematics](mathematics/README.md) | Formal polynomial and runtime vector helpers | Formal evaluation compared with a shared affine fold |
+| [Mathematical notation](mathematical-notation/README.md) | Named and library-defined vector calls with Unicode source names | Weighted interpolation and Hadamard multiplication through the common Host |
 | [Native map](native-map/README.md) | Row formulas applied to whole KoalaBear/Ext8 columns with checked `map` | A gate check over public columns and an interactive challenge combination |
 | [FRI](fri/README.md) | Generic binary FRI with authenticated rows | Commitments, extension-field folding challenges, simultaneous queries and a bounded terminal polynomial |
 | [Imported AIR](imported-air/README.md) | Captured Plonky3 AIR expression and relation Bundle | Actual trace checks and a disclosed-trace proof, plus coefficient and Ext8 point views |

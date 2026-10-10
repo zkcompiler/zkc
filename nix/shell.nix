@@ -4,6 +4,7 @@
   rust,
   python,
   environment,
+  utf8proc,
 }:
 pkgs.mkShell.override { stdenv = llvm.stdenv; } (
   environment.toolchain
@@ -13,6 +14,7 @@ pkgs.mkShell.override { stdenv = llvm.stdenv; } (
       llvm.llvm.dev
       llvm.tblgen
       llvm.clang-tools
+      utf8proc
       pkgs.cmake
       pkgs.ninja
       pkgs.just

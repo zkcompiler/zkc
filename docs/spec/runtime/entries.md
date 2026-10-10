@@ -10,6 +10,15 @@ including required nullable fields, before using source names. Recursive schema
 validation preserves kind, exact logical identity, permissions, custody, field
 slices and nominal alternatives. Every logical port remains present, including
 zero-leaf values. Selectors and Entry choices must agree with those schemas.
+Source names use the [Unicode source profile](../language/lexical.md), retaining
+exact NFC UTF-8 bytes. Raw UTF-8 and equivalent valid JSON escapes decode to the
+same names; invalid UTF-8, lone surrogates and duplicate decoded keys refuse.
+Native role/setup/case labels are derived only from authenticated ordered rosters
+using the [source/native encoding](../language/translation.md#source-and-native-names).
+Binding compares these derived ordinals against the actual artifact, including
+ASCII source names. Logical names are never interpreted as preexisting native IDs.
+Variant nominal identities decode bounded canonical lowercase hex of the complete
+UTF-8 type-key preimage and check its digest; a label or digest alone is insufficient.
 
 `Interface` is this checked logical view, also available from source inspection
 before executable lowering. `BoundInterface` adds authenticated package identity
@@ -42,7 +51,10 @@ Named setup associations instantiate the [setup registry contract](../formats/me
 
 Both source Hosts accept `entry::SetupAuthority`, whose `keys` map covers setup
 slot names exactly and supplies independently authorized verifier-key identities.
-Unknown or missing names refuse with `entry-setup-authority`. The adapter derives
+Unknown or missing names refuse with `entry-setup-authority`. Both authority
+keys and request material keys use source slot names. The adapter translates both
+through the same roster to `setup` plus eight lowercase hexadecimal digits,
+starting at `setup00000000`. Translating only one map is insufficient. It derives
 native maps from the authenticated interface: run maps use role-local operand
 indices; proof maps pin every original public verifier-key index and associate
 other setup-bearing inputs with the slot's lowest verifier-key index. Native
@@ -302,7 +314,8 @@ requires the complete outcome, including acceptance when applicable.
 ### Project defaults
 
 `Project::layout()` owns manifest-relative paths. A canonical `a::B` Entry maps
-to `a.B`; nonportable names and case-folded collisions refuse. The same checks
+to `a.B`, retaining exact NFC source spelling for Unicode names. Reserved device
+names, overlong filenames and ASCII case-folded collisions refuse. The same checks
 apply to input group filenames; explicit input paths bypass the filename convention. Explicit paths
 override each input group or artifact independently and are relative to the
 invocation's working directory. Package and explicit-module modes have no project
@@ -401,7 +414,7 @@ of a protocol's predicate or establish acceptance.
 existing directory and defaults to the current directory. Both require the
 companion compiler and create `zkc.toml`, `protocol.zkc`, `main.zkc` and input
 templates for a minimal index echo. Existing manifests and conflicting source
-files refuse without overwriting them.
+files refuse without overwriting them. Existing regular input files are preserved.
 
 `prepare [ENTRY]` uses the current manifest. With no selector it plans all declared
 Entries; a library with none succeeds without publication. `Compiler::prepare`
@@ -437,15 +450,26 @@ structural value conversions, and Rust representations of Boolean/index/unit,
 array and nominal data. Mathematical leaves remain `entry::Value`, with concrete
 domain and authority validation at invocation. Identifier conversion avoids Rust
 keywords and collisions while retaining original source keys in conversions.
-Field and variant names retain exact source spelling. Reserved path names, `_`
-and names beginning `__zkc_` use that prefix followed by hex of the full source
-identifier. Generated naming-lint allowances cover these intentional spellings;
+Serialized field and variant keys retain exact source spelling. Non-ASCII
+identifiers, Rust keywords, `_` and names beginning `__zkc_` use that prefix
+followed by lowercase hex of the full original UTF-8 bytes. Escaping the reserved
+prefix makes this source-name encoding injective; it does not depend on rustc's
+Unicode version. One allocator covers generated type, field, variant and helper
+names in their namespaces and resolves preferred-name collisions. Generated naming-lint allowances cover these intentional spellings;
 they do not disable general warnings. Fixed public-interface names are allocated
 before source-derived names. Role conversion helpers and name constants delegate
-to the same request/result maps.
+to the same request/result maps. `ROLE`, `PROVER` and `VERIFIER` constants keep
+source names, while native calls use roster-derived IDs.
 Bindings emit no protocol algorithm or new execution/authority implementation.
 Generated source is bounded by 16 MiB. Reauthorizing a different package requires
 regenerating or deliberately replacing its pin.
+
+The report's `native` member and the CLI's nested `execution` diagnostic retain
+native participant and case labels. Source-name conversion applies to logical
+request/result maps; it does not rewrite the native execution evidence format.
+Entry command reports also expose `role_names`, mapping native participant labels
+to source names. Human stop summaries use this map; native bundle commands retain
+their own participant labels.
 
 ## Error phases
 

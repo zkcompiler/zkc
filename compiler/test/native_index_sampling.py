@@ -236,7 +236,7 @@ def insert(text, before, lines):
 
 def extra_query(service, site):
     return [f'%{site}_bound = "data.index"() <{{value = "32"}}> : () -> ui64',
-            f'%{site} = "protocol.query"({service}, %{site}_bound) <{{method = "index", owner = "V", site = "{site}"}}> : ({SERVICE}, ui64) -> ui64']
+            f'%{site} = "protocol.query"({service}, %{site}_bound) <{{method = "index", owner = "role00000001", site = "{site}"}}> : ({SERVICE}, ui64) -> ui64']
 
 
 for name, edit, reason in [

@@ -1,5 +1,5 @@
 //! CLI adaptation and publication. Project and compiler APIs take no CLI state.
-use super::{Asset, Compiler, Project, Selection};
+use super::{Asset, CheckOptions, Compiler, NotationOptions, Project, Selection};
 use crate::{
     cli::Arguments,
     entry::{BoundInterface, CompileOptions},
@@ -125,7 +125,17 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
         if checking {
             let checked = source
                 .compiler
-                .check(&source.project, entry, args.has("--declarations"))
+                .check(
+                    &source.project,
+                    entry,
+                    CheckOptions {
+                        declarations: args.has("--declarations"),
+                        notations: args.has("--notations").then(|| NotationOptions {
+                            include_private: args.has("--notation-private"),
+                            include_installation: args.has("--notation-installation"),
+                        }),
+                    },
+                )
                 .map_err(|e| compiler_error(&mut report, e))?;
             let fields = serde_json::to_value(checked).expect("serializable check result");
             report

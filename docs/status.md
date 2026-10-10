@@ -54,6 +54,9 @@ permissions, lexical scopes and patterns, mutable bindings with inferred region
 state/captures, statement-scoped participant inference, nested ordered calls,
 helper result inference, expression-wide structural type constraints, partial
 static arguments with positional or named binding, named value/service arguments,
+Unicode 17 NFC names, scoped mathematical operators and paired-delimiter calls
+with import activation, explicit fixity and local component bindings, catalog-checked
+primitive definitions and an embedded scalar prelude,
 local short-circuit Boolean operators and total Boolean formulas, inferred catalog/natural
 preconditions with explicit contract checking, unified data/service arguments,
 source rejection with `require`, formal polynomial intrinsics, checked
@@ -75,7 +78,33 @@ admitted validator, member-generic conformance and zero-leaf messages refuse.
 Abstract member-generic signatures can be checked and inspected, but components
 implementing them are not supported.
 Resource permission inference, implicit role remapping, natural equation solving
-and inversion of associated types are outside the source profile.
+and inversion of associated types are outside the source profile. Finite reduction
+binders remain unsupported; `∑` and `∏` are reserved. The staged parser resolves
+notation environments after imports and before bodies. Callable notation uses
+ordinary signature constraints and authored evaluation order, with descriptor
+arity and scope checked by the independent binding witness. No formal
+elaboration-correctness theorem is claimed.
+
+Source/native boundaries retain exact source/public JSON names while encoding
+symbols as UTF-8 segment hex and role/setup/case labels as roster ordinals for
+ASCII and Unicode alike. Both Entry setup authority and material keys are
+translated. Generated Rust bindings use injective UTF-8 escapes and allocated
+names, preserving source keys. Artifact and transcript bytes therefore change
+even for ASCII source; version `0` retains one current schema and no legacy
+readers. The [source/native contract](spec/language/translation.md#source-and-native-names)
+and [SDK dependencies](../compiler/README.md#installed-package-discovery) own the
+encoding and pinned Unicode/NFC boundary.
+
+Checked notation inspection is available through
+`inspectNotations` with `NotationInspectionOptions.includePrivate` and
+`includeInstallation`, and `zkc check --notations` with `--notation-private` and
+`--notation-installation`. The version-0 diagnostic view covers descriptors,
+bindings, scopes and occurrences, with private/local data hidden by default and
+installation data opt-in. [Notation limits](spec/language/notation.md#bounds)
+set 4096 descriptor keys per environment including fixed Boolean descriptors,
+64 delimiter holes and 8 MiB output; lowered SDK limits are rechecked on retained
+projects. This does not supply an LSP server or formatter.
+
 Relation and target/input/output/continuation clauses state intent; declarations
 alone add no runtime guard, satisfaction fact or security theorem.
 

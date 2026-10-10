@@ -3,6 +3,7 @@
 
 #include "zkc/Contracts/Mathematical.h"
 #include "zkc/Language/Assets.h"
+#include "zkc/Language/Notation.h"
 #include "zkc/Language/Types.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
@@ -61,6 +62,8 @@ struct Limits {
   uint64_t importDepth = 64, callDepth = 64;
   uint64_t declarations = 10000, operations = 100000, work = 4000000;
   uint64_t irBytes = 16777216, symbolBytes = 4096;
+  uint64_t notationDescriptors = 4096, notationHoles = 64;
+  uint64_t notationInspectionBytes = 8388608;
   uint64_t interfaceBytes = 4194304, locationBytes = 16777216;
   uint64_t typeDepth = 32, typeNodes = 100000, instances = 4096;
   uint64_t aggregateLeaves = 1024, naturalTerms = 1024, naturalFactors = 64;
@@ -68,8 +71,10 @@ struct Limits {
 llvm::Error checkLimits(const Limits &);
 
 /// Names and bytes determine identity. diagnosticPath is never opened here.
+enum class SourceOrigin { Captured, Installation };
 struct SourceBuffer {
   std::string module, text, diagnosticPath;
+  SourceOrigin origin = SourceOrigin::Captured;
 };
 struct CaptureOptions {
   std::string format = "zkc";
@@ -120,6 +125,12 @@ struct MathValue {
       : identity(identity), operands(std::move(operands)),
         literal(std::move(literal)), staticArguments(std::move(statics)),
         parameters(std::move(parameters)) {}
+};
+/// A callable resolved in its definition environment. Component members retain
+/// the explicit component term until ordinary entry specialization.
+struct CallableReference {
+  DeclarationId declaration;
+  std::optional<Type> component;
 };
 struct HelperCall {
   DeclarationId callee;
@@ -223,6 +234,18 @@ struct LocalControl {
   std::vector<std::string> alternatives;
   unsigned carried = 0;
 };
+/// Source elaboration evidence retained beside the native operation. Families
+/// contain canonical binding identities, not search order or implementation
+/// cost.
+struct CallBinding {
+  CallableReference target;
+  std::vector<Type> arguments;
+  std::vector<ValueId> operands;
+  std::string symbol;
+  std::vector<std::string> family;
+  std::optional<Span> origin;
+  std::optional<NotationDescriptor> notation;
+};
 struct Operation {
   std::variant<MathValue, HelperCall, BulkApplication, Exchange, Restriction,
                Construct, Projection, LocalPrimitive, Consume, LocalControl,
@@ -233,6 +256,7 @@ struct Operation {
   std::vector<ValueId> results;
   Span span;
   uint32_t statement;
+  std::optional<CallBinding> binding = {};
 };
 struct Body {
   enum class Mode { Math, Local, Protocol } mode;
@@ -348,6 +372,12 @@ struct ProofEntry {
   std::string suite;
   Span span;
 };
+/// A validated instance of an installed primitive scheme. The static roots are
+/// inferred from the written signature, independently of parameter names/order.
+struct PrimitiveDefinition {
+  std::string identity;
+  std::vector<Type> arguments;
+};
 struct Declaration {
   enum class Kind {
     Domain,
@@ -383,6 +413,7 @@ struct Declaration {
   std::optional<Type> implementation;
   std::optional<Effects> effectAllowance;
   bool abstract = false;
+  std::optional<PrimitiveDefinition> primitive;
   bool completes = false;
   /// Empty or Type is a private representation; catalog sorts expose a domain.
   std::string associatedSort;
@@ -426,6 +457,7 @@ class CapturedProject;
 class CheckedProject;
 class Analysis;
 class ClosedEntry;
+struct NotationInspectionOptions;
 llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
                                         const CaptureOptions & = {});
 llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
@@ -460,12 +492,18 @@ private:
 /// Only successful analysis can construct this immutable owning handle.
 class CheckedProject {
 public:
+  /// Includes installation sources; module IDs index this array.
+  llvm::ArrayRef<SourceBuffer> sources() const;
   const CapturedProject &capture() const;
   llvm::ArrayRef<Asset> assets() const;
   llvm::ArrayRef<Declaration> declarations() const;
   llvm::ArrayRef<Token> tokens(ModuleId) const;
   llvm::StringRef installationIdentity() const;
   uint64_t checkedWork() const;
+  uint64_t checkedDeclarations() const;
+  uint64_t checkedOperations() const;
+  uint64_t checkedNotationDescriptors() const;
+  uint64_t checkedNotationHoles() const;
   /// All named Entries (including aliases), sorted by qualified name.
   std::vector<DeclarationId> entries() const;
 
@@ -474,11 +512,16 @@ private:
   explicit CheckedProject(std::shared_ptr<const detail::CheckedStorage>);
   std::shared_ptr<const detail::CheckedStorage> storage;
   friend Analysis analyze(const CapturedProject &, const Limits &);
+  friend llvm::Expected<std::string>
+  inspectNotations(const CheckedProject &, const NotationInspectionOptions &,
+                   const Limits &);
 };
 
 /// Recovery tokens and diagnostics cannot be promoted to checked state.
 class Analysis {
 public:
+  /// Includes installation sources; module IDs index this array.
+  llvm::ArrayRef<SourceBuffer> sources() const;
   llvm::ArrayRef<Diagnostic> diagnostics() const;
   llvm::ArrayRef<Token> tokens(ModuleId) const;
   llvm::Expected<CheckedProject> checkedProject() const;

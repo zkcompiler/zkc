@@ -19,6 +19,7 @@ toml = { version = "=1.1.8", default-features = false, features = ["parse", "ser
 serde_json = { version = "=1.0.151", features = ["arbitrary_precision", "unbounded_depth"] }
 num-bigint = "=0.4.8"
 tempfile = "=3.27.0"
+unicode-normalization = "=0.1.25"
 # Nonblocking regular-file ingress for native hosts.
 libc = "=0.2.189"
 # Safe directory-relative input references; reuses the locked tempfile dependency.

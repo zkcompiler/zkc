@@ -228,7 +228,7 @@ fn main() {
     let host=shapes::admit(&bytes,Default::default(),Default::default()).unwrap();
     let input=shapes::PInputs {
         empty:shapes::SampleEmpty{}, choice:shapes::SampleCases::__zkc_53656c66{},
-        names:shapes::SampleNames{r#async:true,__zkc_73656c66:false,Foo:true,foo:false,__zkc_5f:true},
+        names:shapes::SampleNames{__zkc_6173796e63:true,__zkc_73656c66:false,Foo:true,foo:false,__zkc_5f:true},
         zero:[], collision:shapes::POutputs2{flag:true},
     };
     let mut named:zkc_tools::entry::NamedValues=input.into();
@@ -561,7 +561,7 @@ proof Proof=Check{{prover P;verifier V;public{{}};accept accepted;construction a
     assert journal.json(proving)['status'] == 'produced'
     report = journal.json(verifying, refuses='artifact-stopped')
     assert report['execution']['stop']['kind'] == 'Explicit("reject")'
-    assert report['execution']['stop']['role'] == 'V'
+    assert report['execution']['stop']['role'] == 'role00000001'
     input_files(journal, 'producer', public={}, witness={'produce': False, 'accept': True})
     proof.unlink()
     report = journal.json(proving, refuses='artifact-stopped')

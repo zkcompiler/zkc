@@ -1,0 +1,5 @@
+format = "zkc.project/0"
+
+[modules]
+example = "main.zkc"
+"zkc::vector" = "../../../libraries/zkc/vector.zkc"

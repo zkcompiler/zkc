@@ -225,19 +225,6 @@ def Bad : ZKC_OperationExport<"zkc::algebra", "bad", Multiply, ["x"]>;
 declaration_case(label-duplicate [=[
 def Bad : ZKC_OperationExport<"zkc::algebra", "bad", Multiply, ["x","x"]>;
 ]=] "invalid or duplicate input label")
-declaration_case(operator-duplicate [=[
-def Bad : ZKC_Operator<"*", [Element,Element], Multiply, [0,1]>;
-]=] "duplicate operator tuple")
-declaration_case(operator-bijection [=[
-def Bad : ZKC_Operator<"+", [Element,Element], Multiply, [0,0]>;
-]=] "operator order must be a port bijection")
-declaration_case(operator-head [=[
-def Bad : ZKC_Operator<"+", [GroupElement,Element], Multiply, [0,1]>;
-]=] "operator operand constructor mismatch")
-declaration_case(operator-stage [=[
-def Hidden : ZKC_Operation<"hidden.mul", [F], [ZKC_Apply<Element,[F]>,ZKC_Apply<Element,[F]>], [ZKC_Apply<Element,[F]>]> { let stage = Physical; }
-def Bad : ZKC_Operator<"+", [Element,Element], Hidden, [0,1]>;
-]=] "operator requires an exported source operation")
 declaration_case(alias-labels [=[
 def Alias : ZKC_OperationExport<"zkc::algebra", "product", Multiply, ["x","y"]>;
 ]=] "operation aliases must share input labels")

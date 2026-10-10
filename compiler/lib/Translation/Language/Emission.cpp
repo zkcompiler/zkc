@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
+#include "zkc/Language/Names.h"
 #include "zkc/Relation/AIR.h"
 #include "zkc/Relation/R1CS.h"
 #include "zkc/Support/BoundedStream.h"
@@ -265,11 +266,25 @@ class Emitter {
   bool retire(mlir::Value value, StringRef site) {
     return bool(primitive("resource_unit.consume", value, {}, {}, site));
   }
-  mlir::ArrayAttr roles(const Declaration &decl, ArrayRef<unsigned> indices) {
+  mlir::ArrayAttr roles(ArrayRef<unsigned> indices) {
     SmallVector<mlir::Attribute> result;
     for (auto index : indices)
-      result.push_back(builder.getStringAttr(decl.roles[index]));
+      result.push_back(builder.getStringAttr(nativeRoleName(index)));
     return builder.getArrayAttr(result);
+  }
+  std::optional<std::string> alternative(const Layout &layout, StringRef name) {
+    for (unsigned i = 0; i < layout.alternatives.size(); ++i) {
+      const auto &candidate = layout.alternatives[i].name;
+      if (candidate.size() + 1 > remaining) {
+        failure = error("source.limit", "variant label work limit exceeded");
+        return {};
+      }
+      remaining -= candidate.size() + 1;
+      if (candidate == name)
+        return nativeAlternativeName(i);
+    }
+    failure = error("source.emission", "unknown source variant alternative");
+    return {};
   }
   bool body(const Declaration &decl, const Body &source, mlir::Block &block,
             bool region = false) {
@@ -306,7 +321,7 @@ class Emitter {
           return false;
         for (unsigned i = 0; i < slice->layout->leaves.size(); ++i) {
           operands.push_back(block.getArgument(slice->offset + i));
-          selectors.push_back(decl.roles[operand.role]);
+          selectors.push_back(nativeRoleName(operand.role));
         }
       }
       auto acceptance = take(layouts.select(decl, proof->acceptance));
@@ -377,10 +392,13 @@ class Emitter {
           }
           if (source.values[op.results.front().index].type.kind ==
               Type::Kind::Variant) {
+            auto label =
+                alternative(*resultLayouts.front(), construct->alternative);
+            if (!label)
+              return false;
             auto *actual =
                 make("local.variant_inject", resultTypes.back(), input,
-                     {text("site", site),
-                      text("alternative", construct->alternative)});
+                     {text("site", site), text("alternative", *label)});
             if (!actual)
               return false;
             result.push_back(actual->getResult(0));
@@ -551,7 +569,7 @@ class Emitter {
                                                      : "local.apply";
           attrs.push_back(text("site", site));
           if (call->owner)
-            attrs.push_back(text("role", decl.roles[*call->owner]));
+            attrs.push_back(text("role", nativeRoleName(*call->owner)));
         }
         auto *actual = make(name, resultTypes, operands, attrs);
         if (!actual)
@@ -592,10 +610,10 @@ class Emitter {
             return false;
           operands.push_back(bound->getResult(0));
         }
-        auto *actual =
-            make("protocol.query", resultTypes, operands,
-                 {text("method", query->bound ? "index" : "draw"),
-                  text("owner", decl.roles[port.owner]), text("site", site)});
+        auto *actual = make("protocol.query", resultTypes, operands,
+                            {text("method", query->bound ? "index" : "draw"),
+                             text("owner", nativeRoleName(port.owner)),
+                             text("site", site)});
         if (!actual)
           return false;
         result = Values(actual->getResults());
@@ -618,9 +636,9 @@ class Emitter {
           if (policy->affine)
             affineTypes.push_back(value.getType());
         }
-        auto *actual = make(
-            "protocol.finish_if", affineTypes, inputs,
-            {text("owner", decl.roles[completion->owner]), text("site", site)});
+        auto *actual = make("protocol.finish_if", affineTypes, inputs,
+                            {text("owner", nativeRoleName(completion->owner)),
+                             text("site", site)});
         if (!actual)
           return false;
         unsigned successor = 0;
@@ -645,7 +663,7 @@ class Emitter {
         }
         if (protocol) {
           if (!make("protocol.guard", {}, values[check->condition.index],
-                    {text("owner", decl.roles[*check->owner]),
+                    {text("owner", nativeRoleName(*check->owner)),
                      text("site", site)}))
             return false;
         } else {
@@ -668,12 +686,11 @@ class Emitter {
         auto operands = flatten(application->operands);
         for (auto service : application->services)
           operands.push_back(services[service.index]);
-        auto *actual =
-            make("protocol.apply", resultTypes, operands,
-                 {attr("callee",
-                       mlir::FlatSymbolRefAttr::get(&context, target.symbol)),
-                  text("site", site),
-                  attr("roles", roles(decl, application->roles))});
+        auto *actual = make(
+            "protocol.apply", resultTypes, operands,
+            {attr("callee",
+                  mlir::FlatSymbolRefAttr::get(&context, target.symbol)),
+             text("site", site), attr("roles", roles(application->roles))});
         if (!actual)
           return false;
         result = Values(actual->getResults());
@@ -684,16 +701,17 @@ class Emitter {
           return false;
         }
         for (unsigned i = 0; i < resultTypes.size(); ++i) {
-          auto *sent = make("protocol.exchange", resultTypes[i],
-                            values[exchange->payload.index][i],
-                            {text("sender", decl.roles[exchange->sender]),
-                             text("receiver", decl.roles[exchange->receiver]),
-                             text("site", site + "_" + std::to_string(i))});
+          auto *sent =
+              make("protocol.exchange", resultTypes[i],
+                   values[exchange->payload.index][i],
+                   {text("sender", nativeRoleName(exchange->sender)),
+                    text("receiver", nativeRoleName(exchange->receiver)),
+                    text("site", site + "_" + std::to_string(i))});
           if (!sent)
             return false;
-          auto *received = make(
-              "protocol.restrict_roles", resultTypes[i], sent->getResult(0),
-              {attr("roles", roles(decl, {exchange->receiver}))});
+          auto *received = make("protocol.restrict_roles", resultTypes[i],
+                                sent->getResult(0),
+                                {attr("roles", roles({exchange->receiver}))});
           if (!received)
             return false;
           result.push_back(received->getResult(0));
@@ -702,7 +720,7 @@ class Emitter {
         for (unsigned i = 0; i < resultTypes.size(); ++i) {
           auto *actual = make("protocol.restrict_roles", resultTypes[i],
                               values[restriction->input.index][i],
-                              {attr("roles", roles(decl, restriction->roles))});
+                              {attr("roles", roles(restriction->roles))});
           if (!actual)
             return false;
           result.push_back(actual->getResult(0));
@@ -717,14 +735,14 @@ class Emitter {
         for (unsigned i = 0; i < op.results.size(); ++i)
           for (unsigned j = 0; j < resultLayouts[i]->leaves.size(); ++j)
             carriedRoles.push_back(
-                roles(decl, source.values[op.results[i].index].components));
+                roles(source.values[op.results[i].index].components));
         auto *actual = make(
             "protocol.repeat", resultTypes, inputs,
             {text("site", site),
              attr("carried", builder.getI64IntegerAttr(resultTypes.size())),
              attr("maximum",
                   builder.getI64IntegerAttr(repeat->maximum.closedValue())),
-             attr("roles", roles(decl, repeat->roles)),
+             attr("roles", roles(repeat->roles)),
              attr("carried_roles", builder.getArrayAttr(carriedRoles))},
             1);
         if (!actual)
@@ -736,11 +754,19 @@ class Emitter {
       } else if (auto *control = std::get_if<LocalControl>(&op.action)) {
         auto inputs = flatten(control->operands);
         bool match = control->kind == LocalControl::Kind::Match;
+        std::vector<std::string> labels;
         if (match) {
           auto subject = take(
               layouts.get(source.values[control->operands.front().index].type));
           if (!subject)
             return false;
+          // Arms retain authored order; labels come from the type's roster.
+          for (const auto &name : control->alternatives) {
+            auto label = alternative(**subject, name);
+            if (!label)
+              return false;
+            labels.push_back(std::move(*label));
+          }
           if ((**subject).custody) {
             if (!retire(inputs.front(), site + "_match"))
               return false;
@@ -749,7 +775,7 @@ class Emitter {
         }
         SmallVector<mlir::NamedAttribute> attrs{text("site", site)};
         if (match)
-          attrs.push_back(attr("alternatives", strings(control->alternatives)));
+          attrs.push_back(attr("alternatives", strings(labels)));
         auto *actual =
             make(match                                      ? "local.match"
                  : control->kind == LocalControl::Kind::For ? "local.for"
@@ -834,12 +860,12 @@ public:
             return std::move(failure);
           llvm::append_range(input ? ins : outs, *ts);
           for (unsigned i = 0; i < ts->size(); ++i)
-            (input ? inRoles : outRoles).push_back(roles(decl, port.roles));
+            (input ? inRoles : outRoles).push_back(roles(port.roles));
         }
       for (const auto &port : decl.services) {
         ins.push_back(
             protocol_ir::ServiceReferenceType::get(&context, port.contract));
-        inRoles.push_back(roles(decl, {port.owner}));
+        inRoles.push_back(roles({port.owner}));
       }
       SmallVector<mlir::NamedAttribute> attrs{
           text("sym_name", decl.relation ? formulaSymbol(decl) : decl.symbol),
@@ -847,11 +873,14 @@ public:
                mlir::TypeAttr::get(builder.getFunctionType(ins, outs)))};
       bool protocol = decl.kind == Declaration::Kind::Protocol,
            local = decl.kind == Declaration::Kind::Local;
-      if (protocol)
-        attrs.append({attr("roles", strings(decl.roles)),
+      if (protocol) {
+        std::vector<std::string> roster;
+        for (unsigned i = 0; i < decl.roles.size(); ++i)
+          roster.push_back(nativeRoleName(i));
+        attrs.append({attr("roles", strings(roster)),
                       attr("input_roles", builder.getArrayAttr(inRoles)),
                       attr("output_roles", builder.getArrayAttr(outRoles))});
-      else {
+      } else {
         if (!local)
           attrs.push_back(text("sym_visibility", "private"));
         if (local)

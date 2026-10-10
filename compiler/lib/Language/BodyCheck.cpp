@@ -497,6 +497,14 @@ bool Checker::body(DeclarationId id, unsigned depth) {
                                                         : Body::Mode::Protocol;
   if (!resolveBindings(*this, decl, *sources[id.index]))
     return false;
+  if (sources[id.index]->primitive) {
+    if (!primitiveBody(decl, result))
+      return false;
+    decl.body = std::make_shared<Body>(std::move(result));
+    bodyState[id.index] = 2;
+    inferredContracts.erase(&decl);
+    return true;
+  }
   BodyChecker check(*this, decl, *sources[id.index], result, depth);
   for (unsigned i = 0; i < decl.inputs.size(); ++i) {
     auto &p = decl.inputs[i];

@@ -15,6 +15,7 @@ public:
   Semantics types;
   std::vector<SyntaxDeclaration *> sources;
   std::vector<unsigned> bodyState, bodyHeights;
+  std::vector<std::shared_ptr<const NotationEnvironment>> notationEnvironments;
 
   std::optional<DeclarationId> resolve(const Declaration &, llvm::StringRef,
                                        Span, bool required = true);
@@ -29,7 +30,17 @@ public:
             llvm::ArrayRef<ArgumentLabel> = {});
 
   bool bindingName(const Declaration &, llvm::StringRef, Span);
+  std::optional<CallableReference> callable(const Declaration &,
+                                            llvm::StringRef, Span);
+  std::optional<OperatorBinding> operatorBinding(const Declaration &,
+                                                 const SyntaxOperator &);
+  std::optional<std::vector<OperatorBinding>>
+  operatorCandidates(const Declaration &, const SyntaxDeclaration &, uint32_t);
+  std::optional<std::vector<OperatorBinding>>
+  operatorWitnessFamily(const Declaration &, const SyntaxDeclaration &,
+                        uint32_t);
   bool body(DeclarationId, unsigned);
+  bool primitiveBody(Declaration &, Body &);
   bool relation(Declaration &);
 
   std::map<unsigned, std::vector<SpecificationSelector>> inlineBindings;
@@ -41,6 +52,7 @@ public:
 
   bool configureEntry(Declaration &, const Declaration &,
                       const SyntaxProofEntry &);
+  bool retainNotations();
 
 private:
   std::optional<Type> elaborateType(const Declaration &, const SyntaxType &,
@@ -49,6 +61,11 @@ private:
   std::map<std::string, ModuleId> modules;
   std::map<std::string, DeclarationId> qualified;
   std::vector<std::map<std::string, DeclarationId>> visible;
+  std::vector<std::map<std::string, DeclarationId>> exportedNames;
+  std::vector<std::map<std::string, ModuleId>> aliases, exportedAliases;
+  using OperatorSite = std::pair<unsigned, unsigned>;
+  std::vector<std::vector<OperatorSite>> visibleOperators, exportedOperators;
+  std::map<OperatorSite, OperatorBinding> moduleOperators;
   std::vector<unsigned> signatureState;
   std::set<const Declaration *> inferredContracts;
   unsigned signatureDepth = 0;
@@ -66,11 +83,18 @@ private:
                        llvm::ArrayRef<SyntaxSetupSlot>);
   bool collect();
   bool imports();
+  std::vector<unsigned> importOrder;
+  bool prepareNotationSyntax();
+  bool prepareOperators();
+  std::optional<DeclarationId> moduleMember(ModuleId, llvm::StringRef, Span,
+                                            unsigned = 1);
   bool signature(DeclarationId, unsigned = 1);
   bool conformance(DeclarationId);
   bool requirements(Declaration &);
 };
 bool resolveBindings(Checker &, Declaration &, SyntaxDeclaration &);
 bool elaborateExpressions(Checker &, SyntaxDeclaration &);
+/// Source depth accounting follows whether the call retains a helper boundary.
+bool primitiveCallIsInline(Body::Mode, llvm::StringRef identity);
 } // namespace zkc::language::detail
 #endif

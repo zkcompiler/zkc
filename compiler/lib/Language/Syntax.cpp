@@ -1,4 +1,7 @@
 #include "Internal.h"
+#include "zkc/Language/Names.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include <algorithm>
 
@@ -11,7 +14,12 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
   while (offset < text.size()) {
     size_t begin = offset;
     TokenKind kind;
-    char c = text[offset++];
+    auto scalar = decodeSourceScalar(text, offset);
+    if (!scalar)
+      return failure("source.unicode", "invalid UTF-8 scalar",
+                     Span{module, uint32_t(begin), uint32_t(begin + 1)});
+    char c = text[offset];
+    offset += scalar->bytes;
     if (isSpace(c)) {
       kind = TokenKind::Whitespace;
       while (offset < text.size() && isSpace(text[offset]))
@@ -20,18 +28,24 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
       kind = TokenKind::Comment;
       while (offset < text.size() && text[offset] != '\n')
         ++offset;
-    } else if (isAlpha(c) || c == '_') {
+    } else if (sourceIdentifierStart(scalar->value)) {
       kind = TokenKind::Word;
-      while (offset < text.size() &&
-             (isAlnum(text[offset]) || text[offset] == '_'))
-        ++offset;
+      while (offset < text.size()) {
+        auto next = decodeSourceScalar(text, offset);
+        if (!next || !sourceIdentifierContinue(next->value))
+          break;
+        offset += next->bytes;
+      }
+      if (offset - begin > work.limits.identifierBytes)
+        return failure("source.limit", "identifier byte limit exceeded",
+                       Span{module, uint32_t(begin), uint32_t(offset)});
+      if (!isSourceNFC(text.slice(begin, offset)))
+        return failure("source.nfc", "source identifiers require NFC spelling",
+                       Span{module, uint32_t(begin), uint32_t(offset)});
       if (isUnsupported(text.slice(begin, offset)))
         return failure("source.unsupported",
                        "feature is outside this source fragment: " +
                            text.slice(begin, offset),
-                       Span{module, uint32_t(begin), uint32_t(offset)});
-      if (offset - begin > work.limits.identifierBytes)
-        return failure("source.limit", "identifier byte limit exceeded",
                        Span{module, uint32_t(begin), uint32_t(offset)});
     } else if (isDigit(c)) {
       kind = TokenKind::Decimal;
@@ -50,6 +64,14 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
         return failure("source.string", "unterminated string",
                        Span{module, uint32_t(begin), uint32_t(offset)});
       ++offset;
+    } else if (scalar->value > 127) {
+      kind = TokenKind::Punctuation;
+      if (!isMathematicalSymbol(scalar->value) &&
+          !matchingSourceDelimiter(scalar->value) &&
+          !isSourceDelimiterCloser(scalar->value))
+        return failure("source.unicode",
+                       "character is outside the source token profile",
+                       Span{module, uint32_t(begin), uint32_t(offset)});
     } else {
       kind = TokenKind::Punctuation;
       if (offset < text.size() && ((c == ':' && text[offset] == ':') ||
@@ -95,7 +117,7 @@ public:
         tokens.push_back(token);
   }
   Expected<SyntaxModule> run() {
-    SyntaxModule output{module, {}, {}};
+    SyntaxModule output{module, {}, {}, {}};
     std::string moduleName;
     if (!expect("module") || !path(moduleName) || !expect(";"))
       return takeError();
@@ -105,15 +127,17 @@ public:
       return takeError();
     }
     while (!atEnd() && !diagnostic) {
-      if (take("use")) {
+      if (at("use") || (at("pub") && look(1) == "use")) {
         Import import;
         import.span = current().span;
+        import.isPublic = take("pub");
+        advance(); // use
         if (!name(import.module))
           break;
-        bool separator = false;
+        bool selected = false;
         while (take("::")) {
           if (at("{")) {
-            separator = true;
+            selected = true;
             break;
           }
           std::string part;
@@ -123,21 +147,39 @@ public:
         }
         if (diagnostic)
           break;
-        if (!separator || !expect("{")) {
-          fail("source.syntax", "expected import list");
-          break;
-        }
-        if (at("}")) {
-          fail("source.syntax", "import list must be nonempty");
-          break;
-        }
-        do {
-          std::string value;
-          if (!name(value))
+        if (selected) {
+          advance(); // {
+          if (at("}")) {
+            fail("source.syntax", "import list must be nonempty");
             break;
-          import.names.push_back(std::move(value));
-        } while (take(",") && !at("}"));
-        if (diagnostic || !expect("}") || !expect(";"))
+          }
+          do {
+            std::string value;
+            if (at("operator") && operatorSymbol(look(1))) {
+              advance();
+              value = text().str();
+              advance();
+              import.operators.push_back(std::move(value));
+            } else if (at("notation") && delimiter(look(1))) {
+              advance();
+              import.notations.push_back(text().str());
+              advance();
+            } else {
+              if (!name(value))
+                break;
+              import.names.push_back(std::move(value));
+            }
+          } while (take(",") && !at("}"));
+          if (diagnostic || !expect("}"))
+            break;
+        } else {
+          import.alias = StringRef(import.module).rsplit("::").second.str();
+          if (import.alias->empty())
+            import.alias = import.module;
+          if (take("as") && !name(*import.alias))
+            break;
+        }
+        if (!expect(";"))
           break;
         import.span.end = previousEnd;
         if (import.module.size() > work.limits.moduleBytes) {
@@ -145,6 +187,11 @@ public:
           break;
         }
         output.imports.push_back(std::move(import));
+      } else if (operatorHeader() || (at("pub") && operatorHeader(1))) {
+        auto binding = operatorBinding();
+        if (!binding)
+          break;
+        output.operators.push_back(std::move(*binding));
       } else {
         auto decl = declaration(false, false, 1);
         if (!decl)
@@ -157,6 +204,16 @@ public:
     return output;
   }
 
+  Error finish(SyntaxModule &syntax,
+               std::shared_ptr<const NotationEnvironment> environment) {
+    headersOnly = false;
+    notationEnvironment = std::move(environment);
+    for (auto &declaration : syntax.declarations)
+      if (!finish(declaration))
+        return takeError();
+    return Error::success();
+  }
+
 private:
   const SourceBuffer &source;
   ModuleId module;
@@ -165,10 +222,194 @@ private:
   size_t cursor = 0;
   uint32_t previousEnd = 0;
   std::optional<Diagnostic> diagnostic;
+  bool headersOnly = true;
+  std::shared_ptr<const NotationEnvironment> notationEnvironment;
+  std::optional<uint32_t> currentScope;
+  bool finish(SyntaxDeclaration &declaration) {
+    // Inline relation specifications precede their protocol body in the source.
+    for (auto &member : declaration.members)
+      if (!finish(member))
+        return false;
+    if (auto pending = declaration.deferredBody) {
+      cursor = pending->begin;
+      previousEnd = current().span.begin;
+      if (!body(declaration, pending->protocol, false, pending->depth))
+        return false;
+      if (cursor != pending->end)
+        return fail("source.syntax", "body differs from its declaration range");
+      declaration.deferredBody.reset();
+    }
+    return !declaration.deferredBody ||
+           fail("source.syntax", "declaration body was not parsed");
+  }
   const Token &current() const { return tokens[cursor]; }
   StringRef text() const {
     auto s = current().span;
     return StringRef(source.text).slice(s.begin, s.end);
+  }
+  StringRef look(unsigned offset) const {
+    if (cursor + offset >= tokens.size())
+      return {};
+    auto span = tokens[cursor + offset].span;
+    return StringRef(source.text).slice(span.begin, span.end);
+  }
+  using Position = NotationDescriptor::Position;
+  using Association = NotationDescriptor::Association;
+  static bool operatorSymbol(StringRef symbol) {
+    if (symbol == "+" || symbol == "-" || symbol == "*" || symbol == "==")
+      return true;
+    auto scalar = decodeSourceScalar(symbol, 0);
+    return scalar && scalar->bytes == symbol.size() &&
+           isMathematicalSymbol(scalar->value);
+  }
+  static bool delimiter(StringRef symbol) {
+    auto scalar = decodeSourceScalar(symbol, 0);
+    return scalar && scalar->bytes == symbol.size() &&
+           matchingSourceDelimiter(scalar->value).has_value();
+  }
+  static bool fixity(StringRef word) {
+    return word == "infixl" || word == "infixr" || word == "infix" ||
+           word == "prefix" || word == "postfix";
+  }
+  bool operatorHeader(unsigned offset = 0) const {
+    return (look(offset) == "operator" &&
+            ((operatorSymbol(look(offset + 1)) && look(offset + 2) == "=") ||
+             (fixity(look(offset + 1)) && look(offset + 2) == "("))) ||
+           (look(offset) == "notation" && delimiter(look(offset + 1)));
+  }
+  std::shared_ptr<const NotationDescriptor> notation(StringRef symbol,
+                                                     Position position) const {
+    if (!notationEnvironment)
+      return {};
+    NotationDescriptor key;
+    key.symbol = symbol.str();
+    key.position = position;
+    auto found = notationEnvironment->find(key.key());
+    return found == notationEnvironment->end() ? nullptr
+                                               : found->second.descriptor;
+  }
+  std::optional<SyntaxOperator> operatorBinding() {
+    SyntaxOperator result;
+    result.span = current().span;
+    result.isPublic = take("pub");
+    auto descriptor = std::make_shared<NotationDescriptor>();
+    if (take("notation")) {
+      descriptor->position = Position::Delimited;
+      descriptor->precedence = 100;
+      result.explicitNotation = true;
+      auto opener = decodeSourceScalar(text(), 0);
+      auto closer =
+          opener ? matchingSourceDelimiter(opener->value) : std::nullopt;
+      if (!closer) {
+        fail("source.notation", "expected an admitted opening delimiter");
+        return {};
+      }
+      descriptor->symbol = text().str();
+      advance();
+      auto firstHole = decodeSourceScalar(text(), 0);
+      if (firstHole && firstHole->value == *closer) {
+        fail("source.notation", "notation requires at least one hole");
+        return {};
+      }
+      do {
+        if (result.holes.size() >= work.limits.notationHoles) {
+          fail("source.limit", "notation hole limit exceeded");
+          return {};
+        }
+        std::string hole;
+        if (!name(hole))
+          return {};
+        if (llvm::is_contained(result.holes, hole)) {
+          fail("source.notation", "notation holes must be distinct");
+          return {};
+        }
+        result.holes.push_back(std::move(hole));
+      } while (take(","));
+      auto closing = decodeSourceScalar(text(), 0);
+      if (!closing || closing->value != *closer) {
+        fail("source.notation",
+             "notation requires the matching closing delimiter");
+        return {};
+      }
+      descriptor->closing = text().str();
+      descriptor->arity = result.holes.size();
+      advance();
+    } else {
+      if (!expect("operator"))
+        return {};
+      if (fixity(text())) {
+        auto spelling = text();
+        descriptor->position = spelling == "prefix"    ? Position::Prefix
+                               : spelling == "postfix" ? Position::Postfix
+                                                       : Position::Infix;
+        descriptor->association = spelling == "infixl"   ? Association::Left
+                                  : spelling == "infixr" ? Association::Right
+                                                         : Association::None;
+        descriptor->arity = descriptor->position == Position::Infix ? 2 : 1;
+        result.explicitNotation = true;
+        advance();
+        if (!expect("("))
+          return {};
+        if (current().kind != TokenKind::Decimal ||
+            text().getAsInteger(10, descriptor->precedence) ||
+            descriptor->precedence < 1 || descriptor->precedence > 99) {
+          fail("source.notation",
+               "custom precedence must be an integer from 1 to 99");
+          return {};
+        }
+        advance();
+        if (!expect(")"))
+          return {};
+      }
+      if (!operatorSymbol(text()) || at("∑") || at("∏")) {
+        fail("source.notation", "expected an admitted operator symbol; sums "
+                                "and products are reserved for binders");
+        return {};
+      }
+      descriptor->symbol = text().str();
+      if (result.explicitNotation &&
+          static_cast<unsigned char>(text().front()) < 128) {
+        auto fixed = fixedNotationEnvironment(module);
+        auto found = fixed.find(descriptor->key());
+        if (found == fixed.end() || *found->second.descriptor != *descriptor) {
+          fail("source.notation-conflict", "ASCII operator syntax is fixed");
+          return {};
+        }
+      }
+      advance();
+    }
+    result.symbol = descriptor->symbol;
+    if (result.explicitNotation)
+      result.notation = descriptor;
+    if (!expect("="))
+      return {};
+    result.target.span = current().span;
+    if (!path(result.target.name, false, true) ||
+        !staticArguments(result.target.arguments, result.target.labels, 1))
+      return {};
+    if (descriptor->position == Position::Delimited) {
+      if (!expect("("))
+        return {};
+      for (unsigned i = 0; i < result.holes.size(); ++i) {
+        if (i && !expect(","))
+          return {};
+        if (!take(result.holes[i])) {
+          fail("source.notation",
+               "notation call must use every hole once, in written order");
+          return {};
+        }
+      }
+      if (!expect(")"))
+        return {};
+    }
+    if (!expect(";"))
+      return {};
+    result.target.span.end = previousEnd;
+    result.span.end = previousEnd;
+    if (!accept(work.count(work.declarations, work.limits.declarations,
+                           "notation declaration count", result.span)))
+      return {};
+    return result;
   }
   bool at(StringRef value) const { return text() == value; }
   bool atEnd() const { return current().kind == TokenKind::End; }
@@ -1060,6 +1301,17 @@ private:
       if (abstract) {
         if (!expect(";"))
           return {};
+      } else if (take("=")) {
+        if (protocol || d.outputs.size() != 1) {
+          fail("source.primitive",
+               "primitive functions require a written result type");
+          return {};
+        }
+        std::string identity;
+        if (!expect("primitive") || !expect("(") || !string(identity) ||
+            !expect(")") || !expect(";"))
+          return {};
+        d.primitive = std::move(identity);
       } else if (!body(d, protocol, false, 1))
         return {};
     }
@@ -1081,6 +1333,21 @@ private:
       } while (take(",") && !at(")"));
     return expect(")");
   }
+  std::optional<uint32_t> appendExpression(SyntaxDeclaration &decl,
+                                           Expression value) {
+    value.scope = currentScope;
+    for (auto child : value.children)
+      value.height = std::max(value.height, decl.expressions[child].height + 1);
+    if (value.height > work.limits.expressionDepth) {
+      fail("source.limit", "constructed expression depth limit exceeded");
+      return {};
+    }
+    if (!accept(work.charge(1, value.span)))
+      return {};
+    uint32_t index = decl.expressions.size();
+    decl.expressions.push_back(std::move(value));
+    return index;
+  }
   std::optional<uint32_t> expression(SyntaxDeclaration &decl,
                                      unsigned depth = 1, unsigned minimum = 0,
                                      bool records = true,
@@ -1090,12 +1357,55 @@ private:
     Span span = current().span;
     Expression value;
     value.span = span;
-    if (take("!")) {
+    if (at("!")) {
       value.kind = Expression::Kind::Not;
-      auto operand = expression(decl, depth + 1, 6, records);
+      if (minimum > 75) {
+        fail("source.notation-precedence",
+             "weak prefix requires parentheses in this operand");
+        return {};
+      }
+      advance();
+      auto operand = expression(decl, depth + 1, 75, records);
       if (!operand)
         return {};
       value.children.push_back(*operand);
+    } else if (auto prefix = notation(text(), Position::Prefix)) {
+      if (minimum > prefix->precedence) {
+        fail("source.notation-precedence",
+             "weak prefix requires parentheses in this operand");
+        return {};
+      }
+      value.kind = Expression::Kind::NotationCall;
+      value.notation = prefix;
+      advance();
+      auto operand = expression(decl, depth + 1, prefix->precedence, records);
+      if (!operand)
+        return {};
+      value.children.push_back(*operand);
+    } else if (auto delimited = notation(text(), Position::Delimited)) {
+      value.kind = Expression::Kind::NotationCall;
+      value.notation = delimited;
+      advance();
+      for (unsigned i = 0; i < delimited->arity; ++i) {
+        if (i && !take(",")) {
+          fail("source.notation-delimiter",
+               "expected comma between notation operands");
+          return {};
+        }
+        if (at(delimited->closing) || at(",")) {
+          fail("source.notation-delimiter", "missing notation operand");
+          return {};
+        }
+        auto operand = expression(decl, depth + 1);
+        if (!operand)
+          return {};
+        value.children.push_back(*operand);
+      }
+      if (!take(delimited->closing)) {
+        fail("source.notation-delimiter",
+             "expected matching notation closer " + delimited->closing);
+        return {};
+      }
     } else if (at("kernel") || at("intrinsic")) {
       value.kind = take("intrinsic") ? Expression::Kind::Intrinsic
                                      : Expression::Kind::Kernel;
@@ -1209,6 +1519,8 @@ private:
         SyntaxBody empty;
         empty.region = true;
         empty.span = span;
+        empty.parent = currentScope;
+        empty.notationEnvironment = notationEnvironment;
         value.regions.push_back(decl.bodies.size());
         decl.bodies.push_back(std::move(empty));
       }
@@ -1289,9 +1601,11 @@ private:
         } while ((comma = take(",")) && !at(")"));
       if (!expect(")"))
         return {};
-      if (value.children.size() == 1 && !comma)
+      if (value.children.size() == 1 && !comma) {
+        decl.expressions[value.children.front()].grouped = true;
         return postfix(decl, value.children.front(), span, depth, minimum,
                        records);
+      }
     } else if (take("[")) {
       value.kind = Expression::Kind::Array;
       if (!at("]"))
@@ -1312,6 +1626,17 @@ private:
       value.text = text().str();
       advance();
     } else {
+      if (operatorSymbol(text()) || delimiter(text())) {
+        fail("source.notation-visibility",
+             "no visible prefix or delimited notation for " + text());
+        return {};
+      }
+      if (auto scalar = decodeSourceScalar(text(), 0);
+          scalar && isSourceDelimiterCloser(scalar->value)) {
+        fail("source.notation-delimiter",
+             "unexpected closing notation delimiter");
+        return {};
+      }
       value.kind = Expression::Kind::Name;
       if (at("index")) {
         value.text = "index";
@@ -1354,8 +1679,7 @@ private:
               shorthand.kind = Expression::Kind::Name;
               shorthand.text = label;
               shorthand.span = fieldSpan;
-              x = decl.expressions.size();
-              decl.expressions.push_back(std::move(shorthand));
+              x = appendExpression(decl, std::move(shorthand));
             }
             if (!x)
               return {};
@@ -1371,100 +1695,135 @@ private:
       }
     }
     value.span.end = previousEnd;
-    auto left = uint32_t(decl.expressions.size());
     bool blockLike = value.kind == Expression::Kind::Block ||
                      value.kind == Expression::Kind::If ||
                      value.kind == Expression::Kind::Match ||
                      value.kind == Expression::Kind::For;
-    decl.expressions.push_back(std::move(value));
-    if (statementStart && blockLike)
+    auto left = appendExpression(decl, std::move(value));
+    if (!left || (statementStart && blockLike))
       return left;
-    return postfix(decl, left, span, depth, minimum, records);
+    return postfix(decl, *left, span, depth, minimum, records);
   }
   std::optional<uint32_t> postfix(SyntaxDeclaration &decl, uint32_t left,
                                   Span span, unsigned depth, unsigned minimum,
                                   bool records) {
-    while (take(".") || take("[")) {
-      bool bracket = source.text[previousEnd - 1] == '[';
-      Expression projection;
-      projection.kind = Expression::Kind::Projection;
-      projection.bracket = bracket;
-      projection.children = {left};
-      projection.span = span;
-      // `index` is reserved, so `.index` can only name the managed method,
-      // whose static arguments precede its call.
-      bool method = !bracket && at("index");
-      if (method) {
-        projection.text = "index";
-        advance();
-        if (take("<")) {
-          do {
-            SyntaxType argument;
-            if (!type(argument, depth + 1))
+    while (!diagnostic) {
+      if (minimum <= 100 && (take(".") || take("["))) {
+        bool bracket = source.text[previousEnd - 1] == '[';
+        Expression projection;
+        projection.kind = Expression::Kind::Projection;
+        projection.bracket = bracket;
+        projection.children = {left};
+        projection.span = span;
+        // `index` is reserved, so `.index` can only name the managed method,
+        // whose static arguments precede its call.
+        bool method = !bracket && at("index");
+        if (method) {
+          projection.text = "index";
+          advance();
+          if (take("<")) {
+            do {
+              SyntaxType argument;
+              if (!type(argument, depth + 1))
+                return {};
+              projection.arguments.push_back(std::move(argument));
+            } while (take(",") && !at(">"));
+            if (!expect(">"))
               return {};
-            projection.arguments.push_back(std::move(argument));
-          } while (take(",") && !at(">"));
-          if (!expect(">"))
+          }
+          if (!at("(")) {
+            fail("source.syntax", "index requires a method call");
+            return {};
+          }
+        } else if (current().kind == TokenKind::Decimal) {
+          projection.text = text().str();
+          advance();
+        } else if (!name(projection.text))
+          return {};
+        if (bracket && !expect("]"))
+          return {};
+        if (!bracket && take("(")) {
+          projection.kind = Expression::Kind::MethodCall;
+          if (!at(")"))
+            do {
+              auto arg = expression(decl, depth + 1);
+              if (!arg)
+                return {};
+              projection.children.push_back(*arg);
+            } while (take(",") && !at(")"));
+          if (!expect(")"))
             return {};
         }
-        if (!at("(")) {
-          fail("source.syntax", "index requires a method call");
+        projection.span.end = previousEnd;
+        auto next = appendExpression(decl, std::move(projection));
+        if (!next)
+          return {};
+        left = *next;
+        continue;
+      }
+      if (auto suffix = notation(text(), Position::Postfix)) {
+        if (suffix->precedence < minimum)
+          break;
+        Expression unary;
+        unary.kind = Expression::Kind::NotationCall;
+        unary.notation = suffix;
+        unary.span = span;
+        unary.children = {left};
+        advance();
+        unary.span.end = previousEnd;
+        auto next = appendExpression(decl, std::move(unary));
+        if (!next)
+          return {};
+        left = *next;
+        continue;
+      }
+      auto infix = notation(text(), Position::Infix);
+      if (!infix) {
+        if (operatorSymbol(text())) {
+          fail("source.notation-visibility",
+               "no visible infix or postfix notation for " + text());
           return {};
         }
-      } else if (current().kind == TokenKind::Decimal) {
-        projection.text = text().str();
-        advance();
-      } else if (!name(projection.text))
-        return {};
-      if (bracket && !expect("]"))
-        return {};
-      if (!bracket && take("(")) {
-        projection.kind = Expression::Kind::MethodCall;
-        if (!at(")"))
-          do {
-            auto arg = expression(decl, depth + 1);
-            if (!arg)
-              return {};
-            projection.children.push_back(*arg);
-          } while (take(",") && !at(")"));
-        if (!expect(")"))
-          return {};
-      }
-      projection.span.end = previousEnd;
-      left = decl.expressions.size();
-      decl.expressions.push_back(std::move(projection));
-    }
-    bool equality = false;
-    while (!diagnostic) {
-      unsigned precedence = at("||")             ? 1
-                            : at("&&")           ? 2
-                            : at("==")           ? 3
-                            : at("+") || at("-") ? 4
-                            : at("*")            ? 5
-                                                 : 0;
-      if (!precedence || precedence < minimum)
         break;
-      if (precedence == 3 && equality) {
-        fail("source.syntax", "chained equality requires parentheses");
-        return {};
       }
+      if (infix->precedence < minimum)
+        break;
       Expression binary;
       binary.span = span;
       binary.kind = at("||")   ? Expression::Kind::Or
                     : at("&&") ? Expression::Kind::And
-                    : at("==") ? Expression::Kind::Equal
-                    : at("+")  ? Expression::Kind::Add
-                    : at("-")  ? Expression::Kind::Subtract
-                               : Expression::Kind::Multiply;
-      equality = precedence == 3;
+                               : Expression::Kind::NotationCall;
+      binary.notation = infix;
       advance();
-      auto right = expression(decl, depth + 1, precedence + 1, records);
+      auto right =
+          expression(decl, depth + 1,
+                     infix->precedence +
+                         (infix->association == Association::Right ? 0 : 1),
+                     records);
       if (!right)
         return {};
+      for (auto child : {left, *right}) {
+        const auto &operand = decl.expressions[child];
+        if (operand.grouped || !operand.notation ||
+            operand.notation->position != Position::Infix ||
+            operand.notation->precedence != infix->precedence)
+          continue;
+        if (infix->association == Association::None ||
+            operand.notation->association != infix->association) {
+          fail(infix->symbol == "==" && operand.notation->symbol == "=="
+                   ? "source.syntax"
+                   : "source.notation-association",
+               "equal-precedence nonassociative or mixed-association chains "
+               "require parentheses");
+          return {};
+        }
+      }
       binary.children = {left, *right};
       binary.span.end = previousEnd;
-      left = decl.expressions.size();
-      decl.expressions.push_back(std::move(binary));
+      auto next = appendExpression(decl, std::move(binary));
+      if (!next)
+        return {};
+      left = *next;
     }
     return left;
   }
@@ -1535,6 +1894,27 @@ private:
   }
   std::optional<uint32_t> body(SyntaxDeclaration &decl, bool protocol,
                                bool region, unsigned depth) {
+    if (headersOnly) {
+      const auto begin = cursor;
+      if (!expect("{"))
+        return {};
+      unsigned nesting = 1;
+      while (nesting && !atEnd()) {
+        if (!accept(work.charge(1, current().span)))
+          return {};
+        if (at("{"))
+          ++nesting;
+        else if (at("}"))
+          --nesting;
+        advance();
+      }
+      if (nesting) {
+        fail("source.syntax", "unterminated declaration body");
+        return {};
+      }
+      decl.deferredBody = DeferredBody{begin, cursor, depth, protocol};
+      return 0;
+    }
     if (!bounded(depth) || !expect("{"))
       return {};
     uint32_t id = decl.bodies.size();
@@ -1542,7 +1922,41 @@ private:
     SyntaxBody b;
     b.span = current().span;
     b.region = region;
+    b.parent = currentScope;
+    auto previousScope = currentScope;
+    auto previousEnvironment = notationEnvironment;
+    auto restore = llvm::scope_exit([&] {
+      currentScope = previousScope;
+      notationEnvironment = previousEnvironment;
+    });
+    currentScope = id;
+    while (operatorHeader() || (at("pub") && operatorHeader(1))) {
+      auto binding = operatorBinding();
+      if (!binding)
+        return {};
+      if (binding->isPublic) {
+        fail("source.operator", "local notation bindings cannot be public");
+        return {};
+      }
+      b.operators.push_back(std::move(*binding));
+    }
+    if (!b.operators.empty()) {
+      if (!accept(work.charge(notationEnvironment->size(), b.span)))
+        return {};
+      auto environment = *notationEnvironment;
+      if (!accept(resolveNotationSyntax(b.operators, environment, work)))
+        return {};
+      notationEnvironment =
+          std::make_shared<const NotationEnvironment>(std::move(environment));
+    }
+    b.notationEnvironment = notationEnvironment;
     while (!atEnd() && !at("}")) {
+      if (operatorHeader() || (at("pub") && operatorHeader(1))) {
+        fail("source.operator",
+             "local notation declarations must precede runtime statements");
+        return {};
+      }
+
       if (take("stop")) {
         if (protocol || current().kind != TokenKind::String) {
           fail("source.mode", "local stop requires a reason string");
@@ -1704,6 +2118,17 @@ private:
 } // namespace
 Expected<SyntaxModule> parse(const SourceBuffer &source, ModuleId module,
                              ArrayRef<Token> tokens, Work &work) {
+  if (auto error = work.charge(tokens.size(), Span{module, 0, 0}))
+    return std::move(error);
   return Parser(source, module, tokens, work).run();
+}
+Error parseBodies(const SourceBuffer &source, SyntaxModule &module,
+                  ArrayRef<Token> tokens,
+                  std::shared_ptr<const NotationEnvironment> environment,
+                  Work &work) {
+  if (auto error = work.charge(tokens.size(), Span{module.id, 0, 0}))
+    return error;
+  return Parser(source, module.id, tokens, work)
+      .finish(module, std::move(environment));
 }
 } // namespace zkc::language::detail

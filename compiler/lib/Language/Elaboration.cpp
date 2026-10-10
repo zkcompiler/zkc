@@ -15,6 +15,7 @@ bool elaborateExpressions(Checker &checker, SyntaxDeclaration &syntax) {
                            (kind != K::And && kind != K::Or)))
       continue;
     auto expression = syntax.expressions[i];
+    expression.notation.reset();
     if (!checker.types.charge(4, expression.span))
       return false;
     Expression literal;
@@ -24,7 +25,8 @@ bool elaborateExpressions(Checker &checker, SyntaxDeclaration &syntax) {
     const auto constant = uint32_t(syntax.expressions.size());
     syntax.expressions.push_back(std::move(literal));
     if (kind == K::Not) {
-      expression.kind = K::Equal;
+      expression.kind = K::Call;
+      expression.text = "::zkc::prelude::boolean_equal";
       expression.children.push_back(constant);
     } else {
       const auto right = expression.children[1];

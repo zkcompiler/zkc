@@ -51,11 +51,23 @@ public:
                                          unsigned = 1);
   std::optional<std::vector<TypeField>> fields(const Type &, Span,
                                                unsigned = 1);
+  /// Signature-only product shape. An abstract representation or open array
+  /// length returns no shape and no diagnostic; it cannot select an overload.
+  std::optional<std::vector<TypeField>> structuralFields(const Type &, Span);
   std::optional<std::vector<Alternative>> alternatives(const Type &, Span,
                                                        unsigned = 1);
   bool checkArguments(const Declaration &, llvm::ArrayRef<Type>, Span,
                       const Declaration *context = nullptr,
                       const Substitution &extra = {});
+  /// Signature matching only. Capabilities, permissions and natural bounds
+  /// are checked after resolution, never used to choose an overload.
+  std::optional<Substitution>
+  boundMemberSubstitution(const Declaration &, const Type &component, Span);
+  bool checkKnownArgumentSorts(const Declaration &,
+                               llvm::ArrayRef<std::optional<Type>>, Span,
+                               const Substitution &extra = {});
+  bool checkArgumentSorts(const Declaration &, llvm::ArrayRef<Type>, Span,
+                          const Substitution &extra = {});
   bool assumptions(const Declaration &, const NaturalBound &,
                    const Substitution &, Span);
   bool capabilityFormation(const CapabilityBound &);
@@ -68,6 +80,8 @@ public:
   bool executableType(const Type &, Span, unsigned = 1);
   bool mathematicalData(const Type &, Span, const Declaration * = nullptr,
                         unsigned = 1);
+  /// Structural projection only; bounds and access are checked after inference.
+  std::optional<Type> projectionType(const Type &, llvm::StringRef, Span);
   std::optional<Type> projectedType(const Declaration &, Type,
                                     llvm::ArrayRef<unsigned>, Span);
   std::optional<unsigned> fieldIndex(const Declaration &, const Type &,

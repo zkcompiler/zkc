@@ -12,6 +12,7 @@ Start with the [walkthrough](../getting-started.md), then read the
 | Task | Reference |
 |---|---|
 | Define types, helpers, roles, services and control | [Mathematical source](mathematical.md) |
+| Use Unicode names, operators and delimiter calls | [Mathematical notation](notation.md) |
 | Select a closed job | [Entry declarations](entries.md) |
 | Compile, run, prove or verify an Entry | [Entry execution](../runtime/entries.md) |
 | Capture relation data and bind its meaning | [Relation Assets](relations.md) |
@@ -103,3 +104,7 @@ ordered calls list possible owners. Locations use one-based byte columns.
 Excerpts are bounded and escape control/non-ASCII bytes, so caret positions in
 the displayed excerpt can differ from the byte column. Rendering reads captured
 bytes and never opens a diagnostic path.
+
+The separate [notation inspection view](notation.md#inspect-notation-and-locations)
+describes source syntax and visibility, with private/local and installation data
+explicitly requested. It carries no native Entry interface authority.

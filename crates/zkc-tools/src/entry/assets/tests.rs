@@ -152,7 +152,7 @@ fn run_program(field: &str, arenas: &Arenas) -> Json {
             "participant",
             "p",
             "root",
-            "P",
+            "role00000000",
             [["x", vector], ["rounds", index]],
             [vector],
             [
@@ -170,11 +170,11 @@ fn run_program(field: &str, arenas: &Arenas) -> Json {
             ],
             []
         ]],
-        [["entry", "Assets", [["P", "p"]]]]
+        [["entry", "Assets", [["role00000000", "p"]]]]
     ])
 }
 fn run_bundle(program: &Json) -> String {
-    json!({"format":"zkc.run/0","candidate":program.to_string(),"entry":"Assets","roles":["P"],
+    json!({"format":"zkc.run/0","candidate":program.to_string(),"entry":"Assets","roles":["role00000000"],
         "steps":[
             {"loop":[{"role":0,"instruction":0,"anchor":0},{"role":0,"instruction":1,"anchor":0}],
              "body":[{"role":0,"instruction":2,"anchor":1}],
@@ -463,7 +463,7 @@ fn proof_program(field: &str, arenas: &Arenas) -> Json {
                 "participant",
                 "prover",
                 "root",
-                "P",
+                "role00000000",
                 [["x", vector]],
                 [],
                 [
@@ -476,7 +476,7 @@ fn proof_program(field: &str, arenas: &Arenas) -> Json {
                 "participant",
                 "verifier",
                 "root",
-                "V",
+                "role00000001",
                 [["x", vector]],
                 [boolean],
                 [
@@ -487,7 +487,11 @@ fn proof_program(field: &str, arenas: &Arenas) -> Json {
                 []
             ]
         ],
-        [["entry", "Assets", [["P", "prover"], ["V", "verifier"]]]]
+        [[
+            "entry",
+            "Assets",
+            [["role00000000", "prover"], ["role00000001", "verifier"]]
+        ]]
     ])
 }
 fn deployment(field: &str, arenas: &Arenas) -> String {
@@ -499,8 +503,8 @@ fn deployment(field: &str, arenas: &Arenas) -> String {
         [
             "zkc.native-proof-policy/0",
             "Assets",
-            "P",
-            "V",
+            "role00000000",
+            "role00000001",
             "0",
             "",
             "",
@@ -509,7 +513,7 @@ fn deployment(field: &str, arenas: &Arenas) -> String {
         ],
         "zkc.native-origin/0",
         [],
-        [["V", "0", leaf, "zkc.native-data/0"]],
+        [["role00000001", "0", leaf, "zkc.native-data/0"]],
         []
     ]);
     json!([
@@ -520,8 +524,15 @@ fn deployment(field: &str, arenas: &Arenas) -> String {
         candidate,
         hash(candidate.as_bytes()),
         [
-            ["P", "prover", [["0", leaf]], [], [], ""],
-            ["V", "verifier", [["0", leaf]], [["0", "bool"]], [], "0"]
+            ["role00000000", "prover", [["0", leaf]], [], [], ""],
+            [
+                "role00000001",
+                "verifier",
+                [["0", leaf]],
+                [["0", "bool"]],
+                [],
+                "0"
+            ]
         ],
         ["true", "false"],
         []

@@ -88,6 +88,12 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
     let operation = operation.expect("execution command");
     let view = BoundInterface::read(&package).map_err(|e| e.to_string())?;
     report["entry"] = json!(view.entry());
+    report["role_names"] = json!(
+        view.roles()
+            .iter()
+            .map(|role| (&role.native_name, &role.name))
+            .collect::<std::collections::BTreeMap<_, _>>()
+    );
     report["phase"] = json!("invocation");
     let layout = match &target {
         Target::Project(source) => source.project.layout(),

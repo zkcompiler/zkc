@@ -2,15 +2,13 @@
 use serde_json::Value as Json;
 
 pub(super) fn canonical_name(name: &str) -> bool {
-    name.contains("::") && name.split("::").all(identifier)
+    name.rsplit_once("::")
+        .is_some_and(|(module, _)| module.len() <= 2048)
+        && name.split("::").all(identifier)
 }
 
 pub(super) fn identifier(name: &str) -> bool {
-    let mut bytes = name.bytes();
-    bytes
-        .next()
-        .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
-        && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    name.len() <= 128 && crate::source_names::is_source_identifier(name)
 }
 
 pub(super) fn matches(request: Option<&str>, canonical: &str) -> bool {
@@ -57,5 +55,40 @@ pub(super) fn valid_check(report: &Json, request: Option<&str>) -> bool {
                     .iter()
                     .any(|candidate| candidate["name"] == selected)
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn canonical_unicode_selection_keeps_exact_names_and_byte_limits() {
+        let name = "数学::𐐀::証明₂";
+        assert!(canonical_name(name));
+        assert!(matches(Some("証明₂"), name));
+        assert!(matches(Some(name), name));
+        assert!(!matches(Some("証明_2"), name));
+        for invalid in [
+            "証明₂",
+            "::証明₂",
+            "数学::::証明₂",
+            "数学::e\u{301}",
+            "数学::証\u{200d}明",
+        ] {
+            assert!(!canonical_name(invalid), "{invalid}");
+        }
+        assert!(canonical_name(&format!("数学::{}", "α".repeat(64))));
+        assert!(!canonical_name(&format!("数学::{}", "α".repeat(65))));
+        assert!(!canonical_name(&format!("{}証明", "a::".repeat(1024))));
+        let report = json!({"entries":[{"name":name,"kind":"proof"}],"entry":name});
+        assert!(valid_check(&report, Some("証明₂")));
+        let text = report.to_string().replace('𐐀', "\\ud801\\udc00");
+        assert!(valid_check(
+            &serde_json::from_str(&text).unwrap(),
+            Some(name)
+        ));
+        let duplicate = json!({"entries":[{"name":name,"kind":"proof"},{"name":name,"kind":"run"}],"entry":name});
+        assert!(!valid_check(&duplicate, Some(name)));
     }
 }

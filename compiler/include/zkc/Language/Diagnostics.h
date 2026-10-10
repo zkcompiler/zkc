@@ -8,6 +8,10 @@ namespace zkc::language {
 /// escaped. Invalid spans and omitted diagnostics are reported explicitly.
 std::string formatDiagnostics(llvm::ArrayRef<Diagnostic>,
                               const CapturedProject * = nullptr);
+/// Render module IDs from Analysis::sources() or CheckedProject::sources(),
+/// including embedded installation sources.
+std::string formatDiagnostics(llvm::ArrayRef<Diagnostic>,
+                              llvm::ArrayRef<SourceBuffer>);
 /// Human-readable views of resolved terms; never used as semantic identities.
 std::string formatType(const Type &);
 std::string formatNatural(const Natural &);

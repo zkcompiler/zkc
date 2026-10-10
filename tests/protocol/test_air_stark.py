@@ -210,7 +210,7 @@ def test_stark_transcript_orders_commitments_claims_and_queries(toolchain, journ
     descriptor = bundle[2]
     assert descriptor[0] == 'zkc.native-proof-descriptor/0'
     policy = descriptor[1]
-    assert policy[2:4] == ['P', 'V'] and policy[7] == [str(i) for i in range(1, 9)]
+    assert policy[2:4] == ['role00000000', 'role00000001'] and policy[7] == [str(i) for i in range(1, 9)]
     events = []
     for kind, encoded, *bound in descriptor[3]:
         template = decode_tree(bytes.fromhex(encoded))
@@ -233,11 +233,12 @@ def test_stark_transcript_orders_commitments_claims_and_queries(toolchain, journ
     for (query, delivery), i in zip(policy[8], draws, strict=True):
         assert query.endswith('_' + events[i][2][2])
         assert delivery.endswith('_' + events[i + 1][2][2])
-        assert events[i][2][5:7] == ['index' if i == 16 else 'draw', 'V']
+        assert events[i][2][5:7] == ['index' if i == 16 else 'draw', 'role00000001']
     assert events[16][3] == ['32']
     for i, (kind, _, event, bound) in enumerate(events):
         if kind == 'message':
-            assert event[4:6] == (['V', 'P'] if i - 1 in draws else ['P', 'V'])
+            assert event[4:6] == (['role00000001', 'role00000000'] if i - 1 in draws
+                                  else ['role00000000', 'role00000001'])
             assert bound == []
     # One OOD loop, one fold loop, a separate query draw loop and opening
     # loops. Neither retries nor openings are interleaved with new queries.
@@ -282,7 +283,8 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
         f'--module=fri={ROOT}/libraries/fri/lib.zkc',
         f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json'])
     sites = re.findall(r'"protocol\.guard"\(%\d+(?:#\d+)?\) <\{owner = "(\w+)", site = "(s\d+)"\}>', emitted)
-    assert [owner for owner, _ in sites[:7]] == ['V', 'P', 'V', 'V', 'V', 'V', 'V']
+    assert [owner for owner, _ in sites[:7]] == [
+        'role00000001', 'role00000000', *(['role00000001'] * 5)]
     expected = sites[guard][1]
     public, private = inputs()
     producer = request(journal, 'producer', public, private)
@@ -292,7 +294,7 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
     report = journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'],
                           refuses='artifact-stopped')
     stop = report['execution']['stop']
-    assert stop['role'] == 'V' and stop['kind'] == 'Explicit("reject")'
+    assert stop['role'] == 'role00000001' and stop['kind'] == 'Explicit("reject")'
     assert stop['site'].endswith('_' + expected), stop
     assert [frame[2] for frame in stop['origin'][4] if frame[0] == 'loop'] == loops
 

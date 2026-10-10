@@ -42,12 +42,14 @@ enum class MathematicalIdentity {
 /// field root followed by naturals; Boolean operations have no static roots.
 /// Domain points are canonical field literals, independently checked by IR.
 struct MathematicalIntrinsic {
-  enum class Domain { Boolean, Field };
+  enum class Domain { Boolean, Field, Group };
   llvm::StringRef name;
   MathematicalIdentity identity;
   Domain domain;
   unsigned naturals = 0;
   bool domainPoints = false;
+  /// Scalar primitives also admit direct ordered evaluation of this identity.
+  bool scalar = false;
 };
 llvm::ArrayRef<MathematicalIntrinsic> mathematicalIntrinsics();
 const MathematicalIntrinsic *mathematicalIntrinsic(llvm::StringRef);

@@ -55,6 +55,44 @@ existing joint host with independently supplied role inputs.
 Use the named Entry Host for application code. The lower-level bundle interface
 remains available for direct runtime consumers.
 
+## Use library operators
+
+```zkc
+use zkc::vector as vec;
+use zkc::vector::{Vector};
+fn combine<F: Field>(left: Vector<F>, right: Vector<F>, r: F) -> Vector<F> {
+  return left * (1 - r) + right * r;
+}
+```
+
+The module import enables vector `+` and `*`; `vec::add` and `vec::scale` are
+named alternatives with the same native operations and shape checks. Import only
+`::{Vector, add}` to use names without changing the operator environment. Use
+`::{Vector, operator +}` to enable just addition. Scalar operators come from the
+embedded prelude, so they require no project file.
+
+A generic library can bind an explicit interface implementation locally:
+
+```zkc
+interface Addition<T: Type + Copy + Drop> {
+  math fn add(a: T, b: T) -> T;
+}
+math fn combine<T: Type + Copy + Drop, A: Addition<T>>(a: T, b: T) -> T {
+  operator + = A::add;
+  return a + b;
+}
+```
+
+That block uses only `A::add` for `+`. Other scopes keep their own bindings.
+Ambiguous operand meanings require a named call or an explicit local binding;
+return types and effects cannot pick between them. Libraries declare their
+operator targets with `pub operator + = add;`. See the
+[source contract](../spec/language/definitions.md#library-defined-operators)
+for exact signatures and inference rules. [Mathematical notation](notation.md)
+adds Unicode names, explicit fixity, `a ⊙ b` for Hadamard multiplication and
+`⟪a, b⟫` for a dot call, while retaining every named API. Custom spelling adds
+no mathematical operation or algebraic law.
+
 ## Select a proof job
 
 [Schnorr source](../../compiler/test/fixtures/language/schnorr.zkc) defines the
@@ -255,7 +293,7 @@ setup slots executing through ordinary kernels and the common runtime.
 
 - `Zkc::Language`: capture supplied buffers, analyze them, and close an exact
   Entry. It uses the pure Contracts and Relation components and their common
-  support; it has no MLIR, runtime or filesystem dependency.
+  support, plus utf8proc for NFC; it has no MLIR, runtime or filesystem dependency.
 - `Zkc::Translation`: emit unsimplified Protocol IR and independently
   admit and compare actual SSA with the checked source.
 - `Zkc::Compiler`: `prepareOriginal` retains immutable bytes, interface,
@@ -290,6 +328,7 @@ operation map established by source comparison when a position matches.
 Unsupported future syntax is reserved and refuses explicitly.
 
 The interface's toolchain stamp records the compiler source, installed catalog,
-LLVM/MLIR release and LLVM revision when the installation provides it. An absent
+LLVM/MLIR release and LLVM revision when the installation provides it. The source
+build identity includes the pinned Unicode profile manifest and raw UCD hashes. An absent
 revision is explicit. This is provenance, not a binary fingerprint: it cannot
 distinguish local patches that preserve all recorded version information.

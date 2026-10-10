@@ -96,7 +96,7 @@ pub(super) fn run(directory: &Path) {
                     );
                 }
 
-                let codec = backend(&json!({"entry":envelope[2][1][1]}), "P");
+                let codec = backend(&json!({"entry":envelope[2][1][1]}), "role00000000");
                 let wire = |value: Value| hex(&codec.encode_native_value(&value).unwrap());
                 let base = wire(Value::Curve(GroupPoint::generator()));
                 let point = wire(Value::Curve(
@@ -119,7 +119,7 @@ pub(super) fn run(directory: &Path) {
                     };
                     json!([
                         "zkc.native-proof-inputs/0",
-                        [["V", "0", base], ["V", "1", point]],
+                        [["role00000001", "0", base], ["role00000001", "1", point]],
                         data,
                         "",
                         services,
@@ -398,6 +398,8 @@ fn authored(directory: &Path) {
         binding: BindingPolicy::AllowHeaderOnly,
         ..Default::default()
     };
+    let interface: Json = serde_json::from_str(package.interface()).unwrap();
+    let codec = backend(&json!({"entry":interface["protocol"]}), "role00000000");
     let prover = ProofEntry::admit(package.clone(), options, ProofSetups::default()).unwrap();
     let verifier = ProofEntry::admit(package, options, ProofSetups::default()).unwrap();
     assert_eq!(prover.binding_scope(), BindingScope::HeaderOnly);
@@ -406,9 +408,7 @@ fn authored(directory: &Path) {
             let leaf = |n| {
                 if wire {
                     LogicalValue::from(InputValue::Wire(
-                        backend(&json!({"entry":"sample::Echo"}), "P")
-                            .encode_native_value(&field(n))
-                            .unwrap(),
+                        codec.encode_native_value(&field(n)).unwrap(),
                     ))
                 } else {
                     field(n).into()

@@ -5,6 +5,7 @@
   ninja,
   python3,
   llvm,
+  utf8proc,
   source,
 }:
 stdenv.mkDerivation {
@@ -25,6 +26,9 @@ stdenv.mkDerivation {
     llvm.mlir
     llvm.llvm.dev
   ];
+  # Installed Language consumers need this exact NFC package for both static
+  # and shared builds; propagate its CMake discovery path to downstream SDKs.
+  propagatedBuildInputs = [ utf8proc ];
   preConfigure = ''
     cmakeDir="$PWD/compiler"
   '';

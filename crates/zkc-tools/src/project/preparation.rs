@@ -50,7 +50,7 @@ impl Compiler {
         let names = if let Some(name) = name {
             vec![name.to_owned()]
         } else {
-            self.check(project, None, false)?
+            self.check(project, None, Default::default())?
                 .entries
                 .into_iter()
                 .map(|entry| entry.name)

@@ -19,11 +19,14 @@ ROOT = Path(__file__).resolve().parents[2]
 LIBRARY = ROOT / 'libraries/fri/lib.zkc'
 EXAMPLE = ROOT / 'examples/projects/fri/main.zkc'
 SHIFT = [3, 1, 0, 0, 0, 0, 0, 0]
-# The guards of LowDegree in source order, each named by its owner and the
+# The guards of LowDegree in source order, each named by its native owner and the
 # number of loops around it. A test names a guard this way rather than by its
 # generated site, which is renumbered whenever a source line changes.
-GUARDS = [('schedule', 'V', 0), ('input', 'P', 0), ('final_degree', 'V', 0),
-          ('low', 'V', 2), ('high', 'V', 2), ('chain', 'V', 2), ('terminal', 'V', 1)]
+# The source roster (P,V) gives native owners with ordinals 0 and 1.
+GUARDS = [('schedule', 'role00000001', 0), ('input', 'role00000000', 0),
+          ('final_degree', 'role00000001', 0), ('low', 'role00000001', 2),
+          ('high', 'role00000001', 2), ('chain', 'role00000001', 2),
+          ('terminal', 'role00000001', 1)]
 # A degree-seven word with every coefficient nonzero. A constant word folds to
 # itself under any beta, so it cannot expose a wrong fold at all.
 FULL_DEGREE = [[i + 1, i * i, 0, 0, 0, 0, 0, 1] for i in range(8)]
@@ -104,7 +107,7 @@ def stop_guard(stop, sites):
 def rejected(report, sites):
     """The guard and loop iterations at which V stopped a refused verification."""
     stop = report['execution']['stop']
-    assert report['status'] == 'refused' and stop['role'] == 'V'
+    assert report['status'] == 'refused' and stop['role'] == 'role00000001'
     assert stop['kind'] == 'Explicit("reject")', stop
     return stop_guard(stop, sites)
 
@@ -278,7 +281,7 @@ def test_fri_transcript_events_follow_source_order(toolchain, journal, directory
     descriptor = bundle[2]
     assert descriptor[0] == 'zkc.native-proof-descriptor/0' and descriptor[2] == 'zkc.native-origin/0'
     policy = descriptor[1]
-    assert policy[0] == 'zkc.native-proof-policy/0' and policy[2:4] == ['P', 'V']
+    assert policy[0] == 'zkc.native-proof-policy/0' and policy[2:4] == ['role00000000', 'role00000001']
     # Every verifier data input is public: the shift and both counts.
     assert policy[7] == ['1', '2', '3']
     events = []
@@ -295,8 +298,10 @@ def test_fri_transcript_events_follow_source_order(toolchain, journal, directory
         ('message', 1), ('query', 1), ('message', 1), ('message', 0),
         ('index', 1), ('message', 1)] + [('message', 2)] * 4
     assert [event[4:6] for kind, _, event, _ in events if kind == 'message'] == [
-        ['P', 'V'], ['V', 'P'], ['P', 'V'], ['V', 'P']] + [['P', 'V']] * 4
-    assert events[1][2][5:7] == ['draw', 'V'] and events[4][2][5:7] == ['index', 'V']
+        ['role00000000', 'role00000001'], ['role00000001', 'role00000000'],
+        ['role00000000', 'role00000001'], ['role00000001', 'role00000000']] + [
+        ['role00000000', 'role00000001']] * 4
+    assert events[1][2][5:7] == ['draw', 'role00000001'] and events[4][2][5:7] == ['index', 'role00000001']
     assert events[1][3] == [] and events[4][3] == ['32']
     loops = [loops for _, loops, _, _ in events]
     assert loops[0] == loops[1] == loops[2] and loops[4] == loops[5] and loops[6:] == [loops[6]] * 4
@@ -354,8 +359,8 @@ def test_fri_checks_schedule_shape_and_degree(toolchain, journal, directory):
     report = journal.json([toolchain.runtime, '--json', 'run', f'--package={run_package}', f'--sha256={run_pin}', *inputs],
                           refuses='entry-run-incomplete')
     after = {role['role']: role['after'] for role in report['execution']['roles']}
-    assert after['V'][0] == 'stopped' and after['V'][1]['cause'][0] == 'explicit'
-    assert stop_guard(after['V'][1], run_sites) == ('chain', ['0', '1'])
+    assert after['role00000001'][0] == 'stopped' and after['role00000001'][1]['cause'][0] == 'explicit'
+    assert stop_guard(after['role00000001'][1], run_sites) == ('chain', ['0', '1'])
 
 
 def test_fri_returns_exact_authenticated_query_values(toolchain, journal, directory):

@@ -237,7 +237,7 @@ void control() {
          "source.inference"},
         {"fn f(x:Fr,go:bool)->(){if go{x}return ();}", "source.type"},
         {"fn f(x:Fr,go:bool)->(){if go{let _=x;}+x;return ();}",
-         "source.name"}})
+         "source.notation-visibility"}})
     refuses(source, code);
   refuses("fn f<T:Type>(x:T,n:index)->T{for _ in 0..n{let y=x;}return x;}",
           "source.permission");

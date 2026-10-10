@@ -5,6 +5,13 @@ interpreter used by proof hosts. It needs the compiler and Rust tools; this rout
 does not call Lean. The [bundle specification](../spec/runtime/joint.md)
 defines its authority, input formats, limits and reports.
 
+Bundles compiled from `.zkc` source use roster-derived native role, setup and
+variant labels, including for ASCII source names. For example, the first source
+participant is `role00000000`; native inputs use that label. Directly authored
+PIR uses the native names admitted in its own declarations. Use the
+[named Entry commands](entries.md#source-names-and-native-labels) when inputs
+should retain source spelling.
+
 ## A complete example
 
 After [building the tools](../development/README.md), run from the repository root:

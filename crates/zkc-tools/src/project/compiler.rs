@@ -41,7 +41,18 @@ pub struct Entry {
     pub name: String,
     pub kind: EntryKind,
 }
-/// Definition-check results; declarations are the compiler's diagnostic view.
+/// Optional compiler-owned diagnostic inventories. These do not affect semantics.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CheckOptions {
+    pub declarations: bool,
+    pub notations: Option<NotationOptions>,
+}
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NotationOptions {
+    pub include_private: bool,
+    pub include_installation: bool,
+}
+/// Definition-check results; inventories are the compiler's diagnostic views.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Checked {
@@ -54,6 +65,8 @@ pub struct Checked {
     pub original: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub declarations: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notations: Option<serde_json::Value>,
 }
 #[derive(Debug)]
 pub struct Error {
@@ -187,8 +200,21 @@ impl Compiler {
         &self,
         project: &Project,
         entry: Option<&str>,
-        declarations: bool,
+        options: CheckOptions,
     ) -> Result<Checked> {
+        let mut flags = Vec::new();
+        if options.declarations {
+            flags.push("--declarations");
+        }
+        if let Some(notations) = options.notations {
+            flags.push("--notations");
+            if notations.include_private {
+                flags.push("--notation-private");
+            }
+            if notations.include_installation {
+                flags.push("--notation-installation");
+            }
+        }
         let bytes = self.invoke(
             project,
             "language-check",
@@ -196,11 +222,7 @@ impl Compiler {
                 name: entry,
                 kind: None,
             },
-            if declarations {
-                &["--declarations"]
-            } else {
-                &[]
-            },
+            &flags,
         )?;
         let mut report: serde_json::Value =
             serde_json::from_slice(&bytes).map_err(|_| "source-check-format")?;
