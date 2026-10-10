@@ -13,8 +13,8 @@ exactly once. Unknown tags, missing members and extra members refuse.
 
 A run `job` has only `kind: "run"`. A proof job has exactly `kind: "proof"`,
 `prover`, `verifier`, `public`, `acceptance`, `completion`, `target` and
-`construction`. Roles are roster names; `public` is a sorted array of logical
-input indices. Acceptance uses the selector format below. Completion is either
+`construction`. Roles are original source roster names; `public` is a sorted
+array of logical input indices. Acceptance uses the selector format below. Completion is either
 a producer Boolean output selector or JSON null. Target is a clause name or JSON null. An authored
 construction has only `kind: "authored"`; a derived construction has exactly
 `kind: "fiat_shamir"`, `suite` and logical `service` index. Independent reading
@@ -35,6 +35,33 @@ native leaf indices in `native`, and recursive `schema`. A schema has `kind`,
 `alternatives`. Fields have `name`, leaf `offset` and child `schema`; alternatives
 have `name` and payload `fields`. Zero-leaf ports retain empty native indices.
 Offsets are relative to their product or alternative payload.
+
+### Source names and native correspondence
+
+Source names in `entry`, participant rosters, ports, services, clauses, setup
+slots, fields and alternatives follow the
+[Unicode identifier profile](../language/lexical.md). Canonical qualified names
+join admitted segments with `::`. Display `type` strings describe types and
+are not identifier or equality authority. Symbols are native encoded identities.
+
+The interface preserves original NFC UTF-8 source names, including ASCII names.
+Native correspondence is derived only from authenticated ordered rosters:
+participant index `i` uses `role` followed by eight lowercase hexadecimal digits,
+setup index `i` uses `setup` with the same width, and alternative index `i` uses
+`case` with the same width. Ordinals start at zero. Count and uniqueness are
+checked first. Readers compare the resulting labels with the actual native
+artifact; no caller-supplied renaming table is authoritative. Selectors and proof
+roles carry source names and are translated through these rosters. Logical
+alternative names and native variant labels are checked in the same order.
+
+Declaration symbols use `s` followed by decimal UTF-8 byte length, `h` and
+lowercase byte hex for each source path segment, including ASCII segments.
+[Translation](../language/translation.md#source-and-native-names) owns this
+encoding, its expansion bound and specialization policy. Notation descriptors,
+lexical scopes and source occurrences are diagnostic data and do not add fields
+to this interface.
+
+### Relations and logical schemas
 
 A relation record has `symbol`, `inputs` and `definition`. Each formal has `name`,
 `purpose`, ordered `native` indices and `schema`. Definition records have exactly
@@ -111,9 +138,12 @@ argument count and recursively framed argument keys; a natural uses its kind tag
 and framed normalized dimension alone. Tags follow `Type::Kind`; framing is an
 unsigned decimal byte length followed by `:` and the exact bytes. The toolchain
 identity fixes this encoding. Native custody carries the exact digest; a variant
-carries its preimage under the `zkc.language` nominal namespace. The reader checks
-both anchors. Other source type identities remain source assertions until checked
-against the retained project. `type` is display text, never equality authority.
+carries `["zkc.language", lowercase_hex(full_preimage)]`. The preimage is the
+complete original UTF-8 type key. Both C++ and Rust readers require even-length
+lowercase hex, check encoded expansion and decoded byte bounds before allocation,
+validate UTF-8 and hash the decoded bytes. A chosen label or a digest in place of
+the preimage refuses. The reader checks both anchors. Other source type identities
+remain source assertions until checked against the retained project. `type` is display text, never equality authority.
 An empty array's element meaning is bound by its identity and source agreement;
 no selectable element field is invented for it. Promised Copy, Drop and
 Wire permissions cannot exceed native leaves; aggregate Share is checked through
@@ -157,6 +187,8 @@ Object member order is immaterial for semantic interface comparison; admission o
 a published checked original requires canonical bytes. The original identity hashes exact MLIR bytes
 without debug locations under a fixed printing policy. The toolchain identity binds
 the installed catalog, compiler source build identity and actual LLVM/MLIR release.
+Build identity includes the source-name profile manifest, generator and raw
+hash-pinned UCD inputs.
 The catalog uses `zkc.language-catalog` length framing. Kernel rows contain
 their signatures and parameter contracts.
 Source availability still requires an installed declaration at an admitted
@@ -165,12 +197,28 @@ The identities bind the checked environment; they are not an authenticity signat
 security claim. The independent comparison binds generated coordinates to source
 spans; diagnostic paths do not affect capture or original identity.
 
+External source-interface JSON accepts raw UTF-8 and equivalent valid JSON
+escapes; admission uses the exact decoded name bytes without normalization.
+Invalid UTF-8, unpaired surrogates and duplicate decoded keys refuse. Deterministic
+output uses raw UTF-8 with required JSON escapes. Canonically sorted object keys
+use UTF-8 byte order; arrays preserve their authenticated order. Schema identity
+frames decoded names, while capture identity hashes exact authored source bytes.
+Neither is redefined as a hash of arbitrary input JSON spelling. Published
+original/interface bytes retain their canonical printing policy.
+
 External interface JSON uses unique decoded object keys and canonical unsigned
 decimal numeric tokens. Signed, leading-zero, floating and exponent spellings
 refuse. Boolean and null tokens retain ordinary JSON grammar and remain subject
 to the interface schema. Lexical limits apply before schema admission. External
 input passes through the byte reader; an already decoded JSON value does not
 retain its original numeric spelling.
+
+The name encoding changes generated symbols and role/setup/case labels even for
+ASCII source, so artifact and transcript bytes can change with the compiler.
+These contracts remain version `0`: producers, readers and fixtures use one
+current schema, with no legacy decoding path. Public source names and Entry JSON
+keys are retained. Native contract/domain IDs, sites, assets and hashes keep their
+existing ASCII grammars.
 
 ## Published Entry package
 

@@ -9,7 +9,7 @@ concrete domains, Entries and transcript constructions in
 
 | Module | Public exports | Contract |
 |---|---|---|
-| [`zkc::vector`](zkc/vector.zkc) | `Vector`, length/get/sum/split/add/scale/dot/fill/fold/has_length | Ordered finite vectors; fold pairs contiguous halves |
+| [`zkc::vector`](zkc/vector.zkc) | `Vector`, length/get/sum/split/add/hadamard/scale/dot/fill/fold/has_length | Ordered finite vectors; fold pairs contiguous halves |
 | [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, multiply/transpose_multiply/bilinear/rows/columns | Ordered sparse matrix operations |
 | [`zkc::polynomial`](zkc/polynomial.zkc) | `Polynomial`, from_coefficients/evaluate/boundary | Runtime univariate polynomial data; boundary is p(0) + p(1) |
 | [`zkc::symbolic`](zkc/symbolic.zkc) | `Array`, `Polynomial`, pack/get/mle/from_coefficients/coefficients/evaluate/fix_prefix/sum_suffix/fix_table/add/multiply/constant | Total formal polynomial expressions |
@@ -63,11 +63,19 @@ libraries, using explicit asset/component parameters and installed kernels.
 Import a whole math module to enable its public operators, for example
 `use zkc::vector as vec;`. Vector `+` calls `add`; vector `*` calls `scale` with
 the scalar on the right. Matrix `*` calls `multiply` on a matrix and vector.
-Formal polynomial `+`/`*` call symbolic `add`/`multiply`. Dot products remain named
-`vec::dot(a, b)`. Importing `::{Vector, add}` alone enables no operators; add
-`operator +` to that list when desired. The
+Formal polynomial `+`/`*` call symbolic `add`/`multiply`. Vector `⊙` is
+left-associative at power 70 and calls `hadamard`, an explicit wrapper for
+`primitive("vector.mul")`; `⟪a, b⟫` calls `dot(a, b)`. Both retain native
+length checks and stop behavior. Vector `*` remains right-scalar scaling.
+Named `vec::hadamard(a, b)` and `vec::dot(a, b)` remain available.
+Importing `::{Vector, add}` alone enables no notation; add `operator +`,
+`operator ⊙` or `notation ⟪` to select the corresponding exported binding. The
 [operator contract](../docs/spec/language/definitions.md#library-defined-operators)
-defines ambiguity and local replacement rules.
+defines ambiguity and local replacement rules. The
+[notation guide](../docs/language/notation.md) shows weighted vector expressions,
+delimiter declarations and Unicode input. Symbols preserve ordinary callable
+modes and effects; they supply no additional algebra, optimizer or security claim.
+`∑` and `∏` remain reserved for future binders.
 
 These functions use `primitive` bodies when their ports determine the installed
 scheme. Algorithms and operations with explicit attributes retain ordinary bodies.
