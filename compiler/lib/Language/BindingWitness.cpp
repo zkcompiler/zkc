@@ -18,6 +18,28 @@ bool sameSpan(Span a, Span b) {
   return a.module.index == b.module.index && a.begin == b.begin &&
          a.end == b.end;
 }
+bool checkNotationArity(Semantics &types, const NotationDescriptor &notation,
+                        size_t inputs, Span span) {
+  using Position = NotationDescriptor::Position;
+  bool valid = false;
+  switch (notation.position) {
+  case Position::Prefix:
+  case Position::Postfix:
+    valid = notation.arity == 1;
+    break;
+  case Position::Infix:
+    valid = notation.arity == 2;
+    break;
+  case Position::Delimited:
+    if (notation.arity > types.work.limits.notationHoles)
+      return types.fail("source.limit", "notation hole limit exceeded", span);
+    valid = notation.arity > 0;
+    break;
+  }
+  return (valid && notation.arity == inputs) ||
+         types.fail("source.binding-witness", "notation input count differs",
+                    span);
+}
 /// Ground operand matching keeps unknown forward equations as competitors.
 class GroundMatch {
   Semantics &types;
@@ -156,18 +178,64 @@ public:
   }
 };
 } // namespace
+bool checkNotationOccurrence(Semantics &types, const Expression &expr,
+                             const NotationEnvironment &environment) {
+  auto refuse = [&] {
+    return types.fail("source.binding-witness",
+                      "notation occurrence differs from its lexical syntax",
+                      expr.span);
+  };
+  if (expr.kind != Expression::Kind::NotationCall || !expr.notation)
+    return refuse();
+  if (!types.charge(expr.notation->symbol.size() +
+                        expr.notation->closing.size() + 1,
+                    expr.span))
+    return false;
+  const auto found = environment.find(expr.notation->key());
+  if (found == environment.end() || !found->second.descriptor ||
+      *found->second.descriptor != *expr.notation || !expr.arguments.empty() ||
+      !expr.staticLabels.empty() || !expr.callLabels.empty() || expr.roles)
+    return refuse();
+  return checkNotationArity(types, *found->second.descriptor,
+                            expr.children.size(), expr.span);
+}
+
 std::optional<std::vector<OperatorBinding>>
 Checker::operatorWitnessFamily(const Declaration &decl,
                                const SyntaxDeclaration &source,
                                uint32_t expression) {
   const auto &expr = source.expressions[expression];
-  auto symbol = operatorSymbol(expr.kind);
+  const NotationEnvironment *environment = nullptr;
+  if (expr.scope && *expr.scope < source.bodies.size())
+    environment = source.bodies[*expr.scope].notationEnvironment.get();
+  else if (!expr.scope && decl.module.index < notationEnvironments.size())
+    environment = notationEnvironments[decl.module.index].get();
+  if (!environment) {
+    types.fail("source.binding-witness",
+               "notation scope has no syntax environment", expr.span);
+    return {};
+  }
+  if (!checkNotationOccurrence(types, expr, *environment))
+    return {};
+  const auto descriptorKey = expr.notation->key();
   // Reconstruct the family from the checked lexical environment, without
   // using operatorCandidates or any candidate list produced by inference.
   std::map<std::string, OperatorBinding> family;
   auto include = [&](const OperatorBinding &binding) {
-    if (binding.symbol != symbol)
+    if (!binding.notation)
+      return types.fail("source.binding-witness",
+                        "notation binding has no descriptor", expr.span);
+    if (!types.charge(binding.notation->symbol.size() +
+                          binding.notation->closing.size() + 1,
+                      expr.span))
+      return false;
+    if (binding.notation->key() != descriptorKey)
       return true;
+    if (*binding.notation != *expr.notation ||
+        binding.symbol != expr.notation->symbol ||
+        binding.target.declaration.index >= output.declarations.size())
+      return types.fail("source.binding-witness",
+                        "notation binding shape differs", expr.span);
     auto key = operatorBindingKey(binding, output.declarations);
     if (!types.charge(key.size() + 1, expr.span))
       return false;
@@ -175,7 +243,13 @@ Checker::operatorWitnessFamily(const Declaration &decl,
     return true;
   };
   auto scope = expr.scope;
+  unsigned depth = 0;
   while (scope && family.empty()) {
+    if (*scope >= source.bodies.size() ||
+        ++depth > work.limits.expressionDepth) {
+      types.fail("source.binding-witness", "invalid notation scope", expr.span);
+      return {};
+    }
     const auto &region = source.bodies[*scope];
     if (!types.charge(region.resolvedOperators.size() + 1, expr.span))
       return {};
@@ -217,19 +291,29 @@ bool checkCallInputMapping(Semantics &types, ArrayRef<unsigned> mapping,
   return true;
 }
 
-bool checkOperatorOperands(Semantics &types, const CallBinding &witness,
+bool checkOperatorOperands(Semantics &types, const NotationDescriptor &notation,
+                           const CallBinding &witness,
                            ArrayRef<unsigned> parameterOrder,
                            ArrayRef<ValueId> authoredOperands, Span span) {
-  if (parameterOrder.size() != 2 || parameterOrder[0] != 0 ||
-      parameterOrder[1] != 1 || authoredOperands.size() != 2 ||
+  if (!types.charge(parameterOrder.size() + authoredOperands.size() + 1,
+                    span) ||
+      !checkNotationArity(types, notation, authoredOperands.size(), span))
+    return false;
+  if (!witness.notation || *witness.notation != notation ||
+      parameterOrder.size() != authoredOperands.size() ||
       !sameOperands(witness.operands, authoredOperands))
     return types.fail("source.binding-witness",
                       "operator operands differ from authored order", span);
+  for (unsigned i = 0; i < parameterOrder.size(); ++i)
+    if (parameterOrder[i] != i)
+      return types.fail("source.binding-witness",
+                        "operator operands differ from authored order", span);
   return true;
 }
 
 bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
                           ArrayRef<OperatorBinding> expected,
+                          const NotationDescriptor &notation,
                           const CallBinding &witness, ArrayRef<Type> inputs,
                           const Type &output, Span span) {
   auto refuse = [&] {
@@ -239,10 +323,20 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
         span);
   };
   if (witness.target.declaration.index >= declarations.size() ||
-      witness.family.size() != expected.size() || !witness.origin)
+      witness.family.size() != expected.size() || !witness.origin ||
+      !witness.notation || *witness.notation != notation ||
+      witness.symbol != notation.symbol ||
+      witness.operands.size() != inputs.size())
     return refuse();
+  if (!checkNotationArity(types, notation, inputs.size(), span))
+    return false;
   const auto &selected = declarations[witness.target.declaration.index];
-  if (witness.arguments.size() != selected.parameters.size())
+  if (witness.arguments.size() != selected.parameters.size() ||
+      selected.inputs.size() != inputs.size() || selected.outputs.size() != 1 ||
+      (selected.kind != Declaration::Kind::Math &&
+       selected.kind != Declaration::Kind::Local) ||
+      (notation.position == NotationDescriptor::Position::Infix &&
+       notation.symbol == "==" && selected.outputs.front().type != Type{}))
     return refuse();
   auto subst = types.substitution(selected, witness.arguments);
   if (witness.target.component && selected.parent)
@@ -251,6 +345,16 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
   bool found = false;
   for (unsigned i = 0; i < expected.size(); ++i) {
     const auto &binding = expected[i];
+    if (binding.target.declaration.index >= declarations.size() ||
+        !binding.notation || *binding.notation != notation ||
+        binding.arguments.size() !=
+            declarations[binding.target.declaration.index].parameters.size())
+      return refuse();
+    const auto &callee = declarations[binding.target.declaration.index];
+    if (callee.inputs.size() != inputs.size() || callee.outputs.size() != 1 ||
+        (callee.kind != Declaration::Kind::Math &&
+         callee.kind != Declaration::Kind::Local))
+      return refuse();
     if (!types.charge(witness.family[i].size() + 1, span))
       return false;
     if (witness.family[i] != operatorBindingKey(binding, declarations) ||
@@ -273,8 +377,7 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
     if (types.diagnostic)
       return false;
   }
-  if (!found || selected.inputs.size() != inputs.size() ||
-      selected.outputs.size() != 1)
+  if (!found)
     return refuse();
   for (unsigned i = 0; i < inputs.size(); ++i) {
     auto type = types.substitute(selected.inputs[i].type, subst, span);
@@ -297,6 +400,19 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
     return refuse();
   const auto &binding = *operation.binding;
   const auto &callee = declarations[binding.target.declaration.index];
+  if (binding.notation) {
+    if (!binding.origin || binding.family.empty() ||
+        binding.symbol != binding.notation->symbol)
+      return refuse();
+    // The selected declaration supplies an independent input count. A changed
+    // descriptor and operand vector cannot certify one another.
+    if (!checkNotationArity(types, *binding.notation, callee.inputs.size(),
+                            operation.span))
+      return false;
+  } else if (!binding.symbol.empty() || !binding.family.empty() ||
+             binding.origin) {
+    return refuse();
+  }
   if (binding.arguments.size() != callee.parameters.size() ||
       binding.operands.size() != callee.inputs.size() ||
       callee.outputs.size() != 1 || operation.results.size() != 1 ||

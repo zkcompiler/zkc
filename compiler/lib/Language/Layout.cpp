@@ -5,6 +5,7 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/Names.h"
 #include "zkc/Support/FramedHash.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
@@ -308,11 +309,18 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
             addField("value", decl->domain, result->fields, result->leaves))
       return e;
   } else if (type.kind == K::Variant && decl) {
-    protocol::VariantDescriptor descriptor{json::Array{"zkc.language", key},
-                                           {}};
-    for (auto &alt : decl->alternatives) {
+    // The native carrier remains ASCII; its nominal preimage is exact UTF-8.
+    if (key.size() > protocol::VariantSpellingBytes / 2)
+      return error("source.limit",
+                   "variant nominal encoding exceeds byte limit");
+    if (auto e = charge(2 * key.size()))
+      return e;
+    protocol::VariantDescriptor descriptor{
+        json::Array{"zkc.language", encodeNominalIdentity(key)}, {}};
+    for (unsigned i = 0; i < decl->alternatives.size(); ++i) {
+      const auto &alt = decl->alternatives[i];
       LayoutAlternative logical{alt.name, {}};
-      protocol::VariantAlternative native{alt.name, {}};
+      protocol::VariantAlternative native{nativeAlternativeName(i), {}};
       std::vector<LayoutLeaf> payload;
       for (auto &field : alt.fields)
         if (auto e = addField(field.name, field.type, logical.fields, payload))

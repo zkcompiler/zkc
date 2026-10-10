@@ -7,6 +7,7 @@ use zkc_runtime::interactive::{LogicalType, Type};
 #[derive(Debug)]
 pub(in crate::entry) struct RolePorts {
     pub name: String,
+    pub native_name: String,
     pub inputs: Vec<usize>,
     pub outputs: Vec<usize>,
     pub services: Vec<usize>,
@@ -71,7 +72,9 @@ impl Ports {
         let mut roles: Vec<_> = protocol
             .roles
             .iter()
-            .map(|name| RolePorts {
+            .enumerate()
+            .map(|(index, name)| RolePorts {
+                native_name: crate::source_names::native_role_name(index as u32),
                 name: name.clone(),
                 inputs: Vec::new(),
                 outputs: Vec::new(),

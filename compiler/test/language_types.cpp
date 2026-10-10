@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
@@ -643,7 +644,7 @@ protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let v @P =make(x);let y @P =get(v);retur
   mutation(variant, [](auto module) {
     first(module, "local.variant_inject")
         ->setAttr("alternative",
-                  mlir::StringAttr::get(module.getContext(), "B"));
+                  mlir::StringAttr::get(module.getContext(), "case00000001"));
   });
   check(prefix + "fn singleton(x:Fr)->(Fr,){return(x,);}");
   // Representation checking owns nominal permission promises, even for an
@@ -707,7 +708,8 @@ protocol Run roles(P,V)(x:Fr@(P,V))->(){let unused@P=identity(x);return ();}
 run Demo=Run;)");
   mutation(inferred, [](auto module) {
     first(module, "protocol.local_call")
-        ->setAttr("role", mlir::StringAttr::get(module.getContext(), "V"));
+        ->setAttr("role",
+                  mlir::StringAttr::get(module.getContext(), "role00000001"));
   });
   auto custodyVariant = original(prefix + R"(
 enum Choice:Drop {unpack(), Other(Fr)}
@@ -760,6 +762,22 @@ void sourceNotation() {
                                    .str())));
 }
 void bounds() {
+  // Phantom arguments still belong to the exact nominal preimage. Refuse its
+  // hex expansion before allocating an oversized native descriptor.
+  auto nominalProject = check("module m;enum Choice<T:Type>{A()}");
+  Layouts nominalLayouts(nominalProject);
+  Type nominal(Type::Kind::Variant, "m::Choice");
+  nominal.arguments = {Type(Type::Kind::Tuple)};
+  must(nominalLayouts.get(nominal));
+  nominal.arguments[0].arguments.assign(20000, Type(Type::Kind::Boolean));
+  require(typeIdentity(nominal).size() >
+              zkc::protocol::VariantSpellingBytes / 2,
+          "nominal expansion fixture is too small");
+  auto oversizedNominal = nominalLayouts.get(nominal);
+  require(!oversizedNominal, "oversized nominal preimage accepted");
+  require(StringRef(toString(oversizedNominal.takeError()))
+              .contains("source.limit"),
+          "nominal expansion escaped its byte bound");
   Limits termLimits;
   termLimits.typeNodes = 2;
   check("module m;type A=bool;type B=bool;type C=bool;type D=bool;",

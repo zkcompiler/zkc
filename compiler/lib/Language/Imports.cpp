@@ -58,6 +58,7 @@ bool Checker::imports() {
   for (unsigned i = 0; i < count; ++i)
     if (!visit(i, 1))
       return false;
+  importOrder = order;
   for (auto id : order) {
     for (const auto &import : syntax[id].imports) {
       const auto target = modules.at(import.module).index;
@@ -119,17 +120,28 @@ bool Checker::imports() {
         return false;
       std::set<std::string> selectedOperators(import.operators.begin(),
                                               import.operators.end());
+      std::set<std::string> selectedNotations(import.notations.begin(),
+                                              import.notations.end());
       for (auto site : exportedOperators[target]) {
         if (!types.charge(1, import.span))
           return false;
-        const auto &symbol = syntax[site.first].operators[site.second].symbol;
-        if (!import.alias && !is_contained(import.operators, symbol))
+        const auto &binding = syntax[site.first].operators[site.second];
+        const auto &symbol = binding.symbol;
+        bool delimited = !binding.holes.empty();
+        if (!import.alias &&
+            !is_contained(delimited ? import.notations : import.operators,
+                          symbol))
           continue;
-        selectedOperators.erase(symbol);
+        (delimited ? selectedNotations : selectedOperators).erase(symbol);
         visibleOperators[id].push_back(site);
         if (import.isPublic)
           exportedOperators[id].push_back(site);
       }
+      if (!selectedNotations.empty())
+        return types.fail("source.import",
+                          "module does not export notation " +
+                              *selectedNotations.begin(),
+                          import.span);
       if (!selectedOperators.empty())
         return types.fail("source.import",
                           "module does not export operator " +
@@ -143,7 +155,6 @@ bool Checker::imports() {
   }
   if (auto prelude = modules.find("zkc::prelude"); prelude != modules.end()) {
     const auto id = prelude->second.index;
-    visibleOperators[id].clear();
     if (!syntax[id].imports.empty())
       return types.fail("source.import",
                         "installed prelude cannot import captured modules",
@@ -156,6 +167,10 @@ bool Checker::imports() {
       visibleOperators[i].insert(visibleOperators[i].end(),
                                  exportedOperators[id].begin(),
                                  exportedOperators[id].end());
+      llvm::sort(visibleOperators[i]);
+      visibleOperators[i].erase(
+          std::unique(visibleOperators[i].begin(), visibleOperators[i].end()),
+          visibleOperators[i].end());
     }
   }
   return true;

@@ -5,6 +5,7 @@
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Layout.h"
+#include "zkc/Language/Names.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
@@ -360,8 +361,8 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
     const auto &proof = *view.proof;
     NativeProofPolicy selection;
     selection.entry = protocol.symbol;
-    selection.producer = protocol.roles[proof.prover];
-    selection.validator = protocol.roles[proof.verifier];
+    selection.producer = nativeRoleName(proof.prover);
+    selection.validator = nativeRoleName(proof.verifier);
     selection.acceptance = proof.acceptance.native.front();
     selection.suite = proof.suite;
     if (proof.service)

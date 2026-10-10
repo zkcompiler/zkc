@@ -5,6 +5,8 @@ These native contracts define `.zkc` source and its checked translation. The
 
 | Chapter | Owns |
 |---|---|
+| [Source text and names](lexical.md) | Exact UTF-8, Unicode identifiers, mathematical tokens and pinned profile |
+| [Mathematical notation](notation.md) | Descriptors, fixity, delimiter calls, scope, inspection and bounds |
 | [Definitions and types](definitions.md) | Capture, names, static terms, mathematics, permissions, callables and bounds |
 | [Protocol bodies and relations](protocols.md) | Ordered control, availability, services, composition, repetition, completion and specification clauses |
 | [Entry declarations](entries.md) | Closed jobs, participants, construction, selected results and setup associations |

@@ -7,6 +7,7 @@ pub fn get<F: Field>(values: Vector<F>, position: index) -> F = primitive("vecto
 pub fn sum<F: Field>(values: Vector<F>) -> F = primitive("vector.sum");
 pub fn split<F: Field>(values: Vector<F>) -> (Vector<F>, Vector<F>) = primitive("vector.split");
 pub fn add<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> = primitive("vector.add");
+pub fn hadamard<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> = primitive("vector.mul");
 pub fn scale<F: Field>(values: Vector<F>, scalar: F) -> Vector<F> = primitive("vector.scale");
 pub fn dot<F: Field>(left: Vector<F>, right: Vector<F>) -> F = primitive("vector.dot");
 pub fn fill<F: Field>(value: F, count: index) -> Vector<F> = primitive("vector.fill");
@@ -25,3 +26,6 @@ pub fn has_length<F: Field, N: nat>(values: Vector<F>) -> bool {
 
 pub operator + = add;
 pub operator * = scale;
+
+pub operator infixl(70) ⊙ = hadamard;
+pub notation ⟪ left, right ⟫ = dot(left, right);

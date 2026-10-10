@@ -1,0 +1,21 @@
+module example;
+use zkc::vector as vec;
+use zkc::vector::{Vector};
+domain F = field("bls12-381.fr");
+
+fn weighted(a: Vector<F>, b: Vector<F>, weights: Vector<F>, α: F) -> F {
+  let blended = a * (1 - α) + b * α;
+  return ⟪weights, blended⟫;
+}
+fn named(a: Vector<F>, b: Vector<F>, weights: Vector<F>, α: F) -> F {
+  let blended = vec::add(vec::scale(a, 1 - α), vec::scale(b, α));
+  return vec::dot(weights, blended);
+}
+protocol Compare roles(P)(a: Vector<F> @P, b: Vector<F> @P,
+                           weights: Vector<F> @P, α: F @P)
+    -> (symbolic: F @P, named_result: F @P, pointwise: Vector<F> @P) {
+  return (symbolic = weighted(a, b, weights, α),
+          named_result = named(a, b, weights, α),
+          pointwise = a ⊙ b);
+}
+run Run = Compare;

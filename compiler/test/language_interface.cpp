@@ -15,12 +15,12 @@ namespace {
 constexpr StringLiteral original = R"mlir(
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "protocol.func"() <{sym_name = "Transfer", roles = ["P", "V"],
+    "protocol.func"() <{sym_name = "Transfer", roles = ["role00000000", "role00000001"],
       function_type = (i1, i1, !protocol.service_ref<"random.bls12-381.fr/0">) -> i1,
-      input_roles = [["P"], ["P"], ["V"]], output_roles = [["V"]]}> ({
+      input_roles = [["role00000000"], ["role00000000"], ["role00000001"]], output_roles = [["role00000001"]]}> ({
     ^bb0(%a: i1, %b: i1, %rng: !protocol.service_ref<"random.bls12-381.fr/0">):
       %c = "arith.andi"(%a, %b) : (i1, i1) -> i1
-      %d = "protocol.exchange"(%c) <{sender = "P", receiver = "V", site = "message"}> : (i1) -> i1
+      %d = "protocol.exchange"(%c) <{sender = "role00000000", receiver = "role00000001", site = "message"}> : (i1) -> i1
       "protocol.return"(%d) : (i1) -> ()
     }) : () -> ()
   }) : () -> ()
@@ -110,9 +110,203 @@ CheckedOriginal compile(StringRef code) {
       analyze(take(capture({{"sample", code.str(), {}}}))).checkedProject());
   return take(prepareOriginal(take(closeEntry(project, "sample::Demo"))));
 }
+// This fixture is independent of source layout/emission and the Names helpers.
+std::pair<std::string, json::Value>
+variantDocument(StringRef nominal, StringRef first = "case00000000",
+                StringRef second = "case00000001") {
+  zkc::protocol::VariantDescriptor descriptor{
+      json::Array{"zkc.language", nominal.str()},
+      {{first.str(), {"bool"}}, {second.str(), {"bool"}}}};
+  auto encoded = zkc::protocol::encodeVariant(descriptor);
+  require(bool(encoded), "invalid native variant fixture");
+  std::string type = "!local.variant<\"" + *encoded + "\">";
+  std::string native =
+      "module {\"protocol.module\"() <{profile = #protocol.profile<protocol>}> "
+      "({"
+      "\"protocol.func\"() <{sym_name = \"Transfer\", roles = "
+      "[\"role00000000\"], "
+      "function_type = (" +
+      type +
+      ") -> (), input_roles = [[\"role00000000\"]], "
+      "output_roles = []}> ({^bb0(%a: " +
+      type +
+      "): "
+      "\"protocol.return\"() : () -> ()}) : () -> ()}) : () -> ()}";
+  auto value = document();
+  (*value.getAsObject())["original"] =
+      toHex(SHA256::hash(arrayRefFromStringRef(native)), true);
+  auto &p = protocol(value);
+  p["roles"] = json::Array{"P"};
+  p["services"] = json::Array{};
+  p["outputs"] = json::Array{};
+  p["inputs"] = json::Array{json::Object{{"name", "選択"},
+                                         {"type", "数学::Choice"},
+                                         {"roles", json::Array{"P"}},
+                                         {"index", 0},
+                                         {"native", json::Array{0}},
+                                         {"schema", scalar()}}};
+  auto &schema = shape(value);
+  schema["kind"] = "variant";
+  schema["type"] = "数学::Choice";
+  // The preimage has Unicode even though the declaration/alternative is ASCII.
+  schema["identity"] =
+      toHex(SHA256::hash(arrayRefFromStringRef("variant:数学::Choice")), true);
+  schema["leaves"] = json::Array{*encoded};
+  json::Array alternatives;
+  for (StringRef name : {"Some", "case00000000"})
+    alternatives.push_back(json::Object{
+        {"name", name.str()},
+        {"fields", json::Array{json::Object{
+                       {"name", "0"}, {"offset", 0}, {"schema", scalar()}}}}});
+  schema["alternatives"] = std::move(alternatives);
+  return {std::move(native), std::move(value)};
+}
+void renameRoles(json::Value &value, StringRef first, StringRef second) {
+  protocol(value)["roles"] = json::Array{first.str(), second.str()};
+  input(value)["roles"] = json::Array{first.str()};
+  (*protocol(value).getArray("outputs")->front().getAsObject())["roles"] =
+      json::Array{second.str()};
+  (*protocol(value).getArray("services")->front().getAsObject())["owner"] =
+      second.str();
+}
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  cases.run(
+      "Unicode interface keys preserve decoded bytes and public names", [] {
+        auto value = document();
+        (*value.getAsObject())["entry"] = "数学::実行";
+        renameRoles(value, "α", "β₂");
+        input(value)["name"] = "入力";
+        (*protocol(value).getArray("outputs")->front().getAsObject())["name"] =
+            "結果";
+        (*protocol(value).getArray("services")->front().getAsObject())["name"] =
+            "乱数";
+        (*shape(value).getArray("fields"))[0].getAsObject()->operator[](
+            "name") = "𝒜";
+        (*shape(value).getArray("fields"))[1].getAsObject()->operator[](
+            "name") = "q́";
+        auto raw = zkc::printJson(value);
+        require(StringRef(raw).contains("入力") &&
+                    StringRef(raw).contains("𝒜") &&
+                    raw == zkc::printJson(value),
+                "publication lost raw Unicode");
+        auto escaped = raw;
+        for (auto pair :
+             {std::pair<StringRef, StringRef>{"𝒜", "\\uD835\\uDC9C"},
+              {"q́", "q\\u0301"},
+              {"β₂", "\\u03b2\\u2082"}}) {
+          size_t pos = 0;
+          while ((pos = escaped.find(pair.first.str(), pos)) !=
+                 std::string::npos) {
+            escaped.replace(pos, pair.first.size(), pair.second.str());
+            pos += pair.second.size();
+          }
+        }
+        for (const auto &bytes : {raw, escaped}) {
+          auto view = take(readInterface(original, bytes));
+          const auto &p = view.selectedProtocol();
+          require(
+              view.entry == "数学::実行" &&
+                  p.roles == std::vector<std::string>({"α", "β₂"}) &&
+                  p.inputs[0].name == "入力" && p.outputs[0].name == "結果" &&
+                  p.services[0].name == "乱数" && p.services[0].owner == 1 &&
+                  p.inputs[0].schema->fields[0].name == "𝒜" &&
+                  p.inputs[0].schema->fields[1].name == "q́",
+              "Unicode metadata was normalized or replaced by native labels");
+        }
+      });
+  cases.run("source names resembling native ordinals remain independent", [] {
+    auto value = document();
+    renameRoles(value, "role00000001", "role00000000");
+    auto view = take(readInterface(original, zkc::printJson(value)));
+    require(view.selectedProtocol().inputs[0].roles ==
+                    std::vector<unsigned>{0} &&
+                view.selectedProtocol().outputs[0].roles ==
+                    std::vector<unsigned>{1},
+            "source role spelling was mistaken for a native ordinal");
+  });
+  for (StringRef name : {"é", "a\u200db", "a\u202eb", "₀a", "⊙", "18"})
+    cases.run("non-profile source interface name refuses: " + name, [&] {
+      mutate([&](auto &v) { input(v)["name"] = name.str(); });
+      mutate([&](auto &v) { renameRoles(v, name, "V"); });
+      mutate([&](auto &v) {
+        (*shape(v).getArray("fields"))[0].getAsObject()->operator[]("name") =
+            name.str();
+      });
+      mutate([&](auto &v) {
+        (*v.getAsObject())["entry"] = "sample::" + name.str();
+      });
+    });
+  cases.run("source interface name limits count UTF-8 bytes", [] {
+    auto value = document();
+    std::string name;
+    for (unsigned i = 0; i < 64; ++i)
+      name += "α";
+    input(value)["name"] = name;
+    take(readInterface(original, zkc::printJson(value)));
+    input(value)["name"] = name + "α";
+    refuses(readInterface(original, zkc::printJson(value)), "source.limit");
+  });
+  for (StringRef label : {"P", "role00000002", "role0000000A", "role0000000a"})
+    cases.run("native role label must equal authenticated ordinal: " + label,
+              [&] {
+                auto native = original.str();
+                size_t pos = 0;
+                while ((pos = native.find("role00000000", pos)) !=
+                       std::string::npos) {
+                  native.replace(pos, 12, label.str());
+                  pos += label.size();
+                }
+                auto value = document();
+                (*value.getAsObject())["original"] =
+                    toHex(SHA256::hash(arrayRefFromStringRef(native)), true);
+                refuses(readInterface(native, zkc::printJson(value)),
+                        "source.interface");
+              });
+  cases.run("native nominal hex authenticates exact Unicode preimage bytes",
+            [] {
+              auto [native, value] =
+                  variantDocument(toHex("variant:数学::Choice", true));
+              auto view = take(readInterface(native, zkc::printJson(value)));
+              const auto &schema = *view.selectedProtocol().inputs[0].schema;
+              require(schema.alternatives[0].name == "Some" &&
+                          schema.alternatives[1].name == "case00000000" &&
+                          schema.type == "数学::Choice",
+                      "native variant labels leaked into public names");
+              auto &names = *shape(value).getArray("alternatives");
+              (*names[0].getAsObject())["name"] = "有";
+              (*names[1].getAsObject())["name"] = "無";
+              take(readInterface(native, zkc::printJson(value)));
+              (*names[1].getAsObject())["name"] = "有";
+              refuses(readInterface(native, zkc::printJson(value)),
+                      "source.interface");
+              (*names[1].getAsObject())["name"] = "é";
+              refuses(readInterface(native, zkc::printJson(value)),
+                      "source.interface");
+            });
+  for (const auto &nominal :
+       {std::string(""), std::string("0"), std::string("gg"),
+        toHex("variant:数学::Choice", false),
+        toHex("variant:数学::Other", true),
+        toHex(toHex("variant:数学::Choice", true), true)})
+    cases.run("malformed or changed nominal preimage refuses: " + nominal, [&] {
+      auto [native, value] = variantDocument(nominal);
+      refuses(readInterface(native, zkc::printJson(value)), "source.interface");
+    });
+  for (StringRef label : {"Some", "case00000002", "case0000000A", "case0"})
+    cases.run("native alternative must equal authenticated ordinal: " + label,
+              [&] {
+                auto [native, value] =
+                    variantDocument(toHex("variant:数学::Choice", true), label);
+                refuses(readInterface(native, zkc::printJson(value)),
+                        "source.interface");
+              });
+  cases.run("swapped native case ordinals refuse even with equal payloads", [] {
+    auto [native, value] = variantDocument(toHex("variant:数学::Choice", true),
+                                           "case00000001", "case00000000");
+    refuses(readInterface(native, zkc::printJson(value)), "source.interface");
+  });
   cases.run("expanded display types refuse with their source span", [] {
     std::string module;
     for (unsigned i = 0; i < 15; ++i) {
@@ -618,10 +812,11 @@ run Demo=Run;)zkc");
             "source.interface");
     v = take(json::parse(source.interfaceJson()));
     auto bytes = source.bytes().str();
-    std::string old = "output_roles = [[\"P\"]]";
+    std::string old = "output_roles = [[\"role00000000\"]]";
     auto at = bytes.find(old);
     require(at != std::string::npos, "missing role mutation anchor");
-    bytes.replace(at, old.size(), "output_roles = [[\"P\", \"V\"]]");
+    bytes.replace(at, old.size(),
+                  "output_roles = [[\"role00000000\", \"role00000001\"]]");
     (*v.getAsObject())["original"] =
         toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
     protocol(v).getArray("outputs")->front().getAsObject()->operator[](
@@ -676,14 +871,9 @@ run Demo=Run;)zkc");
     }
     module += "::" + std::string(Limits{}.moduleBytes - module.size() - 2, 'b');
     require(module.size() == Limits{}.moduleBytes, "bad module length fixture");
-    auto code = "module " + module +
-                ";protocol Run "
-                "roles(P)(x:bool@P)->(r:bool@P){return(r=x);}run Demo=Run;";
-    auto project =
-        take(analyze(take(capture({{module, code, {}}}))).checkedProject());
-    auto source =
-        take(prepareOriginal(take(closeEntry(project, module + "::Demo"))));
-    take(readInterface(source.bytes(), source.interfaceJson()));
+    auto value = document();
+    (*value.getAsObject())["entry"] = module + "::Demo";
+    take(readInterface(original, zkc::printJson(value)));
   });
   cases.run("JSON key escapes cannot replace nested fields", [] {
     for (StringRef key : {"na\\u006de", "a\\\""}) {
@@ -749,9 +939,10 @@ run Demo=Run;)zkc");
       auto mlir =
           "module {\"protocol.module\"() <{profile = "
           "#protocol.profile<protocol>}> ({\"protocol.func\"() <{sym_name = "
-          "\"Transfer\", roles = [\"P\"], function_type = (" +
+          "\"Transfer\", roles = [\"role00000000\"], function_type = (" +
           type +
-          ") -> (), input_roles = [[\"P\"]], output_roles = []}> ({^bb0(%a: " +
+          ") -> (), input_roles = [[\"role00000000\"]], output_roles = []}> "
+          "({^bb0(%a: " +
           type +
           "): \"protocol.return\"() : () -> ()}) : () -> ()}) : () -> ()}";
       auto value = document();

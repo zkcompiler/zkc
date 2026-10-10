@@ -5,6 +5,7 @@
 #include "TypeInference.h"
 #include "llvm/ADT/STLExtras.h"
 #include <cassert>
+#include <numeric>
 using namespace llvm;
 namespace zkc::language::detail {
 /// Collect type equations without evaluating source. BodyChecker remains the
@@ -141,7 +142,9 @@ class ExpressionInference {
           checker.output.declarations[signature.target.declaration.index];
       output.callees.emplace(id, signature.target);
       output.operators.at(id).binding = selection.binding;
-      output.inputs.emplace(id, std::vector<unsigned>{0, 1});
+      std::vector<unsigned> inputs(signature.inputs.size());
+      std::iota(inputs.begin(), inputs.end(), 0);
+      output.inputs.emplace(id, std::move(inputs));
       // Complete only the selected target. The ordinary body checker owns
       // cycles, permissions, requirements and execution modes after selection.
       if (!callee.abstract) {
@@ -589,14 +592,13 @@ class ExpressionInference {
                   expr.span);
       break;
     }
-    case K::Add:
-    case K::Subtract:
-    case K::Equal:
-    case K::Multiply: {
-      auto left = child(0), right = child(1);
+    case K::NotationCall: {
       auto visible = checker.operatorCandidates(decl, syntax, id);
       if (!visible)
         break;
+      std::vector<Variable> inputs;
+      for (unsigned i = 0; i < expr.children.size(); ++i)
+        inputs.push_back(child(i));
       std::vector<OperatorInference::Candidate> candidates;
       ExpressionTypes::Operator witness;
       for (auto &binding : *visible) {
@@ -606,7 +608,7 @@ class ExpressionInference {
             {binding.target, std::move(binding.arguments), binding.span});
       }
       output.operators.emplace(id, std::move(witness));
-      operators->add(id, expr.span, {left, right}, result.type,
+      operators->add(id, expr.span, std::move(inputs), result.type,
                      std::move(candidates));
       break;
     }

@@ -29,7 +29,11 @@ pub(super) fn run_authority(
     let slots: BTreeMap<_, _> = interface
         .setups
         .iter()
-        .flat_map(|slot| slot.inputs.iter().map(move |i| (*i, slot.name.as_str())))
+        .flat_map(|slot| {
+            slot.inputs
+                .iter()
+                .map(move |i| (*i, slot.native_name.as_str()))
+        })
         .collect();
     let mut inputs = BTreeMap::new();
     for role in interface.roles() {
@@ -38,12 +42,16 @@ pub(super) fn run_authority(
             .flat_map(|p| &p.definition.native);
         for (local, original) in native.enumerate() {
             if let Some(slot) = slots.get(&(*original as usize)) {
-                inputs.insert((role.name.clone(), local), (*slot).to_owned());
+                inputs.insert((role.native_name.clone(), local), (*slot).to_owned());
             }
         }
     }
     Ok(run::SetupAuthority {
-        keys: authority.keys,
+        keys: interface
+            .setups
+            .iter()
+            .map(|slot| (slot.native_name.clone(), authority.keys[&slot.name]))
+            .collect(),
         inputs,
     })
 }
@@ -105,4 +113,23 @@ pub(super) fn public_keys<'a>(
             slot.verifier_keys.iter().map(move |&i| (i as u32, key))
         })
         .collect())
+}
+
+/// Convert only from the authenticated setup roster, after source material checks.
+pub(super) fn run_material(
+    interface: &Interface,
+    mut material: BTreeMap<String, Vec<u8>>,
+    capacity: crate::execution::Capacity,
+) -> Result<BTreeMap<String, Vec<u8>>> {
+    check_material(interface, &material, capacity)?;
+    interface
+        .setups
+        .iter()
+        .map(|slot| {
+            Ok((
+                slot.native_name.clone(),
+                material.remove(&slot.name).ok_or("entry-setup-material")?,
+            ))
+        })
+        .collect()
 }

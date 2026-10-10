@@ -33,7 +33,11 @@ and input-authority boundary.
 Development operations expose their supported options through `python3 scripts/develop.py OPERATION --help`; options for another operation are rejected before preparation or execution.
 
 Outside Nix, provide compatible `CC`, `CXX`, `MLIR_DIR` and, when needed,
-`LLVM_CONFIG`. Recreate a CMake build directory when changing compiler or ABI.
+`LLVM_CONFIG`, plus utf8proc 2.12.0 with its CMake package (select it through
+`utf8proc_DIR` or `CMAKE_PREFIX_PATH`). Installed Language consumers also need
+this external NFC dependency; they do not need MLIR. See the
+[SDK dependency contract](../../compiler/README.md#installed-package-discovery).
+Recreate a CMake build directory when changing compiler or ABI.
 `just doctor` reports selected versions, output paths and cache/toolchain differences.
 See [configuration](configuration.md) for directory and concurrency settings.
 

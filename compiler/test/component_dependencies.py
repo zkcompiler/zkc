@@ -130,6 +130,7 @@ def main():
     extra_sources, extra_headers, extra_generated = extra.sources, extra.headers, extra.generated
     extra_includes, extra_libraries, extra_private = extra.includes, extra.libraries, extra.private
     extra_namespaces = {item.split("/")[0] for item in extra_includes}
+    extra_libraries["ZkcLanguage"].add("utf8proc::utf8proc")
     targets = {}
     owners = {}
     for line in manifest.read_text().splitlines():
@@ -158,7 +159,7 @@ def main():
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
     private_headers = {
-        "ZkcLanguage": {ROOT / f"lib/Language/{name}.h" for name in ("Internal", "State", "Semantics", "Checker", "BodyCheck", "Placement", "TypeInference", "Arguments", "CallableConstraints", "OperatorInference", "BindingWitness")},
+        "ZkcLanguage": {ROOT / f"lib/Language/{name}.h" for name in ("Internal", "State", "Semantics", "Checker", "BodyCheck", "Placement", "TypeInference", "Arguments", "CallableConstraints", "OperatorInference", "BindingWitness", "NotationRecords")},
         "ZkcSupport": {ROOT / "lib/Support/Input.h"},
         "ZkcContracts": {ROOT / "lib/Contracts/RequirementChecks.h"},
         "ZkcRelation": {ROOT / "lib/Relation/Field.h", ROOT / "lib/Relation/BundleInternal.h"},
@@ -216,7 +217,7 @@ def main():
             assert path == ROOT / "lib/Dialect/Registry.cpp", f"private dialect registration fragment: {path} -> {target}"
         semantic_files = {"State.h", "Semantics.h", "Semantics.cpp", "SemanticContracts.cpp",
                           "KernelSignatures.cpp", "IntrinsicSignatures.cpp", "Permissions.cpp",
-                          "Capabilities.cpp", "Specialize.cpp", "Layout.cpp"}
+                          "Capabilities.cpp", "Specialize.cpp", "Layout.cpp", "NotationInspection.cpp"}
         if path.parent == ROOT / "lib/Language" and path.name in semantic_files:
             assert target not in {ROOT / f"lib/Language/{name}.h" for name in ("Internal", "Checker", "BodyCheck")}, f"semantic queries cannot depend on source checking: {path} -> {target}"
         if target in private:

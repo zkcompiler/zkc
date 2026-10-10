@@ -114,9 +114,9 @@ impl RunEntry {
         if request.roles.len() != self.interface.roles().len() {
             return Err("entry-input-roles".into());
         }
-        setups::check_material(
+        let material = setups::run_material(
             &self.interface,
-            &request.setups,
+            request.setups,
             self.native.limits().capacity,
         )?;
         let mut roles = Vec::new();
@@ -128,7 +128,7 @@ impl RunEntry {
             let inputs = arguments::values(self.interface.input_ports(role), values.inputs, None)?;
             let services = arguments::services(self.interface.services(role), values.services)?;
             roles.push(native::RoleInputs {
-                role: role.name.clone(),
+                role: role.native_name.clone(),
                 inputs,
                 services,
             });
@@ -136,7 +136,7 @@ impl RunEntry {
         Ok(native::RunInputs {
             session: request.session,
             roles,
-            setups: request.setups,
+            setups: material,
         })
     }
 }
@@ -210,7 +210,7 @@ fn collect(
         let returned = execution
             .roles
             .iter()
-            .find(|r| r.role == role.name)
+            .find(|r| r.role == role.native_name)
             .ok_or("entry-output-role")?;
         let mut leaves = returned.outputs.iter().cloned();
         let mut values = BTreeMap::new();

@@ -9,6 +9,7 @@
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/Names.h"
 #include "zkc/Language/RelationABI.h"
 #include "zkc/Relation/AIR.h"
 #include "zkc/Relation/Bundle.h"
@@ -25,10 +26,6 @@
 using namespace llvm;
 namespace zkc::language::detail {
 namespace {
-bool identifier(StringRef value) {
-  return !value.empty() && (isAlpha(value.front()) || value.front() == '_') &&
-         all_of(value, [](char c) { return isAlnum(c) || c == '_'; });
-}
 bool hash(StringRef value) {
   return value.size() == 64 && all_of(value, [](char c) {
            return isDigit(c) || (c >= 'a' && c <= 'f');
@@ -143,7 +140,7 @@ class Reader {
       return fail("native role arity differs");
     for (unsigned i = 0; i < roles.size(); ++i) {
       auto name = mlir::dyn_cast<mlir::StringAttr>(array[i]);
-      if (!name || name.getValue() != current->roles[roles[i]])
+      if (!name || name.getValue() != nativeRoleName(roles[i]))
         return fail("native participant mapping differs");
     }
     return true;
@@ -249,7 +246,7 @@ class Reader {
         positional = numbered;
       if (numbered != *positional ||
           (numbered ? *name != std::to_string(result.size())
-                    : !identifier(*name)) ||
+                    : !isSourceIdentifier(*name)) ||
           !names.insert(name->str()).second || *at != offset)
         return fail("invalid field name or noncontiguous field offset");
       auto *childObject = obj->getObject("schema");
@@ -293,7 +290,7 @@ class Reader {
       return fail("empty product hides native data");
     if (value.kind == K::Record) {
       for (const auto &field : value.fields)
-        if (!identifier(field.name))
+        if (!isSourceIdentifier(field.name))
           return fail("record fields require identifiers");
       return true;
     }
@@ -432,17 +429,23 @@ class Reader {
         return {};
       }
       auto *nominal = descriptor->nominal.getAsArray();
-      if (!nominal || nominal->size() != 2 ||
-          (*nominal)[0].getAsString() != "zkc.language" ||
-          !(*nominal)[1].getAsString() ||
-          (*nominal)[1].getAsString()->empty() ||
-          toHex(
-              SHA256::hash(arrayRefFromStringRef(*(*nominal)[1].getAsString())),
-              true) != *identity) {
+      auto encoded = nominal && nominal->size() == 2 &&
+                             (*nominal)[0].getAsString() == "zkc.language"
+                         ? (*nominal)[1].getAsString()
+                         : std::nullopt;
+      if (!encoded || !charge(encoded->size() + 1)) {
         if (!failure)
           fail("variant lacks a source nominal identity");
         return {};
       }
+      auto key =
+          decodeNominalIdentity(*encoded, protocol::VariantSpellingBytes / 2);
+      if (!key || key->empty() ||
+          toHex(SHA256::hash(arrayRefFromStringRef(*key)), true) != *identity) {
+        fail("variant lacks a source nominal identity");
+        return {};
+      }
+      std::set<std::string> names;
       for (unsigned i = 0; i < alts->size(); ++i) {
         const auto &expected = descriptor->alternatives[i];
         auto *alternative = object((*alts)[i], {"name", "fields"});
@@ -452,8 +455,9 @@ class Reader {
         auto *payload = array(*alternative, "fields");
         if (!name || !payload)
           return {};
-        if (*name != expected.label) {
-          fail("variant label or order differs");
+        if (!isSourceIdentifier(*name) || !names.insert(name->str()).second ||
+            expected.label != nativeAlternativeName(i)) {
+          fail("variant name, label or order differs");
           return {};
         }
         InterfaceAlternative arm{name->str(), {}};
@@ -522,7 +526,7 @@ class Reader {
           (!logical->permissions.copy || !logical->permissions.drop ||
            !logical->permissions.share))
         return fail("shared logical port requires Copy, Drop and Share");
-      if (!identifier(*name) || !names.insert(name->str()).second ||
+      if (!isSourceIdentifier(*name) || !names.insert(name->str()).second ||
           *index != result.size() || *type != logical->type ||
           ns->size() != logical->leaves.size())
         return fail("logical port name, index, type or native arity differs");
@@ -614,7 +618,7 @@ class Reader {
       auto *indices = array(*input, "native");
       if (!name || !purpose || !indices)
         return false;
-      if (!identifier(*name) || !names.insert(name->str()).second ||
+      if (!isSourceIdentifier(*name) || !names.insert(name->str()).second ||
           indices->empty() || flat > types.size() ||
           indices->size() > types.size() - flat)
         return fail("invalid relation formal name or native slice");
@@ -919,7 +923,7 @@ class Reader {
          kind = text(*obj, "kind");
     if (!name || !kind)
       return {};
-    if (!identifier(*name)) {
+    if (!isSourceIdentifier(*name)) {
       fail("invalid clause name");
       return {};
     }
@@ -1014,7 +1018,7 @@ class Reader {
     for (const auto &item : *rs) {
       auto name = item.getAsString();
       if (!name || name->size() > limits.identifierBytes ||
-          !identifier(*name) || !usedRoles.insert(name->str()).second)
+          !isSourceIdentifier(*name) || !usedRoles.insert(name->str()).second)
         return fail("invalid or duplicate role");
       roleIndices.try_emplace(*name, current->roles.size());
       current->roles.push_back(name->str());
@@ -1049,7 +1053,7 @@ class Reader {
       if (!name || !contract || !owner || !at)
         return false;
       auto found = roleIndices.find(*owner);
-      if (!identifier(*name) || !names.insert(name->str()).second ||
+      if (!isSourceIdentifier(*name) || !names.insert(name->str()).second ||
           *at != input || input >= type.getNumInputs() ||
           found == roleIndices.end())
         return fail("invalid managed service mapping");
@@ -1114,7 +1118,7 @@ class Reader {
       auto *inputs = array(*obj, "inputs");
       if (!name || !inputs)
         return false;
-      if (!identifier(*name) || !names.insert(name->str()).second ||
+      if (!isSourceIdentifier(*name) || !names.insert(name->str()).second ||
           inputs->empty())
         return fail("invalid, duplicate or empty setup slot");
       InterfaceSetup slot{name->str(), {}};
@@ -1331,7 +1335,7 @@ class Reader {
                     function.getBody().front().getArgument(index) ||
                 statement.getSelectors()[i] !=
                     mlir::StringAttr::get(function.getContext(),
-                                          selected.roles[operand.role]))
+                                          nativeRoleName(operand.role)))
               return fail("native statement operands or participants differ");
             ++i;
           }
@@ -1367,7 +1371,8 @@ class Reader {
     if (entryParts.size() < 2 ||
         entry->rsplit("::").first.size() > limits.moduleBytes ||
         !all_of(entryParts, [&](StringRef part) {
-          return part.size() <= limits.identifierBytes && identifier(part);
+          return part.size() <= limits.identifierBytes &&
+                 isSourceIdentifier(part);
         }))
       return fail("invalid qualified Entry name");
     view.capture = capture->str();

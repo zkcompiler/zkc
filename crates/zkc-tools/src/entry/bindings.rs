@@ -8,62 +8,134 @@ use std::collections::{BTreeMap, BTreeSet};
 type Result<T> = std::result::Result<T, String>;
 const MAX_BYTES: usize = 16 * 1024 * 1024;
 
+// One allocator owns all generated namespaces. Source escapes are injective;
+// allocation also resolves generated type/member and preferred-name collisions.
 #[derive(Default)]
 struct Names {
-    used: BTreeSet<String>,
-    next: BTreeMap<String, usize>,
+    used: BTreeMap<usize, BTreeSet<String>>,
+    next: BTreeMap<(usize, String), usize>,
+    scopes: usize,
 }
+const MAX_NAME_BYTES: usize = 1024 * 1024;
 impl Names {
-    fn ty(&mut self, preferred: &str) -> String {
-        let mut name = String::new();
-        for word in preferred.split('_').filter(|w| !w.is_empty()) {
-            let mut chars = word.chars();
-            if let Some(first) = chars.next() {
-                name.extend(first.to_uppercase());
-                name.extend(chars);
-            }
-        }
-        if name == "Self" {
-            name = "ValueSelf".into();
-        }
-        self.allocate(&name)
+    fn scope(&mut self) -> usize {
+        self.scopes += 1;
+        self.scopes
     }
-    fn allocate(&mut self, preferred: &str) -> String {
-        let base: String = preferred
-            .chars()
-            .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
-            .take(96)
-            .collect();
-        let base = if base.chars().all(|c| c == '_') || base.as_bytes()[0].is_ascii_digit() {
-            format!("Value{base}")
+    fn ty(&mut self, preferred: &str) -> Result<String> {
+        // Escape original UTF-8 before case conversion: mathematical names and
+        // the reserved escape prefix must never lose spelling information.
+        let name = if needs_escape(preferred) {
+            source_name(preferred)?
         } else {
-            base
+            let mut name = String::new();
+            for word in preferred.split('_').filter(|w| !w.is_empty()) {
+                let mut chars = word.chars();
+                if let Some(first) = chars.next() {
+                    name.push(first.to_ascii_uppercase());
+                    name.extend(chars);
+                }
+            }
+            source_name(&name)?
         };
-        let base = if matches!(base.as_str(), "Self" | "self" | "super" | "crate") {
-            format!("value_{base}")
-        } else {
-            base
-        };
-        let mut name = base.clone();
-        let next = self.next.entry(base.clone()).or_insert(2);
-        while !self.used.insert(name.clone()) {
+        self.allocate(0, &name)
+    }
+    fn member(&mut self, scope: usize, source: &str) -> Result<String> {
+        self.allocate(scope, &source_name(source)?)
+    }
+    fn allocate(&mut self, scope: usize, base: &str) -> Result<String> {
+        if base.len() > MAX_NAME_BYTES {
+            return Err("entry-bindings-limit".into());
+        }
+        let mut name = base.to_owned();
+        let next = self.next.entry((scope, base.to_owned())).or_insert(2);
+        let used = self.used.entry(scope).or_default();
+        while !used.insert(name.clone()) {
             name = format!("{base}{next}");
             *next += 1;
+            if name.len() > MAX_NAME_BYTES {
+                return Err("entry-bindings-limit".into());
+            }
         }
-        // Raw identifiers also cover future reserved keywords. Special path names
-        // above cannot be raw, so they get ordinary unique names instead.
-        format!("r#{name}")
+        Ok(format!("r#{name}"))
     }
 }
-fn source_name(name: &str) -> String {
-    let name = if matches!(name, "self" | "Self" | "super" | "crate" | "_")
+fn needs_escape(name: &str) -> bool {
+    !name.is_ascii()
         || name.starts_with("__zkc_")
-    {
-        format!("__zkc_{}", crate::host::inputs::hex(name.as_bytes()))
+        || name.is_empty()
+        || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        || name.as_bytes()[0].is_ascii_digit()
+        || matches!(
+            name,
+            "_" | "as"
+                | "async"
+                | "await"
+                | "break"
+                | "const"
+                | "continue"
+                | "crate"
+                | "dyn"
+                | "else"
+                | "enum"
+                | "extern"
+                | "false"
+                | "fn"
+                | "for"
+                | "if"
+                | "impl"
+                | "in"
+                | "let"
+                | "loop"
+                | "match"
+                | "mod"
+                | "move"
+                | "mut"
+                | "pub"
+                | "ref"
+                | "return"
+                | "self"
+                | "Self"
+                | "static"
+                | "struct"
+                | "super"
+                | "trait"
+                | "true"
+                | "type"
+                | "unsafe"
+                | "use"
+                | "where"
+                | "while"
+                | "abstract"
+                | "become"
+                | "box"
+                | "do"
+                | "final"
+                | "gen"
+                | "macro"
+                | "override"
+                | "priv"
+                | "try"
+                | "typeof"
+                | "unsized"
+                | "virtual"
+                | "yield"
+        )
+}
+fn source_name(name: &str) -> Result<String> {
+    if needs_escape(name) {
+        if name.len() > (MAX_NAME_BYTES - 6) / 2 {
+            return Err("entry-bindings-limit".into());
+        }
+        Ok(format!(
+            "__zkc_{}",
+            crate::source_names::encode_nominal_identity(name)
+        ))
+    } else if name.len() > MAX_NAME_BYTES {
+        Err("entry-bindings-limit".into())
     } else {
-        name.to_owned()
-    };
-    format!("r#{name}")
+        Ok(name.to_owned())
+    }
 }
 struct Generator {
     names: Names,
@@ -85,6 +157,7 @@ impl Generator {
         Ok(())
     }
     fn members(&mut self, fields: &[Field], prefix: &str) -> Result<Vec<Member>> {
+        let scope = self.names.scope();
         fields
             .iter()
             .map(|field| {
@@ -95,7 +168,7 @@ impl Generator {
                 };
                 Ok(Member {
                     source: field.name.clone(),
-                    name: source_name(&label),
+                    name: self.names.member(scope, &label)?,
                     ty: self.schema(&field.schema, &format!("{prefix}_{}", field.name))?,
                 })
             })
@@ -128,21 +201,26 @@ impl Generator {
         let preferred = if matches!(schema.kind, Kind::Record | Kind::Variant)
             && schema
                 .display_type
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b':')
+                .split("::")
+                .all(crate::source_names::is_source_identifier)
         {
-            schema.display_type.replace("::", "_")
+            if schema.display_type.is_ascii() {
+                schema.display_type.replace("::", "_")
+            } else {
+                schema.display_type.clone()
+            }
         } else {
             prefix.to_owned()
         };
-        let name = self.names.ty(&preferred);
+        let name = self.names.ty(&preferred)?;
         self.types.insert(schema.identity.clone(), name.clone());
         if schema.kind == Kind::Variant {
             let mut arms = Vec::new();
+            let scope = self.names.scope();
             for arm in &schema.alternatives {
                 arms.push((
                     arm.name.clone(),
-                    source_name(&arm.name),
+                    self.names.member(scope, &arm.name)?,
                     self.members(&arm.fields, &format!("{prefix}_{}", arm.name))?,
                 ));
             }
@@ -158,14 +236,19 @@ impl Generator {
             self.add(format!("#[allow(non_snake_case)]\nimpl ::core::convert::From<{name}> for ::zkc_tools::entry::Value {{fn from(value: {name})->Self {{match value {{\n"))?;
             for (source, arm, fields) in &arms {
                 self.add(format!("{name}:: {arm}{{"))?;
-                for f in fields {
-                    self.add(format!("{},", f.name))?;
+                // Source field names can resolve to variants or constants in
+                // Rust patterns; bind each field to a generated local instead.
+                for (index, f) in fields.iter().enumerate() {
+                    self.add(format!("{}: __zkc_field_{index},", f.name))?;
                 }
                 self.add(format!(
                     "}}=>Self::Variant{{alternative: {source:?}.into(),fields:["
                 ))?;
-                for f in fields {
-                    self.add(format!("({:?}.into(),{}.into()),", f.source, f.name))?;
+                for (index, f) in fields.iter().enumerate() {
+                    self.add(format!(
+                        "({:?}.into(),__zkc_field_{index}.into()),",
+                        f.source
+                    ))?;
                 }
                 self.add("].into()},\n")?;
             }
@@ -247,7 +330,7 @@ impl Generator {
     }
     fn structure(&mut self, name: &str, fields: &[Member]) -> Result<()> {
         self.add(format!(
-            "#[allow(non_snake_case)]\n#[derive(::core::fmt::Debug)]\npub struct {name} {{\n"
+            "#[allow(non_camel_case_types, non_snake_case)]\n#[derive(::core::fmt::Debug)]\npub struct {name} {{\n"
         ))?;
         for f in fields {
             self.add(format!("pub {}: {},\n", f.name, f.ty))?;
@@ -266,10 +349,11 @@ impl Generator {
     fn ports<'a>(&mut self, name: &str, ports: impl Iterator<Item = &'a Port>) -> Result<()> {
         let preferred = name.strip_prefix("r#").unwrap_or(name);
         let mut fields = Vec::new();
+        let scope = self.names.scope();
         for port in ports {
             fields.push(Member {
                 source: port.name.clone(),
-                name: source_name(&port.name),
+                name: self.names.member(scope, &port.name)?,
                 ty: self.schema(&port.schema, &format!("{preferred}_{}", port.name))?,
             });
         }
@@ -302,6 +386,21 @@ pub fn rust(package: &Package) -> Result<String> {
         types: BTreeMap::new(),
         code: String::new(),
     };
+    generator.names.used.insert(
+        0,
+        [
+            "__zkc_decode",
+            "PACKAGE_SHA256",
+            "admit",
+            "setups",
+            "services",
+            "PROVER",
+            "VERIFIER",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
+    );
     generator.add("// Generated from an authenticated zkc Entry package.\n// Mathematical leaves retain checked ::zkc_tools::entry::Value ingress.\n#[allow(dead_code)]\nfn __zkc_decode<T: ::core::convert::TryFrom<::zkc_tools::entry::Value>>(value: ::zkc_tools::entry::Value) -> ::core::result::Result<T, ::std::string::String> where T::Error: ::core::fmt::Display { T::try_from(value).map_err(|error| error.to_string()) }\n")?;
     generator.add(format!(
         "pub const PACKAGE_SHA256:[::core::primitive::u8;32]={:?};\n",
@@ -321,17 +420,18 @@ pub fn rust(package: &Package) -> Result<String> {
     generator.add(format!("/// Authenticate this exact package and admit its interface, program and application limits.\n/// Artifact bytes stay immutable; no caller verification flag or CLI transport is involved.\npub fn admit(bytes:&[::core::primitive::u8],options: {options},setups: ::zkc_tools::entry::SetupAuthority)->::core::result::Result<{host},::zkc_tools::entry::EntryError>{{let package=::zkc_tools::entry::Package::capture(bytes,&PACKAGE_SHA256,::zkc_tools::entry::Package::MAX_BYTES)?;{host}::admit(package,options,setups)}}\n"))?;
     let public_name = interface
         .is_proof()
-        .then(|| generator.names.ty("PublicInputs"));
+        .then(|| generator.names.ty("PublicInputs"))
+        .transpose()?;
     let role_names: Vec<_> = interface
         .roles()
         .iter()
         .map(|role| {
-            (
-                generator.names.ty(&format!("{}Inputs", role.name)),
-                generator.names.ty(&format!("{}Outputs", role.name)),
-            )
+            Ok((
+                generator.names.ty(&format!("{}Inputs", role.name))?,
+                generator.names.ty(&format!("{}Outputs", role.name))?,
+            ))
         })
-        .collect();
+        .collect::<Result<_>>()?;
     if interface.is_proof() {
         generator.ports(
             public_name.as_ref().expect("proof public name reserved"),
@@ -363,10 +463,12 @@ pub fn rust(package: &Package) -> Result<String> {
         generator.add(format!(
             "#[allow(non_upper_case_globals)]\npub mod {module} {{\n"
         ))?;
+        let scope = generator.names.scope();
         for name in names {
+            let member = generator.names.member(scope, name)?;
             generator.add(format!(
                 "pub const {}: &::core::primitive::str = {name:?};\n",
-                source_name(name)
+                member
             ))?;
         }
         generator.add("}\n")?;
@@ -379,4 +481,30 @@ pub fn rust(package: &Package) -> Result<String> {
         ))?;
     }
     Ok(generator.code)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn full_byte_escapes_and_generated_names_have_separate_expansion_limits() {
+        let name = "α".repeat(64); // The source identifier's 128-byte ceiling.
+        let escaped = source_name(&name).unwrap();
+        assert_eq!(escaped, format!("__zkc_{}", "ceb1".repeat(64)));
+        let mut names = Names::default();
+        let first = format!("{}a", "x".repeat(127));
+        let second = format!("{}b", "x".repeat(127));
+        let a = names.ty(&first).unwrap();
+        let b = names.ty(&second).unwrap();
+        assert!(a.ends_with('a') && b.ends_with('b')); // No 96-byte truncation.
+        assert_ne!(a, b);
+        assert_eq!(
+            source_name(&"α".repeat(MAX_NAME_BYTES / 4)).unwrap_err(),
+            "entry-bindings-limit"
+        );
+        assert_eq!(
+            source_name(&"a".repeat(MAX_NAME_BYTES + 1)).unwrap_err(),
+            "entry-bindings-limit"
+        );
+    }
 }

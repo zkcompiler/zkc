@@ -84,7 +84,10 @@ Ambiguous operand meanings require a named call or an explicit local binding;
 return types and effects cannot pick between them. Libraries declare their
 operator targets with `pub operator + = add;`. See the
 [source contract](../spec/language/definitions.md#library-defined-operators)
-for exact signatures and inference rules.
+for exact signatures and inference rules. [Mathematical notation](notation.md)
+adds Unicode names, explicit fixity, `a ⊙ b` for Hadamard multiplication and
+`⟪a, b⟫` for a dot call, while retaining every named API. Custom spelling adds
+no mathematical operation or algebraic law.
 
 ## Select a proof job
 
@@ -286,7 +289,7 @@ setup slots executing through ordinary kernels and the common runtime.
 
 - `Zkc::Language`: capture supplied buffers, analyze them, and close an exact
   Entry. It uses the pure Contracts and Relation components and their common
-  support; it has no MLIR, runtime or filesystem dependency.
+  support, plus utf8proc for NFC; it has no MLIR, runtime or filesystem dependency.
 - `Zkc::Translation`: emit unsimplified Protocol IR and independently
   admit and compare actual SSA with the checked source.
 - `Zkc::Compiler`: `prepareOriginal` retains immutable bytes, interface,
@@ -321,6 +324,7 @@ operation map established by source comparison when a position matches.
 Unsupported future syntax is reserved and refuses explicitly.
 
 The interface's toolchain stamp records the compiler source, installed catalog,
-LLVM/MLIR release and LLVM revision when the installation provides it. An absent
+LLVM/MLIR release and LLVM revision when the installation provides it. The source
+build identity includes the pinned Unicode profile manifest and raw UCD hashes. An absent
 revision is explicit. This is provenance, not a binary fingerprint: it cannot
 distinguish local patches that preserve all recorded version information.
