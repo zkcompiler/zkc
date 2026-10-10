@@ -10,7 +10,7 @@ set_option autoImplicit false
 namespace Tests.RingExpressionReductions
 
 open Zkc.Algebra.RingExpression
-open Zkc.Algebra.FiniteVectors (dot limit)
+open Zkc.Algebra.FiniteVectors (dot limit product product_append product_replicate product_zero_of_mem)
 
 private def multiply : Expr Int Nat := .mul (.input 0) (.input 1)
 private def affine : Expr Int Nat :=
@@ -73,6 +73,16 @@ example (values : List Int) (large : limit < values.length) :
     mapProduct (.constant (1 : Int)) [.rows [], .rows values] = .error "vector-limit" :=
   mapProduct_error _ _ _ (oversized_refuses values large)
 
+-- The native product companion model has its own bounded list contract.
+example : product ([2, 3] ++ [5, 7] : List Int) = (do
+    let left ← product [2, 3]
+    let right ← product [5, 7]
+    return left * right) := product_append _ _ (by decide)
+example : product (List.replicate 4 (3 : Int)) = .ok 81 :=
+  product_replicate _ _ (by decide)
+example : product ([2, 0, 5] : List Int) = .ok 0 :=
+  product_zero_of_mem _ (by decide) (by decide)
+
 def run : IO Unit := do
   let checks ← Tests.Checks.start
   checks.holds (mapSum multiply rows == .ok 31) "sum of products is 31"
@@ -104,6 +114,11 @@ def run : IO Unit := do
     "signature refusal precedes shape refusal for sum"
   checks.holds (mapProduct (.input 4 : Expr Int Nat) [.rows [], .rows [9]] == .error "map-signature")
     "signature refusal precedes shape refusal for product"
+  checks.holds (product ([] : List Int) == .ok 1) "bounded product empty identity"
+  checks.holds (product ([7] : List Int) == .ok 7) "bounded product singleton"
+  checks.holds (product ([2, 3, 5] : List Int) == .ok 30) "bounded product every entry"
+  checks.holds (product ([2, 0, 5] : List Int) == .ok 0) "bounded product zero factor"
+  checks.holds (product (List.replicate 4 (3 : Int)) == .ok 81) "bounded repeated product"
   checks.finish "ring-expression reduction controls"
 
 #eval run
@@ -111,6 +126,6 @@ def run : IO Unit := do
 end Tests.RingExpressionReductions
 
 run_cmd
-  Tools.DeclarationAudit.check [`Zkc.Algebra.RingExpression.Reductions] "RING-EXPRESSION-REDUCTIONS-AUDIT-PASS" true
+  Tools.DeclarationAudit.check [`Zkc.Algebra.RingExpression.Reductions, `Zkc.Algebra.FiniteVectors] "RING-EXPRESSION-REDUCTIONS-AUDIT-PASS" true
 
 #print axioms Zkc.Algebra.RingExpression.mapSum_mul_eq_dot

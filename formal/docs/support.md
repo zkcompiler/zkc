@@ -94,6 +94,12 @@ not subjects of these theorems; the
 [native comparison](../../tests/kernels/test_pointwise_polynomials.py) of a
 map, the provider and the coset kernels is bounded evidence on fixed inputs.
 
+[Finite vector product](../Zkc/Algebra/FiniteVectors.lean) has bounded list value
+laws for empty and singleton inputs, concatenation under a combined length bound,
+repetition, and a zero factor. The general laws need a monoid; the zero-factor law
+needs a monoid with zero. These laws neither model native output capacity nor
+extend the independent interactive operation reader.
+
 [Finite map reductions](../Zkc/Algebra/RingExpression/Reductions.lean) establish
 sum/product denotation over every admitted row (`mapSum_ok`, `mapProduct_ok`,
 `mapSum_eq`, `mapProduct_eq`), identities for admitted zero-row maps, and

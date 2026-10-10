@@ -86,6 +86,15 @@ successful map (`map_hoist`). Dead nodes: an arena node that no output reaches
 is covered by the restricted node maps of the sharing section. None of these
 laws removes a shape check; each applies to the same operand list.
 
+## Bounded vector product
+
+`FiniteVectors.product xs` returns `List.prod xs` when `xs.length ≤ limit`,
+and `vector-limit` otherwise. Empty and singleton inputs yield one and the
+single value. Concatenation multiplies the two products under a combined
+length bound; repetition gives a power. The value laws require only a monoid,
+with a monoid with zero for the zero-factor law. Native input/output capacity
+and operation dispatch are outside this list model.
+
 ## Finite map reductions
 
 `mapSum` and `mapProduct` first run the checked map, propagate any refusal,
