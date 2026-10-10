@@ -129,7 +129,7 @@ void selectorPolicies(const ImplementationCatalog &installed) {
   // Typed observations select providers from the transcript suite alone.
   BindingApplication observe{
       "transcript.native.indexed.observe.data",
-      {"spongefish0.7.4.keccak.bls12-381.fr64be/0", "field:bls12-381.fr"},
+      {"spongefish0.8.0.keccak.bls12-381.fr64be/0", "field:bls12-381.fr"},
       ""};
   require(accept(installed.defaultFor(observe))->identity ==
               "spongefish/transcript.native.indexed.observe.data",
@@ -315,7 +315,7 @@ int main() {
       {"merlin3.bls12-381.fr64be/0", "arkworks"},
       {"merlin3.ristretto255.scalar64le/0", "dalek"},
       {"merlin3.koala-bear.ext8-binomial3.rejection31le/0", "plonky3"},
-      {"spongefish0.7.4.keccak.bls12-381.fr64be/0", "spongefish"}};
+      {"spongefish0.8.0.keccak.bls12-381.fr64be/0", "spongefish"}};
   for (const auto &[suite, provider] : suites) {
     std::string impl =
         (provider + "/transcript.native.indexed.challenge").str();
@@ -325,7 +325,7 @@ int main() {
     require(ports.inputs[0].representation == "host.resource/0",
             "shared host representation changed nominal provider selection");
   }
-  const std::string spongefish = "spongefish0.7.4.keccak.bls12-381.fr64be/0";
+  const std::string spongefish = "spongefish0.8.0.keccak.bls12-381.fr64be/0";
   const std::string extension =
       "merlin3.koala-bear.ext8-binomial3.rejection31le/0";
   for (auto [suite, payload, provider] :

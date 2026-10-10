@@ -220,7 +220,7 @@ mod tests {
         capture(value.to_string().as_bytes())
     }
     fn digest(seed: u8) -> String {
-        format!("{:x}", Sha256::digest([seed]))
+        crate::host::inputs::hex(&Sha256::digest([seed]))
     }
     #[test]
     fn exact_bytes_and_components_are_retained() {
@@ -333,7 +333,7 @@ mod tests {
     #[test]
     fn asset_count_item_and_aggregate_bytes_are_bounded() {
         let digests: Vec<_> = (0..=ASSET_COUNT as u16)
-            .map(|i| format!("{:x}", Sha256::digest(i.to_le_bytes())))
+            .map(|i| crate::host::inputs::hex(&Sha256::digest(i.to_le_bytes())))
             .collect();
         let mut sorted = digests.clone();
         sorted.sort();

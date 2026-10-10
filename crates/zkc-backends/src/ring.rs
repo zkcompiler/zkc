@@ -42,7 +42,10 @@ impl Registry {
         }
         let expression = Expression::parse(text).map_err(|e| refused(e.0))?;
         let canonical = expression.canonical();
-        let actual = format!("{:x}", Sha256::digest(canonical.as_bytes()));
+        let actual = Sha256::digest(canonical.as_bytes())
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
         if actual != expected {
             return Err(refused("ring-asset-identity"));
         }

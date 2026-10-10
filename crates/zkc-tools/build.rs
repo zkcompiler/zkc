@@ -161,17 +161,13 @@ fn main() {
     let manifest: serde_json::Value =
         serde_json::from_slice(&manifest_bytes).expect("source profile JSON");
     check_manifest(&manifest);
-    let identity = format!("zkc.source-names/0:{:x}", Sha256::digest(&manifest_bytes));
+    let identity = format!("zkc.source-names/0:{}", hex_digest(&manifest_bytes));
     let mut files = BTreeMap::new();
     for &(file, hash) in INPUTS {
         let path = root.join(file);
         println!("cargo:rerun-if-changed={}", path.display());
         let bytes = fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-        assert_eq!(
-            format!("{:x}", Sha256::digest(&bytes)),
-            hash,
-            "UCD hash mismatch: {file}"
-        );
+        assert_eq!(hex_digest(&bytes), hash, "UCD hash mismatch: {file}");
         files.insert(file, String::from_utf8(bytes).expect("UTF-8 UCD input"));
     }
     let core = properties(&files["DerivedCoreProperties.txt"]);
@@ -275,6 +271,13 @@ fn check_manifest(manifest: &serde_json::Value) {
             format!("https://www.unicode.org/Public/17.0.0/ucd/{file}")
         );
     }
+}
+
+fn hex_digest(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 #[cfg(test)]

@@ -15,7 +15,7 @@ let
       ++ [ "rust-analyzer" ];
   };
   leanToolchain = pkgs.callPackage ./lean-toolchain.nix { cc = llvm.clang; };
-  python = pkgs.python314;
+  python = pkgs.python315;
   workspace = inputs.uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ../.; };
   pythonSet =
     (pkgs.callPackage inputs.pyproject-nix.build.packages {

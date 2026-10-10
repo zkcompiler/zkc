@@ -29,7 +29,7 @@ Compiled package source sets exclude Python test orchestration and unrelated int
 Toolchain settings (`CC`, `CXX`, `MLIR_DIR`, `LLVM_CONFIG`, `UV_PYTHON`,
 `UV_PYTHON_DOWNLOADS` and `TZDIR`) are supplied by Nix. The optional formal
 environment separately owns Lean tools and its `LEAN_CC` default. Do not redefine these in just or a local `.env`.
-An intentional toolchain change belongs in the owning manifest or Nix input.
+Rust uses the exact release in `rust-toolchain.toml` in rustup, Nix and CI; doctor refuses a different release. An intentional toolchain change belongs in the owning manifest or Nix input.
 Native builds outside Nix require an explicitly supplied compatible toolchain.
 The configure driver requires `CC` and `CXX` to name executable files (including
 executable wrappers), and `MLIR_DIR` to contain `MLIRConfig.cmake`. Put compiler

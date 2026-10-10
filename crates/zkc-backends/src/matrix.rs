@@ -202,7 +202,12 @@ pub(crate) fn identity_check<S: IdentityCoefficient>(
         hash.update(b"\"]");
     }
     hash.update(b"]]]");
-    Ok(format!("{:x}", hash.finalize()) == *expected)
+    Ok(hash
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()
+        == *expected)
 }
 
 /// Shared algorithms use upstream scalar arithmetic. Exact dimensions are

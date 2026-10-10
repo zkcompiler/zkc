@@ -10,15 +10,15 @@ edition = "2024"
 license = "Apache-2.0"
 
 [workspace.dependencies]
-# Plonky3 0.5.1 is upstream commit 45e0ffe4d294816755522dd2cf7c38d6bcd701ce.
+# Plonky3 0.8.0 is upstream commit a21e3ed42905040ad49c519e402f018381c12d0c.
 # It is the family the native KoalaBear provider pins in crates/zkc-backends.
-p3-air = "=0.5.1"
-p3-commit = "=0.5.1"
-p3-field = "=0.5.1"
-p3-koala-bear = "=0.5.1"
-p3-matrix = "=0.5.1"
-serde_json = "=1.0.151"
-sha2 = "=0.10.9"
+p3-air = "=0.8.0"
+p3-commit = "=0.8.0"
+p3-field = "=0.8.0"
+p3-koala-bear = "=0.8.0"
+p3-matrix = "=0.8.0"
+serde_json = "=1.0.152"
+sha2 = "=0.11.0"
 zkc-plonky3-air = { path = "exporter" }
 zkc-plonky3-air-client = { path = "client" }
 # Native admission and evaluation are optional consumers of exported assets.

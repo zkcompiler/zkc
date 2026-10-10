@@ -11,7 +11,7 @@ use p3_field::{Field, PackedValue, PrimeCharacteristicRing, PrimeField32};
 use p3_field::BasedVectorSpace;
 pub use p3_koala_bear::KoalaBear;
 
-/// Ascending power basis of F_p[X]/(X^8 - 3), pinned by Plonky3 0.5.1.
+/// Ascending power basis of F_p[X]/(X^8 - 3), pinned by Plonky3 0.8.0.
 pub type KoalaBearExt8 = p3_field::extension::BinomialExtensionField<KoalaBear, 8>;
 
 /// Natural constants embed into the base coordinate, never encode eight coordinates.

@@ -38,15 +38,13 @@ def inspect(name, command, expected=None, directory=ROOT):
     return record
 
 
-def rust_version(channel):
-    """A stable channel accepts new releases without requiring a dated override."""
-    record = inspect("rust", ["rustc", "--version"],
-                     None if channel == "stable" else channel)
-    record["channel"] = channel
-    if channel == "stable" and record["status"] == "pass":
-        description = record.get("description", "")
-        if not re.match(r"rustc \d+\.\d+\.\d+\s", description):
-            record.update(status="fail", error="the project uses stable Rust, not a prerelease")
+def rust_version(version):
+    """Require the release selected by rust-toolchain.toml, including its channel."""
+    record = inspect("rust", ["rustc", "--version"], version)
+    record["channel"] = version
+    if record["status"] == "pass" and not re.match(
+            rf"rustc {re.escape(version)}(?:\s|$)", record.get("description", "")):
+        record.update(status="fail", error=f"expected the Rust {version} release")
     return record
 
 

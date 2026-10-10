@@ -67,7 +67,7 @@ specialized modulo the characteristic; closed `field.constant` and
 extension's cardinality. Public extension coordinates use the canonical
 [native structured codec](../formats/messages.md).
 
-The native installation uses pinned Plonky3 0.5.1; the executable independent
+The native installation uses pinned Plonky3 0.8.0; the executable independent
 `Tools.Interactive.ExtensionReference` uses fixed coordinates, convolution and
 checked exponentiation for inverses. It asserts no unproved Lean field instance
 or native adequacy theorem. Generic formal PIR semantics remains parameterized

@@ -1,6 +1,6 @@
 # Guard meaningful package/check boundaries using the actual filtered trees.
-{ runCommandNoCC, sources }:
-runCommandNoCC "zkc-source-boundaries" { } ''
+{ runCommand, sources }:
+runCommand "zkc-source-boundaries" { } ''
   set -x
   test -f ${sources.compiler}/compiler/CMakeLists.txt
   test -f ${sources.compiler}/common/unicode/generate.py

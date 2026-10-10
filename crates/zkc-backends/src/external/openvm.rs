@@ -3,7 +3,7 @@
 //! crates/stark-backend/src/transcript/{duplex_sponge,traits}.rs and
 //! crates/stark-sdk/src/config/baby_bear_poseidon2.rs. Source hashes and licenses
 //! are in provenance.json and UPSTREAM-LICENSE-*. Crypto is p3-baby-bear =0.4.3;
-//! there is no claim of interchangeability with workspace Plonky3 0.5.1.
+//! there is no claim of interchangeability with workspace Plonky3 0.8.0.
 use super::{Error, Result, Transition, Work};
 use p3_baby_bear_043::{BabyBear, Poseidon2BabyBear, default_babybear_poseidon2_16};
 use p3_field_043::{PrimeCharacteristicRing, PrimeField32};

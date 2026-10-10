@@ -266,7 +266,7 @@ proof 公開=実行{setup 設定{鍵,秘密};prover 証明;verifier 検証;
               auto position = text.find("merlin3.bls12-381.fr64be/0");
               text.replace(position,
                            StringRef("merlin3.bls12-381.fr64be/0").size(),
-                           "spongefish0.7.4.keccak.bls12-381.fr64be/0");
+                           "spongefish0.8.0.keccak.bls12-381.fr64be/0");
               auto first = original(source), second = original(text);
               require(first.bytes() == second.bytes(),
                       "construction choice changed authored protocol");
@@ -513,7 +513,7 @@ proof 公開=実行{setup 設定{鍵,秘密};prover 証明;verifier 検証;
         auto value = take(json::parse(checked.interfaceJson()));
         (*value.getAsObject()->getObject("job")->getObject(
             "construction"))["suite"] =
-            "spongefish0.7.4.keccak.bls12-381.fr64be/0";
+            "spongefish0.8.0.keccak.bls12-381.fr64be/0";
         auto view = take(readInterface(checked.bytes(), printJson(value)));
         auto error = compareInterface(checked.entry(), view);
         require(bool(error),

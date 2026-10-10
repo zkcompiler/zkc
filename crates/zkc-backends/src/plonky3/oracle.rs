@@ -183,9 +183,9 @@ pub fn commit<E: Element>(
     Ok((root.roots()[0], State { shape, tree: state }))
 }
 
-/// All shape checks precede the pinned upstream verifier. In 0.5.1 the
-/// upstream verifier does not itself require the declared row width or derive
-/// path length from the expected height; those are this adapter's obligations.
+/// Validate the declared row width, coordinate and height-derived path length
+/// before calling the upstream verifier. These are this adapter's admission
+/// obligations regardless of the upstream verifier's own shape checks.
 pub fn verify<E: Element>(
     root: Digest,
     shape: Shape,

@@ -22,7 +22,7 @@ const EXTENSION: &str = "koala-bear.ext8-binomial3";
 const ORIGINAL: &str = "module\n{}";
 
 fn sha(text: &str) -> String {
-    format!("{:x}", Sha256::digest(text.as_bytes()))
+    crate::host::inputs::hex(&Sha256::digest(text.as_bytes()))
 }
 fn physical(logical: &str) -> String {
     PhysicalType::default_for(LogicalType::parse(logical).unwrap())

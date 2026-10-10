@@ -294,7 +294,7 @@ const DomainCatalog &installedDomains() {
     const std::string scalar = "ristretto255.scalar";
     const std::string ristretto = "ristretto255.group";
     const std::string merlin = "merlin3.ristretto255.scalar64le/0";
-    const std::string spongefish = "spongefish0.7.4.keccak.bls12-381.fr64be/0";
+    const std::string spongefish = "spongefish0.8.0.keccak.bls12-381.fr64be/0";
     const std::string koala = "koala-bear";
     const std::string extension = "koala-bear.ext8-binomial3";
     const std::string extensionTranscript =

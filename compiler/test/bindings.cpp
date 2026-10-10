@@ -182,7 +182,7 @@ int main() {
   require(bool(malformed), "binding arity refused");
   require(toString(std::move(malformed)) == "binding-static-arity",
           "binding-static-arity");
-  const std::string spongefish = "spongefish0.7.4.keccak.bls12-381.fr64be/0";
+  const std::string spongefish = "spongefish0.8.0.keccak.bls12-381.fr64be/0";
   // Explicit policy preserves the selected provider for all installed suites,
   // including suites whose physical state is named host.resource/1.
   for (const auto &[suite, provider] :
@@ -190,7 +190,7 @@ int main() {
         std::pair{"merlin3.ristretto255.scalar64le/0", "dalek"},
         std::pair{"merlin3.koala-bear.ext8-binomial3.rejection31le/0",
                   "plonky3"},
-        std::pair{"spongefish0.7.4.keccak.bls12-381.fr64be/0", "spongefish"}}) {
+        std::pair{"spongefish0.8.0.keccak.bls12-381.fr64be/0", "spongefish"}}) {
     BindingApplication application{
         "transcript.native.indexed.challenge", {suite}, ""};
     const std::string implementation =
