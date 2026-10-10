@@ -117,6 +117,7 @@ let
       ++ [
         "common/tests/support"
         "common/tests/fixtures/variants"
+        "common/tests/fixtures/clean/air-control.json"
         "justfile"
         "examples/relations/multiply.r1cs.json"
       ];
