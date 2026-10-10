@@ -1,5 +1,6 @@
 #ifndef ZKC_LANGUAGE_STATE_H
 #define ZKC_LANGUAGE_STATE_H
+#include "NotationRecords.h"
 #include "zkc/Language/Project.h"
 #include <map>
 #include <set>
@@ -20,6 +21,7 @@ struct CheckedStorage {
   std::string installation;
   uint64_t work = 0, declarationCount = 0, operationCount = 0;
   uint64_t notationDescriptors = 0, notationHoles = 0;
+  NotationRecords notations;
 };
 struct ClosedStorage {
   std::vector<Asset> assets;

@@ -52,6 +52,7 @@ public:
 
   bool configureEntry(Declaration &, const Declaration &,
                       const SyntaxProofEntry &);
+  bool retainNotations();
 
 private:
   std::optional<Type> elaborateType(const Declaration &, const SyntaxType &,

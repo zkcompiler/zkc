@@ -457,6 +457,7 @@ class CapturedProject;
 class CheckedProject;
 class Analysis;
 class ClosedEntry;
+struct NotationInspectionOptions;
 llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
                                         const CaptureOptions & = {});
 llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
@@ -509,6 +510,9 @@ private:
   explicit CheckedProject(std::shared_ptr<const detail::CheckedStorage>);
   std::shared_ptr<const detail::CheckedStorage> storage;
   friend Analysis analyze(const CapturedProject &, const Limits &);
+  friend llvm::Expected<std::string>
+  inspectNotations(const CheckedProject &, const NotationInspectionOptions &,
+                   const Limits &);
 };
 
 /// Recovery tokens and diagnostics cannot be promoted to checked state.

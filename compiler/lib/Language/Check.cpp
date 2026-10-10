@@ -99,6 +99,8 @@ Error Checker::run() {
   }
   if (!entries())
     return types.takeError();
+  if (!retainNotations())
+    return types.takeError();
   return Error::success();
 }
 bool Checker::bindingName(const Declaration &decl, StringRef name, Span span) {

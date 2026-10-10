@@ -19,6 +19,8 @@ int runLanguageCompiler(int argc, char **argv) {
   ArrayRef<SourceBuffer> diagnosticSources;
   std::string entry, format;
   bool declarations = false;
+  bool notations = false;
+  NotationInspectionOptions notationOptions;
   EntryOptions options;
   Limits limits;
   auto refuse = [&](Error failure) {
@@ -59,7 +61,7 @@ int runLanguageCompiler(int argc, char **argv) {
       command != "language-interface" && command != "language-bundle" &&
       command != "language-package")
     return refuse(error("source.command", "unknown language command"));
-  if (argc > int(limits.files + 8))
+  if (argc > int(limits.files + 11))
     return refuse(error("source.limit", "too many source command arguments"));
   uint64_t total = 0, assetTotal = 0;
   for (int i = 2; i < argc; ++i) {
@@ -110,6 +112,16 @@ int runLanguageCompiler(int argc, char **argv) {
             error("source.options",
                   "--declarations is a check option and may appear once"));
       declarations = true;
+    } else if (arg == "--notations" || arg == "--notation-private" ||
+               arg == "--notation-installation") {
+      bool &flag = arg == "--notations" ? notations
+                   : arg == "--notation-private"
+                       ? notationOptions.includePrivate
+                       : notationOptions.includeInstallation;
+      if (flag || command != "language-check")
+        return refuse(error("source.options",
+                            arg + " is a check option and may appear once"));
+      flag = true;
     } else if (command == "language-check" &&
                (arg == "--no-simplify" || arg == "--release-storage"))
       return refuse(
@@ -122,6 +134,10 @@ int runLanguageCompiler(int argc, char **argv) {
     else
       return refuse(error("source.options", "unknown language option: " + arg));
   }
+  if (!notations &&
+      (notationOptions.includePrivate || notationOptions.includeInstallation))
+    return refuse(error("source.options",
+                        "notation visibility options require --notations"));
   if (format.empty())
     return refuse(error("source.options", "--source-format=zkc is required"));
   auto captureResult = capture(std::move(sources), std::move(assets),
@@ -156,6 +172,12 @@ int runLanguageCompiler(int argc, char **argv) {
     if (!report)
       return refuse(report.takeError());
     checked["declarations"] = cantFail(json::parse(*report));
+  }
+  if (notations) {
+    auto report = inspectNotations(*project, notationOptions, limits);
+    if (!report)
+      return refuse(report.takeError());
+    checked["notations"] = cantFail(json::parse(*report));
   }
   if (entry.empty() && command == "language-check") {
     outs() << json::Value(std::move(checked)) << '\n';
