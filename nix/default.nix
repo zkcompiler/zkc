@@ -36,20 +36,21 @@ let
     "scripts/workspace.py"
     "tests/support"
   ];
+  compilerSource = nativeSupport ++ [
+    "compiler"
+    "examples"
+    "libraries"
+  ];
   compiler = pkgs.callPackage ./compiler.nix {
     inherit llvm;
-    source = sourceFor "compiler" (
-      nativeSupport
-      ++ [
-        "compiler"
-        "examples"
-        "libraries"
-      ]
-    );
+    source = sourceFor "compiler" compilerSource;
     stdenv = llvm.stdenv;
     python3 = python;
   };
-  compilerChecks = compiler.override { withTests = true; };
+  compilerChecks = compiler.override {
+    withTests = true;
+    source = sourceFor "compiler" (compilerSource ++ [ "tests/fixtures/clean/air-control.json" ]);
+  };
   compilerSanitize = compilerChecks.overrideAttrs (old: {
     pname = "zkc-compiler-sanitize";
     cmakeBuildType = "RelWithDebInfo";
