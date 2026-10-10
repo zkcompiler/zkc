@@ -9,6 +9,40 @@ using zkc::test::require;
 using zkc::test::take;
 int main() {
   zkc::test::Cases cases;
+  cases.run(
+      "deferred dimension conflicts locate the use and its declaration", [] {
+        auto captured = take(
+            capture({{"library",
+                      "module library;\npub math fn dimension<F:Field,N:nat>("
+                      "values:[F;pow2(N)],point:[F;N])->bool{return true;}\n",
+                      "library.zkc"},
+                     {"main",
+                      "module main;\ndomain F=field(\"koala-bear\");\n"
+                      "fn bad(x:F)->bool{return "
+                      "library::dimension([x,x,x,x,x,x,x,x],[x]);}\n",
+                      "main.zkc"}}));
+        auto analysis = analyze(captured);
+        require(analysis.diagnostics().size() == 1,
+                "expected a dimension conflict");
+        const auto &diagnostic = analysis.diagnostics().front();
+        require(diagnostic.code == "source.type" && diagnostic.primary &&
+                    diagnostic.primary->module.index == 1,
+                "deferred conflict does not locate the call");
+        auto text = formatDiagnostics(analysis.diagnostics(), &captured);
+        require(text.find("note: related source at library.zkc:2:") !=
+                    std::string::npos,
+                text);
+      });
+  cases.run("printable source text retains quotes and backslashes", [] {
+    auto captured = take(capture(
+        {{"m", "module m;\ndomain F=field(\"koala-bear\");\n", "source.zkc"}}));
+    Diagnostic diagnostic{
+        "source.type", "literal \\\"text\\\"", Span{{0}, 10, 16}, {}};
+    auto text = formatDiagnostics({diagnostic}, &captured);
+    require(text.find("field(\"koala-bear\")") != std::string::npos &&
+                text.find("literal \\\"text\\\"") != std::string::npos,
+            text);
+  });
   cases.run("captured locations, related modules, escapes and EOF", [] {
     auto capture = take(
         zkc::language::capture({{"m", "module m;\n//\t\x1b\xe2\x80\xae\r\n",

@@ -7,6 +7,7 @@
 | [Expression Sumcheck](expression-sumcheck/README.md) | Generic Sumcheck over a captured ring asset with KoalaBear/Ext8 Entries | Exact round coefficients, extension-field challenges and public-table terminal evaluation |
 | [AIR STARK](air-stark/README.md) | Captured Plonky3 AIR with quotient, DEEP and FRI libraries | Separate prover/verifier Hosts over base-field trace commitments and extension-field claims |
 | [Accumulator machine](accumulator-machine/README.md) | External CPU/program/memory relation with LogUp or grand-product reductions | Whole-Bundle proof through phased auxiliary commitments, OOD/DEEP and shared FRI |
+| [Mathematics](mathematics/README.md) | Formal polynomial and runtime vector helpers | Formal evaluation compared with a shared affine fold |
 | [Native map](native-map/README.md) | Row formulas applied to whole KoalaBear/Ext8 columns with checked `map` | A gate check over public columns and an interactive challenge combination |
 | [FRI](fri/README.md) | Generic binary FRI with authenticated rows | Commitments, extension-field folding challenges, simultaneous queries and a bounded terminal polynomial |
 | [Imported AIR](imported-air/README.md) | Captured Plonky3 AIR expression and relation Bundle | Actual trace checks and a disclosed-trace proof, plus coefficient and Ext8 point views |
@@ -23,6 +24,3 @@ Each project owns its concrete domains, Entries and invocation inputs. Keep asse
 used by only one project alongside that project; shared relation-ingress samples
 live in [`relations/`](../relations/README.md). Assets and requests an adapter
 derives stay beside the export it checks them against.
-
-[Mathematics](mathematics/README.md) compares formal polynomials with runtime
-vector folding through the shared source libraries.

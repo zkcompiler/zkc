@@ -39,11 +39,17 @@ TypeInference::Variable TypeInference::known(const Type &type, Span span) {
 TypeInference::Variable TypeInference::instantiate(const Type &type,
                                                    const Parameters &parameters,
                                                    Span span) {
-  return instantiate(type, parameters, span, 1);
+  return instantiate(type, parameters, span, span, 1);
 }
 TypeInference::Variable TypeInference::instantiate(const Type &type,
                                                    const Parameters &parameters,
-                                                   Span span, unsigned depth) {
+                                                   Span span, Span origin) {
+  return instantiate(type, parameters, span, origin, 1);
+}
+TypeInference::Variable TypeInference::instantiate(const Type &type,
+                                                   const Parameters &parameters,
+                                                   Span span, Span origin,
+                                                   unsigned depth) {
   if (types.diagnostic || depth > types.work.limits.typeDepth ||
       !types.charge(1, span)) {
     if (!types.diagnostic)
@@ -60,17 +66,18 @@ TypeInference::Variable TypeInference::instantiate(const Type &type,
   if (!parameters.empty() &&
       (type.kind == Type::Kind::Associated || !domainSort(type).empty()) &&
       !type.arguments.empty()) {
-    auto base =
-        instantiate(type.arguments.front(), parameters, span, depth + 1);
+    auto base = instantiate(type.arguments.front(), parameters, span, origin,
+                            depth + 1);
     auto result = fresh(span);
+    nodes[result].origin = origin;
     auto name = StringRef(type.domain).rsplit("::").second.str();
-    defer([this, base, result, name, span] {
+    defer([this, base, result, name, span, origin] {
       auto input = get(base, span);
       if (!input)
         return false;
       auto output = types.associated(*input, name, span);
       if (output)
-        equal(result, known(*output, span), span);
+        equal(result, instantiate(*output, {}, span, origin), span);
       return true;
     });
     return result;
@@ -85,7 +92,8 @@ TypeInference::Variable TypeInference::instantiate(const Type &type,
     }
     if (!dependencies.empty()) {
       auto result = fresh(span);
-      defer([this, result, type, dependencies, span] {
+      nodes[result].origin = origin;
+      defer([this, result, type, dependencies, span, origin] {
         Substitution substitution;
         for (auto &[name, variable] : dependencies) {
           auto value = get(variable, span);
@@ -95,7 +103,7 @@ TypeInference::Variable TypeInference::instantiate(const Type &type,
         }
         auto output = types.substitute(type, substitution, span);
         if (output)
-          equal(result, known(*output, span), span);
+          equal(result, instantiate(*output, {}, span, origin), span);
         return true;
       });
       return result;
@@ -103,7 +111,8 @@ TypeInference::Variable TypeInference::instantiate(const Type &type,
   }
   std::vector<Variable> arguments;
   for (const auto &argument : type.arguments)
-    arguments.push_back(instantiate(argument, parameters, span, depth + 1));
+    arguments.push_back(
+        instantiate(argument, parameters, span, origin, depth + 1));
   if (type.kind == Type::Kind::Array) {
     Type dimension(Type::Kind::Natural);
     dimension.dimension = type.dimension;
@@ -115,9 +124,12 @@ TypeInference::Variable TypeInference::instantiate(const Type &type,
       dimension.domain = terms.begin()->first.front().name;
       dimension.symbolic = true;
     }
-    arguments.push_back(instantiate(dimension, parameters, span, depth + 1));
+    arguments.push_back(
+        instantiate(dimension, parameters, span, origin, depth + 1));
   }
-  return shape(type, std::move(arguments), span);
+  auto result = shape(type, std::move(arguments), span);
+  nodes[result].origin = origin;
+  return result;
 }
 bool TypeInference::occurs(Variable needle, Variable id, Span span,
                            unsigned depth) {

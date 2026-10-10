@@ -97,8 +97,9 @@ where `A::Degree` is the arena's largest output degree with every input
 weighted one; the vector preserves trailing zeros before transmission. V checks
 that coefficient count and the round sum, folds its own table, and checks the
 terminal value through `ring.point` on the final `A::Inputs` factors. Both roles
-fold with a checked [`map`](../docs/spec/language/definitions.md#checked-pointwise-maps)
-of the private `interpolate` helper: each row of the halves becomes
+fold through `zkc::vector::fold`, whose private scalar helper is applied by
+checked [`map`](../docs/spec/language/definitions.md#checked-pointwise-maps):
+each row of the halves becomes
 `low + (high - low) * r`. This is vector arithmetic on the table, not a
 substitution into the arena. The
 compiler derives the width and the degree bound from the admitted arena; no

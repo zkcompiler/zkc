@@ -26,6 +26,15 @@ int runLanguageCompiler(int argc, char **argv) {
       messages.push_back(
           {code.take_front(129).str(), message.take_front(2049).str(), {}, {}});
     };
+    auto appendLines = [&](StringRef message) {
+      for (unsigned i = 0; i < 16 && !message.empty(); ++i) {
+        auto [line, rest] = message.split('\n');
+        append("", line);
+        message = rest;
+      }
+      if (!message.empty())
+        append("", "further diagnostic lines omitted");
+    };
     handleAllErrors(
         std::move(failure),
         [&](const DiagnosticError &error) {
@@ -34,13 +43,13 @@ int runLanguageCompiler(int argc, char **argv) {
         [&](const CompilationError &error) {
           for (const auto &refusal : ArrayRef(error.refusals).take_front(16))
             append(refusal.code, refusal.detail);
-          append("", error.message);
+          appendLines(error.message);
           for (const auto &location : ArrayRef(error.locations).take_front(4))
             append("", "at " + location.filename + ":" +
                            std::to_string(location.line) + ":" +
                            std::to_string(location.column));
         },
-        [&](const ErrorInfoBase &error) { append("", error.message()); });
+        [&](const ErrorInfoBase &error) { appendLines(error.message()); });
     errs() << formatDiagnostics(messages, captured ? &*captured : nullptr);
     return 1;
   };

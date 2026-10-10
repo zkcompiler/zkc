@@ -187,13 +187,13 @@ class ExpressionInference {
         auto field = service(expr.children[i]);
         if (field)
           types.equal(types.instantiate(callee.services[slot.index].field,
-                                        parameters,
+                                        parameters, expr.span,
                                         callee.services[slot.index].span),
                       known(*field, expr.span), expr.span);
       } else {
         auto parameter =
             types.instantiate(callee.inputs[slot.index].type, parameters,
-                              callee.inputs[slot.index].span);
+                              expr.span, callee.inputs[slot.index].span);
         auto argument = expression(expr.children[i], depth + 1);
         if (!rows.empty()) {
           // Report a missing or extra `each` before unifying the two modes.
@@ -212,7 +212,8 @@ class ExpressionInference {
     }
     std::vector<Variable> results;
     for (const auto &port : callee.outputs) {
-      auto result = types.instantiate(port.type, parameters, port.span);
+      auto result =
+          types.instantiate(port.type, parameters, expr.span, port.span);
       results.push_back(rows.empty() ? result : vectorOf(result, expr.span));
     }
     return results;

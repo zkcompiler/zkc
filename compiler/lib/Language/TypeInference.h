@@ -14,6 +14,8 @@ public:
   Variable known(const Type &, Span);
   Variable shape(Type, std::vector<Variable>, Span);
   Variable instantiate(const Type &, const Parameters &, Span);
+  /// Fail at the use site; retain the declaration origin in related notes.
+  Variable instantiate(const Type &, const Parameters &, Span use, Span origin);
   bool equal(Variable, Variable, Span);
   bool requireKinds(Variable, std::initializer_list<Type::Kind>, Span);
   bool allows(Variable, Type::Kind);
@@ -39,7 +41,7 @@ private:
   bool occurs(Variable, Variable, Span, unsigned = 1);
   bool equal(Variable, Variable, Span, unsigned);
   std::optional<Type> get(Variable, Span, unsigned);
-  Variable instantiate(const Type &, const Parameters &, Span, unsigned);
+  Variable instantiate(const Type &, const Parameters &, Span, Span, unsigned);
 };
 
 /// Solved source facts, shared by expression checking and its nested regions.

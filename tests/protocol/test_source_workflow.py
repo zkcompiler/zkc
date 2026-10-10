@@ -65,6 +65,8 @@ pub math fn affine<F:Field>(low:F,high:F,r:F)->F{let unused=low==high;return low
                               refuses='source-compilation')['diagnostics']
     assert 'algebra-map-formula' in diagnostic and str(library) in diagnostic
     assert str(source) in diagnostic
+    assert '\\0A' not in diagnostic
+    assert '\nrelated source declaration: formula::affine\n' in diagnostic
 
 
 def write(directory, name, value):

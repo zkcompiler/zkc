@@ -593,8 +593,7 @@ by their representation. Associated `Field` and `Group` declarations expose thei
 selected domain. Conformance checks callable modes, types, permissions, natural
 preconditions and effect allowances. An implementation cannot require more than
 its interface allows. Interfaces and components may have static parameters;
-abstract signatures may declare member-specific generic parameters, but component
-conformance currently refuses them; implementing them requires a further contract.
+abstract signatures may declare member-specific generic parameters.
 `Component::method<F, ...>(value)` supplies the component parameters directly;
 `C::method(value)` through a bound component uses the parameters already in `C`.
 Records and variants are module declarations. An abstract call or type projection

@@ -1,6 +1,5 @@
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Support/BoundedStream.h"
-#include "llvm/ADT/StringExtras.h"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -19,7 +18,13 @@ std::string atomName(StringRef name) {
 std::string escaped(StringRef text, size_t limit) {
   std::string result;
   raw_string_ostream out(result);
-  printEscapedString(text.take_front(limit), out);
+  constexpr char hex[] = "0123456789ABCDEF";
+  for (unsigned char byte : text.take_front(limit)) {
+    if (byte >= 0x20 && byte <= 0x7e)
+      out << char(byte);
+    else
+      out << '\\' << hex[byte >> 4] << hex[byte & 15];
+  }
   if (text.size() > limit)
     out << "...";
   return result;

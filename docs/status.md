@@ -60,6 +60,8 @@ for source correspondence; it does not interpret retained MLIR. Maintained
 
 Fixed source arrays use static numeric indexing. Private ingress without an
 admitted validator, member-generic conformance and zero-leaf messages refuse.
+Abstract member-generic signatures can be checked and inspected, but components
+implementing them are not supported.
 Resource permission inference, implicit role remapping, natural equation solving
 and inversion of associated types are outside the source profile.
 Relation and target/input/output/continuation clauses state intent; declarations
