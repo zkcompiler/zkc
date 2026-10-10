@@ -17,6 +17,10 @@ add_test(NAME math-realization COMMAND zkc-math_realization-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/helper-realization.mlir")
 set_tests_properties(math-realization PROPERTIES LABELS native)
 mlir_target_link_libraries(zkc-math_realization-test PRIVATE MLIRParser)
+add_zkc_test(vector_reductions Transforms vector-reductions)
+target_compile_definitions(zkc-vector_reductions-test PRIVATE
+  ZKC_MATH_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical")
+mlir_target_link_libraries(zkc-vector_reductions-test PRIVATE MLIRParser)
 add_zkc_test(map_realization Transforms)
 add_test(NAME map-realization COMMAND zkc-map_realization-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/map-realization.mlir")

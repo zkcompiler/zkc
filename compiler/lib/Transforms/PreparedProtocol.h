@@ -15,7 +15,8 @@ class PreparedProtocol {
       : module(std::move(module)) {}
 
 public:
-  static std::optional<PreparedProtocol> prepare(mlir::ModuleOp source);
+  static std::optional<PreparedProtocol>
+  prepare(mlir::ModuleOp source, bool fuseVectorReductions = false);
   mlir::OwningOpRef<mlir::ModuleOp> snapshot() const;
   mlir::OwningOpRef<mlir::ModuleOp> project(bool simplify) &&;
 };
