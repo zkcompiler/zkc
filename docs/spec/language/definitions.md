@@ -81,13 +81,14 @@ resource-limit diagnostics.
 
 ### Module imports and operator scope
 
-`use zkc::vector;` imports the alias `vector` and that module's public operator
-and delimiter bindings. `use zkc::vector as vec;` changes the alias. A selected
-import such as
+`use zkc::vector;` imports the alias `vector` and that module's public operator,
+delimiter and reduction bindings. `use zkc::vector as vec;` changes the alias.
+A selected import such as
 `use zkc::vector::{Vector, add};` imports only those names;
 `use zkc::vector::{Vector, operator +};` also imports the selected public operator
 family, including all exported fixities for the token. `notation ⟪` selects a
-public delimiter shape. A qualified reference alone activates no notation.
+public delimiter shape; `reduction ∑` selects a public reduction binding.
+A qualified reference alone activates no notation.
 `pub use` reexports the selected names, aliases and bindings with their original identities; ordinary
 imports remain private. Duplicate imports of the same identity are harmless.
 Conflicting names/aliases, missing exports and import cycles refuse. Captured
@@ -450,6 +451,87 @@ its helper. Invalid value-argument binding uses `source.call`; invalid static
 binding uses `source.generic`, as for ordinary calls. Other map-specific source
 refusals use `source.map`; a map outside local code uses `source.mode`.
 
+## Finite vector reductions
+
+```zkc
+use zkc::vector as vec;
+fn weighted<F: Field>(xs: vec::Vector<F>, ys: vec::Vector<F>, α: F) -> F {
+  return reduce vec::sum [(x, y) in zip(xs, ys)] { x * y + α };
+}
+```
+
+A finite reduction applies a checked pointwise map to the written collections,
+then calls the selected reducer on that vector. The single-row form is
+`reduce reducer [x in xs] { body }`. Multiple rows require the explicit strict
+`zip` form above. [Reduction notation](notation.md#finite-reduction-syntax)
+gives the equivalent library-bound `∑` and `∏` spellings.
+
+All collections have the installed dynamic `Vector<F>` type for one field `F`.
+The reducer is a statically resolved, defined local callable with exactly one
+`Vector<F>` input, one `F` result and no service inputs. Reduction notation
+bindings require a written result type, as other callable notation does. Named and
+symbolic forms use ordinary callable resolution, static argument inference and
+definition-site identity. A custom reducer may stop; it is an ordinary call,
+with no inferred sum/product law. Component dispatch and function values are
+outside this reducer profile.
+
+Evaluation has this order:
+
+1. Evaluate every collection once, left to right, in the enclosing scope.
+   Repeated collection expressions remain separate evaluations. Row bindings
+   are not in scope in any collection.
+2. Read each captured outer binding once after all collections, in the order
+   of its first textual use in the body. Captures are whole immutable scalar
+   bindings of field `F`, with the ordinary copy/drop permissions. Projection
+   from an aggregate must be assigned to an outer scalar `let` first; mutable
+   bindings, services, vectors and other aggregate captures refuse.
+3. Check every row length in written order against the first row, including
+   `_` and named rows the scalar result does not use. Only then realize the
+   scalar formula over the rows and call the reducer. Unequal lengths retain
+   the map's backend shape refusal, not truncating zip or native rejection.
+
+Named rows are distinct lexical bindings local to the scalar body; `_` introduces
+no name. Rows can shadow outer immutable bindings under the ordinary binding
+rules, without changing collection resolution or capturing those outer values.
+Shadowing a mutable binding remains forbidden. Body-local immutable lets follow
+normal shadowing. Extraction uses resolved binding identities and original
+definition scopes; generated
+names neither capture source bindings nor become source-callable declarations.
+
+The body returns one scalar of `F`. It admits immutable scalar lets, scalar
+aliases, field constants, addition, subtraction and multiplication, and concrete
+static mathematical helpers whose entire reachable bodies satisfy the same
+field-ring rule. Admission checks every operation, including dead operations;
+field-typed results or custom symbols alone do not establish this rule. Deferred
+call and notation inference inside the body uses Math mode, with the generated
+helper edge included in depth accounting. Local calls, effects, mutation,
+services, nonfield values, component dispatch and nested reductions refuse.
+The initial binder occurs only in module-level local functions, not directly
+in protocols, math functions or component members. Protocols can call a local
+wrapper. Existing named `map` retains its later IR formula admission; the binder
+adds this earlier source-body check.
+
+For the library sum, matched empty rows return zero; for the library product,
+they return one. A custom reducer instead receives the empty mapped vector and
+retains its own behavior. Empty selected rows do not bypass other row checks,
+collection evaluation or scalar capture snapshots.
+
+Each binder owns a private generated mathematical helper with positional row
+inputs followed by captures in their snapshot order. Helpers remain in a
+checker-owned pending collection until authored bodies, signatures and Entries
+are checked and their live inference references have expired. Finalization
+inherits the completed enclosing static parameters and requirements. Generated
+helpers have distinct semantic identities, consume declaration/instance/work
+limits, and add a call-depth edge even for a constant body. Closure rechecks
+the retained limits and does not reparse or resolve the extracted expressions.
+
+A separate extraction witness checker reconstructs row bindings, free captures
+and their order from retained authored syntax and resolved identities. It checks
+the scalar body, positional inputs, map mask, field, reducer, sites and lexical
+selection against the actual checked graph before source-to-IR comparison.
+This bounds the extraction check; it is not a proof of parser, resolver, capture
+semantics or native runtime adequacy.
+
 ## Boolean formulas
 
 `!a`, `a && b` and `a || b` accept Boolean operands. Negation evaluates its
@@ -687,13 +769,16 @@ no separate static list. Fixed primitive static interfaces remain positional.
 
 ### Library-defined operators
 
-Operators and paired-delimiter notation resolve to ordinary callable signatures.
+Operators, paired-delimiter notation and reduction bindings resolve to ordinary
+callable signatures.
 The [notation contract](notation.md) defines declarations, fixity, exact binding
 powers, delimiter holes and scope. A target must be mathematical or local, have
 one written result type and exactly the descriptor's number of data inputs:
 two for infix, one for prefix/postfix, and one per delimiter hole. Only reserved
 `==` requires a Boolean result. Protocols and implicit services are not targets.
 Public bindings require public targets. Unused bindings are checked too.
+Reduction descriptors have one mapped-vector operand and the additional
+[finite reduction target rules](#finite-vector-reductions).
 
 A block can begin with `operator + = A::add;`, where `A` is an explicit component
 parameter, or with other callable bindings. Targets accept partial static
