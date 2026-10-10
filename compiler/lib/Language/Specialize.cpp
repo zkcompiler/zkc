@@ -394,7 +394,14 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       if (!types.checkArguments(source, args, source.span))
         return {};
       std::string key;
-      detail::frame(key, source.qualifiedName);
+      if (source.generatedReduction) {
+        detail::frame(key, "generated-reduction");
+        detail::frame(key,
+                      declarations[source.generatedReduction->enclosing.index]
+                          .qualifiedName);
+        detail::frame(key, std::to_string(source.generatedReduction->ordinal));
+      } else
+        detail::frame(key, source.qualifiedName);
       for (auto &arg : args) {
         if (types.symbolic(arg)) {
           types.fail("source.generic",

@@ -101,6 +101,8 @@ add_zkc_component(Language
   lib/Language/ExpressionInference.cpp
   lib/Language/CallResolution.cpp
   lib/Language/Calls.cpp
+  lib/Language/Reductions.cpp
+  lib/Language/ReductionWitness.cpp
   lib/Language/Builtins.cpp
   lib/Language/Kernels.cpp
   lib/Language/Intrinsics.cpp

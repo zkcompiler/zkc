@@ -41,6 +41,7 @@ Checker::operatorBinding(const Declaration &context,
   const auto arity = notation.arity;
   bool validArity = false;
   switch (notation.position) {
+  case Position::Reduction:
   case Position::Prefix:
   case Position::Postfix:
     validArity = arity == 1;
@@ -125,6 +126,14 @@ Checker::operatorBinding(const Declaration &context,
   (void)callableArguments(equations, types, callee, signature, source.span);
   if (types.diagnostic)
     return {};
+  if (notation.position == Position::Reduction) {
+    std::vector<Type> arguments;
+    for (unsigned i = 0; i < callee.parameters.size(); ++i)
+      arguments.push_back(
+          result.arguments[i].value_or(parameterType(callee.parameters[i])));
+    if (!reductionTarget(types, callee, *target, arguments, source.span))
+      return {};
+  }
   return result;
 }
 

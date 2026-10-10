@@ -85,6 +85,7 @@ struct ExpressionTypes {
     Span binding;
   };
   std::map<uint32_t, Operator> operators;
+  std::map<uint32_t, unsigned> reductionHeights;
 };
 } // namespace zkc::language::detail
 #endif

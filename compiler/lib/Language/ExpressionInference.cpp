@@ -36,6 +36,33 @@ class ExpressionInference {
   std::vector<uint32_t> expressionOrder;
   std::vector<Call> calls;
   ExpressionTypes output;
+  std::optional<uint32_t> reductionSite;
+  struct CallContext {
+    Body::Mode mode;
+    std::optional<uint32_t> reduction;
+  };
+  std::map<uint32_t, CallContext> contexts;
+  bool accountCall(uint32_t id, const Declaration &callee,
+                   bool mapped = false) {
+    if (callee.abstract)
+      return true;
+    const auto &context = contexts.at(id);
+    const auto &primitive = checker.sources[callee.id.index]->primitive;
+    unsigned edge =
+        !mapped && primitive && primitiveCallIsInline(context.mode, *primitive)
+            ? 0
+            : 1;
+    unsigned extra = context.reduction ? 1 : 0;
+    if (!checker.body(callee.id, owner.callDepth + extra + edge))
+      return false;
+    unsigned height = checker.bodyHeights[callee.id.index] + edge;
+    checker.bodyHeights[decl.id.index] =
+        std::max(checker.bodyHeights[decl.id.index], height + extra);
+    if (context.reduction)
+      output.reductionHeights[*context.reduction] =
+          std::max(output.reductionHeights[*context.reduction], height);
+    return true;
+  }
 
   bool fail(StringRef code, const Twine &message, Span span) {
     return checker.types.fail(code, message, span);
@@ -147,17 +174,8 @@ class ExpressionInference {
       output.inputs.emplace(id, std::move(inputs));
       // Complete only the selected target. The ordinary body checker owns
       // cycles, permissions, requirements and execution modes after selection.
-      if (!callee.abstract) {
-        const auto &primitive = checker.sources[callee.id.index]->primitive;
-        unsigned edge =
-            primitive && primitiveCallIsInline(owner.body.mode, *primitive) ? 0
-                                                                            : 1;
-        if (!checker.body(callee.id, owner.callDepth + edge))
-          return false;
-        checker.bodyHeights[decl.id.index] =
-            std::max(checker.bodyHeights[decl.id.index],
-                     checker.bodyHeights[callee.id.index] + edge);
-      }
+      if (!accountCall(id, callee))
+        return false;
       calls.push_back({id, callee.id, std::move(signature.parameters)});
     }
     for (unsigned i = begin; i < calls.size(); ++i) {
@@ -212,18 +230,8 @@ class ExpressionInference {
                                     unsigned depth,
                                     const std::vector<bool> &rows = {}) {
     const auto &expr = syntax.expressions[id];
-    if (!callee.abstract) {
-      const auto &primitive = checker.sources[callee.id.index]->primitive;
-      unsigned edge = expr.kind != K::Map && primitive &&
-                              primitiveCallIsInline(owner.body.mode, *primitive)
-                          ? 0
-                          : 1;
-      if (!checker.body(callee.id, owner.callDepth + edge))
-        return {};
-      checker.bodyHeights[decl.id.index] =
-          std::max(checker.bodyHeights[decl.id.index],
-                   checker.bodyHeights[callee.id.index] + edge);
-    }
+    if (!accountCall(id, callee, expr.kind == K::Map))
+      return {};
     auto constraints = instantiateCallable(types, checker.types, callee,
                                            {callee.id, component}, expr.span);
     if (checker.types.diagnostic)
@@ -534,6 +542,9 @@ class ExpressionInference {
     if (auto it = expressions.find(id); it != expressions.end())
       return it->second;
     const auto &expr = syntax.expressions[id];
+    contexts.emplace(
+        id, CallContext{reductionSite ? Body::Mode::Math : owner.body.mode,
+                        reductionSite});
     Result result{types.fresh(expr.span)};
     if (checker.types.diagnostic ||
         depth > checker.work.limits.expressionDepth ||
@@ -610,6 +621,37 @@ class ExpressionInference {
       output.operators.emplace(id, std::move(witness));
       operators->add(id, expr.span, std::move(inputs), result.type,
                      std::move(candidates));
+      break;
+    }
+    case K::ReductionMap: {
+      if (reductionSite || owner.body.mode != Body::Mode::Local) {
+        fail(
+            "source.mode",
+            "finite reductions require local code outside a scalar binder body",
+            expr.span);
+        break;
+      }
+      if (owner.callDepth + 1 > checker.work.limits.callDepth) {
+        fail("source.limit", "generated reduction helper exceeds call depth",
+             expr.span);
+        break;
+      }
+      auto field = types.fresh(expr.span);
+      types.requireKinds(field, {T::Field}, expr.span);
+      auto rows = vectorOf(field, expr.span);
+      types.equal(result.type, rows, expr.span);
+      for (auto collection : expr.children)
+        types.equal(expression(collection, depth + 1).type, rows, expr.span);
+      for (const auto &row : expr.index.children)
+        if (row.binding)
+          bindings.emplace(*row.binding, field);
+      reductionSite = id;
+      output.reductionHeights[id] = 1;
+      checker.bodyHeights[decl.id.index] =
+          std::max(checker.bodyHeights[decl.id.index], 2u);
+      auto scalar = region(expr.regions.front(), depth + 1);
+      types.equal(field, scalar.type, expr.span);
+      reductionSite.reset();
       break;
     }
     case K::Block:
@@ -723,6 +765,13 @@ class ExpressionInference {
                   expr.span);
       break;
     }
+    }
+    if (expr.reductionCall && !checker.types.diagnostic) {
+      auto field = types.fresh(expr.span);
+      types.requireKinds(field, {T::Field}, expr.span);
+      types.equal(result.type, field, expr.span);
+      types.equal(expressions.at(expr.children.front()).type,
+                  vectorOf(field, expr.span), expr.span);
     }
     expressions.emplace(id, result);
     expressionOrder.push_back(id);

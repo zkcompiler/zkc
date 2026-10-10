@@ -189,6 +189,8 @@ Expected<std::string> inspectDeclarations(const CheckedProject &project,
         decl.kind != Declaration::Kind::Local &&
         decl.kind != Declaration::Kind::Protocol)
       continue;
+    if (decl.generatedReduction)
+      continue;
     const Declaration *owner = &decl;
     while (owner->parent)
       owner = &project.declarations()[owner->parent->index];
