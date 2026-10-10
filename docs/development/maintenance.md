@@ -72,11 +72,10 @@ when diagnosing a disagreement.
 The [test guide](../../common/tests/README.md) and CI manifests own current scopes.
 Automatic CI checks source hygiene, docs and the Python harness. Changes to
 native code, libraries or build configuration also run cached Nix checks for
-Rust tests/Clippy, the installed CLI, an installed C++ SDK consumer and C++
-formatting. Full CTest and protocol integration suites, sanitizers and optional
+Rust tests/Clippy, the installed CLI, SDK discovery fixtures, an installed C++ SDK consumer, source boundaries and C++ formatting. Full CTest and protocol integration suites, sanitizers and optional
 formal/external integrations remain explicit workflow scopes.
 
-The Rust check runs Cargo formatting, Clippy and workspace tests directly. It does not build the release CLI or depend on C++ tools and release test drivers. The application and project checks own those execution boundaries. Keep these derivations independent so Rust checks can run alongside the compiler build and reuse their result after unrelated C++ changes.
+The Rust check runs Clippy and workspace tests directly, without building the release CLI or depending on C++ tools and release test drivers. Source style checks own Cargo formatting. The application and project checks own those execution boundaries. Keep these derivations independent so Rust checks can run alongside the compiler build and reuse their result after unrelated C++ changes.
 
 The installed compiler package builds the CLI and SDK with `BUILD_TESTING=OFF`. `checks.compiler` builds and runs the full CTest suite and exports its test helpers for the project integration check. Sanitizers use that testing configuration; domain installation checks use the installed compiler configuration.
 

@@ -29,31 +29,16 @@ let
       );
   pythonTools = pythonSet.mkVirtualEnv "zkc-python-tools" workspace.deps.all;
   environment = import ./environment.nix { inherit pkgs llvm python; };
-  sourceFor = import ./source.nix { inherit lib; };
-  # Native packages need shared test helpers, not checkout maintenance commands.
-  nativeSupport = [
-    "scripts/processes.py"
-    "scripts/reporting.py"
-    "scripts/workspace.py"
-    "common/tests/support"
-  ];
-  compilerSource = nativeSupport ++ [
-    "compiler"
-    "examples"
-    "libraries"
-    "common/unicode"
-  ];
+  sources = import ./sources.nix { inherit lib; };
   compiler = pkgs.callPackage ./compiler.nix {
     inherit llvm utf8proc;
-    source = sourceFor "compiler" compilerSource;
+    source = sources.compiler;
     stdenv = llvm.stdenv;
     python3 = python;
   };
   compilerChecks = compiler.override {
     withTests = true;
-    source = sourceFor "compiler" (
-      compilerSource ++ [ "common/tests/fixtures/clean/air-control.json" ]
-    );
+    source = sources.compilerTests;
   };
   compilerSanitize = compilerChecks.overrideAttrs (old: {
     pname = "zkc-compiler-sanitize";
@@ -73,32 +58,31 @@ let
   # Keep both linkage variants out of `checks` and the default package.
   domainCompiler =
     shared: envelope:
-    compiler.overrideAttrs (old: {
-      pname = "zkc-compiler-${if envelope then "envelope" else "base"}-${
-        if shared then "shared" else "static"
-      }";
-      cmakeFlags = old.cmakeFlags ++ [
-        "-DBUILD_SHARED_LIBS=${if shared then "ON" else "OFF"}"
-      ];
-      preConfigure =
-        old.preConfigure
-        + lib.optionalString envelope ''
-          cmakeFlagsArray+=("-DZKC_CONTRIBUTION_FILES=$PWD/compiler/examples/domain/contribution.cmake")
-        '';
-    });
+    if !shared && !envelope then
+      compiler
+    else
+      (compiler.override { source = if envelope then sources.compilerDomain else sources.compiler; })
+      .overrideAttrs
+        (old: {
+          pname = "zkc-compiler-${if envelope then "envelope" else "base"}-${
+            if shared then "shared" else "static"
+          }";
+          cmakeFlags = old.cmakeFlags ++ [
+            "-DBUILD_SHARED_LIBS=${if shared then "ON" else "OFF"}"
+          ];
+          preConfigure =
+            old.preConfigure
+            + lib.optionalString envelope ''
+              cmakeFlagsArray+=("-DZKC_CONTRIBUTION_FILES=$PWD/compiler/examples/domain/contribution.cmake")
+            '';
+        });
   domainCheck =
     shared:
     pkgs.callPackage ./checks/compiler-domain.nix {
       inherit llvm shared utf8proc;
       stdenv = llvm.stdenv;
       python3 = python;
-      source = sourceFor "compiler" (
-        compilerSource
-        ++ [
-          "scripts/develop.py"
-          "scripts/install_domain.py"
-        ]
-      );
+      source = sources.domainChecks;
       base = domainCompiler shared false;
       domain = domainCompiler shared true;
     };
@@ -107,26 +91,7 @@ let
       cargo = rust;
       rustc = rust;
     };
-    source = sourceFor "rust" (
-      nativeSupport
-      ++ [
-        "Cargo.toml"
-        "Cargo.lock"
-        "rust-toolchain.toml"
-        "crates"
-        "common/unicode"
-        # Native relation tests consume the maintained compiler and adapter fixtures.
-        "compiler/test/fixtures/relation/polynomial-chunks.json"
-        "compiler/adapters/accumulator-machine/fixtures"
-        "compiler/adapters/plonky3/fixtures/recurrence/bundle.json"
-        "compiler/adapters/plonky3/fixtures/recurrence/bundle-configuration.json"
-        "compiler/adapters/plonky3/fixtures/recurrence/bundle-instance.json"
-        "compiler/adapters/plonky3/fixtures/recurrence/bundle-witness.json"
-        "common/tests/run.py"
-        "examples"
-        "libraries"
-      ]
-    );
+    source = sources.rust;
   };
   testDrivers = tools.overrideAttrs {
     pname = "zkc-test-drivers";
@@ -165,20 +130,13 @@ let
     llvm = pkgs.llvmPackages_20;
     stdenv = pkgs.llvmPackages_20.stdenv;
     python3 = python;
-    source = sourceFor "llzk" [
-      "compiler/adapters/llzk"
-      "compiler/include/zkc/Support/MLIRInput.h"
-    ];
+    source = sources.llzk;
   };
   lakeSources = lakeSourcesFor ../lean/lake-manifest.json;
   lean = pkgs.callPackage ./lean.nix {
     inherit leanToolchain lakeSources;
     python3 = python;
-    source = sourceFor "lean" [
-      "lean"
-      "common/tests/fixtures/variants/history-contracts.txt"
-      "common/tests/fixtures/blocks"
-    ];
+    source = sources.lean;
   };
   arklib =
     assert
@@ -186,11 +144,10 @@ let
       == lib.trim (builtins.readFile ../lean/integrations/arklib/lean-toolchain);
     pkgs.callPackage ./arklib.nix {
       inherit lean leanToolchain;
-      source = sourceFor "arklib" [ "lean" ];
+      source = sources.arklib;
       python3 = python;
       lakeSources = lakeSourcesFor ../lean/integrations/arklib/lake-manifest.json;
     };
-  checkSource = sourceFor "checks" (builtins.attrNames (builtins.readDir ../.));
 in
 {
   packages = {
@@ -213,32 +170,46 @@ in
     compiler-domain-shared-checks = domainCheck true;
     lean-checks = pkgs.callPackage ./checks/lean.nix {
       inherit lean leanToolchain environment;
-      source = checkSource;
+      source = sources.leanChecks;
       python3 = python;
     };
     lean-toolchain-checks = pkgs.callPackage ./checks/lean-toolchain.nix { inherit leanToolchain; };
   };
   checks = {
+    sources = pkgs.callPackage ./checks/sources.nix { inherit sources; };
+    harness = pkgs.callPackage ./checks/python.nix {
+      inherit pythonTools environment;
+      python3 = python;
+      source = sources.repository;
+      scope = "harness";
+    };
+    sdk = pkgs.callPackage ./checks/python.nix {
+      inherit pythonTools environment;
+      python3 = python;
+      source = sources.sdk;
+      scope = "sdk";
+    };
     compiler = compilerChecks;
     application = pkgs.callPackage ./checks/application.nix {
       inherit zkc compiler;
-      source = checkSource;
+      source = sources.application;
       python3 = python;
     };
     format = pkgs.callPackage ./checks/format.nix {
-      source = checkSource;
+      source = sources.format;
       clang-tools = llvm.clang-tools;
       python3 = python;
     };
     sandbox = pkgs.callPackage ./checks/sandbox.nix { python3 = python; };
     git-source = pkgs.callPackage ./checks/git-source.nix { };
     style = pkgs.callPackage ./checks/style.nix {
-      inherit pythonTools;
+      inherit pythonTools rust;
       python3 = python;
-      source = checkSource;
+      source = sources.repository;
     };
     compiler-consumer = pkgs.callPackage ./checks/compiler-consumer.nix {
       inherit compiler llvm;
+      source = sources.consumer;
       stdenv = llvm.stdenv;
     };
     project = pkgs.callPackage ./checks/project.nix {
@@ -249,11 +220,12 @@ in
         testSupport
         ;
       compiler = compilerChecks;
-      source = checkSource;
+      source = sources.integration;
       python3 = python;
     };
     rust = pkgs.callPackage ./checks/rust.nix {
       inherit tools environment;
+      source = sources.rustTests;
       python3 = python;
     };
   };

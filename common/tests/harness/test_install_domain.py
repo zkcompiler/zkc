@@ -10,7 +10,8 @@ import sys
 import pytest
 
 from harness import fake_command, load
-from install_domain import check_cache, check_consumers
+import check_domain
+from check_domain import check_cache, check_consumers
 from workspace import ROOT, native_configuration
 
 
@@ -48,7 +49,7 @@ def test_private_registration_fragments_refused_before_consumer_build(tmp_path, 
 
 @pytest.fixture
 def driver(monkeypatch, tmp_path, native_config):
-    developer = load("developer", "scripts/develop.py")
+    developer = load("test_runner", "common/tests/run.py")
     calls = []
     controls = {"missing_package": False, "inventory": None, "junit": None, "fail": False}
 
@@ -73,7 +74,7 @@ def driver(monkeypatch, tmp_path, native_config):
                 Path(args[-1]).write_text(xml)
 
     monkeypatch.setattr(developer, "run", run)
-    monkeypatch.setitem(sys.modules, "develop", developer)
+    monkeypatch.setattr(check_domain, "run", run)
     monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path / "reports"))
 
     def invoke(*args):
@@ -205,9 +206,9 @@ def test_absent_static_linkage_cache_entry_is_supported(tmp_path, native_config)
 
 def test_installed_prefix_entry_point_uses_same_consumer_checks(driver, monkeypatch, tmp_path):
     _, calls, _ = driver
-    module = load("installed_domain", "scripts/install_domain.py")
+    module = check_domain
     monkeypatch.chdir(tmp_path)
-    args = ["install_domain.py", "--output", "evidence"]
+    args = ["check_domain.py", "--output", "evidence"]
     for name in ("base", "domain"):
         prefix = tmp_path / name
         package = prefix / "lib/cmake/ZkcCompiler"
@@ -232,7 +233,7 @@ def test_just_forwards_explicit_build_arguments_without_prerequisites(monkeypatc
                    check=True, capture_output=True, text=True, timeout=10)
     commands = [json.loads(line) for line in record.read_text().splitlines()]
     assert len(commands) == 1
-    assert commands[0]["arguments"] == ["scripts/develop.py", "install-domain", "--profile", "shared", *arguments]
+    assert commands[0]["arguments"] == ["common/tests/run.py", "install-domain", "--profile", "shared", *arguments]
 
 
 @pytest.mark.parametrize("kind", ["empty", "symlink", "missing"])

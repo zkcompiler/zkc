@@ -2,6 +2,7 @@
   stdenvNoCC,
   source,
   pythonTools,
+  rust,
   nixfmt,
   just,
   actionlint,
@@ -14,12 +15,16 @@ stdenvNoCC.mkDerivation {
   src = source;
   nativeBuildInputs = [
     pythonTools
+    rust
     nixfmt
     just
     actionlint
     uv
     python3
   ];
+  UV_PROJECT_ENVIRONMENT = pythonTools;
+  UV_NO_SYNC = "1";
+  UV_OFFLINE = "1";
   UV_PYTHON = "${python3}/bin/python3";
   SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
   dontConfigure = true;
@@ -29,14 +34,11 @@ stdenvNoCC.mkDerivation {
     export UV_CACHE_DIR="$TMPDIR/uv-cache"
     export UV_PYTHON_DOWNLOADS=never
     uv lock --check --offline
-    just --list > /dev/null
-    find . -name '*.nix' -print0 | xargs -0 nixfmt --check
-    actionlint -shellcheck="" .github/workflows/*.yml
-    ruff check .
-    python3 common/tests/check_docs.py --all > docs-check.json
+    python3 common/tests/run.py style
+    python3 common/tests/run.py docs
   '';
   installPhase = ''
     mkdir -p "$out"
-    cp docs-check.json "$out/"
+    cp -R build/reports "$out/reports"
   '';
 }
