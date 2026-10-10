@@ -33,6 +33,8 @@ def select(repo, base, output):
     ("common/unicode/manifest.json", False, True),
     ("common/unicode/manifest.json", True, True),
     ("common/tests/run.py", False, True),
+    ("pyproject.toml", False, True),
+    ("uv.lock", False, True),
     ("lean/Zkc.lean", False, False),
     ("compiler/CMakeLists.txt", False, True),
     ("crates/zkc-tools/build.rs", False, True),
