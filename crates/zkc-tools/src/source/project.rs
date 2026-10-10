@@ -1,10 +1,10 @@
 //! Explicit source inputs. Imports never perform filesystem discovery.
-use crate::{
-    cli::Arguments,
-    host::{document, io},
-};
+use crate::{cli::Arguments, host::io};
 use serde::Deserialize;
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 type Result<T> = std::result::Result<T, String>;
 const MANIFEST_BYTES: usize = 1024 * 1024;
@@ -15,6 +15,7 @@ const FILES: usize = 256;
 struct Project {
     format: String,
     modules: BTreeMap<String, String>,
+    #[serde(default)]
     assets: BTreeMap<String, Asset>,
 }
 #[derive(Deserialize)]
@@ -28,6 +29,7 @@ pub(super) struct Inputs {
     pub flags: Vec<String>,
     /// Includes the manifest: publication must not overwrite any input.
     pub paths: Vec<String>,
+    pub manifest: Option<PathBuf>,
 }
 impl Inputs {
     pub fn load(args: &Arguments<'_>) -> Result<Self> {
@@ -40,28 +42,31 @@ impl Inputs {
             .options
             .iter()
             .any(|(k, _)| matches!(*k, "--module" | "--asset"));
-        if manifest.is_some() && explicit || manifest.is_none() && !explicit {
+        if manifest.is_some() && explicit {
             return Err("cli-usage".into());
         }
+        let manifest = match manifest {
+            Some(path) => Some(PathBuf::from(path)),
+            None if explicit => None,
+            None => Some(discover()?),
+        };
         let mut modules = BTreeMap::new();
         let mut assets = BTreeMap::new();
         let mut result = Self {
             flags: vec![],
             paths: vec![],
+            manifest: manifest.clone(),
         };
         if let Some(path) = manifest {
-            let bytes = io::read_regular(path, MANIFEST_BYTES).map_err(|e| match e {
+            let bytes = io::read_regular(&path, MANIFEST_BYTES).map_err(|e| match e {
                 io::ReadError::Limit => "source-project-limit",
                 io::ReadError::Io(_) => "source-project-io",
             })?;
-            let value =
-                document::read(&bytes, MANIFEST_BYTES).map_err(|_| "source-project-format")?;
-            let project: Project =
-                serde_json::from_value(value).map_err(|_| "source-project-format")?;
+            let project: Project = toml::from_slice(&bytes).map_err(|_| "source-project-format")?;
             if project.format != "zkc.project/0" || project.modules.is_empty() {
                 return Err("source-project-format".into());
             }
-            let parent = Path::new(path).parent().ok_or("source-project-format")?;
+            let parent = path.parent().ok_or("source-project-format")?;
             for (name, path) in project.modules {
                 modules.insert(name, resolve(parent, &path)?);
             }
@@ -74,7 +79,9 @@ impl Inputs {
                     },
                 );
             }
-            result.paths.push(path.into());
+            result
+                .paths
+                .push(path.to_str().ok_or("source-project-format")?.into());
         } else {
             for &(key, value) in &args.options {
                 let value = value.unwrap_or("");
@@ -150,4 +157,19 @@ fn resolve(parent: &Path, path: &str) -> Result<String> {
     let path = path.to_str().ok_or("source-project-format")?;
     validate_path(path)?;
     Ok(path.into())
+}
+
+/// Stop at the nearest directory entry, even if opening it will fail. In
+/// particular, a dangling symlink must not silently select a parent's project.
+fn discover() -> Result<PathBuf> {
+    let cwd = std::env::current_dir().map_err(|_| "source-project-io")?;
+    for parent in cwd.ancestors() {
+        let candidate = parent.join("zkc.toml");
+        match candidate.symlink_metadata() {
+            Ok(_) => return Ok(candidate),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err("source-project-io".into()),
+        }
+    }
+    Err("source-project-missing".into())
 }

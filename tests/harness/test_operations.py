@@ -223,7 +223,7 @@ def test_demo_writes_under_current_run_reports(monkeypatch, tmp_path):
     runner.execute("demo", SimpleNamespace())
     output = tmp_path / "run/demo"
     assert all(path.parent == output for path in outputs)
-    assert (output / "proof.entry").read_bytes() == b"package"
+    assert (output / "proof.zkpkg").read_bytes() == b"package"
     assert (output / "proof.bin").read_bytes() == b"proof"
     assert json.loads((output / "validator.json").read_text())["status"] == "accepted"
     # Reusing the same invocation output must not overwrite a prior proof.

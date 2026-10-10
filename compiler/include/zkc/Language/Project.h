@@ -330,6 +330,8 @@ struct SetupSlot {
   std::vector<EntryInput> inputs;
   Span span;
 };
+enum class EntryKind { Run, Proof };
+struct RunEntry {};
 /// Explicit two-participant proof job choices. Public inputs name whole logical
 /// ports; acceptance can select a Boolean product component. Service indices
 /// refer to managed ports, independently of native data flattening.
@@ -403,7 +405,14 @@ struct Declaration {
   std::optional<RelationDefinition> relation;
   std::vector<SpecificationClause> specifications;
   std::optional<DeclarationId> target;
-  std::optional<ProofEntry> proof;
+  std::variant<RunEntry, ProofEntry> configuration;
+  EntryKind entryKind() const {
+    return std::holds_alternative<ProofEntry>(configuration) ? EntryKind::Proof
+                                                             : EntryKind::Run;
+  }
+  const ProofEntry *proof() const {
+    return std::get_if<ProofEntry>(&configuration);
+  }
   std::vector<SetupSlot> setups;
 };
 
@@ -423,6 +432,11 @@ llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
                                         std::vector<AssetBuffer>,
                                         const CaptureOptions &);
 Analysis analyze(const CapturedProject &, const Limits & = {});
+/// Select from checked declarations: exact qualified name, unique short name,
+/// or the sole Entry when the selector is empty. Never selects by execution
+/// kind.
+llvm::Expected<DeclarationId> selectEntry(const CheckedProject &,
+                                          llvm::StringRef, const Limits & = {});
 llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &, llvm::StringRef,
                                        const Limits & = {});
 
@@ -450,6 +464,8 @@ public:
   llvm::ArrayRef<Token> tokens(ModuleId) const;
   llvm::StringRef installationIdentity() const;
   uint64_t checkedWork() const;
+  /// All named Entries (including aliases), sorted by qualified name.
+  std::vector<DeclarationId> entries() const;
 
 private:
   friend class Layouts;

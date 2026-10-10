@@ -1,16 +1,16 @@
 # Architecture
 
-zkc uses one compilation and execution model. `.zkc` Language emits mathematical
-MLIR, which passes through `protocol`, `participant`, `exec` and `physical`
+zkc uses one compilation and execution model. The `.zkc` frontend emits Protocol
+IR (PIR), built on MLIR. PIR passes through `protocol`, `participant`, `exec` and `physical`
 profiles and is exported as `zkc.program/0`. Entry packages, proof deployments
 and joint bundles execute through the same Rust Runner and installed kernels.
 
 ## System map
 
 ```text
-explicit .zkc modules + Assets                 direct mathematical MLIR
+explicit .zkc modules + Assets                    Protocol IR
               │                                          │
-           Language ─────────────────────────────────────┤
+           frontend ─────────────────────────────────────┤
                                                          ▼
                   protocol → participant → exec → physical
                                                          │
@@ -43,6 +43,8 @@ relation declarations, library-level multi-table bundles and external adapters.
 | `zkc.program/0` | Closed executable participant description admitted by C++ export and Rust loading |
 | Host package | Application-authorized identity, input/result layout, setup authority, execution limits and publication |
 
+PIR is the umbrella for these profiles and their cooperating dialects;
+`protocol` names one profile and the interaction dialect, not the entire IR.
 The [pipeline](compiler/pipeline.md) explains the transitions. Each
 [adjacent preservation check](compiler/verification.md) reads actual candidate
 operands and control against retained input. Source checking, IR formation,

@@ -13,34 +13,33 @@ const COMMANDS: &[Command] = &[
     Command {
         name: "check",
         summary: "Check source definitions and optionally a selected Entry",
-        positional: "",
+        positional: "[ENTRY]",
         options: &[
             Opt::new("--project=FILE"),
             Opt::new("--module=MODULE=FILE.zkc").repeated(),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
-            Opt::new("--entry=MODULE::ENTRY"),
             Opt::new("--declarations"),
             Opt::new("--compiler=PATH"),
         ],
-        description: "Supply --project (zkc.project/0) or explicit modules/assets. All definitions
-are checked. --entry also checks specialization and mathematical IR correspondence.
+        description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.
+All definitions are checked; ENTRY also checks closure and Protocol IR correspondence.
+Select an Entry by unique short name or qualified module::Name. The report lists Entries.
 --declarations reports completed public callable contracts.\nChecking does not execute the protocol or establish its security.",
     },
     Command {
         name: "compile",
         summary: "Compile .zkc source to an authenticated Entry package",
-        positional: "",
+        positional: "[ENTRY]",
         options: &[
-            Opt::new("--entry=MODULE::ENTRY").required(),
             Opt::new("--module=MODULE=FILE.zkc").repeated(),
             Opt::new("--project=FILE"),
-            Opt::new("--output=PACKAGE").required(),
+            Opt::new("--output=PACKAGE"),
             Opt::new("--compiler=PATH"),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
             Opt::new("--no-simplify"),
             Opt::new("--release-storage"),
         ],
-        description: "Supply --project (zkc.project/0) or explicit modules/assets.\nCompilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
+        description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.\nProject output defaults to build/zkc/<qualified.name>.zkpkg beside the manifest.\nExplicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
     },
     Command {
         name: "inspect",
@@ -207,7 +206,12 @@ mod tests {
     #[test]
     fn argument_errors_are_consistent_and_precede_io() {
         for spec in COMMANDS {
-            let report = run(spec.name, &[]);
+            let invalid = if matches!(spec.name, "check" | "compile") {
+                args(&["one", "two"])
+            } else {
+                vec![]
+            };
+            let report = run(spec.name, &invalid);
             assert_eq!(report["phase"], "arguments", "{}", spec.name);
             assert_eq!(report["code"], "cli-usage");
             assert!(report["message"].is_string());
@@ -273,16 +277,20 @@ mod tests {
         }
     }
     #[test]
-    fn compile_requires_selection_and_allows_repeated_sources() {
+    fn compile_accepts_optional_selection_and_repeated_sources() {
         let compile = command("compile").unwrap();
-        let values = args(&[
-            "--entry=a::E",
-            "--module=a=a.zkc",
-            "--module=b=b.zkc",
-            "--output=p",
-        ]);
+        let values = args(&["a::E", "--module=a=a.zkc", "--module=b=b.zkc", "--output=p"]);
         assert!(compile.parse(&values).is_ok());
-        assert_eq!(compile.parse(&values[..3]).err().unwrap().code, "cli-usage");
+        assert!(compile.parse(&values[..3]).is_ok());
+        assert!(compile.parse(&args(&[])).is_ok());
+        assert_eq!(
+            compile.parse(&args(&["one", "two"])).err().unwrap().code,
+            "cli-usage"
+        );
+        assert_eq!(
+            compile.parse(&args(&["--entry=a::E"])).err().unwrap().code,
+            "cli-option"
+        );
     }
     #[test]
     fn removed_commands_are_not_aliases() {

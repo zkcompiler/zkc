@@ -2,14 +2,12 @@ module example;
 use schnorr::{Schnorr};
 domain G = group("bls12-381.g1");
 
-entry Proof = Schnorr<G> {
+proof Proof = Schnorr<G> {
   prover P;
   verifier V;
   public { base, point };
   accept accepted;
   target knowledge;
-  construction fiat_shamir("merlin3.bls12-381.fr64be/0") {
-    derive challenges;
-  }
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
-entry Interactive = Schnorr<G>;
+run Interactive = Schnorr<G>;

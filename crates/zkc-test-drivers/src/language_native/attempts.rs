@@ -10,7 +10,7 @@ use zkc_tools::{
     run::HostLimits,
 };
 fn package(directory: &Path, entry: &str, suite: usize) -> Package {
-    let bytes = std::fs::read(directory.join(format!("attempt-{entry}-{suite}.entry"))).unwrap();
+    let bytes = std::fs::read(directory.join(format!("attempt-{entry}-{suite}.zkpkg"))).unwrap();
     Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES).unwrap()
 }
 fn role(producing: bool, done: bool) -> RoleInputs {

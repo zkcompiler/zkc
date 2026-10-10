@@ -10,4 +10,4 @@ protocol Run roles(P)(x: Fr @P, n: index @P) -> (r: Fr @P) {
   let result @P = sum(x, n);
   return result;
 }
-entry Demo = Run;
+run Demo = Run;

@@ -21,7 +21,7 @@ pub(super) fn run(directory: &Path) {
                 )
                 .unwrap();
                 let published = std::fs::read(directory.join(format!(
-                    "source-proof-{suite}-{simplified}-{released}.entry"
+                    "source-proof-{suite}-{simplified}-{released}.zkpkg"
                 )))
                 .unwrap();
                 // This test's publication is produced by the preceding trusted
@@ -380,7 +380,7 @@ pub(super) fn run(directory: &Path) {
 }
 
 fn authored(directory: &Path) {
-    let bytes = std::fs::read(directory.join("host-proof.entry")).unwrap();
+    let bytes = std::fs::read(directory.join("host-proof.zkpkg")).unwrap();
     let package =
         Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES).unwrap();
     assert_eq!(

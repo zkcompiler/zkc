@@ -1,6 +1,6 @@
 # Compiler reference
 
-The compiler accepts checked `.zkc` source or mathematical MLIR and exports
+The compiler accepts checked `.zkc` source or Protocol IR and exports
 `zkc.program/0`. The [pipeline](pipeline.md) explains representations and ownership;
 [verification](verification.md) explains the comparisons performed before
 publication.

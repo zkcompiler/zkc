@@ -45,7 +45,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, c: Vector<Fr> @P,
   let constant = broadcast(a, s);
   return (folded = folded, combined = combined, constant = constant);
 }
-entry Demo = Run;
+run Demo = Run;
 '''
 
 # The mapped result is never used; its shape checks still execute.
@@ -64,7 +64,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, s: Fr @P)
   let kept = dead(a, b, s);
   return (kept = kept);
 }
-entry Demo = Run;
+run Demo = Run;
 '''
 
 # A map inside a loop executes, and checks shapes, once per iteration.
@@ -86,7 +86,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, s: Fr @P, n: index @P)
   let repeated = repeat(a, b, s, n);
   return (repeated = repeated);
 }
-entry Demo = Run;
+run Demo = Run;
 '''
 
 # One helper realized for a scalar call and for two different row masks.
@@ -111,7 +111,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, x: Fr @P, y: Fr @P,
   let scalar = single(x, y, s);
   return (rows = rows, toward = toward, scalar = scalar);
 }
-entry Demo = Run;
+run Demo = Run;
 '''
 
 
@@ -242,10 +242,10 @@ def test_artifact_and_work_are_independent_of_height(toolchain, journal, directo
 
 
 def build(toolchain, journal, directory, entry):
-    package = directory / f'{entry}.entry'
+    package = directory / f'{entry}.zkpkg'
     result = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-                           f'--project={PROJECT}/zkc.json',
-                           f'--entry=example::{entry}', f'--output={package}'])
+                           f'--project={PROJECT}/zkc.toml',
+                           f'example::{entry}', f'--output={package}'])
     return package, result['package_sha256']
 
 
@@ -336,7 +336,7 @@ protocol Run roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, c: Vector<Fr> @P, s: F
   let combined = combine(a, b, c, s);
   return (combined = combined);
 }
-entry Demo = Run;
+run Demo = Run;
 '''
 
 

@@ -39,8 +39,8 @@ protocol Pair roles(P,V)
   let ok=both(first,second);
   return(accepted=ok,ready=claim.tag);
 }
-entry Run=Pair{setup first{vk_alias,claim.c,vk0,pk0};setup second{vk1,pk1};}
-entry Prove=Pair{
+run Run=Pair{setup first{vk_alias,claim.c,vk0,pk0};setup second{vk1,pk1};}
+proof Prove=Pair{
   setup first{vk_alias,claim.c,vk0,pk0};setup second{vk1,pk1};
   prover P;verifier V;public{claim,vk0,vk1,point,vk_alias};accept accepted;complete ready;construction authored;
 }

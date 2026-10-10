@@ -36,7 +36,7 @@ identity and argument checks.
 ## Use data through the native model
 
 An authored protocol can use explicit matrix/trace inputs and installed kernels,
-or a selected native relation adapter can produce mathematical MLIR. The bounded
+or a selected native relation adapter can produce Protocol IR. The bounded
 [R1CS/Sumcheck adapter](../compiler/relations.md) makes its reduction
 and terminal computation explicit. It has its own size and field restrictions.
 It is distinct from merely importing a relation.

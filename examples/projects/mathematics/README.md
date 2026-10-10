@@ -7,8 +7,8 @@ For `values = [a, b]`, both compute `(1 - point) * a + point * b`.
 Compile from the repository root:
 
 ```sh
-zkc compile --project=examples/projects/mathematics/zkc.json \
-  --entry=example::Run --output=mathematics.entry
+zkc compile --project=examples/projects/mathematics/zkc.toml \
+  example::Run --output=mathematics.zkpkg
 ```
 
 Use `zkc inspect` for the named input/output interface and `zkc run` for local

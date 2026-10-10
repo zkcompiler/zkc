@@ -127,7 +127,7 @@ fn refuses(host: &RunEntry, request: RunRequest, expected: &str) {
 pub(super) fn run(directory: &Path) {
     services(directory);
     shared_inputs(directory);
-    let publication = package(directory, "typed-host_values.entry");
+    let publication = package(directory, "typed-host_values.zkpkg");
     let host = RunEntry::admit(
         publication.clone(),
         HostLimits::default(),
@@ -249,7 +249,7 @@ pub(super) fn run(directory: &Path) {
         Ok(_) => panic!("private constructor admitted"),
     }
     match RunEntry::admit(
-        package(directory, "host-custody.entry"),
+        package(directory, "host-custody.zkpkg"),
         HostLimits::default(),
         SetupAuthority::default(),
     ) {
@@ -270,7 +270,7 @@ pub(super) fn run(directory: &Path) {
 
 fn services(directory: &Path) {
     let host = RunEntry::admit(
-        package(directory, "host-services.entry"),
+        package(directory, "host-services.zkpkg"),
         HostLimits::default(),
         SetupAuthority::default(),
     )
@@ -320,7 +320,7 @@ fn services(directory: &Path) {
 }
 fn shared_inputs(directory: &Path) {
     let host = RunEntry::admit(
-        package(directory, "transfer.entry"),
+        package(directory, "transfer.zkpkg"),
         HostLimits::default(),
         SetupAuthority::default(),
     )

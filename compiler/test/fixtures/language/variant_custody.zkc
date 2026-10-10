@@ -21,4 +21,4 @@ protocol Run roles(P)(x:Fr@P, y:Fr@P, fallback:Fr@P, a:bool@P, b:bool@P)->(resul
   let result @P = read(choice, fallback);
   return(result=result);
 }
-entry Demo = Run;
+run Demo = Run;

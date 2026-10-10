@@ -17,8 +17,8 @@ From the repository root, with the built `zkc` and `zkc-compile` on `PATH`:
 
 ```sh
 zkc compile --compiler=zkc-compile \
-  --project=examples/projects/air-stark/zkc.json \
-  --entry=air_stark_example::Proof --output=air-stark.entry
+  --project=examples/projects/air-stark/zkc.toml \
+  air_stark_example::Proof --output=air-stark.zkpkg
 ```
 
 Prepare public and private requests from the retained upstream run, then prove
@@ -26,8 +26,8 @@ and verify using the `package_sha256` returned by compilation:
 
 ```sh
 python3 examples/projects/air-stark/prepare.py build/air-stark
-zkc prove air-stark.entry "$PACKAGE_SHA256" build/air-stark/prover.json build/air-stark/proof.bin
-zkc verify air-stark.entry "$PACKAGE_SHA256" build/air-stark/verifier.json build/air-stark/proof.bin
+zkc prove air-stark.zkpkg "$PACKAGE_SHA256" build/air-stark/prover.json build/air-stark/proof.bin
+zkc verify air-stark.zkpkg "$PACKAGE_SHA256" build/air-stark/verifier.json build/air-stark/proof.bin
 ```
 
 `Run` is the interactive Entry. `Proof` applies the installed Merlin transcript

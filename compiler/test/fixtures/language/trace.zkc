@@ -17,4 +17,4 @@ protocol Run roles(P,V)(trace: Trace<Fr> @P) -> (rows: index @V) {
   let rows @V = row_count(received);
   return (rows = rows);
 }
-entry Demo = Run;
+run Demo = Run;

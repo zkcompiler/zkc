@@ -51,7 +51,7 @@ protocol Run roles(P)(cs:Vector<F>@P,shift:F@P,beta:F@P,n:index@P,query:index@P)
   let result @P =work(cs,shift,beta,n,query);
   return(result=result);
 }}
-entry Demo=Run;
+run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     rng = random.Random(619)
@@ -100,7 +100,7 @@ protocol Run roles(P,V)(q:index@P)->(result:Indices@V,count:index@V) {
   let count @V =size(received);
   return(result=received,count=count);
 }
-entry Demo=Run;
+run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source)
     for query in (0, P + 1, 2**64 - 1):

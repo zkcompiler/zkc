@@ -1,7 +1,7 @@
 # Author mathematical protocols
 
 The `.zkc` language combines total mathematical helpers, ordered local functions,
-static libraries and explicit participant messages. It emits mathematical MLIR
+static libraries and explicit participant messages. It emits Protocol IR
 for the existing participant compiler and runtime. The
 [source profile](../spec/language/README.md) defines syntax,
 permissions, role semantics and bounds. Static protocol composition, managed
@@ -58,22 +58,20 @@ participant equations, a discrete-log relation and a target clause. Its Entry
 chooses P and V, public inputs, the acceptance result and a transcript suite:
 
 ```text
-entry Proof = Schnorr<G> {
+proof Proof = Schnorr<G> {
   prover P;
   verifier V;
   public { base, point };
   accept accepted;
   target knowledge;
-  construction fiat_shamir("merlin3.bls12-381.fr64be/0") {
-    derive challenges;
-  }
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
 ```
 
 The compiler finds the actual draws of `challenges` through composition and
 repetition. It checks each delivery before constructing participant transcripts.
 Use `construction authored;` for an authored noninteractive job. `target` is
-optional and adds no execution guard. An Entry alias such as `entry Release = Proof;`
+optional and adds no execution guard. An Entry alias such as `proof Release = Proof;`
 inherits the whole configuration. The [Entry contract](../spec/language/entries.md#entry-jobs)
 defines exact selection and refusal rules.
 
@@ -103,7 +101,7 @@ protocol Transfer roles(P, V)(x: Fr @P, go: bool @P) -> (result: Pair<Fr> @V) {
   let received = send P -> V(pair);
   return received;
 }
-entry Demo = Transfer;
+run Demo = Transfer;
 ```
 
 `math fn` describes total algebra. `fn` describes ordered work, including control
@@ -204,7 +202,7 @@ common Host binds the interface to the actual selected artifact.
 A setup slot associates protocol inputs with application-owned key authority:
 
 ```text
-entry Proof = Opening<Kzg> {
+proof Proof = Opening<Kzg> {
   setup pcs { vk, pk, commitment };
   prover P;
   verifier V;
@@ -231,7 +229,7 @@ setup slots executing through ordinary kernels and the common runtime.
 - `Zkc::Language`: capture supplied buffers, analyze them, and close an exact
   Entry. It uses the pure Contracts and Relation components and their common
   support; it has no MLIR, runtime or filesystem dependency.
-- `Zkc::Translation`: emit unsimplified mathematical MLIR and independently
+- `Zkc::Translation`: emit unsimplified Protocol IR and independently
   admit and compare actual SSA with the checked source.
 - `Zkc::Compiler`: `prepareOriginal` retains immutable bytes, interface,
   comparison and diagnostic mappings; `compileEntry` returns that retained

@@ -12,4 +12,4 @@ protocol Transfer roles(P, V)(x: Fr @P, c: Fr @(P, V))
   let ok: bool = (r2 == 9) == expected;
   return (first = r1, second = r2, delta = d, ok = ok);
 }
-entry Demo = Transfer;
+run Demo = Transfer;

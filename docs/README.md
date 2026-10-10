@@ -1,6 +1,6 @@
 # Documentation
 
-zkc compiles `.zkc` source or mathematical MLIR into participant programs executed
+zkc compiles `.zkc` source or Protocol IR into participant programs executed
 by a shared Rust runtime. The [architecture](architecture.md) explains the system;
 the [walkthrough](getting-started.md) compiles and runs a complete example.
 

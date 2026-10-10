@@ -103,16 +103,16 @@ bool isUnsupported(StringRef name) {
 }
 bool isReserved(StringRef name) {
   static const std::set<StringRef> words = {
-      "module", "use",    "pub",       "domain",    "field",     "group",
-      "math",   "fn",     "protocol",  "roles",     "entry",     "let",
-      "return", "send",   "bool",      "true",      "false",     "index",
-      "type",   "struct", "enum",      "interface", "component", "where",
-      "nat",    "mut",    "if",        "else",      "max",       "match",
-      "for",    "in",     "drop",      "consume",   "require",   "stop",
-      "opaque", "Type",   "Field",     "Group",     "Copy",      "Drop",
-      "Share",  "Wire",   "completes", "finish_if", "builtin",   "kernel",
-      "pow2",   "formal", "intrinsic", "relation",  "spec",      "construction",
-      "map",    "each"};
+      "module", "use",       "pub",       "domain",    "field",        "group",
+      "math",   "fn",        "protocol",  "roles",     "let",          "return",
+      "send",   "bool",      "true",      "false",     "index",        "type",
+      "struct", "enum",      "interface", "component", "where",        "nat",
+      "mut",    "if",        "else",      "max",       "match",        "for",
+      "in",     "drop",      "consume",   "require",   "stop",         "opaque",
+      "Type",   "Field",     "Group",     "Copy",      "Drop",         "Share",
+      "Wire",   "completes", "finish_if", "builtin",   "kernel",       "pow2",
+      "formal", "intrinsic", "relation",  "spec",      "construction", "map",
+      "each"};
   return words.count(name) || isUnsupported(name);
 }
 bool isIdentifier(StringRef name) {
@@ -349,8 +349,19 @@ Expected<std::string> encodeSymbol(StringRef path, const Limits &limits) {
   }
   return symbol;
 }
-Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
-                                 const Limits &limits) {
+std::vector<DeclarationId> CheckedProject::entries() const {
+  std::vector<DeclarationId> result;
+  for (const auto &decl : declarations())
+    if (decl.kind == Declaration::Kind::Entry)
+      result.push_back(decl.id);
+  llvm::sort(result, [&](DeclarationId a, DeclarationId b) {
+    return declarations()[a.index].qualifiedName <
+           declarations()[b.index].qualifiedName;
+  });
+  return result;
+}
+Expected<DeclarationId> selectEntry(const CheckedProject &project,
+                                    StringRef name, const Limits &limits) {
   if (auto error = checkLimits(limits))
     return std::move(error);
   if (name.size() > limits.moduleBytes + limits.identifierBytes + 2)
@@ -359,107 +370,144 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
       project.declarations().size() > limits.declarations)
     return detail::failure("source.limit",
                            "checked project exceeds requested limits");
-  for (const auto &decl : project.declarations())
-    if (decl.qualifiedName == name) {
-      if (decl.kind != Declaration::Kind::Entry)
-        return detail::failure("source.entry",
-                               "selection must name an Entry declaration",
-                               decl.span);
-      detail::Work work{limits};
-      // Metadata is bounded by definition checking. Immutable template bodies
-      // are shared; specialization starts with its own phase budget.
-      auto storage = std::make_shared<detail::ClosedStorage>();
-      storage->declarations.assign(project.declarations().begin(),
-                                   project.declarations().end());
-      if (auto error = detail::specialize(storage->declarations,
-                                          project.assets(), work, decl.id))
-        return error;
-      storage->protocol = *storage->declarations[decl.id.index].target;
-      if (auto error = detail::closeAssets(project, *storage, work))
-        return error;
-      ClosedEntry entry(project, decl.id, std::move(storage));
-      Layouts layouts(entry, limits);
-      if (auto error = detail::checkSetups(entry, layouts, work))
-        return error;
-      std::function<Error(const Body &)> checkMessages =
-          [&](const Body &body) -> Error {
-        for (const auto &op : body.operations) {
-          if (auto e = work.charge(1, op.span))
-            return e;
-          if (auto *exchange = std::get_if<Exchange>(&op.action)) {
-            auto layout =
-                layouts.get(body.values[exchange->payload.index].type);
-            if (!layout)
-              return layout.takeError();
-            if ((*layout)->formal)
-              return detail::failure("source.formal",
-                                     "message cannot contain formal values",
-                                     op.span);
-            if ((*layout)->leaves.empty())
-              return detail::failure(
-                  "source.wire", "message requires a nonempty native payload",
-                  op.span);
-          }
-          if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action))
-            if (auto e = checkMessages(*repeat->region))
-              return e;
-        }
-        return Error::success();
-      };
-      for (const auto &definition : entry.declarations()) {
-        if (definition.body)
-          if (auto e = checkMessages(*definition.body))
-            return std::move(e);
-        if (definition.relation && definition.origin)
-          for (const auto &port : definition.inputs) {
-            auto layout = layouts.get(port.type);
-            if (!layout)
-              return layout.takeError();
-            if (!(*layout)->permissions.copy || !(*layout)->permissions.drop)
-              return detail::failure("source.relation",
-                                     "relation inputs require immutable data",
-                                     port.span);
-            if ((*layout)->leaves.empty())
-              return detail::failure(
-                  "source.relation",
-                  "relation formal requires a nonempty data layout", port.span);
-            for (const auto &leaf : (*layout)->leaves) {
-              if (!leaf.data())
-                return detail::failure(
-                    "source.relation",
-                    "relation formal cannot contain formal mathematics",
-                    port.span);
-              protocol::TypeParseBudget budget;
-              budget.remaining =
-                  std::min<uint64_t>(budget.remaining, limits.work - work.used);
-              auto before = budget.remaining;
-              auto native =
-                  protocol::parseBoundType(*leaf.data(), false, 0, &budget);
-              if (!native) {
-                consumeError(native.takeError());
-                return detail::failure(
-                    budget.remaining ? "source.relation" : "source.limit",
-                    "relation native type admission failed", port.span);
-              }
-              auto result = protocol::logicalRelationData(*native, budget);
-              if (auto error = work.charge(
-                      before - budget.remaining + leaf.cost(), port.span))
-                return error;
-              if (result == protocol::RelationData::Limit)
-                return detail::failure(
-                    "source.limit",
-                    "relation data work or depth limit exceeded", port.span);
-              if (result != protocol::RelationData::Supported)
-                return detail::failure(
-                    "source.relation",
-                    "relation formal is not immutable logical data", port.span);
-            }
-          }
+  if (name.contains("::")) {
+    for (const auto &decl : project.declarations())
+      if (decl.qualifiedName == name) {
+        if (decl.kind != Declaration::Kind::Entry)
+          return detail::failure("source.entry",
+                                 "selection must name an Entry declaration",
+                                 decl.span);
+        return decl.id;
       }
-      return entry;
+  }
+  auto candidates = project.entries();
+  std::vector<DeclarationId> matches;
+  for (auto id : candidates)
+    if (name.empty() || project.declarations()[id.index].name == name)
+      matches.push_back(id);
+  if (matches.size() == 1)
+    return matches.front();
+  if (candidates.empty())
+    return detail::failure("source.entry",
+                           "project has no Entries; declare run or proof");
+  std::string message;
+  if (matches.empty())
+    message = "unknown Entry: " + name.str() + "; available Entries:";
+  else if (name.empty())
+    message = "multiple Entries; select one by name. Candidates:";
+  else
+    message = "ambiguous Entry: " + name.str() +
+              "; specify a qualified name. Matches:";
+  unsigned shown = 0;
+  for (auto id : matches.empty() ? candidates : matches) {
+    if (shown++ == 16) {
+      message +=
+          "; further candidates omitted; use check to inspect all Entries";
+      break;
     }
-  return detail::failure("source.entry", "unknown qualified Entry: " + name);
+    const auto &decl = project.declarations()[id.index];
+    message += " " + decl.qualifiedName + " (" +
+               (decl.entryKind() == EntryKind::Proof ? "proof" : "run") + ")";
+  }
+  return detail::failure("source.entry", message);
 }
+Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
+                                 const Limits &limits) {
+  auto selected = selectEntry(project, name, limits);
+  if (!selected)
+    return selected.takeError();
+  const auto &decl = project.declarations()[selected->index];
+  detail::Work work{limits};
+  // Metadata is bounded by definition checking. Immutable template bodies
+  // are shared; specialization starts with its own phase budget.
+  auto storage = std::make_shared<detail::ClosedStorage>();
+  storage->declarations.assign(project.declarations().begin(),
+                               project.declarations().end());
+  if (auto error = detail::specialize(storage->declarations, project.assets(),
+                                      work, decl.id))
+    return error;
+  storage->protocol = *storage->declarations[decl.id.index].target;
+  if (auto error = detail::closeAssets(project, *storage, work))
+    return error;
+  ClosedEntry entry(project, decl.id, std::move(storage));
+  Layouts layouts(entry, limits);
+  if (auto error = detail::checkSetups(entry, layouts, work))
+    return error;
+  std::function<Error(const Body &)> checkMessages =
+      [&](const Body &body) -> Error {
+    for (const auto &op : body.operations) {
+      if (auto e = work.charge(1, op.span))
+        return e;
+      if (auto *exchange = std::get_if<Exchange>(&op.action)) {
+        auto layout = layouts.get(body.values[exchange->payload.index].type);
+        if (!layout)
+          return layout.takeError();
+        if ((*layout)->formal)
+          return detail::failure(
+              "source.formal", "message cannot contain formal values", op.span);
+        if ((*layout)->leaves.empty())
+          return detail::failure("source.wire",
+                                 "message requires a nonempty native payload",
+                                 op.span);
+      }
+      if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action))
+        if (auto e = checkMessages(*repeat->region))
+          return e;
+    }
+    return Error::success();
+  };
+  for (const auto &definition : entry.declarations()) {
+    if (definition.body)
+      if (auto e = checkMessages(*definition.body))
+        return std::move(e);
+    if (definition.relation && definition.origin)
+      for (const auto &port : definition.inputs) {
+        auto layout = layouts.get(port.type);
+        if (!layout)
+          return layout.takeError();
+        if (!(*layout)->permissions.copy || !(*layout)->permissions.drop)
+          return detail::failure("source.relation",
+                                 "relation inputs require immutable data",
+                                 port.span);
+        if ((*layout)->leaves.empty())
+          return detail::failure(
+              "source.relation",
+              "relation formal requires a nonempty data layout", port.span);
+        for (const auto &leaf : (*layout)->leaves) {
+          if (!leaf.data())
+            return detail::failure(
+                "source.relation",
+                "relation formal cannot contain formal mathematics", port.span);
+          protocol::TypeParseBudget budget;
+          budget.remaining =
+              std::min<uint64_t>(budget.remaining, limits.work - work.used);
+          auto before = budget.remaining;
+          auto native =
+              protocol::parseBoundType(*leaf.data(), false, 0, &budget);
+          if (!native) {
+            consumeError(native.takeError());
+            return detail::failure(
+                budget.remaining ? "source.relation" : "source.limit",
+                "relation native type admission failed", port.span);
+          }
+          auto result = protocol::logicalRelationData(*native, budget);
+          if (auto error = work.charge(before - budget.remaining + leaf.cost(),
+                                       port.span))
+            return error;
+          if (result == protocol::RelationData::Limit)
+            return detail::failure("source.limit",
+                                   "relation data work or depth limit exceeded",
+                                   port.span);
+          if (result != protocol::RelationData::Supported)
+            return detail::failure(
+                "source.relation",
+                "relation formal is not immutable logical data", port.span);
+        }
+      }
+  }
+  return entry;
+}
+
 const Declaration &ClosedEntry::entry() const {
   return storage->declarations[selected.index];
 }

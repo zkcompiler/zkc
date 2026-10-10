@@ -2,7 +2,7 @@
 
 | Directory | Responsibility |
 |---|---|
-| `compiler/` | C++ Language, mathematical MLIR, relation adapters, native compilation and installed SDK |
+| `compiler/` | C++ Language, Protocol IR, relation adapters, native compilation and installed SDK |
 | `crates/` | Rust Runner, backend bindings, Entry/proof/joint Hosts and CLI |
 | `libraries/` | Reusable `.zkc` libraries, their public interfaces and protocol contracts |
 | `examples/projects/` | Separately authored Entries and invocation inputs |

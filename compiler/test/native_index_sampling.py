@@ -36,7 +36,7 @@ protocol Pick roles(P, V)(coins: Random<E> @V)
   let p = send V -> P(v);
   return (p = p, v = v);
 }
-entry Demo = Pick;
+run Demo = Pick;
 '''
 
 with case("a static power-of-two domain emits a constant bound and an index query"):
@@ -59,7 +59,7 @@ protocol Run roles(P, V)(coins: Random<E> @V) -> (v: index @V) {
   let v = Pick<E, SIZE>(coins);
   return (v = v);
 }
-entry Demo = Run;
+run Demo = Run;
 '''
 
 with case("explicit generic contracts retain the IndexRandomness requirement"):
@@ -177,14 +177,12 @@ protocol Echo<N: nat, Max: nat> roles(P, V)(rounds: index @(P,V),
   let accepted @V = yes();
   return (accepted = accepted);
 }
-entry Proof = Echo<pow2(5), 4> {
+proof Proof = Echo<pow2(5), 4> {
   prover P;
   verifier V;
   public { rounds };
   accept accepted;
-  construction fiat_shamir("SUITE") {
-    derive coins;
-  }
+  construction fiat_shamir("SUITE", coins);
 }
 '''.replace("SUITE", SUITE)
 

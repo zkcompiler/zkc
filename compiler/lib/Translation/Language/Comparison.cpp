@@ -313,7 +313,7 @@ class Comparator {
     }
     if (argument != block.getNumArguments())
       return fail("block has extra arguments");
-    const auto &proof = project.entry().proof;
+    const auto &proof = project.entry().proof();
     if (!region && decl.id.index == project.protocol().id.index && proof &&
         proof->target) {
       const auto &clause = decl.specifications[*proof->target];

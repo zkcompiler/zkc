@@ -8,7 +8,7 @@ struct SourceLocation {
   unsigned line, column;
   Span source;
 };
-/// Direct, unsimplified mathematical MLIR. The caller supplies native dialects.
+/// Direct, unsimplified Protocol IR. The caller supplies native dialects.
 llvm::Expected<std::string>
 emitOriginal(const ClosedEntry &, mlir::MLIRContext &, const Limits & = {});
 struct Correspondence {

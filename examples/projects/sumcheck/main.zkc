@@ -2,13 +2,11 @@ module example;
 use sumcheck::{Sumcheck};
 domain Fr = field("bls12-381.fr");
 
-entry Proof = Sumcheck<Fr, 2> {
+proof Proof = Sumcheck<Fr, 2> {
   prover P;
   verifier V;
   public { values, claim, rounds };
   accept accepted;
-  construction fiat_shamir("merlin3.bls12-381.fr64be/0") {
-    derive challenges;
-  }
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
-entry Interactive = Sumcheck<Fr, 2>;
+run Interactive = Sumcheck<Fr, 2>;

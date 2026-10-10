@@ -10,4 +10,4 @@ protocol Run roles(P)(n: index @P, m: index @P, x: Fr @P) -> (result: Fr @P) {
   return result;
 }
 
-entry Demo = Run;
+run Demo = Run;

@@ -228,6 +228,7 @@ struct SyntaxDeclaration {
   std::optional<SyntaxProofEntry> proof;
   std::vector<SyntaxSetupSlot> setups;
   bool entryBlock = false;
+  EntryKind entryKind = EntryKind::Run;
 };
 struct Import {
   std::string module;

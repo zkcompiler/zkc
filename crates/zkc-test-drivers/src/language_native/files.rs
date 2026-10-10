@@ -64,7 +64,7 @@ pub(super) fn setups(
         "cli-authority.json",
         &json!({"format":"zkc.entry-setups/0","keys":authority.keys.iter().map(|(k,v)|(k.clone(),hex(v))).collect::<std::collections::BTreeMap<_,_>>()}),
     );
-    let package = directory.join("pcs-setup-Prove.entry");
+    let package = directory.join("pcs-setup-Prove.zkpkg");
     let bytes = std::fs::read(&package).unwrap();
     let proof = directory.join("cli-pcs-proof.bin");
     let mut args = vec![
@@ -122,7 +122,7 @@ pub(super) fn setups(
         "cli-run.json",
         &json!({"format":"zkc.entry-run/0","session":"setup_files","roles":{"P":{"inputs":producer_values},"V":{"inputs":verifier_values}},"setups":material}),
     );
-    let package = directory.join("pcs-setup-Run.entry");
+    let package = directory.join("pcs-setup-Run.zkpkg");
     let bytes = std::fs::read(&package).unwrap();
     let result = zkc_tools::cli::run(
         "run",

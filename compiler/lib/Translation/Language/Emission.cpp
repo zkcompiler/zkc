@@ -292,7 +292,7 @@ class Emitter {
           protocol_ir::ServiceReferenceType::get(&context, port.contract);
       services.push_back(block.addArgument(type, location));
     }
-    const auto &proof = project.entry().proof;
+    const auto &proof = project.entry().proof();
     if (!region && decl.id.index == project.protocol().id.index && proof &&
         proof->target) {
       const auto &clause = decl.specifications[*proof->target];

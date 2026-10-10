@@ -361,7 +361,7 @@ class Comparison {
     return true;
   }
   bool job() {
-    const auto &source = entry.entry().proof;
+    const auto &source = entry.entry().proof();
     if (bool(source) != bool(view.proof))
       return fail("source Entry job kind differs");
     if (!source)

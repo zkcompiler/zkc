@@ -36,7 +36,7 @@ int main() {
     protocol Run roles(P)(x:Pair<bool>@P)->(r:Pair<bool>@P){
       let r @P =swap(x);return(r=r);
     }
-    entry Demo=Run;)",
+    run Demo=Run;)",
         "consumer.zkc"}},
       {{"circuit", "r1cs-json", zkc::printJson(relation->encode()),
         "unused.json"}},
@@ -61,7 +61,22 @@ int main() {
   if (declarations->find("m::swap") == std::string::npos ||
       zkc::language::formatDiagnostics({}, &*capture).size() != 0)
     return 11;
-  auto entry = zkc::language::closeEntry(*checked, "m::Demo");
+  auto selected = zkc::language::selectEntry(*checked, "Demo");
+  if (!selected) {
+    llvm::errs() << llvm::toString(selected.takeError());
+    return 12;
+  }
+  auto inventory = zkc::language::inspectEntries(*checked);
+  if (!inventory) {
+    llvm::errs() << llvm::toString(inventory.takeError());
+    return 13;
+  }
+  if (checked->entries().size() != 1 ||
+      checked->declarations()[selected->index].entryKind() !=
+          zkc::language::EntryKind::Run ||
+      inventory->find("m::Demo") == std::string::npos)
+    return 14;
+  auto entry = zkc::language::closeEntry(*checked, "");
   if (!entry) {
     llvm::errs() << llvm::toString(entry.takeError());
     return 3;

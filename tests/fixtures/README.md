@@ -19,7 +19,7 @@ These independently retained vectors support the native and formal checks below.
 Do not regenerate these fixtures from the implementation they check. The
 optional formal package includes its required vectors without invoking the C++
 compiler or Rust execution toolkit. Current native integration generates its
-programs from mathematical MLIR and `.zkc` source in fresh report directories.
+programs from Protocol IR and `.zkc` source in fresh report directories.
 
 Native backend transcript vectors live under
 `crates/zkc-test-support/fixtures/`, owned by the Rust workspace.

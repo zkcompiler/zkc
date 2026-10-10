@@ -12,4 +12,4 @@ protocol Run roles(V)(go: bool @V, coins: Random<Fr> @V) -> (v: Fr @V) {
   return result;
 }
 
-entry Demo = Run;
+run Demo = Run;

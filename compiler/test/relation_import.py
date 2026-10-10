@@ -136,7 +136,7 @@ for field, prime in FIELDS.items():
     assert matrices == [["2", "4", [["0", str(c), "1"]]] for c in (2, 3, 1)]
     # Explicit binary Assets are admitted by the Language capture boundary.
     module = directory / "asset.zkc"
-    module.write_text("module asset; protocol Echo roles(P)(x:bool@P)->(y:bool@P){return(y=x);} entry Run=Echo;")
+    module.write_text("module asset; protocol Echo roles(P)(x:bool@P)->(y:bool@P){return(y=x);} run Run=Echo;")
     invoke(compiler, "language-check", "--source-format=zkc", "--entry=asset::Run", f"--module=asset={module}",
            f"--asset=circuit=r1cs-binary={binary}")
 

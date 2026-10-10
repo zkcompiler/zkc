@@ -69,7 +69,7 @@ int main() {
       fn run(x:F){return f(Choice::Some(x));}
       protocol Run roles(P)(x:F@P)->(r:F@P){
         return run(x);
-      }entry Demo=Run;
+      }run Demo=Run;
     )");
   });
   cases.run(
@@ -128,7 +128,7 @@ int main() {
         let Token{value}=f(Token{value:b},b);return value;
       }
       protocol Run roles(P)(b:bool@P)->(r:bool@P){return run(b);}
-      entry Demo=Run;
+      run Demo=Run;
     )");
     refuses(check(identity + R"(
       struct Token:Drop {}
@@ -153,7 +153,7 @@ int main() {
       fn choose(x:F,go:bool){return if go{x}else{x+x};}
       protocol Run roles(P)(x:F@P,b:bool@P)->(r:F@P){
         return choose(x,b);
-      } entry Demo=Run;
+      } run Demo=Run;
     )");
     refuses(check("fn f(x:bool){return g(x);}fn g(x:bool){return f(x);}"),
             "source.cycle");
@@ -225,7 +225,7 @@ int main() {
       fn root<T:Field>(n:index){return kernel<T>("poly.domain_root",n);}
       protocol Run<T:Field> roles(P)(n:index@P)->(r:T@P){
         return root<T>(n);
-      } entry Demo=Run<F>;
+      } run Demo=Run<F>;
     )");
   });
   cases.run("natural preconditions are inferred and checked at closure", [] {
@@ -271,7 +271,7 @@ int main() {
       const auto &decl = declaration(project, "m::Parent");
       require(decl.bounds.size() == 1 && decl.bounds[0].inferred,
               "caller missed a specification precondition");
-      refuses(check(source + "entry Demo=Parent<0>;"), "source.bound");
+      refuses(check(source + "run Demo=Parent<0>;"), "source.bound");
     }
   });
   cases.run("resource contracts remain explicit", [] {
@@ -321,7 +321,7 @@ int main() {
       }
       protocol Run roles(P)(x:bool@P,coins:Random<F>@P)->(r:F@P){
         let alias=coins;let result=Draw(alias,x,coins);return result;
-      }entry Demo=Run;
+      }run Demo=Run;
     )";
         auto project = take(check(source));
         const auto &draw = declaration(project, "m::Draw");
@@ -384,7 +384,7 @@ int main() {
       math fn indirect<T:Field,C:Increment<T>>(x:T)->T{return C::add(x);}
       protocol Run roles(P)(x:F@P)->(r:F@P){
         return Plus::add<F,G>(x)+indirect<F,Plus<F,G>>(x);
-      }entry Demo=Run;
+      }run Demo=Run;
     )");
   });
   return cases.result();

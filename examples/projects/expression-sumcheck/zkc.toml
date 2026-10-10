@@ -1,0 +1,13 @@
+format = "zkc.project/0"
+
+[modules]
+example = "main.zkc"
+expression_sumcheck = "../../../libraries/sumcheck/expression.zkc"
+"zkc::vector" = "../../../libraries/zkc/vector.zkc"
+"zkc::polynomial" = "../../../libraries/zkc/polynomial.zkc"
+
+[assets]
+
+[assets.product]
+format = "ring-json"
+path = "product.ring.json"

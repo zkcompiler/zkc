@@ -11,4 +11,4 @@ protocol Shapes roles(P)(empty:Empty@P, choice:Cases@P, names:Names@P,
   let wrapped @P =Box::make(true);
   return(empty=empty,choice=choice,names=names,zero=zero,wrapped=wrapped);
 }
-entry Demo=Shapes;
+run Demo=Shapes;

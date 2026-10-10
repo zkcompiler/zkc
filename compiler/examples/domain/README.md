@@ -2,7 +2,7 @@
 
 This example installs an `envelope` nominal type and contract declarations,
 its MLIR adapters, and a reversible local field-add specialization. It consumes
-mathematical MLIR over the installed field types. The envelope type supplies
+Protocol IR over the installed field types. The envelope type supplies
 logical contract adapters; it has no native endpoint policy or executable
 representation.
 

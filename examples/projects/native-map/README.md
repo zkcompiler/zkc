@@ -21,8 +21,8 @@ From the repository root, with built tools on `PATH`:
 
 ```sh
 zkc compile \
-  --project=examples/projects/native-map/zkc.json \
-  --entry=example::Check --output=native-map.entry
+  --project=examples/projects/native-map/zkc.toml \
+  example::Check --output=native-map.zkpkg
 ```
 
 The [integration tests](../../../tests/protocol/test_native_map.py) supply

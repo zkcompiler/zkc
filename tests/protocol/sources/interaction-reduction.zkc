@@ -31,5 +31,5 @@ protocol Inspect<R: Reduction<E>> roles(P)(channels: index @P, channel: Indices 
     height, challenges);
   return (columns = result.0, claims = result.1, residuals = result.2, ranges = result.3);
 }
-entry LogUpRun = Inspect<LogUp<E>>;
-entry ProductRun = Inspect<GrandProduct<E>>;
+run LogUpRun = Inspect<LogUp<E>>;
+run ProductRun = Inspect<GrandProduct<E>>;

@@ -89,7 +89,7 @@ protocol Transfer roles(P, V)(x: Fr @P, n: index @P, go: bool @P) -> (result: Fr
   let received = send P -> V(payload);
   return received;
 }
-entry Demo = Transfer;
+run Demo = Transfer;
 ```
 
 A protocol has an ordered, nonempty role roster and named, typed input/output ports

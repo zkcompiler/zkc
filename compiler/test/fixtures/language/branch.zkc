@@ -11,4 +11,4 @@ protocol Run roles(P,V)(x:Fr@P,go:bool@P)->(out:Fr@V){
  let sent=send P->V(y);
  return(out=sent);
 }
-entry Demo=Run;
+run Demo=Run;

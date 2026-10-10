@@ -74,7 +74,7 @@ with case('Entry packages retain exact source, interface and artifact bytes'):
     assert package['artifact'] == commands.run([compiler, 'language-bundle', *options]).removesuffix('\n')
     assert package['options'] == {'simplify': True, 'release_storage': False}
     assert package_bytes.endswith('}')
-    (OUT / 'transfer.entry').write_text(package_bytes)
+    (OUT / 'transfer.zkpkg').write_text(package_bytes)
 
 with case('same-signature protocols execute through distinct Entries'):
     source = OUT / 'entries.zkc'
@@ -87,7 +87,7 @@ with case('same-signature protocols execute through distinct Entries'):
       protocol Helpers roles(P,)(x:Fr@P,)->(r:Fr@P,b:bool@P,){
         return(b=is_three(x,),r=entries::plus(x,),);
       }
-      entry One=First; entry Two=Second; entry Alias=First; entry Math=Helpers;
+      run One=First; run Two=Second; run Alias=First; run Math=Helpers;
     ''')
     for name, protocol in [('One', 'First'), ('Two', 'Second'), ('Alias', 'First'), ('Math', 'Helpers')]:
         args = ['--source-format=zkc', f'--entry=entries::{name}', f'--module=entries={source}']
@@ -119,7 +119,7 @@ with case('target admission failure names its phase and related source declarati
     helpers += [f'math fn f{i}()->Fr{{return f{i-1}()+f{i-1}();}}' for i in range(1, 18)]
     source.write_text('module expansion; domain Fr=field("bls12-381.fr");\n' + '\n'.join(helpers) +
                       '\nprotocol Small roles(P)()->(r:Fr@P){return(r=1);}' +
-                      '\nprotocol Unused roles(P)()->(r:Fr@P){return(r=f17());}entry Demo=Unused;')
+                      '\nprotocol Unused roles(P)()->(r:Fr@P){return(r=f17());}run Demo=Unused;')
     definitions = json.loads(commands.run([compiler, 'language-check', '--source-format=zkc',
                                              f'--module=expansion={source}']))
     assert definitions['scope'] == 'definitions'
@@ -142,7 +142,7 @@ for name in ('record', 'array', 'loop', 'variant', 'resource', 'component',
             (OUT / f'typed-{name}-{optimized}.bundle').write_text(bundle)
             if optimized:
                 package = commands.run([compiler, 'language-package', *args, *flags])
-                (OUT / f'typed-{name}.entry').write_text(package)
+                (OUT / f'typed-{name}.zkpkg').write_text(package)
         schema = json.loads(commands.run([compiler, 'language-interface', *args]))
         schema = next(p for p in schema['protocols'] if p['symbol'] == schema['protocol'])
         for direction in ('inputs', 'outputs'):
@@ -184,7 +184,7 @@ with case('managed aliases retain ordered queries and owner guards'):
     schema = next(p for p in schema['protocols'] if p['symbol'] == schema['protocol'])
     assert schema['services'] == [{'name': 'coins', 'owner': 'V',
                                    'contract': 'random.bls12-381.fr/0', 'native': 1}]
-    (OUT / 'host-services.entry').write_text(commands.run([compiler, 'language-package', *args]))
+    (OUT / 'host-services.zkpkg').write_text(commands.run([compiler, 'language-package', *args]))
     for optimized in (0, 1):
         flags = [] if optimized else ['--no-simplify']
         bundle = commands.run([compiler, 'language-bundle', *args, *flags])
@@ -243,7 +243,7 @@ with case('source Host export admission retains affine custody obligations'):
     args = ['--source-format=zkc', '--entry=sample::Demo',
             f'--module=sample={FIXTURES / "completion_affine.zkc"}']
     package = commands.run([compiler, 'language-package', *args])
-    (OUT / 'host-custody.entry').write_text(package)
+    (OUT / 'host-custody.zkpkg').write_text(package)
 
 with case('maximum source schema depth binds in the native Host'):
     nested = 'bool'
@@ -254,7 +254,7 @@ with case('maximum source schema depth binds in the native Host'):
 type Inner = {nested};
 type Deep = (Inner,);
 protocol Identity roles(P)(value:Deep@P)->(result:Deep@P){{return(result=value);}}
-entry Demo=Identity;
+run Demo=Identity;
 """)
     args = ['--source-format=zkc', '--entry=deep::Demo', f'--module=deep={source}']
     package = commands.run([compiler, 'language-package', *args])
@@ -264,7 +264,7 @@ entry Demo=Identity;
         schema = schema['fields'][0]['schema']
         depth += 1
     assert depth == 32
-    (OUT / 'deep-schema.entry').write_text(package)
+    (OUT / 'deep-schema.zkpkg').write_text(package)
 
 for suite, identity in enumerate(('merlin3.bls12-381.fr64be/0',
                                    'spongefish0.7.4.keccak.bls12-381.fr64be/0')):
@@ -284,13 +284,13 @@ for suite, identity in enumerate(('merlin3.bls12-381.fr64be/0',
                 (OUT / f'source-proof-{suite}-{simplified}-{released}.json').write_text(deployment)
                 package = commands.run([compiler, 'language-package', *args, *flags])
                 assert json.loads(package)['artifact'] == deployment.removesuffix('\n')
-                (OUT / f'source-proof-{suite}-{simplified}-{released}.entry').write_text(package)
+                (OUT / f'source-proof-{suite}-{simplified}-{released}.zkpkg').write_text(package)
 
 with case('publish authored proof with logical products and empty public inputs'):
     args = ['--source-format=zkc', '--entry=sample::Demo',
             f'--module=sample={FIXTURES / "host_proof.zkc"}']
     package = commands.run([compiler, 'language-package', *args])
-    (OUT / 'host-proof.entry').write_text(package)
+    (OUT / 'host-proof.zkpkg').write_text(package)
 
 for entry in ('Run', 'Prove'):
     with case(f'source setup associations compile through common native execution: {entry}'):
@@ -300,7 +300,7 @@ for entry in ('Run', 'Prove'):
         interface = json.loads(json.loads(package)['interface'])
         assert [slot['name'] for slot in interface['setups']] == ['first', 'second']
         assert interface['setups'][1]['inputs'] == [{'port': 4, 'path': []}, {'port': 5, 'path': []}]
-        (OUT / f'pcs-setup-{entry}.entry').write_text(package)
+        (OUT / f'pcs-setup-{entry}.zkpkg').write_text(package)
 
 for entry in ('Derived', 'Plain', 'Once', 'Run'):
     with case(f'named attempt selection and operational budgets: {entry}'):
@@ -316,6 +316,6 @@ for entry in ('Derived', 'Plain', 'Once', 'Run'):
                 assert view['job']['completion'] == {'direction':'output', 'port':1, 'role':'P', 'path':[0]}
             elif entry == 'Once':
                 assert view['job']['completion'] is None
-            (OUT / f'attempt-{entry}-{suite}.entry').write_text(package)
+            (OUT / f'attempt-{entry}-{suite}.zkpkg').write_text(package)
 
 counted()

@@ -145,6 +145,27 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
   return result;
 }
 } // namespace
+Expected<std::string> inspectEntries(const CheckedProject &project,
+                                     const Limits &limits) {
+  if (auto failure = checkLimits(limits))
+    return std::move(failure);
+  std::string bytes;
+  BoundedStream out(bytes, limits.interfaceBytes);
+  json::OStream json(out);
+  json.array([&] {
+    for (auto id : project.entries()) {
+      const auto &decl = project.declarations()[id.index];
+      json.value(json::Object{
+          {"name", decl.qualifiedName},
+          {"kind", decl.entryKind() == EntryKind::Proof ? "proof" : "run"}});
+      if (out.overflow())
+        break;
+    }
+  });
+  if (out.overflow())
+    return error("source.limit", "Entry inventory byte limit exceeded");
+  return bytes;
+}
 Expected<std::string> inspectDeclarations(const CheckedProject &project,
                                           const Limits &limits) {
   if (auto failure = checkLimits(limits))

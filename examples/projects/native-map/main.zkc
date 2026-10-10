@@ -48,5 +48,5 @@ protocol Combination roles(P, V)
   let accepted @V = same(received, expected);
   return (accepted = accepted);
 }
-entry Check = Gates;
-entry Interactive = Combination;
+run Check = Gates;
+run Interactive = Combination;

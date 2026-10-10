@@ -125,9 +125,9 @@ def build(toolchain, journal, directory, name, *, main=None, asset=None, edits=(
         arguments.append(f'--module={module}={path}')
     label, bundle = asset or ('recurrence', FIXTURE / 'bundle.json')
     arguments.append(f'--asset={label}=relation-bundle-json={bundle}')
-    package = where / 'Proof.entry'
+    package = where / 'Proof.zkpkg'
     report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-                           *arguments, '--entry=air_stark_example::Proof', f'--output={package}'])
+                           *arguments, 'air_stark_example::Proof', f'--output={package}'])
     emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
                            '--entry=air_stark_example::Proof', *arguments])
     return Variant(package, report['package_sha256'], *emitted_sites(emitted))
@@ -310,15 +310,13 @@ protocol ColumnProof roles(P,V)
   return (accepted = accepted);
 }
 
-entry Proof = ColumnProof {
+proof Proof = ColumnProof {
   prover P;
   verifier V;
   public { x0, shift, round_count, query_count, attempt_count };
   accept accepted;
   target constraints;
-  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {
-    derive coins;
-  }
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
 }
 '''
 # Prover-only helpers: Z_H added to the one extended column raises its degree

@@ -85,7 +85,7 @@ protocol Run roles(P, V)(x: Fr @P, c: Fr @(P,V)) -> (r: Fr @V) {
  let received = send P -> V(a);
  return (r = received);
 }
-entry Demo = Run;
+run Demo = Run;
 )";
 mlir::Operation *first(mlir::ModuleOp module, StringRef name,
                        unsigned occurrence = 0) {
@@ -144,7 +144,7 @@ void sourceControls() {
            {replace(basic.str(), "roles(P, V)", "roles(P, P)"), "source.roles"},
            {replace(basic.str(), "let a = x + c", "let a = (x == c == x)"),
             "source.syntax"},
-           {replace(basic.str(), "entry Demo = Run", "entry Demo = Fr"),
+           {replace(basic.str(), "run Demo = Run", "run Demo = Fr"),
             "source.entry"},
            {basic.str() + "math fn bad(x: Fr) -> Fr { return bad(x); }",
             "source.cycle"},
@@ -176,17 +176,17 @@ void sourceControls() {
   std::string helpers = R"(module m; domain Fr=field("bls12-381.fr");
 math fn first(a: Fr,b: Fr)->Fr {return a;}
 protocol Run roles(P,V)(a:Fr@P,b:Fr@V)->(r:Fr@P){let result=first(a,b);return(r=result);}
-entry Demo=Run;)";
+run Demo=Run;)";
   auto ignored = original(helpers);
   must(compileEntry(ignored));
   sourceRefuses(replace(helpers, "{return a;}", "{let unused=a+b;return a;}"),
                 "source.roles");
   auto subset = original(
-      R"(module m;protocol Run roles(P,V)(x:bool@(P,V))->(a:bool@V,b:bool@V){return(b=true,a=x);}entry Demo=Run;)");
+      R"(module m;protocol Run roles(P,V)(x:bool@(P,V))->(a:bool@V,b:bool@V){return(b=true,a=x);}run Demo=Run;)");
   require(!subset.bytes().contains("restrict_roles"),
           "narrow output inserted a restriction");
   auto same = original(
-      R"(module m;protocol Run roles(P)(x:bool@P)->(r:bool@P){let y @P=x;return(r=y);}entry Demo=Run;)");
+      R"(module m;protocol Run roles(P)(x:bool@P)->(r:bool@P){let y @P=x;return(r=y);}run Demo=Run;)");
   require(!same.bytes().contains("restrict_roles"),
           "equal role annotation inserted a restriction");
   auto qualified =
@@ -197,7 +197,7 @@ entry Demo=Run;)";
                     {"m",
                      "module m; protocol Run "
                      "roles(P)(x:a::F@P)->(r:a::F@P){return(r=a::identity(x));}"
-                     " entry Demo=Run;",
+                     " run Demo=Run;",
                      {}}}));
   must(compileEntry(must(prepareOriginal(must(
       closeEntry(must(analyze(qualified).checkedProject()), "m::Demo"))))));
@@ -285,7 +285,7 @@ void specializationSnapshotBounds() {
   for (unsigned i = 0; i < instances; ++i)
     source +=
         "let v" + std::to_string(i) + "@P=f<" + std::to_string(i) + ">(go);";
-  source += "return();}entry Demo=Run;";
+  source += "return();}run Demo=Run;";
   auto project = check(source);
   must(closeEntry(project, "m::Demo"));
   Limits limit;
@@ -332,7 +332,7 @@ void depthAndAggregateBounds() {
                 {}},
                {"m",
                 "module m; use a::{F,add}; protocol Run "
-                "roles(P)(x:F@P)->(r:F@P){return(r=add(x));} entry Demo=Run;",
+                "roles(P)(x:F@P)->(r:F@P){return(r=add(x));} run Demo=Run;",
                 {}}}));
   auto all = must(analyze(modules).checkedProject());
   Limits limits;
@@ -394,7 +394,7 @@ void reviewControls() {
 math fn f(x:A,y:B)->A{return x+y;})",
       "source.type");
   sourceRefuses(R"(module m;protocol Run roles(P,V)(x:bool@V)->(r:bool@V){
-let sent=send V->P(x);return(r=sent);}entry Demo=Run;)",
+let sent=send V->P(x);return(r=sent);}run Demo=Run;)",
                 "source.roles");
   for (unsigned size : {128, 129}) {
     auto text = replace(
@@ -447,8 +447,8 @@ let sent=send V->P(x);return(r=sent);}entry Demo=Run;)",
                  std::to_string(i - 1) + "()+f" + std::to_string(i - 1) +
                  "();}";
   expansion += "\nprotocol Small roles(P)()->(r:F@P){return(r=1);}";
-  expansion += "\nprotocol Unused roles(P)()->(r:F@P){return(r=f17());}entry "
-               "Demo=Small;entry Large=Unused;";
+  expansion += "\nprotocol Unused roles(P)()->(r:F@P){return(r=f17());}run "
+               "Demo=Small;run Large=Unused;";
   auto alternatives = check(expansion);
   must(prepareOriginal(must(closeEntry(alternatives, "m::Demo"))));
   auto failure = prepareOriginal(must(closeEntry(alternatives, "m::Large")));
@@ -598,32 +598,32 @@ void reviewedSourceBoundaries() {
   }
   for (auto source : {
            R"(module m;domain Fr=field("bls12-381.fr");
-protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:(Fr,Fr)@B){let t=(x,y);return(r=t);}entry Demo=Run;)",
+protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:(Fr,Fr)@B){let t=(x,y);return(r=t);}run Demo=Run;)",
            R"(module m;domain Fr=field("bls12-381.fr");
 interface Mix {math fn mix(a:Fr,b:Fr)->Fr;}
 component First:Mix {math fn mix(a:Fr,b:Fr)->Fr{return a;}}
 math fn keep<C:Mix>(x:Fr,y:Fr)->Fr{return C::mix(x,y);}
-protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:Fr@B){return(r=keep<First>(x,y));}entry Demo=Run;)",
+protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:Fr@B){return(r=keep<First>(x,y));}run Demo=Run;)",
            R"(module m;domain Fr=field("bls12-381.fr");
 math fn pair(x:Fr,y:Fr)->(Fr,Fr){return(x,y);}
-protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:(Fr,Fr)@B){return(r=pair(x,y));}entry Demo=Run;)",
+protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:(Fr,Fr)@B){return(r=pair(x,y));}run Demo=Run;)",
            R"(module m;math fn yes(x:bool)->bool{return x;}
-protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}entry Demo=Run;)",
+protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}run Demo=Run;)",
            R"(module m;domain Fr=field("bls12-381.fr");
-protocol Run roles(V)(x:Fr@V, coins:Random<Fr>@V)->(){require @V coins.draw()==x;return();}entry Demo=Run;)",
+protocol Run roles(V)(x:Fr@V, coins:Random<Fr>@V)->(){require @V coins.draw()==x;return();}run Demo=Run;)",
        })
     must(compileEntry(original(source)));
   must(compileEntry(original(R"(module m;fn yes(x:bool)->bool{return x;}
-protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}entry Demo=Run;)")));
+protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}run Demo=Run;)")));
   auto emptyMessage = check(R"(module m;
-protocol Relay<T:Type+Copy+Drop+Share+Wire> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}entry Demo=Relay<()>;)");
+protocol Relay<T:Type+Copy+Drop+Share+Wire> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}run Demo=Relay<()>;)");
   refuses(closeEntry(emptyMessage, "m::Demo"), "source.wire");
   auto distinct = original(R"(module m;domain Fr=field("bls12-381.fr");
 interface Mix {math fn mix(a:Fr,b:Fr)->Fr;}
 component First:Mix {math fn mix(a:Fr,b:Fr)->Fr{return a;}}
 component Second:Mix {math fn mix(a:Fr,b:Fr)->Fr{return b;}}
 math fn keep<C:Mix>(x:Fr,y:Fr)->Fr{return C::mix(x,y);}
-protocol Run roles(P)(x:Fr@P,y:Fr@P)->(a:Fr@P,b:Fr@P){return(a=keep<First>(x,y),b=keep<Second>(x,y));}entry Demo=Run;)");
+protocol Run roles(P)(x:Fr@P,y:Fr@P)->(a:Fr@P,b:Fr@P){return(a=keep<First>(x,y),b=keep<Second>(x,y));}run Demo=Run;)");
   must(compileEntry(distinct));
   mutation(distinct, "selected component changed", [](auto m) {
     std::vector<mlir::Operation *> calls;
@@ -671,7 +671,7 @@ protocol Reuse roles(P,V)(go:bool@V,x:Fr@(P,V), coins:Random<Fr>@V)->(result:Fr@
   must(compileEntry(original(R"(module m;domain Fr=field("bls12-381.fr");
 protocol Run<T:Type>roles(P)(x:T@P,go:bool@P)->(value:T@P)completes {
  let next=finish_if @P(go)(value=x);return(value=next);
-}entry Demo=Run<Fr>;)")));
+}run Demo=Run<Fr>;)")));
   mutation(checked, "completion occurrence changed", [](auto m) {
     first(m, "protocol.finish_if")
         ->setAttr("site", mlir::StringAttr::get(m.getContext(), "changed"));
@@ -708,7 +708,7 @@ void distributedRepetition() {
   sourceRefuses(
       replace(replace(source, "vb = y;", "vb = x;"), "let (x, y)", "let x"),
       "source.binding");
-  auto generic = check(source + "entry Large = Run<1048577>;");
+  auto generic = check(source + "run Large = Run<1048577>;");
   must(prepareOriginal(must(closeEntry(generic, "m::Demo"))));
   refuses(closeEntry(generic, "m::Large"), "source.bound");
   mutation(checked, "repeat maximum changed", [](auto m) {
@@ -737,7 +737,7 @@ protocol Run roles(P)(n:index@P)->(){
  let mut state@P=make();
  for _ in 0..n roles(P) max 4 { state=identity(state); }
  let done@P=consume_state(state);return();
-}entry Demo=Run;
+}run Demo=Run;
 )";
   must(compileEntry(original(affine)));
   sourceRefuses(replace(affine, "let mut state", "let state"),
@@ -748,7 +748,7 @@ protocol Run roles(P)(n:index@P)->(){
 fn truth()->bool{return true;}
 protocol Run roles(P,V)(n:index@V)->(){
  for _ in 0..n roles(V) max 2 {let x@V=truth();}return();
-}entry Demo=Run;
+}run Demo=Run;
 )");
   must(compileEntry(empty));
   auto restricted = R"(module m;
@@ -757,13 +757,13 @@ protocol Run roles(P,V)(n:index@V)->(){
  for _ in 0..n roles(V) max 2 {
    let literal@V=true;let constant@V=truth();
  }return();
-}entry Demo=Run;)";
+}run Demo=Run;)";
   must(compileEntry(original(restricted)));
   sourceRefuses(replace(restricted, "literal@V", "literal@P"), "source.roles");
   sourceRefuses(replace(restricted, "constant@V", "constant@P"),
                 "source.roles");
   auto nonparticipant = R"(module m;fn truth()->bool{return true;}
-protocol Run roles(P,V)(n:index@V)->(){for _ in 0..n roles(V) max 2{let x@P=truth();}return();}entry Demo=Run;)";
+protocol Run roles(P,V)(n:index@V)->(){for _ in 0..n roles(V) max 2{let x@P=truth();}return();}run Demo=Run;)";
   sourceRefuses(nonparticipant, "source.roles");
 }
 
@@ -803,14 +803,14 @@ void managedServices() {
            {"require @V go", "require @P go", "source.roles"},
            {"let unused = first.draw()", "let unused = send V -> P(first)",
             "source.service"},
-           {"entry Demo = Run;",
-            "entry Demo = Run;fn bad(x:Random<Fr>)->(){return ();}",
+           {"run Demo = Run;",
+            "run Demo = Run;fn bad(x:Random<Fr>)->(){return ();}",
             "source.name"},
        })
     sourceRefuses(replace(source, from, to), code);
   auto alternate = source + R"(
     domain Small=field("koala-bear");
-    entry Other=Draw<Small>;
+    run Other=Draw<Small>;
   )";
   auto project = check(alternate);
   must(prepareOriginal(must(closeEntry(project, "m::Demo"))));
@@ -844,7 +844,7 @@ void selectedClosure() {
   auto extended =
       original(replace(source, "domain Fr",
                        "math fn unrelated(x:bool)->bool{return x;} domain Fr") +
-               "protocol Other roles(P)()->(){return();} entry Extra=Other;");
+               "protocol Other roles(P)()->(){return();} run Extra=Other;");
   require(base.bytes() == extended.bytes(),
           "unrelated declaration changed selected original");
   require(base.identity() == extended.identity(),
@@ -859,7 +859,7 @@ void selectedClosure() {
     protocol Create roles(P)()->(state:State@P){let state @P =make();return(state=state);}
     protocol Consume roles(P)(state:State@P)->(){let done @P =discard(state);return();}
     protocol Run roles(P)()->(){let state=Create();let ()=Consume(state);return();}
-    entry Demo=Run;
+    run Demo=Run;
   )");
   must(compileEntry(privateState));
 }
@@ -1040,7 +1040,7 @@ int main(int argc, char **argv) {
     raw_string_ostream(bytes) << altered;
     refuses(checkInterface(full, bytes), "source.interface");
   }
-  auto aliasProject = check(basic.str() + "entry Alias=Run;");
+  auto aliasProject = check(basic.str() + "run Alias=Run;");
   auto selected =
       must(prepareOriginal(must(closeEntry(aliasProject, "m::Demo"))));
   auto alias =

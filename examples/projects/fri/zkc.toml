@@ -1,0 +1,5 @@
+format = "zkc.project/0"
+
+[modules]
+example = "main.zkc"
+fri = "../../../libraries/fri/lib.zkc"

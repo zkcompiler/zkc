@@ -33,7 +33,7 @@ protocol Run roles(P)(a:E@P, b:E@P, xs:Vector<E>@P, m:Matrix<E>@P)
   let result @P = work(a,b,xs,m);
   return (result=result);
 }
-entry Demo = Run;
+run Demo = Run;
 '''
 
 

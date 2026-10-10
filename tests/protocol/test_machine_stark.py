@@ -26,16 +26,16 @@ def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None
     if source is not None:
         path = directory / 'main.zkc'
         path.write_text(source)
-    package = directory / f'{entry}.entry'
+    package = directory / f'{entry}.zkpkg'
     if source is None and not edits and asset is None:
         report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-                               f'--project={EXAMPLE}/zkc.json',
-                               f'--entry=accumulator_machine::{entry}', f'--output={package}', *flags])
+                               f'--project={EXAMPLE}/zkc.toml',
+                               f'accumulator_machine::{entry}', f'--output={package}', *flags])
         return package, report['package_sha256']
     command = [toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
                f'--module=accumulator_machine={path}',
                f'--asset=machine=relation-bundle-json={asset or FIXTURES / "bundle.json"}',
-               f'--entry=accumulator_machine::{entry}', f'--output={package}', *flags]
+               f'accumulator_machine::{entry}', f'--output={package}', *flags]
     for module, file in [('air_bundle', 'air/bundle'), ('air_interaction', 'air/interaction'),
                          ('air_stark', 'air/stark'), ('air_table', 'air/table'),
                          ('air_polynomial', 'air/polynomial'), ('fri', 'fri/lib')]:

@@ -14,4 +14,4 @@ protocol Run roles(P,V)(go: bool @V, first: Random<Fr> @V, second: Random<Fr> @V
   let after = first.draw();
   return (p = p, v = before + v + after);
 }
-entry Demo = Run;
+run Demo = Run;

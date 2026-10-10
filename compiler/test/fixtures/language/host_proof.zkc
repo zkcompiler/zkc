@@ -8,7 +8,7 @@ protocol Echo roles(P,V)(payload:Payload@(P,V),empty:()@(P,V))
   let accepted@V=true;
   return(accepted=accepted,received=received,empty=empty);
 }
-entry Demo=Echo {
+proof Demo=Echo {
   prover P;
   verifier V;
   public{payload,empty};

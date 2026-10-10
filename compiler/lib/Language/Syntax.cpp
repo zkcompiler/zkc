@@ -532,6 +532,9 @@ private:
         decl.setups.push_back(std::move(slot));
         continue;
       }
+      if (decl.entryKind == EntryKind::Run)
+        return fail("source.entry",
+                    "run blocks accept only setup associations");
       auto key = text().str();
       if (!choices.insert(key).second)
         return fail("source.entry", "duplicate Entry choice");
@@ -574,9 +577,8 @@ private:
         } else if (take("fiat_shamir")) {
           value.construction = ProofEntry::Construction::FiatShamir;
           value.service.emplace();
-          if (!expect("(") || !string(value.suite) || !expect(")") ||
-              !expect("{") || !expect("derive") || !named(*value.service) ||
-              !expect(";") || !expect("}"))
+          if (!expect("(") || !string(value.suite) || !expect(",") ||
+              !named(*value.service) || !expect(")") || !expect(";"))
             return false;
         } else
           return fail("source.entry",
@@ -584,9 +586,7 @@ private:
       } else
         return fail("source.entry", "unknown Entry choice");
     }
-    if (choices.empty() && decl.setups.empty())
-      return fail("source.entry", "empty Entry choice block");
-    if (!choices.empty())
+    if (decl.entryKind == EntryKind::Proof)
       for (StringRef key :
            {"prover", "verifier", "public", "accept", "construction"})
         if (!choices.count(key.str()))
@@ -594,7 +594,7 @@ private:
     if (!expect("}"))
       return false;
     value.span.end = previousEnd;
-    if (!choices.empty())
+    if (decl.entryKind == EntryKind::Proof)
       decl.proof = std::move(value);
     return true;
   }
@@ -839,7 +839,9 @@ private:
           return {};
       } else if (!body(d, false, false, 1))
         return {};
-    } else if (take("entry")) {
+    } else if (at("run") || at("proof")) {
+      d.entryKind = at("proof") ? EntryKind::Proof : EntryKind::Run;
+      advance();
       d.kind = Declaration::Kind::Entry;
       if (member) {
         fail("source.syntax", "declaration is not an interface member");

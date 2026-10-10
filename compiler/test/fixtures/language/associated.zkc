@@ -2,4 +2,4 @@ module sample; domain Fr=field("bls12-381.fr");
 interface Boxed<F:Field>{type State:Drop;fn make(x:F)->State;fn open(x:State)->F;}
 component Box<F:Field>:Boxed<F>{type State:Drop=F;fn make(x:F)->State{return State(x);}fn open(x:State)->F{return unpack(x);}}
 fn work<F:Field,C:Boxed<F>>(x:F)->F{let a=C::make(x);return C::open(a);}
-protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let y @P =work<Fr,Box<Fr>>(x);return(r=y);}entry Demo=Run;
+protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let y @P =work<Fr,Box<Fr>>(x);return(r=y);}run Demo=Run;

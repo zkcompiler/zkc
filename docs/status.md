@@ -1,6 +1,6 @@
 # What the implementation supports
 
-The supported implementation is `.zkc` Language → mathematical MLIR
+The supported implementation is `.zkc` frontend → Protocol IR (PIR)
 (`protocol`, `participant`, `exec`, `physical`) → `zkc.program/0` → a shared Rust
 Runner with Entry/proof/joint Hosts. Direct MLIR enters the same compiler.
 [Specification](spec/README.md) defines contracts; this page records support.
@@ -33,7 +33,10 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 
 ## Source and application boundary
 
-`zkc check` checks definitions without an Entry; `--entry` also checks closure
+`run` and `proof` explicitly select joint execution or proving/verification.
+`zkc.toml` supplies the module/asset map; the CLI discovers the nearest manifest.
+Compile accepts a unique short name, a qualified name, or the sole Entry.
+`zkc check` reports canonical Entry names and checks definitions without selection; a positional Entry selector also checks closure
 and mathematical correspondence. `zkc check` and `compile` accept explicit
 [project manifests](language/README.md#project-inputs) or module/asset maps.
 Language resolves explicit modules and R1CS/AIR Assets, checks generic libraries

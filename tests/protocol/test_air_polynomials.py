@@ -21,7 +21,7 @@ protocol Run roles(P)(height:index@P, begin:index@P, end:index@P, shift:E@P,
  let rows@P=transpose(extension,width,size);
  return (scope=scope,at=at,extension=extension,rows=rows);
 }
-entry Demo=Run;
+run Demo=Run;
 '''
 
 
@@ -66,7 +66,7 @@ fn sample(height:index,begin:index,end:index,samples:Vector<E>) -> Vector<E> {
  }
  return results;
 }
-entry Demo=Run;
+run Demo=Run;
 '''
 
 
@@ -74,10 +74,10 @@ entry Demo=Run;
 def test_scope_polynomials_on_intersecting_cosets(toolchain, journal, directory, flags):
     source = directory / 'scope.zkc'
     source.write_text(SCOPE_CLIENT)
-    package = directory / 'scope.entry'
+    package = directory / 'scope.zkpkg'
     report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
                            f'--module=example={source}', f'--module=air_polynomial={LIBRARY}',
-                           '--entry=example::Demo', f'--output={package}', *flags])
+                           'example::Demo', f'--output={package}', *flags])
     height = 8
     subgroup = points(height)
     samples = subgroup + [ZERO, SHIFT]
@@ -103,10 +103,10 @@ def test_scope_polynomials_on_intersecting_cosets(toolchain, journal, directory,
 def test_scope_polynomials_and_column_extensions(toolchain, journal, directory, flags):
     source = directory / 'client.zkc'
     source.write_text(CLIENT)
-    package = directory / 'math.entry'
+    package = directory / 'math.zkpkg'
     report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
                            f'--module=example={source}', f'--module=air_polynomial={LIBRARY}',
-                           '--entry=example::Demo', f'--output={package}', *flags])
+                           'example::Demo', f'--output={package}', *flags])
     pin = report['package_sha256']
     for height, size in [(8, 32), (16, 64)]:
         subgroup = points(height)

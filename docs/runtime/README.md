@@ -10,7 +10,7 @@ this Runner.
 | Compile and invoke a named source Entry | [Entry guide](entries.md) |
 | Integrate proving and verification | [Proof execution](proofs.md) |
 | Authorize bounded retries | [Attempts](attempts.md) |
-| Run direct mathematical MLIR | [Bundle walkthrough](bundles.md) |
+| Run direct Protocol IR | [Bundle walkthrough](bundles.md) |
 | Understand authority and failure handling | [Runtime design](design.md), [artifact identity](artifact-identity.md) |
 | Configure operational ceilings | [Capacity contract](../spec/runtime/capacity.md) |
 | Check exact admission, frames and publication | [Specification](../spec/README.md#native-contracts) |

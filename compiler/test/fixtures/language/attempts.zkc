@@ -21,13 +21,13 @@ protocol Authored roles(P,V)(done:bool@P, coins:Random<Fr>@P)
   let result=Result{ready:done,value:nonce};
   return(padding=nonce,result=result,accepted=ok);
 }
-entry Derived=Round{
+proof Derived=Round{
   prover P;verifier V;public{};accept accepted;complete result.ready;
-  construction fiat_shamir("merlin3.bls12-381.fr64be/0"){derive challenges;}
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
-entry Plain=Authored{
+proof Plain=Authored{
   prover P;verifier V;public{};accept accepted;complete result.ready;
   construction authored;
 }
-entry Once=Authored{prover P;verifier V;public{};accept accepted;construction authored;}
-entry Run=Round;
+proof Once=Authored{prover P;verifier V;public{};accept accepted;construction authored;}
+run Run=Round;

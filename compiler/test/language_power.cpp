@@ -42,7 +42,7 @@ int main() {
     math fn bound<N:nat>(x:[F;pow2(N)])->F where 1<=pow2(N){return x[0];}
     math fn relay<N:nat>(x:[F;pow2(N)])->F where 1<=pow2(N){return bound<N>(x);}
     protocol Run roles(P)(x:[F;4]@P)->(r:[F;4]@P){let y=shifted<1>(x);return(r=y);}
-    entry Demo=Run;
+    run Demo=Run;
   )"));
   auto original = take(prepareOriginal(take(closeEntry(source, "m::Demo"))));
   take(compileEntry(original));
@@ -70,8 +70,8 @@ int main() {
     math fn inner<N:nat>(x:F)->F{return ignore<pow2(N)>(x);}
     math fn outer<M:nat>(x:F)->F{return inner<pow2(M)>(x);}
     protocol Run<M:nat> roles(P)(x:F@P)->(r:F@P){let y=outer<M>(x);return(r=y);}
-    entry Good=Run<5>;
-    entry Overflow=Run<6>;
+    run Good=Run<5>;
+    run Overflow=Run<6>;
   )"));
   take(compileEntry(
       take(prepareOriginal(take(closeEntry(bodyOnly, "m::Good"))))));

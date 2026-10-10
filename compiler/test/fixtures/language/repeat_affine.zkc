@@ -12,4 +12,4 @@ protocol Run roles(P)(n: index @P, x: Fr @P) -> (result: Fr @P) {
   let result @P = take(state);
   return result;
 }
-entry Demo = Run;
+run Demo = Run;

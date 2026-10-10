@@ -1,7 +1,7 @@
 # Tests
 
-The execution toolkit has one path: `.zkc` source lowers through mathematical
-MLIR to `zkc.program/0`, which the common Runner and Host execute. Root Python
+The execution toolkit has one path: `.zkc` source lowers through Protocol IR
+(PIR), built on MLIR, to `zkc.program/0`, which the common Runner and Host execute. Root Python
 tests exercise that path and its installed tools. The optional Lean package
 maintains independent research models and checks.
 

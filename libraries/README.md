@@ -172,12 +172,12 @@ use schnorr::{Schnorr};
 ```sh
 zkc compile --module=schnorr=libraries/schnorr/lib.zkc \
   --module=example=examples/projects/schnorr/main.zkc \
-  --entry=example::Proof --output=proof.entry
+  example::Proof --output=proof.zkpkg
 ```
 
 See the [walkthrough](../docs/getting-started.md) to invoke the compiled Entry.
 Project files can record these maps; see [project inputs](../docs/language/README.md#project-inputs).
-Check the shared math modules with `zkc check --project=libraries/zkc/zkc.json`.
+Check the shared math modules with `zkc check --project=libraries/zkc/zkc.toml`.
 There is no separate registry or library installation step.
 
 ## Maintain a library

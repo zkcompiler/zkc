@@ -46,7 +46,7 @@ protocol Run roles(P)(m:Matrix<F>@P,x:Vector<F>@P,y:Vector<F>@P)
   let result @P =work(m,x,y);
   return(result=result);
 }}
-entry Demo=Run;
+run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     rng = random.Random(82731)

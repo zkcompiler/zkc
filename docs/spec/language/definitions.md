@@ -6,7 +6,8 @@ This native contract defines captured modules, declarations, types and source bo
 
 A capture is a nonempty map from logical module paths to exact UTF-8 bytes.
 Each file starts with `module path;` matching its captured name. Module paths
-use `::`; identifiers match `[A-Za-z_][A-Za-z0-9_]*`. Keywords are reserved.
+use `::`; identifiers match `[A-Za-z_][A-Za-z0-9_]*`. Keywords are reserved except contextual `run` and `proof`, which introduce
+execution declarations only at declaration positions.
 Comments start with `//`. Tokens retain trivia and byte spans.
 
 Module declarations are private unless prefixed with `pub`. Interface/component
@@ -43,23 +44,30 @@ bound. Caller limits may only lower these ceilings. Analysis rechecks the captur
 against its requested limits before parsing assets. Capture alone supplies no
 protocol ports, runtime matrices or specification binding.
 
-The `zkc` CLI optionally reads a `zkc.project/0` JSON object with exactly
-`format`, `modules` and `assets` fields. `modules` is a nonempty object mapping
-logical names to filenames. `assets` maps names to objects containing exactly
-`format` and `path`. Duplicate keys, unknown fields and duplicate command-line
-names refuse. The manifest is at most 1 MiB, resolved paths at most 4096 bytes,
-and modules plus assets at most 256. Relative paths are anchored at the manifest's
-lexical parent; absolute paths and ordinary symlinks are allowed. Files must be
-regular. The manifest is trusted configuration, not a filesystem sandbox.
+The CLI accepts a TOML manifest with `format = "zkc.project/0"`, a nonempty
+`modules` table mapping logical names to paths, and an optional `assets` table
+mapping names to tables with exactly `format` and `path`. Unknown or duplicate
+keys and unsupported types refuse. A manifest is a bounded regular file (at most
+1 MiB); modules and assets together are limited to 256 files. Each supplied path
+is nonempty, contains no NUL, and is at most 4096 bytes.
 
-`--project` is exclusive with explicit `--module`/`--asset` options. The loader
-passes the resolved map to the same compiler capture boundary; manifest bytes
-and path spelling do not enter capture identity. All inputs, including the
-manifest, are protected from output publication. The loader performs no import
-discovery, dependency download, glob expansion, environment interpolation or
-implicit Entry selection. `zkc check` without `--entry` stops after definition
-checking. Selecting an Entry also checks closure and mathematical correspondence;
-only `compile` produces the executable package.
+`--project=FILE` selects an explicit manifest. Otherwise explicit `--module` or
+`--asset` inputs disable discovery; they cannot be combined with `--project`.
+With neither option the CLI uses the nearest `zkc.toml` in the current directory
+or its ancestors. The first filesystem entry is final: malformed, unreadable,
+nonregular and dangling-symlink candidates fail rather than fall back to a parent.
+Relative mapped paths resolve against the selected manifest's visible parent,
+including symlinked manifests. Explicit command-line paths use the invocation
+directory. Absolute paths, `..` and ordinary symlink resolution are supported;
+imports do not scan directories. SDK captures never discover a manifest.
+
+The manifest carries locations and formats, not execution choices or secrets.
+Its path, formatting and discovery location are report metadata and do not enter
+capture identity. Identical named source/asset bytes have the same capture.
+The CLI protects the manifest, mapped inputs and selected compiler from output
+publication, including file aliases. See [Entry selection](entries.md#selection)
+for canonical names and check scopes, and the [project guide](../../language/README.md#project-inputs)
+for default output paths.
 
 Qualified references first resolve their root in the enclosing component and
 then the module's visible declarations, including imports. A resolved lexical
@@ -69,6 +77,7 @@ path is considered. A leading `::` explicitly selects an absolute module path,
 for example `::algebra::Fr`. It is reference syntax, not part of module or
 canonical declaration names. Optional prefix lookup preserves privacy and
 resource-limit diagnostics.
+
 
 ## Definition checking and Entry closure
 
@@ -434,7 +443,7 @@ math fn evaluate<F: Field, N: nat>(p: Poly<F, N>, point: [F; N]) -> F {
 ```
 
 A formal polynomial denotes an expression over a field and an ordered list of
-variables. It is an SSA value in mathematical MLIR and has no executable value
+variables. It is an SSA value in Protocol IR and has no executable value
 encoding. Its type carries the field and natural arity. It has Copy and Drop,
 but no Share or Wire. Mathematical helper ports, products, fixed arrays and
 ordinary record fields can contain formal values. A zero-length array retains

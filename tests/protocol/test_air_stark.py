@@ -58,11 +58,11 @@ def test_documented_air_stark_requests(journal, directory):
 
 def compile_entry(toolchain, journal, directory, *, log_size=5, queries=8,
                   flags=(), entry='Proof', source=None, table=TABLE, stark=STARK):
-    package = directory / f'{entry}.entry'
+    package = directory / f'{entry}.zkpkg'
     if source is None and log_size == 5 and queries == 8 and table == TABLE and stark == STARK:
         report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-                               f'--project={EXAMPLE.parent}/zkc.json',
-                               f'--entry=air_stark_example::{entry}', f'--output={package}', *flags])
+                               f'--project={EXAMPLE.parent}/zkc.toml',
+                               f'air_stark_example::{entry}', f'--output={package}', *flags])
         return package, report['package_sha256']
     source = EXAMPLE.read_text() if source is None else source
     source = source.replace('TableArgument<0,Recurrence,3,5,8,8>',
@@ -76,7 +76,7 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, queries=8,
                f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
                f'--module=fri={ROOT}/libraries/fri/lib.zkc',
                f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json',
-               f'--entry=air_stark_example::{entry}', f'--output={package}', *flags]
+               f'air_stark_example::{entry}', f'--output={package}', *flags]
     report = journal.json(command)
     return package, report['package_sha256']
 
@@ -321,7 +321,7 @@ protocol Sample roles(V)(values:Vector<Extension>@V, shift:Extension@V)
  let selected@V=choose(values,shift);
  return (selected=selected);
 }
-entry Run=Sample;
+run Run=Sample;
 '''
 
 
@@ -387,7 +387,7 @@ protocol Inspect roles(P)(trace:Vector<E>@P, configuration:Vector<E>@P,
  return (quotient=result.0,chunks=result.1,opened=result.2,
   quotient_opened=result.3,valid=result.4,reduced=result.5);
 }
-entry Run=Inspect;
+run Run=Inspect;
 '''
 
 

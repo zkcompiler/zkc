@@ -31,25 +31,29 @@ bool Checker::entries() {
             source.span);
       if (!self(self, *target, depth + 1))
         return false;
+      if (source.entryKind != definition.entryKind())
+        return types.fail("source.entry",
+                          "Entry aliases must have the same run/proof kind",
+                          source.span);
       uint64_t copied = definition.staticArguments.size();
-      if (definition.proof) {
-        copied += definition.proof->publicInputs.size() +
-                  definition.proof->acceptance.path.size();
-        if (definition.proof->completion)
-          copied += definition.proof->completion->path.size() + 1;
+      if (definition.proof()) {
+        copied += definition.proof()->publicInputs.size() +
+                  definition.proof()->acceptance.path.size();
+        if (definition.proof()->completion)
+          copied += definition.proof()->completion->path.size() + 1;
       }
       if (!types.charge(copied, source.span))
         return false;
       for (const auto &argument : definition.staticArguments)
         if (!types.chargeType(argument, source.span))
           return false;
-      if (definition.proof &&
-          !types.charge(definition.proof->suite.size(), source.span))
+      if (definition.proof() &&
+          !types.charge(definition.proof()->suite.size(), source.span))
         return false;
       height[id.index] = height[target->index] + 1;
       entry.target = definition.target;
       entry.staticArguments = definition.staticArguments;
-      entry.proof = definition.proof;
+      entry.configuration = definition.configuration;
       for (const auto &slot : definition.setups) {
         if (!types.charge(slot.name.size() + slot.inputs.size() + 1,
                           source.span))
@@ -60,6 +64,11 @@ bool Checker::entries() {
       }
       entry.setups = definition.setups;
     } else if (definition.kind == Declaration::Kind::Protocol) {
+      if (source.entryKind == EntryKind::Proof && !source.proof)
+        return types.fail(
+            "source.entry",
+            "proof declarations require a proof configuration block",
+            source.span);
       auto selected =
           arguments(entry, definition, source.targetArguments, source.span);
       if (!selected)
@@ -212,7 +221,7 @@ bool Checker::configureEntry(Declaration &entry, const Declaration &protocol,
     if (!value.service)
       return false;
   }
-  entry.proof = std::move(value);
+  entry.configuration = std::move(value);
   return types.checkProofEntry(entry, protocol);
 }
 

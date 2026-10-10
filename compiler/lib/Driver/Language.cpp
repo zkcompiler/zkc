@@ -121,10 +121,8 @@ int runLanguageCompiler(int argc, char **argv) {
     else
       return refuse(error("source.options", "unknown language option: " + arg));
   }
-  if (format.empty() || (entry.empty() && command != "language-check"))
-    return refuse(error("source.options",
-                        "--source-format=zkc is required; output "
-                        "commands also require --entry"));
+  if (format.empty())
+    return refuse(error("source.options", "--source-format=zkc is required"));
   auto captureResult = capture(std::move(sources), std::move(assets),
                                CaptureOptions{format, limits});
   if (!captureResult)
@@ -144,13 +142,19 @@ int runLanguageCompiler(int argc, char **argv) {
                        {"scope", entry.empty() ? "definitions" : "entry"},
                        {"capture", captured->identity()},
                        {"installation", project->installationIdentity()}};
+  if (command == "language-check") {
+    auto inventory = inspectEntries(*project, limits);
+    if (!inventory)
+      return refuse(inventory.takeError());
+    checked["entries"] = cantFail(json::parse(*inventory));
+  }
   if (declarations) {
     auto report = inspectDeclarations(*project, limits);
     if (!report)
       return refuse(report.takeError());
     checked["declarations"] = cantFail(json::parse(*report));
   }
-  if (entry.empty()) {
+  if (entry.empty() && command == "language-check") {
     outs() << json::Value(std::move(checked)) << '\n';
     return 0;
   }
@@ -161,7 +165,7 @@ int runLanguageCompiler(int argc, char **argv) {
   if (!original)
     return refuse(original.takeError());
   if (command == "language-check") {
-    checked["entry"] = entry;
+    checked["entry"] = selected->entry().qualifiedName;
     checked["original"] = original->identity();
     outs() << json::Value(std::move(checked)) << '\n';
     return 0;

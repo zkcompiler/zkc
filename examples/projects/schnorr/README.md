@@ -9,9 +9,9 @@ The [walkthrough](../../../docs/getting-started.md) runs `Proof`. To select a jo
 interactive run from the repository root, with built tools on `PATH`:
 
 ```sh
-zkc compile --project=examples/projects/schnorr/zkc.json \
-  --entry=example::Interactive --output=schnorr.entry
-zkc run schnorr.entry EXPECTED_SHA256 examples/projects/schnorr/interactive.json \
+zkc compile --project=examples/projects/schnorr/zkc.toml \
+  example::Interactive --output=schnorr.zkpkg
+zkc run schnorr.zkpkg EXPECTED_SHA256 examples/projects/schnorr/interactive.json \
   --results=results.json
 ```
 

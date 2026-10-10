@@ -22,9 +22,9 @@ def vector(rows):
 
 
 def compile_entry(toolchain, journal, directory, entry, flags=()):
-    package = directory / f'{entry}.entry'
+    package = directory / f'{entry}.zkpkg'
     report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-                           f'--module=sample={CLIENT}', f'--entry=sample::{entry}',
+                           f'--module=sample={CLIENT}', f'sample::{entry}',
                            f'--output={package}', *flags])
     assert report['status'] == 'compiled'
     return package, report['package_sha256']

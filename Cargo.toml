@@ -15,6 +15,7 @@ edition = "2024"
 license = "Apache-2.0"
 
 [workspace.dependencies]
+toml = { version = "=1.1.8", default-features = false, features = ["parse", "serde", "std"] }
 serde_json = { version = "=1.0.151", features = ["arbitrary_precision", "unbounded_depth"] }
 num-bigint = "=0.4.8"
 tempfile = "=3.27.0"

@@ -46,7 +46,7 @@ protocol Demo roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P, c: Vector<Fr> @P,
   let repeated = repeat(a, s, n);
   return (folded = folded, combined = combined, repeated = repeated);
 }
-entry Run = Demo;
+run Run = Demo;
 )";
 Expected<CheckedProject> check(StringRef body) {
   auto captured = capture({{"m", (prelude + body).str(), "map.zkc"}});
@@ -135,7 +135,7 @@ int main() {
         "    -> (r: Vector<Fr> @P, t: Vector<Fr> @P, q: Fr @P) {\n"
         "  return (r = rows(a, b, s), t = toward(a, y, s),"
         " q = single(y, y, s));\n}\n"
-        "entry Run = Demo;\n"));
+        "run Run = Demo;\n"));
     auto bytes = checked.bytes();
     SmallVector<StringRef> lines;
     bytes.split(lines, '\n');
@@ -289,7 +289,7 @@ int main() {
         "protocol Demo roles(P)(a: Vector<Fr> @P, b: Vector<Fr> @P) -> "
         "(r: Vector<Fr> @P) {\n"
         "  let r = f(a, b);\n  return (r = r);\n}\n"
-        "entry Run = Demo;\n";
+        "run Run = Demo;\n";
     auto found = located(original(body));
     require(namesIdentifier(found.message, "algebra-map-formula") &&
                 llvm::is_contained(found.codes, "target.admission"),
@@ -316,7 +316,7 @@ int main() {
             "protocol Demo roles(P)(a: Vector<Fr> @P, n: index @P) -> "
             "(r: Vector<Fr> @P) {\n"
             "  let r = f(a, n);\n  return (r = r);\n}\n"
-            "entry Run = Demo;\n";
+            "run Run = Demo;\n";
     auto found = located(original(body));
     require(llvm::is_contained(found.codes, "algebra-map-formula") &&
                 namesIdentifier(found.message, "ring-depth"),

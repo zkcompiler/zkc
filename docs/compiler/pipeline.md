@@ -1,6 +1,6 @@
 # Compilation pipeline
 
-Checked `.zkc` source and direct mathematical MLIR use the same compiler,
+Checked `.zkc` source and direct Protocol IR use the same compiler,
 executable format and Rust Runner. The [protocol contract](../spec/ir/protocols.md)
 owns exact formation and projection rules.
 

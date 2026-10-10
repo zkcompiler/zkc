@@ -4,28 +4,40 @@ This native contract defines closed Entry jobs and their source-level associatio
 
 ## Entry jobs
 
-The short form `entry Session = Protocol<Args>;` selects a joint run. A proof Entry
-uses an explicit block:
+`run` selects joint execution; `proof` selects proving and verification. They
+are contextual at declaration positions, so ordinary variables and fields may be
+named `run` or `proof`. Both produce the same checked Entry abstraction, with an
+explicit execution kind.
 
 ```text
-entry Proof = Schnorr<G> {
+entry-decl := ("run" | "proof") name "=" path static-args?
+              (";" | "{" clause* "}")
+```
+
+`run Session = Protocol<Args>;` selects a joint run. Its optional block accepts
+only setup associations; an empty block is equivalent to the short form.
+A `proof` targeting a protocol requires a complete proof block:
+
+```text
+proof Proof = Schnorr<G> {
   prover P;
   verifier V;
   public { base, point };
   accept accepted;
   target knowledge;
-  construction fiat_shamir("merlin3.bls12-381.fr64be/0") {
-    derive challenges;
-  }
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
-entry Release = Proof;
+proof Release = Proof;
 ```
 
 `prover`, `verifier`, `public`, `accept` and `construction` are required exactly
 once, in any order. Proof jobs require two distinct protocol participants. Public
 ports are named whole logical inputs and must cover exactly the data ports
 available at the verifier, including empty logical ports. Their order is
-canonicalized to declaration order. Relation purposes do not authorize inputs.
+canonicalized to declaration order. A mismatch diagnostic prints the expected
+`public` list. This explicit list approves the whole logical public interface;
+it includes setup-provided verifier keys even when the Host supplies their bytes.
+Relation purposes do not authorize inputs.
 `accept` names a Boolean output or product field available at the verifier;
 its native result index follows the complete flattened output signature.
 
@@ -58,16 +70,34 @@ more general clauses remain valid attachments but cannot be selected for this
 native statement ABI.
 
 An Entry may name another complete Entry, including one declared later. Aliases
-inherit the protocol, closed arguments, setup associations and every job choice. Cycles, partial
+must have the same run/proof kind and inherit the protocol, closed arguments,
+setup associations and every job choice. Cycles, partial
 overrides and static re-specialization of an Entry refuse. Alias resolution uses
 the source call-depth and work bounds.
+
+### Selection
+
+The checked project exposes all Entry declaration IDs sorted by qualified name.
+`selectEntry` and `closeEntry` share these rules: an exact qualified name must
+name an Entry; a short name must match exactly one Entry's terminal identifier;
+an empty selector requires exactly one Entry across the capture. Complete
+aliases remain distinct candidates. Missing or ambiguous selections refuse with
+`source.entry` and list canonical candidate names and kinds. Adding candidates
+cannot silently change a previously successful selection to another Entry.
+
+Definition checking without selection does not close every Entry. The compiler's
+`zkc.source-check/0` diagnostic report includes an `entries` array of objects with
+`name` (canonical qualified name) and `kind` (`run` or `proof`). A selected check
+reports its canonical `entry` and `original` identity, with `scope: "entry"`;
+an unselected check has `scope: "definitions"` and no selected Entry. Detailed
+public callable inspection remains the optional `declarations` array.
 
 ### Setup associations
 
 Run and proof Entries may associate inputs with named setup slots:
 
 ```text
-entry Proof = Opening<Kzg> {
+proof Proof = Opening<Kzg> {
   setup pcs { vk, pk, statement.commitment };
   prover P;
   verifier V;
@@ -75,7 +105,7 @@ entry Proof = Opening<Kzg> {
   accept accepted;
   construction authored;
 }
-entry Session = Opening<Kzg> { setup pcs { vk, pk, statement.commitment }; }
+run Session = Opening<Kzg> { setup pcs { vk, pk, statement.commitment }; }
 ```
 
 A selector names an input or a visible product subtree. It retains logical port
@@ -98,8 +128,8 @@ verifier-key ports are admitted in a proof Entry, independently of the slot coun
 Prover-key inputs must remain at the prover. The Host pins
 all keys in one slot to the same application-selected identity. Multiple slots
 may select different identities. A run slot does not require a verifier-key input.
-A block with only setup choices selects a run; adding any proof choice requires
-the complete proof block. Empty blocks refuse.
+A run block accepts setup associations without proof choices. A proof block
+always requires its complete configuration, even if it also has setup slots.
 
 Explicit setup association admits whole builtin `prover_key` and `verifier_key`
 input ports through checked Host initialization. It does not grant `Wire`,

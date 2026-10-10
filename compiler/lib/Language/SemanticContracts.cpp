@@ -77,9 +77,9 @@ Semantics::selectedType(const Declaration &decl,
 }
 bool Semantics::checkProofEntry(const Declaration &entry,
                                 const Declaration &protocol) {
-  if (!entry.proof)
+  if (!entry.proof())
     return true;
-  const auto &value = *entry.proof;
+  const auto &value = *entry.proof();
   if (!charge(protocol.inputs.size() + protocol.services.size() +
                   value.publicInputs.size() + value.acceptance.path.size() + 1,
               value.span))
@@ -92,10 +92,20 @@ bool Semantics::checkProofEntry(const Declaration &entry,
   for (unsigned i = 0; i < protocol.inputs.size(); ++i)
     if (is_contained(protocol.inputs[i].roles, value.verifier))
       required.push_back(i);
-  if (required != value.publicInputs)
-    return fail("source.entry",
-                "public inputs must exactly authorize verifier data ports",
-                value.span);
+  if (required != value.publicInputs) {
+    std::string expected = "public {";
+    for (auto index : required) {
+      if (expected.back() != '{')
+        expected += ", ";
+      expected += protocol.inputs[index].name;
+    }
+    expected += "};";
+    return fail(
+        "source.entry",
+        "public inputs must exactly authorize verifier data ports; expected " +
+            expected,
+        value.span);
+  }
   auto bindings = substitution(protocol, entry.staticArguments);
   auto booleanOutput = [&](const SpecificationSelector &selected, unsigned role,
                            StringRef keyword) {

@@ -15,4 +15,4 @@ protocol Compare roles(P)(a: F @P, b: F @P, values: Vector<F> @P, point: F @P)
   let runtime_result = dynamic(values, point);
   return (formal_result = formal_result, runtime_result = runtime_result);
 }
-entry Run = Compare;
+run Run = Compare;

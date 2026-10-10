@@ -14,9 +14,9 @@ CompiledEntry compile(StringRef selected, const EntryOptions &options = {}) {
   auto capture = take(language::capture({{"sample",
                                           R"(module sample;
     protocol Check roles(P,V)(ok:bool@V)->(accepted:bool@V){return(accepted=ok);}
-    entry Session=Check;
-    entry Proof=Check{prover P;verifier V;public{ok};accept accepted;construction authored;}
-    entry Alias=Proof;)",
+    run Session=Check;
+    proof Proof=Check{prover P;verifier V;public{ok};accept accepted;construction authored;}
+    proof Alias=Proof;)",
                                           {}}}));
   auto checked = take(analyze(capture).checkedProject());
   return take(compileEntry(

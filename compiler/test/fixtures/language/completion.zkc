@@ -5,4 +5,4 @@ protocol Run roles(P,V)(go: bool @V, x: Fr @(P,V), coins: Random<Fr> @V) -> (res
   let unused = coins.draw();
   return (result = x + x);
 }
-entry Demo = Run;
+run Demo = Run;

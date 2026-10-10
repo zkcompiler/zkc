@@ -24,12 +24,12 @@ python3 examples/projects/accumulator-machine/prepare.py \
   build/machine-requests
 
 zkc compile --compiler=build/compiler/zkc-compile \
-  --project=examples/projects/accumulator-machine/zkc.json \
-  --entry=accumulator_machine::ProofLogUp --output=build/machine.entry
+  --project=examples/projects/accumulator-machine/zkc.toml \
+  accumulator_machine::ProofLogUp --output=build/machine.zkpkg
 
-zkc prove build/machine.entry PACKAGE_SHA256 \
+zkc prove build/machine.zkpkg PACKAGE_SHA256 \
   build/machine-requests/prover.json build/machine.proof
-zkc verify build/machine.entry PACKAGE_SHA256 \
+zkc verify build/machine.zkpkg PACKAGE_SHA256 \
   build/machine-requests/verifier.json build/machine.proof
 ```
 

@@ -128,8 +128,8 @@ int main(int argc, char **argv) {
   cases.run("authored proof and joint run are distinct artifact variants", [&] {
     const auto text =
         R"(module sample;protocol Verify roles(P,V)(ok:bool@V)->(accepted:bool@V){return(accepted=ok);}
-      entry Demo=Verify{prover P;verifier V;public{ok};accept accepted;construction authored;}
-      entry Session=Verify;)";
+      proof Demo=Verify{prover P;verifier V;public{ok};accept accepted;construction authored;}
+      run Session=Verify;)";
     auto proof = take(compileEntry(original(text)));
     require(std::holds_alternative<CompiledNativeProof>(proof.artifact()),
             "authored proof became run");
@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
   cases.run(
       "source composition and repetition use native occurrence selection", [&] {
         auto definitions =
-            source.substr(0, source.find("entry Demo")) +
+            source.substr(0, source.find("proof Demo")) +
             R"(math fn both(a:bool,b:bool)->bool{return intrinsic("bool.and",a,b);})";
         for (bool repeated : {false, true}) {
           auto text = definitions + R"(
@@ -162,8 +162,8 @@ int main(int argc, char **argv) {
           return(accepted=both(first,second));
         )";
           text += R"(}
-        entry Demo=Wrapper{prover P;verifier V;public{base,point,n};accept accepted;
-          construction fiat_shamir("merlin3.bls12-381.fr64be/0"){derive challenges;}}
+        proof Demo=Wrapper{prover P;verifier V;public{base,point,n};accept accepted;
+          construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);}
       )";
           auto compiled = take(compileEntry(original(text)));
           auto artifact = take(json::parse(compiled.bytes()));
@@ -179,7 +179,7 @@ int main(int argc, char **argv) {
               auto checked = original(R"(module sample;
       struct Result{pub extra:index,pub accepted:bool}
       protocol Verify roles(P,V)(r:Result@V)->(r:Result@V){return(r=r);}
-      entry Demo=Verify{prover P;verifier V;public{r};accept r.accepted;construction authored;})");
+      proof Demo=Verify{prover P;verifier V;public{r};accept r.accepted;construction authored;})");
               require(checked.interface().proof->acceptance.native ==
                           std::vector<unsigned>{1},
                       "acceptance was flattened to the first result");
@@ -221,10 +221,10 @@ int main(int argc, char **argv) {
         auto text =
             "module sample;protocol " + name +
             " roles(P,V)(ok:bool@V)->(accepted:bool@V){return(accepted=ok);}"
-            "entry Demo=" +
+            "proof Demo=" +
             name +
             "{prover P;verifier V;public{ok};accept accepted;construction "
-            "authored;}entry Session=" +
+            "authored;}run Session=" +
             name + ";";
         for (StringRef entry : {"sample::Demo", "sample::Session"}) {
           auto checked = original(text, entry);
@@ -245,8 +245,8 @@ int main(int argc, char **argv) {
     }
     text += "protocol Round roles(P,V)(ok:bool@V)->(accepted:bool@V,x:F@P)"
             "{return(accepted=ok,x=f14());}\n"
-            "entry Demo=Round{prover P;verifier V;public{ok};accept accepted;"
-            "construction authored;}entry Session=Round;";
+            "proof Demo=Round{prover P;verifier V;public{ok};accept accepted;"
+            "construction authored;}run Session=Round;";
     for (StringRef entry : {"sample::Demo", "sample::Session"}) {
       auto result = compileEntry(original(text, entry), {false, false});
       require(!result, "oversized projection succeeded");
@@ -275,8 +275,8 @@ int main(int argc, char **argv) {
           "(x:bool)->bool{return x;}protocol Round "
           "roles(P,V)(x:bool@V)->(ok:bool@V){let ok @V =" +
           name +
-          "(x);return(ok=ok);}entry Demo=Round{prover P;verifier V;"
-          "public{x};accept ok;construction authored;}entry Session=Round;";
+          "(x);return(ok=ok);}proof Demo=Round{prover P;verifier V;"
+          "public{x};accept ok;construction authored;}run Session=Round;";
       for (StringRef entry : {"sample::Demo", "sample::Session"})
         take(compileEntry(original(text, entry)));
     }
@@ -382,7 +382,7 @@ int main(int argc, char **argv) {
         auto checked = original(R"(module sample;
       struct Result{pub first:bool,pub second:bool,pub count:index}
       protocol Run roles(P,V)(n:index@P,r:Result@(P,V),ok:bool@V)->(padding:index@P,result:Result@(P,V),accepted:bool@V){return(padding=n,result=r,accepted=ok);}
-      entry Demo=Run{prover P;verifier V;public{r,ok};accept accepted;complete result.second;construction authored;}
+      proof Demo=Run{prover P;verifier V;public{r,ok};accept accepted;complete result.second;construction authored;}
     )");
         require(checked.interface().proof->completion->native ==
                     std::vector<unsigned>{2},

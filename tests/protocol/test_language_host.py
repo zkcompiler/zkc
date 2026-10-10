@@ -13,10 +13,10 @@ FIXTURES = ROOT / 'compiler/test/fixtures/language'
 
 
 def compile_entry(toolchain, journal, directory, entry, source=None):
-    package = directory / f'{entry}.entry'
+    package = directory / f'{entry}.zkpkg'
     args = [toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
             f'--module=sample={source or FIXTURES / "attempts.zkc"}',
-            f'--entry=sample::{entry}', f'--output={package}']
+            f'sample::{entry}', f'--output={package}']
     report = json.loads(journal.run(args))
     assert report['status'] == 'compiled'
     assert Path(report['compiler']).is_absolute() and len(report['toolchain']) == 64
@@ -175,11 +175,11 @@ def test_generated_bindings_are_an_independent_rust_consumer(toolchain, journal,
     shapes_dir.mkdir()
     collision = shapes_dir / 'p.zkc'
     collision.write_text('module p;pub struct Outputs {pub flag:bool}')
-    shapes_package = shapes_dir / 'Demo.entry'
+    shapes_package = shapes_dir / 'Demo.zkpkg'
     shapes_report = json.loads(journal.run([
         toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
         f'--module=sample={FIXTURES / "host_bindings.zkc"}', f'--module=p={collision}',
-        '--entry=sample::Demo', f'--output={shapes_package}',
+        'sample::Demo', f'--output={shapes_package}',
     ]))
     shapes_pin = shapes_report['package_sha256']
     pcs_package, pcs_pin = compile_entry(toolchain, journal, directory, 'Prove', FIXTURES / 'pcs_setup.zkc')
@@ -315,7 +315,7 @@ fn main() {
 
 def test_input_numbers_keep_their_json_shape(toolchain, journal, directory):
     source = directory / 'indices.zkc'
-    source.write_text("module sample; protocol Index roles(P)(n:index@P)->(n:index@P){return(n=n);} entry Demo=Index;")
+    source.write_text("module sample; protocol Index roles(P)(n:index@P)->(n:index@P){return(n=n);} run Demo=Index;")
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
     request = {'format': 'zkc.entry-run/0', 'session': 'index_files', 'roles': {'P': {'inputs': {'n': 7}}}}
     inputs = write(directory / 'inputs.json', request)
@@ -347,7 +347,7 @@ def test_bindings_refuse_outputs_without_host_export(toolchain, journal, directo
     source.write_text('module sample; struct Restricted:Drop{pub b:bool}'
                       'fn make()->Restricted{return Restricted{b:true};}'
                       'protocol Run roles(P)()->(r:Restricted@P){'
-                      'let r @P =make();return(r=r);}entry Demo=Run;')
+                      'let r @P =make();return(r=r);}run Demo=Run;')
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
     bindings = directory / 'bindings.rs'
     bindings.write_bytes(b'unchanged')
@@ -369,7 +369,7 @@ def test_compilation_preserves_the_selected_executable(toolchain, journal, direc
     original = compiler.read_bytes()
     for selected, output in [(compiler, compiler), (alias, compiler), (alias, alias),
                              (compiler, alias)]:
-        journal.run([toolchain.runtime, 'compile', '--entry=sample::Derived',
+        journal.run([toolchain.runtime, 'compile', 'sample::Derived',
                      f'--module=sample={FIXTURES / "attempts.zkc"}', f'--compiler={selected}',
                      f'--output={output}'], refuses='entry-output-path')
         assert compiler.read_bytes() == original and alias.is_symlink()
@@ -379,9 +379,9 @@ def test_compiler_failures_are_bounded_and_do_not_publish(toolchain, journal, di
     compiler = directory / 'compiler'
     compiler.write_text(f'#!{sys.executable}\nimport sys\nsys.stderr.write("X" * 70000)\nsys.exit(1)\n')
     compiler.chmod(0o755)
-    output = directory / 'existing.entry'
+    output = directory / 'existing.zkpkg'
     output.write_bytes(b'unchanged')
-    args = [toolchain.runtime, 'compile', '--entry=sample::Derived',
+    args = [toolchain.runtime, 'compile', 'sample::Derived',
             f'--module=sample={FIXTURES / "attempts.zkc"}', f'--output={output}']
     report = json.loads(journal.run([*args, f'--compiler={compiler}'], refuses='source-compilation'))
     assert report['diagnostics_truncated'] and len(report['diagnostics']) == 65536
@@ -409,15 +409,15 @@ def test_proof_file_public_inputs_are_authoritative(toolchain, journal, director
     journal.run(verifying, refuses='proof-header')
     original = source.read_bytes()
     journal.run([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-                 f'--module=sample={source}', '--entry=sample::Derived', f'--output={source}'],
+                 f'--module=sample={source}', 'sample::Derived', f'--output={source}'],
                 refuses='entry-output-path')
     assert source.read_bytes() == original
 
 
 def test_compiler_lookup_and_positional_arguments(toolchain, journal, directory):
     source = directory / 'source.zkc'
-    source.write_text('module sample; protocol Run roles(P)(b:bool@P)->(b:bool@P){return(b=b);} entry Demo=Run;')
-    args = [toolchain.runtime, 'compile', '--module=sample=source.zkc', '--entry=sample::Demo', '--output=demo.entry']
+    source.write_text('module sample; protocol Run roles(P)(b:bool@P)->(b:bool@P){return(b=b);} run Demo=Run;')
+    args = [toolchain.runtime, 'compile', '--module=sample=source.zkc', 'sample::Demo', '--output=demo.zkpkg']
     env = dict(os.environ, PATH=str(toolchain.compiler.parent))
     result = journal.attempt(args, cwd=directory, env=env)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -438,7 +438,7 @@ def test_compiler_lookup_and_positional_arguments(toolchain, journal, directory)
             env['PATH'] = path
         result = journal.attempt(args, cwd=directory, env=env)
         assert result.returncode == 1 and json.loads(result.stdout)['code'] == 'source-compiler-missing'
-    package = directory / 'demo.entry'
+    package = directory / 'demo.zkpkg'
     for command in ('prove', 'bindings'):
         args = [toolchain.runtime, command, package, report['package_sha256']]
         if command == 'prove':
@@ -459,7 +459,7 @@ protocol Run roles(P,V)(done:bool@P)->(large:Vector<Fr>@P,accepted:bool@V){
   let actual=send P->V(done);
   return(large=large,accepted=actual);
 }
-entry Demo=Run{prover P;verifier V;public{};accept accepted;construction authored;}
+proof Demo=Run{prover P;verifier V;public{};accept accepted;construction authored;}
 ''')
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
     producer = write(directory / 'producer.json', {'format': 'zkc.entry-proof/0', 'public': {}, 'inputs': {'done': True}})
@@ -487,7 +487,7 @@ def test_interface_publication_and_host_share_resource_boundaries(toolchain, jou
     source = directory / 'source.zkc'
     def program(count):
         ports = ','.join(f'a{i}:[();1024]@P' for i in range(count))
-        return f'module sample;protocol Run roles(P)({ports})->(){{return();}}entry Demo=Run;'
+        return f'module sample;protocol Run roles(P)({ports})->(){{return();}}run Demo=Run;'
     source.write_text(program(7))
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
     journal.run([toolchain.runtime, 'bindings', package, pin, directory / 'bindings.rs'])
@@ -498,10 +498,10 @@ def test_interface_publication_and_host_share_resource_boundaries(toolchain, jou
     executed = json.loads(journal.run([toolchain.runtime, 'run', package, pin, request]))
     assert executed['status'] == 'executed'
     source.write_text(program(9))
-    refused = directory / 'oversized.entry'
+    refused = directory / 'oversized.zkpkg'
     result = json.loads(journal.run([
         toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-        f'--module=sample={source}', '--entry=sample::Demo', f'--output={refused}',
+        f'--module=sample={source}', 'sample::Demo', f'--output={refused}',
     ], refuses='source-compilation'))
     assert 'source.limit' in result['diagnostics']
     assert not refused.exists()
@@ -534,7 +534,7 @@ def test_inspect_authenticates_without_execution(toolchain, journal, directory, 
                            refuses='entry-package-identity')
     assert 'interface' not in refused
     assert package.read_bytes() == sentinel
-    missing = directory / 'missing.entry'
+    missing = directory / 'missing.zkpkg'
     refused = journal.json([toolchain.runtime, 'inspect', missing, pin, '--results=unused'],
                            refuses='cli-option')
     assert refused['phase'] == 'arguments' and refused['message']
@@ -568,7 +568,7 @@ protocol Check roles(P,V)(produce:bool@P,accept:bool@P)->(accepted:bool@V){{
   let final=send P->V(true);
   return true;
 }}
-entry Proof=Check{{prover P;verifier V;public{{}};accept accepted;construction authored;}}
+proof Proof=Check{{prover P;verifier V;public{{}};accept accepted;construction authored;}}
 ''')
     package, pin = compile_entry(toolchain, journal, directory, 'Proof', source)
     producer = write(directory / 'producer.json', {'format': 'zkc.entry-proof/0', 'public': {},

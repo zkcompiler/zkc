@@ -71,7 +71,7 @@ protocol Run roles(P)(m:Matrix<F>@P,v:Vector<F>@P,a:F@P,b:F@P,x:F@P)
     logic=(zkc::boolean::both(true,false),zkc::boolean::either(true,false),
       zkc::boolean::different(true,true),zkc::boolean::negate(false)));
 }
-entry Demo=Run;
+run Demo=Run;
 '''
     # [1 2; 0 3], independent native sparse-matrix encoding.
     entries = [(0, 0, 1), (0, 1, 2), (1, 1, 3)]
@@ -96,7 +96,7 @@ entry Demo=Run;
 def test_formal_contract_and_execution_modes_refuse(toolchain, journal, directory):
     prefix = '''module sample;
  domain F=field("bls12-381.fr");
- protocol Run roles(P)(a:F@P)->(out:F@P){return a;} entry Demo=Run;
+ protocol Run roles(P)(a:F@P)->(out:F@P){return a;} run Demo=Run;
 '''
     for name, definition, code in [
         ('index-bound', 'math fn bad(a:F)->F {return zkc::symbolic::get<F,1,1>(zkc::symbolic::pack([a]));}', 'source.bound'),

@@ -19,11 +19,11 @@ int main(int argc, char **argv) {
     protocol Step roles(P)(x:bool@P)->(r:bool@P)
       spec {output contract=Same(in.x,out.r);}{return(r=x);}
     protocol Run roles(P)(x:bool@P)->(r:bool@P){let r=Step(x);return(r=r);}
-    entry Demo=Run;
+    run Demo=Run;
     protocol Send roles(P,V)(x:bool@P)->(accepted:bool@V){
       let received=send P->V(x);return(accepted=received);
     }
-    entry Proof=Send{prover P;verifier V;public{};accept accepted;construction authored;})",
+    proof Proof=Send{prover P;verifier V;public{};accept accepted;construction authored;})",
                                            "consumer.zkc"}});
   if (!captured) {
     llvm::errs() << llvm::toString(captured.takeError());
@@ -192,8 +192,8 @@ int main(int argc, char **argv) {
     };
     if (!write("run.bundle", native->bundle) ||
         !write("proof.deployment", proof->deployment) ||
-        !write("run.entry", package->bytes()) ||
-        !write("proof.entry", proofPackage->bytes()))
+        !write("run.zkpkg", package->bytes()) ||
+        !write("proof.zkpkg", proofPackage->bytes()))
       return 16;
   }
   return 0;

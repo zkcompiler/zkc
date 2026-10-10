@@ -47,13 +47,11 @@ protocol SpotCheck<N: nat, Max: nat> roles(P, V)
   return (accepted = accepted);
 }
 
-entry Proof = SpotCheck<pow2(3), 4> {
+proof Proof = SpotCheck<pow2(3), 4> {
   prover P;
   verifier V;
   public { expected, rounds };
   accept accepted;
-  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {
-    derive coins;
-  }
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
 }
-entry Interactive = SpotCheck<pow2(3), 4>;
+run Interactive = SpotCheck<pow2(3), 4>;

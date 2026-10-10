@@ -53,12 +53,12 @@ def test_source_reduction_matches_independent_staged_reference(toolchain, journa
     rows = machine.layout(machine.execute(program, 1))
     configuration, instance, witness = machine.carriers(bundle, rows)
     publics = [decode(slot[1], v) for slot, v in zip(bundle[1], instance[2])]
-    package = directory / 'reduction.entry'
+    package = directory / 'reduction.zkpkg'
     report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
         f'--module=inspect_reduction={ROOT}/tests/protocol/sources/interaction-reduction.zkc',
         f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
         f'--module=air_interaction={ROOT}/libraries/air/interaction.zkc',
-        f'--entry=inspect_reduction::{entry}', f'--output={package}'])
+        f'inspect_reduction::{entry}', f'--output={package}'])
     pin = report['package_sha256']
     reduction = reductions.Reduction(kind, bundle, [True, True, True])
     challenges = reductions.fixture_challenges('source-comparison', 4)
