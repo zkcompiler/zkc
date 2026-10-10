@@ -148,7 +148,7 @@ std::string source(StringRef relation = signature,
           "  let disclosed_pairs = send P -> V(pairs);\n"
           "  return (ok = accept);\n"
           "}\n"
-          "entry Demo = Run { prover P; verifier V; public { " +
+          "proof Demo = Run { prover P; verifier V; public { " +
           publicPorts +
           " }; accept ok; target proof; construction authored; }\n")
       .str();

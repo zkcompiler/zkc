@@ -1,0 +1,14 @@
+format = "zkc.project/0"
+
+[modules]
+air_stark_example = "main.zkc"
+air_stark = "../../../libraries/air/stark.zkc"
+air_table = "../../../libraries/air/table.zkc"
+air_polynomial = "../../../libraries/air/polynomial.zkc"
+fri = "../../../libraries/fri/lib.zkc"
+
+[assets]
+
+[assets.recurrence]
+format = "relation-bundle-json"
+path = "../../../compiler/adapters/plonky3/fixtures/recurrence/bundle.json"

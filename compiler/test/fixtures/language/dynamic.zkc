@@ -12,4 +12,4 @@ protocol Run roles(P,V)(x:Fr@P,n:index@P)->(left:Fr@V,right:Fr@V){
  let right @V =sum(ys.1);
  return(left=left,right=right);
 }
-entry Demo=Run;
+run Demo=Run;

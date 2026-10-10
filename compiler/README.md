@@ -3,7 +3,7 @@
 The compiler implements one model:
 
 ```
-.zkc Language → mathematical MLIR → generic participant programs
+.zkc Language → Protocol IR → generic participant programs
 ```
 
 Language captures explicit module buffers and relation Assets, checks declarations
@@ -34,7 +34,7 @@ callable contracts. `zkc check` and `compile` also accept an explicit
 [project map](../docs/language/README.md#project-inputs). Language Assets retain binary R1CS
 and AIR data ingress without generating an intermediate authored language.
 
-For mathematical MLIR, `protocol-bundle` compiles a run. `protocol-checked-bundle`
+For Protocol IR, `protocol-bundle` compiles a run. `protocol-checked-bundle`
 additionally checks supplied polynomial or public-coin requirements.
 `protocol-public-coin`, `protocol-check-public-coin`, and
 `protocol-check-reductions` expose the corresponding analyses.

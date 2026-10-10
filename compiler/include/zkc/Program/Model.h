@@ -157,7 +157,7 @@ struct Function {
   std::optional<LogicalOrigin> origin; // Required callable provenance.
 };
 /// Reconstructed native local callable definitions. This is an internal
-/// structural view of mathematical MLIR, never an authored source carrier.
+/// structural view of Protocol IR, never an authored source carrier.
 struct LocalDefinitions {
   std::vector<protocol::OperationBinding> bindings;
   std::vector<Function> functions;

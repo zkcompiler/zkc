@@ -110,7 +110,7 @@ source(StringRef body = "", StringRef entry = "Run<Product>",
   return (Twine(prelude) + body +
           "protocol Run<A: Ring> roles(E)(v: Vector<F>@E)->(ok: bool@E) " +
           protocolBound + " {\n  let ok @E = shape<F,A>(v);\n" +
-          "  return (ok=ok);\n}\nentry Demo = " + entry + ";\n")
+          "  return (ok=ok);\n}\nrun Demo = " + entry + ";\n")
       .str();
 }
 Expected<CheckedProject> check(StringRef text, std::vector<AssetBuffer> assets,
@@ -220,7 +220,7 @@ int main() {
     auto twice = source("domain Again = ring(asset product);\n"
                         "protocol Other roles(E)(v: Vector<F>@E)->(ok: bool@E)"
                         " { let ok @E = shape<F,Again>(v);"
-                        " return (ok=ok); }\nentry Second = Other;\n");
+                        " return (ok=ok); }\nrun Second = Other;\n");
     auto first = take(close(twice, {product()}));
     auto second = take(close(twice, {product()}, {}, "sample::Second"));
     require(indexConstants(first) == indexConstants(second) &&
@@ -289,7 +289,7 @@ protocol Count<B: Bundle> roles(E)(v: Vector<F>@E)->(n: index@E)
   let n @E = forwarded<B>();
   return (n=n);
 }
-entry Demo = Count<Recurrence>;
+run Demo = Count<Recurrence>;
 )";
     // A generic term's facts reach the body as constants of the captured
     // bundle, through a renamed parameter, and bounds entail each other.
@@ -373,7 +373,7 @@ entry Demo = Count<Recurrence>;
                "fn second(x: Row<Product>) -> bool { return x[1]; }\n"
                "protocol Rows roles(E)(x: Row<Product>@E)->(ok: bool@E)"
                " { let ok @E = second(x); return (ok=ok); }\n"
-               "entry Alias = Rows;\n");
+               "run Alias = Rows;\n");
     auto rows = take(close(aliased, {product()}, {}, "sample::Alias"));
     require(rows.protocol().inputs[0].type.kind == Type::Kind::Array &&
                 rows.protocol().inputs[0].type.dimension.closedValue() == 2,
@@ -387,14 +387,14 @@ entry Demo = Count<Recurrence>;
         " return E::eval(v); }\n"
         "protocol Dispatch roles(E)(v: Vector<F>@E)->(r: Vector<F>@E)"
         " { let r @E = through<F, Fixed<F, Product>>(v);"
-        " return (r=r); }\nentry Selected = Dispatch;\n");
+        " return (r=r); }\nrun Selected = Dispatch;\n");
     auto dispatched =
         take(close(component, {product()}, {}, "sample::Selected"));
     require(ringReferences(dispatched).size() == 1 &&
                 dispatched.assets().size() == 1,
             "component member did not close its asset parameter");
     auto generic = source("domain Cube = ring(asset cube);\n"
-                          "entry Other = Run<Cube>;\n");
+                          "run Other = Run<Cube>;\n");
     auto first = take(close(generic, {product(), cubic("cube")}));
     auto other =
         take(close(generic, {product(), cubic("cube")}, {}, "sample::Other"));

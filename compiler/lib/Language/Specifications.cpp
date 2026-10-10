@@ -200,8 +200,8 @@ bool Checker::specifications(Declaration &decl) {
                  "clause requires a relation declaration", source.span);
       return {};
     }
-    auto args =
-        arguments(decl, relation, source.relation.arguments, source.span);
+    auto args = arguments(decl, relation, source.relation.arguments,
+                          source.span, source.relation.labels);
     if (!args)
       return {};
     const auto *inlined =

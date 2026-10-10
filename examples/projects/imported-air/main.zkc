@@ -95,11 +95,11 @@ protocol Points roles(Evaluator)
   let residuals @Evaluator = row_values(assignments, points);
   return (residuals = residuals);
 }
-entry RowResiduals = Rows;
-entry TraceResiduals = Trace;
-entry CoefficientResiduals = Coefficients;
-entry PointResiduals = Points;
-entry DisclosedTraceProof = RevealTrace {
+run RowResiduals = Rows;
+run TraceResiduals = Trace;
+run CoefficientResiduals = Coefficients;
+run PointResiduals = Points;
+proof DisclosedTraceProof = RevealTrace {
   prover P;
   verifier V;
   public { configuration, x0, y0, final_acc, height };

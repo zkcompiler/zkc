@@ -67,10 +67,10 @@ proof's V inputs determine the public statement and configuration.
 From the repository root:
 
 ```sh
-zkc compile --project=examples/projects/imported-air/zkc.json \
-  --entry=imported_air::TraceResiduals \
-  --output=trace.entry
-zkc run trace.entry EXPECTED_SHA256 \
+zkc compile --project=examples/projects/imported-air/zkc.toml \
+  imported_air::TraceResiduals \
+  --output=trace.zkpkg
+zkc run trace.zkpkg EXPECTED_SHA256 \
   compiler/adapters/plonky3/fixtures/recurrence/source-trace-changed-trace.json \
   --results=results.json
 ```

@@ -17,12 +17,12 @@ protocol Schnorr<H:Group+Share+Wire> roles(P,V)
   let accepted@V=base*response==commitment+point*challenge;
   return(accepted=accepted);
 }
-entry Demo=Schnorr<G>{
+proof Demo=Schnorr<G>{
   prover P;
   verifier V;
   public{base,point};
   accept accepted;
   target knowledge;
-  construction fiat_shamir("merlin3.bls12-381.fr64be/0"){derive challenges;}
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
-entry Release=Demo;
+proof Release=Demo;

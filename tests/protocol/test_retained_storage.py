@@ -53,9 +53,9 @@ protocol Cost roles(P,V)(size:index@(P,V), width:index@(P,V), count:index@(P,V),
   }}
   return(accepted=accepted);
 }}
-entry Demo=Cost {{
+proof Demo=Cost {{
   prover P; verifier V; public{{size,width,count}}; accept accepted;
-  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {{derive coins;}}
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
 }}
 '''
 
@@ -82,9 +82,9 @@ class Case:
         self.width, self.capacity, self.runs = width, capacity, 0
         source = directory / 'retained.zkc'
         source.write_text(SOURCE.format(field=field))
-        self.package = directory / 'retained.entry'
+        self.package = directory / 'retained.zkpkg'
         report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-                               f'--module=sample={source}', '--entry=sample::Demo',
+                               f'--module=sample={source}', 'sample::Demo',
                                f'--output={self.package}'])
         self.pin = report['package_sha256']
         assert self.pin == hashlib.sha256(self.package.read_bytes()).hexdigest()

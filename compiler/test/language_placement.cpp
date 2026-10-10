@@ -61,19 +61,19 @@ void examples() {
   native("struct Ticket:Drop {} fn make()->Ticket{return Ticket{};}"
          "fn consumeTicket(x:Ticket)->bool{consume x;return true;}"
          "protocol Run roles(P,V)()->(r:bool@V){return consumeTicket(make());}"
-         "entry Demo=Run;");
+         "run Demo=Run;");
   refuses("struct Ticket:Drop {} fn make()->Ticket{return Ticket{};}"
           "protocol Run roles(P,V)()->(){let _=make();return ();}",
           "source.owner");
   native("interface Select{math fn selected(x:F,y:F)->F;}"
          "component First:Select{math fn selected(x:F,y:F)->F{return x;}}"
          "protocol Run<C:Select> roles(P,V)(s:F@(P,V),p:F@P)->(){"
-         "let r=C::selected(f(s),p);return ();}entry Demo=Run<First>;");
+         "let r=C::selected(f(s),p);return ();}run Demo=Run<First>;");
   for (StringRef expression : {"f(p)", "f(f(p))", "f(s)+p", "g(f(s),p)",
                                "zero(g(f(s),p))", "zero(f(v))+f(p)"}) {
     auto original = native(
         "protocol Run roles(P,V)(p:F@P,v:F@V,s:F@(P,V))->(r:F@P){return " +
-        expression.str() + ";}entry Demo=Run;");
+        expression.str() + ";}run Demo=Run;");
     require(!callOwners(*original.entry().protocol().body).empty(),
             "ordinary call disappeared");
   }
@@ -100,59 +100,59 @@ void examples() {
               "let r=mixed(f(s),p,v);return ();}",
           "source.roles");
   native(header + "let x@P=f(s);let r=ignored(x,p);let _@P=unit(s);return "
-                  "();}entry Demo=Run;");
-  native(header + "let r@P={let x=f(p);f(s)+x};return ();}entry Demo=Run;");
+                  "();}run Demo=Run;");
+  native(header + "let r@P={let x=f(p);f(s)+x};return ();}run Demo=Run;");
   auto mixed =
-      native(header + "let r@P=zero(f(v))+f(s);return ();}entry Demo=Run;");
+      native(header + "let r@P=zero(f(v))+f(s);return ();}run Demo=Run;");
   require(callOwners(*mixed.entry().protocol().body) ==
               std::vector<unsigned>({1, 0}),
           "one statement lost its independently owned calls");
   auto nested = native(header + "let r@P=f(s)+{let y@V=f(s);zero(y)};"
-                                "return ();}entry Demo=Run;");
+                                "return ();}run Demo=Run;");
   require(callOwners(*nested.entry().protocol().body) ==
               std::vector<unsigned>({0, 1}),
           "inner statement settlement changed a pending outer call");
   native("protocol Run roles(P,V)(s:F@(P,V))->(r:F@V){let r=send "
-         "P->V(g(f(s),f(s)));return r;}entry Demo=Run;");
+         "P->V(g(f(s),f(s)));return r;}run Demo=Run;");
   native("protocol Pair roles(P,V)(p:F@P,v:F@V)->(p:F@P,v:F@V){return(p,v);}"
          "protocol Run "
          "roles(P,V)(s:F@(P,V))->(p:F@P,v:F@V){let(a,b)=Pair(f(s),f(s));return("
-         "p=a,v=b);}entry Demo=Run;");
+         "p=a,v=b);}run Demo=Run;");
   refuses("protocol Pair roles(P,V)(p:F@P,v:F@V)->(p:F@P,v:F@V){return(p,v);}" +
               header + "let r=Pair(p,v);return ();}",
           "source.binding");
   auto outputs = native("protocol Run "
                         "roles(P,V)(s:F@(P,V))->(p:F@P,v:F@V){return(v=f(s),p="
-                        "f(s));}entry Demo=Run;");
+                        "f(s));}run Demo=Run;");
   require(callOwners(*outputs.entry().protocol().body) ==
               std::vector<unsigned>({1, 0}),
           "return order or independent port demand changed");
   native("protocol Run roles(P,V)(s:F@(P,V),n:index@P)->(r:F@P){let mut x@P=s;"
-         "for _ in 0..n roles(P) max 4{x=f(x);}return x;}entry Demo=Run;");
+         "for _ in 0..n roles(P) max 4{x=f(x);}return x;}run Demo=Run;");
   refuses("protocol Run roles(P,V)(n:index@P,s:F@V)->(){for _ in 0..n roles(P) "
           "max 4{let x=f(s);}return ();}",
           "source.roles");
   native("protocol Run roles(P)(n:index@P,x:F@P)->(){"
-         "for _ in 0..n roles(P) max 4{unit(x)}return ();}entry Demo=Run;");
+         "for _ in 0..n roles(P) max 4{unit(x)}return ();}run Demo=Run;");
   native("protocol Run roles(P,V)(n:index@(P,V),x:F@P)->(){"
-         "for _ in 0..n roles(P,V) max 4{unit(x)}return ();}entry Demo=Run;");
+         "for _ in 0..n roles(P,V) max 4{unit(x)}return ();}run Demo=Run;");
   refuses("protocol Run roles(P,V)(n:index@(P,V),x:F@(P,V))->(){"
           "for _ in 0..n roles(P,V) max 4{unit(x)}return ();}",
           "source.owner");
   native("protocol Run roles(P)(n:index@P)->(){"
-         "for _ in 0..n roles(P) max 4{}return ();}entry Demo=Run;");
+         "for _ in 0..n roles(P) max 4{}return ();}run Demo=Run;");
   native("fn count(n:index)->index{return n;}"
          "protocol Run roles(P,V)(n:index@(P,V))->(){"
-         "for _ in 0..count(n) roles(P) max 4{}return ();}entry Demo=Run;");
+         "for _ in 0..count(n) roles(P) max 4{}return ();}run Demo=Run;");
   refuses("fn count(n:index)->index{return n;}"
           "protocol Run roles(P,V)(n:index@(P,V))->(){"
           "for _ in 0..count(n) roles(P,V) max 4{}return ();}",
           "source.roles");
   native("protocol Run roles(P,V)(s:F@(P,V),go:bool@V)->(r:F@V)completes{"
-         "let ()=finish_if @V(yes(go))(r=f(s));return f(s);}entry Demo=Run;");
+         "let ()=finish_if @V(yes(go))(r=f(s));return f(s);}run Demo=Run;");
   native("fn check(go:bool)->bool{require go;return go;}"
          "protocol Run roles(P,V)(go:bool@V)->(r:bool@V){require "
-         "yes(go);return check(go);}entry Demo=Run;");
+         "yes(go);return check(go);}run Demo=Run;");
   refuses(
       "protocol Run roles(P,V)(go:bool@(P,V))->(){require yes(go);return ();}",
       "source.owner");
@@ -161,9 +161,9 @@ void examples() {
   refuses("fn bad(go:bool)->(){require @P go;return ();}", "source.roles");
   refuses("protocol Run roles(P)()->(){require @;return ();}", "source.name");
   // Suffixes cannot alter the committed owner; a direct return demand can.
-  auto a = native(header + "let x=f(p);return ();}entry Demo=Run;");
+  auto a = native(header + "let x=f(p);return ();}run Demo=Run;");
   auto b = native(
-      header + "let x=f(p);let actual=send P->V(x);return ();}entry Demo=Run;");
+      header + "let x=f(p);let actual=send P->V(x);return ();}run Demo=Run;");
   require(callOwners(*a.entry().protocol().body) ==
               callOwners(*b.entry().protocol().body),
           "a later statement changed an earlier owner");

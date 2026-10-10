@@ -23,9 +23,10 @@ public:
 
   std::optional<std::vector<unsigned>> roles(const Declaration &,
                                              llvm::ArrayRef<std::string>, Span);
-  std::optional<std::vector<Type>> arguments(const Declaration &,
-                                             const Declaration &,
-                                             llvm::ArrayRef<SyntaxType>, Span);
+  std::optional<std::vector<Type>>
+  arguments(const Declaration &, const Declaration &,
+            llvm::ArrayRef<SyntaxType>, Span,
+            llvm::ArrayRef<ArgumentLabel> = {});
 
   bool bindingName(const Declaration &, llvm::StringRef, Span);
   bool body(DeclarationId, unsigned);
@@ -70,5 +71,6 @@ private:
   bool requirements(Declaration &);
 };
 bool resolveBindings(Checker &, Declaration &, SyntaxDeclaration &);
+bool elaborateExpressions(Checker &, SyntaxDeclaration &);
 } // namespace zkc::language::detail
 #endif

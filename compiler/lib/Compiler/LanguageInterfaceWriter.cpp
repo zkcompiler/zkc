@@ -225,7 +225,7 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
       }
     });
     out.attributeObject("job", [&] {
-      const auto &proof = entry.entry().proof;
+      const auto &proof = entry.entry().proof();
       out.attribute("kind", proof ? "proof" : "run");
       if (!proof)
         return;

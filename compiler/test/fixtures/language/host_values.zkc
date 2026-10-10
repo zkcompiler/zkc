@@ -8,4 +8,4 @@ protocol Echo roles(P, V)(payload: Payload @P, empty: () @P)
   let received = send P -> V(payload);
   return(sent = payload, received = received, empty = ());
 }
-entry Demo = Echo;
+run Demo = Echo;

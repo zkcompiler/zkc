@@ -14,4 +14,4 @@ where Share(H::Scalar), Wire(H::Scalar) {
   let received = send P->V(result);
   return(result=received);
 }
-entry Demo = Run<G>;
+run Demo = Run<G>;

@@ -13,7 +13,7 @@ use zkc_tools::{
     run::HostLimits,
 };
 fn package(directory: &Path, entry: &str) -> Package {
-    let bytes = std::fs::read(directory.join(format!("pcs-setup-{entry}.entry"))).unwrap();
+    let bytes = std::fs::read(directory.join(format!("pcs-setup-{entry}.zkpkg"))).unwrap();
     Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES).unwrap()
 }
 fn point() -> Value {

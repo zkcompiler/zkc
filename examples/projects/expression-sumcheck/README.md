@@ -26,15 +26,15 @@ a polynomial commitment or a claimed soundness/Fiat–Shamir theorem.
 Compile from the repository root:
 
 ```sh
-zkc compile --project=examples/projects/expression-sumcheck/zkc.json \
-  --entry=example::BaseProof --output=expression.entry
+zkc compile --project=examples/projects/expression-sumcheck/zkc.toml \
+  example::BaseProof --output=expression.zkpkg
 ```
 
 Each independent Host admits the packaged expression before execution:
 
 ```sh
-zkc prove expression.entry EXPECTED_SHA256 prover.json proof.bin
-zkc verify expression.entry EXPECTED_SHA256 verifier.json proof.bin
+zkc prove expression.zkpkg EXPECTED_SHA256 prover.json proof.bin
+zkc verify expression.zkpkg EXPECTED_SHA256 verifier.json proof.bin
 ```
 
 Use named public inputs `values`, `claim`, and `rounds` in the ordinary

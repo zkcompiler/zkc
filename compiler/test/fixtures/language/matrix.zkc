@@ -11,4 +11,4 @@ protocol Run roles(P,V)(m: Matrix<Fr> @P, v: Vector<Fr> @P) -> (r: Fr @V) {
   let result @V = evaluate(data.0, data.1);
   return (r = result);
 }
-entry Demo = Run;
+run Demo = Run;

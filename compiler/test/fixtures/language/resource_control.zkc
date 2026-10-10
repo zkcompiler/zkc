@@ -28,4 +28,4 @@ protocol Run roles(P)(n:index@P, go:bool@P)->() {
   let result @P = work(n, go);
   return ();
 }
-entry Demo = Run;
+run Demo = Run;

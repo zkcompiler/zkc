@@ -45,13 +45,13 @@ native="${ZKC_NATIVE_BIN:-${CARGO_TARGET_DIR:-target}/release}"
 "$native/zkc" compile --compiler="$compiler" \
   --module=schnorr=libraries/schnorr/lib.zkc \
   --module=example=examples/projects/schnorr/main.zkc \
-  --entry=example::Proof --output="$demo_dir/proof.entry" \
+  example::Proof --output="$demo_dir/proof.zkpkg" \
   > "$demo_dir/build.json"
 pin=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["package_sha256"])' "$demo_dir/build.json")
-"$native/zkc" prove "$demo_dir/proof.entry" "$pin" \
+"$native/zkc" prove "$demo_dir/proof.zkpkg" "$pin" \
   examples/projects/schnorr/prover.json "$demo_dir/proof.bin" \
   > "$demo_dir/producer.json"
-"$native/zkc" verify "$demo_dir/proof.entry" "$pin" \
+"$native/zkc" verify "$demo_dir/proof.zkpkg" "$pin" \
   examples/projects/schnorr/verifier.json "$demo_dir/proof.bin" \
   > "$demo_dir/validator.json"
 cat "$demo_dir/validator.json"

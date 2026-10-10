@@ -2,6 +2,7 @@
 """Exercise an installed zkc and its companion compiler outside the checkout."""
 import argparse
 import json
+from support.project import project_text
 from pathlib import Path
 import shutil
 import subprocess
@@ -31,30 +32,30 @@ def check(binary, compiler, output):
 
     invoke("help", "--help")
     invoke("version", "--version")
-    (output / "zkc.json").write_text(json.dumps({"format": "zkc.project/0",
+    (output / "zkc.toml").write_text(project_text({"format": "zkc.project/0",
         "modules": {"schnorr": "schnorr.zkc", "example": "main.zkc"}, "assets": {}}))
-    checked = json.loads(invoke("check", "check", "--project=zkc.json", "--declarations"))
+    checked = json.loads(invoke("check", "check", "--project=zkc.toml", "--declarations"))
     assert checked["status"] == "checked" and checked["scope"] == "definitions"
     assert any(d["name"] == "schnorr::Schnorr" for d in checked["declarations"])
-    arguments = ["compile", "--entry=example::Proof", "--project=zkc.json", "--output=proof.entry"]
+    arguments = ["compile", "example::Proof", "--project=zkc.toml", "--output=proof.zkpkg"]
     built = json.loads(invoke("compile", *arguments))
     assert Path(built["compiler"]).resolve() == compiler.resolve()
     # An explicit selection must remain usable through the package wrapper.
     selected = json.loads(invoke("selected-compiler", *arguments, f"--compiler={compiler}"))
     assert Path(selected["compiler"]).resolve() == compiler.resolve()
     pin = selected["package_sha256"]
-    inspected = json.loads(invoke("inspect", "inspect", "proof.entry", pin))
+    inspected = json.loads(invoke("inspect", "inspect", "proof.zkpkg", pin))
     assert inspected["status"] == "inspected" and inspected["interface"]["kind"] == "proof"
     assert inspected["interface"]["entry"] == "example::Proof"
-    refused = json.loads(invoke("wrong-pin", "inspect", "proof.entry", "0" * 64, success=False))
+    refused = json.loads(invoke("wrong-pin", "inspect", "proof.zkpkg", "0" * 64, success=False))
     assert refused["code"] == "entry-package-identity"
     for name, inputs, status in [("prove", "prover.json", "produced"),
                                   ("verify", "verifier.json", "accepted")]:
-        result = json.loads(invoke(name, name, "proof.entry", pin, inputs, "proof.bin"))
+        result = json.loads(invoke(name, name, "proof.zkpkg", pin, inputs, "proof.bin"))
         assert result["status"] == status
     proof = output / "proof.bin"
     proof.write_bytes(proof.read_bytes()[:-1])
-    refused = json.loads(invoke("truncated", "verify", "proof.entry", pin,
+    refused = json.loads(invoke("truncated", "verify", "proof.zkpkg", pin,
                                "verifier.json", "proof.bin", success=False))
     assert refused["status"] == "refused"
 
@@ -63,15 +64,15 @@ def check(binary, compiler, output):
     shutil.copyfile(ROOT / "examples/projects/mathematics/main.zkc", output / "mathematics.zkc")
     for name in ("vector", "symbolic"):
         shutil.copyfile(ROOT / f"libraries/zkc/{name}.zkc", output / f"{name}.zkc")
-    (output / "mathematics.json").write_text(json.dumps({"format": "zkc.project/0", "modules": {
+    (output / "mathematics.toml").write_text(project_text({"format": "zkc.project/0", "modules": {
         "example": "mathematics.zkc", "zkc::vector": "vector.zkc", "zkc::symbolic": "symbolic.zkc"
     }, "assets": {}}))
-    checked = json.loads(invoke("math-check", "check", "--project=mathematics.json",
-                                "--entry=example::Run", "--declarations"))
+    checked = json.loads(invoke("math-check", "check", "--project=mathematics.toml",
+                                "example::Run", "--declarations"))
     assert checked["scope"] == "entry"
     assert any(d["name"] == "zkc::vector::fold" for d in checked["declarations"])
-    compiled = json.loads(invoke("math-compile", "compile", "--project=mathematics.json",
-                                 "--entry=example::Run", "--output=mathematics.entry"))
+    compiled = json.loads(invoke("math-compile", "compile", "--project=mathematics.toml",
+                                 "example::Run", "--output=mathematics.zkpkg"))
 
     def scalar(value):
         return (b"ZKCV\x00\x01" + value.to_bytes(32, "little")).hex()
@@ -81,7 +82,7 @@ def check(binary, compiler, output):
     (output / "mathematics-inputs.json").write_text(json.dumps({"format": "zkc.entry-run/0",
         "session": "installed_math", "roles": {"P": {"inputs": {
             "a": scalar(2), "b": scalar(3), "point": scalar(4), "values": values}}}}))
-    executed = json.loads(invoke("math-run", "run", "mathematics.entry", compiled["package_sha256"],
+    executed = json.loads(invoke("math-run", "run", "mathematics.zkpkg", compiled["package_sha256"],
                                  "mathematics-inputs.json", "--results=mathematics-results.json"))
     assert executed["status"] == "executed"
     result = json.loads((output / "mathematics-results.json").read_text())

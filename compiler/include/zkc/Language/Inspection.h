@@ -3,6 +3,9 @@
 #include "zkc/Language/Project.h"
 
 namespace zkc::language {
+/// JSON inventory of canonical Entry names and run/proof kinds, sorted by name.
+llvm::Expected<std::string> inspectEntries(const CheckedProject &,
+                                           const Limits & = {});
 /// JSON array of completed public callable declarations, sorted by qualified
 /// name. This is a diagnostic view of checked facts, not an admitted artifact.
 /// Output is bounded by limits.interfaceBytes; no partial array is returned.

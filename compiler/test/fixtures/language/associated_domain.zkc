@@ -4,4 +4,4 @@ interface Algebra{type Scalar:Field;math fn identity(x:Scalar)->Scalar;}
 component BLS:Algebra{type Scalar:Field=Fr;math fn identity(x:Scalar)->Scalar{return x;}}
 math fn double<C:Algebra>(x:C::Scalar)->C::Scalar{return C::identity(x)+x;}
 protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return(r=double<BLS>(x));}
-entry Demo=Run;
+run Demo=Run;

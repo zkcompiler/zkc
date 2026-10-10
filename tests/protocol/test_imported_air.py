@@ -78,10 +78,10 @@ class Client:
 
     def __init__(self, toolchain, journal, directory, entry, flags=()):
         self.tools, self.journal, self.directory = toolchain, journal, directory
-        self.package = directory / f'{entry}.entry'
+        self.package = directory / f'{entry}.zkpkg'
         report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-                               f'--project={PROJECT}/zkc.json',
-                               f'--entry=imported_air::{entry}', f'--output={self.package}', *flags])
+                               f'--project={PROJECT}/zkc.toml',
+                               f'imported_air::{entry}', f'--output={self.package}', *flags])
         self.pin = report['package_sha256']
 
     def run(self, name, request, refuses=None):
@@ -358,8 +358,8 @@ def test_reference_protocol_refuses_relations_with_additional_obligations(
         f'--module=imported_air={PROJECT}/main.zkc',
         f'--asset=export=ring-json={RECURRENCE}/arena.json',
         f'--asset=recurrence=relation-bundle-json={asset}',
-        '--entry=imported_air::DisclosedTraceProof',
-        f'--output={directory}/{extra}.entry'], refuses='source.bound')
+        'imported_air::DisclosedTraceProof',
+        f'--output={directory}/{extra}.zkpkg'], refuses='source.bound')
 
 
 @pytest.mark.parametrize('mutation,code', [
@@ -423,9 +423,9 @@ protocol Check roles(V)(w: Vector @V, c: Vector @V, p: Vector @V, h: index @V)
   let out @V = evaluate(w, c, p, h);
   return (out = out);
 }}
-entry Run = Check;
+run Run = Check;
 ''')
     journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
         f'--module=reference={source}',
         f'--asset=recurrence=relation-bundle-json={RECURRENCE}/bundle.json',
-        '--entry=reference::Run', f'--output={directory}/reference.entry'], refuses=code)
+        'reference::Run', f'--output={directory}/reference.zkpkg'], refuses=code)

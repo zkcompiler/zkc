@@ -17,4 +17,4 @@ protocol Run<N: nat> roles(P, V)(n: index @(P,V), a: Fr @P, b: Fr @V, go: bool @
   return (p = pa, v = vb);
 }
 
-entry Demo = Run<4>;
+run Demo = Run<4>;

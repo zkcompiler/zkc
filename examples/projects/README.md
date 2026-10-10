@@ -12,8 +12,8 @@
 | [FRI](fri/README.md) | Generic binary FRI with authenticated rows | Commitments, extension-field folding challenges, simultaneous queries and a bounded terminal polynomial |
 | [Imported AIR](imported-air/README.md) | Captured Plonky3 AIR expression and relation Bundle | Actual trace checks and a disclosed-trace proof, plus coefficient and Ext8 point views |
 
-The [walkthrough](../../docs/getting-started.md) runs the Schnorr project. Each project has an explicit `zkc.json` source and asset map. Run
-`zkc check --project=examples/projects/NAME/zkc.json --declarations`, then
+The [walkthrough](../../docs/getting-started.md) runs the Schnorr project. Each project has an explicit `zkc.toml` source and asset map. Run
+`zkc check --project=examples/projects/NAME/zkc.toml --declarations`, then
 compile with the same `--project` and a selected `--entry`. Invoke the package through
 the [common Host](../../docs/runtime/entries.md). These projects require no
 protocol-specific executor. The [source project checks](../../tests/protocol/test_source_projects.py)

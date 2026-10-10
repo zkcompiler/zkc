@@ -557,7 +557,7 @@ def check_bundle_commands(toolchain, journal, directory):
 def check_source_setup_commands(toolchain, journal, directory):
     import hashlib
     import json
-    package = directory / 'pcs-setup-Prove.entry'
+    package = directory / 'pcs-setup-Prove.zkpkg'
     pin = hashlib.sha256(package.read_bytes()).hexdigest()
     authority = f'--setups={directory / "cli-authority.json"}'
     proof = directory / 'separate-cli-pcs-proof.bin'
@@ -569,7 +569,7 @@ def check_source_setup_commands(toolchain, journal, directory):
         report = json.loads(journal.run([toolchain.runtime, 'prove', package, pin,
             directory / 'cli-producer.json', *output, authority, '--allow-header-only'], refuses='entry-output-path'))
         assert 'execution' not in report and key.read_bytes() == unchanged
-    package = directory / 'pcs-setup-Run.entry'
+    package = directory / 'pcs-setup-Run.zkpkg'
     pin = hashlib.sha256(package.read_bytes()).hexdigest()
     command = [toolchain.runtime, 'run', package, pin, directory / 'cli-run.json', authority]
     journal.run(command)

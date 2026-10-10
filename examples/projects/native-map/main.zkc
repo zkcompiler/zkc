@@ -22,7 +22,7 @@ fn vanishes<F: Field>(values: Vector<F>) -> bool {
   return kernel<F>("vector.equal", values, map zero(each values));
 }
 fn combined<F: Field>(left: Vector<F>, right: Vector<F>, r: F) -> Vector<F> {
-  return map combine(each left, each right, r);
+  return map combine(r = r, right = each right, left = each left);
 }
 fn same<F: Field>(left: Vector<F>, right: Vector<F>) -> bool {
   return kernel<F>("vector.equal", left, right);
@@ -48,5 +48,5 @@ protocol Combination roles(P, V)
   let accepted @V = same(received, expected);
   return (accepted = accepted);
 }
-entry Check = Gates;
-entry Interactive = Combination;
+run Check = Gates;
+run Interactive = Combination;

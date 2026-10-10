@@ -30,7 +30,7 @@ protocol Run roles(P,V)(table:[Fr;2]@P,claim:Fr@V,r:Fr@V)
   let ok@V=true;
   return(point=[r],value=value,ok=ok);
  }
-entry Demo=Run;
+run Demo=Run;
 
 math fn products(a:[Fr;2],b:[Fr;2],x:Fr)->(Fr,Fr){
   let p=intrinsic<Fr,1>("poly.multiply",polynomial<Fr,1>(a),polynomial<Fr,1>(b));
@@ -41,4 +41,4 @@ math fn products(a:[Fr;2],b:[Fr;2],x:Fr)->(Fr,Fr){
 protocol Products roles(P)(x:Fr@P)->(values:(Fr,Fr)@P){
   return(values=products([0,1],[0,1],x));
 }
-entry ProductControl=Products;
+run ProductControl=Products;

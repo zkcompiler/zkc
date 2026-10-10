@@ -1,6 +1,6 @@
 # Roadmap
 
-Development extends one supported model: `.zkc` Language → mathematical MLIR →
+Development extends one supported model: `.zkc` Language → Protocol IR →
 `zkc.program/0` → the shared Rust Runner and Entry/proof/joint Hosts.
 [Status](status.md) records existing support; this page orders further work.
 

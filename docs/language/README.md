@@ -1,7 +1,7 @@
 # Writing protocols
 
 Write `.zkc` modules and select an Entry to compile and execute a protocol. The
-Language implementation checks the source and emits mathematical MLIR for the
+frontend checks the source and emits Protocol IR (PIR), built on MLIR, for the
 common participant compiler and Rust Host.
 
 Start with the [walkthrough](../getting-started.md), then read the
@@ -26,44 +26,63 @@ the independent semantic foundations.
 
 ## Project inputs
 
-A project file records the source and asset map. Paths are relative to that file;
-imports never search directories. For example, `zkc.json` can contain:
+`zkc.toml` records explicit source and asset locations. Relative paths use the
+manifest's visible parent, including when the manifest is a symlink. Imports
+never search directories.
 
-```json
-{
-  "format": "zkc.project/0",
-  "modules": {"example": "main.zkc", "schnorr": "../../libraries/schnorr/lib.zkc"},
-  "assets": {}
-}
+```toml
+format = "zkc.project/0"
+
+[modules]
+example = "main.zkc"
+schnorr = "../../libraries/schnorr/lib.zkc"
+
+# Optional external relation data.
+[assets.constraints]
+format = "ring-json"
+path = "constraints.ring.json"
 ```
+
+From the project directory or a subdirectory:
 
 ```sh
-zkc check --project=zkc.json
-zkc check --project=zkc.json --entry=example::Proof
-zkc compile --project=zkc.json --entry=example::Proof --output=proof.entry
+zkc check
+zkc check Proof
+zkc compile Proof
+zkc compile example::Proof --output=proof.zkpkg
 ```
 
-`check` checks every definition, including generic library bodies, without
-requiring an Entry. With `--entry`, it also closes that Entry and checks its
-mathematical IR and source correspondence. For example, definition checking
-validates a generic `map` call's signature and inferred vector results, while the
-selected Entry also admits its closed helper body against the supported scalar
-operations. A successful definitions check alone does not establish that every
-specialization can be compiled. Neither form executes a protocol.
-The JSON report records the reached scope and capture identity. The compiler and
-CLI use the same flat `zkc.source-check/0` result; the CLI adds its selected
-compiler path.
+`check` checks every definition, including generic library bodies. Its `entries`
+array lists canonical names and `run`/`proof` kinds. Selecting an Entry also
+checks its closure, Protocol IR and source correspondence. A definitions check
+alone does not establish that every specialization can compile. Neither form
+executes a protocol. `scope` distinguishes `definitions` from `entry`.
 
-Use a project file or repeated `--module`/`--asset` options, never both. The
-manifest selects no Entry, backend, transcript or setup policy. Assets have
-`{"format": "ring-json", "path": "product.ring.json"}` entries keyed by their
-source names; see [relation inputs](relations.md) for supported formats.
-[Example projects](../../examples/projects/README.md) contain complete manifests.
+A selector is a qualified name or a unique short name across all captured
+modules. `compile` can omit it when exactly one Entry exists. Aliases count as
+separate candidates. Ambiguity is an error with candidate names; the compiler
+never prefers one execution kind or module.
+
+The CLI discovers the nearest `zkc.toml` in the current directory or its ancestors.
+An invalid nearer manifest fails instead of selecting a parent. `--project=FILE`
+selects one explicitly. Repeated `--module=NAME=FILE` and `--asset=NAME=FORMAT=FILE`
+options disable discovery and cannot be combined with `--project`. SDKs use
+explicit captures. The manifest chooses no Entry, backend, transcript or setup
+policy. See [relation inputs](relations.md) for asset formats.
+
+Project compilation defaults to `build/zkc/<qualified.name>.zkpkg` beside the
+manifest. It creates that directory and replaces prior output at the exact
+filename, including obsolete or damaged packages. Input aliases and filenames
+differing only in case are refused. Use `--output` for another filename; explicit
+module mode requires it. Explicit command-line paths are relative to the invocation directory.
+Reports include the selected compiler, manifest when used, output path and package
+SHA-256. Paths do not enter source capture identity. The `.zkpkg` extension is a
+filename convention; readers check the package format.
 
 ## Inspect completed declarations
 
 ```sh
-zkc check --project=libraries/zkc/zkc.json --declarations
+zkc check --project=libraries/zkc/zkc.toml --declarations
 ```
 
 The report's `declarations` array lists public mathematical functions,

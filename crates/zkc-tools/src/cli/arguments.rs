@@ -5,7 +5,6 @@ use std::collections::BTreeSet;
 pub(super) struct OptionSpec {
     pub syntax: &'static str,
     pub repeated: bool,
-    pub required: bool,
     unsigned: bool,
 }
 impl OptionSpec {
@@ -13,16 +12,11 @@ impl OptionSpec {
         Self {
             syntax,
             repeated: false,
-            required: false,
             unsigned: false,
         }
     }
     pub const fn unsigned(mut self) -> Self {
         self.unsigned = true;
-        self
-    }
-    pub const fn required(mut self) -> Self {
-        self.required = true;
         self
     }
     pub const fn repeated(mut self) -> Self {
@@ -65,11 +59,7 @@ impl Command {
             } else {
                 option.syntax.into()
             };
-            usage.push_str(&if option.required {
-                format!(" {syntax}")
-            } else {
-                format!(" [{syntax}]")
-            });
+            usage.push_str(&format!(" [{syntax}]"));
         }
         format!("{usage}\n\n{}\n", self.description)
     }
@@ -117,16 +107,17 @@ impl Command {
             }
             parsed.options.push((name, value));
         }
-        if parsed.positional.len() != self.positional.split_whitespace().count() {
+        let maximum = self.positional.split_whitespace().count();
+        let minimum = self
+            .positional
+            .split_whitespace()
+            .filter(|p| !p.starts_with('['))
+            .count();
+        if !(minimum..=maximum).contains(&parsed.positional.len()) {
             return Err(error(
                 "cli-usage",
                 format!("expected positional arguments: {}", self.positional),
             ));
-        }
-        for spec in self.options.iter().filter(|spec| spec.required) {
-            if !seen.contains(spec.name()) {
-                return Err(error("cli-usage", format!("missing {}", spec.syntax)));
-            }
         }
         Ok(parsed)
     }

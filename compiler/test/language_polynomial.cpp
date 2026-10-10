@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
     auto text = (*bytes)->getBuffer().str() + R"(
       protocol Shared roles(P,V)(a:Fr@(P,V),b:Fr@(P,V),x:Fr@(P,V))
         ->(r:(Fr,Fr,Fr,Fr,Fr,Fr)@(P,V)){return(r=calculate(a,b,x));}
-      entry SharedDemo=Shared;
+      run SharedDemo=Shared;
     )";
     auto original = take(prepareOriginal(
         take(closeEntry(take(check(text)), "sample::SharedDemo"))));
@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
         let sum=intrinsic<F,0,0>("poly.sum_suffix",fixed);
         return intrinsic<F,0>("poly.evaluate",sum,[]);
       }
-      protocol Run roles(P)(x:F@P)->(r:F@P){return(r=value(x));}entry Demo=Run;
+      protocol Run roles(P)(x:F@P)->(r:F@P){return(r=value(x));}run Demo=Run;
     )");
     auto original = take(
         prepareOriginal(take(closeEntry(take(check(text)), "sample::Demo"))));
@@ -203,7 +203,7 @@ int main(int argc, char **argv) {
       math fn p(x:F)->Poly<33>{return intrinsic<F,33>("poly.constant",x);}
       math fn value(x:F)->F{let discarded=p(x);return x;}
       protocol Run roles(P)(x:F@P)->(r:F@P){return(r=value(x));}
-      entry Demo=Run;
+      run Demo=Run;
     )")));
     auto closed = take(closeEntry(project, "sample::Demo"));
     auto result = prepareOriginal(closed);
@@ -271,7 +271,7 @@ int main(int argc, char **argv) {
         return x;
       }
       protocol Run<N:nat> roles(P)(x:F@P)->(r:F@P) where 1<=pow2(N){return(r=p<N>(x));}
-      entry Demo=Run<21>;
+      run Demo=Run<21>;
     )")));
     auto closed = closeEntry(project, "sample::Demo");
     require(!closed, "oversized closed intrinsic shape admitted");
@@ -302,7 +302,7 @@ int main(int argc, char **argv) {
                 r=calculate(a,b,x);
               }
               return(r=r);
-            }entry NestedDemo=Nested;
+            }run NestedDemo=Nested;
           )";
               auto project = take(check(changed));
               auto original =
@@ -328,7 +328,7 @@ int main(int argc, char **argv) {
           return x;
         }
         protocol Run roles(P)(x:F@P)->(r:F@P){return(r=x);}
-        entry Demo=Run;
+        run Demo=Run;
       )");
           // Close the helper through an ordinary call, then remove that call
           // from the admitted original. The helper remains available only for

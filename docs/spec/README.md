@@ -1,6 +1,6 @@
 # Specification
 
-This reference defines the native `.zkc` → mathematical MLIR → `zkc.program/0`
+This reference defines the native `.zkc` → Protocol IR → `zkc.program/0`
 path, its application interfaces, and the mathematical contracts used to describe
 it. Definitions are normative within their stated parameters and premises.
 Examples are informative. [Status](../status.md) records implemented coverage.
@@ -10,7 +10,7 @@ Examples are informative. [Status](../status.md) records implemented coverage.
 | Subject | Contract |
 |---|---|
 | Source language | [Definitions, types, bodies, Entries and translation](language/README.md) |
-| Mathematical IR | [Protocol profiles](ir/protocols.md), [mathematics](ir/mathematics.md), [polynomial recipes](ir/polynomials.md) |
+| Protocol IR | [Profiles](ir/protocols.md), [mathematics](ir/mathematics.md), [polynomial recipes](ir/polynomials.md) |
 | Composition and control | [Applications](ir/composition.md), [iteration](ir/iteration.md), [functions](ir/functions.md), [control](ir/control.md), [completion](ir/completion.md) |
 | Data | [Variants](ir/variants.md), [nested data](ir/data.md) |
 | Construction and analysis | [Transcripts](ir/construction.md), [public-coin views](ir/public-coin.md), [compiler limits](ir/limits.md) |

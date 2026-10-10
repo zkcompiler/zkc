@@ -11,10 +11,10 @@ After [building the tools](../development/README.md), compile a trusted source
 tree with explicit module paths:
 
 ```sh
-zkc compile --entry=example::Proof --module=example=protocol.zkc --output=proof.entry
-zkc inspect proof.entry EXPECTED_SHA256
-zkc prove proof.entry EXPECTED_SHA256 prover.json proof.bin
-zkc verify proof.entry EXPECTED_SHA256 verifier.json proof.bin
+zkc compile example::Proof --module=example=protocol.zkc --output=proof.zkpkg
+zkc inspect proof.zkpkg EXPECTED_SHA256
+zkc prove proof.zkpkg EXPECTED_SHA256 prover.json proof.bin
+zkc verify proof.zkpkg EXPECTED_SHA256 verifier.json proof.bin
 ```
 
 Store the compilation report's `package_sha256` in trusted deployment
@@ -29,10 +29,10 @@ execute a protocol or establish native admission or protocol security.
 Run Entries use:
 
 ```sh
-zkc run run.entry EXPECTED_SHA256 inputs.json --results=results.json
+zkc run run.zkpkg EXPECTED_SHA256 inputs.json --results=results.json
 ```
 
-Use `--project=zkc.json` for an explicit [project map](../language/README.md#project-inputs),
+Use `--project=zkc.toml` for an explicit [project map](../language/README.md#project-inputs),
 or repeat `--module=NAME=FILE` and `--asset=NAME=FORMAT=FILE` to capture dependencies.
 `--compiler=PATH` selects a trusted compiler; otherwise it resolves from absolute
 directories in trusted `PATH`. `--no-simplify` and `--release-storage` choose
@@ -122,7 +122,7 @@ failed boundary. Reports retain execution failures and cleanup details.
 Generate optional data bindings from a trusted package:
 
 ```sh
-zkc bindings proof.entry EXPECTED_SHA256 bindings.rs
+zkc bindings proof.zkpkg EXPECTED_SHA256 bindings.rs
 ```
 
 The module pins that package and provides named input/output structures, setup

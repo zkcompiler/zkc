@@ -1,3 +1,4 @@
+#include "Arguments.h"
 #include "Checker.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/StringExtras.h"
@@ -5,20 +6,21 @@
 #include <limits>
 using namespace llvm;
 namespace zkc::language::detail {
-std::optional<std::vector<Type>> Checker::arguments(const Declaration &context,
-                                                    const Declaration &target,
-                                                    ArrayRef<SyntaxType> syntax,
-                                                    Span span) {
-  if (syntax.size() != target.parameters.size()) {
-    types.fail("source.generic", "static argument count differs", span);
+std::optional<std::vector<Type>>
+Checker::arguments(const Declaration &context, const Declaration &target,
+                   ArrayRef<SyntaxType> syntax, Span span,
+                   ArrayRef<ArgumentLabel> labels) {
+  auto binding =
+      bindArguments(types, argumentNames<Parameter>(target.parameters),
+                    syntax.size(), labels, true, span, "source.generic");
+  if (!binding)
     return {};
-  }
-  std::vector<Type> result;
-  for (auto &s : syntax) {
-    auto arg = type(context, s);
+  std::vector<Type> result(target.parameters.size());
+  for (unsigned i = 0; i < syntax.size(); ++i) {
+    auto arg = type(context, syntax[i]);
     if (!arg)
       return {};
-    result.push_back(std::move(*arg));
+    result[(*binding)[i]] = std::move(*arg);
   }
   if (formingParameters.count(context.id.index)) {
     for (const auto &argument : result)
@@ -217,6 +219,12 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
     return {};
   auto &decl = output.declarations[id->index];
   if (decl.kind == Declaration::Kind::Associated) {
+    if (!s.arguments.empty()) {
+      types.fail("source.generic",
+                 "associated types inherit their component's static arguments",
+                 s.span);
+      return {};
+    }
     auto &parent = output.declarations[decl.parent->index];
     if ((!context.parent || context.parent->index != parent.id.index) &&
         (parent.kind == Declaration::Kind::Interface ||
@@ -233,7 +241,7 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
       base.arguments.push_back(parameterType(p));
     return types.associated(base, decl.name, s.span);
   }
-  auto args = arguments(context, decl, s.arguments, s.span);
+  auto args = arguments(context, decl, s.arguments, s.span, s.labels);
   if (!args)
     return {};
   if (decl.kind == Declaration::Kind::Domain)

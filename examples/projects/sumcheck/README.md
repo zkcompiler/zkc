@@ -19,10 +19,10 @@ exercises a complete terminal decision without requiring a PCS setup.
 From the repository root, with built tools on `PATH`:
 
 ```sh
-zkc compile --project=examples/projects/sumcheck/zkc.json \
-  --entry=example::Proof --output=sumcheck.entry
-zkc prove sumcheck.entry EXPECTED_SHA256 examples/projects/sumcheck/prover.json sumcheck.proof
-zkc verify sumcheck.entry EXPECTED_SHA256 examples/projects/sumcheck/verifier.json sumcheck.proof
+zkc compile --project=examples/projects/sumcheck/zkc.toml \
+  example::Proof --output=sumcheck.zkpkg
+zkc prove sumcheck.zkpkg EXPECTED_SHA256 examples/projects/sumcheck/prover.json sumcheck.proof
+zkc verify sumcheck.zkpkg EXPECTED_SHA256 examples/projects/sumcheck/verifier.json sumcheck.proof
 ```
 
 `EXPECTED_SHA256` comes from trusted compilation. Both requests authorize the

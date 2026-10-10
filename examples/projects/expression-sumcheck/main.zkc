@@ -32,23 +32,19 @@ protocol ExtensionSumcheck roles(P,V)
     (values, values, claim, rounds, challenges);
   return (accepted = accepted);
 }
-entry BaseRun = BaseSumcheck;
-entry ExtensionRun = ExtensionSumcheck;
-entry BaseProof = BaseSumcheck {
+run BaseRun = BaseSumcheck;
+run ExtensionRun = ExtensionSumcheck;
+proof BaseProof = BaseSumcheck {
   prover P;
   verifier V;
   public { values, claim, rounds };
   accept accepted;
-  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {
-    derive challenges;
-  }
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", challenges);
 }
-entry Proof = ExtensionSumcheck {
+proof Proof = ExtensionSumcheck {
   prover P;
   verifier V;
   public { values, claim, rounds };
   accept accepted;
-  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {
-    derive challenges;
-  }
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", challenges);
 }

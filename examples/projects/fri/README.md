@@ -15,8 +15,8 @@ oracle operations. No FRI-specific compiler or Host dispatch is involved.
 
 ```sh
 zkc compile \
-  --project=examples/projects/fri/zkc.json \
-  --entry=example::Proof --output=fri.entry
+  --project=examples/projects/fri/zkc.toml \
+  example::Proof --output=fri.zkpkg
 ```
 
 `Run` exposes interactive execution. `Proof` derives verifier randomness through

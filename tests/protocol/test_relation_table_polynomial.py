@@ -59,7 +59,7 @@ protocol View roles(Evaluator)
   let b @Evaluator = point_of<Base,TABLE,Recurrence>(base);
   return (shape = s, input = i, scope = c, ood_values = e, base_values = b);
 }
-entry Polynomial = View;
+run Polynomial = View;
 '''
 
 
@@ -119,11 +119,11 @@ class Client:
         module = directory / 'polynomial_view.zkc'
         module.write_text(text)
         asset = journal.write('bundle.json', bundle) if bundle else RECURRENCE / 'bundle.json'
-        self.package = directory / 'polynomial.entry'
+        self.package = directory / 'polynomial.zkpkg'
         report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
                                f'--module=polynomial_view={module}',
                                f'--asset=recurrence=relation-bundle-json={asset}',
-                               '--entry=polynomial_view::Polynomial',
+                               'polynomial_view::Polynomial',
                                f'--output={self.package}'], refuses=refuses)
         self.pin = None if refuses else report['package_sha256']
 
@@ -328,7 +328,7 @@ protocol Batch roles(Evaluator)
   let d @Evaluator = rows_of<Base,0,Recurrence>(witness, configuration, public_data, height);
   return (subgroup_values = s, ood_values = o, single_values = p, dense = d);
 }
-entry Polynomial = Batch;
+run Polynomial = Batch;
 '''
 
 # The recurrence fixture's honest data: one witness group of width 4, one

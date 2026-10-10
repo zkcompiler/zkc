@@ -220,8 +220,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         return types.fail("source.generic",
                           "component parameter requires an interface",
                           src.span);
-      auto args =
-          arguments(decl, interface, src.constraint.arguments, src.span);
+      auto args = arguments(decl, interface, src.constraint.arguments, src.span,
+                            src.constraint.labels);
       if (!args)
         return false;
       p.sort = Parameter::Sort::Component;
@@ -377,7 +377,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     for (const auto &src : source.services) {
       if (decl.kind != Declaration::Kind::Protocol ||
           src.type.kind != SyntaxType::Kind::Name ||
-          src.type.name != "Random" || src.type.arguments.size() != 1)
+          src.type.name != "Random" || src.type.arguments.size() != 1 ||
+          !src.type.labels.empty())
         return types.fail("source.service",
                           "expected a Random<Field> managed port", src.span);
       if (!bindingName(decl, src.name, src.span) ||

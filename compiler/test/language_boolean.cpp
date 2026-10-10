@@ -30,7 +30,7 @@ int main() {
     }
     protocol Run roles(P,V)(a:bool@(P,V),b:bool@(P,V))->(r:bool@(P,V)){
       return(r=formula(a,b));
-    }entry Demo=Run;
+    }run Demo=Run;
   )";
   auto original = take(
       prepareOriginal(take(closeEntry(take(check(program)), "sample::Demo"))));
@@ -97,7 +97,7 @@ int main() {
         auto protocol = [&](StringRef roles) {
           return helper + "protocol Run roles(P,V)(a:bool@P,b:bool@" +
                  roles.str() + ")->(r:bool@P){return(r=" + callee +
-                 "(a,b));}entry Demo=Run;";
+                 "(a,b));}run Demo=Run;";
         };
         take(prepareOriginal(
             take(closeEntry(take(check(protocol("(P,V)"))), "sample::Demo"))));

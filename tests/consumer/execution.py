@@ -71,7 +71,7 @@ def main():
             refused = run("verify-bundle", deployment, "00" * 32, validator, proof,
                           *options, refusal="native-proof-deployment-binding")
             assert "binding_scope" not in refused
-        package = work / "run.entry"
+        package = work / "run.zkpkg"
         pin = hashlib.sha256(package.read_bytes()).hexdigest()
         inputs = write("named-run.json", {"format": "zkc.entry-run/0", "session": "installed",
             "roles": {"P": {"inputs": {"x": True}}}})
@@ -81,7 +81,7 @@ def main():
         assert json.loads(outputs.read_text())["roles"]["P"] == {"r": True}
         run("run", package, "00" * 32, inputs, refusal="entry-package-identity")
 
-        package = work / "proof.entry"
+        package = work / "proof.zkpkg"
         pin = hashlib.sha256(package.read_bytes()).hexdigest()
         producer = write("named-producer.json", {"format": "zkc.entry-proof/0",
             "public": {}, "inputs": {"x": True}})

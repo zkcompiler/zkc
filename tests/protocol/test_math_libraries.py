@@ -71,7 +71,7 @@ protocol Run roles(P)(m:Matrix<F>@P,v:Vector<F>@P,a:F@P,b:F@P,x:F@P)
     logic=(zkc::boolean::both(true,false),zkc::boolean::either(true,false),
       zkc::boolean::different(true,true),zkc::boolean::negate(false)));
 }
-entry Demo=Run;
+run Demo=Run;
 '''
     # [1 2; 0 3], independent native sparse-matrix encoding.
     entries = [(0, 0, 1), (0, 1, 2), (1, 1, 3)]
@@ -93,10 +93,32 @@ entry Demo=Run;
     assert 'split' in str(report)
 
 
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
+@pytest.mark.parametrize('helper,operator,skip', [('both', '&&', False), ('either', '||', True)])
+def test_boolean_library_calls_remain_eager(toolchain, journal, directory, flags,
+                                          helper, operator, skip):
+    source = f'''module sample;
+fn checked(ok:bool){{require ok;return ok;}}
+fn evaluate(go:bool,ok:bool,eager:bool){{
+  return if eager{{zkc::boolean::{helper}(left=go,right=checked(ok))}}
+         else{{go {operator} checked(ok)}};
+}}
+protocol Run roles(P)(go:bool@P,ok:bool@P,eager:bool@P)->(result:bool@P){{
+  return evaluate(go,ok,eager);
+}}
+run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
+    assert entry.run('skipped', {'go': skip, 'ok': False, 'eager': False}) == {'result': skip}
+    entry.run('evaluated', {'go': skip, 'ok': False, 'eager': True},
+              refuses='entry-run-incomplete')
+    assert entry.run('accepted', {'go': skip, 'ok': True, 'eager': True}) == {'result': skip}
+
+
 def test_formal_contract_and_execution_modes_refuse(toolchain, journal, directory):
     prefix = '''module sample;
  domain F=field("bls12-381.fr");
- protocol Run roles(P)(a:F@P)->(out:F@P){return a;} entry Demo=Run;
+ protocol Run roles(P)(a:F@P)->(out:F@P){return a;} run Demo=Run;
 '''
     for name, definition, code in [
         ('index-bound', 'math fn bad(a:F)->F {return zkc::symbolic::get<F,1,1>(zkc::symbolic::pack([a]));}', 'source.bound'),

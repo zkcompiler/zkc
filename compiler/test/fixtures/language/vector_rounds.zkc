@@ -30,4 +30,4 @@ protocol Run roles(P,V)(values: Vector<Fr> @P, claim: Fr @V, n: index @(P,V), co
   return (prover = final_sum, verifier = current);
 }
 
-entry Demo = Run;
+run Demo = Run;

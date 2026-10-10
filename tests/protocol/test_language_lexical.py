@@ -28,7 +28,7 @@ protocol Run roles(P)(x:index@P,b:bool@P)
   let (sum,double,selected,last,state)=work(x,b);
   return(sum,double,selected,last,state);
 }
-entry Demo=Run;
+run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for x in (0, 7):
@@ -50,7 +50,7 @@ protocol Run roles(P,V)(shared:index@(P,V),p:index@P)->(r:index@P,s:index@V){
   let r=add(echo(shared),p);
   return(r,s=echo(shared));
 }
-entry Demo=Run;
+run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run_roles('different-components', {
@@ -66,7 +66,7 @@ protocol Run roles(P,V)(n:index@(P,V),go:bool@P)->(result:bool@V){
   for _ in 0..n roles(P,V) max 4{note(go)}
   return true;
 }
-entry Demo=Run;
+run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for name, n, go in [('empty', 0, False), ('pass', 2, True)]:
@@ -110,7 +110,7 @@ protocol Run roles(P)(n:index@P,m:index@P,go:bool@P)
   }
   return(bound,total,local_bound,local_total);
 }
-entry Demo=Run;
+run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for n in (0, 1, 4, 8):
@@ -136,7 +136,7 @@ protocol Run roles(P)(go:bool@P)->(result:index@P) {
   let result@P=work(go);
   return result;
 }
-entry Demo=Run;
+run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for go in (False, True):
@@ -159,7 +159,7 @@ fn work(n:index,go:bool)->index {
 protocol Run roles(P)(n:index@P,go:bool@P)->(result:index@P) {
   let result@P=work(n,go);return result;
 }
-entry Demo=Run;
+run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source)
     for go in (False, True):
@@ -191,7 +191,7 @@ fn work(x:index,go:bool,halt:bool)->index {
 protocol Run roles(P)(x:index@P,go:bool@P,halt:bool@P)->(result:index@P){
   let result@P=work(x,go,halt);return result;
 }
-entry Demo=Run;
+run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     for go in (False, True):
@@ -213,7 +213,7 @@ fn plus(a:index,b:index)->index {return kernel("index.add",a,b);}
 protocol Run roles(P)(x:index@P,first:bool@P,second:bool@P)->(r:index@P){
   return plus(checked(x,first),raw(x,second));
 }
-entry Demo=Run;
+run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     assert entry.run('pass', {'x': 7, 'first': True, 'second': True}) == {'r': 14}
@@ -242,7 +242,7 @@ protocol Run roles(P,V)(n:index@(P,V),go:bool@{owner})->(r:bool@V){{
   }}
   return true;
 }}
-entry Demo=Run;
+run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source)
     def roles(n, go):
@@ -267,7 +267,7 @@ fn add(a:F,b:F)->F{return a+b;}
 protocol Run roles(P)(go:bool@P, coins:Random<F>@P)->(r:F@P){
   return add(checked(coins.draw(),go),coins.draw());
 }
-entry Demo=Run;
+run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
     report = entry.run_roles('stop-after-first-draw', {'P': {'inputs': {'go': False}, 'services': {'coins': 1}}},

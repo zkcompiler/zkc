@@ -28,15 +28,15 @@ def values(extension=True, claim=100, rounds=2, table=tuple(range(1, 9))):
 
 def build(toolchain, journal, directory, entry, flags=(), arena=None):
     arena = arena or PROJECT / 'product.ring.json'
-    package = directory / f'{entry}.entry'
-    modules = ([f'--project={PROJECT}/zkc.json'] if arena == PROJECT / 'product.ring.json' else [
+    package = directory / f'{entry}.zkpkg'
+    modules = ([f'--project={PROJECT}/zkc.toml'] if arena == PROJECT / 'product.ring.json' else [
         f'--module=expression_sumcheck={ROOT}/libraries/sumcheck/expression.zkc',
         f'--module=zkc::vector={ROOT}/libraries/zkc/vector.zkc',
         f'--module=zkc::polynomial={ROOT}/libraries/zkc/polynomial.zkc',
         f'--module=example={PROJECT}/main.zkc', f'--asset=product=ring-json={arena}'])
     report = json.loads(journal.run([
         toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}', *modules,
-        f'--entry=example::{entry}', f'--output={package}', *flags]))
+        f'example::{entry}', f'--output={package}', *flags]))
     return package, report['package_sha256']
 
 
@@ -138,7 +138,7 @@ def test_expression_package_asset_refusals(toolchain, journal, directory):
             frame['assets'] *= 2
         else:
             del frame['assets']
-        path = write(directory, f'{name}.entry', frame)
+        path = write(directory, f'{name}.zkpkg', frame)
         changed_pin = sha256(path.read_bytes()).hexdigest()
         proof = directory / f'{name}.proof'
         journal.run([toolchain.runtime, 'prove', path, changed_pin, request, proof], refuses=reason)

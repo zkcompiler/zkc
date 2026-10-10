@@ -32,8 +32,8 @@ Error checkSetups(const ClosedEntry &entry, Layouts &layouts, Work &work) {
       if (auto error =
               work.charge(before - budget.remaining + leaf.cost(), input.span))
         return error;
-      if (choices.proof && type->kind == "prover_key" &&
-          llvm::is_contained(input.roles, choices.proof->verifier))
+      if (choices.proof() && type->kind == "prover_key" &&
+          llvm::is_contained(input.roles, choices.proof()->verifier))
         return failure("source.entry",
                        "proof prover keys must stay with the prover",
                        input.span);
@@ -50,7 +50,7 @@ Error checkSetups(const ClosedEntry &entry, Layouts &layouts, Work &work) {
       ++offset;
     }
   }
-  if (choices.proof && verifierKeys.size() > 64)
+  if (choices.proof() && verifierKeys.size() > 64)
     return failure("source.limit", "proof verifier key limit exceeded",
                    choices.span);
   for (const auto &slot : choices.setups) {
@@ -72,12 +72,12 @@ Error checkSetups(const ClosedEntry &entry, Layouts &layouts, Work &work) {
         if (!covered.insert(index).second)
           return failure("source.entry", "setup selectors overlap", input.span);
         if (auto key = verifierKeys.find(index); key != verifierKeys.end()) {
-          if (!choices.proof)
+          if (!choices.proof())
             continue;
           auto port = key->second;
-          if (!llvm::is_contained(choices.proof->publicInputs, port) ||
+          if (!llvm::is_contained(choices.proof()->publicInputs, port) ||
               !llvm::is_contained(protocol.inputs[port].roles,
-                                  choices.proof->verifier))
+                                  choices.proof()->verifier))
             return failure("source.entry",
                            "proof setup keys must be public verifier inputs",
                            input.span);
@@ -89,7 +89,7 @@ Error checkSetups(const ClosedEntry &entry, Layouts &layouts, Work &work) {
                        "setup selector contains no setup-bearing input",
                        input.span);
     }
-    if (choices.proof && !publicVerifier)
+    if (choices.proof() && !publicVerifier)
       return failure("source.entry",
                      "proof setup slot requires a public verifier key",
                      slot.span);

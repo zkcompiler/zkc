@@ -57,6 +57,8 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
                                    (c == '=' && text[offset] == '=') ||
                                    (c == '=' && text[offset] == '>') ||
                                    (c == '<' && text[offset] == '=') ||
+                                   (c == '&' && text[offset] == '&') ||
+                                   (c == '|' && text[offset] == '|') ||
                                    (c == '.' && text[offset] == '.')))
         ++offset;
       else if (!StringRef(";,:(){}@=+-*<>[]!.").contains(c))
@@ -262,6 +264,33 @@ private:
     return type.height <= work.limits.parseDepth ||
            fail("source.limit", "type syntax depth limit exceeded");
   }
+  bool argumentLabel(std::vector<ArgumentLabel> &labels, unsigned index) {
+    if (current().kind != TokenKind::Word || cursor + 1 >= tokens.size() ||
+        StringRef(source.text)
+                .slice(tokens[cursor + 1].span.begin,
+                       tokens[cursor + 1].span.end) != "=")
+      return true;
+    ArgumentLabel label{index, {}, current().span};
+    if (!name(label.name) || !expect("="))
+      return false;
+    labels.push_back(std::move(label));
+    return true;
+  }
+  bool staticArguments(std::vector<SyntaxType> &arguments,
+                       std::vector<ArgumentLabel> &labels, unsigned depth) {
+    if (!take("<"))
+      return true;
+    if (at(">"))
+      return fail("source.syntax", "empty static argument list");
+    do {
+      SyntaxType argument;
+      if (!argumentLabel(labels, arguments.size()) ||
+          !type(argument, depth + 1))
+        return false;
+      arguments.push_back(std::move(argument));
+    } while (take(",") && !at(">"));
+    return expect(">");
+  }
   bool type(SyntaxType &out, unsigned depth = 1, unsigned minimum = 0) {
     if (!bounded(depth))
       return false;
@@ -325,18 +354,8 @@ private:
         advance();
       } else if (!path(out.name, true, true))
         return false;
-      if (take("<")) {
-        if (at(">"))
-          return fail("source.syntax", "empty static argument list");
-        do {
-          SyntaxType arg;
-          if (!type(arg, depth + 1))
-            return false;
-          out.arguments.push_back(std::move(arg));
-        } while (take(",") && !at(">"));
-        if (!expect(">"))
-          return false;
-      }
+      if (!staticArguments(out.arguments, out.labels, depth))
+        return false;
     }
     out.span.end = previousEnd;
     if (!typeTreeBound(out))
@@ -532,6 +551,9 @@ private:
         decl.setups.push_back(std::move(slot));
         continue;
       }
+      if (decl.entryKind == EntryKind::Run)
+        return fail("source.entry",
+                    "run blocks accept only setup associations");
       auto key = text().str();
       if (!choices.insert(key).second)
         return fail("source.entry", "duplicate Entry choice");
@@ -574,9 +596,8 @@ private:
         } else if (take("fiat_shamir")) {
           value.construction = ProofEntry::Construction::FiatShamir;
           value.service.emplace();
-          if (!expect("(") || !string(value.suite) || !expect(")") ||
-              !expect("{") || !expect("derive") || !named(*value.service) ||
-              !expect(";") || !expect("}"))
+          if (!expect("(") || !string(value.suite) || !expect(",") ||
+              !named(*value.service) || !expect(")") || !expect(";"))
             return false;
         } else
           return fail("source.entry",
@@ -584,9 +605,7 @@ private:
       } else
         return fail("source.entry", "unknown Entry choice");
     }
-    if (choices.empty() && decl.setups.empty())
-      return fail("source.entry", "empty Entry choice block");
-    if (!choices.empty())
+    if (decl.entryKind == EntryKind::Proof)
       for (StringRef key :
            {"prover", "verifier", "public", "accept", "construction"})
         if (!choices.count(key.str()))
@@ -594,7 +613,7 @@ private:
     if (!expect("}"))
       return false;
     value.span.end = previousEnd;
-    if (!choices.empty())
+    if (decl.entryKind == EntryKind::Proof)
       decl.proof = std::move(value);
     return true;
   }
@@ -839,7 +858,9 @@ private:
           return {};
       } else if (!body(d, false, false, 1))
         return {};
-    } else if (take("entry")) {
+    } else if (at("run") || at("proof")) {
+      d.entryKind = at("proof") ? EntryKind::Proof : EntryKind::Run;
+      advance();
       d.kind = Declaration::Kind::Entry;
       if (member) {
         fail("source.syntax", "declaration is not an interface member");
@@ -854,6 +875,7 @@ private:
       }
       d.target = target.name;
       d.targetArguments = std::move(target.arguments);
+      d.targetLabels = std::move(target.labels);
       if (at("{")) {
         if (!entryChoices(d))
           return {};
@@ -1068,7 +1090,13 @@ private:
     Span span = current().span;
     Expression value;
     value.span = span;
-    if (at("kernel") || at("intrinsic")) {
+    if (take("!")) {
+      value.kind = Expression::Kind::Not;
+      auto operand = expression(decl, depth + 1, 6, records);
+      if (!operand)
+        return {};
+      value.children.push_back(*operand);
+    } else if (at("kernel") || at("intrinsic")) {
       value.kind = take("intrinsic") ? Expression::Kind::Intrinsic
                                      : Expression::Kind::Kernel;
       if (value.kind == Expression::Kind::Kernel)
@@ -1124,20 +1152,14 @@ private:
       value.kind = Expression::Kind::Map;
       if (!path(value.text))
         return {};
-      if (take("<")) {
-        do {
-          SyntaxType argument;
-          if (!type(argument, depth + 1))
-            return {};
-          value.arguments.push_back(std::move(argument));
-        } while (take(",") && !at(">"));
-        if (!expect(">"))
-          return {};
-      }
+      if (!staticArguments(value.arguments, value.staticLabels, depth))
+        return {};
       if (!expect("("))
         return {};
       if (!at(")"))
         do {
+          if (!argumentLabel(value.callLabels, value.children.size()))
+            return {};
           bool each = take("each");
           auto argument = expression(decl, depth + 1);
           if (!argument)
@@ -1296,16 +1318,8 @@ private:
         advance();
       } else if (!path(value.text, false, true))
         return {};
-      if (take("<")) {
-        do {
-          SyntaxType arg;
-          if (!type(arg, depth + 1))
-            return {};
-          value.arguments.push_back(std::move(arg));
-        } while (take(",") && !at(">"));
-        if (!expect(">"))
-          return {};
-      }
+      if (!staticArguments(value.arguments, value.staticLabels, depth))
+        return {};
       if (records && take("roles")) {
         value.roles.emplace();
         if (!names(*value.roles))
@@ -1315,6 +1329,8 @@ private:
         value.kind = Expression::Kind::Call;
         if (!at(")"))
           do {
+            if (!argumentLabel(value.callLabels, value.children.size()))
+              return {};
             auto x = expression(decl, depth + 1);
             if (!x)
               return {};
@@ -1420,23 +1436,27 @@ private:
     }
     bool equality = false;
     while (!diagnostic) {
-      unsigned precedence = at("==")             ? 1
-                            : at("+") || at("-") ? 2
-                            : at("*")            ? 3
+      unsigned precedence = at("||")             ? 1
+                            : at("&&")           ? 2
+                            : at("==")           ? 3
+                            : at("+") || at("-") ? 4
+                            : at("*")            ? 5
                                                  : 0;
       if (!precedence || precedence < minimum)
         break;
-      if (precedence == 1 && equality) {
+      if (precedence == 3 && equality) {
         fail("source.syntax", "chained equality requires parentheses");
         return {};
       }
       Expression binary;
       binary.span = span;
-      binary.kind = at("==")  ? Expression::Kind::Equal
-                    : at("+") ? Expression::Kind::Add
-                    : at("-") ? Expression::Kind::Subtract
-                              : Expression::Kind::Multiply;
-      equality |= precedence == 1;
+      binary.kind = at("||")   ? Expression::Kind::Or
+                    : at("&&") ? Expression::Kind::And
+                    : at("==") ? Expression::Kind::Equal
+                    : at("+")  ? Expression::Kind::Add
+                    : at("-")  ? Expression::Kind::Subtract
+                               : Expression::Kind::Multiply;
+      equality = precedence == 3;
       advance();
       auto right = expression(decl, depth + 1, precedence + 1, records);
       if (!right)

@@ -55,16 +55,14 @@ protocol ScopedProof roles(P,V)
   return (accepted = accepted);
 }
 
-entry Proof = ScopedProof {
+proof Proof = ScopedProof {
   prover P;
   verifier V;
   public { configuration, public_columns, x0, shift,
     round_count, query_count, attempt_count };
   accept accepted;
   target constraints;
-  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {
-    derive coins;
-  }
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
 }
 '''
 

@@ -36,7 +36,7 @@ protocol Run<A: Ring> roles(E)(v: Vector<F>@E)->(r: Vector<F>@E) {
   let r @E = evaluate<F,A>(v);
   return (r=r);
 }
-entry Demo = Run<Product>;
+run Demo = Run<Product>;
 )";
 } // namespace
 int main() {

@@ -46,6 +46,12 @@ these choices stay explicit when their sum alone would not determine them.
 Generic preconditions are completed from the intrinsic contracts and checked
 at each call. These modules select no field, commitment or transcript.
 
+Use `!`, `&&` and `||` to write Boolean expressions. The `zkc::boolean` helpers
+remain ordinary functions: `both(a, check(b))` evaluates both arguments even
+when `a` is false. In local `fn` code, `a && check(b)` skips the call when `a`
+is false. See the [Boolean rules](../docs/spec/language/definitions.md#boolean-formulas)
+for mathematical formulas and resource checks.
+
 The [mathematics client](../examples/projects/mathematics/README.md) compares
 formal evaluation and runtime folding. Group arithmetic already has ordinary
 `+`, `-` and scaling as `point * scalar`; no duplicate group wrapper is needed. Asset-specific
@@ -172,12 +178,12 @@ use schnorr::{Schnorr};
 ```sh
 zkc compile --module=schnorr=libraries/schnorr/lib.zkc \
   --module=example=examples/projects/schnorr/main.zkc \
-  --entry=example::Proof --output=proof.entry
+  example::Proof --output=proof.zkpkg
 ```
 
 See the [walkthrough](../docs/getting-started.md) to invoke the compiled Entry.
 Project files can record these maps; see [project inputs](../docs/language/README.md#project-inputs).
-Check the shared math modules with `zkc check --project=libraries/zkc/zkc.json`.
+Check the shared math modules with `zkc check --project=libraries/zkc/zkc.toml`.
 There is no separate registry or library installation step.
 
 ## Maintain a library

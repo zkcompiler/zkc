@@ -11,6 +11,12 @@ namespace zkc::language {
 class Layouts;
 }
 namespace zkc::language::detail {
+/// A label belongs to an authored argument position, not to the value's type.
+struct ArgumentLabel {
+  unsigned index;
+  std::string name;
+  Span span;
+};
 struct SyntaxType {
   enum class Kind {
     Hole,
@@ -30,6 +36,7 @@ struct SyntaxType {
   // cleanup.
   unsigned height = 1;
   std::vector<SyntaxType> arguments;
+  std::vector<ArgumentLabel> labels;
 };
 struct SyntaxSelector {
   bool output = false;
@@ -88,6 +95,9 @@ struct Expression {
     Subtract,
     Multiply,
     Equal,
+    And,
+    Or,
+    Not,
     Tuple,
     Array,
     Record,
@@ -102,6 +112,7 @@ struct Expression {
   bool bracket = false;
   Span span;
   std::vector<SyntaxType> arguments;
+  std::vector<ArgumentLabel> staticLabels, callLabels;
   std::vector<std::string> labels;
   /// Kernel parameter positions written as asset terms instead of literals.
   std::map<unsigned, SyntaxType> assetParameters;
@@ -209,6 +220,7 @@ struct SyntaxDeclaration {
   std::vector<Binding> bindings;
   std::vector<BindingId> inputBindings, serviceBindings;
   bool resolved = false;
+  bool elaborated = false;
   std::vector<SyntaxParameter> parameters;
   std::vector<SyntaxRequirement> requirements;
   bool explicitRequirements = false;
@@ -216,6 +228,7 @@ struct SyntaxDeclaration {
   std::optional<Effects> effects;
   std::optional<SyntaxType> definition;
   std::vector<SyntaxType> targetArguments;
+  std::vector<ArgumentLabel> targetLabels;
   std::vector<SyntaxPort> fields;
   std::vector<SyntaxAlternative> alternatives;
   std::vector<SyntaxDeclaration> members;
@@ -228,6 +241,7 @@ struct SyntaxDeclaration {
   std::optional<SyntaxProofEntry> proof;
   std::vector<SyntaxSetupSlot> setups;
   bool entryBlock = false;
+  EntryKind entryKind = EntryKind::Run;
 };
 struct Import {
   std::string module;

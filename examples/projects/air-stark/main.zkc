@@ -38,15 +38,13 @@ protocol RecurrenceProof roles(P,V)
   return (accepted = accepted);
 }
 
-entry Run = RecurrenceProof;
-entry Proof = RecurrenceProof {
+run Run = RecurrenceProof;
+proof Proof = RecurrenceProof {
   prover P;
   verifier V;
   public { configuration, x0, y0, final_acc, shift,
     round_count, query_count, attempt_count };
   accept accepted;
   target constraints;
-  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {
-    derive coins;
-  }
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
 }

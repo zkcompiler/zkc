@@ -52,11 +52,11 @@ def demo(output):
             run(arguments, stdout=stream)
         return json.loads(path.read_text())
 
-    package, proof = output / "proof.entry", output / "proof.bin"
+    package, proof = output / "proof.zkpkg", output / "proof.bin"
     built = emit("build.json", [tools.runtime, "compile", f"--compiler={tools.compiler}",
         "--module=schnorr=libraries/schnorr/lib.zkc",
         "--module=example=examples/projects/schnorr/main.zkc",
-        "--entry=example::Proof", f"--output={package}"])
+        "example::Proof", f"--output={package}"])
     for command, request, role, expected in [("prove", "prover", "producer", "produced"),
                                               ("verify", "verifier", "validator", "accepted")]:
         report = emit(f"{role}.json", [tools.runtime, command, package, built["package_sha256"],

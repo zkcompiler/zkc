@@ -53,26 +53,22 @@ protocol MachineProof<R: Reduction<Extension>> roles(P,V)
   return (accepted = accepted);
 }
 
-entry Run = MachineProof<LogUp<Extension>>;
-entry ProofLogUp = MachineProof<LogUp<Extension>> {
+run Run = MachineProof<LogUp<Extension>>;
+proof ProofLogUp = MachineProof<LogUp<Extension>> {
   prover P;
   verifier V;
   public { initial, final, cpu_height, program_height, instructions, memory_present,
     memory_height, schedule, shift, round_count, query_count, attempt_count, channel_count };
   accept accepted;
   target constraints;
-  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {
-    derive coins;
-  }
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
 }
-entry ProofProduct = MachineProof<GrandProduct<Extension>> {
+proof ProofProduct = MachineProof<GrandProduct<Extension>> {
   prover P;
   verifier V;
   public { initial, final, cpu_height, program_height, instructions, memory_present,
     memory_height, schedule, shift, round_count, query_count, attempt_count, channel_count };
   accept accepted;
   target constraints;
-  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {
-    derive coins;
-  }
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
 }

@@ -36,7 +36,7 @@ math fn same(x:bool,y:bool)->bool{return x==y;}
 relation Equal(statement x:bool,witness y:bool){return same(x,y);}
 protocol Run roles(P,V)(x:bool@P,y:bool@V)->(ok:bool@V)
  spec {target proof=Equal(in.x,in.y) accept out.ok;}
- {let ok@V=true;return(ok=ok);}entry Demo=Run;)";
+ {let ok@V=true;return(ok=ok);}run Demo=Run;)";
 zkc::relation::DeclareOp relation(mlir::ModuleOp module) {
   zkc::relation::DeclareOp result;
   module.walk([&](zkc::relation::DeclareOp op) { result = op; });
@@ -224,7 +224,7 @@ int main() {
           }
         }
         return(a=u,b=v);
-      }entry Demo=Run;)")));
+      }run Demo=Run;)")));
         unsigned calls = 0, nested = 0;
         std::set<std::string> callees;
         std::set<std::vector<unsigned>> paths;
@@ -418,7 +418,7 @@ int main() {
         output after=R(in.x,out.y);
         continuation reduction=R(in.x,in.x) residual R(in.x,out.y) accept out.ok;
         target target=relation(statement expected=in.x,witness actual=out.y){return expected==actual;} accept out.ok;
-      }{return(y=x,ok=true);}entry Demo=Run;)")));
+      }{return(y=x,ok=true);}run Demo=Run;)")));
         require(original.interface().selectedProtocol().clauses.size() == 4 &&
                     original.interface().relations.size() == 2,
                 "authored clause inventory was not retained");
@@ -466,7 +466,7 @@ int main() {
               witness +
               "@P)->(ok:bool@V)"
               "spec{target proof=Captured(in.s,in.w) accept out.ok;}{let "
-              "ok@V=true;return(ok=ok);}entry Demo=Run;";
+              "ok@V=true;return(ok=ok);}run Demo=Run;";
           auto original = take(prepareOriginal(close(text, {asset})));
           refuses(readInterface(original.bytes(), original.interfaceJson()),
                   "source.interface");
@@ -520,7 +520,7 @@ int main() {
         return x==x;
       }
       protocol Run roles(P)(x:F@P)->(ok:bool@P)
-      spec{target claim=Bad(in.x) accept out.ok;}{return(ok=true);}entry Demo=Run;)");
+      spec{target claim=Bad(in.x) accept out.ok;}{return(ok=true);}run Demo=Run;)");
     auto invalid = prepareOriginal(selected);
     require(!invalid, "invalid predicate observation accepted");
     auto message = toString(invalid.takeError());
@@ -535,7 +535,7 @@ int main() {
           second.str() + ":bool}relation Equal(statement x:Pair){return x." +
           first.str() + "==x." + second.str() +
           ";}protocol Run roles(P)(x:Pair@P)->(ok:bool@P)"
-          "spec{target t=Equal(in.x) accept out.ok;}{return(ok=true);}entry "
+          "spec{target t=Equal(in.x) accept out.ok;}{return(ok=true);}run "
           "Demo=Run;")));
     };
     auto a = make("a", "b"), b = make("c", "d");
@@ -654,7 +654,7 @@ int main() {
           })";
                   auto run = take(prepareOriginal(close(helper + R"(
           protocol Run roles(P)(x:F@P)->(ok:bool@P){return(ok=probe(x));}
-          entry Demo=Run;)")));
+          run Demo=Run;)")));
                   auto executed = compileEntry(run);
                   require(bool(executed) == fits,
                           "execution observation verdict differs");
@@ -666,7 +666,7 @@ int main() {
                   auto specified = prepareOriginal(close(helper + R"(
           relation R(statement x:F){return probe(x);}
           protocol Run roles(P)(x:F@P)->(ok:bool@P)
-          spec{target t=R(in.x) accept out.ok;}{return(ok=true);}entry Demo=Run;)"));
+          spec{target t=R(in.x) accept out.ok;}{return(ok=true);}run Demo=Run;)"));
                   require(bool(specified) == fits,
                           "predicate-only observation verdict differs");
                   if (!specified) {
@@ -686,7 +686,7 @@ int main() {
               "(x);}";
     text += "relation R(statement x:bool){return f8(x);}"
             "protocol Run roles(P)(x:bool@P)->(ok:bool@P)"
-            "spec{target t=R(in.x) accept out.ok;}{return(ok=true);}entry "
+            "spec{target t=R(in.x) accept out.ok;}{return(ok=true);}run "
             "Demo=Run;";
     auto original = take(prepareOriginal(close(text)));
     auto parsed = parse(original.bytes());
@@ -714,7 +714,7 @@ int main() {
     for (unsigned i = 0; i < 30; ++i)
       text +=
           "input c" + std::to_string(i) + "=R" + std::to_string(i) + "(in.x);";
-    text += "}{return ();}entry Demo=Run;";
+    text += "}{return ();}run Demo=Run;";
     auto original = take(prepareOriginal(close(text)));
     require(original.interface().relations.size() == 30,
             "shared predicate closure omitted roots");

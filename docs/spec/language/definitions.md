@@ -6,7 +6,9 @@ This native contract defines captured modules, declarations, types and source bo
 
 A capture is a nonempty map from logical module paths to exact UTF-8 bytes.
 Each file starts with `module path;` matching its captured name. Module paths
-use `::`; identifiers match `[A-Za-z_][A-Za-z0-9_]*`. Keywords are reserved.
+use `::`; identifiers match `[A-Za-z_][A-Za-z0-9_]*`. Keywords are reserved except
+contextual `run` and `proof`, which introduce execution declarations only at
+declaration positions.
 Comments start with `//`. Tokens retain trivia and byte spans.
 
 Module declarations are private unless prefixed with `pub`. Interface/component
@@ -43,23 +45,30 @@ bound. Caller limits may only lower these ceilings. Analysis rechecks the captur
 against its requested limits before parsing assets. Capture alone supplies no
 protocol ports, runtime matrices or specification binding.
 
-The `zkc` CLI optionally reads a `zkc.project/0` JSON object with exactly
-`format`, `modules` and `assets` fields. `modules` is a nonempty object mapping
-logical names to filenames. `assets` maps names to objects containing exactly
-`format` and `path`. Duplicate keys, unknown fields and duplicate command-line
-names refuse. The manifest is at most 1 MiB, resolved paths at most 4096 bytes,
-and modules plus assets at most 256. Relative paths are anchored at the manifest's
-lexical parent; absolute paths and ordinary symlinks are allowed. Files must be
-regular. The manifest is trusted configuration, not a filesystem sandbox.
+The CLI accepts a TOML manifest with `format = "zkc.project/0"`, a nonempty
+`modules` table mapping logical names to paths, and an optional `assets` table
+mapping names to tables with exactly `format` and `path`. Unknown or duplicate
+keys and unsupported types refuse. A manifest is a bounded regular file (at most
+1 MiB); modules and assets together are limited to 256 files. Each supplied path
+is nonempty, contains no NUL, and is at most 4096 bytes.
 
-`--project` is exclusive with explicit `--module`/`--asset` options. The loader
-passes the resolved map to the same compiler capture boundary; manifest bytes
-and path spelling do not enter capture identity. All inputs, including the
-manifest, are protected from output publication. The loader performs no import
-discovery, dependency download, glob expansion, environment interpolation or
-implicit Entry selection. `zkc check` without `--entry` stops after definition
-checking. Selecting an Entry also checks closure and mathematical correspondence;
-only `compile` produces the executable package.
+`--project=FILE` selects an explicit manifest. Otherwise explicit `--module` or
+`--asset` inputs disable discovery; they cannot be combined with `--project`.
+With neither option the CLI uses the nearest `zkc.toml` in the current directory
+or its ancestors. The first filesystem entry is final: malformed, unreadable,
+nonregular and dangling-symlink candidates fail rather than fall back to a parent.
+Relative mapped paths resolve against the selected manifest's visible parent,
+including symlinked manifests. Explicit command-line paths use the invocation
+directory. Absolute paths, `..` and ordinary symlink resolution are supported;
+imports do not scan directories. SDK captures never discover a manifest.
+
+The manifest carries locations and formats, not execution choices or secrets.
+Its path, formatting and discovery location are report metadata and do not enter
+capture identity. Identical named source/asset bytes have the same capture.
+The CLI protects the manifest, mapped inputs and selected compiler from output
+publication, including file aliases. See [Entry selection](entries.md#selection)
+for canonical names and check scopes, and the [project guide](../../language/README.md#project-inputs)
+for default output paths.
 
 Qualified references first resolve their root in the enclosing component and
 then the module's visible declarations, including imports. A resolved lexical
@@ -398,10 +407,30 @@ anything else with `algebra-map-formula`. The expanded formula must also fit the
 [Ring limits](../ir/limits.md), including depth 1,024, where subtraction costs an
 extra level on its right operand; a deeper formula refuses with the same
 identifier when the original is prepared. Both refusals name the source map and
-its helper. Other source refusals of a map use `source.map`; a map outside local
-code uses `source.mode`.
+its helper. Invalid value-argument binding uses `source.call`; invalid static
+binding uses `source.generic`, as for ordinary calls. Other map-specific source
+refusals use `source.map`; a map outside local code uses `source.mode`.
 
 ## Boolean formulas
+
+`!a`, `a && b` and `a || b` accept Boolean operands. Negation evaluates its
+operand once. In a local `fn`, `&&` evaluates its right operand only when the
+left is true; `||` does so only when the left is false. They follow the same
+typing, effects, capture and resource-join rules as local `if` expressions.
+Specifically, `a && b` checks as `if a { b } else { false }`, and `a || b`
+as `if a { true } else { b }`. A noncopyable capture used only on the right
+therefore needs `Drop` on the skipped path.
+Both operands are checked, including a statically skipped operand. A block on
+the right may perform ordered work or stop. Its continuing result must be Boolean.
+
+In `math fn`, relations and protocol formulas, these operators denote total
+mathematics. Both operands retain their dependencies and formation obligations,
+including in `false && x` and `true || x`. Protocol `&&` and `||` operands must
+contain only mathematical work, including inside blocks and unused bindings:
+local calls, service queries, messages, mutation, rejection and control refuse
+with `source.mode`. An empty effect allowance on a local function does not make
+it mathematical. Put conditional execution in a local `fn` and call it from
+the protocol; this does not introduce a conditional message schedule.
 
 Total Boolean operations use the same mathematical helper path as field and
 group expressions. `intrinsic("bool.and", a, b)`, `"bool.or"` and `"bool.xor"`
@@ -413,7 +442,7 @@ operations, not conditional execution. Libraries can expose ordinary functions:
 math fn both(a: bool, b: bool) -> bool {
   return intrinsic("bool.and", a, b);
 }
-math fn negate(a: bool) -> bool { return a == false; }
+math fn negate(a: bool) -> bool { return !a; }
 ```
 
 These helpers can be called in protocols or realized within local code. Their
@@ -434,7 +463,7 @@ math fn evaluate<F: Field, N: nat>(p: Poly<F, N>, point: [F; N]) -> F {
 ```
 
 A formal polynomial denotes an expression over a field and an ordered list of
-variables. It is an SSA value in mathematical MLIR and has no executable value
+variables. It is an SSA value in Protocol IR and has no executable value
 encoding. Its type carries the field and natural arity. It has Copy and Drop,
 but no Share or Wire. Mathematical helper ports, products, fixed arrays and
 ordinary record fields can contain formal values. A zero-length array retains
@@ -572,10 +601,33 @@ consume resources or choose participants. Resource checks and evaluation remain
 in source order; participant inference follows its
 [own statement constraints](protocols.md#participant-meaning).
 
+### Arguments and inference
+
+User-declared helper and protocol parameters accept positional arguments followed
+by named arguments. A named argument is `parameter = expression`; its name belongs
+to the resolved declaration. For example, `pair(right = n, left = flag)` binds
+the same parameters as `pair(flag, n)`, while evaluating `n` before `flag`.
+Every value or managed-service parameter must be supplied exactly once. Unknown
+names, duplicate bindings, missing/excess arguments and a positional argument
+after a named argument refuse with `source.call`. Runtime arguments have no
+defaults. Interface calls use the interface's parameter names; concrete component
+calls use the implementation's names. Renaming a public parameter changes this
+source contract even though parameter names do not affect type conformance.
+
+Argument expressions evaluate once, left to right in written order. Expected
+types, participant demands and service requirements follow the named destination;
+only evaluated operands are arranged in declaration order. The same rule applies
+to maps: `map affine(r = r, high = each ys, low = each xs)` associates `each`
+with its named parameter. Record fields already use their declared names. Variant
+payloads, associated representation constructors and fixed primitive, intrinsic,
+kernel and service-method interfaces retain positional arguments.
+
 Helper and protocol calls infer bare static parameters from data argument types,
-managed-service fields and expected helper results. Omit the entire static list,
-or write one slot per parameter and use `_` for selected holes, as in
-`choose<_, Impl>(value)`. Explicit slots constrain inference. Every hole must
+managed-service fields and expected helper results. Static arguments also accept
+names: `pair<B = index>(flag, n)` fixes `B` and infers other parameters. Omit
+the whole list, supply a positional prefix, select parameters by name, or use `_`
+for a whole slot, as in `choose<_, Impl>(value)`. Positional arguments must precede
+named ones. Explicit slots constrain inference. Every missing slot or hole must
 have one consistent solution; there are no default types, dimensions or component
 implementations. Holes are whole call slots, not nested type syntax or kernel,
 intrinsic, constructor or Entry arguments. There is no global instance search,
@@ -585,6 +637,16 @@ remain fixed. Associated types and compound natural expressions normalize
 forward after their inputs are known, without inferring those inputs from a
 result. Group scaling is written `point * scalar`; it does not infer a group
 from its scalar field.
+
+Types, constructors, relation applications and Entries accept named static
+arguments with complete coverage, such as `Box<T = Fr>` or
+`run Demo = Run<N = 8, F = Fr>;`. These contexts do not infer missing arguments
+or accept holes. Invalid static name binding uses `source.generic`. A bound
+component already supplies its inherited parameters; a member call cannot
+override them. Associated types inherit their component's arguments and accept
+no separate static list. Fixed primitive static interfaces remain positional.
+
+### Components and body modes
 
 An interface declares associated types/domains and math/local member signatures.
 A component selects one interface and defines every member exactly once. Associated
@@ -608,8 +670,10 @@ Opaque runtime intrinsics are not exposed by this profile.
 Bodies use lexical `let` and `let mut` bindings, whole-name assignment, nested
 block expressions and a final `return`. [Body semantics](protocols.md#bindings-and-local-control)
 define scopes, patterns and resource joins. Arithmetic uses
-`*`, `+`, `-`, `==`, parentheses and field/group contracts; operator precedence is
-multiplication, addition/subtraction, then equality. Chained equality needs
+`*`, `+`, `-`, `==`, parentheses and field/group contracts. From highest to
+lowest, operator precedence is `!`, multiplication, addition/subtraction,
+equality, `&&`, then `||`. Binary operators at each level associate left to
+right, except chained equality needs
 parentheses. No implicit field conversion occurs. Field literals need a unique
 expected field from an annotation, operand, call or result. Installed contracts
 check canonical spelling and characteristic bounds without modular reduction.

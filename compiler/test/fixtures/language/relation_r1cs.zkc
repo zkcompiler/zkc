@@ -18,4 +18,4 @@ relation RankOne<F:Field>(parameter a:[[F;3];2],parameter b:[[F;3];2],
 protocol Run roles(P)(a:[[Fr;3];2]@P,b:[[Fr;3];2]@P,c:[[Fr;3];2]@P,s:Fr@P,z:[Fr;3]@P)
  ->(ok:bool@P) spec{target validity=RankOne<Fr>(in.a,in.b,in.c,in.s,in.z) accept out.ok;}
  {return(ok=holds(a,b,c,s,z));}
-entry Demo=Run;
+run Demo=Run;

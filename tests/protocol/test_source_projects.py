@@ -20,10 +20,10 @@ def request(directory, name, value):
 
 
 def build(toolchain, journal, directory, project, entry, flags):
-    package = directory / f'{entry}.entry'
+    package = directory / f'{entry}.zkpkg'
     report = json.loads(journal.run([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-        f'--project={ROOT}/examples/projects/{project}/zkc.json',
-        f'--entry=example::{entry}', f'--output={package}', *flags]))
+        f'--project={ROOT}/examples/projects/{project}/zkc.toml',
+        f'example::{entry}', f'--output={package}', *flags]))
     return package, report['package_sha256']
 
 

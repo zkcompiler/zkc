@@ -16,4 +16,4 @@ protocol Run roles(P, V)(go: bool @V, coins: Random<Fr> @V)
   let (p, v) = Draw<Fr>(alias, coins);
   return (p = p, v = v);
 }
-entry Demo = Run;
+run Demo = Run;

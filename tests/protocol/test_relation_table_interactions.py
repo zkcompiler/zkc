@@ -85,7 +85,7 @@ protocol View roles(Evaluator)
   return (policy = p, counts = c, descriptor = d, subgroup_records = s,
           subgroup_residuals = r, ood_records = o, facts = f);
 }
-entry Interactions = View;
+run Interactions = View;
 '''
 
 # Only the policy: no execution height is involved.
@@ -104,7 +104,7 @@ protocol Policy roles(Evaluator)(unused: index @Evaluator)
   let p @Evaluator = policy_of<FIELD,TABLE,Machine>();
   return (policy = p);
 }
-entry Interactions = Policy;
+run Interactions = Policy;
 '''
 
 
@@ -149,11 +149,11 @@ class Client:
         module = directory / 'interaction_view.zkc'
         module.write_text(text)
         asset = journal.write('bundle.json', bundle) if bundle else MACHINE / 'bundle.json'
-        self.package = directory / 'interactions.entry'
+        self.package = directory / 'interactions.zkpkg'
         report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
                                f'--module=interaction_view={module}',
                                f'--asset=machine=relation-bundle-json={asset}',
-                               '--entry=interaction_view::Interactions',
+                               'interaction_view::Interactions',
                                f'--output={self.package}'], refuses=refuses)
         self.pin = None if refuses else report['package_sha256']
 

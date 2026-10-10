@@ -48,9 +48,19 @@ private:
 /// Values, effects, resource use and participant choices are deliberately
 /// absent.
 struct ExpressionTypes {
+  struct Callable {
+    DeclarationId declaration;
+    std::optional<Type> component;
+  };
   std::set<uint32_t> covered;
   std::map<uint32_t, Type> expressions;
   std::map<uint32_t, std::vector<Type>> arguments;
+  /// Authored argument index -> declared input index; operands are evaluated
+  /// in authored order and only their resulting values are canonicalized.
+  std::map<uint32_t, std::vector<unsigned>> inputs;
+  /// Resolve against the authored declaration once; body checking consumes the
+  /// same target, including bound interface members and nominal constructors.
+  std::map<uint32_t, Callable> callees;
 };
 } // namespace zkc::language::detail
 #endif

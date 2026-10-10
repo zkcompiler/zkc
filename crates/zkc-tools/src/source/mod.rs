@@ -1,5 +1,7 @@
 //! Source capture transport and compiler invocation, separate from Entry execution.
+mod output;
 mod project;
+mod selection;
 use crate::{
     cli::Arguments,
     entry::{Interface, Package},
@@ -20,17 +22,19 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
         let mut compiler = "zkc-compile";
         let mut output = None;
         let mut flags = Vec::new();
-        let mut entry = None;
+        let entry = args.positional.first().copied();
+        if let Some(name) = entry {
+            if name.is_empty() {
+                return Err("source-entry-selection".into());
+            }
+            flags.push(format!("--entry={name}"));
+        }
         let inputs = project::Inputs::load(args)?;
         for &(key, value) in &args.options {
             let value = value.unwrap_or("");
             match key {
                 "--compiler" => compiler = value,
                 "--output" => output = Some(value),
-                "--entry" => {
-                    entry = Some(value);
-                    flags.push(format!("--entry={value}"));
-                }
                 "--no-simplify" | "--release-storage" | "--declarations" => {
                     flags.push(key.to_owned())
                 }
@@ -38,7 +42,13 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
                 _ => unreachable!("validated source option"),
             }
         }
-        flags.extend(inputs.flags);
+        flags.extend(inputs.flags.iter().cloned());
+        if !checking && output.is_none() && inputs.manifest.is_none() {
+            return Err("source-output-required".into());
+        }
+        if let Some(manifest) = &inputs.manifest {
+            report["project"] = json!(manifest);
+        }
         let outputs: Vec<_> = output.into_iter().collect();
         let sources: Vec<_> = inputs.paths.iter().map(String::as_str).collect();
         let mut destinations = Outputs::new(&outputs, &sources)?;
@@ -47,16 +57,17 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
         }
         let selected_compiler = resolve_compiler(compiler)?;
         let compiler_path = std::path::Path::new(compiler);
+        let mut compiler_paths = vec![selected_compiler.to_str().ok_or("source-compiler-io")?];
         if compiler_path.is_absolute() || compiler_path.components().count() > 1 {
-            destinations.protect([compiler])?;
+            compiler_paths.push(compiler);
         }
-        destinations.protect([selected_compiler.to_str().ok_or("source-compiler-io")?])?;
-        let compiler = selected_compiler;
+        destinations.protect(compiler_paths.iter().copied())?;
+        let compiler = &selected_compiler;
         report["compiler"] = json!(compiler);
         report["phase"] = json!("compilation");
         let directory = tempfile::tempdir().map_err(|_| "source-compiler-io")?;
         let captured = crate::host::process::capture(
-            Command::new(&compiler)
+            Command::new(compiler)
                 .args([
                     if checking {
                         "language-check"
@@ -105,11 +116,14 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
                     } else {
                         "definitions"
                     }
-                || entry.is_some_and(|name| checked["entry"] != name)
+                || !selection::valid_check(&checked, entry)
             {
                 return Err("source-check-format".into());
             }
             report = checked;
+            if let Some(manifest) = &inputs.manifest {
+                report["project"] = json!(manifest);
+            }
             report["compiler"] = json!(compiler);
             report["status"] = json!("checked");
             report["phase"] = json!("complete");
@@ -119,19 +133,53 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
         let package =
             Package::capture(&bytes, &pin, Package::MAX_BYTES).map_err(|e| e.to_string())?;
         let interface = Interface::read(&package).map_err(|e| e.to_string())?;
+        if !selection::matches(entry, interface.entry()) {
+            return Err("source-entry-selection".into());
+        }
         report["entry"] = json!(interface.entry());
         report["toolchain"] = json!(interface.toolchain());
         report["package_sha256"] = json!(hex(&pin));
         report["phase"] = json!("publication");
+        let default_output;
+        let path = if let Some(path) = output {
+            path
+        } else {
+            default_output = output::default_path(&inputs, interface.entry())?;
+            destinations = Outputs::new(&[&default_output], &sources)?;
+            destinations.protect(compiler_paths.iter().copied())?;
+            &default_output
+        };
+        report["output"] = json!(path);
         destinations.publish(&[("package", &bytes)], &mut report)?;
         report["status"] = json!("compiled");
         report["phase"] = json!("complete");
         Ok(())
     })();
     if let Err(code) = result {
-        if code == "cli-usage" {
-            report["message"] =
-                json!("supply --project=FILE or explicit --module options; do not combine them");
+        let message = match code.as_str() {
+            "cli-usage" => {
+                Some("supply --project=FILE or explicit --module options; do not combine them")
+            }
+            "source-project-missing" => Some(
+                "no zkc.toml found in this directory or its ancestors; use --project or --module",
+            ),
+            "source-output-required" => Some("explicit module inputs require --output=FILE"),
+            "source-output-collision" => Some(
+                "default filename collides with a name differing only in case; choose --output=FILE",
+            ),
+            "source-entry-selection" => {
+                Some("the Entry selector must match the compiler's canonical Entry name")
+            }
+            "source-output-name" => Some(
+                "the canonical Entry name cannot be used as a portable filename; choose --output=FILE",
+            ),
+            "source-output-directory" => {
+                Some("cannot create the project's build/zkc output directory")
+            }
+            _ => None,
+        };
+        if let Some(message) = message {
+            report["message"] = json!(message);
         }
         report["code"] = json!(if code == "artifact-output-path" {
             "entry-output-path"

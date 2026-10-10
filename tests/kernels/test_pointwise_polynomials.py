@@ -55,7 +55,7 @@ protocol Run roles(P)(p: Vector<F> @P, q: Vector<F> @P, shift: F @P, n: index @P
   let result @P = work(p, q, shift, n, m, z);
   return (result = result);
 }}
-entry Demo = Run;
+run Demo = Run;
 '''
 
 

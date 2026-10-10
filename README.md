@@ -6,7 +6,7 @@ analyzed, transformed and executed using cryptographic libraries.
 
 A relation describes what is being proved. A protocol describes how participants
 compute, exchange messages, obtain challenges and check the proof. zkc authors
-that protocol in `.zkc` and compiles it through mathematical MLIR to independently
+that protocol in `.zkc` and compiles it through Protocol IR (PIR), built on MLIR, to independently
 executable participant programs.
 
 The project is under active development. [Implementation status](docs/status.md)
@@ -36,7 +36,7 @@ repetition, vector kernels and an actual terminal evaluation.
 ## How it works
 
 ```text
-.zkc Language → mathematical MLIR
+.zkc Language → Protocol IR
                  protocol → participant → exec → physical
                                                        ↓
                                                  zkc.program/0

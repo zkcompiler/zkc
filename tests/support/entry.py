@@ -8,9 +8,9 @@ class Entry:
         self.tools, self.journal, self.directory = toolchain, journal, directory
         path = directory / 'kernels.zkc'
         path.write_text(source)
-        self.package = directory / 'kernels.entry'
+        self.package = directory / 'kernels.zkpkg'
         report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-                               f'--module=sample={path}', '--entry=sample::Demo',
+                               f'--module=sample={path}', 'sample::Demo',
                                f'--output={self.package}', *flags])
         self.pin = report['package_sha256']
 

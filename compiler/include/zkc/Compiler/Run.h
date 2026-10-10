@@ -32,9 +32,9 @@ struct CompiledRun {
   /// zkc.compiled-public-coin/0: structural view and compilation identities.
   std::optional<std::string> publicCoin;
 };
-/// Compile mathematical MLIR through the native protocol pipeline. This API
+/// Compile Protocol IR through the native protocol pipeline. This API
 /// enforces 16 MiB text, nesting 64 and 4096-byte entry/filename limits.
-/// This invocation owns its mathematical MLIR input and compiled artifact.
+/// This invocation owns its Protocol IR input and compiled artifact.
 /// The final module remains valid with its Compilation. Every failure is an
 /// owned CompilationError; no partial executable is returned.
 llvm::Expected<CompiledRun> compileRun(llvm::StringRef text,

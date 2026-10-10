@@ -89,7 +89,7 @@ protocol Transfer roles(P, V)(x: Fr @P, n: index @P, go: bool @P) -> (result: Fr
   let received = send P -> V(payload);
   return received;
 }
-entry Demo = Transfer;
+run Demo = Transfer;
 ```
 
 A protocol has an ordered, nonempty role roster and named, typed input/output ports
@@ -134,6 +134,8 @@ specialization does not infer owners again.
 
 Nested calls evaluate strictly left to right and remain ordered even when their
 results are unused. Different calls in one statement may have different owners.
+Named arguments preserve this written order; their destination parameters supply
+the same type and participant constraints as positional arguments.
 Pure mathematics propagates demand through its actual result dependencies.
 Every original mathematical intermediate must still form at the chosen owners,
 but an ignored intermediate cannot select them. For example, if `zero(x)` returns
@@ -217,7 +219,7 @@ at the service owner and the query is ordered like `draw()`. It emits a
 `index`; source correspondence compares both. Other distributions, runtime
 bounds and rejection sampling are not source methods. Services cannot enter
 ordinary types, aggregate fields, messages, local functions or return values.
-An application supplies each managed binding in its declared argument position.
+An application supplies each managed binding by position or by parameter name.
 Each field and mapped owner must match. Repeating a binding passes the same
 reference to both ports.
 
