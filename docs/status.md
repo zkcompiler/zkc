@@ -74,7 +74,9 @@ Resource permission inference, implicit role remapping, natural equation solving
 and inversion of associated types are outside the source profile.
 [Finite reduction binders](spec/language/definitions.md#finite-vector-reductions)
 support named reducers and library-owned `∑`/`∏`, explicit strict zip and
-immutable same-field scalar captures. Nested binders, arbitrary collections,
+immutable same-field scalar captures in module-level local functions. Protocols
+call those functions; direct protocol, math-function and component-member binders
+are outside this profile. Nested binders, arbitrary collections,
 effectful/non-ring scalar bodies and aggregate or mutable captures are outside
 this profile. Generated helpers retain lexical identities and counted bounds;
 a separate extraction witness precedes source-to-IR comparison.

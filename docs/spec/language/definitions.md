@@ -487,8 +487,9 @@ Evaluation has this order:
    bindings, services, vectors and other aggregate captures refuse.
 3. Check every row length in written order against the first row, including
    `_` and named rows the scalar result does not use. Only then realize the
-   scalar formula over the rows and call the reducer. Unequal lengths retain
-   the map's backend shape refusal, not truncating zip or native rejection.
+   scalar formula over the rows and call the reducer. Unequal lengths fail
+   through the map's ordered `control.require` guards (`rejected:require` in
+   native execution); strict zip never truncates.
 
 Named rows are distinct lexical bindings local to the scalar body; `_` introduces
 no name. Rows can shadow outer immutable bindings under the ordinary binding
