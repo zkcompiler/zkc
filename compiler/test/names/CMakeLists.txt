@@ -42,4 +42,4 @@ add_test(NAME language-names COMMAND zkc-language_names-test)
 add_test(NAME unicode-generation
   COMMAND "${Python3_EXECUTABLE}" "${zkc_compiler}/test/unicode_generation.py")
 set_tests_properties(unicode-generation PROPERTIES ENVIRONMENT
-  "PYTHONPATH=${zkc_compiler}/test/support:${zkc_compiler}/../tests/support")
+  "PYTHONPATH=${zkc_compiler}/test/support:${zkc_compiler}/../common/tests/support")

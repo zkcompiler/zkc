@@ -16,12 +16,12 @@ exported as `zkc.program/0` for the generic participant runtime.
 ## Build and validate
 
 Use the repository [development guide](../docs/development/README.md) and
-[test guide](../tests/README.md#selecting-checks). A matching LLVM/MLIR installation
+[test guide](../common/tests/README.md#selecting-checks). A matching LLVM/MLIR installation
 and utf8proc 2.12.0 are required. Configure CMake with
 `-S compiler -B BUILD -DMLIR_DIR=... -Dutf8proc_DIR=...`; build
 with `cmake --build BUILD -j4` and run `ctest --test-dir BUILD --output-on-failure`.
 The same source supports static and shared libraries. Install into a fresh prefix
-with `cmake --install BUILD --prefix PREFIX` and build `tests/consumer` against
+with `cmake --install BUILD --prefix PREFIX` and build `common/tests/consumer` against
 that prefix to check every component and installed public header.
 
 ## Public commands
@@ -126,7 +126,7 @@ makes Language and its dependent components unavailable. A preloaded target or
 explicit package directory cannot silently select a different version. This
 request works with `CMAKE_DISABLE_FIND_PACKAGE_MLIR=TRUE`.
 
-The [Unicode manifest](../support/unicode/manifest.json) pins raw UCD hashes and
+The [Unicode manifest](../common/unicode/manifest.json) pins raw UCD hashes and
 normalizers: utf8proc 2.12.0 for C++, `unicode-normalization` 0.1.25 for Rust.
 Classification is generated offline from Unicode 17.0.0 inputs, independently
 of either normalizer's repertoire. The manifest, generator and raw inputs enter

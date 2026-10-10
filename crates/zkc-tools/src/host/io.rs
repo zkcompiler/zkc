@@ -40,7 +40,7 @@ pub(crate) fn open_regular(path: impl AsRef<Path>) -> Result<std::fs::File, Read
     }
     Ok(file)
 }
-fn read_from(reader: impl Read, limit: usize) -> Result<Vec<u8>, ReadError> {
+pub(crate) fn read_from(reader: impl Read, limit: usize) -> Result<Vec<u8>, ReadError> {
     let mut bytes = Vec::new();
     reader
         .take((limit as u64).saturating_add(1))

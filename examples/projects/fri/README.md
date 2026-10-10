@@ -27,7 +27,7 @@ values use the canonical eight-coordinate wire encoding. The test constructs
 requests and polynomial words through independent integer arithmetic:
 
 ```sh
-uv run --no-sync --locked pytest tests/protocol/test_fri.py
+uv run --no-sync --locked pytest common/tests/protocol/test_fri.py
 ```
 
 The library also returns the sampled positions and their authenticated initial

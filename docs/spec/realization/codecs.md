@@ -3,7 +3,7 @@
 Native program JSON, value frames and proof receives instantiate the corresponding format and transition boundaries.
 This chapter states shared laws; a native implementation claim needs its
 actual instance and evidence. Independent formal examples retain their own
-[model scope](../../../formal/docs/spec/README.md).
+[model scope](../../../lean/docs/spec/README.md).
 
 A codec connects a logical value with an external representation. A receive
 operation additionally changes the state of an input stream and can emit
@@ -20,7 +20,7 @@ encode : D → Bytes
 decode : Bytes → Except Error (D × Bytes)
 ```
 
-The [error result type](../../../formal/docs/spec/conventions.md#mathematical-notation) has disjoint
+The [error result type](../../../lean/docs/spec/conventions.md#mathematical-notation) has disjoint
 `ok x` and `error e` constructors. The second component of a successful result
 is the unconsumed suffix. `D` can be a refined domain, such as integers less
 than a selected modulus. A codec using a
@@ -34,7 +34,7 @@ A complete-packet profile can instead require a successful result with `t = []`.
 Prefix decoding and full-packet acceptance therefore have different languages.
 
 An intermediate representation codec can replace `Bytes` by a specified syntax
-type. The [direct profile](../../../formal/docs/spec/profiles/compiler/direct-plan.md#format-parameters) uses
+type. The [direct profile](../../../lean/docs/spec/profiles/compiler/direct-plan.md#format-parameters) uses
 JSON values and an error-returning decoder. It separately specifies parsing
 text into those values. An encode/decode pair alone asserts no inverse,
 faithfulness, injectivity or canonical serialization law.
@@ -78,7 +78,7 @@ of these properties merely because the underlying encoding is injective.
 A receive contract specifies a transition from an actual input state to a
 complete result. It fixes the interpretation of successful values, failure
 categories, residual bytes or provider, cursor movement and ordered events.
-It can use the formal [complete execution](../../../formal/docs/spec/core/execution.md#complete-results)
+It can use the formal [complete execution](../../../lean/docs/spec/core/execution.md#complete-results)
 or a separately interpreted machine-exit record. In either case the result
 retains its final state and events on failure.
 
@@ -105,12 +105,12 @@ A byte-facing text profile fixes the text encoding, invalid-text behavior,
 whole-document consumption and subsequent syntax decoder. A claim of canonical
 bytes additionally fixes whitespace, escaping and numeric spellings, or another
 exact serialization rule. Equality of decoded JSON values does not supply such
-a rule. The [direct format](../../../formal/docs/spec/profiles/compiler/direct-plan.md#text-parsing-and-limits)
+a rule. The [direct format](../../../lean/docs/spec/profiles/compiler/direct-plan.md#text-parsing-and-limits)
 specifies its own noncanonical text boundary and decoder limits.
 
 ## Selected scalar codec
 
-The [scalar-byte profile](../../../formal/docs/spec/profiles/realization/scalar-bytes.md) fixes the width,
+The [scalar-byte profile](../../../lean/docs/spec/profiles/realization/scalar-bytes.md) fixes the width,
 modulus, decoding and failed-consumption behavior of that selected codec.
 
 ## Native formats

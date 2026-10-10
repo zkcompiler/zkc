@@ -3,7 +3,7 @@
 Native formal-polynomial SSA and realization recipes use these mathematical objects.
 This chapter states shared laws; a native implementation claim needs its
 actual instance and evidence. Independent formal examples retain their own
-[model scope](../../../formal/docs/spec/README.md).
+[model scope](../../../lean/docs/spec/README.md).
 
 A table first denotes its multilinear extension. A table expression then forms
 sums of products of those extensions. Table order, factor multiplicity and
@@ -28,12 +28,12 @@ the point count. Evaluation followed by interpolation preserves a polynomial
 only under an adequate degree bound. In particular, `mle(T) * mle(U)` generally
 differs away from the Boolean cube from the MLE of pointwise table products.
 For univariate values the same distinction is
-[`interpolate_polynomial` and `interpolate_ne_polynomial`](../../../formal/Zkc/Algebra/RingExpression/Pointwise.lean):
+[`interpolate_polynomial` and `interpolate_ne_polynomial`](../../../lean/Zkc/Algebra/RingExpression/Pointwise.lean):
 the interpolant of a formula's pointwise values recovers the substituted
 polynomial when its actual degree is below the node count, and differs when
 its actual degree reaches that count. A structural degree bound below the
 node count is sufficient for recovery. A
-[native comparison](../../../tests/kernels/test_pointwise_polynomials.py) checks
+[native comparison](../../../common/tests/kernels/test_pointwise_polynomials.py) checks
 this on KoalaBear and Ext8 cosets against integer arithmetic: the interpolant of
 pointwise products is the formal product reduced modulo `X^n - s^n`.
 
@@ -55,7 +55,7 @@ nonzero coefficient index to be at most `d`. An implementation's allocation limi
 does not establish this protocol-specific degree bound. When the permitted
 message domain includes arbitrary univariate polynomials, a sumcheck verifier
 checks its bound before drawing the next challenge. The existing
-[quadratic coefficient type](../../../formal/docs/spec/profiles/sumcheck/quadratic.md#quadratic-coefficient-objects)
+[quadratic coefficient type](../../../lean/docs/spec/profiles/sumcheck/quadratic.md#quadratic-coefficient-objects)
 is a stronger admitted domain with three coefficients and bound two; it need
 not acquire an unchecked arbitrary-degree message interpretation.
 
@@ -166,7 +166,7 @@ verified by this analysis. No runtime domain carrier is required.
 ## Points and Boolean tables
 
 For a type `X`, an indexed vector of length `n` is a function `Fin n → X`, using
-the [finite index type](../../../formal/docs/spec/conventions.md#mathematical-notation).
+the [finite index type](../../../lean/docs/spec/conventions.md#mathematical-notation).
 The unique vector of length zero is written `empty`. For `x : Fin n → X`,
 `cons(a,x)` has length `n+1`, first element `a`, and element `x i` at position
 `i+1`. Conversely, `tail x i = x(i+1)` removes the first coordinate.
@@ -280,7 +280,7 @@ eval tables x ((c,occurrences) :: rest) =
 The empty sum is zero; the empty product is one. Repeated identifiers contribute
 repeated factors, including repeated scales if scales are moved into a term's
 coefficient. All finite occurrence lists have meaning. The
-[degree-two compiler](../../../formal/docs/spec/profiles/sumcheck/quadratic.md#quadratic-coefficient-objects)
+[degree-two compiler](../../../lean/docs/spec/profiles/sumcheck/quadratic.md#quadratic-coefficient-objects)
 is a separate selected subset.
 
 For raw table inputs, the adapter resolves every used identifier and preserves
@@ -420,7 +420,7 @@ residual applies the fold at `r` before export. At the last coordinate its value
 is `H false () + r * (H true () - H false ())`, for `H : Bool → Unit → F`.
 Exporting `H false ()` instead omits that challenge's effect.
 
-The [module contract](../../../formal/docs/spec/profiles/compiler/factor-preparation.md#outcome-specific-summaries) governs
+The [module contract](../../../lean/docs/spec/profiles/compiler/factor-preparation.md#outcome-specific-summaries) governs
 availability, overwrite and invalidation. An identifier or cache hit alone does
 not establish the residual equation or prove that a pending challenge was applied.
 

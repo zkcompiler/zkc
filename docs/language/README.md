@@ -22,7 +22,7 @@ The compiler checks declared contracts and availability. A relation clause alone
 adds no runtime guard or proof of satisfaction. Backend implementations must
 satisfy their operation and representation contracts; a successful type check
 does not infer cryptographic assumptions. [Status](../status.md) records supported
-syntax and native capabilities, and [model guides](../../formal/docs/guides/README.md) explain
+syntax and native capabilities, and [model guides](../../lean/docs/guides/README.md) explain
 the independent semantic foundations.
 
 ## Project inputs
@@ -58,6 +58,8 @@ array lists canonical names and `run`/`proof` kinds. Selecting an Entry also
 checks its closure, Protocol IR and source correspondence. A definitions check
 alone does not establish that every specialization can compile. Neither form
 executes a protocol. `scope` distinguishes `definitions` from `entry`.
+Use `--json` to read these fields programmatically. For input templates and
+execution defaults, see the [project workflow](../runtime/entries.md#project-workflow).
 
 A selector is a qualified name or a unique short name across all captured
 modules. `compile` can omit it when exactly one Entry exists. Aliases count as

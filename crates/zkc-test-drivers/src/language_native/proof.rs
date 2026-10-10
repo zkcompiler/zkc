@@ -41,7 +41,7 @@ pub(super) fn run(directory: &Path) {
                 );
                 assert_eq!(package.options().simplify, simplified == 1);
                 assert_eq!(package.options().release_storage, released == 1);
-                let checked = zkc_tools::entry::Interface::read(&package).unwrap();
+                let checked = zkc_tools::entry::BoundInterface::read(&package).unwrap();
                 assert!(checked.is_proof());
                 assert_eq!(checked.entry(), "sample::Demo");
                 let interface: Json = serde_json::from_str(package.interface()).unwrap();
@@ -89,7 +89,7 @@ pub(super) fn run(directory: &Path) {
                         }
                     });
                     assert_eq!(
-                        zkc_tools::entry::Interface::read(&altered)
+                        zkc_tools::entry::BoundInterface::read(&altered)
                             .unwrap()
                             .check_proof(&deployment),
                         Err(zkc_tools::entry::InterfaceError::NativeBinding)

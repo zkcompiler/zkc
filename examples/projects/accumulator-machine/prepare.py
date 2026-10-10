@@ -1,8 +1,8 @@
-"""Prepare this example's proof requests from an external accumulator-machine run.
+"""Prepare this example's proof inputs from an external accumulator-machine run.
 
 The external adapter executes the run and lays it out as relation-bundle
 carriers. This script maps those carriers to the relation's derived formals,
-in the Bundle's ABI order, and writes prover and verifier requests.
+in the Bundle's ABI order, and writes public and witness input files.
 """
 import argparse
 import json
@@ -25,12 +25,11 @@ SCHEDULE = {'shift': 3, 'round_count': 5, 'query_count': 8, 'attempt_count': 8,
 
 
 def scalar(value):
-    return (b'ZKCV\x00\x13' + (int(value) % machine.P).to_bytes(4, 'little')).hex()
+    return str(int(value) % machine.P)
 
 
 def vector(values):
-    return (b'ZKCV\x00\x14' + len(values).to_bytes(4, 'little')
-            + b''.join((int(v) % machine.P).to_bytes(4, 'little') for v in values)).hex()
+    return [scalar(v) for v in values]
 
 
 def formals(bundle, configuration, instance, witness):
@@ -45,9 +44,9 @@ def formals(bundle, configuration, instance, witness):
         if presence == 'optional':
             result.append(('statement', present))
         if height[0] == 'config':
-            result.append(('parameter', configured_height))
+            result.append(('parameter', str(configured_height)))
         elif height[0] == 'instance':
-            result.append(('statement', entry[1] if present else 0))
+            result.append(('statement', str(entry[1] if present else 0)))
         sources = {'config': iter(configured), 'public': iter(entry[2] if present else []),
                    'witness': iter(witness[2][t] or [])}
         for group in groups:
@@ -56,8 +55,8 @@ def formals(bundle, configuration, instance, witness):
     return result
 
 
-def requests(bundle, configuration, instance, witness, **schedule):
-    """Prover and verifier requests for the example's proof Entries."""
+def inputs(bundle, configuration, instance, witness, **schedule):
+    """Public and witness inputs for the example's proof Entries."""
     values = formals(bundle, configuration, instance, witness)
     if len(values) != len(FORMALS):
         raise ValueError('the Bundle does not derive MachineRelation\'s formals')
@@ -65,29 +64,28 @@ def requests(bundle, configuration, instance, witness, **schedule):
     for name, (purpose, value) in zip(FORMALS, values, strict=True):
         (private if purpose == 'witness' else public)[name] = value
     settings = SCHEDULE | schedule
-    public |= {name: scalar(value) if name == 'shift' else value for name, value in settings.items()}
-    return ({'format': 'zkc.entry-proof/0', 'public': public, 'inputs': private},
-            {'format': 'zkc.entry-proof/0', 'public': public, 'inputs': {}})
+    public |= {name: scalar(value) if name == 'shift' else str(value) for name, value in settings.items()}
+    return public, private
 
 
-def run_requests(document, memory_clocks=None, memory_present=None):
+def run_inputs(document, memory_clocks=None, memory_present=None):
     program, initial = machine.read_run(document)
     rows = machine.layout(machine.execute(program, initial), memory_clocks, memory_present)
     bundle, _ = machine.machine_bundle()
-    return requests(bundle, *machine.carriers(bundle, rows))
+    return inputs(bundle, *machine.carriers(bundle, rows))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('run', type=Path, help='a zkc.accumulator-machine-run/0 document')
-    parser.add_argument('output', type=Path, help='directory for the two proof request files')
+    parser.add_argument('output', type=Path, help='directory for the public and witness input files')
     parser.add_argument('--memory-clocks', type=int, help='schedule length, if longer than the run')
     parser.add_argument('--memory-present', action=argparse.BooleanOptionalAction,
                         help='override whether the memory table is present')
     args = parser.parse_args()
-    pair = run_requests(json.loads(args.run.read_text()), args.memory_clocks, args.memory_present)
+    pair = run_inputs(json.loads(args.run.read_text()), args.memory_clocks, args.memory_present)
     args.output.mkdir(parents=True, exist_ok=True)
-    for name, request in zip(('prover', 'verifier'), pair, strict=True):
+    for name, request in zip(('public', 'witness'), pair, strict=True):
         (args.output / f'{name}.json').write_text(json.dumps(request, indent=2) + '\n')
 
 

@@ -13,15 +13,15 @@ the [walkthrough](getting-started.md) compiles and runs a complete example.
 | Work on the compiler | [Compiler](compiler/README.md) |
 | Find exact syntax, IR or artifact rules | [Specification](spec/README.md) |
 | Check implemented capabilities | [Status](status.md) |
-| Assess proofs and tests | [Assurance](assurance.md), [formal models](../formal/docs/README.md) |
-| Build, test or contribute | [Development](development/README.md), [tests](../tests/README.md) |
+| Assess proofs and tests | [Assurance](assurance.md), [formal models](../lean/docs/README.md) |
+| Build, test or contribute | [Development](development/README.md), [tests](../common/tests/README.md) |
 | Understand adopted choices or future work | [Rationale](rationale/README.md), [roadmap](roadmap.md) |
 
 ## Authority
 
 `docs/spec/` owns native contracts and the mathematical laws they use.
-`formal/docs/spec/` owns the independent Lean models; their theorem scope is in
-[formal support](../formal/docs/support.md). Applying a model theorem to the native
+`lean/docs/spec/` owns the independent Lean models; their theorem scope is in
+[formal support](../lean/docs/support.md). Applying a model theorem to the native
 implementation requires an explicit correspondence. A specification, compiler
 check, test and security proof establish different claims.
 

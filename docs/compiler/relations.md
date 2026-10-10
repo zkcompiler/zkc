@@ -138,6 +138,6 @@ challenge experiment; query order alone proves no uniform sampling law.
 
 The recognizer is an optional analysis, not a special execution instruction.
 Equivalent unsupported rewrites can refuse. [Adjacent checks](verification.md)
-separately compare lowering and publication. [Native tests](../../tests/native.md)
+separately compare lowering and publication. [Native tests](../../common/tests/native.md)
 cover R1CS/AIR inputs, actual terminal decisions and same-shaped substitutions.
 They do not establish succinctness, zero knowledge or an upstream encoding proof.

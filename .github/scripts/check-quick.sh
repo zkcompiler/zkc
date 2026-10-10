@@ -9,5 +9,5 @@ actionlint -shellcheck="" .github/workflows/*.yml
 git ls-files -z '*.nix' | xargs -0 nixfmt --check
 cargo fmt --all -- --check
 uv run --no-sync --locked ruff check .
-python3 tests/check_docs.py --all
-python3 tests/run.py harness
+python3 common/tests/check_docs.py --all
+python3 common/tests/run.py harness

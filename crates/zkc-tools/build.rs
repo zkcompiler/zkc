@@ -154,7 +154,7 @@ fn emit(output: &mut String, name: &str, ranges: &[(u32, u32)]) {
 }
 fn main() {
     let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap())
-        .join("../../support/unicode/17.0.0");
+        .join("../../common/unicode/17.0.0");
     let manifest_path = root.parent().unwrap().join("manifest.json");
     println!("cargo:rerun-if-changed={}", manifest_path.display());
     let manifest_bytes = fs::read(&manifest_path).expect("source profile manifest");
@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn source_profile_manifest_rejects_changed_contract_and_input_pins() {
         let manifest: serde_json::Value =
-            serde_json::from_str(include_str!("../../support/unicode/manifest.json")).unwrap();
+            serde_json::from_str(include_str!("../../common/unicode/manifest.json")).unwrap();
         check_manifest(&manifest);
         for (path, replacement) in [
             ("/unicode_version", serde_json::json!("18.0.0")),

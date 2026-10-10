@@ -3,7 +3,7 @@
 Native oracle operations use these commitment, query and opening obligations.
 This chapter states shared laws; a native implementation claim needs its
 actual instance and evidence. Independent formal examples retain their own
-[model scope](../../../formal/docs/spec/README.md).
+[model scope](../../../lean/docs/spec/README.md).
 
 A vector commitment authenticates coordinates of an ordered finite table. It
 does not assert polynomial degree, relation satisfaction, an extraction theorem

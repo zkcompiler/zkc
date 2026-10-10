@@ -25,6 +25,6 @@ zkc compile \
   example::Check --output=native-map.zkpkg
 ```
 
-The [integration tests](../../../tests/protocol/test_native_map.py) supply
+The [integration tests](../../../common/tests/protocol/test_native_map.py) supply
 satisfied, changed and unequal-length columns through the common Host. These
 are public-column examples: they make no commitment, hiding or soundness claim.

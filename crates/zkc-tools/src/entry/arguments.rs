@@ -41,7 +41,9 @@ pub(super) fn values<'a>(
             Some(zkc_runtime::interactive::Type::ProverKey) => {
                 let value = values.remove(&port.name).ok_or("entry-input-names")?;
                 let Value::Leaf(
-                    value @ (InputValue::ProverKey(_) | InputValue::ProverKeyFile { .. }),
+                    value @ (InputValue::ProverKey(_)
+                    | InputValue::ProverKeyFile { .. }
+                    | InputValue::ProverKeyInput { .. }),
                 ) = value
                 else {
                     return Err("entry-input-key".into());
@@ -125,6 +127,10 @@ fn duplicate(
             InputValue::Wire(bytes.clone())
         }
         InputValue::Native(value) => InputValue::Native(value.clone()),
+        InputValue::WireFile { file, sha256 } => InputValue::WireFile {
+            file: file.clone(),
+            sha256: *sha256,
+        },
         InputValue::Variant {
             alternative,
             payload,

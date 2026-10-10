@@ -36,7 +36,7 @@ polynomial stage merely because other protocols use polynomials.
 An opaque host callback would lose inspectable computation. Conversely, an
 interpretation alone supplies no materialized target for a lower-level analysis.
 Build a form where a consumer needs it, with its preservation obligation. The
-[formal semantics](../../formal/docs/design/semantics.md#interpretation-and-representations)
+[formal semantics](../../lean/docs/design/semantics.md#interpretation-and-representations)
 explains that distinction independently of the native pipeline.
 
 The tradeoff is that placement and preservation need explicit analyses rather

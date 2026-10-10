@@ -59,6 +59,6 @@ Native custody, value limits, conversion failures and instruction charges remain
 part of the executable contract. Sufficient-capacity mathematical equality does
 not imply equal exhaustion or allocation behavior at arbitrary runtime caps.
 
-The independent Lean [representation laws](../../formal/Zkc/Realization/Simulation.lean)
+The independent Lean [representation laws](../../lean/Zkc/Realization/Simulation.lean)
 describe selected semantic relations. Native physical lowering requires its own
 correspondence to those models.

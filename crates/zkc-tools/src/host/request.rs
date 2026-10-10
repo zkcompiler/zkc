@@ -9,6 +9,11 @@ pub enum InputValue {
     /// Immutable data satisfying its upstream scalar/group library invariants.
     Native(Box<Value>),
     Wire(Vec<u8>),
+    /// Opened native frame; its exact bytes must match the declared digest.
+    WireFile {
+        file: super::input_file::InputFile,
+        sha256: [u8; 32],
+    },
     /// An active arm of the admitted native variant type. Payloads contain only
     /// immutable data; no key, service, or private capability is issued here.
     Variant {
@@ -24,6 +29,11 @@ pub enum InputValue {
     ProverKey(ProverMaterial),
     ProverKeyFile {
         path: String,
+        fingerprint: [u8; 32],
+    },
+    /// Opened key material, imported under independently authorized setup pins.
+    ProverKeyInput {
+        file: super::input_file::InputFile,
         fingerprint: [u8; 32],
     },
 }

@@ -2,14 +2,14 @@
 use super::{MAX_REQUEST_BYTES, NamedValues, Result, Value};
 use crate::{
     entry::RoleValues,
-    host::{capacity::Capacity, inputs::hex, request::InputValue},
+    host::{capacity::Capacity, request::InputValue},
 };
 use serde::{
     Serialize, Serializer,
     ser::{Error, SerializeMap, SerializeSeq},
 };
 use std::io::Write;
-use zkc_backends::{NativeBackend, Value as Native};
+use zkc_backends::NativeBackend;
 use zkc_runtime::interactive::Value as _;
 
 struct Buffer {
@@ -237,14 +237,10 @@ impl Serialize for Item<'_> {
                 if !zkc_backends::has_native_wire(&v.physical_type()) {
                     return Err(S::Error::custom("entry output is not serializable"));
                 }
-                match &**v {
-                    Native::Bool(v) => serializer.serialize_bool(*v),
-                    Native::Index(v) => serializer.serialize_u64(*v),
-                    _ => serializer.serialize_str(&hex(&self
-                        .backend
-                        .encode_native_value(v)
-                        .map_err(S::Error::custom)?)),
-                }
+                self.backend
+                    .encode_readable_value(v)
+                    .map_err(S::Error::custom)?
+                    .serialize(serializer)
             }
             _ => Err(S::Error::custom("entry output value")),
         }
@@ -253,6 +249,8 @@ impl Serialize for Item<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::host::inputs::hex;
+    use zkc_backends::Value as Native;
     use zkc_runtime::interactive::Identity;
     #[test]
     fn pcs_outputs_require_explicit_authenticated_setup_material() {
@@ -286,7 +284,7 @@ mod tests {
             .unwrap();
         let document: serde_json::Value =
             serde_json::from_slice(&proof_outputs(&values, capacity, registry).unwrap()).unwrap();
-        assert_eq!(document["values"]["commitment"], hex(&expected));
+        assert_eq!(document["values"]["commitment"]["wire"], hex(&expected));
         let mut wrong = authority.clone();
         wrong.keys.get_mut("setup").unwrap()[0] ^= 1;
         assert!(output_setups(&material, &wrong, capacity).is_err());
@@ -336,7 +334,7 @@ mod tests {
         );
     }
     #[test]
-    fn maximum_source_variant_depth_fits_the_request_envelope() {
+    fn maximum_source_variant_depth_fits_an_input_document() {
         let mut value = Value::from(true);
         for _ in 0..32 {
             value = Value::Variant {
@@ -351,7 +349,7 @@ mod tests {
         )
         .unwrap();
         let values: serde_json::Value = serde_json::from_slice(&outputs).unwrap();
-        let request = serde_json::json!({"format":"zkc.entry-run/0", "session":"nested", "roles":{"P":{"inputs":values["values"]}}}).to_string();
+        let request = values["values"].to_string();
         assert!(crate::host::document::read(request.as_bytes(), MAX_REQUEST_BYTES).is_ok());
     }
     #[test]
@@ -370,7 +368,7 @@ mod tests {
         .into();
         let bytes = proof_outputs(&values, Capacity::default(), Default::default()).unwrap();
         let document: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(document["values"]["record"]["index"], u64::MAX);
+        assert_eq!(document["values"]["record"]["index"], u64::MAX.to_string());
         let mut nested = Value::Unit;
         for _ in 0..crate::host::document::MAX_DEPTH {
             nested = Value::Associated(Box::new(nested));

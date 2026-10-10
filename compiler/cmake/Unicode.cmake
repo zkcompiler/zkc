@@ -1,6 +1,6 @@
 # Shared profile inputs are ordinary, hash-checked source dependencies. Neither
 # configure nor generation downloads anything or consults host Unicode tables.
-set(ZKC_UNICODE_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../support/unicode")
+set(ZKC_UNICODE_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../common/unicode")
 get_filename_component(ZKC_UNICODE_SOURCE_DIR "${ZKC_UNICODE_SOURCE_DIR}" ABSOLUTE)
 file(READ "${ZKC_UNICODE_SOURCE_DIR}/manifest.json" zkc_unicode_manifest)
 string(JSON ZKC_UTF8PROC_VERSION GET "${zkc_unicode_manifest}" normalizers cpp version)

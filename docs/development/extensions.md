@@ -123,7 +123,7 @@ may add an explicit native interpretation or independent reference, but no old
 source/table theorem automatically validates a new native operation or program.
 [Assurance](../assurance.md) controls that claim.
 
-Select affected checks from the [test guide](../../tests/README.md#selecting-checks).
+Select affected checks from the [test guide](../../common/tests/README.md#selecting-checks).
 Installed-header/component changes need installed consumers; codec and Host
 changes need actual execution and refusal cases. Broaden validation when failures
 or unresolved concerns justify it, and report the scope actually run.

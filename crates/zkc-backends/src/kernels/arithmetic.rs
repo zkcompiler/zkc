@@ -145,7 +145,7 @@ impl Coefficient for KoalaBearExt8 {
         p3_field::Field::try_inverse(&self)
     }
 }
-trait Family: crate::matrix::CanonicalCoefficient {
+trait Family: crate::matrix::IdentityCoefficient {
     fn dot(a: &[Self], b: &[Self]) -> Result<Self> {
         equal_len(a.len(), b.len())?;
         Ok(a.iter().zip(b).fold(Self::zero(), |s, (a, b)| s + *a * *b))

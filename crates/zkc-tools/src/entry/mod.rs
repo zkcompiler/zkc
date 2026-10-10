@@ -12,7 +12,7 @@ pub use package::{CompileOptions, Package, PackageError, PackagedAsset};
 mod errors;
 pub use errors::{EntryError, EntryPhase};
 mod interface;
-pub use interface::{Interface, InterfaceError};
+pub use interface::{BoundInterface, Interface, InterfaceError};
 mod assets;
 pub use assets::EntryAssets;
 
@@ -29,11 +29,12 @@ mod setups;
 pub use setups::SetupAuthority;
 mod proof;
 pub use proof::{
-    AttemptOptions, BindingPolicy, BindingScope, ProofEntry, ProofOptions, ProofReport,
-    ProofRequest,
+    AttemptOptions, BindingPolicy, BindingScope, ProofEntry, ProofOperation, ProofOptions,
+    ProofReport, ProofRequest,
 };
 
 pub mod files;
+pub mod inputs;
 
 pub(crate) mod cli;
 

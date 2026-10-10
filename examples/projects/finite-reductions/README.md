@@ -24,7 +24,7 @@ zkc compile --project=examples/projects/finite-reductions/zkc.toml \
 The optional fusion can replace the multiply-map/sum with ordered shape checks
 and a native dot operation. It preserves values and shape refusals under
 sufficient resources; resource exhaustion can differ. Other formulas retain the
-ordinary map and reducer path. The [integration controls](../../../tests/protocol/test_finite_reductions.py)
+ordinary map and reducer path. The [integration controls](../../../common/tests/protocol/test_finite_reductions.py)
 exercise both choices through the common Host, alongside independent field arithmetic.
 
 See the [language guide](../../../docs/language/notation.md) for scope and imports,

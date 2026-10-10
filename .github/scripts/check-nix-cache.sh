@@ -12,7 +12,8 @@ for check in "${checks[@]}"; do
     targets+=(".#checks.x86_64-linux.$check")
   fi
 done
-for package in compiler.testSupport tools test-drivers zkc; do
+targets+=(".#checks.x86_64-linux.compiler.testSupport")
+for package in compiler tools test-drivers zkc; do
   targets+=(".#packages.x86_64-linux.$package")
 done
 mkdir -p build/reports/environment

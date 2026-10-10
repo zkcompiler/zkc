@@ -2625,6 +2625,7 @@ dependencies = [
  "p3-symmetric 0.4.3",
  "p3-symmetric 0.5.1",
  "rand 0.8.8",
+ "serde",
  "serde_json",
  "sha2 0.10.9",
  "sha3",
@@ -2685,6 +2686,8 @@ name = "zkc-tools"
 version = "0.0.0"
 dependencies = [
  "libc",
+ "rand 0.8.8",
+ "rustix",
  "serde",
  "serde_json",
  "sha2 0.10.9",

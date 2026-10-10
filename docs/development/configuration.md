@@ -13,7 +13,7 @@ exports an alternative environment.
 | Source selection | `nix/source.nix` | Exclude generated/private data; isolate component inputs |
 | Native builds | `compiler/CMakePresets.json`, Cargo/Lake manifests | Build graph, profiles and dependency versions |
 | Workspace operations | `scripts/develop.py`, `scripts/workspace.py` | Explicit setup, profile resolution and mutable checkout paths |
-| Test execution | `tests/run.py` and the existing test drivers | Ordered integrations and report routing, shared by local commands and Nix |
+| Test execution | `common/tests/run.py` and the existing test drivers | Ordered integrations and report routing, shared by local commands and Nix |
 | Everyday interface | `justfile` | Short commands and simple prerequisites |
 
 The `justfile` does not load `.env`, discover installations, update locks or
@@ -81,7 +81,7 @@ from different directories. Native runtime examples use the release profile.
 
 These directory inputs select C++/Rust tools for native integration tests.
 Formal package audits and independent Lake consumers inspect the selected
-source package and its own build outputs; their `--formal`, `--lake` or
+source package and its own build outputs; their `--lean`, `--lake` or
 explicit checker arguments retain that package boundary.
 
 CTest privately passes exact target files using `ZKC_CTEST_*`, so a test of a
@@ -96,7 +96,7 @@ export a global `PYTHONPATH`.
 
 `ZKC_REPORTS_DIR` selects the report root, defaulting to `build/reports`.
 Python, Rust, CTest, optional formal controls and integration drivers place their reports
-under this root. Relative values are checkout-relative. `tests/run.py` creates
+under this root. Relative values are checkout-relative. `common/tests/run.py` creates
 a new `runs/<scope>-…` directory, prints its path and passes it to children via
 the same `ZKC_REPORTS_DIR`; there is no second report-root variable. Direct
 pytest and compiler Python cases also allocate exclusive directories. Rust allocates
@@ -105,7 +105,7 @@ Lean reproduction and installed-SDK checks likewise allocate a fresh operation
 root. These paths preserve evidence; native build directories and dependency
 stores are still shared. Concurrent builds of one profile or Lake package are
 not isolated by report allocation. The
-[test guide](../../tests/README.md) owns the report and cancellation contract.
+[test guide](../../common/tests/README.md) owns the report and cancellation contract.
 
 A test's explicit `--output` overrides its default where supported. Drivers that capture published artifacts require an absent output directory, preserving previous evidence on
 reruns. `just test` does not delete reports; `just clean-reports` explicitly

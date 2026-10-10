@@ -3,7 +3,7 @@
 Native relation declarations, reduction checks and explicit terminal decisions use these obligations.
 This chapter states shared laws; a native implementation claim needs its
 actual instance and evidence. Independent formal examples retain their own
-[model scope](../../formal/docs/spec/README.md).
+[model scope](../../lean/docs/spec/README.md).
 
 A relation describes the mathematical statement being established. A protocol
 reduction connects actual statement instances, and a terminal contract connects
@@ -59,7 +59,7 @@ intermediate witness. A target protocol's reduction and terminal acceptance can
 then establish source validity with the same exceptional event; encoding
 adequacy does not bound that event's probability or prove the target protocol.
 These laws are implemented by
-[`Zkc.Relation.Encoding`](../../formal/Zkc/Relation/Encoding.lean).
+[`Zkc.Relation.Encoding`](../../lean/Zkc/Relation/Encoding.lean).
 
 An operation whitelist, successful export, hash equality or honest-witness test
 alone does not construct such an encoding. Artifact-specific equation comparison
@@ -137,7 +137,7 @@ to the same target value cannot be distinguished by a compatible connector
 against the same represented partner. No global injectivity is required.
 
 These laws are implemented in
-[`PIR.Relation.Connected`](../../formal/Zkc/Semantics/RelationComposition.lean).
+[`PIR.Relation.Connected`](../../lean/Zkc/Semantics/RelationComposition.lean).
 They concern logical relation composition. Protocol completeness, knowledge,
 zero knowledge and shared-randomness security require their separately selected
 experiments and hypotheses.
@@ -173,7 +173,7 @@ Both premises use the same actual `r` and the same predicate `middle`.
 Equality of type names or identifiers is insufficient. The rule follows by
 applying the second implication and, on its valid-middle branch, the first.
 The exceptional events remain a disjunction; any probability estimate uses
-their [actual joint experiment](../../formal/docs/spec/properties/probability.md#attempts-and-extensions).
+their [actual joint experiment](../../lean/docs/spec/properties/probability.md#attempts-and-extensions).
 
 ## Finite obligation derivations
 
@@ -199,7 +199,7 @@ reusable, and repeated requirements cannot replace a different missing root.
 Given sound terminal facts and a sound law for each applied rule, successful
 checking implies that all required propositions hold together or an exceptional
 event of an applied rule occurs. The
-[`PIR.Obligations`](../../formal/Zkc/Semantics/Obligations.lean) reference
+[`PIR.Obligations`](../../lean/Zkc/Semantics/Obligations.lean) reference
 proves this implication and packages it as the existing `ReductionContract`.
 Its sequencing law uses the actual available facts returned by the first segment.
 
@@ -232,9 +232,9 @@ Terminal A = accepted(a : A) | rejected.
 ```
 
 This is distinct from an execution outcome. An execution can return either
-terminal value or stop with a [stop reason](../../formal/docs/spec/core/execution.md#complete-results).
+terminal value or stop with a [stop reason](../../lean/docs/spec/core/execution.md#complete-results).
 In particular, `returned rejected` and `stopped reject` are different records.
-The [accepted-continuation profile](../../formal/docs/spec/profiles/services/accepted-continuations.md#verifier-decisions-and-ordinary-composition)
+The [accepted-continuation profile](../../lean/docs/spec/profiles/services/accepted-continuations.md#verifier-decisions-and-ordinary-composition)
 specifies the adapter that turns a returned rejection into a stopping combined
 execution.
 

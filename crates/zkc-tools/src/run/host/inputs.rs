@@ -242,13 +242,21 @@ fn check_declaration(
         ("rng" | "nonce", InputValue::Resource { budget }) => checked_budget(*budget).map(|_| ()),
         (
             "wire",
-            value @ (InputValue::Wire(_) | InputValue::Native(_) | InputValue::Variant { .. }),
+            value @ (InputValue::Wire(_)
+            | InputValue::WireFile { .. }
+            | InputValue::Native(_)
+            | InputValue::Variant { .. }),
         ) => crate::host::admission::check_native_data(ty, value, host.limits.capacity),
         ("rng" | "nonce" | "verifier_key" | "prover_key_file", InputValue::Native(_)) => {
             Err("native-input-private".into())
         }
         ("verifier_key", InputValue::VerifierKey)
-        | ("prover_key_file", InputValue::ProverKeyFile { .. } | InputValue::ProverKey(_)) => {
+        | (
+            "prover_key_file",
+            InputValue::ProverKeyFile { .. }
+            | InputValue::ProverKeyInput { .. }
+            | InputValue::ProverKey(_),
+        ) => {
             if !host
                 .authority
                 .inputs
@@ -381,7 +389,10 @@ pub(super) fn prepare<'a>(
                     })?);
                     continue;
                 }
-                InputValue::Variant { .. } | InputValue::Wire(_) | InputValue::Native(_) => {
+                InputValue::Variant { .. }
+                | InputValue::Wire(_)
+                | InputValue::WireFile { .. }
+                | InputValue::Native(_) => {
                     admission.native_data(&backend, ty.clone(), value, selected.cloned())?
                 }
                 InputValue::VerifierKey => {
@@ -394,8 +405,13 @@ pub(super) fn prepare<'a>(
                 InputValue::ProverKey(material) => admission.add(Input::Ready(
                     material.operand(ty, selected.ok_or("bundle-setup-input")?, &backend)?,
                 ))?,
+                InputValue::ProverKeyInput { file, fingerprint } => admission.add(Input::Key {
+                    source: crate::host::admission::KeySource::File(file),
+                    fingerprint: *fingerprint,
+                    verifier: selected.ok_or("bundle-setup-input")?.clone(),
+                })?,
                 InputValue::ProverKeyFile { path, fingerprint } => admission.add(Input::Key {
-                    path,
+                    source: crate::host::admission::KeySource::Path(path),
                     fingerprint: *fingerprint,
                     verifier: selected.ok_or("bundle-setup-input")?.clone(),
                 })?,

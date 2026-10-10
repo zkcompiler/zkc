@@ -6,7 +6,7 @@ use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy};
 use zkc_runtime::interactive::{
     AdmissionError, KernelSignature, LogicalType, OperationBinding, PhysicalType, admit_supplied,
 };
-use zkc_tools::entry::{Interface, Package};
+use zkc_tools::entry::Package;
 
 type LogicalResolver =
     fn(&OperationBinding) -> Result<KernelSignature<LogicalType>, AdmissionError>;
@@ -99,7 +99,7 @@ fn entry_interface(text: &str) -> Value {
     .expect("inert package serialization");
     let package = Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES)
         .expect("well-formed authenticated test package");
-    observed(Interface::read(&package).map(|_| ()))
+    observed(zkc_tools::entry::BoundInterface::read(&package).map(|_| ()))
 }
 
 fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Option<Value> {

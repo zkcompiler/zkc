@@ -2,7 +2,7 @@
 """Explicit workspace preparation and native build operations.
 
 The compiler profile is owned by CMakePresets.json. Nix supplies tools; these
-operations only manage mutable checkout outputs. Tests live in tests/run.py.
+operations only manage mutable checkout outputs. Tests live in common/tests/run.py.
 """
 
 import argparse
@@ -34,20 +34,20 @@ def configure(profile):
 
 
 def fetch_lean(deps):
-    run([sys.executable, ROOT / "formal/cache_dependencies.py",
+    run([sys.executable, ROOT / "lean/cache_dependencies.py",
          *([f"--with-{deps}"] if deps != "main" else []),
-         "--output", reports_root() / f"formal/cache-{deps}.json"], cwd=ROOT / "formal")
+         "--output", reports_root() / f"lean/cache-{deps}.json"], cwd=ROOT / "lean")
 
 
-CLEAN = ROOT / "formal/integrations/clean"
-CLEAN_CONTROL = ROOT / "tests/fixtures/clean/air-control.json"
+CLEAN = ROOT / "lean/integrations/clean"
+CLEAN_CONTROL = ROOT / "common/tests/fixtures/clean/air-control.json"
 
 
 def clean_integration():
     """Build and audit the Clean package, then require the committed native
     control to be exactly what its producer prints now."""
     run(["lake", "build"], cwd=CLEAN)
-    output = reports_root() / "formal/clean-air-control.json"
+    output = reports_root() / "lean/clean-air-control.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w") as stream:
         run(["lake", "env", "lean", "--run", "TestsClean/Control.lean"], cwd=CLEAN, stdout=stream)
@@ -58,19 +58,23 @@ def clean_integration():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["setup", "configure", "compiler", "rust", "test-drivers", "lean",
-                                             "fetch-lean", "lean-integration", "lean-clean", "lean-fresh", "install",
-                                             "install-domain", "clean-reports"])
-    parser.add_argument("--profile", default="release")
-    parser.add_argument("--deps", choices=["main", "arklib", "clean"], default="main")
-    parser.add_argument("--output")
-    parser.add_argument("--base-build", help="install-domain: explicit base CMake build directory")
-    parser.add_argument("--domain-build", help="install-domain: explicit envelope CMake build directory")
-    parser.add_argument("--skip-build", action="store_true",
-                        help="install-domain: install already built, cache-checked directories without rebuilding")
+    operations = parser.add_subparsers(dest="operation", required=True)
+    for operation in ["setup", "configure", "compiler", "rust", "test-drivers", "lean",
+                      "fetch-lean", "lean-integration", "lean-clean", "lean-fresh", "install",
+                      "install-domain", "clean-reports"]:
+        command = operations.add_parser(operation)
+        if operation in {"configure", "compiler", "install", "install-domain"}:
+            command.add_argument("--profile", default="release", help="CMake build profile (default: release)")
+        if operation == "fetch-lean":
+            command.add_argument("--deps", choices=["main", "arklib", "clean"], default="main")
+        if operation in {"install", "install-domain"}:
+            command.add_argument("--output", help="fresh installation output directory")
+        if operation == "install-domain":
+            command.add_argument("--base-build", help="explicit base CMake build directory")
+            command.add_argument("--domain-build", help="explicit envelope CMake build directory")
+            command.add_argument("--skip-build", action="store_true",
+                                 help="install already built, cache-checked directories without rebuilding")
     args = parser.parse_args()
-    if args.operation != "install-domain" and (args.base_build or args.domain_build or args.skip_build):
-        parser.error("--base-build, --domain-build and --skip-build require install-domain")
     validate_environment()
     # Native Cargo paths keep Cargo's cwd-relative meaning even though the
     # commands below consistently run at the repository root.
@@ -111,21 +115,21 @@ def execute(args):
     elif args.operation == "fetch-lean":
         fetch_lean(args.deps)
     elif args.operation == "lean-integration":
-        run(["lake", "build"], cwd=ROOT / "formal/integrations/arklib")
-        run([sys.executable, ROOT / "formal/checks/check_clients.py", "--with-arklib",
-             "--output", reports_root() / "formal/clients-arklib"], cwd=ROOT / "formal")
+        run(["lake", "build"], cwd=ROOT / "lean/integrations/arklib")
+        run([sys.executable, ROOT / "lean/checks/check_clients.py", "--with-arklib",
+             "--output", reports_root() / "lean/clients-arklib"], cwd=ROOT / "lean")
     elif args.operation == "lean-clean":
         clean_integration()
     elif args.operation == "lean-fresh":
-        run([sys.executable, ROOT / "formal/reproduce.py", "--with-arklib", "--with-clean",
-             "--output", reports_root() / "formal/fresh"], cwd=ROOT / "formal")
+        run([sys.executable, ROOT / "lean/reproduce.py", "--with-arklib", "--with-clean",
+             "--output", reports_root() / "lean/fresh"], cwd=ROOT / "lean")
     elif args.operation == "configure":
         configure(args.profile)
     elif args.operation == "compiler":
         configure(args.profile)
         run(["cmake", "--build", "--preset", args.profile], cwd=ROOT / "compiler")
     elif args.operation == "lean":
-        run(["lake", "build"], cwd=ROOT / "formal")
+        run(["lake", "build"], cwd=ROOT / "lean")
     elif args.operation == "rust":
         run(["cargo", "build", "--release", "--locked", "-p", "zkc-tools", "--bin", "zkc"])
     elif args.operation == "test-drivers":
@@ -150,7 +154,7 @@ def execute(args):
         for name in ("zkc-compile", "zkc-opt"):
             for option in ("--help", "--version"):
                 run([prefix / "bin" / name, option])
-        run(["cmake", "-S", ROOT / "tests/consumer", "-B", consumer,
+        run(["cmake", "-S", ROOT / "common/tests/consumer", "-B", consumer,
              "-G", "Ninja", f"-DZkcCompiler_DIR={package}",
              *[f"-D{key}={value}" for key, value in selected.items()]])
         run(["cmake", "--build", consumer])

@@ -91,6 +91,24 @@ impl Outputs {
         }
         self.check()
     }
+    /// Preserve the identity of an input already opened through a directory
+    /// capability. No path lookup can redirect this protection.
+    pub(crate) fn protect_metadata(&mut self, metadata: &fs::Metadata) -> Result<()> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            self.protected.push(Identity {
+                location: PathBuf::new(),
+                target: None,
+                inode: Some((metadata.dev(), metadata.ino())),
+            });
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = metadata;
+        }
+        self.check()
+    }
     fn check(&self) -> Result<()> {
         let current = self
             .protected_paths
@@ -137,10 +155,41 @@ impl Outputs {
     /// Every supplied buffer must already be encoded. Stage the entire set before
     /// the first rename, and retain exactly which renames completed on refusal.
     pub(crate) fn publish(&self, bytes: &[(&str, &[u8])], report: &mut Json) -> Result<()> {
-        self.publish_with(bytes, report, |file, path| {
+        let result = self.publish_with(bytes, report, |file, path| {
             file.persist(path)
                 .map(|_| ())
                 .map_err(|_| IO_ERROR.to_owned())
+        });
+        for (name, _) in bytes {
+            if report["publication"]["published"]
+                .as_array()
+                .is_some_and(|names| names.iter().any(|n| n == name))
+            {
+                report[format!("{name}_published")] = json!(true);
+            }
+        }
+        result
+    }
+    /// Initialization never replaces existing files, including races after the
+    /// preflight. A later filesystem failure still reports partial publication.
+    pub(crate) fn create(&self, bytes: &[(&str, &[u8])], report: &mut Json) -> Result<()> {
+        for path in &self.paths {
+            match path.symlink_metadata() {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+                _ => {
+                    report["conflict"] = serde_json::json!(path);
+                    return Err("entry-output-exists".into());
+                }
+            }
+        }
+        self.publish_with(bytes, report, |file, path| {
+            file.persist_noclobber(path).map(|_| ()).map_err(|e| {
+                if e.error.kind() == std::io::ErrorKind::AlreadyExists {
+                    "entry-output-exists".into()
+                } else {
+                    IO_ERROR.into()
+                }
+            })
         })
     }
     fn publish_with(
@@ -149,8 +198,18 @@ impl Outputs {
         report: &mut Json,
         mut persist: impl FnMut(tempfile::NamedTempFile, &Path) -> Result<()>,
     ) -> Result<()> {
-        report["publication"] = json!({"requested": bytes.iter().map(|(name, _)| name).collect::<Vec<_>>(),
-            "published": [], "stage": "staging"});
+        // Initialization can publish a scaffold followed by input templates.
+        // Retain every completed file if a later batch fails.
+        let publication = report
+            .as_object_mut()
+            .unwrap()
+            .entry("publication")
+            .or_insert_with(|| json!({"requested": [], "published": []}));
+        publication["requested"]
+            .as_array_mut()
+            .unwrap()
+            .extend(bytes.iter().map(|(name, _)| json!(name)));
+        publication["stage"] = json!("staging");
         let staged = self.stage(bytes)?;
         // A second check catches changes during staging without promising race isolation.
         self.check()?;
@@ -164,7 +223,6 @@ impl Outputs {
                 .as_array_mut()
                 .unwrap()
                 .push(json!(name));
-            report[format!("{name}_published")] = json!(true);
         }
         report["publication"]["stage"] = json!("complete");
         Ok(())
@@ -203,6 +261,8 @@ mod tests {
             report["publication"]["published"],
             json!(["proof", "results"])
         );
+        assert_eq!(report["proof_published"], true);
+        assert_eq!(report["results_published"], true);
     }
 
     #[test]
@@ -248,6 +308,35 @@ mod tests {
         assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     }
     #[test]
+    fn initialization_retains_completed_batches_on_later_staging_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("main.zkc");
+        let first = Outputs::new(&[source.to_str().unwrap()], &[]).unwrap();
+        let mut report = json!({});
+        first
+            .create(&[("main.zkc", b"source")], &mut report)
+            .unwrap();
+        let parent = dir.path().join("inputs");
+        fs::create_dir(&parent).unwrap();
+        let template = parent.join("P.json");
+        let second = Outputs::new(&[template.to_str().unwrap()], &[]).unwrap();
+        fs::remove_dir(&parent).unwrap();
+        assert!(
+            second
+                .create(&[("inputs/P.json", b"{}")], &mut report)
+                .is_err()
+        );
+        assert_eq!(
+            report["publication"]["requested"],
+            json!(["main.zkc", "inputs/P.json"])
+        );
+        assert_eq!(report["publication"]["published"], json!(["main.zkc"]));
+        assert_eq!(report["publication"]["stage"], "staging");
+        assert_eq!(fs::read(&source).unwrap(), b"source");
+        assert_eq!(report.as_object().unwrap().len(), 1);
+    }
+
+    #[test]
     fn later_rename_failure_reports_partial_publication() {
         let dir = tempfile::tempdir().unwrap();
         let first = dir.path().join("proof");
@@ -276,7 +365,6 @@ mod tests {
         assert_eq!(fs::read(&second).unwrap(), b"old results");
         assert_eq!(report["publication"]["published"], json!(["proof"]));
         assert_eq!(report["publication"]["failed"], "results");
-        assert_eq!(report["proof_published"], true);
     }
     #[test]
     fn changed_alias_and_parent_symlinks_are_checked_before_staging() {

@@ -117,7 +117,7 @@ fn encodings_are_canonical_reversible_and_byte_bounded() {
 #[test]
 fn complete_unicode17_normalization_corpus() {
     assert_eq!(unicode_normalization::UNICODE_VERSION, (17, 0, 0));
-    let corpus = include_str!("../../../../support/unicode/17.0.0/NormalizationTest.txt");
+    let corpus = include_str!("../../../../common/unicode/17.0.0/NormalizationTest.txt");
     let mut count = 0;
     for row in corpus.lines() {
         let row = row.split('#').next().unwrap().trim();

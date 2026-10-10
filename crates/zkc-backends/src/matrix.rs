@@ -10,23 +10,23 @@ use zkc_runtime::interactive::Identity;
 
 /// Canonical mathematical coefficients, independent of Montgomery or wire
 /// storage. Prime fields use their least nonnegative decimal representative.
-pub(crate) trait CanonicalCoefficient: Coefficient {
+pub(crate) trait IdentityCoefficient: Coefficient {
     const IDENTITY: Identity;
     fn canonical(self) -> String;
 }
-impl CanonicalCoefficient for crate::Scalar {
+impl IdentityCoefficient for crate::Scalar {
     const IDENTITY: Identity = Identity::Bls12381Fr;
     fn canonical(self) -> String {
         self.into_bigint().to_string()
     }
 }
-impl CanonicalCoefficient for crate::Bn254Scalar {
+impl IdentityCoefficient for crate::Bn254Scalar {
     const IDENTITY: Identity = Identity::Bn254Fr;
     fn canonical(self) -> String {
         self.into_bigint().to_string()
     }
 }
-impl CanonicalCoefficient for crate::RistrettoScalar {
+impl IdentityCoefficient for crate::RistrettoScalar {
     const IDENTITY: Identity = Identity::Ristretto255Scalar;
     fn canonical(self) -> String {
         let mut limbs = [0; 4];
@@ -36,13 +36,13 @@ impl CanonicalCoefficient for crate::RistrettoScalar {
         BigInt::<4>::new(limbs).to_string()
     }
 }
-impl CanonicalCoefficient for crate::KoalaBear {
+impl IdentityCoefficient for crate::KoalaBear {
     const IDENTITY: Identity = Identity::KoalaBear;
     fn canonical(self) -> String {
         self.as_canonical_u32().to_string()
     }
 }
-impl CanonicalCoefficient for crate::KoalaBearExt8 {
+impl IdentityCoefficient for crate::KoalaBearExt8 {
     const IDENTITY: Identity = Identity::KoalaBearExt8;
     fn canonical(self) -> String {
         // The installed ascending power basis gives the canonical integer
@@ -152,7 +152,7 @@ pub(crate) fn from_entries<S: Coefficient>(
 /// provenance. Checked constructors already enforce normalized sorted COO.
 /// Stream compact JSON without retaining a second copy of the matrix:
 /// ["zkc.matrix/0", field, [rowsString, columnsString, [[r,c,coefficient],...]]].
-pub(crate) fn identity_check<S: CanonicalCoefficient>(
+pub(crate) fn identity_check<S: IdentityCoefficient>(
     m: &SparseCoo<S>,
     attributes: &[String],
 ) -> Result<bool> {

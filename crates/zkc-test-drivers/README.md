@@ -1,7 +1,7 @@
 # Native integration drivers
 
 These binaries exercise the public Rust SDK against compiler-generated programs.
-Python tests in `tests/protocol/` generate artifacts and supply each driver's
+Python tests in `common/tests/protocol/` generate artifacts and supply each driver's
 arguments. `zkc-test-support` owns shared reference fixtures and evidence storage.
 
 Build with `just build-test-drivers` or

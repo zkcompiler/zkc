@@ -35,7 +35,7 @@ own version rules.
 | Main LLVM/MLIR and C++ packages | Compiler CMake requirements and Nix inputs |
 | Rust workspace | Cargo manifests, lockfile, toolchain selection and `nix/rust.nix` vendor hash |
 | Python tooling | `pyproject.toml` and `uv.lock` |
-| Independent Lean package | `formal/lean-toolchain`, Lake manifests and lockfiles |
+| Independent Lean package | `lean/lean-toolchain`, Lake manifests and lockfiles |
 | Optional integrations | Their own manifests, source pins and compatible toolchains |
 
 LLZK remains a generic optional relation adapter with a separate LLVM process.
@@ -43,7 +43,7 @@ Do not link incompatible LLVM versions into the main compiler. Formal source
 builds, reached-axiom audits and optional ArkLib consumers retain their own scopes;
 they are not default native execution prerequisites. `scripts/update-lean-pins.py`
 selects revisions from ArkLib only. The Clean integration's manifest must keep the
-main package's shared revisions and toolchain, which `formal/checks/check_library.py`
+main package's shared revisions and toolchain, which `lean/checks/check_library.py`
 checks; after a Lean or Mathlib change, update it by hand and rerun
 `just test-lean-clean`.
 
@@ -69,12 +69,18 @@ when diagnosing a disagreement.
 
 ## Workflow scopes and reports
 
-The [test guide](../../tests/README.md) and CI manifests own current scopes.
+The [test guide](../../common/tests/README.md) and CI manifests own current scopes.
 Automatic CI checks source hygiene, docs and the Python harness. Changes to
 native code, libraries or build configuration also run cached Nix checks for
 Rust tests/Clippy, the installed CLI, an installed C++ SDK consumer and C++
 formatting. Full CTest and protocol integration suites, sanitizers and optional
 formal/external integrations remain explicit workflow scopes.
+
+The Rust check runs Cargo formatting, Clippy and workspace tests directly. It does not build the release CLI or depend on C++ tools and release test drivers. The application and project checks own those execution boundaries. Keep these derivations independent so Rust checks can run alongside the compiler build and reuse their result after unrelated C++ changes.
+
+The installed compiler package builds the CLI and SDK with `BUILD_TESTING=OFF`. `checks.compiler` builds and runs the full CTest suite and exports its test helpers for the project integration check. Sanitizers use that testing configuration; domain installation checks use the installed compiler configuration.
+
+When investigating CI time, compare job and step timings first, then the Nix build log's derivation phases. Separate dependency downloads, project compilation and test execution; a binary cache hit for dependencies does not reuse compilation of changed project sources. Retain the automatic checks when optimizing their dependency graph. Full CTest and protocol integration remain available through the manual `main` scope.
 
 A direct test driver requires built tools. Report directories are allocated
 independently of shared build trees; concurrent reports do not isolate concurrent

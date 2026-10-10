@@ -8,7 +8,7 @@
 }:
 stdenv.mkDerivation {
   name = "zkc-compiler-consumer";
-  src = ../../tests/consumer;
+  src = ../../common/tests/consumer;
   nativeBuildInputs = [
     cmake
     ninja

@@ -32,7 +32,7 @@ or volume.
 | What the project is and where it is going | [Architecture](../docs/architecture.md) |
 | What the current checkout actually claims | [Current Status](../docs/status.md) |
 | Which document decides what | [documentation authority map](../docs/README.md) |
-| How to build and run the checks | [Development guide](../docs/development/README.md) and [test scopes](../tests/README.md) |
+| How to build and run the checks | [Development guide](../docs/development/README.md) and [test scopes](../common/tests/README.md) |
 | Where documentation belongs | [Documentation guide](../docs/development/documentation.md) |
 | The exact semantics of a surface | [Specification](../docs/spec/README.md) |
 
@@ -43,7 +43,7 @@ to `main` directly. Branch names are short and topical — `feat/…`, `fix/…`
 `docs/…`, `test/…`.
 
 1. Run the tests and lint checks affected by the change, using the
-   [test guide](../tests/README.md#selecting-checks). Use `just test` for broad
+   [test guide](../common/tests/README.md#selecting-checks). Use `just test` for broad
    integration validation, not for every edit. Run optional suites when their
    integration boundary changes, and describe the checks actually performed.
    Automatic CI checks sources, formatting, documentation and the test harness.
@@ -106,11 +106,11 @@ belongs in the pull request body, which is what survives the squash.
   `Tests.Checks` records a condition that does not hold and carries on, while
   a shape error stays fatal because there is no value to go on with.
 - **Semantics.** Update the owning specification: `docs/spec/` for native and
-  shared contracts, `formal/docs/spec/` for independent formal models. Keep
+  shared contracts, `lean/docs/spec/` for independent formal models. Keep
   intended contracts and implementation coverage distinct; do not weaken a
   contract to match a missing implementation. Record native coverage in
   [status](../docs/status.md) and theorem scope in
-  [formal support](../formal/docs/support.md).
+  [formal support](../lean/docs/support.md).
 - **Formats and identities.** Version persisted or exchanged formats and
   cryptographic byte constructions. Before stabilization, keep zkc-owned
   format and construction versions at `0` and update producers, readers and

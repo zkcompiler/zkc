@@ -1,7 +1,8 @@
 //! Independently authored native carriers exercise the entire Entry/Host bridge.
 use super::*;
 use crate::entry::{
-    self, BindingPolicy, ProofEntry, ProofOptions, RunEntry, RunRequest, SetupAuthority,
+    self, BindingPolicy, ProofEntry, ProofOptions, ProofRequest, RoleInputs, RunEntry, RunRequest,
+    SetupAuthority,
 };
 use crate::run::HostLimits;
 use crate::source_names::encode_nominal_identity;
@@ -215,13 +216,35 @@ fn unicode_roles_enum_payloads_and_output_keys_round_trip_through_native_host() 
         SetupAuthority::default(),
     )
     .unwrap();
-    let request = json!({"format":"zkc.entry-run/0","session":"unicode", "roles":{
-        "role00000001":{"inputs":{"入力":{"case":"有値","fields":{"値":true}}}},
-        "検証者":{"inputs":{"入力":{"case":"空","fields":{}}}}
-    }});
-    for text in [request.to_string(), escape_json(&request.to_string())] {
+    let mut decoder = entry::inputs::Decoder::new(Default::default()).unwrap();
+    let groups = entry.interface().input_groups();
+    let values = [
+        json!({"入力":{"case":"有値","fields":{"値":true}}}),
+        json!({"入力":{"case":"空","fields":{}}}),
+    ];
+    for escaped in [false, true] {
+        let roles = groups
+            .iter()
+            .zip(&values)
+            .map(|(group, value)| {
+                let text = value.to_string();
+                let text = if escaped { escape_json(&text) } else { text };
+                let inputs = decoder.decode(group, text.as_bytes(), None).unwrap();
+                (
+                    group.name().to_owned(),
+                    RoleInputs {
+                        inputs,
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect();
         let report = entry
-            .prepare(entry.interface().run_request(text.as_bytes()).unwrap())
+            .prepare(RunRequest {
+                session: "unicode".into(),
+                roles,
+                setups: Default::default(),
+            })
             .unwrap()
             .execute();
         assert!(report.is_success(), "{:?}", report.output_error);
@@ -241,26 +264,51 @@ fn unicode_roles_enum_payloads_and_output_keys_round_trip_through_native_host() 
         assert_eq!(output["roles"]["role00000001"]["結果"]["case"], "有値");
         assert_eq!(output["roles"]["検証者"]["結果"]["case"], "空");
     }
-    let duplicate = request
-        .to_string()
-        .replace("\"検証者\":", "\"検証者\":{\"inputs\":{}},\"\\u691c証者\":");
-    assert!(entry.interface().run_request(duplicate.as_bytes()).is_err());
-    let mut bad = request.clone();
-    bad["roles"]["検証者"]["inputs"]["入力"]["case"] = json!("case00000000");
-    assert!(
+    let duplicate = r#"{"入力":{"case":"空","fields":{}},"\u5165力":{"case":"空","fields":{}}}"#;
+    let error = decoder
+        .decode(&groups[1], duplicate.as_bytes(), None)
+        .unwrap_err();
+    assert_eq!(error.code, "entry-request-format");
+    assert_eq!(error.path, "検証者");
+    let mut bad = values[1].clone();
+    bad["入力"]["case"] = json!("case00000000");
+    let error = decoder
+        .decode(&groups[1], bad.to_string().as_bytes(), None)
+        .unwrap_err();
+    assert_eq!(error.code, "entry-input-alternative");
+    assert_eq!(error.path, "検証者.入力");
+    let roles = groups
+        .iter()
+        .zip(&values)
+        .map(|(group, value)| {
+            let inputs = decoder
+                .decode(group, value.to_string().as_bytes(), None)
+                .unwrap();
+            let name = if group.name() == "role00000001" {
+                "role00000000"
+            } else {
+                group.name()
+            };
+            (
+                name.to_owned(),
+                RoleInputs {
+                    inputs,
+                    ..Default::default()
+                },
+            )
+        })
+        .collect();
+    assert_eq!(
         entry
-            .interface()
-            .run_request(bad.to_string().as_bytes())
-            .is_err()
-    );
-    let mut bad = request;
-    bad["roles"]["role00000000"] = bad["roles"]["role00000001"].take();
-    bad["roles"].as_object_mut().unwrap().remove("role00000001");
-    assert!(
-        entry
-            .interface()
-            .run_request(bad.to_string().as_bytes())
-            .is_err()
+            .prepare(RunRequest {
+                session: "unicode".into(),
+                roles,
+                setups: Default::default()
+            })
+            .err()
+            .unwrap()
+            .to_string(),
+        "entry-input-roles"
     );
     for native in [
         ["role00000001", "role00000000"],
@@ -577,6 +625,32 @@ fn proof_fixture() -> (Value, String) {
         "job":{"kind":"proof","prover":"証明者","verifier":"検証者","public":[0],"acceptance":selector("output",0,"検証者"),"completion":null,"target":null,"construction":{"kind":"authored"}}});
     (doc, artifact)
 }
+fn proof_request(interface: &Interface, producer: bool) -> ProofRequest {
+    let groups = interface.input_groups();
+    let mut decoder = entry::inputs::Decoder::new(Default::default()).unwrap();
+    let public = decoder
+        .decode(&groups[0], escape_json(r#"{"公開":true}"#).as_bytes(), None)
+        .unwrap();
+    let private = if producer {
+        decoder
+            .decode(
+                &groups[1],
+                escape_json(r#"{"秘密":false}"#).as_bytes(),
+                None,
+            )
+            .unwrap()
+    } else {
+        Default::default()
+    };
+    ProofRequest {
+        public,
+        private: RoleInputs {
+            inputs: private,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
 #[test]
 fn unicode_proof_requests_bind_the_selected_prover_and_verifier_roster_indices() {
     let (doc, artifact) = proof_fixture();
@@ -591,37 +665,23 @@ fn unicode_proof_requests_bind_the_selected_prover_and_verifier_roster_indices()
         ProofEntry::admit(package(&doc, &artifact), options, SetupAuthority::default()).unwrap();
     let verifier =
         ProofEntry::admit(package(&doc, &artifact), options, SetupAuthority::default()).unwrap();
-    let request =
-        json!({"format":"zkc.entry-proof/0","public":{"公開":true},"inputs":{"秘密":false}})
-            .to_string();
-    let request = prover
-        .interface()
-        .proof_request(escape_json(&request).as_bytes(), true)
-        .unwrap();
+    let request = proof_request(prover.interface(), true);
     let report = prover.prove(request).unwrap();
     assert!(report.is_success(), "{:?}", report.native.outcome);
     assert!(!bool::try_from(report.outputs.unwrap().remove("結果").unwrap()).unwrap());
     let proof = report.native.outcome.unwrap();
-    let request = json!({"format":"zkc.entry-proof/0","public":{"公開":true}}).to_string();
     let report = verifier
-        .verify(
-            verifier
-                .interface()
-                .proof_request(request.as_bytes(), false)
-                .unwrap(),
-            &proof,
-        )
+        .verify(proof_request(verifier.interface(), false), &proof)
         .unwrap();
     assert!(report.is_success(), "{:?}", report.native.outcome);
     assert!(bool::try_from(report.outputs.unwrap().remove("受理").unwrap()).unwrap());
-    let private =
-        json!({"format":"zkc.entry-proof/0","public":{"公開":true},"inputs":{"秘密":true}})
-            .to_string();
-    assert!(
+    assert_eq!(
         verifier
-            .interface()
-            .proof_request(private.as_bytes(), false)
-            .is_err()
+            .verify(proof_request(verifier.interface(), true), &proof)
+            .err()
+            .unwrap()
+            .to_string(),
+        "entry-input-names"
     );
     for swapped in [true, false] {
         let mut bad = doc.clone();
@@ -698,14 +758,9 @@ fn unicode_setup_material_is_injected_into_both_independent_proof_requests() {
     let entry =
         ProofEntry::admit(package(&doc, &artifact.to_string()), options, authority).unwrap();
     let request = |producer: bool, key: &str, material: &[u8]| {
-        let text = json!({"format":"zkc.entry-proof/0","public":{"公開":true},
-            "inputs":if producer { json!({"秘密":false}) } else {json!({})},
-            "setups":{key:crate::host::inputs::hex(material)}})
-        .to_string();
-        entry
-            .interface()
-            .proof_request(escape_json(&text).as_bytes(), producer)
-            .unwrap()
+        let mut request = proof_request(entry.interface(), producer);
+        request.setups.insert(key.to_owned(), material.to_vec());
+        request
     };
     let produced = entry.prove(request(true, "鍵₂", &bytes)).unwrap();
     assert!(produced.is_success(), "{:?}", produced.native.outcome);

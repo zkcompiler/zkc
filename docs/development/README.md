@@ -30,6 +30,8 @@ access. The demo compiles the maintained Schnorr Entry and independently proves
 and verifies it. [Getting started](../getting-started.md) gives the exact commands
 and input-authority boundary.
 
+Development operations expose their supported options through `python3 scripts/develop.py OPERATION --help`; options for another operation are rejected before preparation or execution.
+
 Outside Nix, provide compatible `CC`, `CXX`, `MLIR_DIR` and, when needed,
 `LLVM_CONFIG`, plus utf8proc 2.12.0 with its CMake package (select it through
 `utf8proc_DIR` or `CMAKE_PREFIX_PATH`). Installed Language consumers also need
@@ -49,7 +51,7 @@ just test-integration
 just test-docs
 ```
 
-Use the [test guide](../../tests/README.md#selecting-checks) to choose affected
+Use the [test guide](../../common/tests/README.md#selecting-checks) to choose affected
 checks. `just test` is broad integration validation and includes resource-boundary
 cases; run it when changes justify that scope. Direct test drivers use existing
 outputs and do not build dependencies. Record commands, revision, environment
@@ -97,7 +99,7 @@ evaluating their packages. Generated checkout output is excluded.
 The owning flake and test manifests define the exact checks.
 
 Lean has separate build, control and reproduction commands in the
-[formal guide](../../formal/README.md). Its tools and models do not validate the
+[formal guide](../../lean/README.md). Its tools and models do not validate the
 native executable merely by being built. Optional ArkLib, generic
 [LLZK](../../compiler/adapters/llzk/README.md) and pinned
 [Plonky3 AIR](../../compiler/adapters/plonky3/README.md) and

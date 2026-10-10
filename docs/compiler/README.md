@@ -17,7 +17,7 @@ publication.
 | Verifier dependency analysis | [Public-coin views](public-coin.md) |
 | Operation metadata and kernel selection | [Operation contracts](operation-contracts.md), [representation](representation.md) |
 
-[Specification](../spec/README.md) owns exact rules; [native tests](../../tests/native.md)
+[Specification](../spec/README.md) owns exact rules; [native tests](../../common/tests/native.md)
 own validation scope. [Runtime](../runtime/README.md) owns application execution.
 The [C++ SDK](../../compiler/README.md) describes installed targets and APIs;
 [extensions](../development/extensions.md) explains contributor work.

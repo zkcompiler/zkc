@@ -118,9 +118,9 @@ Every failed requirement stops; `accepted` is true on continuing paths.
 
 ## Evidence and limits
 
-The [polynomial helper tests](../../tests/protocol/test_air_polynomials.py)
+The [polynomial helper tests](../../common/tests/protocol/test_air_polynomials.py)
 compare scope products, column extensions and layouts with independent integer
-Ext8 arithmetic. The [protocol tests](../../tests/protocol/test_air_stark.py)
+Ext8 arithmetic. The [protocol tests](../../common/tests/protocol/test_air_stark.py)
 exercise the imported AIR with separate prover/verifier Hosts, several domain
 sizes and compilation modes, malformed statements and schedules, altered
 commitments, claims and openings, and excluded-set exhaustion. Dishonest prover
@@ -130,10 +130,10 @@ query order through nested protocol calls. Independent integer interpolation
 also reconstructs the complete quotient chunks, OOD claims and DEEP word. Native Bundle
 polynomial tests independently check descriptors, degrees and substitutions.
 
-[Adversarial controls](../../tests/protocol/test_air_stark_adversarial.py)
+[Adversarial controls](../../common/tests/protocol/test_air_stark_adversarial.py)
 reach the verifier with a false trace, a compensated opening lie and a
 column whose degree exceeds the declared bound. The
-[statement-authority controls](../../tests/protocol/test_air_statement_authority.py)
+[statement-authority controls](../../common/tests/protocol/test_air_statement_authority.py)
 use interval scopes and public columns, and reject a prover's consistent proof
 for different configuration, public-column or scalar inputs. Removing the
 specific known-input or degree-adjustment check admits its corresponding
@@ -243,13 +243,13 @@ checked at the sampled point, and their interpolants have degree below `h_t`.
 
 ### Machine evidence and remaining scope
 
-The [machine protocol tests](../../tests/protocol/test_machine_stark.py) cover
+The [machine protocol tests](../../common/tests/protocol/test_machine_stark.py) cover
 both reductions, three external executions, differing table heights, absent
 and idle memory, ordinary/simplification-disabled/storage-release compilation,
 invalid relations and profiles, all commitment phases, and the exact nested
-transcript order. The [reduction comparison](../../tests/protocol/test_air_interaction.py)
+transcript order. The [reduction comparison](../../common/tests/protocol/test_air_interaction.py)
 checks source auxiliary columns, claims and scoped residuals against the
-independent staged reference. The [malicious-prover tests](../../tests/protocol/test_machine_stark_adversarial.py)
+independent staged reference. The [malicious-prover tests](../../common/tests/protocol/test_machine_stark_adversarial.py)
 commit consistent false quotients and auxiliary columns. A valid execution of
 another configured program with the same final result is rejected by the known
 configuration obligation; disabling that obligation makes the control pass.

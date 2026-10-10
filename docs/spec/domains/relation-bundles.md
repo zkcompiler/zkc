@@ -153,7 +153,7 @@ proof claim. On a finite table, per-assertion divisibility is the
 [per-constraint law](constraints.md#polynomial-interpretation-of-finite-scopes)
 with its formal model. The cyclic wrap rule has no Lean model; its evidence is
 the bounded coefficient check of the recurrence fixture recorded in the
-[native validation map](../../../tests/native.md).
+[native validation map](../../../common/tests/native.md).
 
 ## Compiler-visible polynomial view
 
@@ -668,8 +668,8 @@ weighted degree. Staged assignments reuse bundle value, group, window, scope
 and resource identifiers; challenge/claim list shape uses `staged-slot-shape`
 in both the reader and evaluator.
 
-[`Zkc.Relation.Bundle`](../../../formal/Zkc/Relation/Bundle.lean) is the
+[`Zkc.Relation.Bundle`](../../../lean/Zkc/Relation/Bundle.lean) is the
 independent formal denotation. The
-[correspondence map](../../../formal/docs/correspondence/domains.md#relation-domain-foundation)
+[correspondence map](../../../lean/docs/correspondence/domains.md#relation-domain-foundation)
 states its theorem scope; it is not a proof of the native admission or
 evaluation code.

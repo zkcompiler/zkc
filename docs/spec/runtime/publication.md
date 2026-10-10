@@ -5,37 +5,52 @@ explains commands; [Entry calls](entries.md) own their logical inputs.
 
 ## Reports and returned values
 
-Standard output contains a structured status report. It retains resource usage,
+`--json` selects a structured status report on standard output. It retains resource usage,
 attempt decisions, stops, cleanup and publication state. It omits returned values
 and proof payloads. Exit status is zero only after complete execution, cleanup
-and requested publication.
+and requested publication. Human summaries are the default; refusals use standard
+error. Entry proof commands report `proof_sha256` for the proof produced or read;
+publication status distinguishes produced bytes from a successfully written file.
 
-Use `--results=FILE` to publish returned logical values. Run files contain a
+Project runs publish returned values to their standard results path unless
+`--no-results` is supplied. `--results=FILE` selects an explicit destination;
+it cannot be combined with `--no-results`. Other modes publish values only with
+`--results`. Run files contain a
 `roles` map; proof files contain `values` for the invoked participant. Both use
 `zkc.entry-outputs/0`. Encoding honors admitted native capacity and a 16 MiB whole
-file limit. Non-Wire private results cannot be serialized.
+file limit. Requested output types without a native codec refuse with
+`entry-output-codec` before execution. Value-dependent encoding and size failures
+can still occur after execution; neither these nor publication failures cause an
+automatic rerun. Non-Wire private results cannot be serialized.
 
 ## File admission
 
-Request files have a 16 MiB byte limit, depth at most 72 and a 200,000-node
-allowance including object keys. Decoding rejects duplicate keys, unknown record
+Entry input documents share a 16 MiB byte limit and a 200,000-node allowance
+including object keys per invocation; each document has depth at most 72. Decoding rejects duplicate keys, unknown record
 fields, trailing documents and numeric values outside unsigned 64-bit naturals.
 The application authority file is bounded by 64 KiB.
 [Entry file adapters](entries.md#file-adapters-and-rust-bindings) define request,
 value and `zkc.entry-setups/0` authority schemas.
 
-All configured input and authority paths name bounded regular files. Symlink
-inputs resolve to a regular descriptor; FIFOs, devices and other nonregular
-inputs refuse. Byte-slice APIs remain available for applications that own their
+All configured input and authority paths name bounded regular files. Explicit authority, package and policy paths may resolve symlinks to regular
+files. On Unix, Entry JSON document names and references refuse final symlinks; confined
+reference traversal also refuses intermediate symlinks. FIFOs, devices and
+other nonregular inputs refuse. Byte-slice APIs remain available for applications that own their
 transport. Compile sources and assets also require regular files, with capture
 limits enforced by the compiler.
 
 ## Output publication
 
 Output paths must differ from each other and all input/configuration paths,
-including referenced prover-key files. Existing symlink outputs and nonregular
+including opened native-value and prover-key references. Descriptor identities
+remain protected after their original path is replaced. Existing symlink outputs and nonregular
 destinations refuse. Canonical directory aliases and, on Unix, existing hardlink aliases
-also refuse. Destination parents must already exist. The plan is rechecked
+also refuse. Explicit destination parents must already exist; standard project
+output directories are created as needed before execution. Project and input initialization
+create their destination directories and publish without replacing existing files.
+`new` and `init` publish sources before compiling input templates. If compilation or
+later publication fails, completed files remain and the report retains their paths.
+Once the sources compile, use `prepare` to finish input preparation. The plan is rechecked
 before publication. These are trusted configuration checks; concurrent hostile
 filesystem mutation is outside this contract.
 
@@ -48,5 +63,6 @@ proof followed by optional results. This is per-file publication, not a multi-fi
 transaction. A later replacement can fail after the proof was published. The
 report retains `proof_published: true`, a `publication.published` list, the
 `publication.failed` output name, and execution observations. Staging refusal has
-an empty published list. Publication errors never trigger an automatic rerun;
+an empty published list unless an earlier initialization batch completed.
+Publication errors never trigger an automatic rerun;
 these operations do not promise crash durability of directory entries.

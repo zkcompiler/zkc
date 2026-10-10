@@ -3,7 +3,7 @@
 Native MSM, matrix contractions and vector kernels use these ordered value contracts.
 This chapter states shared laws; a native implementation claim needs its
 actual instance and evidence. Independent formal examples retain their own
-[model scope](../../../formal/docs/spec/README.md).
+[model scope](../../../lean/docs/spec/README.md).
 
 For a carrier `X`, `Vector X n = Fin n → X`. A dynamically sized vector carries
 its length together with that indexed value. Length zero is permitted. Element
@@ -50,7 +50,7 @@ combine(w, fun i => d[i] • x[i]) = combine(fun i => w[i]*d[i], x)
 ```
 
 The maintained Lean laws are
-[`linearCombination_rows` and `linearCombination_smul`](../../../formal/Zkc/Algebra/LinearCombination.lean).
+[`linearCombination_rows` and `linearCombination_smul`](../../../lean/Zkc/Algebra/LinearCombination.lean).
 They establish value equalities under the stated algebraic and shape premises.
 
 ## Matrix and sequence operations
@@ -212,12 +212,12 @@ formal polynomials: a pointwise product of two tables is not the table of the
 product of their multilinear or univariate interpretations.
 
 The maintained Lean laws are
-[`map_coordinate`, `map_shape`, `map_substitute` and `map_hoist`](../../../formal/Zkc/Algebra/RingExpression/Pointwise.lean):
+[`map_coordinate`, `map_shape`, `map_substitute` and `map_hoist`](../../../lean/Zkc/Algebra/RingExpression/Pointwise.lean):
 a successful map is row-by-row evaluation, unequal rowwise lengths never
 succeed, a formula composed of helpers may be mapped in one pass over the same
 operands, and a subformula over scalar inputs has one value for every row.
 Dropping scalar operations the result never reaches is the restricted node map
-of the [arena sharing laws](../../../formal/Zkc/Algebra/RingExpression/Sharing.lean).
+of the [arena sharing laws](../../../lean/Zkc/Algebra/RingExpression/Sharing.lean).
 They establish value equalities in a list model under the stated shape premises;
 the native realization and its checks are separately tested.
 
@@ -243,7 +243,7 @@ all original ordered shape guards, even when the dot itself uses only two of
 several row inputs. The [optional native fusion contract](../ir/protocols.md#optional-vector-reduction-fusion)
 states the restricted rewrite and its resource relation.
 
-The independent [Lean reduction model](../../../formal/docs/spec/core/ring-expressions.md)
+The independent [Lean reduction model](../../../lean/docs/spec/core/ring-expressions.md)
 proves list-value, empty, unused-row refusal and error-propagation laws under
 its stated admission premises. It does not prove native compiler correspondence,
 source capture snapshots or runtime adequacy. Source binding and evaluation

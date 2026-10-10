@@ -174,8 +174,12 @@ pub(super) fn prepare(
             ("wire", input) => crate::host::admission::check_native_data(ty, input, host.capacity)?,
             ("rng" | "nonce", InputValue::Resource { budget }) => check_budget(*budget)?,
             ("verifier_key", InputValue::VerifierKey) => {}
-            ("prover_key_file", InputValue::ProverKeyFile { .. } | InputValue::ProverKey(_))
-                if producer => {}
+            (
+                "prover_key_file",
+                InputValue::ProverKeyFile { .. }
+                | InputValue::ProverKeyInput { .. }
+                | InputValue::ProverKey(_),
+            ) if producer => {}
             _ => return Err("native-proof-role-input-kind".into()),
         }
     }
@@ -317,25 +321,42 @@ pub(super) fn prepare(
                     &backend,
                 )?,
             ))?,
+            InputValue::ProverKeyInput { file, fingerprint } => admission.add(Input::Key {
+                source: crate::host::admission::KeySource::File(file),
+                fingerprint: *fingerprint,
+                verifier: selected(port.original).ok_or("native-proof-setup-required")?,
+            })?,
             InputValue::ProverKeyFile { path, fingerprint } => admission.add(Input::Key {
-                path,
+                source: crate::host::admission::KeySource::Path(path),
                 fingerprint: *fingerprint,
                 verifier: selected(port.original).ok_or("native-proof-setup-required")?,
             })?,
             input => {
-                // Preserve the wire adapter's exact-byte agreement and reuse.
-                let same = match (public_requests.get(&port.original), input) {
+                // Reuse only identical bytes or the same pinned open descriptor.
+                let same_source = match (public_requests.get(&port.original), input) {
                     (Some(InputValue::Wire(a)), InputValue::Wire(b)) => {
                         if a != b {
                             return Err("native-proof-shared-public-input".into());
                         }
-                        PhysicalType::default_for(port.logical.clone())
-                            .ok()
-                            .as_ref()
-                            == Some(ty)
+                        true
                     }
+                    (
+                        Some(InputValue::WireFile {
+                            file: a,
+                            sha256: a_pin,
+                        }),
+                        InputValue::WireFile {
+                            file: b,
+                            sha256: b_pin,
+                        },
+                    ) => a.same_source(b) && a_pin == b_pin,
                     _ => false,
                 };
+                let same = same_source
+                    && PhysicalType::default_for(port.logical.clone())
+                        .ok()
+                        .as_ref()
+                        == Some(ty);
                 let id = if same {
                     public_ids[&port.original]
                 } else {

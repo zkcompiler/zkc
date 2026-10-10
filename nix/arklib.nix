@@ -1,9 +1,9 @@
 {
   lib,
   stdenvNoCC,
-  formal,
-  source,
   lean,
+  source,
+  leanToolchain,
   git,
   python3,
   lakeSources,
@@ -14,18 +14,18 @@ stdenvNoCC.mkDerivation {
   dontUnpack = true;
   dontConfigure = true;
   nativeBuildInputs = [
-    lean
+    leanToolchain
     git
     python3
   ];
   buildPhase = ''
-    cp -R ${formal.library}/share/zkc/formal formal
-    mkdir -p tests
-    cp -R ${formal.library}/share/zkc/tests/fixtures tests/fixtures
-    chmod -R u+w formal
-    cp -R ${source}/formal/integrations formal/
-    chmod -R u+w formal/integrations
-    cd formal
+    cp -R ${lean.library}/share/zkc/lean lean
+    mkdir -p common/tests
+    cp -R ${lean.library}/share/zkc/common/tests/fixtures common/tests/fixtures
+    chmod -R u+w lean
+    cp -R ${source}/lean/integrations lean/
+    chmod -R u+w lean/integrations
+    cd lean
     mkdir -p integrations/arklib/.lake/packages
     for dependency in ${lakeSources}/*; do
       name=$(basename "$dependency")
@@ -46,7 +46,7 @@ stdenvNoCC.mkDerivation {
     python3 checks/check_clients.py --with-arklib --output "$TMPDIR/clients-arklib"
   '';
   installPhase = ''
-    mkdir -p "$out/share/zkc/formal" "$out/share/zkc/tests" "$out/reports"
+    mkdir -p "$out/share/zkc/lean" "$out/share/zkc/common/tests" "$out/reports"
     # Replace temporary absolute links before publishing the package.
     for dependency in integrations/arklib/.lake/packages/*; do
       if [ -L "$dependency" ]; then
@@ -55,8 +55,8 @@ stdenvNoCC.mkDerivation {
         ln -s "../../../../.lake/packages/$name" "$dependency"
       fi
     done
-    cp -a . "$out/share/zkc/formal/"
-    cp -R ../tests/fixtures "$out/share/zkc/tests/fixtures"
+    cp -a . "$out/share/zkc/lean/"
+    cp -R ../common/tests/fixtures "$out/share/zkc/common/tests/fixtures"
     # Logs and source records remain useful; temporary dependency links do not.
     (cd "$TMPDIR/clients-arklib" &&
       find . -type f ! -path '*/.lake/*' -exec cp --parents {} "$out/reports/" \;)

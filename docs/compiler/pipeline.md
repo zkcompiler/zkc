@@ -97,6 +97,6 @@ includes its iteration coordinates. [Public-coin views](public-coin.md) consume 
 bounded part of this information. Honest delivery, independent randomness and
 cryptographic assumptions are separate premises.
 
-The [formal models](../../formal/docs/README.md) specify independent subjects and
+The [formal models](../../lean/docs/README.md) specify independent subjects and
 laws. Applying them to this pipeline requires the explicit connection described
 by [assurance](../assurance.md#native-correspondence).

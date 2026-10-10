@@ -68,7 +68,7 @@ judgment.
 | Rust runtime | [zkc-runtime](../crates/zkc-runtime/README.md): Runner, bounded work and resource custody |
 | Rust Hosts | [zkc-tools](../crates/zkc-tools/README.md): Entry, proof and joint invocation, authentication, preparation and reports |
 | Backend integration | [zkc-backends](../crates/zkc-backends/README.md): installed types, codecs, services and kernel dispatch |
-| Lean | [formal](../formal/README.md): independently built semantic models, proofs and model-specific tools |
+| Lean | [formal](../lean/README.md): independently built semantic models, proofs and model-specific tools |
 
 The exported CMake components follow these responsibilities; the
 [compiler package](../compiler/README.md#components-and-ownership) owns the exact installed API.
@@ -79,8 +79,10 @@ checks and installed consumers enforce this direction.
 ## Runtime and application authority
 
 An Entry package retains the source interface, original mathematical program,
-compilation choices and selected artifact. A trusted application supplies the
-expected package digest. The Rust Host binds named inputs to the independently
+compilation choices and selected artifact. Local source commands trust the
+selected project and compiler and capture the returned package bytes. Deployed
+applications supply an independently authorized expected package digest.
+The Rust Host binds named inputs to the independently
 admitted program; it trusts the compiler publication for source correspondence.
 It does not interpret the retained MLIR.
 
