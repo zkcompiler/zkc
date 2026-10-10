@@ -686,6 +686,7 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
     return refuse(module, "expected one mathematical symbol-table block");
   SymbolTableCollection tables;
   HelperAnalysis helpers(module, tables);
+  algebra::MapFormulas maps(tables);
   unsigned programs = 0;
   unsigned remainingRealizations = realizedHelperOperationLimit;
   for (auto &op : module.getBody().front()) {
@@ -712,6 +713,20 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
       remainingRealizations -= summary->expandedOperations;
       // The local-definition reader independently checks data-only native
       // ports.
+    } else if (auto map = dyn_cast<algebra::MapRealizeOp>(op)) {
+      // Admitted explicitly: its preparation-callable interface grants
+      // nothing. Algebra's formula rule reads the closure that helper analysis
+      // has bounded; preparation applies Ring limits to the expanded formula.
+      const HelperSummary *summary;
+      auto helper = tables.lookupNearestSymbolFrom<func::FuncOp>(
+          map, map.getHelperAttr());
+      if (failed(helpers.get(helper, summary)) || failed(maps.verify(map)))
+        return failure();
+      if (summary->expandedOperations > remainingRealizations)
+        return diagnostics::emit(
+            map.emitOpError(), "mathematical-analysis-limit",
+            "realized helpers exceed the shared expansion budget");
+      remainingRealizations -= summary->expandedOperations;
     } else if (isa<local::FuncOp, local::OperationBindingOp, poly::RecipeOp,
                    poly::RealizeOp>(op)) {
       // Whole executable admission below checks even unused definitions.

@@ -1,4 +1,5 @@
 #include "BodyCheck.h"
+#include "zkc/Language/Builtins.h"
 #include <algorithm>
 #include <numeric>
 using namespace llvm;
@@ -270,5 +271,67 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   if (result && variable)
     placement->calls.emplace_back(body.operations.size() - 1, *variable);
   return result;
+}
+std::optional<ValueId> BodyChecker::bulk(const Expression &expr,
+                                         unsigned depth) {
+  if (!local()) {
+    fail("source.mode", "map requires an ordinary local function", expr.span);
+    return {};
+  }
+  auto target = callable(expr);
+  if (!target)
+    return {};
+  const auto &callee = checker.output.declarations[target->first.index];
+  if (callee.kind != Declaration::Kind::Math || callee.abstract ||
+      target->second || callee.outputs.size() != 1 ||
+      expr.children.size() != callee.inputs.size() ||
+      !llvm::is_contained(expr.each, true)) {
+    fail("source.map",
+         "map requires a static, defined math fn and at least one each "
+         "argument",
+         expr.span);
+    return {};
+  }
+  const auto id = uint32_t(&expr - syntax.expressions.data());
+  const auto &staticArgs = inference->arguments.at(id);
+  auto subst = checker.types.substitution(callee, staticArgs);
+  auto field =
+      checker.types.substitute(callee.outputs.front().type, subst, expr.span);
+  if (!field)
+    return {};
+  // One scalar field for every helper port; lifting adds only the vectors.
+  auto rows = builtinType("vector", {*field});
+  if (field->kind != Type::Kind::Field || !rows) {
+    if (!rows)
+      consumeError(rows.takeError());
+    fail("source.map", "mapped helper must return one scalar field", expr.span);
+    return {};
+  }
+  std::vector<ValueId> args;
+  for (unsigned i = 0; i < expr.children.size(); ++i) {
+    auto scalar =
+        checker.types.substitute(callee.inputs[i].type, subst, expr.span);
+    if (!scalar)
+      return {};
+    if (*scalar != *field) {
+      fail("source.map", "mapped helper ports must share one scalar field",
+           expr.span);
+      return {};
+    }
+    auto expected = expr.each[i] ? *rows : *scalar;
+    auto arg = expression(expr.children[i], expected, depth + 1);
+    if (!arg || !use(*arg, expr.span))
+      return {};
+    if (body.values[arg->index].type != expected) {
+      fail("source.map", "map argument mode or field differs", expr.span);
+      return {};
+    }
+    args.push_back(*arg);
+  }
+  // Unequal row counts stop this checked application.
+  body.mayStop = true;
+  return emit(
+      BulkApplication{callee.id, std::move(args), staticArgs, expr.each}, *rows,
+      {}, expr.span);
 }
 } // namespace zkc::language::detail

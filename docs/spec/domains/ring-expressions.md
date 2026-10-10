@@ -238,6 +238,9 @@ polynomial evaluation/degree laws. `Zkc.Algebra.RingExpression.Sharing` proves
 that a label-preserving node map between untyped arenas unfolds every node and
 every ordered output to the same tree, which is the law behind the sharing
 judgment; field identities and embeddings are outside that model.
+`Zkc.Algebra.RingExpression.Pointwise` states that a checked pointwise map of a
+formula over rows of evaluations computes the evaluations of the substituted
+polynomial, and when interpolating such rows does and does not recover it.
 `Zkc.Relation.AIR.RingExpression` preserves
 finite-AIR expression evaluation and its public/read degree weights. Those
 independent models do not yet prove the native DAG decoder, the native sharing

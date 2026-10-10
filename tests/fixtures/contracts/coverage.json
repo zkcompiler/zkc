@@ -8,6 +8,7 @@
       "ring.affine_sum",
       "vector.get",
       "vector.slice",
+      "vector.transpose",
       "vector.length",
       "vector.rotate",
       "vector.interleave",

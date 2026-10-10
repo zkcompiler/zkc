@@ -48,6 +48,17 @@ with case('stable recipe ABI and malformed declarations'):
     # Generic malformed siblings must refuse, not crash before symbol checking.
     commands.source('protocol-bundle', recipe.replace('"poly.recipe_yield"(%p) : (!f)->()', '"poly.recipe_yield"() : ()->()'), refuses='operand')
     commands.source('protocol-bundle', recipe.replace('%p = algebra.field_multiply %a, %b : (!f,!f)->!f', '%p = "algebra.constant"() {wrong="0"} : ()->!f'), refuses='value')
+with case('recipe carrier includes unused scalar expressions'):
+    recipe = (FIXTURES / 'iterated-sumcheck.mlir').read_text()
+    inserted = '''   %foreign = "algebra.constant"() {value="2130706432"} : ()->!algebra.field<"koala-bear">
+   %negated = algebra.field_multiply %foreign, %foreign : (!algebra.field<"koala-bear">,!algebra.field<"koala-bear">)->!algebra.field<"koala-bear">
+'''
+    # Dead arithmetic still reaches recipe realization. It must never be
+    # reinterpreted in the recipe's BLS12-381 field, even without simplification.
+    changed = recipe.replace('   "poly.recipe_yield"', inserted + '   "poly.recipe_yield"')
+    assert changed != recipe
+    for options in [(), ('--no-simplify',)]:
+        commands.source('protocol-bundle', changed, *options, refuses='polynomial-formation')
 with case('exact affine roots through zero or many iterations'):
     affine = '''!r = !local.capability<"rng:bls12-381.fr">
 module { "protocol.module"() ({

@@ -17,6 +17,16 @@ def OpVectorSlice : ZKC_Operation<"vector.slice", [OpVectorSliceF],
 def ExportVectorSlice : ZKC_OperationExport<"zkc::algebra", "vector_slice",
     OpVectorSlice, ["vector", "index1", "index2"]>;
 
+// Checked rectangular permutation over a flat row-major vector. This retains
+// dynamic dimensions explicitly; it does not construct a formal tensor value.
+def OpVectorTransposeF : ZKC_Root<"F", FieldDomain>;
+def OpVectorTranspose : ZKC_Operation<"vector.transpose", [OpVectorTransposeF],
+    [ZKC_Apply<TypeVector, [OpVectorTransposeF]>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeIndex, []>], [ZKC_Apply<TypeVector, [OpVectorTransposeF]>],
+    [ZKC_Holds<CapabilityField, [OpVectorTransposeF]>]>;
+def ExportVectorTranspose : ZKC_OperationExport<"zkc::algebra", "vector_transpose",
+    OpVectorTranspose, ["vector", "rows", "columns"]>;
+
 def OpVectorLengthF : ZKC_Root<"F", FieldDomain>;
 def OpVectorLength : ZKC_Operation<"vector.length", [OpVectorLengthF],
     [ZKC_Apply<TypeVector, [OpVectorLengthF]>],

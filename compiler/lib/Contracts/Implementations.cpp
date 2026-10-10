@@ -100,6 +100,7 @@ constexpr ContractRow contractRows[] = {
     {"field.embed", Plonky3},
     {"vector.get", Arithmetic},
     {"vector.slice", Arithmetic},
+    {"vector.transpose", Arithmetic},
     {"vector.length", Arithmetic},
     {"vector.rotate", Arithmetic},
     {"vector.interleave", Arithmetic},

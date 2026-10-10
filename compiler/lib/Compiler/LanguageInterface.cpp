@@ -131,6 +131,8 @@ Error detail::withInterface(
   uint64_t remaining = limits.work;
   if (auto error = mathematical::checkFormulaDefinitions(*module, remaining))
     return error;
+  if (auto error = mathematical::checkMapFormulas(*module, remaining))
+    return error;
   auto identity = toHex(SHA256::hash(arrayRefFromStringRef(original)), true);
   auto decoded =
       detail::decodeInterface(*module, identity, *parsed, limits, assets);

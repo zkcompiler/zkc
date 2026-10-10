@@ -120,10 +120,11 @@ class ExecutionModelReader {
   }
   bool callTypes(Operation *op, StringRef callee) {
     Operation *definition = SymbolTable::lookupSymbolIn(root, callee);
-    bool kind = isa_and_nonnull<zkc::local::FuncOp>(definition) ||
-                (localDefinitionsOnly && isa<zkc::local::ApplyOp>(op) &&
-                 profile.getValue() == zkc::protocol_ir::Profile::Protocol &&
-                 isa_and_nonnull<zkc::local::RealizeOp>(definition));
+    bool kind =
+        isa_and_nonnull<zkc::local::FuncOp>(definition) ||
+        (localDefinitionsOnly && isa<zkc::local::ApplyOp>(op) &&
+         profile.getValue() == zkc::protocol_ir::Profile::Protocol &&
+         isa_and_nonnull<zkc::PreparationCallableOpInterface>(definition));
     if (!kind) {
       fail("interactive-symbol-kind");
       return false;
@@ -582,15 +583,21 @@ public:
         if (!binding)
           return binding.takeError();
         module.bindings.push_back(std::move(*binding));
-      } else if (auto realization = dyn_cast<zkc::local::RealizeOp>(op)) {
+      } else if (isa<zkc::local::RealizeOp, zkc::algebra::MapRealizeOp>(op)) {
+        // Both declarations are admitted explicitly in this profile.
+        bool map = isa<zkc::algebra::MapRealizeOp>(op);
         if (profile.getValue() != zkc::protocol_ir::Profile::Protocol ||
-            !attributes(&op, {"sym_name", "helper", "function_type"}))
+            (map ? !attributes(
+                       &op, {"sym_name", "helper", "function_type", "rowwise"})
+                 : !attributes(&op, {"sym_name", "helper", "function_type"})))
           return error("local-realization-context");
+        auto signature = cast<zkc::PreparationCallableOpInterface>(op)
+                             .getPreparationSignature();
         LocalRealization value;
-        value.name = realization.getSymName().str();
+        value.name = SymbolTable::getSymbolName(&op).str();
         for (bool input : {true, false})
-          for (auto type : input ? realization.getFunctionType().getInputs()
-                                 : realization.getFunctionType().getResults()) {
+          for (auto type :
+               input ? signature.getInputs() : signature.getResults()) {
             auto bound = encodeBoundType(type, false);
             if (!bound) {
               consumeError(bound.takeError());

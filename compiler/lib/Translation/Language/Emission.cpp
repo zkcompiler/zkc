@@ -35,6 +35,7 @@ class Emitter {
   std::map<std::pair<std::string, std::vector<std::string>>, std::string>
       bindings;
   std::map<std::string, std::string> realizations;
+  std::map<std::pair<std::string, std::vector<bool>>, std::string> maps;
   std::set<std::string> symbols;
   Error failure = Error::success();
   uint64_t operations = 0, siteOrdinal = 0, remaining;
@@ -220,6 +221,45 @@ class Emitter {
                                        inputs, outputs)))}))
       return {};
     realizations.emplace(helper.symbol, name);
+    return name;
+  }
+  // One declaration per helper instance and row mask. Its signature follows
+  // from both, so the name binds exactly that pair.
+  std::optional<std::string> map(const Declaration &helper,
+                                 ArrayRef<bool> rowwise, mlir::TypeRange inputs,
+                                 mlir::TypeRange outputs) {
+    auto key = std::make_pair(
+        helper.symbol, std::vector<bool>(rowwise.begin(), rowwise.end()));
+    if (auto found = maps.find(key); found != maps.end())
+      return found->second;
+    std::string identity =
+        "zkc.local.map:" + std::to_string(helper.symbol.size()) + ":" +
+        helper.symbol + ":";
+    for (bool row : rowwise)
+      identity += row ? '1' : '0';
+    auto digest = SHA256::hash(arrayRefFromStringRef(identity));
+    std::string name = "zkl_map_" + toHex(ArrayRef<uint8_t>(digest), true);
+    if (name.size() > limits.symbolBytes) {
+      failure = error("source.limit", "map symbol exceeds byte limit");
+      return {};
+    }
+    if (!symbols.insert(name).second) {
+      failure = error("source.symbol", "map symbol collision");
+      return {};
+    }
+    mlir::OpBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPointToStart(definitions);
+    SmallVector<bool> mask(rowwise.begin(), rowwise.end());
+    if (!make(
+            "algebra.map_realize", {}, {},
+            {text("sym_name", name),
+             attr("helper",
+                  mlir::FlatSymbolRefAttr::get(&context, helper.symbol)),
+             attr("function_type", mlir::TypeAttr::get(builder.getFunctionType(
+                                       inputs, outputs))),
+             attr("rowwise", builder.getDenseBoolArrayAttr(mask))}))
+      return {};
+    maps.emplace(std::move(key), name);
     return name;
   }
   bool retire(mlir::Value value, StringRef site) {
@@ -514,6 +554,25 @@ class Emitter {
             attrs.push_back(text("role", decl.roles[*call->owner]));
         }
         auto *actual = make(name, resultTypes, operands, attrs);
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *bulk = std::get_if<BulkApplication>(&op.action)) {
+        if (source.mode != Body::Mode::Local) {
+          failure = error("source.mode", "map requires local mode");
+          return false;
+        }
+        const auto &target = project.declarations()[bulk->callee.index];
+        auto operands = flatten(bulk->operands);
+        SmallVector<bool> mask(bulk->mapped.begin(), bulk->mapped.end());
+        auto symbol = map(target, mask, mlir::ValueRange(operands).getTypes(),
+                          resultTypes);
+        if (!symbol)
+          return false;
+        auto *actual = make(
+            "local.apply", resultTypes, operands,
+            {attr("callee", mlir::FlatSymbolRefAttr::get(&context, *symbol)),
+             text("site", site)});
         if (!actual)
           return false;
         result = Values(actual->getResults());

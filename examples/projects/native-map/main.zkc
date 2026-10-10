@@ -1,0 +1,52 @@
+module example;
+domain Base = field("koala-bear");
+domain Extension = field("koala-bear.ext8-binomial3");
+type Vector<F: Field> = builtin("vector", F);
+
+// Row formulas are ordinary math helpers. `map` applies one to whole columns
+// with checked bulk vector operations; it never expands per row.
+math fn gate<F: Field>(selector: F, left: F, right: F, output: F) -> F {
+  return selector * (left * right - output)
+       + (1 - selector) * (left + right - output);
+}
+math fn combine<F: Field>(left: F, right: F, r: F) -> F {
+  return left + r * right;
+}
+math fn zero<F: Field>(value: F) -> F { return 0; }
+
+fn residuals<F: Field>(selector: Vector<F>, left: Vector<F>,
+                       right: Vector<F>, output: Vector<F>) -> Vector<F> {
+  return map gate(each selector, each left, each right, each output);
+}
+fn vanishes<F: Field>(values: Vector<F>) -> bool {
+  return kernel<F>("vector.equal", values, map zero(each values));
+}
+fn combined<F: Field>(left: Vector<F>, right: Vector<F>, r: F) -> Vector<F> {
+  return map combine(each left, each right, r);
+}
+fn same<F: Field>(left: Vector<F>, right: Vector<F>) -> bool {
+  return kernel<F>("vector.equal", left, right);
+}
+
+// V checks a selected multiplication/addition gate on every row.
+protocol Gates roles(V)
+    (selector: Vector<Base> @V, left: Vector<Base> @V, right: Vector<Base> @V,
+     output: Vector<Base> @V) -> (accepted: bool @V) {
+  let values @V = residuals(selector, left, right, output);
+  let accepted @V = vanishes(values);
+  return (accepted = accepted);
+}
+// P combines two shared columns at V's challenge; V recomputes the column.
+protocol Combination roles(P, V)
+    (left: Vector<Extension> @(P,V), right: Vector<Extension> @(P,V),
+     challenges: Random<Extension> @V) -> (accepted: bool @V) {
+  let r = challenges.draw();
+  let delivered = send V -> P(r);
+  let column @P = combined(left, right, delivered);
+  let received = send P -> V(column);
+  let expected @V = combined(left, right, r);
+  let accepted @V = same(received, expected);
+  return (accepted = accepted);
+}
+entry Check = Gates;
+entry Interactive = Combination;

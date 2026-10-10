@@ -1,6 +1,7 @@
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
+#include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Local/IR/LocalTypes.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
@@ -37,46 +38,33 @@ FailureOr<unsigned> recipeDegree(RecipeOp recipe) {
   Type field = body.getArgument(0).getType();
   if (!isa<algebra::FieldType>(field))
     return failure();
-  llvm::DenseMap<Value, unsigned> degrees;
-  for (auto arg : body.getArguments()) {
-    if (arg.getType() != field)
-      return failure();
-    degrees[arg] = 1;
-  }
-  unsigned work = 0;
-  for (auto &op : body.without_terminator()) {
-    if (++work > 128 || op.getNumResults() != 1 ||
-        op.getResult(0).getType() != field || op.getNumRegions())
-      return failure();
-    unsigned degree = 0;
-    if (auto literal = dyn_cast<algebra::ConstantFieldOp>(op)) {
-      auto value = op.getAttrOfType<StringAttr>("value");
-      if (op.getAttrs().size() != 1 || !value || op.getNumOperands() ||
-          !algebra::isCanonicalFieldLiteral(
-              cast<algebra::FieldType>(field).getDomain(), value.getValue()))
-        return failure();
-    } else {
-      if (!isa<algebra::FieldAddOp, algebra::SubtractFieldOp,
-               algebra::FieldMultiplyOp>(op) ||
-          !op.getAttrs().empty() || op.getNumOperands() != 2)
-        return failure();
-      auto a = degrees.find(op.getOperand(0)),
-           b = degrees.find(op.getOperand(1));
-      if (a == degrees.end() || b == degrees.end())
-        return failure();
-      degree = isa<algebra::FieldMultiplyOp>(op)
-                   ? a->second + b->second
-                   : std::max(a->second, b->second);
-    }
-    if (degree > 16)
-      return failure();
-    degrees[op.getResult(0)] = degree;
-  }
+  if (!all_of(body.getArgumentTypes(),
+              [&](Type type) { return type == field; }) ||
+      std::distance(body.begin(), body.end()) > 129)
+    return failure();
   auto result = dyn_cast<RecipeYieldOp>(body.back());
   if (!result || result->getNumOperands() != 1 || result->getNumResults() ||
       result->getNumRegions() || !result->getAttrs().empty() ||
-      !degrees.count(result.getValue()) ||
-      degrees.lookup(result.getValue()) > uint64_t(declared.getInt()))
+      result.getValue().getType() != field)
+    return failure();
+  SmallVector<Value> observations;
+  for (auto &op : body.without_terminator())
+    observations.append(op.getResults().begin(), op.getResults().end());
+  observations.push_back(result.getValue());
+  auto expression = algebra::describeRingExpression(body, observations);
+  if (!expression) {
+    consumeError(expression.takeError());
+    return failure();
+  }
+  // The Ring view owns arithmetic degree propagation. Polynomial recipes retain
+  // one carrier for their entire body, including unused expressions: their
+  // realization selects all primitive operations from that field.
+  for (const auto &fact : expression->facts())
+    if (fact.field != cast<algebra::FieldType>(field).getDomain() ||
+        fact.degree > 16)
+      return failure();
+  if (expression->facts()[expression->outputs().back()].degree >
+      uint64_t(declared.getInt()))
     return failure();
   // This is an ABI bound, not a simplifier-dependent estimate.
   return unsigned(declared.getInt());

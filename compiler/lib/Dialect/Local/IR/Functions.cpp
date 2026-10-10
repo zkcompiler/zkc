@@ -54,15 +54,17 @@ namespace {
 LogicalResult verifyCall(Operation *op, FlatSymbolRefAttr reference,
                          SymbolTableCollection &tables) {
   auto *function = tables.lookupNearestSymbolFrom(op, reference);
-  if (!isa_and_nonnull<FuncOp>(function) &&
-      !(isa<ApplyOp>(op) && isa_and_nonnull<RealizeOp>(function)))
+  auto prepared = dyn_cast_if_present<PreparationCallableOpInterface>(function);
+  if (!isa_and_nonnull<FuncOp>(function) && !(isa<ApplyOp>(op) && prepared))
     return diagnostics::emit(
         op->emitOpError(), "interactive-symbol-kind",
         "expected a local.func or preparation-time realization");
   // A sibling's verifier may not have run yet.
-  auto attribute = function->getAttrOfType<TypeAttr>("function_type");
-  auto type =
-      attribute ? dyn_cast<FunctionType>(attribute.getValue()) : FunctionType();
+  FunctionType type;
+  if (prepared)
+    type = prepared.getPreparationSignature();
+  else if (auto attribute = function->getAttrOfType<TypeAttr>("function_type"))
+    type = dyn_cast<FunctionType>(attribute.getValue());
   if (!type || op->getOperandTypes() != type.getInputs() ||
       op->getResultTypes() != type.getResults())
     return diagnostics::emit(op->emitOpError(), "interactive-call-signature");

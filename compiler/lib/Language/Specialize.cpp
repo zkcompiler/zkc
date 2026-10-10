@@ -1,6 +1,7 @@
 #include "Semantics.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Language/Builtins.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -56,6 +57,13 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
         for (const auto &arg : *primitive->bindingArguments)
           if (!types.chargeType(arg, op.span))
             return false;
+    } else if (const auto *bulk = std::get_if<BulkApplication>(&op.action)) {
+      if (!types.charge(bulk->operands.size() + bulk->mapped.size() + 1,
+                        op.span))
+        return false;
+      for (const auto &arg : bulk->arguments)
+        if (!types.chargeType(arg, op.span))
+          return false;
     } else if (const auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
       if (!types.charge(repeat->roles.size() + repeat->carried.size() +
                             repeat->captures.size() + repeat->services.size(),
@@ -259,6 +267,40 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             return false;
           height = std::max(height, heights.at(instance->index) + 1);
           call->callee = *instance;
+        } else if (auto *bulk = std::get_if<BulkApplication>(&op.action)) {
+          for (auto &arg : bulk->arguments)
+            if (!closeType(arg, bindings, op.span))
+              return false;
+          DeclarationId target = bulk->callee;
+          if (auto origin = declarations[target.index].origin) {
+            bulk->arguments = declarations[target.index].staticArguments;
+            target = *origin;
+          }
+          auto instance = instantiate(target, bulk->arguments, depth + 1);
+          if (!instance)
+            return false;
+          height = std::max(height, heights.at(instance->index) + 1);
+          bulk->callee = *instance;
+          // Selection must keep one scalar field and the written row modes.
+          const auto &helper = declarations[instance->index];
+          auto field = helper.outputs.size() == 1 ? helper.outputs.front().type
+                                                  : Type(Type::Kind::Unit);
+          auto rows = builtinType("vector", {field});
+          bool exact = rows && field.kind == Type::Kind::Field &&
+                       helper.kind == Declaration::Kind::Math &&
+                       helper.inputs.size() == bulk->operands.size() &&
+                       bulk->mapped.size() == bulk->operands.size() &&
+                       op.results.size() == 1 &&
+                       body.values[op.results.front().index].type == *rows;
+          for (unsigned i = 0; exact && i < bulk->operands.size(); ++i)
+            exact = helper.inputs[i].type == field &&
+                    body.values[bulk->operands[i].index].type ==
+                        (bulk->mapped[i] ? *rows : field);
+          if (!rows)
+            consumeError(rows.takeError());
+          if (!exact)
+            return types.fail("source.map", "specialized map ports differ",
+                              op.span);
         } else if (auto *query = std::get_if<ServiceQuery>(&op.action);
                    query && query->bound) {
           Type bound(Type::Kind::Natural);

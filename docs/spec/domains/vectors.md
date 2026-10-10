@@ -144,6 +144,16 @@ An empty slice at the end is valid. Out-of-range slices refuse rather than
 truncate, wrap, or pad. The typed Lean slice laws establish bounds, length and
 coordinate preservation; native runtime adequacy remains separately tested.
 
+`vector.transpose<F>(v,rows,columns)` changes a flat row-major `rows × columns`
+matrix into the flat row-major transpose. It requires exactly `rows*columns`
+entries, with checked multiplication, and takes no attributes. The coordinate
+law is `result[column*rows + row] = v[row*columns + column]`. Zero extents admit
+only an empty vector and return immediately, even if the other extent is large.
+Transposing again with exchanged extents restores every coordinate. The selected
+realization visits each element once and checks shape and allocation limits
+before copying. This checked layout operation preserves field identity and
+values; it supplies neither polynomial interpolation nor a change of domain.
+
 `curve.get<G>(xs,i) : groups<G>, index → group:G` selects the group at
 zero-based position `i`; `curve.length<G>(xs) : groups<G> → index` returns
 the actual sequence length, including zero. Both take no operation attributes.
@@ -174,6 +184,34 @@ These are sequence operations shared by protocol families. In particular, a
 prefix-product computation is not itself a permutation argument: its challenge
 ordering, linkage to committed traces, and terminal equality are separate
 protocol obligations.
+
+## Pointwise maps
+
+Let `f : F^k -> F` be a ring expression over one field and let a mask select its
+rowwise inputs. For rowwise inputs `v_j : Vector F n` and scalar inputs `x_j : F`,
+the checked map has length `n` and
+
+```text
+map(f)(...)[i] = f(..., v_j[i], ..., x_j, ...)
+```
+
+Every rowwise input must have the same length, which may be zero. A mismatch
+fails the checked map, including for an input that `f` does not read; nothing is
+truncated or padded. The failure has the class of a vector kernel's own shape
+check, not a native protocol rejection; see the
+[source contract](../language/definitions.md#checked-pointwise-maps). This is elementwise arithmetic on vectors. It is not substitution into
+formal polynomials: a pointwise product of two tables is not the table of the
+product of their multilinear or univariate interpretations.
+
+The maintained Lean laws are
+[`map_coordinate`, `map_shape`, `map_substitute` and `map_hoist`](../../../formal/Zkc/Algebra/RingExpression/Pointwise.lean):
+a successful map is row-by-row evaluation, unequal rowwise lengths never
+succeed, a formula composed of helpers may be mapped in one pass over the same
+operands, and a subformula over scalar inputs has one value for every row.
+Dropping scalar operations the result never reaches is the restricted node map
+of the [arena sharing laws](../../../formal/Zkc/Algebra/RingExpression/Sharing.lean).
+They establish value equalities in a list model under the stated shape premises;
+the native realization and its checks are separately tested.
 
 ## Representation and execution
 

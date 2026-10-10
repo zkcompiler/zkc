@@ -166,9 +166,102 @@ on this edge; these checks are not an independent proof of their
 arithmetic semantics. Resource exhaustion remains a possible runtime failure, as
 with other realized total calculations.
 
+### Checked pointwise maps
+
+The protocol profile also declares a checked [pointwise map](../domains/vectors.md#pointwise-maps)
+of a total helper:
+
+```mlir
+algebra.map_realize @rows = @scalar_helper [true, false] : (tensor<?xF>, F) -> tensor<?xF>
+```
+
+Algebra owns this declaration and its validation. The helper is private, defined
+and has the exact signature `(F, ..., F) -> F` for one installed field `F`.
+`rowwise[i]` marks input `i` as a dynamic vector of `F`, read one element per row;
+other inputs are scalars of `F` shared by every row. At least one input is rowwise
+and the single result is a vector of `F`. Like `local.realize`, it is invoked only
+by `local.apply`, has no body or runtime provider and is forbidden after
+preparation. Both declarations implement the preparation-callable interface read
+by `local.apply`; the interface grants no admission, and this profile admits both
+operations explicitly. Formation refuses with `algebra-map-signature` or
+`algebra-map-helper`.
+
+After whole-module helper analysis admits the helper and its callees, this
+profile applies Algebra's map formula rule to that closure: every operation of
+every reachable helper body, used or not, is a field constant, addition,
+subtraction or multiplication in `F`, or a call whose operands and results are
+all `F`. Anything else, including unused work in another field, refuses with
+`algebra-map-formula` during ordinary IR verification. The rule reads each helper
+body at most once per field in one verification, without expansion.
+
+Preparation charges the root helper, including unused operations, before cloning
+it and charges each callee body as it is expanded. Both use the shared helper
+expansion budget; exhaustion refuses with `mathematical-expansion-limit`.
+It admits the detached formula with the shared
+[Ring view](../domains/ring-expressions.md), which applies the
+[Ring limits](limits.md) to the expanded formula: 65,536 nodes and depth 1,024.
+These limits depend on expansion, so a declaration that passes verification can
+still refuse here with `algebra-map-formula`. Admission of a source original runs
+the same check. The resulting `local.func` keeps the declaration's symbol and
+signature, and its logical origin names the helper with no static arguments, as
+for `local.realize`. Origin arguments are static bindings, so the row mask is
+carried by the declaration symbol and the generated body rather than the origin.
+Its body:
+
+1. measures the first rowwise input with `vector.length`; then, in input order,
+   measures each later rowwise input and compares it with the first through
+   `index.equal` and `control.require`. This prefix includes inputs the formula
+   never reads and precedes all arithmetic;
+2. evaluates live scalar subexpressions with `field.*` operations;
+3. combines rows with `vector.add`, `vector.sub` and `vector.mul`, uses
+   `vector.scale` when one factor is scalar, and broadcasts a scalar addend
+   with one `vector.fill(x, rows)` of the first input's length immediately
+   before its first use;
+4. broadcasts a scalar result the same way.
+
+The body has O(formula) operations, independent of runtime row counts. Its
+storage is not: each vector operation produces a vector of the row count, and
+intermediates remain in the local frame until cleanup unless
+`--release-storage` selects checked storage release. By default, peak storage
+therefore grows with the number of vector operations plus rowwise inputs,
+multiplied by the row count. Empty equal-length inputs succeed. A mismatch is a
+backend failure of the bound `control.require`, reported as `rejected:require`
+like a vector kernel's own shape check; it is not a native `reject`. The
+application is ordered and has no purity grant, so an unused result still checks
+shapes.
+
+Three choices in this body simplify the formula, each with a stated effect:
+expanding callees realizes one map instead of a map per helper, so no
+intermediate column is allocated or shape-checked on its own; a subformula over
+scalar inputs is one scalar operation instead of a row operation with a
+broadcast; a scalar operation whose result the formula never reaches is not
+realized. None of them removes or reorders a shape check, and the participant
+simplifier does not rewrite realized bodies. Their value laws are the
+[pointwise map laws](../domains/vectors.md#pointwise-maps); their effects are
+measured by the [map tests](../../../tests/protocol/test_native_map.py).
+
+The map matcher derives the formula again from the retained original and reads
+the actual generated body independently of the realizer: guards, operand modes,
+broadcasts, field and vector operations, literals, the returned value and
+bindings. It also requires every other declaration to be retained unchanged and
+refuses with `algebra-map-correspondence`. It establishes equal values and equal
+shape refusals under the declared vector contracts and sufficient resources, not
+equal resource exhaustion against another realization. The matcher shares the
+formula derivation with the realizer: helper expansion, Ring admission and the
+removal of unused formula nodes, as well as the scalar or row mode of each value
+and the shape-guard contract. These shared steps are trusted on this edge; for
+helper expansion this matches `local.realize`.
+
 Preparation then expands admitted `local.apply` using `canonical-expanded-locals/0`
 before freezing local definitions. An application inside a local region remains
-inside that region; it is not hoisted to protocol mathematics. Subsequent common preparation,
+inside that region; it is not hoisted to protocol mathematics. Occurrence names
+encode the ordered call-site/callee pairs and leaf site with length prefixes.
+An encoding longer than 128 bytes uses `lc_h_` followed by its SHA-256 digest;
+the provenance map retains the full path. Existing shorter names retain their
+encoding. Generated site collisions are refused by ordinary local formation,
+and the expansion checker independently checks the expected name. Encoding work
+has a cumulative 16 MiB byte limit, charged before construction and separately
+by expansion and its checker (`algorithm-origin-limit`). Subsequent common preparation,
 projection, participant simplification and lowering preserve those bodies and their
 binding declarations. Physical selection may change representations and insert
 checked storage releases under the selected execution contract. An authored

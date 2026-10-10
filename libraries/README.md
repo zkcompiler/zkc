@@ -56,7 +56,11 @@ through the installed `ring.affine_sum` kernel, padded to `A::Degree + 1`
 where `A::Degree` is the arena's largest output degree with every input
 weighted one; the vector preserves trailing zeros before transmission. V checks
 that coefficient count and the round sum, folds its own table, and checks the
-terminal value through `ring.point` on the final `A::Inputs` factors. The
+terminal value through `ring.point` on the final `A::Inputs` factors. Both roles
+fold with a checked [`map`](../docs/spec/language/definitions.md#checked-pointwise-maps)
+of the private `interpolate` helper: each row of the halves becomes
+`low + (high - low) * r`. This is vector arithmetic on the table, not a
+substitution into the arena. The
 compiler derives the width and the degree bound from the admitted arena; no
 author-supplied dimension is involved. The exactness of the kernels and the
 degree bound are mathematical premises of the installed evaluator, not source
@@ -100,6 +104,7 @@ through the common compiler and Host. With built tools, run:
 ```sh
 uv run --no-sync --locked pytest tests/protocol/test_source_projects.py
 uv run --no-sync --locked pytest tests/protocol/test_expression_sumcheck.py
+uv run --no-sync --locked pytest tests/protocol/test_native_map.py
 ```
 
 These checks cover interactive and separate proof execution, compilation options,

@@ -46,6 +46,7 @@ or external prover/verifier compatibility.
 | UniformIndex sampling | [Source, formation and construction](../compiler/test/native_index_sampling.py), [independent transcript replay](../crates/zkc-test-drivers/src/native_index_sampling.rs), [spot-check client](protocol/test_index_sampling.py) |
 | Retry and completion | [Attempt lifecycle](../compiler/test/native_attempts.py), [participant completion](../compiler/test/native_entry_completion.py) |
 | Retained storage and logical work | [Proof-scale openings](protocol/test_retained_storage.py), [native ledgers](../crates/zkc-backends/tests/retained_storage.rs), [Runner ledgers](../crates/zkc-runtime/src/interactive/tests/storage.rs) |
+| Pointwise maps | [Source controls and refusal locations](../compiler/test/language_map.cpp), [formula formation, Ring depth boundaries, realization schedule and correspondence mutations](../compiler/test/map_realization.cpp), [Host values, loops, shared helpers, shape refusals, height-independent work and measured helper inlining, scalar hoisting and dead scalar operations](protocol/test_native_map.py), [agreement with Ring providers and coset kernels on KoalaBear/Ext8, including off-domain interpolation](kernels/test_pointwise_polynomials.py) |
 | External relation export | [Clean export against finite AIR and ring providers](protocol/test_clean_air_conformance.py) |
 
 ## Independent references and trust

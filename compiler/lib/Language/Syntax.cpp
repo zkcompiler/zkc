@@ -1118,6 +1118,35 @@ private:
       }
       if (!expect(")"))
         return {};
+    } else if (take("map")) {
+      // `map helper<...>(each rows, scalar, ...)` names one static helper;
+      // `each` marks the arguments read one row at a time.
+      value.kind = Expression::Kind::Map;
+      if (!path(value.text))
+        return {};
+      if (take("<")) {
+        do {
+          SyntaxType argument;
+          if (!type(argument, depth + 1))
+            return {};
+          value.arguments.push_back(std::move(argument));
+        } while (take(",") && !at(">"));
+        if (!expect(">"))
+          return {};
+      }
+      if (!expect("("))
+        return {};
+      if (!at(")"))
+        do {
+          bool each = take("each");
+          auto argument = expression(decl, depth + 1);
+          if (!argument)
+            return {};
+          value.children.push_back(*argument);
+          value.each.push_back(each);
+        } while (take(",") && !at(")"));
+      if (!expect(")"))
+        return {};
     } else if (take("finish_if")) {
       value.kind = Expression::Kind::FinishIf;
       if (!expect("@") || !name(value.text) || !expect("("))

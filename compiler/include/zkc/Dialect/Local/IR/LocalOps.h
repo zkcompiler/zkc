@@ -13,6 +13,7 @@
 #include "zkc/Dialect/KernelSupport.h"
 #include "zkc/Dialect/Local/IR/LocalTypes.h"
 #include "zkc/Interfaces/LinearContraction.h"
+#include "zkc/Interfaces/PreparationCallable.h"
 #define GET_OP_CLASSES
 #include "zkc/Dialect/Local/IR/localOps.h.inc"
 

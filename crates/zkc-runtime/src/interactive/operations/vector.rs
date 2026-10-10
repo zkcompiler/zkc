@@ -21,6 +21,15 @@ pub(super) const CONTRACTS: &[Contract] = &[
         "dalek/vector.slice",
         "plonky3/vector.slice",
     ]),
+    Contract::selectable(
+        "vector.transpose",
+        (&[Vector, Index, Index], &[Vector], AttributeRule::None),
+    )
+    .implemented_by(&[
+        "arkworks/vector.transpose",
+        "dalek/vector.transpose",
+        "plonky3/vector.transpose",
+    ]),
     Contract::selectable("vector.length", (&[Vector], &[Index], AttributeRule::None))
         .implemented_by(&[
             "arkworks/vector.length",

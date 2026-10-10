@@ -74,6 +74,7 @@ constexpr ExpectedMapping expected[] = {
     {"indices.length", "algebra.exec.indices_length"},
     {"vector.get", "algebra.exec.vector_get"},
     {"vector.slice", "algebra.exec.vector_slice"},
+    {"vector.transpose", "algebra.exec.vector_transpose"},
     {"vector.length", "algebra.exec.vector_length"},
     {"vector.rotate", "algebra.exec.vector_rotate"},
     {"vector.interleave", "algebra.exec.vector_interleave"},

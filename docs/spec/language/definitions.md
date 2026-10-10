@@ -316,6 +316,46 @@ not move those calls into Entry setup. Kernels cannot occur in `math fn` or dire
 in protocol expressions. Protocols call library wrappers with an explicit local
 owner. These bindings install no new backend, mathematical identity or provider.
 
+## Checked pointwise maps
+
+```text
+math fn affine<F: Field>(low: F, high: F, r: F) -> F {
+  return low + (high - low) * r;
+}
+fn fold<F: Field>(low: Vector<F>, high: Vector<F>, r: F) -> Vector<F> {
+  return map affine(each low, each high, r);
+}
+```
+
+`map helper<...>(arguments...)` applies one static, defined `math fn` at every
+row of runtime vectors; `map` and `each` are keywords. `each` marks an argument
+read one row at a time, which must be a native `vector` of the helper's field.
+Other arguments are scalars shared by every row, and at least one is marked.
+After replacing each marked vector by its element type, the arguments match the
+helper's parameters exactly. Every parameter and the single result use one scalar
+field `F`; the map returns a vector of `F`. Static arguments are inferred or
+written as for calls. There are no function values, closures, interface members
+or dynamic dispatch, and every argument remains an ordinary operand for use,
+capture and effect checking.
+
+`map` occurs only in ordinary local functions; protocols call a local wrapper.
+It is checked execution with the [pointwise meaning](../domains/vectors.md#pointwise-maps).
+Unequal row counts fail its ordered shape check. Like a vector kernel's own
+check, this is a backend failure reported as `rejected:require`, not a native
+`reject`, and the caller conservatively infers `stop`. Code that should reject
+unequal lengths natively first requires them equal, for example
+`require(kernel<F>("vector.length", a) == kernel<F>("vector.length", b))`.
+
+Every operation of the helper and of the helpers it calls, used or not, may be
+only a field constant, `+`, `-` or `*` in the map's field. Formation of the
+emitted [IR declaration](../ir/protocols.md#checked-pointwise-maps) refuses
+anything else with `algebra-map-formula`. The expanded formula must also fit the
+[Ring limits](../ir/limits.md), including depth 1,024, where subtraction costs an
+extra level on its right operand; a deeper formula refuses with the same
+identifier when the original is prepared. Both refusals name the source map and
+its helper. Other source refusals of a map use `source.map`; a map outside local
+code uses `source.mode`.
+
 ## Boolean formulas
 
 Total Boolean operations use the same mathematical helper path as field and

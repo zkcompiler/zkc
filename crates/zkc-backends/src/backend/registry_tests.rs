@@ -1101,6 +1101,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "vector.sum",
         "vector.to_point",
         "vector.to_table",
+        "vector.transpose",
     ]
     .into_iter()
     .collect::<BTreeSet<_>>();

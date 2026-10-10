@@ -157,3 +157,4 @@ vector.sub 0
 vector.sum 0
 vector.to_point 0
 vector.to_table 0
+vector.transpose 0

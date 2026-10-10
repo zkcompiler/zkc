@@ -48,6 +48,8 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
     result = kernel(expr, depth);
   } else if (expr.kind == K::Intrinsic) {
     result = intrinsic(expr, depth);
+  } else if (expr.kind == K::Map) {
+    result = bulk(expr, depth);
   } else if (expr.kind == K::MethodCall) {
     bool index = expr.text == "index";
     if (!protocol() || (expr.text != "draw" && !index) ||
