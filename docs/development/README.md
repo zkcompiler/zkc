@@ -30,6 +30,8 @@ access. The demo compiles the maintained Schnorr Entry and independently proves
 and verifies it. [Getting started](../getting-started.md) gives the exact commands
 and input-authority boundary.
 
+Development operations expose their supported options through `python3 scripts/develop.py OPERATION --help`; options for another operation are rejected before preparation or execution.
+
 Outside Nix, provide compatible `CC`, `CXX`, `MLIR_DIR` and, when needed,
 `LLVM_CONFIG`, plus utf8proc 2.12.0 with its CMake package (select it through
 `utf8proc_DIR` or `CMAKE_PREFIX_PATH`). Installed Language consumers also need

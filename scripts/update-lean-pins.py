@@ -169,7 +169,7 @@ def main():
     set_required_rev(MAIN / "lakefile.toml", "mathlib", main_mathlib, mathlib)
     set_required_rev(INTEGRATION / "lakefile.toml", "Arklib", current, args.arklib)
 
-    run(["nix", "develop", ROOT, "--command", "bash", "-c",
+    run(["nix", "develop", f"{ROOT}#formal", "--command", "bash", "-c",
          "cd formal && lake update && cd integrations/arklib && lake update"])
     run(["nix", "develop", f"{ROOT}#maintenance", "--command",
          "python3", ROOT / "scripts/update-nix-sources.py", "--root", ROOT])

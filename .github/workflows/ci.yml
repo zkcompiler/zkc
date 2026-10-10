@@ -63,26 +63,16 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.sha }}
-        run: |
-          python3 - <<'PY'
-          import os, re, subprocess
-          base = os.environ['BASE']
-          exists = base and subprocess.run(
-              ['git', 'cat-file', '-e', base + '^{commit}'],
-              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
-          if not exists:
-              paths = subprocess.check_output(['git', 'ls-files'], text=True).splitlines()
-          else:
-              paths = subprocess.check_output(['git', 'diff', '--name-only', base, os.environ['HEAD']], text=True).splitlines()
-          selected = any(not p.endswith('.md') and re.match(
-              r'^(compiler/|crates/|libraries/|examples/|nix/|scripts/|tests/|Cargo\.|rust-toolchain|flake\.|justfile|\.clang-format|\.github/)', p)
-              for p in paths)
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write(f'native={str(selected).lower()}\n')
-          PY
+        run: python3 .github/scripts/select-native-changes.py
       - name: Reserve build space
         if: steps.changes.outputs.native == 'true' && runner.environment == 'github-hosted'
-        run: sudo rm -rf /usr/local/lib/android
+        run: |
+          # Leave room for downloaded toolchains and concurrent native builds.
+          available_kib=$(df --output=avail -k / | tail -n 1)
+          if (( available_kib < 20 * 1024 * 1024 )); then
+            sudo rm -rf /usr/local/lib/android
+          fi
+          df -h /
       - uses: ./.github/actions/nix
         if: steps.changes.outputs.native == 'true'
       - name: Check Rust, installed application, SDK and C++ formatting
@@ -133,10 +123,7 @@ jobs:
         run: nix flake check -L --keep-going 2>&1 | tee build/reports/nix-check.log
       - name: Retain successful check records
         run: |
-          read -r -a check_names <<< "$(nix eval --raw .#checks.x86_64-linux --apply 'checks: builtins.concatStringsSep " " (builtins.attrNames checks)')"
-          for check in "${check_names[@]}"; do
-            nix build ".#checks.x86_64-linux.$check" --out-link "build/nix-$check"
-          done
+          nix build .#checks.x86_64-linux.project --out-link build/nix-project
           cp -RL build/nix-project/reports build/reports/packaged
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

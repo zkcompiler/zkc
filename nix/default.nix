@@ -37,23 +37,24 @@ let
     "scripts/workspace.py"
     "tests/support"
   ];
+  compilerSource = nativeSupport ++ [
+    "compiler"
+    "examples"
+    "libraries"
+    "support/unicode"
+  ];
   compiler = pkgs.callPackage ./compiler.nix {
     inherit llvm utf8proc;
-    source = sourceFor "compiler" (
-      nativeSupport
-      ++ [
-        "compiler"
-        "examples"
-        "libraries"
-        "support/unicode"
-      ]
-    );
+    source = sourceFor "compiler" compilerSource;
     stdenv = llvm.stdenv;
     python3 = python;
   };
-  compilerSanitize = compiler.overrideAttrs (old: {
+  compilerChecks = compiler.override {
+    withTests = true;
+    source = sourceFor "compiler" (compilerSource ++ [ "tests/fixtures/clean/air-control.json" ]);
+  };
+  compilerSanitize = compilerChecks.overrideAttrs (old: {
     pname = "zkc-compiler-sanitize";
-    doCheck = true;
     cmakeBuildType = "RelWithDebInfo";
     cmakeFlags = old.cmakeFlags ++ [
       "-DZKC_ENABLE_ASSERTIONS=ON"
@@ -74,11 +75,7 @@ let
       pname = "zkc-compiler-${if envelope then "envelope" else "base"}-${
         if shared then "shared" else "static"
       }";
-      outputs = [ "out" ];
-      doCheck = false;
-      postInstall = "";
       cmakeFlags = old.cmakeFlags ++ [
-        "-DBUILD_TESTING=OFF"
         "-DBUILD_SHARED_LIBS=${if shared then "ON" else "OFF"}"
       ];
       preConfigure =
@@ -86,11 +83,6 @@ let
         + lib.optionalString envelope ''
           cmakeFlagsArray+=("-DZKC_CONTRIBUTION_FILES=$PWD/compiler/examples/domain/contribution.cmake")
         '';
-      buildPhase = ''
-        runHook preBuild
-        cmake --build . --target zkc-compile zkc-opt zkc-tblgen --parallel "$NIX_BUILD_CORES"
-        runHook postBuild
-      '';
     });
   domainCheck =
     shared:
@@ -98,7 +90,13 @@ let
       inherit llvm shared utf8proc;
       stdenv = llvm.stdenv;
       python3 = python;
-      source = compiler.src;
+      source = sourceFor "compiler" (
+        compilerSource
+        ++ [
+          "scripts/develop.py"
+          "scripts/install_domain.py"
+        ]
+      );
       base = domainCompiler shared false;
       domain = domainCompiler shared true;
     };
@@ -219,7 +217,7 @@ in
     lean-toolchain-checks = pkgs.callPackage ./checks/lean-toolchain.nix { inherit lean; };
   };
   checks = {
-    compiler = compiler.overrideAttrs { doCheck = true; };
+    compiler = compilerChecks;
     application = pkgs.callPackage ./checks/application.nix {
       inherit zkc compiler;
       source = checkSource;
@@ -245,20 +243,15 @@ in
       inherit
         pythonTools
         environment
-        compiler
         tools
         testSupport
         ;
+      compiler = compilerChecks;
       source = checkSource;
       python3 = python;
     };
     rust = pkgs.callPackage ./checks/rust.nix {
-      inherit
-        compiler
-        tools
-        testSupport
-        environment
-        ;
+      inherit tools environment;
       python3 = python;
     };
   };

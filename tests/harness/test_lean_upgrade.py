@@ -81,3 +81,47 @@ def test_manifest_requires_unique_resolved_revisions(defect):
         value["packages"][0]["rev"] = "main"
     with pytest.raises(ValueError):
         upgrade.git_revisions(value)
+
+
+def test_upgrade_resolves_manifests_with_the_selected_formal_toolchain(tmp_path, monkeypatch):
+    import sys
+
+    upgrade = load("lean_upgrade", "scripts/update-lean-pins.py")
+    main = tmp_path / "formal"
+    integration = main / "integrations/arklib"
+    integration.mkdir(parents=True)
+    toolchain = "leanprover/lean4:v4.33.1"
+    for directory, name in [(main, "mathlib"), (integration, "Arklib")]:
+        (directory / "lakefile.toml").write_text(
+            f'[[require]]\nname = "{name}"\ngit = "https://example.invalid/{name}"\nrev = "{OLD}"\n')
+    monkeypatch.setattr(upgrade, "ROOT", tmp_path)
+    monkeypatch.setattr(upgrade, "MAIN", main)
+    monkeypatch.setattr(upgrade, "INTEGRATION", integration)
+    monkeypatch.setattr(upgrade, "upstream_files", lambda *_: (toolchain, manifest(mathlib=NEW)))
+    monkeypatch.setattr(upgrade, "lean_archive_hash", lambda _: "selected-hash")
+    events = []
+    monkeypatch.setattr(upgrade, "record_lean_hash", lambda *args: events.append(("hash", args)))
+
+    def run(arguments):
+        # No ambient elan/Lake may decide which toolchain resolves the manifests.
+        assert arguments[:2] == ["nix", "develop"]
+        if arguments[4:6] == ["bash", "-c"]:
+            assert arguments[2] == f"{tmp_path}#formal"
+            for directory in (main, integration):
+                assert (directory / "lean-toolchain").read_text().strip() == toolchain
+                revisions = {"mathlib": NEW}
+                if directory == integration:
+                    revisions["Arklib"] = NEW
+                (directory / "lake-manifest.json").write_text(json.dumps(manifest(**revisions)))
+            events.append("resolve")
+        else:
+            assert arguments[2] == f"{tmp_path}#maintenance"
+            assert arguments[4:6] == ["python3", tmp_path / "scripts/update-nix-sources.py"]
+            events.append("transport")
+
+    monkeypatch.setattr(upgrade, "run", run)
+    monkeypatch.setattr(sys, "argv", ["update-lean-pins.py", "--arklib", NEW])
+    upgrade.main()
+    assert events == [("hash", ("4.33.1", "selected-hash")), "resolve", "transport"]
+    assert upgrade.required(main / "lakefile.toml", "mathlib")[1] == NEW
+    assert upgrade.required(integration / "lakefile.toml", "Arklib")[1] == NEW
