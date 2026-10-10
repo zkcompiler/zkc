@@ -135,6 +135,7 @@ constexpr ContractRow contractRows[] = {
     {"vector.matvec", Arithmetic},
     {"vector.scale", Arithmetic},
     {"vector.sum", Arithmetic},
+    {"vector.product", Arithmetic},
     {"vector.split", Arithmetic},
     {"vector.at", Arithmetic},
     {"vector.length_check", Arithmetic},

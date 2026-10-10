@@ -1,5 +1,62 @@
 use super::*;
 
+#[test]
+fn vector_product_has_one_vector_and_same_field_scalar_result() {
+    for (field, provider) in [
+        ("bls12-381.fr", "arkworks"),
+        ("bn254.fr", "arkworks"),
+        ("ristretto255.scalar", "dalek"),
+        ("koala-bear", "plonky3"),
+        ("koala-bear.ext8-binomial3", "plonky3"),
+    ] {
+        let binding = OperationBinding {
+            contract: "vector.product".into(),
+            arguments: vec![field.into()],
+            implementation: format!("{provider}/vector.product"),
+        };
+        let identity = Identity::parse(field).unwrap();
+        let signature = logical_signature(&binding).unwrap();
+        assert_eq!(
+            signature.inputs,
+            [LogicalType::new(Type::Vector, identity).unwrap()]
+        );
+        assert_eq!(
+            signature.outputs,
+            [LogicalType::new(Type::Field, identity).unwrap()]
+        );
+        assert_eq!(signature.attributes, AttributeRule::None);
+        assert!(binding.signature().is_ok());
+        for arguments in [
+            vec![],
+            vec![field.into(), field.into()],
+            vec!["bls12-381.g1".into()],
+        ] {
+            assert_eq!(
+                OperationBinding {
+                    arguments,
+                    ..binding.clone()
+                }
+                .signature()
+                .unwrap_err()
+                .code,
+                ErrorCode::Signature
+            );
+        }
+        for implementation in ["missing/vector.product", "arkworks/vector.sum"] {
+            assert_eq!(
+                OperationBinding {
+                    implementation: implementation.into(),
+                    ..binding.clone()
+                }
+                .signature()
+                .unwrap_err()
+                .code,
+                ErrorCode::Signature
+            );
+        }
+    }
+}
+
 fn with_alternative(
     owner: &'static Contribution,
     name: &'static str,
@@ -148,7 +205,7 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
         vector.transpose vector.equal vector.get vector.slice vector.length vector.rotate vector.interleave vector.prefix_product
         vector.prefix_sum vector.inverse vector.fill vector.geometric vector.constant vector.scatter_sum
         vector.empty vector.append vector.splat vector.powers vector.add vector.sub vector.mul vector.concat
-        vector.kronecker vector.scale vector.sum vector.dot vector.split vector.at vector.length_check
+        vector.kronecker vector.scale vector.sum vector.product vector.dot vector.split vector.at vector.length_check
         vector.gather vector.matvec vector.from_point vector.to_point vector.from_table vector.to_table
         matrix.mul_vector matrix.transpose_mul_vector matrix.bilinear matrix.identity_check matrix.shape_check matrix.dimension
         poly.coefficient_count poly.coset_evaluate poly.coset_interpolate poly.domain_point poly.domain_root

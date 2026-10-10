@@ -47,6 +47,7 @@ fn nominal_associations_and_native_advertisements_are_checked_independently() {
             "vector.mul",
             "vector.scale",
             "vector.sum",
+            "vector.product",
             "vector.dot",
             "vector.split",
             "vector.concat",

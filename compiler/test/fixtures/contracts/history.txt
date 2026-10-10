@@ -164,6 +164,7 @@ vector.splat 0
 vector.split 0
 vector.sub 0
 vector.sum 0
+vector.product 0
 vector.to_point 0
 vector.to_table 0
 vector.transpose 0
