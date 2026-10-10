@@ -11,6 +11,8 @@ file(GLOB_RECURSE zkc_identity_inputs CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.td"
   "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.def"
   "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.inc"
+  "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.in"
+  "${CMAKE_CURRENT_SOURCE_DIR}/lib/*.zkc"
   "${CMAKE_CURRENT_SOURCE_DIR}/tools/*.h"
   "${CMAKE_CURRENT_SOURCE_DIR}/tools/*.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/*.cmake"

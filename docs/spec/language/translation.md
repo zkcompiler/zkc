@@ -55,7 +55,11 @@ whole native module and independently compares actual SSA with checked source.
 It consumes every definition and operation, including unused work, and checks
 layouts, operands, bindings, modes, helper targets, roles, sites, captures, carry,
 variant arms, custody and returns. The comparison never calls emission. Both consume the checked graph; this
-comparison does not independently establish lexical elaboration correctness. An equivalent
+comparison does not independently establish lexical elaboration correctness.
+Before translation, library operators also pass the separate
+[binding witness check](definitions.md#library-defined-operators). It validates
+resolution evidence against the lexical family and native action; it does not
+prove the parser, name resolver or complete source semantics. An equivalent
 but differently structured rewrite can refuse. Inputs, receives, restrictions,
 queries, owned calls and protocol results retain exact role sets. Derived math
 and aggregate leaves may have wider native availability than the conservative

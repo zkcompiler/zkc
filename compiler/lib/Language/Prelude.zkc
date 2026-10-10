@@ -1,0 +1,27 @@
+module zkc::prelude;
+
+pub math fn field_add<F: Field>(a: F, b: F) -> F = primitive("field.add");
+pub math fn field_subtract<F: Field>(a: F, b: F) -> F = primitive("field.sub");
+pub math fn field_multiply<F: Field>(a: F, b: F) -> F = primitive("field.mul");
+pub math fn field_equal<F: Field>(a: F, b: F) -> bool = primitive("field.equal");
+pub math fn group_add<G: Group>(a: G, b: G) -> G = primitive("curve.add");
+pub math fn group_scale<G: Group>(a: G, b: G::Scalar) -> G = primitive("curve.scale");
+pub math fn group_equal<G: Group>(a: G, b: G) -> bool = primitive("curve.equal");
+pub math fn boolean_equal(a: bool, b: bool) -> bool = primitive("bool.equal");
+pub fn index_add(a: index, b: index) -> index = primitive("index.add");
+pub fn index_subtract(a: index, b: index) -> index = primitive("index.sub");
+pub fn index_multiply(a: index, b: index) -> index = primitive("index.mul");
+pub fn index_equal(a: index, b: index) -> bool = primitive("index.equal");
+
+pub operator + = field_add;
+pub operator + = group_add;
+pub operator + = index_add;
+pub operator - = field_subtract;
+pub operator - = index_subtract;
+pub operator * = field_multiply;
+pub operator * = group_scale;
+pub operator * = index_multiply;
+pub operator == = field_equal;
+pub operator == = group_equal;
+pub operator == = boolean_equal;
+pub operator == = index_equal;

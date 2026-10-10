@@ -19,6 +19,23 @@ Semantics::intrinsicSignature(const Declaration *scope, StringRef name,
     }
     return CallSignature{{Type{}, Type{}}, {Type{}}};
   }
+  if (intrinsic && intrinsic->domain == MathematicalIntrinsic::Domain::Group) {
+    if (arguments.size() != 1 || arguments.front().kind != K::Group ||
+        !parameters.empty()) {
+      fail("source.intrinsic", "group intrinsic requires one group root", span);
+      return {};
+    }
+    const auto &group = arguments.front();
+    auto right = intrinsic->identity == MathematicalIdentity::GroupScale
+                     ? associated(group, "Scalar", span)
+                     : std::optional(group);
+    if (!right)
+      return {};
+    return CallSignature{
+        {group, *right},
+        {intrinsic->identity == MathematicalIdentity::GroupEqual ? Type{}
+                                                                 : group}};
+  }
   if (!intrinsic || arguments.size() != intrinsic->naturals + 1 ||
       arguments.front().kind != K::Field ||
       !llvm::all_of(arguments.drop_front(),
@@ -127,6 +144,13 @@ Semantics::intrinsicSignature(const Declaration *scope, StringRef name,
   auto n = intrinsic->naturals ? arguments[1]
                                : natural(Natural::constant(parameters.size()));
   switch (intrinsic->identity) {
+  case I::FieldAdd:
+  case I::FieldSubtract:
+  case I::FieldMultiply:
+  case I::FieldEqual:
+    result.inputs = {field, field};
+    result.outputs = {intrinsic->identity == I::FieldEqual ? Type{} : field};
+    break;
   case I::ArrayFromElements:
     if (!input(array(n)) || !output(shape(false, n)))
       return {};

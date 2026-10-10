@@ -1,43 +1,46 @@
 #include "BodyCheck.h"
 using namespace llvm;
 namespace zkc::language::detail {
-std::optional<ExpressionTypes::Callable>
-BodyChecker::callable(const Expression &expr) {
-  auto parts = StringRef(expr.text).split("::");
+std::optional<CallableReference> Checker::callable(const Declaration &decl,
+                                                   StringRef name, Span span) {
+  auto parts = name.split("::");
   if (!parts.second.empty())
     for (auto &parameter : decl.parameters) {
       if (parameter.name != parts.first || !parameter.interface)
         continue;
       SyntaxType term;
       term.name = parameter.name;
-      term.span = expr.span;
-      auto component = checker.type(decl, term);
+      term.span = span;
+      auto component = type(decl, term);
       if (!component)
         return {};
-      auto &interface = checker.output.declarations[parameter.interface->index];
+      auto &interface = output.declarations[parameter.interface->index];
       for (auto id : interface.members)
-        if (checker.output.declarations[id.index].name == parts.second)
-          return ExpressionTypes::Callable{id, *component};
-      fail("source.call", "unknown interface member", expr.span);
+        if (output.declarations[id.index].name == parts.second)
+          return CallableReference{id, *component};
+      types.fail("source.call", "unknown interface member", span);
       return {};
     }
   // A bound component member takes precedence over a nominal alternative.
-  auto alternative = StringRef(expr.text).rsplit("::");
+  auto alternative = name.rsplit("::");
   if (!alternative.second.empty()) {
-    auto nominal = checker.resolve(decl, alternative.first, expr.span, false);
-    if (nominal && checker.output.declarations[nominal->index].kind ==
-                       Declaration::Kind::Variant)
-      return ExpressionTypes::Callable{*nominal, {}};
+    auto nominal = resolve(decl, alternative.first, span, false);
+    if (nominal &&
+        output.declarations[nominal->index].kind == Declaration::Kind::Variant)
+      return CallableReference{*nominal, {}};
   }
-  auto id = checker.resolve(decl, expr.text, expr.span);
+  auto id = resolve(decl, name, span);
   if (!id)
     return {};
-  if (checker.output.declarations[id->index].abstract &&
-      checker.output.declarations[id->index].kind !=
-          Declaration::Kind::Associated) {
-    fail("source.call", "abstract call requires a bound component", expr.span);
+  if (output.declarations[id->index].abstract &&
+      output.declarations[id->index].kind != Declaration::Kind::Associated) {
+    types.fail("source.call", "abstract call requires a bound component", span);
     return {};
   }
-  return ExpressionTypes::Callable{*id, {}};
+  return CallableReference{*id, {}};
+}
+std::optional<ExpressionTypes::Callable>
+BodyChecker::callable(const Expression &expr) {
+  return checker.callable(decl, expr.text, expr.span);
 }
 } // namespace zkc::language::detail

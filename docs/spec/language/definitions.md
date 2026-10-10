@@ -7,8 +7,8 @@ This native contract defines captured modules, declarations, types and source bo
 A capture is a nonempty map from logical module paths to exact UTF-8 bytes.
 Each file starts with `module path;` matching its captured name. Module paths
 use `::`; identifiers match `[A-Za-z_][A-Za-z0-9_]*`. Keywords are reserved except
-contextual `run` and `proof`, which introduce execution declarations only at
-declaration positions.
+contextual `run`, `proof`, `operator`, `as` and `primitive`. These words have
+special meaning only in their declaration/import positions.
 Comments start with `//`. Tokens retain trivia and byte spans.
 
 Module declarations are private unless prefixed with `pub`. Interface/component
@@ -16,7 +16,7 @@ members are exposed through their owner; associated representations retain their
 constructor privacy. A declaration can be named
 through `use module::{Name, Other};` or by its qualified path when its module
 is captured. Imports never discover files. Imports, declarations, static parameters
-and local bindings cannot shadow visible declarations. Lexical binding rules are
+and local bindings cannot shadow visible declarations or module aliases. Lexical binding rules are
 defined in [protocol bodies](protocols.md#bindings-and-local-control). Imports, types and call graphs
 must be acyclic. Every declaration is checked, including unused generic bodies.
 
@@ -79,6 +79,29 @@ for example `::algebra::Fr`. It is reference syntax, not part of module or
 canonical declaration names. Optional prefix lookup preserves privacy and
 resource-limit diagnostics.
 
+### Module imports and operator scope
+
+`use zkc::vector;` imports the alias `vector` and that module's public operator
+bindings. `use zkc::vector as vec;` changes the alias. A selected import such as
+`use zkc::vector::{Vector, add};` imports only those names;
+`use zkc::vector::{Vector, operator +};` also imports the selected public operator
+family. A qualified reference alone activates no operators. `pub use` reexports
+the selected names, aliases and bindings with their original identities; ordinary
+imports remain private. Duplicate imports of the same identity are harmless.
+Conflicting names/aliases, missing exports and import cycles refuse. Captured
+module ordering and import ordering do not choose overloads.
+
+The reserved `zkc::prelude` module belongs to the compiler installation. Its exact
+source is embedded and included in installation identity. Captures cannot supply
+that module or claim an installation origin. Its public scalar operator bindings
+are visible by default; its function names require qualification or explicit
+import. The prelude itself has no imports or inherited operator environment.
+There is no runtime source-file lookup. Capture identity and captured file/byte
+limits exclude the prelude; token, declaration, operation and work limits include
+its checking. `Analysis::sources()` and `CheckedProject::sources()` include both
+origins and index all diagnostic spans. `capture().sources()` includes only
+captured inputs.
+
 ## Definition checking and Entry closure
 
 Analysis completes each callable's contract from its declaration and body,
@@ -106,13 +129,16 @@ Adding an unreachable definition changes capture identity but does not rename
 reachable instances. Template bodies are shared immutably. Specialization has its own work and instance budgets; retained templates do not consume the emitted-declaration allowance. Only reachable body copies are specialized before original emission.
 
 `zkc check --declarations` adds a diagnostic array of completed public callable
-contracts, sorted by qualified name, under `declarations`. Callable members
+contracts from captured modules, sorted by qualified name, under `declarations`.
+Installation declarations remain accessible through the checked SDK graph. Callable members
 are visible through their public owner. Members identify that owner and mark
 inherited static parameters; `abstract` distinguishes interface declarations
 from definitions with bodies. Each item reports its kind, static
 parameters and permissions, role roster, data/service argument order, typed
 ports, services, requirements, body effects (or abstract allowance), and captured
-module byte span. Natural/capability bounds retain their inferred flags; explicit
+module byte span and source `origin`. `definition` is `body`, `abstract` or
+`primitive`; primitive definitions also report the installed `primitive` identity.
+Natural/capability bounds retain their inferred flags; explicit
 or inherited effect allowances remain separate; abstract declarations always
 include their effective allowance, including the default. Type and natural
 strings are descriptive mathematical spellings,
@@ -619,7 +645,7 @@ types, participant demands and service requirements follow the named destination
 only evaluated operands are arranged in declaration order. The same rule applies
 to maps: `map affine(r = r, high = each ys, low = each xs)` associates `each`
 with its named parameter. Record fields already use their declared names. Variant
-payloads, associated representation constructors and fixed primitive, intrinsic,
+payloads, associated representation constructors and fixed intrinsic,
 kernel and service-method interfaces retain positional arguments.
 
 Helper and protocol calls infer bare static parameters from data argument types,
@@ -645,6 +671,81 @@ or accept holes. Invalid static name binding uses `source.generic`. A bound
 component already supplies its inherited parameters; a member call cannot
 override them. Associated types inherit their component's arguments and accept
 no separate static list. Fixed primitive static interfaces remain positional.
+
+### Library-defined operators
+
+The fixed ASCII binary operators `+`, `-`, `*` and `==` resolve to ordinary
+callable signatures. A module declares `pub operator + = add;`; a private
+binding omits `pub`. Targets must be mathematical or local functions with exactly
+two data inputs and one **written** result type. Equality requires a Boolean
+result. Protocols are not operator targets. Public bindings may expose only
+public targets. Unused declarations and bindings are checked too.
+
+A block can begin with `operator + = A::add;`, where `A` is an explicit component
+parameter, or with bindings to other visible functions. Targets accept partial
+static arguments, names and holes, for example `operator * = scale<F = F>;`.
+Bindings precede executable statements. The nearest block declaring a symbol
+replaces its entire outer family; nested blocks inherit it. Resolution never
+falls back to an outer family because a local target has unsuitable types.
+Component parameters supply dictionaries explicitly; there is no instance search.
+
+Named calls and operators share signature constraints. Each statement is solved
+as one problem, including expected results, literals and nested calls. Existing
+`let` boundaries remain: a later statement cannot resolve an earlier one.
+Structural contexts such as `match` propagate constraints from uniquely viable
+signatures before reading their scrutinee type. They still require a known
+scrutinee before checking arms; they do not finalize call identities early.
+Results may determine operand types or static arguments, but cannot select between
+distinct bindings that accept the same fixed operand types. An unresolved,
+consistent alternative prevents unique resolution. Capabilities, natural bounds,
+effects, body modes, participants and backend availability never break ties.
+Candidate equations are isolated and all explored work counts toward the invocation
+limit. Incomplete inference uses `source.inference`; missing or ambiguous operator
+meanings use `source.operator`; exhausted search uses `source.limit`.
+
+Only the selected target proceeds through ordinary body, cycle, permission,
+requirement, effect and participant checks. Both operands evaluate once in written
+order. Definition checking retains the chosen target, statics, component, source
+binding and canonical visible family. A separate structural checker re-enumerates
+the lexical family from the checked scope, checks input coherence and authored
+operand order, compares the inferred result, and validates the emitted native
+action without invoking the overload solver or its candidate enumerator. Inconsistent evidence refuses with
+`source.binding-witness`. Specialization substitutes static arguments and retains
+the definition's target/family identities; it never resolves notation in a caller's
+scope. This executable check is not a formal proof of elaboration correctness.
+
+### Primitive function definitions
+
+A function can name an installed operation as its complete body:
+
+```text
+pub math fn add<F: Field>(a: F, b: F) -> F = primitive("field.add");
+pub operator + = add;
+```
+
+`primitive` validates a registered signature, body mode, effects and mathematical
+input dependencies. It introduces no foreign semantics or unverified effect
+annotation. Static roots are recovered from written ports by structural matching
+and forward association. Extra or reordered source parameters do not change native
+root order. Schemes requiring literal attributes or roots that cannot be recovered
+from ports use an ordinary `kernel`/`intrinsic` body. A primitive requires one
+written result; a tuple can represent multiple native results. Invalid declarations
+use `source.primitive` or the more specific installed-contract diagnostic.
+
+The installed scalar prelude provides field addition/subtraction/multiplication/
+equality, group addition/scaling/equality, Boolean equality, and ordered index
+addition/subtraction/multiplication/equality. Group scaling is `point * scalar`.
+Total scalar calls emit mathematical or local primitive operations directly.
+Index arithmetic retains possible failure; index equality is total. Ordered
+vector operations retain shape checks and stop behavior. Calls to ordered
+primitives in protocols keep the participant-owned helper boundary. Formal
+intrinsics called from local code retain the existing realization boundary.
+Retained helper calls, including mapped primitives, count toward the call-depth
+limit; directly emitted primitive operations add no helper edge.
+The prelude is excluded from capture file/byte limits, but its parsing and
+checking count toward token, declaration and work limits for the invocation.
+`!`, `&&` and `||` keep their fixed Boolean control/formula semantics and are not
+redefined by library equality bindings.
 
 ### Components and body modes
 

@@ -3,39 +3,24 @@ module zkc::symbolic;
 pub type Array<F: Field, N: nat> = builtin("field_array", F, N);
 pub type Polynomial<F: Field, N: nat> = formal("polynomial", F, N);
 
-pub math fn pack<F: Field, N: nat>(values: [F; N]) -> Array<F, N> {
-  return intrinsic<F, N>("array.pack", values);
-}
+pub math fn pack<F: Field, N: nat>(values: [F; N]) -> Array<F, N> = primitive("array.pack");
 pub math fn get<F: Field, N: nat, I: nat>(values: Array<F, N>) -> F {
   return intrinsic<F, N, I>("array.at", values);
 }
-pub math fn mle<F: Field, N: nat>(values: Array<F, pow2(N)>) -> Polynomial<F, N> {
-  return intrinsic<F, N>("poly.mle", values);
-}
-pub math fn from_coefficients<F: Field, N: nat>(values: Array<F, N>) -> Polynomial<F, 1> {
-  return intrinsic<F, N>("poly.from_coefficients", values);
-}
-pub math fn coefficients<F: Field, N: nat>(value: Polynomial<F, 1>) -> Array<F, N> {
-  return intrinsic<F, N>("poly.coefficients", value);
-}
-pub math fn evaluate<F: Field, N: nat>(value: Polynomial<F, N>, point: [F; N]) -> F {
-  return intrinsic<F, N>("poly.evaluate", value, point);
-}
-pub math fn fix_prefix<F: Field, N: nat, K: nat>(value: Polynomial<F, N + K>, prefix: [F; K]) -> Polynomial<F, N> {
-  return intrinsic<F, N, K>("poly.fix", value, prefix);
-}
+pub math fn mle<F: Field, N: nat>(values: Array<F, pow2(N)>) -> Polynomial<F, N> = primitive("poly.mle");
+pub math fn from_coefficients<F: Field, N: nat>(values: Array<F, N>) -> Polynomial<F, 1> = primitive("poly.from_coefficients");
+pub math fn coefficients<F: Field, N: nat>(value: Polynomial<F, 1>) -> Array<F, N> = primitive("poly.coefficients");
+pub math fn evaluate<F: Field, N: nat>(value: Polynomial<F, N>, point: [F; N]) -> F = primitive("poly.evaluate");
+pub math fn fix_prefix<F: Field, N: nat, K: nat>(value: Polynomial<F, N + K>, prefix: [F; K]) -> Polynomial<F, N> = primitive("poly.fix");
 pub math fn sum_suffix<F: Field, N: nat, C: nat>(value: Polynomial<F, N + C>) -> Polynomial<F, N> {
   return intrinsic<F, N, C>("poly.sum_suffix", value);
 }
 pub math fn fix_table<F: Field, N: nat, K: nat>(values: Array<F, pow2(N + K)>, prefix: [F; K]) -> Array<F, pow2(N)> {
   return intrinsic<F, N, K>("poly.fix_table", values, prefix);
 }
-pub math fn add<F: Field, N: nat>(left: Polynomial<F, N>, right: Polynomial<F, N>) -> Polynomial<F, N> {
-  return intrinsic<F, N>("poly.add", left, right);
-}
-pub math fn multiply<F: Field, N: nat>(left: Polynomial<F, N>, right: Polynomial<F, N>) -> Polynomial<F, N> {
-  return intrinsic<F, N>("poly.multiply", left, right);
-}
-pub math fn constant<F: Field, N: nat>(value: F) -> Polynomial<F, N> {
-  return intrinsic<F, N>("poly.constant", value);
-}
+pub math fn add<F: Field, N: nat>(left: Polynomial<F, N>, right: Polynomial<F, N>) -> Polynomial<F, N> = primitive("poly.add");
+pub math fn multiply<F: Field, N: nat>(left: Polynomial<F, N>, right: Polynomial<F, N>) -> Polynomial<F, N> = primitive("poly.multiply");
+pub math fn constant<F: Field, N: nat>(value: F) -> Polynomial<F, N> = primitive("poly.constant");
+
+pub operator + = add;
+pub operator * = multiply;

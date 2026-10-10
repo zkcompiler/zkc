@@ -1,5 +1,6 @@
 module example;
-use zkc::vector::{Vector, fold, sum};
+use zkc::vector as vec;
+use zkc::vector::{Vector};
 use zkc::symbolic::{pack, mle, evaluate};
 domain F = field("bls12-381.fr");
 
@@ -8,7 +9,10 @@ math fn symbolic(a: F, b: F, point: F) {
   let polynomial = mle<N = 1>(pack([a, b]));
   return evaluate(polynomial, [point]);
 }
-fn dynamic(values: Vector<F>, point: F) { return sum(fold(values, point)); }
+fn dynamic(values: Vector<F>, point: F) {
+  let (low, high) = vec::split(values);
+  return vec::sum(low * (1 - point) + high * point);
+}
 protocol Compare roles(P)(a: F @P, b: F @P, values: Vector<F> @P, point: F @P)
     -> (formal_result: F @P, runtime_result: F @P) {
   let formal_result = symbolic(point = point, a = a, b = b);

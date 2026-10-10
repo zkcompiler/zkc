@@ -61,16 +61,8 @@ struct SourceCapabilityExport {
 llvm::ArrayRef<SourceTypeFamilyCase> sourceTypeFamilies();
 llvm::ArrayRef<SourceAssociatedType> sourceAssociatedTypes();
 llvm::ArrayRef<SourceCapabilityExport> sourceCapabilityExports();
-struct SourceOperatorBinding {
-  std::string symbol;
-  std::vector<std::string> operands;
-  std::string contract;
-  /// order[k] is the written operand passed to logical input k.
-  std::vector<unsigned> order;
-};
 llvm::ArrayRef<SourceTypeExport> sourceTypeExports();
 llvm::ArrayRef<SourceOperationExport> sourceOperationExports();
-llvm::ArrayRef<SourceOperatorBinding> sourceOperatorBindings();
 
 enum class Custody { Unknown, PublicValue, PrivateImmutable, Affine };
 struct TypePermissions {

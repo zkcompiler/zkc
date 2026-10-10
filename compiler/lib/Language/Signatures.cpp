@@ -179,20 +179,16 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     decl.capabilityBounds =
         output.declarations[decl.parent->index].capabilityBounds;
   }
-  std::set<std::string> names;
   for (auto &p : decl.parameters) {
     if (p.name == decl.name)
       return types.fail("source.shadow",
                         "member shadows an inherited static parameter",
                         decl.span);
-    names.insert(p.name);
   }
   formingParameters.insert(id.index);
   for (auto &src : source.parameters) {
-    if (!names.insert(src.name).second ||
-        visible[decl.module.index].count(src.name))
-      return types.fail("source.shadow",
-                        "static parameter shadows a visible name", src.span);
+    if (!bindingName(decl, src.name, src.span))
+      return false;
     Parameter p;
     p.name = src.name;
     p.atom = "parameter:" + decl.qualifiedName + "::" + src.name;
@@ -343,9 +339,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       for (auto &src : input ? source.inputs : source.outputs) {
         if (!names.insert(src.name).second)
           return types.fail("source.duplicate", "duplicate port", src.span);
-        if (input && visible[decl.module.index].count(src.name))
-          return types.fail("source.shadow",
-                            "input shadows a visible declaration", src.span);
+        if (input && !bindingName(decl, src.name, src.span))
+          return false;
         std::optional<Type> t;
         if (input && src.binding) {
           const auto &owner = output.declarations[decl.parent->index];

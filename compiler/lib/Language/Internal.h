@@ -38,6 +38,18 @@ struct SyntaxType {
   std::vector<SyntaxType> arguments;
   std::vector<ArgumentLabel> labels;
 };
+struct SyntaxOperator {
+  std::string symbol;
+  SyntaxType target;
+  bool isPublic = false;
+  Span span;
+};
+struct OperatorBinding {
+  std::string symbol;
+  CallableReference target;
+  std::vector<std::optional<Type>> arguments;
+  Span span;
+};
 struct SyntaxSelector {
   bool output = false;
   std::string port;
@@ -123,6 +135,8 @@ struct Expression {
   Pattern index;
   /// For `map`, whether each argument was marked `each`.
   std::vector<bool> each;
+  /// Lexical body identity, assigned before type inference.
+  std::optional<uint32_t> scope;
 };
 struct Statement {
   enum class Kind {
@@ -144,6 +158,9 @@ struct Statement {
   Span span;
 };
 struct SyntaxBody {
+  std::vector<SyntaxOperator> operators;
+  std::vector<OperatorBinding> resolvedOperators;
+  std::optional<uint32_t> parent;
   std::vector<Statement> statements;
   std::vector<std::pair<std::string, uint32_t>> results;
   bool stopped = false;
@@ -207,6 +224,7 @@ struct SyntaxDeclaration {
   /// installed identity or, for an asset domain, the captured asset name.
   std::string name, domain, target;
   bool assetDomain = false;
+  std::optional<std::string> primitive;
   bool isPublic = false;
   bool completes = false;
   Span span;
@@ -247,11 +265,18 @@ struct Import {
   std::string module;
   std::vector<std::string> names;
   Span span;
+  std::optional<std::string> alias;
+  std::vector<std::string> operators;
+  bool isPublic = false;
 };
+std::string operatorBindingKey(const OperatorBinding &,
+                               llvm::ArrayRef<Declaration>);
+llvm::StringRef operatorSymbol(Expression::Kind);
 struct SyntaxModule {
   ModuleId id;
   std::vector<Import> imports;
   std::vector<SyntaxDeclaration> declarations;
+  std::vector<SyntaxOperator> operators;
 };
 llvm::Error lex(const SourceBuffer &, ModuleId, Work &, std::vector<Token> &);
 llvm::Expected<SyntaxModule> parse(const SourceBuffer &, ModuleId,

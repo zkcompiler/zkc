@@ -28,6 +28,21 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
   for (const auto &op : body.operations) {
     if (!types.charge(op.results.size(), op.span))
       return false;
+    if (op.binding) {
+      const auto &binding = *op.binding;
+      if (!types.charge(binding.operands.size() + binding.symbol.size() + 1,
+                        op.span))
+        return false;
+      for (const auto &member : binding.family)
+        if (!types.charge(member.size() + 1, op.span))
+          return false;
+      for (const auto &arg : binding.arguments)
+        if (!types.chargeType(arg, op.span))
+          return false;
+      if (binding.target.component &&
+          !types.chargeType(*binding.target.component, op.span))
+        return false;
+    }
     if (const auto *math = std::get_if<MathValue>(&op.action)) {
       if (!types.charge(math->operands.size() + math->literal.size() + 1,
                         op.span))
@@ -141,6 +156,16 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       for (auto &op : body.operations) {
         if (!types.charge(1, op.span))
           return false;
+        if (op.binding) {
+          for (auto &argument : op.binding->arguments)
+            if (!closeType(argument, bindings, op.span))
+              return false;
+          if (op.binding->target.component &&
+              !closeType(*op.binding->target.component, bindings, op.span))
+            return false;
+          // Target and family retain their definition identities. The action
+          // below selects instances; notation is never resolved at a caller.
+        }
         if (auto *primitive = std::get_if<LocalPrimitive>(&op.action)) {
           for (auto &argument : primitive->staticArguments)
             if (!closeType(argument, bindings, op.span))
@@ -476,6 +501,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       for (auto *ports : {&result.inputs, &result.outputs})
         for (auto &port : *ports)
           if (!closeType(port.type, bindings, port.span))
+            return {};
+      if (result.primitive)
+        for (auto &argument : result.primitive->arguments)
+          if (!closeType(argument, bindings, result.span))
             return {};
       for (auto &service : result.services)
         if (!closeService(service, bindings))

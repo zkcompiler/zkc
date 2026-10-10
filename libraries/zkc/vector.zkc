@@ -2,30 +2,14 @@ module zkc::vector;
 
 pub type Vector<F: Field> = builtin("vector", F);
 
-pub fn length<F: Field>(values: Vector<F>) -> index {
-  return kernel<F>("vector.length", values);
-}
-pub fn get<F: Field>(values: Vector<F>, position: index) -> F {
-  return kernel<F>("vector.get", values, position);
-}
-pub fn sum<F: Field>(values: Vector<F>) -> F {
-  return kernel<F>("vector.sum", values);
-}
-pub fn split<F: Field>(values: Vector<F>) -> (Vector<F>, Vector<F>) {
-  return kernel<F>("vector.split", values);
-}
-pub fn add<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> {
-  return kernel<F>("vector.add", left, right);
-}
-pub fn scale<F: Field>(values: Vector<F>, scalar: F) -> Vector<F> {
-  return kernel<F>("vector.scale", values, scalar);
-}
-pub fn dot<F: Field>(left: Vector<F>, right: Vector<F>) -> F {
-  return kernel<F>("vector.dot", left, right);
-}
-pub fn fill<F: Field>(value: F, count: index) -> Vector<F> {
-  return kernel<F>("vector.fill", value, count);
-}
+pub fn length<F: Field>(values: Vector<F>) -> index = primitive("vector.length");
+pub fn get<F: Field>(values: Vector<F>, position: index) -> F = primitive("vector.get");
+pub fn sum<F: Field>(values: Vector<F>) -> F = primitive("vector.sum");
+pub fn split<F: Field>(values: Vector<F>) -> (Vector<F>, Vector<F>) = primitive("vector.split");
+pub fn add<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> = primitive("vector.add");
+pub fn scale<F: Field>(values: Vector<F>, scalar: F) -> Vector<F> = primitive("vector.scale");
+pub fn dot<F: Field>(left: Vector<F>, right: Vector<F>) -> F = primitive("vector.dot");
+pub fn fill<F: Field>(value: F, count: index) -> Vector<F> = primitive("vector.fill");
 math fn interpolate<F: Field>(low: F, high: F, r: F) -> F {
   return low + (high - low) * r;
 }
@@ -38,3 +22,6 @@ pub fn fold<F: Field>(values: Vector<F>, challenge: F) -> Vector<F> {
 pub fn has_length<F: Field, N: nat>(values: Vector<F>) -> bool {
   return length(values) == index<N>();
 }
+
+pub operator + = add;
+pub operator * = scale;

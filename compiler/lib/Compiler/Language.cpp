@@ -39,7 +39,7 @@ class SourceCoordinates {
 
 public:
   explicit SourceCoordinates(const ClosedEntry &entry) : entry(entry) {
-    for (const auto &source : entry.project().capture().sources()) {
+    for (const auto &source : entry.project().sources()) {
       std::vector<unsigned> offsets{0};
       for (unsigned i = 0; i < source.text.size(); ++i)
         if (source.text[i] == '\n')
@@ -48,7 +48,7 @@ public:
     }
   }
   DiagnosticLocation location(Span span) const {
-    const auto &source = entry.project().capture().sources()[span.module.index];
+    const auto &source = entry.project().sources()[span.module.index];
     const auto &offsets = lines[span.module.index];
     auto line = std::upper_bound(offsets.begin(), offsets.end(), span.begin);
     unsigned number = line - offsets.begin();

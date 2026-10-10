@@ -119,7 +119,7 @@ void sourceControls() {
   for (const auto &entry : std::vector<std::pair<std::string, std::string>>{
            {replace(basic.str(), "module m", "module wrong"), "source.module"},
            {replace(basic.str(), "x + c", "unknown + c"), "source.name"},
-           {replace(basic.str(), "x + c", "true + false"), "source.type"},
+           {replace(basic.str(), "x + c", "true + false"), "source.operator"},
            {replace(basic.str(), "let a = x + c;", "let a = 1;"),
             "source.inference"},
            {replace(basic.str(), "let a = x + c;",
@@ -219,8 +219,11 @@ component C: I { type State: Copy + Drop = bool; }
   for (bool extra : {false, true}) {
     auto project =
         must(checked("fn f(x:C::State)->C::State{return x;}", extra));
-    require(project.declarations().back().inputs.front().type.kind ==
-                Type::Kind::Associated,
+    require(llvm::find_if(
+                project.declarations(),
+                [](const auto &decl) { return decl.qualifiedName == "m::f"; })
+                    ->inputs.front()
+                    .type.kind == Type::Kind::Associated,
             "captured module replaced lexical component member");
     refuses(checked("fn f(x:C::Missing)->bool{return x;}", extra),
             "source.name");
@@ -350,25 +353,28 @@ void depthAndAggregateBounds() {
     limits.*member = 1;
     sourceRefuses(basic, "source.limit", limits);
   }
+  uint64_t tokenCount = 0;
+  for (unsigned i = 0; i < all.sources().size(); ++i)
+    tokenCount += all.tokens(ModuleId{i}).size();
   for (auto member : {&Limits::tokens, &Limits::declarations,
                       &Limits::operations, &Limits::work}) {
     limits = {};
-    limits.*member =
-        member == &Limits::tokens
-            ? all.tokens(ModuleId{0}).size() + all.tokens(ModuleId{1}).size()
-        : member == &Limits::declarations ? all.declarations().size()
-        : member == &Limits::operations   ? 2
-                                          : all.checkedWork();
+    limits.*member = member == &Limits::tokens ? tokenCount
+                     : member == &Limits::declarations
+                         ? all.checkedDeclarations()
+                     : member == &Limits::operations ? all.checkedOperations()
+                                                     : all.checkedWork();
     must(analyze(modules, limits).checkedProject());
     --(limits.*member);
     refuses(analyze(modules, limits).checkedProject(), "source.limit");
   }
   limits = {};
-  limits.identifierBytes = 9;
-  auto names = replace(replace(basic.str(), "let a =", "let abcdefghi ="),
-                       "V(a)", "V(abcdefghi)");
+  limits.identifierBytes = 16;
+  auto names =
+      replace(replace(basic.str(), "let a =", "let abcdefghijklmnop ="), "V(a)",
+              "V(abcdefghijklmnop)");
   check(names, limits);
-  limits.identifierBytes = 8;
+  limits.identifierBytes = 15;
   sourceRefuses(names, "source.limit", limits);
   limits = {};
   limits.captureBytes = 18;
@@ -392,7 +398,7 @@ void reviewControls() {
   sourceRefuses(
       R"(module m;domain A=field("bls12-381.fr");domain B=field("bn254.fr");
 math fn f(x:A,y:B)->A{return x+y;})",
-      "source.type");
+      "source.operator");
   sourceRefuses(R"(module m;protocol Run roles(P,V)(x:bool@V)->(r:bool@V){
 let sent=send V->P(x);return(r=sent);}run Demo=Run;)",
                 "source.roles");
@@ -904,7 +910,7 @@ void bounds() {
     refuses(prepareOriginal(selected, limits), "source.limit");
   }
   limits = {};
-  limits.declarations = project.declarations().size();
+  limits.declarations = project.checkedDeclarations();
   check(basic, limits);
   must(prepareOriginal(must(closeEntry(project, "m::Demo", limits)), limits));
   --limits.declarations;
@@ -915,14 +921,16 @@ void bounds() {
   check(basic, limits);
   --limits.work;
   sourceRefuses(basic, "source.limit", limits);
-  uint64_t tokenCount = project.tokens(ModuleId{0}).size();
+  uint64_t tokenCount = 0;
+  for (unsigned i = 0; i < project.sources().size(); ++i)
+    tokenCount += project.tokens(ModuleId{i}).size();
   limits = {};
   limits.tokens = tokenCount;
   check(basic, limits);
   --limits.tokens;
   sourceRefuses(basic, "source.limit", limits);
   limits = {};
-  limits.operations = 4;
+  limits.operations = project.checkedOperations();
   check(basic, limits);
   --limits.operations;
   sourceRefuses(basic, "source.limit", limits);

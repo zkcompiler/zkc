@@ -211,23 +211,6 @@ int main() {
                         e.constructor == "polynomial";
                }),
         "polynomial constructor export");
-  check(sourceOperatorBindings().size() == 15, "operator inventory changed");
-  check(any_of(sourceOperatorBindings(),
-               [](const auto &b) {
-                 return b.symbol == "*" &&
-                        b.operands ==
-                            std::vector<std::string>{"field", "group"} &&
-                        b.contract == "curve.scale" &&
-                        b.order == std::vector<unsigned>{1, 0};
-               }),
-        "scalar/group permutation lost");
-  check(none_of(sourceOperatorBindings(),
-                [](const auto &b) {
-                  return b.symbol == "*" &&
-                         b.operands ==
-                             std::vector<std::string>{"vector", "vector"};
-                }),
-        "ambiguous vector multiplication acquired sugar");
   for (auto key :
        {"external.monero.update", "external.openvm.observe",
         "external.openvm.sample", "external.openvm.sample_ext",

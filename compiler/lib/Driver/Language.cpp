@@ -16,6 +16,7 @@ int runLanguageCompiler(int argc, char **argv) {
   std::vector<SourceBuffer> sources;
   std::vector<AssetBuffer> assets;
   std::optional<CapturedProject> captured;
+  ArrayRef<SourceBuffer> diagnosticSources;
   std::string entry, format;
   bool declarations = false;
   EntryOptions options;
@@ -50,7 +51,7 @@ int runLanguageCompiler(int argc, char **argv) {
                            std::to_string(location.column));
         },
         [&](const ErrorInfoBase &error) { appendLines(error.message()); });
-    errs() << formatDiagnostics(messages, captured ? &*captured : nullptr);
+    errs() << formatDiagnostics(messages, diagnosticSources);
     return 1;
   };
   StringRef command(argv[1]);
@@ -128,9 +129,11 @@ int runLanguageCompiler(int argc, char **argv) {
   if (!captureResult)
     return refuse(captureResult.takeError());
   captured = std::move(*captureResult);
+  diagnosticSources = captured->sources();
   auto analysis = analyze(*captured);
+  diagnosticSources = analysis.sources();
   if (!analysis.diagnostics().empty()) {
-    errs() << formatDiagnostics(analysis.diagnostics(), &*captured);
+    errs() << formatDiagnostics(analysis.diagnostics(), analysis.sources());
     return 1;
   }
   auto project = analysis.checkedProject();

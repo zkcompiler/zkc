@@ -282,16 +282,75 @@ std::optional<Type> Semantics::associated(const Type &base, StringRef member,
   fail("source.type", "unknown associated type: " + member, span);
   return {};
 }
-bool Semantics::checkArguments(const Declaration &target, ArrayRef<Type> args,
-                               Span span, const Declaration *context,
-                               const Substitution &extra) {
+std::optional<Substitution>
+Semantics::boundMemberSubstitution(const Declaration &callee,
+                                   const Type &component, Span span) {
+  if (!callee.parent) {
+    fail("source.call", "bound callable has no interface owner", span);
+    return {};
+  }
+  const auto &parent = declarations[callee.parent->index];
+  Type interface = component;
+  if (!component.symbolic && parent.kind == Declaration::Kind::Interface) {
+    const auto *owner = typeDeclaration(component);
+    if (!owner || !owner->implementation) {
+      fail("source.conformance", "bound callable requires a component", span);
+      return {};
+    }
+    auto selected = substitute(*owner->implementation,
+                               substitution(*owner, component.arguments), span);
+    if (!selected)
+      return {};
+    interface = std::move(*selected);
+  }
+  if (interface.arguments.size() != parent.parameters.size() ||
+      callee.parameters.size() < parent.parameters.size()) {
+    fail("source.conformance", "bound member static arguments differ", span);
+    return {};
+  }
+  Substitution result;
+  for (unsigned i = 0; i < parent.parameters.size(); ++i)
+    result.emplace(callee.parameters[i].atom, interface.arguments[i]);
+  result.emplace("self:" + parent.qualifiedName, component);
+  return result;
+}
+
+bool Semantics::checkArgumentSorts(const Declaration &target,
+                                   ArrayRef<Type> args, Span span,
+                                   const Substitution &extra) {
+  if (!charge(args.size() + 1, span))
+    return false;
+  std::vector<std::optional<Type>> known(args.begin(), args.end());
+  return checkKnownArgumentSorts(target, known, span, extra);
+}
+bool Semantics::checkKnownArgumentSorts(const Declaration &target,
+                                        ArrayRef<std::optional<Type>> args,
+                                        Span span, const Substitution &extra) {
   if (args.size() != target.parameters.size())
     return fail("source.generic", "static argument count differs", span);
-  auto subst = substitution(target, args);
-  subst.insert(extra.begin(), extra.end());
+  Substitution subst = extra;
+  std::set<std::string> unknown;
+  for (unsigned i = 0; i < args.size(); ++i)
+    if (args[i])
+      subst.insert_or_assign(target.parameters[i].atom, *args[i]);
+    else
+      unknown.insert(target.parameters[i].atom);
+  std::function<bool(const Type &)> ready = [&](const Type &type) {
+    if (unknown.count(type.domain))
+      return false;
+    for (const auto &[factors, coefficient] : type.dimension.terms()) {
+      (void)coefficient;
+      for (const auto &factor : factors)
+        if (unknown.count(factor.name))
+          return false;
+    }
+    return llvm::all_of(type.arguments, ready);
+  };
   for (unsigned i = 0; i < args.size(); ++i) {
+    if (!args[i])
+      continue;
     auto &p = target.parameters[i];
-    auto &a = args[i];
+    auto &a = *args[i];
     bool kind = false;
     switch (p.sort) {
     case Parameter::Sort::Domain:
@@ -339,6 +398,10 @@ bool Semantics::checkArguments(const Declaration &target, ArrayRef<Type> args,
         return fail("source.conformance", "interface static arguments differ",
                     span);
       for (unsigned j = 0; j < p.arguments.size(); ++j) {
+        if (!chargeType(p.arguments[j], span))
+          return false;
+        if (!ready(p.arguments[j]))
+          continue;
         auto expected = substitute(p.arguments[j], subst, span);
         if (!expected)
           return false;
@@ -351,6 +414,19 @@ bool Semantics::checkArguments(const Declaration &target, ArrayRef<Type> args,
     }
     if (!kind)
       return fail("source.generic", "static argument has wrong sort", span);
+  }
+  return true;
+}
+bool Semantics::checkArguments(const Declaration &target, ArrayRef<Type> args,
+                               Span span, const Declaration *context,
+                               const Substitution &extra) {
+  if (!checkArgumentSorts(target, args, span, extra))
+    return false;
+  auto subst = substitution(target, args);
+  subst.insert(extra.begin(), extra.end());
+  for (unsigned i = 0; i < args.size(); ++i) {
+    const auto &p = target.parameters[i];
+    const auto &a = args[i];
     if (valueType(a)) {
       auto caps = permissions(a, span, context);
       if (!caps)

@@ -14,10 +14,11 @@ struct CheckedStorage {
       : capture(std::move(capture)) {}
   CapturedProject capture;
   std::vector<Asset> assets;
+  std::shared_ptr<const std::vector<SourceBuffer>> sources;
   std::vector<std::vector<Token>> tokens;
   std::vector<Declaration> declarations;
   std::string installation;
-  uint64_t work = 0;
+  uint64_t work = 0, declarationCount = 0, operationCount = 0;
 };
 struct ClosedStorage {
   std::vector<Asset> assets;
@@ -25,6 +26,7 @@ struct ClosedStorage {
   DeclarationId protocol;
 };
 struct AnalysisStorage {
+  std::shared_ptr<const std::vector<SourceBuffer>> sources;
   std::vector<Diagnostic> diagnostics;
   std::vector<std::vector<Token>> tokens;
   std::optional<CheckedProject> checked;

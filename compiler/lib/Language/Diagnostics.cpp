@@ -30,19 +30,19 @@ std::string escaped(StringRef text, size_t limit) {
   return result;
 }
 class Renderer {
-  const CapturedProject *capture;
+  ArrayRef<SourceBuffer> sources;
   raw_ostream &out;
   std::map<unsigned, std::vector<unsigned>> lines;
 
 public:
-  Renderer(const CapturedProject *capture, raw_ostream &out)
-      : capture(capture), out(out) {}
+  Renderer(ArrayRef<SourceBuffer> sources, raw_ostream &out)
+      : sources(sources), out(out) {}
   void location(Span span) {
-    if (!capture || span.module.index >= capture->sources().size()) {
+    if (span.module.index >= sources.size()) {
       out << " (invalid source span)\n";
       return;
     }
-    const auto &source = capture->sources()[span.module.index];
+    const auto &source = sources[span.module.index];
     if (span.begin > span.end || span.end > source.text.size()) {
       out << " (invalid source span)\n";
       return;
@@ -103,9 +103,14 @@ public:
 } // namespace
 std::string formatDiagnostics(ArrayRef<Diagnostic> diagnostics,
                               const CapturedProject *capture) {
+  return formatDiagnostics(diagnostics, capture ? capture->sources()
+                                                : ArrayRef<SourceBuffer>{});
+}
+std::string formatDiagnostics(ArrayRef<Diagnostic> diagnostics,
+                              ArrayRef<SourceBuffer> sources) {
   std::string result;
   BoundedStream out(result, 64 * 1024 - 64);
-  Renderer renderer(capture, out);
+  Renderer renderer(sources, out);
   size_t shown = 0;
   for (const auto &diagnostic : diagnostics.take_front(20)) {
     renderer.diagnostic(diagnostic);

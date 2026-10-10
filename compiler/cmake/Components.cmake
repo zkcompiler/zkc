@@ -46,6 +46,10 @@ add_zkc_component(Contracts
   lib/Contracts/NativeOrigin.cpp
   lib/Contracts/Representations.cpp
 )
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Prelude.zkc" zkc_prelude_source)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/lib/Language/Prelude.zkc")
+configure_file(lib/Language/Prelude.inc.in generated/Prelude.inc @ONLY)
 add_zkc_component(Language
   lib/Language/Diagnostics.cpp
   lib/Language/Inspection.cpp
@@ -61,8 +65,12 @@ add_zkc_component(Language
   lib/Language/Elaboration.cpp
   lib/Language/Booleans.cpp
   lib/Language/Check.cpp
+  lib/Language/Imports.cpp
+  lib/Language/Operators.cpp
   lib/Language/Semantics.cpp
   lib/Language/KernelSignatures.cpp
+  lib/Language/BindingWitness.cpp
+  lib/Language/Primitives.cpp
   lib/Language/IntrinsicSignatures.cpp
   lib/Language/SemanticContracts.cpp
   lib/Language/TypeCheck.cpp
@@ -83,6 +91,8 @@ add_zkc_component(Language
   lib/Language/BodyPlacement.cpp
   lib/Language/Expressions.cpp
   lib/Language/TypeInference.cpp
+  lib/Language/CallableConstraints.cpp
+  lib/Language/OperatorInference.cpp
   lib/Language/ExpressionInference.cpp
   lib/Language/CallResolution.cpp
   lib/Language/Calls.cpp
@@ -303,3 +313,5 @@ endforeach()
 zkc_link_contribution_libraries()
 
 include(${CMAKE_CURRENT_LIST_DIR}/BuildIdentity.cmake)
+
+target_include_directories(ZkcLanguage PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)

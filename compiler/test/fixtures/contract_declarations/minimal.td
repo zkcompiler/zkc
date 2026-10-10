@@ -16,4 +16,3 @@ def Multiply : ZKC_Operation<"field.mul", [F],
     [ZKC_Apply<Element, [F]>], [ZKC_Holds<Ring, [F]>]>;
 def ExportMultiply : ZKC_OperationExport<"zkc::algebra", "mul", Multiply, ["left", "right"]>;
 def ExportElement : ZKC_TypeExport<"zkc::algebra", "Element", Element>;
-def MultiplyOperator : ZKC_Operator<"*", [Element, Element], Multiply, [0, 1]>;

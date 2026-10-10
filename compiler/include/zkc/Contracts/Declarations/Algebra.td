@@ -472,14 +472,6 @@ def OpFieldEqual : ZKC_Operation<"field.equal", [OpFieldEqualF],
 def ExportFieldEqual : ZKC_OperationExport<"zkc::algebra", "equal",
     OpFieldEqual, ["field0", "field1"]>;
 
-def OperatorFieldAdd0 : ZKC_Operator<"+", [TypeField, TypeField], OpFieldAdd, [0, 1]>;
-def OperatorFieldSub1 : ZKC_Operator<"-", [TypeField, TypeField], OpFieldSub, [0, 1]>;
-def OperatorFieldMul2 : ZKC_Operator<"*", [TypeField, TypeField], OpFieldMul, [0, 1]>;
-def OperatorFieldNeg3 : ZKC_Operator<"-", [TypeField], OpFieldNeg, [0]>;
-def OperatorVectorAdd8 : ZKC_Operator<"+", [TypeVector, TypeVector], OpVectorAdd, [0, 1]>;
-def OperatorVectorSub9 : ZKC_Operator<"-", [TypeVector, TypeVector], OpVectorSub, [0, 1]>;
-def OperatorVectorScale10 : ZKC_Operator<"*", [TypeVector, TypeField], OpVectorScale, [0, 1]>;
-def OperatorVectorScale11 : ZKC_Operator<"*", [TypeField, TypeVector], OpVectorScale, [1, 0]>;
 
 // Exact finite vector equality, including length. No padding or reduction.
 def OpVectorEqualF : ZKC_Root<"F", FieldDomain>;
