@@ -1,8 +1,11 @@
-//! Honest execution through the pinned upstream executor and checkers.
+//! Honest execution through the pinned upstream executor and checkers, and
+//! the lowering on arbitrary traces.
 use zkc_openvm_relation::reference::{
     recorder, recorder_residuals, unbalanced, upstream_accepts, upstream_balanced,
 };
-use zkc_openvm_relation::slice::{AIR_NAMES, Branch, Parameters, Program, Registers, Slice, Step};
+use zkc_openvm_relation::slice::{
+    AIR_NAMES, Branch, MEMORY, Parameters, Program, Registers, Slice, Step,
+};
 
 #[test]
 fn honest_execution_satisfies_upstream() {
@@ -92,7 +95,6 @@ fn honest_execution_satisfies_upstream() {
 fn capture_and_lowering_agree_with_upstream() {
     use zkc_openvm_relation::bundle::{Data, carriers, evaluate};
     use zkc_openvm_relation::capture::{capture, export};
-    use zkc_openvm_relation::reference::{dag_values, recorder_values};
     let slice = Slice::new(Parameters::default()).unwrap();
     let cap = capture(&slice).unwrap();
     let exp = export(&slice, &cap).unwrap();
@@ -119,6 +121,10 @@ fn capture_and_lowering_agree_with_upstream() {
         }
         println!();
     }
+    // The memory partner asserts nothing: its messages and counts are free
+    // witness data, so the memory bus constrains no read.
+    assert!(cap.recorder[MEMORY].constraints.is_empty());
+    assert!(exp.airs[MEMORY].assertions.is_empty());
     println!("buses {:?}", exp.buses);
     println!("height constraints {:?}", exp.trace_height_constraints);
     println!(
@@ -174,90 +180,202 @@ fn capture_and_lowering_agree_with_upstream() {
     let outcome = evaluate(&exp, &data).unwrap();
     println!("outcome {:?}", outcome);
     assert!(outcome.satisfied());
-    // Row by row: every lowered assertion equals the recorder constraint on its scope rows,
-    // and every DAG constraint equals its recorder constraint.
-    for (i, trace) in execution.traces.iter().enumerate() {
-        let Some(trace) = trace else { continue };
-        let air = &exp.airs[i];
-        let rec = recorder_values(&cap.recorder[i].constraints, trace);
-        let dag = dag_values(&cap.vk.inner.per_air[i].symbolic_constraints, trace);
-        let h = trace.height();
-        for (c, row, v) in &rec {
-            let node = air.recorder_constraints[*c];
-            let position = air
-                .dag
-                .constraint_idx
-                .iter()
-                .position(|n| *n == node)
-                .unwrap();
-            let dv = dag
-                .iter()
-                .find(|(p, r, _)| p == &position && r == row)
-                .unwrap()
-                .2;
-            assert_eq!(dv, *v, "{} constraint {c} row {row}", air.name);
-        }
-        let table = data.tables[i].as_ref().unwrap();
-        for row in 0..h {
-            let outputs = air.arena.evaluate(|slot| match air.inputs[slot] {
-                zkc_openvm_relation::model::Input::Read {
-                    group,
-                    offset,
-                    column,
-                } => {
-                    let width = air.groups[group].width;
-                    let values = if group + 1 == air.groups.len() {
-                        &table.main
-                    } else {
-                        &table.cached[group]
-                    };
-                    values[((row + offset) % h) * width + column]
-                }
-                zkc_openvm_relation::model::Input::Public(slot) => data.publics[slot],
-            });
-            for a in &air.assertions {
-                if a.scope.contains(row, h) {
-                    let upstream = rec
-                        .iter()
-                        .find(|(c, r, _)| c == &a.constraint && r == &row)
-                        .unwrap()
-                        .2;
-                    assert_eq!(
-                        outputs[a.output],
-                        upstream,
-                        "{} assertion c{} {} row {row}",
-                        air.name,
-                        a.constraint,
-                        a.scope.name()
-                    );
-                }
-            }
-            // Vacuous classes really are zero upstream.
-            for (c, class) in &air.vacuous {
-                let in_class = match class {
-                    zkc_openvm_relation::model::RowClass::First => row == 0,
-                    zkc_openvm_relation::model::RowClass::Interior => row > 0 && row + 1 < h,
-                    zkc_openvm_relation::model::RowClass::Last => row + 1 == h,
-                };
-                if in_class {
-                    let upstream = rec
-                        .iter()
-                        .find(|(cc, r, _)| cc == c && r == &row)
-                        .unwrap()
-                        .2;
-                    assert_eq!(
-                        upstream,
-                        p3_field::PrimeCharacteristicRing::ZERO,
-                        "{} vacuous c{} row {row}",
-                        air.name,
-                        c
-                    );
-                }
-            }
-        }
-    }
     let c = carriers(&exp, &data).unwrap();
     let line = serde_json::to_string(&c).unwrap();
     println!("carrier line bytes {}", line.len());
     assert!(line.len() < 1024 * 1024);
+}
+
+/// Selector lowering on deterministic arbitrary traces of every table at
+/// heights with and without interior rows, ignoring the Bundle height
+/// policy: per constraint, assertion scopes and vacuous classes partition
+/// the row classes; every in-scope lowered output equals the recorder value,
+/// which also equals the verifying-key DAG value; and the recorder value is
+/// zero on every class marked vacuous.
+#[test]
+fn lowered_assertions_equal_recorder_constraints_on_arbitrary_traces() {
+    use openvm_stark_backend::p3_matrix::dense::RowMajorMatrix;
+    use p3_field::{PrimeCharacteristicRing, PrimeField32};
+    use rand::rngs::StdRng;
+    use rand::{Rng, SeedableRng};
+    use std::collections::{BTreeMap, BTreeSet};
+    use zkc_openvm_relation::bundle::{TableData, row_outputs};
+    use zkc_openvm_relation::capture::{capture, export};
+    use zkc_openvm_relation::field::F;
+    use zkc_openvm_relation::model::RowClass;
+    use zkc_openvm_relation::reference::{dag_values, recorder_values};
+    use zkc_openvm_relation::slice::Trace;
+    let slice = Slice::new(Parameters::default()).unwrap();
+    let cap = capture(&slice).unwrap();
+    let exp = export(&slice, &cap).unwrap();
+    let mut rng = StdRng::seed_from_u64(7);
+    let mut arbitrary = |n: usize| -> Vec<F> {
+        (0..n)
+            .map(|_| F::from_u32(rng.random_range(0..F::ORDER_U32)))
+            .collect()
+    };
+    let mut nonzero = BTreeSet::new();
+    let mut vacuous_rows = BTreeSet::new();
+    for (t, air) in exp.airs.iter().enumerate() {
+        for c in 0..air.recorder_constraints.len() {
+            for class in RowClass::ALL {
+                let asserted = air
+                    .assertions
+                    .iter()
+                    .filter(|a| a.constraint == c && a.scope.covers(class))
+                    .count();
+                let vacuous = usize::from(air.vacuous.contains(&(c, class)));
+                assert_eq!(
+                    asserted + vacuous,
+                    1,
+                    "{} constraint {c} {class:?}",
+                    air.name
+                );
+            }
+        }
+        let (main, cached) = air.groups.split_last().unwrap();
+        for height in [2, 4, 8] {
+            let table = TableData {
+                height,
+                cached: cached.iter().map(|g| arbitrary(height * g.width)).collect(),
+                main: arbitrary(height * main.width),
+            };
+            let publics = arbitrary(exp.publics.len());
+            let trace = Trace {
+                cached_mains: table
+                    .cached
+                    .iter()
+                    .zip(cached)
+                    .map(|(values, g)| RowMajorMatrix::new(values.clone(), g.width))
+                    .collect(),
+                common_main: RowMajorMatrix::new(table.main.clone(), main.width),
+                public_values: exp
+                    .publics
+                    .iter()
+                    .zip(&publics)
+                    .filter(|((_, a, _), _)| *a == t)
+                    .map(|(_, v)| *v)
+                    .collect(),
+            };
+            let recorded: BTreeMap<_, _> = recorder_values(&cap.recorder[t].constraints, &trace)
+                .into_iter()
+                .map(|(c, row, v)| ((c, row), v))
+                .collect();
+            let dag: BTreeMap<_, _> =
+                dag_values(&cap.vk.inner.per_air[t].symbolic_constraints, &trace)
+                    .into_iter()
+                    .map(|(p, row, v)| ((p, row), v))
+                    .collect();
+            for row in 0..height {
+                for (c, node) in air.recorder_constraints.iter().enumerate() {
+                    let position = air
+                        .dag
+                        .constraint_idx
+                        .iter()
+                        .position(|n| n == node)
+                        .unwrap();
+                    assert_eq!(
+                        dag[&(position, row)],
+                        recorded[&(c, row)],
+                        "{} DAG c{c}",
+                        air.name
+                    );
+                }
+                let outputs = row_outputs(air, &table, &publics, row);
+                for (a, assertion) in air.assertions.iter().enumerate() {
+                    if assertion.scope.contains(row, height) {
+                        let value = outputs[assertion.output];
+                        assert_eq!(
+                            value,
+                            recorded[&(assertion.constraint, row)],
+                            "{} assertion c{} {} row {row} of {height}",
+                            air.name,
+                            assertion.constraint,
+                            assertion.scope.name()
+                        );
+                        if value != F::ZERO {
+                            nonzero.insert((t, a));
+                        }
+                    }
+                }
+                let class = RowClass::of(row, height);
+                for &(c, vacuous) in air.vacuous.iter().filter(|(_, v)| *v == class) {
+                    assert_eq!(
+                        recorded[&(c, row)],
+                        F::ZERO,
+                        "{} vacuous c{c} row {row}",
+                        air.name
+                    );
+                    vacuous_rows.insert((t, c, vacuous));
+                }
+            }
+        }
+    }
+    // Comparisons ran on nonzero values and on every vacuous class.
+    for (t, air) in exp.airs.iter().enumerate() {
+        for a in 0..air.assertions.len() {
+            assert!(nonzero.contains(&(t, a)), "{} assertion {a}", air.name);
+        }
+        for &(c, class) in &air.vacuous {
+            assert!(vacuous_rows.contains(&(t, c, class)));
+        }
+    }
+}
+
+/// Upstream `count_weight` is a trace-height coefficient, not a count
+/// bound: the Bundle declares none, and the provenance report keeps every
+/// weight with the height constraints that use it.
+#[test]
+fn count_weights_stay_provenance_and_bundle_declares_no_count_bound() {
+    use serde_json::{Value, json};
+    use zkc_openvm_relation::bundle::bundle;
+    use zkc_openvm_relation::capture::{capture, export};
+    let slice = Slice::new(Parameters::default()).unwrap();
+    let cap = capture(&slice).unwrap();
+    let exp = export(&slice, &cap).unwrap();
+    let carrier = bundle(&exp).unwrap();
+    let records: Vec<&Value> = carrier[3]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|table| table[8].as_array().unwrap())
+        .collect();
+    assert_eq!(
+        records.len(),
+        exp.airs.iter().map(|a| a.interactions.len()).sum::<usize>()
+    );
+    for record in records {
+        assert_eq!(record[0], "field-balance");
+        assert_eq!(record[6], Value::Null);
+    }
+    let report = exp.to_value().unwrap();
+    let mut positive = 0;
+    for (t, air) in report["airs"].as_array().unwrap().iter().enumerate() {
+        let upstream: Vec<u64> = cap.vk.inner.per_air[t]
+            .symbolic_constraints
+            .interactions
+            .iter()
+            .map(|x| u64::from(x.count_weight))
+            .collect();
+        positive += upstream.iter().filter(|w| **w > 0).count();
+        for recorded in [&air["interactions"], &air["dag"]["interactions"]] {
+            let weights: Vec<u64> = recorded
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|x| x[3].as_u64().unwrap())
+                .collect();
+            assert_eq!(weights, upstream, "{}", air["name"]);
+        }
+    }
+    assert!(positive > 0);
+    let heights: Vec<Value> = cap
+        .vk
+        .inner
+        .trace_height_constraints
+        .iter()
+        .map(|c| json!([c.coefficients, c.threshold]))
+        .collect();
+    assert!(!heights.is_empty());
+    assert_eq!(report["trace_height_constraints"], Value::Array(heights));
 }

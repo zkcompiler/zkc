@@ -462,19 +462,12 @@ pub fn export(slice: &Slice, capture: &Capture) -> Result<Export> {
             };
             for (scope, node) in groups_of_classes {
                 if builder.as_constant(node) == Some(F::ZERO) {
-                    for class in RowClass::ALL {
-                        let covered = match scope {
-                            Scope::All => true,
-                            Scope::First => class == RowClass::First,
-                            Scope::Last => class == RowClass::Last,
-                            Scope::Transition => class != RowClass::Last,
-                            Scope::Interior => class == RowClass::Interior,
-                            Scope::Tail => class != RowClass::First,
-                        };
-                        if covered {
-                            vacuous.push((c, class));
-                        }
-                    }
+                    vacuous.extend(
+                        RowClass::ALL
+                            .into_iter()
+                            .filter(|class| scope.covers(*class))
+                            .map(|class| (c, class)),
+                    );
                     continue;
                 }
                 assertions_raw.push((c, scope, node));

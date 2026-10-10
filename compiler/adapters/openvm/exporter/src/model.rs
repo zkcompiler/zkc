@@ -29,6 +29,17 @@ impl Scope {
             Scope::Tail => row >= 1,
         }
     }
+    /// Whether the scope contains the rows of a row class.
+    pub fn covers(self, class: RowClass) -> bool {
+        match self {
+            Scope::All => true,
+            Scope::First => class == RowClass::First,
+            Scope::Last => class == RowClass::Last,
+            Scope::Transition => class != RowClass::Last,
+            Scope::Interior => class == RowClass::Interior,
+            Scope::Tail => class != RowClass::First,
+        }
+    }
     pub fn name(self) -> &'static str {
         match self {
             Scope::All => "all",
@@ -43,7 +54,7 @@ impl Scope {
 
 /// The three row classes of the row-indicator selector law at height at
 /// least two: `(is_first_row, is_last_row, is_transition)`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RowClass {
     First,
     Interior,
@@ -52,6 +63,16 @@ pub enum RowClass {
 
 impl RowClass {
     pub const ALL: [RowClass; 3] = [RowClass::First, RowClass::Interior, RowClass::Last];
+    /// The class of `row` in a table of height at least two.
+    pub fn of(row: usize, height: usize) -> Self {
+        if row == 0 {
+            RowClass::First
+        } else if row + 1 == height {
+            RowClass::Last
+        } else {
+            RowClass::Interior
+        }
+    }
     pub fn selectors(self) -> (bool, bool, bool) {
         match self {
             RowClass::First => (true, false, true),
@@ -141,6 +162,7 @@ pub struct Interaction {
     pub bus: usize,
     pub message: Vec<usize>,
     pub count: usize,
+    /// Upstream coefficient in the trace-height inequality; provenance only.
     pub count_weight: u32,
     pub degree: u64,
 }

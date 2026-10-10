@@ -5,14 +5,15 @@
 //! one `field-balance` channel: OpenVM's balance condition is that the sum of
 //! field-valued multiplicities of every distinct message on a bus is zero,
 //! which is the bundle's field-weighted balance with no natural
-//! interpretation of a count. A recorded `declared_count_bound` is the
-//! upstream `count_weight` when it is positive (the per-row bound the
-//! verifier's trace-height constraints rely on) and `null` when upstream
-//! declares weight zero; neither is part of satisfaction.
+//! interpretation of a count. Every record declares no count bound (`null`):
+//! upstream `count_weight` is the coefficient of an interaction in the
+//! trace-height inequality `sum(weight * height) < p`, not a bound on any
+//! row's count, so it stays in the provenance report with the height
+//! constraints it belongs to.
 
 use crate::arena::hex_sha256;
 use crate::field::{F, FIELD_IDENTITY, decimal};
-use crate::model::{Export, Height, Input, Scope};
+use crate::model::{AirExport, Export, Height, Input, Scope};
 use crate::refusal::{Result, ensure, refuse};
 use crate::slice::{Execution, Trace};
 use p3_field::PrimeCharacteristicRing;
@@ -191,11 +192,6 @@ pub fn bundle(export: &Export) -> Result<Value> {
             .interactions
             .iter()
             .map(|x| {
-                let bound = if x.count_weight > 0 {
-                    json!(x.count_weight)
-                } else {
-                    Value::Null
-                };
                 json!([
                     "field-balance",
                     x.bus,
@@ -203,7 +199,7 @@ pub fn bundle(export: &Export) -> Result<Value> {
                     ["all"],
                     x.message,
                     x.count,
-                    bound
+                    Value::Null
                 ])
             })
             .collect();
@@ -372,6 +368,27 @@ impl Outcome {
     }
 }
 
+/// Arena outputs of one table row with cyclic reads. The table's matrices
+/// must have the export's group widths; its height is not checked against
+/// the table's height policy.
+pub fn row_outputs(air: &AirExport, table: &TableData, publics: &[F], row: usize) -> Vec<F> {
+    air.arena.evaluate(|slot| match air.inputs[slot] {
+        Input::Read {
+            group,
+            offset,
+            column,
+        } => {
+            let values = if group + 1 == air.groups.len() {
+                &table.main
+            } else {
+                &table.cached[group]
+            };
+            values[((row + offset) % table.height) * air.groups[group].width + column]
+        }
+        Input::Public(slot) => publics[slot],
+    })
+}
+
 pub fn evaluate(export: &Export, data: &Data) -> Result<Outcome> {
     check_shape(export, data)?;
     let mut residuals = vec![];
@@ -383,25 +400,8 @@ pub fn evaluate(export: &Export, data: &Data) -> Result<Outcome> {
         ensure(height >= 1, "openvm-data-shape", || {
             format!("{}: empty table", air.name)
         })?;
-        let group_values = |g: usize| -> &[F] {
-            if g + 1 == air.groups.len() {
-                &table.main
-            } else {
-                &table.cached[g]
-            }
-        };
         for row in 0..height {
-            let outputs = air.arena.evaluate(|slot| match air.inputs[slot] {
-                Input::Read {
-                    group,
-                    offset,
-                    column,
-                } => {
-                    let width = air.groups[group].width;
-                    group_values(group)[((row + offset) % height) * width + column]
-                }
-                Input::Public(slot) => data.publics[slot],
-            });
+            let outputs = row_outputs(air, table, &data.publics, row);
             for (a, assertion) in air.assertions.iter().enumerate() {
                 if assertion.scope.contains(row, height) {
                     let v = outputs[assertion.output];
