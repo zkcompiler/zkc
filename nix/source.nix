@@ -16,10 +16,10 @@ lib.cleanSourceWith {
       || (type == "directory" && lib.hasPrefix "${relative}/" selected)
     ) paths
     # Optional integration edits do not invalidate the main Lean build.
-    && !(name == "formal" && lib.hasPrefix "formal/integrations" relative)
+    && !(name == "lean" && lib.hasPrefix "lean/integrations" relative)
     && !(
       builtins.elem name [
-        "formal"
+        "lean"
         "arklib"
         "compiler"
         "rust"

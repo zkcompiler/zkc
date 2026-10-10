@@ -13,7 +13,7 @@ stdenvNoCC.mkDerivation {
   dontBuild = true;
   doCheck = true;
   checkPhase = ''
-    python3 tests/check_install.py ${zkc}/bin/zkc \
+    python3 common/tests/check_install.py ${zkc}/bin/zkc \
       --compiler=${compiler}/bin/zkc-compile --output="$TMPDIR/installed-client" \
       > application.json
   '';

@@ -37,7 +37,7 @@ zkc verify BaseProof --public=public.json --proof=proof.bin
 ```
 
 Each independent Host admits the packaged expression before execution. The
-[integration tests](../../../tests/protocol/test_expression_sumcheck.py) cover
+[integration tests](../../../common/tests/protocol/test_expression_sumcheck.py) cover
 both input fields, compiler policies, interactive execution, altered coefficients,
 false claims, changed public inputs, asset substitution and a three-input cubic
 expression using the same source client.

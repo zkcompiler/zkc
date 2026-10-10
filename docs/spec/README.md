@@ -38,14 +38,14 @@ premises. A law alone does not prove that a C++ checker or Rust kernel realizes 
 | External constructions | [Hash-chain and duplex transitions](realization/external-constructions.md): explicit native primitive calls |
 | Validation | [Refinement](verification/refinement.md), [analysis](verification/analysis.md), [judgments](verification/judgments.md): the obligations of source-relative checking |
 
-The mathematical chapters use the [formal core](../../formal/docs/spec/README.md)
+The mathematical chapters use the [formal core](../../lean/docs/spec/README.md)
 vocabulary of signatures, interpretations, handlers, complete results and
 observations. Those definitions are normative for the parameterized laws;
 a native consumer must supply an instance and establish its connection to
 actual execution. The native contracts above define the implemented surfaces.
 Formal profiles supply informative examples and separate proof subjects,
 without selecting another native execution path.
-[Correspondence maps](../../formal/docs/README.md#definitions-and-proofs) identify
+[Correspondence maps](../../lean/docs/README.md#definitions-and-proofs) identify
 exact Lean declarations and their premises.
 
 ## Conformance

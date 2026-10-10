@@ -7,8 +7,10 @@
 | `libraries/` | Reusable `.zkc` libraries, their public interfaces and protocol contracts |
 | `examples/projects/` | Separately authored Entries and invocation inputs |
 | `examples/relations/` | Relation data JSON |
-| `formal/` | Independent Lean research library, model-specific tools and optional integrations |
-| `tests/` | Native execution integration, installed consumers and documentation/build checks |
+| `lean/` | Independent Lean research library, model-specific tools and optional integrations |
+| [`common/`](../../common/README.md) | Shared build inputs and project-level validation |
+| `common/unicode/` | Pinned source-name data and generation shared by C++ and Rust |
+| `common/tests/` | Native execution integration, installed consumers and documentation/build checks |
 | `docs/` | Public reference, specification, support and development guides |
 | `scripts/`, `nix/` | Workspace commands, environment and package ownership |
 

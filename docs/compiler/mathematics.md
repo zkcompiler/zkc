@@ -76,7 +76,7 @@ explains their bounded structural recognizer. A binding cannot make a private
 prover value available to a verifier: a private terminal needs an actual
 commitment/opening contract.
 
-The [native validation map](../../tests/native.md) includes shrinking/growing numeric
+The [native validation map](../../common/tests/native.md) includes shrinking/growing numeric
 state, ragged matrices, batched openings, QAP and AIR compositions. They validate
 general mechanisms at their stated scope, without claiming full Groth16, BP+,
 FRI or zkVM implementations.

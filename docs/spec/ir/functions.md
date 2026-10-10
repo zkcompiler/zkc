@@ -1,7 +1,7 @@
 # Canonical local algorithm expansion
 
 This profile expands acyclic ordered local applications before participant
-projection. The independent [stored-definition model](../../../formal/docs/spec/profiles/source/definitions.md)
+projection. The independent [stored-definition model](../../../lean/docs/spec/profiles/source/definitions.md)
 supplies selected inlining laws; native expansion and accounting have their own
 [preservation checks](../../compiler/verification.md).
 

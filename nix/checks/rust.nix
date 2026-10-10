@@ -16,7 +16,7 @@ tools.overrideAttrs (old: {
     ${environment.checks}
     cargo fmt --all -- --check
     cargo clippy --workspace --locked --offline --all-targets --all-features -- -D warnings
-    python3 tests/run.py rust
+    python3 common/tests/run.py rust
     runHook postCheck
   '';
   installPhase = ''

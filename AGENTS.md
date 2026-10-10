@@ -6,7 +6,7 @@ If `AGENTS.local.md` exists, read it for additional local instructions.
 
 - Follow [the contribution guide](.github/CONTRIBUTING.md) for repository changes.
 - Use [the documentation index](docs/README.md) to find relevant documents.
-  `docs/spec/` defines native and shared contracts; `formal/docs/spec/` defines
+  `docs/spec/` defines native and shared contracts; `lean/docs/spec/` defines
   the independent formal models. `docs/status.md` records implementation support.
   Research notes provide context, not specification. Read what the task needs.
 
@@ -22,7 +22,7 @@ If `AGENTS.local.md` exists, read it for additional local instructions.
 ## Validation
 
 - Use [the development guide](docs/development/README.md) for builds and
-  [the test guide](tests/README.md#selecting-checks) to select affected checks.
+  [the test guide](common/tests/README.md#selecting-checks) to select affected checks.
 - `just test` includes expensive resource-boundary cases. Use it for broad
   integration validation, not every edit. Expand or repeat checks when changes,
   failures, or unresolved concerns justify it.

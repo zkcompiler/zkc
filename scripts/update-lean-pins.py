@@ -2,7 +2,7 @@
 """Select every Lean dependency revision from one ArkLib commit.
 
 The main formal package and the optional ArkLib integration share Lean,
-Mathlib and Mathlib's own dependencies; `formal/checks/check_library.py`
+Mathlib and Mathlib's own dependencies; `lean/checks/check_library.py`
 refuses differences in their shared dependencies. This coordinated upgrade
 starts from one ArkLib commit: its `lean-toolchain` and
 `lake-manifest.json` decide the Lean release, the Mathlib revision the main
@@ -38,7 +38,7 @@ import tomllib
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
-MAIN = ROOT / "formal"
+MAIN = ROOT / "lean"
 INTEGRATION = MAIN / "integrations/arklib"
 NIX_LEAN = ROOT / "nix/lean-toolchain.nix"
 TOOLCHAIN = re.compile(r"leanprover/lean4:v(\d+\.\d+\.\d+(?:-rc\d+)?)")
@@ -169,8 +169,8 @@ def main():
     set_required_rev(MAIN / "lakefile.toml", "mathlib", main_mathlib, mathlib)
     set_required_rev(INTEGRATION / "lakefile.toml", "Arklib", current, args.arklib)
 
-    run(["nix", "develop", f"{ROOT}#formal", "--command", "bash", "-c",
-         "cd formal && lake update && cd integrations/arklib && lake update"])
+    run(["nix", "develop", f"{ROOT}#lean", "--command", "bash", "-c",
+         "cd lean && lake update && cd integrations/arklib && lake update"])
     run(["nix", "develop", f"{ROOT}#maintenance", "--command",
          "python3", ROOT / "scripts/update-nix-sources.py", "--root", ROOT])
     check(toolchain, upstream, args.arklib)

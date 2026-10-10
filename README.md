@@ -51,7 +51,7 @@ projection, demand lowering and physical kernel selection. Hosts authenticate
 packages, bind application inputs and setup authority, and manage execution and
 publication. Direct MLIR clients enter the same pipeline.
 
-The independent [Lean library](formal/README.md) supplies semantic models and
+The independent [Lean library](lean/README.md) supplies semantic models and
 proofs. Those results concern their stated formal subjects; native pipeline
 correspondence remains open. [Architecture](docs/architecture.md) explains the
 owners, and [assurance](docs/assurance.md) distinguishes formal results, compiler
@@ -84,7 +84,7 @@ witness is deliberately public; runtime randomness is fresh. See the
 |---|---|
 | Write a protocol or library | [Language](docs/language/README.md), [example projects](examples/projects/README.md) |
 | Develop the compiler or a backend | [Architecture](docs/architecture.md), [development](docs/development/README.md) |
-| Study semantics and verification | [Native specification](docs/spec/README.md), [formal models](formal/docs/README.md) |
+| Study semantics and verification | [Native specification](docs/spec/README.md), [formal models](lean/docs/README.md) |
 | Assess support and future work | [Status](docs/status.md), [roadmap](docs/roadmap.md) |
 
 The [documentation index](docs/README.md) maps the reference. Contributions follow

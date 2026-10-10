@@ -33,7 +33,7 @@ python3 compiler/adapters/accumulator-machine/regenerate.py write NEW_DIRECTORY
 
 `check` exits nonzero and names each file that is missing, extra or different;
 `write` refuses an existing directory. The independent evaluation lives in
-[`tests/protocol/test_machine_relations.py`](../../../tests/protocol/test_machine_relations.py),
+[`common/tests/protocol/test_machine_relations.py`](../../../common/tests/protocol/test_machine_relations.py),
 part of `just test-integration`. It needs the compiler's
 `test/zkc-relation_bundle_conformance-test` and the Rust
 `relation_bundle_conformance` driver, and runs every carrier through both.

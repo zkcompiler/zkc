@@ -18,14 +18,14 @@ link to the rule's owner.
 | Evidence policy and remaining native trust | `docs/assurance.md` |
 | Public sequencing and extension triggers | `docs/roadmap.md` |
 | Consequential adopted choices | `docs/rationale/`; brief reasons stay beside their owner |
-| Independent Lean models and definitions | `formal/docs/spec/` and its model guides |
-| Exact theorem scope and clause mapping | `formal/docs/support.md` and `formal/docs/correspondence/` |
-| Formal architecture and adopted choices | `formal/docs/architecture.md` and `formal/docs/design/` |
+| Independent Lean models and definitions | `lean/docs/spec/` and its model guides |
+| Exact theorem scope and clause mapping | `lean/docs/support.md` and `lean/docs/correspondence/` |
+| Formal architecture and adopted choices | `lean/docs/architecture.md` and `lean/docs/design/` |
 | Builds and component procedures | `docs/development/` and adjacent component READMEs |
-| Test selection and bounded native evidence | `tests/README.md`, `tests/native.md` |
+| Test selection and bounded native evidence | `common/tests/README.md`, `common/tests/native.md` |
 | Research proposals, review logs and originals | Private research repository |
 
-The [native index](../README.md) and [formal index](../../formal/docs/README.md) state
+The [native index](../README.md) and [formal index](../../lean/docs/README.md) state
 authority. Placement follows reader tasks and semantic ownership, not every
 source directory or completed implementation package. A native reference test
 and an independent formal model are different evidence; name which one applies.
@@ -50,7 +50,7 @@ ceilings alongside successful runs. No benchmark campaign is currently maintaine
 For executable instructions, state the working directory, prerequisites,
 required inputs and expected result. Distinguish a development command that
 builds prerequisites from a driver that requires existing outputs. Link to the
-[test scope map](../../tests/README.md#coverage-and-ownership) rather than maintaining a
+[test scope map](../../common/tests/README.md#coverage-and-ownership) rather than maintaining a
 second list. Optional external integrations must say what makes them optional.
 
 ## Consolidate without losing a contract
@@ -139,7 +139,7 @@ just test-docs
 git diff --check
 ```
 
-The [checker](../../tests/check_docs.py) checks local inline links, heading fragments,
+The [checker](../../common/tests/check_docs.py) checks local inline links, heading fragments,
 whitespace, public/private boundaries and reachability from each reference's
 index. `just test-docs` uses `--all` to include component and fixture guides. It
 does not verify mathematical truth, external websites or commands in code blocks.

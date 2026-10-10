@@ -140,10 +140,10 @@ add_zkc_test(air Relation air-model)
 add_zkc_test(air_ring_expression Relation air-ring-expression)
 add_zkc_test(air_polynomial Relation air-polynomial-model)
 add_zkc_test(relation_bundle Relation relation-bundle)
-# Also driven with the Rust ring provider by tests/protocol/test_clean_air_conformance.py.
+# Also driven with the Rust ring provider by common/tests/protocol/test_clean_air_conformance.py.
 add_zkc_test(clean_air_conformance Relation)
 add_test(NAME clean-air-conformance COMMAND zkc-clean_air_conformance-test
-  "${PROJECT_SOURCE_DIR}/../tests/fixtures/clean/air-control.json")
+  "${PROJECT_SOURCE_DIR}/../common/tests/fixtures/clean/air-control.json")
 set_tests_properties(clean-air-conformance PROPERTIES LABELS native)
 add_zkc_test(operation_contracts Contracts operation-contracts)
 target_compile_definitions(zkc-operation_contracts-test PRIVATE
@@ -214,13 +214,13 @@ set(zkc_script_environment
   ZKC_CTEST_COMPILER=$<TARGET_FILE:zkc-compile>
   ZKC_CTEST_OPTIMIZER=$<TARGET_FILE:zkc-opt>
   ZKC_CTEST_REQUIREMENTS_TEST=$<TARGET_FILE:zkc-requirements-test>
-  PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/support:${PROJECT_SOURCE_DIR}/../tests/support)
+  PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/support:${PROJECT_SOURCE_DIR}/../common/tests/support)
 
 # Every Python file in this directory is a test, and its name is the test's
 # name with underscores for hyphens. Registering by listing the directory is
 # what stops a script from sitting here unrun: it is a test by being here. The
 # glob does not descend, so vocabulary these tests share sits in support/, and
-# what they share with another build's tests sits in tests/support.
+# what they share with another build's tests sits in common/tests/support.
 file(GLOB zkc_scripts CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.py)
 foreach(script ${zkc_scripts})
   get_filename_component(stem ${script} NAME_WE)

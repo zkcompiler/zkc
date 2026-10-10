@@ -9,7 +9,7 @@ import unittest
 from tools import records
 
 
-ROOT = Path(__file__).resolve().parents[2] / "support/unicode"
+ROOT = Path(__file__).resolve().parents[2] / "common/unicode"
 SPEC = importlib.util.spec_from_file_location("unicode_generator", ROOT / "generate.py")
 GENERATOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(GENERATOR)

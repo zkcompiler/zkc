@@ -36,7 +36,7 @@ zkc verify --package=air-stark.zkpkg --sha256="$PACKAGE_SHA256" \
 `Run` is the interactive Entry. `Proof` applies the installed Merlin transcript
 suite to the same protocol. See the [proof Host](../../../docs/runtime/README.md)
 for result files and execution limits. The
-[executable tests](../../../tests/protocol/test_air_stark.py) exercise these
+[executable tests](../../../common/tests/protocol/test_air_stark.py) exercise these
 inputs, independent producer/consumer invocations and rejection cases.
 Fixture values come from the adapter's direct AIR execution.
 

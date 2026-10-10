@@ -1,6 +1,6 @@
 // Native finite-AIR side of the Clean export comparison. Test transport: reads
-// one zkc.clean-air-control/0 document (tests/fixtures/clean) and prints one
-// report. The Rust driver consumes the report's per-constraint ring views.
+// one zkc.clean-air-control/0 document (common/tests/fixtures/clean) and prints
+// one report. The Rust driver consumes the report's per-constraint ring views.
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Relation/AIR.h"

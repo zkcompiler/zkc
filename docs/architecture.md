@@ -68,7 +68,7 @@ judgment.
 | Rust runtime | [zkc-runtime](../crates/zkc-runtime/README.md): Runner, bounded work and resource custody |
 | Rust Hosts | [zkc-tools](../crates/zkc-tools/README.md): Entry, proof and joint invocation, authentication, preparation and reports |
 | Backend integration | [zkc-backends](../crates/zkc-backends/README.md): installed types, codecs, services and kernel dispatch |
-| Lean | [formal](../formal/README.md): independently built semantic models, proofs and model-specific tools |
+| Lean | [formal](../lean/README.md): independently built semantic models, proofs and model-specific tools |
 
 The exported CMake components follow these responsibilities; the
 [compiler package](../compiler/README.md#components-and-ownership) owns the exact installed API.

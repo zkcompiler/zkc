@@ -67,7 +67,7 @@ notation is a visibility error, distinct from an illegal Unicode token.
 
 ## Pinned data and normalization
 
-The [source-name manifest](../../../support/unicode/manifest.json) owns the
+The [source-name manifest](../../../common/unicode/manifest.json) owns the
 profile, explicit additions/exclusions, normalizer versions and SHA-256 hashes
 of the raw UCD inputs. C++ and Rust derive their classification tables from
 these inputs; neither uses locale, host Unicode categories or the normalizer's

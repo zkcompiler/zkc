@@ -154,7 +154,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--profile", default="release")
-    parser.add_argument("--formal", action="store_true", help="also inspect the optional Lean toolchain")
+    parser.add_argument("--lean", action="store_true", help="also inspect the optional Lean toolchain")
     args = parser.parse_args()
     records = []
 
@@ -184,9 +184,9 @@ def main():
         inspect("uv", ["uv", "--version"]),
         inspect("just", ["just", "--version"]),
     ])
-    if args.formal:
-        lean = (ROOT / "formal/lean-toolchain").read_text().strip().split(":v")[-1]
-        records.append(inspect("lean", ["lean", "--version"], lean, ROOT / "formal"))
+    if args.lean:
+        lean = (ROOT / "lean/lean-toolchain").read_text().strip().split(":v")[-1]
+        records.append(inspect("lean", ["lean", "--version"], lean, ROOT / "lean"))
     tested = re.search(r'set\(ZKC_TESTED_LLVM_VERSION\s+"([^"]+)"',
                        (ROOT / "compiler/CMakeLists.txt").read_text())[1]
     mlir = os.environ.get("MLIR_DIR", "").strip()

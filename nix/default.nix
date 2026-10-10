@@ -14,7 +14,7 @@ let
       (builtins.fromTOML (builtins.readFile ../rust-toolchain.toml)).toolchain.components
       ++ [ "rust-analyzer" ];
   };
-  lean = pkgs.callPackage ./lean-toolchain.nix { cc = llvm.clang; };
+  leanToolchain = pkgs.callPackage ./lean-toolchain.nix { cc = llvm.clang; };
   python = pkgs.python314;
   workspace = inputs.uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ../.; };
   pythonSet =
@@ -35,13 +35,13 @@ let
     "scripts/processes.py"
     "scripts/reporting.py"
     "scripts/workspace.py"
-    "tests/support"
+    "common/tests/support"
   ];
   compilerSource = nativeSupport ++ [
     "compiler"
     "examples"
     "libraries"
-    "support/unicode"
+    "common/unicode"
   ];
   compiler = pkgs.callPackage ./compiler.nix {
     inherit llvm utf8proc;
@@ -51,7 +51,9 @@ let
   };
   compilerChecks = compiler.override {
     withTests = true;
-    source = sourceFor "compiler" (compilerSource ++ [ "tests/fixtures/clean/air-control.json" ]);
+    source = sourceFor "compiler" (
+      compilerSource ++ [ "common/tests/fixtures/clean/air-control.json" ]
+    );
   };
   compilerSanitize = compilerChecks.overrideAttrs (old: {
     pname = "zkc-compiler-sanitize";
@@ -112,7 +114,7 @@ let
         "Cargo.lock"
         "rust-toolchain.toml"
         "crates"
-        "support/unicode"
+        "common/unicode"
         # Native relation tests consume the maintained compiler and adapter fixtures.
         "compiler/test/fixtures/relation/polynomial-chunks.json"
         "compiler/adapters/accumulator-machine/fixtures"
@@ -120,7 +122,7 @@ let
         "compiler/adapters/plonky3/fixtures/recurrence/bundle-configuration.json"
         "compiler/adapters/plonky3/fixtures/recurrence/bundle-instance.json"
         "compiler/adapters/plonky3/fixtures/recurrence/bundle-witness.json"
-        "tests/run.py"
+        "common/tests/run.py"
         "examples"
         "libraries"
       ]
@@ -168,25 +170,25 @@ let
       "compiler/include/zkc/Support/MLIRInput.h"
     ];
   };
-  lakeSources = lakeSourcesFor ../formal/lake-manifest.json;
-  formal = pkgs.callPackage ./formal.nix {
-    inherit lean lakeSources;
+  lakeSources = lakeSourcesFor ../lean/lake-manifest.json;
+  lean = pkgs.callPackage ./lean.nix {
+    inherit leanToolchain lakeSources;
     python3 = python;
-    source = sourceFor "formal" [
-      "formal"
-      "tests/fixtures/variants/history-contracts.txt"
-      "tests/fixtures/blocks"
+    source = sourceFor "lean" [
+      "lean"
+      "common/tests/fixtures/variants/history-contracts.txt"
+      "common/tests/fixtures/blocks"
     ];
   };
   arklib =
     assert
-      lib.trim (builtins.readFile ../formal/lean-toolchain)
-      == lib.trim (builtins.readFile ../formal/integrations/arklib/lean-toolchain);
+      lib.trim (builtins.readFile ../lean/lean-toolchain)
+      == lib.trim (builtins.readFile ../lean/integrations/arklib/lean-toolchain);
     pkgs.callPackage ./arklib.nix {
-      inherit formal lean;
-      source = sourceFor "arklib" [ "formal" ];
+      inherit lean leanToolchain;
+      source = sourceFor "arklib" [ "lean" ];
       python3 = python;
-      lakeSources = lakeSourcesFor ../formal/integrations/arklib/lake-manifest.json;
+      lakeSources = lakeSourcesFor ../lean/integrations/arklib/lake-manifest.json;
     };
   checkSource = sourceFor "checks" (builtins.attrNames (builtins.readDir ../.));
 in
@@ -196,25 +198,25 @@ in
       compiler
       tools
       zkc
-      formal
+      lean
       arklib
       llzk
       ;
     lake-sources = lakeSources;
     default = zkc;
     test-drivers = testDrivers;
-    lean-toolchain = lean;
+    lean-toolchain = leanToolchain;
     rust-toolchain = rust;
     python-tools = pythonTools;
     compiler-sanitize = compilerSanitize;
     compiler-domain-checks = domainCheck false;
     compiler-domain-shared-checks = domainCheck true;
-    formal-checks = pkgs.callPackage ./checks/formal.nix {
-      inherit formal lean environment;
+    lean-checks = pkgs.callPackage ./checks/lean.nix {
+      inherit lean leanToolchain environment;
       source = checkSource;
       python3 = python;
     };
-    lean-toolchain-checks = pkgs.callPackage ./checks/lean-toolchain.nix { inherit lean; };
+    lean-toolchain-checks = pkgs.callPackage ./checks/lean-toolchain.nix { inherit leanToolchain; };
   };
   checks = {
     compiler = compilerChecks;
@@ -280,9 +282,9 @@ in
     UV_PYTHON = python.interpreter;
     UV_PYTHON_DOWNLOADS = "never";
   };
-  devShells.formal = pkgs.mkShellNoCC {
+  devShells.lean = pkgs.mkShellNoCC {
     packages = [
-      lean
+      leanToolchain
       python
       pkgs.git
       pkgs.just

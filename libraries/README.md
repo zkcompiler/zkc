@@ -222,9 +222,9 @@ Library changes include their runnable clients and positive and negative checks
 through the common compiler and Host. With built tools, run:
 
 ```sh
-uv run --no-sync --locked pytest tests/protocol/test_source_projects.py
-uv run --no-sync --locked pytest tests/protocol/test_expression_sumcheck.py
-uv run --no-sync --locked pytest tests/protocol/test_native_map.py
+uv run --no-sync --locked pytest common/tests/protocol/test_source_projects.py
+uv run --no-sync --locked pytest common/tests/protocol/test_expression_sumcheck.py
+uv run --no-sync --locked pytest common/tests/protocol/test_native_map.py
 ```
 
 These checks cover interactive and separate proof execution, compilation options,

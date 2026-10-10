@@ -48,26 +48,26 @@ clean-reports:
 
 # Build and test the selected compiler profile.
 test-compiler profile="release": (build-compiler profile)
-    python3 tests/run.py compiler --profile "$1"
+    python3 common/tests/run.py compiler --profile "$1"
 
 # Build and run the native C++ sanitizer tests.
 test-sanitize: (test-compiler "sanitize")
 
 # Run native compiler/Runner/Host integration and harness checks.
 test-integration: build build-test-drivers
-    python3 tests/run.py integration
+    python3 common/tests/run.py integration
 
 # Test command wiring and reporting without compiled project tools.
 test-harness:
-    python3 tests/run.py harness
+    python3 common/tests/run.py harness
 
 # Run Rust tests against the built components.
 test-rust: build
-    python3 tests/run.py rust
+    python3 common/tests/run.py rust
 
 # Run optional formal controls and independent Lean consumers.
 test-lean: build-lean
-    python3 tests/run.py lean
+    python3 common/tests/run.py lean
 
 # Fetch pinned main, ArkLib or Clean dependency objects for development.
 fetch-lean deps="main":
@@ -99,15 +99,15 @@ test-install-domain profile="release" *args:
 
 # Check documentation links, fragments and reachability.
 test-docs:
-    python3 tests/run.py docs
+    python3 common/tests/run.py docs
 
 # Compile a source Entry and produce and verify its proof.
 demo: build
-    python3 tests/run.py demo
+    python3 common/tests/run.py demo
 
 # Check C++/Rust formatting, Clippy and Python lint.
 lint:
-    python3 tests/run.py lint
+    python3 common/tests/run.py lint
 
 # Format the Nix definitions with the pinned formatter.
 fmt-nix:
