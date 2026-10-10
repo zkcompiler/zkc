@@ -51,7 +51,7 @@ def test_source_reduction_matches_independent_staged_reference(toolchain, journa
     publics = [decode(slot[1], v) for slot, v in zip(bundle[1], instance[2])]
     package = directory / 'reduction.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-        f'--module=inspect_reduction={ROOT}/tests/protocol/sources/interaction-reduction.zkc',
+        f'--module=inspect_reduction={ROOT}/common/tests/protocol/sources/interaction-reduction.zkc',
         f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
         f'--module=air_interaction={ROOT}/libraries/air/interaction.zkc',
         f'inspect_reduction::{entry}', f'--output={package}'])

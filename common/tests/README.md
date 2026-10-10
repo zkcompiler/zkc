@@ -37,7 +37,7 @@ python3 common/tests/run.py compiler --profile dev
 python3 common/tests/run.py rust
 python3 common/tests/run.py demo
 uv run --no-sync --locked pytest common/tests/kernels
-uv run --no-sync --locked pytest tests --collect-only
+uv run --no-sync --locked pytest common/tests --collect-only
 ```
 
 `common/tests/run.py project` is the Nix integration scope: root pytest plus the source
