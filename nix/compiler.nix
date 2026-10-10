@@ -7,15 +7,13 @@
   llvm,
   utf8proc,
   source,
+  withTests ? false,
 }:
 stdenv.mkDerivation {
   pname = "zkc-compiler";
   version = "0.0.0";
   src = source;
-  outputs = [
-    "out"
-    "testSupport"
-  ];
+  outputs = [ "out" ] ++ lib.optional withTests "testSupport";
   nativeBuildInputs = [
     cmake
     ninja
@@ -35,11 +33,11 @@ stdenv.mkDerivation {
   cmakeFlags = [
     "-DMLIR_DIR=${lib.getDev llvm.mlir}/lib/cmake/mlir"
     "-DMLIR_TABLEGEN_EXE=${llvm.tblgen}/bin/mlir-tblgen"
-    "-DBUILD_TESTING=ON"
+    "-DBUILD_TESTING=${if withTests then "ON" else "OFF"}"
   ];
-  # Full compiler validation is checks.compiler; installation does not run tests.
-  doCheck = false;
-  postInstall = ''
+  # Full validation and integration helpers share checks.compiler.
+  doCheck = withTests;
+  postInstall = lib.optionalString withTests ''
     mkdir -p "$testSupport/bin/test"
     ln -s "$out/bin/zkc-compile" "$out/bin/zkc-opt" "$out/bin/zkc-tblgen" "$testSupport/bin/"
     find test -maxdepth 1 -type f -executable -exec cp {} "$testSupport/bin/test/" \;

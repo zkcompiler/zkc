@@ -58,19 +58,23 @@ def clean_integration():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["setup", "configure", "compiler", "rust", "test-drivers", "lean",
-                                             "fetch-lean", "lean-integration", "lean-clean", "lean-fresh", "install",
-                                             "install-domain", "clean-reports"])
-    parser.add_argument("--profile", default="release")
-    parser.add_argument("--deps", choices=["main", "arklib", "clean"], default="main")
-    parser.add_argument("--output")
-    parser.add_argument("--base-build", help="install-domain: explicit base CMake build directory")
-    parser.add_argument("--domain-build", help="install-domain: explicit envelope CMake build directory")
-    parser.add_argument("--skip-build", action="store_true",
-                        help="install-domain: install already built, cache-checked directories without rebuilding")
+    operations = parser.add_subparsers(dest="operation", required=True)
+    for operation in ["setup", "configure", "compiler", "rust", "test-drivers", "lean",
+                      "fetch-lean", "lean-integration", "lean-clean", "lean-fresh", "install",
+                      "install-domain", "clean-reports"]:
+        command = operations.add_parser(operation)
+        if operation in {"configure", "compiler", "install", "install-domain"}:
+            command.add_argument("--profile", default="release", help="CMake build profile (default: release)")
+        if operation == "fetch-lean":
+            command.add_argument("--deps", choices=["main", "arklib", "clean"], default="main")
+        if operation in {"install", "install-domain"}:
+            command.add_argument("--output", help="fresh installation output directory")
+        if operation == "install-domain":
+            command.add_argument("--base-build", help="explicit base CMake build directory")
+            command.add_argument("--domain-build", help="explicit envelope CMake build directory")
+            command.add_argument("--skip-build", action="store_true",
+                                 help="install already built, cache-checked directories without rebuilding")
     args = parser.parse_args()
-    if args.operation != "install-domain" and (args.base_build or args.domain_build or args.skip_build):
-        parser.error("--base-build, --domain-build and --skip-build require install-domain")
     validate_environment()
     # Native Cargo paths keep Cargo's cwd-relative meaning even though the
     # commands below consistently run at the repository root.
