@@ -41,9 +41,10 @@ cmake -S compiler/test/names -B build/names -G Ninja \
   -Dutf8proc_DIR=/path/to/utf8proc/lib/cmake/utf8proc
 cmake --build build/names --parallel 4
 ctest --test-dir build/names --output-on-failure
-python3 compiler/test/names/sdk.py --output build/names-sdk \
+python3 compiler/test/support/unicode_sdk.py --output build/names-sdk \
   --llvm-dir /path/to/llvm/lib/cmake/llvm \
-  --utf8proc-dir /path/to/utf8proc/lib/cmake/utf8proc
+  --utf8proc-dir /path/to/utf8proc/lib/cmake/utf8proc \
+  --c-compiler /path/to/clang --cxx-compiler /path/to/clang++
 ```
 
 The focused C++ test checks all Unicode scalars against independent raw-data
