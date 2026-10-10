@@ -26,6 +26,7 @@ clause-to-declaration connections and remaining obligations:
 - [Execution and observations](correspondence/core.md)
 - [Programs, inputs and interaction](correspondence/programs.md)
 - [Domains and source](correspondence/domains.md)
+- [Ordered finite computations](correspondence/finite-computations.md)
 - [Transformations and judgments](correspondence/transformations.md)
 - [Properties and release](correspondence/properties.md)
 - [Realization and binding](correspondence/realization.md)
