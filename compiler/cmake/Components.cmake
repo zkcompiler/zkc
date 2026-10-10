@@ -66,6 +66,7 @@ add_zkc_component(Language
   lib/Language/Booleans.cpp
   lib/Language/Check.cpp
   lib/Language/Imports.cpp
+  lib/Language/Notation.cpp
   lib/Language/Operators.cpp
   lib/Language/Semantics.cpp
   lib/Language/KernelSignatures.cpp

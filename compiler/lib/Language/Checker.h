@@ -15,6 +15,7 @@ public:
   Semantics types;
   std::vector<SyntaxDeclaration *> sources;
   std::vector<unsigned> bodyState, bodyHeights;
+  std::vector<std::shared_ptr<const NotationEnvironment>> notationEnvironments;
 
   std::optional<DeclarationId> resolve(const Declaration &, llvm::StringRef,
                                        Span, bool required = true);
@@ -81,6 +82,8 @@ private:
                        llvm::ArrayRef<SyntaxSetupSlot>);
   bool collect();
   bool imports();
+  std::vector<unsigned> importOrder;
+  bool prepareNotationSyntax();
   bool prepareOperators();
   std::optional<DeclarationId> moduleMember(ModuleId, llvm::StringRef, Span,
                                             unsigned = 1);

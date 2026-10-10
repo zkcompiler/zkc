@@ -19,6 +19,7 @@ struct CheckedStorage {
   std::vector<Declaration> declarations;
   std::string installation;
   uint64_t work = 0, declarationCount = 0, operationCount = 0;
+  uint64_t notationDescriptors = 0, notationHoles = 0;
 };
 struct ClosedStorage {
   std::vector<Asset> assets;
@@ -46,6 +47,7 @@ void frame(std::string &, llvm::StringRef);
 struct Work {
   const Limits &limits;
   uint64_t used = 0, tokens = 0, declarations = 0, operations = 0;
+  uint64_t notationDescriptors = 0, notationHoles = 0;
   llvm::Error charge(uint64_t amount = 1, std::optional<Span> span = {});
   llvm::Error count(uint64_t &counter, uint64_t limit, llvm::StringRef what,
                     std::optional<Span> span = {});
