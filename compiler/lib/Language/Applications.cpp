@@ -24,10 +24,6 @@ BodyChecker::application(const Expression &expr) {
          "a completing protocol can only be selected as an Entry", expr.span);
     return {};
   }
-  if (expr.children.size() != callee.inputOrder.size()) {
-    fail("source.call", "protocol application input count differs", expr.span);
-    return {};
-  }
   const auto &roleNames = expr.roles ? *expr.roles : callee.roles;
   if (roleNames.size() != callee.roles.size()) {
     fail("source.roles",

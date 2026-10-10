@@ -46,6 +46,12 @@ these choices stay explicit when their sum alone would not determine them.
 Generic preconditions are completed from the intrinsic contracts and checked
 at each call. These modules select no field, commitment or transcript.
 
+Use `!`, `&&` and `||` to write Boolean expressions. The `zkc::boolean` helpers
+remain ordinary functions: `both(a, check(b))` evaluates both arguments even
+when `a` is false. In local `fn` code, `a && check(b)` skips the call when `a`
+is false. See the [Boolean rules](../docs/spec/language/definitions.md#boolean-formulas)
+for mathematical formulas and resource checks.
+
 The [mathematics client](../examples/projects/mathematics/README.md) compares
 formal evaluation and runtime folding. Group arithmetic already has ordinary
 `+`, `-` and scaling as `point * scalar`; no duplicate group wrapper is needed. Asset-specific

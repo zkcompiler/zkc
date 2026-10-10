@@ -69,7 +69,8 @@ clauses remain metadata; selecting no target emits no statement. Output-bound or
 more general clauses remain valid attachments but cannot be selected for this
 native statement ABI.
 
-An Entry may name another complete Entry, including one declared later. Aliases
+An Entry may name another complete Entry, including one declared later. An alias
+uses the short form without a block, even an empty one. Aliases
 must have the same run/proof kind and inherit the protocol, closed arguments,
 setup associations and every job choice. Cycles, partial
 overrides and static re-specialization of an Entry refuse. Alias resolution uses

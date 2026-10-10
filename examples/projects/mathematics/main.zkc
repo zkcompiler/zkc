@@ -5,7 +5,7 @@ domain F = field("bls12-381.fr");
 
 // Runtime vectors are local computations; formal polynomials remain math.
 math fn symbolic(a: F, b: F, point: F) {
-  let polynomial = mle<F, 1>(pack([a, b]));
+  let polynomial = mle<N = 1>(pack([a, b]));
   return evaluate(polynomial, [point]);
 }
 fn dynamic(values: Vector<F>, point: F) { return sum(fold(values, point)); }

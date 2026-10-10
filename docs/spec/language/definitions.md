@@ -6,8 +6,9 @@ This native contract defines captured modules, declarations, types and source bo
 
 A capture is a nonempty map from logical module paths to exact UTF-8 bytes.
 Each file starts with `module path;` matching its captured name. Module paths
-use `::`; identifiers match `[A-Za-z_][A-Za-z0-9_]*`. Keywords are reserved except contextual `run` and `proof`, which introduce
-execution declarations only at declaration positions.
+use `::`; identifiers match `[A-Za-z_][A-Za-z0-9_]*`. Keywords are reserved except
+contextual `run` and `proof`, which introduce execution declarations only at
+declaration positions.
 Comments start with `//`. Tokens retain trivia and byte spans.
 
 Module declarations are private unless prefixed with `pub`. Interface/component
@@ -77,7 +78,6 @@ path is considered. A leading `::` explicitly selects an absolute module path,
 for example `::algebra::Fr`. It is reference syntax, not part of module or
 canonical declaration names. Optional prefix lookup preserves privacy and
 resource-limit diagnostics.
-
 
 ## Definition checking and Entry closure
 

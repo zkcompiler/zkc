@@ -171,14 +171,12 @@ class ExpressionInference {
                       expr.span, "source.generic");
     if (!staticBinding)
       return {};
-    if (!expr.arguments.empty()) {
-      for (unsigned i = 0; i < expr.arguments.size(); ++i)
-        if (expr.arguments[i].kind != SyntaxType::Kind::Hole)
-          types.equal(
-              parameters.at(
-                  callee.parameters[inherited + (*staticBinding)[i]].atom),
-              annotation(expr.arguments[i]), expr.span);
-    }
+    for (unsigned i = 0; i < expr.arguments.size(); ++i)
+      if (expr.arguments[i].kind != SyntaxType::Kind::Hole)
+        types.equal(
+            parameters.at(
+                callee.parameters[inherited + (*staticBinding)[i]].atom),
+            annotation(expr.arguments[i]), expr.span);
     bool protocol = callee.kind == Declaration::Kind::Protocol;
     auto binding =
         bindArguments(checker.types, inputNames(callee), expr.children.size(),
@@ -240,11 +238,6 @@ class ExpressionInference {
     if (callee.kind != Declaration::Kind::Math || callee.abstract ||
         target->component) {
       fail("source.map", "map selects a static, defined math fn", expr.span);
-      return;
-    }
-    if (expr.children.size() != callee.inputs.size()) {
-      fail("source.map", "map argument count differs from the helper",
-           expr.span);
       return;
     }
     if (!llvm::is_contained(expr.each, true)) {
@@ -389,6 +382,13 @@ class ExpressionInference {
       if (!target)
         return;
       output.callees.emplace(id, *target);
+      auto kind = checker.output.declarations[target->declaration.index].kind;
+      if (!expr.callLabels.empty() && (kind == Declaration::Kind::Variant ||
+                                       kind == Declaration::Kind::Associated)) {
+        fail("source.call", "constructor payloads require positional values",
+             expr.span);
+        return;
+      }
     }
     auto split = StringRef(expr.text).rsplit("::");
     if (expr.kind == K::Record ||

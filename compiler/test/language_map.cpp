@@ -220,7 +220,7 @@ int main() {
   refusal("argument count",
           "fn f(a: Vector<Fr>, s: Fr) -> Vector<Fr> {\n"
           "  return map affine(each a, s);\n}\n",
-          "source.map");
+          "source.call");
   refusal("ordered helper",
           "fn g(x: Fr) -> Fr { return x; }\n"
           "fn f(a: Vector<Fr>) -> Vector<Fr> { return map g(each a); }\n",

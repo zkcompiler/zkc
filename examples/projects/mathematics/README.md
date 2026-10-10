@@ -4,7 +4,8 @@
 multilinear polynomial in `math fn`, and an ordered runtime vector fold in `fn`.
 For `values = [a, b]`, both compute `(1 - point) * a + point * b`.
 The calls use parameter names to make the evaluation point and table inputs
-explicit. Named arguments evaluate in written order.
+explicit. Named arguments evaluate in written order. `mle<N = 1>` fixes the
+variable count and infers the field from the table.
 
 Compile from the repository root:
 

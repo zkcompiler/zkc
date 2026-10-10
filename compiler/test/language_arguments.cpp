@@ -76,6 +76,19 @@ int main() {
     refuses(check("enum C{Some(bool)}fn f(x:bool){return C::Some(value=x);}"),
             "source.call");
   });
+  cases.run("constructor payload labels refuse before type constraints", [] {
+    refuses(check("enum E{V(bool,index)}fn f(x:bool,n:index){"
+                  "return E::V(b=n,a=x);}"),
+            "source.call");
+    refuses(check(R"(
+      interface I{type Value:Drop;fn make(x:index)->Value;}
+      component Impl:I{
+        type Value:Drop=bool;
+        fn make(x:index)->Value{return Value(payload=x);}
+      }
+    )"),
+            "source.call");
+  });
   cases.run("interface names and concrete names bind their own contracts", [] {
     compile(R"(
       interface Ops<T:Type>{fn use_value(first:T,second:index)->(T,index);}

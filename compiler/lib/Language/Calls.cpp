@@ -78,8 +78,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     auto alt = llvm::find_if(*alternatives,
                              [&](auto &a) { return a.name == split.second; });
     if (alt == alternatives->end() ||
-        alt->fields.size() != expr.children.size() ||
-        !expr.callLabels.empty()) {
+        alt->fields.size() != expr.children.size()) {
       fail("source.call", "unknown alternative or wrong payload count",
            expr.span);
       return {};
@@ -100,7 +99,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
                 type, {}, expr.span);
   }
   if (callee.kind == Declaration::Kind::Associated) {
-    if (!local() || expr.children.size() != 1 || !expr.callLabels.empty()) {
+    if (!local() || expr.children.size() != 1) {
       fail("source.call",
            "associated constructor needs one local representation value",
            expr.span);
@@ -134,10 +133,6 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   if (ordered && math()) {
     fail("source.mode", "ordered calls require local or protocol mode",
          expr.span);
-    return {};
-  }
-  if (expr.children.size() != callee.inputs.size()) {
-    fail("source.call", "helper argument count mismatch", expr.span);
     return {};
   }
   const auto &staticArgs = inference->arguments.at(id);
@@ -225,16 +220,6 @@ std::optional<ValueId> BodyChecker::bulk(const Expression &expr,
   const auto id = uint32_t(&expr - syntax.expressions.data());
   const auto &target = inference->callees.at(id);
   const auto &callee = checker.output.declarations[target.declaration.index];
-  if (callee.kind != Declaration::Kind::Math || callee.abstract ||
-      target.component || callee.outputs.size() != 1 ||
-      expr.children.size() != callee.inputs.size() ||
-      !llvm::is_contained(expr.each, true)) {
-    fail("source.map",
-         "map requires a static, defined math fn and at least one each "
-         "argument",
-         expr.span);
-    return {};
-  }
   const auto &staticArgs = inference->arguments.at(id);
   auto subst = checker.types.substitution(callee, staticArgs);
   auto field =

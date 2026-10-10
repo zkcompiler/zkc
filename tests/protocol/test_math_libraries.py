@@ -93,6 +93,28 @@ run Demo=Run;
     assert 'split' in str(report)
 
 
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
+@pytest.mark.parametrize('helper,operator,skip', [('both', '&&', False), ('either', '||', True)])
+def test_boolean_library_calls_remain_eager(toolchain, journal, directory, flags,
+                                          helper, operator, skip):
+    source = f'''module sample;
+fn checked(ok:bool){{require ok;return ok;}}
+fn evaluate(go:bool,ok:bool,eager:bool){{
+  return if eager{{zkc::boolean::{helper}(left=go,right=checked(ok))}}
+         else{{go {operator} checked(ok)}};
+}}
+protocol Run roles(P)(go:bool@P,ok:bool@P,eager:bool@P)->(result:bool@P){{
+  return evaluate(go,ok,eager);
+}}
+run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
+    assert entry.run('skipped', {'go': skip, 'ok': False, 'eager': False}) == {'result': skip}
+    entry.run('evaluated', {'go': skip, 'ok': False, 'eager': True},
+              refuses='entry-run-incomplete')
+    assert entry.run('accepted', {'go': skip, 'ok': True, 'eager': True}) == {'result': skip}
+
+
 def test_formal_contract_and_execution_modes_refuse(toolchain, journal, directory):
     prefix = '''module sample;
  domain F=field("bls12-381.fr");
