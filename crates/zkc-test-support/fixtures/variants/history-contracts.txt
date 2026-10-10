@@ -45,6 +45,7 @@ field.neg 0
 field.sub 0
 field_array.at 0
 field_array.from_vector 0
+field_array.get 0
 fixed_vector.dot 0
 fixed_vector.from_vector 0
 fixed_vector.to_vector 0
@@ -62,6 +63,7 @@ indices.empty 0
 indices.length 0
 matrix.bilinear 0
 matrix.dimension 0
+matrix.get 0
 matrix.identity_check 0
 matrix.mul_vector 0
 matrix.shape_check 0

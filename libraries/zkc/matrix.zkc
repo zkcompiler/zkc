@@ -2,6 +2,7 @@ module zkc::matrix;
 use zkc::vector::{Vector};
 
 pub type Matrix<F: Field> = builtin("matrix", F);
+pub fn get<F: Field>(matrix: Matrix<F>, row: index, column: index) -> F = primitive("matrix.get");
 pub fn multiply<F: Field>(matrix: Matrix<F>, values: Vector<F>) -> Vector<F> = primitive("matrix.mul_vector");
 pub fn transpose_multiply<F: Field>(matrix: Matrix<F>, values: Vector<F>) -> Vector<F> = primitive("matrix.transpose_mul_vector");
 pub fn bilinear<F: Field>(matrix: Matrix<F>, left: Vector<F>, right: Vector<F>) -> F = primitive("matrix.bilinear");

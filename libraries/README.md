@@ -10,7 +10,8 @@ concrete domains, Entries and transcript constructions in
 | Module | Public exports | Contract |
 |---|---|---|
 | [`zkc::vector`](zkc/vector.zkc) | `Vector`, length/get/sum/product/split/add/hadamard/scale/dot/fill/fold/has_length, reduction bindings `∑`/`∏` | Ordered finite vectors; fold pairs contiguous halves |
-| [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, multiply/transpose_multiply/bilinear/rows/columns | Ordered sparse matrix operations |
+| [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, get/multiply/transpose_multiply/bilinear/rows/columns | Ordered sparse matrix operations |
+| [`zkc::field_array`](zkc/field_array.zkc) | `Array`, from_vector/get | Fixed-length field arrays with checked native construction and dynamic access |
 | [`zkc::polynomial`](zkc/polynomial.zkc) | `Polynomial`, from_coefficients/evaluate/boundary | Runtime univariate polynomial data; boundary is p(0) + p(1) |
 | [`zkc::symbolic`](zkc/symbolic.zkc) | `Array`, `Polynomial`, pack/get/mle/from_coefficients/coefficients/evaluate/fix_prefix/sum_suffix/fix_table/add/multiply/constant | Total formal polynomial expressions |
 | [`zkc::boolean`](zkc/boolean.zkc) | both/either/different/negate | Total Boolean formulas; eager operands |
@@ -32,6 +33,17 @@ It fixes one Boolean coordinate of an evaluation table. FRI folding additionally
 uses its coset points and keeps its separate domain-specific operation.
 `has_length<F, N>` compares the dynamic
 length with explicit static `N`; it does not resize or pad a vector.
+
+`zkc::matrix::get(matrix, row, column)` checks both dynamic coordinates and
+returns the coefficient in the matrix's field. An absent in-range sparse cell
+is zero; an out-of-range coordinate stops execution, including every access to
+a matrix with either dimension zero.
+`zkc::field_array::from_vector<F, N>(values)` checks that the vector has exactly
+`N` elements. `zkc::field_array::get(array, position)` checks `position < N`.
+Both are ordinary native functions; fixed field arrays currently execute only
+over BLS12-381 Fr. This `Array` has the same type as `zkc::symbolic::Array`.
+The symbolic module's static `get<F, N, I>` retains its mathematical bound
+requirement. A dynamic `index` alone establishes no such bound.
 
 `zkc::symbolic::Polynomial<F, N>` is a formal expression with `N` variables.
 `zkc::polynomial::Polynomial<F>` is runtime univariate coefficient data. Use

@@ -120,6 +120,7 @@ def RingAffineSumOp : KernelOp<AlgebraDialect, "exec.ring_affine_sum", [OpRingAf
 def MatrixMulVectorOp : KernelOp<AlgebraDialect, "exec.matrix_mul_vector", [OpMatrixMulVector]>;
 
 def MatrixDimensionOp : KernelOp<AlgebraDialect, "exec.matrix_dimension", [OpMatrixDimension]>;
+def MatrixGetOp : KernelOp<AlgebraDialect, "exec.matrix_get", [OpMatrixGet]>;
 
 def MatrixShapeCheckOp : KernelOp<AlgebraDialect, "exec.matrix_shape_check", [OpMatrixShapeCheck]>;
 
@@ -222,6 +223,7 @@ def SubtractFieldOp : TotalMathOp<AlgebraDialect, "field_subtract", Field,
 def FieldArrayFromVectorOp : KernelOp<AlgebraDialect, "exec.field_array_from_vector",
                                     [OpFieldArrayFromVector]>;
 def FieldArrayAtOp : KernelOp<AlgebraDialect, "exec.field_array_at", [OpFieldArrayAt]>;
+def FieldArrayGetOp : KernelOp<AlgebraDialect, "exec.field_array_get", [OpFieldArrayGet]>;
 
 
 def PairingOp : TotalMathOp<AlgebraDialect, "pairing", Group, Group, Group, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;

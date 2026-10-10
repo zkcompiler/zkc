@@ -125,6 +125,15 @@ identity. This complete identity is checked independently in C++ and Rust.
 Other fields can have mathematical formation without an installed native array
 provider.
 
+`field_array.get<F,N>(array, position)` is ordinary checked execution with a
+dynamic `index` operand and no attributes. It returns the element of `F` at
+`position` when `position < N`, otherwise refusing with `field-array-index`.
+Length zero has no valid access, and large indices cannot wrap into range.
+`field_array.at<F,N>` remains the separate checked kernel with a static index
+attribute used by mathematical lowering. Neither executable kernel establishes
+total mathematical access; the mathematical static operation has its own bound
+premise. `field_array.from_vector<F,N>` checks exact length before construction.
+
 Arrays use immutable shared storage. Their generic custody declaration is
 `PrivateImmutable` (copy and drop); codec support is an independent property.
 This classification does not assert secrecy. The mathematical profile permits

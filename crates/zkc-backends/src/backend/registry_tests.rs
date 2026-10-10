@@ -1030,6 +1030,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "field.sub",
         "matrix.bilinear",
         "matrix.dimension",
+        "matrix.get",
         "matrix.identity_check",
         "matrix.mul_vector",
         "matrix.shape_check",

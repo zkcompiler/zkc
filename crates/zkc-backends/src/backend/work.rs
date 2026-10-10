@@ -15,7 +15,8 @@ pub(super) fn operand_work(contract: &str, args: &[Value]) -> Option<u64> {
         }
         // One element or handle selected from a collection, plus the index.
         (
-            "opening_states.at" | "commitments.at" | "sequence.at" | "vector.get",
+            "opening_states.at" | "commitments.at" | "sequence.at" | "vector.get"
+            | "field_array.get",
             [_, Value::Index(_)],
         ) => 2 * HANDLE,
         ("field_array.at", [_]) => HANDLE,

@@ -33,6 +33,7 @@
       "matrix.mul_vector",
       "matrix.transpose_mul_vector",
       "matrix.bilinear",
+      "matrix.get",
       "matrix.shape_check",
       "matrix.identity_check",
       "vector.constant",
@@ -179,6 +180,7 @@
     ],
     "array": [
       "field_array.from_vector",
+      "field_array.get",
       "field_array.at"
     ],
     "native_data_observation": [

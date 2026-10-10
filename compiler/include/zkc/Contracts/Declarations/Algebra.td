@@ -192,6 +192,14 @@ def OpMatrixDimension : ZKC_Operation<"matrix.dimension", [OpMatrixDimensionF],
 def ExportMatrixDimension : ZKC_OperationExport<"zkc::algebra", "matrix_dimension",
     OpMatrixDimension, ["matrix"]>;
 
+def OpMatrixGetF : ZKC_Root<"F", FieldDomain>;
+def OpMatrixGet : ZKC_Operation<"matrix.get", [OpMatrixGetF],
+    [ZKC_Apply<TypeMatrix, [OpMatrixGetF]>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeIndex, []>], [ZKC_Apply<TypeField, [OpMatrixGetF]>],
+    [ZKC_Holds<CapabilityField, [OpMatrixGetF]>]>;
+def ExportMatrixGet : ZKC_OperationExport<"zkc::algebra", "matrix_get",
+    OpMatrixGet, ["matrix", "row", "column"]>;
+
 def OpMatrixShapeCheckF : ZKC_Root<"F", FieldDomain>;
 def OpMatrixShapeCheck : ZKC_Operation<"matrix.shape_check", [OpMatrixShapeCheckF],
     [ZKC_Apply<TypeMatrix, [OpMatrixShapeCheckF]>],

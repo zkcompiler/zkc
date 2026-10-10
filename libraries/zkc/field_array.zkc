@@ -1,0 +1,6 @@
+module zkc::field_array;
+use zkc::vector::{Vector};
+
+pub type Array<F: Field, N: nat> = builtin("field_array", F, N);
+pub fn from_vector<F: Field, N: nat>(values: Vector<F>) -> Array<F, N> = primitive("field_array.from_vector");
+pub fn get<F: Field, N: nat>(values: Array<F, N>, position: index) -> F = primitive("field_array.get");
