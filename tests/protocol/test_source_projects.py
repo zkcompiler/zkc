@@ -77,7 +77,7 @@ def test_sumcheck_uses_received_coefficients_and_actual_claim(toolchain, journal
     proof = directory / 'proof.bin'
     journal.run([toolchain.runtime, 'prove', package, pin, producer, proof])
     rejected = json.loads(journal.run([toolchain.runtime, 'verify', package, pin, verifier, proof], refuses='artifact-stopped'))
-    assert rejected['execution']['stop']['role'] == 'V'
+    assert rejected['execution']['stop']['role'] == 'role00000001'
     assert rejected['execution']['stop']['kind'] == 'Explicit("reject")'
     producer.write_text(json.dumps(read('sumcheck', 'prover')))
     verifier.write_text(json.dumps(read('sumcheck', 'verifier')))

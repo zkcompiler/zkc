@@ -252,7 +252,8 @@ run Demo=Run;
     assert entry.run_roles('zero', roles(0, False))['V'] == {'r': True}
     assert entry.run_roles('pass', roles(1, True))['V'] == {'r': True}
     report = entry.run_roles('stop', roles(1, False), refuses='entry-run-incomplete')
-    stopped = next(role for role in report['execution']['roles'] if role['role'] == owner)
+    native_owner = f'role{("P", "V").index(owner):08x}'
+    stopped = next(role for role in report['execution']['roles'] if role['role'] == native_owner)
     assert stopped['before'][1]['cause'] == ['explicit', {'omitted_bytes': 0, 'text': 'reject'}]
     assert 'loop-count-disagreement' not in str(report)
     assert 'provenance' not in str(report)
