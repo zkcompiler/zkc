@@ -35,7 +35,9 @@ bool boundWithoutField(StringRef contract) {
 // Expand one map's helper into a detached scalar function. Its single block is
 // the complete scalar formula; the Ring view admits every operation in it,
 // including unused ones, and preserves every input slot. The helper and its
-// callees are cloned, never edited.
+// callees are cloned, never edited. The root helper is charged to the shared
+// budgets before it is cloned, as helper observation does; inlining then
+// charges only the callees it expands.
 FailureOr<OwningOpRef<func::FuncOp>>
 scalarFormula(algebra::MapRealizeOp map, protocol_ir::ProtocolModuleOp unit,
               SymbolTableCollection &symbols, unsigned &remaining,
@@ -46,6 +48,8 @@ scalarFormula(algebra::MapRealizeOp map, protocol_ir::ProtocolModuleOp unit,
                       "expected a helper body");
     return failure();
   }
+  if (failed(chargeHelperOperations(helper, remaining, indices, work)))
+    return failure();
   OwningOpRef<func::FuncOp> scratch(cast<func::FuncOp>(helper->clone()));
   if (failed(inlineHelpers(*scratch, remaining, indices, symbols, unit, work)))
     return failure();

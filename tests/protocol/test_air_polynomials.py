@@ -50,6 +50,55 @@ def zero_polynomial_at(roots, x):
     return result
 
 
+SCOPE_CLIENT = '''module example;
+use air_polynomial::{Vector, vanishing_values, vanishing, empty, append, length, get};
+domain E = field("koala-bear.ext8-binomial3");
+protocol Run roles(P)(height:index@P, begin:index@P, end:index@P, shift:E@P,
+ size:index@P, samples:Vector<E>@P) -> (scope:Vector<E>@P, sampled:Vector<E>@P) {
+ let scope@P=vanishing_values(height,begin,end,shift,size);
+ let sampled@P=sample(height,begin,end,samples);
+ return (scope=scope,sampled=sampled);
+}
+fn sample(height:index,begin:index,end:index,samples:Vector<E>) -> Vector<E> {
+ let mut results=empty<E>();
+ for i in 0..length(samples) {
+  results=append(results,vanishing(height,begin,end,get(samples,i)));
+ }
+ return results;
+}
+entry Demo=Run;
+'''
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_scope_polynomials_on_intersecting_cosets(toolchain, journal, directory, flags):
+    source = directory / 'scope.zkc'
+    source.write_text(SCOPE_CLIENT)
+    package = directory / 'scope.entry'
+    report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+                           f'--module=example={source}', f'--module=air_polynomial={LIBRARY}',
+                           '--entry=example::Demo', f'--output={package}', *flags])
+    height = 8
+    subgroup = points(height)
+    samples = subgroup + [ZERO, SHIFT]
+    # Equal, smaller, larger and shifted intersecting domains, plus a disjoint
+    # control. Scalar samples include every active and every complement root.
+    for size, shift in [(4, ONE), (8, ONE), (16, ONE), (4, subgroup[1]), (16, SHIFT)]:
+        coset = points(size, shift)
+        for begin, end in [(0, 7), (1, 8), (1, 7), (0, 8), (3, 3), (2, 5)]:
+            inputs = {'height': height, 'begin': begin, 'end': end, 'size': size,
+                      'shift': wire([shift], True), 'samples': wire(samples)}
+            request = journal.write('inputs.json', {'format': 'zkc.entry-run/0',
+                'session': 'scope_roots', 'roles': {'P': {'inputs': inputs}}})
+            output = directory / 'outputs.json'
+            journal.run([toolchain.runtime, 'run', package, report['package_sha256'], request,
+                         f'--results={output}'])
+            actual = json.loads(output.read_text())['roles']['P']
+            roots = subgroup[begin:end]
+            assert actual['scope'] == wire([zero_polynomial_at(roots, at) for at in coset])
+            assert actual['sampled'] == wire([zero_polynomial_at(roots, at) for at in samples])
+
+
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
 def test_scope_polynomials_and_column_extensions(toolchain, journal, directory, flags):
     source = directory / 'client.zkc'

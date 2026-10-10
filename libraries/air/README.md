@@ -22,6 +22,14 @@ assertion and interaction expressions. Native polynomial, vector and commitment 
 implement their own mathematical contracts. The source modules choose the
 quotient combination, challenge schedule and acceptance conditions.
 
+`vanishing(height,begin,end,x)` evaluates the product over subgroup rows
+`[begin,end)` at any field point, including excluded subgroup roots.
+`vanishing_values` evaluates that same polynomial on the supplied two-adic
+coset. Both use the complement shortcut where its denominator is nonzero;
+the scalar helper falls back at a removable pole, and the vector helper uses
+direct products on intersecting cosets. Full scopes keep geometric evaluation.
+The STARK profiles use disjoint evaluation domains and retain the fast path.
+
 ## Single-table statement and supported relation
 
 `TableArgument<Table,B,LogHeight,LogSize,Queries,Attempts>` proves the assertions

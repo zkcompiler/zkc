@@ -9,6 +9,15 @@ mlir::LogicalResult inlineHelpers(mlir::Operation *body, unsigned &remaining,
                                   mlir::SymbolTableCollection &symbols,
                                   mlir::Operation *lookupRoot = nullptr,
                                   uint64_t *work = nullptr);
+// Charge every operation of one helper, including the helper itself, its
+// terminator and operations no result reaches, to the budgets inlineHelpers
+// charges its callees to: one operation, its operand/result slots, and one
+// more than those slots of optional work. Callers charge a root helper before
+// cloning it so the clone never exceeds what the budgets admit.
+mlir::LogicalResult chargeHelperOperations(mlir::Operation *helper,
+                                           unsigned &remaining,
+                                           uint64_t &indices,
+                                           uint64_t *work = nullptr);
 // Closed execution vocabulary of the mathematical recipes. Admission of a
 // data signature alone does not establish that an operation is total.
 bool isCalculationContract(llvm::StringRef contract);
