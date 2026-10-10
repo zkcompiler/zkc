@@ -194,8 +194,10 @@ all `F`. Anything else, including unused work in another field, refuses with
 `algebra-map-formula` during ordinary IR verification. The rule reads each helper
 body at most once per field in one verification, without expansion.
 
-Preparation clones the helper, expands its callees with bounded helper expansion
-and admits the detached formula with the shared
+Preparation charges the root helper, including unused operations, before cloning
+it and charges each callee body as it is expanded. Both use the shared helper
+expansion budget; exhaustion refuses with `mathematical-expansion-limit`.
+It admits the detached formula with the shared
 [Ring view](../domains/ring-expressions.md), which applies the
 [Ring limits](limits.md) to the expanded formula: 65,536 nodes and depth 1,024.
 These limits depend on expansion, so a declaration that passes verification can
