@@ -10,6 +10,8 @@ namespace zkc::language {
 namespace {
 StringRef position(NotationDescriptor::Position position) {
   switch (position) {
+  case NotationDescriptor::Position::Reduction:
+    return "reduction";
   case NotationDescriptor::Position::Prefix:
     return "prefix";
   case NotationDescriptor::Position::Infix:
@@ -72,10 +74,10 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
                         scope.span))
       return std::move(error);
     for (const auto &import : scope.imports)
-      if (auto error =
-              work.charge(import.names.size() + import.operators.size() +
-                              import.notations.size(),
-                          import.span))
+      if (auto error = work.charge(
+              import.names.size() + import.operators.size() +
+                  import.notations.size() + import.reductions.size(),
+              import.span))
         return std::move(error);
   }
   for (unsigned i = 0; i < bindings.size(); ++i) {
@@ -289,6 +291,7 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
                 strings("names", import.names);
                 strings("operators", import.operators);
                 strings("notations", import.notations);
+                strings("reductions", import.reductions);
               });
             }
           });

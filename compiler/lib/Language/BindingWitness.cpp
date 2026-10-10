@@ -23,6 +23,7 @@ bool checkNotationArity(Semantics &types, const NotationDescriptor &notation,
   using Position = NotationDescriptor::Position;
   bool valid = false;
   switch (notation.position) {
+  case Position::Reduction:
   case Position::Prefix:
   case Position::Postfix:
     valid = notation.arity == 1;

@@ -77,7 +77,7 @@ fn package() -> Package {
     ];
     let doc = json!({"format":"zkc.language-interface/0","capture":digest("capture"),"original":digest("original"),"toolchain":"test","entry":"数学::Entry","protocol":"main",
         "protocols":[{"symbol":"main","roles":["役"],"inputs":inputs,"outputs":[],"services":[{"name":"乱数", "owner":"役", "contract":"random.bls12-381.fr/0", "native":names.len()+2}],"clauses":[]}],"relations":[],"setups":[{"name":"鍵₂", "inputs":[{"port":4,"path":[]}]}],"job":{"kind":"run"}});
-    let frame = json!({"format":"zkc.entry/0","original":"original","interface":doc.to_string(),"artifact":"metadata-only binding fixture","options":{"simplify":true,"release_storage":false},"assets":[]}).to_string();
+    let frame = json!({"format":"zkc.entry/0","original":"original","interface":doc.to_string(),"artifact":"metadata-only binding fixture","options":{"simplify":true,"release_storage":false,"fuse_vector_reductions":false},"assets":[]}).to_string();
     Package::capture(
         frame.as_bytes(),
         &Sha256::digest(frame.as_bytes()).into(),

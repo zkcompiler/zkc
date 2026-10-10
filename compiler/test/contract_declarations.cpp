@@ -81,6 +81,34 @@ int main() {
   requires("poly.univariate_evaluate", "CommRing");
   requires("poly.evaluate", "CommRing");
   requires("field.add", "Field");
+  requires("vector.product", "Field");
+  const auto &product = signature("vector.product");
+  check(product.inputs.size() == 1 && product.outputs.size() == 1 &&
+            type(product.inputs[0], "vector", {0}) &&
+            type(product.outputs[0], "field", {0}),
+        "product contracts one vector to its own field scalar");
+  for (StringRef field : {"bls12-381.fr", "bn254.fr", "ristretto255.scalar",
+                          "koala-bear", "koala-bear.ext8-binomial3"}) {
+    BindingApplication binding{"vector.product", {field.str()}, ""};
+    auto logical = resolveBinding(binding, false);
+    check(bool(logical), "product logical field binding");
+    if (!logical)
+      consumeError(logical.takeError());
+    auto implementation = defaultImplementation(binding);
+    check(bool(implementation), "product has a default field implementation");
+    if (implementation) {
+      binding.implementation = *implementation;
+      auto physical = resolveBinding(binding, true);
+      check(bool(physical), "product physical field binding");
+      if (!physical)
+        consumeError(physical.takeError());
+    } else
+      consumeError(implementation.takeError());
+    success(checkParameters(binding, {}), "product takes no parameters");
+    auto unexpected = checkParameters(binding, {"0"});
+    check(bool(unexpected), "product refuses parameters");
+    consumeError(std::move(unexpected));
+  }
   requires("poly.coset_evaluate", "TwoAdicField");
   requires("random.draw", "Field");
   requires("random.index", "IndexRandomness");

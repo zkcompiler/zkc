@@ -53,7 +53,9 @@ int main(int argc, char **argv) {
   if (admitted->identity() != original->identity() ||
       admitted->interfaceJson() != original->interfaceJson())
     return 41;
-  auto execution = zkc::language::compileEntry(*admitted);
+  zkc::language::EntryOptions options;
+  options.fuseVectorReductions = true;
+  auto execution = zkc::language::compileEntry(*admitted, options);
   if (!execution) {
     llvm::errs() << llvm::toString(execution.takeError());
     return 34;

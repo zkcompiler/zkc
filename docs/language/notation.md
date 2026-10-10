@@ -75,8 +75,8 @@ An existing unambiguous descriptor permits the short form
 `operator ⊙ = another_hadamard;`. Prefix and infix may share a symbol, which
 then requires an explicit fixity when binding it. Postfix and infix cannot
 share a symbol. Custom operators are single admitted mathematical scalars;
-arbitrary words and strings are not operators. `∑` and `∏` are reserved for
-future binders and currently have no reduction syntax.
+arbitrary words and strings are not operators. `∑` and `∏` use the separate
+reduction declarations below.
 
 Delimiter declarations name holes, not variables to substitute into arbitrary
 code. `dot(left, right)` must use each hole once in that order. A wrapper function
@@ -91,6 +91,39 @@ explicit descriptors. A local binding replaces that descriptor's inherited
 callable family. A type mismatch does not fall back to an outer binding.
 Return types and effects cannot choose between targets accepting the same fixed
 input types; use a named call or an explicit local binding to resolve ambiguity.
+
+## Reduce finite vectors
+
+```zkc
+use zkc::vector as vec;
+fn weighted<F: Field>(xs: vec::Vector<F>, ys: vec::Vector<F>, α: F) -> F {
+  return ∑ [(x, y) in zip(xs, ys)] { x * y + α };
+}
+fn shifted_product<F: Field>(xs: vec::Vector<F>, α: F) -> F {
+  return reduce vec::product [x in xs] { x + α };
+}
+```
+
+The vector library declares `pub reduction ∑ = sum;` and
+`pub reduction ∏ = product;`. Named `reduce vec::sum [...] { ... }` and
+`reduce vec::product [...] { ... }` remain available without symbol imports.
+For selective imports, write
+`use zkc::vector::{Vector, reduction ∑, reduction ∏};`. A body declaration
+prefix can select a different reducer with `reduction ∑ = my_sum;`; it follows
+ordinary callable resolution and local replacement rules.
+
+Collections evaluate once in written order; captures such as `α` are then read
+once in first textual-use order. Row names exist only inside the scalar body
+and may shadow outer names. Explicit `zip` is strict: every vector must have
+the same length, including a row written `_` or unused by the body. Matched
+empty rows give zero for library sum and one for library product.
+
+This profile accepts field vectors and pure field-ring scalar bodies in local
+functions, with immutable whole-scalar captures of the same field. Nested
+binders, arbitrary collections, mutable or aggregate captures, and effectful
+scalar bodies are unsupported. A custom defined local reducer can stop and
+retains its ordinary behavior. See the [finite reduction contract](../spec/language/definitions.md#finite-vector-reductions)
+for the precise body and helper limits.
 
 ## Inspect notation and locations
 

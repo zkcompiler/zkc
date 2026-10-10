@@ -122,21 +122,35 @@ bool Checker::imports() {
                                               import.operators.end());
       std::set<std::string> selectedNotations(import.notations.begin(),
                                               import.notations.end());
+      std::set<std::string> selectedReductions(import.reductions.begin(),
+                                               import.reductions.end());
       for (auto site : exportedOperators[target]) {
         if (!types.charge(1, import.span))
           return false;
         const auto &binding = syntax[site.first].operators[site.second];
         const auto &symbol = binding.symbol;
         bool delimited = !binding.holes.empty();
-        if (!import.alias &&
-            !is_contained(delimited ? import.notations : import.operators,
-                          symbol))
+        bool reduction =
+            binding.notation && binding.notation->position ==
+                                    NotationDescriptor::Position::Reduction;
+        if (!import.alias && !is_contained(reduction   ? import.reductions
+                                           : delimited ? import.notations
+                                                       : import.operators,
+                                           symbol))
           continue;
-        (delimited ? selectedNotations : selectedOperators).erase(symbol);
+        (reduction   ? selectedReductions
+         : delimited ? selectedNotations
+                     : selectedOperators)
+            .erase(symbol);
         visibleOperators[id].push_back(site);
         if (import.isPublic)
           exportedOperators[id].push_back(site);
       }
+      if (!selectedReductions.empty())
+        return types.fail("source.import",
+                          "module does not export reduction " +
+                              *selectedReductions.begin(),
+                          import.span);
       if (!selectedNotations.empty())
         return types.fail("source.import",
                           "module does not export notation " +

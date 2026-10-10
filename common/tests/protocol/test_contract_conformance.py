@@ -508,6 +508,9 @@ def test_explicit_semantic_witnesses(drivers, directory):
     # Independently authored signatures keep a shared inventory error visible.
     witnesses = [
         ("field.add", ["koala-bear"], ["field:koala-bear"] * 2, ["field:koala-bear"]),
+        *(("vector.product", [field], [f"vector:{field}"], [f"field:{field}"])
+          for field in ("bls12-381.fr", "bn254.fr", "ristretto255.scalar",
+                        "koala-bear", "koala-bear.ext8-binomial3")),
         ("poly.univariate_evaluate", ["bls12-381.fr"],
          ["polynomial:bls12-381.fr", "field:bls12-381.fr"], ["field:bls12-381.fr"]),
         ("poly.evaluate", ["bls12-381.fr"],
@@ -946,7 +949,7 @@ def admission_failures(cases, replies):
 def test_actual_parameter_and_program_admission(drivers, directory):
     cases = json.loads((FIXTURES / "attribute-admission.json").read_text())
     assert len({case["name"] for case in cases}) == len(cases)
-    assert 60 <= len(cases) <= 100, "review the bounded attribute witness set"
+    assert 60 <= len(cases) <= 103, "review the bounded attribute witness set"
     replies = query(drivers, [attribute_request(case) for case in cases], directory)
     finish(directory, admission_failures(cases, replies))
 

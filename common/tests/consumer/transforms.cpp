@@ -40,7 +40,7 @@ int main() {
   zkc::protocol_ir::MathematicalReturnOp::create(
       builder, location, mlir::ValueRange{value.getResult()});
   mlir::PassManager pipeline(&context);
-  pipeline.addPass(zkc::protocol::createProjectProtocolPass());
+  pipeline.addPass(zkc::protocol::createProjectProtocolPass(true, true));
   pipeline.addPass(zkc::protocol::createSimplifyParticipantPass());
   if (failed(pipeline.run(*module)))
     return 1;

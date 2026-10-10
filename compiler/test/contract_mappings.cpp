@@ -128,6 +128,7 @@ constexpr ExpectedMapping expected[] = {
     {"vector.matvec", "algebra.exec.vector_matvec"},
     {"vector.scale", "algebra.exec.vector_scale"},
     {"vector.sum", "algebra.exec.vector_sum"},
+    {"vector.product", "algebra.exec.vector_product"},
     {"vector.split", "algebra.exec.vector_split"},
     {"vector.at", "algebra.exec.vector_at"},
     {"vector.length_check", "algebra.exec.vector_length_check"},
@@ -360,6 +361,69 @@ module { "protocol.module"() ({
   });
   check(sites == 2, "arithmetic import lost or duplicated sites");
 }
+void importedProduct(MLIRContext &context) {
+  auto imported = mlir::parseSourceString<ModuleOp>(R"(
+!F = !algebra.field<"koala-bear">
+!V = tensor<?x!F>
+module { "protocol.module"() ({
+ "local.binding"() {sym_name="product",contract="vector.product",arguments=["koala-bear"],implementation=""} : ()->()
+ "local.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
+ "local.binding"() {sym_name="other",contract="vector.product",arguments=["bn254.fr"],implementation=""} : ()->()
+ local.func @Product(%xs:!V)->!F attributes {logical_origin=["Product",[]]} {
+   %result = "algebra.exec.vector_product"(%xs) {binding=@product,site="product_site",parameters=[]} : (!V)->!F
+   local.return %result : !F
+ }
+ "protocol.func"() ({^entry(%xs:!V):
+   %out = "protocol.local_call"(%xs) {callee=@Product,role="P",site="work"} : (!V)->!F
+   "protocol.return"(%out) : (!F)->()
+ }) {sym_name="main",function_type=(!V)->!F,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)",
+                                                    &context);
+  if (!check(bool(imported), "product fixture refused"))
+    return;
+  check(succeeded(verify(*imported)), "product fixture rejected");
+  unsigned sites = 0;
+  imported->walk([&](Operation *op) {
+    if (op->getName().getStringRef() != "algebra.exec.vector_product")
+      return;
+    ++sites;
+    std::vector<diagnostics::RefusalInfo> refusals;
+    ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {
+      llvm::append_range(refusals, diagnostics::refusals(diagnostic));
+      return success();
+    });
+    auto refuses = [&](StringRef code) {
+      refusals.clear();
+      check(failed(op->getName().verifyInvariants(op)),
+            "product mutation admitted");
+      check(llvm::any_of(refusals,
+                         [&](const auto &info) { return info.code == code; }),
+            "product mutation lost refusal identifier: " + code);
+    };
+    auto original = op->getAttr("binding");
+    op->setAttr("binding", FlatSymbolRefAttr::get(&context, "sum"));
+    refuses("binding-operation");
+    op->setAttr("binding", FlatSymbolRefAttr::get(&context, "other"));
+    refuses("binding-operation-signature");
+    op->setAttr("binding", original);
+    auto scalarType = op->getResult(0).getType();
+    op->getResult(0).setType(op->getOperand(0).getType());
+    refuses("binding-operation-signature");
+    op->getResult(0).setType(scalarType);
+    auto vectorType = op->getOperand(0).getType();
+    op->getOperand(0).setType(scalarType);
+    refuses("binding-operation-signature");
+    op->getOperand(0).setType(vectorType);
+    auto input = op->getOperand(0);
+    op->setOperands(ValueRange{});
+    refuses("binding-operation-signature");
+    op->setOperands(ValueRange{input});
+    check(succeeded(op->getName().verifyInvariants(op)),
+          "restored product refused");
+  });
+  check(sites == 1, "product import lost or duplicated its occurrence");
+}
 } // namespace
 
 int main() {
@@ -369,6 +433,7 @@ int main() {
   context.loadAllAvailableDialects();
   identities(context);
   importedArithmetic(context);
+  importedProduct(context);
   outs() << checks << " mapping checks, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

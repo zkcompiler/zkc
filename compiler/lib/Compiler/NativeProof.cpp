@@ -900,7 +900,8 @@ struct PreparedProof {
   StringMap<Origin> origins;
 };
 Expected<PreparedProof> prepareProof(ModuleOp source,
-                                     const NativeProofPolicy &policy) {
+                                     const NativeProofPolicy &policy,
+                                     bool fuseVectorReductions) {
   if (!source || failed(verify(source)))
     return error("native-proof-source");
   auto original = unit(source);
@@ -939,7 +940,8 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
     return error("native-proof-authored-transcript");
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
   PassManager passes(source.getContext());
-  passes.addPass(protocol::createPrepareProtocolPass(false));
+  passes.addPass(
+      protocol::createPrepareProtocolPass(false, fuseVectorReductions));
   if (failed(passes.run(*candidate)))
     return error("native-proof-preparation");
   if (!unit(*candidate))
@@ -948,12 +950,13 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
 }
 } // namespace
 Expected<NativeProofPolicy>
-selectNativeProofDraws(ModuleOp source, const NativeProofPolicy &selection) {
+selectNativeProofDraws(ModuleOp source, const NativeProofPolicy &selection,
+                       bool fuseVectorReductions) {
   auto policy =
       readProofPolicy(printJson(encodeNativeProofPolicy(selection)), true);
   if (!policy)
     return policy.takeError();
-  auto prepared = prepareProof(source, *policy);
+  auto prepared = prepareProof(source, *policy, fuseVectorReductions);
   if (!prepared)
     return prepared.takeError();
   SymbolTable symbols(unit(*prepared->module));
@@ -966,13 +969,14 @@ selectNativeProofDraws(ModuleOp source, const NativeProofPolicy &selection) {
   return parseNativeProofPolicy(printJson(encodeNativeProofPolicy(*policy)));
 }
 Expected<NativeProofConstruction>
-constructNativeProof(ModuleOp source, const NativeProofPolicy &policy) {
+constructNativeProof(ModuleOp source, const NativeProofPolicy &policy,
+                     bool fuseVectorReductions) {
   // Validate public API callers too; policy structs are not admission tokens.
   auto checked =
       parseNativeProofPolicy(printJson(encodeNativeProofPolicy(policy)));
   if (!checked)
     return checked.takeError();
-  auto preparedSource = prepareProof(source, policy);
+  auto preparedSource = prepareProof(source, policy, fuseVectorReductions);
   if (!preparedSource)
     return preparedSource.takeError();
   auto candidate = std::move(preparedSource->module);
@@ -1015,11 +1019,12 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy) {
                                  std::move(admitted->wireSites)};
 }
 Error checkNativeProof(ModuleOp source, ModuleOp candidate,
-                       const NativeProofPolicy &policy) {
+                       const NativeProofPolicy &policy,
+                       bool fuseVectorReductions) {
   if (!source || !candidate || candidate.getContext() != source.getContext() ||
       failed(verify(candidate)))
     return error("native-proof-candidate");
-  auto expected = constructNativeProof(source, policy);
+  auto expected = constructNativeProof(source, policy, fuseVectorReductions);
   if (!expected)
     return expected.takeError();
   if (!OperationEquivalence::isEquivalentTo(

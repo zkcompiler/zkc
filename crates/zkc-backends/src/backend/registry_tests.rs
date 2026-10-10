@@ -1099,6 +1099,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "vector.split",
         "vector.sub",
         "vector.sum",
+        "vector.product",
         "vector.to_point",
         "vector.to_table",
         "vector.transpose",

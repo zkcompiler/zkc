@@ -1,4 +1,7 @@
 [
+  {"name": "product-no-attributes", "contract": "vector.product", "arguments": ["bls12-381.fr"], "implementation": "arkworks/vector.product", "attributes": [], "admitted": true},
+  {"name": "product-extension-no-attributes", "contract": "vector.product", "arguments": ["koala-bear.ext8-binomial3"], "implementation": "plonky3/vector.product", "attributes": [], "admitted": true},
+  {"name": "product-extra-attribute", "contract": "vector.product", "arguments": ["ristretto255.scalar"], "implementation": "dalek/vector.product", "attributes": ["0"], "admitted": false},
   {"name": "ring-asset-canonical", "contract": "ring.point", "arguments": ["koala-bear"], "implementation": "plonky3/ring.point", "attributes": ["1b02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4"], "admitted": true},
   {"name": "ring-asset-extension", "contract": "ring.affine_sum", "arguments": ["koala-bear.ext8-binomial3"], "implementation": "plonky3/ring.affine_sum", "attributes": ["1b02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4"], "admitted": true},
   {"name": "ring-asset-uppercase", "contract": "ring.point", "arguments": ["koala-bear"], "implementation": "plonky3/ring.point", "attributes": ["AB02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4"], "admitted": false},

@@ -18,6 +18,7 @@ const ASSETS_BYTES: usize = zkc_backends::ring::REGISTRY_BYTE_LIMIT;
 pub struct CompileOptions {
     pub simplify: bool,
     pub release_storage: bool,
+    pub fuse_vector_reductions: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -207,7 +208,7 @@ mod tests {
     fn frame() -> String {
         json!({"format":"zkc.entry/0","original":"module\n{}",
             "interface":"{\"job\":{\"kind\":\"run\"}}", "artifact":"[]",
-            "options":{"simplify":true,"release_storage":false},"assets":[]})
+            "options":{"simplify":true,"release_storage":false,"fuse_vector_reductions":false},"assets":[]})
         .to_string()
     }
     fn capture(bytes: &[u8]) -> Result<Package, PackageError> {
@@ -233,7 +234,8 @@ mod tests {
             package.options(),
             CompileOptions {
                 simplify: true,
-                release_storage: false
+                release_storage: false,
+                fuse_vector_reductions: false,
             }
         );
         assert_eq!(package.clone().identity(), package.identity());
@@ -275,6 +277,15 @@ mod tests {
             original.replace("\"simplify\":true", "\"simplify\":\"true\""),
             original.replace("\"release_storage\":false", "\"other\":false"),
             original.replace("\"artifact\":\"[]\"", "\"artifact\":[]"),
+            original.replace(
+                "\"fuse_vector_reductions\":false",
+                "\"fuse_vector_reductions\":\"false\"",
+            ),
+            original.replace("\"fuse_vector_reductions\":false,", ""),
+            original.replace(
+                "\"fuse_vector_reductions\":false",
+                "\"fuse_vector_reductions\":false,\"fuse_vector_reductions\":false",
+            ),
             original.clone() + "{}",
         ] {
             assert!(
@@ -354,7 +365,7 @@ mod tests {
             Err(PackageError::Format)
         ));
         let value = frame().replace(
-            r#"{"release_storage":false,"simplify":true}"#,
+            r#"{"fuse_vector_reductions":false,"release_storage":false,"simplify":true}"#,
             "[true,false]",
         );
         assert_ne!(value, frame());

@@ -1,11 +1,14 @@
+#include "AlgorithmSupport.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Transforms/Algorithms.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseMap.h"
 
 using namespace mlir;
@@ -17,18 +20,20 @@ namespace {
 class AlgorithmCorrespondence {
   using Values = llvm::DenseMap<Value, Value>;
   SymbolTable symbols;
-  unsigned remaining = 1000000;
-  uint64_t originBytes = 16 * 1024 * 1024;
+  AlgorithmExpansionPhase phase;
+  const detail::AlgorithmExpansionRecord &input;
+  detail::AlgorithmExpansionRecord expected;
+  std::string functionName, declarationName, definitionName;
 
   LogicalResult refuse(Operation *op, StringRef reason) {
     return diagnostics::emit(op->emitOpError(), "algorithm-correspondence",
                              reason);
   }
   LogicalResult charge(Operation *op) {
-    if (!remaining)
+    if (!expected.checkWork)
       return diagnostics::emit(op->emitOpError(),
                                "algorithm-correspondence-limit");
-    --remaining;
+    --expected.checkWork;
     return success();
   }
   StringRef definition(local::FuncOp function) {
@@ -60,6 +65,16 @@ class AlgorithmCorrespondence {
     for (auto &op : source) {
       if (failed(charge(&op)))
         return failure();
+      if (!expected.work)
+        return diagnostics::emit(op.emitOpError(), "algorithm-expansion-limit");
+      --expected.work;
+      auto saved =
+          detail::occurrence(input, declarationName, attr(&op, "site"));
+      auto currentPath = saved ? saved->path : path;
+      auto originalSite = saved ? saved->originalSite : attr(&op, "site").str();
+      unsigned currentDepth = saved ? saved->depth : depth;
+      if (currentPath.size() > 64 || currentDepth > 64)
+        return refuse(&op, "expanded occurrence depth");
       if (auto ret = dyn_cast<local::ReturnOp>(op)) {
         for (auto value : ret.getOperands()) {
           auto mapped = values.lookup(value);
@@ -69,7 +84,9 @@ class AlgorithmCorrespondence {
         }
         return success();
       }
-      if (auto call = dyn_cast<local::ApplyOp>(op)) {
+      if (auto call = dyn_cast<local::ApplyOp>(op);
+          call && !(phase == AlgorithmExpansionPhase::RetainMaps &&
+                    symbols.lookup<algebra::MapRealizeOp>(call.getCallee()))) {
         auto callee = symbols.lookup<local::FuncOp>(call.getCallee());
         if (!callee || !callee.getBody().hasOneBlock())
           return refuse(&op, "missing local body");
@@ -81,12 +98,17 @@ class AlgorithmCorrespondence {
             return refuse(&op, "unbound actual argument");
           inner[argument] = mapped;
         }
-        auto nested = path;
-        nested.emplace_back(attr(&op, "site").str(), definition(callee).str());
+        auto nested = currentPath;
+        nested.emplace_back(originalSite, definition(callee).str());
+        auto oldDeclaration = declarationName, oldDefinition = definitionName;
+        declarationName = callee.getSymName().str();
+        definitionName = definition(callee).str();
         SmallVector<Value> results;
         if (failed(block(callee.getBody().front(), target, cursor, inner,
-                         nested, true, results, stopped, depth + 1)))
+                         nested, true, results, stopped, currentDepth + 1)))
           return failure();
+        declarationName = std::move(oldDeclaration);
+        definitionName = std::move(oldDefinition);
         if (stopped)
           return success();
         if (failed(bind(call.getResults(), results, values)))
@@ -101,15 +123,36 @@ class AlgorithmCorrespondence {
           op.getResultTypes() != actual.getResultTypes())
         return refuse(&actual, "operation identity");
       NamedAttrList attributes(op.getAttrs());
-      if (encode && op.hasAttr("site")) {
-        auto site = algorithmSite(path, attr(&op, "site"), originBytes);
+      if (isa<local::ApplyOp>(op) &&
+          (currentDepth >= 64 || currentPath.size() >= 64))
+        return refuse(&op, "retained map call depth");
+      if (encode && !saved && op.hasAttr("site")) {
+        auto site =
+            algorithmSite(currentPath, originalSite, expected.checkOriginBytes);
         if (!site)
           return diagnostics::emit(actual.emitOpError(), site.takeError());
+        // Producer and checker have independent cumulative encoding budgets.
+        auto measured =
+            algorithmSite(currentPath, originalSite, expected.originBytes);
+        if (!measured)
+          return diagnostics::emit(actual.emitOpError(), measured.takeError());
         attributes.set("site", StringAttr::get(op.getContext(), *site));
       }
       if (attributes.getDictionary(op.getContext()) !=
           actual.getAttrDictionary())
         return refuse(&actual, "operation attributes");
+      if (op.hasAttr("site")) {
+        auto record = saved ? *saved
+                            : detail::AlgorithmOccurrence{
+                                  definitionName, declarationName, originalSite,
+                                  currentPath, currentDepth};
+        if (!expected.occurrences
+                 .emplace(detail::OccurrenceKey{functionName,
+                                                attr(&actual, "site").str()},
+                          std::move(record))
+                 .second)
+          return refuse(&actual, "duplicate occurrence record");
+      }
       SmallVector<Value> operands;
       for (Value operand : op.getOperands()) {
         Value mapped = values.lookup(operand);
@@ -193,8 +236,8 @@ class AlgorithmCorrespondence {
         auto position = after.begin();
         SmallVector<Value> ignored;
         bool terminated = false;
-        if (failed(block(before, after, position, inner, path, encode, ignored,
-                         terminated, depth + 1, yields,
+        if (failed(block(before, after, position, inner, currentPath, encode,
+                         ignored, terminated, currentDepth + 1, yields,
                          isa<local::LocalForOp>(op))) ||
             position != after.end())
           return refuse(&actual, "region body correspondence");
@@ -210,8 +253,15 @@ class AlgorithmCorrespondence {
   }
 
 public:
-  explicit AlgorithmCorrespondence(protocol_ir::ProtocolModuleOp source)
-      : symbols(source) {}
+  AlgorithmCorrespondence(protocol_ir::ProtocolModuleOp source,
+                          AlgorithmExpansionPhase phase,
+                          const detail::AlgorithmExpansionRecord &input)
+      : symbols(source), phase(phase), input(input), expected(input) {
+    expected.occurrences.clear();
+    expected.retained = phase == AlgorithmExpansionPhase::RetainMaps;
+    expected.finished = phase == AlgorithmExpansionPhase::Finish;
+  }
+  const detail::AlgorithmExpansionRecord &result() const { return expected; }
   LogicalResult function(local::FuncOp before, local::FuncOp after) {
     if (before->getAttrDictionary() != after->getAttrDictionary() ||
         before.isExternal() != after.isExternal())
@@ -220,6 +270,9 @@ public:
       return success();
     if (!before.getBody().hasOneBlock() || !after.getBody().hasOneBlock())
       return refuse(after, "function body");
+    functionName = before.getSymName().str();
+    declarationName = functionName;
+    definitionName = definition(before).str();
     Values values;
     if (failed(bind(before.getArguments(), after.getArguments(), values)))
       return refuse(after, "function arguments");
@@ -245,13 +298,18 @@ public:
   }
 };
 } // namespace
-LogicalResult verifyAlgorithmExpansionPreserved(ModuleOp before,
-                                                ModuleOp after) {
+LogicalResult detail::checkAlgorithmExpansion(
+    ModuleOp before, ModuleOp after, AlgorithmExpansionPhase phase,
+    const AlgorithmExpansionRecord &input, AlgorithmExpansionRecord &output,
+    bool compareRecords) {
   if (failed(verify(before)) || failed(verify(after)))
     return failure();
   auto refuse = [&] {
     return diagnostics::emit(after.emitError(), "algorithm-correspondence");
   };
+  if (input.finished ||
+      (phase == AlgorithmExpansionPhase::RetainMaps && input.retained))
+    return refuse();
   if (before->getAttrDictionary() != after->getAttrDictionary() ||
       !hasSingleElement(*before.getBody()) ||
       !hasSingleElement(*after.getBody()))
@@ -262,7 +320,20 @@ LogicalResult verifyAlgorithmExpansionPreserved(ModuleOp before,
       a.getBody().front().getOperations().size() !=
           b.getBody().front().getOperations().size())
     return refuse();
-  AlgorithmCorrespondence check(a);
+  if (a.getProfile() != protocol_ir::Profile::Protocol)
+    return refuse();
+  if (phase == AlgorithmExpansionPhase::RetainMaps) {
+    uint64_t remaining = 1000000;
+    if (auto error = mathematical::checkMapFormulas(before, remaining)) {
+      consumeError(std::move(error));
+      return refuse();
+    }
+  } else {
+    for (Operation &op : a.getBody().front())
+      if (isa<PreparationCallableOpInterface>(op))
+        return refuse();
+  }
+  AlgorithmCorrespondence check(a, phase, input);
   for (auto [x, y] : zip(a.getBody().front(), b.getBody().front())) {
     if (auto function = dyn_cast<local::FuncOp>(x)) {
       auto candidate = dyn_cast<local::FuncOp>(y);
@@ -272,6 +343,32 @@ LogicalResult verifyAlgorithmExpansionPreserved(ModuleOp before,
                    &x, &y, OperationEquivalence::IgnoreLocations))
       return refuse();
   }
+  const auto &expected = check.result();
+  if (compareRecords && (expected.occurrences != output.occurrences ||
+                         expected.work != output.work ||
+                         expected.originBytes != output.originBytes ||
+                         expected.retained != output.retained ||
+                         expected.finished != output.finished))
+    return refuse();
+  output.checkWork = expected.checkWork;
+  output.checkOriginBytes = expected.checkOriginBytes;
   return success();
+}
+
+LogicalResult verifyAlgorithmExpansionPreserved(ModuleOp before,
+                                                ModuleOp after) {
+  detail::AlgorithmExpansionRecord input, output;
+  return detail::checkAlgorithmExpansion(
+      before, after, AlgorithmExpansionPhase::Finish, input, output, false);
+}
+
+LogicalResult verifyStagedAlgorithmExpansionPreserved(
+    ModuleOp before, ModuleOp after, AlgorithmExpansionPhase phase,
+    const AlgorithmExpansionState &beforeState,
+    const AlgorithmExpansionState &afterState) {
+  auto output = detail::AlgorithmStateAccess::get(afterState);
+  return detail::checkAlgorithmExpansion(
+      before, after, phase, detail::AlgorithmStateAccess::get(beforeState),
+      output, true);
 }
 } // namespace zkc::protocol

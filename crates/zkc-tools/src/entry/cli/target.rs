@@ -30,6 +30,7 @@ impl Target {
                             | "--compiler"
                             | "--no-simplify"
                             | "--release-storage"
+                            | "--fuse-vector-reductions"
                     )
                 }))
         {

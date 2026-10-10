@@ -35,8 +35,13 @@ Output commands accept `--entry-kind=run|proof` to restrict the eligible kind.
 An explicit name is resolved before kind checking; filtering cannot hide an
 ambiguous short name. With no name, exactly one eligible Entry is required.
 The application CLI offers `zkc check` with the same behavior and optional
-[project inputs](README.md#project-inputs). Module and Asset capture is explicit. `--no-simplify` and `--release-storage` select
-existing downstream compiler options for bundle production.
+[project inputs](README.md#project-inputs). Module and Asset capture is explicit.
+`--no-simplify`, `--release-storage` and `--fuse-vector-reductions` select
+downstream compiler options for bundle production. Vector reduction fusion is
+disabled by default and independent of the other choices; its
+[preparation contract](../spec/ir/protocols.md#optional-vector-reduction-fusion)
+compares values and ordered shape refusals under sufficient resources.
+`language-check` and `zkc check` reject executable optimization options.
 
 `--asset=NAME=FORMAT=FILE` adds explicitly captured relation data. Supported
 formats are `r1cs-json`, `r1cs-binary`, `air-json`, `ring-json` and
@@ -228,6 +233,13 @@ lengths, then computes every row with bulk vector operations. `r` is shared by
 all rows. Unequal lengths end execution like a failed vector kernel; `require`
 equal lengths first when a protocol should reject such inputs. The [map contract](../spec/language/definitions.md#checked-pointwise-maps)
 states the admitted helpers and refusals.
+
+To reduce an inline scalar body, write `reduce vec::sum [x in xs] { x * x }`
+or import the vector library's `∑`/`∏` bindings. Multiple rows require explicit
+strict `zip`; scalar captures are immutable snapshots after collection evaluation.
+The [notation guide](notation.md#reduce-finite-vectors) shows both spellings and
+the [source contract](../spec/language/definitions.md#finite-vector-reductions)
+defines the restricted body, capture order and helper checks.
 
 Type information also flows through nested expressions:
 

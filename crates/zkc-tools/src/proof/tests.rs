@@ -138,7 +138,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                 ["P", "prover", [], output_map, [], ""],
                 ["V", "verifier", [], [["0", "bool"]], [], "0"]
             ],
-            ["true", "false"],
+            ["true", "false", "false"],
             []
         ])
         .to_string();

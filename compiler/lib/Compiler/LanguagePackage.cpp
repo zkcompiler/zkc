@@ -40,6 +40,8 @@ Expected<EntryPackage> packageEntry(const CompiledEntry &entry,
     out.attributeObject("options", [&] {
       out.attribute("simplify", entry.options().simplify);
       out.attribute("release_storage", entry.options().releaseStorage);
+      out.attribute("fuse_vector_reductions",
+                    entry.options().fuseVectorReductions);
     });
   });
   if (stream.overflow())

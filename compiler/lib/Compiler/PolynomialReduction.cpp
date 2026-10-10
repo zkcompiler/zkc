@@ -619,7 +619,8 @@ Expected<json::Value> checkComposition(pir::ProtocolModuleOp source,
 
 Expected<json::Value> checkPolynomialReductions(ModuleOp original,
                                                 ModuleOp candidate,
-                                                StringRef text) {
+                                                StringRef text,
+                                                bool fuseVectorReductions) {
   auto requirements = parse(text);
   if (!requirements)
     return requirements.takeError();
@@ -652,7 +653,8 @@ Expected<json::Value> checkPolynomialReductions(ModuleOp original,
   // cannot make an incorrect authored verifier receive this report.
   OwningOpRef<ModuleOp> projected(cast<ModuleOp>(original->clone()));
   PassManager preparation(original.getContext());
-  preparation.addPass(protocol::createProjectProtocolPass(false));
+  preparation.addPass(
+      protocol::createProjectProtocolPass(false, fuseVectorReductions));
   if (failed(preparation.run(*projected)))
     return error("polynomial-correspondence-source");
   auto expected = cast<pir::ProtocolModuleOp>(projected->getBody()->front());
@@ -759,6 +761,7 @@ Expected<json::Value> checkPolynomialReductions(ModuleOp original,
   };
   return json::Object{
       {"format", "zkc.polynomial-correspondence/0"},
+      {"fuse_vector_reductions", fuseVectorReductions},
       {"requirements", std::move(results)},
       {"requirement_source", requirementSource},
       {"requirements_sha256", digest(requirementSource)},

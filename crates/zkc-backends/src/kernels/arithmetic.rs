@@ -430,6 +430,7 @@ fn dense<S: Family>(
             Ok(vec![S::vector_value(Arc::from([]))])
         }
         "vector.sum" => scalar(v(0)?.iter().fold(S::zero(), |s, x| s + *x)),
+        "vector.product" => scalar(v(0)?.iter().fold(S::one(), |product, x| product * *x)),
         "vector.dot" => {
             let (a, b) = (v(0)?, v(1)?);
             equal_len(a.len(), b.len())?;
@@ -1160,6 +1161,12 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             "dalek/vector.sum",
             "plonky3/vector.sum",
         ]),
+        field::operation("vector.product", &[Vector], &[Field], AttributeRule::None)
+            .implemented_by(&[
+                "arkworks/vector.product",
+                "dalek/vector.product",
+                "plonky3/vector.product",
+            ]),
         field::operation(
             "vector.dot",
             &[Vector, Vector],

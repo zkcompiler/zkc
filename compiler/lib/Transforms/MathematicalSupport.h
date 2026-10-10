@@ -1,7 +1,13 @@
 #ifndef ZKC_TRANSFORMS_MATHEMATICALSUPPORT_H
 #define ZKC_TRANSFORMS_MATHEMATICALSUPPORT_H
 #include "zkc/Dialect/Operations.h"
+#include <map>
 namespace zkc::mathematical {
+// Bounded derived view: every map formula is admitted, including dead work;
+// entries identify exactly a multiplication of two rowwise argument slots.
+// No IR or expression graph is stored in this view.
+mlir::FailureOr<std::map<std::string, std::pair<unsigned, unsigned>>>
+describeMapProducts(mlir::ModuleOp module);
 // Helpers operate only on an owned candidate whose original module passed
 // admission. Work budgets are shared across every selected definition.
 mlir::LogicalResult inlineHelpers(mlir::Operation *body, unsigned &remaining,

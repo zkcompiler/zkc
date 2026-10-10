@@ -355,6 +355,15 @@ def OpVectorSum : ZKC_Operation<"vector.sum", [OpVectorSumF],
 def ExportVectorSum : ZKC_OperationExport<"zkc::algebra", "vector_sum",
     OpVectorSum, ["vector"]>;
 
+def OpVectorProductF : ZKC_Root<"F", FieldDomain>;
+def OpVectorProduct : ZKC_Operation<"vector.product", [OpVectorProductF],
+    [ZKC_Apply<TypeVector, [OpVectorProductF]>],
+    [ZKC_Apply<TypeField, [OpVectorProductF]>], [ZKC_Holds<CapabilityField, [OpVectorProductF]>]> {
+  int ordinal = 160;
+}
+def ExportVectorProduct : ZKC_OperationExport<"zkc::algebra", "vector_product",
+    OpVectorProduct, ["vector"]>;
+
 def OpVectorSplitF : ZKC_Root<"F", FieldDomain>;
 def OpVectorSplit : ZKC_Operation<"vector.split", [OpVectorSplitF],
     [ZKC_Apply<TypeVector, [OpVectorSplitF]>],

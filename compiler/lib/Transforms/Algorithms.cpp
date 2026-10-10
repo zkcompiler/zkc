@@ -1,14 +1,16 @@
-#include "zkc/Transforms/Algorithms.h"
+#include "AlgorithmSupport.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
 #include "llvm/ADT/StringExtras.h"
@@ -99,8 +101,10 @@ LogicalResult canonicalizeCaptures(Operation *op) {
 class Expander {
   OpBuilder builder;
   std::map<std::string, zkc::local::FuncOp> functions;
-  size_t work = 0;
-  uint64_t originBytes = 16 * 1024 * 1024;
+  AlgorithmExpansionPhase phase;
+  const detail::AlgorithmExpansionRecord &input;
+  detail::AlgorithmExpansionRecord output;
+  std::map<std::string, algebra::MapRealizeOp> maps;
   std::vector<AlgorithmOrigin> origins;
 
   std::string definition(zkc::local::FuncOp function) {
@@ -112,19 +116,29 @@ class Expander {
   LogicalResult body(zkc::local::FuncOp function, Block &block,
                      IRMapping &mapping, StringRef root,
                      protocol::Assignments path, bool encode,
-                     SmallVector<Value> &returned) {
-    if (path.size() > 64)
+                     SmallVector<Value> &returned, unsigned depth = 0) {
+    if (path.size() > 64 || depth > 64)
       return diagnostics::emit(function.emitOpError(),
                                "interactive-call-depth");
     for (auto &op : block) {
       // Bound traversal as well as output: empty helpers can also form an
       // exponentially large DAG. Admission separately bounds depth/cycles.
-      if (++work > 32768)
+      if (!output.work)
         return diagnostics::emit(op.emitOpError(), "algorithm-expansion-limit");
+      --output.work;
+      auto saved =
+          detail::occurrence(input, function.getSymName(), attr(&op, "site"));
+      auto currentPath = saved ? saved->path : path;
+      auto originalSite = saved ? saved->originalSite : attr(&op, "site").str();
+      unsigned currentDepth = saved ? saved->depth : depth;
+      if (currentPath.size() > 64 || currentDepth > 64)
+        return diagnostics::emit(op.emitOpError(), "interactive-call-depth");
       if (auto ret = dyn_cast<zkc::local::ReturnOp>(op)) {
         for (auto value : ret.getOperands())
           returned.push_back(mapping.lookup(value));
-      } else if (auto call = dyn_cast<zkc::local::ApplyOp>(op)) {
+      } else if (auto call = dyn_cast<zkc::local::ApplyOp>(op);
+                 call && !(phase == AlgorithmExpansionPhase::RetainMaps &&
+                           maps.count(call.getCallee().str()))) {
         auto found = functions.find(call.getCallee().str());
         if (found == functions.end() || found->second.isExternal() ||
             !llvm::hasSingleElement(found->second.getBody()))
@@ -133,11 +147,11 @@ class Expander {
         IRMapping inner;
         for (auto [arg, value] : zip(callee.getArguments(), call.getOperands()))
           inner.map(arg, mapping.lookup(value));
-        auto nested = path;
-        nested.emplace_back(attr(&op, "site").str(), definition(callee));
+        auto nested = currentPath;
+        nested.emplace_back(originalSite, definition(callee));
         SmallVector<Value> results;
         if (failed(body(callee, callee.getBody().front(), inner, root,
-                        std::move(nested), true, results)))
+                        std::move(nested), true, results, currentDepth + 1)))
           return failure();
         if (!builder.getInsertionBlock()->empty() &&
             isa<zkc::local::StopOp>(builder.getInsertionBlock()->back()))
@@ -149,9 +163,13 @@ class Expander {
         builder.clone(op, mapping);
       } else {
         std::string site = attr(&op, "site").str();
-        std::string original = site;
-        if (encode) {
-          auto encoded = algorithmSite(path, site, originBytes);
+        std::string original = originalSite;
+        if (isa<local::ApplyOp>(op) &&
+            (currentPath.size() >= 64 || currentDepth >= 64))
+          return diagnostics::emit(op.emitOpError(), "interactive-call-depth");
+        if (encode && !saved) {
+          auto encoded =
+              algorithmSite(currentPath, original, output.originBytes);
           if (!encoded)
             return diagnostics::emit(op.emitOpError(), encoded.takeError());
           site = std::move(*encoded);
@@ -167,8 +185,8 @@ class Expander {
           OpBuilder::InsertionGuard guard(builder);
           builder.setInsertionPointToEnd(nestedBlock);
           SmallVector<Value> ignored;
-          if (failed(body(function, before.front(), inner, root, path, encode,
-                          ignored)))
+          if (failed(body(function, before.front(), inner, root, currentPath,
+                          encode, ignored, currentDepth + 1)))
             return failure();
         }
         if (op.hasAttr("site"))
@@ -186,11 +204,19 @@ class Expander {
                                    "algorithm-terminal-results");
         // Cloning retains the leaf diagnostic location. The checked site path
         // carries the nested occurrence separately from diagnostic metadata.
+        auto record =
+            saved ? *saved
+                  : detail::AlgorithmOccurrence{
+                        definition(function), function.getSymName().str(),
+                        original, currentPath, currentDepth};
+        if (op.hasAttr("site"))
+          output.occurrences.emplace(detail::OccurrenceKey{root.str(), site},
+                                     record);
         origins.push_back(
-            {root.str(), site, definition(function), original, path});
-        if (definition(function) != function.getSymName())
+            {root.str(), site, record.definition, original, currentPath});
+        if (record.definition != record.declaration)
           origins.push_back(
-              {root.str(), site, function.getSymName().str(), original, path});
+              {root.str(), site, record.declaration, original, currentPath});
         if (isa<zkc::local::StopOp>(copy))
           return success();
       }
@@ -199,11 +225,17 @@ class Expander {
   }
 
 public:
-  explicit Expander(ModuleOp original) : builder(original.getContext()) {
+  Expander(ModuleOp original, AlgorithmExpansionPhase phase,
+           const detail::AlgorithmExpansionRecord &input)
+      : builder(original.getContext()), phase(phase), input(input),
+        output(input) {
+    output.occurrences.clear();
     auto root =
         cast<zkc::protocol_ir::ProtocolModuleOp>(&original.getBody()->front());
     for (auto fn : root.getBody().front().getOps<zkc::local::FuncOp>())
       functions.emplace(fn.getSymName().str(), fn);
+    for (auto map : root.getBody().front().getOps<algebra::MapRealizeOp>())
+      maps.emplace(map.getSymName().str(), map);
   }
   LogicalResult run(ModuleOp candidate) {
     auto root =
@@ -233,6 +265,11 @@ public:
     }
     return success();
   }
+  detail::AlgorithmExpansionRecord takeRecord() {
+    output.retained = phase == AlgorithmExpansionPhase::RetainMaps;
+    output.finished = phase == AlgorithmExpansionPhase::Finish;
+    return std::move(output);
+  }
   std::vector<AlgorithmOrigin> takeOrigins() { return std::move(origins); }
 };
 struct AlgorithmExpansionPass
@@ -248,30 +285,68 @@ struct AlgorithmExpansionPass
   }
 };
 } // namespace
-LogicalResult expandAlgorithms(ModuleOp module,
-                               std::vector<AlgorithmOrigin> *origins) {
+static LogicalResult expandAlgorithmsImpl(ModuleOp module,
+                                          AlgorithmExpansionPhase phase,
+                                          AlgorithmExpansionState &state,
+                                          std::vector<AlgorithmOrigin> *origins,
+                                          bool allowUnrecordedNoop) {
+  const auto &input = detail::AlgorithmStateAccess::get(state);
+  if (input.finished ||
+      (phase == AlgorithmExpansionPhase::RetainMaps && input.retained))
+    return diagnostics::emit(module.emitError(), "algorithm-expansion-stage");
   if (llvm::hasSingleElement(*module.getBody())) {
     auto unit =
         dyn_cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
     if (unit && unit.getProfile() == protocol_ir::Profile::Protocol) {
       if (failed(verify(module)))
         return failure();
+      if (phase == AlgorithmExpansionPhase::RetainMaps) {
+        // Admission explicitly names maps and checks all expanded scalar work.
+        // A preparation interface by itself never authorizes atomic retention.
+        uint64_t remaining = 1000000;
+        if (auto error = mathematical::checkMapFormulas(module, remaining))
+          return diagnostics::emit(module.emitError(), std::move(error));
+      } else {
+        for (Operation &op : unit.getBody().front())
+          if (isa<PreparationCallableOpInterface>(op))
+            return diagnostics::emit(
+                op.emitOpError(), "algorithm-call-symbol",
+                "Finish requires realized preparation declarations");
+      }
       bool calls = false;
       unit.walk([&](local::ApplyOp) { calls = true; });
-      if (!calls && !origins)
+      if (allowUnrecordedNoop && !calls && !origins && !input.retained &&
+          phase == AlgorithmExpansionPhase::Finish)
         return success();
       OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
-      Expander expansion(module);
-      if (failed(expansion.run(*candidate)) || failed(verify(*candidate)) ||
-          failed(verifyAlgorithmExpansionPreserved(module, *candidate)))
+      Expander expansion(module, phase, input);
+      if (failed(expansion.run(*candidate)) || failed(verify(*candidate)))
+        return failure();
+      auto output = expansion.takeRecord();
+      if (failed(detail::checkAlgorithmExpansion(module, *candidate, phase,
+                                                 input, output, true)))
         return failure();
       module.getBodyRegion().takeBody(candidate->getBodyRegion());
+      detail::AlgorithmStateAccess::set(state, std::move(output));
       if (origins)
         *origins = expansion.takeOrigins();
       return success();
     }
   }
   return diagnostics::emit(module.emitError(), "algorithm-expansion-stage");
+}
+
+LogicalResult expandAlgorithms(ModuleOp module,
+                               std::vector<AlgorithmOrigin> *origins) {
+  AlgorithmExpansionState state;
+  // Preserve legacy call-free admission without exposing an unfinished state.
+  return expandAlgorithmsImpl(module, AlgorithmExpansionPhase::Finish, state,
+                              origins, true);
+}
+LogicalResult expandAlgorithms(ModuleOp module, AlgorithmExpansionPhase phase,
+                               AlgorithmExpansionState &state,
+                               std::vector<AlgorithmOrigin> *origins) {
+  return expandAlgorithmsImpl(module, phase, state, origins, false);
 }
 
 std::unique_ptr<Pass> createExpandAlgorithmsPass() {

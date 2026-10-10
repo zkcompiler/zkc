@@ -295,6 +295,14 @@ binds it to the package's artifact identity and compile options. `inspect` and `
 can obtain the logical view directly from `language-interface`, before executable
 lowering. Package inspection validates the captured package view. Neither path
 performs native admission, key import, resource issuance or execution.
+
+Source compilation accepts `--no-simplify`, `--release-storage` and
+`--fuse-vector-reductions` for `compile`, `run`, `prove`, `verify`, `bindings`
+and `inputs check`. The resulting package records all three options. These
+options are refused by `check`, `inspect`, `inputs init` and pinned-package
+invocations. Vector reduction fusion defaults to false and follows the
+[preparation contract](../ir/protocols.md#optional-vector-reduction-fusion).
+
 `zkc.entry-inspection/0` reports Entry/protocol/toolchain, role ports, services,
 setup names, proof selections and input group schemas. Input schemas are derived
 from that same checked Interface, not a separately persisted authority. Each

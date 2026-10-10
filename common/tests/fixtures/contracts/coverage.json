@@ -50,6 +50,7 @@
       "vector.matvec",
       "vector.scale",
       "vector.sum",
+      "vector.product",
       "vector.split",
       "vector.at",
       "vector.length_check",

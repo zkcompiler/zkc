@@ -225,12 +225,21 @@ existing ASCII grammars.
 `packageEntry` accepts only an owned `CompiledEntry`. It emits `zkc.entry/0`
 with exactly `format`, `original`, `interface`, `artifact`, `options` and
 `assets`. Original MLIR, interface JSON and native run bundle or proof
-deployment are exact strings. Options contain Boolean `simplify` and
-`release_storage`. The job kind and complete source interface remain in the
-retained interface, avoiding a second name or participant table. Package SHA-256
+deployment are exact strings. Options contain exactly the required JSON Booleans
+`simplify`, `release_storage` and `fuse_vector_reductions`. Fusion defaults to
+false at compilation; its field is still required in the package. Missing,
+duplicate, unknown or non-Boolean option fields refuse. The job kind and complete
+source interface remain in the retained interface, avoiding a second name or
+participant table. Package SHA-256
 covers the exact emitted bytes, including source capture, selected Entry,
 toolchain, compilation options and assets. Complete Entry aliases can share
 executable bytes while naming different packages.
+
+For proof Entries, native artifact binding checks agreement between all three
+package options and the deployment's ordered
+[compiler choices](proof.md#deployment-and-invocation-records), as well as the
+original and selected artifact identities. This remains one current version-0
+schema; no shorter option record or compatibility reader is admitted.
 
 `assets` carries the compiler-visible assets referenced by executable operations
 or Bundle relation declarations. It is an array of pairs `[expected_sha256, body]`: the lowercase

@@ -1131,6 +1131,8 @@ Expected<Correspondence> compareOriginal(const ClosedEntry &project,
                                          const Limits &limits) {
   if (auto e = checkLimits(limits))
     return e;
+  if (auto e = checkReductionElaboration(project.project(), limits))
+    return e;
   if (project.project().installationIdentity() != installedCatalogIdentity())
     return error("source.environment",
                  "source was checked against another installed catalog");

@@ -62,6 +62,7 @@ std::string compilerToolchainIdentity();
 struct EntryOptions {
   bool simplify = true;
   bool releaseStorage = false;
+  bool fuseVectorReductions = false;
 };
 using EntryArtifact = std::variant<CompiledRun, CompiledNativeProof>;
 class CompiledEntry {

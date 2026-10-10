@@ -13,10 +13,16 @@ namespace zkc {
 struct LinearContractionStats;
 namespace protocol {
 /// Validate and expand whole-protocol mathematics, with optional folding.
-std::unique_ptr<mlir::Pass> createPrepareProtocolPass(bool simplify = true);
+/// Vector fusion is separately opt-in and preserves values/ordered shape
+/// refusals under sufficient resources, not exhaustion or backend failures.
+std::unique_ptr<mlir::Pass>
+createPrepareProtocolPass(bool simplify = true,
+                          bool fuseVectorReductions = false);
 /// Project the protocol profile into participant programs, retaining
 /// mathematics.
-std::unique_ptr<mlir::Pass> createProjectProtocolPass(bool simplify = true);
+std::unique_ptr<mlir::Pass>
+createProjectProtocolPass(bool simplify = true,
+                          bool fuseVectorReductions = false);
 /// Lower participant mathematics to execution recipes in the exec profile.
 std::unique_ptr<mlir::Pass> createLowerMathPass();
 /// Distribute prefix fixing through shared sums/products and MLE leaves.

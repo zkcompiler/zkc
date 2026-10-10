@@ -17,6 +17,10 @@ add_test(NAME math-realization COMMAND zkc-math_realization-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/helper-realization.mlir")
 set_tests_properties(math-realization PROPERTIES LABELS native)
 mlir_target_link_libraries(zkc-math_realization-test PRIVATE MLIRParser)
+add_zkc_test(vector_reductions Transforms vector-reductions)
+target_compile_definitions(zkc-vector_reductions-test PRIVATE
+  ZKC_MATH_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical")
+mlir_target_link_libraries(zkc-vector_reductions-test PRIVATE MLIRParser)
 add_zkc_test(map_realization Transforms)
 add_test(NAME map-realization COMMAND zkc-map_realization-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/map-realization.mlir")
@@ -62,6 +66,9 @@ add_test(NAME language-polynomial COMMAND zkc-language_polynomial-test
 set_tests_properties(language-polynomial PROPERTIES LABELS native)
 add_zkc_test(language_boolean Compiler language-boolean)
 add_zkc_test(language_map Compiler language-map)
+add_zkc_test(language_reductions Language language-reductions)
+add_zkc_test(language_reduction_ir Compiler language-reduction-ir)
+mlir_target_link_libraries(zkc-language_reduction_ir-test PRIVATE MLIRParser)
 mlir_target_link_libraries(zkc-language_boolean-test PRIVATE MLIRParser)
 add_zkc_test(language_capabilities Compiler language-capabilities)
 add_zkc_test(language_inference Compiler language-inference)

@@ -137,6 +137,9 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     return {};
   }
   const auto &staticArgs = inference->arguments.at(id);
+  if (expr.reductionCall &&
+      !reductionTarget(checker.types, callee, target, staticArgs, expr.span))
+    return {};
   auto subst = checker.types.substitution(callee, staticArgs);
   if (target.component && callee.parent)
     subst.emplace(

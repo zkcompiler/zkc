@@ -494,6 +494,36 @@ LogicalResult expandMapRealizations(ModuleOp module) {
   return success();
 }
 
+FailureOr<std::map<std::string, std::pair<unsigned, unsigned>>>
+describeMapProducts(ModuleOp module) {
+  auto unit = protocolUnit(module);
+  if (failed(unit))
+    return failure();
+  std::map<std::string, std::pair<unsigned, unsigned>> products;
+  SymbolTableCollection symbols;
+  unsigned helpers = realizedHelperOperationLimit;
+  uint64_t indices = 1000000;
+  for (auto map : unit->getBody().front().getOps<algebra::MapRealizeOp>()) {
+    auto formula = scalarFormula(map, *unit, symbols, helpers, indices);
+    if (failed(formula))
+      return failure();
+    auto &body = (*formula)->front();
+    auto product =
+        body.back().getOperand(0).getDefiningOp<algebra::FieldMultiplyOp>();
+    if (!product)
+      continue;
+    auto left = dyn_cast<BlockArgument>(product->getOperand(0));
+    auto right = dyn_cast<BlockArgument>(product->getOperand(1));
+    if (left && right && left.getOwner() == &body &&
+        right.getOwner() == &body && map.getRowwise()[left.getArgNumber()] &&
+        map.getRowwise()[right.getArgNumber()])
+      products.emplace(
+          map.getSymName().str(),
+          std::make_pair(left.getArgNumber(), right.getArgNumber()));
+  }
+  return products;
+}
+
 Error checkMapFormulas(ModuleOp original, uint64_t &remaining) {
   auto unit = protocolUnit(original);
   if (failed(unit))

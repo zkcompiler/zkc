@@ -117,6 +117,7 @@ fn nominal_admission_and_native_signatures_are_independent() {
         "vector.mul",
         "vector.scale",
         "vector.sum",
+        "vector.product",
         "vector.dot",
         "vector.split",
         "vector.concat",

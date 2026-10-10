@@ -115,6 +115,7 @@ fn numerical_identity_and_independent_installation_have_no_crypto_associations()
         "vector.mul",
         "vector.scale",
         "vector.sum",
+        "vector.product",
         "vector.dot",
         "vector.split",
         "vector.concat",

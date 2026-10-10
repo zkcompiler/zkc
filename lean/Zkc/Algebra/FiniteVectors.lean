@@ -1,9 +1,11 @@
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.BigOperators.Group.List.Basic
+import Mathlib.Algebra.BigOperators.Ring.List
 
 /-! Executable finite sequence arithmetic. Shape checks precede every zip,
-index and allocation; coefficients are ascending and zero is the empty list.
-These helpers require ring arithmetic, not a primality assumption. -/
+index and allocation. Polynomial coefficients are ascending and the zero
+polynomial is the empty list. Each helper states its algebraic assumptions;
+none requires a primality assumption. -/
 
 set_option autoImplicit false
 
@@ -71,6 +73,57 @@ theorem slice_coordinate {α : Type} (xs ys : List α) (start count i : Nat)
     ys[i]? = xs[start + i]? := by
   obtain ⟨_, _, rfl⟩ := slice_eq xs ys start count success
   simp [List.getElem?_drop, inside]
+
+/-- Bounded ordered product. These are independent list value laws; they do
+not establish native input admission, resource accounting or refinement. -/
+def product {M : Type} [Monoid M] (xs : List M) : Result M :=
+  if xs.length ≤ limit then .ok xs.prod else .error "vector-limit"
+
+theorem product_eq {M : Type} [Monoid M] (xs : List M) (value : M)
+    (success : product xs = .ok value) : xs.length ≤ limit ∧ value = xs.prod := by
+  unfold product at success
+  split at success
+  · cases success
+    exact ⟨by assumption, rfl⟩
+  · contradiction
+
+theorem product_of_bounded {M : Type} [Monoid M] (xs : List M)
+    (bound : xs.length ≤ limit) : product xs = .ok xs.prod := by
+  simp [product, bound]
+
+theorem product_limit {M : Type} [Monoid M] (xs : List M)
+    (exceeds : limit < xs.length) : product xs = .error "vector-limit" := by
+  simp [product, Nat.not_le_of_gt exceeds]
+
+@[simp] theorem product_nil {M : Type} [Monoid M] : product ([] : List M) = .ok 1 := by
+  simp [product]
+
+@[simp] theorem product_singleton {M : Type} [Monoid M] (x : M) :
+    product [x] = .ok x := by
+  simp [product, limit]
+
+/-- Concatenation multiplies the two products only when their combined length
+is admitted. This is a value equation, not an execution/resource equivalence. -/
+theorem product_append {M : Type} [Monoid M] (xs ys : List M)
+    (bound : xs.length + ys.length ≤ limit) :
+    product (xs ++ ys) = (do
+      let x ← product xs
+      let y ← product ys
+      return x * y) := by
+  have left : xs.length ≤ limit := by omega
+  have right : ys.length ≤ limit := by omega
+  simp [product, List.length_append, bound, left, right, List.prod_append]
+  rfl
+
+theorem product_replicate {M : Type} [Monoid M] (x : M) (n : Nat)
+    (bound : n ≤ limit) : product (List.replicate n x) = .ok (x ^ n) := by
+  simp [product, bound, List.prod_replicate]
+
+/-- A zero factor suffices; no field or absence-of-zero-divisors premise is
+needed. The converse would require an additional algebraic hypothesis. -/
+theorem product_zero_of_mem {M : Type} [MonoidWithZero M] (xs : List M)
+    (bound : xs.length ≤ limit) (containsZero : 0 ∈ xs) : product xs = .ok 0 := by
+  rw [product_of_bounded xs bound, List.prod_eq_zero containsZero]
 
 variable {F : Type} [CommRing F]
 

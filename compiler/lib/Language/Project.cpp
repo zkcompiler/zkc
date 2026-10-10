@@ -464,6 +464,8 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
 Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
                                  const Limits &limits,
                                  std::optional<EntryKind> kind) {
+  if (auto error = checkReductionElaboration(project, limits))
+    return std::move(error);
   auto selected = selectEntry(project, name, limits, kind);
   if (!selected)
     return selected.takeError();

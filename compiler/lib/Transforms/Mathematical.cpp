@@ -22,6 +22,7 @@
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Transforms/VectorReductions.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SetVector.h"
@@ -784,7 +785,8 @@ namespace {
 // Admit the original whole unit before expanding or erasing anything. Every
 // rewrite is confined to mathematical protocol bodies on an owned candidate;
 // executable local definitions will not be traversed by this optimization.
-OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify) {
+OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
+                                    bool fuseVectorReductions) {
   if (failed(verify(source)))
     return {};
   if (!llvm::hasSingleElement(*source.getBody())) {
@@ -803,13 +805,25 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify) {
   }
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
   if (failed(expandPolynomialRecipes(*candidate)) ||
-      failed(expandMathRealizations(*candidate)) ||
-      failed(expandMapRealizations(*candidate)))
+      failed(expandMathRealizations(*candidate)))
     return {};
-  // Algorithm expansion either leaves admitted IR untouched or returns a
-  // verified candidate; static application analysis relies on that contract.
-  if (failed(zkc::protocol::expandAlgorithms(*candidate)))
-    return {};
+  if (fuseVectorReductions) {
+    protocol::AlgorithmExpansionState expansion;
+    if (failed(protocol::expandAlgorithms(
+            *candidate, protocol::AlgorithmExpansionPhase::RetainMaps,
+            expansion)) ||
+        failed(mathematical::fuseVectorReductions(*candidate, expansion)) ||
+        failed(expandMapRealizations(*candidate)) ||
+        failed(protocol::expandAlgorithms(
+            *candidate, protocol::AlgorithmExpansionPhase::Finish, expansion)))
+      return {};
+  } else {
+    // Preserve the exact baseline preparation and budget admission when the
+    // sufficient-resource vector rewrite has not been explicitly requested.
+    if (failed(expandMapRealizations(*candidate)) ||
+        failed(protocol::expandAlgorithms(*candidate)))
+      return {};
+  }
   auto unit =
       cast<zkc::protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
   OwningOpRef<protocol_ir::ProtocolModuleOp> beforeApplications(
@@ -863,11 +877,19 @@ OwningOpRef<ModuleOp> projectPrepared(ModuleOp candidate) {
 struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PreparePass)
   PreparePass() = default;
-  explicit PreparePass(bool value) { simplify = value; }
+  explicit PreparePass(bool value, bool fusion) {
+    simplify = value;
+    fuseVectorReductions = fusion;
+  }
   PreparePass(const PreparePass &other) : PassWrapper(other) {}
   Option<bool> simplify{*this, "simplify",
                         llvm::cl::desc("Simplify after expansion"),
                         llvm::cl::init(true)};
+  Option<bool> fuseVectorReductions{
+      *this, "fuse-vector-reductions",
+      llvm::cl::desc(
+          "Fuse admitted vector reductions under sufficient resources"),
+      llvm::cl::init(false)};
   StringRef getArgument() const final { return "zkc-prepare-protocol"; }
   StringRef getDescription() const final {
     return "Admit mathematical definitions, expand pure helpers, and simplify "
@@ -875,7 +897,7 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   }
   void runOnOperation() final {
     auto source = getOperation();
-    auto candidate = prepareSource(source, simplify);
+    auto candidate = prepareSource(source, simplify, fuseVectorReductions);
     if (!candidate)
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
@@ -920,11 +942,19 @@ struct SimplifyParticipantPass
 struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ProjectPass)
   ProjectPass() = default;
-  explicit ProjectPass(bool value) { simplify = value; }
+  explicit ProjectPass(bool value, bool fusion) {
+    simplify = value;
+    fuseVectorReductions = fusion;
+  }
   ProjectPass(const ProjectPass &other) : PassWrapper(other) {}
   Option<bool> simplify{*this, "simplify",
                         llvm::cl::desc("Simplify before projection"),
                         llvm::cl::init(true)};
+  Option<bool> fuseVectorReductions{
+      *this, "fuse-vector-reductions",
+      llvm::cl::desc(
+          "Fuse admitted vector reductions under sufficient resources"),
+      llvm::cl::init(false)};
   StringRef getArgument() const final { return "zkc-project-protocol"; }
   StringRef getDescription() const final {
     return "Project total mathematics and ordered actions into participant "
@@ -936,7 +966,7 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
   }
   void runOnOperation() final {
     auto source = getOperation();
-    auto candidate = prepareSource(source, simplify);
+    auto candidate = prepareSource(source, simplify, fuseVectorReductions);
     if (!candidate)
       return signalPassFailure();
     auto output = projectPrepared(*candidate);
@@ -948,8 +978,9 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
 };
 } // namespace
 
-std::optional<PreparedProtocol> PreparedProtocol::prepare(ModuleOp source) {
-  auto candidate = prepareSource(source, false);
+std::optional<PreparedProtocol>
+PreparedProtocol::prepare(ModuleOp source, bool fuseVectorReductions) {
+  auto candidate = prepareSource(source, false, fuseVectorReductions);
   if (!candidate)
     return std::nullopt;
   return PreparedProtocol(std::move(candidate));
@@ -987,13 +1018,17 @@ OwningOpRef<ModuleOp> PreparedProtocol::project(bool simplify) && {
 } // namespace zkc::mathematical
 
 std::unique_ptr<mlir::Pass>
-zkc::protocol::createProjectProtocolPass(bool simplify) {
-  return std::make_unique<mathematical::ProjectPass>(simplify);
+zkc::protocol::createProjectProtocolPass(bool simplify,
+                                         bool fuseVectorReductions) {
+  return std::make_unique<mathematical::ProjectPass>(simplify,
+                                                     fuseVectorReductions);
 }
 
 std::unique_ptr<mlir::Pass>
-zkc::protocol::createPrepareProtocolPass(bool simplify) {
-  return std::make_unique<mathematical::PreparePass>(simplify);
+zkc::protocol::createPrepareProtocolPass(bool simplify,
+                                         bool fuseVectorReductions) {
+  return std::make_unique<mathematical::PreparePass>(simplify,
+                                                     fuseVectorReductions);
 }
 
 std::unique_ptr<mlir::Pass> zkc::protocol::createSimplifyParticipantPass() {

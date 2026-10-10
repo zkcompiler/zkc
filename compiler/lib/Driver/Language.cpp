@@ -62,7 +62,7 @@ int runLanguageCompiler(int argc, char **argv) {
       command != "language-interface" && command != "language-bundle" &&
       command != "language-package")
     return refuse(error("source.command", "unknown language command"));
-  if (argc > int(limits.files + 11))
+  if (argc > int(limits.files + 12))
     return refuse(error("source.limit", "too many source command arguments"));
   uint64_t total = 0, assetTotal = 0;
   for (int i = 2; i < argc; ++i) {
@@ -131,7 +131,8 @@ int runLanguageCompiler(int argc, char **argv) {
                             arg + " is a check option and may appear once"));
       flag = true;
     } else if (command == "language-check" &&
-               (arg == "--no-simplify" || arg == "--release-storage"))
+               (arg == "--no-simplify" || arg == "--release-storage" ||
+                arg == "--fuse-vector-reductions"))
       return refuse(
           error("source.options",
                 "checking accepts no executable optimization options"));
@@ -139,6 +140,8 @@ int runLanguageCompiler(int argc, char **argv) {
       options.simplify = false;
     else if (arg == "--release-storage")
       options.releaseStorage = true;
+    else if (arg == "--fuse-vector-reductions")
+      options.fuseVectorReductions = true;
     else
       return refuse(error("source.options", "unknown language option: " + arg));
   }

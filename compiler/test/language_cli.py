@@ -72,7 +72,8 @@ with case('Entry packages retain exact source, interface and artifact bytes'):
     assert package['original'] == commands.run([compiler, 'language-emit', *options])
     assert json.loads(package['interface']) == interface
     assert package['artifact'] == commands.run([compiler, 'language-bundle', *options]).removesuffix('\n')
-    assert package['options'] == {'simplify': True, 'release_storage': False}
+    assert package['options'] == {'simplify': True, 'release_storage': False,
+                                  'fuse_vector_reductions': False}
     assert package_bytes.endswith('}')
     (OUT / 'transfer.zkpkg').write_text(package_bytes)
 

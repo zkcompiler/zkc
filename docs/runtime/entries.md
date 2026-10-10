@@ -35,6 +35,18 @@ project, or explicit `--module=NAME=FILE` and `--asset=NAME=FORMAT=FILE` mapping
 from absolute directories in trusted `PATH`. Execution compiles in memory and
 reports the resulting package identity. It does not publish an intermediate package.
 
+`--no-simplify`, `--release-storage` and `--fuse-vector-reductions` choose
+compilation options without skipping source comparison, for `compile` and
+commands that compile source before invocation. Fusion is disabled by default;
+it can replace an eligible multiply-map/sum with shape guards and dot under the
+[preparation contract](../spec/ir/protocols.md#optional-vector-reduction-fusion).
+Its values and ordered shape refusals agree under sufficient resources, while
+resource exhaustion can differ. The package records the choice, including for
+proof Entries. Checking source and inspecting input interfaces reject these
+executable optimization options; pinned-package invocations use the recorded
+choices. Maintained [projects](../../examples/projects/README.md) provide
+complete inputs and commands.
+
 `check` checks source without requiring input values. `prepare` checks input
 interfaces and creates missing templates for all Entries, or one named Entry.
 It preserves existing regular files byte for byte, including stale or unfilled
