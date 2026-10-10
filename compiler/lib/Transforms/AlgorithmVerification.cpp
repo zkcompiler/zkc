@@ -8,6 +8,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Transforms/Algorithms.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseMap.h"
 
 using namespace mlir;
@@ -306,6 +307,9 @@ LogicalResult detail::checkAlgorithmExpansion(
   auto refuse = [&] {
     return diagnostics::emit(after.emitError(), "algorithm-correspondence");
   };
+  if (input.finished ||
+      (phase == AlgorithmExpansionPhase::RetainMaps && input.retained))
+    return refuse();
   if (before->getAttrDictionary() != after->getAttrDictionary() ||
       !hasSingleElement(*before.getBody()) ||
       !hasSingleElement(*after.getBody()))
@@ -316,6 +320,19 @@ LogicalResult detail::checkAlgorithmExpansion(
       a.getBody().front().getOperations().size() !=
           b.getBody().front().getOperations().size())
     return refuse();
+  if (a.getProfile() != protocol_ir::Profile::Protocol)
+    return refuse();
+  if (phase == AlgorithmExpansionPhase::RetainMaps) {
+    uint64_t remaining = 1000000;
+    if (auto error = mathematical::checkMapFormulas(before, remaining)) {
+      consumeError(std::move(error));
+      return refuse();
+    }
+  } else {
+    for (Operation &op : a.getBody().front())
+      if (isa<PreparationCallableOpInterface>(op))
+        return refuse();
+  }
   AlgorithmCorrespondence check(a, phase, input);
   for (auto [x, y] : zip(a.getBody().front(), b.getBody().front())) {
     if (auto function = dyn_cast<local::FuncOp>(x)) {

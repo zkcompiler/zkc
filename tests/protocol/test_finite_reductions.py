@@ -129,7 +129,7 @@ type Vector<E:Field>=builtin("vector",E);
 fn sum(v:Vector<F>)->F=primitive("vector.sum");
 fn fill(x:F,n:index)->Vector<F>=primitive("vector.fill");
 fn work(n:index)->(F,index){
-  let mut state=0;
+  let mut state:index=0;
   let result=reduce sum [(x,y) in zip(
       {state=state+1; fill(2,n)}, {state=state*10+3; fill(5,n)})] {x*y};
   return(result,state);
@@ -149,7 +149,7 @@ domain F=field("koala-bear");
 type Vector<E:Field>=builtin("vector",E);
 fn length(v:Vector<F>)->index=primitive("vector.length");
 fn sum(v:Vector<F>)->F=primitive("vector.sum");
-fn nonempty(v:Vector<F>)->F{require length(v)>0;return sum(v);}
+fn nonempty(v:Vector<F>)->F{require !(length(v)==0);return sum(v);}
 reduction ∑=nonempty;
 fn work(a:Vector<F>,b:Vector<F>)->F{return ∑ [(x,y) in zip(a,b)] {x*y};}
 protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P)->(result:F@P){return work(a,b);}
@@ -160,7 +160,8 @@ run Demo=Run;
                                  'b': vector_wire(20, [5, 7])})['result'] == field_wire(19, 31)
     refused = entry.run('empty', {'a': vector_wire(20, []), 'b': vector_wire(20, [])},
                         refuses='entry-run-incomplete')
-    assert 'rejected:require' in json.dumps(refused)
+    after = refused['execution']['roles'][0]['after']
+    assert after[0] == 'stopped' and after[1]['cause'][0] == 'explicit'
 
 
 @pytest.mark.parametrize('flags', OPTIONS)
@@ -214,11 +215,22 @@ def run_report(entry, name, inputs, capacity=None, refuses=None):
     return result
 
 
+BINDER_SUM = MAP_SUM.replace(
+    'let mapped=map times(each a,each b,each unused);\n  return sum(mapped);',
+    'return reduce sum [(x,y,_) in zip(a,b,unused)] {x*y};')
+
+
+@pytest.mark.parametrize('source', [MAP_SUM, BINDER_SUM], ids=['named-map', 'binder'])
 @pytest.mark.parametrize('extra', [[], ['--no-simplify'], ['--release-storage']])
 def test_fusion_preserves_values_and_guards_with_different_resource_charges(
-    toolchain, journal, directory, extra,
+    toolchain, journal, directory, source, extra,
 ):
-    entries = {name: Entry(toolchain, journal, subdirectory(directory, name), MAP_SUM,
+    # Repeat the same computation so the allocation gap exceeds the separate
+    # input-loading charge on the original three vectors.
+    repetitions = 8
+    source = source.replace('return work(a,b,unused);',
+                            'return ' + '+'.join(['work(a,b,unused)'] * repetitions) + ';')
+    entries = {name: Entry(toolchain, journal, subdirectory(directory, name), source,
                            [*extra, *flags])
                for name, flags in [('baseline', []), ('fused', ['--fuse-vector-reductions'])]}
     n = 1024
@@ -229,7 +241,7 @@ def test_fusion_preserves_values_and_guards_with_different_resource_charges(
         report = run_report(entry, f'{name}-usage', inputs)
         assert report['status'] == 'executed'
         usage[name] = report['execution']['roles'][0]['usage']
-        assert entry.run(f'{name}-value', inputs)['result'] == field_wire(19, 6*n)
+        assert entry.run(f'{name}-value', inputs)['result'] == field_wire(19, 6*n*repetitions)
         for case, changed in [('ignored', {'unused': vector_wire(20, [7])}),
                                ('used', {'b': vector_wire(20, [])})]:
             refused = entry.run(f'{name}-{case}', inputs | changed,
@@ -241,14 +253,20 @@ def test_fusion_preserves_values_and_guards_with_different_resource_charges(
     assert fused['instructions'] < baseline['instructions']
     assert fused['logical_bytes'] < baseline['logical_bytes']
     assert fused['total_value_bytes'] < baseline['total_value_bytes']
+    assert all(isinstance(u['live_value_bytes'], int) for u in usage.values())
+    journal.write('measured-resource-ledgers.json', usage)
     ceiling = (fused['total_value_bytes'] + baseline['total_value_bytes']) // 2
     capacity = journal.write('between-allocation-charges.json', [
         'zkc.native-capacity/0', '65536', '4096', '16777216', '67108864',
-        ['1000000', '100000', '4294967296'], [str(ceiling), str(ceiling)]])
+        ['1000000', '100000', '4294967296'], ['67108864', str(ceiling)]])
     assert run_report(entries['fused'], 'limited-fused', inputs, capacity)['status'] == 'executed'
     refused = run_report(entries['baseline'], 'limited-baseline', inputs, capacity,
                          refuses='entry-run-incomplete')
-    assert 'exhausted' in json.dumps(refused).lower()
+    after = refused['execution']['roles'][0]['after']
+    assert after[0] == 'stopped'
+    cause = after[1]['cause']
+    assert cause == ['limit'] or (
+        cause[0] == 'backend' and 'exhausted:output-bytes' in cause[1]['text']), cause
 
 
 PROOF = '''module sample;
@@ -274,13 +292,29 @@ proof Demo=Check{prover P;verifier V;public{a,b};accept accepted;
 
 
 def test_fusion_proof_construction_preserves_protocol_origins(toolchain, journal, directory):
-    descriptors = []
+    descriptors, wire_sites, candidates = [], [], []
     for name, flags in [('baseline', []), ('fused', ['--fuse-vector-reductions'])]:
         entry = Entry(toolchain, journal, subdirectory(directory, name), PROOF, flags)
         package = json.loads(entry.package.read_text())
         deployment = json.loads(package['artifact'])
         assert deployment[7] == ['true', 'false', 'true' if flags else 'false']
         descriptors.append(deployment[2])
+        wire_sites.append(deployment[8])
+        candidates.append(deployment[4:6])
+        original = entry.directory / 'original.mlir'
+        original.write_text(journal.run([
+            toolchain.compiler, 'language-emit', '--source-format=zkc',
+            f'--module=sample={entry.directory / "kernels.zkc"}', '--entry=sample::Demo']))
+        policy = journal.write(f'{name}.policy.json', deployment[2][1])
+        candidate = entry.directory / 'candidate.mlir'
+        candidate.write_text(journal.run([
+            toolchain.compiler, 'protocol-construct-proof', original, policy, *flags]))
+        assert ('algebra.exec.vector_dot' in candidate.read_text()) == bool(flags)
+        journal.run([toolchain.compiler, 'protocol-check-proof', original, policy,
+                     candidate, *flags])
+        journal.run([toolchain.compiler, 'protocol-check-proof', original, policy,
+                     candidate, *([] if flags else ['--fuse-vector-reductions'])],
+                    refuses='native-proof-correspondence')
         request = journal.write(f'{name}.proof-inputs.json', {
             'format': 'zkc.entry-proof/0', 'public': {
                 'a': vector_wire(66, [2, 3], 32), 'b': vector_wire(66, [5, 7], 32)},
@@ -294,6 +328,8 @@ def test_fusion_proof_construction_preserves_protocol_origins(toolchain, journal
         journal.json([toolchain.runtime, 'verify', entry.package, entry.pin, request, truncated],
                      refuses='proof-truncated')
     assert descriptors[0] == descriptors[1]
+    assert wire_sites[0] == wire_sites[1]
+    assert candidates[0] != candidates[1]
 
 
 def test_fusion_flag_is_compile_only(toolchain, journal, directory):
@@ -322,3 +358,18 @@ run Demo=Run;
     assert entry.run('shadowed', {'a': vector_wire(20, [2, 3]), 'x': field_wire(19, 77),
                                  'α': field_wire(19, 5)})['result'] == [
                                      field_wire(19, 35), field_wire(19, 77)]
+
+
+def test_registered_participant_pipeline_forwards_fusion(toolchain, journal, directory):
+    source = directory / 'source.zkc'
+    source.write_text(BINDER_SUM)
+    original = directory / 'original.mlir'
+    original.write_text(journal.run([
+        toolchain.compiler, 'language-emit', '--source-format=zkc',
+        f'--module=sample={source}', '--entry=sample::Demo']))
+    for fuse in (False, True):
+        choice = 'true' if fuse else 'false'
+        projected = journal.run([
+            toolchain.optimizer, original,
+            f'--zkc-participant-pipeline=project-only=true fuse-vector-reductions={choice}'])
+        assert ('algebra.exec.vector_dot' in projected) == fuse

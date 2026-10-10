@@ -28,8 +28,8 @@ int main() {
       {{"m", R"(module m;
     pub operator infixl(65) ⊕ = zkc::prelude::index_add;
     pub fn 合成(α:index,β:index)->index{return α⊕β;}
-    type Vector<F:Field>=builtin("vector",F);
-    fn sum<F:Field>(xs:Vector<F>)->F=primitive("vector.sum");
+    pub type Vector<F:Field>=builtin("vector",F);
+    pub fn sum<F:Field>(xs:Vector<F>)->F=primitive("vector.sum");
     pub reduction ∑=sum;
     pub fn weighted<F:Field>(xs:Vector<F>,α:F)->F {
       return ∑ [x in xs] {x*α};

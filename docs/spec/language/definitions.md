@@ -530,8 +530,10 @@ A separate extraction witness checker reconstructs row bindings, free captures
 and their order from retained authored syntax and resolved identities. It checks
 the scalar body, positional inputs, map mask, field, reducer, sites and lexical
 selection against the actual checked graph before source-to-IR comparison.
-This bounds the extraction check; it is not a proof of parser, resolver, capture
-semantics or native runtime adequacy.
+The checker retains collection result identities; it trusts the enclosing
+source checker to emit their producing operations in authored order. It does
+not independently reconstruct those collection computations. Parser, resolver,
+inference and native runtime adequacy remain outside this extraction check.
 
 ## Boolean formulas
 

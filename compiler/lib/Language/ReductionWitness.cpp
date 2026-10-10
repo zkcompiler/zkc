@@ -417,9 +417,10 @@ Error checkReductionElaboration(const CheckedProject &project,
                                 const Limits &limits) {
   if (auto error = checkLimits(limits))
     return error;
+  // Operation ceilings belong to each phase. Native comparison may have a
+  // smaller selected graph than the completed project, including the prelude.
   if (project.checkedWork() > limits.work ||
-      project.checkedDeclarations() > limits.declarations ||
-      project.checkedOperations() > limits.operations)
+      project.checkedDeclarations() > limits.declarations)
     return detail::failure("source.limit",
                            "checked project exceeds reduction witness limits");
   detail::Work work{limits};

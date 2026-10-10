@@ -102,6 +102,8 @@ static application admission refuses a callee that contains a statement.
 - `statement_inputs`, `bound_non_statement_inputs`, and
   `prover_unavailable_bound_inputs`, each in increasing port order.
 - `source_ir_sha256`, `prepared_ir_sha256`, and `requirement_sha256`.
+  The prepared identity uses the source analysis view with default preparation;
+  it does not identify a separately fused compilation candidate.
 
 IR identities hash the default MLIR printing of the admitted original module
 and unsimplified prepared module; locations are omitted. The requirement hash

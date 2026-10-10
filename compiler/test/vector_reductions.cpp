@@ -252,6 +252,95 @@ int main() {
                   }),
             "repeated RetainMaps reset the state");
   });
+  auto noCalls =
+      edit(fixture,
+           "   %v = local.apply @mapped(%a,%b,%c,%s) {site=\"map\"} : "
+           "(!V,!V,!V,!F)->!V\n"
+           "   %r = local.apply @reduce(%v) {site=\"reduce\"} : (!V)->!F\n"
+           "   local.return %r : !F",
+           "   local.return %s : !F");
+  auto noMaps = edit(noCalls,
+                     " algebra.map_realize @mapped = @formula [true, true, "
+                     "true, false] : (!V,!V,!V,!F)->!V",
+                     "");
+  for (bool withOrigins : {false, true})
+    cases.run(
+        withOrigins ? "call-free Finish records requested origins"
+                    : "call-free Finish publishes checked terminal state",
+        [&] {
+          auto before = parse(noMaps), after = copy(*before);
+          State state;
+          std::vector<protocol::AlgorithmOrigin> origins;
+          require(succeeded(protocol::expandAlgorithms(
+                      *after, Phase::Finish, state,
+                      withOrigins ? &origins : nullptr)),
+                  "call-free Finish refused");
+          require(succeeded(protocol::verifyStagedAlgorithmExpansionPreserved(
+                      *before, *after, Phase::Finish, initial, state)),
+                  "successful call-free Finish failed independent checking");
+          for (auto phase : {Phase::Finish, Phase::RetainMaps}) {
+            State unchanged = state;
+            require(named("algorithm-expansion-stage",
+                          [&] {
+                            return failed(protocol::expandAlgorithms(
+                                *after, phase, state));
+                          }),
+                    "terminal state was reusable");
+            require(
+                named("algorithm-correspondence",
+                      [&] {
+                        return failed(
+                            protocol::verifyStagedAlgorithmExpansionPreserved(
+                                *before, *after, phase, unchanged, state));
+                      }),
+                "checker accepted a transition from terminal state");
+          }
+        });
+  cases.run("Finish checker refuses unrealized unused map", [&] {
+    auto completed = parse(noMaps);
+    State state;
+    require(
+        succeeded(protocol::expandAlgorithms(*completed, Phase::Finish, state)),
+        "reference Finish refused");
+    auto before = parse(noCalls), after = copy(*before);
+    require(named("algorithm-correspondence",
+                  [&] {
+                    return failed(
+                        protocol::verifyStagedAlgorithmExpansionPreserved(
+                            *before, *after, Phase::Finish, initial, state));
+                  }),
+            "unused preparation declaration bypassed checker admission");
+  });
+  cases.run(
+      "RetainMaps checker independently admits scalar formula depth", [&] {
+        std::string operations;
+        for (unsigned i = 0; i < 1024; ++i)
+          operations += "   %d" + std::to_string(i) +
+                        " = \"algebra.field_add\"(" +
+                        (i ? "%d" + std::to_string(i - 1) : "%a") +
+                        ",%a) : (!F,!F)->!F\n";
+        auto before =
+            parse(edit(edit(fixture, "   %dead =", operations + "   %dead ="),
+                       "func.return %p : !F", "func.return %d1023 : !F"));
+        auto after = copy(*retained);
+        auto sourceHelper = cast<func::FuncOp>(SymbolTable::lookupSymbolIn(
+            &before->getBody()->front(), "formula"));
+        auto targetHelper = cast<func::FuncOp>(
+            SymbolTable::lookupSymbolIn(&after->getBody()->front(), "formula"));
+        OpBuilder builder(targetHelper);
+        builder.clone(*sourceHelper);
+        targetHelper.erase();
+        require(succeeded(verify(*before)) && succeeded(verify(*after)),
+                "formula-depth mutation was not native-admitted");
+        require(named("algorithm-correspondence",
+                      [&] {
+                        return failed(
+                            protocol::verifyStagedAlgorithmExpansionPreserved(
+                                *before, *after, Phase::RetainMaps, initial,
+                                retainedState));
+                      }),
+                "checker accepted unsupported expanded scalar formula");
+      });
   auto baseline = [&](StringRef text) {
     auto legacy = parse(text), staged = copy(*legacy);
     require(succeeded(mathematical::expandMapRealizations(*legacy)) &&

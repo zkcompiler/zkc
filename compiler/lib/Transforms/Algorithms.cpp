@@ -285,16 +285,11 @@ struct AlgorithmExpansionPass
   }
 };
 } // namespace
-LogicalResult expandAlgorithms(ModuleOp module,
-                               std::vector<AlgorithmOrigin> *origins) {
-  AlgorithmExpansionState state;
-  return expandAlgorithms(module, AlgorithmExpansionPhase::Finish, state,
-                          origins);
-}
-
-LogicalResult expandAlgorithms(ModuleOp module, AlgorithmExpansionPhase phase,
-                               AlgorithmExpansionState &state,
-                               std::vector<AlgorithmOrigin> *origins) {
+static LogicalResult expandAlgorithmsImpl(ModuleOp module,
+                                          AlgorithmExpansionPhase phase,
+                                          AlgorithmExpansionState &state,
+                                          std::vector<AlgorithmOrigin> *origins,
+                                          bool allowUnrecordedNoop) {
   const auto &input = detail::AlgorithmStateAccess::get(state);
   if (input.finished ||
       (phase == AlgorithmExpansionPhase::RetainMaps && input.retained))
@@ -320,7 +315,7 @@ LogicalResult expandAlgorithms(ModuleOp module, AlgorithmExpansionPhase phase,
       }
       bool calls = false;
       unit.walk([&](local::ApplyOp) { calls = true; });
-      if (!calls && !origins && !input.retained &&
+      if (allowUnrecordedNoop && !calls && !origins && !input.retained &&
           phase == AlgorithmExpansionPhase::Finish)
         return success();
       OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
@@ -339,6 +334,19 @@ LogicalResult expandAlgorithms(ModuleOp module, AlgorithmExpansionPhase phase,
     }
   }
   return diagnostics::emit(module.emitError(), "algorithm-expansion-stage");
+}
+
+LogicalResult expandAlgorithms(ModuleOp module,
+                               std::vector<AlgorithmOrigin> *origins) {
+  AlgorithmExpansionState state;
+  // Preserve legacy call-free admission without exposing an unfinished state.
+  return expandAlgorithmsImpl(module, AlgorithmExpansionPhase::Finish, state,
+                              origins, true);
+}
+LogicalResult expandAlgorithms(ModuleOp module, AlgorithmExpansionPhase phase,
+                               AlgorithmExpansionState &state,
+                               std::vector<AlgorithmOrigin> *origins) {
+  return expandAlgorithmsImpl(module, phase, state, origins, false);
 }
 
 std::unique_ptr<Pass> createExpandAlgorithmsPass() {
