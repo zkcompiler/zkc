@@ -119,25 +119,31 @@ def test_just_forwards_profile_and_native_environment_without_reinterpreting(mon
     assert all(c["cwd"] == str(ROOT / "compiler") and c["jobs"] == "3" for c in commands)
 
 
-def test_integration_driver_preserves_report_path_as_one_argument(monkeypatch, tmp_path):
+@pytest.mark.parametrize("scope,selection", [
+    ("harness", ["common/tests/harness"]),
+    ("sdk", ["common/tests/consumer"]),
+    ("integration", ["common/tests/protocol", "common/tests/kernels"]),
+])
+def test_pytest_scope_preserves_selection_and_report_argument(scope, selection, monkeypatch, tmp_path):
     fake_command(tmp_path, "uv")
     record = tmp_path / "commands.jsonl"
     monkeypatch.setenv("COMMAND_RECORD", str(record))
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path / "report space"))
     monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", "2")
-    subprocess.run([sys.executable, str(ROOT / "common/tests/run.py"), "integration"],
+    subprocess.run([sys.executable, str(ROOT / "common/tests/run.py"), scope],
                    cwd=tmp_path, check=True, capture_output=True, text=True)
     command = json.loads(record.read_text())
-    reports = list((tmp_path / "report space/runs").glob("integration-*"))
+    reports = list((tmp_path / "report space/runs").glob(f"{scope}-*"))
     assert len(reports) == 1
-    assert command["arguments"][-3:] == ["-n", "2", f"--junit-xml={reports[0] / 'tests.xml'}"]
+    assert command["arguments"] == ["run", "--no-sync", "--locked", "pytest", *selection,
+                                     "-n", "2", f"--junit-xml={reports[0] / (scope + '.xml')}"]
     assert json.loads((reports[0] / "run.json").read_text())["status"] == "pass"
     assert command["cwd"] == str(ROOT)
 
 
 @pytest.mark.parametrize("recipe,arguments", [
-    ("test-install", ["scripts/develop.py", "install", "--output"]),
+    ("test-install", ["common/tests/run.py", "install", "--output"]),
 ])
 def test_just_output_argument_is_forwarded_literally(recipe, arguments, monkeypatch, tmp_path):
     fake_command(tmp_path, "python3")

@@ -38,19 +38,19 @@ For interactive development inside `nix develop .#lean`, prepare the pinned
 dependencies and use the optional Lake recipes:
 
 ```sh
-just fetch-lean          # prepare the main package's pinned dependencies
-just build-lean          # lake build: every library and executable the package declares
-just test-lean           # the structural, tool and consumer checks over it
+just fetch-lean             # prepare the main package's pinned dependencies
+just test-lean              # build the package and run its controls and consumers
+just fetch-lean arklib       # prepare the optional ArkLib dependencies
 just test-lean-integration   # the optional ArkLib package and its consumers
+just fetch-lean clean        # prepare the optional Clean dependencies
 just test-lean-clean         # the optional Clean package and its native control
 ```
 
-What `lake build` builds is `lakefile.toml`'s default targets, and
+`just build-lean` builds the main package without running its Python controls. What `lake build` builds is `lakefile.toml`'s default targets, and
 `test_checks.py` fails if a declared library or executable is not one of them,
 so neither this page nor a workflow keeps its own list. What `just test-lean`
 runs is discovered by [the shared test driver](../common/tests/run.py) from
-`checks/*.py` and `consumers/*/check.py`, with fixture-helper controls supplied
-by the driver. The recipe builds the formal prerequisites before running it.
+`checks/*.py` and `consumers/*/check.py`. Fixture-helper controls live in `checks/check_cli.py`. The recipe builds the formal prerequisites before running it.
 
 Build each optional library separately from `lean/integrations/arklib` or
 `lean/integrations/clean` with `lake build`. The main build checks every

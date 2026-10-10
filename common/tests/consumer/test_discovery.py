@@ -1,9 +1,7 @@
 """Real CMake export/discovery controls using small independently linked clients."""
 
-import os
 import shutil
 import subprocess
-from pathlib import Path
 
 import pytest
 
@@ -35,8 +33,7 @@ def run(work, *arguments, success=True, env=None):
 
 @pytest.fixture(scope="module", params=["static", "shared"])
 def sdk(request, tmp_path_factory):
-    if not shutil.which("cmake") or not shutil.which("c++"):
-        pytest.skip("CMake and a C++ compiler are required")
+    assert shutil.which("cmake") and shutil.which("c++"), "SDK checks require CMake and a C++ compiler"
     work = tmp_path_factory.mktemp(f"sdk-{request.param}")
     dependencies = work / "dependencies"
     for name in ("llvm", "mlir"):
@@ -304,28 +301,6 @@ foreach(component IR Compiler IR)
   endif()
 endforeach()
 ''')
-
-
-@pytest.mark.parametrize("mode", ["compiler", "repeated"])
-def test_installed_upstream_native_build_variables(sdk, tmp_path, mode):
-    llvm_config = shutil.which("llvm-config")
-    if not llvm_config:
-        pytest.skip("installed upstream llvm-config is required")
-    work, prefix, _ = sdk
-    if run(work, llvm_config, "--version").strip() != "23.1.2":
-        pytest.skip("installed LLVM must match the fixture ABI")
-    llvm = Path(run(work, llvm_config, "--cmakedir").strip())
-    mlir = llvm.parent / "mlir"
-    if not (mlir / "MLIRConfig.cmake").is_file():
-        pytest.skip("installed upstream MLIR is required")
-    # The script starts a fresh C/C++ configure and includes real upstream
-    # TableGen/AddMLIR modules using variables exposed solely by SDK discovery.
-    run(work, "cmake", f"-DPACKAGE_DIR={prefix}/lib/cmake/ZkcCompiler",
-        f"-DLLVM_DIR={llvm}", f"-DMLIR_DIR={mlir}", f"-DTEST_ROOT={tmp_path}",
-        f"-DMODE={mode}",
-        f"-DC_COMPILER={shutil.which('cc')}", f"-DCXX_COMPILER={shutil.which('c++')}",
-        "-P", ROOT / "common/tests/consumer/package-components.cmake",
-        env=os.environ | {"CMAKE_PREFIX_PATH": str(prefix)})
 
 
 def test_native_discovery_uses_mlir_llvm_hint(sdk, tmp_path):

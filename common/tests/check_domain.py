@@ -8,8 +8,14 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
-from processes import Interrupted
-from workspace import ROOT, checkout_path, compiler_directory, native_configuration, reports_root
+from functools import partial
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+from processes import Interrupted, checked  # noqa: E402
+from workspace import checkout_path, compiler_directory, native_configuration, reports_root  # noqa: E402
+
+run = partial(checked, cwd=ROOT)
 
 
 def reserve(path):
@@ -169,8 +175,6 @@ def install_domain(args, run):
 def main():
     # Nix supplies already installed immutable packages; use the same consumer
     # runner without rebuilding or copying their compiler libraries.
-    from develop import run
-
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-prefix", required=True, type=Path)
     parser.add_argument("--domain-prefix", required=True, type=Path)

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'common/tests/support'))
 from journal import Journal  # noqa: E402
 from toolchain import reports_root  # noqa: E402

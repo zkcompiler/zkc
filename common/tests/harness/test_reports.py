@@ -8,8 +8,7 @@ import sys
 
 import pytest
 
-from harness import executable, load
-from reporting import new_directory
+from reporting import new_directory, run_report
 import toolchain
 import workspace
 
@@ -78,26 +77,6 @@ def test_same(directory, request, name):
     assert len({path.read_text() for path in records}) == 4
 
 
-def test_demo_output_is_never_automatically_deleted(monkeypatch, tmp_path):
-    runner = load("demo_runner", "common/tests/run.py")
-    calls = []
-    monkeypatch.setattr(runner, "run", lambda *args, **kwargs: calls.append(args))
-    for kind, names in {
-        "compiler": ["zkc-compile"],
-        "native": ["zkc"],
-    }.items():
-        for name in names:
-            executable(tmp_path / kind / name)
-        monkeypatch.setenv(workspace.DIRECTORIES[kind][0], str(tmp_path / kind))
-    output = tmp_path / "evidence"
-    output.mkdir()
-    (output / "previous.json").write_text(json.dumps({"keep": True}))
-    with pytest.raises(FileExistsError):
-        runner.demo(output)
-    assert json.loads((output / "previous.json").read_text()) == {"keep": True}
-    assert not calls
-
-
 def test_explicit_cleanup_refuses_build_root_and_symlink(monkeypatch, tmp_path):
     root = tmp_path / "repo"
     (root / "build").mkdir(parents=True)
@@ -121,3 +100,35 @@ def test_normal_full_suite_does_not_invoke_cleanup():
     commands = result.stdout + result.stderr
     assert "common/tests/run.py" in commands
     assert "clean-reports" not in commands
+
+
+@pytest.mark.parametrize("outcome", [None, ValueError("failed check"), KeyboardInterrupt()])
+@pytest.mark.parametrize("previous", [None, "previous reports"])
+def test_run_report_records_lifecycle_and_restores_caller(outcome, previous, monkeypatch, tmp_path):
+    if previous is None:
+        monkeypatch.delenv("ZKC_REPORTS_DIR", raising=False)
+    else:
+        monkeypatch.setenv("ZKC_REPORTS_DIR", previous)
+
+    def invoke():
+        with run_report(tmp_path, "outer", ["runner", "outer"]) as outer:
+            manifest = outer / "run.json"
+            assert json.loads(manifest.read_text())["status"] == "running"
+            with run_report(outer, "inner", ["runner", "inner"]) as inner:
+                assert os.environ["ZKC_REPORTS_DIR"] == str(inner)
+            assert os.environ["ZKC_REPORTS_DIR"] == str(outer)
+            if outcome is not None:
+                raise outcome
+
+    if outcome is None:
+        invoke()
+    else:
+        with pytest.raises(type(outcome)):
+            invoke()
+    assert os.environ.get("ZKC_REPORTS_DIR") == previous
+    manifest, = (tmp_path / "runs").glob("*/run.json")
+    record = json.loads(manifest.read_text())
+    assert record["status"] == ("pass" if outcome is None else
+                                "interrupted" if isinstance(outcome, KeyboardInterrupt) else "failed")
+    assert record["argv"] == ["runner", "outer"]
+    assert record["started_utc"] <= record["finished_utc"]

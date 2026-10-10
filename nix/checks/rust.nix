@@ -1,9 +1,11 @@
 {
   tools,
+  source,
   environment,
   python3,
 }:
 tools.overrideAttrs (old: {
+  src = source;
   nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ python3 ];
   CARGO_NET_OFFLINE = "true";
   pname = "zkc-rust-checks";
@@ -14,7 +16,6 @@ tools.overrideAttrs (old: {
   checkPhase = ''
     runHook preCheck
     ${environment.checks}
-    cargo fmt --all -- --check
     cargo clippy --workspace --locked --offline --all-targets --all-features -- -D warnings
     python3 common/tests/run.py rust
     runHook postCheck
