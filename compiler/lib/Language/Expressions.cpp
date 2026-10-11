@@ -17,6 +17,11 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
   if (!expected)
     expected = inferredType(id);
   auto result = evaluate(id, expected, depth, allowUntypedStop);
+  if (result && retainExpressionValues) {
+    if (!checker.types.charge(1, syntax.expressions[id].span))
+      return {};
+    body.expressionValues.insert_or_assign(id, *result);
+  }
   if (result && reductionValues)
     reductionValues->insert_or_assign(id, *result);
   const auto &expr = syntax.expressions[id];

@@ -1021,29 +1021,41 @@ private:
         if (!name(p.name) || !expect(":"))
           return false;
         if (take("scoped")) {
-          SyntaxScopedSignature signature;
-          signature.mode = take("math") ? ScopedSignature::Mode::Math
-                                        : ScopedSignature::Mode::Local;
-          if (!expect("fn") || !expect("("))
-            return false;
-          if (!at(")"))
-            do {
-              SyntaxType input;
-              if (!type(input))
+          if (take("domain")) {
+            SyntaxType item;
+            if (!expect("<") || !type(item) || !expect(">"))
+              return false;
+            p.domain = std::move(item);
+          } else {
+            SyntaxScopedSignature signature;
+            signature.mode = take("math") ? ScopedSignature::Mode::Math
+                                          : ScopedSignature::Mode::Local;
+            if (!expect("fn") || !expect("("))
+              return false;
+            if (!at(")"))
+              do {
+                SyntaxType input;
+                if (!type(input))
+                  return false;
+                signature.inputs.push_back(std::move(input));
+              } while (take(",") && !at(")"));
+            if (!expect(")") || !expect("->") || !type(signature.result))
+              return false;
+            SyntaxDeclaration allowance;
+            if (signature.mode == ScopedSignature::Mode::Local && !at("!"))
+              return fail("source.effect", "Local scoped signatures require an "
+                                           "explicit effect allowance");
+            if (!effects(allowance))
+              return false;
+            signature.allowance = allowance.effects.value_or(Effects{});
+            if (take("on")) {
+              std::string domain;
+              if (!expect("(") || !name(domain) || !expect(")"))
                 return false;
-              signature.inputs.push_back(std::move(input));
-            } while (take(",") && !at(")"));
-          if (!expect(")") || !expect("->") || !type(signature.result))
-            return false;
-          SyntaxDeclaration allowance;
-          if (signature.mode == ScopedSignature::Mode::Local && !at("!"))
-            return fail(
-                "source.effect",
-                "Local scoped signatures require an explicit effect allowance");
-          if (!effects(allowance))
-            return false;
-          signature.allowance = allowance.effects.value_or(Effects{});
-          p.scoped = std::move(signature);
+              signature.itemDomain = std::move(domain);
+            }
+            p.scoped = std::move(signature);
+          }
         } else if (!type(p.type))
           return false;
         if (roles && (!expect("@") || !roleList(p.roles)))
@@ -1060,7 +1072,8 @@ private:
     SyntaxDeclaration d;
     d.span = current().span;
     d.isPublic = take("pub") || member;
-    if (take("domain")) {
+    bool domainFunction = take("domain");
+    if (domainFunction && !at("fn")) {
       d.kind = Declaration::Kind::Domain;
       if (member) {
         fail("source.syntax", "declaration is not an interface member");
@@ -1292,9 +1305,10 @@ private:
              "protocol component members belong to protocol composition");
         return {};
       }
-      d.kind = protocol ? Declaration::Kind::Protocol
-               : math   ? Declaration::Kind::Math
-                        : Declaration::Kind::Local;
+      d.kind = domainFunction ? Declaration::Kind::DomainFunction
+               : protocol     ? Declaration::Kind::Protocol
+               : math         ? Declaration::Kind::Math
+                              : Declaration::Kind::Local;
       if (!name(d.name) || !parameters(d.parameters))
         return {};
       if (protocol && (!expect("roles") || !roleList(d.roles, true)))
@@ -1307,17 +1321,19 @@ private:
         for (auto &port : ports) {
           bool service = protocol && port.type.kind == SyntaxType::Kind::Name &&
                          port.type.name == "Random";
-          if (port.scoped && protocol) {
-            fail("source.scoped", "protocol ports cannot be scoped arguments");
+          if ((port.scoped || port.domain) && protocol) {
+            fail("source.scoped", "protocol ports cannot be static arguments");
             return {};
           }
-          auto &selected = port.scoped ? d.scopedInputs
-                           : service   ? d.services
-                                       : d.inputs;
+          auto &selected = port.domain   ? d.domainInputs
+                           : port.scoped ? d.scopedInputs
+                           : service     ? d.services
+                                         : d.inputs;
           d.inputOrder.push_back(
-              {port.scoped ? Declaration::InputSlot::Kind::Scoped
-               : service   ? Declaration::InputSlot::Kind::Service
-                           : Declaration::InputSlot::Kind::Data,
+              {port.domain   ? Declaration::InputSlot::Kind::Domain
+               : port.scoped ? Declaration::InputSlot::Kind::Scoped
+               : service     ? Declaration::InputSlot::Kind::Service
+                             : Declaration::InputSlot::Kind::Data,
                unsigned(selected.size())});
           selected.push_back(std::move(port));
         }
@@ -1325,6 +1341,12 @@ private:
       if (protocol) {
         if (!expect("->") || !ports(d.outputs, true))
           return {};
+      } else if (domainFunction) {
+        SyntaxType item;
+        if (!expect("->") || !expect("scoped") || !expect("domain") ||
+            !expect("<") || !type(item) || !expect(">"))
+          return {};
+        d.domainResult = std::move(item);
       } else if (take("->")) {
         SyntaxPort p;
         p.name = "result";
@@ -1353,16 +1375,22 @@ private:
         if (!expect(";"))
           return {};
       } else if (take("=")) {
-        if (protocol || d.outputs.size() != 1) {
+        if (protocol || (!domainFunction && d.outputs.size() != 1)) {
           fail("source.primitive",
                "primitive functions require a written result type");
           return {};
         }
         std::string identity;
-        if (!expect("primitive") || !expect("(") || !string(identity) ||
-            !expect(")") || !expect(";"))
+        bool finite = !domainFunction && take("finite");
+        if ((!finite && !expect(domainFunction ? "domain" : "primitive")) ||
+            !expect("(") || !string(identity) || !expect(")") || !expect(";"))
           return {};
-        d.primitive = std::move(identity);
+        if (domainFunction)
+          d.domainConstructor = std::move(identity);
+        else if (finite)
+          d.finiteDefinition = std::move(identity);
+        else
+          d.primitive = std::move(identity);
       } else if (!body(d, protocol, false, 1))
         return {};
     }

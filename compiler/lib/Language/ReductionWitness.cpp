@@ -401,6 +401,10 @@ Error checkReductions(const CheckedStorage &storage, Work &work) {
         if (!visit(*repeat->region, owner, depth + 1))
           return false;
     }
+    for (const auto &binding : body.scopedBindings)
+      if (binding.computation &&
+          !visit(*binding.computation->body, owner, depth + 1))
+        return false;
     return true;
   };
   for (const auto &decl : storage.declarations)

@@ -60,6 +60,10 @@ queryFreePlaces(Semantics &types, const SyntaxDeclaration &syntax,
       }
       const auto &name = syntax.expressions[root];
       if (name.kind == Expression::Kind::Name && name.binding) {
+        if (environment.domains.count(*name.binding)) {
+          result.domains.insert(*name.binding);
+          return true;
+        }
         if (environment.scoped.count(*name.binding)) {
           result.scoped.insert(*name.binding);
           return true;
@@ -86,7 +90,9 @@ queryFreePlaces(Semantics &types, const SyntaxDeclaration &syntax,
     if (expr.kind == Expression::Kind::Lambda) {
       // Capture discovery visits deferred code without executing its flow.
       for (auto id : expr.regions) {
-        Flow deferred;
+        if (!types.charge(flow.assigned.size() + 1, expr.span))
+          return false;
+        Flow deferred{flow.assigned, false};
         if (!region(id, depth + 1, deferred))
           return false;
       }

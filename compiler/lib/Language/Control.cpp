@@ -144,8 +144,14 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
                                                 *arm.body, callDepth);
     auto &nested = *arm.checker;
     nested.inference = inference;
+    nested.retainExpressionValues = retainExpressionValues;
     if (!inheritScoped(nested))
       return {};
+    std::vector<unsigned> selectedDomains;
+    if (!inheritDomains(nested, summary->domains, selectedDomains))
+      return {};
+    if (ordinal == 0)
+      operation.domainArguments = std::move(selectedDomains);
     if (loop) {
       auto value = nested.input(Type(Type::Kind::Index), {}, expr.index.span);
       if (!value)

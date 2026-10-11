@@ -19,7 +19,8 @@ class CaptureCheck {
     Span span;
   };
   std::vector<Place> reads;
-  std::set<BindingId> scoped;
+  const std::vector<const Operation *> &producers;
+  std::set<BindingId> scoped, domains;
   bool refuse(Span span) {
     return types.fail("source.scoped-witness",
                       "scoped extraction differs from authored lexical places",
@@ -61,6 +62,8 @@ class CaptureCheck {
       return false;
     if (expr.binding && source.scoped.count(*expr.binding))
       scoped.insert(*expr.binding);
+    if (expr.binding && source.domains.count(*expr.binding))
+      domains.insert(*expr.binding);
     auto selected = place(id, depth);
     if (types.diagnostic)
       return false;
@@ -95,8 +98,10 @@ class CaptureCheck {
 
 public:
   CaptureCheck(Semantics &types, const ScopedSource &source,
-               const Declaration &owner)
-      : types(types), source(source), owner(owner), syntax(*source.syntax) {}
+               const Declaration &owner,
+               const std::vector<const Operation *> &producers)
+      : types(types), source(source), owner(owner), syntax(*source.syntax),
+        producers(producers) {}
   bool run(const Body &outer, const ScopedBinding &binding) {
     const auto &computation = *binding.computation;
     const auto &authored = syntax.expressions.at(source.expression);
@@ -110,36 +115,58 @@ public:
       return refuse(binding.span);
     if (!expression(source.expression, 1))
       return false;
-    // Independent antichain: replace a covered subtree at its earliest lexical
-    // occurrence, without using the producer's region/capture query.
-    std::vector<Place> minimal;
-    auto prefix = [](ArrayRef<unsigned> a, ArrayRef<unsigned> b) {
-      return a.size() <= b.size() && std::equal(a.begin(), a.end(), b.begin());
+    // A prefix trie keeps one capture for each minimal lexical place. Each
+    // subtree remembers its earliest occurrence even if a later whole-place
+    // read replaces that subtree.
+    struct Node {
+      std::optional<Place> selected;
+      std::optional<Span> first;
+      std::map<unsigned, Node> children;
     };
+    std::map<BindingId, Node> roots;
     for (const auto &read : reads) {
+      if (!types.charge(read.path.size() + 1, read.span))
+        return false;
+      auto *node = &roots[read.binding];
       bool covered = false;
-      for (auto &prior : minimal)
-        if (prior.binding == read.binding && prefix(prior.path, read.path)) {
-          if (read.span.begin < prior.span.begin)
-            prior.span = read.span;
+      for (unsigned position = 0;; ++position) {
+        if (!node->first || read.span.begin < node->first->begin)
+          node->first = read.span;
+        if (node->selected) {
+          node->selected->span = *node->first;
           covered = true;
           break;
         }
-      if (covered)
-        continue;
-      Place selected = read;
-      for (auto it = minimal.begin(); it != minimal.end();)
-        if (it->binding == read.binding && prefix(read.path, it->path)) {
-          if (it->span.begin < selected.span.begin)
-            selected.span = it->span;
-          it = minimal.erase(it);
-        } else
-          ++it;
-      minimal.push_back(std::move(selected));
+        if (position == read.path.size())
+          break;
+        node = &node->children[read.path[position]];
+      }
+      if (!covered) {
+        node->selected = read;
+        node->selected->span = *node->first;
+        node->children.clear();
+      }
     }
+    std::vector<Place> minimal;
+    std::function<void(const Node &)> collect = [&](const Node &node) {
+      if (node.selected)
+        minimal.push_back(*node.selected);
+      for (const auto &[index, child] : node.children)
+        collect(child);
+    };
+    for (const auto &[binding, root] : roots)
+      collect(root);
+    uint64_t levels = 1;
+    for (auto count = minimal.size(); count > 1; count >>= 1)
+      ++levels;
+    if (!types.charge(minimal.size() * levels, binding.span))
+      return false;
     llvm::stable_sort(minimal, [](const Place &a, const Place &b) {
       return a.span.begin < b.span.begin;
     });
+    auto prefix = [](ArrayRef<unsigned> a, ArrayRef<unsigned> b) {
+      return a.size() <= b.size() && std::equal(a.begin(), a.end(), b.begin());
+    };
     const auto &body = *computation.body;
     unsigned explicitInputs = source.signature.inputs.size();
     if (minimal.size() != computation.captures.size() ||
@@ -187,16 +214,16 @@ public:
           return refuse(binding.span);
       }
       auto value = binding.captures[i];
-      unsigned matches = 0;
-      for (const auto &op : outer.operations)
-        if (op.results.size() == 1 && op.results.front().index == value.index) {
-          auto *projection = std::get_if<Projection>(&op.action);
-          if (!projection || projection->input.index != root.index ||
-              projection->path != path || !same(op.span, expected.span))
-            return refuse(binding.span);
-          ++matches;
-        }
-      if (matches != 1 || value.index >= outer.values.size() ||
+      const auto *op =
+          value.index < producers.size() ? producers[value.index] : nullptr;
+      const auto *projection =
+          op ? std::get_if<Projection>(&op->action) : nullptr;
+      if (!types.charge(path.size() + 1, binding.span))
+        return false;
+      if (!projection || op->results.size() != 1 ||
+          projection->input.index != root.index || projection->path != path ||
+          !same(op->span, expected.span) ||
+          value.index >= outer.values.size() ||
           root.index >= outer.values.size() ||
           outer.values[value.index].type != *type ||
           outer.values[value.index].components !=
@@ -206,6 +233,24 @@ public:
     if (scoped.size() != computation.scopedCaptures.size() ||
         scoped.size() != binding.scopedCaptures.size())
       return refuse(binding.span);
+    if (domains.size() != computation.domainCaptures.size() ||
+        domains.size() != binding.domainCaptures.size())
+      return refuse(binding.span);
+    unsigned domainIndex = 0;
+    for (auto name : domains) {
+      auto outerIndex = source.domains.at(name);
+      if (computation.domainCaptures[domainIndex] != name.index ||
+          binding.domainCaptures[domainIndex] != outerIndex ||
+          outerIndex >= outer.domainBindings.size() ||
+          domainIndex >= body.domainBindings.size())
+        return refuse(binding.span);
+      const auto &parameter = body.domainBindings[domainIndex];
+      if (parameter.kind != DomainBinding::Kind::Parameter ||
+          parameter.parameter != domainIndex ||
+          parameter.item != outer.domainBindings[outerIndex].item)
+        return refuse(binding.span);
+      ++domainIndex;
+    }
     unsigned i = 0;
     for (auto name : scoped) {
       if (computation.scopedCaptures[i] != name.index ||
@@ -229,8 +274,10 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     };
     const auto *call = std::get_if<HelperCall>(&op.action);
     if (!op.binding || !op.binding->scopedSource)
-      return (!call || call->scopedArguments.empty()) &&
+      return (!call || (call->scopedArguments.empty() &&
+                        call->domainArguments.empty())) &&
                      (!op.binding || (op.binding->scopedArguments.empty() &&
+                                      op.binding->domainArguments.empty() &&
                                       op.binding->argumentOrder.empty()))
                  ? true
                  : refuse();
@@ -242,14 +289,16 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     if (!source.syntax || source.target.index >= storage.declarations.size() ||
         source.target.index != binding.target.declaration.index ||
         call->callee.index != source.target.index ||
-        call->scopedArguments != binding.scopedArguments)
+        call->scopedArguments != binding.scopedArguments ||
+        call->domainArguments != binding.domainArguments)
       return refuse();
     const auto &expr = source.syntax->expressions.at(source.expression);
     const auto &callee = storage.declarations[source.target.index];
     if (!same(expr.span, op.span) ||
         expr.children.size() != callee.inputOrder.size() ||
         binding.argumentOrder.size() != expr.children.size() ||
-        call->scopedArguments.size() != callee.scopedInputs.size())
+        call->scopedArguments.size() != callee.scopedInputs.size() ||
+        call->domainArguments.size() != callee.domainInputs.size())
       return refuse();
     std::vector<bool> assigned(callee.inputOrder.size());
     for (unsigned i = 0; i < expr.children.size(); ++i) {
@@ -259,9 +308,12 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
           parameter = callee.inputOrder.size();
           for (unsigned j = 0; j < callee.inputOrder.size(); ++j) {
             const auto &slot = callee.inputOrder[j];
-            const auto &name = slot.kind == Declaration::InputSlot::Kind::Scoped
-                                   ? callee.scopedInputs[slot.index].name
-                                   : callee.inputs[slot.index].name;
+            const auto &name =
+                slot.kind == Declaration::InputSlot::Kind::Scoped
+                    ? callee.scopedInputs[slot.index].name
+                : slot.kind == Declaration::InputSlot::Kind::Domain
+                    ? callee.domainInputs[slot.index].name
+                    : callee.inputs[slot.index].name;
             if (name == label.name)
               parameter = j;
           }
@@ -271,6 +323,30 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
         return refuse();
       assigned[parameter] = true;
       const auto &slot = callee.inputOrder[parameter];
+      if (slot.kind == Declaration::InputSlot::Kind::Domain) {
+        auto index = call->domainArguments[slot.index];
+        if (index >= body.domainBindings.size())
+          return refuse();
+        const auto &argument = source.syntax->expressions[expr.children[i]];
+        if (argument.kind == Expression::Kind::Name && argument.binding) {
+          auto lexical = source.domains.find(*argument.binding);
+          if (lexical == source.domains.end() || lexical->second != index)
+            return refuse();
+        } else if (argument.kind == Expression::Kind::Call) {
+          unsigned matches = 0;
+          for (const auto &application : body.domainApplications) {
+            if (!types.charge(1, application.span))
+              return false;
+            if (same(application.span, argument.span) &&
+                application.result == index)
+              ++matches;
+          }
+          if (matches != 1)
+            return refuse();
+        } else
+          return refuse();
+        continue;
+      }
       if (slot.kind != Declaration::InputSlot::Kind::Scoped)
         continue;
       auto index = call->scopedArguments[slot.index];
@@ -297,12 +373,23 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                                                           unsigned depth) {
     if (depth > work.limits.expressionDepth)
       return types.fail("source.limit", "scoped witness body depth", {});
+    if (!types.charge(body.values.size() + body.operations.size() + 1, {}))
+      return false;
+    std::vector<const Operation *> producers(body.values.size());
+    for (const auto &op : body.operations)
+      for (auto value : op.results) {
+        if (value.index >= producers.size() || producers[value.index])
+          return types.fail("source.scoped-witness", "invalid operation result",
+                            op.span);
+        producers[value.index] = &op;
+      }
     for (const auto &binding : body.scopedBindings) {
       if (!types.charge(1, binding.span))
         return false;
       if (binding.parameter) {
         if (binding.source || binding.computation ||
-            !binding.captures.empty() || !binding.scopedCaptures.empty())
+            !binding.captures.empty() || !binding.scopedCaptures.empty() ||
+            !binding.domainCaptures.empty())
           return types.fail("source.scoped-witness",
                             "formal scoped binding has an environment",
                             binding.span);
@@ -315,8 +402,10 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                           binding.span);
       const auto &source = *storage.scopedSources[*binding.source];
       if (!source.syntax || source.owner.index >= storage.declarations.size() ||
-          !CaptureCheck(types, source, storage.declarations[source.owner.index])
+          !CaptureCheck(types, source, storage.declarations[source.owner.index],
+                        producers)
                .run(body, binding) ||
+          !checkScopedValues(types, storage, source, binding) ||
           !visit(*binding.computation->body, depth + 1))
         return false;
     }

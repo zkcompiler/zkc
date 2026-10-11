@@ -150,8 +150,15 @@ std::optional<Components> BodyChecker::combine(ArrayRef<ValueId> args,
     fail("source.roles", "operation has no common participant", span);
     return {};
   }
-  if (math() && !result.empty())
-    body.formationRequirements.push_back(result);
+  if (math() && !result.empty()) {
+    uint64_t levels = 1;
+    for (auto count = formationRequirements.size(); count > 1; count >>= 1)
+      ++levels;
+    if (!checker.types.charge((result.size() + 1) * levels, span))
+      return {};
+    if (formationRequirements.insert(result).second)
+      body.formationRequirements.push_back(result);
+  }
   return Components(std::move(result));
 }
 bool BodyChecker::restricted(const Type &type) {
@@ -177,6 +184,18 @@ bool BodyChecker::statements(const SyntaxBody &source) {
       if (!root)
         return false;
       services.emplace(*s.pattern.binding, *root);
+      ++statement;
+      continue;
+    }
+    if (s.kind == Statement::Kind::Let && s.pattern.binding &&
+        syntax.bindings[s.pattern.binding->index].domain) {
+      TypeScope types(*this, s.expression, {}, true);
+      if (!types)
+        return false;
+      auto value = domainArgument(s.expression, 1);
+      if (!value || !inference.commit())
+        return false;
+      domains.emplace(*s.pattern.binding, *value);
       ++statement;
       continue;
     }
@@ -489,6 +508,13 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   bodyHeights[id.index] = 1;
   if (decl.kind == Declaration::Kind::Protocol && !specifications(decl))
     return false;
+  if (decl.kind == Declaration::Kind::DomainFunction) {
+    if (!resolveBindings(*this, decl, *sources[id.index]) ||
+        !domainBody(decl, depth))
+      return false;
+    bodyState[id.index] = 2;
+    return true;
+  }
   Body result;
   result.mode = (decl.kind == Declaration::Kind::Math ||
                  decl.kind == Declaration::Kind::Relation)
@@ -505,6 +531,9 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     inferredContracts.erase(&decl);
     return true;
   }
+  if (sources[id.index]->finiteDefinition)
+    return types.fail("source.finite", "finite definition has no checked body",
+                      decl.span);
   BodyChecker check(*this, decl, *sources[id.index], result, depth);
   for (unsigned i = 0; i < decl.inputs.size(); ++i) {
     auto &p = decl.inputs[i];
@@ -529,6 +558,10 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   for (unsigned i = 0; i < decl.services.size(); ++i)
     if (!check.addService(sources[id.index]->serviceBindings[i],
                           decl.services[i]))
+      return false;
+  for (unsigned i = 0; i < decl.domainInputs.size(); ++i)
+    if (!check.addDomain(sources[id.index]->domainBindings[i],
+                         decl.domainInputs[i], i))
       return false;
   for (unsigned i = 0; i < decl.scopedInputs.size(); ++i)
     if (!check.addScoped(sources[id.index]->scopedBindings[i],

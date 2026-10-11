@@ -43,6 +43,7 @@ BodyChecker::scopedArgument(uint32_t id, const ScopedSignature &signature,
   source->expression = id;
   source->signature = signature;
   source->scoped = scoped;
+  source->domains = domains;
   for (const auto &[name, state] : bindings) {
     if (!checker.types.charge(state.pieces.size() + 1, expr.span) ||
         !checker.types.chargeType(state.type, expr.span))
@@ -72,6 +73,7 @@ BodyChecker::scopedArgument(uint32_t id, const ScopedSignature &signature,
                       : Body::Mode::Local;
   BodyChecker nested(checker, decl, syntax, *checked, callDepth + 1);
   nested.inference = inference;
+  nested.retainExpressionValues = true;
   ScopedBinding binding{signature, {},        computation, {},
                         {},        expr.span, sourceIndex};
   std::vector<ValueId> parameters;
@@ -136,6 +138,10 @@ BodyChecker::scopedArgument(uint32_t id, const ScopedSignature &signature,
     binding.scopedCaptures.push_back(index);
     computation->scopedCaptures.push_back(capture.index);
   }
+  if (!inheritDomains(nested, inputs->domains, binding.domainCaptures))
+    return {};
+  for (auto capture : inputs->domains)
+    computation->domainCaptures.push_back(capture.index);
   // Destructuring emits ordinary projections after every input is allocated.
   for (unsigned i = 0; i < parameters.size(); ++i)
     if (!nested.bindPattern(expr.payloads.front()[i], parameters[i]))
@@ -194,27 +200,14 @@ std::optional<ValueId> BodyChecker::invokeScoped(const Expression &expr,
               expr.span);
 }
 bool Checker::retainScopedSources() {
-  std::map<unsigned, std::shared_ptr<const SyntaxDeclaration>> retained;
-  auto retain = [&](DeclarationId owner) {
-    auto &syntax = retained[owner.index];
-    if (!syntax) {
-      const auto &original = *sources[owner.index];
-      if (!types.charge(original.expressions.size() + original.bindings.size() +
-                            original.bodies.size(),
-                        original.span))
-        return std::shared_ptr<const SyntaxDeclaration>{};
-      syntax = std::make_shared<SyntaxDeclaration>(original);
-    }
-    return syntax;
-  };
   for (auto &source : scopedSources) {
-    source->syntax = retain(source->owner);
+    source->syntax = retainSyntax(source->owner);
     if (!source->syntax)
       return false;
     output.scopedSources.push_back(std::move(source));
   }
   for (auto &source : scopedCalls) {
-    source->syntax = retain(source->owner);
+    source->syntax = retainSyntax(source->owner);
     if (!source->syntax)
       return false;
     output.scopedCalls.push_back(std::move(source));

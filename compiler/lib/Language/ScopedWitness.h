@@ -13,15 +13,17 @@ struct ScopedSource {
     std::vector<std::pair<std::vector<unsigned>, ValueId>> pieces;
   };
   std::map<BindingId, Place> environment;
-  std::map<BindingId, unsigned> scoped;
+  std::map<BindingId, unsigned> scoped, domains;
   ScopedSignature signature;
 };
 struct ScopedCallSource {
   DeclarationId owner, target;
   uint32_t expression;
   std::shared_ptr<const SyntaxDeclaration> syntax;
-  std::map<BindingId, unsigned> scoped;
+  std::map<BindingId, unsigned> scoped, domains;
 };
+bool checkScopedValues(Semantics &, const CheckedStorage &,
+                       const ScopedSource &, const ScopedBinding &);
 llvm::Error checkScopedSources(const CheckedStorage &, Work &);
 } // namespace zkc::language::detail
 #endif

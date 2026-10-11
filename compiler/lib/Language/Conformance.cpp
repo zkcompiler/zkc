@@ -164,6 +164,7 @@ bool Checker::conformance(DeclarationId id) {
         }
       }
       if (required.scopedInputs.size() != provided->scopedInputs.size() ||
+          required.domainInputs.size() != provided->domainInputs.size() ||
           required.inputOrder.size() != provided->inputOrder.size())
         return types.fail("source.conformance", "scoped member arity differs",
                           provided->span);
@@ -172,6 +173,24 @@ bool Checker::conformance(DeclarationId id) {
             required.inputOrder[i].index != provided->inputOrder[i].index)
           return types.fail("source.conformance",
                             "member input categories differ", provided->span);
+      for (unsigned i = 0; i < required.domainInputs.size(); ++i) {
+        auto expected = types.substitute(required.domainInputs[i].item,
+                                         bindings, provided->span);
+        if (!expected)
+          return false;
+        if (*expected != provided->domainInputs[i].item)
+          return types.fail("source.conformance",
+                            "domain item signature differs", provided->span);
+      }
+      if (required.domainResult) {
+        auto expected =
+            types.substitute(*required.domainResult, bindings, provided->span);
+        if (!expected)
+          return false;
+        if (provided->domainResult != expected)
+          return types.fail("source.conformance", "domain result differs",
+                            provided->span);
+      }
       for (unsigned i = 0; i < required.scopedInputs.size(); ++i) {
         auto expected = required.scopedInputs[i].signature;
         for (auto &input : expected.inputs) {
@@ -189,6 +208,8 @@ bool Checker::conformance(DeclarationId id) {
           return types.fail("source.conformance",
                             "scoped member signature differs", provided->span);
       }
+      if (required.kind == Declaration::Kind::DomainFunction)
+        continue;
       auto allowance = required.effectAllowance.value_or(
           Effects{required.kind == Declaration::Kind::Local,
                   required.kind == Declaration::Kind::Local});

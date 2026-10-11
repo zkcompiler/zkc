@@ -1,6 +1,7 @@
 #include "BindingWitness.h"
 #include "BodyCheck.h"
 #include "BodySummary.h"
+#include "FiniteDomains.h"
 #include "ScopedWitness.h"
 #include "zkc/Language/Builtins.h"
 #include <algorithm>
@@ -154,10 +155,12 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   std::vector<ValueId> args(callee.inputs.size());
   std::vector<ValueId> authoredOperands;
   std::vector<unsigned> scopedArgs(callee.scopedInputs.size());
+  std::vector<unsigned> domainArgs(callee.domainInputs.size());
   std::vector<ValueId> captureOperands;
   if (binding.size() != expr.children.size() ||
-      !checkCallInputMapping(checker.types, binding,
-                             args.size() + scopedArgs.size(), expr.span)) {
+      !checkCallInputMapping(
+          checker.types, binding,
+          args.size() + scopedArgs.size() + domainArgs.size(), expr.span)) {
     if (!checker.types.diagnostic)
       fail("source.binding-witness", "call input mapping differs", expr.span);
     return {};
@@ -167,6 +170,19 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
                     ? Declaration::InputSlot{Declaration::InputSlot::Kind::Data,
                                              binding[i]}
                     : callee.inputOrder[binding[i]];
+    if (slot.kind == Declaration::InputSlot::Kind::Domain) {
+      auto argument = domainArgument(expr.children[i], depth + 1);
+      if (!argument)
+        return {};
+      domainArgs[slot.index] = *argument;
+      auto operands =
+          domainOperands(checker.types, body, {*argument}, expr.span);
+      if (!operands)
+        return {};
+      captureOperands.insert(captureOperands.end(), operands->values.begin(),
+                             operands->values.end());
+      continue;
+    }
     if (slot.kind == Declaration::InputSlot::Kind::Scoped) {
       const auto &signature = inference->scopedSignatures.at(expr.children[i]);
       auto argument = scopedArgument(expr.children[i], signature, depth + 1);
@@ -176,6 +192,12 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
       const auto &binding = body.scopedBindings[*argument];
       captureOperands.insert(captureOperands.end(), binding.captures.begin(),
                              binding.captures.end());
+      auto domains = domainOperands(checker.types, body, binding.domainCaptures,
+                                    expr.span);
+      if (!domains)
+        return {};
+      captureOperands.insert(captureOperands.end(), domains->values.begin(),
+                             domains->values.end());
       continue;
     }
     const auto parameter = slot.index;
@@ -219,13 +241,10 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
           return {};
     }
   } else {
-    std::vector<Dependencies> sourceValues;
-    for (unsigned i = 0; i < body.values.size(); ++i)
-      sourceValues.push_back({{i}, false});
     std::vector<ScopedSummaryBinding> selected;
     for (auto argument : scopedArgs) {
       auto binding = summarizeScopedBinding(checker.types, body, argument, {},
-                                            sourceValues, {});
+                                            {}, {}, 1, true);
       if (!binding)
         return {};
       selected.push_back(std::move(*binding));
@@ -233,11 +252,20 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     std::vector<Dependencies> inputs;
     for (auto arg : args)
       inputs.push_back({{arg.index}, false});
+    std::vector<Dependencies> selectedDomains;
+    for (auto domain : domainArgs) {
+      auto dependency =
+          summarizeDomainBinding(checker.types, body, domain, {}, {}, 1, true);
+      if (!dependency)
+        return {};
+      selectedDomains.push_back(std::move(*dependency));
+    }
     std::vector<Dependencies> formation;
     Dependencies result;
     if (callee.body) {
       auto summary = summarizeBody(checker.types, checker.output.declarations,
-                                   *callee.body, subst, inputs, selected);
+                                   *callee.body, subst, inputs, selected, 1,
+                                   selectedDomains);
       if (!summary)
         return {};
       result = summary->results.front();
@@ -246,7 +274,15 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     } else {
       for (auto arg : args)
         result.inputs.push_back(arg.index);
-      result.parameterized = !scopedArgs.empty();
+      for (auto capture : captureOperands)
+        result.inputs.push_back(capture.index);
+      result.parameterized = !scopedArgs.empty() || !domainArgs.empty();
+      for (const auto &domain : selectedDomains) {
+        result.inputs.insert(result.inputs.end(), domain.inputs.begin(),
+                             domain.inputs.end());
+        result.parameterized |= domain.parameterized;
+      }
+      body.parameterizedSummary |= result.parameterized;
     }
     auto apply =
         [&](const Dependencies &dependency) -> std::optional<Components> {
@@ -269,12 +305,14 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     resultComponents = *available;
   }
   CallBinding evidence{target, staticArgs, args, {}, {}, {}, {}};
-  if (!scopedArgs.empty()) {
+  if (!scopedArgs.empty() || !domainArgs.empty()) {
     evidence.scopedSource = checker.scopedCalls.size();
     evidence.argumentOrder = binding;
     evidence.scopedArguments = scopedArgs;
-    checker.scopedCalls.push_back(std::make_shared<ScopedCallSource>(
-        ScopedCallSource{decl.id, target.declaration, id, {}, scoped}));
+    evidence.domainArguments = domainArgs;
+    checker.scopedCalls.push_back(
+        std::make_shared<ScopedCallSource>(ScopedCallSource{
+            decl.id, target.declaration, id, {}, scoped, domains}));
   }
   if (expr.kind == Expression::Kind::NotationCall &&
       (!expr.notation || !inference->operators.count(id))) {
@@ -356,7 +394,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
                                     staticArgs,
                                     target.component,
                                     {},
-                                    scopedArgs},
+                                    scopedArgs,
+                                    domainArgs},
                          std::move(resultComponents));
   if (result && variable)
     placement->calls.emplace_back(body.operations.size() - 1, *variable);

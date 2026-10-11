@@ -87,6 +87,7 @@ struct ExpressionTypes {
   std::map<uint32_t, Operator> operators;
   std::map<uint32_t, unsigned> reductionHeights;
   std::map<uint32_t, ScopedSignature> scopedSignatures;
+  std::map<uint32_t, Type> domainItems;
 };
 } // namespace zkc::language::detail
 #endif

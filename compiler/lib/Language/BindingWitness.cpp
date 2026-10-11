@@ -417,6 +417,7 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
   if (binding.arguments.size() != callee.parameters.size() ||
       binding.operands.size() != callee.inputs.size() ||
       binding.scopedArguments.size() != callee.scopedInputs.size() ||
+      binding.domainArguments.size() != callee.domainInputs.size() ||
       callee.outputs.size() != 1 || operation.results.size() != 1 ||
       operation.results.front().index >= body.values.size())
     return refuse();
@@ -429,6 +430,14 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
         types.substitute(callee.inputs[i].type, subst, operation.span);
     if (!expected || binding.operands[i].index >= body.values.size() ||
         *expected != body.values[binding.operands[i].index].type)
+      return refuse();
+  }
+  for (unsigned i = 0; i < binding.domainArguments.size(); ++i) {
+    auto index = binding.domainArguments[i];
+    auto expected =
+        types.substitute(callee.domainInputs[i].item, subst, operation.span);
+    if (!expected || index >= body.domainBindings.size() ||
+        *expected != body.domainBindings[index].item)
       return refuse();
   }
   auto result =
@@ -446,6 +455,7 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
             action->arguments == binding.arguments &&
             action->component == binding.target.component &&
             action->scopedArguments == binding.scopedArguments &&
+            action->domainArguments == binding.domainArguments &&
             sameOperands(action->operands, binding.operands)) ||
            refuse();
   }

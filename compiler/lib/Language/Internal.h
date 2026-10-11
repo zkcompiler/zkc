@@ -71,6 +71,7 @@ struct SyntaxScopedSignature {
   std::vector<SyntaxType> inputs;
   SyntaxType result;
   Effects allowance;
+  std::optional<std::string> itemDomain;
 };
 struct SyntaxPort {
   std::string name;
@@ -81,6 +82,7 @@ struct SyntaxPort {
   std::optional<RelationPurpose> purpose;
   std::optional<SyntaxSelector> binding;
   std::optional<SyntaxScopedSignature> scoped;
+  std::optional<SyntaxType> domain;
 };
 struct SyntaxParameter {
   std::string name;
@@ -239,6 +241,7 @@ struct Binding {
   bool service = false;
   bool scoped = false;
   unsigned scope = 0;
+  bool domain = false;
 };
 /// Token intervals refer to the module's non-trivia token sequence. Fixed
 /// declaration headers are collected before imports; expression bodies are
@@ -255,11 +258,13 @@ struct SyntaxDeclaration {
   std::string name, domain, target;
   bool assetDomain = false;
   std::optional<std::string> primitive;
+  std::optional<std::string> domainConstructor, finiteDefinition;
+  std::optional<SyntaxType> domainResult;
   bool isPublic = false;
   bool completes = false;
   Span span;
   std::vector<std::string> roles;
-  std::vector<SyntaxPort> inputs, outputs, services, scopedInputs;
+  std::vector<SyntaxPort> inputs, outputs, services, scopedInputs, domainInputs;
   std::vector<Declaration::InputSlot> inputOrder;
   std::vector<Expression> expressions;
   std::optional<DeferredBody> deferredBody;
@@ -267,7 +272,8 @@ struct SyntaxDeclaration {
   std::vector<SyntaxBody> bodies;
   // Resolved lexical identities are private elaboration data, never serialized.
   std::vector<Binding> bindings;
-  std::vector<BindingId> inputBindings, serviceBindings, scopedBindings;
+  std::vector<BindingId> inputBindings, serviceBindings, scopedBindings,
+      domainBindings;
   bool resolved = false;
   bool elaborated = false;
   std::vector<SyntaxParameter> parameters;

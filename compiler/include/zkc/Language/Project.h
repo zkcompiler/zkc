@@ -146,15 +146,76 @@ struct ScopedSignature {
   std::vector<Type> inputs;
   Type result;
   Effects allowance;
+  /// Domain formal supplying the last explicit input. This is an invocation
+  /// contract, not a dependent runtime type.
+  std::optional<unsigned> itemDomain = {};
   bool operator==(const ScopedSignature &other) const {
     return mode == other.mode && inputs == other.inputs &&
-           result == other.result && allowance == other.allowance;
+           result == other.result && allowance == other.allowance &&
+           itemDomain == other.itemDomain;
   }
 };
 struct ScopedParameter {
   std::string name;
   ScopedSignature signature;
   Span span;
+};
+/// Finite domains are a separate static argument category. Their ordinary
+/// operands remain checked data values with authored evaluation order.
+struct DomainParameter {
+  std::string name;
+  Type item;
+  Span span;
+};
+struct DomainBinding {
+  enum class Kind {
+    Parameter,
+    Application,
+    Elements,
+    Indices,
+    Range,
+    Zip,
+    Product,
+    MatrixRow,
+    MatrixColumn,
+    MatrixCoordinates,
+    SourceArray
+  } kind;
+  Type item;
+  std::vector<ValueId> operands;
+  std::vector<unsigned> children;
+  unsigned axis = 0;
+  std::optional<unsigned> parameter = {};
+  Span span = {};
+  std::optional<CallableReference> factory = {};
+  std::vector<Type> arguments = {};
+  std::vector<unsigned> argumentOrder = {};
+};
+/// A factory application retains its selected declaration and substitution.
+/// This witness is checked against the factory's typed constructor template.
+struct DomainApplication {
+  CallableReference target;
+  std::vector<Type> arguments;
+  std::vector<ValueId> operands;
+  std::vector<unsigned> domains;
+  std::vector<unsigned> argumentOrder;
+  unsigned result;
+  Span span;
+};
+struct DomainDefinition {
+  std::optional<DomainBinding::Kind> constructor;
+  unsigned axis = 0;
+  std::vector<DomainBinding> bindings;
+  std::vector<DomainApplication> applications;
+  unsigned result = 0;
+};
+/// Static alias partition for a closed callable. Authored ports remain in the
+/// ABI; input references and hidden captures select their canonical ports.
+struct ClosureLayout {
+  std::vector<unsigned> inputs, captures;
+  bool operator==(const ClosureLayout &other) const {
+    return inputs == other.inputs && captures == other.captures;
+  }
 };
 struct ScopedInvoke {
   unsigned binding;
@@ -167,6 +228,7 @@ struct HelperCall {
   std::optional<Type> component;
   std::optional<unsigned> owner;
   std::vector<unsigned> scopedArguments = {};
+  std::vector<unsigned> domainArguments = {};
 };
 /// A checked pointwise application of a static scalar math helper in local
 /// code. Each operand is either a whole vector of the helper's field, one row
@@ -262,6 +324,7 @@ struct LocalControl {
   std::vector<std::shared_ptr<const Body>> regions;
   std::vector<std::string> alternatives;
   unsigned carried = 0;
+  std::vector<unsigned> domainArguments = {};
 };
 /// Source elaboration evidence retained beside the native operation. Families
 /// contain canonical binding identities, not search order or implementation
@@ -278,6 +341,7 @@ struct CallBinding {
   std::optional<unsigned> scopedSource = {};
   std::vector<unsigned> argumentOrder = {};
   std::vector<unsigned> scopedArguments = {};
+  std::vector<unsigned> domainArguments = {};
 };
 /// Extraction evidence. Input slots name resolved lexical BindingIds; ignored
 /// rows have no binding. Expression values refer to the generated Math body.
@@ -300,6 +364,7 @@ struct ScopedComputation {
   std::vector<CaptureSlot> captures;
   std::vector<uint32_t> scopedCaptures;
   std::shared_ptr<const Body> body;
+  std::vector<uint32_t> domainCaptures = {};
 };
 /// Parameter is an index in the body's static scoped environment. A literal
 /// carries data snapshots and references to that body's scoped bindings.
@@ -311,6 +376,7 @@ struct ScopedBinding {
   std::vector<unsigned> scopedCaptures;
   Span span;
   std::optional<uint32_t> source;
+  std::vector<unsigned> domainCaptures = {};
 };
 struct Operation {
   std::variant<MathValue, HelperCall, BulkApplication, Exchange, Restriction,
@@ -329,6 +395,11 @@ struct Body {
   enum class Mode { Math, Local, Protocol } mode;
   std::vector<ServicePort> services;
   std::vector<ScopedBinding> scopedBindings;
+  std::vector<DomainBinding> domainBindings;
+  std::vector<DomainApplication> domainApplications;
+  /// Source expression results retained for independent scoped extraction
+  /// checks.
+  std::map<uint32_t, ValueId> expressionValues;
   std::vector<Value> values;
   std::vector<Operation> operations;
   std::vector<ValueId> results;
@@ -450,6 +521,7 @@ struct GeneratedReduction {
 struct Declaration {
   enum class Kind {
     Domain,
+    DomainFunction,
     Math,
     Local,
     Protocol,
@@ -491,15 +563,20 @@ struct Declaration {
   std::vector<Type> staticArguments;
   /// Closed helper selections, independent of runtime capture values.
   std::vector<DeclarationId> scopedArguments;
+  ClosureLayout closureLayout;
   std::optional<std::pair<DeclarationId, uint32_t>> scopedOrigin;
   std::vector<std::string> roles;
   std::vector<Port> inputs, outputs;
   std::vector<ScopedParameter> scopedInputs;
+  std::vector<DomainParameter> domainInputs;
+  std::optional<Type> domainResult;
+  std::shared_ptr<const DomainDefinition> domainDefinition;
+  std::optional<std::string> finiteDefinition;
   std::vector<ServicePort> services;
   /// Source arguments in written order. Data, managed services and static
   /// scoped computations remain separate input categories.
   struct InputSlot {
-    enum class Kind { Data, Service, Scoped } kind;
+    enum class Kind { Data, Service, Scoped, Domain } kind;
     unsigned index;
   };
   std::vector<InputSlot> inputOrder;

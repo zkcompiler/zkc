@@ -17,6 +17,10 @@ BodyChecker::regionInputs(const Expression &control) {
     (void)state;
     environment.scoped.insert(id);
   }
+  for (const auto &[id, state] : domains) {
+    (void)state;
+    environment.domains.insert(id);
+  }
   environment.place = [&](uint32_t id) { return sourcePlace(id); };
   return queryFreePlaces(checker.types, syntax, control, environment);
 }

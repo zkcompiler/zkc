@@ -30,7 +30,8 @@ class ExpressionInference {
   const SyntaxDeclaration &syntax;
   TypeInference types;
   std::unique_ptr<OperatorInference> operators;
-  std::map<BindingId, Variable> bindings;
+  std::map<BindingId, Variable> bindings, domains;
+  std::map<uint32_t, Variable> domainExpressions;
   std::map<BindingId, Type> services;
   std::map<uint32_t, Result> expressions;
   std::vector<uint32_t> expressionOrder;
@@ -101,6 +102,50 @@ class ExpressionInference {
       return;
     }
     scopedEquations.emplace(id, std::move(equations));
+  }
+  Variable domainArgument(uint32_t id, unsigned depth) {
+    const auto &expr = syntax.expressions[id];
+    if (depth > checker.work.limits.expressionDepth ||
+        !checker.types.charge(1, expr.span)) {
+      fail("source.limit", "domain inference depth exceeded", expr.span);
+      return types.fresh(expr.span);
+    }
+    if (auto found = domainExpressions.find(id);
+        found != domainExpressions.end())
+      return found->second;
+    Variable result = types.fresh(expr.span);
+    if (expr.kind == K::Name && expr.binding) {
+      if (auto found = domains.find(*expr.binding); found != domains.end())
+        types.equal(result, found->second, expr.span);
+      else if (auto found = owner.domains.find(*expr.binding);
+               found != owner.domains.end())
+        constrain(result, owner.body.domainBindings[found->second].item,
+                  expr.span);
+      else
+        fail("source.finite-domain", "expected a finite domain binding",
+             expr.span);
+    } else if (expr.kind == K::Call && !expr.binding && !expr.roles) {
+      auto target = owner.callable(expr);
+      if (!target)
+        return result;
+      const auto &callee =
+          checker.output.declarations[target->declaration.index];
+      if (callee.kind != Declaration::Kind::DomainFunction) {
+        fail("source.finite-domain", "expected a finite domain factory",
+             expr.span);
+        return result;
+      }
+      output.callees.emplace(id, *target);
+      contexts.emplace(id, CallContext{scopedMode.value_or(owner.body.mode),
+                                       reductionSite, scopedDepth});
+      auto outputs = application(id, callee, target->component, depth);
+      if (outputs.size() == 1)
+        types.equal(result, outputs.front(), expr.span);
+    } else
+      fail("source.finite-domain", "expected a finite domain argument",
+           expr.span);
+    domainExpressions.emplace(id, result);
+    return result;
   }
   struct CallContext {
     Body::Mode mode;
@@ -340,6 +385,10 @@ class ExpressionInference {
                                         parameters, expr.span,
                                         callee.services[slot.index].span),
                       known(*field, expr.span), expr.span);
+      } else if (slot.kind == Declaration::InputSlot::Kind::Domain) {
+        types.equal(types.instantiate(callee.domainInputs[slot.index].item,
+                                      parameters, expr.span),
+                    domainArgument(expr.children[i], depth + 1), expr.span);
       } else if (slot.kind == Declaration::InputSlot::Kind::Data) {
         auto parameter = constraints.inputs[slot.index];
         auto argument = expression(expr.children[i], depth + 1);
@@ -367,6 +416,9 @@ class ExpressionInference {
                          depth + 1);
       }
     std::vector<Variable> results;
+    if (callee.domainResult)
+      results.push_back(
+          types.instantiate(*callee.domainResult, parameters, expr.span));
     for (auto result : constraints.outputs)
       results.push_back(rows.empty() ? result : vectorOf(result, expr.span));
     return results;
@@ -445,6 +497,19 @@ class ExpressionInference {
         auto field = service(statement.expression);
         if (field)
           services.emplace(*statement.pattern.binding, *field);
+        continue;
+      }
+      if (statement.kind == Statement::Kind::Let && statement.pattern.binding &&
+          syntax.bindings[statement.pattern.binding->index].domain) {
+        auto firstCall = calls.size();
+        auto firstExpression = expressionOrder.size();
+        auto item = domainArgument(statement.expression, depth + 1);
+        if (!finishCalls(firstCall, firstExpression, statement.span))
+          return {item};
+        if (!types.get(item, statement.span))
+          fail("source.inference",
+               "domain item needs a type before its next use", statement.span);
+        domains.emplace(*statement.pattern.binding, item);
         continue;
       }
       auto firstCall = calls.size();
@@ -879,9 +944,9 @@ public:
         syntax(owner.syntax), types(checker.types),
         operators(std::make_unique<OperatorInference>(
             types, checker.types, checker.output.declarations)) {}
-  std::optional<ExpressionTypes> run(uint32_t id,
-                                     std::optional<Type> expected) {
-    auto result = expression(id, 1);
+  std::optional<ExpressionTypes> run(uint32_t id, std::optional<Type> expected,
+                                     bool domain) {
+    auto result = domain ? Result{domainArgument(id, 1)} : expression(id, 1);
     if (expected)
       constrain(result.type, *expected, syntax.expressions[id].span);
     if (!finishCalls(0, 0, syntax.expressions[id].span))
@@ -890,6 +955,17 @@ public:
       output.covered.insert(id);
       if (auto type = types.get(value.type, syntax.expressions[id].span))
         output.expressions.emplace(id, std::move(*type));
+    }
+    for (const auto &[id, item] : domainExpressions) {
+      output.covered.insert(id);
+      auto type = types.get(item, syntax.expressions[id].span);
+      if (!type) {
+        if (!checker.types.diagnostic)
+          fail("source.inference", "cannot infer finite domain item",
+               syntax.expressions[id].span);
+        return {};
+      }
+      output.domainItems.emplace(id, *type);
     }
     for (const auto &[id, equations] : scopedEquations) {
       ScopedSignature signature{equations.mode, {}, {}, equations.allowance};
@@ -911,16 +987,17 @@ public:
   }
 };
 std::optional<ExpressionTypes>
-BodyChecker::inferExpression(uint32_t id, std::optional<Type> expected) {
+BodyChecker::inferExpression(uint32_t id, std::optional<Type> expected,
+                             bool domain) {
   assert(syntax.elaborated && "inference requires elaborated source");
-  return ExpressionInference(*this).run(id, std::move(expected));
+  return ExpressionInference(*this).run(id, std::move(expected), domain);
 }
 BodyChecker::TypeScope::TypeScope(BodyChecker &checker, uint32_t id,
-                                  std::optional<Type> expected)
+                                  std::optional<Type> expected, bool domain)
     : checker(checker), outer(checker.inference), valid(true) {
   if (outer && outer->covered.count(id))
     return;
-  state = checker.inferExpression(id, std::move(expected));
+  state = checker.inferExpression(id, std::move(expected), domain);
   valid = state.has_value();
   if (valid)
     checker.inference = &*state;

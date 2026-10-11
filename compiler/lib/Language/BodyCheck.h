@@ -11,6 +11,7 @@ public:
               unsigned);
   bool run(const SyntaxBody &, std::vector<Port> &, bool protocol);
   bool addScoped(BindingId, const ScopedSignature &, Span);
+  bool addDomain(BindingId, const DomainParameter &, unsigned);
   bool addService(BindingId, const ServicePort &);
   bool addInput(BindingId, const Type &, std::vector<unsigned>, Span);
 
@@ -22,16 +23,19 @@ private:
   Body &body;
   unsigned callDepth;
   uint32_t statement = 0;
+  bool retainExpressionValues = false;
   Placement *placement = nullptr;
   const ExpressionTypes *inference = nullptr;
   std::map<uint32_t, ValueId> *reductionValues = nullptr;
   std::set<uint32_t> mathematicalExpressions;
+  std::set<std::vector<unsigned>> formationRequirements;
   struct TypeScope {
     BodyChecker &checker;
     const ExpressionTypes *outer;
     std::optional<ExpressionTypes> state;
     bool valid;
-    TypeScope(BodyChecker &, uint32_t, std::optional<Type>);
+    TypeScope(BodyChecker &, uint32_t, std::optional<Type>,
+              bool domain = false);
     TypeScope(const TypeScope &) = delete;
     TypeScope &operator=(const TypeScope &) = delete;
     ~TypeScope();
@@ -59,11 +63,14 @@ private:
     std::vector<std::pair<std::vector<unsigned>, ValueId>> pieces;
   };
   std::map<BindingId, BindingState> bindings;
-  std::map<BindingId, unsigned> scoped;
+  std::map<BindingId, unsigned> scoped, domains;
+  std::optional<unsigned> domainArgument(uint32_t, unsigned);
   std::optional<unsigned> scopedArgument(uint32_t, const ScopedSignature &,
                                          unsigned);
   std::optional<ValueId> invokeScoped(const Expression &, unsigned);
   bool inheritScoped(BodyChecker &);
+  bool inheritDomains(BodyChecker &, const std::set<BindingId> &,
+                      std::vector<unsigned> &);
   std::map<BindingId, ServiceId> services;
   std::optional<ServiceId> service(const Expression &);
   struct Uses {
@@ -124,7 +131,8 @@ private:
   bool data(const Type &, Span);
   bool restricted(const Type &);
   std::optional<Type> projected(Type, llvm::ArrayRef<unsigned>, Span);
-  std::optional<ExpressionTypes> inferExpression(uint32_t, std::optional<Type>);
+  std::optional<ExpressionTypes> inferExpression(uint32_t, std::optional<Type>,
+                                                 bool domain = false);
   std::optional<Type> inferredType(uint32_t) const;
   std::optional<ValueId> expression(uint32_t, std::optional<Type> = {},
                                     unsigned = 1,

@@ -33,7 +33,15 @@ public:
       syntax.bindings[id->index].scoped = true;
       syntax.scopedBindings.push_back(*id);
     }
-    if (!syntax.primitive && !body(0, 1))
+    for (auto &port : decl.domainInputs) {
+      auto id = bind(port.name, port.span, false, false, true);
+      if (!id)
+        return false;
+      syntax.bindings[id->index].domain = true;
+      syntax.domainBindings.push_back(*id);
+    }
+    if (!syntax.primitive && !syntax.domainConstructor &&
+        !syntax.finiteDefinition && !body(0, 1))
       return false;
     syntax.resolved = true;
     return true;
@@ -188,9 +196,19 @@ private:
           return fail("source.service",
                       "service aliases are immutable unannotated names",
                       s.span);
+        bool domain = checker.domainExpression(decl, syntax, s.expression);
+        if (checker.types.diagnostic)
+          return false;
+        if (domain && (s.mutableBinding || s.roles || s.type || s.exchange ||
+                       s.pattern.kind != Pattern::Kind::Name))
+          return fail("source.finite-domain",
+                      "domain aliases require one immutable unannotated name",
+                      s.span);
         std::set<std::string> seen;
         if (!pattern(s.pattern, s.mutableBinding, service, seen, depth))
           return false;
+        if (domain)
+          syntax.bindings[s.pattern.binding->index].domain = true;
       } else if (s.kind == Statement::Kind::Assign) {
         s.pattern.binding = lookup(s.pattern.name, s.pattern.span);
         if (!s.pattern.binding)

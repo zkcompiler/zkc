@@ -13,6 +13,7 @@ struct ScopedSummaryBinding {
   Substitution statics;
   std::vector<Dependencies> captures;
   std::vector<ScopedSummaryBinding> scoped;
+  std::vector<Dependencies> domains;
 };
 struct BodySummary {
   // Math dependencies compose exactly at logical-value granularity. Local
@@ -25,10 +26,20 @@ struct BodySummary {
 std::optional<BodySummary>
 summarizeBody(Semantics &, llvm::ArrayRef<Declaration>, const Body &,
               const Substitution &, llvm::ArrayRef<Dependencies>,
-              llvm::ArrayRef<ScopedSummaryBinding>, unsigned = 1);
+              llvm::ArrayRef<ScopedSummaryBinding>, unsigned = 1,
+              llvm::ArrayRef<Dependencies> domains = {});
 std::optional<ScopedSummaryBinding>
 summarizeScopedBinding(Semantics &, const Body &, unsigned,
                        const Substitution &, llvm::ArrayRef<Dependencies>,
-                       llvm::ArrayRef<ScopedSummaryBinding>, unsigned = 1);
+                       llvm::ArrayRef<ScopedSummaryBinding>, unsigned = 1,
+                       bool identityValues = false,
+                       llvm::ArrayRef<Dependencies> domains = {});
+/// Resolve a domain's eager operand dependencies in the caller's value space.
+/// Unknown domain formals remain parameterized rather than appearing constant.
+std::optional<Dependencies>
+summarizeDomainBinding(Semantics &, const Body &, unsigned,
+                       llvm::ArrayRef<Dependencies> values,
+                       llvm::ArrayRef<Dependencies> environment = {},
+                       unsigned depth = 1, bool identityValues = false);
 } // namespace zkc::language::detail
 #endif

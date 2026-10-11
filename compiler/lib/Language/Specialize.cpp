@@ -1,5 +1,6 @@
 #include "BodyMapping.h"
 #include "BodySummary.h"
+#include "ClosureInputs.h"
 #include "Semantics.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/Services.h"
@@ -12,7 +13,8 @@ namespace {
 // bodies.
 bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
   if (!types.charge(body.operations.size() + body.values.size() +
-                        body.results.size() + body.stopReason.size() + 1,
+                        body.results.size() + body.expressionValues.size() +
+                        body.stopReason.size() + 1,
                     span))
     return false;
   for (const auto &value : body.values)
@@ -144,7 +146,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
     std::map<std::pair<unsigned, unsigned>, DeclarationId> scopedTemplates;
     std::vector<DeclarationId> generatedTemplates;
     std::function<std::optional<DeclarationId>(
-        DeclarationId, ArrayRef<Type>, unsigned, ArrayRef<DeclarationId>)>
+        DeclarationId, ArrayRef<Type>, unsigned, ArrayRef<DeclarationId>,
+        const ClosureLayout &)>
         instantiate;
     std::function<bool(Body &, const Substitution &, Body::Mode, unsigned,
                        unsigned &, const std::vector<Environment> &)>
@@ -214,14 +217,14 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         }
         const auto &computation = *binding.computation;
         std::vector<DeclarationId> selected;
-        auto operands = binding.captures;
+        std::vector<ValueId> hiddenCaptures;
         for (auto capture : binding.scopedCaptures) {
           auto value = resolveScoped(capture, nestedDepth + 1);
           if (!value)
             return {};
           selected.push_back(value->helper);
-          operands.insert(operands.end(), value->captures.begin(),
-                          value->captures.end());
+          hiddenCaptures.insert(hiddenCaptures.end(), value->captures.begin(),
+                                value->captures.end());
         }
         auto identity = std::make_pair(computation.lexicalOwner.index,
                                        computation.expression);
@@ -285,10 +288,23 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             return {};
           arguments.push_back(*argument);
         }
-        auto helper = instantiate(source, arguments, depth + 1, selected);
+        std::vector<std::optional<ValueId>> authored(
+            computation.signature.inputs.size());
+        for (auto capture : binding.captures)
+          authored.push_back(capture);
+        auto inputs =
+            closeInputs(types, body, authored, hiddenCaptures, binding.span);
+        if (!inputs)
+          return {};
+        auto helper =
+            instantiate(source, arguments, depth + 1, selected, inputs->layout);
         if (!helper)
           return {};
         height = std::max(height, heights.at(helper->index) + 1);
+        std::vector<ValueId> operands;
+        for (auto value : ArrayRef(inputs->operands)
+                              .drop_front(computation.signature.inputs.size()))
+          operands.push_back(*value);
         return resolved[index] = Environment{*helper, std::move(operands)};
       };
       // Even unused callback bodies are closed and checked. Creating a static
@@ -408,7 +424,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             target = *origin;
           }
           auto instance =
-              instantiate(target, application->arguments, depth + 1, {});
+              instantiate(target, application->arguments, depth + 1, {}, {});
           if (!instance)
             return false;
           height = std::max(height, heights.at(instance->index) + 1);
@@ -443,16 +459,31 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             call->arguments = call->component->arguments;
           }
           std::vector<DeclarationId> selected;
+          std::vector<ValueId> hiddenCaptures;
           for (auto argument : call->scopedArguments) {
             auto value = resolveScoped(argument, 1);
             if (!value)
               return false;
             selected.push_back(value->helper);
-            call->operands.insert(call->operands.end(), value->captures.begin(),
+            hiddenCaptures.insert(hiddenCaptures.end(), value->captures.begin(),
                                   value->captures.end());
           }
+          ClosureLayout layout;
+          if (!selected.empty()) {
+            std::vector<std::optional<ValueId>> authored;
+            for (auto operand : call->operands)
+              authored.push_back(operand);
+            auto inputs =
+                closeInputs(types, body, authored, hiddenCaptures, op.span);
+            if (!inputs)
+              return false;
+            layout = std::move(inputs->layout);
+            call->operands.clear();
+            for (auto operand : inputs->operands)
+              call->operands.push_back(*operand);
+          }
           auto instance =
-              instantiate(target, call->arguments, depth + 1, selected);
+              instantiate(target, call->arguments, depth + 1, selected, layout);
           call->scopedArguments.clear();
           if (!instance)
             return false;
@@ -467,7 +498,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             bulk->arguments = declarations[target.index].staticArguments;
             target = *origin;
           }
-          auto instance = instantiate(target, bulk->arguments, depth + 1, {});
+          auto instance =
+              instantiate(target, bulk->arguments, depth + 1, {}, {});
           if (!instance)
             return false;
           height = std::max(height, heights.at(instance->index) + 1);
@@ -564,9 +596,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       body.parameterizedSummary = false;
       return true;
     };
-    instantiate =
-        [&](DeclarationId origin, ArrayRef<Type> args, unsigned depth,
-            ArrayRef<DeclarationId> scoped) -> std::optional<DeclarationId> {
+    instantiate = [&](DeclarationId origin, ArrayRef<Type> args, unsigned depth,
+                      ArrayRef<DeclarationId> scoped,
+                      const ClosureLayout &providedLayout)
+        -> std::optional<DeclarationId> {
       const auto &source = declarations[origin.index];
       if (depth > work.limits.callDepth) {
         types.fail("source.limit", "closed call depth limit exceeded",
@@ -615,6 +648,31 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         if (!types.charge(1, source.span))
           return {};
       }
+      auto layout = providedLayout;
+      if (layout.inputs.empty() && source.inputs.size())
+        for (unsigned i = 0; i < source.inputs.size(); ++i)
+          layout.inputs.push_back(i);
+      if (layout.inputs.size() != source.inputs.size()) {
+        types.fail("source.closure-inputs",
+                   "authored closure input arity differs", source.span);
+        return {};
+      }
+      frame(key, "input-aliases");
+      for (unsigned i = 0; i < layout.inputs.size(); ++i) {
+        if (layout.inputs[i] > i ||
+            layout.inputs[layout.inputs[i]] != layout.inputs[i]) {
+          types.fail("source.closure-inputs",
+                     "invalid authored alias partition", source.span);
+          return {};
+        }
+        frame(key, std::to_string(layout.inputs[i]));
+      }
+      frame(key, "capture-inputs");
+      for (auto port : layout.captures)
+        frame(key, std::to_string(port));
+      if (!types.charge(layout.inputs.size() + layout.captures.size() + 1,
+                        source.span))
+        return {};
       auto known = instances.find(key);
       if (known != instances.end()) {
         if (depth - 1 + heights.at(known->second.index) >
@@ -686,10 +744,16 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       result.members.clear();
       result.staticArguments.assign(args.begin(), args.end());
       result.scopedArguments.assign(scoped.begin(), scoped.end());
+      result.closureLayout = layout;
       // Native participant carriers bound identifiers to 128 bytes. Reuse the
       // instance key for long declaration paths instead of narrowing source
       // names.
-      if (!args.empty() || !scoped.empty() || result.symbol.size() > 128)
+      if (!args.empty() || !scoped.empty() ||
+          llvm::any_of(llvm::enumerate(layout.inputs),
+                       [](const auto &input) {
+                         return input.index() != input.value();
+                       }) ||
+          result.symbol.size() > 128)
         result.symbol = "zkl_" + detail::digest(key);
       if (result.symbol.size() > work.limits.symbolBytes) {
         types.fail("source.limit", "specialized symbol exceeds byte limit",
@@ -731,7 +795,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         for (auto &argument : subject.arguments)
           if (!closeType(argument, bindings, subject.span))
             return false;
-        auto selected = instantiate(subject.relation, subject.arguments, 1, {});
+        auto selected =
+            instantiate(subject.relation, subject.arguments, 1, {}, {});
         if (!selected)
           return false;
         subject.relation = *selected;
@@ -760,26 +825,46 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         auto body = std::make_shared<Body>(*result.body);
         std::vector<Value> hidden;
         std::vector<Environment> environment;
+        unsigned offset = 0;
         for (unsigned i = 0; i < scoped.size(); ++i) {
           const auto &helper = declarations[scoped[i].index];
           Environment selected{scoped[i], {}};
           for (unsigned j = result.scopedInputs[i].signature.inputs.size();
                j < helper.inputs.size(); ++j) {
+            if (offset >= layout.captures.size()) {
+              types.fail("source.closure-inputs",
+                         "missing hidden input mapping", result.span);
+              return {};
+            }
+            auto position = layout.captures[offset++];
             auto port = helper.inputs[j];
-            port.name = "capture" + std::to_string(hidden.size());
-            result.inputs.push_back(port);
-            hidden.push_back({port.type, {}, port.span});
+            if (position > result.inputs.size()) {
+              types.fail("source.closure-inputs",
+                         "noncontiguous hidden input mapping", result.span);
+              return {};
+            }
+            if (position == result.inputs.size()) {
+              port.name = "capture" + std::to_string(hidden.size());
+              result.inputs.push_back(port);
+              hidden.push_back({port.type, {}, port.span});
+            } else if (result.inputs[position].type != port.type) {
+              types.fail("source.closure-inputs", "aliased input types differ",
+                         result.span);
+              return {};
+            }
+            selected.captures.push_back({position});
           }
           environment.push_back(std::move(selected));
         }
-        if (!types.charge(hidden.size() + 1, result.span))
+        if (offset != layout.captures.size() ||
+            !types.charge(hidden.size() + 1, result.span))
           return {};
-        auto inputs = appendBodyInputs(*body, hidden);
-        unsigned offset = 0;
-        for (unsigned i = 0; i < scoped.size(); ++i)
-          for (unsigned j = result.scopedInputs[i].signature.inputs.size();
-               j < declarations[scoped[i].index].inputs.size(); ++j)
-            environment[i].captures.push_back(inputs[offset++]);
+        appendBodyInputs(*body, hidden);
+        mapBodyValues(*body, [&](ValueId value) {
+          return ValueId{value.index < layout.inputs.size()
+                             ? layout.inputs[value.index]
+                             : value.index};
+        });
         if (!closeBody(*body, bindings, mode, depth, height, environment))
           return {};
         if (result.kind == Declaration::Kind::Math ||
@@ -810,7 +895,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
     if (!target)
       return types.fail("source.entry", "Entry has no checked target",
                         declarations[selected.index].span);
-    auto instance = instantiate(*target, args, 1, {});
+    auto instance = instantiate(*target, args, 1, {}, {});
     if (!instance)
       return false;
     if (!types.checkProofEntry(declarations[selected.index],

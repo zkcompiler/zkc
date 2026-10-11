@@ -406,16 +406,10 @@ bool Checker::finalizeReductions() {
   return true;
 }
 bool Checker::retainReductionSources() {
-  std::map<unsigned, std::shared_ptr<const SyntaxDeclaration>> retained;
   for (auto &source : reductionSources) {
-    auto &syntax = retained[source->owner.index];
-    if (!syntax) {
-      if (!types.charge(1, output.declarations[source->owner.index].span))
-        return false;
-      syntax = std::make_shared<SyntaxDeclaration>(
-          std::move(*sources[source->owner.index]));
-    }
-    source->syntax = syntax;
+    source->syntax = retainSyntax(source->owner);
+    if (!source->syntax)
+      return false;
     output.reductions.push_back(source);
   }
   return true;

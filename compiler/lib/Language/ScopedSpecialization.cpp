@@ -1,4 +1,5 @@
 #include "BodySummary.h"
+#include "ClosureInputs.h"
 #include "zkc/Language/Project.h"
 #include <algorithm>
 #include <set>
@@ -70,10 +71,12 @@ class SpecializationCheck {
     }
     return result;
   }
-  std::optional<Environment>
-  binding(const Body &body, unsigned index, DeclarationId selected,
-          const Substitution &subst, ArrayRef<Environment> environment,
-          const std::function<ValueId(ValueId)> &map, unsigned depth) {
+  std::optional<Environment> binding(const Body &body, const Body &closedBody,
+                                     unsigned index, DeclarationId selected,
+                                     const Substitution &subst,
+                                     ArrayRef<Environment> environment,
+                                     const std::function<ValueId(ValueId)> &map,
+                                     unsigned depth) {
     if (index >= body.scopedBindings.size() ||
         selected.index >= candidate.size() || depth > work.limits.callDepth) {
       refuse({}, "invalid scoped environment edge");
@@ -114,16 +117,32 @@ class SpecializationCheck {
       statics.push_back(*argument);
     }
     Environment result{selected, {}};
+    std::vector<std::optional<ValueId>> authored(
+        computation.signature.inputs.size());
     for (auto capture : binding.captures)
-      result.captures.push_back(map(capture));
+      authored.push_back(map(capture));
+    std::vector<ValueId> hidden;
     for (unsigned i = 0; i < binding.scopedCaptures.size(); ++i) {
-      auto captured = this->binding(body, binding.scopedCaptures[i],
+      auto captured = this->binding(body, closedBody, binding.scopedCaptures[i],
                                     actual.scopedArguments[i], subst,
                                     environment, map, depth + 1);
       if (!captured)
         return {};
-      result.captures.insert(result.captures.end(), captured->captures.begin(),
-                             captured->captures.end());
+      hidden.insert(hidden.end(), captured->captures.begin(),
+                    captured->captures.end());
+    }
+    auto inputs = bindClosureInputs(types, closedBody, authored, hidden,
+                                    actual.closureLayout, actual.inputs.size(),
+                                    binding.span);
+    if (!inputs)
+      return {};
+    for (auto value :
+         ArrayRef(*inputs).drop_front(computation.signature.inputs.size())) {
+      if (!value) {
+        refuse(binding.span, "unbound closed capture input");
+        return {};
+      }
+      result.captures.push_back(*value);
     }
     if (!instance(selected, source[computation.lexicalOwner.index],
                   &computation, statics, actual.scopedArguments, depth + 1))
@@ -131,7 +150,8 @@ class SpecializationCheck {
     return result;
   }
   bool body(const Body &original, const Body &actual, const Substitution &subst,
-            ArrayRef<Environment> environment, unsigned depth) {
+            ArrayRef<Environment> environment, unsigned depth,
+            const ClosureLayout *layout = nullptr) {
     if (depth > work.limits.callDepth)
       return types.fail("source.limit", "specialization witness depth exceeded",
                         {});
@@ -140,10 +160,13 @@ class SpecializationCheck {
       return false;
     unsigned hidden = 0;
     for (const auto &selected : environment)
-      hidden += selected.captures.size();
+      for (auto capture : selected.captures)
+        if (capture.index >= original.inputs)
+          hidden = std::max(hidden, capture.index - original.inputs + 1);
     auto map = [&](ValueId value) {
-      return ValueId{value.index < original.inputs ? value.index
-                                                   : value.index + hidden};
+      return ValueId{value.index < original.inputs
+                         ? (layout ? layout->inputs[value.index] : value.index)
+                         : value.index + hidden};
     };
     auto mapped = [&](ArrayRef<ValueId> values) {
       std::vector<ValueId> result;
@@ -163,7 +186,8 @@ class SpecializationCheck {
       return refuse({});
     for (unsigned i = 0; i < original.values.size(); ++i) {
       const auto &expected = original.values[i];
-      const auto &value = actual.values[map({i}).index];
+      const auto &value =
+          actual.values[i < original.inputs ? i : map({i}).index];
       if (!typeEqual(expected.type, value.type, subst, expected.span) ||
           !same(expected.span, value.span) ||
           (actual.mode == Body::Mode::Protocol &&
@@ -230,8 +254,8 @@ class SpecializationCheck {
             !call->arguments.empty() || call->component || call->owner ||
             !call->scopedArguments.empty())
           return refuse(op.span);
-        auto selected = binding(original, invoke->binding, call->callee, subst,
-                                environment, map, depth + 1);
+        auto selected = binding(original, actual, invoke->binding, call->callee,
+                                subst, environment, map, depth + 1);
         if (!selected)
           return false;
         auto operands = mapped(invoke->operands);
@@ -285,19 +309,37 @@ class SpecializationCheck {
               const auto &callee = candidate[value.callee.index];
               auto operands = mapped(action.operands);
               std::vector<DeclarationId> selected;
+              std::vector<ValueId> hidden;
               if constexpr (std::is_same_v<T, HelperCall>) {
                 if (action.scopedArguments.size() !=
                     callee.scopedArguments.size())
                   return false;
                 for (unsigned j = 0; j < action.scopedArguments.size(); ++j) {
-                  auto scoped = binding(original, action.scopedArguments[j],
-                                        callee.scopedArguments[j], subst,
-                                        environment, map, depth + 1);
+                  auto scoped =
+                      binding(original, actual, action.scopedArguments[j],
+                              callee.scopedArguments[j], subst, environment,
+                              map, depth + 1);
                   if (!scoped)
                     return false;
                   selected.push_back(scoped->helper);
-                  operands.insert(operands.end(), scoped->captures.begin(),
-                                  scoped->captures.end());
+                  hidden.insert(hidden.end(), scoped->captures.begin(),
+                                scoped->captures.end());
+                }
+              }
+              if constexpr (std::is_same_v<T, HelperCall>) {
+                std::vector<std::optional<ValueId>> authored;
+                for (auto value : operands)
+                  authored.push_back(value);
+                auto inputs = bindClosureInputs(types, actual, authored, hidden,
+                                                callee.closureLayout,
+                                                callee.inputs.size(), op.span);
+                if (!inputs)
+                  return false;
+                operands.clear();
+                for (auto input : *inputs) {
+                  if (!input)
+                    return false;
+                  operands.push_back(*input);
                 }
               }
               if constexpr (std::is_same_v<T, BulkApplication>)
@@ -546,7 +588,16 @@ class SpecializationCheck {
         if (actual.outputs[i].roles != original.outputs[i].roles)
           return refuse(actual.span);
     }
-    unsigned offset = inputs.size();
+    const auto &layout = actual.closureLayout;
+    if (layout.inputs.size() != inputs.size())
+      return refuse(actual.span, "authored closure input count differs");
+    for (unsigned i = 0; i < inputs.size(); ++i)
+      if (layout.inputs[i] > i ||
+          layout.inputs[layout.inputs[i]] != layout.inputs[i] ||
+          actual.inputs[i].type != actual.inputs[layout.inputs[i]].type)
+        return refuse(actual.span, "invalid authored closure aliases");
+    unsigned offset = 0;
+    unsigned ports = inputs.size();
     std::vector<Environment> environment;
     for (unsigned i = 0; i < selected.size(); ++i) {
       if (selected[i].index >= candidate.size())
@@ -570,18 +621,22 @@ class SpecializationCheck {
       Environment binding{selected[i], {}};
       for (unsigned j = signatures[i].inputs.size(); j < helper.inputs.size();
            ++j) {
-        if (offset >= actual.inputs.size() ||
-            actual.inputs[offset].type != helper.inputs[j].type ||
-            !actual.body ||
-            actual.body->values[offset].type != helper.inputs[j].type)
+        if (offset >= layout.captures.size())
+          return refuse(actual.span, "missing hidden input mapping");
+        auto port = layout.captures[offset++];
+        if (port >= actual.inputs.size() || port > ports ||
+            actual.inputs[port].type != helper.inputs[j].type || !actual.body ||
+            actual.body->values[port].type != helper.inputs[j].type)
           return refuse(actual.span, "hidden input mapping differs");
-        binding.captures.push_back({offset++});
+        if (port == ports)
+          ++ports;
+        binding.captures.push_back({port});
       }
       environment.push_back(std::move(binding));
     }
-    if (offset != actual.inputs.size() ||
-        (templateBody &&
-         !body(*templateBody, *actual.body, subst, environment, depth)))
+    if (offset != layout.captures.size() || ports != actual.inputs.size() ||
+        (templateBody && !body(*templateBody, *actual.body, subst, environment,
+                               depth, &layout)))
       return refuse(actual.span);
     active.erase(id.index);
     checked.insert(id.index);
@@ -596,8 +651,20 @@ public:
         types(typeDeclarations, entry.project().assets(), work) {}
   Error run() {
     const auto &authored = source[entry.entry().id.index];
-    if (!authored.target ||
-        !instance(entry.protocol().id, source[authored.target->index], nullptr,
+    if (!authored.target)
+      return failure("source.scoped-specialization",
+                     "entry has no source target", authored.span);
+    const auto &rootLayout = entry.protocol().closureLayout;
+    if (!rootLayout.captures.empty() ||
+        rootLayout.inputs.size() !=
+            source[authored.target->index].inputs.size())
+      return failure("source.scoped-specialization",
+                     "entry input layout differs", authored.span);
+    for (unsigned i = 0; i < rootLayout.inputs.size(); ++i)
+      if (rootLayout.inputs[i] != i)
+        return failure("source.scoped-specialization",
+                       "entry asserts an input alias", authored.span);
+    if (!instance(entry.protocol().id, source[authored.target->index], nullptr,
                   authored.staticArguments, {}, 1))
       return types.takeError();
     for (const auto &declaration : candidate)

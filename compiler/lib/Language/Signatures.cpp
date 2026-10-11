@@ -325,6 +325,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                       decl.span);
   if (decl.kind == Declaration::Kind::Math ||
       decl.kind == Declaration::Kind::Local ||
+      decl.kind == Declaration::Kind::DomainFunction ||
       decl.kind == Declaration::Kind::Protocol ||
       decl.kind == Declaration::Kind::Relation) {
     decl.roles = source.roles;
@@ -369,11 +370,51 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         (input ? decl.inputs : decl.outputs).push_back(std::move(p));
       }
     }
+    for (const auto &src : source.domainInputs) {
+      if (!bindingName(decl, src.name, src.span) ||
+          llvm::any_of(decl.inputs,
+                       [&](const auto &p) { return p.name == src.name; }) ||
+          llvm::any_of(decl.domainInputs,
+                       [&](const auto &p) { return p.name == src.name; }))
+        return types.diagnostic
+                   ? false
+                   : types.fail("source.duplicate", "duplicate domain input",
+                                src.span);
+      auto item = type(decl, *src.domain, depth + 1);
+      if (!item)
+        return false;
+      if (!valueType(*item))
+        return types.fail("source.finite-domain", "domain item must be data",
+                          src.span);
+      auto permissions = types.permissions(*item, src.span, &decl);
+      if (!permissions)
+        return false;
+      if (!permissions->copy || !permissions->drop)
+        return types.fail("source.finite-domain",
+                          "domain items require Copy and Drop", src.span);
+      decl.domainInputs.push_back({src.name, *item, src.span});
+    }
+    if (source.domainResult) {
+      decl.domainResult = type(decl, *source.domainResult, depth + 1);
+      if (!decl.domainResult)
+        return false;
+      auto permissions =
+          types.permissions(*decl.domainResult, decl.span, &decl);
+      if (!permissions)
+        return false;
+      if (!valueType(*decl.domainResult) || !permissions->copy ||
+          !permissions->drop)
+        return types.fail("source.finite-domain",
+                          "domain result items require Copy and Drop",
+                          decl.span);
+    }
     for (const auto &src : source.scopedInputs) {
       if (!bindingName(decl, src.name, src.span) ||
           llvm::any_of(decl.inputs,
                        [&](const auto &p) { return p.name == src.name; }) ||
           llvm::any_of(decl.scopedInputs,
+                       [&](const auto &p) { return p.name == src.name; }) ||
+          llvm::any_of(decl.domainInputs,
                        [&](const auto &p) { return p.name == src.name; }))
         return types.diagnostic
                    ? false
@@ -402,6 +443,17 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         return types.fail("source.type", "scoped result must be data",
                           src.span);
       signature.result = *result;
+      if (written.itemDomain) {
+        auto found = llvm::find_if(decl.domainInputs, [&](const auto &domain) {
+          return domain.name == *written.itemDomain;
+        });
+        if (found == decl.domainInputs.end() || signature.inputs.empty() ||
+            signature.inputs.back() != found->item)
+          return types.fail("source.finite-domain",
+                            "on(domain) must supply the last scoped input",
+                            src.span);
+        signature.itemDomain = unsigned(found - decl.domainInputs.begin());
+      }
       if (signature.mode == ScopedSignature::Mode::Math) {
         for (const auto &input : signature.inputs)
           if (!types.mathematicalData(input, src.span, &decl))
@@ -447,6 +499,12 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         (decl.effectAllowance->mayStop || decl.effectAllowance->opaque))
       return types.fail("source.effect",
                         "math callable cannot allow ordered effects",
+                        decl.span);
+    if (decl.kind == Declaration::Kind::DomainFunction &&
+        (!decl.scopedInputs.empty() || decl.effectAllowance))
+      return types.fail("source.finite-domain",
+                        "domain factories compose typed constructors without "
+                        "scoped callbacks or an effect allowance",
                         decl.span);
   }
   if (decl.kind == Declaration::Kind::Relation && !relation(decl))

@@ -13,11 +13,11 @@ struct FreePlace {
 };
 struct RegionInputs {
   std::set<FreePlace> places;
-  std::set<BindingId> writes, services, scoped;
+  std::set<BindingId> writes, services, scoped, domains;
   std::map<FreePlace, Span> occurrences;
 };
 struct FreePlaceEnvironment {
-  std::set<BindingId> data, services, scoped;
+  std::set<BindingId> data, services, scoped, domains;
   std::function<std::optional<std::pair<BindingId, std::vector<unsigned>>>(
       uint32_t)>
       place;

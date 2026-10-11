@@ -43,6 +43,61 @@ int main() {
 protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return(r=forward(x,fun y=>y+a));}
 run Run=Demo;)");
   });
+  cases.run("existing reduction inside scoped callback", [] {
+    succeeds(R"(
+fn sum<F:Field>(xs:Vector<F>)->F=primitive("vector.sum");
+fn example(xs:Vector<Fr>,a:Fr)->Fr {
+ return apply(a,fun y=>reduce sum [x in xs] {x+a+y});
+}
+protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P)->(r:Fr@P){return example(xs,a);}
+run Run=Demo;)");
+  });
+  cases.run(
+      "scoped specialization retains joint authored and captured aliases", [] {
+        auto project = take(check(R"(
+fn twice(x:Fr,y:Fr,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{return body(x)+y;}
+fn dispatcher(x:Fr,y:Fr,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{
+ return twice(x,x,body)+twice(x,y,body);
+}
+protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){return dispatcher(x,y,fun v=>v+y);}
+run Run=Demo;
+)"));
+        auto closed = take(closeEntry(project, "m::Run"));
+        if (auto error = checkScopedSpecialization(closed))
+          throw std::runtime_error(toString(std::move(error)));
+        unsigned variants = 0;
+        for (const auto &declaration : closed.declarations())
+          if (declaration.body && declaration.name == "twice") {
+            ++variants;
+            const auto &layout = declaration.closureLayout;
+            if (layout.inputs == std::vector<unsigned>({0, 0}))
+              require(layout.captures == std::vector<unsigned>{2} &&
+                          declaration.inputs.size() == 3,
+                      "independent captured value was merged with an authored "
+                      "input");
+            else
+              require(layout.inputs == std::vector<unsigned>({0, 1}) &&
+                          layout.captures == std::vector<unsigned>{1} &&
+                          declaration.inputs.size() == 2,
+                      "equal captured and authored places received different "
+                      "ports");
+          }
+        require(variants == 2,
+                "distinct alias partitions shared a specialization");
+        bool changed = false;
+        for (const auto &declaration : closed.declarations())
+          if (declaration.body && declaration.name == "twice" &&
+              declaration.inputs.size() == 3) {
+            auto &layout = const_cast<Declaration &>(declaration).closureLayout;
+            layout.captures.front() = 0;
+            changed = true;
+            break;
+          }
+        require(changed, "missing distinct-capture specialization");
+        auto error = checkScopedSpecialization(closed);
+        require(bool(error), "forged capture alias was accepted");
+        consumeError(std::move(error));
+      });
   cases.run("generic Math apply and forwarding", [] {
     succeeds(R"(
 protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return(r=forward_math(x,fun y=>y+a));}
@@ -95,6 +150,69 @@ fn ignore<A:Type+Drop,B:Type+Copy+Drop>(x:A,body:scoped fn(A)->B !{stop},fallbac
 fn work(x:Fr)->Fr{return ignore(x,fun _=>{stop "reject";},x);}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}run Run=Demo;
 )");
+  });
+
+  cases.run("abstract Math callback captures survive wrapper summaries", [] {
+    const std::string helpers = R"(
+interface MathOps<F:Field>{math fn run(x:F,body:scoped math fn(F)->F)->F;}
+component Impl<F:Field>:MathOps<F>{math fn run(x:F,body:scoped math fn(F)->F)->F{return body(x);}}
+math fn g<F:Field,C:MathOps<F>>(x:F,y:F)->F{return C::run(x,fun t=>t+y);}
+math fn h(x:Fr,y:Fr)->Fr{return g<Fr,Impl<Fr>>(x,y);}
+)";
+    for (const auto &call : {"h(x,y)", "g<Fr,Impl<Fr>>(x,y)"})
+      refuses(check(helpers +
+                    "protocol Demo "
+                    "roles(P,V)(x:Fr@(P,V),y:Fr@P)->(r:Fr@(P,V)){return(r=" +
+                    call + ");}run Run=Demo;"),
+              "source.roles");
+    succeeds(helpers + "protocol Demo "
+                       "roles(P,V)(x:Fr@(P,V),y:Fr@P)->(r:Fr@P){return(r=h(x,y)"
+                       ");}run Run=Demo;");
+  });
+  cases.run("callback after whole reassignment does not capture moved input",
+            [] {
+              succeeds(R"(
+struct Token:Drop {}
+struct Holder {pub v:Fr,pub t:Token}
+fn f(x:Fr,c:bool,h:Holder)->Fr{
+ let mut s=h;let old=s;
+ return if c {s=Holder{v:x,t:Token{}};apply(x,fun y=>y+s.v)}
+ else {s=Holder{v:x,t:Token{}};x};
+}
+fn run(x:Fr,c:bool)->Fr{return f(x,c,Holder{v:x,t:Token{}});}
+protocol Demo roles(P)(x:Fr@P,c:bool@P)->(r:Fr@P){return run(x,c);}run Run=Demo;
+)");
+            });
+  cases.run("always-stopping argument excludes unreachable callback capture",
+            [] {
+              refuses(check(R"(
+fn g(a:Fr,b:Fr)->Fr{return a;}
+fn f(x:Fr,a:Fr)->Fr{return apply(x,fun y=>g({stop "reject";},a));}
+protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return f(x,a);}run Run=Demo;
+)"),
+                      "source.unreachable");
+            });
+
+  cases.run("formation summaries are sets across wide helper reuse", [] {
+    std::string source = "math fn wide(x:Fr)->Fr{";
+    for (unsigned i = 0; i < 256; ++i)
+      source += "let a" + std::to_string(i) + "=x+x;";
+    source += "return x;} math fn middle(x:Fr)->Fr{return wide(x);} math fn "
+              "caller(x:Fr)->Fr{";
+    for (unsigned i = 0; i < 256; ++i)
+      source += "let a" + std::to_string(i) + "=middle(x);";
+    source += "return x;}";
+    auto captured = take(capture({{"m", prelude + source, "wide.zkc"}}));
+    auto project = take(analyze(captured).checkedProject());
+    for (const auto &decl : project.declarations())
+      if (decl.name == "wide" || decl.name == "middle" || decl.name == "caller")
+        require(decl.body->formationRequirements.size() == 1,
+                "duplicate formation requirements accumulated");
+    Limits limits;
+    limits.work = project.checkedWork() - 1;
+    refuses(analyze(captured, limits).checkedProject(), "source.limit");
+    limits.work = project.checkedWork();
+    take(analyze(captured, limits).checkedProject());
   });
 
   const std::vector<std::pair<std::string, std::string>> refusals = {
@@ -265,6 +383,98 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return chain(second=fun y
                         std::string::npos,
                     "wrong scoped call mapping refusal");
           });
+  cases.run("authored witness checks capture operands inside callback", [&] {
+    auto project = take(check(captured));
+    for (const auto &decl : project.declarations()) {
+      if (decl.name != "Demo")
+        continue;
+      auto body = std::make_shared<Body>(*decl.body);
+      const_cast<Declaration &>(decl).body = body;
+      auto &binding = body->scopedBindings.front();
+      auto computation =
+          std::make_shared<ScopedComputation>(*binding.computation);
+      auto nested = std::make_shared<Body>(*computation->body);
+      binding.computation = computation;
+      computation->body = nested;
+      auto swap = [](ValueId &v) {
+        if (v.index == 1)
+          v.index = 2;
+        else if (v.index == 2)
+          v.index = 1;
+      };
+      for (auto &op : nested->operations) {
+        std::visit(
+            [&](auto &action) {
+              using T = std::decay_t<decltype(action)>;
+              if constexpr (std::is_same_v<T, MathValue> ||
+                            std::is_same_v<T, HelperCall> ||
+                            std::is_same_v<T, LocalPrimitive>)
+                for (auto &v : action.operands)
+                  swap(v);
+            },
+            op.action);
+        if (op.binding)
+          for (auto &v : op.binding->operands)
+            swap(v);
+      }
+    }
+    auto error = checkScopedElaboration(project);
+    require(bool(error), "callback capture use mutation accepted");
+    require(toString(std::move(error)).find("source.scoped-witness") !=
+                std::string::npos,
+            "wrong capture use refusal");
+  });
+  for (unsigned mutation = 0; mutation < 4; ++mutation)
+    cases.run(
+        "capture occurrence correspondence mutation " +
+            std::to_string(mutation),
+        [&, mutation] {
+          auto project = take(check(R"(
+protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return forward(x,fun y=>{let t=a;y+t-b});}run Run=Demo;
+)"));
+          bool changed = false;
+          for (const auto &decl : project.declarations())
+            if (decl.name == "Demo") {
+              auto outer = std::make_shared<Body>(*decl.body);
+              const_cast<Declaration &>(decl).body = outer;
+              auto &binding = outer->scopedBindings.front();
+              auto computation =
+                  std::make_shared<ScopedComputation>(*binding.computation);
+              auto body = std::make_shared<Body>(*computation->body);
+              binding.computation = computation;
+              computation->body = body;
+              if (mutation < 2) {
+                for (auto it = body->expressionValues.begin();
+                     it != body->expressionValues.end(); ++it)
+                  if (it->second.index == 1) {
+                    if (mutation == 0)
+                      it->second.index = 2;
+                    else
+                      body->expressionValues.erase(it);
+                    changed = true;
+                    break;
+                  }
+              } else {
+                for (auto &op : body->operations)
+                  if (auto *projection = std::get_if<Projection>(&op.action))
+                    if (projection->input.index == 1) {
+                      projection->input.index = 2;
+                      if (mutation == 3)
+                        for (auto &[id, value] : body->expressionValues)
+                          if (value.index == 1)
+                            value.index = 2;
+                      changed = true;
+                      break;
+                    }
+              }
+            }
+          require(changed, "mutation did not reach a capture read");
+          auto error = checkScopedElaboration(project);
+          require(bool(error), "corrupted capture occurrence accepted");
+          require(toString(std::move(error)).find("source.scoped-witness") !=
+                      std::string::npos,
+                  "wrong occurrence refusal");
+        });
   for (unsigned mutation = 0; mutation < 7; ++mutation)
     cases.run("capture witness mutation " + std::to_string(mutation), [&] {
       auto project = take(check(captured));

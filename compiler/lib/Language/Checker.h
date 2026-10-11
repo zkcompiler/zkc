@@ -42,6 +42,9 @@ public:
                         uint32_t);
   bool body(DeclarationId, unsigned);
   bool primitiveBody(Declaration &, Body &);
+  bool domainBody(Declaration &, unsigned);
+  bool domainExpression(const Declaration &, const SyntaxDeclaration &,
+                        uint32_t);
   bool relation(Declaration &);
 
   std::map<unsigned, std::vector<SpecificationSelector>> inlineBindings;
@@ -63,6 +66,7 @@ public:
   std::vector<std::shared_ptr<ScopedSource>> scopedSources;
   std::vector<std::shared_ptr<ScopedCallSource>> scopedCalls;
   bool retainScopedSources();
+  std::shared_ptr<const SyntaxDeclaration> retainSyntax(DeclarationId);
   bool finalizeReductions();
   bool retainReductionSources();
 
@@ -70,6 +74,7 @@ private:
   std::optional<Type> elaborateType(const Declaration &, const SyntaxType &,
                                     unsigned);
   std::vector<SyntaxModule> syntax;
+  std::map<unsigned, std::shared_ptr<const SyntaxDeclaration>> retainedSyntax;
   std::map<std::string, ModuleId> modules;
   std::map<std::string, DeclarationId> qualified;
   std::vector<std::map<std::string, DeclarationId>> visible;

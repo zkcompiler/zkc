@@ -7,6 +7,12 @@ void mapBodyValues(Body &body, const std::function<ValueId(ValueId)> &map) {
       value = map(value);
   };
   list(body.results);
+  for (auto &[id, value] : body.expressionValues)
+    value = map(value);
+  for (auto &domain : body.domainBindings)
+    list(domain.operands);
+  for (auto &application : body.domainApplications)
+    list(application.operands);
   for (auto &binding : body.scopedBindings)
     list(binding.captures);
   for (auto &op : body.operations) {

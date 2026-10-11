@@ -63,6 +63,8 @@ std::vector<StringRef> inputNames(const Declaration &decl) {
                          ? decl.inputs[slot.index].name
                      : slot.kind == Declaration::InputSlot::Kind::Scoped
                          ? decl.scopedInputs[slot.index].name
+                     : slot.kind == Declaration::InputSlot::Kind::Domain
+                         ? decl.domainInputs[slot.index].name
                          : decl.services[slot.index].name);
   return result;
 }
