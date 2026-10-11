@@ -353,7 +353,7 @@ fn example(xs:Pair,other:Vector<Fr>)->(Vector<Fr>,Vector<Fr>,Vector<Fr>){
         std::vector<Declaration> declarations(project.declarations().begin(),
                                               project.declarations().end());
         for (unsigned mutation = 0; mutation < 3; ++mutation) {
-          auto shape = std::make_shared<zkc::language::detail::DomainShape>();
+          auto shape = std::make_shared<DomainShape>();
           shape->inputs = {Type(Type::Kind::Index), Type(Type::Kind::Index)};
           shape->nodes.push_back({DomainBinding::Kind::Range,
                                   Type(Type::Kind::Index),
@@ -440,8 +440,7 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
                   "domain witness confused template and caller SSA spaces");
         for (unsigned mutation = 0; mutation < 9; ++mutation) {
           auto candidate = *original;
-          auto shape = std::make_shared<zkc::language::detail::DomainShape>(
-              *candidate.shape);
+          auto shape = std::make_shared<DomainShape>(*candidate.shape);
           candidate.shape = shape;
           shape->identity = "untrusted producer key";
           if (mutation == 1)
@@ -506,5 +505,150 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
                   std::string::npos,
               "wrong domain refusal diagnostic");
     });
+  cases.run("domains close through ordinary generic helper forwarding", [] {
+    auto project = take(check(R"(
+domain Fr=field("koala-bear");
+fn ignore<T:Type+Copy+Drop>(rows:scoped domain<T>,fallback:T)->T{return fallback;}
+fn forward<T:Type+Copy+Drop>(rows:scoped domain<T>,fallback:T)->T{return ignore(rows,fallback);}
+protocol Demo roles(P)(xs:Vector<Fr>@P,fallback:Fr@P)->(r:Fr@P){return forward(elements(xs),fallback);}run Run=Demo;
+)"));
+    auto closed = take(closeEntry(project, "m::Run"));
+    unsigned forwarded = 0;
+    for (const auto &decl : closed.declarations())
+      if (decl.body) {
+        require(decl.domainInputs.empty() && decl.body->domainBindings.empty(),
+                "static domain survived in runtime signature");
+        if (decl.name == "forward" || decl.name == "ignore") {
+          require(decl.domainArguments.size() == 1 && decl.inputs.size() == 2 &&
+                      decl.closureLayout.captures == std::vector<unsigned>{1},
+                  "domain operand did not become an explicit helper input");
+          ++forwarded;
+        }
+      }
+    require(forwarded == 2, "forwarding helper missing");
+  });
+  cases.run("domain and callback captures share authored SSA identities", [] {
+    auto project = take(check(R"(
+domain Fr=field("koala-bear");
+fn observe(rows:scoped domain<index>,xs:Vector<Fr>,body:scoped fn(Vector<Fr>)->Vector<Fr> !{})->Vector<Fr>{return body(xs);}
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Vector<Fr>@P){return observe(indices(xs),xs,fun _=>xs);}run Run=Demo;
+)"));
+    auto closed = take(closeEntry(project, "m::Run"));
+    bool found = false;
+    for (const auto &decl : closed.declarations())
+      if (decl.body && decl.name == "observe") {
+        require(decl.inputs.size() == 1 && decl.closureLayout.captures ==
+                                               std::vector<unsigned>({0, 0}),
+                "domain and callback capture received independent ports");
+        found = true;
+      }
+    require(found, "missing joint helper");
+  });
+  cases.run("callbacks capture domains and retain ordinary forwarding", [] {
+    auto project = take(check(R"(
+domain Fr=field("koala-bear");
+fn ignore<T:Type+Copy+Drop>(rows:scoped domain<T>,fallback:T)->T{return fallback;}
+fn apply(x:Fr,body:scoped fn(Fr)->Fr !{})->Fr{return body(x);}
+fn outer(xs:Vector<Fr>,x:Fr)->Fr{let rows=elements(xs);return apply(x,fun y=>ignore(rows,y));}
+protocol Demo roles(P)(xs:Vector<Fr>@P,x:Fr@P)->(r:Fr@P){return outer(xs,x);}run Run=Demo;
+)"));
+    auto closed = take(closeEntry(project, "m::Run"));
+    bool found = false;
+    for (const auto &decl : closed.declarations())
+      if (decl.body && decl.scopedOrigin) {
+        require(decl.domainArguments.size() == 1 && decl.inputs.size() == 2,
+                "callback lost static captured domain");
+        found = true;
+      }
+    require(found, "missing callback");
+  });
+  cases.run("closed domains survive local conditional and loop regions", [] {
+    auto project = take(check(R"(
+domain Fr=field("koala-bear");
+fn ignore(rows:scoped domain<Fr>,fallback:Fr)->Fr{return fallback;}
+fn outer(xs:Vector<Fr>,x:Fr,n:index,flag:bool)->Fr{
+ let rows=elements(xs);let mut result=x;
+ for i in 0..n { result=if flag {ignore(rows,result)} else {result}; }
+ return result;
+}
+protocol Demo roles(P)(xs:Vector<Fr>@P,x:Fr@P,n:index@P,flag:bool@P)->(r:Fr@P){return outer(xs,x,n,flag);}run Run=Demo;
+)"));
+    take(closeEntry(project, "m::Run"));
+  });
+  for (unsigned mutation = 0; mutation < 3; ++mutation)
+    cases.run("closed domain edge mutation " + std::to_string(mutation), [&] {
+      auto project = take(check(R"(
+domain Fr=field("koala-bear");
+fn ignore(rows:scoped domain<index>,fallback:Fr)->Fr{return fallback;}
+protocol Demo roles(P)(a:index@P,b:index@P,x:Fr@P)->(r:Fr@P){return ignore(range(a,b),x);}run Run=Demo;
+)"));
+      auto closed = take(closeEntry(project, "m::Run"));
+      for (const auto &decl : closed.declarations())
+        if (decl.body && decl.name == "ignore") {
+          auto &candidate = const_cast<Declaration &>(decl);
+          if (mutation == 2)
+            candidate.closureLayout.captures[1] =
+                candidate.closureLayout.captures[0];
+          else {
+            auto shape = std::make_shared<DomainShape>(
+                *candidate.domainArguments.front());
+            candidate.domainArguments.front() = shape;
+            if (mutation == 0)
+              std::swap(shape->nodes.back().operands[0],
+                        shape->nodes.back().operands[1]);
+            else
+              shape->nodes.clear();
+          }
+        }
+      auto error = checkScopedSpecialization(closed);
+      require(bool(error), "forged domain specialization accepted");
+      auto message = toString(std::move(error));
+      require(message.find("source.domain-witness") != std::string::npos ||
+                  message.find("source.closure-inputs") != std::string::npos ||
+                  message.find("source.scoped-specialization") !=
+                      std::string::npos,
+              "wrong domain specialization refusal");
+    });
+  cases.run(
+      "protocol repetition captures recipe operands at their participants", [] {
+        auto project = take(check(R"(
+domain Fr=field("koala-bear");
+fn ignore(rows:scoped domain<Fr>,fallback:Fr)->Fr{return fallback;}
+protocol Demo roles(P,V)(xs:Vector<Fr>@P,x:Fr@P,n:index@(P,V))->(r:Fr@P){
+ let rows=elements(xs);let mut result@P=x;
+ for _ in 0..n roles(P,V) max 4 {
+   for _ in 0..n roles(P,V) max 4 {result=ignore(rows,result+x);}
+ }
+ return result;
+}run Run=Demo;
+)"));
+        take(closeEntry(project, "m::Run"));
+      });
+  cases.run("domain capture cannot introduce an absent protocol participant",
+            [] {
+              refuses(check(R"(
+domain Fr=field("koala-bear");
+fn ignore(rows:scoped domain<Fr>,fallback:Fr)->Fr{return fallback;}
+protocol Demo roles(P,V)(xs:Vector<Fr>@V,x:Fr@P,n:index@P)->(r:Fr@P){
+ let rows=elements(xs);let mut result@P=x;
+ for _ in 0..n roles(P) max 4 {result=ignore(rows,result);}
+ return result;
+}run Run=Demo;
+)"),
+                      "source.roles");
+            });
+  cases.run("domain operand availability participates in nested call placement",
+            [] {
+              refuses(check(R"(
+domain Fr=field("koala-bear");
+fn ignore(rows:scoped domain<Fr>,fallback:Fr)->Fr{return fallback;}
+protocol Demo roles(P,V)(xs:Vector<Fr>@V,x:Fr@P,n:index@(P,V))->(r:Fr@P){
+ let rows=elements(xs);let mut result@P=x;
+ for _ in 0..n roles(P,V) max 4 {result=ignore(rows,result);}
+ return result;
+}run Run=Demo;
+)"),
+                      "source.roles");
+            });
   return cases.result();
 }

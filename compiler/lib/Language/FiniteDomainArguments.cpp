@@ -59,6 +59,75 @@ bool BodyChecker::inheritDomains(BodyChecker &nested,
   }
   return true;
 }
+bool BodyChecker::captureDomains(
+    BodyChecker &nested, const std::set<BindingId> &selected,
+    const std::function<std::optional<ValueId>(ValueId)> &capture, Span span) {
+  std::vector<unsigned> pending;
+  for (auto binding : selected)
+    pending.push_back(domains.at(binding));
+  std::set<unsigned> reachable;
+  while (!pending.empty()) {
+    auto index = pending.back();
+    pending.pop_back();
+    if (!checker.types.charge(1, span))
+      return false;
+    if (!reachable.insert(index).second)
+      continue;
+    if (index >= body.domainBindings.size())
+      return fail("source.finite-domain", "captured domain edge outside body",
+                  span);
+    const auto &source = body.domainBindings[index];
+    if (source.parameter || source.kind == DomainBinding::Kind::Parameter)
+      return fail("source.finite-domain",
+                  "protocol domain capture has an unbound formal", span);
+    if (!checker.types.charge(source.children.size(), span))
+      return false;
+    pending.insert(pending.end(), source.children.begin(),
+                   source.children.end());
+  }
+  std::map<unsigned, unsigned> nodes;
+  std::map<unsigned, ValueId> operands;
+  // Checked recipes are topologically ordered. Copy the reachable constructor
+  // applications, not their runtime results; admission stays at the consumer.
+  for (auto index : reachable) {
+    const auto &source = body.domainBindings[index];
+    if (!checker.types.charge(source.operands.size() + source.children.size() +
+                                  source.arguments.size() +
+                                  source.argumentOrder.size() + 1,
+                              span) ||
+        !checker.types.chargeType(source.item, span))
+      return false;
+    for (const auto &argument : source.arguments)
+      if (!checker.types.chargeType(argument, span))
+        return false;
+    if (source.factory && source.factory->component &&
+        !checker.types.chargeType(*source.factory->component, span))
+      return false;
+    DomainBinding copy = source;
+    for (auto &operand : copy.operands) {
+      auto found = operands.find(operand.index);
+      if (found == operands.end()) {
+        auto input = capture(operand);
+        if (!input)
+          return false;
+        found = operands.emplace(operand.index, *input).first;
+      }
+      operand = found->second;
+    }
+    for (auto &child : copy.children) {
+      auto found = nodes.find(child);
+      if (found == nodes.end())
+        return fail("source.finite-domain",
+                    "captured domain recipe is not topological", span);
+      child = found->second;
+    }
+    nodes.emplace(index, nested.body.domainBindings.size());
+    nested.body.domainBindings.push_back(std::move(copy));
+  }
+  for (auto binding : selected)
+    nested.domains.emplace(binding, nodes.at(domains.at(binding)));
+  return true;
+}
 std::optional<unsigned> BodyChecker::domainArgument(uint32_t id,
                                                     unsigned depth) {
   const auto &expr = syntax.expressions[id];

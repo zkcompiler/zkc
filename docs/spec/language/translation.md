@@ -14,17 +14,30 @@ and owners enter the checked graph. Type and resource uses are checked in source
 order without guessing owners. Checks that depend on component sets run after
 selection. Closing an Entry substitutes already checked bodies;
 it never reparses templates. Closed instances are memoized by declaration, mode
-and exact static type identity, including selected scoped helper identities.
+and exact static type identity, including selected scoped helper identities,
+closed domain shapes and the validated input alias layout.
 Only closed definitions enter original MLIR.
 
 [Scoped computations](definitions.md#scoped-computations) retain the same checked
 `Body` representation as named helpers. Closure introduces private Math or Local
-helpers and explicit data inputs for capture snapshots. Accepting functions gain
-hidden capture inputs after their ordinary inputs; forwarding and nested control
-regions receive the corresponding environment operands. The selected code and
+helpers and explicit data inputs for capture snapshots. Authored physical inputs
+remain in the ABI. Logical references and hidden captures may reuse the same
+port when caller SSA identities establish an immutable Copy/Drop alias;
+remaining hidden inputs follow the authored inputs. Independent closure checking
+validates this mapping at each call. Forwarding and nested control regions receive
+the corresponding environment operands. Loop indices, carried state and match
+payloads remain fresh inputs. Loop yields forward every physical invariant port,
+even when logical uses share an alias. The selected code and
 its lexical static context determine the instance; runtime captures and caller
 participants do not. A scoped parameter has no runtime value or MLIR function
 type, and every scoped invocation becomes an ordinary helper call before emission.
+
+Domain closure uses the same capture layout. Factory graphs remain static while
+their data operands become ordinary helper inputs. Scoped computations can capture
+domains; local control forwards their environments, and protocol repetition
+captures reachable recipes with explicit data operands and participant
+availability. Independent domain and specialization witnesses check the selected
+constructor graph, operand substitutions and region layouts before emission.
 
 Math helpers become private `func.func` definitions. A selected formula relation
 adds a non-callable `relation.declare` and a private Boolean `func.func`; its exact

@@ -71,6 +71,11 @@ private:
   bool inheritScoped(BodyChecker &);
   bool inheritDomains(BodyChecker &, const std::set<BindingId> &,
                       std::vector<unsigned> &);
+  /// Import a checked recipe at a protocol region boundary, where ordinary
+  /// data ports must retain their participant availability during checking.
+  bool captureDomains(BodyChecker &, const std::set<BindingId> &,
+                      const std::function<std::optional<ValueId>(ValueId)> &,
+                      Span);
   std::map<BindingId, ServiceId> services;
   std::optional<ServiceId> service(const Expression &);
   struct Uses {

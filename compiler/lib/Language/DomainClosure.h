@@ -3,14 +3,6 @@
 #include "Semantics.h"
 namespace zkc::language::detail {
 class ValueOrigins;
-/// A descriptor shape is static. Its input slots refer to ordinary data ports,
-/// never to runtime values or a second expression evaluator.
-struct DomainShape {
-  std::vector<Type> inputs;
-  std::vector<DomainBinding> nodes;
-  unsigned result;
-  std::string identity;
-};
 struct DomainEnvironment {
   std::shared_ptr<const DomainShape> shape;
   /// SSA values in the body where this environment is consumed.

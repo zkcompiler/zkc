@@ -151,3 +151,45 @@ protocol Run roles(P)(n:index@P)->(result:bool@P){return work(n);}run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source)
     assert entry.run('state', {'n': str(count)})['result'] is True
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
+def test_domain_forwarding_and_callback_invariants_in_loops(toolchain, journal, directory, flags):
+    source = PREFIX + '''
+
+domain fn elements<E:Field>(xs:Vector<E>)->scoped domain<E>=domain("elements");
+fn ignore(rows:scoped domain<F>,fallback:F)->F{return fallback;}
+fn iterate(x:F,n:index,rows:scoped domain<F>,body:scoped fn(F)->F !{stop})->F !{stop}{
+ let mut state=x;for _ in 0..n {state=ignore(rows,body(state));}return state;
+}
+fn outer(xs:Vector<F>,x:F,n:index)->F !{stop}{
+ let rows=elements(xs);return iterate(x,n,rows,fun y=>ignore(rows,y+x));
+}
+protocol Run roles(P)(xs:Vector<F>@P,x:F@P,n:index@P)->(result:F@P){return outer(xs,x,n);}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    for count in (0, 3):
+        assert entry.run(f'iterations-{count}', {'xs': ['4', '9'], 'x': '7', 'n': str(count)})['result'] == str(7 * (count + 1))
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
+def test_domains_and_callbacks_inside_protocol_repetition(toolchain, journal, directory, flags):
+    source = PREFIX + '''
+domain fn elements<E:Field>(xs:Vector<E>)->scoped domain<E>=domain("elements");
+fn ignore(rows:scoped domain<F>,fallback:F)->F{return fallback;}
+protocol Run roles(P,V)(xs:Vector<F>@P,x:F@P,n:index@(P,V))->(result:F@P){
+ let rows=elements(xs);let mut result@P=x;
+ for _ in 0..n roles(P,V) max 4 {
+   for _ in 0..n roles(P,V) max 4 {result=apply(result,fun y=>ignore(rows,y+x));}
+ }
+ return result;
+}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    for count in (0, 2):
+        outputs = entry.run_roles(f'iterations-{count}', {
+            'P': {'inputs': {'xs': ['4', '9'], 'x': '7', 'n': str(count)}},
+            'V': {'inputs': {'n': str(count)}},
+        })
+        assert outputs['P']['result'] == str(7 * (count * count + 1))
+        assert outputs['V'] == {}

@@ -924,6 +924,58 @@ For an abstract field, only the universally valid literals `0` and `1` are admit
 Boolean literals need no domain. Record construction supplies every field exactly
 once. Variant construction uses `Choice::Some<Fr>(x)` in local code.
 
+## Finite domains
+
+A finite domain is a static description of an enumeration. Its ordinary data
+operands remain checked values; the domain itself is not a runtime `Type`, an
+Entry port, or a value that can be returned by an ordinary function.
+
+```zkc
+domain fn elements<F: Field>(xs: Vector<F>) -> scoped domain<F>
+  = domain("elements");
+domain fn indices<F: Field>(xs: Vector<F>) -> scoped domain<index>
+  = domain("indices");
+domain fn range(lower: index, upper: index) -> scoped domain<index>
+  = domain("range");
+
+domain fn positions<F: Field>(xs: Vector<F>) -> scoped domain<index> {
+  let rows = indices(xs);
+  return rows;
+}
+```
+
+Registered domain definitions validate their complete signatures. Constructors
+cover container elements and indices, half-open ranges, strict zip, independent
+product, explicit matrix rows/columns/coordinate order, and fixed source arrays.
+The [finite IR contract](../ir/finite.md#domain-declarations) defines enumeration
+and admission. Defined factories compose domain calls and immutable aliases;
+ordinary computations producing their data operands stay at the call site.
+Interface and component members use the same resolved factory identities.
+
+Math and Local functions may accept `rows: scoped domain<I>`, forward it, or
+capture it in scoped computations and local control. A domain factory accepts
+ordinary data and domain parameters. Protocol signatures cannot expose domain
+parameters, but protocol bodies can construct domains and use them in calls or
+nested protocol repetitions. Each captured data operand must be available to its
+executing participant; a domain does not introduce communication.
+
+Domain data expressions execute at their written argument positions, alongside
+ordinary arguments and callback snapshots. Aliasing a domain does not reevaluate
+these expressions. A selected factory retains its complete constructor recipe,
+including unused intermediates, for admission at a finite consumer. Merely
+forwarding a domain through an ordinary helper does not admit its constructors.
+Unrelated domain bindings are not admitted with a consumed domain. A nested
+consumer admits its domain only when that computation is reached.
+
+Closure retains constructor order, exact item types and the identities of data
+operands. Shapes and static selections determine specialization; runtime contents
+do not. Shared immutable operands can reuse capture ports. Equal types alone do
+not identify two containers, and a mutable successor remains distinct from its
+earlier snapshot. The independent domain witness checks a supplied closed shape
+against the checked factory recipe and caller operand mapping, without trusting
+its cached identity. This is a checked-recipe witness, not a source-elaboration
+correctness theorem.
+
 ## Scoped computations
 
 Named Math and Local functions, including interface/component members, may take

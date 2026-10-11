@@ -89,8 +89,15 @@ capture and specialization checks reject mapping and coverage mutations before
 source-to-MLIR comparison. Compiler and native tests cover fixed modes, effects,
 owner inference, forwarding, aggregate captures and authored evaluation order.
 Runtime function values, escaping computations, outer writes and captured
-services are unsupported. General finite-domain and fold syntax remain separate
-work; existing finite-vector reductions retain the following restrictions.
+services are unsupported.
+[Finite domains](spec/language/definitions.md#finite-domains) support registered
+constructors, composed factories, component selection, static helper arguments,
+callback captures and nested local/protocol control. Joint closure retains
+immutable operand aliases and independent witnesses check closed recipes and
+capture layouts. Source checking and native tests cover forwarding, zero trips,
+participant availability and specialization mutations. General finite consumers
+and total source bounds are still being connected to the retained finite IR;
+the existing finite-vector reductions retain the following restrictions.
 [Finite reduction binders](spec/language/definitions.md#finite-vector-reductions)
 support named reducers and library-owned `∑`/`∏`, explicit strict zip and
 immutable same-field scalar captures in module-level local functions. Protocols

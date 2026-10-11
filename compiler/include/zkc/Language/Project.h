@@ -193,6 +193,14 @@ struct DomainBinding {
   /// Authored expression identity within the owning lexical declaration.
   std::optional<uint32_t> expression = {};
 };
+/// Closed static constructor graph. Data ports use ordinary caller operands;
+/// the descriptor itself is not a runtime value or an expression interpreter.
+struct DomainShape {
+  std::vector<Type> inputs;
+  std::vector<DomainBinding> nodes;
+  unsigned result;
+  std::string identity;
+};
 struct DomainDefinition {
   std::optional<DomainBinding::Kind> constructor;
   unsigned axis = 0;
@@ -272,6 +280,7 @@ struct ProtocolRepeat {
   std::vector<ValueId> carried, captures;
   std::vector<ServiceId> services;
   std::shared_ptr<const Body> region;
+  ClosureLayout regionLayout = {};
 };
 struct Construct {
   enum class Kind { Aggregate, Variant, Unpack };
@@ -315,6 +324,8 @@ struct LocalControl {
   std::vector<std::string> alternatives;
   unsigned carried = 0;
   std::vector<unsigned> domainArguments = {};
+  std::vector<std::shared_ptr<const DomainShape>> domainShapes;
+  std::vector<ClosureLayout> regionLayouts;
 };
 /// Source elaboration evidence retained beside the native operation. Families
 /// contain canonical binding identities, not search order or implementation
@@ -558,6 +569,7 @@ struct Declaration {
   std::vector<Port> inputs, outputs;
   std::vector<ScopedParameter> scopedInputs;
   std::vector<DomainParameter> domainInputs;
+  std::vector<std::shared_ptr<const DomainShape>> domainArguments;
   std::optional<Type> domainResult;
   std::shared_ptr<const DomainDefinition> domainDefinition;
   std::optional<std::string> finiteDefinition;

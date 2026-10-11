@@ -71,5 +71,30 @@ int main() {
     require(changed, "no comparable captures");
     refuses(compareOriginal(entry, *module), "source.correspondence");
   });
+  cases.run(
+      "closed domain and callback environments compile through nested loops",
+      [&] {
+        auto captured = take(capture({{"sample", R"(module sample;
+domain Fr=field("koala-bear");
+type Vector<F:Field>=builtin("vector",F);
+domain fn elements<F:Field>(xs:Vector<F>)->scoped domain<F>=domain("elements");
+fn ignore(rows:scoped domain<Fr>,fallback:Fr)->Fr{return fallback;}
+fn iterate(x:Fr,n:index,rows:scoped domain<Fr>,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{
+ let mut state=x;for _ in 0..n {state=ignore(rows,body(state));}return state;
+}
+fn outer(xs:Vector<Fr>,x:Fr,n:index)->Fr !{stop}{
+ let rows=elements(xs);return iterate(x,n,rows,fun y=>ignore(rows,y+x));
+}
+protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,n:index@P)->(r:Fr@P){return outer(xs,x,n);}run Demo=Run;
+)",
+                                       "domains.zkc"}}));
+        auto entry = take(closeEntry(take(analyze(captured).checkedProject()),
+                                     "sample::Demo"));
+        auto original = take(prepareOriginal(entry));
+        require(original.bytes().contains("local.for"),
+                "loop was erased from original IR");
+        take(compileEntry(original));
+        take(compileEntry(original, {false, false}));
+      });
   return cases.result();
 }

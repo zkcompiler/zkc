@@ -212,6 +212,40 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return g(xs,a,fu
       }
     require(checked, "missing closed reduction evidence");
   });
+  cases.run(
+      "loop carried state cannot alias an invariant callback capture", [] {
+        auto project = take(check(R"(
+fn iterate(x:Fr,n:index,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{
+ let mut state=x;for _ in 0..n {state=body(state);}return state;
+}
+protocol Demo roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return iterate(x,n,fun y=>y+x);}run Run=Demo;
+)"));
+        auto closed = take(closeEntry(project, "m::Run"));
+        bool changed = false;
+        for (const auto &decl : closed.declarations())
+          if (decl.body && decl.name == "iterate") {
+            auto body = std::make_shared<Body>(*decl.body);
+            const_cast<Declaration &>(decl).body = body;
+            for (auto &op : body->operations)
+              if (auto *control = std::get_if<LocalControl>(&op.action)) {
+                require(
+                    control->regions.front()->inputs == 3 &&
+                        control->regionLayouts.front().captures ==
+                            std::vector<unsigned>{2},
+                    "loop carried state was identified with initial invariant");
+                require(control->regions.front()->results.back().index == 2,
+                        "new invariant input missing from yield");
+                control->regionLayouts.front().captures.front() = 1;
+                changed = true;
+              }
+          }
+        require(changed, "missing loop candidate");
+        auto error = checkScopedSpecialization(closed);
+        require(bool(error), "forged carried-state alias accepted");
+        require(toString(std::move(error)).find("source.closure-inputs") !=
+                    std::string::npos,
+                "wrong loop alias refusal");
+      });
   cases.run("generic Math apply and forwarding", [] {
     succeeds(R"(
 protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return(r=forward_math(x,fun y=>y+a));}

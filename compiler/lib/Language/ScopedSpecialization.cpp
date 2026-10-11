@@ -1,5 +1,6 @@
 #include "BodySummary.h"
 #include "ClosureInputs.h"
+#include "DomainWitness.h"
 #include "zkc/Language/Project.h"
 #include <algorithm>
 #include <set>
@@ -75,6 +76,7 @@ class SpecializationCheck {
   binding(const Body &body, const Body &closedBody, ValueOrigins &bodyOrigins,
           unsigned index, DeclarationId selected, const Substitution &subst,
           ArrayRef<Environment> environment,
+          ArrayRef<DomainEnvironment> domains,
           const std::function<ValueId(ValueId)> &map, unsigned depth) {
     if (index >= body.scopedBindings.size() ||
         selected.index >= candidate.size() || depth > work.limits.callDepth) {
@@ -103,7 +105,8 @@ class SpecializationCheck {
     if (!actual.scopedOrigin ||
         actual.scopedOrigin->first.index != computation.lexicalOwner.index ||
         actual.scopedOrigin->second != computation.expression ||
-        actual.scopedArguments.size() != binding.scopedCaptures.size()) {
+        actual.scopedArguments.size() != binding.scopedCaptures.size() ||
+        actual.domainArguments.size() != binding.domainCaptures.size()) {
       refuse(binding.span, "selected callback identity differs");
       return {};
     }
@@ -122,13 +125,26 @@ class SpecializationCheck {
       authored.push_back(map(capture));
     std::vector<ValueId> hidden;
     for (unsigned i = 0; i < binding.scopedCaptures.size(); ++i) {
-      auto captured = this->binding(
-          body, closedBody, bodyOrigins, binding.scopedCaptures[i],
-          actual.scopedArguments[i], subst, environment, map, depth + 1);
+      auto captured =
+          this->binding(body, closedBody, bodyOrigins,
+                        binding.scopedCaptures[i], actual.scopedArguments[i],
+                        subst, environment, domains, map, depth + 1);
       if (!captured)
         return {};
       hidden.insert(hidden.end(), captured->captures.begin(),
                     captured->captures.end());
+    }
+    for (unsigned i = 0; i < binding.domainCaptures.size(); ++i) {
+      if (!actual.domainArguments[i]) {
+        refuse(binding.span, "missing captured domain shape");
+        return {};
+      }
+      auto operands = bindDomainInputs(
+          types, source, body, closedBody, map, binding.domainCaptures[i],
+          subst, domains, *actual.domainArguments[i], &bodyOrigins);
+      if (!operands)
+        return {};
+      hidden.insert(hidden.end(), operands->begin(), operands->end());
     }
     auto inputs = bindClosureInputs(types, closedBody, authored, hidden,
                                     actual.closureLayout, actual.inputs.size(),
@@ -150,8 +166,10 @@ class SpecializationCheck {
     return result;
   }
   bool body(const Body &original, const Body &actual, const Substitution &subst,
-            ArrayRef<Environment> environment, unsigned depth,
-            const ClosureLayout *layout = nullptr) {
+            ArrayRef<Environment> environment,
+            ArrayRef<DomainEnvironment> domains, unsigned depth,
+            const ClosureLayout *layout = nullptr,
+            std::optional<unsigned> invariantSuffix = {}) {
     if (depth > work.limits.callDepth)
       return types.fail("source.limit", "specialization witness depth exceeded",
                         {});
@@ -164,6 +182,10 @@ class SpecializationCheck {
       for (auto capture : selected.captures)
         if (capture.index >= original.inputs)
           hidden = std::max(hidden, capture.index - original.inputs + 1);
+    for (const auto &domain : domains)
+      for (auto operand : domain.operands)
+        if (operand.index >= original.inputs)
+          hidden = std::max(hidden, operand.index - original.inputs + 1);
     auto map = [&](ValueId value) {
       return ValueId{value.index < original.inputs
                          ? (layout ? layout->inputs[value.index] : value.index)
@@ -175,6 +197,17 @@ class SpecializationCheck {
         result.push_back(map(value));
       return result;
     };
+    auto results = mapped(original.results);
+    if (invariantSuffix && !actual.stopped) {
+      if (*invariantSuffix > original.inputs ||
+          *invariantSuffix > results.size())
+        return refuse({}, "loop invariant result coverage differs");
+      for (unsigned i = 0; i < *invariantSuffix; ++i)
+        results[results.size() - *invariantSuffix + i] = {original.inputs -
+                                                          *invariantSuffix + i};
+      for (unsigned i = original.inputs; i < actual.inputs; ++i)
+        results.push_back({i});
+    }
     if (actual.mode != original.mode ||
         actual.inputs != original.inputs + hidden ||
         actual.values.size() != original.values.size() + hidden ||
@@ -183,7 +216,7 @@ class SpecializationCheck {
         actual.stopReason != original.stopReason ||
         actual.mayStop != original.mayStop ||
         actual.opaque != original.opaque || !actual.scopedBindings.empty() ||
-        !same(actual.results, mapped(original.results)))
+        !actual.domainBindings.empty() || !same(actual.results, results))
       return refuse({});
     for (unsigned i = 0; i < original.values.size(); ++i) {
       const auto &expected = original.values[i];
@@ -238,6 +271,7 @@ class SpecializationCheck {
             a.family != b.family || a.scopedSource != b.scopedSource ||
             a.argumentOrder != b.argumentOrder ||
             a.scopedArguments != b.scopedArguments ||
+            a.domainArguments != b.domainArguments ||
             bool(a.target.component) != bool(b.target.component) ||
             bool(a.notation) != bool(b.notation) ||
             (a.notation && *a.notation != *b.notation) ||
@@ -253,11 +287,11 @@ class SpecializationCheck {
         const auto *call = std::get_if<HelperCall>(&out.action);
         if (!call || invoke->binding >= original.scopedBindings.size() ||
             !call->arguments.empty() || call->component || call->owner ||
-            !call->scopedArguments.empty())
+            !call->scopedArguments.empty() || !call->domainArguments.empty())
           return refuse(op.span);
         auto selected =
             binding(original, actual, bodyOrigins, invoke->binding,
-                    call->callee, subst, environment, map, depth + 1);
+                    call->callee, subst, environment, domains, map, depth + 1);
         if (!selected)
           return false;
         auto operands = mapped(invoke->operands);
@@ -285,7 +319,8 @@ class SpecializationCheck {
               if constexpr (std::is_same_v<T, HelperCall>) {
                 if (bool(action.component) != bool(value.component) ||
                     action.owner != value.owner ||
-                    !value.scopedArguments.empty())
+                    !value.scopedArguments.empty() ||
+                    !value.domainArguments.empty())
                   return false;
                 if (action.component) {
                   auto component = type(*action.component, subst, op.span);
@@ -320,7 +355,7 @@ class SpecializationCheck {
                   auto scoped = binding(original, actual, bodyOrigins,
                                         action.scopedArguments[j],
                                         callee.scopedArguments[j], subst,
-                                        environment, map, depth + 1);
+                                        environment, domains, map, depth + 1);
                   if (!scoped)
                     return false;
                   selected.push_back(scoped->helper);
@@ -329,6 +364,20 @@ class SpecializationCheck {
                 }
               }
               if constexpr (std::is_same_v<T, HelperCall>) {
+                if (action.domainArguments.size() !=
+                    callee.domainArguments.size())
+                  return false;
+                for (unsigned j = 0; j < action.domainArguments.size(); ++j) {
+                  if (!callee.domainArguments[j])
+                    return false;
+                  auto bound = bindDomainInputs(
+                      types, source, original, actual, map,
+                      action.domainArguments[j], subst, domains,
+                      *callee.domainArguments[j], &bodyOrigins);
+                  if (!bound)
+                    return false;
+                  hidden.insert(hidden.end(), bound->begin(), bound->end());
+                }
                 std::vector<std::optional<ValueId>> authored;
                 for (auto value : operands)
                   authored.push_back(value);
@@ -430,23 +479,78 @@ class SpecializationCheck {
               if (action.kind != value.kind ||
                   action.carried != value.carried ||
                   action.alternatives != value.alternatives ||
-                  action.regions.size() != value.regions.size())
+                  action.regions.size() != value.regions.size() ||
+                  action.regions.size() != value.regionLayouts.size() ||
+                  !value.domainArguments.empty() ||
+                  value.domainShapes.size() != action.domainArguments.size())
                 return false;
-              auto operands = mapped(action.operands);
+              std::vector<ValueId> captures;
               for (const auto &selected : environment)
-                operands.insert(operands.end(), selected.captures.begin(),
+                captures.insert(captures.end(), selected.captures.begin(),
                                 selected.captures.end());
-              if (!same(value.operands, operands))
+              std::vector<DomainEnvironment> selectedDomains;
+              for (unsigned j = 0; j < action.domainArguments.size(); ++j) {
+                if (!value.domainShapes[j])
+                  return false;
+                auto bound =
+                    bindDomainInputs(types, source, original, actual, map,
+                                     action.domainArguments[j], subst, domains,
+                                     *value.domainShapes[j], &bodyOrigins);
+                if (!bound)
+                  return false;
+                captures.insert(captures.end(), bound->begin(), bound->end());
+                selectedDomains.push_back(
+                    {value.domainShapes[j], std::move(*bound)});
+              }
+              const bool loop = action.kind == LocalControl::Kind::For;
+              unsigned header = loop ? 2 : 1;
+              auto operands = mapped(action.operands);
+              if (operands.size() < header)
                 return false;
+              unsigned forwarded = operands.size() - header;
               for (unsigned j = 0; j < action.regions.size(); ++j) {
+                const auto &region = *action.regions[j];
+                const auto &closed = *value.regions[j];
+                if (region.inputs < forwarded ||
+                    (loop && (region.inputs != forwarded + 1 ||
+                              action.carried > forwarded)))
+                  return false;
+                std::vector<std::optional<ValueId>> authored(region.inputs -
+                                                             forwarded);
+                for (unsigned i = 0; i < forwarded; ++i)
+                  authored.push_back(
+                      loop && i < action.carried
+                          ? std::nullopt
+                          : std::optional<ValueId>(operands[header + i]));
+                const auto &layout = value.regionLayouts[j];
+                auto inputs =
+                    bindClosureInputs(types, actual, authored, captures, layout,
+                                      closed.inputs, op.span, &bodyOrigins);
+                if (!inputs)
+                  return false;
+                auto expectedOperands = operands;
+                for (auto input : ArrayRef(*inputs).drop_front(region.inputs)) {
+                  if (!input)
+                    return false;
+                  expectedOperands.push_back(*input);
+                }
+                if (!same(value.operands, expectedOperands))
+                  return false;
                 auto nested = std::vector<Environment>(environment.begin(),
                                                        environment.end());
-                unsigned next = action.regions[j]->inputs;
+                auto nestedDomains = selectedDomains;
+                unsigned offset = 0;
                 for (auto &selected : nested)
                   for (auto &capture : selected.captures)
-                    capture = {next++};
-                if (!body(*action.regions[j], *value.regions[j], subst, nested,
-                          depth + 1))
+                    capture = {layout.captures[offset++]};
+                for (auto &domain : nestedDomains)
+                  for (auto &operand : domain.operands)
+                    operand = {layout.captures[offset++]};
+                if (!body(region, closed, subst, nested, nestedDomains,
+                          depth + 1, &layout,
+                          loop ? std::optional<unsigned>(forwarded -
+                                                         action.carried)
+                               : std::nullopt))
                   return false;
               }
               return true;
@@ -465,7 +569,16 @@ class SpecializationCheck {
               for (unsigned j = 0; j < action.services.size(); ++j)
                 if (action.services[j].index != value.services[j].index)
                   return false;
-              return body(*action.region, *value.region, subst, {}, depth + 1);
+              std::vector<std::optional<ValueId>> authored(
+                  1 + action.carried.size());
+              for (auto capture : action.captures)
+                authored.push_back(map(capture));
+              if (!bindClosureInputs(types, actual, authored, {},
+                                     value.regionLayout, value.region->inputs,
+                                     op.span, &bodyOrigins))
+                return false;
+              return body(*action.region, *value.region, subst, {}, {},
+                          depth + 1, &value.regionLayout);
             } else
               return false;
           },
@@ -486,7 +599,8 @@ class SpecializationCheck {
       return false;
     if (ArrayRef<Type>(actual.staticArguments) != statics ||
         actual.scopedArguments.size() != selected.size() ||
-        !actual.scopedInputs.empty() || !actual.parameters.empty())
+        !actual.scopedInputs.empty() || !actual.domainInputs.empty() ||
+        !actual.parameters.empty())
       return refuse(actual.span, "static substitution differs");
     for (unsigned i = 0; i < selected.size(); ++i)
       if (actual.scopedArguments[i].index != selected[i].index)
@@ -513,7 +627,8 @@ class SpecializationCheck {
     // Protocol applications, maps, relation subjects and roots currently have
     // no alias witness and therefore retain independent authored inputs.
     if (!checkedAliases) {
-      if (!actual.closureLayout.captures.empty())
+      if (!actual.closureLayout.captures.empty() ||
+          !actual.domainArguments.empty())
         return refuse(actual.span, "unwitnessed hidden input mapping");
       for (unsigned i = 0; i < actual.closureLayout.inputs.size(); ++i)
         if (actual.closureLayout.inputs[i] != i)
@@ -567,6 +682,7 @@ class SpecializationCheck {
       return refuse(actual.span);
     std::vector<Type> inputs, outputs;
     std::vector<ScopedSignature> signatures;
+    std::vector<Type> domainItems;
     if (computation) {
       for (unsigned i = 0; i < templateBody->inputs; ++i)
         inputs.push_back(templateBody->values[i].type);
@@ -574,6 +690,9 @@ class SpecializationCheck {
       for (const auto &binding : templateBody->scopedBindings)
         if (binding.parameter)
           signatures.push_back(binding.signature);
+      for (const auto &binding : templateBody->domainBindings)
+        if (binding.parameter)
+          domainItems.push_back(binding.item);
       if (!actual.effectAllowance ||
           !(*actual.effectAllowance == computation->signature.allowance))
         return refuse(actual.span);
@@ -584,10 +703,13 @@ class SpecializationCheck {
         outputs.push_back(port.type);
       for (const auto &parameter : original.scopedInputs)
         signatures.push_back(parameter.signature);
+      for (const auto &parameter : original.domainInputs)
+        domainItems.push_back(parameter.item);
       if (actual.effectAllowance != original.effectAllowance)
         return refuse(actual.span);
     }
     if (signatures.size() != selected.size() ||
+        domainItems.size() != actual.domainArguments.size() ||
         actual.outputs.size() != outputs.size() ||
         actual.inputs.size() < inputs.size())
       return refuse(actual.span);
@@ -651,9 +773,31 @@ class SpecializationCheck {
       }
       environment.push_back(std::move(binding));
     }
+    std::vector<DomainEnvironment> domains;
+    for (unsigned i = 0; i < actual.domainArguments.size(); ++i) {
+      const auto &shape = actual.domainArguments[i];
+      if (!shape || shape->result >= shape->nodes.size() ||
+          !typeEqual(domainItems[i], shape->nodes[shape->result].item, subst,
+                     actual.span))
+        return refuse(actual.span, "domain item mapping differs");
+      DomainEnvironment domain{shape, {}};
+      for (const auto &type : shape->inputs) {
+        if (offset >= layout.captures.size())
+          return refuse(actual.span, "missing domain input mapping");
+        auto port = layout.captures[offset++];
+        if (port >= actual.inputs.size() || port > ports ||
+            actual.inputs[port].type != type || !actual.body ||
+            actual.body->values[port].type != type)
+          return refuse(actual.span, "domain input mapping differs");
+        if (port == ports)
+          ++ports;
+        domain.operands.push_back({port});
+      }
+      domains.push_back(std::move(domain));
+    }
     if (offset != layout.captures.size() || ports != actual.inputs.size() ||
         (templateBody && !body(*templateBody, *actual.body, subst, environment,
-                               depth, &layout)))
+                               domains, depth, &layout)))
       return refuse(actual.span);
     active.erase(id.index);
     checked.insert(id.index);
