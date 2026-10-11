@@ -47,4 +47,3 @@ def OpBytesEqual : ZKC_Operation<"bytes.equal", [],
 }
 def ExportBytesEqual : ZKC_OperationExport<"zkc::bytes", "equal",
     OpBytesEqual, ["left", "right"]>;
-
