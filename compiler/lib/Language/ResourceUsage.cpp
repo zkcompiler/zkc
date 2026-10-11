@@ -1,4 +1,5 @@
 #include "BodyCheck.h"
+#include "Effects.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -30,6 +31,10 @@ bool BodyChecker::use(ValueId value, Span span, ArrayRef<unsigned> path) {
   return true;
 }
 bool BodyChecker::finish(Span span) {
+  auto effects = inferEffects(checker.types, checker.output.declarations, body);
+  if (!effects)
+    return false;
+  body.effects = std::move(*effects);
   if (body.stopped)
     return true;
   for (unsigned i = 0; i < body.values.size(); ++i)

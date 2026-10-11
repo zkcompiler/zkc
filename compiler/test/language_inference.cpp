@@ -179,7 +179,7 @@ int main() {
       fn call(xs:[bool;2]){return value<_,2>(xs);}
       fn result<T:Type>(x:T)->T{return x;}
       fn contextual()->index{return result<_>(1);}
-      interface Ops{fn get()->bool;}
+      interface Ops{fn get()->bool effects(stop, opaque);}
       component Impl:Ops{fn get(){return true;}}
       fn invoke<T:Type+Drop,C:Ops>(x:T){return C::get();}
       fn caller(x:bool){return invoke<_,Impl>(x);}
@@ -289,27 +289,27 @@ int main() {
   cases.run("component results and requirements obey interface promises", [] {
     take(check(R"(
       interface Roots<F:Field>{
-        fn root(n:index)->F where zkc::algebra::TwoAdicField(F);
+        fn root(n:index)->F effects(stop, opaque) where zkc::algebra::TwoAdicField(F);
       }
       component Impl<F:Field>:Roots<F>{
         fn root(n:index){return kernel<F>("poly.domain_root",n);}
       }
     )"));
     refuses(check(R"(
-      interface Roots<F:Field>{fn root(n:index)->F;}
+      interface Roots<F:Field>{fn root(n:index)->F effects(stop, opaque);}
       component Impl<F:Field>:Roots<F>{
         fn root(n:index){return kernel<F>("poly.domain_root",n);}
       }
     )"),
             "source.conformance");
     refuses(check(R"(
-      interface A{fn f(x:bool)->bool !{};}
+      interface A{fn f(x:bool)->bool effects();}
       component B:A{fn f(x:bool){require x;return x;}}
     )"),
             "source.effect");
-    refuses(
-        check("interface A{fn f()->bool;}component B:A{fn f(){return ();}}"),
-        "source.conformance");
+    refuses(check("interface A{fn f()->bool effects(stop, opaque);}component "
+                  "B:A{fn f(){return ();}}"),
+            "source.conformance");
   });
   cases.run(
       "one protocol argument list preserves data and service identity", [] {

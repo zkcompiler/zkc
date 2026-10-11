@@ -75,7 +75,7 @@ int main() {
         "false && {let unused=local(x);true}", "false && {require x;true}",
         "false && {let mut y=x;y=true;y}"})
     cases.run("protocol formula rejects ordered work: " + expression, [&] {
-      refuses(check("fn local(x:bool)->bool !{}{return x;}"
+      refuses(check("fn local(x:bool)->bool effects(){return x;}"
                     "protocol Run roles(P)(x:bool@P)->(r:bool@P){return " +
                     expression.str() + ";}"),
               "source.mode");
@@ -127,7 +127,7 @@ int main() {
     compile("fn f(x:bool){require x;return x;}"
             "protocol Run roles(P)(x:bool@P)->(r:bool@P){return !f(x);}run "
             "Demo=Run;");
-    refuses(check("interface Bad{math fn f(x:bool)->bool !{stop};}"),
+    refuses(check("interface Bad{math fn f(x:bool)->bool effects(stop);}"),
             "source.effect");
   });
   return cases.result();

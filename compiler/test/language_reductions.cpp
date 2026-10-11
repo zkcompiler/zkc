@@ -8,16 +8,16 @@ using namespace zkc::test;
 namespace {
 const std::string definitions = R"(
 pub type Vector<F:Field>=builtin("vector",F);
-pub domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
-pub fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-pub fn sum<I:Type+Copy+Drop,F:Field>(rows:scoped domain<I>,term:scoped fn(I)->F !{stop} on(rows))->F !{stop}{return fold(rows,0,fun state item=>state+term(item));}
+pub domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)>=domain("zip");
+pub fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item, rows))->S effects(stop)=finite("local.fold");
+pub fn sum<I:Type+Copy+Drop,F:Field>(rows:domain<I>,term:fn(item:I)->F effects(stop) where item_from(item, rows))->F effects(stop){return fold(rows,0,fn(state, item)=>state+term(item));}
 )";
 const std::string prelude = "module m;" + definitions + R"(
 domain Fr=field("koala-bear");
 domain Ext=field("koala-bear.ext8-binomial3");
 math fn square<F:Field>(x:F)->F{return x*x;}
 math fn difference<F:Field>(a:F,b:F)->F{return a-b;}
-fn custom<I:Type+Copy+Drop,F:Field>(rows:scoped domain<I>,term:scoped fn(I)->F !{stop} on(rows))->F !{stop}{return sum(rows,term)+1;}
+fn custom<I:Type+Copy+Drop,F:Field>(rows:domain<I>,term:fn(item:I)->F effects(stop) where item_from(item, rows))->F effects(stop){return sum(rows,term)+1;}
 )";
 Expected<CheckedProject> check(StringRef text, const Limits &limits = {}) {
   auto captured = capture({{"m", prelude + text.str(), "reductions.zkc"}});
@@ -38,7 +38,7 @@ void success(Error error) {
 const std::string program = R"(
 pub reduction ∑=sum;
 pub fn f<F:Field>(xs:Vector<F>,ys:Vector<F>,a:F,b:F)->F{
-  let first=sum(zip(xs,ys),fun (x,_)=>b*x+a);
+  let first=sum(zip(xs,ys),fn((x,_))=>b*x+a);
   return first+(∑ (x,y) in zip(xs,ys), {
     operator *=difference;
     let z=x*y;
@@ -66,15 +66,17 @@ int main() {
               require(take(json::parse(report)).getAsObject() &&
                           report.find("reduction") != std::string::npos,
                       "notation inspection lost reduction descriptors");
+              require(report.find("fn((x, y)) =>") != std::string::npos,
+                      "binder rendering lost the unary tuple pattern");
               require(take(inspectDeclarations(project)).find("reduction<") ==
                           std::string::npos,
                       "obsolete synthetic declaration leaked");
             });
   for (const auto &body :
-       {"sum(xs,fun x=>x*x)", "custom(xs,fun x=>x)", "sum(xs,fun _=>1)",
-        "sum(zip(xs,xs),fun (x,_)=>x)", "sum(xs,fun a=>{let t=a;t+a})",
-        "sum(xs,fun x=>({let x=a;x})+x)",
-        "sum(xs,fun x=>if x==a {x} else {a})"})
+       {"sum(xs,fn(x)=>x*x)", "custom(xs,fn(x)=>x)", "sum(xs,fn(_)=>1)",
+        "sum(zip(xs,xs),fn((x,_))=>x)", "sum(xs,fn(a)=>{let t=a;t+a})",
+        "sum(xs,fn(x)=>({let x=a;x})+x)",
+        "sum(xs,fn(x)=>if x==a {x} else {a})"})
     cases.run(body, [&] {
       take(check("fn f(xs:Vector<Fr>,a:Fr)->Fr{return " + std::string(body) +
                  ";}"));

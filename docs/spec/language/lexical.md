@@ -42,13 +42,19 @@ a guarantee against visually confusable identifiers.
 Keywords remain reserved except in explicitly contextual positions. `run`,
 `proof`, `operator`, `as`, `primitive`, `notation`, `infixl`, `infixr`, `infix`,
 `prefix` and `postfix` have special meanings in their declaration or import
-grammar; elsewhere they remain available as ordinary names.
+grammar; elsewhere they remain available as ordinary names. `effects` introduces
+a callable's effect bound. `item_from` introduces a callback-local `where`
+condition; an outer `where` rejects it with a diagnostic. Both remain ordinary
+names elsewhere, as does `on`.
 
 ## Mathematical tokens
 
-`scoped` and `fun` are reserved for [scoped computation signatures and
-literals](definitions.md#scoped-computations). `=>` separates a literal's input
-patterns from its expression or block.
+The reserved keyword `fn` introduces named function declarations,
+[computation parameter signatures](definitions.md#scoped-computations) and
+anonymous computation literals. A literal uses a parenthesized, comma-separated
+input pattern list followed by `=>` and its expression or block. `math fn`
+specifies a total Math computation; `domain<I>` specifies a finite-domain
+parameter or a domain factory's result.
 
 A custom operator token is exactly one non-ASCII scalar with Unicode general
 category `Sm`. It must already be NFC and must not be an identifier character,

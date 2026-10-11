@@ -11,7 +11,8 @@ struct Item {
   std::vector<unsigned> path;
 };
 using Facts = std::vector<std::optional<Item>>;
-using Restrictions = std::vector<std::optional<unsigned>>;
+using OriginMap = std::map<unsigned, unsigned>;
+using Restrictions = std::vector<OriginMap>;
 using InputValues = std::vector<std::optional<ValueOrigin>>;
 struct ItemBound {
   std::vector<unsigned> path;
@@ -347,13 +348,15 @@ class ContractCheck {
                         origin->second.end());
     return true;
   }
-  bool restriction(Context &context, unsigned index,
-                   std::optional<unsigned> &result, Span span) {
+  bool restriction(Context &context, unsigned index, OriginMap &result,
+                   Span span) {
     if (index >= context.body.scopedBindings.size())
       return refuse(span, "scoped binding is outside its body");
     const auto &binding = context.body.scopedBindings[index];
     if (!binding.parameter || *binding.parameter >= context.scoped.size())
       return refuse(span, "scoped invocation requires a bound formal");
+    if (!types.charge(context.scoped[*binding.parameter].size(), span))
+      return false;
     result = context.scoped[*binding.parameter];
     return true;
   }
@@ -363,25 +366,31 @@ class ContractCheck {
     result = context.domains[index];
     return true;
   }
-  bool callback(Context &context, unsigned index,
-                std::optional<unsigned> expected, unsigned depth, Span span) {
+  bool callback(Context &context, unsigned index, const OriginMap &expected,
+                unsigned depth, Span span) {
     if (!bounded(depth, span) || index >= context.body.scopedBindings.size())
       return types.diagnostic ? false : refuse(span, "missing scoped binding");
     const auto &binding = context.body.scopedBindings[index];
     if (binding.parameter) {
-      std::optional<unsigned> actual;
+      OriginMap actual;
       if (!restriction(context, index, actual, span))
         return false;
-      return !actual || actual == expected ||
-             refuse(span, "restricted callback requires the same item domain");
+      if (!types.charge(actual.size(), span))
+        return false;
+      for (const auto &[input, domain] : actual) {
+        auto promised = expected.find(input);
+        if (promised == expected.end() || promised->second != domain)
+          return refuse(
+              span, "restricted callback requires the same input item origin");
+      }
+      return true;
     }
     if (!binding.computation || !binding.computation->body)
       return refuse(span, "missing scoped computation");
     const auto &computation = *binding.computation;
     const auto &nested = *computation.body;
     unsigned explicitInputs = computation.signature.inputs.size();
-    if (nested.inputs != explicitInputs + binding.captures.size() ||
-        (expected && !explicitInputs))
+    if (nested.inputs != explicitInputs + binding.captures.size())
       return refuse(span, "scoped input coverage differs");
     if (!types.charge(nested.inputs + binding.scopedCaptures.size() +
                           binding.domainCaptures.size(),
@@ -389,8 +398,13 @@ class ContractCheck {
       return false;
     Facts inputs(nested.inputs);
     InputValues values(nested.inputs);
-    if (expected)
-      inputs[explicitInputs - 1] = Item{*expected, {}};
+    if (!types.charge(expected.size(), span))
+      return false;
+    for (const auto &[input, domain] : expected) {
+      if (input >= explicitInputs)
+        return refuse(span, "item origin input is outside callback signature");
+      inputs[input] = Item{domain, {}};
+    }
     for (unsigned i = 0; i < binding.captures.size(); ++i) {
       values[explicitInputs + i] = value(context, binding.captures[i], span);
       if (!values[explicitInputs + i] ||
@@ -429,13 +443,17 @@ class ContractCheck {
         return false;
     }
     for (unsigned i = 0; i < call.scopedArguments.size(); ++i) {
-      std::optional<unsigned> expected;
-      if (auto formal = callee.scopedInputs[i].signature.itemDomain) {
+      OriginMap expected;
+      const auto &parameter = callee.scopedInputs[i];
+      if (!types.charge(parameter.itemOrigins.size(), span))
+        return false;
+      for (const auto &[input, formal] : parameter.itemOrigins) {
         unsigned selected;
-        if (*formal >= call.domainArguments.size() ||
-            !domain(context, call.domainArguments[*formal], selected, span))
-          return types.diagnostic ? false : refuse(span, "invalid item domain");
-        expected = selected;
+        if (input >= parameter.signature.inputs.size() ||
+            formal >= call.domainArguments.size() ||
+            !domain(context, call.domainArguments[formal], selected, span))
+          return types.diagnostic ? false : refuse(span, "invalid item origin");
+        expected.emplace(input, selected);
       }
       if (!callback(context, call.scopedArguments[i], expected, depth + 1,
                     span))
@@ -472,6 +490,9 @@ class ContractCheck {
                                          inputs[prefix + i], span))
           return false;
       }
+      for (const auto &origins : context.scoped)
+        if (!types.charge(origins.size() + 1, span))
+          return false;
       if (!body(*region, std::move(inputs), context.scoped, domains, depth + 1,
                 std::move(values)))
         return false;
@@ -479,11 +500,12 @@ class ContractCheck {
     return true;
   }
   bool closedCallback(Context &context, const FiniteCallback &callback,
-                      unsigned domain, bool step, unsigned depth, Span span) {
+                      unsigned domain, unsigned itemInput, unsigned depth,
+                      Span span) {
     if (!bounded(depth, span) || callback.helper.index >= declarations.size())
       return types.diagnostic ? false : refuse(span, "invalid finite helper");
     const auto &helper = declarations[callback.helper.index];
-    unsigned explicitInputs = step ? 2 : 1;
+    unsigned explicitInputs = itemInput + 1;
     if (helper.inputs.size() != explicitInputs + callback.captures.size() ||
         domain >= domainBounds.size())
       return refuse(span, "finite helper input fact coverage differs");
@@ -502,7 +524,7 @@ class ContractCheck {
       inputs.push_back(std::move(*origin));
     }
     for (const auto &fact : domainBounds[domain]) {
-      auto index = inputs[step ? 1 : 0];
+      auto index = inputs[itemInput];
       index.second = fact.path;
       assumptions.push_back({DataPrecondition::Kind::IndexBound,
                              std::move(index), fact.container, 0, fact.axis});
@@ -598,11 +620,11 @@ class ContractCheck {
       return false;
     unsigned selected = domains[finite.domain->result];
     return closedCallback(context, finite.body, selected,
-                          finite.kind == FiniteApplication::Kind::Fold,
-                          depth + 1, span) &&
+                          finiteItemInput(finite.kind), depth + 1, span) &&
            (!finite.predicate ||
-            closedCallback(context, *finite.predicate, selected, false,
-                           depth + 1, span));
+            closedCallback(context, *finite.predicate, selected,
+                           finiteItemInput(finite.kind, true), depth + 1,
+                           span));
   }
   bool body(const Body &source, Facts inputs, Restrictions scoped,
             ArrayRef<unsigned> environment, unsigned depth,
@@ -745,15 +767,17 @@ class ContractCheck {
         }
       }
       if (const auto *invoke = std::get_if<ScopedInvoke>(&op.action)) {
-        std::optional<unsigned> required;
+        OriginMap required;
         if (!restriction(context, invoke->binding, required, op.span))
           return false;
-        if (required) {
+        if (!types.charge(required.size(), op.span))
+          return false;
+        for (const auto &[input, domain] : required) {
           std::optional<Item> actual;
-          if (invoke->operands.empty() ||
-              !fact(context, invoke->operands.back(), actual, op.span))
+          if (input >= invoke->operands.size() ||
+              !fact(context, invoke->operands[input], actual, op.span))
             return types.diagnostic ? false : refuse(op.span, "missing item");
-          if (!actual || !actual->path.empty() || actual->domain != *required)
+          if (!actual || !actual->path.empty() || actual->domain != domain)
             return refuse(op.span, "restricted callback requires a whole item "
                                    "from its declared domain");
         }
@@ -764,9 +788,13 @@ class ContractCheck {
                      std::get_if<FiniteApplication>(&op.action)) {
         unsigned selected;
         if (!domain(context, finite->domain, selected, op.span) ||
-            !callback(context, finite->body, selected, depth + 1, op.span) ||
-            (finite->predicate && !callback(context, *finite->predicate,
-                                            selected, depth + 1, op.span)))
+            !callback(context, finite->body,
+                      {{finiteItemInput(finite->kind), selected}}, depth + 1,
+                      op.span) ||
+            (finite->predicate &&
+             !callback(context, *finite->predicate,
+                       {{finiteItemInput(finite->kind, true), selected}},
+                       depth + 1, op.span)))
           return false;
       } else if (const auto *finite =
                      std::get_if<FiniteComputation>(&op.action)) {
@@ -824,11 +852,16 @@ public:
       domains.push_back(newDomain());
     Restrictions selected;
     for (const auto &parameter : decl.scopedInputs) {
-      auto formal = parameter.signature.itemDomain;
-      if (formal && *formal >= domains.size())
-        return refuse(parameter.span, "invalid declared item domain");
-      selected.push_back(formal ? std::optional<unsigned>(domains[*formal])
-                                : std::nullopt);
+      OriginMap origins;
+      if (!types.charge(parameter.itemOrigins.size(), parameter.span))
+        return false;
+      for (const auto &[input, formal] : parameter.itemOrigins) {
+        if (input >= parameter.signature.inputs.size() ||
+            formal >= domains.size())
+          return refuse(parameter.span, "invalid declared item origin");
+        origins.emplace(input, domains[formal]);
+      }
+      selected.push_back(std::move(origins));
     }
     return body(source, Facts(source.inputs), std::move(selected), domains, 1);
   }

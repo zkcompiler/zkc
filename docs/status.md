@@ -102,8 +102,13 @@ filtered stops, strict zip admission, packed record sequences, repeated calls,
 dependent inner ranges and mutable capture snapshots. Fixed source arrays now
 adapt through independently checked sequence construction, including records,
 empty arrays and Unit items. Source item-provenance checks
-now cover generic restricted forwarding, named argument order, nested captures
-and invariant local-region inputs, including independent witness revalidation.
+now cover callback-local `where item_from(input, domain)`, optional input labels,
+arbitrary slots, multiple independent origins, generic restricted forwarding,
+named argument order, nested captures and invariant local-region inputs. Native
+controls include exact normalized component conformance, independent authored
+selector reconstruction and mutation refusal. Inner conditions preserve outer
+catalog/natural inference. Labels and canonical maps are exposed separately in
+declaration inspection; they add no runtime closure or finite IR attributes.
 Retained witnesses also check formal callback slots and authored invocation
 identities through nested regions. Total index literals, static natural index construction and comparisons now
 support mathematical ranges and filters through ordinary realization. Total
@@ -132,6 +137,14 @@ notation environments after imports and before bodies. Callable notation uses
 ordinary signature constraints and authored evaluation order, with descriptor
 arity and scope checked by the independent binding witness. No formal
 elaboration-correctness theorem is claimed.
+
+Local effect contracts use `effects(...)` before `where`. Open helper bodies
+retain bounded callback dependencies, including forwarding and literal captures;
+closure and independent witnesses reconstruct selected effects. Callback ceiling
+omission allows the tracked Local universe, while truly abstract Local outputs
+require an explicit contract. Local finite admission remains stopping and finite
+callbacks remain stop-only. This is compiler effect checking, not a totality or
+protocol-security result.
 
 Source/native boundaries retain exact source/public JSON names while encoding
 symbols as UTF-8 segment hex and role/setup/case labels as roster ordinals for

@@ -743,6 +743,9 @@ private:
     do {
       SyntaxRequirement req;
       req.span = current().span;
+      if (at("item_from") && look(1) == "(")
+        return fail("source.finite-domain",
+                    "item_from belongs on a callback signature's where clause");
       if (at("in_bounds") || at("equal_extent")) {
         if (!dataRequirement(req))
           return false;
@@ -774,29 +777,37 @@ private:
       }
       req.span.end = previousEnd;
       decl.requirements.push_back(std::move(req));
-    } while (take(",") && !at("{") && !at(";") && !at("!"));
+    } while (take(",") && !at("{") && !at(";"));
     return true;
   }
   bool effects(SyntaxDeclaration &decl) {
-    if (!take("!"))
+    if (at("!"))
+      return fail("source.effect", "use effects(...) for effect contracts");
+    if (!take("effects"))
       return true;
     decl.effects = Effects{};
-    if (!expect("{"))
+    if (!expect("("))
       return false;
-    if (!at("}"))
+    std::set<std::string> seen;
+    if (!at(")"))
       do {
-        bool *flag = nullptr;
+        std::string item;
         if (take("stop"))
-          flag = &decl.effects->mayStop;
+          item = "stop";
         else if (take("opaque"))
-          flag = &decl.effects->opaque;
-        else
-          return fail("source.effect", "expected stop or opaque effect");
-        if (*flag)
+          item = "opaque";
+        else if (!name(item))
+          return false;
+        if (!seen.insert(item).second)
           return fail("source.duplicate", "duplicate effect");
-        *flag = true;
-      } while (take(",") && !at("}"));
-    return expect("}");
+        if (item == "stop")
+          decl.effects->mayStop = true;
+        else if (item == "opaque")
+          decl.effects->opaque = true;
+        else
+          decl.effectDependencies.push_back(std::move(item));
+      } while (take(",") && !at(")"));
+    return expect(")");
   }
   bool roleList(std::vector<std::string> &roles, bool parenthesized = false) {
     bool parens = take("(");
@@ -1099,44 +1110,83 @@ private:
         p.span = current().span;
         if (!name(p.name) || !expect(":"))
           return false;
-        if (take("scoped")) {
-          if (take("domain")) {
-            SyntaxType item;
-            if (!expect("<") || !type(item) || !expect(">"))
-              return false;
-            p.domain = std::move(item);
-          } else {
-            SyntaxScopedSignature signature;
-            signature.mode = take("math") ? ScopedSignature::Mode::Math
-                                          : ScopedSignature::Mode::Local;
-            if (!expect("fn") || !expect("("))
-              return false;
-            if (!at(")"))
-              do {
-                SyntaxType input;
-                if (!type(input))
-                  return false;
-                signature.inputs.push_back(std::move(input));
-              } while (take(",") && !at(")"));
-            if (!expect(")") || !expect("->") || !type(signature.result))
-              return false;
-            SyntaxDeclaration allowance;
-            if (signature.mode == ScopedSignature::Mode::Local && !at("!"))
-              return fail("source.effect", "Local scoped signatures require an "
-                                           "explicit effect allowance");
-            if (!effects(allowance))
-              return false;
-            signature.allowance = allowance.effects.value_or(Effects{});
-            if (take("on")) {
-              std::string domain;
-              if (!expect("(") || !name(domain) || !expect(")"))
+        if (take("domain")) {
+          SyntaxType item;
+          if (!expect("<") || !type(item) || !expect(">"))
+            return false;
+          p.domain = std::move(item);
+        } else if (at("fn") || at("math")) {
+          SyntaxScopedSignature signature;
+          signature.mode = take("math") ? ScopedSignature::Mode::Math
+                                        : ScopedSignature::Mode::Local;
+          if (!expect("fn") || !expect("("))
+            return false;
+          if (!at(")"))
+            do {
+              SyntaxType input;
+              std::string label;
+              if (look(1) == ":" && (!name(label) || !expect(":")))
                 return false;
-              signature.itemDomain = std::move(domain);
+              signature.inputLabels.push_back(std::move(label));
+              if (!type(input))
+                return false;
+              signature.inputs.push_back(std::move(input));
+            } while (take(",") && !at(")"));
+          if (!expect(")") || !expect("->") || !type(signature.result))
+            return false;
+          SyntaxDeclaration allowance;
+          if (!effects(allowance))
+            return false;
+          if (!allowance.effectDependencies.empty())
+            return fail("source.effect",
+                        "callback allowances contain only fixed effects");
+          bool local = signature.mode == ScopedSignature::Mode::Local;
+          signature.allowance =
+              allowance.effects.value_or(Effects{local, local});
+          if (take("where")) {
+            if (take("(")) {
+              if (!expect(")"))
+                return false;
+            } else {
+              do {
+                SyntaxItemOrigin condition;
+                condition.span = current().span;
+                if (!take("item_from"))
+                  return fail(
+                      "source.finite-domain",
+                      "callback where requires item_from(input, domain)");
+                if (!expect("(") || !name(condition.input) || !expect(",") ||
+                    !name(condition.domain) || !expect(")"))
+                  return false;
+                condition.span.end = previousEnd;
+                if (!accept(work.charge(condition.input.size() +
+                                            condition.domain.size() + 1,
+                                        condition.span)))
+                  return false;
+                if (signature.itemOrigins.size() >= work.limits.typeNodes)
+                  return fail("source.limit",
+                              "callback condition count exceeded");
+                signature.itemOrigins.push_back(std::move(condition));
+                // A following name ':' starts an enclosing port, including
+                // a port named item_from. Leave its comma to ports().
+                if (!at(",") ||
+                    (tokens[cursor + 1].kind == TokenKind::Word &&
+                     look(2) == ":") ||
+                    look(1) == ")")
+                  break;
+                advance();
+              } while (true);
             }
-            p.scoped = std::move(signature);
           }
+          if (at("effects"))
+            return fail("source.effect",
+                        "callback effects(...) must precede where");
+          p.scoped = std::move(signature);
         } else if (!type(p.type))
           return false;
+        if (roles && (p.scoped || p.domain))
+          return fail("source.scoped",
+                      "protocol ports cannot be static arguments");
         if (roles && (!expect("@") || !roleList(p.roles)))
           return false;
         p.span.end = previousEnd;
@@ -1400,10 +1450,6 @@ private:
         for (auto &port : ports) {
           bool service = protocol && port.type.kind == SyntaxType::Kind::Name &&
                          port.type.name == "Random";
-          if ((port.scoped || port.domain) && protocol) {
-            fail("source.scoped", "protocol ports cannot be static arguments");
-            return {};
-          }
           auto &selected = port.domain   ? d.domainInputs
                            : port.scoped ? d.scopedInputs
                            : service     ? d.services
@@ -1422,8 +1468,8 @@ private:
           return {};
       } else if (domainFunction) {
         SyntaxType item;
-        if (!expect("->") || !expect("scoped") || !expect("domain") ||
-            !expect("<") || !type(item) || !expect(">"))
+        if (!expect("->") || !expect("domain") || !expect("<") || !type(item) ||
+            !expect(">"))
           return {};
         d.domainResult = std::move(item);
       } else if (take("->")) {
@@ -1445,8 +1491,12 @@ private:
         }
         d.completes = true;
       }
-      if (!requirements(d) || !effects(d))
+      if (!effects(d) || !requirements(d))
         return {};
+      if (d.explicitRequirements && at("effects")) {
+        fail("source.effect", "effects(...) must precede where");
+        return {};
+      }
       if (protocol && !specifications(d))
         return {};
       d.abstract = abstract;
@@ -1516,16 +1566,19 @@ private:
     Expression value;
     value.span = span;
     auto reductionNotation = notation(text(), Position::Reduction);
-    if (take("fun")) {
+    if (take("fn")) {
       value.kind = Expression::Kind::Lambda;
       value.payloads.emplace_back();
-      while (!at("=>") && !atEnd()) {
-        auto binder = pattern(depth + 1);
-        if (!binder)
-          return {};
-        value.payloads.front().push_back(std::move(*binder));
-      }
-      if (!expect("=>"))
+      if (!expect("("))
+        return {};
+      if (!at(")"))
+        do {
+          auto binder = pattern(depth + 1);
+          if (!binder)
+            return {};
+          value.payloads.front().push_back(std::move(*binder));
+        } while (take(",") && !at(")"));
+      if (!expect(")") || !expect("=>"))
         return {};
       if (at("{")) {
         auto region = body(decl, false, true, depth + 1);

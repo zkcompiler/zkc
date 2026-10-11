@@ -217,14 +217,6 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   if (!resultType)
     return {};
 
-  if (!callee.abstract) {
-    body.mayStop |= callee.body->mayStop;
-    body.opaque |= callee.body->opaque;
-  } else {
-    auto effects = callee.effectAllowance.value_or(Effects{ordered, ordered});
-    body.mayStop |= effects.mayStop;
-    body.opaque |= effects.opaque;
-  }
   Components resultComponents;
   std::optional<unsigned> variable;
   if (ordered) {
@@ -523,7 +515,7 @@ std::optional<ValueId> BodyChecker::bulk(const Expression &expr,
     each[parameter] = expr.each[i];
   }
   // Unequal row counts stop this checked application.
-  body.mayStop = true;
+
   return emit(
       BulkApplication{callee.id, std::move(args), staticArgs, std::move(each)},
       *rows, {}, expr.span);

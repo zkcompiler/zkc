@@ -138,7 +138,7 @@ scoped callback. The optional filtered target has the same domain and body
 shape, with a Boolean predicate callback between them. Targets are ordinary
 Math or Local functions with one written result and no data or service inputs.
 Generic parameter sorts, permissions, interfaces, partial static arguments,
-item/result/output types, callback modes and allowances must correspond after
+item/result/output types, callback modes, allowances and normalized origin maps must correspond after
 parameter renaming. Each target retains its own independently checked input
 conditions and component identity; the pair asserts no equivalence law.
 
@@ -150,7 +150,7 @@ explicit local binding or selective imports; mode and effects never choose one.
 For example, a mathematical function can declare
 `reduction ∑ = finite_math::sum, finite_math::sum_where;` in its declaration prefix.
 
-Expansion creates an ordinary call with unary `fun` callbacks and structural
+Expansion creates an ordinary call with unary `fn(...) => ...` callbacks and structural
 domain products. Product construction never looks up a generated textual
 `product` name. The [source binder contract](definitions.md#finite-reduction-binders)
 defines evaluation, captures and retained checks. Named calls remain available
@@ -266,7 +266,7 @@ persistent cross-build identifiers.
 
 Canonical named-call rendering is a diagnostic aid. It is not a byte-preserving
 rewrite, and named and symbolic captures need not have equal artifact identities.
-Binder renderings show `fun` callbacks and use `×` to display structural products;
+Binder renderings show `fn(...) => ...` callbacks and use `×` to display structural products;
 that diagnostic product spelling is not an implicit source name lookup.
 Syntax metadata does not enter the native Entry interface or grant execution
 authority. Retained inventories survive the temporary parser and checker without

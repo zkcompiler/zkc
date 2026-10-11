@@ -162,8 +162,6 @@ bool BodyChecker::repeat(const Expression &expr) {
   }
   if (!nested.finish(expr.span))
     return false;
-  body.mayStop |= region->mayStop;
-  body.opaque |= region->opaque;
   operation.region = region;
   auto emitted =
       emitResults(std::move(operation), std::move(results), expr.span);

@@ -14,7 +14,7 @@ concrete domains, Entries and transcript constructions in
 | [`zkc::finite_math`](zkc/finite_math.zkc) | Total counterparts of the finite functions | Mathematical callbacks; every domain formation and bounded read must be justified |
 | [`zkc::accumulation`](zkc/accumulation.zkc) | `Combiner`, `FieldSum`, `FieldProduct`, `GroupSum` | Explicit identity/combine implementations; no associativity or commutativity is inferred |
 | [`zkc::indices`](zkc/indices.zkc) | `Indices`, empty/append/length/get/at/elements/indices/collect | Ordered index collections, checked and total access, finite traversal |
-| [`zkc::computation`](zkc/computation.zkc) | apply_math/forward_math/apply/forward/twice | Generic statically bound scoped computations; explicit fixed modes and Local effect allowances |
+| [`zkc::computation`](zkc/computation.zkc) | apply_math/forward_math/apply/forward/twice | Generic statically bound callbacks; fixed modes and effects that depend on the selected callback |
 | [`zkc::vector`](zkc/vector.zkc) | `Vector`, length/get/at/elements/indices/sum/product/split/add/hadamard/scale/dot/fill/collect/collect_where/reduce/fold/has_length, reduction bindings `∑`/`∏` | Ordered finite vectors; fold pairs contiguous halves |
 | [`zkc::sequence`](zkc/sequence.zkc) | `Sequence`, empty/append/length/get/at/elements/indices | Immutable sequences of executable Copy + Drop elements, including source products |
 | [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, get/at/multiply/transpose_multiply/bilinear/rows/columns and explicit finite views | Ordered sparse matrix operations |
@@ -33,24 +33,30 @@ concrete domains, Entries and transcript constructions in
 ### Mathematics
 
 `zkc::computation` demonstrates ordinary user-defined combinators. Its Math
-functions accept total scoped bodies; its Local functions allow `stop` and
-support affine explicit inputs. Captures require Copy+Drop and become explicit
+functions accept total scoped bodies; its Local functions use `effects(body)`
+to preserve the supplied callback effects and support affine explicit inputs. Captures require Copy+Drop and become explicit
 private-helper arguments. The [component client](../examples/projects/scoped-computations/README.md)
 forwards nested callbacks with record/vector captures and a checked lookup.
 
 ### Finite computations
 
-The finite libraries use ordinary statically bound scoped functions. The input
-item, accumulated state and output element can have different types. For example:
+The finite libraries use statically bound callbacks written `fn(...) -> ...`
+or `math fn(...) -> ...`, and finite domains written `domain<I>`. These are
+static parameter categories, with no runtime function or domain values. The input
+item, accumulated state and output element can have different types. Library
+callback signatures name the item input and promise
+`where item_from(item, rows)` after their effects. This requires the whole
+original item of that exact domain; an equal or reconstructed value does not
+satisfy the contract. Lambda binders can use any valid name. For example:
 
 ```text
 use zkc::finite as finite;
 use zkc::finite_domain as domains;
 
-let dot = finite::sum(domains::zip(xs, ys), fun (x, y) => x * y);
-let decimal = finite::fold(xs, initial, fun state x => state * 10 + x);
-let selected = finite::sum_where(rows, fun row => row.enabled,
-                                fun row => checked_value(row));
+let dot = finite::sum(domains::zip(xs, ys), fn((x, y)) => x * y);
+let decimal = finite::fold(xs, initial, fn(state, x) => state * 10 + x);
+let selected = finite::sum_where(rows, fn(row) => row.enabled,
+                                fn(row) => checked_value(row));
 ```
 
 A native vector, group vector, sequence, index collection or fixed array supplied
@@ -177,7 +183,7 @@ defines ambiguity and local replacement rules. The
 delimiter declarations and Unicode input. Symbols preserve ordinary callable
 modes and effects; they supply no additional algebra, optimizer or security claim.
 The vector module reexports `finite`'s paired sum/product notation. Write
-`∑ x in xs, x * x` or `finite::sum(xs, fun x => x * x)`. Selective imports use
+`∑ x in xs, x * x` or `finite::sum(xs, fn(x) => x * x)`. Selective imports use
 `reduction ∑` and `reduction ∏`; filters use `with`. Strict zip retains checks
 for ignored rows. Named `vec::sum(xs)` and `vec::product(xs)` still reduce an
 already constructed vector. The [finite reduction guide](../docs/language/notation.md#reduce-finite-domains)

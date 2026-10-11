@@ -132,17 +132,17 @@ pub struct Layout {
 // values may be on the table's rows, on a larger evaluation domain or at a
 // single point (rows = 1): `constraints` is the same arithmetic for each.
 pub interface Reduction<F: Field> {
-  fn layout(records: Interactions, height: index) -> Layout;
+  fn layout(records: Interactions, height: index) -> Layout effects(stop, opaque);
   fn build(records: Interactions, values: Vector<F>, height: index,
-    challenges: Vector<F>) -> (Vector<F>, Vector<F>);
+    challenges: Vector<F>) -> (Vector<F>, Vector<F>) effects(stop, opaque);
   fn constraints(records: Interactions, values: Vector<F>, openings: Vector<F>,
-    rows: index, challenges: Vector<F>, claims: Vector<F>) -> Vector<F>;
-  fn global_claims(channels: index) -> index;
-  fn start(channels: index) -> Vector<F>;
-  fn fold(records: Interactions, claims: Vector<F>, accumulator: Vector<F>) -> Vector<F>;
-  fn global(accumulator: Vector<F>, channels: index) -> Vector<F>;
-  fn close(accumulator: Vector<F>, global: Vector<F>, channels: index) -> bool;
-  fn admits(push: index, pull: index, characteristic: index) -> bool;
+    rows: index, challenges: Vector<F>, claims: Vector<F>) -> Vector<F> effects(stop, opaque);
+  fn global_claims(channels: index) -> index effects(stop, opaque);
+  fn start(channels: index) -> Vector<F> effects(stop, opaque);
+  fn fold(records: Interactions, claims: Vector<F>, accumulator: Vector<F>) -> Vector<F> effects(stop, opaque);
+  fn global(accumulator: Vector<F>, channels: index) -> Vector<F> effects(stop, opaque);
+  fn close(accumulator: Vector<F>, global: Vector<F>, channels: index) -> bool effects(stop, opaque);
+  fn admits(push: index, pull: index, characteristic: index) -> bool effects(stop, opaque);
 }
 
 // Channels used by a table's records, in increasing order.

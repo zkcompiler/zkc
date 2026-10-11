@@ -89,8 +89,6 @@ BodyChecker::application(const Expression &expr) {
       operands[slot.index] = *value;
     }
   }
-  body.mayStop |= callee.body->mayStop;
-  body.opaque |= callee.body->opaque;
   std::vector<Value> results;
   for (const auto &port : callee.outputs) {
     auto type = checker.types.substitute(port.type, substitution, expr.span);

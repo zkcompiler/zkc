@@ -33,24 +33,24 @@ pub notation ⟪ left, right ⟫ = dot(left, right);
 
 pub use zkc::finite::{reduction ∑, reduction ∏};
 
-pub domain fn elements<F: Field>(values: Vector<F>) -> scoped domain<F> = domain("elements");
-pub domain fn indices<F: Field>(values: Vector<F>) -> scoped domain<index> = domain("indices");
+pub domain fn elements<F: Field>(values: Vector<F>) -> domain<F> = domain("elements");
+pub domain fn indices<F: Field>(values: Vector<F>) -> domain<index> = domain("indices");
 pub math fn at<F: Field>(values: Vector<F>, position: index) -> F where in_bounds(position, values)
   = primitive("container.at");
 
 pub fn collect<I: Type + Copy + Drop, F: Field>(
-  rows: scoped domain<I>, body: scoped fn(I) -> F !{stop} on(rows)
-) -> Vector<F> !{stop} = finite("local.collect.vector");
+  rows: domain<I>, body: fn(item: I) -> F effects(stop) where item_from(item, rows)
+) -> Vector<F> effects(stop) = finite("local.collect.vector");
 pub fn collect_where<I: Type + Copy + Drop, F: Field>(
-  rows: scoped domain<I>, keep: scoped fn(I) -> bool !{stop} on(rows),
-  body: scoped fn(I) -> F !{stop} on(rows)
-) -> Vector<F> !{stop} = finite("local.collect.vector_where");
+  rows: domain<I>, keep: fn(item: I) -> bool effects(stop) where item_from(item, rows),
+  body: fn(item: I) -> F effects(stop) where item_from(item, rows)
+) -> Vector<F> effects(stop) = finite("local.collect.vector_where");
 
 // Materialize every selected body result before invoking the reducer once.
 pub fn reduce<I: Type + Copy + Drop, F: Field, R: Type>(
-  rows: scoped domain<I>, body: scoped fn(I) -> F !{stop} on(rows),
-  reducer: scoped fn(Vector<F>) -> R !{stop}
-) -> R !{stop} {
+  rows: domain<I>, body: fn(item: I) -> F effects(stop) where item_from(item, rows),
+  reducer: fn(Vector<F>) -> R effects(stop)
+) -> R effects(stop) {
   return reducer(collect(rows, body));
 }
 

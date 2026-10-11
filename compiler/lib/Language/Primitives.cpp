@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "Effects.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/STLExtras.h"
@@ -275,14 +276,18 @@ bool Checker::primitiveBody(Declaration &decl, Body &body) {
     LocalPrimitive primitive{identity, operands, {}};
     primitive.bindingArguments = *arguments;
     action = std::move(primitive);
-    body.mayStop = identity != "index.equal";
   }
-  if (decl.effectAllowance && body.mayStop && !decl.effectAllowance->mayStop)
+  body.operations.push_back({std::move(action), {result}, decl.span, 0});
+  body.results = {result};
+  auto effects = inferEffects(types, output.declarations, body);
+  if (!effects)
+    return false;
+  body.effects = std::move(*effects);
+  if (decl.effectAllowance &&
+      !effectsWithin(types, body.effects, *decl.effectAllowance, decl.span))
     return types.fail("source.effect",
                       "primitive exceeds its written effect allowance",
                       decl.span);
-  body.operations.push_back({std::move(action), {result}, decl.span, 0});
-  body.results = {result};
   decl.primitive = PrimitiveDefinition{identity, std::move(*arguments)};
   return true;
 }

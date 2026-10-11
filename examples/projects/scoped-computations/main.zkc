@@ -5,20 +5,20 @@ use zkc::vector as vec;
 domain Fr = field("koala-bear");
 
 interface Transform<F: Field> {
-  fn adjust(value: F) -> F !{};
-  fn run(value: F, body: scoped fn(F) -> F !{stop}) -> F !{stop};
+  fn adjust(value: F) -> F effects();
+  fn run(value: F, body: fn(F) -> F effects(stop)) -> F effects(stop);
 }
 
 component Increment<F: Field>: Transform<F> {
-  fn adjust(value: F) -> F !{} { return value + 1; }
-  fn run(value: F, body: scoped fn(F) -> F !{stop}) -> F !{stop} {
-    return computation::forward(value, fun x => body(adjust(x)));
+  fn adjust(value: F) -> F effects() { return value + 1; }
+  fn run(value: F, body: fn(F) -> F effects(stop)) -> F effects(stop) {
+    return computation::forward(value, fn(x) => body(adjust(x)));
   }
 }
 
 fn through<F: Field, C: Transform<F>>(
-  value: F, body: scoped fn(F) -> F !{stop}
-) -> F !{stop} {
+  value: F, body: fn(F) -> F effects(stop)
+) -> F effects(stop) {
   return C::run(value, body);
 }
 
@@ -32,8 +32,8 @@ protocol Compute roles(P, V)(
 ) -> (result: Fr @P) {
   let result = through<Fr, Increment<Fr>>(
     shared,
-    fun x => computation::forward(
-      x, fun y => vec::get(parameters.table, position) + y + parameters.shift
+    fn(x) => computation::forward(
+      x, fn(y) => vec::get(parameters.table, position) + y + parameters.shift
     )
   );
   return result;

@@ -29,12 +29,12 @@ component Decimal:Combiner<F>{
 fn checked(x:F,ok:bool)->F{require ok;return x;}
 fn work(xs:Vector<F>,ys:Vector<F>,enabled:bool)->(F,F,F,F,F,index){
  let paired=domains::zip(zkc::vector::elements(xs),zkc::vector::elements(ys));
- let dot=finite::sum(paired,fun (x,y)=>x*y);
- let ordered=finite::accumulate<_,F,Decimal>(zkc::vector::elements(xs),fun x=>x);
- let product=finite::product(zkc::vector::elements(xs),fun x=>x+1);
- let selected=finite::sum_where(zkc::vector::elements(xs),fun x=>enabled,fun x=>checked(x,enabled));
- let materialized=zkc::vector::reduce(zkc::vector::elements(xs),fun x=>x*x,fun values=>zkc::vector::sum(values));
- let pairs=finite::collect(domains::product(zkc::vector::elements(xs),zkc::vector::elements(ys)),fun pair=>pair);
+ let dot=finite::sum(paired,fn((x,y))=>x*y);
+ let ordered=finite::accumulate<_,F,Decimal>(zkc::vector::elements(xs),fn(x)=>x);
+ let product=finite::product(zkc::vector::elements(xs),fn(x)=>x+1);
+ let selected=finite::sum_where(zkc::vector::elements(xs),fn(x)=>enabled,fn(x)=>checked(x,enabled));
+ let materialized=zkc::vector::reduce(zkc::vector::elements(xs),fn(x)=>x*x,fn(values)=>zkc::vector::sum(values));
+ let pairs=finite::collect(domains::product(zkc::vector::elements(xs),zkc::vector::elements(ys)),fn(pair)=>pair);
  return(dot,ordered,product,selected,materialized,zkc::sequence::length(pairs));
 }
 protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P,enabled:bool@P)->(result:(F,F,F,F,F,index)@P){return work(xs,ys,enabled);}run Demo=Run;
@@ -57,9 +57,9 @@ use zkc::matrix::{Matrix};
 use zkc::finite_math as total;
 domain F=field("koala-bear");
 math fn analytic(xs:Vector<F>,matrix:Matrix<F>)->(F,F,F){
- let energy=total::sum(zkc::vector::indices(xs),fun i=>zkc::vector::at(xs,i)*zkc::vector::at(xs,i));
- let coordinates=total::sum(zkc::matrix::coordinates(matrix),fun (i,j)=>zkc::matrix::at(matrix,i,j));
- let nested=total::sum(zkc::matrix::row_indices(matrix),fun i=>total::sum(zkc::matrix::row_values(matrix,i),fun x=>x));
+ let energy=total::sum(zkc::vector::indices(xs),fn(i)=>zkc::vector::at(xs,i)*zkc::vector::at(xs,i));
+ let coordinates=total::sum(zkc::matrix::coordinates(matrix),fn((i,j))=>zkc::matrix::at(matrix,i,j));
+ let nested=total::sum(zkc::matrix::row_indices(matrix),fn(i)=>total::sum(zkc::matrix::row_values(matrix,i),fn(x)=>x));
  return(energy,coordinates,nested);
 }
 protocol Run roles(P)(xs:Vector<F>@P,matrix:Matrix<F>@P)->(result:(F,F,F)@P){return analytic(xs,matrix);}run Demo=Run;
@@ -85,13 +85,13 @@ struct Row{pub value:G::Scalar,pub enabled:bool}
 fn checked_inverse(x:G::Scalar)->G::Scalar=primitive("field.inverse");
 fn work(xs:Vector<G::Scalar>,n:index)->(bool,G::Scalar,G::Scalar,index){
  let generator=kernel<G>("curve.generator");
- let points=zkc::curve::collect(zkc::vector::elements(xs),fun x=>generator);
- let commitment=finite::group_sum(domains::zip(zkc::curve::elements(points),zkc::vector::elements(xs)),fun (point,x)=>point*x);
+ let points=zkc::curve::collect(zkc::vector::elements(xs),fn(x)=>generator);
+ let commitment=finite::group_sum(domains::zip(zkc::curve::elements(points),zkc::vector::elements(xs)),fn((point,x))=>point*x);
  let expected=generator*zkc::vector::sum(xs);
- let records=finite::collect(zkc::vector::elements(xs),fun x=>Row{value:x,enabled:!(x==0)});
- let selected=finite::sum_where(zkc::sequence::elements(records),fun record=>record.enabled,fun record=>record.value*checked_inverse(record.value));
- let ratio=finite::product_where(zkc::sequence::elements(records),fun record=>record.enabled,fun record=>record.value*checked_inverse(record.value));
- let triangular:index=finite::fold(domains::range(0,n),0,fun state i=>state+finite::fold(domains::range(0,i),0,fun count j=>count+1));
+ let records=finite::collect(zkc::vector::elements(xs),fn(x)=>Row{value:x,enabled:!(x==0)});
+ let selected=finite::sum_where(zkc::sequence::elements(records),fn(record)=>record.enabled,fn(record)=>record.value*checked_inverse(record.value));
+ let ratio=finite::product_where(zkc::sequence::elements(records),fn(record)=>record.enabled,fn(record)=>record.value*checked_inverse(record.value));
+ let triangular:index=finite::fold(domains::range(0,n),0,fn(state, i)=>state+finite::fold(domains::range(0,i),0,fn(count, j)=>count+1));
  return(commitment==expected,selected,ratio,triangular);
 }
 protocol Run roles(P)(xs:Vector<G::Scalar>@P,n:index@P)->(result:(bool,G::Scalar,G::Scalar,index)@P){return work(xs,n);}run Demo=Run;
@@ -108,7 +108,7 @@ use zkc::vector::{Vector};
 domain F=field("koala-bear");
 fn invert(x:F)->F=primitive("field.inverse");
 fn work(xs:Vector<F>,enabled:bool)->F{
- return zkc::vector::reduce(zkc::vector::elements(xs),fun x=>invert(x),fun values=>{
+ return zkc::vector::reduce(zkc::vector::elements(xs),fn(x)=>invert(x),fn(values)=>{
    require enabled;
    require zkc::vector::length(values)==2;
    zkc::vector::get(values,0)+zkc::vector::get(values,1)
@@ -144,18 +144,18 @@ domain F=field("koala-bear");
 fn work(count:index,a:F,b:F,scale:F,shift:F)->(F,F,F){
  let xs=zkc::vector::fill(a,count);
  let ys=zkc::vector::fill(b,count);
- let dot=finite::sum(domains::zip(xs,ys),fun (x,y)=>x*y);
- let square=finite::sum(xs,fun x=>x*x);
- let mapped=zkc::vector::collect(xs,fun x=>x*scale+shift);
+ let dot=finite::sum(domains::zip(xs,ys),fn((x,y))=>x*y);
+ let square=finite::sum(xs,fn(x)=>x*x);
+ let mapped=zkc::vector::collect(xs,fn(x)=>x*scale+shift);
  let affine=zkc::vector::sum(mapped);
  return(dot,square,affine);
 }
 protocol Run roles(P)(count:index@P,a:F@P,b:F@P,scale:F@P,shift:F@P)->(result:(F,F,F)@P){return work(count,a,b,scale,shift);}run Demo=Run;
 '''
     if symbolic:
-        source = source.replace('finite::sum(domains::zip(xs,ys),fun (x,y)=>x*y)',
+        source = source.replace('finite::sum(domains::zip(xs,ys),fn((x,y))=>x*y)',
                                 '∑ (x,y) in domains::zip(xs,ys),x*y')
-        source = source.replace('finite::sum(xs,fun x=>x*x)', '∑ x in xs,x*x')
+        source = source.replace('finite::sum(xs,fn(x)=>x*x)', '∑ x in xs,x*x')
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     # Default preparation recognizes contractions at the container ceiling.
     # Disabling simplification intentionally selects finite loop fallback;
@@ -178,7 +178,7 @@ fn work(value:G::Scalar)->bool{
  let mut points=kernel<G>("curve.append",kernel<G>("curve.empty"),base);
  for i in 0..12 {points=kernel<G>("curve.concat",points,points);}
  let scalars=zkc::vector::fill(value,4096);
- let commitment=finite::group_sum(domains::zip(points,scalars),fun (point,scalar)=>point*scalar);
+ let commitment=finite::group_sum(domains::zip(points,scalars),fn((point,scalar))=>point*scalar);
  return commitment==base*(value*4096);
 }
 protocol Run roles(P)(value:G::Scalar@P)->(result:bool@P){return work(value);}run Demo=Run;
@@ -198,8 +198,8 @@ domain F=field("koala-bear");
 fn work(matrix:Matrix<F>,value:F,selected:index)->(F,F){
  let xs=zkc::vector::fill(value,zkc::matrix::columns(matrix));
  let ys=zkc::vector::fill(value,zkc::matrix::rows(matrix));
- let row=finite::sum(domains::zip(zkc::matrix::row_values(matrix,selected),xs),fun (x,y)=>x*y);
- let column=finite::sum(domains::zip(zkc::matrix::column_values(matrix,0),ys),fun (x,y)=>x*y);
+ let row=finite::sum(domains::zip(zkc::matrix::row_values(matrix,selected),xs),fn((x,y))=>x*y);
+ let column=finite::sum(domains::zip(zkc::matrix::column_values(matrix,0),ys),fn((x,y))=>x*y);
  return(row,column);
 }
 protocol Run roles(P)(matrix:Matrix<F>@P,value:F@P,selected:index@P)->(result:(F,F)@P){return work(matrix,value,selected);}run Demo=Run;
@@ -226,20 +226,20 @@ component Decimal:Combiner<F>{
  math fn combine(state:F,value:F)->F{return state*10+value;}
 }
 MODE compute(xs:Vector<F>,enabled:bool)->(F,F,F,F,F,F,F,F,F,F,F){
- let folded=finite::fold(xs,7,fun state x=>state*10+x);
- let filtered=finite::fold_where(xs,7,fun x=>enabled,fun state x=>state*10+x);
- let accumulated=finite::accumulate<F,F,Decimal>(xs,fun x=>x);
- let selected=finite::accumulate_where<F,F,Decimal>(xs,fun x=>enabled,fun x=>x);
- let values=finite::collect(xs,fun x=>x+1);
- let kept=finite::collect_where(xs,fun x=>enabled,fun x=>x+1);
- let values_sum=finite::sum(values,fun x=>x);
- let kept_sum=finite::sum(kept,fun x=>x);
- let product=finite::product(xs,fun x=>x);
- let product_kept=finite::product_where(xs,fun x=>enabled,fun x=>x);
- let sum_kept=finite::sum_where(xs,fun x=>enabled,fun x=>x);
+ let folded=finite::fold(xs,7,fn(state, x)=>state*10+x);
+ let filtered=finite::fold_where(xs,7,fn(x)=>enabled,fn(state, x)=>state*10+x);
+ let accumulated=finite::accumulate<F,F,Decimal>(xs,fn(x)=>x);
+ let selected=finite::accumulate_where<F,F,Decimal>(xs,fn(x)=>enabled,fn(x)=>x);
+ let values=finite::collect(xs,fn(x)=>x+1);
+ let kept=finite::collect_where(xs,fn(x)=>enabled,fn(x)=>x+1);
+ let values_sum=finite::sum(values,fn(x)=>x);
+ let kept_sum=finite::sum(kept,fn(x)=>x);
+ let product=finite::product(xs,fn(x)=>x);
+ let product_kept=finite::product_where(xs,fn(x)=>enabled,fn(x)=>x);
+ let sum_kept=finite::sum_where(xs,fn(x)=>enabled,fn(x)=>x);
  let array=[1,2];
- let array_sum=finite::sum(domains::array<F,2>(array),fun x=>x);
- let implicit_array_sum:F=finite::sum([1,2],fun x=>x);
+ let array_sum=finite::sum(domains::array<F,2>(array),fn(x)=>x);
+ let implicit_array_sum:F=finite::sum([1,2],fn(x)=>x);
  return(folded,filtered,accumulated,selected,values_sum,kept_sum,product,product_kept,sum_kept,array_sum,implicit_array_sum);
 }
 protocol Run roles(P)(xs:Vector<F>@P,enabled:bool@P)->(result:(F,F,F,F,F,F,F,F,F,F,F)@P){return compute(xs,enabled);}run Demo=Run;
@@ -258,9 +258,9 @@ use zkc::vector::{Vector};
 use zkc::FINITE_MODULE as finite;
 domain G=group("bls12-381.g1");
 MODE compute(xs:Vector<G::Scalar>,point:G,enabled:bool)->(G,G,G::Scalar){
- let all=finite::group_sum(xs,fun x=>point*x);
- let kept=finite::group_sum_where(xs,fun x=>enabled,fun x=>point*x);
- return(all,kept,finite::sum(xs,fun x=>x));
+ let all=finite::group_sum(xs,fn(x)=>point*x);
+ let kept=finite::group_sum_where(xs,fn(x)=>enabled,fn(x)=>point*x);
+ return(all,kept,finite::sum(xs,fn(x)=>x));
 }
 fn work(xs:Vector<G::Scalar>,enabled:bool)->(bool,bool){
  let generator=kernel<G>("curve.generator");
@@ -331,7 +331,7 @@ fn selected(xs:Vector<F>,i:index)->F{
  return xs[i];
 }
 protocol Run roles(P)(xs:Vector<F>@P,i:index@P)->(result:(F,F)@P){
- let total@P=finite::sum(zkc::vector::indices(xs),fun j=>xs[j]);
+ let total@P=finite::sum(zkc::vector::indices(xs),fn(j)=>xs[j]);
  let picked@P=selected(xs,i);
  return(total,picked);
 }run Demo=Run;
@@ -353,17 +353,17 @@ use zkc::finite_math as total;
 domain G=group("bls12-381.g1");
 struct Row{pub value:G::Scalar}
 math fn combined(xs:Array<G::Scalar,2>,rows:Sequence<Row>,points:Groups<G>,values:Indices)->(G::Scalar,G::Scalar,G,bool){
- let array_sum=total::sum(zkc::field_array::indices(xs),fun i=>xs[i]);
- let record_sum=total::sum(zkc::sequence::indices(rows),fun i=>{let row=rows[i];row.value});
- let group_sum=total::group_sum(zkc::curve::indices(points),fun i=>points[i]);
- let same=total::fold(zkc::indices::indices(values),true,fun state i=>state&&(values[i]==7));
+ let array_sum=total::sum(zkc::field_array::indices(xs),fn(i)=>xs[i]);
+ let record_sum=total::sum(zkc::sequence::indices(rows),fn(i)=>{let row=rows[i];row.value});
+ let group_sum=total::group_sum(zkc::curve::indices(points),fn(i)=>points[i]);
+ let same=total::fold(zkc::indices::indices(values),true,fn(state, i)=>state&&(values[i]==7));
  return(array_sum,record_sum,group_sum,same);
 }
 fn work(xs:Array<G::Scalar,2>)->(G::Scalar,G::Scalar,bool,bool){
  let generator=kernel<G>("curve.generator");
- let rows=finite::collect(xs,fun value=>Row{value:value});
- let points=zkc::curve::collect(xs,fun value=>generator);
- let values=zkc::indices::collect(xs,fun value=>7);
+ let rows=finite::collect(xs,fn(value)=>Row{value:value});
+ let points=zkc::curve::collect(xs,fn(value)=>generator);
+ let values=zkc::indices::collect(xs,fn(value)=>7);
  let results=combined(xs,rows,points,values);
  return(results.0,results.1,results.2==generator+generator,results.3);
 }

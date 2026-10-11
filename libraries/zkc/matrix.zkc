@@ -15,12 +15,12 @@ pub fn columns<F: Field>(matrix: Matrix<F>) -> index {
 
 pub operator * = multiply;
 
-pub domain fn row_values<F: Field>(values: Matrix<F>, position: index) -> scoped domain<F> = domain("matrix.row");
-pub domain fn column_values<F: Field>(values: Matrix<F>, position: index) -> scoped domain<F> = domain("matrix.column");
-pub domain fn row_indices<F: Field>(values: Matrix<F>) -> scoped domain<index> = domain("indices.rows");
-pub domain fn column_indices<F: Field>(values: Matrix<F>) -> scoped domain<index> = domain("indices.columns");
-pub domain fn coordinates<F: Field>(values: Matrix<F>) -> scoped domain<(index, index)> = domain("matrix.coordinates.row_major");
-pub domain fn column_coordinates<F: Field>(values: Matrix<F>) -> scoped domain<(index, index)> = domain("matrix.coordinates.column_major");
+pub domain fn row_values<F: Field>(values: Matrix<F>, position: index) -> domain<F> = domain("matrix.row");
+pub domain fn column_values<F: Field>(values: Matrix<F>, position: index) -> domain<F> = domain("matrix.column");
+pub domain fn row_indices<F: Field>(values: Matrix<F>) -> domain<index> = domain("indices.rows");
+pub domain fn column_indices<F: Field>(values: Matrix<F>) -> domain<index> = domain("indices.columns");
+pub domain fn coordinates<F: Field>(values: Matrix<F>) -> domain<(index, index)> = domain("matrix.coordinates.row_major");
+pub domain fn column_coordinates<F: Field>(values: Matrix<F>) -> domain<(index, index)> = domain("matrix.coordinates.column_major");
 pub math fn at<F: Field>(values: Matrix<F>, row: index, column: index) -> F
   where in_bounds(row, values, 0), in_bounds(column, values, 1)
   = primitive("matrix.at");

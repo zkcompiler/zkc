@@ -20,7 +20,6 @@ struct BodySummary {
   // execution conservatively depends on eager operands and capture snapshots;
   // these summaries never select an owner from a callback's constant result.
   std::vector<Dependencies> values, results, formation;
-  Effects effects;
   bool parameterized = false;
 };
 std::optional<BodySummary>

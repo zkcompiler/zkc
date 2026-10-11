@@ -205,8 +205,10 @@ bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
   if (callee.inputOrder[0].kind != K::Domain || callee.inputOrder[0].index != 0)
     return refuse();
   for (unsigned i = 0; i < count; ++i) {
-    const auto &signature = callee.scopedInputs[i].signature;
-    if (!types.chargeType(callee.domainInputs[0].item, span) ||
+    const auto &parameter = callee.scopedInputs[i];
+    const auto &signature = parameter.signature;
+    if (!types.charge(parameter.itemOrigins.size(), span) ||
+        !types.chargeType(callee.domainInputs[0].item, span) ||
         !types.chargeType(signature.result, span))
       return false;
     for (const auto &input : signature.inputs)
@@ -215,7 +217,8 @@ bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
     if (callee.inputOrder[i + 1].kind != K::Scoped ||
         callee.inputOrder[i + 1].index != i ||
         signature.inputs != std::vector<Type>{callee.domainInputs[0].item} ||
-        (signature.itemDomain && *signature.itemDomain != 0))
+        (!parameter.itemOrigins.empty() &&
+         parameter.itemOrigins != std::map<unsigned, unsigned>{{0, 0}}))
       return refuse();
   }
   if (filtered) {
@@ -223,7 +226,8 @@ bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
     const auto &body = callee.scopedInputs[1].signature;
     if (predicate.result != Type{} || predicate.mode != body.mode ||
         !(predicate.allowance == body.allowance) ||
-        predicate.itemDomain != body.itemDomain)
+        callee.scopedInputs[0].itemOrigins !=
+            callee.scopedInputs[1].itemOrigins)
       return refuse();
   }
   return true;
@@ -584,7 +588,8 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
   }
   if (body.mode == Body::Mode::Local) {
     auto *action = std::get_if<LocalPrimitive>(&operation.action);
-    return (action && action->contract == primitive->identity &&
+    return (action && action->origin == LocalPrimitive::Origin::Primitive &&
+            action->contract == primitive->identity &&
             sameOperands(action->operands, binding.operands) &&
             action->parameters.empty() && action->staticArguments.empty() &&
             action->assetReferences.empty() &&

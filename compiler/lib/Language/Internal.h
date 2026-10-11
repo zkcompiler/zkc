@@ -73,12 +73,17 @@ struct SyntaxSelector {
   std::optional<std::string> role;
   Span span;
 };
+struct SyntaxItemOrigin {
+  std::string input, domain;
+  Span span;
+};
 struct SyntaxScopedSignature {
   ScopedSignature::Mode mode;
   std::vector<SyntaxType> inputs;
   SyntaxType result;
   Effects allowance;
-  std::optional<std::string> itemDomain;
+  std::vector<std::string> inputLabels;
+  std::vector<SyntaxItemOrigin> itemOrigins;
 };
 struct SyntaxPort {
   std::string name;
@@ -296,6 +301,7 @@ struct SyntaxDeclaration {
   bool explicitRequirements = false;
   std::optional<Permissions> permissions;
   std::optional<Effects> effects;
+  std::vector<std::string> effectDependencies;
   std::optional<SyntaxType> definition;
   std::vector<SyntaxType> targetArguments;
   std::vector<ArgumentLabel> targetLabels;

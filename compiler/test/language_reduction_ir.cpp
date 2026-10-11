@@ -12,9 +12,9 @@ const std::string source = R"(module m;
 domain Fr=field("koala-bear");
 domain Ext=field("koala-bear.ext8-binomial3");
 type Vector<F:Field>=builtin("vector",F);
-domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
-fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn sum<I:Type+Copy+Drop,F:Field>(rows:scoped domain<I>,term:scoped fn(I)->F !{stop} on(rows))->F !{stop}{return fold(rows,0,fun state item=>state+term(item));}
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)>=domain("zip");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item, rows))->S effects(stop)=finite("local.fold");
+fn sum<I:Type+Copy+Drop,F:Field>(rows:domain<I>,term:fn(item:I)->F effects(stop) where item_from(item, rows))->F effects(stop){return fold(rows,0,fn(state, item)=>state+term(item));}
 reduction ∑=sum;
 math fn square<F:Field>(x:F)->F{return x*x;}
 fn f<F:Field>(xs:Vector<F>,ys:Vector<F>,a:F,b:F)->F{
@@ -106,8 +106,8 @@ int main() {
     auto entry = close(
         R"(module m;domain Fr=field("koala-bear");type Vector<F:Field>=builtin("vector",F);
       fn custom(xs:Vector<Fr>)->Fr{stop "reject";}
-      fn collect<I:Type+Copy+Drop,F:Field>(rows:scoped domain<I>,term:scoped fn(I)->F !{stop} on(rows))->Vector<F> !{stop}=finite("local.collect.vector");
-      fn f(xs:Vector<Fr>)->Fr{let terms=collect(xs,fun x=>x);return custom(terms);}
+      fn collect<I:Type+Copy+Drop,F:Field>(rows:domain<I>,term:fn(item:I)->F effects(stop) where item_from(item, rows))->Vector<F> effects(stop)=finite("local.collect.vector");
+      fn f(xs:Vector<Fr>)->Fr{let terms=collect(xs,fn(x)=>x);return custom(terms);}
       protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return(r=f(xs));}run Run=Demo;)");
     auto original = take(prepareOriginal(entry));
     require(original.bytes().contains("local.stop") &&
@@ -118,9 +118,9 @@ int main() {
   cases.run("binders in local branches and loops preserve lexical captures", [&] {
     auto entry = close(
         R"(module m;domain Fr=field("koala-bear");type Vector<F:Field>=builtin("vector",F);
-      domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
-fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn sum<I:Type+Copy+Drop,F:Field>(rows:scoped domain<I>,term:scoped fn(I)->F !{stop} on(rows))->F !{stop}{return fold(rows,0,fun state item=>state+term(item));}
+      domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)>=domain("zip");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item, rows))->S effects(stop)=finite("local.fold");
+fn sum<I:Type+Copy+Drop,F:Field>(rows:domain<I>,term:fn(item:I)->F effects(stop) where item_from(item, rows))->F effects(stop){return fold(rows,0,fn(state, item)=>state+term(item));}
       reduction ∑=sum;
       fn f(xs:Vector<Fr>,a:Fr,b:bool,n:index)->Fr{
         let mut acc=a;

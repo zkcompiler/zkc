@@ -3,6 +3,7 @@
 #include "ClosureInputs.h"
 #include "DataRequirements.h"
 #include "DomainClosure.h"
+#include "Effects.h"
 #include "FiniteContracts.h"
 #include "Semantics.h"
 #include "zkc/Contracts/Kernels.h"
@@ -17,7 +18,8 @@ namespace {
 bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
   if (!types.charge(body.operations.size() + body.values.size() +
                         body.results.size() + body.expressionValues.size() +
-                        body.stopReason.size() + 1,
+                        body.stopReason.size() +
+                        body.effects.dependencies.size() + 1,
                     span))
     return false;
   for (const auto &value : body.values)
@@ -323,7 +325,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           helper.finiteDefinition.reset();
           helper.dataPreconditions.clear();
           helper.body = computation.body;
-          helper.effectAllowance = computation.signature.allowance;
+          helper.effectAllowance =
+              EffectSummary{computation.signature.allowance};
           for (unsigned i = 0; i < helper.body->inputs; ++i)
             helper.inputs.push_back({"input" + std::to_string(i),
                                      helper.body->values[i].type,
@@ -775,6 +778,14 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           control->domainArguments.clear();
         }
       }
+      auto effects = inferEffects(types, declarations, body);
+      if (!effects)
+        return false;
+      if (!effects->dependencies.empty())
+        return types.fail(
+            "source.effect", "closed body retains callback effect dependencies",
+            body.operations.empty() ? Span{} : body.operations.front().span);
+      body.effects = std::move(*effects);
       body.scopedBindings.clear();
       body.domainBindings.clear();
       if (mode == Body::Mode::Math) {
@@ -838,9 +849,14 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         return {};
       }
       for (auto selected : scoped) {
-        frame(key, declarations[selected.index].symbol);
         if (!types.charge(1, source.span))
           return {};
+        if (selected.index >= declarations.size()) {
+          types.fail("source.effect",
+                     "selected callback is outside the project", source.span);
+          return {};
+        }
+        frame(key, declarations[selected.index].symbol);
       }
       if (domains.size() != source.domainInputs.size()) {
         types.fail("source.finite-domain",
@@ -942,7 +958,34 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                                              clause.decision->span))
           return {};
       }
+      if (source.effectAllowance &&
+          !types.charge(source.effectAllowance->dependencies.size() + 1,
+                        source.span))
+        return {};
       Declaration result = source;
+      if (source.effectAllowance) {
+        std::vector<EffectSummary> effects;
+        for (auto callback : scoped) {
+          if (!types.charge(1, source.span))
+            return {};
+          if (callback.index >= declarations.size() ||
+              !declarations[callback.index].body) {
+            types.fail("source.effect", "selected callback has no effect body",
+                       source.span);
+            return {};
+          }
+          if (!types.charge(declarations[callback.index]
+                                    .body->effects.dependencies.size() +
+                                1,
+                            source.span))
+            return {};
+          effects.push_back(declarations[callback.index].body->effects);
+        }
+        result.effectAllowance = substituteEffects(
+            types, *source.effectAllowance, effects, source.span);
+        if (!result.effectAllowance)
+          return {};
+      }
       DeclarationId id{uint32_t(declarations.size())};
       result.id = id;
       result.origin = origin;

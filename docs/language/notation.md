@@ -102,7 +102,7 @@ fn weighted<F: Field>(xs: vec::Vector<F>, ys: vec::Vector<F>, α: F) -> F {
   return ∑ (x, y) ∈ zip(xs, ys), (x * y + α);
 }
 fn shifted_product<F: Field>(xs: vec::Vector<F>, α: F) -> F {
-  return product(xs, fun x => x + α);
+  return product(xs, fn(x) => x + α);
 }
 ```
 
@@ -111,6 +111,13 @@ use the same checking and lowering. Selective imports can request
 `reduction ∑` and `reduction ∏`. Other collections, records, tuple items and
 nested finite domains use the same scoped callback path, including directly in
 protocols. `in` is an ASCII alternative to `∈`.
+
+`fn(x) => expression` supplies an anonymous computation to a scoped parameter.
+Use `fn(x, y) => ...` for two inputs and `fn((x, y)) => ...` to destructure one
+tuple input. A block body uses `fn(x) => { statements; result }`. These literals
+use the same keyword as named `fn` declarations and infer their types from the
+receiving signature. They can capture surrounding values under the
+[scoped computation rules](../spec/language/definitions.md#scoped-computations).
 
 ```zkc
 let selected = ∑ x ∈ xs with enabled, checked_term(x);
@@ -131,8 +138,8 @@ completed sum. Write `(x + c)` or `{ x + c }` to add it for every item. A local
 both Local and Math families requires a local choice or selective imports;
 the compiler does not infer that choice from the body's effects.
 
-An arbitrary vector reducer uses `vec::reduce(rows, fun x => term(x),
-fun terms => custom(terms))`. It receives the collected vector once, including
+An arbitrary vector reducer uses `vec::reduce(rows, fn(x) => term(x),
+fn(terms) => custom(terms))`. It receives the collected vector once, including
 empty input, and keeps its own failure behavior. See the
 [source contract](../spec/language/definitions.md#finite-reduction-binders) for
 selection, bounds and retained checks.
@@ -143,7 +150,7 @@ selection, bounds and retained checks.
 use zkc::vector::{Vector, indices, indexing []};
 use zkc::finite_math::{sum};
 math fn energy<F: Field>(xs: Vector<F>) -> F {
-  return sum(indices(xs), fun i => xs[i] * xs[i]);
+  return sum(indices(xs), fn(i) => xs[i] * xs[i]);
 }
 fn checked_pick<F: Field>(xs: Vector<F>, i: index) -> F {
   indexing values[position] = zkc::vector::get(values, position);

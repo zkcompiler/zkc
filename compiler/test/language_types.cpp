@@ -152,7 +152,7 @@ void typing() {
            {"fn bad<N:nat+Copy>()->bool{return true;}", "source.permission"},
            {"fn bad<N:nat>()->bool where Copy(N) {return true;}",
             "source.permission"},
-           {"fn bad(x:Fr)->bool !{} {require true;return true;}",
+           {"fn bad(x:Fr)->bool effects() {require true;return true;}",
             "source.effect"},
            {"fn bad(x:Fr)->Fr {let y=if true { missing}else{ x};return y;}",
             "source.name"},
@@ -187,7 +187,7 @@ void typing() {
            {"interface I{math fn f(x:bool)->bool;}component C:I{fn "
             "f(x:bool)->bool{return x;}}",
             "source.conformance"},
-           {"interface I{fn f(x:bool)->bool !{};}component C:I{fn "
+           {"interface I{fn f(x:bool)->bool effects();}component C:I{fn "
             "f(x:bool)->bool{require x;return x;}}",
             "source.effect"},
            {"interface I{type Scalar:Field;}component C:I{type "
@@ -199,7 +199,8 @@ void typing() {
            {"interface I{}interface J{}component C:I{}fn f<T:J>()->bool{return "
             "true;}fn bad()->bool{return f<C>();}",
             "source.conformance"},
-           {"interface I{fn f<T:Type+Copy+Drop>(x:T)->T;}component C:I{fn "
+           {"interface I{fn f<T:Type+Copy+Drop>(x:T)->T effects(stop, "
+            "opaque);}component C:I{fn "
             "f<T:Type+Copy+Drop>(x:T)->T{return x;}}",
             "source.unsupported"},
        })
@@ -207,14 +208,14 @@ void typing() {
   refuses(prefix + "enum Opt<T:Type>{Some(T),None()}fn "
                    "forget<T:Type>(o:Opt<T>)->(){consume o;return ();}",
           "source.type");
-  refuses(prefix + "interface Eat<X:Type>{type T;fn eat(x:X)->();}component "
+  refuses(prefix + "interface Eat<X:Type>{type T;fn eat(x:X)->() effects(stop, "
+                   "opaque);}component "
                    "Sink<T:Type>:Eat<T>{type T=();fn eat(x:T)->(){consume "
                    "x;return ();}}",
           "source.shadow");
-  refuses(
-      prefix +
-          "interface I{fn f()->bool;}fn unused<T:Type>()->bool{return I::f();}",
-      "source.call");
+  refuses(prefix + "interface I{fn f()->bool effects(stop, opaque);}fn "
+                   "unused<T:Type>()->bool{return I::f();}",
+          "source.call");
   refuses(prefix + "interface I{type State;}fn "
                    "unused<T:Type>(x:I::State)->I::State{return x;}",
           "source.generic");
@@ -248,27 +249,27 @@ math fn identity<C:A>(x:C::Out)->C::Out where Copy(C::Out),Drop(C::Out){return x
 protocol Shared<G:Group> roles(P,V)(x:G::Scalar@(P,V))->(r:G::Scalar@(P,V)) where Share(G::Scalar){return(r=x);}
 )");
   check(prefix + R"(
-interface I<F:Field>{type Out:Field;fn f(x:Out)->Out where Wire(Out);}
+interface I<F:Field>{type Out:Field;fn f(x:Out)->Out effects(stop, opaque) where Wire(Out);}
 component K<F:Field>:I<F>{type Out:Field=F;fn f(x:Out)->Out where Wire(Out){return x;}}
 )");
   check(prefix + R"(
-interface I<T:Type>{fn f(x:T)->T where Wire(T);}
+interface I<T:Type>{fn f(x:T)->T effects(stop, opaque) where Wire(T);}
 component K<G:Group>:I<G::Scalar>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return x;}}
 )");
   refuses(prefix + R"(
-interface I<T:Type>{fn f(x:T)->T;}
+interface I<T:Type>{fn f(x:T)->T effects(stop, opaque);}
 component K<G:Group>:I<G::Scalar>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return x;}}
 )",
           "source.conformance");
   check(prefix + R"(
-interface I{type S:Field;fn f(x:S)->S where Wire(S);}
+interface I{type S:Field;fn f(x:S)->S effects(stop, opaque) where Wire(S);}
 component K<F:Field>:I{type S:Field=F;fn f(x:S)->S where Wire(S){return x;}}
 component Concrete:I{type S:Field=Fr;fn f(x:S)->S where Wire(S){return x;}}
-interface J{type S:Group;fn f(x:S)->S where Wire(S);}
+interface J{type S:Group;fn f(x:S)->S effects(stop, opaque) where Wire(S);}
 component L<G:Group>:J{type S:Group=G;fn f(x:S)->S where Wire(S){return x;}}
 )");
   refuses(prefix + R"(
-interface I{type S:Field;fn f(x:S)->S;}
+interface I{type S:Field;fn f(x:S)->S effects(stop, opaque);}
 component K<F:Field>:I{type S:Field=F;fn f(x:S)->S where Wire(S){return x;}}
 )",
           "source.conformance");
@@ -290,45 +291,45 @@ fn f<G:Group>(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return need(mk<G>(x)
 )");
   check(prefix + R"(
 interface Src{type Out;}
-interface Sink<X:Type+Copy+Drop>{fn put(x:X)->();}
+interface Sink<X:Type+Copy+Drop>{fn put(x:X)->() effects(stop, opaque);}
 fn pipe<A:Src,B:Sink<A::Out>>(x:A::Out)->() where Copy(A::Out),Drop(A::Out){return B::put(x);}
 fn direct<T:Type,C:Sink<T>>(x:T)->() where Copy(T),Drop(T){return C::put(x);}
 )");
   refuses(prefix + R"(
 interface Src{type Out;}
-interface Sink<X:Type+Copy+Drop>{fn put(x:X)->();}
+interface Sink<X:Type+Copy+Drop>{fn put(x:X)->() effects(stop, opaque);}
 fn pipe<A:Src,B:Sink<A::Out>>(x:A::Out)->(){return B::put(x);}
 )",
           "source.permission");
   check(prefix + R"(
-interface Limited<N:nat> where 1<=N {fn get()->bool;}
+interface Limited<N:nat> where 1<=N {fn get()->bool effects(stop, opaque);}
 fn f<N:nat,C:Limited<N>>()->bool where 1<=N{return C::get();}
 )");
   refuses(prefix + R"(
-interface Limited<N:nat> where 1<=N {fn get()->bool;}
+interface Limited<N:nat> where 1<=N {fn get()->bool effects(stop, opaque);}
 fn f<N:nat,C:Limited<N>>()->bool where () {return C::get();}
 )",
           "source.bound");
   check(prefix + R"(
 struct Box<T:Type+Copy>{pub value:T}
-interface Sink<X:Type>{fn put(x:X)->();}
+interface Sink<X:Type>{fn put(x:X)->() effects(stop, opaque);}
 fn f<T:Type,C:Sink<Box<T>>>(x:Box<T>)->() where Copy(T){return C::put(x);}
 )");
   check(prefix + R"(
-interface I{type Out;fn f(x:Out)->Out where Wire(Out);}
+interface I{type Out;fn f(x:Out)->Out effects(stop, opaque) where Wire(Out);}
 fn g<A:I>(x:A::Out)->A::Out where Wire(A::Out){return A::f(x);}
 )");
   refuses(prefix + R"(
-interface I{type Out;fn f(x:Out)->Out where Wire(Out);}
+interface I{type Out;fn f(x:Out)->Out effects(stop, opaque) where Wire(Out);}
 fn g<A:I>(x:A::Out)->A::Out{return A::f(x);}
 )",
           "source.permission");
   check(prefix + R"(
-interface I<T:Type>{type Out;fn f(x:Out)->Out where Wire(Out);}
+interface I<T:Type>{type Out;fn f(x:Out)->Out effects(stop, opaque) where Wire(Out);}
 component K<T:Type>:I<T>{type Out=T;fn f(x:Out)->Out where Wire(Out){return x;}}
 )");
   check(prefix + R"(
-interface I<G:Group>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar);}
+interface I<G:Group>{fn f(x:G::Scalar)->G::Scalar effects(stop, opaque) where Wire(G::Scalar);}
 component K<Scalar:Group>:I<Scalar>{fn f(x:Scalar::Scalar)->Scalar::Scalar where Wire(Scalar::Scalar){return x;}}
 interface Algebra{type Scalar:Field;}
 math fn sq<C:Algebra>(x:C::Scalar)->C::Scalar{return x*x;}
@@ -350,12 +351,12 @@ fn outer<H:Group>(x:H::Scalar)->H::Scalar{return sendable<H>(x);}
 )",
           "source.permission");
   refuses(prefix + R"(
-interface I<G:Group>{fn f(x:G::Scalar)->G::Scalar;}
+interface I<G:Group>{fn f(x:G::Scalar)->G::Scalar effects(stop, opaque);}
 component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return x;}}
 )",
           "source.conformance");
   check(prefix + R"(
-interface I<G:Group>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar);}
+interface I<G:Group>{fn f(x:G::Scalar)->G::Scalar effects(stop, opaque) where Wire(G::Scalar);}
 component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return x;}}
 )");
   check(prefix + "protocol Run roles(P)()->(r:bool@P){let r @P "
@@ -373,7 +374,7 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
               "roles(P)(x:T@P)->(r:T@P){return(r=x);}run Demo=Run<Secret>;",
           "source.permission");
   auto libraryCapture = must(capture({{"lib", R"(module lib;
-        pub interface Boxed<F:Field>{type State;fn make(x:F)->State;fn open(x:State)->F;}
+        pub interface Boxed<F:Field>{type State;fn make(x:F)->State effects(stop, opaque);fn open(x:State)->F effects(stop, opaque);}
         pub component Box<F:Field>:Boxed<F>{type State=F;fn make(x:F)->State{return State(x);}fn open(x:State)->F{return unpack(x);}}
       )",
                                        "lib.zkc"},
@@ -413,13 +414,18 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
   refuses(prefix + "type Nonempty<N:nat> where 1<=N=[Fr;N];fn "
                    "bad<N:nat>(x:Nonempty<N>)->() where () {return ();}",
           "source.bound");
-  refuses(prefix + "interface I<N:nat>{fn f()->bool;}component "
-                   "C<N:nat>:I<N>{fn f()->bool where 1<=N{return true;}}",
-          "source.bound");
-  refuses(prefix + "interface I<T:Type>{fn f(x:T)->T;}component "
-                   "C<T:Type>:I<T>{fn f(x:T)->T where Copy(T){return x;}}",
-          "source.conformance");
-  check(prefix + "interface I<N:nat>{fn f()->bool where 1<=N;}component "
+  refuses(
+      prefix +
+          "interface I<N:nat>{fn f()->bool effects(stop, opaque);}component "
+          "C<N:nat>:I<N>{fn f()->bool where 1<=N{return true;}}",
+      "source.bound");
+  refuses(
+      prefix +
+          "interface I<T:Type>{fn f(x:T)->T effects(stop, opaque);}component "
+          "C<T:Type>:I<T>{fn f(x:T)->T where Copy(T){return x;}}",
+      "source.conformance");
+  check(prefix + "interface I<N:nat>{fn f()->bool effects(stop, opaque) where "
+                 "1<=N;}component "
                  "C<N:nat>:I<N>{fn f()->bool where 1<=N{return true;}}");
   check(prefix + "struct Token:Copy {}fn forward(t:Token)->Token{let "
                  "second=t;return second;}");
@@ -458,7 +464,7 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
                    "=make();let y=send P->V(x);return();}",
           "source.permission");
   auto nestedAssociated = original(prefix + R"(
-interface I{type Out;fn make()->Out;fn finish(x:Out)->();}
+interface I{type Out;fn make()->Out effects(stop, opaque);fn finish(x:Out)->() effects(stop, opaque);}
 component C:I{type Out=();fn make()->Out{return Out(());}fn finish(x:Out)->(){consume x;return ();}}
 struct Holder<A:I>{pub item:A::Out}
 fn forward<A:I>()->(){let h=Holder<A>{item:A::make()};return A::finish(h.item);}
@@ -727,7 +733,7 @@ fn finish(h:Holder<1>)->(){let t=h.token;consume t;return ();}
 protocol Run roles(P)()->(){let h @P =wrap();let done @P =finish(h);return();}run Demo=Run;)");
   must(compileEntry(nominal));
   auto resource = original(prefix + R"(
-interface I{type State;fn make()->State;fn done(x:State)->();}
+interface I{type State;fn make()->State effects(stop, opaque);fn done(x:State)->() effects(stop, opaque);}
 component C:I{type State=();fn make()->State{return State(());}fn done(x:State)->(){consume x;return ();}}
 fn forward<T:I>()->(){let x=T::make();return T::done(x);}
 protocol Run roles(P)()->(){let r @P =forward<C>();return();}run Demo=Run;)");
@@ -790,7 +796,7 @@ void bounds() {
     inherited += (i ? "," : "") + std::string("N") + std::to_string(i) + ":nat";
   inherited += ">{";
   for (unsigned i = 0; i < 400; ++i)
-    inherited += "fn f" + std::to_string(i) + "()->();";
+    inherited += "fn f" + std::to_string(i) + "()->() effects(stop, opaque);";
   inherited += "}";
   Limits inheritedLimits;
   inheritedLimits.work = 50000;
@@ -917,7 +923,7 @@ void staticDomains() {
   refuses(domains + "type Bad=builtin(\"vector\",Kzg);" + unit,
           "source.builtin");
   must(compileEntry(original(domains + R"(
-    interface Generic<C:Commitment>{fn get(x:C::ValueField)->C::ValueField;}
+    interface Generic<C:Commitment>{fn get(x:C::ValueField)->C::ValueField effects(stop, opaque);}
     component Selected<D:Commitment>:Generic<D>{
       fn get(x:D::ValueField)->D::ValueField{return x;}
     }
@@ -927,7 +933,7 @@ void staticDomains() {
       return T::get(x);
     }
     interface View{type Domain:Commitment;
-      fn identity(x:Domain::ValueField)->Domain::ValueField;}
+      fn identity(x:Domain::ValueField)->Domain::ValueField effects(stop, opaque);}
     component NamedView:View{type Domain:Commitment=Kzg;
       fn identity(x:Domain::ValueField)->Domain::ValueField{return x;}}
     protocol Run<C:Commitment> roles(P)(x:Box<C>@P,
@@ -1041,7 +1047,7 @@ void nativeData() {
                            "Fr>(\"vector.sum\",v));}"})
     refuses(library + body + unit, "source.mode");
   refuses(library +
-              "fn bad(v:Vector<Fr>)->Fr ! {} {return "
+              "fn bad(v:Vector<Fr>)->Fr effects() {return "
               "kernel<Fr>(\"vector.sum\",v);}" +
               unit,
           "source.effect");

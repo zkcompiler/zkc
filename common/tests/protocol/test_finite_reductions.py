@@ -28,10 +28,10 @@ OPTIONS = [[], ['--fuse-vector-reductions'],
            ['--fuse-vector-reductions', '--release-storage']]
 
 FINITE = '''
-domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
-fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn sum<I:Type+Copy+Drop,E:Field>(rows:scoped domain<I>,term:scoped fn(I)->E !{stop} on(rows))->E !{stop}{return fold(rows,0,fun state item=>state+term(item));}
-fn product<I:Type+Copy+Drop,E:Field>(rows:scoped domain<I>,term:scoped fn(I)->E !{stop} on(rows))->E !{stop}{return fold(rows,1,fun state item=>state*term(item));}
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)>=domain("zip");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item, rows))->S effects(stop)=finite("local.fold");
+fn sum<I:Type+Copy+Drop,E:Field>(rows:domain<I>,term:fn(item:I)->E effects(stop) where item_from(item, rows))->E effects(stop){return fold(rows,0,fn(state, item)=>state+term(item));}
+fn product<I:Type+Copy+Drop,E:Field>(rows:domain<I>,term:fn(item:I)->E effects(stop) where item_from(item, rows))->E effects(stop){return fold(rows,1,fn(state, item)=>state*term(item));}
 reduction ∑=sum;
 reduction ∏=product;
 '''
@@ -45,7 +45,7 @@ fn vector_product<E:Field>(v:Vector<E>)->E=primitive("vector.product");
 fn work<E: Field>(a: Vector<E>, b: Vector<E>, ignored: Vector<E>, α: E)
     -> (E,E,E,E,E,E) {
   let zipped = ∑ ((x,y),_) in zip(zip(a,b),ignored), x*y;
-  let named = sum(zip(zip(a,b),ignored),fun ((x,y),_)=>x*y);
+  let named = sum(zip(zip(a,b),ignored),fn(((x,y),_))=>x*y);
   let products = ∏ ((x,y),_) in zip(zip(a,b),ignored), x*y;
   let native = vector_product(a);
   let shifted = ∑ x in a, (α*x+α);
@@ -129,7 +129,7 @@ fn fill(x:F,n:index)->Vector<F>=primitive("vector.fill");
 fn work(n:index)->(F,index){
   let mut state:index=0;
   let result=sum(zip(
-      {state=state+1; fill(2,n)}, {state=state*10+3; fill(5,n)}),fun (x,y)=>x*y);
+      {state=state+1; fill(2,n)}, {state=state*10+3; fill(5,n)}),fn((x,y))=>x*y);
   return(result,state);
 }
 protocol Run roles(P)(n:index@P)->(result:(F,index)@P){return work(n);}
@@ -148,9 +148,9 @@ type Vector<E:Field>=builtin("vector",E);
 fn length(v:Vector<F>)->index=primitive("vector.length");
 fn sum(v:Vector<F>)->F=primitive("vector.sum");
 fn nonempty(v:Vector<F>)->F{require !(length(v)==0);return sum(v);}
-domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
-fn collect<I:Type+Copy+Drop,E:Field>(rows:scoped domain<I>,term:scoped fn(I)->E !{stop} on(rows))->Vector<E> !{stop}=finite("local.collect.vector");
-fn work(a:Vector<F>,b:Vector<F>)->F{let terms=collect(zip(a,b),fun (x,y)=>x*y);return nonempty(terms);}
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)>=domain("zip");
+fn collect<I:Type+Copy+Drop,E:Field>(rows:domain<I>,term:fn(item:I)->E effects(stop) where item_from(item, rows))->Vector<E> effects(stop)=finite("local.collect.vector");
+fn work(a:Vector<F>,b:Vector<F>)->F{let terms=collect(zip(a,b),fn((x,y))=>x*y);return nonempty(terms);}
 protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P)->(result:F@P){return work(a,b);}
 run Demo=Run;
 '''

@@ -153,7 +153,8 @@ bool Checker::collect() {
     decl.abstract = source.abstract;
     decl.completes = source.completes;
     decl.permissions = source.permissions;
-    decl.effectAllowance = source.effects;
+    if (source.effects)
+      decl.effectAllowance = EffectSummary{*source.effects};
     decl.inputOrder = source.inputOrder;
     decl.associatedSort = source.associatedSort;
     decl.anonymous = source.anonymous;
