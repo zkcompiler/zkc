@@ -177,13 +177,18 @@ jobs:
       - name: Check the public source tree
         run: bash .github/scripts/public-tree-guard.sh
       - uses: ./.github/actions/nix
+        if: inputs.scope != 'main' && inputs.scope != 'cache'
         with:
-          require-cache: ${{ github.event_name == 'workflow_dispatch' && inputs.scope == 'cache' }}
-          cache-scope: ${{ inputs.scope == 'cache' && 'main' || 'native-dependencies' }}
-          cache-key-target: ${{ inputs.scope == 'cache' && '' || '.#ci-native-dependencies' }}
-          dependencies-only: ${{ inputs.scope != 'cache' }}
+          cache-scope: native-dependencies
+          cache-key-target: .#ci-native-dependencies
+          dependencies-only: "true"
+      - uses: ./.github/actions/nix
+        if: inputs.scope == 'main' || inputs.scope == 'cache'
+        with:
+          cache-scope: main
+          require-cache: ${{ inputs.scope == 'cache' }}
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: inputs.scope != 'cache'
+        if: inputs.scope != 'main' && inputs.scope != 'cache'
         id: compilation-cache
         with:
           path: build/compilation-cache
@@ -196,7 +201,7 @@ jobs:
       - name: Record selected tools and lock
         run: |
           mkdir -p build/reports/environment
-          nix develop --profile build/nix-dev --command python3 scripts/doctor.py --json \
+          nix develop --command python3 scripts/doctor.py --json \
             | tee build/reports/environment/tools.json
           cp flake.lock build/reports/environment/
           nix config show sandbox > build/reports/environment/sandbox.txt
@@ -208,7 +213,7 @@ jobs:
           nix flake check --no-build
           python3 .github/scripts/check-nix-inputs.py
           cache_options=()
-          if [ "$VALIDATION_SCOPE" != cache ]; then
+          if [ "$VALIDATION_SCOPE" != cache ] && [ "$VALIDATION_SCOPE" != main ]; then
             cache_options+=(--compiler-cache build/compilation-cache)
           fi
           python3 .github/scripts/build-nix.py --all-checks "${cache_options[@]}" 2>&1 | tee build/reports/nix-check.log

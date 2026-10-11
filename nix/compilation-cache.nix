@@ -45,6 +45,7 @@ in
         # Normalize only the ephemeral unpack directory so they can share
         # identical object files; the source contents remain Nix inputs.
         postUnpack = (old.postUnpack or "") + ''
+          chmod u+w "$(dirname "$sourceRoot")"
           mv "$sourceRoot" source
           sourceRoot=source
         '';
