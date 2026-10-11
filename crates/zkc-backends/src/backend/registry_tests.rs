@@ -606,7 +606,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         ),
         Type::Sequence,
         I::None,
-        256 + sequence_type.descriptor_bytes() + 512 + 512,
+        256 + sequence_type.descriptor_bytes() + 256 + 512 + 512,
     );
     check(
         Value::pack_variant(descriptor, 0, vec![fixed]).unwrap(),

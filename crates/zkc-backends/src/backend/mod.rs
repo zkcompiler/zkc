@@ -324,7 +324,22 @@ impl Backend for NativeBackend {
     fn validate_value(&self, v: &Value) -> Result<()> {
         self.core.validate(v)
     }
+    fn validate_value_retained(
+        &self,
+        v: &Value,
+        retained: zkc_runtime::interactive::Retained<'_>,
+    ) -> Result<()> {
+        self.core.validate_retained(v, retained)
+    }
     fn enter_frame(&mut self, f: &Frame, args: &[Value]) -> Result<()> {
+        self.enter_frame_retained(f, args, zkc_runtime::interactive::Retained::NONE)
+    }
+    fn enter_frame_retained(
+        &mut self,
+        f: &Frame,
+        args: &[Value],
+        retained: zkc_runtime::interactive::Retained<'_>,
+    ) -> Result<()> {
         let entry = matches!(f.kind(), zkc_runtime::interactive::FrameKind::Entry);
         if entry {
             match &mut self.services {
@@ -333,7 +348,7 @@ impl Backend for NativeBackend {
                 None => return Err(crate::refused("service-bindings")),
             }
         }
-        if let Err(error) = self.core.enter(f, args) {
+        if let Err(error) = self.core.enter(f, args, retained) {
             // No data frame exists on failed Core::enter. Release the tentative
             // service lease without cancelling or retiring caller-owned inputs.
             if entry && let Some(services) = &mut self.services {
@@ -344,8 +359,19 @@ impl Backend for NativeBackend {
         Ok(())
     }
     fn leave_frame(&mut self, f: &Frame, exit: FrameExit, outputs: &[Value]) -> Result<()> {
+        self.leave_frame_retained(f, exit, outputs, zkc_runtime::interactive::Retained::NONE)
+    }
+    fn leave_frame_retained(
+        &mut self,
+        f: &Frame,
+        exit: FrameExit,
+        outputs: &[Value],
+        retained: zkc_runtime::interactive::Retained<'_>,
+    ) -> Result<()> {
         // Always perform resource cleanup even if a non-resource output is invalid.
-        let validation = outputs.iter().try_for_each(|v| self.validate_value(v));
+        let validation = outputs
+            .iter()
+            .try_for_each(|v| self.validate_value_retained(v, retained));
         let cleanup = self.core.resources.leave(f, exit, outputs);
         if self.core.resources.frame_count() == 0
             && let Some(services) = &mut self.services
@@ -370,7 +396,7 @@ impl Backend for NativeBackend {
             .iter()
             .any(|(_, contract)| *contract == i.binding.declaration().contract)
         {
-            self.sequence_work.charge(args)?;
+            self.sequence_work.charge(args, i.retained)?;
         }
         self.core.invoke(i, args, &signature)?;
         let outputs = (implementation.handler)(self, i, args)?;

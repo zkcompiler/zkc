@@ -184,7 +184,10 @@ fn unit_count(values: &[Value]) -> usize {
         .map(|value| match value {
             Value::ResourceUnit(_) => 1,
             Value::Variant(v) => unit_count(v.payload()),
-            Value::Sequence(v) => unit_count(v.elements()),
+            Value::Sequence(v) => v
+                .iter()
+                .map(|child| unit_count(std::slice::from_ref(child)))
+                .sum(),
             _ => 0,
         })
         .sum()
@@ -210,7 +213,11 @@ pub(super) fn check_units(
                 }
             }
             Value::Variant(v) => check_units(backend, v.payload(), seen)?,
-            Value::Sequence(v) => check_units(backend, v.elements(), seen)?,
+            Value::Sequence(v) => {
+                for child in v.iter() {
+                    check_units(backend, std::slice::from_ref(child), seen)?;
+                }
+            }
             _ => {}
         }
     }

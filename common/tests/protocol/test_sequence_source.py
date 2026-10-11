@@ -61,3 +61,41 @@ protocol Run roles(P)(xs:Sequence<Sequence<Entry<F>>>@P,i:index@P)
     replay_dir.mkdir()
     replay = Entry(toolchain, journal, replay_dir, replay_source, [*MODULES, *flags])
     assert replay.run('codec', {'xs': result['xs'], 'i': '0'}) == result
+
+
+@pytest.mark.parametrize('record,count', [(False, 16384), (True, 8192)])
+def test_source_sequence_collection_default_capacity(toolchain, journal, directory, record, count):
+    element = 'Pair' if record else 'index'
+    item = 'Pair{first:i,second:i}' if record else 'i'
+    source = f'''module sample;
+use zkc::sequence::{{Sequence,empty,append,length,get}};
+struct Pair{{pub first:index,pub second:index}}
+fn collect(n:index)->Sequence<{element}>{{
+  let mut xs=empty<{element}>();
+  for i in 0..n {{xs=append(xs,{item});}}
+  return xs;
+}}
+'''
+    if record:
+        # Native execution validates every record. Export only observations here:
+        # the codec's independent peak-allocation ceiling also budgets a copy.
+        source += '''
+fn observe(n:index,last:index)->(index,Pair,Pair){
+  let xs=collect(n);return(length(xs),get(xs,0),get(xs,last));
+}
+protocol Run roles(P)(n:index@P,last:index@P)->(r:(index,Pair,Pair)@P){return observe(n,last);}
+run Demo=Run;
+'''
+    else:
+        source += f'''
+protocol Run roles(P)(n:index@P)->(xs:Sequence<{element}>@P){{return collect(n);}}
+run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, MODULES)
+    if record:
+        result = entry.run('collect', {'n': str(count), 'last': str(count - 1)})['r']
+        assert result == [str(count), {'first': '0', 'second': '0'},
+                          {'first': str(count - 1), 'second': str(count - 1)}]
+        return
+    result = entry.run('collect', {'n': str(count)})['xs']
+    assert result == [str(i) for i in range(count)]

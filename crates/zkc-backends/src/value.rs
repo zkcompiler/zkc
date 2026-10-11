@@ -216,10 +216,7 @@ impl Value {
         visit: &mut impl FnMut(&Self) -> std::result::Result<(), E>,
     ) -> std::result::Result<(), E> {
         match self {
-            Self::Sequence(value) => value
-                .elements()
-                .iter()
-                .try_for_each(|v| v.visit_active_leaves(visit)),
+            Self::Sequence(value) => value.iter().try_for_each(|v| v.visit_active_leaves(visit)),
             Self::Variant(value) => value
                 .payload()
                 .iter()

@@ -14,7 +14,7 @@ pub(crate) fn check_input(value: &Value, key: &zkc_arkworks::VerifierKey) -> Res
         Value::ProverKey(v) => Some(v.metadata()),
         Value::VerifierKey(v) => Some(v.metadata()),
         Value::Sequence(v) => {
-            for child in v.elements() {
+            for child in v.iter() {
                 check_input(child, key)?;
             }
             None

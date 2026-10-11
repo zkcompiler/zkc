@@ -159,6 +159,9 @@ impl Backend for StorageBackend {
     ) -> Result<(), BackendError> {
         self.trace
             .push(format!("leave:{:?}:{exit:?}:{}", frame.kind(), args.len()));
+        if self.failure == Some("leave") && !args.is_empty() {
+            return Err(BackendError::new("chosen-leave-failure"));
+        }
         Ok(())
     }
     fn apply(
@@ -976,6 +979,115 @@ fn validation_is_reused_only_for_bound_aliases_with_reported_identity() {
             WorkBudget::default(),
         );
         assert_eq!(owned.validations.get(), 1 + 4 * n as usize);
+    }
+}
+
+fn carried_local() -> Json {
+    one(
+        json!([[
+            "function",
+            "work",
+            [
+                ["lo", "index@native.index/0"],
+                ["hi", "index@native.index/0"]
+            ],
+            ["field"],
+            [
+                ["op", "first", "field.constant", ["7"], [], ["initial"]],
+                [
+                    "for",
+                    "carry",
+                    "i",
+                    "lo",
+                    "hi",
+                    [["state", "initial"]],
+                    [],
+                    [
+                        ["op", "alias", "field.add", [], ["state", "state"], ["read"]],
+                        ["op", "later", "field.constant", ["7"], [], ["next"]],
+                        ["yield", ["next"]]
+                    ],
+                    ["result"]
+                ],
+                ["return", ["result"]]
+            ]
+        ]]),
+        json!([
+            ["lo", "index@native.index/0"],
+            ["hi", "index@native.index/0"]
+        ]),
+        json!([]),
+        json!([
+            ["local", "work", "work", ["lo", "hi"], ["result"]],
+            ["return", []]
+        ]),
+    )
+}
+
+#[test]
+fn local_carried_backing_keeps_validation_across_region_handoffs() {
+    const C: usize = 64;
+    for n in [0, 1, 16, 128] {
+        let (result, usage, backend) = drive(
+            &carried_local(),
+            StorageBackend::shared(C, C),
+            vec![
+                Stored::from_control_index(0).unwrap(),
+                Stored::from_control_index(n).unwrap(),
+            ],
+            values(3 * C, (n as usize + 1) * C),
+            WorkBudget::default(),
+        );
+        assert_eq!(result, "returned", "n={n} {usage:?}");
+        assert_eq!(backend.validations.get(), n as usize + 1);
+        assert_eq!(backend.allocations, n as usize + 1);
+        assert_eq!(usage.total_value_bytes, (n as usize + 1) * C);
+        assert_eq!((usage.live_values, usage.live_value_bytes), (0, 0));
+        assert!(backend.all_freed());
+    }
+}
+
+#[test]
+fn local_handoff_references_are_released_on_every_failure() {
+    for failure in [Some("alias"), Some("later"), Some("leave"), None] {
+        for (live, total, instructions, iterations) in [
+            (192, 256, 1000, 1000),
+            (191, 256, 1000, 1000),
+            (192, 255, 1000, 1000),
+            (192, 256, 9, 1000),
+            (192, 256, 1000, 1),
+        ] {
+            let backend = StorageBackend {
+                failure,
+                ..StorageBackend::shared(64, 64)
+            };
+            let (result, usage, backend) = drive(
+                &carried_local(),
+                backend,
+                vec![
+                    Stored::from_control_index(0).unwrap(),
+                    Stored::from_control_index(3).unwrap(),
+                ],
+                values(live, total),
+                WorkBudget {
+                    instructions,
+                    iterations,
+                    ..WorkBudget::default()
+                },
+            );
+            let succeeds = failure.is_none()
+                && live == 192
+                && total == 256
+                && instructions == 1000
+                && iterations == 1000;
+            assert_eq!(result == "returned", succeeds, "{result} {usage:?}");
+            assert_eq!(
+                (usage.live_values, usage.live_value_bytes),
+                (0, 0),
+                "{result}"
+            );
+            assert!(backend.all_freed(), "{result}");
+        }
     }
 }
 

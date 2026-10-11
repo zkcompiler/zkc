@@ -350,7 +350,8 @@ impl<B: Backend> Runner<B> {
         // An alias of a bound, capability-free immutable value of this type has
         // already passed backend validation; its contents cannot have changed.
         if !self.ledger.validated(value, &ty) {
-            self.backend.validate_value(value)?;
+            self.backend
+                .validate_value_retained(value, self.ledger.view())?;
         }
         if wire {
             if !ty.is_message_type() {
@@ -491,7 +492,10 @@ impl<B: Backend> Runner<B> {
         // hidden payload store. The parent cannot advance while this frame lives.
         // Borrowed captures share the parent's allocations and add no storage.
         self.retain(&values, retention)?;
-        if let Err(e) = self.backend.enter_frame(&frame, &values) {
+        if let Err(e) = self
+            .backend
+            .enter_frame_retained(&frame, &values, self.ledger.view())
+        {
             self.release(values.iter());
             return Err(e.into());
         }
@@ -1196,10 +1200,26 @@ impl<B: Backend> Runner<B> {
             return Ok(());
         }
         let values = result.expect("successful local result");
-        self.bind(outputs, values, Retention::Transfer)?;
+        self.accept_local_return(values, |runner, values| {
+            runner.bind(outputs, values.to_vec(), Retention::Transfer)
+        })?;
         self.stack.last_mut().expect("local parent").pc += 1;
         self.pending = None;
         Ok(())
+    }
+    /// Returned shared backing stays accounted for until its caller installs
+    /// the result. The handoff itself adds no binding or inline-storage charge.
+    fn unpin_local_return(&mut self, values: &[B::Value]) {
+        self.usage.live_value_bytes -= self.ledger.unpin(values);
+    }
+    fn accept_local_return<T>(
+        &mut self,
+        values: Vec<B::Value>,
+        accept: impl FnOnce(&mut Self, &[B::Value]) -> Result<T>,
+    ) -> Result<T> {
+        let result = accept(self, &values);
+        self.unpin_local_return(&values);
+        result
     }
     /// Execute one accepted local frame, preserving the original failure and
     /// recording cleanup failures in actual inner-to-outer leave order.
@@ -1215,16 +1235,22 @@ impl<B: Backend> Runner<B> {
             return Err(RuntimeError::Limit);
         }
         self.can_retain(&args, Retention::Transfer)?;
-        self.backend.enter_frame(frame, &args)?;
+        self.backend
+            .enter_frame_retained(frame, &args, self.ledger.view())?;
         let result = self.run_local_body(frame, logical_origin, body, args, depth);
         let (exit, returned) = match &result {
             Ok(values) => (FrameExit::Returned, values.as_slice()),
             Err(_) => (FrameExit::Stopped, &[][..]),
         };
-        let leave = self.backend.leave_frame(frame, exit, returned);
+        let leave = self
+            .backend
+            .leave_frame_retained(frame, exit, returned, self.ledger.view());
         match result {
             Ok(values) => {
-                leave?;
+                if let Err(error) = leave {
+                    self.unpin_local_return(&values);
+                    return Err(error.into());
+                }
                 Ok(values)
             }
             Err(error) => {
@@ -1344,7 +1370,8 @@ impl<B: Backend> Runner<B> {
                         outputs,
                     } => {
                         let value = &env[input];
-                        self.backend.validate_value(value)?;
+                        self.backend
+                            .validate_value_retained(value, self.ledger.view())?;
                         let (descriptor, alternative, mut args) = value.unpack_variant()?;
                         if value.physical_type().logical().variant_descriptor() != Some(&descriptor)
                         {
@@ -1391,10 +1418,13 @@ impl<B: Backend> Runner<B> {
                             },
                             depth,
                         )?;
-                        Self::matches_outputs(outputs, &values)?;
-                        self.retain(&values, Retention::Transfer)?;
-                        local_count += values.len();
-                        env.extend(outputs.iter().cloned().zip(values));
+                        self.accept_local_return(values, |runner, values| {
+                            Self::matches_outputs(outputs, values)?;
+                            runner.retain(values, Retention::Transfer)?;
+                            local_count += values.len();
+                            env.extend(outputs.iter().cloned().zip(values.iter().cloned()));
+                            Ok(())
+                        })?;
                     }
                     LocalInstruction::Op {
                         site,
@@ -1416,6 +1446,7 @@ impl<B: Backend> Runner<B> {
                             logical_origin,
                             attributes,
                             max_output_bytes: 0,
+                            retained: super::Retained::NONE,
                         };
                         // Shared operands are read at every use; aliasing never
                         // makes repeated computation free.
@@ -1427,6 +1458,7 @@ impl<B: Backend> Runner<B> {
                             .map_or(full, |declared| declared.min(full));
                         self.charge_logical(read)?;
                         invocation.max_output_bytes = self.output_allowance();
+                        invocation.retained = self.ledger.view();
                         let values = self.backend.apply(&invocation, &arguments)?;
                         if values.len() != signature.outputs.len() {
                             return Err(RuntimeError::Backend(BackendError::new(
@@ -1469,10 +1501,13 @@ impl<B: Backend> Runner<B> {
                             },
                             depth,
                         )?;
-                        Self::matches_outputs(outputs, &values)?;
-                        self.retain(&values, Retention::Transfer)?;
-                        local_count += values.len();
-                        env.extend(outputs.iter().cloned().zip(values));
+                        self.accept_local_return(values, |runner, values| {
+                            Self::matches_outputs(outputs, values)?;
+                            runner.retain(values, Retention::Transfer)?;
+                            local_count += values.len();
+                            env.extend(outputs.iter().cloned().zip(values.iter().cloned()));
+                            Ok(())
+                        })?;
                     }
                     LocalInstruction::For {
                         conditional,
@@ -1497,50 +1532,68 @@ impl<B: Backend> Runner<B> {
                             .iter()
                             .map(|(_, n)| env[n].clone())
                             .collect::<Vec<_>>();
-                        for index in lower..upper {
-                            if let Err(error) = self.iteration() {
-                                let mut origin = frame.origin.clone();
-                                origin.path.push(PathElement::For {
-                                    site: site.clone(),
-                                    index,
-                                });
-                                self.local_failure = Some((site.clone(), origin));
-                                return Err(error);
+                        let mut pinned = false;
+                        let result = (|| {
+                            for index in lower..upper {
+                                if let Err(error) = self.iteration() {
+                                    let mut origin = frame.origin.clone();
+                                    origin.path.push(PathElement::For {
+                                        site: site.clone(),
+                                        index,
+                                    });
+                                    self.local_failure = Some((site.clone(), origin));
+                                    return Err(error);
+                                }
+                                let mut args = vec![self.index_value(index)?];
+                                args.extend(values.iter().cloned());
+                                args.extend(captures.iter().map(|n| env[n].clone()));
+                                let names = std::iter::once(induction.clone())
+                                    .chain(carried.iter().map(|(n, _)| n.clone()))
+                                    .chain(captures.iter().cloned());
+                                let ports = names
+                                    .zip(&args)
+                                    .map(|(n, v)| (n, v.physical_type()))
+                                    .collect();
+                                let returned = self.run_local_region(
+                                    frame,
+                                    logical_origin,
+                                    body,
+                                    ports,
+                                    args,
+                                    PathElement::For {
+                                        site: site.clone(),
+                                        index,
+                                    },
+                                    depth,
+                                )?;
+                                if pinned {
+                                    self.unpin_local_return(&values);
+                                }
+                                values = returned;
+                                pinned = true;
+                                if *conditional {
+                                    let condition = values.remove(0);
+                                    let continue_loop = condition.control_bool();
+                                    self.unpin_local_return(std::slice::from_ref(&condition));
+                                    if !continue_loop? {
+                                        break;
+                                    }
+                                }
                             }
-                            let mut args = vec![self.index_value(index)?];
-                            args.extend(values);
-                            args.extend(captures.iter().map(|n| env[n].clone()));
-                            let names = std::iter::once(induction.clone())
-                                .chain(carried.iter().map(|(n, _)| n.clone()))
-                                .chain(captures.iter().cloned());
-                            let ports = names
-                                .zip(&args)
-                                .map(|(n, v)| (n, v.physical_type()))
-                                .collect();
-                            values = self.run_local_region(
-                                frame,
-                                logical_origin,
-                                body,
-                                ports,
-                                args,
-                                PathElement::For {
-                                    site: site.clone(),
-                                    index,
-                                },
-                                depth,
-                            )?;
-                            if *conditional && !values.remove(0).control_bool()? {
-                                break;
-                            }
+                            Self::matches_outputs(outputs, &values)?;
+                            self.retain(&values, Retention::Transfer)?;
+                            local_count += values.len();
+                            env.extend(outputs.iter().cloned().zip(values.iter().cloned()));
+                            Ok::<(), RuntimeError>(())
+                        })();
+                        if pinned {
+                            self.unpin_local_return(&values);
                         }
-                        Self::matches_outputs(outputs, &values)?;
-                        self.retain(&values, Retention::Transfer)?;
-                        local_count += values.len();
-                        env.extend(outputs.iter().cloned().zip(values));
+                        result?;
                     }
                     LocalInstruction::Release(_) => unreachable!("handled without a tick"),
                     LocalInstruction::Return(names) | LocalInstruction::Yield(names) => {
-                        return Ok(names.iter().map(|n| env[n].clone()).collect());
+                        return Ok(names.iter().map(|n| env[n].clone()).collect::<Vec<_>>());
                     }
                 }
             }
@@ -1556,6 +1609,12 @@ impl<B: Backend> Runner<B> {
                 _ => String::new(),
             });
             self.local_failure = Some((site, frame.origin.clone()));
+        }
+        if let Ok(values) = &result {
+            // Each value is already held by this region and validated by this
+            // backend. Keep its shared subtree live while dropping the region's
+            // bindings; the caller releases this reference on every exit path.
+            self.ledger.retain(values);
         }
         // Ghost charges survive physical release, including on every early error.
         let released = self.ledger.release(env.values());
