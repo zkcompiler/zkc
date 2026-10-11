@@ -61,7 +61,10 @@ mlir::LogicalResult verify(mlir::Operation *op);
 mlir::LogicalResult verifyLocal(mlir::Operation *op);
 mlir::LogicalResult verifyReferences(mlir::Operation *op,
                                      mlir::SymbolTableCollection &symbols);
-// Region-level closure checks after local and symbol-user verification.
+// Region-level closure checks after every body has passed local and symbol-user
+// verification. Owns bounded-access evidence even in units without finite
+// computations; isolated access verification checks only structure. Recheck
+// the closure after changing any inspected helper body.
 mlir::LogicalResult verifyClosure(mlir::Operation *unit);
 mlir::LogicalResult verifyPreconditions(mlir::Operation *helper);
 mlir::LogicalResult verifyCallPreconditions(mlir::Operation *call);

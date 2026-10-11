@@ -157,16 +157,8 @@ LogicalResult BoundedAtOp::verify() {
     return diagnostics::emit(
         emitOpError(), "finite-bound",
         "lookup requires exact container/index provenance");
-  uint64_t remaining = 65536;
-  auto status = finite::boundStatus(getIndex(), getInput(), 0, remaining);
-  if (status != facts::Status::Proven)
-    return diagnostics::emit(
-        emitOpError(),
-        status == facts::Status::Capacity ? "finite-analysis-limit"
-                                          : "finite-bound",
-        status == facts::Status::Capacity
-            ? "finite evidence work limit"
-            : "lookup requires exact container/index provenance");
+  // Bound evidence may inspect sibling helpers; the enclosing symbol closure
+  // verifies it after all operation structure has been checked.
   return success();
 }
 LogicalResult BoundedMatrixAtOp::verify() {
@@ -175,19 +167,7 @@ LogicalResult BoundedMatrixAtOp::verify() {
     return diagnostics::emit(
         emitOpError(), "finite-bound",
         "matrix lookup requires both exact coordinate bounds");
-  uint64_t remaining = 65536;
-  for (auto [axis, index] :
-       llvm::enumerate(ValueRange{getRow(), getColumn()})) {
-    auto status = finite::boundStatus(index, getInput(), axis, remaining);
-    if (status != facts::Status::Proven)
-      return diagnostics::emit(
-          emitOpError(),
-          status == facts::Status::Capacity ? "finite-analysis-limit"
-                                            : "finite-bound",
-          status == facts::Status::Capacity
-              ? "finite evidence work limit"
-              : "matrix lookup requires both exact coordinate bounds");
-  }
+  // The enclosing symbol closure establishes both coordinate bounds.
   return success();
 }
 } // namespace zkc::data

@@ -130,7 +130,8 @@ public:
       else
         emit(shapeGuard, emit("index.equal", {rows, length}, boolean), Type());
     }
-    if (!selectLaneFormula(formula, rowwise))
+    const auto &recipes = mathematicalRecipes();
+    if (!selectLaneFormula(formula, rowwise, recipes))
       return diagnostics::emit(map.emitOpError(),
                                "mathematical-lane-unsupported",
                                "required map has no supported lane formula");
@@ -141,7 +142,7 @@ public:
     // the stage's operation/slot budgets. The optional finite-selection budget
     // must not introduce a stricter second admission limit here.
     auto result =
-        realizeLanes(formula, values, vector, rows, nullptr,
+        realizeLanes(formula, values, vector, rows, nullptr, recipes,
                      [&](StringRef contract, ValueRange operands, Type output,
                          ArrayRef<std::string> parameters) {
                        return emit(contract, operands, output, parameters);

@@ -142,7 +142,11 @@ occurred on the first item.
 
 `data.bounded_at(container, index)` and
 `data.bounded_matrix_at(matrix, row, column)` require checked provenance; neither
-accepts an `in_bounds` assertion. Private helpers may declare parameter relations:
+accepts an `in_bounds` assertion. Their operation verifiers check local attributes
+and types. The enclosing symbol closure establishes semantic bounds after helper
+structure has been verified, including units without a finite computation.
+Verifying an isolated access is therefore not whole-program admission. Private
+helpers may declare parameter relations:
 
 ```mlir
 data.preconditions = [#data.index_bound<indexArg, containerArg, axis>,

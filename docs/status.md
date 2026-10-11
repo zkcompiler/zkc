@@ -119,6 +119,15 @@ callee-first closure requirements. Native checks independently discharge each
 call and finite callback, including equal-extent captures. Closed source checks
 cover all retained zip/matrix-view formation and exact fixed collection sizes;
 sequence constructor evidence preserves fixed-array lengths across adapters.
+Source fact extraction currently follows aliases, projections, literal indices
+and declared input conditions. It does not yet recover exact forwarding through
+ordinary Math helper results or transfer the extent of an unfiltered collection
+result, although the SSA analysis supports those cases. Finite specialization
+can also lose a total range's known endpoints when it outlines them as helper
+inputs: collecting `range(0, 4)` into a four-element field array may pass
+definition checking and still fail closure with `source.data-bound`. The
+compiler retains the required formation checks; source and SSA fact coverage
+are not yet identical.
 Fixed field-array output follows the installed BLS12-381.Fr contracts; other
 field backends may lack that realization. The [shared libraries](../libraries/README.md#finite-computations)
 now expose ordered and total folds, collection, explicit combiner modules,

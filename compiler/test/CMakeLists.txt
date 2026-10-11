@@ -49,6 +49,12 @@ mlir_target_link_libraries(zkc-mathematical_recipes-test PRIVATE MLIRParser)
 add_zkc_test(realization_emission Transforms realization-emission)
 mlir_target_link_libraries(zkc-realization_emission-test PRIVATE MLIRParser)
 
+add_zkc_test(pass_dependencies Transforms pass-dependencies)
+mlir_target_link_libraries(zkc-pass_dependencies-test PRIVATE MLIRParser MLIRPass)
+
+add_zkc_test(bounded_access_verification Transforms bounded-access-verification)
+mlir_target_link_libraries(zkc-bounded_access_verification-test PRIVATE MLIRParser MLIRPass)
+
 add_zkc_test(mathematical_stages Transforms mathematical-stages)
 target_compile_definitions(zkc-mathematical_stages-test PRIVATE
   ZKC_MATH_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical"

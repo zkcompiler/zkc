@@ -1,4 +1,5 @@
 #include "../lib/Transforms/LaneRealization.h"
+#include "../lib/Transforms/MathematicalRecipes.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
@@ -126,26 +127,27 @@ int main(int argc, char **argv) {
       return Value();
     };
     uint64_t remaining = 0;
-    auto declined = take(mathematical::realizeLanes(helper.getBody().front(),
-                                                    inputs, vector.getType(),
-                                                    {}, &remaining, emit));
+    auto declined = take(mathematical::realizeLanes(
+        helper.getBody().front(), inputs, vector.getType(), {}, &remaining,
+        mathematical::mathematicalRecipes(), emit));
     require(declined.status == mathematical::LaneRealizationStatus::Capacity &&
                 declined.reason == "mathematical-lane-work" && !emitted,
             "optional capacity emitted part of a candidate");
     remaining = 1000;
     auto work = symbols.lookup<local::FuncOp>("work");
     llvm::DenseMap<Value, mathematical::LaneInput> noInputs;
-    auto unsupported = take(
-        mathematical::realizeLanes(work.getBody().front(), noInputs,
-                                   vector.getType(), {}, &remaining, emit));
+    auto unsupported = take(mathematical::realizeLanes(
+        work.getBody().front(), noInputs, vector.getType(), {}, &remaining,
+        mathematical::mathematicalRecipes(), emit));
     require(unsupported.status ==
                     mathematical::LaneRealizationStatus::Unsupported &&
                 unsupported.reason == "mathematical-lane-unsupported" &&
                 !emitted,
             "unsupported formula emitted part of a candidate");
     remaining = 1000;
-    refuses(mathematical::realizeLanes(helper.getBody().front(), inputs,
-                                       vector.getType(), {}, &remaining, emit),
+    refuses(mathematical::realizeLanes(
+                helper.getBody().front(), inputs, vector.getType(), {},
+                &remaining, mathematical::mathematicalRecipes(), emit),
             "mathematical-lane-realization");
     require(emitted == 1, "construction failure did not come from the emitter");
   });

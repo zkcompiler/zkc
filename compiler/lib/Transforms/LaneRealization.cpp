@@ -11,7 +11,8 @@ using namespace llvm;
 namespace zkc::mathematical {
 Expected<LaneRealizationResult>
 realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
-             Type vector, Value length, uint64_t *remaining, LaneEmitter emit) {
+             Type vector, Value length, uint64_t *remaining,
+             const MathematicalRecipes &recipes, LaneEmitter emit) {
   auto unsupported = [] {
     return LaneRealizationResult{LaneRealizationStatus::Unsupported,
                                  {},
@@ -82,7 +83,7 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
     auto *contract = finite::semantics(&op);
     if (!contract ||
         contract->law.algebra != protocol::ComputationAlgebra::FieldRing ||
-        !contract->law.total || !mathematicalRecipes().lane(contract->identity))
+        !contract->law.total || !recipes.lane(contract->identity))
       return unsupported();
     if (contract->identity == MathematicalIdentity::FieldSubtract) {
       nodes.push_back(ring::Node::neg(right));
@@ -193,7 +194,7 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
         return invalid("missing realized operand");
       const auto *contract = finite::semantics(&op);
       const auto *recipe =
-          contract ? mathematicalRecipes().lane(contract->identity) : nullptr;
+          contract ? recipes.lane(contract->identity) : nullptr;
       if (!recipe)
         return invalid("missing selected lane recipe");
       realized.lanes = left.lanes || right.lanes;

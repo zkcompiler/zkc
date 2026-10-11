@@ -1058,6 +1058,11 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
     return "Admit mathematical definitions, expand pure helpers, and simplify "
            "their callers";
   }
+  void getDependentDialects(DialectRegistry &registry) const final {
+    // Finite and mathematical realizations can introduce execution operations
+    // even when the source has no algebra operations or types.
+    registry.insert<local::LocalDialect, algebra::AlgebraDialect>();
+  }
   void runOnOperation() final {
     auto source = getOperation();
     RealizationTrace trace;

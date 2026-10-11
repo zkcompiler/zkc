@@ -27,6 +27,27 @@ LogicalResult requireEvidence(Operation *op, facts::Status status,
     return refuse(op, "finite evidence work limit", "finite-analysis-limit");
   return status == facts::Status::Proven ? success() : refuse(op, reason, code);
 }
+// Called only by the enclosing closure after local and symbol verification.
+LogicalResult verifyBoundedAccess(Operation *op) {
+  uint64_t remaining = 65536;
+  auto check = [&](Value container, ValueRange indices,
+                   StringRef reason) -> LogicalResult {
+    // Both matrix coordinates consume the same allowance.
+    for (auto [axis, index] : llvm::enumerate(indices))
+      if (failed(requireEvidence(
+              op, boundStatus(index, container, axis, remaining), reason)))
+        return failure();
+    return success();
+  };
+  if (auto access = dyn_cast<data::BoundedAtOp>(op))
+    return check(access.getInput(), ValueRange{access.getIndex()},
+                 "lookup requires exact container/index provenance");
+  if (auto access = dyn_cast<data::BoundedMatrixAtOp>(op))
+    return check(access.getInput(),
+                 ValueRange{access.getRow(), access.getColumn()},
+                 "matrix lookup requires both exact coordinate bounds");
+  return success();
+}
 FunctionType signature(Operation *op) {
   auto attr = op ? op->getAttrOfType<TypeAttr>("function_type") : TypeAttr();
   return attr ? dyn_cast<FunctionType>(attr.getValue()) : FunctionType();
@@ -589,13 +610,16 @@ LogicalResult verifyClosure(Operation *unit) {
   unit->walk([&](Operation *op) { hasFinite |= isComputation(op); });
   if (!hasFinite) {
     // Preserve the existing pure/local cycle diagnostics in units without a
-    // finite reference edge. Preconditions still apply to ordinary calls.
+    // finite reference edge. Call premises and bounded accesses still require
+    // evidence from this verified symbol closure.
     auto checked = unit->walk([&](Operation *op) -> WalkResult {
       if (isa<func::FuncOp, local::FuncOp>(op) &&
           failed(verifyPreconditions(op)))
         return WalkResult::interrupt();
       if (isa<func::CallOp, local::ApplyOp>(op) &&
           failed(verifyCallPreconditions(op)))
+        return WalkResult::interrupt();
+      if (failed(verifyBoundedAccess(op)))
         return WalkResult::interrupt();
       return WalkResult::advance();
     });
@@ -622,13 +646,15 @@ LogicalResult verifyClosure(Operation *unit) {
       }
       --work;
       // Symbol-table region verification has already checked each finite ABI.
-      // This traversal owns reference cycles and call premises, not another
-      // independent replay of every finite computation's verification.
+      // This traversal owns reference cycles, call premises and access bounds,
+      // not another replay of every finite computation's verification.
       if (isa<func::FuncOp, local::FuncOp>(op) &&
           failed(verifyPreconditions(op)))
         return WalkResult::interrupt();
       if (isa<func::CallOp, local::ApplyOp>(op) &&
           failed(verifyCallPreconditions(op)))
+        return WalkResult::interrupt();
+      if (failed(verifyBoundedAccess(op)))
         return WalkResult::interrupt();
       for (StringRef edge : {"callee", "helper", "step", "body", "predicate"}) {
         if (!op->hasAttrOfType<FlatSymbolRefAttr>(edge))

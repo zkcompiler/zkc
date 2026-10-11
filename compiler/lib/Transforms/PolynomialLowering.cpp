@@ -435,7 +435,7 @@ struct EliminatePolynomialsPass
   }
   llvm::StringRef getDescription() const final {
     return "Realize polynomial observations as bounded concrete field and "
-           "tensor operations";
+           "nominal array operations";
   }
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<algebra::AlgebraDialect>();

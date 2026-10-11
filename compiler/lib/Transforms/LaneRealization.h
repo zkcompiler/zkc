@@ -10,6 +10,7 @@
 #include <string>
 
 namespace zkc::mathematical {
+struct MathematicalRecipes;
 /// One admitted scalar formula input, represented once or once per lane.
 /// Access/admission analysis supplies these bindings; it does not authorize
 /// movement of ordered computations into the formula.
@@ -34,13 +35,15 @@ struct LaneRealizationResult {
 /// an independent semantic reader must check the actual candidate afterwards.
 /// Unsupported/capacity results emit nothing, so an optional caller can retain
 /// its ordered implementation. Errors indicate a failed construction/check,
-/// never permission to accept or publish a partly emitted candidate. The work
+/// never permission to accept or publish a partly emitted candidate. The
 /// optional work budget belongs to the enclosing selection stage, not each
 /// formula. Required maps already charge their complete expanded helpers.
+/// Use the same immutable recipe inventory as selection; emission does not
+/// consult the global inventory or grant the independent reader new premises.
 llvm::Expected<LaneRealizationResult>
 realizeLanes(mlir::Block &formula,
              const llvm::DenseMap<mlir::Value, LaneInput> &inputs,
              mlir::Type vector, mlir::Value length, uint64_t *remaining,
-             LaneEmitter emit);
+             const MathematicalRecipes &recipes, LaneEmitter emit);
 } // namespace zkc::mathematical
 #endif
