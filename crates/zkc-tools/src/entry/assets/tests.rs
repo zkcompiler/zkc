@@ -516,6 +516,7 @@ fn deployment(field: &str, arenas: &Arenas) -> String {
         "zkc.native-origin/0",
         [],
         [["role00000001", "0", leaf, "zkc.native-data/0"]],
+        [],
         []
     ]);
     json!([

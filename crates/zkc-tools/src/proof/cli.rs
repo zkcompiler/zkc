@@ -51,14 +51,14 @@ pub(crate) fn run(produce: bool, args: &crate::cli::Arguments<'_>) -> Json {
             authority.unwrap_or_default(),
         )?
         .with_capacity(capacity.unwrap_or_default())?;
-        report["binding_scope"] = json!(if deployment.entry().transcript().is_some() {
+        report["binding_scope"] = json!(if deployment.entry().binds_invocation() {
             "transcript"
         } else if deployment.format == super::ProofFormat::Native {
             "header"
         } else {
             "authored"
         });
-        if deployment.entry().transcript().is_none() && !allow_authored {
+        if !deployment.entry().binds_invocation() && !allow_authored {
             return Err("native-proof-binding-policy".into());
         }
         report["capacity"] = deployment.capacity().record();

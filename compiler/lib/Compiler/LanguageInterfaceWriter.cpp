@@ -15,10 +15,6 @@ std::string digest(StringRef bytes) {
 Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
                      StringRef original, StringRef toolchain,
                      const Limits &limits) {
-  if (const auto *proof = entry.entry().proof();
-      proof && proof->construction == ProofEntry::Construction::Derived)
-    return error("source.construction",
-                 "derived construction deployment is not available");
   Layouts layouts(entry, limits);
   struct Ports {
     std::vector<std::shared_ptr<const Layout>> inputs, outputs;
@@ -259,14 +255,25 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
         out.value(nullptr);
       out.attributeEnd();
       out.attributeObject("construction", [&] {
-        bool derived =
+        bool native =
             proof->construction == ProofEntry::Construction::FiatShamir;
-        out.attribute("kind", derived ? "fiat_shamir" : "authored");
+        bool selected =
+            proof->construction == ProofEntry::Construction::Derived;
+        out.attribute("kind", selected ? "derived"
+                              : native ? "fiat_shamir"
+                                       : "authored");
         out.attribute("format", protocol::proofFormatName(proof->format));
-        if (derived) {
-          out.attribute("suite", proof->suite);
+        if (native || selected) {
+          if (selected && proof->suite.empty())
+            out.attribute("suite", nullptr);
+          else
+            out.attribute("suite", proof->suite);
           out.attribute("service", *proof->service);
         }
+        if (selected)
+          out.attribute(
+              "symbol",
+              entry.declarations()[proof->selectedConstruction->index].symbol);
       });
     });
     out.attributeArray("protocols", [&] {

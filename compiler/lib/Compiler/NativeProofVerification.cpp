@@ -181,12 +181,24 @@ class TranscriptCorrespondence {
         if (!cursor)
           return false;
         if (auto returned = dyn_cast<local::ReturnOp>(op)) {
-          auto actual = dyn_cast<local::ReturnOp>(cursor);
           SmallVector<Value> results;
           if (event.query)
             results.push_back(env.lookup(returned.getInputs().back()));
           for (Value value : returned.getInputs().take_front(stateTypes.size()))
             results.push_back(env.lookup(value));
+          if (event.bound) {
+            if (!kernel(cursor, "index.less", {},
+                        {results.front(), operands.back()}, {}) ||
+                cursor->getNumResults() != 1)
+              return false;
+            Value valid = cursor->getResult(0);
+            cursor = cursor->getNextNode();
+            if (!kernel(cursor, "control.require", {}, {valid}, {}) ||
+                cursor->getNumResults() != 0)
+              return false;
+            cursor = cursor->getNextNode();
+          }
+          auto actual = dyn_cast_or_null<local::ReturnOp>(cursor);
           if (!actual || actual.getInputs() != ValueRange(results))
             return false;
         } else if (!exact(op, *cursor, env, 0)) {

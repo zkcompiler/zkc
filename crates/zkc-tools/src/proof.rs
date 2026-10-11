@@ -70,6 +70,7 @@ pub(crate) struct SourceInterface<'a> {
     pub choices: [bool; 3],
     pub acceptance: usize,
     pub suite: Option<&'a str>,
+    pub construction: &'a str,
     pub format: ProofFormat,
     pub service: Option<usize>,
     pub public: &'a [Port],
@@ -241,7 +242,7 @@ impl NativeDeployment {
         }
         let source = text(&envelope[1])?.to_owned();
         digest(&source)?;
-        let descriptor = array(&envelope[2], 6)?;
+        let descriptor = array(&envelope[2], 7)?;
         if text(&descriptor[0])? != "zkc.native-proof-descriptor/0"
             || text(&descriptor[2])? != "zkc.native-origin/0"
         {
@@ -265,6 +266,11 @@ impl NativeDeployment {
         let policy = interface::DeploymentPolicy::read(&descriptor[1])?;
         let (entry, producer, validator) = (policy.entry, policy.producer, policy.validator);
         let suite = policy.suite;
+        let construction = zkc_runtime::interactive::ConstructionPlan::read(&descriptor[6])
+            .map_err(|e| e.to_string())?;
+        if construction.as_ref().map_or("", |p| p.symbol()) != policy.construction {
+            return Err("native-proof-construction".into());
+        }
         let admitted = {
             let dummy = NativeBackend::new(
                 Policy::default(),
@@ -280,7 +286,13 @@ impl NativeDeployment {
             maps,
             public,
             acceptance,
-        } = interface::RoleInterface::read(&admitted, &policy, &envelope[6], &descriptor[4])?;
+        } = interface::RoleInterface::read(
+            &admitted,
+            &policy,
+            &envelope[6],
+            &descriptor[4],
+            construction.as_ref(),
+        )?;
         let keys = public
             .iter()
             .filter(|p| p.logical.kind() == Type::VerifierKey)
@@ -305,14 +317,22 @@ impl NativeDeployment {
         }
         let setups = authority;
         setups.check(&public, &maps)?;
+        let source_inputs = maps
+            .iter()
+            .map(|(role, map)| (role.clone(), map.data.iter().map(|p| p.original).collect()))
+            .collect();
         let proof_entry = NativeProofEntry::new(
             admitted,
             entry,
             producer,
             validator,
             acceptance.ok_or("native-proof-acceptance-map")?,
-            suite,
-            &messages.events,
+            zkc_runtime::interactive::ProofConstruction {
+                suite,
+                events: &messages.events,
+                plan: construction.as_ref(),
+                source_inputs: &source_inputs,
+            },
         )
         .map_err(|e| e.to_string())?;
         Ok(Self {
@@ -375,6 +395,7 @@ impl NativeDeployment {
             choices: self.choices,
             acceptance: index(&policy[4]).expect("admitted acceptance"),
             suite: (!suite.is_empty()).then_some(suite),
+            construction: policy[10].as_str().expect("admitted construction"),
             format: self.format,
             service: (!service.is_empty()).then(|| index(&policy[6]).expect("admitted service")),
             public: &self.public,

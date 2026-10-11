@@ -1164,14 +1164,40 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
     use zkc_runtime::interactive::{NativeProofEntry, admit_supplied};
     let admit =
         |program: &Json| admit_supplied(program.to_string().as_bytes(), &Host::default()).unwrap();
-    NativeProofEntry::new(admit(&carrier()), "main", "Alice", "Bob", 0, None, &[]).unwrap();
+    NativeProofEntry::new(
+        admit(&carrier()),
+        "main",
+        "Alice",
+        "Bob",
+        0,
+        zkc_runtime::interactive::ProofConstruction {
+            suite: None,
+            events: &[],
+            plan: None,
+            source_inputs: &Default::default(),
+        },
+    )
+    .unwrap();
 
     let vector = Value::Vector(vec![].into()).physical_type().spelling();
     let mut program = typed_carrier(&vector);
     program[3][1][4] = json!([["accepted", BOOL]]);
     program[3][1][5] = json!([BOOL]);
     program[3][1][6][1] = json!(["return", ["accepted"]]);
-    NativeProofEntry::new(admit(&program), "main", "Alice", "Bob", 0, None, &[]).unwrap();
+    NativeProofEntry::new(
+        admit(&program),
+        "main",
+        "Alice",
+        "Bob",
+        0,
+        zkc_runtime::interactive::ProofConstruction {
+            suite: None,
+            events: &[],
+            plan: None,
+            source_inputs: &Default::default(),
+        },
+    )
+    .unwrap();
     let mut unsupported = program.clone();
     let polynomial = Value::Polynomial(vec![].into()).physical_type().spelling();
     unsupported[2][0][2][0][1] = json!(&polynomial);
@@ -1179,9 +1205,21 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
     unsupported[3][0][4][0][1] = json!(&polynomial);
     unsupported[3][1][6][0][5] = json!(&polynomial);
     assert_eq!(
-        NativeProofEntry::new(admit(&unsupported), "main", "Alice", "Bob", 0, None, &[])
-            .unwrap_err()
-            .to_string(),
+        NativeProofEntry::new(
+            admit(&unsupported),
+            "main",
+            "Alice",
+            "Bob",
+            0,
+            zkc_runtime::interactive::ProofConstruction {
+                suite: None,
+                events: &[],
+                plan: None,
+                source_inputs: &Default::default()
+            }
+        )
+        .unwrap_err()
+        .to_string(),
         "native-proof-wire-type"
     );
 
@@ -1204,7 +1242,20 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
             ]),
         );
     }
-    NativeProofEntry::new(admit(&program), "main", "Alice", "Bob", 0, None, &[]).unwrap();
+    NativeProofEntry::new(
+        admit(&program),
+        "main",
+        "Alice",
+        "Bob",
+        0,
+        zkc_runtime::interactive::ProofConstruction {
+            suite: None,
+            events: &[],
+            plan: None,
+            source_inputs: &Default::default(),
+        },
+    )
+    .unwrap();
 }
 
 #[test]

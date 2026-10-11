@@ -134,7 +134,7 @@ impl ProofEntry {
             .ok_or_else(|| E::new(P::Admission, "entry-job-kind"))?;
         let roles = (proof.prover, proof.verifier);
         let completion = proof.completion;
-        let scope = if proof.suite.is_some() {
+        let scope = if proof.suite.is_some() && proof.construction.is_none() {
             BindingScope::Transcript
         } else if proof.format == crate::proof::ProofFormat::Native {
             BindingScope::HeaderOnly
@@ -314,7 +314,7 @@ impl ProofEntry {
     }
     fn inputs(&self, request: ProofRequest, producer: bool) -> Result<ProofInputs> {
         let role = &self.interface.roles()[if producer { self.roles.0 } else { self.roles.1 }];
-        let derived = self.interface.proof().and_then(|p| p.transcript).is_some();
+        let managed = self.native.entry().transcript().is_some();
         let keys = setups::public_keys(&self.interface, &request.setups, self.native.capacity())?;
         let public = arguments::values(self.interface.public_ports(), request.public, Some(&keys))?;
         let inputs = arguments::proof_inputs(
@@ -329,7 +329,7 @@ impl ProofEntry {
             inputs,
             services: arguments::services(self.interface.services(role), request.private.services)?,
             context: request.context,
-            transcript_budget: request.transcript_budget.unwrap_or(if derived {
+            transcript_budget: request.transcript_budget.unwrap_or(if managed {
                 super::DEFAULT_DRAW_BUDGET
             } else {
                 0

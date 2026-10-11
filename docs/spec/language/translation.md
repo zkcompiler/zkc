@@ -153,3 +153,11 @@ mutable original IR. The existing compiler receives those bytes and the selected
 protocol symbol. Run jobs emit `zkc.run/0`; proof jobs use the native proof policy
 and deployment schemas. Both contain ordinary `zkc.program/0` participant programs.
 Every protocol in the selected closure passes target preparation.
+
+The selected Entry interface represents this association as
+`construction: {kind: "derived", format, symbol, suite, service}`. `suite` is null
+for a Local factory. The independently read interface checks the selected
+Protocol record, provider suite and original replaced service. The Host binds
+that symbol to the executable construction plan and uses the ordinary compiled
+participant programs. A custom selection does not inherit the installed
+construction's invocation-binding claim.

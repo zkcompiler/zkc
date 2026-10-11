@@ -540,6 +540,13 @@ Error admitConstruction(pir::MathematicalOp source,
                 plan.state.size() + unsigned(event.bound.has_value()))
           return error("native-proof-construction-request");
       }
+      if (previous) {
+        auto before = dyn_cast<pir::ExchangeOp>(previousOperation);
+        auto after = dyn_cast<pir::ExchangeOp>(operation);
+        if (!before || !after || before.getSender() != after.getSender() ||
+            before.getReceiver() != after.getReceiver())
+          return error("native-proof-construction-message-group");
+      }
       previous = found->second;
       previousOperation = operation;
     }
@@ -735,6 +742,13 @@ class Emitter {
             values.push_back(mapping.lookup(returned.getInputs().back()));
           for (Value value : returned.getInputs().take_front(stateTypes.size()))
             values.push_back(mapping.lookup(value));
+          if (event.bound) {
+            auto valid = kernel("index.less", binding("index.less", {}),
+                                {values.front(), arguments.back()},
+                                {builder.getI1Type()}, "range");
+            kernel("control.require", binding("control.require", {}),
+                   {valid->getResult(0)}, {}, "require_range");
+          }
           local::ReturnOp::create(builder, module.getLoc(), values);
         } else {
           builder.clone(op, mapping);
@@ -816,7 +830,7 @@ public:
         occupied.insert(site.getValue());
     });
   }
-  Error run(const Admitted &admitted) {
+  Error run(const Admitted &admitted, json::Array &exportedPlan) {
     auto records = module.getBody().front().getOps<pir::ProjectionOp>();
     if (!hasSingleElement(records))
       return error("native-proof-entry");
@@ -833,6 +847,14 @@ public:
       stateTypes.push_back(stateType);
     bool hostRoot =
         !plan || plan->root == protocol::ConstructionPlan::Root::Host;
+    if (plan) {
+      if (plan->initializer &&
+          !symbols.lookup<local::FuncOp>(plan->initializer.getValue()))
+        return error("native-proof-construction-handler");
+      for (const auto &rule : plan->rules)
+        if (!symbols.lookup<local::FuncOp>(rule.handler.getValue()))
+          return error("native-proof-construction-handler");
+    }
     // Source admission bounds the original program. Charge repeated handler
     // copies separately before generating adapters or threading participants.
     uint64_t remaining = 1000000;
@@ -863,6 +885,7 @@ public:
         return error("native-proof-construction-limit");
       remaining -= cost;
     }
+    json::Array adapters;
     std::map<std::string, const Event *> events;
     for (const auto &event : admitted.events) {
       events.emplace(event.site, &event);
@@ -874,6 +897,48 @@ public:
         return result.takeError();
       helpers.emplace(event.site, *result);
       invokedHelpers.push_back(*result);
+      if (plan) {
+        json::Array origins;
+        if (rule) {
+          for (const auto &site : rule->sites) {
+            auto selected = find_if(admitted.events, [&](const Event &e) {
+              return e.site == site;
+            });
+            if (selected == admitted.events.end())
+              return error("native-proof-construction-handler");
+            origins.push_back(selected->origin);
+          }
+        } else {
+          origins.push_back(event.origin);
+        }
+        adapters.push_back(json::Array{result->getValue().str(),
+                                       rule ? "local" : "native",
+                                       std::move(origins)});
+      }
+    }
+    if (plan) {
+      json::Array slots, startInputs;
+      std::string start;
+      for (Type type : stateTypes) {
+        auto logical = protocol::encodeBoundType(type, false);
+        if (!logical)
+          return logical.takeError();
+        slots.push_back(logical->spelling());
+      }
+      for (const auto &rule : plan->rules)
+        if (rule.kind == protocol::ConstructionRule::Kind::Start) {
+          start = rule.handler.getValue().str();
+          for (unsigned input : rule.inputs)
+            startInputs.push_back(std::to_string(input));
+        }
+      exportedPlan = json::Array{
+          "zkc.construction-plan/0",
+          plan->symbol.getValue().str(),
+          hostRoot ? "host" : "local",
+          std::move(slots),
+          plan->initializer ? plan->initializer.getValue().str() : "",
+          json::Array{start, std::move(startInputs)},
+          std::move(adapters)};
     }
     std::map<std::string, std::string> deliveries;
     std::set<std::string> queries;
@@ -1179,6 +1244,9 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
     if (checked->target.getValue() != policy.entry ||
         checked->suite != policy.suite || checked->service != policy.service)
       return error("native-proof-construction-selection");
+    // Managed source providers are admitted separately from native fallback.
+    if (checked->root == protocol::ConstructionPlan::Root::Host)
+      return error("native-proof-construction-root");
     construction = std::move(*checked);
   }
   if (construction.has_value() != !policy.construction.empty())
@@ -1296,8 +1364,10 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy,
   auto projected = OwningOpRef<ModuleOp>(cast<ModuleOp>((*candidate)->clone()));
   auto *plan =
       preparedSource->construction ? &*preparedSource->construction : nullptr;
+  json::Array exportedPlan;
   if (!policy.suite.empty() || plan)
-    if (auto e = Emitter(unit(*candidate), policy, plan).run(*admitted))
+    if (auto e = Emitter(unit(*candidate), policy, plan)
+                     .run(*admitted, exportedPlan))
       return std::move(e);
   if (failed(verify(*candidate)))
     return error("native-proof-construction");
@@ -1307,7 +1377,8 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy,
   json::Value descriptor(json::Array{
       "zkc.native-proof-descriptor/0", encodeNativeProofPolicy(policy),
       "zkc.native-origin/0", std::move(admitted->sequence),
-      std::move(admitted->publicBindings), std::move(admitted->messages)});
+      std::move(admitted->publicBindings), std::move(admitted->messages),
+      std::move(exportedPlan)});
   return NativeProofConstruction{std::move(candidate), std::move(descriptor),
                                  std::move(admitted->wireSites)};
 }

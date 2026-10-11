@@ -365,6 +365,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
     selection.validator = nativeRoleName(proof.verifier);
     selection.acceptance = proof.acceptance.native.front();
     selection.suite = proof.suite;
+    selection.construction = proof.selectedConstruction;
     selection.format = proof.format;
     if (proof.service)
       selection.service = protocol.services[*proof.service].native;
@@ -390,7 +391,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
                                         : nullptr;
     auto selected = compiled->policy;
     selected.draws.clear();
-    if (!descriptor || descriptor->size() != 6 ||
+    if (!descriptor || descriptor->size() != 7 ||
         (*deployment)[0].getAsString() != "zkc.native-proof/0" ||
         (*deployment)[1].getAsString() != original.identity() ||
         encodeNativeProofPolicy(selected) !=

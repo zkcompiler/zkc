@@ -73,13 +73,16 @@ impl<'a> MessageLayout<'a> {
             }
             if query {
                 queries += 1;
-                if record[4][4]
+                let field = record[4][4]
                     .as_str()
                     .and_then(|c| zkc_runtime::interactive::ServiceContract::parse(c).ok())
-                    .map(|c| c.field())
-                    != suite
-                        .and_then(|s| LogicalType::parse(&format!("transcript:{s}")).ok())
-                        .and_then(|t| t.identity().scalar_field())
+                    .map(|c| c.field());
+                if field.is_none()
+                    || suite.is_some()
+                        && field
+                            != suite
+                                .and_then(|s| LogicalType::parse(&format!("transcript:{s}")).ok())
+                                .and_then(|t| t.identity().scalar_field())
                     || record[4][5].as_str() != Some(if bound.is_some() { "index" } else { "draw" })
                     || record[4][6].as_str() != Some(validator)
                 {
@@ -113,7 +116,7 @@ impl<'a> MessageLayout<'a> {
                 "message" => "transcript.native.indexed.observe.data".to_owned(),
                 _ => return Err("native-proof-event".into()),
             };
-            if suite.is_some() {
+            if suite.is_some() || !policy.construction.is_empty() {
                 events.push(NativeTranscriptEvent {
                     contract,
                     origin: origin.into(),

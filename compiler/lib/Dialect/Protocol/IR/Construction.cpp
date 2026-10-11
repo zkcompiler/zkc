@@ -4,6 +4,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringSet.h"
@@ -48,6 +49,7 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
                         record.getNativeBase(),
                         {},
                         {}};
+  mathematical::NativeTypePolicies types(record);
   for (auto attr : record.getState()) {
     auto type = dyn_cast<TypeAttr>(attr);
     if (!type)
@@ -58,6 +60,9 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
     if (plan.root == ConstructionPlan::Root::Local &&
         (!duplicable(*logical) || !discardable(*logical)))
       return fail("source-created state requires Copy and Drop");
+    auto policy = types.get(type.getValue());
+    if (!policy || !policy->protocolPort)
+      return fail("construction state requires a protocol port representation");
     plan.state.push_back(type.getValue());
   }
   if (plan.root == ConstructionPlan::Root::Local) {
@@ -140,7 +145,11 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
             !seen.insert(port).second)
           return fail("invalid or duplicate start input");
         auto owners = dyn_cast<ArrayAttr>(target.getInputRoles()[port]);
-        if (!owners || !equal(owners, target.getRoles()) ||
+        if (!owners || owners.size() != target.getRoles().size() ||
+            !all_of(owners,
+                    [&](Attribute owner) {
+                      return is_contained(target.getRoles(), owner);
+                    }) ||
             isa<protocol_ir::ServiceReferenceType>(signature.getInput(port)))
           return fail("start input must be available at both participants");
         parameters.push_back(signature.getInput(port));

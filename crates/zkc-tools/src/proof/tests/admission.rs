@@ -73,7 +73,8 @@ fn deployment() -> Json {
         [
             [first, "bool", "zkcv.bool/0"],
             [second, "bool", "zkcv.bool/0"]
-        ]
+        ],
+        []
     ]);
     let mut result = json!([
         "zkc.native-proof/0",

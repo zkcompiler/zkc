@@ -320,8 +320,37 @@ fn job(
         schemas.charge(1 + completion.path.len())?;
         check_decision(protocol, completion, prover)?;
     }
-    let derived = match construction {
+    let derived = match construction.as_ref() {
         Construction::Authored { .. } => None,
+        Construction::Derived {
+            symbol,
+            suite,
+            service,
+            format,
+        } => {
+            schemas.charge(symbol.len() + suite.as_ref().map_or(0, String::len))?;
+            require(
+                !symbol.is_empty()
+                    && symbol.len() <= 4096
+                    && *format == crate::proof::ProofFormat::Native,
+                E::Selection,
+            )?;
+            let selected = protocol
+                .services
+                .get(*service as usize)
+                .ok_or(E::Selection)?;
+            let contract = ServiceContract::parse(&selected.contract).map_err(|_| E::Selection)?;
+            require(&selected.owner == verifier, E::Selection)?;
+            if let Some(suite) = suite {
+                let ty =
+                    LogicalType::parse(&format!("transcript:{suite}")).map_err(|_| E::Selection)?;
+                require(
+                    ty.identity().scalar_field() == Some(contract.field()),
+                    E::Selection,
+                )?;
+            }
+            Some(*service as usize)
+        }
         Construction::FiatShamir {
             suite,
             service,

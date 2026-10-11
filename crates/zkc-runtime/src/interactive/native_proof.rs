@@ -3,6 +3,17 @@
 //! they do not authenticate compilation or establish Fiat–Shamir soundness.
 use super::{Admitted, EntryRole, PhysicalType, ProgramAction, Type, model::*};
 use std::collections::{BTreeMap, BTreeSet};
+mod construction;
+pub use construction::ConstructionPlan;
+
+/// Construction facts authenticated by the caller's selected deployment.
+/// Source-input indices are checked by the Host against participant ports.
+pub struct ProofConstruction<'a> {
+    pub suite: Option<&'a str>,
+    pub events: &'a [NativeTranscriptEvent],
+    pub plan: Option<&'a ConstructionPlan>,
+    pub source_inputs: &'a BTreeMap<String, Vec<usize>>,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NativeTranscriptEvent {
@@ -33,10 +44,11 @@ pub struct NativeProofEntry {
     validator: EntryRole,
     acceptance: usize,
     transcript: Option<PhysicalType>,
+    native_binding: bool,
 }
 type LoopPath = Vec<[String; 3]>;
 struct Helper<'a> {
-    event: NativeTranscriptEvent,
+    events: Vec<NativeTranscriptEvent>,
     message: Option<(String, String)>,
     function: &'a Function,
     loops: Vec<LoopPath>,
@@ -232,7 +244,7 @@ fn helper<'a>(
     Ok(Some(Helper {
         message,
         loops,
-        event: NativeTranscriptEvent {
+        events: vec![NativeTranscriptEvent {
             contract: contract.into(),
             origin: attributes[0].clone(),
             payload: if challenge {
@@ -241,9 +253,217 @@ fn helper<'a>(
                 Some(function.inputs[1].1.logical())
             },
             bound: bound.map(|b| b.1),
-        },
+        }],
         function,
     }))
+}
+
+fn custom_helper<'a>(
+    function: &'a Function,
+    state: &[PhysicalType],
+    events: &[NativeTranscriptEvent],
+    entry: &str,
+    validator: &str,
+) -> Result<Helper<'a>> {
+    let first = events
+        .first()
+        .ok_or_else(|| refuse("native-proof-construction-coverage"))?;
+    let query = first.payload.is_none();
+    let mut loops = Vec::new();
+    let mut message = None;
+    let mut expected_inputs = state.to_vec();
+    let mut expected_outputs = Vec::new();
+    for (index, event) in events.iter().enumerate() {
+        let expected = if !query {
+            "transcript.native.indexed.observe.data"
+        } else if event.bound.is_some() {
+            "transcript.native.indexed.index"
+        } else {
+            "transcript.native.indexed.challenge"
+        };
+        if event.contract != expected || !query && event.bound.is_some() {
+            return Err(refuse("native-proof-event"));
+        }
+        if let Some(bound) = event.bound
+            && (bound == 0 || !bound.is_power_of_two() || bound > (1u64 << 63))
+        {
+            return Err(refuse("native-proof-index-bound"));
+        }
+        if event.payload.is_none() != query || query && events.len() != 1 {
+            return Err(refuse("native-proof-construction-coverage"));
+        }
+        let bytes = crate::logical::native_origin_template(
+            std::slice::from_ref(&event.origin),
+            if query { "query" } else { "message" },
+        )
+        .map_err(|_| refuse("native-proof-origin"))?;
+        let origin =
+            crate::logical::decode_tree(&bytes).map_err(|_| refuse("native-proof-origin"))?;
+        if origin[1].as_str() != Some(entry) {
+            return Err(refuse("native-proof-origin"));
+        }
+        let mut path = Vec::new();
+        let mut event_loops = Vec::new();
+        for step in origin[2]
+            .as_array()
+            .ok_or_else(|| refuse("native-proof-origin"))?
+        {
+            path.push([
+                step[0].as_str().unwrap().into(),
+                step[1].as_str().unwrap().into(),
+                step[2].as_str().unwrap().into(),
+            ]);
+            if step[0] == "repeat" {
+                event_loops.push(path.clone());
+            }
+        }
+        let event_message = if query {
+            None
+        } else {
+            Some((
+                origin[4][4].as_str().unwrap().to_owned(),
+                origin[4][5].as_str().unwrap().to_owned(),
+            ))
+        };
+        if index != 0 && (event_loops != loops || event_message != message) {
+            return Err(refuse("native-proof-construction-coverage"));
+        }
+        loops = event_loops;
+        message = event_message;
+        if let Some(payload) = &event.payload {
+            expected_inputs.push(
+                PhysicalType::default_for(payload.clone())
+                    .map_err(|_| refuse("native-proof-helper-signature"))?,
+            );
+        } else {
+            let contract = super::ServiceContract::parse(origin[4][4].as_str().unwrap())
+                .map_err(|_| refuse("native-proof-query-origin"))?;
+            if origin[4][6].as_str() != Some(validator)
+                || origin[4][5].as_str()
+                    != Some(if event.bound.is_some() {
+                        "index"
+                    } else {
+                        "draw"
+                    })
+            {
+                return Err(refuse("native-proof-query-origin"));
+            }
+            let logical = if event.bound.is_some() {
+                "index".into()
+            } else {
+                format!("field:{}", contract.field().name())
+            };
+            expected_outputs.push(
+                PhysicalType::default_for(
+                    super::LogicalType::parse(&logical)
+                        .map_err(|_| refuse("native-proof-helper-signature"))?,
+                )
+                .map_err(|_| refuse("native-proof-helper-signature"))?,
+            );
+        }
+    }
+    expected_inputs.extend(std::iter::repeat_n(
+        PhysicalType::default_for(super::LogicalType::parse("index").unwrap()).unwrap(),
+        loops.len(),
+    ));
+    expected_outputs.extend_from_slice(state);
+    if !function
+        .inputs
+        .iter()
+        .map(|(_, t)| t)
+        .eq(expected_inputs.iter())
+        || function.outputs != expected_outputs
+    {
+        return Err(refuse("native-proof-helper-signature"));
+    }
+    if let Some(bound) = first.bound {
+        check_index_range(function, bound)?;
+    }
+    Ok(Helper {
+        events: events.to_vec(),
+        message,
+        function,
+        loops,
+    })
+}
+
+/// The arbitrary handler's successful return is followed by an independently
+/// checked range guard. Sampling quality remains the provider's obligation.
+fn check_index_range(function: &Function, bound: u64) -> Result<()> {
+    let body: Vec<_> = function
+        .body
+        .iter()
+        .filter(|op| !matches!(op, LocalInstruction::Release(_)))
+        .collect();
+    if matches!(body.last(), Some(LocalInstruction::Stop { .. })) {
+        return Ok(());
+    }
+    let Some(
+        [
+            LocalInstruction::Op {
+                binding: less,
+                attributes: a,
+                inputs,
+                outputs,
+                ..
+            },
+            LocalInstruction::Op {
+                binding: guard,
+                attributes: b,
+                inputs: condition,
+                outputs: none,
+                ..
+            },
+            LocalInstruction::Return(returned),
+        ],
+    ) = tail(&body, 3)
+    else {
+        return Err(refuse("native-proof-index-range"));
+    };
+    if less.declaration().contract != "index.less"
+        || guard.declaration().contract != "control.require"
+        || !a.is_empty()
+        || !b.is_empty()
+        || inputs.len() != 2
+        || outputs.len() != 1
+        || condition != outputs
+        || !none.is_empty()
+        || returned.first() != inputs.first()
+    {
+        return Err(refuse("native-proof-index-range"));
+    }
+    if !body[..body.len() - 3].iter().any(|op| {
+        matches!(op,
+        LocalInstruction::Op {binding, attributes, inputs: args, outputs: values, ..}
+            if binding.declaration().contract == "index.constant" && args.is_empty()
+                && values.as_slice() == [inputs[1].clone()]
+                && attributes.as_slice() == [bound.to_string()])
+    }) {
+        return Err(refuse("native-proof-index-bound"));
+    }
+    Ok(())
+}
+
+fn verifier_function(function: &Function) -> Result<()> {
+    if function.inputs.iter().any(|(_, t)| !verifier_data(t))
+        || function.outputs.iter().any(|t| !verifier_data(t))
+    {
+        return Err(refuse("native-proof-verifier-resource"));
+    }
+    for op in LocalInstruction::walk(&function.body) {
+        if let LocalInstruction::Op { binding, .. } = op {
+            let signature = binding.signature();
+            if signature
+                .inputs
+                .iter()
+                .chain(&signature.outputs)
+                .any(|t| !verifier_data(t))
+            {
+                return Err(refuse("native-proof-verifier-resource"));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn verifier_data(ty: &PhysicalType) -> bool {
@@ -274,9 +494,8 @@ fn verifier_key(ty: &PhysicalType) -> bool {
     ty.logical().spelling() == "verifier_key:multilinear.kzg.bls12-381/0"
         && PhysicalType::default_for(ty.logical()).ok().as_ref() == Some(ty)
 }
-// General admission already checks SSA uniqueness, exact call/result arity,
-// affine use and loop-carried types, including nested regions. This walk adds
-// the proof-specific transcript and occurrence constraints over that program.
+// General admission checks SSA, exact signatures and resource use. This walk
+// adds ordered construction-state and event-occurrence correspondence.
 struct ProofWalk<'a> {
     admitted: &'a Admitted,
     helpers: &'a BTreeMap<String, Helper<'a>>,
@@ -286,16 +505,30 @@ struct ProofWalk<'a> {
     transcript: bool,
     calls: BTreeSet<String>,
     reached: Vec<NativeTranscriptEvent>,
-    // A bijection between original loop prefixes and actual compact loops.
     loops: BTreeMap<LoopPath, (String, u64)>,
     loop_sites: BTreeMap<String, LoopPath>,
-    state_returns: usize,
+}
+fn tail<T>(values: &[T], count: usize) -> Option<&[T]> {
+    values
+        .len()
+        .checked_sub(count)
+        .map(|start| &values[start..])
 }
 impl ProofWalk<'_> {
+    fn has_events(&self, body: &Body) -> bool {
+        body.iter().any(|op| match op {
+            Instruction::Local { function, .. } => self.helpers.contains_key(function),
+            Instruction::Send { .. }
+            | Instruction::Receive { .. }
+            | Instruction::ReturnIf { .. } => self.transcript,
+            Instruction::Loop { body, .. } => self.has_events(body),
+            _ => false,
+        })
+    }
     fn block(
         &mut self,
-        body: &Body,
-        mut current: Option<String>,
+        body: &[Instruction],
+        mut current: Option<Vec<String>>,
         coordinates: &[String],
         parents: &[(String, u64)],
         depth: usize,
@@ -303,8 +536,8 @@ impl ProofWalk<'_> {
         if depth > 64 {
             return Err(refuse("native-proof-loop-limit"));
         }
-        let mut pending_message: Option<String> = None;
-        let mut pending_challenge: Option<String> = None;
+        let mut pending_message = Vec::new();
+        let mut pending_challenge = Vec::new();
         for instruction in body.iter() {
             match instruction {
                 Instruction::Local {
@@ -314,13 +547,21 @@ impl ProofWalk<'_> {
                     ..
                 } => {
                     if let Some(checked) = self.helpers.get(function) {
+                        let state = current
+                            .as_ref()
+                            .ok_or_else(|| refuse("native-proof-state-chain"))?;
                         if !self.calls.insert(function.clone())
-                            || inputs.first() != current.as_ref()
+                            || inputs.get(..state.len()) != Some(state.as_slice())
                             || outputs.len() != checked.function.outputs.len()
                         {
                             return Err(refuse("native-proof-state-chain"));
                         }
-                        let ordinary = if checked.message.is_some() { 2 } else { 1 };
+                        let payloads = if checked.message.is_some() {
+                            checked.events.len()
+                        } else {
+                            0
+                        };
+                        let ordinary = state.len() + payloads;
                         if inputs.get(ordinary..) != Some(coordinates)
                             || checked.loops.len() != parents.len()
                         {
@@ -340,42 +581,29 @@ impl ProofWalk<'_> {
                         }
                         if let Some((sender, receiver)) = &checked.message {
                             let payload = if sender == self.producer && receiver == self.validator {
-                                pending_message.take()
+                                &mut pending_message
                             } else if sender == self.validator && receiver == self.producer {
-                                pending_challenge.take()
+                                &mut pending_challenge
                             } else {
                                 return Err(refuse("native-proof-message-origin"));
                             };
-                            if inputs.get(1) != payload.as_ref() || payload.is_none() {
+                            if inputs.get(state.len()..ordinary) != Some(payload.as_slice())
+                                || payload.is_empty()
+                            {
                                 return Err(refuse("native-proof-observation-payload"));
                             }
+                            payload.clear();
                         } else {
-                            if pending_message.is_some() || pending_challenge.is_some() {
+                            if !pending_message.is_empty() || !pending_challenge.is_empty() {
                                 return Err(refuse("native-proof-observation-order"));
                             }
-                            pending_challenge = outputs.first().cloned();
+                            pending_challenge.push(outputs[0].clone());
                         }
-                        current = outputs.last().cloned();
-                        self.reached.push(checked.event.clone());
-                    } else if self.validating {
-                        let f = &self.admitted.program.functions[function];
-                        if f.inputs.iter().any(|(_, t)| !verifier_data(t))
-                            || f.outputs.iter().any(|t| !verifier_data(t))
-                        {
-                            return Err(refuse("native-proof-verifier-resource"));
-                        }
-                        for op in LocalInstruction::walk(&f.body) {
-                            if let LocalInstruction::Op { binding, .. } = op {
-                                let signature = binding.signature();
-                                if signature
-                                    .inputs
-                                    .iter()
-                                    .chain(&signature.outputs)
-                                    .any(|t| !verifier_data(t))
-                                {
-                                    return Err(refuse("native-proof-verifier-resource"));
-                                }
-                            }
+                        current = Some(tail(outputs, state.len()).unwrap().to_vec());
+                        self.reached.extend_from_slice(&checked.events);
+                    } else {
+                        if self.validating {
+                            verifier_function(&self.admitted.program.functions[function])?;
                         }
                     }
                 }
@@ -385,11 +613,11 @@ impl ProofWalk<'_> {
                     if self.transcript && current.is_none() {
                         return Err(refuse("native-proof-loop-state"));
                     }
-                    if current.is_some()
-                        && (pending_message.replace(input.clone()).is_some()
-                            || pending_challenge.is_some())
-                    {
-                        return Err(refuse("native-proof-observation-order"));
+                    if current.is_some() {
+                        if !pending_challenge.is_empty() {
+                            return Err(refuse("native-proof-observation-order"));
+                        }
+                        pending_message.push(input.clone());
                     }
                 }
                 Instruction::Receive { peer, output, .. }
@@ -398,11 +626,11 @@ impl ProofWalk<'_> {
                     if self.transcript && current.is_none() {
                         return Err(refuse("native-proof-loop-state"));
                     }
-                    if current.is_some()
-                        && (pending_message.replace(output.clone()).is_some()
-                            || pending_challenge.is_some())
-                    {
-                        return Err(refuse("native-proof-observation-order"));
+                    if current.is_some() {
+                        if !pending_challenge.is_empty() {
+                            return Err(refuse("native-proof-observation-order"));
+                        }
+                        pending_message.push(output.clone());
                     }
                 }
                 Instruction::Query { .. } if !self.validating => {}
@@ -414,54 +642,38 @@ impl ProofWalk<'_> {
                     body,
                     outputs,
                 } => {
-                    if pending_message.is_some() || pending_challenge.is_some() {
+                    if !pending_message.is_empty() || !pending_challenge.is_empty() {
                         return Err(refuse("native-proof-observation-order"));
                     }
-                    let LoopCount {
-                        maximum, induction, ..
-                    } = count;
-                    let state_positions: Vec<_> = carried
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, (_, initial))| Some(initial) == current.as_ref())
-                        .map(|(n, _)| n)
-                        .collect();
-                    if current.as_ref().is_some_and(|s| captures.contains(s))
-                        || state_positions.len() > 1
-                    {
-                        return Err(refuse("native-proof-state-capture"));
-                    }
                     let before = self.reached.len();
-                    let returns_before = self.state_returns;
-                    if let Some(&position) = state_positions.first() {
-                        if position + 1 != carried.len()
+                    if self.has_events(body) {
+                        let state = current
+                            .as_ref()
+                            .ok_or_else(|| refuse("native-proof-loop-state"))?;
+                        let slots = tail(carried, state.len())
+                            .ok_or_else(|| refuse("native-proof-loop-state"))?;
+                        if !slots.iter().map(|(_, value)| value).eq(state.iter())
                             || coordinates.iter().any(|v| !captures.contains(v))
                         {
                             return Err(refuse("native-proof-loop-state"));
                         }
                         let mut child_coordinates = coordinates.to_vec();
-                        child_coordinates.push(induction.clone());
+                        child_coordinates.push(count.induction.clone());
                         let mut child_parents = parents.to_vec();
-                        child_parents.push((site.clone(), *maximum));
+                        child_parents.push((site.clone(), count.maximum));
                         self.block(
                             body,
-                            Some(carried[position].0.clone()),
+                            Some(slots.iter().map(|(name, _)| name.clone()).collect()),
                             &child_coordinates,
                             &child_parents,
                             depth + 1,
                         )?;
-                        if self.reached.len() == before && self.state_returns == returns_before {
-                            return Err(refuse("native-proof-empty-state-loop"));
-                        }
                         current = Some(
-                            outputs
-                                .get(position)
-                                .cloned()
-                                .ok_or_else(|| refuse("native-proof-loop-state"))?,
+                            tail(outputs, state.len())
+                                .ok_or_else(|| refuse("native-proof-loop-state"))?
+                                .to_vec(),
                         );
                     } else {
-                        // Owner-local pure work has no transcript. Any hidden
-                        // helper in this subtree fails its state-chain check.
                         self.block(body, None, &[], &[], depth + 1)?;
                         if self.reached.len() != before {
                             return Err(refuse("native-proof-loop-state"));
@@ -473,31 +685,38 @@ impl ProofWalk<'_> {
                     continuations,
                     ..
                 } => {
-                    if pending_message.is_some() || pending_challenge.is_some() {
+                    if !pending_message.is_empty() || !pending_challenge.is_empty() {
                         return Err(refuse("native-proof-observation-order"));
                     }
                     if self.transcript {
-                        if current.is_none() || values.last() != current.as_ref() {
+                        let state = current
+                            .as_ref()
+                            .ok_or_else(|| refuse("native-proof-state-chain"))?;
+                        if tail(values, state.len()) != Some(state.as_slice()) {
                             return Err(refuse("native-proof-state-chain"));
                         }
                         current = Some(
-                            continuations
-                                .last()
-                                .cloned()
-                                .ok_or_else(|| refuse("native-proof-state-chain"))?,
+                            tail(continuations, state.len())
+                                .ok_or_else(|| refuse("native-proof-state-chain"))?
+                                .to_vec(),
                         );
-                        self.state_returns += 1;
                     }
                 }
                 Instruction::Yield(values)
-                    if depth != 0 && (current.is_none() || values.last() == current.as_ref()) => {}
+                    if depth != 0
+                        && current
+                            .as_ref()
+                            .is_none_or(|s| tail(values, s.len()) == Some(s.as_slice())) => {}
                 Instruction::Return(values)
-                    if depth == 0 && (current.is_none() || values.last() == current.as_ref()) => {}
+                    if depth == 0
+                        && current
+                            .as_ref()
+                            .is_none_or(|s| tail(values, s.len()) == Some(s.as_slice())) => {}
                 _ => return Err(refuse("native-proof-state-chain")),
             }
         }
-        if pending_message.is_some()
-            || pending_challenge.is_some()
+        if !pending_message.is_empty()
+            || !pending_challenge.is_empty()
             || !(if depth != 0 {
                 matches!(body.last(), Some(Instruction::Yield(_)))
             } else {
@@ -519,9 +738,14 @@ impl NativeProofEntry {
         producer: &str,
         validator: &str,
         acceptance: usize,
-        suite: Option<&str>,
-        events: &[NativeTranscriptEvent],
+        construction: ProofConstruction<'_>,
     ) -> Result<Self> {
+        let ProofConstruction {
+            suite,
+            events,
+            plan,
+            source_inputs,
+        } = construction;
         if producer == validator {
             return Err(refuse("native-proof-profile"));
         }
@@ -534,7 +758,7 @@ impl NativeProofEntry {
                 .map_err(|_| refuse("native-proof-suite"))
             })
             .transpose()?;
-        if events.len() > 2048 || transcript.is_none() && !events.is_empty() {
+        if events.len() > 2048 || transcript.is_none() && plan.is_none() && !events.is_empty() {
             return Err(refuse("native-proof-events"));
         }
         let mut event_origins = BTreeSet::new();
@@ -549,6 +773,55 @@ impl NativeProofEntry {
                 helpers.insert(name.clone(), checked);
             }
         }
+        let state: Vec<_> = if let Some(plan) = plan {
+            if plan.host != transcript.is_some()
+                || plan.host && plan.state.first() != transcript.as_ref()
+            {
+                return Err(refuse("native-proof-construction-root"));
+            }
+            let mut offset = 0;
+            for adapter in &plan.adapters {
+                let group = events
+                    .get(offset..offset + adapter.origins.len())
+                    .ok_or_else(|| refuse("native-proof-construction-coverage"))?;
+                if !group
+                    .iter()
+                    .map(|event| &event.origin)
+                    .eq(adapter.origins.iter())
+                {
+                    return Err(refuse("native-proof-construction-coverage"));
+                }
+                offset += group.len();
+                if adapter.native {
+                    let helper = helpers
+                        .get(&adapter.symbol)
+                        .ok_or_else(|| refuse("native-proof-construction-helper"))?;
+                    if helper.events != group {
+                        return Err(refuse("native-proof-construction-helper"));
+                    }
+                } else {
+                    if helpers.contains_key(&adapter.symbol) {
+                        return Err(refuse("native-proof-construction-helper"));
+                    }
+                    let function = admitted
+                        .program
+                        .functions
+                        .get(&adapter.symbol)
+                        .ok_or_else(|| refuse("native-proof-construction-helper"))?;
+                    let helper = custom_helper(function, &plan.state, group, entry, validator)?;
+                    if !plan.host {
+                        verifier_function(function)?;
+                    }
+                    helpers.insert(adapter.symbol.clone(), helper);
+                }
+            }
+            if offset != events.len() || helpers.len() != plan.adapters.len() {
+                return Err(refuse("native-proof-construction-coverage"));
+            }
+            plan.state.clone()
+        } else {
+            transcript.iter().cloned().collect()
+        };
         let roles = admitted
             .entry(entry)
             .ok_or_else(|| refuse("native-proof-entry"))?;
@@ -611,19 +884,80 @@ impl NativeProofEntry {
         for endpoint in [&producer, &validator] {
             let participant = &admitted.program.participants[&endpoint.participant];
             let validating = endpoint.role == validator.role;
-            let state_input = if let Some(state) = &transcript {
-                if participant.inputs.last().map(|(_, t)| t) != Some(state)
-                    || participant.outputs.last() != Some(state)
-                {
-                    return Err(refuse("native-proof-state-ports"));
+            let state_inputs = if transcript.is_some() { state.len() } else { 0 };
+            let state_outputs = state.len();
+            if !tail(&participant.inputs, state_inputs).is_some_and(|ports| {
+                ports
+                    .iter()
+                    .map(|(_, t)| t)
+                    .eq(state.iter().take(state_inputs))
+            }) || tail(&participant.outputs, state_outputs) != Some(state.as_slice())
+            {
+                return Err(refuse("native-proof-state-ports"));
+            }
+            let mut current = transcript.as_ref().map(|_| {
+                tail(&participant.inputs, state_inputs)
+                    .unwrap()
+                    .iter()
+                    .map(|(name, _)| name.clone())
+                    .collect::<Vec<_>>()
+            });
+            let mut body = participant.body.as_ref();
+            if let Some(plan) = plan {
+                let mut invoke = |symbol: &str,
+                                  inputs: &[String],
+                                  output_types: &[PhysicalType]|
+                 -> Result<Vec<String>> {
+                    let Some(Instruction::Local {
+                        function,
+                        inputs: actual,
+                        outputs,
+                        ..
+                    }) = body.first()
+                    else {
+                        return Err(refuse("native-proof-construction-root"));
+                    };
+                    if function != symbol
+                        || actual != inputs
+                        || admitted.program.functions[function].outputs != output_types
+                    {
+                        return Err(refuse("native-proof-construction-root"));
+                    }
+                    if validating && !plan.host {
+                        verifier_function(&admitted.program.functions[function])?;
+                    }
+                    body = &body[1..];
+                    Ok(outputs.clone())
+                };
+                if !plan.host {
+                    current = Some(invoke(&plan.initializer, &[], &state)?);
                 }
-                Some(participant.inputs.last().unwrap().0.as_str())
-            } else {
-                None
-            };
-
-            let ordinary_inputs = participant.inputs.len() - usize::from(transcript.is_some());
-            let ordinary_outputs = participant.outputs.len() - usize::from(transcript.is_some());
+                if !plan.start.is_empty() {
+                    let mut arguments = current
+                        .clone()
+                        .ok_or_else(|| refuse("native-proof-construction-root"))?;
+                    let ports = source_inputs
+                        .get(&endpoint.role)
+                        .ok_or_else(|| refuse("native-proof-construction-start"))?;
+                    for original in &plan.inputs {
+                        let position = ports
+                            .iter()
+                            .position(|p| p == original)
+                            .ok_or_else(|| refuse("native-proof-construction-start"))?;
+                        arguments.push(
+                            participant
+                                .inputs
+                                .get(position)
+                                .ok_or_else(|| refuse("native-proof-construction-start"))?
+                                .0
+                                .clone(),
+                        );
+                    }
+                    current = Some(invoke(&plan.start, &arguments, &state)?);
+                }
+            }
+            let ordinary_inputs = participant.inputs.len() - state_inputs;
+            let ordinary_outputs = participant.outputs.len() - state_outputs;
             if participant.inputs[..ordinary_inputs]
                 .iter()
                 .any(|(_, t)| t.kind() == Type::Transcript || validating && !verifier_data(t))
@@ -639,20 +973,13 @@ impl NativeProofEntry {
                 producer: &producer.role,
                 validator: &validator.role,
                 validating,
-                transcript: transcript.is_some(),
+                transcript: transcript.is_some() || plan.is_some(),
                 calls: BTreeSet::new(),
                 reached: Vec::new(),
                 loops: BTreeMap::new(),
                 loop_sites: BTreeMap::new(),
-                state_returns: 0,
             };
-            walk.block(
-                &participant.body,
-                state_input.map(str::to_owned),
-                &[],
-                &[],
-                0,
-            )?;
+            walk.block(body, current, &[], &[], 0)?;
             if walk.reached != events {
                 return Err(refuse("native-proof-state-chain"));
             }
@@ -675,6 +1002,7 @@ impl NativeProofEntry {
             validator,
             acceptance,
             transcript,
+            native_binding: suite.is_some() && plan.is_none(),
         })
     }
     pub fn admitted(&self) -> &Admitted {
@@ -691,6 +1019,11 @@ impl NativeProofEntry {
     }
     pub fn acceptance(&self) -> usize {
         self.acceptance
+    }
+    /// True only for the installed construction whose root absorbs the
+    /// canonical invocation. Custom code must establish its own binding.
+    pub fn binds_invocation(&self) -> bool {
+        self.native_binding
     }
     pub fn transcript(&self) -> Option<&PhysicalType> {
         self.transcript.as_ref()

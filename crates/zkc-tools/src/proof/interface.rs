@@ -5,7 +5,7 @@ use super::{Port, RoleMap, index, input_kind, wire_codec, wire_type};
 use crate::host::inputs::{Result, array, list, text};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
-use zkc_runtime::interactive::{Admitted, LogicalType, PhysicalType, Type};
+use zkc_runtime::interactive::{Admitted, ConstructionPlan, LogicalType, PhysicalType, Type};
 
 /// Borrowed policy fields after syntactic checks. Public selection is checked
 /// later against the actual validator inputs, after message and role checks.
@@ -15,6 +15,7 @@ pub(super) struct DeploymentPolicy<'a> {
     pub(super) validator: &'a str,
     pub(super) original_acceptance: usize,
     pub(super) suite: Option<&'a str>,
+    pub(super) construction: &'a str,
     pub(super) format: super::ProofFormat,
     public_selection: &'a Json,
     pub(super) draw_count: usize,
@@ -25,11 +26,7 @@ impl<'a> DeploymentPolicy<'a> {
         if text(&policy[0])? != "zkc.native-proof-policy/0" {
             return Err("native-proof-policy".into());
         }
-        // Executable custom-plan admission is connected with construction
-        // descriptors; never interpret a selected body as an authored proof.
-        if !text(&policy[10])?.is_empty() {
-            return Err("native-proof-construction".into());
-        }
+        let construction = text(&policy[10])?;
         let (entry, producer, validator) =
             (text(&policy[1])?, text(&policy[2])?, text(&policy[3])?);
         if producer == validator {
@@ -39,17 +36,18 @@ impl<'a> DeploymentPolicy<'a> {
         let suite = text(&policy[5])?;
         let suite = (!suite.is_empty()).then_some(suite);
         let format = super::ProofFormat::parse(text(&policy[9])?).ok_or("native-proof-format")?;
-        if format == super::ProofFormat::RawBytes && suite.is_some() {
+        if format == super::ProofFormat::RawBytes && (suite.is_some() || !construction.is_empty()) {
             return Err("native-proof-format".into());
         }
         let draws = list(&policy[8])?;
+        let selected = suite.is_some() || !construction.is_empty();
         if draws.len() > 64
-            || (suite.is_some() != !draws.is_empty())
-            || suite.is_some() != !text(&policy[6])?.is_empty()
+            || construction.is_empty() && (suite.is_some() != !draws.is_empty())
+            || selected != !text(&policy[6])?.is_empty()
         {
             return Err("native-proof-policy".into());
         }
-        if suite.is_some() {
+        if selected {
             index(&policy[6])?;
         }
         let mut selected_sites = std::collections::BTreeSet::new();
@@ -71,6 +69,7 @@ impl<'a> DeploymentPolicy<'a> {
             validator,
             original_acceptance,
             suite,
+            construction,
             format,
             public_selection: &policy[7],
             draw_count: draws.len(),
@@ -90,6 +89,7 @@ impl RoleInterface {
         policy: &DeploymentPolicy<'_>,
         role_map: &Json,
         public_map: &Json,
+        construction: Option<&ConstructionPlan>,
     ) -> Result<Self> {
         let (entry, producer, validator) = (policy.entry, policy.producer, policy.validator);
         let suite = policy.suite;
@@ -107,11 +107,14 @@ impl RoleInterface {
             if role.participant != text(&row[1])? {
                 return Err("native-proof-role-map".into());
             }
-            let extra = usize::from(suite.is_some());
-            if role.inputs.len() < extra || role.outputs.len() < extra {
+            let inputs =
+                construction.map_or(usize::from(suite.is_some()), ConstructionPlan::input_slots);
+            let outputs =
+                construction.map_or(usize::from(suite.is_some()), ConstructionPlan::output_slots);
+            if role.inputs.len() < inputs || role.outputs.len() < outputs {
                 return Err("native-proof-port-map".into());
             }
-            let input_types = role.inputs[..role.inputs.len() - extra]
+            let input_types = role.inputs[..role.inputs.len() - inputs]
                 .iter()
                 .map(|(_, t)| t.clone())
                 .collect::<Vec<_>>();
@@ -119,7 +122,7 @@ impl RoleInterface {
             for ty in &input_types {
                 input_kind(ty)?;
             }
-            let outputs = ports(&row[3], &role.outputs[..role.outputs.len() - extra])?;
+            let outputs = ports(&row[3], &role.outputs[..role.outputs.len() - outputs])?;
             // This host returns proof bytes and retires its issued roots. It
             // has no caller-owned backend in which other affine outputs could
             // remain live, unlike the general bundle host.

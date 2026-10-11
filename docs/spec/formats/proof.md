@@ -208,10 +208,12 @@ target, provider suite and replacement authority must match this policy.
 Indices are canonical decimal strings less than 1024. Public input indices are
 strictly increasing and enumerate every validator data input, including unused
 inputs. All are explicitly authorized for public invocation binding. `service`
-is the original validator service input index. An empty suite and service with
-an empty draw list selects authored execution without a transcript. Otherwise
-both a supported suite and the selected service are required, with one through
-64 draws. A draw pair selects either a `draw` or an `index` query of that service. Selectors use prepared static occurrence sites; native labels retain
+is the original validator service input index. With no construction selector,
+an empty suite, service and draw list select authored execution; a native
+selection requires a supported suite, selected service and 1–64 draws. A custom
+selection requires its replaced service and permits 0–64 draws. Local factories
+use an empty suite. Selecting a managed provider does not itself establish
+invocation binding. A draw pair selects either a `draw` or an `index` query of that service. Selectors use prepared static occurrence sites; native labels retain
 original authored paths. No timing or security premise follows from selecting
 this policy.
 
@@ -230,7 +232,7 @@ The immutable compiler descriptor is:
 ["zkc.native-proof-descriptor/0", policy, "zkc.native-origin/0",
  [event, ...],
  [[validator, original_port, logical_type, codec], ...],
- [[message_origin_hex, logical_type, codec], ...]]
+ [[message_origin_hex, logical_type, codec], ...], construction_plan]
 event = ["query", origin_hex] | ["index", origin_hex, bound] | ["message", origin_hex]
 ```
 
@@ -241,16 +243,46 @@ refuses any other row width, a noncanonical or invalid bound, and a kind whose
 origin method differs. Events and messages follow original source order. Public ports follow original
 input order. The descriptor includes the complete selected logical policy,
 origin tag, event labels and nominal wire codecs. Candidate implementation
-names and generated helper symbols are absent. The descriptor is encoded with
-the bounded logical tree encoding when hashing or constructing an invocation
-root.
+names and generated helper symbols are absent from the native baseline, whose
+`construction_plan` is `[]`. A programmable selection carries its executable
+association:
+
+```text
+["zkc.construction-plan/0", selected_symbol, root,
+ [logical_state_type, ...], initializer_or_empty,
+ [start_or_empty, [original_input, ...]],
+ [[adapter_symbol, "local" | "native", [origin_hex, ...]], ...]]
+```
+
+The selected symbol must equal the policy selector. Adapters cover every event
+exactly once in descriptor order. A message adapter receives all leaves of its
+ordered group; a query adapter returns one sample. Each group has one direction
+and loop path. State inputs come first, then message values, then loop
+coordinates; outputs are the query sample, if any, followed by state slots.
+
+A Local root calls its zero-argument initializer once per participant, then its
+start handler with state and the selected original inputs. Each start input must
+exist at both participants. No managed transcript is created. A Host root uses
+one managed transcript input. State results follow original participant results;
+loop-carried state, yields and early-completion results use the same trailing
+slot order. Zero-slot state still has ordered handler occurrences. The Runtime
+checks these positions and operands, including actual received message values.
+
+A custom bounded-index adapter checks `sample < bound` before returning. Its
+ordinary handler body owns the sampling algorithm; range checks do not establish
+uniformity. The Runtime independently checks the range guard and static bound.
+
+The descriptor is encoded with the bounded logical tree encoding when hashing
+or constructing an invocation root. The caller authenticates the deployment;
+structural admission does not authenticate handler source or prove its security.
 
 A constructed projection interface adds a `construction` dictionary with
-`format = "zkc.native-construction/0"`, the logical `transcript` type,
-`removed_services` (the original service index), and a complete actual `actions`
-map. All original interface fields, port lists and action records remain
-unchanged. Each participant appends exactly one transcript input and result;
-original data and output positions remain unchanged. Formation checks the new
+`format = "zkc.native-construction/0"`, `state` types, `root`, selected `plan`
+(or empty for native), `helpers`, `removed_services` (the original service
+index), and the complete actual `actions` map. Original interface fields, port
+lists and action records remain unchanged. Host roots append state inputs;
+both root kinds append state results. Original data and output positions stay
+unchanged. Formation checks the new
 signatures, remaining services and every actual action. It retains original
 producer queries, messages, local calls and guards exactly and in order. Only
 queries at the removed service owner and that owner's outgoing challenge

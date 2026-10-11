@@ -82,7 +82,7 @@ struct InterfaceProofEntry {
   InterfaceSelector acceptance;
   std::optional<InterfaceSelector> completion;
   std::optional<unsigned> target, service;
-  std::string suite;
+  std::string suite, selectedConstruction;
   protocol::ProofFormat format = protocol::ProofFormat::Native;
 };
 struct LanguageInterface {

@@ -587,6 +587,7 @@ fn proof_fixture() -> (Value, String) {
         "zkc.native-origin/0",
         [],
         [["role00000000", "0", "bool", "zkcv.bool/0"]],
+        [],
         []
     ]);
     let artifact = json!([

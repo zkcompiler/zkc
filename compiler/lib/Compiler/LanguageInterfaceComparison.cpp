@@ -235,7 +235,7 @@ class Comparison {
           return false;
     }
     for (const auto &decl : entry.project().declarations())
-      if (decl.anonymous && !decl.generatedReduction &&
+      if (decl.anonymous && decl.relation && !decl.generatedReduction &&
           !anonymous.count(decl.id.index))
         return fail("source omitted an inline predicate binding");
     auto sources = entry.project().sources();
@@ -382,6 +382,11 @@ class Comparison {
              selector(entry.protocol(), *source->completion,
                       *actual.completion)) &&
             text(source->suite, actual.suite) &&
+            text(source->construction == ProofEntry::Construction::Derived
+                     ? entry.declarations()[source->selectedConstruction->index]
+                           .symbol
+                     : "",
+                 actual.selectedConstruction) &&
             selector(entry.protocol(), source->acceptance,
                      actual.acceptance)) ||
            fail("source Entry choices differ");

@@ -5,6 +5,7 @@
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
@@ -44,6 +45,7 @@ class Reader {
       relationIdentities;
   std::map<std::string, protocol_ir::MathematicalOp> nativeProtocols;
   std::map<std::string, relation::DeclareOp> nativeRelations;
+  std::map<std::string, protocol_ir::ConstructionOp> nativeConstructions;
   std::map<std::string, mlir::func::FuncOp> helpers;
   relation::FormulaIdentities formulas;
   std::map<const InterfaceSchema *, std::string> schemaIdentities;
@@ -1266,8 +1268,44 @@ class Reader {
       proof.construction = ProofEntry::Construction::FiatShamir;
       proof.suite = suite->str();
       proof.service = *service;
+    } else if (*constructionKind == "derived") {
+      if (!object(construction,
+                  {"kind", "format", "suite", "service", "symbol"}))
+        return false;
+      auto symbol = text(*constructionObject, "symbol");
+      auto service = natural(*constructionObject, "service");
+      std::string suite;
+      if (constructionObject->get("suite")->kind() != json::Value::Null) {
+        auto name = text(*constructionObject, "suite");
+        if (!name)
+          return false;
+        suite = name->str();
+      }
+      if (!symbol || !service || *service >= current->services.size() ||
+          current->services[*service].owner != proof.verifier ||
+          proof.format != protocol::ProofFormat::Native)
+        return fail("construction selection or verifier service differs");
+      auto found = nativeConstructions.find(symbol->str());
+      if (nativeConstructions.size() != 1 || found == nativeConstructions.end())
+        return fail("construction record differs");
+      mlir::SymbolTableCollection symbols;
+      auto plan = protocol::readConstructionPlan(found->second, symbols);
+      if (!plan) {
+        consumeError(plan.takeError());
+        return fail("invalid construction record");
+      }
+      if (plan->target.getValue() != current->symbol || plan->suite != suite ||
+          plan->service != current->services[*service].native)
+        return fail("construction record differs");
+      proof.construction = ProofEntry::Construction::Derived;
+      proof.selectedConstruction = symbol->str();
+      proof.suite = suite;
+      proof.service = *service;
     } else
       return fail("unknown Entry construction");
+    if (proof.construction != ProofEntry::Construction::Derived &&
+        !nativeConstructions.empty())
+      return fail("unselected construction record");
     for (unsigned i = 0; i < current->services.size(); ++i) {
       if (!charge(1))
         return false;
@@ -1398,6 +1436,10 @@ class Reader {
         return false;
       if (auto function = mlir::dyn_cast<protocol_ir::MathematicalOp>(op))
         nativeProtocols.emplace(function.getSymName().str(), function);
+      else if (auto construction =
+                   mlir::dyn_cast<protocol_ir::ConstructionOp>(op))
+        nativeConstructions.emplace(construction.getSymName().str(),
+                                    construction);
       else if (auto relation = mlir::dyn_cast<relation::DeclareOp>(op))
         nativeRelations.emplace(relation.getSymName().str(), relation);
       else if (auto helper = mlir::dyn_cast<mlir::func::FuncOp>(op))

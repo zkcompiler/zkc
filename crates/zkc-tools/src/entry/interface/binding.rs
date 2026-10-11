@@ -61,7 +61,9 @@ impl BoundInterface {
         let native = deployment.source_interface();
         let entry = deployment.entry();
         let suite = proof.suite.as_deref();
-        let service = proof.transcript.map(|i| p.services[i].native as usize);
+        let service = proof
+            .replaced_service
+            .map(|i| p.services[i].native as usize);
         require(
             native.publication == self.artifact
                 && native.source == self.original()
@@ -76,6 +78,7 @@ impl BoundInterface {
                 && &entry.validator().role == verifier
                 && native.acceptance == proof.acceptance
                 && native.suite == suite
+                && native.construction == proof.construction.as_deref().unwrap_or("")
                 && native.format == proof.format
                 && native.service == service
                 && native.roles.len() == p.roles.len(),

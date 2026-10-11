@@ -122,6 +122,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             "zkc.native-origin/0",
             [],
             [],
+            [],
             []
         ]);
         let output_map = if returned {

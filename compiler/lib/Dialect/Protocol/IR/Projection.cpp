@@ -246,6 +246,9 @@ struct MetadataVerifier {
         return refuse(record, "invalid native construction mapping");
       hostRoot = root.getValue() == "host";
       programmable = !plan.empty();
+      if (hostRoot && programmable)
+        return refuse(
+            record, "managed construction plans require source authorization");
       for (auto item : states) {
         auto state = dyn_cast<TypeAttr>(item);
         if (!state)
@@ -615,7 +618,7 @@ struct MetadataVerifier {
       if (insertedCallees != constructionHelpers)
         return refuse(record, "unused construction helper selection");
       for (auto callee : retainedCallees)
-        if (insertedCallees.contains(callee))
+        if (!programmable && insertedCallees.contains(callee))
           return refuse(record,
                         "inserted transcript helper used by retained action");
     }
