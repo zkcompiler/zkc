@@ -442,24 +442,27 @@ module { "protocol.module"() ({
   depth("expanded helper calls beyond the Ring depth limit",
         chain(600, "algebra.field_add", false, 2), false);
   for (bool unused : {false, true})
-    cases.run(unused ? "many maps near the shared helper operation limit"
-                     : "many maps with deep live formulas", [&] {
-      auto text = chain(1023, "algebra.field_add", false);
-      if (unused)
-        text = edit(text, "func.return %v1022", "func.return %v0");
-      std::string declarations;
-      // Live output also faces the 400,000-node Local artifact bound. With
-      // unused source arithmetic, 97 maps charge 99,716 helper operations
-      // while their compact candidates remain inside that separate bound.
-      for (unsigned i = 1; i < (unused ? 97u : 24u); ++i)
-        declarations += " algebra.map_realize @mapped" + std::to_string(i) +
-                        " = @outer [true] : (!V)->!V\n";
-      text = edit(text, " local.func @work", declarations + " local.func @work");
-      auto module = parseSourceString<ModuleOp>(text, &context);
-      require(bool(module), "many-map fixture refused");
-      require(succeeded(mathematical::expandMapRealizations(*module)),
-              "correspondence budget refused a large admitted map family");
-    });
+    cases.run(
+        unused ? "many maps near the shared helper operation limit"
+               : "many maps with deep live formulas",
+        [&] {
+          auto text = chain(1023, "algebra.field_add", false);
+          if (unused)
+            text = edit(text, "func.return %v1022", "func.return %v0");
+          std::string declarations;
+          // Live output also faces the 400,000-node Local artifact bound. With
+          // unused source arithmetic, 97 maps charge 99,716 helper operations
+          // while their compact candidates remain inside that separate bound.
+          for (unsigned i = 1; i < (unused ? 97u : 24u); ++i)
+            declarations += " algebra.map_realize @mapped" + std::to_string(i) +
+                            " = @outer [true] : (!V)->!V\n";
+          text = edit(text, " local.func @work",
+                      declarations + " local.func @work");
+          auto module = parseSourceString<ModuleOp>(text, &context);
+          require(bool(module), "many-map fixture refused");
+          require(succeeded(mathematical::expandMapRealizations(*module)),
+                  "correspondence budget refused a large admitted map family");
+        });
   // Admission charges the root helper before cloning it, operations no
   // result reaches included, and then charges only the callees it expands.
   // One work unit admits the map; every charged operation costs one more than
