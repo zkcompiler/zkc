@@ -191,9 +191,6 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
     if (!types.charge(input.inputs.size() + 1, {}))
       return {};
   std::copy(inputs.begin(), inputs.end(), result.values.begin());
-  // Written effects include primitive checks and explicit terminators; scoped
-  // calls are bounded by the definition's allowance even before substitution.
-  result.effects = {body.mayStop, body.opaque};
   auto gather = [&](ArrayRef<ValueId> operands)
       -> std::optional<std::vector<Dependencies>> {
     std::vector<Dependencies> values;
@@ -234,8 +231,6 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
         return false;
     result.formation.insert(result.formation.end(), nested.formation.begin(),
                             nested.formation.end());
-    result.effects.mayStop |= nested.effects.mayStop;
-    result.effects.opaque |= nested.effects.opaque;
     result.parameterized |= nested.parameterized;
     return true;
   };
@@ -406,8 +401,6 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
         if (!combined)
           return {};
         dependencies = std::move(*combined);
-        result.effects.mayStop |= known.body->mayStop;
-        result.effects.opaque |= known.body->opaque;
       } else {
         std::vector<Dependencies> selectedDomains;
         for (auto domain : call->domainArguments) {

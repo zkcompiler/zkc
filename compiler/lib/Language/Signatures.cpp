@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "Effects.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -475,6 +476,30 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       }
       decl.scopedInputs.push_back({src.name, std::move(signature), src.span});
     }
+    if (decl.kind == Declaration::Kind::Local && decl.abstract &&
+        !decl.effectAllowance)
+      return types.fail(
+          "source.effect",
+          "abstract Local outputs require an explicit effects(...) contract",
+          decl.span);
+    for (const auto &name : source.effectDependencies) {
+      if (!types.charge(decl.scopedInputs.size() + 1, decl.span))
+        return false;
+      auto found = llvm::find_if(decl.scopedInputs, [&](const auto &input) {
+        return input.name == name;
+      });
+      if (found == decl.scopedInputs.end())
+        return types.fail("source.effect",
+                          "output effect must name an own callback input",
+                          decl.span);
+      auto ceiling = found->signature.allowance;
+      if (ceiling.mayStop || ceiling.opaque)
+        decl.effectAllowance->dependencies.emplace(
+            unsigned(found - decl.scopedInputs.begin()), ceiling);
+    }
+    if (decl.effectAllowance &&
+        !joinEffects(types, *decl.effectAllowance, EffectSummary{}, decl.span))
+      return false;
     for (const auto &src : source.services) {
       if (decl.kind != Declaration::Kind::Protocol ||
           src.type.kind != SyntaxType::Kind::Name ||
@@ -502,7 +527,9 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       decl.services.push_back({src.name, *field, owner->front(), src.span, {}});
     }
     if (decl.kind == Declaration::Kind::Math && decl.effectAllowance &&
-        (decl.effectAllowance->mayStop || decl.effectAllowance->opaque))
+        (decl.effectAllowance->fixed.mayStop ||
+         decl.effectAllowance->fixed.opaque ||
+         !decl.effectAllowance->dependencies.empty()))
       return types.fail("source.effect",
                         "math callable cannot allow ordered effects",
                         decl.span);

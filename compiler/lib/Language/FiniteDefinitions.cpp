@@ -64,7 +64,8 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
         "finite body must accept the selected item and state on its domain");
   if (filtered && !matches(decl.scopedInputs[0].signature, {item}, Type{}))
     return refuse("finite predicate must return bool on its domain");
-  if (decl.effectAllowance && !mathematical && !decl.effectAllowance->mayStop)
+  if (decl.effectAllowance && !mathematical &&
+      !decl.effectAllowance->fixed.mayStop)
     return types.fail("source.effect", "finite admission can stop", decl.span);
   for (const auto &type : {item, element, output}) {
     if (!types.permissions(type, decl.span, &decl) ||
@@ -107,7 +108,7 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
        decl.span,
        0});
   body.results = {result};
-  body.mayStop = !mathematical;
+  body.effects.fixed.mayStop = !mathematical;
   body.parameterizedSummary = true;
   decl.finiteDefinition = identity;
   return true;

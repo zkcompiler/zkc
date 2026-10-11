@@ -143,9 +143,18 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
         {"index", slot.index}});
   bool domain = decl.kind == Declaration::Kind::DomainFunction;
   bool ordered = decl.kind != Declaration::Kind::Math && !domain;
-  Effects effects =
-      decl.body ? Effects{decl.body->mayStop, decl.body->opaque}
-                : decl.effectAllowance.value_or(Effects{ordered, ordered});
+  auto renderEffects = [](const EffectSummary &summary) {
+    json::Array dependencies;
+    for (const auto &[slot, ceiling] : summary.dependencies)
+      dependencies.push_back(json::Object{{"callback", slot},
+                                          {"stop", ceiling.mayStop},
+                                          {"opaque", ceiling.opaque}});
+    return json::Object{{"stop", summary.fixed.mayStop},
+                        {"opaque", summary.fixed.opaque},
+                        {"dependencies", std::move(dependencies)}};
+  };
+  auto effects = decl.body ? decl.body->effects
+                           : decl.effectAllowance.value_or(EffectSummary{});
   json::Object result{
       {"name", decl.qualifiedName},
       {"abstract", decl.abstract},
@@ -165,8 +174,7 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
       {"outputs", ports(decl.outputs)},
       {"services", std::move(services)},
       {"requirements", std::move(requirements)},
-      {"effects",
-       json::Object{{"stop", effects.mayStop}, {"opaque", effects.opaque}}},
+      {"effects", renderEffects(effects)},
       {"source",
        json::Object{{"module", project.sources()[decl.module.index].module},
                     {"origin", project.sources()[decl.module.index].origin ==
@@ -191,9 +199,8 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
       result["definition"] = "domain_constructor";
   }
   if (decl.effectAllowance || decl.abstract) {
-    auto allowance = decl.effectAllowance.value_or(Effects{ordered, ordered});
-    result["effect_allowance"] =
-        json::Object{{"stop", allowance.mayStop}, {"opaque", allowance.opaque}};
+    auto allowance = decl.effectAllowance.value_or(EffectSummary{});
+    result["effect_allowance"] = renderEffects(allowance);
   }
   if (owner) {
     json::Object parent{{"name", owner->qualifiedName},

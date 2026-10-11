@@ -584,7 +584,8 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
   }
   if (body.mode == Body::Mode::Local) {
     auto *action = std::get_if<LocalPrimitive>(&operation.action);
-    return (action && action->contract == primitive->identity &&
+    return (action && action->origin == LocalPrimitive::Origin::Primitive &&
+            action->contract == primitive->identity &&
             sameOperands(action->operands, binding.operands) &&
             action->parameters.empty() && action->staticArguments.empty() &&
             action->assetReferences.empty() &&

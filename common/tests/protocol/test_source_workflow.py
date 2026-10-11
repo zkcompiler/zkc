@@ -315,7 +315,7 @@ pub protocol Run roles(P,V)(x:bool@(P,V))->(out:bool@V){
     assert declarations[-1]['roles'] == ['P', 'V']
     assert declarations[1]['outputs'][0]['type'] == 'F'
     assert declarations[1]['parameters'][0]['sort'] == 'Field'
-    assert declarations[0]['effects'] == {'opaque': False, 'stop': False}
+    assert declarations[0]['effects'] == {'opaque': False, 'stop': False, 'dependencies': []}
     compact = journal.json(command)
     assert 'declarations' not in compact
     source.write_text('module main; fn bad<T:Type+Copy+Drop>(x:T)->bool{return x;}')

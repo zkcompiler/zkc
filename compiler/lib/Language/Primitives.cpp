@@ -275,9 +275,10 @@ bool Checker::primitiveBody(Declaration &decl, Body &body) {
     LocalPrimitive primitive{identity, operands, {}};
     primitive.bindingArguments = *arguments;
     action = std::move(primitive);
-    body.mayStop = identity != "index.equal";
+    body.effects.fixed.mayStop = identity != "index.equal";
   }
-  if (decl.effectAllowance && body.mayStop && !decl.effectAllowance->mayStop)
+  if (decl.effectAllowance && body.effects.fixed.mayStop &&
+      !decl.effectAllowance->fixed.mayStop)
     return types.fail("source.effect",
                       "primitive exceeds its written effect allowance",
                       decl.span);

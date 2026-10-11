@@ -296,6 +296,7 @@ struct SyntaxDeclaration {
   bool explicitRequirements = false;
   std::optional<Permissions> permissions;
   std::optional<Effects> effects;
+  std::vector<std::string> effectDependencies;
   std::optional<SyntaxType> definition;
   std::vector<SyntaxType> targetArguments;
   std::vector<ArgumentLabel> targetLabels;

@@ -274,6 +274,9 @@ class ValueCheck {
           return false;
       } else if (const auto *primitive =
                      std::get_if<LocalPrimitive>(&op->action)) {
+        if ((expr.kind == Expression::Kind::Kernel) !=
+            (primitive->origin == LocalPrimitive::Origin::Kernel))
+          return refuse(expr.span);
         if (expr.kind == Expression::Kind::Kernel &&
             !arguments(primitive->operands, expr))
           return false;

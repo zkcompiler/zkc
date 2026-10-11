@@ -1,4 +1,5 @@
 #include "BodyCheck.h"
+#include "Effects.h"
 #include "FiniteContracts.h"
 #include "zkc/Contracts/Kernels.h"
 #include <algorithm>
@@ -291,7 +292,6 @@ bool BodyChecker::statements(const SyntaxBody &source) {
       if (!use(*value, s.span) ||
           !emitResults(Require{*value, requireOwner}, {}, s.span))
         return false;
-      body.mayStop = true;
       ++statement;
       continue;
     }
@@ -381,7 +381,6 @@ bool BodyChecker::statements(const SyntaxBody &source) {
       return fail("source.mode", "unknown local stop reason", source.span);
     body.stopped = true;
     body.stopReason = source.stopReason;
-    body.mayStop = true;
   }
   return true;
 }
@@ -594,8 +593,7 @@ bool Checker::body(DeclarationId id, unsigned depth) {
                         "shared output requires Copy, Drop and Share", p.span);
   }
   if (decl.effectAllowance &&
-      ((result.mayStop && !decl.effectAllowance->mayStop) ||
-       (result.opaque && !decl.effectAllowance->opaque)))
+      !effectsWithin(types, result.effects, *decl.effectAllowance, decl.span))
     return types.fail("source.effect",
                       "body exceeds its written effect allowance", decl.span);
   decl.body = std::make_shared<Body>(std::move(result));

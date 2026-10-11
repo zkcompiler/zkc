@@ -132,7 +132,7 @@ int main() {
   cases.run("component inspection keeps abstract and inherited allowances", [] {
     auto captured = take(capture({{"m", R"(module m;
       pub interface Boxed<F:Field>{
-        type State; fn make(x:F)->State; fn open(x:State)->F;
+        type State; fn make(x:F)->State effects(stop, opaque); fn open(x:State)->F effects(stop, opaque);
       }
       pub component Box<F:Field>:Boxed<F>{
         type State=F;
@@ -176,12 +176,12 @@ int main() {
                       .getAsObject()
                       ->getBoolean("inherited") == true,
               "owner parameter was presented as a member argument");
-      if (!abstract) {
-        auto *allowance = decl->getObject("effect_allowance");
-        require(allowance && allowance->getBoolean("stop") == true &&
-                    allowance->getBoolean("opaque") == true,
-                "inherited effect allowance is missing");
-      }
+      if (!abstract)
+        require(!decl->getObject("effect_allowance"),
+                "inferred implementation acquired an authored ceiling");
+      require(effects->getArray("dependencies") &&
+                  effects->getArray("dependencies")->empty(),
+              "concrete effect summary has dependencies");
     }
     require(bytes.find("Hidden") == std::string::npos &&
                 bytes.find("self:") == std::string::npos,

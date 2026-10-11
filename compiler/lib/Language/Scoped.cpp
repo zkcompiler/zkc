@@ -1,4 +1,5 @@
 #include "BodyCheck.h"
+#include "Effects.h"
 #include "ScopedWitness.h"
 #include <algorithm>
 using namespace llvm;
@@ -157,8 +158,8 @@ BodyChecker::scopedArgument(uint32_t id, const ScopedSignature &signature,
   }
   if (!nested.finish(region.span))
     return {};
-  if ((checked->mayStop && !signature.allowance.mayStop) ||
-      (checked->opaque && !signature.allowance.opaque)) {
+  if (!effectsWithin(checker.types, checked->effects,
+                     EffectSummary{signature.allowance}, expr.span)) {
     fail("source.effect", "scoped body exceeds its signature allowance",
          expr.span);
     return {};
@@ -191,8 +192,6 @@ std::optional<ValueId> BodyChecker::invokeScoped(uint32_t id, unsigned depth) {
     body.expressionValues.insert_or_assign(expr.children[i], *value);
     operands.push_back(*value);
   }
-  body.mayStop |= signature.allowance.mayStop;
-  body.opaque |= signature.allowance.opaque;
   body.parameterizedSummary = true;
   auto dependencies = combine(operands, expr.span);
   if (!dependencies)
@@ -207,6 +206,17 @@ std::optional<ValueId> BodyChecker::invokeScoped(uint32_t id, unsigned depth) {
               expr.span);
 }
 bool Checker::retainScopedSources() {
+  for (const auto &decl : output.declarations) {
+    if (!types.charge(1, decl.span))
+      return false;
+    if (decl.scopedInputs.empty() && !decl.effectAllowance)
+      continue;
+    auto syntax = retainSyntax(decl.id);
+    if (!syntax)
+      return false;
+    output.effectSources.emplace(decl.id.index, std::move(syntax));
+  }
+
   for (auto &source : scopedInvocations) {
     source->syntax = retainSyntax(source->owner);
     if (!source->syntax)

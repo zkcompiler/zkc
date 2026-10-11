@@ -1,6 +1,7 @@
 #include "ScopedWitness.h"
 #include "Arguments.h"
 #include "BindingWitness.h"
+#include "Effects.h"
 #include "FiniteContracts.h"
 #include "FiniteDomains.h"
 #include "Semantics.h"
@@ -191,8 +192,8 @@ public:
         body.mode != (source.signature.mode == ScopedSignature::Mode::Math
                           ? Body::Mode::Math
                           : Body::Mode::Local) ||
-        (body.mayStop && !source.signature.allowance.mayStop) ||
-        (body.opaque && !source.signature.allowance.opaque))
+        !effectsWithin(types, body.effects,
+                       EffectSummary{source.signature.allowance}, binding.span))
       return refuse(binding.span);
     for (unsigned i = 0; i < explicitInputs; ++i)
       if (body.values[i].type != source.signature.inputs[i])
@@ -279,6 +280,49 @@ public:
 } // namespace
 Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   Semantics types(storage.declarations, storage.assets, work);
+  for (const auto &[index, syntax] : storage.effectSources) {
+    auto refuse = [&] {
+      return failure("source.scoped-witness",
+                     "effect contract differs from authored signature");
+    };
+    if (!syntax || index >= storage.declarations.size())
+      return refuse();
+    const auto &decl = storage.declarations[index];
+    if (!types.charge(syntax->scopedInputs.size() +
+                          syntax->effectDependencies.size() + 1,
+                      decl.span))
+      return types.takeError();
+    if (decl.scopedInputs.size() != syntax->scopedInputs.size())
+      return refuse();
+    for (unsigned slot = 0; slot < decl.scopedInputs.size(); ++slot) {
+      const auto &written = syntax->scopedInputs[slot].scoped;
+      const auto &actual = decl.scopedInputs[slot].signature;
+      if (!written || written->mode != actual.mode ||
+          written->allowance != actual.allowance)
+        return refuse();
+    }
+    std::optional<EffectSummary> expected;
+    if (syntax->effects) {
+      expected = EffectSummary{*syntax->effects};
+      for (const auto &name : syntax->effectDependencies) {
+        if (!types.charge(syntax->scopedInputs.size() + 1, decl.span))
+          return types.takeError();
+        auto found =
+            llvm::find_if(syntax->scopedInputs, [&](const auto &input) {
+              return input.name == name;
+            });
+        if (found == syntax->scopedInputs.end() || !found->scoped)
+          return refuse();
+        expected->dependencies.emplace(
+            unsigned(found - syntax->scopedInputs.begin()),
+            found->scoped->allowance);
+      }
+      if (!joinEffects(types, *expected, EffectSummary{}, decl.span))
+        return types.takeError();
+    }
+    if (expected != decl.effectAllowance)
+      return refuse();
+  }
   std::vector<unsigned> uses(storage.scopedSources.size());
   std::vector<unsigned> callUses(storage.scopedCalls.size());
   std::vector<unsigned> invocationUses(storage.scopedInvocations.size());
@@ -631,6 +675,10 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
             if (!visit(*repeat->region, {}, depth + 1))
               return false;
         }
+        auto effects = inferEffects(types, storage.declarations, body);
+        if (!effects || *effects != body.effects)
+          return types.fail("source.scoped-witness",
+                            "effect summary differs from operations", {});
         return true;
       };
   for (const auto &decl : storage.declarations) {

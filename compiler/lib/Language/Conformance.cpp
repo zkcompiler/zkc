@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "Effects.h"
 #include "zkc/Language/Builtins.h"
 #include <algorithm>
 using namespace llvm;
@@ -218,23 +219,11 @@ bool Checker::conformance(DeclarationId id) {
       }
       if (required.kind == Declaration::Kind::DomainFunction)
         continue;
-      auto allowance = required.effectAllowance.value_or(
-          Effects{required.kind == Declaration::Kind::Local,
-                  required.kind == Declaration::Kind::Local});
-      auto &mutableProvided = output.declarations[provided->id.index];
-      if (mutableProvided.effectAllowance) {
-        auto p = *mutableProvided.effectAllowance;
-        if ((p.mayStop && !allowance.mayStop) ||
-            (p.opaque && !allowance.opaque))
-          return types.fail("source.conformance",
-                            "member effect allowance exceeds interface",
-                            provided->span);
-      } else
-        mutableProvided.effectAllowance = allowance;
-      if ((provided->body->mayStop && !allowance.mayStop) ||
-          (provided->body->opaque && !allowance.opaque))
+      auto allowance = required.effectAllowance.value_or(EffectSummary{});
+      if (!effectsWithin(types, provided->body->effects, allowance,
+                         provided->span))
         return types.fail("source.effect",
-                          "body exceeds its interface effect allowance",
+                          "body exceeds its interface effect contract",
                           provided->span);
     }
   }

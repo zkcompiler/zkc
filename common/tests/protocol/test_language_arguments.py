@@ -12,7 +12,7 @@ def test_named_calls_preserve_written_order_and_declared_types(
     toolchain, journal, directory, flags,
 ):
     source = '''module sample;
-interface Ops<T:Type>{fn select(first:T,second:index)->(T,index);}
+interface Ops<T:Type>{fn select(first:T,second:index)->(T,index) effects(stop, opaque);}
 component Impl<T:Type>:Ops<T>{fn select(a:T,b:index)->(T,index){return(a,b);}}
 fn abstract_call<C:Ops<bool>>(x:bool,n:index){return C::select(second=n,first=x);}
 fn pair<A:Type,B:Type>(left:A,right:B){return(left,right);}

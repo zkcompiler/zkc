@@ -94,11 +94,11 @@ int main() {
     require(localAction(decl(project, "m::named")) == "field.add" &&
                 localAction(decl(project, "m::infix")) == "field.add",
             "scalar call acquired a wrapper");
-    require(!decl(project, "m::named").body->mayStop &&
-                !decl(project, "m::total").body->mayStop,
+    require(!decl(project, "m::named").body->effects.fixed.mayStop &&
+                !decl(project, "m::total").body->effects.fixed.mayStop,
             "total scalar primitive became stopping");
-    require(decl(project, "m::index_sum").body->mayStop &&
-                !decl(project, "m::index_eq").body->mayStop,
+    require(decl(project, "m::index_sum").body->effects.fixed.mayStop &&
+                !decl(project, "m::index_eq").body->effects.fixed.mayStop,
             "index primitive effects changed");
     require(std::get<MathValue>(
                 decl(project, "m::total").body->operations.back().action)
@@ -113,7 +113,8 @@ int main() {
       run Demo=Run;
     )"));
     const auto &body = *decl(project, "m::Run").body;
-    require(body.mayStop, "protocol erased index arithmetic failure");
+    require(body.effects.fixed.mayStop,
+            "protocol erased index arithmetic failure");
     require(llvm::count_if(body.operations,
                            [](const auto &op) {
                              return std::holds_alternative<HelperCall>(
@@ -181,7 +182,7 @@ int main() {
             {}}}));
       require(localAction(decl(project, "m::f")) == "vector.add",
               "vector lost native identity");
-      require(decl(project, "m::f").body->mayStop,
+      require(decl(project, "m::f").body->effects.fixed.mayStop,
               "vector shape failure erased");
     });
   cases.run("named-only import leaves operators inactive", [&] {
@@ -286,7 +287,7 @@ int main() {
            {"type A<T:Field,N:nat>=builtin(\"field_array\",T,N);math fn "
             "f<T:Field,N:nat,I:nat>(a:A<T,N>)->T=primitive(\"array.at\");",
             "source.primitive"},
-           {"type V=builtin(\"vector\",F);fn f(a:V,b:V)->V !{} = "
+           {"type V=builtin(\"vector\",F);fn f(a:V,b:V)->V effects() = "
             "primitive(\"vector.add\");",
             "source.effect"},
            {"fn f()->index=primitive(\"index.constant\");", "source.primitive"},
@@ -379,8 +380,9 @@ int main() {
   for (StringRef import : {"use v as T;", "use r::{T};"})
     for (StringRef source :
          {"fn id<T:Type>(x:T)->T{return x;}",
-          "interface I<T:Type>{fn f(x:T)->T;}",
-          "interface I{fn f(T:bool)->bool;}", "fn f(T:bool)->bool{return T;}"})
+          "interface I<T:Type>{fn f(x:T)->T effects(stop, opaque);}",
+          "interface I{fn f(T:bool)->bool effects(stop, opaque);}",
+          "fn f(T:bool)->bool{return T;}"})
       cases.run("signature alias shadowing: " + import + source, [&] {
         refuses(check({{"v", "module v;", {}},
                        {"r", "module r;pub use v as T;", {}},
@@ -388,8 +390,12 @@ int main() {
                 "source.shadow");
       });
   cases.run("abstract inputs cannot shadow static parameters", [&] {
-    refuses(check("interface I<T:Type>{fn f(T:bool)->bool;}"), "source.shadow");
-    refuses(check("interface I{fn f<T:Type>(T:bool)->bool;}"), "source.shadow");
+    refuses(
+        check("interface I<T:Type>{fn f(T:bool)->bool effects(stop, opaque);}"),
+        "source.shadow");
+    refuses(
+        check("interface I{fn f<T:Type>(T:bool)->bool effects(stop, opaque);}"),
+        "source.shadow");
   });
   cases.run("effects and body modes cannot select an overload", [&] {
     refuses(check(field + R"(

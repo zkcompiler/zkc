@@ -2,6 +2,7 @@
 #include "ClosureInputs.h"
 #include "DataRequirements.h"
 #include "DomainWitness.h"
+#include "Effects.h"
 #include "FiniteContracts.h"
 #include "zkc/Language/Project.h"
 #include <algorithm>
@@ -219,9 +220,8 @@ class SpecializationCheck {
         actual.operations.size() != original.operations.size() ||
         actual.stopped != original.stopped ||
         actual.stopReason != original.stopReason ||
-        actual.mayStop != original.mayStop ||
-        actual.opaque != original.opaque || !actual.scopedBindings.empty() ||
-        !actual.domainBindings.empty() || !same(actual.results, results))
+        !actual.scopedBindings.empty() || !actual.domainBindings.empty() ||
+        !same(actual.results, results))
       return refuse({});
     for (unsigned i = 0; i < original.values.size(); ++i) {
       const auto &expected = original.values[i];
@@ -234,6 +234,10 @@ class SpecializationCheck {
           (actual.mode == Body::Mode::Local && !value.components.empty()))
         return refuse(expected.span);
     }
+    auto effects = inferEffects(types, candidate, actual);
+    if (!effects || !effects->dependencies.empty() ||
+        *effects != actual.effects)
+      return refuse({}, "specialized effect summary differs from operations");
     if (actual.mode == Body::Mode::Math) {
       std::vector<Dependencies> inputs;
       for (unsigned i = 0; i < actual.inputs; ++i)
@@ -448,6 +452,7 @@ class SpecializationCheck {
               auto statics = arguments(action.staticArguments, subst, op.span);
               if (!statics || *statics != value.staticArguments ||
                   action.contract != value.contract ||
+                  action.origin != value.origin ||
                   !same(value.operands, mapped(action.operands)) ||
                   bool(action.bindingArguments) != bool(value.bindingArguments))
                 return false;
@@ -728,7 +733,8 @@ class SpecializationCheck {
         if (binding.parameter)
           domainItems.push_back(binding.item);
       if (!actual.effectAllowance ||
-          !(*actual.effectAllowance == computation->signature.allowance))
+          !(*actual.effectAllowance ==
+            EffectSummary{computation->signature.allowance}))
         return refuse(actual.span);
     } else {
       for (const auto &port : original.inputs)
@@ -739,7 +745,27 @@ class SpecializationCheck {
         signatures.push_back(parameter.signature);
       for (const auto &parameter : original.domainInputs)
         domainItems.push_back(parameter.item);
-      if (actual.effectAllowance != original.effectAllowance)
+      std::optional<EffectSummary> expectedAllowance;
+      if (original.effectAllowance) {
+        std::vector<EffectSummary> effects;
+        for (auto callback : selected) {
+          if (!types.charge(1, actual.span) ||
+              callback.index >= candidate.size() ||
+              !candidate[callback.index].body)
+            return refuse(actual.span);
+          if (!types.charge(
+                  candidate[callback.index].body->effects.dependencies.size() +
+                      1,
+                  actual.span))
+            return false;
+          effects.push_back(candidate[callback.index].body->effects);
+        }
+        expectedAllowance = substituteEffects(types, *original.effectAllowance,
+                                              effects, actual.span);
+        if (!expectedAllowance)
+          return false;
+      }
+      if (actual.effectAllowance != expectedAllowance)
         return refuse(actual.span);
     }
     if (signatures.size() != selected.size() ||
@@ -781,8 +807,10 @@ class SpecializationCheck {
           helper.kind != (signatures[i].mode == ScopedSignature::Mode::Math
                               ? Declaration::Kind::Math
                               : Declaration::Kind::Local) ||
-          (helper.body->mayStop && !signatures[i].allowance.mayStop) ||
-          (helper.body->opaque && !signatures[i].allowance.opaque))
+          (helper.body->effects.fixed.mayStop &&
+           !signatures[i].allowance.mayStop) ||
+          (helper.body->effects.fixed.opaque &&
+           !signatures[i].allowance.opaque))
         return refuse(actual.span);
       for (unsigned j = 0; j < signatures[i].inputs.size(); ++j)
         if (!typeEqual(signatures[i].inputs[j], helper.inputs[j].type, subst,

@@ -309,8 +309,6 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
     }
     if (!nested.finish(expr.span))
       return {};
-    body.mayStop |= arm.body->mayStop;
-    body.opaque |= arm.body->opaque;
     body.parameterizedSummary |= arm.body->parameterizedSummary;
     operation.regions.push_back(arm.body);
   }

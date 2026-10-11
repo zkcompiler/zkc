@@ -33,8 +33,8 @@ concrete domains, Entries and transcript constructions in
 ### Mathematics
 
 `zkc::computation` demonstrates ordinary user-defined combinators. Its Math
-functions accept total scoped bodies; its Local functions allow `stop` and
-support affine explicit inputs. Captures require Copy+Drop and become explicit
+functions accept total scoped bodies; its Local functions use `effects(body)`
+to preserve the supplied callback effects and support affine explicit inputs. Captures require Copy+Drop and become explicit
 private-helper arguments. The [component client](../examples/projects/scoped-computations/README.md)
 forwards nested callbacks with record/vector captures and a checked lookup.
 

@@ -1,6 +1,8 @@
+#include "../lib/Language/Effects.h"
 #include "support/NativeCases.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/Project.h"
+#include "llvm/Support/JSON.h"
 using namespace llvm;
 using namespace zkc::language;
 using namespace zkc::test;
@@ -11,8 +13,8 @@ type Vector<F:Field>=builtin("vector",F);
 fn get<F:Field>(xs:Vector<F>,i:index)->F=primitive("vector.get");
 math fn apply_math<A:Type+Copy+Drop,B:Type+Copy+Drop>(x:A,body:math fn(A)->B)->B{return body(x);}
 math fn forward_math<A:Type+Copy+Drop,B:Type+Copy+Drop>(x:A,body:math fn(A)->B)->B{return apply_math(x,body);}
-fn apply<A:Type,B:Type>(x:A,body:fn(A)->B !{stop})->B !{stop}{return body(x);}
-fn forward<A:Type,B:Type>(x:A,body:fn(A)->B !{stop})->B !{stop}{return apply(x,body);}
+fn apply<A:Type,B:Type>(x:A,body:fn(A)->B effects(stop))->B effects(stop){return body(x);}
+fn forward<A:Type,B:Type>(x:A,body:fn(A)->B effects(stop))->B effects(stop){return apply(x,body);}
 )";
 Expected<CheckedProject> check(StringRef source) {
   auto captured = capture({{"m", prelude + source.str(), "scoped.zkc"}});
@@ -38,6 +40,91 @@ void succeeds(StringRef source) {
 } // namespace
 int main() {
   Cases cases;
+  cases.run("symbolic effects specialize below explicit callback ceilings", [] {
+    succeeds(R"(
+fn precise(x:Fr)->Fr effects(){return forward(x,fn(y)=>y+1);}
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return precise(x);}
+run Run=Demo;)");
+    refuses(check(R"(
+fn bad(x:Fr)->Fr effects(){return forward(x,fn(y)=>{require y==1;y});}
+)"),
+            "source.effect");
+  });
+  cases.run("omitted callback ceilings retain dependencies through captures",
+            [] {
+              succeeds(R"(
+fn invoke(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){return f(x);}
+fn adapter(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){return invoke(x,fn(y)=>invoke(y,fn(z)=>f(z)));}
+fn precise(x:Fr)->Fr effects(){return adapter(x,fn(y)=>y+1);}
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return precise(x);}
+run Run=Demo;)");
+            });
+  cases.run("output contracts are universally checked by callback identity", [] {
+    for (
+        auto source :
+        {R"(fn bad(x:Fr,first:fn(Fr)->Fr,second:fn(Fr)->Fr)->Fr effects(first){return second(x);})",
+         R"(fn bad(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){require x==1;return f(x);})",
+         R"(fn clean(x:Fr,f:fn(Fr)->Fr effects())->Fr effects(){return f(x);} fn bad(x:Fr,f:fn(Fr)->Fr)->Fr{return clean(x,f);})"}) {
+      refuses(check(source), StringRef(source).contains("clean(x,f)")
+                                 ? "source.scoped"
+                                 : "source.effect");
+    }
+    succeeds(R"(
+fn chain(x:Fr,first:fn(Fr)->Fr,second:fn(Fr)->Fr)->Fr effects(first,second){return second(first(x));}
+fn unused(x:Fr,f:fn(Fr)->Fr)->Fr effects(){return x;}
+fn renamed(x:Fr,callback:fn(Fr)->Fr)->Fr effects(callback){return callback(x);}
+fn clean(x:Fr)->Fr effects(){return chain(x,fn(y)=>y,fn(y)=>unused(y,fn(z)=>{require z==1;z}));}
+)");
+  });
+  cases.run("explicit kernel authoring retains its stopping envelope", [] {
+    refuses(check(R"(
+fn bad()->Fr effects(){return kernel<Fr>("field.constant";"1");}
+)"),
+            "source.effect");
+    succeeds(R"(
+fn good()->Fr effects(){return 1;}
+)");
+  });
+  cases.run("eager argument evaluation is retained with unused callbacks", [] {
+    refuses(check(R"(
+fn unused(x:Fr,f:fn(Fr)->Fr)->Fr effects(){return x;}
+fn argument(x:Fr)->Fr{require x==1;return x;}
+fn bad(x:Fr)->Fr effects(){return unused(argument(x),fn(y)=>y);}
+)"),
+            "source.effect");
+  });
+  cases.run("effect grammar rejects legacy and foreign dependency syntax", [] {
+    for (auto source : {R"(fn f(x:Fr)->Fr !{}{return x;})",
+                        R"(fn f(x:Fr)->Fr effects(x){return x;})",
+                        R"(fn f(x:Fr,b:fn(Fr)->Fr effects(b))->Fr{return x;})",
+                        R"(fn f(x:Fr)->Fr effects(missing){return x;})",
+                        R"(interface I{fn f(x:Fr)->Fr;})",
+                        R"(fn f(x:Fr)->Fr effects() effects(){return x;})",
+                        R"(fn f(x:Fr)->Fr where () effects(){return x;})"}) {
+      refuses(check(source),
+              StringRef(source).contains("effects() effects()") ||
+                      StringRef(source).contains("where () effects()")
+                  ? "source.syntax"
+                  : "source.effect");
+    }
+    refuses(check("fn f(x:Fr)->Fr effects(stop,stop){return x;}"),
+            "source.duplicate");
+    succeeds("fn effects(x:Fr)->Fr effects(){return x;}");
+  });
+  cases.run("interface output dependencies preserve alpha-renamed slots", [] {
+    succeeds(R"(
+interface I{fn run(x:Fr,body:fn(Fr)->Fr)->Fr effects(body);}
+component C:I{fn run(x:Fr,renamed:fn(Fr)->Fr)->Fr{return renamed(x);}}
+fn through<T:I>(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){return T::run(x,f);}
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return through<C>(x,fn(y)=>y);}
+run Run=Demo;)");
+    refuses(check(R"(
+interface I{fn run(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr effects(a);}
+component C:I{fn run(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr{return b(x);}}
+)"),
+            "source.effect");
+  });
+
   cases.run("generic Local apply and forwarding", [] {
     succeeds(R"(
 protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return(r=forward(x,fn(y)=>y+a));}
@@ -45,8 +132,8 @@ run Run=Demo;)");
   });
   cases.run("existing reduction inside scoped callback", [] {
     succeeds(R"(
-fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn sum<I:Type+Copy+Drop>(rows:domain<I>,term:fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fn(state, item)=>state+term(item));}
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S effects(stop) on(rows))->S effects(stop)=finite("local.fold");
+fn sum<I:Type+Copy+Drop>(rows:domain<I>,term:fn(I)->Fr effects(stop) on(rows))->Fr effects(stop){return fold(rows,0,fn(state, item)=>state+term(item));}
 reduction ∑=sum;
 fn example(xs:Vector<Fr>,a:Fr)->Fr {
  return apply(a,fn(y)=>∑ x in xs, (x+a+y));
@@ -57,8 +144,8 @@ run Run=Demo;)");
   cases.run(
       "scoped specialization retains joint authored and captured aliases", [] {
         auto project = take(check(R"(
-fn twice(x:Fr,y:Fr,body:fn(Fr)->Fr !{stop})->Fr !{stop}{return body(x)+y;}
-fn dispatcher(x:Fr,y:Fr,body:fn(Fr)->Fr !{stop})->Fr !{stop}{
+fn twice(x:Fr,y:Fr,body:fn(Fr)->Fr effects(stop))->Fr effects(stop){return body(x)+y;}
+fn dispatcher(x:Fr,y:Fr,body:fn(Fr)->Fr effects(stop))->Fr effects(stop){
  return twice(x,x,body)+twice(x,y,body);
 }
 protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){return dispatcher(x,y,fn(v)=>v+y);}
@@ -100,21 +187,22 @@ run Run=Demo;
         require(bool(error), "forged capture alias was accepted");
         consumeError(std::move(error));
       });
-  cases.run("long sequential let aliases close without expression recursion",
-            [] {
-              std::string program = "fn chain(x:Fr)->Fr !{stop}{let a0=x;";
-              for (unsigned i = 1; i <= 150; ++i)
-                program += "let a" + std::to_string(i) + "=a" +
-                           std::to_string(i - 1) + ";";
-              program += "return apply(a150,fn(y)=>y+a150);}";
-              program += "protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return "
-                         "chain(x);}run Run=Demo;";
-              auto closed = take(closeEntry(take(check(program)), "m::Run"));
-              if (auto error = checkScopedSpecialization(closed))
-                throw std::runtime_error(toString(std::move(error)));
-            });
+  cases.run(
+      "long sequential let aliases close without expression recursion", [] {
+        std::string program = "fn chain(x:Fr)->Fr effects(stop){let a0=x;";
+        for (unsigned i = 1; i <= 150; ++i)
+          program +=
+              "let a" + std::to_string(i) + "=a" + std::to_string(i - 1) + ";";
+        program += "return apply(a150,fn(y)=>y+a150);}";
+        program += "protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return "
+                   "chain(x);}run Run=Demo;";
+        auto closed = take(closeEntry(take(check(program)), "m::Run"));
+        if (auto error = checkScopedSpecialization(closed))
+          throw std::runtime_error(toString(std::move(error)));
+      });
   cases.run("many scoped calls share one body origin table", [] {
-    std::string program = "fn wide(x:Fr,body:fn(Fr)->Fr !{stop})->Fr !{stop}{";
+    std::string program =
+        "fn wide(x:Fr,body:fn(Fr)->Fr effects(stop))->Fr effects(stop){";
     for (unsigned i = 0; i < 1200; ++i)
       program += "let a" + std::to_string(i) + "=apply(x,body);";
     program +=
@@ -154,7 +242,7 @@ protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){let r=Inner(x,y);return r;}run R
   });
   cases.run("truncated hidden input body is rejected before reading ports", [] {
     auto closed = take(closeEntry(take(check(R"(
-fn twice(x:Fr,y:Fr,body:fn(Fr)->Fr !{stop})->Fr !{stop}{return body(x)+y;}
+fn twice(x:Fr,y:Fr,body:fn(Fr)->Fr effects(stop))->Fr effects(stop){return body(x)+y;}
 protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return twice(x,x,fn(y)=>y+a);}run Run=Demo;
 )")),
                                   "m::Run"));
@@ -177,10 +265,10 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return twice(x,x,fn(y)=>y+a);}ru
   cases.run("finite binder inside a scoped helper preserves capture layouts",
             [] {
               auto project = take(check(R"(
-fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn sum<I:Type+Copy+Drop>(rows:domain<I>,term:fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fn(state, item)=>state+term(item));}
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S effects(stop) on(rows))->S effects(stop)=finite("local.fold");
+fn sum<I:Type+Copy+Drop>(rows:domain<I>,term:fn(I)->Fr effects(stop) on(rows))->Fr effects(stop){return fold(rows,0,fn(state, item)=>state+term(item));}
 reduction ∑=sum;
-fn g(xs:Vector<Fr>,a:Fr,body:fn(Fr)->Fr !{stop})->Fr !{stop}{let r=∑ x in xs,(x+a);return body(r);}
+fn g(xs:Vector<Fr>,a:Fr,body:fn(Fr)->Fr effects(stop))->Fr effects(stop){let r=∑ x in xs,(x+a);return body(r);}
 protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return g(xs,a,fn(y)=>y+b);}run Run=Demo;
 )"));
               auto closed = take(closeEntry(project, "m::Run"));
@@ -198,7 +286,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return g(xs,a,fn
   cases.run(
       "loop carried state cannot alias an invariant callback capture", [] {
         auto project = take(check(R"(
-fn iterate(x:Fr,n:index,body:fn(Fr)->Fr !{stop})->Fr !{stop}{
+fn iterate(x:Fr,n:index,body:fn(Fr)->Fr effects(stop))->Fr effects(stop){
  let mut state=x;for _ in 0..n {state=body(state);}return state;
 }
 protocol Demo roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return iterate(x,n,fn(y)=>y+x);}run Run=Demo;
@@ -250,7 +338,7 @@ protocol Demo roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return iterate(x,n,fn(y)=>y+x
                 "enum Choice {Left(Fr),Right(Fr)} fn choose(x:Fr,flag:" +
                 flagType +
                 ",body:fn(Fr)->Fr "
-                "!{stop})->Fr !{stop}{" +
+                "effects(stop))->Fr effects(stop){" +
                 expression +
                 "}protocol Demo roles(P)(x:Fr@P,y:Fr@P,flag:" + flagType +
                 "@P)"
@@ -300,12 +388,12 @@ run Run=Demo;)");
   });
   cases.run("component nested scoped capture and record projections", [] {
     succeeds(R"(
-interface Transform<F:Field>{fn adjust(x:F)->F !{};fn run(x:F,body:fn(F)->F !{stop})->F !{stop};}
+interface Transform<F:Field>{fn adjust(x:F)->F effects();fn run(x:F,body:fn(F)->F effects(stop))->F effects(stop);}
 component Increment<F:Field>:Transform<F>{
- fn adjust(x:F)->F !{}{return x+1;}
- fn run(x:F,body:fn(F)->F !{stop})->F !{stop}{return forward(x,fn(y)=>body(adjust(y)));}
+ fn adjust(x:F)->F effects(){return x+1;}
+ fn run(x:F,body:fn(F)->F effects(stop))->F effects(stop){return forward(x,fn(y)=>body(adjust(y)));}
 }
-fn through<F:Field,C:Transform<F>>(x:F,body:fn(F)->F !{stop})->F !{stop}{return C::run(x,body);}
+fn through<F:Field,C:Transform<F>>(x:F,body:fn(F)->F effects(stop))->F effects(stop){return C::run(x,body);}
 struct Parameters<F:Field>{pub shift:F,pub table:Vector<F>}
 protocol Demo roles(P,V)(x:Fr@(P,V),parameters:Parameters<Fr>@P,position:index@P)->(r:Fr@P){
  let result=through<Fr,Increment<Fr>>(x,fn(y)=>forward(y,fn(z)=>get(parameters.table,position)+z+parameters.shift));
@@ -315,22 +403,22 @@ run Run=Demo;)");
   });
   cases.run("Local callback has short circuit inside protocol", [] {
     succeeds(R"(
-fn fail(x:bool)->bool !{stop}{require x;return x;}
+fn fail(x:bool)->bool effects(stop){require x;return x;}
 protocol Demo roles(P)(x:bool@P)->(r:bool@P){return(r=apply(x,fn(y)=>false && fail(y)));}
 run Run=Demo;)");
   });
   cases.run("multiple inputs and tuple destructuring", [] {
     succeeds(R"(
-fn two(x:Fr,y:Fr,body:fn(Fr,Fr)->Fr !{})->Fr !{}{return body(x,y);}
-fn pair(x:(Fr,Fr),body:fn((Fr,Fr))->Fr !{})->Fr !{}{return body(x);}
+fn two(x:Fr,y:Fr,body:fn(Fr,Fr)->Fr effects())->Fr effects(){return body(x,y);}
+fn pair(x:(Fr,Fr),body:fn((Fr,Fr))->Fr effects())->Fr effects(){return body(x);}
 fn example(x:Fr,y:Fr)->Fr{return two(x,y,fn(a, b)=>a+b)+pair((x,y),fn((a,b))=>a-b);}
 protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){return(r=example(x,y));}run Run=Demo;)");
   });
   cases.run("empty input list, Unit pattern and trailing comma", [] {
     succeeds(R"(
-fn zero(body:fn()->Fr !{})->Fr !{}{return body();}
-fn unit(body:fn(())->Fr !{})->Fr !{}{return body(());}
-fn one(x:Fr,body:fn(Fr)->Fr !{})->Fr !{}{return body(x);}
+fn zero(body:fn()->Fr effects())->Fr effects(){return body();}
+fn unit(body:fn(())->Fr effects())->Fr effects(){return body(());}
+fn one(x:Fr,body:fn(Fr)->Fr effects())->Fr effects(){return body(x);}
 fn work(x:Fr)->Fr{return zero(fn()=>x)+unit(fn(())=>x)+one(x,fn(y,)=>y);}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}run Run=Demo;
 )");
@@ -364,19 +452,20 @@ run Run=Demo;
 )");
   });
   for (const auto &source :
-       {"fn f(body:scoped fn(Fr)->Fr !{})->Fr{return body(0);}",
+       {"fn f(body:scoped fn(Fr)->Fr effects())->Fr{return body(0);}",
         "math fn f(body:scoped math fn(Fr)->Fr)->Fr{return body(0);}",
         "fn f(rows:scoped domain<Fr>)->Fr{return 0;}",
         "domain fn f(xs:Vector<Fr>)->scoped domain<Fr>=domain(\"elements\");"})
     cases.run("reject obsolete signature " + std::string(source),
               [source] { refuses(check(source), "source.syntax"); });
   for (const auto &source :
-       {"type Callback=fn(Fr)->Fr !{};", "type Rows=domain<Fr>;",
-        "struct Holder{body:fn(Fr)->Fr !{}}", "struct Holder{rows:domain<Fr>}",
-        "fn f()->fn(Fr)->Fr !{}{return fn(x)=>x;}",
+       {"type Callback=fn(Fr)->Fr effects();", "type Rows=domain<Fr>;",
+        "struct Holder{body:fn(Fr)->Fr effects()}",
+        "struct Holder{rows:domain<Fr>}",
+        "fn f()->fn(Fr)->Fr effects(){return fn(x)=>x;}",
         "fn f()->domain<Fr>{return [];}",
-        "fn f(pair:(Fr,fn(Fr)->Fr !{}))->Fr{return 0;}",
-        "fn f(body:fn(fn(Fr)->Fr !{})->Fr !{})->Fr{return 0;}"})
+        "fn f(pair:(Fr,fn(Fr)->Fr effects()))->Fr{return 0;}",
+        "fn f(body:fn(fn(Fr)->Fr effects())->Fr effects())->Fr{return 0;}"})
     cases.run("reject static signature in runtime type " + std::string(source),
               [source] { refuses(check(source), "source.name"); });
   for (const auto &[literal, code] :
@@ -408,7 +497,7 @@ protocol Demo roles(P,V)(x:bool@(P,V))->(r:bool@(P,V)){return true && apply_math
   });
   cases.run("unused contextual callback and all-stopping callback", [] {
     succeeds(R"(
-fn ignore<A:Type+Drop,B:Type+Copy+Drop>(x:A,body:fn(A)->B !{stop},fallback:B)->B !{}{return fallback;}
+fn ignore<A:Type+Drop,B:Type+Copy+Drop>(x:A,body:fn(A)->B effects(stop),fallback:B)->B effects(){return fallback;}
 fn work(x:Fr)->Fr{return ignore(x,fn(_)=>{stop "reject";},x);}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}run Run=Demo;
 )");
@@ -478,36 +567,38 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return f(x,a);}run Run=Demo;
   });
 
   const std::vector<std::pair<std::string, std::string>> refusals = {
-      {"protocol Bad roles(P)(body:fn(Fr)->Fr !{}@P)->(){return();}",
+      {"protocol Bad roles(P)(body:fn(Fr)->Fr effects()@P)->(){return();}",
        "source.scoped"},
       {"protocol Bad roles(P)(body:math fn(Fr)->Fr@P)->(){return();}",
        "source.scoped"},
-      {"protocol Bad roles(P)()->(body:fn(Fr)->Fr !{}@P){return();}",
+      {"protocol Bad roles(P)()->(body:fn(Fr)->Fr effects()@P){return();}",
        "source.scoped"},
       {"protocol Bad roles(P)()->(body:math fn(Fr)->Fr@P){return();}",
        "source.scoped"},
       {"protocol Bad roles(P)()->(rows:domain<Fr>@P){return();}",
        "source.scoped"},
 
-      {"fn f(x:Fr,b:fn(Fr)->Fr)->Fr{return x;}", "source.effect"},
-      {"fn f(x:Fr,b:math fn(Fr)->Fr !{stop})->Fr{return x;}", "source.effect"},
+      {"fn f(x:Fr,b:math fn(Fr)->Fr effects(stop))->Fr{return x;}",
+       "source.effect"},
       {"fn f(x:Fr)->Fr{return apply_math(x,fn(y)=>get(([],),0));}",
        "source.type"},
-      {"fn f(x:Fr,b:fn(Fr)->Fr !{})->Fr{return b;}", "source.scoped"},
+      {"fn f(x:Fr,b:fn(Fr)->Fr effects())->Fr{return b;}", "source.scoped"},
       {"fn f(x:Fr)->Fr{let b=fn(y)=>y;return x;}", "source.scoped"},
       {"fn f(x:Fr)->Fr{let mut a=x;return apply(x,fn(y)=>{a=y;y});}",
        "source.scoped-capture"},
-      {"fn unused<A:Type>(x:A,b:fn(A)->A !{})->A{return b(true);}",
+      {"fn unused<A:Type>(x:A,b:fn(A)->A effects())->A{return b(true);}",
        "source.type"},
-      {"math fn f(x:Fr,b:fn(Fr)->Fr !{})->Fr{return b(x);}", "source.mode"},
-      {"fn stop_value(x:Fr)->Fr !{stop}{stop \"reject\";} fn "
+      {"math fn f(x:Fr,b:fn(Fr)->Fr effects())->Fr{return b(x);}",
+       "source.mode"},
+      {"fn stop_value(x:Fr)->Fr effects(stop){stop \"reject\";} fn "
        "f(x:Fr)->Fr{return apply_math(x,fn(y)=>stop_value(y));}",
        "source.mode"},
-      {"fn clean(x:Fr,b:fn(Fr)->Fr !{})->Fr !{}{return b(x);} fn "
-       "stop_value(x:Fr)->Fr !{stop}{stop \"reject\";} fn f(x:Fr)->Fr{return "
+      {"fn clean(x:Fr,b:fn(Fr)->Fr effects())->Fr effects(){return b(x);} fn "
+       "stop_value(x:Fr)->Fr effects(stop){stop \"reject\";} fn "
+       "f(x:Fr)->Fr{return "
        "clean(x,fn(y)=>stop_value(y));}",
        "source.effect"},
-      {"fn f(x:Fr,b:fn(Fr)->Fr !{})->Fr{return apply_math(x,b);}",
+      {"fn f(x:Fr,b:fn(Fr)->Fr effects())->Fr{return apply_math(x,b);}",
        "source.scoped"},
       {"protocol Demo "
        "roles(P,V)(x:Fr@(P,V),a:Fr@P,b:Fr@V)->(r:Fr@P){return(r=apply(x,fn(y)=>"
@@ -540,8 +631,9 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return f(x,a);}run Run=Demo;
       {"protocol Demo roles(P)(x:Fr@P,coins:Random<Fr>@P)->(r:Fr@P){return "
        "apply(x,fn(y)=>y+coins.draw());}run Run=Demo;",
        "source.scoped-capture"},
-      {"interface I{fn f(x:Fr,b:fn(Fr)->Fr !{})->Fr !{};}component "
-       "C:I{fn f(x:Fr,b:fn(Fr)->Fr !{stop})->Fr !{stop}{return b(x);}}",
+      {"interface I{fn f(x:Fr,b:fn(Fr)->Fr effects())->Fr effects();}component "
+       "C:I{fn f(x:Fr,b:fn(Fr)->Fr effects(stop))->Fr effects(stop){return "
+       "b(x);}}",
        "source.conformance"},
       {"fn unused<A:Type+Copy+Drop>(x:A)->A{return apply_math(x,fn(y)=>{let "
        "bad:bool=y;y});}",
@@ -569,8 +661,9 @@ protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return forward(x,fn(y)=>forward(y,fn(z)
             "wrong witness budget refusal");
   });
   cases.run("declaration inspection separates scoped and runtime inputs", [] {
-    auto project = take(check("pub fn export_body(x:Fr,body:fn(Fr)->Fr "
-                              "!{stop})->Fr !{stop}{return body(x);}"));
+    auto project =
+        take(check("pub fn export_body(x:Fr,body:fn(Fr)->Fr "
+                   "effects(stop))->Fr effects(stop){return body(x);}"));
     auto json = take(inspectDeclarations(project));
     require(StringRef(json).contains("\"scoped_inputs\"") &&
                 StringRef(json).contains("\"scoped\"") &&
@@ -579,7 +672,7 @@ protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return forward(x,fn(y)=>forward(y,fn(z)
   });
   cases.run("forwarded scoped selection mutation is rejected", [] {
     auto project = take(check(R"(
-fn chain(x:Fr,first:fn(Fr)->Fr !{stop},second:fn(Fr)->Fr !{stop})->Fr !{stop}{return second(first(x));}
+fn chain(x:Fr,first:fn(Fr)->Fr effects(stop),second:fn(Fr)->Fr effects(stop))->Fr effects(stop){return second(first(x));}
 protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return chain(x,fn(y)=>y+a,fn(y)=>y*b);}run Run=Demo;
 )"));
     auto closed = take(closeEntry(project, "m::Run"));
@@ -607,7 +700,7 @@ run Run=Demo;)";
               " scoped call mapping mutation " + std::to_string(mutation),
           [&] {
             auto project = take(check(R"(
-fn chain(x:Fr,first:fn(Fr)->Fr !{stop},second:fn(Fr)->Fr !{stop})->Fr !{stop}{return second(first(x));}
+fn chain(x:Fr,first:fn(Fr)->Fr effects(stop),second:fn(Fr)->Fr effects(stop))->Fr effects(stop){return second(first(x));}
 protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return chain(second=fn(y)=>y*b,x=x,first=fn(y)=>y+a);}run Run=Demo;
 )"));
             auto closed = take(closeEntry(project, "m::Run"));
@@ -826,5 +919,182 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return forward(x,fn(y)=>{
                   std::string::npos,
               "wrong specialization refusal");
         });
+  cases.run("captured dependency keeps outer identity across local numbering",
+            [] {
+              succeeds(R"(
+fn invoke(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){return f(x);}
+fn adapter(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr effects(b){
+ return invoke(x,fn(y)=>invoke(y,fn(z)=>b(z)));
+}
+fn clean(x:Fr)->Fr effects(){return adapter(x,fn(y)=>{require y==1;y},fn(y)=>y);}
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return clean(x);}
+run Run=Demo;)");
+              refuses(check(R"(
+fn invoke(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){return f(x);}
+fn adapter(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr effects(a){return invoke(x,fn(y)=>b(y));}
+)"),
+                      "source.effect");
+            });
+  cases.run("many forwarding layers preserve precise effects", [] {
+    std::string program =
+        "fn layer0(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){return f(x);}";
+    for (unsigned i = 1; i < 20; ++i)
+      program += "fn layer" + std::to_string(i) +
+                 "(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){return layer" +
+                 std::to_string(i - 1) + "(x,f);}";
+    program += "fn clean(x:Fr)->Fr effects(){return layer19(x,fn(y)=>y+1);}";
+    succeeds(program);
+  });
+  for (bool specialized : {false, true})
+    cases.run(
+        std::string(specialized ? "closed" : "open") +
+            " kernel envelope mutation",
+        [&] {
+          auto project = take(check(R"(
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return apply(x,fn(y)=>kernel<Fr>("field.constant";"1"));}
+run Run=Demo;)"));
+          auto closed = take(closeEntry(project, "m::Run"));
+          bool changed = false;
+          auto mutate = [&](const std::shared_ptr<const Body> &original) {
+            auto body = std::make_shared<Body>(*original);
+            for (auto &op : body->operations)
+              if (auto *primitive = std::get_if<LocalPrimitive>(&op.action))
+                if (primitive->origin == LocalPrimitive::Origin::Kernel) {
+                  primitive->origin = LocalPrimitive::Origin::Primitive;
+                  body->effects = EffectSummary{};
+                  changed = true;
+                }
+            return body;
+          };
+          if (specialized) {
+            for (const auto &decl : closed.declarations())
+              if (decl.scopedOrigin && decl.body)
+                const_cast<Declaration &>(decl).body = mutate(decl.body);
+          } else {
+            for (const auto &decl : project.declarations())
+              if (decl.name == "Demo") {
+                auto body = std::make_shared<Body>(*decl.body);
+                for (auto &binding : body->scopedBindings)
+                  if (binding.computation) {
+                    auto computation = std::make_shared<ScopedComputation>(
+                        *binding.computation);
+                    computation->body = mutate(computation->body);
+                    binding.computation = computation;
+                  }
+                const_cast<Declaration &>(decl).body = body;
+              }
+          }
+          require(changed, "kernel mutation not applied");
+          auto error = specialized ? checkScopedSpecialization(closed)
+                                   : checkScopedElaboration(project);
+          require(bool(error), "altered kernel envelope and summary accepted");
+          require(toString(std::move(error))
+                          .find(specialized ? "source.scoped-specialization"
+                                            : "source.scoped-witness") !=
+                      std::string::npos,
+                  "wrong kernel envelope refusal");
+        });
+  cases.run("effect transformations enforce shared work limits", [] {
+    using namespace zkc::language::detail;
+    for (unsigned operation = 0; operation < 4; ++operation) {
+      Limits limits;
+      limits.work = 0;
+      Work work{limits};
+      std::vector<Declaration> declarations;
+      Semantics types(declarations, {}, work);
+      EffectSummary summary;
+      summary.dependencies.emplace(0, Effects{true, true});
+      EffectSummary into;
+      Body body;
+      body.mode = Body::Mode::Local;
+      bool accepted = operation == 0   ? joinEffects(types, into, summary)
+                      : operation == 1 ? effectsWithin(types, summary, summary)
+                      : operation == 2
+                          ? bool(substituteEffects(types, summary, {summary}))
+                          : bool(inferEffects(types, declarations, body));
+      require(!accepted && types.diagnostic.has_value(),
+              "effect work bypassed limit");
+      require(toString(types.takeError()).find("source.limit") !=
+                  std::string::npos,
+              "wrong effect work refusal");
+    }
+  });
+  cases.run(
+      "inspection separates fixed effects from callback dependencies", [] {
+        auto project = take(check(R"(
+pub fn inspect(x:Fr,a:fn(Fr)->Fr effects(stop),b:fn(Fr)->Fr)->Fr effects(a,b){return a(b(x));}
+pub fn selected(x:Fr)->Fr effects(){return inspect(x,fn(y)=>y,fn(y)=>y);}
+)"));
+        auto value = take(json::parse(take(inspectDeclarations(project))));
+        bool found = false;
+        for (auto &item : *value.getAsArray()) {
+          auto &decl = *item.getAsObject();
+          auto &effects = *decl.getObject("effects");
+          require(effects.getBoolean("stop") == false &&
+                      effects.getBoolean("opaque") == false,
+                  "symbolic maximum leaked into fixed effects");
+          auto &dependencies = *effects.getArray("dependencies");
+          if (decl.getString("name") == "m::inspect") {
+            found = true;
+            require(dependencies.size() == 2,
+                    "missing inspection dependencies");
+            require(
+                dependencies[0].getAsObject()->getInteger("callback") == 0 &&
+                    dependencies[0].getAsObject()->getBoolean("opaque") ==
+                        false &&
+                    dependencies[1].getAsObject()->getInteger("callback") ==
+                        1 &&
+                    dependencies[1].getAsObject()->getBoolean("opaque") == true,
+                "inspection lost stable slots or ceilings");
+          } else
+            require(dependencies.empty(),
+                    "selected literal retained dependency");
+        }
+        require(found, "missing public effect inspection");
+      });
+  for (unsigned mutation = 0; mutation < 4; ++mutation)
+    cases.run(
+        "independent symbolic effect mutation " + std::to_string(mutation),
+        [&] {
+          auto project = take(check(R"(
+fn compose(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr{return a(b(x));}
+)"));
+          for (const auto &decl : project.declarations())
+            if (decl.name == "compose") {
+              auto body = std::make_shared<Body>(*decl.body);
+              if (mutation == 0)
+                body->effects.dependencies.erase(0);
+              if (mutation == 1)
+                body->effects.dependencies[0].opaque = false;
+              if (mutation == 2)
+                body->effects.dependencies.emplace(100, Effects{true, true});
+              if (mutation == 3)
+                body->effects.fixed.mayStop = true;
+              const_cast<Declaration &>(decl).body = body;
+            }
+          auto error = checkScopedElaboration(project);
+          require(bool(error), "altered open effect summary accepted");
+          require(toString(std::move(error)).find("source.scoped-witness") !=
+                      std::string::npos,
+                  "wrong symbolic summary refusal");
+        });
+  cases.run("independent closed effect mutation is rejected", [] {
+    auto project = take(check(R"(
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return forward(x,fn(y)=>y);}
+run Run=Demo;)"));
+    auto closed = take(closeEntry(project, "m::Run"));
+    bool changed = false;
+    for (const auto &decl : closed.declarations())
+      if (decl.body && decl.name == "forward") {
+        auto body = std::make_shared<Body>(*decl.body);
+        body->effects.dependencies.emplace(0, Effects{true, true});
+        const_cast<Declaration &>(decl).body = body;
+        changed = true;
+      }
+    require(changed, "missing specialized body");
+    auto error = checkScopedSpecialization(closed);
+    require(bool(error), "open dependency accepted in closed effect summary");
+    consumeError(std::move(error));
+  });
   return cases.result();
 }

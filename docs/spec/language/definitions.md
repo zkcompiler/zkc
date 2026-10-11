@@ -155,8 +155,11 @@ ports, services, requirements, body effects (or abstract allowance), and capture
 module byte span and source `origin`. `definition` is `body`, `abstract` or
 `primitive`; primitive definitions also report the installed `primitive` identity.
 Natural/capability bounds retain their inferred flags; explicit
-or inherited effect allowances remain separate; abstract declarations always
-include their effective allowance, including the default. Type and natural
+effect allowances remain separate; abstract Local declarations always include
+their explicit allowance. Effect objects report fixed `stop` and `opaque` flags
+and a `dependencies` array whose entries identify zero-based `callback` slots
+and their label-specific `stop` and `opaque` bounds. Fixed callback acceptance
+ceilings remain separate in each `scoped_inputs` item. Type and natural
 strings are descriptive mathematical spellings,
 not a serialization accepted by the checker. The view never supplies linking
 or admission authority. Its unembedded JSON array is bounded by `interfaceBytes`;
@@ -883,11 +886,32 @@ abstract signatures may declare member-specific generic parameters.
 Records and variants are module declarations. An abstract call or type projection
 requires a bound component; a free interface name cannot select an implementation.
 
-Defined local functions infer `stop` and `opaque` effects from their bodies.
-An optional `!{stop, opaque}` is an upper bound, and `!{}` forbids both. Abstract
-local signatures default to allowing both; math signatures allow neither. An empty
-effect allowance never turns ordered code into a total mathematical function.
-Opaque runtime intrinsics are not exposed by this profile.
+Defined Local functions infer a symbolic union of fixed `stop` and `opaque`
+effects and dependencies on invoked callback inputs. An optional `effects(...)`
+clause is an absolute upper bound. It follows the result and precedes `where`.
+`effects()` forbids both tracked effects; `effects(stop, opaque)` allows both.
+An output clause may name its own callback inputs, as in `effects(body)` or
+`effects(first, second, stop)`. These names resolve to signature slots and denote
+unions, not invocations. Duplicate entries, data names and unknown names are
+rejected. `effects` remains a contextual word, usable as an ordinary identifier.
+The former punctuation spelling is rejected.
+
+A truly abstract Local output requires an explicit clause. A registered
+`primitive(...)` or `finite(...)` definition instead obtains its effects from
+its checked implementation contract. Math signatures allow neither tracked
+effect. An empty Local effect allowance never establishes Math formation or
+freedom from arbitrary host failures. Opaque runtime intrinsics are not exposed
+by this profile.
+
+Containment holds for every admissible assignment of effects to callback slots.
+For each tracked label, a fixed effect on the left requires a fixed allowance
+on the right; a dependency requires the same slot on the right unless that
+label is allowed unconditionally. Labels excluded by a callback ceiling do not
+contribute. Comparing maximum effect sets is insufficient: `effects(first)`
+does not permit invoking `second`, even when their ceilings match. Component
+input contracts remain equal after substitution, including callback mode, types,
+ceilings and domain contracts. The implementation body must be pointwise within
+the interface output contract.
 
 Bodies use lexical `let` and `let mut` bindings, whole-name assignment, nested
 block expressions and a final `return`. [Body semantics](protocols.md#bindings-and-local-control)
@@ -972,19 +996,19 @@ scoped functions, effects and capture rules as authored helpers:
 ```zkc
 fn fold<I: Type + Copy + Drop, S: Type>(
   rows: domain<I>, initial: S,
-  step: fn(S, I) -> S !{stop} on(rows)
-) -> S !{stop} = finite("local.fold");
+  step: fn(S, I) -> S effects(stop) on(rows)
+) -> S effects(stop) = finite("local.fold");
 
 fn collect<I: Type + Copy + Drop, B: Type + Copy + Drop>(
-  rows: domain<I>, body: fn(I) -> B !{stop} on(rows)
-) -> Sequence<B> !{stop} = finite("local.collect.sequence");
+  rows: domain<I>, body: fn(I) -> B effects(stop) on(rows)
+) -> Sequence<B> effects(stop) = finite("local.collect.sequence");
 ```
 
 The complete signature is checked against the selected identity. Fold state
 and domain item types are independent; Unit is a valid state. `on(rows)` ties
 the callback's last explicit parameter to an item from the indicated domain.
 `local.fold_where` adds a predicate before the step parameter. Its predicate
-has signature `fn(I) -> bool !{stop} on(rows)`; false skips the step.
+has signature `fn(I) -> bool effects(stop) on(rows)`; false skips the step.
 The corresponding collect identities are `local.collect.vector`, `.groups`,
 `.sequence`, `.indices` and `.field_array`; each admits the matching native
 result type. Appending `_where` adds a predicate before the body, except for
@@ -1093,16 +1117,16 @@ math fn apply_math<A: Type + Copy + Drop, B: Type + Copy + Drop>(
   return body(value);
 }
 
-fn apply<A: Type, B: Type>(value: A, body: fn(A) -> B !{stop}) -> B !{stop} {
+fn apply<A: Type, B: Type>(value: A, body: fn(A) -> B) -> B effects(body) {
   return body(value);
 }
 
-fn forward<A: Type, B: Type>(value: A, body: fn(A) -> B !{stop}) -> B !{stop} {
+fn forward<A: Type, B: Type>(value: A, body: fn(A) -> B) -> B effects(body) {
   return apply(value, body);
 }
 ```
 
-Computation parameters, written `fn(...) -> ... !{...}` or `math fn(...) -> ...`,
+Computation parameters, written `fn(...) -> ... effects(...)` or `math fn(...) -> ...`,
 are static, nonescaping inputs. Their signatures are not runtime `Type` values.
 A computation argument is a literal or an in-scope
 computation parameter. It cannot be bound by `let`, put in a product or variant,
@@ -1125,15 +1149,30 @@ explicit generic permissions and bounds remain necessary; call sites do not
 repair malformed definitions.
 
 A signature fixes the body's mode. `math fn(A) -> B` is total Math;
-`fn(A) -> B !{...}` is ordered Local and requires an explicit effect
-allowance, including `!{}` when empty. The existing `stop` and `opaque` effect
-names apply. Math signatures cannot allow ordered effects. A forwarded parameter
-must have matching mode, input types and result type; its effect allowance must
-fit within the receiver's allowance. Interface conformance checks the scoped
-signatures and authored input categories. An invocation contributes the declared
-allowance to generic checking even if a particular supplied body uses fewer
-effects. A Local computation cannot be invoked in Math. Component members retain
-lexical member resolution, notation and `self`, including through nested lambdas.
+`fn(A) -> B` is ordered Local. An omitted Local callback ceiling allows both
+tracked effects. An explicit `effects()` accepts only nonstopping, nonopaque
+callbacks; `effects(stop)` excludes opaque effects. The written callback ceiling
+contains fixed labels only, never sibling or enclosing callback names. In callback headers, `effects(...)` precedes `on(rows)`.
+
+Invoking a callback contributes its bounded symbolic dependency, not its full
+ceiling. Calls substitute actual callback summaries into the callee summary.
+Defined helpers retain body precision below their written upper bound; abstract
+calls use the published contract. Forwarding preserves slot identity, including
+captured outer callbacks in nested literals. An unrestricted callback cannot be
+forwarded to an empty-effect receiver. An unused callback contributes no
+invocation effect, but eager arguments, domain operands and capture evaluation
+retain their effects. Local finite admission still contributes `stop`, including
+empty traversals, and registered Local finite callbacks exclude `opaque`.
+
+A Local computation cannot be invoked in Math. Component members retain lexical
+member resolution, notation and `self`, including through nested lambdas.
+Open bodies have one canonical symbolic effect summary. Specialization produces
+a closed summary from the selected helpers; independent extraction and closure
+checks reconstruct effects from operations and validate retained identities.
+Immutable authored signatures independently anchor callback ceilings and output
+contracts, including abstract declarations.
+Dependency normalization, substitution and witness traversal use the shared
+work budget.
 
 Local literals use ordinary blocks, `if`, `match`, loops, mutable local state,
 stopping and short-circuit Boolean semantics. A Local literal authored in a

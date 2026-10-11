@@ -40,13 +40,13 @@ int main() {
 
   const std::string finitePrelude = R"(
 domain Fr=field("koala-bear");
-fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn apply<A:Type,B:Type>(x:A,body:fn(A)->B !{stop})->B !{stop}{return body(x);}
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S effects(stop) on(rows))->S effects(stop)=finite("local.fold");
+fn apply<A:Type,B:Type>(x:A,body:fn(A)->B effects(stop))->B effects(stop){return body(x);}
 )";
   const std::string notationPrelude = finitePrelude + R"(
-fn sum<I:Type+Copy+Drop>(rows:domain<I>,term:fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fn(state, item)=>state+term(item));}
-fn fold_where<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,keep:fn(I)->bool !{stop} on(rows),step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold_where");
-fn sum_where<I:Type+Copy+Drop>(rows:domain<I>,keep:fn(I)->bool !{stop} on(rows),term:fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold_where(rows,0,keep,fn(state, item)=>state+term(item));}
+fn sum<I:Type+Copy+Drop>(rows:domain<I>,term:fn(I)->Fr effects(stop) on(rows))->Fr effects(stop){return fold(rows,0,fn(state, item)=>state+term(item));}
+fn fold_where<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,keep:fn(I)->bool effects(stop) on(rows),step:fn(S,I)->S effects(stop) on(rows))->S effects(stop)=finite("local.fold_where");
+fn sum_where<I:Type+Copy+Drop>(rows:domain<I>,keep:fn(I)->bool effects(stop) on(rows),term:fn(I)->Fr effects(stop) on(rows))->Fr effects(stop){return fold_where(rows,0,keep,fn(state, item)=>state+term(item));}
 )";
   cases.run(
       "indexed callbacks capture static elements and dynamic containers", [&] {
@@ -167,12 +167,13 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,enabled:bool@P)->(r:Fr@P)
                     "xs) (y in xs) (z in xs),x*y*z;}"),
         std::string("reduction ∑=sum;fn work(xs:Vector<Fr>)->Fr{return ∑ "
                     "((x,y) in zip(xs,xs)) (z in xs),x*y*z;}"),
-        std::string("interface Scale{math fn apply(x:Fr)->Fr;}fn "
-                    "custom<C:Scale>(rows:domain<Fr>,term:"
-                    "fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{return "
-                    "sum(rows,fn(x)=>C::apply(term(x)));}fn "
-                    "work<C:Scale>(xs:Vector<Fr>)->Fr{reduction "
-                    "∑=custom<C>;return ∑ x∈xs,x;}"),
+        std::string(
+            "interface Scale{math fn apply(x:Fr)->Fr;}fn "
+            "custom<C:Scale>(rows:domain<Fr>,term:"
+            "fn(Fr)->Fr effects(stop) on(rows))->Fr effects(stop){return "
+            "sum(rows,fn(x)=>C::apply(term(x)));}fn "
+            "work<C:Scale>(xs:Vector<Fr>)->Fr{reduction "
+            "∑=custom<C>;return ∑ x∈xs,x;}"),
         std::string(
             "math fn math_fold<I:Type+Copy+Drop>(rows:"
             "domain<I>,initial:Fr,step:math fn(Fr,I)->Fr "
@@ -194,7 +195,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,enabled:bool@P)->(r:Fr@P)
            {"reduction ∑=sum;reduction ∑=sum_where;",
             "source.reduction-target"},
            {"fn other<I:Type+Copy+Drop>(rows:domain<I>,term:"
-            "fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return "
+            "fn(I)->Fr effects(stop) on(rows))->Fr effects(stop){return "
             "sum(rows,term);}reduction ∑=sum;reduction ∑=other;fn "
             "work(xs:Vector<Fr>)->Fr{return ∑ x in xs,x;}",
             "source.notation-ambiguous"},
@@ -369,10 +370,10 @@ fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
             "0..2 {result=result+term(x);}result});")})
     cases.run("restricted item forwarding " + body, [&] {
       auto project = take(check(finitePrelude + R"(
-fn sum(rows:domain<Fr>,flag:bool,term:fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{
+fn sum(rows:domain<Fr>,flag:bool,term:fn(Fr)->Fr effects(stop) on(rows))->Fr effects(stop){
 )" + body + R"(
 }
-fn reordered(unused:domain<Fr>,rows:domain<Fr>,term:fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{return sum(rows,true,term);}
+fn reordered(unused:domain<Fr>,rows:domain<Fr>,term:fn(Fr)->Fr effects(stop) on(rows))->Fr effects(stop){return sum(rows,true,term);}
 protocol Demo roles(P)(xs:Vector<Fr>@P,shift:Fr@P)->(r:Fr@P){return reordered(elements(xs),elements(xs),fn(x)=>x+shift);}run Run=Demo;
 )"));
       take(closeEntry(project, "m::Run"));
@@ -386,30 +387,30 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,shift:Fr@P)->(r:Fr@P){return reordered(el
                     "{y=term(y);}s+y});")})
     cases.run("restricted item refusal " + body, [&] {
       refuses(check(finitePrelude + R"(
-fn invalid(a:domain<Fr>,b:domain<Fr>,term:fn(Fr)->Fr !{stop} on(a))->Fr !{stop}{
+fn invalid(a:domain<Fr>,b:domain<Fr>,term:fn(Fr)->Fr effects(stop) on(a))->Fr effects(stop){
 )" + body + "}"),
               "source.scoped-domain");
     });
   cases.run("unrestricted callbacks satisfy a restricted consumer", [&] {
     take(check(finitePrelude + R"(
-fn wrapper(rows:domain<Fr>,step:fn(Fr,Fr)->Fr !{stop})->Fr !{stop}{return fold(rows,0,step);}
+fn wrapper(rows:domain<Fr>,step:fn(Fr,Fr)->Fr effects(stop))->Fr effects(stop){return fold(rows,0,step);}
 )"));
   });
   cases.run("restricted forwarding cannot switch formal domain", [&] {
     refuses(check(finitePrelude + R"(
-fn wrapper(a:domain<Fr>,b:domain<Fr>,step:fn(Fr,Fr)->Fr !{stop} on(a))->Fr !{stop}{return fold(b,0,step);}
+fn wrapper(a:domain<Fr>,b:domain<Fr>,step:fn(Fr,Fr)->Fr effects(stop) on(a))->Fr effects(stop){return fold(b,0,step);}
 )"),
             "source.scoped-domain");
   });
   cases.run("reconstructed product is not a genuine domain item", [&] {
     refuses(check(finitePrelude + R"(
-fn wrapper(rows:domain<(Fr,Fr)>,term:fn((Fr,Fr))->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fn(s, (a,b))=>s+term((a,b)));}
+fn wrapper(rows:domain<(Fr,Fr)>,term:fn((Fr,Fr))->Fr effects(stop) on(rows))->Fr effects(stop){return fold(rows,0,fn(s, (a,b))=>s+term((a,b)));}
 )"),
             "source.scoped-domain");
   });
   cases.run("retained witness rechecks finite invocation contracts", [&] {
     auto project = take(check(finitePrelude + R"(
-fn wrapper(rows:domain<Fr>,step:fn(Fr,Fr)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,step);}
+fn wrapper(rows:domain<Fr>,step:fn(Fr,Fr)->Fr effects(stop) on(rows))->Fr effects(stop){return fold(rows,0,step);}
 )"));
     // Weakening the selected callee must not authorize a restricted callback.
     auto &fold =
@@ -427,7 +428,7 @@ fn wrapper(rows:domain<Fr>,step:fn(Fr,Fr)->Fr !{stop} on(rows))->Fr !{stop}{retu
               [&] {
                 std::string source =
                     finitePrelude + R"(
-fn nested(rows:domain<Fr>,free:fn(Fr)->Fr !{stop},term:fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{
+fn nested(rows:domain<Fr>,free:fn(Fr)->Fr effects(stop),term:fn(Fr)->Fr effects(stop) on(rows))->Fr effects(stop){
  return fold(rows,0,fn(state, item)=>{let mut result:Fr=state;
    for j in 0..2 {let value=if true {term()" +
                     std::string(valid ? "item" : "0") +
@@ -448,7 +449,7 @@ fn nested(rows:domain<Fr>,free:fn(Fr)->Fr !{stop},term:fn(Fr)->Fr !{stop} on(row
                      : "scoped invocation target mutation refuses",
         [&] {
           auto project = take(check(finitePrelude + R"(
-fn nested(rows:domain<Fr>,free:fn(Fr)->Fr !{stop},term:fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{
+fn nested(rows:domain<Fr>,free:fn(Fr)->Fr effects(stop),term:fn(Fr)->Fr effects(stop) on(rows))->Fr effects(stop){
  return fold(rows,0,fn(state, item)=>{let mut result:Fr=state;
    for j in 0..2 {let value=if true {term(item)} else {free(item)};result=result+value;}
    result});
@@ -485,7 +486,7 @@ fn nested(rows:domain<Fr>,free:fn(Fr)->Fr !{stop},term:fn(Fr)->Fr !{stop} on(row
   cases.run("scoped invocation operand order mutation refuses", [&] {
     auto project = take(check(R"(
 domain Fr=field("koala-bear");
-fn apply(a:Fr,b:Fr,body:fn(Fr,Fr)->Fr !{})->Fr{return body(a,b);}
+fn apply(a:Fr,b:Fr,body:fn(Fr,Fr)->Fr effects())->Fr{return body(a,b);}
 )"));
     auto &body =
         const_cast<Body &>(*declarationNamed(project, "m::apply").body);
@@ -716,14 +717,15 @@ math fn bad(xs:Array<Fr,3>,ys:Array<Fr,5>)->bool where equal_extent(xs,ys){retur
   });
   cases.run("registered finite definitions retain ordered callback slots", [] {
     auto project = take(check(R"(
-fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn filtered<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,keep:fn(I)->bool !{stop} on(rows),step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold_where");
-fn collect<I:Type+Copy+Drop,F:Field>(rows:domain<I>,body:fn(I)->F !{stop} on(rows))->Vector<F> !{stop}=finite("local.collect.vector");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S effects(stop) on(rows))->S effects(stop)=finite("local.fold");
+fn filtered<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,keep:fn(I)->bool effects(stop) on(rows),step:fn(S,I)->S effects(stop) on(rows))->S effects(stop)=finite("local.fold_where");
+fn collect<I:Type+Copy+Drop,F:Field>(rows:domain<I>,body:fn(I)->F effects(stop) on(rows))->Vector<F> effects(stop)=finite("local.collect.vector");
 math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:math fn(S,I)->S on(rows))->S=finite("math.fold");
 )"));
     const auto &fold = declarationNamed(project, "m::fold");
     require(fold.finiteDefinition == "local.fold" && fold.body &&
-                fold.body->parameterizedSummary && fold.body->mayStop,
+                fold.body->parameterizedSummary &&
+                fold.body->effects.fixed.mayStop,
             "finite definition omitted admission effects");
     const auto &filtered =
         std::get<FiniteApplication>(declarationNamed(project, "m::filtered")
@@ -738,14 +740,14 @@ math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:m
     require(collect.kind == FiniteApplication::Kind::Collect &&
                 collect.operands.empty(),
             "collect invented an initial state");
-    require(!declarationNamed(project, "m::total").body->mayStop,
+    require(!declarationNamed(project, "m::total").body->effects.fixed.mayStop,
             "total finite definition acquired ordered failure");
   });
   cases.run("finite closure preserves selected helpers and captures", [] {
     auto project = take(check(R"(
 domain Fr=field("koala-bear");
-fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn work(xs:Vector<Fr>,initial:Fr,offset:Fr)->Fr !{stop}{return fold(elements(xs),initial,fn(acc, x)=>acc+x+offset);}
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S effects(stop) on(rows))->S effects(stop)=finite("local.fold");
+fn work(xs:Vector<Fr>,initial:Fr,offset:Fr)->Fr effects(stop){return fold(elements(xs),initial,fn(acc, x)=>acc+x+offset);}
 protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){return work(xs,initial,offset);}run Run=Demo;
 )"));
     auto closed = take(closeEntry(project, "m::Run"));
@@ -768,7 +770,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){retur
               [mutation] {
                 auto project = take(check(R"(
 domain Fr=field("koala-bear");
-fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S effects(stop) on(rows))->S effects(stop)=finite("local.fold");
 protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){return fold(elements(xs),initial,fn(acc, x)=>acc+x+offset);}run Run=Demo;
 )"));
                 auto closed = take(closeEntry(project, "m::Run"));
@@ -820,14 +822,14 @@ protocol Demo roles(P,V)(xs:Vector<Fr>@(P,V),initial:Fr@(P,V),offset:Fr@P)->(r:F
   });
   for (const auto &definition :
        {std::string("fn f<I:Type+Copy+Drop,S:Type>(rows:"
-                    "domain<I>,initial:S,step:fn(S,I)->S !{stop})->S "
-                    "!{stop}=finite(\"local.fold\");"),
+                    "domain<I>,initial:S,step:fn(S,I)->S effects(stop))->S "
+                    "effects(stop)=finite(\"local.fold\");"),
         std::string("fn f<I:Type+Copy+Drop,S:Type>(rows:"
-                    "domain<I>,initial:S,step:fn(S,I)->S !{stop} "
-                    "on(rows))->S !{stop}=finite(\"math.fold\");"),
+                    "domain<I>,initial:S,step:fn(S,I)->S effects(stop) "
+                    "on(rows))->S effects(stop)=finite(\"math.fold\");"),
         std::string("fn f<I:Type+Copy+Drop,S:Type>(rows:"
-                    "domain<I>,initial:S,step:fn(S,I)->S !{stop} "
-                    "on(rows))->S !{stop}=finite(\"local.unknown\");")})
+                    "domain<I>,initial:S,step:fn(S,I)->S effects(stop) "
+                    "on(rows))->S effects(stop)=finite(\"local.unknown\");")})
     cases.run("finite registered signature refusal " + definition,
               [&] { refuses(check(definition), "source.finite"); });
   cases.run("domain constructors retain a separate static signature", [] {
@@ -998,7 +1000,7 @@ fn example(a:index,b:index,c:index,d:index)->bool {
   cases.run("scoped and control regions capture static domains", [] {
     auto project = take(check(R"(
 fn ignore<T:Type+Copy+Drop>(rows:domain<T>,fallback:T)->T{return fallback;}
-fn apply<T:Type+Copy+Drop>(x:T,body:fn(T)->T !{stop})->T !{stop}{return body(x);}
+fn apply<T:Type+Copy+Drop>(x:T,body:fn(T)->T effects(stop))->T effects(stop){return body(x);}
 fn example<F:Field>(xs:Vector<F>,x:F,choose:bool)->F {
  let rows=elements(xs);
  return apply(x,fn(y)=>if choose {ignore(rows,y)} else {y});
@@ -1022,7 +1024,7 @@ math fn inner<F:Field,C:Inspect<F>>(rows:domain<F>,fallback:F)->F {
 math fn outer<F:Field,C:Inspect<F>>(rows:domain<F>,fallback:F)->F {
  return inner<F,C>(rows,fallback);
 }
-math fn apply<F:Field>(x:F,body:math fn(F)->F !{})->F{return body(x);}
+math fn apply<F:Field>(x:F,body:math fn(F)->F effects())->F{return body(x);}
 math fn captured<F:Field,C:Inspect<F>>(rows:domain<F>,fallback:F)->F {
  return apply(fallback,fn(x)=>inner<F,C>(rows,x));
 }
@@ -1286,7 +1288,7 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
        "source.cycle"},
       {R"(protocol Bad roles(P)(rows:domain<index>@P)->(){return();})",
        "source.scoped"},
-      {R"(interface Bad{fn work(rows:domain<index>,body:fn(bool)->bool !{} on(rows))->bool;})",
+      {R"(interface Bad{fn work(rows:domain<index>,body:fn(bool)->bool effects() on(rows))->bool effects(stop, opaque);})",
        "source.finite-domain"},
   };
   for (unsigned i = 0; i < invalid.size(); ++i)
@@ -1322,7 +1324,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,fallback:Fr@P)->(r:Fr@P){return forward(e
   cases.run("domain and callback captures share authored SSA identities", [] {
     auto project = take(check(R"(
 domain Fr=field("koala-bear");
-fn observe(rows:domain<index>,xs:Vector<Fr>,body:fn(Vector<Fr>)->Vector<Fr> !{})->Vector<Fr>{return body(xs);}
+fn observe(rows:domain<index>,xs:Vector<Fr>,body:fn(Vector<Fr>)->Vector<Fr> effects())->Vector<Fr>{return body(xs);}
 protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Vector<Fr>@P){return observe(indices(xs),xs,fn(_)=>xs);}run Run=Demo;
 )"));
     auto closed = take(closeEntry(project, "m::Run"));
@@ -1340,7 +1342,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Vector<Fr>@P){return observe(indices
     auto project = take(check(R"(
 domain Fr=field("koala-bear");
 fn ignore<T:Type+Copy+Drop>(rows:domain<T>,fallback:T)->T{return fallback;}
-fn apply(x:Fr,body:fn(Fr)->Fr !{})->Fr{return body(x);}
+fn apply(x:Fr,body:fn(Fr)->Fr effects())->Fr{return body(x);}
 fn outer(xs:Vector<Fr>,x:Fr)->Fr{let rows=elements(xs);return apply(x,fn(y)=>ignore(rows,y));}
 protocol Demo roles(P)(xs:Vector<Fr>@P,x:Fr@P)->(r:Fr@P){return outer(xs,x);}run Run=Demo;
 )"));

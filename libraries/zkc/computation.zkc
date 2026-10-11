@@ -13,14 +13,14 @@ pub math fn forward_math<A: Type + Copy + Drop, B: Type + Copy + Drop>(
   return apply_math(value, body);
 }
 
-pub fn apply<A: Type, B: Type>(value: A, body: fn(A) -> B !{stop}) -> B !{stop} {
+pub fn apply<A: Type, B: Type>(value: A, body: fn(A) -> B) -> B effects(body) {
   return body(value);
 }
 
-pub fn forward<A: Type, B: Type>(value: A, body: fn(A) -> B !{stop}) -> B !{stop} {
+pub fn forward<A: Type, B: Type>(value: A, body: fn(A) -> B) -> B effects(body) {
   return apply(value, body);
 }
 
-pub fn twice<A: Type>(value: A, body: fn(A) -> A !{stop}) -> A !{stop} {
+pub fn twice<A: Type>(value: A, body: fn(A) -> A) -> A effects(body) {
   return body(body(value));
 }

@@ -85,10 +85,10 @@ domain Fr=field("koala-bear");
 type Vector<F:Field>=builtin("vector",F);
 domain fn elements<F:Field>(xs:Vector<F>)->domain<F>=domain("elements");
 fn ignore(rows:domain<Fr>,fallback:Fr)->Fr{return fallback;}
-fn iterate(x:Fr,n:index,rows:domain<Fr>,body:fn(Fr)->Fr !{stop})->Fr !{stop}{
+fn iterate(x:Fr,n:index,rows:domain<Fr>,body:fn(Fr)->Fr effects(stop))->Fr effects(stop){
  let mut state=x;for _ in 0..n {state=ignore(rows,body(state));}return state;
 }
-fn outer(xs:Vector<Fr>,x:Fr,n:index)->Fr !{stop}{
+fn outer(xs:Vector<Fr>,x:Fr,n:index)->Fr effects(stop){
  let rows=elements(xs);return iterate(x,n,rows,fn(y)=>ignore(rows,y+x));
 }
 protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,n:index@P)->(r:Fr@P){return outer(xs,x,n);}run Demo=Run;
@@ -108,7 +108,7 @@ protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,n:index@P)->(r:Fr@P){return outer(x
                      : "ordered finite fold source pipeline",
         [&] {
           std::string mode = mathematical ? "math " : "";
-          std::string effects = mathematical ? "" : " !{stop}";
+          std::string effects = mathematical ? "" : " effects(stop)";
           auto captured = take(capture(
               {{"sample",
                 std::string(R"(module sample;
@@ -141,7 +141,7 @@ domain Fr=field("koala-bear");
 type Sequence<T:Type+Copy+Drop>=builtin("sequence",T);
 struct Row {pub value:Fr,pub enabled:bool}
 domain fn elements<T:Type+Copy+Drop>(xs:Sequence<T>)->domain<T>=domain("elements");
-fn collect<I:Type+Copy+Drop,B:Type+Copy+Drop>(rows:domain<I>,body:fn(I)->B !{stop} on(rows))->Sequence<B> !{stop}=finite("local.collect.sequence");
+fn collect<I:Type+Copy+Drop,B:Type+Copy+Drop>(rows:domain<I>,body:fn(I)->B effects(stop) on(rows))->Sequence<B> effects(stop)=finite("local.collect.sequence");
 protocol Run roles(P)(xs:Sequence<Row>@P)->(r:Sequence<Row>@P){return collect(elements(xs),fn(row)=>row);}run Demo=Run;
 )",
                                    "collect.zkc"}}));
@@ -161,7 +161,7 @@ protocol Run roles(P)(xs:Sequence<Row>@P)->(r:Sequence<Row>@P){return collect(el
               std::to_string(count),
           [&] {
             std::string mode = mathematical ? "math " : "";
-            std::string effects = mathematical ? "" : " !{stop}";
+            std::string effects = mathematical ? "" : " effects(stop)";
             auto captured = take(capture(
                 {{"sample",
                   std::string(R"(module sample;
@@ -362,7 +362,7 @@ domain Fr=field("koala-bear");
 type Vector<F:Field>=builtin("vector",F);
 domain fn elements<F:Field>(xs:Vector<F>)->domain<F>=domain("elements");
 domain fn choose<F:Field>(left:Vector<F>,right:Vector<F>)->domain<F>{let a=elements(left);let b=elements(right);return a;}
-fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S effects(stop) on(rows))->S effects(stop)=finite("local.fold");
 protocol Run roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,offset:Fr@P)->(r:Fr@P){return fold(choose(xs,ys),0,fn(state, item)=>state*10+item+offset);}run Demo=Run;
 )",
                                          "mutation.zkc"}}));

@@ -778,25 +778,33 @@ private:
     return true;
   }
   bool effects(SyntaxDeclaration &decl) {
-    if (!take("!"))
+    if (at("!"))
+      return fail("source.effect", "use effects(...) for effect contracts");
+    if (!take("effects"))
       return true;
     decl.effects = Effects{};
-    if (!expect("{"))
+    if (!expect("("))
       return false;
-    if (!at("}"))
+    std::set<std::string> seen;
+    if (!at(")"))
       do {
-        bool *flag = nullptr;
+        std::string item;
         if (take("stop"))
-          flag = &decl.effects->mayStop;
+          item = "stop";
         else if (take("opaque"))
-          flag = &decl.effects->opaque;
-        else
-          return fail("source.effect", "expected stop or opaque effect");
-        if (*flag)
+          item = "opaque";
+        else if (!name(item))
+          return false;
+        if (!seen.insert(item).second)
           return fail("source.duplicate", "duplicate effect");
-        *flag = true;
-      } while (take(",") && !at("}"));
-    return expect("}");
+        if (item == "stop")
+          decl.effects->mayStop = true;
+        else if (item == "opaque")
+          decl.effects->opaque = true;
+        else
+          decl.effectDependencies.push_back(std::move(item));
+      } while (take(",") && !at(")"));
+    return expect(")");
   }
   bool roleList(std::vector<std::string> &roles, bool parenthesized = false) {
     bool parens = take("(");
@@ -1120,12 +1128,14 @@ private:
           if (!expect(")") || !expect("->") || !type(signature.result))
             return false;
           SyntaxDeclaration allowance;
-          if (signature.mode == ScopedSignature::Mode::Local && !at("!"))
-            return fail("source.effect", "Local function parameters require "
-                                         "an explicit effect allowance");
           if (!effects(allowance))
             return false;
-          signature.allowance = allowance.effects.value_or(Effects{});
+          if (!allowance.effectDependencies.empty())
+            return fail("source.effect",
+                        "callback allowances contain only fixed effects");
+          bool local = signature.mode == ScopedSignature::Mode::Local;
+          signature.allowance =
+              allowance.effects.value_or(Effects{local, local});
           if (take("on")) {
             std::string domain;
             if (!expect("(") || !name(domain) || !expect(")"))
@@ -1442,7 +1452,7 @@ private:
         }
         d.completes = true;
       }
-      if (!requirements(d) || !effects(d))
+      if (!effects(d) || !requirements(d))
         return {};
       if (protocol && !specifications(d))
         return {};

@@ -86,7 +86,7 @@ run Demo=Run;
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
 def test_protocol_callback_short_circuit_and_stops(toolchain, journal, directory, flags):
     source = PREFIX + '''
-fn fail(x:bool)->bool !{stop}{require x;return x;}
+fn fail(x:bool)->bool effects(stop){require x;return x;}
 protocol Run roles(P)(x:bool@P)->(result:bool@P){
  return apply(x,fn(y)=>y && fail(false));
 }
@@ -101,10 +101,10 @@ run Demo=Run;
 
 def test_multiple_inputs_tuple_patterns_and_environment_reuse(toolchain, journal, directory):
     source = PREFIX + '''
-fn two(x:F,y:F,body:fn(F,F)->F !{})->F !{}{return body(x,y);}
-fn pair(x:(F,F),body:fn((F,F))->F !{})->F !{}{return body(x);}
-fn zero(body:fn()->F !{})->F !{}{return body();}
-fn unit(body:fn(())->F !{})->F !{}{return body(());}
+fn two(x:F,y:F,body:fn(F,F)->F effects())->F effects(){return body(x,y);}
+fn pair(x:(F,F),body:fn((F,F))->F effects())->F effects(){return body(x);}
+fn zero(body:fn()->F effects())->F effects(){return body();}
+fn unit(body:fn(())->F effects())->F effects(){return body(());}
 fn shift(x:F,a:F)->F{return forward(x,fn(y)=>y+a);}
 fn work(x:F,a:F,b:F)->(F,F,F,F,F,F){return(two(x,a,fn(y,z,)=>y+z),pair((x,a),fn((y,z))=>y-z),shift(x,a),shift(x,b),zero(fn()=>x+a),unit(fn(())=>x+b));}
 protocol Run roles(P)(x:F@P,a:F@P,b:F@P)->(result:(F,F,F,F,F,F)@P){return work(x,a,b);}
@@ -119,10 +119,10 @@ def test_matrix_array_captures_and_forwarded_callbacks_in_control(toolchain, jou
     source = PREFIX + '''
 type Matrix<E:Field>=builtin("matrix",E);
 fn rows<E:Field>(m:Matrix<E>)->index{return kernel<E>("matrix.dimension",m;"0");}
-fn select(x:F,go:bool,first:fn(F)->F !{stop},second:fn(F)->F !{stop})->F !{stop}{
+fn select(x:F,go:bool,first:fn(F)->F effects(stop),second:fn(F)->F effects(stop))->F effects(stop){
  return if go{second(first(x))}else{first(second(x))};
 }
-fn relay(x:F,go:bool,first:fn(F)->F !{stop},second:fn(F)->F !{stop})->F !{stop}{
+fn relay(x:F,go:bool,first:fn(F)->F effects(stop),second:fn(F)->F effects(stop))->F effects(stop){
  return select(second=second,x=x,first=first,go=go);
 }
 fn work(x:F,a:[F;2],m:Matrix<F>,go:bool)->(F,index,F){
@@ -161,10 +161,10 @@ def test_domain_forwarding_and_callback_invariants_in_loops(toolchain, journal, 
 
 domain fn elements<E:Field>(xs:Vector<E>)->domain<E>=domain("elements");
 fn ignore(rows:domain<F>,fallback:F)->F{return fallback;}
-fn iterate(x:F,n:index,rows:domain<F>,body:fn(F)->F !{stop})->F !{stop}{
+fn iterate(x:F,n:index,rows:domain<F>,body:fn(F)->F effects(stop))->F effects(stop){
  let mut state=x;for _ in 0..n {state=ignore(rows,body(state));}return state;
 }
-fn outer(xs:Vector<F>,x:F,n:index)->F !{stop}{
+fn outer(xs:Vector<F>,x:F,n:index)->F effects(stop){
  let rows=elements(xs);return iterate(x,n,rows,fn(y)=>ignore(rows,y+x));
 }
 protocol Run roles(P)(xs:Vector<F>@P,x:F@P,n:index@P)->(result:F@P){return outer(xs,x,n);}run Demo=Run;
@@ -203,7 +203,7 @@ def test_domain_captures_in_match_arms_with_different_payloads(toolchain, journa
 domain fn elements<E:Field>(xs:Vector<E>)->domain<E>=domain("elements");
 enum Choice { Single(F), Pair(F,F) }
 fn ignore(rows:domain<F>,fallback:F)->F{return fallback;}
-fn choose(value:Choice,rows:domain<F>,body:fn(F)->F !{})->F !{}{
+fn choose(value:Choice,rows:domain<F>,body:fn(F)->F effects())->F effects(){
  return match value {
   Single(a)=>{body(ignore(rows,a))},
   Pair(a,b)=>{body(ignore(rows,a+b))}

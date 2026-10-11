@@ -90,6 +90,7 @@ add_zkc_component(Language
   lib/Language/Resolution.cpp
   lib/Language/ResourceUsage.cpp
   lib/Language/Bindings.cpp
+  lib/Language/Effects.cpp
   lib/Language/BodySummary.cpp
   lib/Language/BodyMapping.cpp
   lib/Language/ScopedSpecialization.cpp

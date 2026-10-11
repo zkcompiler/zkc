@@ -141,6 +141,20 @@ struct Effects {
     return mayStop == other.mayStop && opaque == other.opaque;
   }
 };
+/// A union of fixed effects and bounded callback dependencies. Keys are slots
+/// in the owning signature or body's static environment, never source names.
+struct EffectSummary {
+  Effects fixed;
+  std::map<unsigned, Effects> dependencies;
+  EffectSummary() = default;
+  EffectSummary(Effects fixed) : fixed(fixed) {}
+  bool operator==(const EffectSummary &other) const {
+    return fixed == other.fixed && dependencies == other.dependencies;
+  }
+  bool operator!=(const EffectSummary &other) const {
+    return !(*this == other);
+  }
+};
 struct ScopedSignature {
   enum class Mode { Math, Local } mode;
   std::vector<Type> inputs;
@@ -324,6 +338,9 @@ struct AssetReference {
   Type term;
 };
 struct LocalPrimitive {
+  /// Explicit kernel authoring retains the installed ordered envelope even
+  /// when the underlying primitive also has a total mathematical spelling.
+  enum class Origin { Primitive, Kernel } origin = Origin::Primitive;
   std::string contract;
   std::vector<ValueId> operands;
   std::vector<std::string> parameters;
@@ -427,7 +444,7 @@ struct Body {
   unsigned inputs = 0;
   bool stopped = false;
   std::string stopReason;
-  bool mayStop = false, opaque = false;
+  EffectSummary effects;
   /// True when a scoped formal prevents a concrete dependency summary.
   bool parameterizedSummary = false;
   /// Includes intermediate dependencies of unused mathematical work.
@@ -584,7 +601,7 @@ struct Declaration {
   std::vector<DeclarationId> members;
   std::optional<DeclarationId> parent;
   std::optional<Type> implementation;
-  std::optional<Effects> effectAllowance;
+  std::optional<EffectSummary> effectAllowance;
   bool abstract = false;
   std::optional<PrimitiveDefinition> primitive;
   bool completes = false;

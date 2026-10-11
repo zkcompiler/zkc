@@ -1,6 +1,6 @@
 # Scoped computations
 
-Callback parameters use `fn(...) -> ... !{...}` for Local computation or
+Callback parameters use `fn(...) -> ... effects(...)` for Local computation or
 `math fn(...) -> ...` for total Math computation. The compiler selects each
 callback statically; callbacks cannot escape into runtime data.
 

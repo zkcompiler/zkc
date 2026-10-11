@@ -12,9 +12,9 @@ domain fn indices<E:Field>(xs:Vector<E>)->domain<index>=domain("indices");
 domain fn sequence<T:Type+Copy+Drop>(xs:Sequence<T>)->domain<T>=domain("elements");
 domain fn range(lower:index,upper:index)->domain<index>=domain("range");
 domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(left:domain<A>,right:domain<B>)->domain<(A,B)>=domain("zip");
-fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn filtered<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,keep:fn(I)->bool !{stop} on(rows),step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold_where");
-fn collect<I:Type+Copy+Drop,B:Type+Copy+Drop>(rows:domain<I>,body:fn(I)->B !{stop} on(rows))->Sequence<B> !{stop}=finite("local.collect.sequence");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S effects(stop) on(rows))->S effects(stop)=finite("local.fold");
+fn filtered<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,keep:fn(I)->bool effects(stop) on(rows),step:fn(S,I)->S effects(stop) on(rows))->S effects(stop)=finite("local.fold_where");
+fn collect<I:Type+Copy+Drop,B:Type+Copy+Drop>(rows:domain<I>,body:fn(I)->B effects(stop) on(rows))->Sequence<B> effects(stop)=finite("local.collect.sequence");
 fn get<E:Field>(xs:Vector<E>,i:index)->E=primitive("vector.get");
 '''
 
@@ -125,8 +125,8 @@ protocol Run roles(P)(xs:Sequence<Row>@P)->(result:(F,F)@P){return work(xs);}run
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
 def test_generic_item_restrictions_through_nested_scopes(toolchain, journal, directory, flags):
     source = PREFIX + '''
-fn apply<A:Type,B:Type>(value:A,body:fn(A)->B !{stop})->B !{stop}{return body(value);}
-fn sum(rows:domain<F>,flag:bool,body:fn(F)->F !{stop} on(rows))->F !{stop}{
+fn apply<A:Type,B:Type>(value:A,body:fn(A)->B effects(stop))->B effects(stop){return body(value);}
+fn sum(rows:domain<F>,flag:bool,body:fn(F)->F effects(stop) on(rows))->F effects(stop){
  return fold(step=fn(state, item)=>apply(state,fn(initial)=>{
    let mut total:F=initial;
    for i in 0..2 {let value=if flag {body(item)} else {0};total=total+value;}

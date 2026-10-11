@@ -178,7 +178,7 @@ Protocol loops additionally spell `roles(P, V) max N`. Protocol calls use ordina
 call syntax, such as `let result = Round(x, coins);`. Declare the service alongside
 data inputs, for example `(x: F @V, coins: Random<F> @V)`.
 `let alias = coins;` gives the same service another name.
-Defined functions infer effects. Write `!{}` only
+Defined functions infer effects. Write `effects()` only
 when an effect-free interface is an intended contract. Ordinary calls can nest;
 all calls in one statement must have uniquely determined participants. Use `@P`
 on a binding to resolve ambiguity. Later statements never move an earlier call.
