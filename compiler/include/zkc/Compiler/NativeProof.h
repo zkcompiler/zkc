@@ -9,6 +9,9 @@ namespace zkc {
 /// Current deployment policy. The source remains independently owned.
 struct NativeProofPolicy {
   std::string entry, producer, validator, suite;
+  /// Empty selects the installed native/authored construction. Otherwise this
+  /// names the exact protocol.construction symbol in the original module.
+  std::string construction;
   protocol::ProofFormat format = protocol::ProofFormat::Native;
   unsigned acceptance = 0;
   std::optional<unsigned> service;
@@ -35,7 +38,8 @@ struct NativeProofConstruction {
 };
 /// Admit original source, prepare/project without simplification and construct
 /// role-local transcripts. No source IR is mutated and no cryptographic theorem
-/// is asserted. An empty suite selects the authored no-transcript profile.
+/// is asserted. Empty suite and construction selectors select the authored
+/// profile; a construction symbol selects its checked Local handler plan.
 llvm::Expected<NativeProofConstruction>
 constructNativeProof(mlir::ModuleOp source, const NativeProofPolicy &policy,
                      bool fuseVectorReductions = false);

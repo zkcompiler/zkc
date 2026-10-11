@@ -1,7 +1,12 @@
+#include "../lib/Compiler/NativeProofVerification.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "zkc/Compiler/NativeProof.h"
+#include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Inspection.h"
@@ -245,6 +250,199 @@ int main() {
                 plan.rules[2].sites.size() == 2 &&
                 plan.rules[1].payload.size() == 2 && plan.rules.size() == 5,
             "two wire leaves belong to one logical handler invocation");
+    zkc::NativeProofPolicy policy;
+    policy.entry = plan.target.getValue().str();
+    policy.construction = plan.symbol.getValue().str();
+    policy.service = plan.service;
+    policy.publicInputs = {0};
+    mlir::SymbolTable table(unit);
+    auto protocol =
+        table.lookup<zkc::protocol_ir::MathematicalOp>(policy.entry);
+    policy.producer =
+        mlir::cast<mlir::StringAttr>(protocol.getRoles()[0]).str();
+    policy.validator =
+        mlir::cast<mlir::StringAttr>(protocol.getRoles()[1]).str();
+    auto selected = take(zkc::selectNativeProofDraws(*parsed, policy));
+    require(
+        selected.draws.size() == 1 &&
+            selected.construction == policy.construction,
+        "construction selection admits logical groups and selected authority");
+    auto constructed = take(zkc::constructNativeProof(*parsed, selected));
+    if (auto error =
+            zkc::checkNativeProof(*parsed, *constructed.module, selected))
+      throw std::runtime_error(toString(std::move(error)));
+    for (bool simplify : {false, true}) {
+      zkc::NativeProofOptions options;
+      options.policy = zkc::NativeProofSelection{policy};
+      options.simplify = simplify;
+      options.releaseStorage = simplify;
+      auto compiled =
+          take(zkc::compileNativeProof(take(emitOriginal(closed, context)),
+                                       "construction.mlir", options, registry));
+      require(compiled.policy.construction == policy.construction,
+              "physical compilation retains selected construction");
+    }
+    auto changed = policy;
+    changed.construction = "absent";
+    refuses(zkc::selectNativeProofDraws(*parsed, changed),
+            "native-proof-construction-selection");
+    changed = policy;
+    changed.construction.clear();
+    refuses(zkc::selectNativeProofDraws(*parsed, changed),
+            "native-proof-policy");
+    auto rules = record.getRules();
+    SmallVector<mlir::Attribute> missing(rules.getValue());
+    missing.erase(missing.begin() + 1);
+    mlir::Builder builder(&context);
+    record.setRulesAttr(builder.getArrayAttr(missing));
+    refuses(zkc::selectNativeProofDraws(*parsed, policy),
+            "native-proof-construction-coverage");
+    record.setRulesAttr(rules);
+  });
+  auto compileSource = [&](StringRef source) {
+    auto closed = take(closeEntry(take(checked(source)), "m::Demo"));
+    auto text = take(emitOriginal(closed, context));
+    auto parsed = mlir::parseSourceString<mlir::ModuleOp>(text, &context);
+    require(bool(parsed), "parse construction source");
+    auto unit = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+        parsed->getBody()->front());
+    auto record = *unit.getBody()
+                       .front()
+                       .getOps<zkc::protocol_ir::ConstructionOp>()
+                       .begin();
+    mlir::SymbolTableCollection symbols;
+    auto plan = take(zkc::protocol::readConstructionPlan(record, symbols));
+    mlir::SymbolTable table(unit);
+    auto protocol =
+        table.lookup<zkc::protocol_ir::MathematicalOp>(plan.target.getValue());
+    zkc::NativeProofPolicy policy;
+    policy.entry = plan.target.getValue().str();
+    policy.construction = plan.symbol.getValue().str();
+    policy.service = plan.service;
+    policy.producer =
+        mlir::cast<mlir::StringAttr>(protocol.getRoles()[0]).str();
+    policy.validator =
+        mlir::cast<mlir::StringAttr>(protocol.getRoles()[1]).str();
+    for (auto [i, roles] : enumerate(protocol.getInputRoles()))
+      if (i != plan.service && is_contained(mlir::cast<mlir::ArrayAttr>(roles),
+                                            protocol.getRoles()[1]))
+        policy.publicInputs.push_back(i);
+    auto selected = take(zkc::selectNativeProofDraws(*parsed, policy));
+    auto result = take(zkc::constructNativeProof(*parsed, selected));
+    for (bool simplify : {false, true}) {
+      zkc::NativeProofOptions options;
+      options.policy = zkc::NativeProofSelection{policy};
+      options.simplify = simplify;
+      options.releaseStorage = simplify;
+      take(zkc::compileNativeProof(text, "construction.mlir", options,
+                                   registry));
+    }
+    return std::make_tuple(std::move(parsed), std::move(result),
+                           std::move(selected));
+  };
+  cases.run("local state crosses nested protocol loops", [&] {
+    auto source = replace("  #[site(commitment)]", R"(
+      let mut accepted @V = true;
+      for _ in 0..rounds roles(P,V) max 2 {
+        for _ in 0..rounds roles(P,V) max 2 {
+          #[site(commitment)])");
+    source.insert(source.find("secret:T@P"), "rounds:index@(P,V),");
+    auto at = source.find("return last==first+c;");
+    source.replace(at, StringRef("return last==first+c;").size(),
+                   "accepted = last==first+c;}} return accepted;");
+    auto provider = deployment.str();
+    provider.replace(provider.find("public{public}"),
+                     StringRef("public{public}").size(),
+                     "public{public,rounds}");
+    compileSource(source + provider);
+  });
+  cases.run("zero-slot local state still has ordered transitions", [&] {
+    auto provider = deployment.str();
+    auto at = provider.find("(index,index)");
+    provider.replace(at, StringRef("(index,index)").size(), "()");
+    at = provider.find("State((0,0))");
+    provider.replace(at, StringRef("State((0,0))").size(), "State(())");
+    compileSource(program.str() + provider);
+  });
+  cases.run("same-typed state substitution fails source correspondence", [&] {
+    auto [original, built, policy] =
+        compileSource((program + deployment).str());
+    auto before = mlir::OwningOpRef<mlir::ModuleOp>(
+        mlir::cast<mlir::ModuleOp>(original->clone()));
+    mlir::PassManager prepare(&context);
+    prepare.addPass(zkc::protocol::createPrepareProtocolPass(false));
+    require(mlir::succeeded(prepare.run(*before)), "prepare reference subject");
+    auto reference = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+        before->getBody()->front());
+    auto record = *reference.getBody()
+                       .front()
+                       .getOps<zkc::protocol_ir::ConstructionOp>()
+                       .begin();
+    mlir::SymbolTableCollection symbols;
+    auto plan = take(zkc::protocol::readConstructionPlan(record, symbols));
+    SmallVector<zkc::detail::NativeTranscriptEvent> events;
+    const auto &sequence = *(*built.descriptor.getAsArray())[3].getAsArray();
+    reference.walk<mlir::WalkOrder::PreOrder>([&](mlir::Operation *op) {
+      auto query = mlir::dyn_cast<zkc::protocol_ir::QueryOp>(op);
+      auto message = mlir::dyn_cast<zkc::protocol_ir::ExchangeOp>(op);
+      if (!query && !message)
+        return;
+      auto origin =
+          (*sequence[events.size()].getAsArray())[1].getAsString()->str();
+      events.push_back(
+          {op->getAttrOfType<mlir::StringAttr>("site").str(), origin,
+           query ? query.getResult(0).getType() : message.getInput().getType(),
+           bool(query), 0, std::nullopt});
+    });
+    record.erase();
+    mlir::PassManager project(&context);
+    project.addPass(zkc::protocol::createProjectProtocolPass(false));
+    require(mlir::succeeded(project.run(*before)), "project reference subject");
+    if (auto error = zkc::detail::verifyNativeTranscript(*before, *built.module,
+                                                         policy, events, &plan))
+      throw std::runtime_error(toString(std::move(error)));
+    auto unit = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+        built.module->getBody()->front());
+    auto participant = *unit.getBody()
+                            .front()
+                            .getOps<zkc::protocol_ir::ParticipantOp>()
+                            .begin();
+    auto calls = participant.getBody().front().getOps<zkc::local::CallOp>();
+    auto iterator = calls.begin();
+    auto factory = *iterator++;
+    auto start = *iterator++;
+    auto observation = *iterator;
+    require(factory.getNumResults() == 2 && start.getNumResults() == 2 &&
+                observation.getInputs()[0] == start.getResult(0),
+            "fixture contains distinct factory, start and observation states");
+    observation->setOperand(0, factory.getResult(0));
+    require(mlir::succeeded(mlir::verify(*built.module)),
+            "copyable-state substitution remains well typed");
+    auto error = zkc::checkNativeProof(*original, *built.module, policy);
+    require(bool(error) && namesIdentifier(toString(std::move(error)),
+                                           "native-proof-correspondence"),
+            "bypassed start successor must refuse");
+    error = zkc::detail::verifyNativeTranscript(*before, *built.module, policy,
+                                                events, &plan);
+    require(bool(error) && namesIdentifier(toString(std::move(error)),
+                                           "native-transcript-correspondence"),
+            "independent checker refuses bypassed start state");
+    observation->setOperand(0, start.getResult(0));
+    mlir::SymbolTable table(unit);
+    auto helper = table.lookup<zkc::local::FuncOp>(observation.getCallee());
+    auto returned =
+        mlir::cast<zkc::local::ReturnOp>(helper.getBody().front().back());
+    require(returned.getNumOperands() == 2 &&
+                returned.getInputs()[0] != returned.getInputs()[1],
+            "handler returns two distinct state slots");
+    returned->setOperand(0, returned.getInputs()[1]);
+    require(mlir::succeeded(mlir::verify(*built.module)),
+            "changed copyable handler remains well typed");
+    error = zkc::detail::verifyNativeTranscript(*before, *built.module, policy,
+                                                events, &plan);
+    require(bool(error) && namesIdentifier(toString(std::move(error)),
+                                           "native-transcript-correspondence"),
+            "independent checker refuses changed selected handler body");
   });
   cases.run("inherited construction checking respects the work budget", [&] {
     std::string source = program.str();

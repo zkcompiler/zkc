@@ -65,14 +65,16 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
       return fail("local root requires a factory");
     auto factory = symbols.lookupNearestSymbolFrom<local::FuncOp>(
         record, plan.initializer);
-    if (!plan.initializer || !factory ||
-        failed(factory->getName().verifyInvariants(factory)) ||
+    if (!factory || failed(factory->getName().verifyInvariants(factory)) ||
         !factory.getFunctionType().getInputs().empty() ||
         !equal(factory.getResultTypes(), plan.state) || !plan.suite.empty() ||
         plan.nativeBase)
       return fail("local root requires a matching zero-argument factory");
   } else {
     if (plan.initializer || nativeChallengeField(plan.suite).empty() ||
+        randomServiceField(
+            cast<protocol_ir::ServiceReferenceType>(signature.getInput(service))
+                .getContract()) != nativeChallengeField(plan.suite) ||
         plan.state.size() != 1 ||
         plan.state.front() !=
             local::CapabilityType::get(record.getContext(),

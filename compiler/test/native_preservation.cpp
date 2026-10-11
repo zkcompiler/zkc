@@ -73,6 +73,11 @@ unsigned removeAbsorption(ModuleOp module, StringRef origin) {
   };
   construction.set(
       "actions", filter(filter, cast<ArrayAttr>(construction.get("actions"))));
+  SmallVector<Attribute> helpers;
+  for (auto ref : cast<ArrayAttr>(construction.get("helpers")))
+    if (cast<FlatSymbolRefAttr>(ref).getValue() != helper)
+      helpers.push_back(ref);
+  construction.set("helpers", ArrayAttr::get(context, helpers));
   interface.set("construction", construction.getDictionary(context));
   projection.setInterfacesAttr(
       ArrayAttr::get(context, {interface.getDictionary(context)}));
@@ -107,7 +112,7 @@ int main(int argc, char **argv) {
   auto source = parseSourceFile<ModuleOp>(argv[1], &context);
   require(bool(source), "fixture parse");
   auto policy = take(parseNativeProofPolicy(
-      R"(["zkc.native-proof-policy/0", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/0", "4", ["0", "2"], [["draw_challenge", "challenge"]], "zkc.framed/0"])"));
+      R"(["zkc.native-proof-policy/0", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/0", "4", ["0", "2"], [["draw_challenge", "challenge"]], "zkc.framed/0", ""])"));
   auto built = take(constructNativeProof(*source, policy));
   auto projected = OwningOpRef<ModuleOp>(cast<ModuleOp>((*source)->clone()));
   PassManager passes(&context);
@@ -261,7 +266,7 @@ int main(int argc, char **argv) {
     auto input = parseSourceString<ModuleOp>(loopFixture, &context);
     require(bool(input), "loop fixture parse");
     auto selected = take(parseNativeProofPolicy(
-        R"(["zkc.native-proof-policy/0","main","P","V","0","merlin3.bls12-381.fr64be/0","2",["0","1"],[["draw","challenge"]], "zkc.framed/0"])"));
+        R"(["zkc.native-proof-policy/0","main","P","V","0","merlin3.bls12-381.fr64be/0","2",["0","1"],[["draw","challenge"]], "zkc.framed/0", ""])"));
     auto construction = take(constructNativeProof(*input, selected));
     SmallVector<zkc::detail::NativeTranscriptEvent> facts;
     auto &sequence = *(*construction.descriptor.getAsArray())[3].getAsArray();

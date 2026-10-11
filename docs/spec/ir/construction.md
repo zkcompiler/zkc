@@ -68,9 +68,43 @@ share the validator challenge root with producer entropy refuses at registry
 admission. That owner check does not prove independently distributed randomness
 across distinct roots. Broader selectors must account for all reachable aliases.
 
+## Programmable state and handlers
+
+A selected `protocol.construction` symbol binds a protocol, provider, replaced
+service, state slots, root factory and typed Local handlers. Preparation preserves
+that record exactly. Construction admits its event coverage and authority before
+consuming the record and projecting participant programs.
+
+A local root calls its zero-argument factory once per participant, followed by
+the start handler on that role's actual selected original inputs. Local state
+requires `Copy` and `Drop`; it may contain several native slots or none. State
+slots are internal results, not application outputs. A host root instead uses
+the selected managed transcript capability described below.
+
+One message handler receives the ordered native leaves of its source payload
+after the last send or receive. Total calculations may separate those leaves;
+another ordered effect may not. Each role uses its actual local values. A query
+handler receives the current state and, for an index request, its admitted static
+bound. Its returned sample replaces the original query or corresponding receive;
+its returned state feeds the next handler. Handler bodies retain ordinary Local
+control, effects and failure behavior.
+
+The construction pass carries the complete state vector through affected loops,
+completion and final return, including zero-slot state with ordered handler calls.
+Custom adapters preserve the selected prepared body and reorder only the query
+result ABI. Dynamic occurrence coordinates remain explicit adapter operands;
+custom bodies absorb only what they explicitly compute and observe.
+
+Projection metadata records the selected plan, root kind, ordered state types,
+helper symbols, removed service and resulting action map. The source-relative
+checker independently checks those records, factory/start operands, handler
+bodies, message grouping and every state successor. A same-typed value cannot
+replace the selected successor. Construction also bounds repeated handler
+expansion before generating adapters.
+
 ## Transcript state and occurrence identity
 
-Each internally constructed role owns a distinct affine transcript capability.
+In the installed native construction, each role owns a distinct affine transcript capability.
 The host initializes it from the authorized invocation binding and selected
 suite; it is not a user-supplied token. Initialization absorbs the full
 canonical root bytes under the installed suite's fixed `binding` label. The

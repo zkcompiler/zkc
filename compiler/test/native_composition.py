@@ -32,7 +32,7 @@ for family, suite, service, public, roles, draws in [
                 service,
                 public,
                 draws,
-                "zkc.framed/0",
+                "zkc.framed/0", "",
             ]
             policy = OUT / (name + ".policy")
             policy.write_text(json.dumps(p))

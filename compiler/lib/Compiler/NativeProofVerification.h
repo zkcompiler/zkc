@@ -1,6 +1,7 @@
 #ifndef ZKC_LIB_COMPILER_NATIVE_PROOF_VERIFICATION_H
 #define ZKC_LIB_COMPILER_NATIVE_PROOF_VERIFICATION_H
 #include "zkc/Compiler/NativeProof.h"
+#include "zkc/Dialect/Protocol/Construction.h"
 #include <cstdint>
 #include <optional>
 namespace zkc::detail {
@@ -18,9 +19,10 @@ struct NativeTranscriptEvent {
 llvm::Error verifyNativeEntrySelection(mlir::ModuleOp prepared,
                                        mlir::ModuleOp selected,
                                        llvm::StringRef entry);
-llvm::Error
-verifyNativeTranscript(mlir::ModuleOp projected, mlir::ModuleOp constructed,
-                       const NativeProofPolicy &policy,
-                       llvm::ArrayRef<NativeTranscriptEvent> events);
+llvm::Error verifyNativeTranscript(
+    mlir::ModuleOp projected, mlir::ModuleOp constructed,
+    const NativeProofPolicy &policy,
+    llvm::ArrayRef<NativeTranscriptEvent> events,
+    const protocol::ConstructionPlan *construction = nullptr);
 } // namespace zkc::detail
 #endif

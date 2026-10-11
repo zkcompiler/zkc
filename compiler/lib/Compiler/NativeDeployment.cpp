@@ -2,6 +2,7 @@
 #include "ArtifactJson.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/LogicalTree.h"
@@ -31,6 +32,20 @@ Expected<json::Array> ports(pir::MathematicalOp source,
       program.participants.size() != source.getRoles().size())
     return error("native-deployment-correspondence");
   json::Array maps;
+  unsigned stateInputs = !policy.suite.empty(), stateOutputs = stateInputs;
+  if (!policy.construction.empty()) {
+    SymbolTableCollection symbols;
+    auto record = symbols.lookupNearestSymbolFrom<pir::ConstructionOp>(
+        source, StringAttr::get(source.getContext(), policy.construction));
+    if (!record)
+      return error("native-deployment-construction");
+    auto plan = protocol::readConstructionPlan(record, symbols);
+    if (!plan)
+      return plan.takeError();
+    stateOutputs = plan->state.size();
+    stateInputs =
+        plan->root == protocol::ConstructionPlan::Root::Host ? stateOutputs : 0;
+  }
   auto type = source.getFunctionType();
   for (auto item : source.getRoles()) {
     auto role = cast<StringAttr>(item);
@@ -80,10 +95,9 @@ Expected<json::Array> ports(pir::MathematicalOp source,
         return logical.takeError();
       outputs.push_back(json::Array{std::to_string(i), logical->spelling()});
     }
-    unsigned state = !policy.suite.empty();
     if (service != participant->services.size() ||
-        participant->arguments.size() != inputs.size() + state ||
-        participant->results.size() != outputs.size() + state ||
+        participant->arguments.size() != inputs.size() + stateInputs ||
+        participant->results.size() != outputs.size() + stateOutputs ||
         (role.getValue() == policy.validator && acceptance.empty()))
       return error("native-deployment-correspondence");
     maps.push_back(json::Array{role.str(), participant->name, std::move(inputs),

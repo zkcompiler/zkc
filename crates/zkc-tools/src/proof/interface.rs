@@ -21,9 +21,14 @@ pub(super) struct DeploymentPolicy<'a> {
 }
 impl<'a> DeploymentPolicy<'a> {
     pub(super) fn read(value: &'a Json) -> Result<Self> {
-        let policy = array(value, 10)?;
+        let policy = array(value, 11)?;
         if text(&policy[0])? != "zkc.native-proof-policy/0" {
             return Err("native-proof-policy".into());
+        }
+        // Executable custom-plan admission is connected with construction
+        // descriptors; never interpret a selected body as an authored proof.
+        if !text(&policy[10])?.is_empty() {
+            return Err("native-proof-construction".into());
         }
         let (entry, producer, validator) =
             (text(&policy[1])?, text(&policy[2])?, text(&policy[3])?);

@@ -197,8 +197,13 @@ The compiler's policy is an exact array (JSON spelling carries no identity):
 
 ```text
 ["zkc.native-proof-policy/0", entry, producer, validator, acceptance,
- suite, service, public_inputs, [[query_site, delivery_site], ...], format]
+ suite, service, public_inputs, [[query_site, delivery_site], ...], format,
+ construction]
 ```
+
+`construction` is empty for the installed native or authored path. Otherwise it
+names the exact `protocol.construction` symbol in the original module. Its
+target, provider suite and replacement authority must match this policy.
 
 Indices are canonical decimal strings less than 1024. Public input indices are
 strictly increasing and enumerate every validator data input, including unused

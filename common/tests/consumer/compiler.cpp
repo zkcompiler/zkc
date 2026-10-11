@@ -137,7 +137,7 @@ int main(int argc, char **argv) {
   llvm::consumeError(std::move(checked));
   zkc::NativeProofOptions proofOptions;
   proofOptions.policy =
-      R"(["zkc.native-proof-policy/0","main","P","V","0","","",[],[], "zkc.framed/0"])";
+      R"(["zkc.native-proof-policy/0","main","P","V","0","","",[],[], "zkc.framed/0", ""])";
   auto proof =
       zkc::compileNativeProof(R"(module { "protocol.module"() ({
     "protocol.func"() ({

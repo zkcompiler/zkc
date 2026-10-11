@@ -11,7 +11,7 @@ OUT = records()
 commands = Commands(OUT)
 fixtures = Path(__file__).parent / 'fixtures/mathematical'
 manifest = []
-policy_data = ['zkc.native-proof-policy/0', 'main', 'P', 'V', '1', '', '', ['0', '1'], [], "zkc.framed/0"]
+policy_data = ['zkc.native-proof-policy/0', 'main', 'P', 'V', '1', '', '', ['0', '1'], [], "zkc.framed/0", ""]
 policy = OUT / 'policy.json'
 policy.write_text(json.dumps(policy_data))
 for family in ['r1cs', 'air']:

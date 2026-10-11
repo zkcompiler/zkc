@@ -1,5 +1,6 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
@@ -222,25 +223,62 @@ struct MetadataVerifier {
       if ((!policy || !policy->shared) && cast<ArrayAttr>(owners).size() != 1)
         return refuse(record, "owner-local result has multiple roles");
     }
-    Type transcript;
+    SmallVector<Type> stateTypes;
+    bool hostRoot = false, programmable = false;
+    llvm::DenseSet<Attribute> constructionHelpers;
     llvm::DenseSet<unsigned> removedServices;
     ArrayAttr constructedActions;
     if (construction) {
       auto format = construction.getAs<StringAttr>("format");
-      auto state = construction.getAs<TypeAttr>("transcript");
+      auto states = construction.getAs<ArrayAttr>("state");
+      auto root = construction.getAs<StringAttr>("root");
+      auto plan = construction.getAs<StringAttr>("plan");
+      auto helpers = construction.getAs<ArrayAttr>("helpers");
       auto removed = construction.getAs<ArrayAttr>("removed_services");
       constructedActions = construction.getAs<ArrayAttr>("actions");
-      if (!keys(construction,
-                {"format", "transcript", "removed_services", "actions"}) ||
+      if (!keys(construction, {"format", "state", "root", "plan", "helpers",
+                               "removed_services", "actions"}) ||
           !format || format.getValue() != "zkc.native-construction/0" ||
-          !state || !removed || removed.size() != 1 || !constructedActions)
+          !states || states.size() > 1024 || !root ||
+          (root.getValue() != "host" && root.getValue() != "local") || !plan ||
+          !helpers || helpers.size() > 2050 || !removed ||
+          removed.size() != 1 || !constructedActions)
         return refuse(record, "invalid native construction mapping");
-      auto capability = dyn_cast<local::CapabilityType>(state.getValue());
-      if (!capability || !capability.getKind().starts_with("transcript:") ||
-          protocol::nativeChallengeField(capability.getKind().drop_front(11))
-              .empty())
-        return refuse(record, "unsupported constructed transcript type");
-      transcript = state.getValue();
+      hostRoot = root.getValue() == "host";
+      programmable = !plan.empty();
+      for (auto item : states) {
+        auto state = dyn_cast<TypeAttr>(item);
+        if (!state)
+          return refuse(record, "invalid construction state slot");
+        auto logical = protocol::encodeBoundType(state.getValue(), false);
+        if (!logical) {
+          consumeError(logical.takeError());
+          return refuse(record, "invalid construction state slot");
+        }
+        if (!hostRoot && (!protocol::duplicable(*logical) ||
+                          !protocol::discardable(*logical)))
+          return refuse(record,
+                        "local construction state requires Copy and Drop");
+        stateTypes.push_back(state.getValue());
+      }
+      if (hostRoot) {
+        auto capability =
+            stateTypes.size() == 1
+                ? dyn_cast<local::CapabilityType>(stateTypes.front())
+                : local::CapabilityType();
+        if (!capability || !capability.getKind().starts_with("transcript:") ||
+            protocol::nativeChallengeField(capability.getKind().drop_front(11))
+                .empty())
+          return refuse(record, "unsupported constructed transcript type");
+      } else if (!programmable) {
+        return refuse(record, "local root requires an explicit construction");
+      }
+      for (auto item : helpers) {
+        auto ref = dyn_cast<FlatSymbolRefAttr>(item);
+        if (!ref || !constructionHelpers.insert(ref).second ||
+            !tables.lookupNearestSymbolFrom<local::FuncOp>(record, ref))
+          return refuse(record, "invalid construction helper selection");
+      }
       for (auto item : removed) {
         auto port = index(item, type.getNumInputs());
         if (!port ||
@@ -390,10 +428,9 @@ struct MetadataVerifier {
           results.push_back(builder.getI64IntegerAttr(i));
           resultTypes.push_back(type.getResult(i));
         }
-      if (transcript) {
-        inputTypes.push_back(transcript);
-        resultTypes.push_back(transcript);
-      }
+      if (hostRoot)
+        append_range(inputTypes, stateTypes);
+      append_range(resultTypes, stateTypes);
       auto participantType = participant.getFunctionType();
       auto matches = [](ArrayRef<Type> expected, ArrayRef<Type> actual) {
         return expected.size() == actual.size() &&
@@ -549,9 +586,9 @@ struct MetadataVerifier {
           auto function =
               ref ? tables.lookupNearestSymbolFrom<local::FuncOp>(record, ref)
                   : local::FuncOp();
-          if (!function)
+          if (!function || !constructionHelpers.contains(ref))
             return refuse(record, "missing constructed helper");
-          if (insertedCallees.insert(ref).second &&
+          if (insertedCallees.insert(ref).second && !programmable &&
               failed(checkTranscriptHelper(function)))
             return failure();
           auto targets = action.getAs<ArrayAttr>("targets");
@@ -573,8 +610,10 @@ struct MetadataVerifier {
       };
       if (failed(compare(compare, actions, constructedActions, 0)))
         return failure();
-      if (!totalRemoved)
+      if (!totalRemoved && !programmable)
         return refuse(record, "unpaired constructed challenges");
+      if (insertedCallees != constructionHelpers)
+        return refuse(record, "unused construction helper selection");
       for (auto callee : retainedCallees)
         if (insertedCallees.contains(callee))
           return refuse(record,

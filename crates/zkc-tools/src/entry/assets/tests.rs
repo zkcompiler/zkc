@@ -510,7 +510,8 @@ fn deployment(field: &str, arenas: &Arenas) -> String {
             "",
             ["0"],
             [],
-            "zkc.framed/0"
+            "zkc.framed/0",
+            ""
         ],
         "zkc.native-origin/0",
         [],

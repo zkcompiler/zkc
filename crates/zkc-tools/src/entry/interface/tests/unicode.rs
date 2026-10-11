@@ -581,7 +581,8 @@ fn proof_fixture() -> (Value, String) {
             "",
             ["0"],
             [],
-            "zkc.framed/0"
+            "zkc.framed/0",
+            ""
         ],
         "zkc.native-origin/0",
         [],

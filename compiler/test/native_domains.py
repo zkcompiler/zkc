@@ -45,7 +45,7 @@ for family, suite, service, public, roles, draws in [
                 service,
                 public,
                 draws,
-                "zkc.framed/0",
+                "zkc.framed/0", "",
             ]
             policy = OUT / (name + ".policy")
             policy.write_text(json.dumps(p))
@@ -85,7 +85,8 @@ for family, suite, service, public, roles, draws in [
         src = OUT / (name + ".mlir")
         src.write_text(source)
         policy = OUT / (name + ".policy")
-        two_draw_policy = [*p[:8], [*draws, ["draw2", "challenge2"]], p[9]]
+        two_draw_policy = p.copy()
+        two_draw_policy[8] = [*draws, ["draw2", "challenge2"]]
         policy.write_text(json.dumps(two_draw_policy))
         (OUT / (name + ".deployment")).write_text(commands.run([compiler, "protocol-proof", src, policy]))
         manifest.append(dict(name=name, family=family, two_draws=True))

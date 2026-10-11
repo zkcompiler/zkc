@@ -18,6 +18,10 @@ namespace pir = protocol_ir;
 using Env = llvm::DenseMap<Value, Value>;
 class TranscriptCorrespondence {
   const NativeProofPolicy &policy;
+  const protocol::ConstructionPlan *plan;
+  StringMap<const protocol::ConstructionRule *> rules;
+  llvm::StringSet<> rootHelpers, recordedHelpers;
+  bool hostRoot;
   ArrayRef<NativeTranscriptEvent> events;
   SymbolTable symbols;
   SmallVector<Type> stateTypes;
@@ -135,9 +139,12 @@ class TranscriptCorrespondence {
         cast<StringAttr>(origin[0]).getValue() != function.getSymName() ||
         !isa<ArrayAttr>(origin[1]) || !cast<ArrayAttr>(origin[1]).empty())
       return false;
+    auto *rule = rules.lookup(event.site);
     SmallVector<Type> inputs(stateTypes), outputs;
     if (event.query)
       outputs.push_back(event.payload);
+    else if (rule)
+      append_range(inputs, rule->payload);
     else
       inputs.push_back(event.payload);
     unsigned data = inputs.size();
@@ -162,6 +169,35 @@ class TranscriptCorrespondence {
         return false;
       operands.push_back(cursor->getResult(0));
       cursor = cursor->getNextNode();
+    }
+    if (rule) {
+      auto source = symbols.lookup<local::FuncOp>(rule->handler.getValue());
+      if (!source || !source.getBody().hasOneBlock())
+        return false;
+      Env env;
+      if (!bind(source.getBody().front().getArguments(), operands, env))
+        return false;
+      for (auto &op : source.getBody().front()) {
+        if (!cursor)
+          return false;
+        if (auto returned = dyn_cast<local::ReturnOp>(op)) {
+          auto actual = dyn_cast<local::ReturnOp>(cursor);
+          SmallVector<Value> results;
+          if (event.query)
+            results.push_back(env.lookup(returned.getInputs().back()));
+          for (Value value : returned.getInputs().take_front(stateTypes.size()))
+            results.push_back(env.lookup(value));
+          if (!actual || actual.getInputs() != ValueRange(results))
+            return false;
+        } else if (!exact(op, *cursor, env, 0)) {
+          return false;
+        }
+        cursor = cursor->getNextNode();
+      }
+      if (cursor)
+        return false;
+      checkedHelpers.try_emplace(function.getSymName(), &event);
+      return true;
     }
     {
       if (!kernel(cursor, "indices.empty", {}, {}, {}))
@@ -197,7 +233,7 @@ class TranscriptCorrespondence {
     return true;
   }
   bool call(Operation *&cursor, const NativeTranscriptEvent &event,
-            SmallVectorImpl<Value> &state, Value payload,
+            SmallVectorImpl<Value> &state, ValueRange payload,
             ArrayRef<Value> coordinates, Value *challenge,
             SmallVectorImpl<const NativeTranscriptEvent *> &reached) {
     auto invocation = dyn_cast_if_present<local::CallOp>(cursor);
@@ -207,8 +243,7 @@ class TranscriptCorrespondence {
     if (!function || !helper(function, event))
       return false;
     SmallVector<Value> inputs(state.begin(), state.end());
-    if (payload)
-      inputs.push_back(payload);
+    append_range(inputs, payload);
     append_range(inputs, coordinates);
     if (invocation.getInputs() != ValueRange(inputs) ||
         coordinates.size() != event.depth || event.query != bool(challenge))
@@ -248,10 +283,23 @@ class TranscriptCorrespondence {
   bool body(Block &a, Block &b, Env env, SmallVector<Value> state,
             ArrayRef<Value> coordinates, StringRef role,
             SmallVectorImpl<const NativeTranscriptEvent *> &reached,
-            unsigned depth) {
+            unsigned depth, Operation *first = nullptr) {
     if (depth > 64)
       return false;
-    Operation *cursor = &b.front();
+    Operation *cursor = first ? first : &b.front();
+    SmallVector<Value> payloadGroup;
+    auto observe = [&](const NativeTranscriptEvent &event, Value payload) {
+      payloadGroup.push_back(payload);
+      auto *rule = rules.lookup(event.site);
+      if (rule && rule->sites.back() != event.site) {
+        reached.push_back(&event);
+        return true;
+      }
+      bool valid = call(cursor, event, state, payloadGroup, coordinates,
+                        nullptr, reached);
+      payloadGroup.clear();
+      return valid;
+    };
     llvm::DenseMap<const NativeTranscriptEvent *, Value> challenges;
     for (auto &op : a) {
       checkpoint =
@@ -376,8 +424,7 @@ class TranscriptCorrespondence {
             payload = env.lookup(receive.getOutput());
             cursor = cursor->getNextNode();
           }
-          if (!call(cursor, fact, state, payload, coordinates, nullptr,
-                    reached))
+          if (!observe(fact, payload))
             return false;
         } else if (auto send = dyn_cast<pir::EmitOp>(op)) {
           if (fact.query ||
@@ -396,8 +443,7 @@ class TranscriptCorrespondence {
                 challenges.lookup(query->second) != payload)
               return false;
           }
-          if (!payload || !call(cursor, fact, state, payload, coordinates,
-                                nullptr, reached))
+          if (!payload || !observe(fact, payload))
             return false;
         } else
           return false;
@@ -407,19 +453,20 @@ class TranscriptCorrespondence {
         cursor = cursor->getNextNode();
       }
     }
-    return !cursor;
+    return !cursor && payloadGroup.empty();
   }
   bool participant(pir::ParticipantOp a, pir::ParticipantOp b) {
     if (!indexObservedLoops(a) ||
         !attributes(a, b, {"function_type", "service_ports"}))
       return false;
     auto x = a.getFunctionType(), y = b.getFunctionType();
-    if (y.getNumInputs() != x.getNumInputs() + stateTypes.size() ||
+    unsigned extraInputs = hostRoot ? stateTypes.size() : 0;
+    if (y.getNumInputs() != x.getNumInputs() + extraInputs ||
         y.getNumResults() != x.getNumResults() + stateTypes.size() ||
-        y.getInputs().drop_back(stateTypes.size()) != x.getInputs() ||
+        y.getInputs().drop_back(extraInputs) != x.getInputs() ||
         y.getResults().drop_back(stateTypes.size()) != x.getResults() ||
-        y.getInputs().take_back(stateTypes.size()) !=
-            ArrayRef<Type>(stateTypes) ||
+        (hostRoot &&
+         y.getInputs().take_back(extraInputs) != ArrayRef<Type>(stateTypes)) ||
         y.getResults().take_back(stateTypes.size()) !=
             ArrayRef<Type>(stateTypes))
       return false;
@@ -432,13 +479,57 @@ class TranscriptCorrespondence {
     auto &after = b.getBody().front();
     Env env;
     if (!bind(before.getArguments(),
-              after.getArguments().drop_back(stateTypes.size()), env))
+              after.getArguments().drop_back(extraInputs), env))
       return false;
     SmallVector<const NativeTranscriptEvent *> reached;
-    if (!body(before, after, std::move(env),
-              SmallVector<Value>(
-                  after.getArguments().take_back(stateTypes.size())),
-              {}, a.getRole(), reached, 0) ||
+    SmallVector<Value> state(after.getArguments().take_back(extraInputs));
+    Operation *cursor = &after.front();
+    auto rootCall = [&](FlatSymbolRefAttr reference, ValueRange operands) {
+      auto call = dyn_cast_if_present<local::CallOp>(cursor);
+      if (!call || call.getCalleeAttr() != reference ||
+          call.getInputs() != operands ||
+          !llvm::equal(call.getResultTypes(), stateTypes))
+        return false;
+      rootHelpers.insert(reference.getValue());
+      state.assign(call.getResults().begin(), call.getResults().end());
+      cursor = cursor->getNextNode();
+      return true;
+    };
+    if (plan) {
+      if (!hostRoot && !rootCall(plan->initializer, {}))
+        return false;
+      for (const auto &rule : plan->rules) {
+        if (rule.kind != protocol::ConstructionRule::Kind::Start)
+          continue;
+        SmallVector<Value> operands(state);
+        auto records =
+            a->getParentOp()->getRegion(0).front().getOps<pir::ProjectionOp>();
+        if (!hasSingleElement(records))
+          return false;
+        auto interface =
+            cast<DictionaryAttr>((*records.begin()).getInterfaces()[0]);
+        for (auto item : interface.getAs<ArrayAttr>("participants")) {
+          auto port = cast<DictionaryAttr>(item);
+          if (port.getAs<FlatSymbolRefAttr>("participant") !=
+              FlatSymbolRefAttr::get(a))
+            continue;
+          auto inputs = port.getAs<ArrayAttr>("inputs");
+          for (unsigned original : rule.inputs) {
+            auto found = llvm::find_if(inputs, [&](Attribute value) {
+              return cast<IntegerAttr>(value).getInt() == original;
+            });
+            if (found == inputs.end())
+              return false;
+            operands.push_back(after.getArgument(found - inputs.begin()));
+          }
+        }
+        if (!rootCall(rule.handler, operands))
+          return false;
+      }
+    }
+    if (!cursor ||
+        !body(before, after, std::move(env), std::move(state), {}, a.getRole(),
+              reached, 0, cursor) ||
         reached.size() != events.size())
       return false;
     for (auto [actual, expected] : zip(reached, events))
@@ -454,15 +545,28 @@ class TranscriptCorrespondence {
     NamedAttrList after(cast<DictionaryAttr>(b.getInterfaces()[0]));
     auto construction =
         dyn_cast_if_present<DictionaryAttr>(after.erase("construction"));
-    if (!construction || construction.size() != 4 ||
+    auto states =
+        construction ? construction.getAs<ArrayAttr>("state") : ArrayAttr();
+    auto helpers =
+        construction ? construction.getAs<ArrayAttr>("helpers") : ArrayAttr();
+    if (!construction || construction.size() != 7 ||
         after.getDictionary(a.getContext()) != before ||
-        !construction.getAs<StringAttr>("format") ||
-        construction.getAs<StringAttr>("format").getValue() !=
-            "zkc.native-construction/0" ||
-        !construction.getAs<TypeAttr>("transcript") ||
-        construction.getAs<TypeAttr>("transcript").getValue() !=
-            stateTypes.front())
+        construction.getAs<StringAttr>("format") !=
+            StringAttr::get(a.getContext(), "zkc.native-construction/0") ||
+        construction.getAs<StringAttr>("plan") !=
+            StringAttr::get(a.getContext(), policy.construction) ||
+        construction.getAs<StringAttr>("root") !=
+            StringAttr::get(a.getContext(), hostRoot ? "host" : "local") ||
+        !states || states.size() != stateTypes.size() || !helpers)
       return false;
+    for (auto [type, value] : zip(stateTypes, states))
+      if (value != TypeAttr::get(type))
+        return false;
+    for (auto value : helpers) {
+      auto ref = dyn_cast<FlatSymbolRefAttr>(value);
+      if (!ref || !recordedHelpers.insert(ref.getValue()).second)
+        return false;
+    }
     auto removed = construction.getAs<ArrayAttr>("removed_services");
     return removed && removed.size() == 1 && policy.service &&
            isa<IntegerAttr>(removed[0]) &&
@@ -473,10 +577,21 @@ class TranscriptCorrespondence {
 public:
   TranscriptCorrespondence(pir::ProtocolModuleOp candidate,
                            const NativeProofPolicy &policy,
-                           ArrayRef<NativeTranscriptEvent> events)
-      : policy(policy), events(events), symbols(candidate),
-        stateTypes{local::CapabilityType::get(candidate.getContext(),
-                                              "transcript:" + policy.suite)} {}
+                           ArrayRef<NativeTranscriptEvent> events,
+                           const protocol::ConstructionPlan *plan)
+      : policy(policy), plan(plan),
+        hostRoot(!plan || plan->root == protocol::ConstructionPlan::Root::Host),
+        events(events), symbols(candidate) {
+    if (plan) {
+      stateTypes = plan->state;
+      for (const auto &rule : plan->rules)
+        for (const auto &site : rule.sites)
+          rules[site] = &rule;
+    } else {
+      stateTypes.push_back(local::CapabilityType::get(
+          candidate.getContext(), "transcript:" + policy.suite));
+    }
+  }
   bool check(pir::ProtocolModuleOp before, pir::ProtocolModuleOp after) {
     if (!attributes(before, after))
       return false;
@@ -537,7 +652,19 @@ public:
         continue;
       return false;
     }
-    return projections == 1 && checkedHelpers.size() == events.size();
+    unsigned expectedHelpers = count_if(events, [&](const auto &event) {
+      auto *rule = rules.lookup(event.site);
+      return !rule || rule->sites.back() == event.site;
+    });
+    if (recordedHelpers.size() != checkedHelpers.size() + rootHelpers.size())
+      return false;
+    for (const auto &item : checkedHelpers)
+      if (!recordedHelpers.count(item.first()))
+        return false;
+    for (const auto &item : rootHelpers)
+      if (!recordedHelpers.count(item.first()))
+        return false;
+    return projections == 1 && checkedHelpers.size() == expectedHelpers;
   }
   bool exhausted() const { return !remaining; }
   StringRef detail() const { return checkpoint; }
@@ -572,14 +699,15 @@ Error verifyNativeEntrySelection(ModuleOp prepared, ModuleOp selected,
 }
 Error verifyNativeTranscript(ModuleOp projected, ModuleOp constructed,
                              const NativeProofPolicy &policy,
-                             ArrayRef<NativeTranscriptEvent> events) {
+                             ArrayRef<NativeTranscriptEvent> events,
+                             const protocol::ConstructionPlan *plan) {
   if (!projected || !constructed ||
       projected.getContext() != constructed.getContext() ||
       failed(verify(projected)) || failed(verify(constructed)) ||
       !hasSingleElement(*projected.getBody()) ||
       !hasSingleElement(*constructed.getBody()))
     return error("native-transcript-subject");
-  if (policy.suite.empty()) {
+  if (policy.suite.empty() && !plan) {
     if (!OperationEquivalence::isEquivalentTo(
             projected, constructed, OperationEquivalence::IgnoreLocations))
       return error("native-transcript-correspondence");
@@ -590,7 +718,7 @@ Error verifyNativeTranscript(ModuleOp projected, ModuleOp constructed,
   if (!before || !after || before.getProfile() != pir::Profile::Participant ||
       after.getProfile() != pir::Profile::Participant)
     return error("native-transcript-subject");
-  TranscriptCorrespondence checker(after, policy, events);
+  TranscriptCorrespondence checker(after, policy, events, plan);
   if (!checker.check(before, after))
     return error(checker.exhausted() ? "native-transcript-limit"
                                      : "native-transcript-correspondence",
