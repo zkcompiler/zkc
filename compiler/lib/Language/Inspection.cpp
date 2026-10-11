@@ -163,6 +163,15 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
     result["suite"] = construction.suite;
     result["format"] = protocol::proofFormatName(
         decl.proofFormat.value_or(protocol::ProofFormat::Native));
+    if (construction.codec) {
+      json::Array inputs;
+      for (auto index : construction.codec->inputs)
+        inputs.push_back(target.inputs[index].name);
+      result["codec"] =
+          json::Object{{"provider", type(construction.codec->provider)},
+                       {"record", type(construction.codec->record)},
+                       {"inputs", std::move(inputs)}};
+    }
     result["base"] =
         construction.parent
             ? project.declarations()[construction.parent->index].qualifiedName
@@ -178,9 +187,7 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
       for (auto input : rule.inputs)
         inputs.push_back(target.inputs[input].name);
       rules.push_back(json::Object{
-          {"kind", rule.kind == ConstructionRule::Kind::Start     ? "start"
-                   : rule.kind == ConstructionRule::Kind::Message ? "message"
-                                                                  : "query"},
+          {"kind", protocol::constructionRuleName(rule.kind)},
           {"path", std::move(path)},
           {"inputs", std::move(inputs)},
           {"handler",

@@ -83,6 +83,21 @@ bool Semantics::chargeConstruction(const ConstructionDefinition &value,
     for (const auto &argument : *arguments)
       if (!chargeType(argument, span))
         return false;
+  if (value.codec) {
+    const auto &codec = *value.codec;
+    if (!chargeType(codec.provider, span) || !chargeType(codec.record, span) ||
+        !charge(codec.inputs.size() + 1, span))
+      return false;
+    for (const auto *method :
+         {&codec.initialize, &codec.write, &codec.finish}) {
+      if (method->target.component &&
+          !chargeType(*method->target.component, span))
+        return false;
+      for (const auto &argument : method->arguments)
+        if (!chargeType(argument, span))
+          return false;
+    }
+  }
   for (const auto &rule : value.rules) {
     if (!charge(rule.inputs.size() + 1, rule.span))
       return false;
@@ -91,6 +106,9 @@ bool Semantics::chargeConstruction(const ConstructionDefinition &value,
         return false;
     for (const auto &argument : rule.arguments)
       if (!chargeType(argument, rule.span))
+        return false;
+    for (const auto *type : {&rule.payload, &rule.chunks})
+      if (*type && !chargeType(**type, rule.span))
         return false;
   }
   return true;

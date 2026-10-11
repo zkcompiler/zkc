@@ -34,7 +34,8 @@ def ConstructionOp : Op<ProtocolDialect, "construction",
   let arguments = (ins SymbolNameAttr:$sym_name, FlatSymbolRefAttr:$target, StrAttr:$provider,
     StrAttr:$root, ArrayAttr:$state,
     OptionalAttr<FlatSymbolRefAttr>:$initializer, StrAttr:$suite,
-    I64Attr:$service, BoolAttr:$native_base, ArrayAttr:$rules);
+    I64Attr:$service, BoolAttr:$native_base, ArrayAttr:$rules,
+    OptionalAttr<DictionaryAttr>:$codec);
 }
 
 // Static protocol composition, expanded before participant projection.

@@ -13,6 +13,7 @@ common source + explicit construction policy
     → admit source occurrences and verifier dependencies
     → project unsimplified participants
     → construct role-local transcripts and check the actual candidate
+    → apply a selected record codec and independently check transport
     → simplify → exec → physical → participant programs
 ```
 
@@ -66,8 +67,11 @@ describes loop structure without a second executable graph.
 Canonical receive decoding precedes observation. [Structured frames](../spec/formats/messages.md)
 bind complete types, tags, lengths and payloads. Records, alternatives, numeric
 tensors and sequences use the same typed codec. Copyability alone grants neither
-wire permission nor cross-role availability. External byte formats need an
-adapter preserving the bytes their construction observes.
+wire permission nor cross-role availability. A selected record codec uses
+ordinary Local functions for encoding, range selection, decoding and finalization.
+Compiler-owned slices preserve the exact proof bytes observed by optional wire
+handlers. Decoded values feed mathematical handlers. The common Host transports
+one bounded raw buffer and executes no codec-specific algorithm.
 
 ## Authored transcripts
 

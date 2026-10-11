@@ -84,6 +84,7 @@ add_zkc_component(Language
   lib/Language/RelationABI.cpp
   lib/Language/Entries.cpp
   lib/Language/Constructions.cpp
+  lib/Language/ConstructionCodecs.cpp
   lib/Language/EntrySetups.cpp
   lib/Language/Capabilities.cpp
   lib/Language/Permissions.cpp
@@ -238,6 +239,8 @@ add_zkc_component(Compiler
   lib/Compiler/PolynomialReduction.cpp
   lib/Compiler/PublicCoin.cpp
   lib/Compiler/NativeDeployment.cpp
+  lib/Compiler/NativeCodec.cpp
+  lib/Compiler/NativeCodecVerification.cpp
   lib/Compiler/NativeProof.cpp
   lib/Compiler/NativeProofVerification.cpp
   lib/Compiler/Passes.cpp

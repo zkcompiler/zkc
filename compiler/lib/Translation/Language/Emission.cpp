@@ -849,30 +849,31 @@ class Emitter {
     SmallVector<mlir::Attribute> rules;
     for (const auto &rule : plan.rules) {
       const auto &handler = project.declarations()[rule.handler.index];
-      SmallVector<mlir::Type> payload;
+      SmallVector<mlir::Type> payload, chunks;
       SmallVector<int64_t> inputs;
       std::vector<std::string> sites;
-      StringRef kind = rule.kind == ConstructionRule::Kind::Start ? "start"
-                       : rule.kind == ConstructionRule::Kind::Message
-                           ? "message"
-                           : "query";
+      StringRef kind = protocol::constructionRuleName(rule.kind);
       if (rule.kind == ConstructionRule::Kind::Start) {
         for (auto port : rule.inputs)
           for (unsigned i = offsets[port]; i < offsets[port + 1]; ++i)
             inputs.push_back(i);
       } else {
-        auto layout =
-            take(layouts.get(kind == "message" ? handler.inputs[1].type
-                                               : handler.outputs.front().type));
+        auto layout = take(layouts.get(*rule.payload));
         if (!layout)
           return false;
         auto native = types(**layout);
         if (!native)
           return false;
-        payload = kind == "message"
-                      ? *native
-                      : SmallVector<mlir::Type>(
-                            ArrayRef(*native).drop_front(state->size()));
+        payload = *native;
+        if (rule.chunks) {
+          auto wire = take(layouts.get(*rule.chunks));
+          if (!wire)
+            return false;
+          auto values = types(**wire);
+          if (!values)
+            return false;
+          chunks = *values;
+        }
         auto qualified = [&](std::string site) {
           std::string prefix;
           for (auto &part : ArrayRef(rule.path).drop_back()) {
@@ -898,7 +899,8 @@ class Emitter {
                 mlir::FlatSymbolRefAttr::get(&context, handler.symbol)),
            attr("sites", strings(sites)),
            attr("inputs", builder.getDenseI64ArrayAttr(inputs)),
-           attr("payload", typeAttrs(payload))}));
+           attr("payload", typeAttrs(payload)),
+           attr("chunks", typeAttrs(chunks))}));
     }
     SmallVector<mlir::NamedAttribute> attrs{
         text("sym_name", definition.symbol),
@@ -913,6 +915,33 @@ class Emitter {
              builder.getI64IntegerAttr(offsets.back() + *plan.service)),
         attr("native_base", builder.getBoolAttr(plan.nativeBase)),
         attr("rules", builder.getArrayAttr(rules))};
+    if (plan.codec) {
+      const auto &codec = *plan.codec;
+      auto layout = take(layouts.get(codec.record));
+      if (!layout)
+        return false;
+      auto recordTypes = types(**layout);
+      if (!recordTypes)
+        return false;
+      SmallVector<int64_t> inputs;
+      for (unsigned port : codec.inputs)
+        for (unsigned i = offsets[port]; i < offsets[port + 1]; ++i)
+          inputs.push_back(i);
+      auto method = [&](const ConstructionMethod &method) {
+        return mlir::FlatSymbolRefAttr::get(
+            &context,
+            project.declarations()[method.target.declaration.index].symbol);
+      };
+      attrs.push_back(
+          attr("codec",
+               builder.getDictionaryAttr(
+                   {text("provider", typeIdentity(codec.provider)),
+                    attr("record", typeAttrs(*recordTypes)),
+                    attr("initialize", method(codec.initialize)),
+                    attr("write", method(codec.write)),
+                    attr("finish", method(codec.finish)),
+                    attr("inputs", builder.getDenseI64ArrayAttr(inputs))})));
+    }
     if (plan.initializer)
       attrs.push_back(
           attr("initializer",

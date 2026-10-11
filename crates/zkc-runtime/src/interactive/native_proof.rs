@@ -3,6 +3,7 @@
 //! they do not authenticate compilation or establish Fiat–Shamir soundness.
 use super::{Admitted, EntryRole, PhysicalType, ProgramAction, Type, model::*};
 use std::collections::{BTreeMap, BTreeSet};
+mod codec;
 mod construction;
 pub use construction::ConstructionPlan;
 
@@ -45,6 +46,7 @@ pub struct NativeProofEntry {
     acceptance: usize,
     transcript: Option<PhysicalType>,
     native_binding: bool,
+    record_codec: bool,
 }
 type LoopPath = Vec<[String; 3]>;
 struct Helper<'a> {
@@ -537,6 +539,7 @@ struct ProofWalk<'a> {
     validator: &'a str,
     validating: bool,
     transcript: bool,
+    affine_state: bool,
     calls: BTreeSet<String>,
     reached: Vec<NativeTranscriptEvent>,
     loops: BTreeMap<LoopPath, (String, u64)>,
@@ -729,11 +732,13 @@ impl ProofWalk<'_> {
                         if tail(values, state.len()) != Some(state.as_slice()) {
                             return Err(refuse("native-proof-state-chain"));
                         }
-                        current = Some(
-                            tail(continuations, state.len())
-                                .ok_or_else(|| refuse("native-proof-state-chain"))?
-                                .to_vec(),
-                        );
+                        if self.affine_state {
+                            current = Some(
+                                tail(continuations, state.len())
+                                    .ok_or_else(|| refuse("native-proof-state-chain"))?
+                                    .to_vec(),
+                            );
+                        }
                     }
                 }
                 Instruction::Yield(values)
@@ -863,6 +868,13 @@ impl NativeProofEntry {
         } else {
             transcript.iter().cloned().collect()
         };
+        let codec = plan
+            .and_then(|p| p.codec.as_ref())
+            .map(|codec| {
+                codec::CheckedCodec::new(&admitted, codec, &state, &helpers, producer, validator)
+            })
+            .transpose()?;
+        let has_codec = codec.is_some();
         let roles = admitted
             .entry(entry)
             .ok_or_else(|| refuse("native-proof-entry"))?;
@@ -917,7 +929,9 @@ impl NativeProofEntry {
             }
             Ok(messages)
         };
-        if messages(&producer.role)? != messages(&validator.role)? {
+        if messages(&producer.role)? != messages(&validator.role)?
+            || has_codec && !messages(&producer.role)?.is_empty()
+        {
             return Err(refuse("native-proof-wire-layout"));
         }
         let mut used_helpers = BTreeSet::new();
@@ -927,17 +941,36 @@ impl NativeProofEntry {
             let validating = endpoint.role == validator.role;
             let state_inputs = if transcript.is_some() { state.len() } else { 0 };
             let state_outputs = state.len();
-            if !tail(&participant.inputs, state_inputs).is_some_and(|ports| {
+            let hidden_input = usize::from(has_codec && validating);
+            let hidden_output = usize::from(has_codec && !validating);
+            let inputs_end = participant
+                .inputs
+                .len()
+                .checked_sub(hidden_input)
+                .ok_or_else(|| refuse("native-proof-codec-ports"))?;
+            let outputs_end = participant
+                .outputs
+                .len()
+                .checked_sub(hidden_output)
+                .ok_or_else(|| refuse("native-proof-codec-ports"))?;
+            if hidden_input != 0 && participant.inputs[inputs_end].1.kind() != Type::Bytes
+                || hidden_output != 0 && participant.outputs[outputs_end].kind() != Type::Bytes
+            {
+                return Err(refuse("native-proof-codec-ports"));
+            }
+            let input_ports = &participant.inputs[..inputs_end];
+            let output_ports = &participant.outputs[..outputs_end];
+            if !tail(input_ports, state_inputs).is_some_and(|ports| {
                 ports
                     .iter()
                     .map(|(_, t)| t)
                     .eq(state.iter().take(state_inputs))
-            }) || tail(&participant.outputs, state_outputs) != Some(state.as_slice())
+            }) || tail(output_ports, state_outputs) != Some(state.as_slice())
             {
                 return Err(refuse("native-proof-state-ports"));
             }
             let mut current = transcript.as_ref().map(|_| {
-                tail(&participant.inputs, state_inputs)
+                tail(input_ports, state_inputs)
                     .unwrap()
                     .iter()
                     .map(|(name, _)| name.clone())
@@ -997,8 +1030,23 @@ impl NativeProofEntry {
                     current = Some(invoke(&plan.start, &arguments, &state)?);
                 }
             }
-            let ordinary_inputs = participant.inputs.len() - state_inputs;
-            let ordinary_outputs = participant.outputs.len() - state_outputs;
+            let normalized;
+            if let Some(codec) = &codec {
+                let inputs = source_inputs
+                    .get(&endpoint.role)
+                    .ok_or_else(|| refuse("native-proof-codec-layout"))?;
+                normalized = codec.normalize(
+                    participant,
+                    body,
+                    inputs,
+                    validating,
+                    &producer.role,
+                    &validator.role,
+                )?;
+                body = &normalized;
+            }
+            let ordinary_inputs = inputs_end - state_inputs;
+            let ordinary_outputs = outputs_end - state_outputs;
             if participant.inputs[..ordinary_inputs]
                 .iter()
                 .any(|(_, t)| t.kind() == Type::Transcript || validating && !verifier_data(t))
@@ -1015,6 +1063,7 @@ impl NativeProofEntry {
                 validator: &validator.role,
                 validating,
                 transcript: transcript.is_some() || plan.is_some(),
+                affine_state: transcript.is_some(),
                 calls: BTreeSet::new(),
                 reached: Vec::new(),
                 loops: BTreeMap::new(),
@@ -1044,6 +1093,7 @@ impl NativeProofEntry {
             acceptance,
             transcript,
             native_binding: suite.is_some(),
+            record_codec: has_codec,
         })
     }
     pub fn admitted(&self) -> &Admitted {
@@ -1065,6 +1115,9 @@ impl NativeProofEntry {
     /// establish that arbitrary handlers use their state or sample securely.
     pub fn binds_invocation(&self) -> bool {
         self.native_binding
+    }
+    pub fn has_record_codec(&self) -> bool {
+        self.record_codec
     }
     pub fn transcript(&self) -> Option<&PhysicalType> {
         self.transcript.as_ref()

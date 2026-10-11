@@ -212,19 +212,24 @@ is the original validator service input index. With no construction selector,
 an empty suite, service and draw list select authored execution; a native
 selection requires a supported suite, selected service and 1–64 draws. A custom
 selection requires its replaced service and permits 0–64 draws. Local factories
-use an empty suite. Selecting a managed provider does not itself establish
-invocation binding. A draw pair selects either a `draw` or an `index` query of that service. Selectors use prepared static occurrence sites; native labels retain
+use an empty suite. A managed root absorbs the canonical invocation at issuance;
+this does not establish that custom handlers use it correctly. A draw pair selects either a `draw` or an `index` query of that service. Selectors use prepared static occurrence sites; native labels retain
 original authored paths. No timing or security premise follows from selecting
 this policy.
 
 `format` is `zkc.framed/0` or `raw.bytes/0`. Native framing uses the header and
 message frames below. Raw Bytes uses no header, length prefix or implicit
-observation. Its admitted authored program has exactly one nonrepeated `bytes`
-message from producer to validator. One receive consumes the entire bounded
+observation. Without a programmable record codec, its admitted authored program
+has exactly one nonrepeated `bytes` message from producer to validator. One receive consumes the entire bounded
 input, including an empty byte string; the authored parser owns record decoding
 and inner EOF. Returning without that receive, or sending no message, refuses.
-The application authenticates the deployment independently. Raw Bytes carries
-no Host-level statement or context binding; authored code owns that obligation.
+A programmable [record codec](../ir/construction.md#record-transport) instead
+uses one internal verifier Bytes input and one internal prover Bytes result,
+with no executable Send or Receive. Its ordinary functions own record parsing,
+encoding and EOF. The application authenticates the deployment independently.
+Raw bytes carry no framing-level statement or context binding; a managed root
+still absorbs the canonical invocation, while local state owns its binding
+algorithm.
 
 The immutable compiler descriptor is:
 
@@ -251,7 +256,7 @@ association:
 ["zkc.construction-plan/0", selected_symbol, root,
  [logical_state_type, ...], initializer_or_empty,
  [start_or_empty, [original_input, ...]],
- [[adapter_symbol, "local" | "native", [origin_hex, ...]], ...]]
+ [[adapter_symbol, "local" | "native", [origin_hex, ...]], ...], record_codec]
 ```
 
 The selected symbol must equal the policy selector. Adapters cover every event
@@ -267,6 +272,24 @@ one managed transcript input. State results follow original participant results;
 loop-carried state, yields and early-completion results use the same trailing
 slot order. Zero-slot state still has ordered handler occurrences. The Runtime
 checks these positions and operands, including actual received message values.
+
+`record_codec` is `[]` without a codec, otherwise:
+
+```text
+[provider_identity, [logical_record_type, ...], initialize, write, finish,
+ [original_layout_input, ...],
+ [[encode, receive, decode, wire_or_empty, slice, [message_origin, ...]], ...],
+ conditional_write_or_empty, conditional_finish_or_empty]
+```
+
+Record slots require Copy and Drop. The three component methods retain their
+ordinary identities; use on unrelated data remains legal. Message rows cover
+all prover-to-verifier message origins once in order. Slice adapters consume the
+original Bytes input and offset/length pairs, returning only those exact slices.
+Conditional helpers wrap the selected method in the original completion
+condition, with an empty Bytes or unit untaken result. Both names are empty when
+there is no conditional completion. The verifier proof input and prover proof
+output follow any hidden transcript ports. Ordinary output maps exclude them.
 
 A custom bounded-index adapter checks `sample < bound` before returning. Its
 ordinary handler body owns the sampling algorithm; range checks do not establish
@@ -287,6 +310,10 @@ signatures, remaining services and every actual action. It retains original
 producer queries, messages, local calls and guards exactly and in order. Only
 queries at the removed service owner and that owner's outgoing challenge
 messages can disappear. Inserted actions call the [indexed helpers](../ir/construction.md#ordered-construction).
+A record construction additionally carries a `codec` dictionary with exactly
+`producer`, `validator` and `helpers`. The action map removes typed proof
+transport and records the actual codec calls. Its helper list names precisely
+the used codec methods and generated adapters.
 Complete state and coordinate checks apply recursively through participant loops. Retained authored
 actions cannot call inserted helpers. These formation checks do not establish
 source correspondence. Source-relative checking reconstructs the admitted
@@ -409,9 +436,10 @@ the root. An authored protocol without transcript operations only checks the
 header's context: changing the header can preserve its mathematical acceptance.
 The authored control is not a cryptographic binding or proof-of-knowledge claim.
 Execution reports use `binding_scope = "transcript"` for managed construction,
-`"header"` for native-framed authored execution, and `"authored"` for RawBytes.
-With RawBytes, Host context contributes to the reported invocation identity but
-is not transmitted or authenticated. It is not visible to source code. Context
+`"header"` for native-framed local/authored execution, and `"authored"` for raw
+bytes with local/authored state. Raw codecs with a managed root keep
+`"transcript"` binding. With local/authored raw bytes, Host context contributes
+to the reported invocation identity but is not transmitted or authenticated. It is not visible to source code. Context
 that an authored algorithm must bind needs an explicit public protocol input.
 
 Final proof admission checks both roles' exact ordered native transitions,

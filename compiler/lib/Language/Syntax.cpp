@@ -1150,14 +1150,15 @@ private:
             kind = ConstructionRule::Kind::Start;
             selectors.emplace_back();
           } else {
-            if (take("message"))
-              kind = ConstructionRule::Kind::Message;
-            else if (take("query"))
-              kind = ConstructionRule::Kind::Query;
-            else {
-              fail("source.construction", "expected start, message or query");
+            std::string event;
+            if (!name(event))
+              return {};
+            auto parsed = protocol::parseConstructionRuleKind(event);
+            if (!parsed || *parsed == ConstructionRule::Kind::Start) {
+              fail("source.construction", "unknown construction rule kind");
               return {};
             }
+            kind = *parsed;
             bool group = take("{");
             do {
               std::vector<SyntaxName> path;
@@ -1257,8 +1258,23 @@ private:
           else if (take("Native"))
             d.proofFormat = protocol::ProofFormat::Native;
           else {
-            fail("source.construction", "unknown proof format");
-            return {};
+            construction.codec.emplace();
+            if (!type(*construction.codec))
+              return {};
+            d.proofFormat = protocol::ProofFormat::RawBytes;
+            if (take("(")) {
+              if (!at(")"))
+                do {
+                  SyntaxName input;
+                  input.span = current().span;
+                  if (!name(input.name))
+                    return {};
+                  input.span.end = previousEnd;
+                  construction.layout.push_back(std::move(input));
+                } while (take(",") && !at(")"));
+              if (!expect(")"))
+                return {};
+            }
           }
           if (!expect(";"))
             return {};

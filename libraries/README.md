@@ -16,6 +16,7 @@ concrete domains, Entries and transcript constructions in
 | [`zkc::boolean`](zkc/boolean.zkc) | both/either/different/negate | Total Boolean formulas; eager operands |
 | [`zkc::bytes`](zkc/bytes.zkc) | `Bytes`, empty/append/concat/slice/at/length/equal | Bounded immutable byte strings; slices and byte values are checked |
 | [`zkc::shake128`](zkc/shake128.zkc) | `State`, init/absorb/squeeze | Private copyable XOF snapshots; ordered transitions and bounded work |
+| [`zkc::proof`](zkc/proof.zkc) | `StreamCodec`, `Stream` | Ordinary sequential record accumulation, offset selection and exact EOF; encoding and observations belong to the construction |
 | [`zkc::transcript`](zkc/transcript.zkc) | `State`, observe/challenge/challenge_index | Explicit methods on a construction's managed affine state; no source initializer |
 | [`zkc::encoding`](zkc/encoding.zkc) | field_be/field_from_be/field_reduce_be/group_compressed/group_from_compressed | Explicit mathematical codecs; currently BLS12-381 Fr and G1 |
 | [`schnorr`](schnorr/lib.zkc) | `DLog<G>`, `Schnorr<G>` | Discrete-log relation and three-message group protocol |

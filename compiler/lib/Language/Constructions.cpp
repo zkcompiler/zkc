@@ -13,6 +13,7 @@ struct ConstructionSite {
   Type payload;
   std::optional<unsigned> service;
   std::optional<Natural> bound;
+  bool proofMessage = false;
 };
 } // namespace
 
@@ -86,10 +87,30 @@ bool Checker::constructions() {
       for (auto &argument : result.initializerArguments)
         if (!replace(argument))
           return false;
-      for (auto &rule : result.rules)
+      for (auto &rule : result.rules) {
         for (auto &argument : rule.arguments)
           if (!replace(argument))
             return false;
+        for (auto *value : {&rule.payload, &rule.chunks})
+          if (*value && !replace(**value))
+            return false;
+      }
+      if (result.codec) {
+        if (sources[id.index]->proofFormat)
+          return types.fail("source.construction",
+                            "an inherited record format cannot be replaced",
+                            decl.span);
+        auto &codec = *result.codec;
+        if (!replace(codec.provider) || !replace(codec.record))
+          return false;
+        for (auto *method : {&codec.initialize, &codec.write, &codec.finish}) {
+          if (method->target.component && !replace(*method->target.component))
+            return false;
+          for (auto &argument : method->arguments)
+            if (!replace(argument))
+              return false;
+        }
+      }
       if (!decl.proofFormat)
         decl.proofFormat = base.proofFormat;
       if (syntax.provider || syntax.service)
@@ -101,7 +122,8 @@ bool Checker::constructions() {
     if (syntax.base == ConstructionDefinition::Base::Authored ||
         (syntax.base == ConstructionDefinition::Base::Named &&
          result.root == ConstructionDefinition::Root::None)) {
-      if (syntax.provider || syntax.service || !syntax.rules.empty())
+      if (syntax.provider || syntax.service || syntax.codec ||
+          !syntax.rules.empty())
         return types.fail("source.construction",
                           "authored base accepts only a proof format",
                           decl.span);
@@ -220,14 +242,20 @@ bool Checker::constructions() {
                         "construction requires a transcript provider and "
                         "replacement authority",
                         decl.span);
+    if (!constructionCodec(decl, syntax, result, substitution))
+      return false;
+    if (result.codec && target.roles.size() != 2)
+      return types.fail("source.construction",
+                        "record codecs require two participants", decl.span);
 
     std::vector<ConstructionSite> sites;
     std::function<bool(const Body &, const Substitution &, ArrayRef<unsigned>,
-                       ArrayRef<std::string>, bool, unsigned)>
+                       ArrayRef<unsigned>, ArrayRef<std::string>, bool,
+                       unsigned)>
         collect;
     collect = [&](const Body &body, const Substitution &bindings,
-                  ArrayRef<unsigned> services, ArrayRef<std::string> prefix,
-                  bool labelled, unsigned depth) {
+                  ArrayRef<unsigned> services, ArrayRef<unsigned> roles,
+                  ArrayRef<std::string> prefix, bool labelled, unsigned depth) {
       if (depth > work.limits.callDepth)
         return types.fail("source.limit", "construction occurrence depth",
                           decl.span);
@@ -245,8 +273,8 @@ bool Checker::constructions() {
           std::vector<unsigned> captured;
           for (auto service : repeat->services)
             captured.push_back(services[service.index]);
-          if (!collect(*repeat->region, bindings, captured, prefix, labelled,
-                       depth + 1))
+          if (!collect(*repeat->region, bindings, captured, roles, prefix,
+                       labelled, depth + 1))
             return false;
         } else if (auto call =
                        std::get_if<ProtocolApplication>(&operation.action)) {
@@ -261,8 +289,11 @@ bool Checker::constructions() {
           std::vector<unsigned> captured;
           for (auto service : call->services)
             captured.push_back(services[service.index]);
+          std::vector<unsigned> mappedRoles;
+          for (auto role : call->roles)
+            mappedRoles.push_back(roles[role]);
           if (!collect(*callee.body, types.substitution(callee, actual),
-                       captured, path, validPath, depth + 1))
+                       captured, mappedRoles, path, validPath, depth + 1))
             return false;
         } else if (auto message = std::get_if<Exchange>(&operation.action)) {
           auto payload =
@@ -275,7 +306,11 @@ bool Checker::constructions() {
                            validPath,
                            std::move(*payload),
                            {},
-                           {}});
+                           {},
+                           roles[message->receiver] ==
+                                   target.services[*result.service].owner &&
+                               roles[message->sender] !=
+                                   target.services[*result.service].owner});
         } else if (auto query = std::get_if<ServiceQuery>(&operation.action)) {
           if (services[query->service.index] != *result.service)
             continue;
@@ -292,14 +327,75 @@ bool Checker::constructions() {
       return true;
     };
     std::vector<unsigned> services(target.services.size());
+    std::vector<unsigned> roles(target.roles.size());
     std::iota(services.begin(), services.end(), 0);
-    if (!collect(*target.body, substitution, services, {}, true, 1))
+    std::iota(roles.begin(), roles.end(), 0);
+    if (!collect(*target.body, substitution, services, roles, {}, true, 1))
       return false;
+    auto bytes = builtinType("bytes", {});
+    if (!bytes)
+      return types.accept(bytes.takeError(), decl.span);
+    std::map<std::vector<std::string>, Type> chunks;
+    for (const auto &rule : result.rules)
+      if (rule.chunks)
+        chunks[rule.path] = *rule.chunks;
+    auto validChunks = [&](auto &&self, const Type &value,
+                           unsigned depth) -> bool {
+      if (!types.charge(1, decl.span) || depth > work.limits.typeDepth)
+        return false;
+      return value == *bytes ||
+             (value.kind == Type::Kind::Tuple && !value.arguments.empty() &&
+              all_of(value.arguments, [&](const Type &part) {
+                return self(self, part, depth + 1);
+              }));
+    };
+    for (const auto &source : syntax.rules) {
+      if (source.kind != ConstructionRule::Kind::Decode)
+        continue;
+      if (!result.codec || source.parameters.size() != 1)
+        return types.fail("source.construction",
+                          "decode requires a record format and one byte input",
+                          source.span);
+      auto &handler = output.declarations[decl.members[source.member].index];
+      if (!signature(handler.id))
+        return false;
+      const auto &annotation = sources[handler.id.index]->inputs.front().type;
+      std::optional<Type> selected = *bytes;
+      if (!annotation.name.empty() || annotation.kind != SyntaxType::Kind::Name)
+        selected = type(handler, annotation);
+      if (!selected)
+        return false;
+      if (!validChunks(validChunks, *selected, 1))
+        return types.diagnostic ? false
+                                : types.fail("source.construction",
+                                             "decode input must be Bytes or a "
+                                             "nonempty product of Bytes",
+                                             source.span);
+      std::vector<std::string> path;
+      for (const auto &part : source.path)
+        path.push_back(part.name);
+      auto prior = chunks.find(path);
+      if (prior != chunks.end() && prior->second != *selected)
+        return types.fail("source.construction",
+                          "an inherited wire shape cannot be replaced",
+                          source.span);
+      chunks[std::move(path)] = std::move(*selected);
+    }
+    auto ranges = [&](auto &&self, const Type &value) -> Type {
+      Type result(Type::Kind::Tuple);
+      if (value == *bytes)
+        result.arguments = {Type(Type::Kind::Index), Type(Type::Kind::Index)};
+      else
+        for (const auto &part : value.arguments)
+          result.arguments.push_back(self(self, part));
+      return result;
+    };
     std::set<std::pair<ConstructionRule::Kind, std::vector<std::string>>>
         written;
     for (const auto &source : syntax.rules) {
       ConstructionRule rule{source.kind, {}, decl.members[source.member],
-                            {},          {}, source.span};
+                            {},          {}, source.span,
+                            {},          {}};
       for (const auto &part : source.path)
         rule.path.push_back(part.name);
       if (!written.emplace(rule.kind, rule.path).second)
@@ -335,14 +431,49 @@ bool Checker::constructions() {
           return false;
         auto site = llvm::find_if(sites, [&](const ConstructionSite &site) {
           return site.labelled && site.path == rule.path &&
-                 site.kind == rule.kind;
+                 site.kind == (protocol::isCodecRule(rule.kind)
+                                   ? ConstructionRule::Kind::Message
+                                   : rule.kind);
         });
         if (site == sites.end())
           return types.fail(
               "source.construction",
               "selector names no occurrence of this kind and authority",
               source.span);
-        if (rule.kind == ConstructionRule::Kind::Message)
+        rule.payload = site->payload;
+        if (protocol::isCodecRule(rule.kind)) {
+          if (!result.codec || !site->proofMessage)
+            return types.fail(
+                "source.construction",
+                "codec rule requires a producer message and record format",
+                source.span);
+          rule.chunks = chunks.count(rule.path) ? chunks.at(rule.path) : *bytes;
+          auto pair = [](const Type &first, const Type &second) {
+            Type value(Type::Kind::Tuple);
+            value.arguments = {first, second};
+            return value;
+          };
+          switch (rule.kind) {
+          case ConstructionRule::Kind::Encode:
+            inputs = {result.codec->record, site->payload};
+            outputs = {pair(result.codec->record, *rule.chunks)};
+            break;
+          case ConstructionRule::Kind::Receive:
+            inputs = {result.codec->record, *bytes};
+            outputs = {
+                pair(result.codec->record, ranges(ranges, *rule.chunks))};
+            break;
+          case ConstructionRule::Kind::Decode:
+            inputs = {*rule.chunks};
+            outputs = {site->payload};
+            break;
+          case ConstructionRule::Kind::Wire:
+            inputs = {*result.state, *rule.chunks};
+            break;
+          default:
+            llvm_unreachable("checked codec rule");
+          }
+        } else if (rule.kind == ConstructionRule::Kind::Message)
           inputs.push_back(site->payload);
         else {
           if (site->bound)
@@ -396,6 +527,26 @@ bool Checker::constructions() {
         result.rules.push_back(std::move(rule));
       else
         *prior = std::move(rule);
+    }
+    if (result.codec) {
+      for (const auto &site : sites) {
+        if (!site.proofMessage)
+          continue;
+        for (auto kind :
+             {ConstructionRule::Kind::Encode, ConstructionRule::Kind::Receive,
+              ConstructionRule::Kind::Decode}) {
+          if (!types.charge(result.rules.size(), decl.span))
+            return false;
+          if (!site.labelled ||
+              none_of(result.rules, [&](const ConstructionRule &rule) {
+                return rule.kind == kind && rule.path == site.path;
+              }))
+            return types.fail(
+                "source.construction",
+                "record codec does not cover every producer message",
+                decl.span);
+        }
+      }
     }
     if (!result.nativeBase) {
       if (llvm::none_of(result.rules, [](const ConstructionRule &rule) {

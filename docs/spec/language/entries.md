@@ -132,6 +132,63 @@ whole inherited rule at that selector; other rules remain inherited. Without a
 native base, the resolved construction must have a start handler and cover every
 message and every query on the selected authority. Bases must be acyclic.
 
+### Record codecs
+
+`format Codec;` selects an ordinary component with an associated
+`Record: Copy + Drop` and these Local methods:
+
+```text
+initialize(layout: Layout) -> Record
+write(record: Record) -> Bytes
+finish(record: Record, proof: Bytes) -> ()
+```
+
+The compiler checks these signatures structurally; the interface name is an
+ordinary library choice. Bare `format Codec;` passes `()` to `initialize`.
+`format Codec(rounds, size);` passes the named shared original inputs in order:
+a single input keeps its type, and multiple inputs form a tuple. Layout inputs
+must be available at both participants. An inherited format and its input
+selection remain fixed; a different format needs its own construction.
+
+The construction supplies rules for every prover-to-verifier message:
+
+| Rule | Parameters | Result |
+|---|---|---|
+| `on encode site` | Record, actual logical payload | `(Record, Chunks)` |
+| `on receive site` | Record, original proof Bytes | `(Record, Ranges)` |
+| `on decode site` | Chunks | Logical payload |
+| `on wire site` (optional) | Transcript state, Chunks | Transcript state |
+
+Chunks defaults to `Bytes`. Annotating the decode parameter with a nonempty
+product such as `(Bytes, Bytes)` selects multiple disjoint chunks. Ranges has
+the same shape, replacing each `Bytes` with `(index, index)` for offset and
+length. The compiler slices the actual immutable proof with bounds checks;
+receive cannot substitute a different buffer. Decode sees only these chunks.
+Codec rules do not cover erased challenge deliveries.
+
+For example, `zkc::proof::Stream` accumulates sequential chunks and checks EOF:
+
+```zkc
+format Stream;
+on encode response(r, value) { return Stream::append(r, encoding::field_be(value)); }
+on receive response(r, proof) { return Stream::take(r, 32); }
+on decode response(chunk) {
+  let (valid, value) = encoding::field_from_be<F>(chunk);
+  require valid;
+  return value;
+}
+```
+
+On the verifier, receive and slicing precede wire observation, decoding, then
+mathematical observation. On the prover, encoding precedes wire and mathematical
+observation. Omit `on wire` when the transcript observes only decoded values.
+Codec functions use ordinary data computation; only wire and mathematical
+handlers receive transcript authority. Record state is separate from transcript
+state and cannot enter ordinary protocol operands or outputs. The exact exit
+and failure rules are defined by [record construction](../ir/construction.md#record-transport).
+A well-typed codec does not establish injectivity, byte coverage, round-trip
+correctness or protocol security.
+
 ### Selection
 
 The checked project exposes all Entry declaration IDs sorted by qualified name.

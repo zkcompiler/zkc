@@ -88,29 +88,51 @@ fn cancel_failure<B: Backend>(runner: &mut Runner<B>, failed: bool) -> Option<St
     None
 }
 
+/// How the admitted participant program exchanges its proof with the Host.
+#[derive(Clone, Copy)]
+pub(super) enum Transport {
+    Messages(ProofFormat),
+    Record,
+}
+impl Transport {
+    fn format(self) -> ProofFormat {
+        match self {
+            Self::Messages(format) => format,
+            Self::Record => ProofFormat::RawBytes,
+        }
+    }
+    fn record(self) -> bool {
+        matches!(self, Self::Record)
+    }
+}
+
 /// Called only by the host after native proof-entry admission.
 pub(super) fn produce_native(
     runner: &mut Runner<zkc_backends::NativeBackend>,
     expected_binding: &[u8; 32],
-    format: ProofFormat,
+    transport: Transport,
     limit: usize,
 ) -> ArtifactReport<Produced<zkc_backends::Value>> {
-    produce_admitted_with_limit(runner, expected_binding, format, limit, |backend, value| {
-        format.encode(backend, value)
-    })
+    produce_admitted_with_limit(
+        runner,
+        expected_binding,
+        transport,
+        limit,
+        |backend, value| transport.format().encode(backend, value),
+    )
 }
 
 pub(super) fn produce_admitted_with_limit<B: Backend>(
     runner: &mut Runner<B>,
     expected_binding: &[u8; 32],
-    format: ProofFormat,
+    transport: Transport,
     limit: usize,
     encode: impl Fn(&B, &B::Value) -> Result<Vec<u8>, ArtifactFailure>,
 ) -> ArtifactReport<Produced<B::Value>> {
     if let Some(report) = entry_report(runner) {
         return report;
     }
-    let mut writer = match ProofWriter::with_limit(format, expected_binding, limit) {
+    let mut writer = match ProofWriter::with_limit(transport.format(), expected_binding, limit) {
         Ok(writer) => writer,
         Err(error) => {
             return ArtifactReport {
@@ -127,28 +149,39 @@ pub(super) fn produce_admitted_with_limit<B: Backend>(
         match action {
             Action::Query(query) => runner.execute_query(&query.cut)?,
             Action::Local(local) => runner.execute_local(&local.cut)?,
-            Action::Send(_) => {
+            Action::Send(_) if !transport.record() => {
                 let cut = action
                     .cut()
                     .ok_or(ArtifactFailure::UnexpectedCommunication)?;
                 let packet = runner.take_send(&cut)?;
                 writer.message(&encode(runner.backend(), &packet.payload)?)?;
             }
-            Action::Receive(_) => return Err(ArtifactFailure::UnexpectedCommunication),
+            Action::Send(_) | Action::Receive(_) => {
+                return Err(ArtifactFailure::UnexpectedCommunication);
+            }
             Action::Stopped(stop) => return Err(ArtifactFailure::Stopped(Box::new(stop))),
-            Action::Returned(outputs) => return Ok(outputs),
+            Action::Returned(outputs) => {
+                if transport.record() {
+                    let proof = outputs
+                        .last()
+                        .ok_or(ArtifactFailure::UnexpectedCommunication)?;
+                    writer.message(&encode(runner.backend(), proof)?)?;
+                }
+                return Ok(outputs);
+            }
         }
     })();
     let messages = writer.messages();
     let bytes = writer.bytes_written();
+    let outcome = outcome.and_then(|outputs| {
+        Ok(Produced {
+            proof: writer.finish()?,
+            outputs,
+        })
+    });
     let cancelled = cancel_failure(runner, outcome.is_err());
     ArtifactReport {
-        outcome: outcome.and_then(|outputs| {
-            Ok(Produced {
-                proof: writer.finish()?,
-                outputs,
-            })
-        }),
+        outcome,
         messages,
         bytes,
         cancelled,
@@ -159,14 +192,14 @@ pub(super) fn validate_native(
     runner: &mut Runner<zkc_backends::NativeBackend>,
     proof: &[u8],
     expected_binding: &[u8; 32],
-    format: ProofFormat,
+    transport: Transport,
     acceptance: usize,
 ) -> ArtifactReport<Vec<zkc_backends::Value>> {
     validate_admitted(
         runner,
         proof,
         expected_binding,
-        format,
+        transport,
         acceptance,
         |v| {
             if let zkc_backends::Value::Bool(b) = v {
@@ -179,7 +212,10 @@ pub(super) fn validate_native(
             let cut = Action::<zkc_backends::Value>::Receive(request.clone())
                 .cut()
                 .ok_or(ArtifactFailure::UnexpectedCommunication)?;
-            let decoded = match format.decode(runner.backend(), &request.ty, bytes) {
+            let decoded = match transport
+                .format()
+                .decode(runner.backend(), &request.ty, bytes)
+            {
                 Ok(value) => Ok(value),
                 Err(zkc_backends::NativeWireError::Invalid(reason)) => Err(reason),
                 Err(error) => return Err(ArtifactFailure::NativeWire(error)),
@@ -193,7 +229,7 @@ fn validate_admitted<B: Backend>(
     runner: &mut Runner<B>,
     proof: &[u8],
     expected_binding: &[u8; 32],
-    format: ProofFormat,
+    transport: Transport,
     acceptance_index: usize,
     boolean: impl Fn(&B::Value) -> Option<bool>,
     receive: impl Fn(
@@ -205,7 +241,10 @@ fn validate_admitted<B: Backend>(
     if let Some(report) = entry_report(runner) {
         return report;
     }
-    let mut reader = match ProofReader::new(format, proof, expected_binding) {
+    let mut reader = match (!transport.record())
+        .then(|| ProofReader::new(transport.format(), proof, expected_binding))
+        .transpose()
+    {
         Ok(reader) => reader,
         Err(error) => {
             let cancelled = cancel_failure(runner, true);
@@ -227,13 +266,18 @@ fn validate_admitted<B: Backend>(
             Action::Query(_) => return Err(ArtifactFailure::UnexpectedCommunication),
             Action::Local(local) => runner.execute_local(&local.cut)?,
             Action::Receive(request) => {
-                let bytes = reader.message()?;
+                let bytes = reader
+                    .as_mut()
+                    .ok_or(ArtifactFailure::UnexpectedCommunication)?
+                    .message()?;
                 receive(runner, request, bytes)?;
             }
             Action::Send(_) => return Err(ArtifactFailure::UnexpectedCommunication),
             Action::Stopped(stop) => return Err(ArtifactFailure::Stopped(Box::new(stop))),
             Action::Returned(outputs) => {
-                reader.finish()?;
+                if let Some(reader) = &reader {
+                    reader.finish()?;
+                }
                 return match outputs.get(acceptance_index).and_then(&boolean) {
                     Some(true) => Ok(outputs),
                     Some(false) => Err(ArtifactFailure::Rejected),
@@ -245,8 +289,8 @@ fn validate_admitted<B: Backend>(
     ArtifactReport {
         cancelled: cancel_failure(runner, outcome.is_err()),
         outcome,
-        messages: reader.messages(),
-        bytes: reader.bytes_read(),
+        messages: reader.as_ref().map_or(0, ProofReader::messages),
+        bytes: reader.as_ref().map_or(proof.len(), ProofReader::bytes_read),
     }
 }
 

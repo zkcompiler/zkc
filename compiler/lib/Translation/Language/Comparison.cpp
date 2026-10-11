@@ -904,16 +904,35 @@ class Comparator {
     }
     if (plan->service != offsets.back() + *source.service)
       return fail("construction replacement authority differs");
+    if (bool(plan->codec) != bool(source.codec))
+      return fail("construction record format differs");
+    if (source.codec) {
+      const auto &expected = *source.codec;
+      const auto &actual = *plan->codec;
+      auto record = take(layouts.get(expected.record));
+      if (!record || !types(actual.record, (*record)->leaves))
+        return false;
+      SmallVector<unsigned> inputs;
+      for (unsigned port : expected.inputs)
+        for (unsigned i = offsets[port]; i < offsets[port + 1]; ++i)
+          inputs.push_back(i);
+      if (actual.provider != typeIdentity(expected.provider) ||
+          actual.inputs != inputs)
+        return fail("construction codec or layout inputs differ");
+      for (auto [method, reference] :
+           {std::pair{&expected.initialize, actual.initialize},
+            std::pair{&expected.write, actual.write},
+            std::pair{&expected.finish, actual.finish}})
+        if (reference.getValue() !=
+            project.declarations()[method->target.declaration.index].symbol)
+          return fail("construction codec method differs");
+    }
     for (auto [expected, actual] : zip(source.rules, plan->rules)) {
       if (!charge(expected.path.size() + expected.inputs.size() + 1))
         return false;
       const auto &handler = project.declarations()[expected.handler.index];
-      auto kind = expected.kind == ConstructionRule::Kind::Start
-                      ? protocol::ConstructionRule::Kind::Start
-                  : expected.kind == ConstructionRule::Kind::Message
-                      ? protocol::ConstructionRule::Kind::Message
-                      : protocol::ConstructionRule::Kind::Query;
-      if (actual.kind != kind || actual.handler.getValue() != handler.symbol)
+      if (actual.kind != expected.kind ||
+          actual.handler.getValue() != handler.symbol)
         return fail("construction handler selection differs");
       if (expected.kind == ConstructionRule::Kind::Start) {
         SmallVector<unsigned> ports;
@@ -924,17 +943,15 @@ class Comparator {
           return fail("construction start inputs differ");
         continue;
       }
-      auto layout =
-          take(layouts.get(expected.kind == ConstructionRule::Kind::Message
-                               ? handler.inputs[1].type
-                               : handler.outputs.front().type));
-      if (!layout)
+      auto layout = take(layouts.get(*expected.payload));
+      if (!layout || !types(actual.payload, (*layout)->leaves))
         return false;
-      auto leaves = ArrayRef((*layout)->leaves);
-      if (expected.kind == ConstructionRule::Kind::Query)
-        leaves = leaves.drop_front((*state)->leaves.size());
-      if (!types(actual.payload, leaves))
-        return false;
+      if (expected.chunks) {
+        auto chunks = take(layouts.get(*expected.chunks));
+        if (!chunks || !types(actual.chunks, (*chunks)->leaves))
+          return false;
+      } else if (!actual.chunks.empty())
+        return fail("unexpected codec byte shape");
       for (auto [i, site] : enumerate(actual.sites)) {
         std::string prefix;
         for (const auto &part : ArrayRef(expected.path).drop_back()) {
@@ -944,7 +961,7 @@ class Comparator {
                        : mathematical::expandedApplicationSite(prefix, label);
         }
         auto label = nativeSiteName(expected.path.back(), 0);
-        if (expected.kind == ConstructionRule::Kind::Message)
+        if (expected.kind != ConstructionRule::Kind::Query)
           label += "_" + std::to_string(i);
         auto name = prefix.empty()
                         ? label

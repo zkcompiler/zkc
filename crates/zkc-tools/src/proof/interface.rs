@@ -36,7 +36,7 @@ impl<'a> DeploymentPolicy<'a> {
         let suite = text(&policy[5])?;
         let suite = (!suite.is_empty()).then_some(suite);
         let format = super::ProofFormat::parse(text(&policy[9])?).ok_or("native-proof-format")?;
-        if format == super::ProofFormat::RawBytes && (suite.is_some() || !construction.is_empty()) {
+        if format == super::ProofFormat::RawBytes && construction.is_empty() && suite.is_some() {
             return Err("native-proof-format".into());
         }
         let draws = list(&policy[8])?;
@@ -107,10 +107,16 @@ impl RoleInterface {
             if role.participant != text(&row[1])? {
                 return Err("native-proof-role-map".into());
             }
-            let inputs =
-                construction.map_or(usize::from(suite.is_some()), ConstructionPlan::input_slots);
-            let outputs =
-                construction.map_or(usize::from(suite.is_some()), ConstructionPlan::output_slots);
+            let inputs = construction
+                .map_or(usize::from(suite.is_some()), ConstructionPlan::input_slots)
+                + usize::from(
+                    construction.is_some_and(ConstructionPlan::has_codec) && role_name == validator,
+                );
+            let outputs = construction
+                .map_or(usize::from(suite.is_some()), ConstructionPlan::output_slots)
+                + usize::from(
+                    construction.is_some_and(ConstructionPlan::has_codec) && role_name == producer,
+                );
             if role.inputs.len() < inputs || role.outputs.len() < outputs {
                 return Err("native-proof-port-map".into());
             }

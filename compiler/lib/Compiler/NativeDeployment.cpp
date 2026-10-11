@@ -33,6 +33,7 @@ Expected<json::Array> ports(pir::MathematicalOp source,
     return error("native-deployment-correspondence");
   json::Array maps;
   unsigned stateInputs = !policy.suite.empty(), stateOutputs = stateInputs;
+  bool codec = false;
   if (!policy.construction.empty()) {
     SymbolTableCollection symbols;
     auto record = symbols.lookupNearestSymbolFrom<pir::ConstructionOp>(
@@ -42,6 +43,7 @@ Expected<json::Array> ports(pir::MathematicalOp source,
     auto plan = protocol::readConstructionPlan(record, symbols);
     if (!plan)
       return plan.takeError();
+    codec = plan->codec.has_value();
     stateOutputs = plan->state.size();
     stateInputs =
         plan->root == protocol::ConstructionPlan::Root::Host ? stateOutputs : 0;
@@ -96,8 +98,12 @@ Expected<json::Array> ports(pir::MathematicalOp source,
       outputs.push_back(json::Array{std::to_string(i), logical->spelling()});
     }
     if (service != participant->services.size() ||
-        participant->arguments.size() != inputs.size() + stateInputs ||
-        participant->results.size() != outputs.size() + stateOutputs ||
+        participant->arguments.size() !=
+            inputs.size() + stateInputs +
+                unsigned(codec && role.getValue() == policy.validator) ||
+        participant->results.size() !=
+            outputs.size() + stateOutputs +
+                unsigned(codec && role.getValue() == policy.producer) ||
         (role.getValue() == policy.validator && acceptance.empty()))
       return error("native-deployment-correspondence");
     maps.push_back(json::Array{role.str(), participant->name, std::move(inputs),

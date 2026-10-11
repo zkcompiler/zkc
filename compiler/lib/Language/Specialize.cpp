@@ -610,7 +610,28 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             return {};
           factory.declaration = *initializer;
         }
+        if (construction.codec) {
+          auto &codec = *construction.codec;
+          if (!closeType(codec.provider, bindings, result.span) ||
+              !closeType(codec.record, bindings, result.span))
+            return {};
+          for (auto *method :
+               {&codec.initialize, &codec.write, &codec.finish}) {
+            if (!closeCallable(method->target.declaration,
+                               method->target.component, method->arguments,
+                               bindings, result.span))
+              return {};
+            auto closed = instantiate(method->target.declaration,
+                                      method->arguments, depth + 1);
+            if (!closed)
+              return {};
+            method->target.declaration = *closed;
+          }
+        }
         for (auto &rule : construction.rules) {
+          for (auto *value : {&rule.payload, &rule.chunks})
+            if (*value && !closeType(**value, bindings, rule.span))
+              return {};
           for (auto &argument : rule.arguments)
             if (!closeType(argument, bindings, rule.span))
               return {};

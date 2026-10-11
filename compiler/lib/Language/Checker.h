@@ -89,6 +89,8 @@ private:
   std::map<unsigned, std::vector<DeferredApplication>> deferredApplications;
   bool entries();
   bool constructions();
+  bool constructionCodec(Declaration &, const SyntaxConstruction &,
+                         ConstructionDefinition &, const Substitution &);
   bool configureSetups(Declaration &, const Declaration &,
                        llvm::ArrayRef<SyntaxSetupSlot>);
   bool collect();

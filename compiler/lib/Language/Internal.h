@@ -251,6 +251,8 @@ struct SyntaxConstructionRule {
 struct SyntaxConstruction {
   ConstructionDefinition::Base base = ConstructionDefinition::Base::None;
   std::optional<SyntaxType> parent, provider;
+  std::optional<SyntaxType> codec;
+  std::vector<SyntaxName> layout;
   std::optional<SyntaxName> service;
   std::string suite;
   std::vector<SyntaxConstructionRule> rules;

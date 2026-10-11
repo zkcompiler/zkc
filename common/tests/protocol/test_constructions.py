@@ -380,3 +380,29 @@ def test_managed_index_methods_reject_invalid_bounds_and_clean_up(toolchain, jou
                               f'--proof={proof}'])['status'] == 'accepted'
     else:
         assert not proof.exists()
+
+@pytest.mark.parametrize('slots', [0, 2])
+@pytest.mark.parametrize('flags', [[], ['--release-storage']])
+def test_copyable_construction_state_survives_untaken_completion(toolchain, journal, directory, slots, flags):
+    source = directory / 'main.zkc'
+    text = SOURCE.replace('STATE', '()' if slots == 0 else '(index,index)').replace('INITIAL', '()' if slots == 0 else '(0,0)')
+    text = text.replace('LOOP_START', '').replace('LOOP_END', '')
+    text = text.replace('public:T@(P,V),', 'go:bool@(P,V),public:T@(P,V),')
+    text = text.replace('->(ok:bool@V){', '->(ok:bool@V) completes{')
+    text = text.replace('let first=send P->V((secret,secret));', 'let first=send P->V((secret,secret));\n'
+                        'let ()=finish_if @P(go)();let ()=finish_if @V(go)(ok=true);')
+    text = text.replace('public{public,rounds}', 'public{go,public,rounds}')
+    source.write_text(text)
+    package = directory / 'proof.zkpkg'
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+                             f'--module=sample={source}', 'sample::Demo', f'--output={package}', *flags])
+    public = journal.write('public.json', {})
+    witness = journal.write('witness.json', {'secret': '7'})
+    args = [f'--package={package}', f'--sha256={compiled["package_sha256"]}', f'--public={public}', '--allow-authored']
+    proof = directory / 'proof.bin'
+    for go in (False, True):
+        public.write_text(json.dumps({'go': go, 'public': '5', 'rounds': '2'}))
+        journal.json([toolchain.runtime, '--json', 'prove', *args,
+                      f'--witness={witness}', f'--output={proof}'])
+        assert journal.json([toolchain.runtime, '--json', 'verify', *args,
+                             f'--proof={proof}'])['status'] == 'accepted'

@@ -271,6 +271,12 @@ impl NativeDeployment {
         if construction.as_ref().map_or("", |p| p.symbol()) != policy.construction {
             return Err("native-proof-construction".into());
         }
+        if construction
+            .as_ref()
+            .is_some_and(|plan| plan.has_codec() != (policy.format == ProofFormat::RawBytes))
+        {
+            return Err("native-proof-format".into());
+        }
         let admitted = {
             let dummy = NativeBackend::new(
                 Policy::default(),
@@ -420,7 +426,7 @@ impl NativeDeployment {
     /// Execute immutable role inputs with an explicit production, verification
     /// or retry request. Public inputs and setups remain application-authorized.
     /// Authored execution follows the pinned program's own binding algorithm.
-    /// For RawBytes, `input.context` identifies the invocation report only; pass
+    /// For local/authored RawBytes, context identifies the report only; pass
     /// any context the protocol must authenticate through its public data ports.
     pub fn execute(
         &self,
@@ -552,6 +558,16 @@ impl NativeDeployment {
                 }
                 values.push(state);
             }
+            if self.entry.has_record_codec()
+                && let Some(proof) = proof
+            {
+                let ty = &role.inputs.last().expect("admitted codec input").1;
+                values.push(
+                    backend
+                        .decode_raw_bytes(ty, proof)
+                        .map_err(|e| e.to_string())?,
+                );
+            }
             let mut service_ports = BTreeMap::new();
             for ((port, budget), service) in mapping
                 .services
@@ -630,7 +646,7 @@ impl NativeDeployment {
                             let produced = driver::produce_native(
                                 &mut runner,
                                 &binding,
-                                self.format,
+                                self.transport(),
                                 MAX_PROOF_BYTES,
                             );
                             retain_driver_stop(&mut report, &produced);
@@ -650,7 +666,7 @@ impl NativeDeployment {
                                 &mut runner,
                                 proof,
                                 &binding,
-                                self.format,
+                                self.transport(),
                                 self.entry.acceptance(),
                             );
                             retain_driver_stop(&mut report, &validated);
@@ -680,6 +696,14 @@ impl NativeDeployment {
     }
     /// Native admission has checked the output map against the role signature.
     /// Private successors belong to cleanup, not immutable application results.
+    fn transport(&self) -> driver::Transport {
+        if self.entry.has_record_codec() {
+            driver::Transport::Record
+        } else {
+            driver::Transport::Messages(self.format)
+        }
+    }
+
     fn original_outputs(&self, role: &EntryRole, values: Vec<Value>) -> BTreeMap<usize, Value> {
         self.maps[&role.role]
             .outputs

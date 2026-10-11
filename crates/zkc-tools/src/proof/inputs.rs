@@ -12,8 +12,9 @@ pub struct ProofInputs {
     pub public: Vec<InputValue>,
     pub inputs: Vec<InputValue>,
     /// Host invocation context. Native framing checks it in the header and
-    /// managed transcripts bind it in their root. RawBytes does neither:
-    /// protocol-visible context must be a declared public data input.
+    /// managed transcripts bind it in their root. RawBytes with local/authored
+    /// state uses it only for the invocation report; protocol-visible context
+    /// must be a declared public data input.
     pub context: Vec<u8>,
     pub services: Vec<u64>,
     pub transcript_budget: u64,
@@ -388,8 +389,14 @@ pub(super) fn prepare(
     if host.entry.transcript().is_some() {
         values.push(None);
     }
+    // This stage validates caller inputs. The internal proof buffer is acquired
+    // separately and checked with the full role signature when the Runner starts.
+    let mut input_role = role.clone();
+    if host.entry.has_record_codec() && !producer {
+        input_role.inputs.pop();
+    }
     backend
-        .check_entry_values(role, &values)
+        .check_entry_values(&input_role, &values)
         .map_err(|e| e.to_string())?;
     // Only public data needs canonical serialization. Private native inputs stay
     // in process. Wire inputs have already passed the canonical codec loader.

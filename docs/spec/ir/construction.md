@@ -107,6 +107,58 @@ bodies, message grouping and every state successor. A same-typed value cannot
 replace the selected successor. Construction also bounds repeated handler
 expansion before generating adapters.
 
+## Record transport
+
+A selected record codec transforms typed prover-to-verifier transport after
+transcript construction. It preserves the ordered mathematical message and
+query evidence. Each source message has matching encode, receive and decode
+rules, plus an optional wire rule. Challenge deliveries have no record payload.
+Rules operate on the full logical payload, whose native leaves remain ordered.
+Only total mathematical calculations may separate leaves when grouping them.
+
+The verifier executes receive on its current Record and original proof, slices
+the returned ranges from that same proof, observes those chunks through the wire
+rule if selected, decodes them, then invokes the mathematical handlers on the
+actual decoded values. The prover encodes its actual message and executes the
+same selected wire and mathematical handlers in order. These handlers form a
+contiguous sequence; unrelated local calls and service queries cannot interrupt
+it. Range selection may be
+noncontiguous: a round's two chunks can come from separate `L[]` and `R[]`
+regions. Future messages are decoded only at their own occurrences.
+
+Record initialization follows root state initialization and start, once per
+participant even with no messages or zero loop trips. It receives only its
+selected actual shared original inputs. Every protocol loop carries Record
+separately after transcript state. The verifier also captures the original proof
+through isolated loop regions. Record versions, proof ingress, ranges, chunks
+and final encoded bytes are internal codec values. Ordinary calculations,
+loop bounds, guards and public outputs cannot consume them. Decoded payloads
+and the checked transcript-state successors cross that boundary.
+
+Before each successful return, the prover calls write on the current Record;
+the verifier calls finish on the current Record and original proof. Conditional
+completion invokes its finalizer only on the taken branch. Its untaken prover
+branch returns an unused empty Bytes placeholder. Copyable state and bytes do
+not acquire affine continuation slots. Earlier stops skip finalization. Finish
+runs even when the mathematical result is false; its framing failure precedes
+the Host's Boolean rejection. Finalization can precede pure data calculations
+outlined for the return, but no later record or transcript step is allowed.
+The Host publishes the prover's internal Bytes result only after successful
+return and cleanup. Record never becomes an application result.
+
+The compiler independently compares the transport transformation with its
+transcript-constructed input, including retained calculations, helper bodies,
+SSA operands, metadata and exits. Runtime admission checks the actual executable
+codec sequence and internal-value boundary, then exposes its checked logical
+messages to the transcript checker. That temporary admission view is not an
+executable program. Both roles execute ordinary Local functions through the
+same Runner; the Host dispatches neither protocol names nor codec names.
+
+Record selection emits raw proof bytes without native headers or message frames.
+The codec's finish method owns EOF and record coverage. Admission checks wiring
+and authority, not injectivity, complete byte coverage, agreement between
+encoded chunks and selected ranges, or correctness of an external parser.
+
 ## Transcript state and occurrence identity
 
 In the installed native construction, each role owns a distinct affine transcript capability.

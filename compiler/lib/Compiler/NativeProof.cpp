@@ -1,4 +1,5 @@
 #include "zkc/Compiler/NativeProof.h"
+#include "NativeCodec.h"
 #include "NativeProofVerification.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/IRMapping.h"
@@ -483,7 +484,8 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
     return error("native-proof-draw-selection");
   if (consumedOrigins.size() != sourceOrigins.size())
     return error("native-proof-origin-coverage");
-  if (policy.format == protocol::ProofFormat::RawBytes) {
+  if (policy.format == protocol::ProofFormat::RawBytes &&
+      !(construction && construction->codec)) {
     if (!policy.suite.empty() || admitted.events.size() != 1 ||
         admitted.events.front().query || admitted.events.front().depth)
       return error("native-proof-format");
@@ -508,7 +510,7 @@ Error admitConstruction(pir::MathematicalOp source,
       operations[site.getValue()] = op;
   });
   SymbolTable symbols(source->getParentOp());
-  llvm::StringSet<> covered;
+  std::map<protocol::ConstructionRule::Kind, llvm::StringSet<>> covered;
   for (const auto &rule : plan.rules) {
     if (rule.kind == protocol::ConstructionRule::Kind::Start)
       continue;
@@ -516,7 +518,7 @@ Error admitConstruction(pir::MathematicalOp source,
     Operation *previousOperation = nullptr;
     for (auto [leaf, site] : enumerate(rule.sites)) {
       auto found = indices.find(site);
-      if (found == indices.end() || !covered.insert(site).second)
+      if (found == indices.end() || !covered[rule.kind].insert(site).second)
         return error("native-proof-construction-coverage");
       auto &event = events[found->second];
       bool query = rule.kind == protocol::ConstructionRule::Kind::Query;
@@ -541,6 +543,14 @@ Error admitConstruction(pir::MathematicalOp source,
                 plan.state.size() + unsigned(event.bound.has_value()))
           return error("native-proof-construction-request");
       }
+      if (protocol::isCodecRule(rule.kind)) {
+        auto message = dyn_cast<pir::ExchangeOp>(operation);
+        auto owners = cast<ArrayAttr>(source.getInputRoles()[plan.service]);
+        if (!message || owners.size() != 1 ||
+            message.getReceiverAttr() != owners[0] ||
+            message.getSenderAttr() == owners[0])
+          return error("native-proof-construction-codec-direction");
+      }
       if (previous) {
         auto before = dyn_cast<pir::ExchangeOp>(previousOperation);
         auto after = dyn_cast<pir::ExchangeOp>(operation);
@@ -552,8 +562,24 @@ Error admitConstruction(pir::MathematicalOp source,
       previousOperation = operation;
     }
   }
-  if (!plan.nativeBase && covered.size() != events.size())
+  if (!plan.nativeBase &&
+      covered[protocol::ConstructionRule::Kind::Message].size() +
+              covered[protocol::ConstructionRule::Kind::Query].size() !=
+          events.size())
     return error("native-proof-construction-coverage");
+  if (plan.codec) {
+    auto owners = cast<ArrayAttr>(source.getInputRoles()[plan.service]);
+    for (const auto &event : events) {
+      auto message =
+          dyn_cast_or_null<pir::ExchangeOp>(operations.lookup(event.site));
+      if (message && message.getReceiverAttr() == owners[0])
+        for (auto kind : {protocol::ConstructionRule::Kind::Encode,
+                          protocol::ConstructionRule::Kind::Receive,
+                          protocol::ConstructionRule::Kind::Decode})
+          if (!covered[kind].contains(event.site))
+            return error("native-proof-construction-coverage");
+    }
+  }
   return Error::success();
 }
 } // namespace
@@ -622,8 +648,8 @@ Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
     if (!p.service)
       return error("native-proof-policy");
   }
-  if (p.format == protocol::ProofFormat::RawBytes &&
-      (!p.suite.empty() || !p.construction.empty()))
+  if (p.format == protocol::ProofFormat::RawBytes && p.construction.empty() &&
+      !p.suite.empty())
     return error("native-proof-format");
   if (!p.construction.empty()
           ? !p.service || (!p.suite.empty() &&
@@ -835,8 +861,9 @@ public:
         builder(module.getContext()), symbols(module) {
     if (plan)
       for (const auto &rule : plan->rules)
-        for (const auto &site : rule.sites)
-          rules[site] = &rule;
+        if (!protocol::isCodecRule(rule.kind))
+          for (const auto &site : rule.sites)
+            rules[site] = &rule;
     module.walk([&](Operation *op) {
       if (auto site = op->getAttrOfType<StringAttr>("site"))
         occupied.insert(site.getValue());
@@ -1113,7 +1140,10 @@ public:
             SmallVector<Value> inputs(completion.getValues());
             append_range(inputs, state);
             SmallVector<Type> results(completion.getResultTypes());
-            append_range(results, stateTypes);
+            bool affineState =
+                !plan || plan->root == protocol::ConstructionPlan::Root::Host;
+            if (affineState)
+              append_range(results, stateTypes);
             builder.setInsertionPoint(completion);
             auto replacement = pir::FinishIfOp::create(
                 builder, completion.getLoc(), results,
@@ -1122,9 +1152,11 @@ public:
             for (auto [oldValue, newValue] :
                  zip(completion.getResults(), replacement.getResults()))
               oldValue.replaceAllUsesWith(newValue);
-            state.clear();
-            append_range(state,
-                         replacement.getResults().take_back(stateTypes.size()));
+            if (affineState) {
+              state.clear();
+              append_range(
+                  state, replacement.getResults().take_back(stateTypes.size()));
+            }
             completion.erase();
             continue;
           }
@@ -1256,6 +1288,9 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
     if (checked->target.getValue() != policy.entry ||
         checked->suite != policy.suite || checked->service != policy.service)
       return error("native-proof-construction-selection");
+    if (bool(checked->codec) !=
+        (policy.format == protocol::ProofFormat::RawBytes))
+      return error("native-proof-format");
     construction = std::move(*checked);
   }
   if (construction.has_value() != !policy.construction.empty())
@@ -1419,6 +1454,23 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy,
   if (auto e = detail::verifyNativeTranscript(*projected, *candidate, policy,
                                               admitted->events, plan))
     return std::move(e);
+  json::Array codecPlan;
+  if (plan && plan->codec) {
+    auto beforeCodec =
+        OwningOpRef<ModuleOp>(cast<ModuleOp>((*candidate)->clone()));
+    auto encoded = detail::constructNativeCodec(*candidate, policy, *plan,
+                                                admitted->events, exportedPlan);
+    if (!encoded)
+      return encoded.takeError();
+    if (auto e =
+            detail::verifyNativeCodec(*beforeCodec, *candidate, policy, *plan,
+                                      admitted->events, exportedPlan, *encoded))
+      return std::move(e);
+    codecPlan = std::move(*encoded);
+    admitted->wireSites.clear();
+  }
+  if (plan)
+    exportedPlan.push_back(std::move(codecPlan));
   json::Value descriptor(json::Array{
       "zkc.native-proof-descriptor/0", encodeNativeProofPolicy(policy),
       "zkc.native-origin/0", std::move(admitted->sequence),

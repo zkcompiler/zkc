@@ -63,6 +63,11 @@ replacement service index, native-base requirement and resolved handler rules.
 Rules refer to Local symbols. Start selectors identify original flattened input
 ports; message selectors retain the ordered native leaves of one logical
 payload. Query bodies retain the source `(state, value)` result order.
+Each rule dictionary contains `kind`, `handler`, `sites`, `inputs`, `payload`
+and `chunks`. Codec rules retain payload and chunk types separately. The optional
+`codec` dictionary contains exactly `provider`, `record`, `initialize`, `write`,
+`finish` and `inputs`: a closed provider identity, native Record types, three
+Local symbols and the ordered original layout input indices.
 
 Independent source comparison checks the complete selection, including handler
 identity and every call-qualified site. Native record verification checks

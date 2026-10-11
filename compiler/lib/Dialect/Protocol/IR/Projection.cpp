@@ -225,7 +225,8 @@ struct MetadataVerifier {
     }
     SmallVector<Type> stateTypes;
     bool hostRoot = false, programmable = false;
-    llvm::DenseSet<Attribute> constructionHelpers;
+    llvm::DenseSet<Attribute> constructionHelpers, codecHelpers;
+    StringAttr codecProducer, codecValidator;
     llvm::DenseSet<unsigned> removedServices;
     ArrayAttr constructedActions;
     if (construction) {
@@ -236,12 +237,17 @@ struct MetadataVerifier {
       auto helpers = construction.getAs<ArrayAttr>("helpers");
       auto removed = construction.getAs<ArrayAttr>("removed_services");
       constructedActions = construction.getAs<ArrayAttr>("actions");
-      if (!keys(construction, {"format", "state", "root", "plan", "helpers",
-                               "removed_services", "actions"}) ||
+      auto codec = construction.getAs<DictionaryAttr>("codec");
+      NamedAttrList core(construction);
+      core.erase("codec");
+      if ((construction.get("codec") && !codec) ||
+          !keys(core.getDictionary(record.getContext()),
+                {"format", "state", "root", "plan", "helpers",
+                 "removed_services", "actions"}) ||
           !format || format.getValue() != "zkc.native-construction/0" ||
           !states || states.size() > 1024 || !root ||
           (root.getValue() != "host" && root.getValue() != "local") || !plan ||
-          !helpers || helpers.size() > 2050 || !removed ||
+          !helpers || helpers.size() > 16384 || !removed ||
           removed.size() != 1 || !constructedActions)
         return refuse(record, "invalid native construction mapping");
       hostRoot = root.getValue() == "host";
@@ -278,6 +284,22 @@ struct MetadataVerifier {
         if (!ref || !constructionHelpers.insert(ref).second ||
             !tables.lookupNearestSymbolFrom<local::FuncOp>(record, ref))
           return refuse(record, "invalid construction helper selection");
+      }
+      if (codec) {
+        codecProducer = codec.getAs<StringAttr>("producer");
+        codecValidator = codec.getAs<StringAttr>("validator");
+        auto helpers = codec.getAs<ArrayAttr>("helpers");
+        if (!keys(codec, {"producer", "validator", "helpers"}) ||
+            !codecProducer || !codecValidator ||
+            codecProducer == codecValidator ||
+            !is_contained(roles, codecProducer) ||
+            !is_contained(roles, codecValidator) || !helpers ||
+            helpers.empty() || helpers.size() > 14336 || !programmable)
+          return refuse(record, "invalid record codec mapping");
+        for (auto helper : helpers)
+          if (!constructionHelpers.contains(helper) ||
+              !codecHelpers.insert(helper).second)
+            return refuse(record, "invalid codec helper selection");
       }
       for (auto item : removed) {
         auto port = index(item, type.getNumInputs());
@@ -431,6 +453,12 @@ struct MetadataVerifier {
       if (hostRoot)
         append_range(inputTypes, stateTypes);
       append_range(resultTypes, stateTypes);
+      auto bytes = RankedTensorType::get({ShapedType::kDynamic},
+                                         builder.getIntegerType(8, false));
+      if (role == codecProducer)
+        resultTypes.push_back(bytes);
+      if (role == codecValidator)
+        inputTypes.push_back(bytes);
       auto participantType = participant.getFunctionType();
       auto matches = [](ArrayRef<Type> expected, ArrayRef<Type> actual) {
         return expected.size() == actual.size() &&
@@ -498,6 +526,7 @@ struct MetadataVerifier {
       unsigned removed = *removedServices.begin();
       auto owners = cast<ArrayAttr>(inputs[removed]);
       if (owners.size() != 1 ||
+          (codecValidator && owners[0] != codecValidator) ||
           protocol::randomServiceField(
               cast<protocol_ir::ServiceReferenceType>(type.getInput(removed))
                   .getContract())
@@ -525,7 +554,7 @@ struct MetadataVerifier {
           originals[action.getAs<StringAttr>("site").getValue()] = action;
           auto targets = action.getAs<ArrayAttr>("targets");
           auto kind = action.getAs<StringAttr>("kind").getValue();
-          bool remove = false;
+          bool remove = false, codecMessage = false;
           if (kind == "protocol.query")
             remove = cast<DictionaryAttr>(targets[0]).get("participant") ==
                      validator;
@@ -541,6 +570,8 @@ struct MetadataVerifier {
             }
             if (sends != 1 || receives != 1)
               return refuse(record, "invalid original exchange directions");
+            codecMessage = codecProducer && !remove;
+            remove |= codecMessage;
           }
           if (!remove) {
             retained.push_back(action);
@@ -548,7 +579,7 @@ struct MetadataVerifier {
               retainedCallees.push_back(callee);
           } else if (kind == "protocol.query") {
             ++removedQueries;
-          } else {
+          } else if (!codecMessage) {
             ++removedMessages;
           }
         }
@@ -599,7 +630,9 @@ struct MetadataVerifier {
             auto participant =
                 target ? target.getAs<FlatSymbolRefAttr>("participant")
                        : FlatSymbolRefAttr();
-            if (!participant || !insertedUses.insert({participant, ref}).second)
+            if (!participant ||
+                (!insertedUses.insert({participant, ref}).second &&
+                 !codecHelpers.contains(ref)))
               return refuse(record, "repeated inserted transcript helper");
           }
         }

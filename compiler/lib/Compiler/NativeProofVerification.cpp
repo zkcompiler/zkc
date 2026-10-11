@@ -380,7 +380,9 @@ class TranscriptCorrespondence {
         cursor = cursor->getNextNode();
       } else if (isa<pir::FinishOp, pir::ProtocolYieldOp, pir::FinishIfOp>(
                      op)) {
-        bool continuing = isa<pir::FinishIfOp>(op);
+        bool continuing =
+            isa<pir::FinishIfOp>(op) &&
+            (!plan || plan->root == protocol::ConstructionPlan::Root::Host);
         if (op.getName() != cursor->getName() || !attributes(&op, cursor) ||
             cursor->getNumOperands() !=
                 op.getNumOperands() + stateTypes.size() ||
@@ -597,8 +599,9 @@ public:
     if (plan) {
       stateTypes = plan->state;
       for (const auto &rule : plan->rules)
-        for (const auto &site : rule.sites)
-          rules[site] = &rule;
+        if (!protocol::isCodecRule(rule.kind))
+          for (const auto &site : rule.sites)
+            rules[site] = &rule;
     } else {
       stateTypes.push_back(local::CapabilityType::get(
           candidate.getContext(), "transcript:" + policy.suite));

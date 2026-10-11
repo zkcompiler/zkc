@@ -1,3 +1,4 @@
+#include "../lib/Compiler/NativeCodec.h"
 #include "../lib/Compiler/NativeProofVerification.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Verifier.h"
@@ -55,6 +56,32 @@ constexpr StringLiteral deployment = R"(
       proof Demo=Round<F>{prover P;verifier V;public{public};accept ok;
         construction Derived<F,Provider>;}
     )";
+constexpr StringLiteral codec = R"(
+  type Bytes=builtin("bytes");
+  fn empty()->Bytes=primitive("bytes.empty");
+  interface RecordCodec<L:Type+Copy+Drop> {
+    type Record:Copy+Drop;
+    fn initialize(layout:L)->Record;
+    fn write(record:Record)->Bytes;
+    fn finish(record:Record,proof:Bytes)->();
+  }
+  component Packing:RecordCodec<F> {
+    type Record:Copy+Drop=();
+    fn initialize(layout:F)->Record{return Record(());}
+    fn write(record:Record)->Bytes{return empty();}
+    fn finish(record:Record,proof:Bytes)->(){return ();}
+  }
+  pub construction Encoded<C:RecordCodec<F>> for Round<F> {
+    base Derived<F,Provider>;
+    format C(public);
+    on encode {commitment,response}(r,value){return (r,empty());}
+    on receive {commitment,response}(r,proof){return (r,(0,32));}
+    on decode {commitment,response}(wire){return 0;}
+    on wire {commitment,response}(t,wire){return t;}
+  }
+  proof Packed=Round<F>{prover P;verifier V;public{public};accept ok;
+    construction Encoded<Packing>;}
+)";
 Expected<CheckedProject> checked(StringRef source, const Limits &limits = {}) {
   auto captured = capture({{"m", source.str(), "construction.zkc"}});
   if (!captured)
@@ -75,6 +102,168 @@ int main() {
   zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  cases.run(
+      "record codecs close ordinary component methods and typed rules", [&] {
+        auto project = take(checked((program + deployment + codec).str()));
+        auto closed = take(closeEntry(project, "m::Packed"));
+        const auto &plan =
+            *closed
+                 .declarations()
+                     [closed.entry().proof()->selectedConstruction->index]
+                 .construction;
+        require(plan.codec.has_value() &&
+                    plan.codec->inputs == std::vector<unsigned>{0},
+                "codec retains the actual shared layout input");
+        for (const auto *method : {&plan.codec->initialize, &plan.codec->write,
+                                   &plan.codec->finish}) {
+          const auto &function =
+              closed.declarations()[method->target.declaration.index];
+          require(function.body && function.parameters.empty(),
+                  "codec method is closed ordinary Local code");
+        }
+        require(plan.rules.size() == 13,
+                "codec groups use the checked selector inventory");
+        auto original = take(emitOriginal(closed, context));
+        auto parsed =
+            mlir::parseSourceString<mlir::ModuleOp>(original, &context);
+        require(bool(parsed),
+                "codec PIR parses with checked method signatures");
+        take(compareOriginal(closed, *parsed));
+        auto module = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+            parsed->getBody()->front());
+        auto record = *module.getBody()
+                           .front()
+                           .getOps<zkc::protocol_ir::ConstructionOp>()
+                           .begin();
+        mlir::SymbolTableCollection symbols;
+        auto native =
+            take(zkc::protocol::readConstructionPlan(record, symbols));
+        require(native.codec && native.codec->record.empty() &&
+                    native.codec->inputs == SmallVector<unsigned>{0},
+                "unit Record has zero slots and layout retains original port");
+        mlir::OpBuilder builder(&context);
+        auto saved = record.getCodecAttr();
+        mlir::NamedAttrList changed(saved);
+        changed.set("inputs", builder.getDenseI64ArrayAttr({1}));
+        record.setCodecAttr(changed.getDictionary(&context));
+        refuses(zkc::protocol::readConstructionPlan(record, symbols),
+                "protocol-construction");
+        record.setCodecAttr(saved);
+        zkc::NativeProofPolicy policy;
+        policy.entry = native.target.getValue().str();
+        policy.construction = native.symbol.getValue().str();
+        policy.service = native.service;
+        policy.suite = native.suite;
+        policy.format = zkc::protocol::ProofFormat::RawBytes;
+        policy.publicInputs = {0};
+        mlir::SymbolTable table(module);
+        auto protocol =
+            table.lookup<zkc::protocol_ir::MathematicalOp>(policy.entry);
+        policy.producer =
+            mlir::cast<mlir::StringAttr>(protocol.getRoles()[0]).str();
+        policy.validator =
+            mlir::cast<mlir::StringAttr>(protocol.getRoles()[1]).str();
+        auto selected = take(zkc::selectNativeProofDraws(*parsed, policy));
+        auto constructed = take(zkc::constructNativeProof(*parsed, selected));
+        unsigned communication = 0;
+        constructed.module->walk([&](mlir::Operation *op) {
+          communication +=
+              mlir::isa<zkc::protocol_ir::EmitOp, zkc::protocol_ir::AwaitOp>(
+                  op);
+        });
+        require(communication == 0,
+                "codec endpoints contain no typed transport");
+
+        for (const auto &rule : plan.rules)
+          if (zkc::protocol::isCodecRule(rule.kind))
+            require(rule.chunks && rule.payload,
+                    "codec keeps byte shape and logical payload separately");
+        auto inventory = take(inspectDeclarations(project));
+        require(StringRef(inventory).contains("\"codec\"") &&
+                    StringRef(inventory).contains("\"decode\""),
+                "inspection exposes codec selection and rule kind");
+      });
+  cases.run(
+      "record codecs support disjoint byte ranges without message enums", [&] {
+        auto source = (program + deployment + codec).str();
+        for (auto [from, to] :
+             {std::pair<StringRef, StringRef>{"return (r,empty());",
+                                              "return (r,(empty(),empty()));"},
+              {"return (r,(0,32));", "return (r,((0,32),(64,32)));"},
+              {"on decode {commitment,response}(wire)",
+               "on decode {commitment,response}(wire:(Bytes,Bytes))"}}) {
+          auto at = source.find(from.str());
+          require(at != std::string::npos, "range fixture replacement");
+          source.replace(at, from.size(), to.str());
+        }
+        auto closed = take(closeEntry(take(checked(source)), "m::Packed"));
+        const auto &plan =
+            *closed
+                 .declarations()
+                     [closed.entry().proof()->selectedConstruction->index]
+                 .construction;
+        for (const auto &rule : plan.rules)
+          if (zkc::protocol::isCodecRule(rule.kind))
+            require(rule.chunks && rule.chunks->kind == Type::Kind::Tuple &&
+                        rule.chunks->arguments.size() == 2,
+                    "all codec rules share the two-chunk shape");
+        auto original = take(emitOriginal(closed, context));
+        auto parsed =
+            mlir::parseSourceString<mlir::ModuleOp>(original, &context);
+        require(bool(parsed), "disjoint codec PIR parses");
+        take(compareOriginal(closed, *parsed));
+      });
+  cases.run(
+      "a bare format uses unit layout and inherited format stays fixed", [&] {
+        auto source = (program + deployment + codec).str();
+        for (auto [from, to] :
+             {std::pair<StringRef, StringRef>{"RecordCodec<F>",
+                                              "RecordCodec<()>"},
+              {"initialize(layout:F)", "initialize(layout:())"},
+              {"format C(public);", "format C;"}}) {
+          size_t at = 0;
+          while ((at = source.find(from.str(), at)) != std::string::npos) {
+            source.replace(at, from.size(), to.str());
+            at += to.size();
+          }
+        }
+        auto closed = take(closeEntry(take(checked(source)), "m::Packed"));
+        const auto &plan =
+            *closed
+                 .declarations()
+                     [closed.entry().proof()->selectedConstruction->index]
+                 .construction;
+        require(plan.codec && plan.codec->inputs.empty(),
+                "unit layout selects no input");
+        auto original = take(emitOriginal(closed, context));
+        auto parsed =
+            mlir::parseSourceString<mlir::ModuleOp>(original, &context);
+        require(bool(parsed), "unit layout PIR parses");
+        take(compareOriginal(closed, *parsed));
+        source += R"(
+      construction ChangedFormat for Round<F> {
+        base Encoded<Packing>; format Native;
+      }
+    )";
+        refuses(checked(source), "source.construction");
+      });
+  for (auto change :
+       {std::pair<StringRef, StringRef>{"format C(public);",
+                                        "format C(secret);"},
+        {"format C(public);", "format C(public,public);"},
+        {"format C(public);", "format Native;"},
+        {"on decode {commitment,response}(wire)",
+         "on decode {commitment,response}(wire:F)"},
+        {"on decode {commitment,response}(wire){return 0;}", ""},
+        {"on encode {commitment,response}", "on encode {commitment,delivery}"}})
+    cases.run(("codec refuses " + change.second).str(), [&, from = change.first,
+                                                         to = change.second] {
+      auto source = (program + deployment + codec).str();
+      auto at = source.find(from.str());
+      require(at != std::string::npos, "codec invalid fixture replacement");
+      source.replace(at, from.size(), to.str());
+      refuses(checked(source), "source.construction");
+    });
   cases.run("typed handlers use ordinary Local declarations", [&] {
     auto project = take(checked(program));
     unsigned handlers = 0;
@@ -299,8 +488,9 @@ int main() {
             "native-proof-construction-coverage");
     record.setRulesAttr(rules);
   });
-  auto compileSource = [&](StringRef source, bool collideSites = false) {
-    auto closed = take(closeEntry(take(checked(source)), "m::Demo"));
+  auto compileSource = [&](StringRef source, bool collideSites = false,
+                           StringRef entry = "m::Demo") {
+    auto closed = take(closeEntry(take(checked(source)), entry));
     auto text = take(emitOriginal(closed, context));
     auto parsed = mlir::parseSourceString<mlir::ModuleOp>(text, &context);
     require(bool(parsed), "parse construction source");
@@ -337,6 +527,8 @@ int main() {
     policy.construction = plan.symbol.getValue().str();
     policy.service = plan.service;
     policy.suite = plan.suite;
+    policy.format = plan.codec ? zkc::protocol::ProofFormat::RawBytes
+                               : zkc::protocol::ProofFormat::Native;
     policy.producer =
         mlir::cast<mlir::StringAttr>(protocol.getRoles()[0]).str();
     policy.validator =
@@ -358,6 +550,132 @@ int main() {
     return std::make_tuple(std::move(parsed), std::move(result),
                            std::move(selected));
   };
+  cases.run("record codecs lower through physical compilation", [&] {
+    compileSource((program + deployment + codec).str(), false, "m::Packed");
+  });
+  for (StringRef mutation : {"provider", "record", "layout", "group", "slice",
+                             "helper", "calculation"})
+    cases.run(
+        ("independent record checker refuses changed " + mutation).str(),
+        [&, mutation] {
+          auto closed = take(
+              closeEntry(take(checked((program + deployment + codec).str())),
+                         "m::Packed"));
+          auto text = take(emitOriginal(closed, context));
+          auto source = mlir::parseSourceString<mlir::ModuleOp>(text, &context);
+          mlir::PassManager prepare(&context);
+          prepare.addPass(zkc::protocol::createPrepareProtocolPass(false));
+          require(mlir::succeeded(prepare.run(*source)),
+                  "prepare codec reference");
+          auto unit = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+              source->getBody()->front());
+          auto record = *unit.getBody()
+                             .front()
+                             .getOps<zkc::protocol_ir::ConstructionOp>()
+                             .begin();
+          mlir::SymbolTableCollection symbols;
+          auto plan =
+              take(zkc::protocol::readConstructionPlan(record, symbols));
+          mlir::SymbolTable table(unit);
+          auto protocol = table.lookup<zkc::protocol_ir::MathematicalOp>(
+              plan.target.getValue());
+          zkc::NativeProofPolicy policy;
+          policy.entry = plan.target.getValue().str();
+          policy.construction = plan.symbol.getValue().str();
+          policy.service = plan.service;
+          policy.publicInputs = {0};
+          policy.producer =
+              mlir::cast<mlir::StringAttr>(protocol.getRoles()[0]).str();
+          policy.validator =
+              mlir::cast<mlir::StringAttr>(protocol.getRoles()[1]).str();
+          SmallVector<mlir::Attribute> mathematical;
+          for (auto rule : record.getRules())
+            if (!zkc::protocol::isCodecRule(
+                    *zkc::protocol::parseConstructionRuleKind(
+                        mlir::cast<mlir::DictionaryAttr>(rule)
+                            .getAs<mlir::StringAttr>("kind")
+                            .getValue())))
+              mathematical.push_back(rule);
+          record.setRulesAttr(mlir::ArrayAttr::get(&context, mathematical));
+          record.removeCodecAttr();
+          policy = take(zkc::selectNativeProofDraws(*source, policy));
+          auto transcript = take(zkc::constructNativeProof(*source, policy));
+          SmallVector<zkc::detail::NativeTranscriptEvent> events;
+          const auto &sequence =
+              *(*transcript.descriptor.getAsArray())[3].getAsArray();
+          protocol.walk<mlir::WalkOrder::PreOrder>([&](mlir::Operation *op) {
+            auto query = mlir::dyn_cast<zkc::protocol_ir::QueryOp>(op);
+            auto message = mlir::dyn_cast<zkc::protocol_ir::ExchangeOp>(op);
+            if (!query && !message)
+              return;
+            auto origin =
+                (*sequence[events.size()].getAsArray())[1].getAsString()->str();
+            events.push_back({op->getAttrOfType<mlir::StringAttr>("site").str(),
+                              origin,
+                              query ? query.getResult(0).getType()
+                                    : message.getInput().getType(),
+                              bool(query), 0, std::nullopt});
+          });
+          auto candidate = mlir::OwningOpRef<mlir::ModuleOp>(
+              mlir::cast<mlir::ModuleOp>(transcript.module->clone()));
+          auto exported =
+              *(*transcript.descriptor.getAsArray())[6].getAsArray();
+          exported.pop_back(); // The transport pass receives the
+                               // transcript-only plan.
+          auto transport = take(zkc::detail::constructNativeCodec(
+              *candidate, policy, plan, events, exported));
+          if (auto error = zkc::detail::verifyNativeCodec(
+                  *transcript.module, *candidate, policy, plan, events,
+                  exported, transport))
+            throw std::runtime_error(toString(std::move(error)));
+          if (mutation == "provider")
+            transport[0] = "different-provider";
+          else if (mutation == "record")
+            transport[1] = json::Array{"index"};
+          else if (mutation == "layout")
+            transport[5] = json::Array{"1"};
+          else if (mutation == "group")
+            (*(*transport[6].getAsArray())[0].getAsArray())[5] = json::Array{};
+          else if (mutation == "slice") {
+            auto name = (*(*transport[6].getAsArray())[0].getAsArray())[4]
+                            .getAsString()
+                            ->str();
+            auto module = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+                candidate->getBody()->front());
+            auto f = mlir::SymbolTable(module).lookup<zkc::local::FuncOp>(name);
+            auto &op = f.getBody().front().front();
+            op.setOperand(1, op.getOperand(2));
+          } else if (mutation == "helper") {
+            auto module = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+                candidate->getBody()->front());
+            auto f = mlir::SymbolTable(module).lookup<zkc::local::FuncOp>(
+                plan.codec->finish.getValue());
+            // Preserve the function type and add an unrelated data operation.
+            mlir::OpBuilder builder(&context);
+            builder.setInsertionPoint(&f.getBody().front().back());
+            zkc::local::BoolConstantOp::create(
+                builder, f.getLoc(), builder.getI1Type(),
+                builder.getBoolAttr(true), builder.getStringAttr("extra"));
+          } else {
+            bool changed = false;
+            candidate->walk([&](zkc::protocol_ir::ParticipantOp participant) {
+              participant.walk([&](mlir::Operation *op) {
+                if (!changed &&
+                    op->getName().getStringRef() == "algebra.field_add") {
+                  op->setOperand(0, op->getOperand(1));
+                  changed = true;
+                }
+              });
+            });
+            require(changed, "fixture contains a retained calculation");
+          }
+          auto error = zkc::detail::verifyNativeCodec(
+              *transcript.module, *candidate, policy, plan, events, exported,
+              transport);
+          require(bool(error) && namesIdentifier(toString(std::move(error)),
+                                                 "native-codec-correspondence"),
+                  "independent codec checker refuses mutation");
+        });
   cases.run("index adapters allocate fresh sites around existing Local code",
             [&] {
               compileSource(R"(module m;

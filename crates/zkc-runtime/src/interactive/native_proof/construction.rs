@@ -15,6 +15,29 @@ pub struct ConstructionPlan {
     pub(super) start: String,
     pub(super) inputs: Vec<usize>,
     pub(super) adapters: Vec<Adapter>,
+    pub(super) codec: Option<RecordCodec>,
+}
+/// A checked record format. Mathematical observation adapters remain separate
+/// from these ordered transport steps; only `wire` receives transcript state.
+#[derive(Clone, Debug)]
+pub(super) struct RecordCodec {
+    pub record: Vec<PhysicalType>,
+    pub initialize: String,
+    pub write: String,
+    pub finish: String,
+    pub inputs: Vec<usize>,
+    pub messages: Vec<CodecMessage>,
+    pub conditional_write: String,
+    pub conditional_finish: String,
+}
+#[derive(Clone, Debug)]
+pub(super) struct CodecMessage {
+    pub encode: String,
+    pub receive: String,
+    pub decode: String,
+    pub wire: String,
+    pub slice: String,
+    pub origins: Vec<String>,
 }
 #[derive(Clone, Debug)]
 pub(super) struct Adapter {
@@ -53,10 +76,10 @@ impl ConstructionPlan {
     /// Read the single current schema. An empty array selects the installed
     /// native or authored path; unknown fields and partial plans refuse.
     pub fn read(value: &Value) -> Result<Option<Self>> {
-        if list(value, 7)?.is_empty() {
+        if list(value, 8)?.is_empty() {
             return Ok(None);
         }
-        let row = record(value, 7)?;
+        let row = record(value, 8)?;
         if text(&row[0])? != "zkc.construction-plan/0" {
             return Err(refuse("native-proof-construction-plan"));
         }
@@ -155,6 +178,7 @@ impl ConstructionPlan {
             start: start_name,
             inputs,
             adapters,
+            codec: RecordCodec::read(&row[7])?,
         }))
     }
     pub fn symbol(&self) -> &str {
@@ -163,8 +187,88 @@ impl ConstructionPlan {
     pub fn input_slots(&self) -> usize {
         if self.host { self.state.len() } else { 0 }
     }
+    pub fn has_codec(&self) -> bool {
+        self.codec.is_some()
+    }
     pub fn output_slots(&self) -> usize {
         self.state.len()
+    }
+}
+
+impl RecordCodec {
+    fn read(value: &Value) -> Result<Option<Self>> {
+        if list(value, 9)?.is_empty() {
+            return Ok(None);
+        }
+        let row = record(value, 9)?;
+        if text(&row[0])?.is_empty() || text(&row[0])?.len() > 65536 {
+            return Err(refuse("native-proof-codec-plan"));
+        }
+        let record = list(&row[1], 1024)?
+            .iter()
+            .map(|slot| {
+                let logical = LogicalType::parse(text(slot)?)
+                    .map_err(|_| refuse("native-proof-codec-record"))?;
+                let ty = PhysicalType::default_for(logical)
+                    .map_err(|_| refuse("native-proof-codec-record"))?;
+                if !ty.is_duplicable() || !ty.is_discardable() {
+                    return Err(refuse("native-proof-codec-record"));
+                }
+                Ok(ty)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let mut inputs = Vec::new();
+        for input in list(&row[5], 1024)? {
+            let encoded = text(input)?;
+            let index = encoded
+                .parse::<usize>()
+                .ok()
+                .filter(|i| *i < 1024 && i.to_string() == encoded)
+                .ok_or_else(|| refuse("native-proof-codec-layout"))?;
+            if inputs.contains(&index) {
+                return Err(refuse("native-proof-codec-layout"));
+            }
+            inputs.push(index);
+        }
+        let mut messages = Vec::new();
+        let mut origins = BTreeSet::new();
+        let mut origin_bytes = 0usize;
+        for message in list(&row[6], 2048)? {
+            let row = self::record(message, 6)?;
+            let mut selected = Vec::new();
+            for origin in list(&row[5], 2048)? {
+                let origin = text(origin)?;
+                origin_bytes += origin.len();
+                if origin_bytes > 16 * 1024 * 1024
+                    || origins.len() == 2048
+                    || !origins.insert(origin.to_owned())
+                {
+                    return Err(refuse("native-proof-codec-coverage"));
+                }
+                selected.push(origin.to_owned());
+            }
+            if selected.is_empty() {
+                return Err(refuse("native-proof-codec-coverage"));
+            }
+            messages.push(CodecMessage {
+                encode: name(&row[0], false)?,
+                receive: name(&row[1], false)?,
+                decode: name(&row[2], false)?,
+                wire: name(&row[3], true)?,
+                slice: name(&row[4], false)?,
+                origins: selected,
+            });
+        }
+        Ok(Some(Self {
+            record,
+            initialize: name(&row[2], false)?,
+            write: name(&row[3], false)?,
+            finish: name(&row[4], false)?,
+            inputs,
+            messages,
+            conditional_write: name(&row[7], true)?,
+            conditional_finish: name(&row[8], true)?,
+        }))
     }
 }
 
@@ -181,7 +285,8 @@ mod tests {
             ["index"],
             "initialize",
             ["start", ["0"]],
-            [["observe", "local", ["message"]]]
+            [["observe", "local", ["message"]]],
+            []
         ])
     }
 

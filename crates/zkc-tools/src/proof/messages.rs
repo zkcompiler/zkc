@@ -14,6 +14,7 @@ pub(super) struct MessageLayout<'a> {
     pub(super) events: Vec<NativeTranscriptEvent>,
     wire_origins: Vec<&'a str>,
     format: super::ProofFormat,
+    record_codec: bool,
 }
 impl<'a> MessageLayout<'a> {
     pub(super) fn read(descriptor: &'a [Json], policy: &DeploymentPolicy<'_>) -> Result<Self> {
@@ -63,6 +64,7 @@ impl<'a> MessageLayout<'a> {
                 return Err("native-proof-origin-map".into());
             }
             if policy.format == super::ProofFormat::RawBytes
+                && policy.construction.is_empty()
                 && record[2]
                     .as_array()
                     .ok_or("native-proof-origin-map")?
@@ -132,6 +134,7 @@ impl<'a> MessageLayout<'a> {
             return Err("native-proof-event-map".into());
         }
         if policy.format == super::ProofFormat::RawBytes
+            && policy.construction.is_empty()
             && (observed_messages != 1
                 || wire_origins.len() != 1
                 || messages
@@ -145,6 +148,8 @@ impl<'a> MessageLayout<'a> {
             events,
             wire_origins,
             format: policy.format,
+            record_codec: policy.format == super::ProofFormat::RawBytes
+                && !policy.construction.is_empty(),
         })
     }
 
@@ -152,12 +157,17 @@ impl<'a> MessageLayout<'a> {
     /// actual ordered sends/receives, including schema and nominal payload type.
     pub(super) fn check_wire(&self, value: &Json, admitted: &Admitted, entry: &str) -> Result<()> {
         let wire_rows = list(value)?;
-        if wire_rows.len() != self.wire_origins.len() {
+        let origins = if self.record_codec {
+            &[]
+        } else {
+            self.wire_origins.as_slice()
+        };
+        if wire_rows.len() != origins.len() {
             return Err("native-proof-wire-map".into());
         }
         let mut wire_layout = Vec::new();
         let mut wire_sites = std::collections::BTreeSet::new();
-        for (row, origin) in wire_rows.iter().zip(self.wire_origins.iter().copied()) {
+        for (row, origin) in wire_rows.iter().zip(origins.iter().copied()) {
             let row = array(row, 2)?;
             let site = text(&row[1])?;
             if text(&row[0])? != origin

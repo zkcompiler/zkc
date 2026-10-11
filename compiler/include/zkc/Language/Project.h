@@ -1,6 +1,7 @@
 #ifndef ZKC_LANGUAGE_PROJECT_H
 #define ZKC_LANGUAGE_PROJECT_H
 
+#include "zkc/Contracts/Construction.h"
 #include "zkc/Contracts/Mathematical.h"
 #include "zkc/Contracts/ProofFormat.h"
 #include "zkc/Language/Assets.h"
@@ -370,12 +371,24 @@ enum class EntryKind { Run, Proof };
 struct RunEntry {};
 /// A checked association of ordinary Local code with a protocol occurrence.
 struct ConstructionRule {
-  enum class Kind { Start, Message, Query } kind;
+  using Kind = protocol::ConstructionRuleKind;
+  Kind kind;
   std::vector<std::string> path;
   DeclarationId handler;
   std::vector<Type> arguments;
   std::vector<unsigned> inputs;
   Span span;
+  std::optional<Type> payload, chunks;
+};
+struct ConstructionMethod {
+  CallableReference target;
+  std::vector<Type> arguments;
+};
+struct ConstructionCodec {
+  Type provider, record;
+  ConstructionMethod initialize, write, finish;
+  /// Actual shared protocol inputs used to initialize the layout record.
+  std::vector<unsigned> inputs;
 };
 struct ConstructionDefinition {
   enum class Base { None, Authored, Native, Named } base = Base::None;
@@ -390,6 +403,7 @@ struct ConstructionDefinition {
   std::string suite;
   bool nativeBase = false;
   std::vector<ConstructionRule> rules;
+  std::optional<ConstructionCodec> codec;
 };
 /// Explicit two-participant proof job choices. Public inputs name whole logical
 /// ports; acceptance can select a Boolean product component. Service indices

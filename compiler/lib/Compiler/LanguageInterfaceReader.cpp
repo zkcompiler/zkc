@@ -1282,8 +1282,7 @@ class Reader {
         suite = name->str();
       }
       if (!symbol || !service || *service >= current->services.size() ||
-          current->services[*service].owner != proof.verifier ||
-          proof.format != protocol::ProofFormat::Native)
+          current->services[*service].owner != proof.verifier)
         return fail("construction selection or verifier service differs");
       auto found = nativeConstructions.find(symbol->str());
       if (nativeConstructions.size() != 1 || found == nativeConstructions.end())
@@ -1294,7 +1293,9 @@ class Reader {
         consumeError(plan.takeError());
         return fail("invalid construction record");
       }
-      if (plan->target.getValue() != current->symbol || plan->suite != suite ||
+      if (plan->codec.has_value() !=
+              (proof.format == protocol::ProofFormat::RawBytes) ||
+          plan->target.getValue() != current->symbol || plan->suite != suite ||
           plan->service != current->services[*service].native)
         return fail("construction record differs");
       proof.construction = ProofEntry::Construction::Derived;

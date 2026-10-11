@@ -326,15 +326,10 @@ fn job(
             symbol,
             suite,
             service,
-            format,
+            ..
         } => {
             schemas.charge(symbol.len() + suite.as_ref().map_or(0, String::len))?;
-            require(
-                !symbol.is_empty()
-                    && symbol.len() <= 4096
-                    && *format == crate::proof::ProofFormat::Native,
-                E::Selection,
-            )?;
+            require(!symbol.is_empty() && symbol.len() <= 4096, E::Selection)?;
             let selected = protocol
                 .services
                 .get(*service as usize)

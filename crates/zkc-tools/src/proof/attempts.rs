@@ -344,7 +344,7 @@ impl Session<'_> {
                         let produced = driver::produce_native(
                             &mut runner,
                             self.binding,
-                            self.deployment.format,
+                            self.deployment.transport(),
                             self.plan.policy.limits.proof_bytes,
                         );
                         record.stop = produced.stop().cloned();

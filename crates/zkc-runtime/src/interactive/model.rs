@@ -427,7 +427,7 @@ pub(crate) enum LocalInstruction {
     },
     Return(Vec<String>),
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct LoopCount {
     pub value: String,
     pub maximum: u64,
@@ -443,7 +443,7 @@ pub(crate) struct Participant {
     pub outputs: Vec<PhysicalType>,
     pub body: Body,
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum Instruction {
     Query {
         site: String,
