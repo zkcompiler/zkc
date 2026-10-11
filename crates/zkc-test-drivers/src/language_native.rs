@@ -801,7 +801,7 @@ fn main() {
         }
         for (name, inputs, expected) in [
             ("array", vec![field(3), field(7)], 3),
-            ("component", vec![field(3)], 4),
+            ("module", vec![field(3)], 4),
             ("associated", vec![field(3)], 3),
             ("associated_domain", vec![field(3)], 6),
         ] {

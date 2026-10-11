@@ -110,6 +110,14 @@ A selected import such as
 family, including all exported fixities for the token. `notation ⟪` selects a
 public delimiter shape; `reduction ∑` selects a public reduction binding.
 `indexing []` selects all exported indexing arities.
+Import aliases have whole-module scope and may refer to aliases written later.
+The names introduced by an import are excluded from its own source path; for
+example, `use library::sub as library;` resolves the enclosing or captured
+`library` before introducing the alias.
+A leading `::` starts import lookup at captured roots. Alias dependency cycles and
+depth limits are checked independently of authored order. Name bindings are
+resolved first; a separate pass validates the completed module dependency graph
+and propagates notation exports. Visibility checks authorize the resolved routes.
 A qualified reference alone activates no notation.
 `pub use` reexports the selected names, aliases and bindings with their original identities; ordinary
 imports remain private. A reexport requires the selected declaration itself to be
@@ -174,7 +182,9 @@ reachable instances. Template bodies are shared immutably. Specialization has it
 
 `zkc check --declarations` adds a diagnostic array of public modules, interfaces,
 completed callable contracts and constructions from captured modules, sorted by qualified name, under `declarations`.
-Module/interface records report public member names and any implemented contract.
+Module/interface records report directly declared public member names and any
+implemented contract. The inventory uses canonical declaration paths with public
+owners; it does not enumerate import alias or reexport routes.
 Installation declarations remain accessible through the checked SDK graph. Callable members
 are visible through their public owner. Members identify that owner and mark
 inherited static parameters; `abstract` distinguishes interface declarations
@@ -917,7 +927,9 @@ selected domain. Conformance checks callable modes, types, permissions, natural
 preconditions, callback acceptance contracts and implementation effects. An
 implementation cannot require more than its interface allows. Interfaces and
 modules may have static parameters;
-abstract signatures may declare member-specific generic parameters.
+abstract callable signatures may declare member-specific generic parameters.
+Associated types use only their owner's static parameters; member-specific
+parameters on associated types are rejected.
 `Module::method<F, ...>(value)` supplies the module parameters directly;
 `C::method(value)` through a bound module uses the parameters already in `C`.
 `type Name = T;` is always a transparent alias. `type Name: Type = T;` or
@@ -1381,6 +1393,11 @@ have no native leaves; its result must also pass the bounded interface reader.
 | Active notation descriptor keys per environment; delimiter holes | 4096; 64 |
 | Notation inspection JSON | 8 MiB |
 | Location records, five 64-bit coordinates each | 16 MiB |
+
+The import-depth ceiling also bounds the dependency chain used to construct
+notation environments, including lexical parents and the installed prelude.
+Bodies in one source file share its filtered token stream, with a separate
+notation environment for each module.
 
 The work ceiling accommodates composed source libraries while preserving charges
 for each traversal. File, type, instance, operation and output ceilings remain

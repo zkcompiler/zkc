@@ -171,6 +171,11 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     }
   }
   auto &source = *sources[id.index];
+  if (decl.kind == Declaration::Kind::Associated && !source.parameters.empty())
+    return types.fail(
+        "source.unsupported",
+        "associated types use only their owner's static parameters",
+        source.parameters.front().span);
   ++signatureDepth;
   auto restoreDepth = llvm::scope_exit([&] { --signatureDepth; });
   signatureState[id.index] = 1;

@@ -5,11 +5,12 @@ using namespace llvm;
 using namespace zkc::language;
 using namespace zkc::test;
 namespace {
-Expected<CheckedProject> check(std::vector<SourceBuffer> sources) {
+Expected<CheckedProject> check(std::vector<SourceBuffer> sources,
+                               Limits limits = {}) {
   auto captured = capture(std::move(sources));
   if (!captured)
     return captured.takeError();
-  return analyze(*captured).checkedProject();
+  return analyze(*captured, limits).checkedProject();
 }
 Expected<CheckedProject> check(StringRef source) {
   return check({{"m", source.str(), "main.zkc"}});
@@ -310,6 +311,188 @@ int main() {
     });
     require(primary && primary->source.index == 1,
             "child diagnostic points into parent file");
+  });
+
+  cases.run("import aliases have whole-module scope", [] {
+    for (bool reverse : {false, true}) {
+      std::string a = "use Alias as Again;", b = "use ::m::Library as Alias;";
+      auto project = take(check(
+          "module m;module Library{pub math fn value()->bool{return true;}}" +
+          (reverse ? b + a : a + b) +
+          "protocol Demo roles(P)()->(ok:bool@P){return Again::value();}run "
+          "Run=Demo;"));
+      take(prepareOriginal(take(closeEntry(project, "m::Run"))));
+    }
+    refuses(check("module m;use A as B;use B as A;"), "source.cycle");
+  });
+  cases.run("an implicit module alias resolves its enclosing source", [] {
+    take(check(std::vector<SourceBuffer>{
+        {"library", "module library;pub math fn value()->bool{return true;}",
+         "library"},
+        {"client",
+         "module client;use library;math fn apply()->bool{return "
+         "library::value();}",
+         "client"}}));
+  });
+  cases.run("import binding limits do not depend on authored order", [] {
+    for (bool reverse : {false, true}) {
+      std::string imports = "use ::m::Library as A;use A as B;use B as C;";
+      if (reverse)
+        imports = "use B as C;use A as B;use ::m::Library as A;";
+      std::vector<SourceBuffer> sources{
+          {"m", "module m;module Library{}" + imports, "main.zkc"}};
+      Limits limits;
+      limits.importDepth = 3;
+      take(check(sources, limits));
+      limits.importDepth = 2;
+      refuses(check(sources, limits), "source.limit");
+    }
+  });
+  cases.run("early alias lookup retains its module dependency depth", [] {
+    std::vector<SourceBuffer> sources{
+        {"m",
+         "module m;use B::Alias as Imported;"
+         "module B{pub use ::library as Alias;}"
+         "module E{use ::m::B;}",
+         "m.zkc"},
+        {"library", "module library;use leaf;", "library.zkc"},
+        {"leaf", "module leaf;", "leaf.zkc"}};
+    Limits limits;
+    limits.importDepth = 4;
+    take(check(sources, limits));
+    limits.importDepth = 3;
+    refuses(check(sources, limits), "source.limit");
+  });
+  cases.run("pending imports shadow captured roots in either order", [] {
+    for (bool reverse : {false, true}) {
+      std::string a = "use Y::{z};", b = "use X::{Y};";
+      auto definitions = [&](bool exported) {
+        return std::vector<SourceBuffer>{
+            {"Y", "module Y;pub math fn z()->bool{return false;}", "Y.zkc"},
+            {"X",
+             "module X;pub module Y{" +
+                 std::string(exported ? "pub math fn z()->bool{return true;}"
+                                      : "") +
+                 "}",
+             "X.zkc"},
+            {"m",
+             "module m;" + (reverse ? b + a : a + b) +
+                 "math fn apply()->bool{return z();}",
+             "m.zkc"}};
+      };
+      refuses(check(definitions(false)), "source.import");
+      auto project = take(check(definitions(true)));
+      const auto &body = *named(project, "m::apply").body;
+      bool checked = false;
+      for (const auto &operation : body.operations)
+        if (auto call = std::get_if<HelperCall>(&operation.action)) {
+          require(project.declarations()[call->callee.index].qualifiedName ==
+                      "X::Y::z",
+                  "pending import selected a captured root instead");
+          checked = true;
+        }
+      require(checked, "missing imported helper call");
+    }
+  });
+  cases.run("a child resolves a later parent import", [] {
+    for (bool reverse : {false, true}) {
+      std::string a = "use B::{t};", b = "use X::{Y};";
+      take(check(std::vector<SourceBuffer>{
+          {"X", "module X;pub module Y{pub math fn t()->bool{return true;}}",
+           "X.zkc"},
+          {"m",
+           "module m;" + (reverse ? b + a : a + b) +
+               "module B{pub use Y::{t};}",
+           "m.zkc"}}));
+    }
+  });
+  cases.run("associated types cannot introduce unbound member parameters", [] {
+    refuses(check("module m;module M<N:nat>{pub type "
+                  "Box<K:nat>:Copy+Drop=[bool;K];}"),
+            "source.unsupported");
+    refuses(check("module m;interface I{type T<K:nat>;}module A:I{type "
+                  "T:Copy+Drop=bool;}"),
+            "source.unsupported");
+  });
+  cases.run("type arguments reuse each omitted lexical binder", [] {
+    auto project = take(check(R"(module m;
+      module M<N:nat>{
+        pub struct S<T:Type>{pub x:[T;N]}
+        pub type Row=S<T=bool>;
+        type Single=S<N=1,T=bool>;
+        pub math fn make(x:[bool;N])->Row{return S<T=bool>{x:x};}
+      }
+      protocol Demo roles(P)(x:[bool;2]@P)->(out:M::Row<2>@P){return M::make<2>(x);}
+      run Run=Demo;
+    )"));
+    take(prepareOriginal(take(closeEntry(project, "m::Run"))));
+    refuses(check("module m;module M<N:nat>{struct S<T:Type>{pub x:[T;N]}type "
+                  "Bad=S;}"),
+            "source.generic");
+  });
+  cases.run("inline module bodies share one source token pass", [] {
+    std::string source = "module m;";
+    for (unsigned i = 0; i < 500; ++i)
+      source += "module M" + std::to_string(i) +
+                "{pub math fn value()->bool{return true;}}";
+    take(check(source));
+  });
+  cases.run("private external child routes obey module visibility", [] {
+    refuses(
+        check(std::vector<SourceBuffer>{
+            {"m", "module m;module Child;", "m.zkc"},
+            {"m::Child",
+             "module m::Child;pub math fn value()->bool{return true;}",
+             "child.zkc"},
+            {"client", "module client;use m::Child::{value};", "client.zkc"}}),
+        "source.private");
+  });
+  cases.run("binding depth is independent of target module loading", [] {
+    for (bool warm : {false, true}) {
+      std::string source = "module m;module Leaf{}"
+                           "module Library{use ::m::Leaf as L;}";
+      if (warm)
+        source += "use ::m::Library as Z;";
+      source += "use ::m::Library as A;use A as B;use B as C;";
+      Limits limits;
+      limits.importDepth = 3;
+      take(check({{"m", source, "m.zkc"}}, limits));
+      limits.importDepth = 2;
+      refuses(check({{"m", source, "m.zkc"}}, limits), "source.limit");
+    }
+  });
+  cases.run("an import excludes its own names from its source path", [] {
+    take(check(std::vector<SourceBuffer>{
+        {"library", "module library;pub math fn library()->bool{return true;}",
+         "library.zkc"},
+        {"client",
+         "module client;use library::{library};math fn apply()->bool{return "
+         "library();}",
+         "client.zkc"}}));
+    for (bool publicChild : {false, true}) {
+      auto result = check(std::vector<SourceBuffer>{
+          {"library",
+           "module library;" + std::string(publicChild ? "pub " : "") +
+               "module sub{pub math fn value()->bool{return true;}}",
+           "library.zkc"},
+          {"client",
+           "module client;use library::sub as library;math fn "
+           "apply()->bool{return library::value();}",
+           "client.zkc"}});
+      if (publicChild)
+        take(std::move(result));
+      else
+        refuses(std::move(result), "source.private");
+    }
+  });
+  cases.run("module ordering does not change lexical alias resolution", [] {
+    for (bool reverse : {false, true}) {
+      std::string a =
+          "module M{use library;pub module C{use library::Sub::{value};}}";
+      std::string b = "pub module library{pub module Sub{pub math fn "
+                      "value()->bool{return true;}}use ::m::M::C as Child;}";
+      take(check("module m;" + (reverse ? b + a : a + b)));
+    }
   });
   return cases.result();
 }

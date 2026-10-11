@@ -28,26 +28,28 @@ Checker::arguments(const Declaration &context, const Declaration &target,
   auto enclosing = enclosingParameters(context, target, span);
   if (!enclosing)
     return {};
-  bool lexical =
-      syntax.empty() && target.parent &&
-      output.declarations[target.parent->index].parameters.size() ==
-          target.parameters.size() &&
-      llvm::all_of(*enclosing, [](bool available) { return available; });
-  if (lexical) {
-    for (unsigned i = 0; i < target.parameters.size(); ++i)
-      result[i] = parameterType(target.parameters[i]);
-  } else {
-    auto binding =
-        bindArguments(types, argumentNames<Parameter>(target.parameters),
-                      syntax.size(), labels, true, span, "source.generic");
-    if (!binding)
+  auto binding =
+      bindArguments(types, argumentNames<Parameter>(target.parameters),
+                    syntax.size(), labels, false, span, "source.generic");
+  if (!binding)
+    return {};
+  std::vector<bool> written(target.parameters.size());
+  for (unsigned i = 0; i < syntax.size(); ++i) {
+    auto arg = type(context, syntax[i]);
+    if (!arg)
       return {};
-    for (unsigned i = 0; i < syntax.size(); ++i) {
-      auto arg = type(context, syntax[i]);
-      if (!arg)
-        return {};
-      result[(*binding)[i]] = std::move(*arg);
+    result[(*binding)[i]] = std::move(*arg);
+    written[(*binding)[i]] = true;
+  }
+  for (unsigned i = 0; i < target.parameters.size(); ++i) {
+    if (written[i])
+      continue;
+    if (!(*enclosing)[i]) {
+      types.fail("source.generic",
+                 "missing static argument: " + target.parameters[i].name, span);
+      return {};
     }
+    result[i] = parameterType(target.parameters[i]);
   }
   if (formingParameters.count(context.id.index)) {
     for (const auto &argument : result)
@@ -271,17 +273,17 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
                    s.span);
         return {};
       }
-      for (const auto &parameter : parent.parameters) {
-        if (llvm::none_of(context.parameters, [&](const Parameter &available) {
-              return parameter.atom == available.atom;
-            })) {
-          types.fail("source.generic",
-                     "associated type needs its module's static arguments",
-                     s.span);
-          return {};
-        }
-        base.arguments.push_back(parameterType(parameter));
+      auto enclosing = enclosingParameters(context, parent, s.span);
+      if (!enclosing)
+        return {};
+      if (!llvm::all_of(*enclosing, [](bool available) { return available; })) {
+        types.fail("source.generic",
+                   "associated type needs its module's static arguments",
+                   s.span);
+        return {};
       }
+      for (const auto &parameter : parent.parameters)
+        base.arguments.push_back(parameterType(parameter));
     }
     return types.associated(base, decl.name, s.span);
   }

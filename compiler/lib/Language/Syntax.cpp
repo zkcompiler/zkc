@@ -7,7 +7,7 @@
 
 using namespace llvm;
 namespace zkc::language::detail {
-Error lex(const SourceBuffer &source, SourceId module, Work &work,
+Error lex(const SourceBuffer &source, SourceId sourceId, Work &work,
           std::vector<Token> &tokens) {
   StringRef text = source.text;
   size_t offset = 0;
@@ -17,7 +17,7 @@ Error lex(const SourceBuffer &source, SourceId module, Work &work,
     auto scalar = decodeSourceScalar(text, offset);
     if (!scalar)
       return failure("source.unicode", "invalid UTF-8 scalar",
-                     Span{module, uint32_t(begin), uint32_t(begin + 1)});
+                     Span{sourceId, uint32_t(begin), uint32_t(begin + 1)});
     char c = text[offset];
     offset += scalar->bytes;
     if (isSpace(c)) {
@@ -38,15 +38,15 @@ Error lex(const SourceBuffer &source, SourceId module, Work &work,
       }
       if (offset - begin > work.limits.identifierBytes)
         return failure("source.limit", "identifier byte limit exceeded",
-                       Span{module, uint32_t(begin), uint32_t(offset)});
+                       Span{sourceId, uint32_t(begin), uint32_t(offset)});
       if (!isSourceNFC(text.slice(begin, offset)))
         return failure("source.nfc", "source identifiers require NFC spelling",
-                       Span{module, uint32_t(begin), uint32_t(offset)});
+                       Span{sourceId, uint32_t(begin), uint32_t(offset)});
       if (isUnsupported(text.slice(begin, offset)))
         return failure("source.unsupported",
                        "feature is outside this source fragment: " +
                            text.slice(begin, offset),
-                       Span{module, uint32_t(begin), uint32_t(offset)});
+                       Span{sourceId, uint32_t(begin), uint32_t(offset)});
     } else if (isDigit(c)) {
       kind = TokenKind::Decimal;
       while (offset < text.size() && isDigit(text[offset]))
@@ -58,11 +58,11 @@ Error lex(const SourceBuffer &source, SourceId module, Work &work,
         if (byte < 32 || byte > 126 || byte == '\\')
           return failure("source.string",
                          "expected an unescaped printable ASCII string",
-                         Span{module, uint32_t(begin), uint32_t(offset)});
+                         Span{sourceId, uint32_t(begin), uint32_t(offset)});
       }
       if (offset == text.size())
         return failure("source.string", "unterminated string",
-                       Span{module, uint32_t(begin), uint32_t(offset)});
+                       Span{sourceId, uint32_t(begin), uint32_t(offset)});
       ++offset;
     } else if (scalar->value > 127) {
       kind = TokenKind::Punctuation;
@@ -71,7 +71,7 @@ Error lex(const SourceBuffer &source, SourceId module, Work &work,
           !isSourceDelimiterCloser(scalar->value))
         return failure("source.unicode",
                        "character is outside the source token profile",
-                       Span{module, uint32_t(begin), uint32_t(offset)});
+                       Span{sourceId, uint32_t(begin), uint32_t(offset)});
     } else {
       kind = TokenKind::Punctuation;
       if (offset < text.size() && ((c == ':' && text[offset] == ':') ||
@@ -85,9 +85,9 @@ Error lex(const SourceBuffer &source, SourceId module, Work &work,
         ++offset;
       else if (!StringRef(";,:(){}@=+-*<>[]!.#").contains(c))
         return failure("source.token", "unsupported source character",
-                       Span{module, uint32_t(begin), uint32_t(offset)});
+                       Span{sourceId, uint32_t(begin), uint32_t(offset)});
     }
-    Span span{module, uint32_t(begin), uint32_t(offset)};
+    Span span{sourceId, uint32_t(begin), uint32_t(offset)};
     if (kind != TokenKind::Whitespace && kind != TokenKind::Comment &&
         offset - begin > work.limits.tokenBytes)
       return failure("source.limit", "token byte limit exceeded", span);
@@ -98,7 +98,7 @@ Error lex(const SourceBuffer &source, SourceId module, Work &work,
       return error;
     tokens.push_back({kind, span});
   }
-  Span end{module, uint32_t(offset), uint32_t(offset)};
+  Span end{sourceId, uint32_t(offset), uint32_t(offset)};
   if (auto error =
           work.count(work.tokens, work.limits.tokens, "token count", end))
     return error;
@@ -108,9 +108,9 @@ Error lex(const SourceBuffer &source, SourceId module, Work &work,
 namespace {
 class Parser {
 public:
-  Parser(const SourceBuffer &source, SourceId module, ArrayRef<Token> input,
+  Parser(const SourceBuffer &source, SourceId sourceId, ArrayRef<Token> input,
          Work &work)
-      : source(source), module(module), work(work) {
+      : source(source), sourceId(sourceId), work(work) {
     for (const auto &token : input)
       if (token.kind != TokenKind::Whitespace &&
           token.kind != TokenKind::Comment)
@@ -157,8 +157,11 @@ public:
         import.span = current().span;
         import.isPublic = take("pub");
         advance(); // use
+        bool absolute = take("::");
         if (!name(import.module))
           break;
+        if (absolute)
+          import.module.insert(0, "::");
         bool selected = false;
         while (take("::")) {
           if (at("{")) {
@@ -248,7 +251,7 @@ public:
 
 private:
   const SourceBuffer &source;
-  SourceId module;
+  SourceId sourceId;
   Work &work;
   std::vector<Token> tokens;
   size_t cursor = 0;
@@ -444,7 +447,7 @@ private:
       descriptor->symbol = text().str();
       if (result.explicitNotation &&
           static_cast<unsigned char>(text().front()) < 128) {
-        auto fixed = fixedNotationEnvironment(module);
+        auto fixed = fixedNotationEnvironment(sourceId);
         auto found = fixed.find(descriptor->key());
         if (found == fixed.end() || *found->second.descriptor != *descriptor) {
           fail("source.notation-conflict", "ASCII operator syntax is fixed");
@@ -2713,19 +2716,21 @@ private:
   }
 };
 } // namespace
-Expected<SyntaxDeclaration> parse(const SourceBuffer &source, SourceId module,
+Expected<SyntaxDeclaration> parse(const SourceBuffer &source, SourceId sourceId,
                                   ArrayRef<Token> tokens, Work &work) {
-  if (auto error = work.charge(tokens.size(), Span{module, 0, 0}))
+  if (auto error = work.charge(tokens.size(), Span{sourceId, 0, 0}))
     return std::move(error);
-  return Parser(source, module, tokens, work).run();
+  return Parser(source, sourceId, tokens, work).run();
 }
-Error parseBodies(const SourceBuffer &source, SyntaxDeclaration &module,
-                  ArrayRef<Token> tokens,
-                  std::shared_ptr<const NotationEnvironment> environment,
+Error parseBodies(const SourceBuffer &source, SourceId id,
+                  ArrayRef<Token> tokens, ArrayRef<BodyParseScope> scopes,
                   Work &work) {
-  if (auto error = work.charge(tokens.size(), module.span))
+  if (auto error = work.charge(tokens.size(), Span{id, 0, 0}))
     return error;
-  return Parser(source, module.span.source, tokens, work)
-      .finish(module, std::move(environment));
+  Parser parser(source, id, tokens, work);
+  for (const auto &scope : scopes)
+    if (auto error = parser.finish(*scope.module, scope.environment))
+      return error;
+  return Error::success();
 }
 } // namespace zkc::language::detail

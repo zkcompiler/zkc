@@ -377,9 +377,12 @@ llvm::StringRef operatorSymbol(const Expression &);
 llvm::Error lex(const SourceBuffer &, SourceId, Work &, std::vector<Token> &);
 llvm::Expected<SyntaxDeclaration> parse(const SourceBuffer &, SourceId,
                                         llvm::ArrayRef<Token>, Work &);
-llvm::Error parseBodies(const SourceBuffer &, SyntaxDeclaration &,
-                        llvm::ArrayRef<Token>,
-                        std::shared_ptr<const NotationEnvironment>, Work &);
+struct BodyParseScope {
+  SyntaxDeclaration *module;
+  std::shared_ptr<const NotationEnvironment> environment;
+};
+llvm::Error parseBodies(const SourceBuffer &, SourceId, llvm::ArrayRef<Token>,
+                        llvm::ArrayRef<BodyParseScope>, Work &);
 NotationEnvironment fixedNotationEnvironment(SourceId);
 llvm::Error resolveNotationSyntax(std::vector<SyntaxOperator> &,
                                   NotationEnvironment &, Work &);

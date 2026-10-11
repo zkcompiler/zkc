@@ -128,7 +128,7 @@ pub struct Layout {
 
 // A challenge-dependent reduction of every channel's multiset equality to
 // per-table auxiliary columns, per-table claims and global claims. One
-// component serves every table, so tables cannot mix reductions. Record
+// module serves every table, so tables cannot mix reductions. Record
 // values may be on the table's rows, on a larger evaluation domain or at a
 // single point (rows = 1): `constraints` is the same arithmetic for each.
 pub interface Reduction<F: Field> {

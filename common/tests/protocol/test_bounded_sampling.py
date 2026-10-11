@@ -9,6 +9,8 @@ SOURCE = '''module sample;
 use zkc::sampling::{Words,uniform_index};
 module TestWords:Words {
   type State:Copy+Drop=(index,index);
+  pub fn start(word:index,count:index)->State{return State((word,count));}
+  pub fn draw_count(state:State)->index{let(_,count)=unpack(state);return count;}
   fn next(state:State)->(State,index){
     let(word,count)=unpack(state);
     let value=if count==0 {word} else {18446744073709551615};
@@ -16,9 +18,8 @@ module TestWords:Words {
   }
 }
 fn sample(first:index,bound:index)->(index,index){
-  let(state,value)=uniform_index<TestWords,ATTEMPTS>(TestWords::State((first,0)),bound);
-  let(word,count)=unpack(state);
-  return(value,count);
+  let(state,value)=uniform_index<TestWords,ATTEMPTS>(TestWords::start(first,0),bound);
+  return(value,TestWords::draw_count(state));
 }
 protocol Sample roles(P)(first:index@P,bound:index@P)->(value:index@P,count:index@P){
   let(value,count)=sample(first,bound);
@@ -70,9 +71,11 @@ def test_non_power_of_two_construction_uses_an_explicit_sampler(toolchain, journ
     text = SOURCE[:SOURCE.index('fn sample')]
     text += '''
     domain E=field("koala-bear.ext8-binomial3");
-    interface ProviderType {type State:Copy+Drop;fn initialize()->State;}
+    interface ProviderType {type State:Copy+Drop;fn initialize()->State effects();}
     module Provider:ProviderType {
       type State:Copy+Drop=index;
+      pub fn wrap(value:index)->State{return State(value);}
+      pub fn raw(state:State)->index{return unpack(state);}
       fn initialize()->State{return State(0);}
     }
     protocol Choose roles(P,V)(expected:index@(P,V),coins:Random<E>@V)->(ok:bool@V){
@@ -85,9 +88,9 @@ def test_non_power_of_two_construction_uses_an_explicit_sampler(toolchain, journ
       transcript Provider;replace coins;
       on start(t){return t;}
       on query pick(t,bound){
-        let(next,value)=uniform_index<TestWords,2>(TestWords::State((0,unpack(t))),bound);
-        let(word,count)=unpack(next);
-        return(Provider::State(count),value);
+        let(next,value)=uniform_index<TestWords,2>(TestWords::start(0,Provider::raw(t)),bound);
+        let count=TestWords::draw_count(next);
+        return(Provider::wrap(count),value);
       }
       on message {delivery,response}(t,value){return t;}
     }
@@ -121,9 +124,11 @@ def test_explicit_transcript_trials_preserve_state_and_charge_work(toolchain, jo
     text = '''module sample;
     type Indices=builtin("indices");
     domain E=field("koala-bear.ext8-binomial3");
-    interface ProviderType {type State:Copy+Drop;fn initialize()->State;}
+    interface ProviderType {type State:Copy+Drop;fn initialize()->State effects(stop);}
     module Provider:ProviderType {
       type State:Copy+Drop=Indices;
+      pub fn wrap(value:Indices)->State{return State(value);}
+      pub fn raw(state:State)->Indices{return unpack(state);}
       fn initialize()->State{return State(kernel("external.openvm.init"));}
     }
     protocol Choose roles(P,V)(coins:Random<E>@V)->(ok:bool@V){
@@ -135,13 +140,13 @@ def test_explicit_transcript_trials_preserve_state_and_charge_work(toolchain, jo
     construction Custom for Choose {
       transcript Provider;replace coins;
       on start(t){
-        let original=unpack(t);
+        let original=Provider::raw(t);
         TRIALS
         return t;
       }
       on query pick(t,bound){
-        let(next,value)=kernel("external.openvm.sample_bits",unpack(t),4);
-        return(Provider::State(next),value);
+        let(next,value)=kernel("external.openvm.sample_bits",Provider::raw(t),4);
+        return(Provider::wrap(next),value);
       }
       on message {delivery,response}(t,value){return t;}
     }

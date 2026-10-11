@@ -25,10 +25,11 @@ Expected<SyntaxDeclaration> syntax(StringRef prefix, StringRef expression,
   auto environment = fixedNotationEnvironment({0});
   if (auto error = resolveNotationSyntax(parsed->operators, environment, work))
     return error;
-  if (auto error = parseBodies(
-          source, *parsed, tokens,
-          std::make_shared<const NotationEnvironment>(std::move(environment)),
-          work))
+  if (auto error =
+          parseBodies(source, {0}, tokens,
+                      {{&*parsed, std::make_shared<const NotationEnvironment>(
+                                      std::move(environment))}},
+                      work))
     return error;
   return std::move(*parsed);
 }

@@ -58,7 +58,7 @@ Error insertNotation(NotationEnvironment &environment,
   return Error::success();
 }
 } // namespace
-NotationEnvironment fixedNotationEnvironment(SourceId module) {
+NotationEnvironment fixedNotationEnvironment(SourceId sourceId) {
   NotationEnvironment result;
   auto add = [&](StringRef symbol, Position position, unsigned precedence,
                  Association association, unsigned arity) {
@@ -69,7 +69,7 @@ NotationEnvironment fixedNotationEnvironment(SourceId module) {
     descriptor->association = association;
     descriptor->arity = arity;
     result.emplace(descriptor->key(),
-                   NotationSyntax{descriptor, Span{module, 0, 0}});
+                   NotationSyntax{descriptor, Span{sourceId, 0, 0}});
   };
   add("||", Position::Infix, 10, Association::Left, 2);
   add("&&", Position::Infix, 20, Association::Left, 2);

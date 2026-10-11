@@ -17,14 +17,16 @@ Error Checker::run() {
     return error;
   if (!collect() || !imports() || !prepareNotationSyntax())
     return types.takeError();
+  std::vector<std::vector<BodyParseScope>> bodyScopes(output.sources->size());
   for (auto id : moduleIds) {
-    auto &module = *sources[id.index];
-    auto source = module.span.source.index;
-    if (auto error = parseBodies((*output.sources)[source], module,
-                                 output.tokens[source],
-                                 notationEnvironments[id.index], work))
-      return error;
+    auto *module = sources[id.index];
+    bodyScopes[module->span.source.index].push_back(
+        {module, notationEnvironments[id.index]});
   }
+  for (unsigned i = 0; i < bodyScopes.size(); ++i)
+    if (auto error = parseBodies((*output.sources)[i], SourceId{i},
+                                 output.tokens[i], bodyScopes[i], work))
+      return error;
   for (auto &decl : output.declarations)
     if (!decl.abstract && !sources[decl.id.index]->explicitRequirements &&
         (decl.kind == Declaration::Kind::Math ||
@@ -172,7 +174,7 @@ bool Checker::collect() {
       definition->isPublic = written.isPublic;
     } else if (parent && files.count(path))
       return types.fail("source.duplicate",
-                        "module has both inline and captured bodies",
+                        "captured module path collides with a declaration",
                         written.span);
     auto &source = *definition;
     Declaration decl;
@@ -321,12 +323,9 @@ std::optional<DeclarationId> Checker::member(const Declaration &context,
     return target;
   };
   if (decl.kind == Declaration::Kind::Module) {
+    if (loadBinding && !loadBinding(owner, name))
+      return {};
     auto found = visible[owner.index].find(name.str());
-    if (found == visible[owner.index].end() && loadImports) {
-      if (!loadImports(owner))
-        return {};
-      found = visible[owner.index].find(name.str());
-    }
     if (found != visible[owner.index].end())
       return check(found->second.target, found->second.isPublic,
                    found->second.span);
@@ -341,9 +340,9 @@ std::optional<DeclarationId> Checker::member(const Declaration &context,
   }
   return {};
 }
-std::optional<DeclarationId> Checker::resolve(const Declaration &context,
-                                              StringRef name, Span span,
-                                              bool required) {
+std::optional<DeclarationId>
+Checker::resolve(const Declaration &context, StringRef name, Span span,
+                 bool required, std::vector<ModuleLookup> *route) {
   if (!types.charge(1, span))
     return {};
   const bool absolute = name.consume_front("::");
@@ -357,8 +356,11 @@ std::optional<DeclarationId> Checker::resolve(const Declaration &context,
       root = member(context, *scope, head, span);
       if (types.diagnostic)
         return {};
-      if (root)
+      if (root) {
+        if (route)
+          route->push_back({*scope, head.str()});
         break;
+      }
     }
   }
   if (!root) {
@@ -380,7 +382,10 @@ std::optional<DeclarationId> Checker::resolve(const Declaration &context,
   }
   while (root && !tail.empty()) {
     auto next = tail.split("::");
-    root = member(context, *root, next.first, span);
+    auto owner = *root;
+    root = member(context, owner, next.first, span);
+    if (root && route)
+      route->push_back({owner, next.first.str()});
     if (types.diagnostic)
       return {};
     tail = next.second;

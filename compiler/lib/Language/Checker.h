@@ -17,8 +17,13 @@ public:
   std::vector<unsigned> bodyState, bodyHeights;
   std::vector<std::shared_ptr<const NotationEnvironment>> notationEnvironments;
 
-  std::optional<DeclarationId> resolve(const Declaration &, llvm::StringRef,
-                                       Span, bool required = true);
+  struct ModuleLookup {
+    DeclarationId owner;
+    std::string name;
+  };
+  std::optional<DeclarationId>
+  resolve(const Declaration &, llvm::StringRef, Span, bool required = true,
+          std::vector<ModuleLookup> *route = nullptr);
   std::optional<Type> type(const Declaration &, const SyntaxType &,
                            unsigned = 1);
 
@@ -80,7 +85,7 @@ private:
     bool isPublic;
   };
   bool checkingVisibility = false;
-  std::function<bool(DeclarationId)> loadImports;
+  std::function<bool(DeclarationId, llvm::StringRef)> loadBinding;
   std::map<std::string, DeclarationId> qualified;
   std::vector<std::map<std::string, ModuleBinding>> visible;
   using OperatorSite = std::pair<unsigned, unsigned>;

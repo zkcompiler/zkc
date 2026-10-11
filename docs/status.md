@@ -78,8 +78,9 @@ for source correspondence; it does not interpret retained MLIR. Maintained
 
 Fixed source arrays use static numeric indexing. Private ingress without an
 admitted validator, member-generic conformance and zero-leaf messages refuse.
-Abstract member-generic signatures can be checked and inspected, but modules
-implementing them are not supported.
+Abstract callable signatures with member generics can be checked and inspected,
+but modules implementing them are not supported. Associated types cannot
+introduce member-specific static parameters.
 Resource permission inference, implicit role remapping, natural equation solving
 and inversion of associated types are outside the source profile.
 [Scoped computations](spec/language/definitions.md#scoped-computations) use the
