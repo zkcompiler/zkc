@@ -67,6 +67,9 @@ endforeach()
 target_link_libraries(zkc-opt PRIVATE ZkcCompiler MLIRMlirOptMain)
 target_compile_options(zkc-opt PRIVATE -Wall -Wextra -Werror)
 
+# Product builds do not need the test executables in the default CMake graph.
+add_custom_target(zkc-tools DEPENDS zkc-compile zkc-opt zkc-tblgen)
+
 include(CMakePackageConfigHelpers)
 # Keep installed tools usable with the selected external LLVM/MLIR package.
 set_target_properties(zkc-compile zkc-opt zkc-tblgen PROPERTIES

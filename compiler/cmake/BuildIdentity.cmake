@@ -28,5 +28,8 @@ foreach(input IN LISTS zkc_identity_inputs)
   string(APPEND zkc_identity_material "${name}:${identity}\n")
 endforeach()
 string(SHA256 zkc_build_identity "${zkc_identity_material}")
+# Only this tiny translation unit changes after an unrelated source edit.
+set_source_files_properties(lib/Compiler/BuildIdentity.cpp PROPERTIES
+  COMPILE_DEFINITIONS "ZKC_BUILD_ID=\"${zkc_build_identity}\"")
 set_source_files_properties(lib/Compiler/Language.cpp PROPERTIES
-  COMPILE_DEFINITIONS "ZKC_BUILD_ID=\"${zkc_build_identity}\";ZKC_LLVM_VERSION=\"${LLVM_PACKAGE_VERSION}\"")
+  COMPILE_DEFINITIONS "ZKC_LLVM_VERSION=\"${LLVM_PACKAGE_VERSION}\"")

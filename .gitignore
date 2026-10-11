@@ -15,6 +15,7 @@ __pycache__/
 /result
 /result-*
 .cache/
+.direnv/
 
 # Editor and operating-system metadata.
 .vscode/

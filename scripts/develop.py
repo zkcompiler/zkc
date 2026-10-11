@@ -24,6 +24,15 @@ def configure(profile):
     selected = native_configuration()
     run(["cmake", "--preset", profile, *[f"-D{key}={value}" for key, value in selected.items()]],
         cwd=ROOT / "compiler")
+    database = compiler_directory(profile) / "compile_commands.json"
+    selected_database = ROOT / "compile_commands.json"
+    if database.is_file():
+        if selected_database.is_symlink() and selected_database.resolve().is_relative_to(ROOT / "build"):
+            selected_database.unlink()
+        if not os.path.lexists(selected_database):
+            selected_database.symlink_to(database.relative_to(ROOT))
+        elif selected_database.resolve() != database:
+            print(f"Keeping existing {selected_database}; selected profile uses {database}", file=sys.stderr)
 
 
 def execute(args):
@@ -41,7 +50,7 @@ def execute(args):
         configure(args.profile)
     elif args.operation == "compiler":
         configure(args.profile)
-        run(["cmake", "--build", "--preset", args.profile], cwd=ROOT / "compiler")
+        run(["cmake", "--build", "--preset", args.profile, "--target", *args.targets], cwd=ROOT / "compiler")
     elif args.operation == "lean":
         directory = ROOT / "lean"
         if args.deps != "main":
@@ -63,6 +72,9 @@ def main():
         command = operations.add_parser(operation)
         if operation in {"configure", "compiler"}:
             command.add_argument("--profile", default="release", help="CMake build profile (default: release)")
+        if operation == "compiler":
+            command.add_argument("--target", dest="targets", nargs="+", default=["zkc-tools"],
+                                 help="CMake targets (default: product tools; zkc-tests builds all test tools)")
         if operation in {"fetch-lean", "lean"}:
             command.add_argument("--deps", choices=["main", "arklib", "clean"], default="main")
     args = parser.parse_args()

@@ -13,6 +13,8 @@ import json
 
 import pytest
 
+pytestmark = pytest.mark.resource
+
 SOURCE = '''module sample;
 domain E = field("koala-bear.ext8-binomial3");
 domain F = field("{field}");

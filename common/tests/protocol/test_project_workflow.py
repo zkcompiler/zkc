@@ -4,11 +4,14 @@ import os
 from hashlib import sha256
 from pathlib import Path
 
+import pytest
+
 
 def command(toolchain, *arguments):
     return [toolchain.runtime, '--json', *arguments, f'--compiler={toolchain.compiler}']
 
 
+@pytest.mark.core
 def test_new_prepare_run_defaults_and_human_reports(toolchain, journal, directory):
     project = directory / 'demo'
     created = journal.json(command(toolchain, 'new', project))

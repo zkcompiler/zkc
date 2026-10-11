@@ -174,4 +174,4 @@ def test_rust_recipe_runs_only_cargo_tests():
 
     result = subprocess.run(["just", "--justfile", str(ROOT / "justfile"), "--dry-run", "test-rust"],
                             capture_output=True, text=True, check=True, timeout=10)
-    assert (result.stdout + result.stderr).strip() == "python3 common/tests/run.py rust"
+    assert (result.stdout + result.stderr).strip() == 'python3 common/tests/run.py rust -- "$@"'

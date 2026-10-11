@@ -15,6 +15,8 @@ runCommand "zkc-source-boundaries" { } ''
   test ! -e ${sources.rust}/compiler
   test ! -e ${sources.rust}/common/tests
   test -f ${sources.rustTests}/compiler/test/fixtures/relation/polynomial-chunks.json
+  test ! -e ${sources.rustTests}/examples
+  test ! -e ${sources.rustTests}/libraries
   test ! -e ${sources.integration}/common/tests/harness
   test ! -e ${sources.integration}/common/tests/consumer
   test -f ${sources.integration}/docs/getting-started.md

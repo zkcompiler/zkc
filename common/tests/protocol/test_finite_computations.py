@@ -37,6 +37,7 @@ protocol Run roles(P)(a:F@P,b:F@P,enabled:bool@P)->(xs:Sequence<Row>@P){return m
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.core
 def test_ordered_fold_initial_state_and_mixed_state(toolchain, journal, directory, flags):
     source = PREFIX + '''
 fn work(xs:Vector<F>,initial:F,offset:F)->(F,(F,F)){
@@ -52,6 +53,7 @@ protocol Run roles(P)(xs:Vector<F>@P,initial:F@P,offset:F@P)->(result:(F,(F,F))@
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.core
 def test_filtered_body_skips_stops_and_still_admits_zip(toolchain, journal, directory, flags):
     source = PREFIX + '''
 protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P,enabled:bool@P)->(result:F@P){

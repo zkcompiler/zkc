@@ -40,6 +40,8 @@ def select(repo, base, output):
     ("crates/zkc-tools/build.rs", False, True),
     ("common/unicode/README.md", False, False),
     ("docs/README.md", False, False),
+    ("docs/getting-started.md", False, True),
+    ("docs/runtime/bundles.md", False, True),
 ])
 def test_native_selection_from_changes(tmp_path, path, remove, expected):
     repo = tmp_path / "repo"

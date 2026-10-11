@@ -18,7 +18,7 @@ from workspace import (  # noqa: E402
 from reporting import new_directory  # noqa: E402
 
 BUILDS = {
-    "compiler": "just build-compiler",
+    "compiler": "just build-compiler release zkc-tests",
     "native": "just build-rust build-test-drivers",
 }
 

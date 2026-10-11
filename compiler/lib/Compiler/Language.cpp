@@ -1,4 +1,5 @@
 #include "zkc/Compiler/Language.h"
+#include "BuildIdentity.h"
 #include "LanguageInterface.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
@@ -146,7 +147,7 @@ std::string compilerToolchainIdentity() {
     std::string material;
     frame(material, "zkc.language-toolchain");
     frame(material, installedCatalogIdentity());
-    frame(material, ZKC_BUILD_ID);
+    frame(material, detail::compilerBuildIdentity());
     frame(material, ZKC_LLVM_VERSION);
 #ifdef LLVM_REVISION
     frame(material, LLVM_REVISION);

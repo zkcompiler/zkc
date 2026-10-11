@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import time
 
 
 def new_directory(root, identity, label=None):
@@ -34,6 +35,7 @@ def run_report(root, scope, argv):
     print(f"Reports: {output}", flush=True)
     record = {"scope": scope, "argv": list(argv), "status": "running",
               "started_utc": datetime.now(timezone.utc).isoformat()}
+    started = time.monotonic()
     manifest = output / "run.json"
     try:
         manifest.write_text(json.dumps(record, indent=2) + "\n")
@@ -46,6 +48,7 @@ def run_report(root, scope, argv):
     finally:
         try:
             record["finished_utc"] = datetime.now(timezone.utc).isoformat()
+            record["elapsed_seconds"] = round(time.monotonic() - started, 3)
             manifest.write_text(json.dumps(record, indent=2) + "\n")
         finally:
             if previous is None:

@@ -35,6 +35,7 @@ def lean_checks():
 
 def execute(scope, args):
     reports = reports_root()
+    arguments = getattr(args, "arguments", [])
     if scope in {"integration", "harness", "sdk"}:
         workers = os.environ.get("PYTEST_XDIST_AUTO_NUM_WORKERS", "1")
         if not workers.isdecimal() or int(workers) < 1:
@@ -44,13 +45,15 @@ def execute(scope, args):
             "sdk": ["common/tests/consumer"],
             "integration": ["common/tests/protocol", "common/tests/kernels"],
         }[scope]
-        run(["uv", "run", "--no-sync", "--locked", "pytest", *selection, "-n", workers,
+        run(["uv", "run", "--no-sync", "--locked", "pytest",
+             "-o", "testpaths=" + " ".join(selection), "-n", workers, *arguments,
              f"--junit-xml={reports / (scope + '.xml')}"])
     elif scope == "rust":
-        run(["cargo", "test", "--workspace", "--locked", "--all-features", "--no-fail-fast"])
+        selection = arguments or ["--workspace", "--all-features"]
+        run(["cargo", "test", "--locked", "--no-fail-fast", *selection])
     elif scope == "compiler":
         compiler_directory(args.profile)
-        run(["ctest", "--preset", args.profile, "--output-junit", reports / "ctest.xml"], cwd=ROOT / "compiler")
+        run(["ctest", "--preset", args.profile, *arguments, "--output-junit", reports / "ctest.xml"], cwd=ROOT / "compiler")
     elif scope == "lean":
         for check in lean_checks():
             run([sys.executable, check])
@@ -104,7 +107,14 @@ def main():
             command.add_argument("--domain-build", help="explicit envelope CMake build directory")
             command.add_argument("--skip-build", action="store_true",
                                  help="install already built, cache-checked directories without rebuilding")
-    args = parser.parse_args()
+    # Native arguments require an explicit separator; misspelled driver options
+    # still fail before preparing reports or launching any tools.
+    arguments = sys.argv[1:]
+    separator = arguments.index("--") if "--" in arguments else len(arguments)
+    args = parser.parse_args(arguments[:separator])
+    args.arguments = arguments[separator + 1:]
+    if args.arguments and args.scope not in {"compiler", "rust", "integration", "harness", "sdk"}:
+        parser.error(f"{args.scope} does not accept native test arguments")
     validate_environment()
     if os.environ.get("CARGO_TARGET_DIR"):
         os.environ["CARGO_TARGET_DIR"] = str(Path(os.environ["CARGO_TARGET_DIR"]).resolve())

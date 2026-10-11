@@ -61,7 +61,19 @@ worker unless explicitly configured. Builds and tests may themselves start
 threaded subprocesses, so increase these values deliberately. Nix checks use
 their allocated `NIX_BUILD_CORES`, with one worker when that budget is zero or
 unspecified. Check derivations receive their own declared inputs/environment;
-they do not inherit `devShell` settings.
+they do not inherit `devShell` settings. Standard GitHub runners give one Nix derivation four cores at a time. Compiler/package and Rust checks run in separate jobs. Full packaged integration runs resource-boundary cases with one worker after the remaining cases, preserving their coverage without competing large allocations.
+
+## Incremental builds and input boundaries
+
+The main Nix C++ toolchain uses the matching LLVM LLD linker through its Nix wrapper, retaining runtime-library paths and the existing libstdc++ ABI. This applies to local builds, packages and installed-consumer checks without raising the CMake minimum version. Outside Nix, the selected compiler retains its own linker policy.
+
+The development shell enables ccache through CMake's C/C++ compiler launchers. Its normal user cache can be shared between worktrees, while each worktree keeps its own CMake outputs. `CCACHE_BASEDIR` defaults to the shell-entry directory, and `CCACHE_NAMESPACE` includes the pinned Clang package. ccache still checks compiler inputs and flags; it never replaces CMake's dependency graph. Inspect reuse with `ccache --show-stats`. To disable it, set `CMAKE_C_COMPILER_LAUNCHER=` and `CMAKE_CXX_COMPILER_LAUNCHER=` before configuring. Nix package builds do not read this mutable cache.
+
+Configure writes a root compilation-database symlink for the selected CMake profile, replacing only a previous link into this checkout's `build/` directory. A regular file or external symlink remains user-owned. Switching a profile updates clangd's selected commands without changing integration-test tool selection.
+
+Nix uses Crane to cache compiled external Rust dependencies separately from workspace sources. Release product, release test-driver and development-profile all-feature test artifacts have separate caches, so tests cannot add provider features to the distributed CLI. Cargo manifests, the lockfile and toolchain remain cache inputs; no manually maintained vendor hash is needed. Source changes rebuild the relevant workspace crates. Libraries and examples are integration inputs, not Rust-only test inputs.
+
+`python3 .github/scripts/check-nix-inputs.py` verifies derivation invalidation in a temporary tracked-source snapshot: documentation changes preserve compiled outputs, library changes invalidate execution checks, C++ changes invalidate the compiler, Rust changes preserve external dependency artifacts, and Cargo manifest changes invalidate those artifacts. It evaluates derivations without compiling them. Keep these controls aligned with `nix/sources.nix` when changing ownership.
 
 ## Built tool selection
 

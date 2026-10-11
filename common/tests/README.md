@@ -12,6 +12,7 @@ maintains independent research models and checks.
 | Harness, configuration or command wiring | `just test-harness` | Python controls without compiled project tools |
 | C++ compiler, dialects or passes | `just test-compiler` | CMake/CTest; accepts `dev`, `sanitize` or `shared` |
 | Runner, Host or backends | `just test-rust` | Root Cargo workspace, all features |
+| Representative source-to-execution semantics | `just test-core` | Product tools only; source refusal, evaluation order, short circuiting, finite computations and Host workflow |
 | Source-to-execution integration | `just test-integration` | Protocol and kernel pytest suites against built compiler and Rust tools |
 | SDK discovery and dependency isolation | `just test-sdk` | Small static/shared CMake fixtures; no LLVM installation needed |
 | Installed SDK | `just test-install` | Fresh compiler installation and independent consumer |
@@ -26,7 +27,7 @@ maintains independent research models and checks.
 
 `just setup` prepares locked Python and Cargo dependencies. `just build` builds
 only the compiler and default-feature CLI. `just build-test-drivers` separately
-builds integration drivers with test providers; `just test-integration` builds both. No default build, test or installation invokes a Lean checker. `just test-sanitize` selects the compiler sanitizer profile.
+builds integration drivers with test providers; `just test-integration` also builds C++ helpers through the `zkc-tests` target. `just test-compiler` builds those helpers for its selected profile. No default build, test or installation invokes a Lean checker. `just test-sanitize` selects the compiler sanitizer profile.
 
 The driver uses existing project tools. Cargo tests and SDK checks compile their own test targets and consumers:
 
@@ -40,6 +41,19 @@ python3 common/tests/run.py install --profile dev
 uv run --no-sync --locked pytest common/tests/kernels
 uv run --no-sync --locked pytest common/tests --collect-only
 ```
+
+Pass native selection arguments after the profile where applicable:
+
+```sh
+just test-compiler dev -R language-api
+just test-rust -p zkc-runtime --all-features
+just test-integration common/tests/protocol/test_project_workflow.py -k defaults
+just test-harness -k reports
+python3 common/tests/run.py compiler --profile dev -- -R language-api
+python3 common/tests/run.py integration -- -m core
+```
+
+The Python driver's `--` separates its options from CTest, Cargo or pytest arguments. `just` supplies that separator. An explicit pytest path replaces the scope's default discovery paths. A Cargo selection replaces the default workspace/all-features selection, while locked dependencies and failure reporting remain enabled. With no selection arguments, the existing full scopes are unchanged. Selected runs still retain their reports.
 
 The `harness`, `sdk` and `integration` selections are disjoint. `checks.project` in Nix invokes `integration` against packaged tools; separate derivations own the harness, SDK discovery, compiler, Rust, installed consumer and style checks. The integration suite executes the [published walkthrough](../../docs/getting-started.md) directly.
 
@@ -80,7 +94,7 @@ representative controls and states their evidence limits.
 the harness does not substitute tools from `PATH`.
 
 `ZKC_REPORTS_DIR` defaults to `build/reports`. Each driver invocation allocates a
-new directory with `run.json`, and each pytest case receives its own directory.
+new directory with `run.json` (including elapsed seconds), and each pytest case receives its own directory.
 Journals retain command arguments, exit statuses and output even after failure
 or cancellation. `just clean-reports` explicitly removes generated reports;
 ordinary commands never clear earlier evidence.
@@ -89,7 +103,7 @@ Direct driver calls never synchronize dependencies. `just setup` performs that
 step explicitly. `PYTEST_XDIST_AUTO_NUM_WORKERS` controls pytest workers and
 must be a positive integer. The driver defaults to one worker outside the Nix
 shell. Tests retain their individual timeouts and do not implicitly filter slow
-cases.
+cases. The `core` marker selects representative product-only integration controls. The `resource` marker identifies large retained-storage boundary cases; full Nix integration runs the remaining cases first and these cases with one worker. Both groups remain required for the full suite. Local `just test-integration` retains all cases by default; use `-m 'not resource'` only as an explicitly narrower selection.
 
 ## Optional formal checks
 

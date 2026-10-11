@@ -17,6 +17,7 @@ pkgs.mkShell.override { stdenv = llvm.stdenv; } (
       utf8proc
       pkgs.cmake
       pkgs.ninja
+      pkgs.ccache
       pkgs.just
       pkgs.git
       pkgs.pkg-config
@@ -27,6 +28,11 @@ pkgs.mkShell.override { stdenv = llvm.stdenv; } (
       pkgs.nixfmt
     ];
     shellHook = environment.development + ''
+      # This is a local incremental-build cache, not an input to Nix packages.
+      export CMAKE_C_COMPILER_LAUNCHER="''${CMAKE_C_COMPILER_LAUNCHER-ccache}"
+      export CMAKE_CXX_COMPILER_LAUNCHER="''${CMAKE_CXX_COMPILER_LAUNCHER-ccache}"
+      export CCACHE_BASEDIR="''${CCACHE_BASEDIR-$PWD}"
+      export CCACHE_NAMESPACE="''${CCACHE_NAMESPACE-zkc-${llvm.clang}}"
       # Select the compiler matching the main MLIR package explicitly.
       export PATH="${llvm.clang}/bin:$PATH"
       if [ -z "''${TZ+x}" ] && [ ! -r /etc/localtime ]; then export TZ=UTC; fi

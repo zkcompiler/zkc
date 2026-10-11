@@ -113,7 +113,7 @@ def test_just_forwards_profile_and_native_environment_without_reinterpreting(mon
                    f"-DCMAKE_CXX_COMPILER={native_config['CXX']}",
                    f"-DMLIR_DIR={native_config['MLIR_DIR']}",
                    f"-DCMAKE_MAKE_PROGRAM={native_config['NINJA']}"]),
-        ("cmake", ["--build", "--preset", "dev"]),
+        ("cmake", ["--build", "--preset", "dev", "--target", "zkc-tests"]),
         ("ctest", ["--preset", "dev", "--output-junit", str(reports[0] / "ctest.xml")]),
     ]
     assert all(c["cwd"] == str(ROOT / "compiler") and c["jobs"] == "3" for c in commands)
@@ -136,7 +136,7 @@ def test_pytest_scope_preserves_selection_and_report_argument(scope, selection, 
     command = json.loads(record.read_text())
     reports = list((tmp_path / "report space/runs").glob(f"{scope}-*"))
     assert len(reports) == 1
-    assert command["arguments"] == ["run", "--no-sync", "--locked", "pytest", *selection,
+    assert command["arguments"] == ["run", "--no-sync", "--locked", "pytest", "-o", "testpaths=" + " ".join(selection),
                                      "-n", "2", f"--junit-xml={reports[0] / (scope + '.xml')}"]
     assert json.loads((reports[0] / "run.json").read_text())["status"] == "pass"
     assert command["cwd"] == str(ROOT)

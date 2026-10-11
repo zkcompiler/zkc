@@ -2,8 +2,11 @@
 #
 # A test name is optional. Without one the file is built but registers no test,
 # which is for an executable a Python test here drives as a tool.
+add_custom_target(zkc-tests DEPENDS zkc-tools)
+
 function(add_zkc_test name component)
   add_executable(zkc-${name}-test ${name}.cpp)
+  add_dependencies(zkc-tests zkc-${name}-test)
   target_link_libraries(zkc-${name}-test PRIVATE Zkc${component})
   target_compile_options(zkc-${name}-test PRIVATE -Wall -Wextra -Werror)
   if(ARGC GREATER 2)

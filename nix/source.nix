@@ -24,6 +24,7 @@ lib.cleanSourceWith {
     && !(lib.hasPrefix ".venv" (baseNameOf path))
     && !(builtins.elem (baseNameOf path) [
       ".lake"
+      ".direnv"
       ".venv"
       ".cache"
       ".ruff_cache"

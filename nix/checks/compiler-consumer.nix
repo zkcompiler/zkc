@@ -27,7 +27,7 @@ stdenv.mkDerivation {
   doCheck = true;
   checkPhase = ''
     runHook preCheck
-    ctest --output-on-failure
+    ctest --output-on-failure --no-tests=error --parallel "$NIX_BUILD_CORES"
     runHook postCheck
   '';
   installPhase = ''

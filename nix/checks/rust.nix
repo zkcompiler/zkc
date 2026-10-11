@@ -1,29 +1,32 @@
 {
-  tools,
+  craneLib,
+  cargoArtifacts,
+  cargoVendorDir,
   source,
   environment,
   python3,
 }:
-tools.overrideAttrs (old: {
-  src = source;
-  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ python3 ];
-  CARGO_NET_OFFLINE = "true";
+craneLib.mkCargoDerivation {
   pname = "zkc-rust-checks";
-  # Cargo tests build their own targets. The installed release CLI and native
-  # execution clients are checked by application and project, respectively.
-  dontBuild = true;
-  doCheck = true;
-  checkPhase = ''
-    runHook preCheck
+  version = "0.0.0";
+  src = source;
+  inherit cargoArtifacts cargoVendorDir;
+  passthru.dependencies = cargoArtifacts;
+  nativeBuildInputs = [ python3 ];
+  CARGO_NET_OFFLINE = "true";
+  CARGO_PROFILE = "dev";
+  doInstallCargoArtifacts = false;
+  buildPhaseCargoCommand = ''
     ${environment.checks}
     cargo clippy --workspace --locked --offline --all-targets --all-features -- -D warnings
-    python3 common/tests/run.py rust
-    runHook postCheck
   '';
-  installPhase = ''
-    runHook preInstall
+  doCheck = true;
+  checkPhaseCargoCommand = ''
+    ${environment.checks}
+    python3 common/tests/run.py rust
+  '';
+  installPhaseCommand = ''
     mkdir -p "$out"
     cp -R build/reports "$out/reports"
-    runHook postInstall
   '';
-})
+}

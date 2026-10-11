@@ -1,6 +1,12 @@
 name: Nix environment
 description: Install upstream Nix and optionally enable the GitHub Actions binary cache
 inputs:
+  cores:
+    description: Parallel workers within one Nix build
+    default: "4"
+  max-jobs:
+    description: Concurrent Nix builds on this runner
+    default: "1"
   cache:
     description: Read and write build outputs in the GitHub Actions cache
     default: "true"
@@ -15,15 +21,18 @@ runs:
           experimental-features = nix-command flakes
           sandbox = true
           sandbox-fallback = false
-          max-jobs = 2
-          cores = 2
+          max-jobs = ${{ inputs.max-jobs }}
+          cores = ${{ inputs.cores }}
     - name: Report Nix version and verify settings
+      env:
+        NIX_EXPECTED_CORES: ${{ inputs.cores }}
+        NIX_EXPECTED_JOBS: ${{ inputs.max-jobs }}
       shell: bash
       run: |
         # Existing installations may use a newer release. Check the settings
         # and actual build isolation below, not an arbitrary version equality.
         nix --version
-        for setting in 'sandbox true' 'sandbox-fallback false' 'max-jobs 2' 'cores 2'; do
+        for setting in 'sandbox true' 'sandbox-fallback false' "max-jobs $NIX_EXPECTED_JOBS" "cores $NIX_EXPECTED_CORES"; do
           read -r name expected <<< "$setting"
           if [ "$(nix config show "$name")" != "$expected" ]; then
             echo "::error::The runner must configure Nix $name = $expected. The installer does not reconfigure an existing installation."

@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "23 18 * * 1"
   workflow_dispatch:
     inputs:
       scope:
@@ -26,7 +28,7 @@ defaults:
 jobs:
   quick:
     name: Quick source and harness checks
-    if: github.event_name != 'workflow_dispatch' || inputs.scope == 'quick' || inputs.scope == 'all'
+    if: github.event_name != 'workflow_dispatch' || inputs.scope == 'quick' || inputs.scope == 'all' || inputs.scope == 'main' || inputs.scope == 'cache'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -48,56 +50,105 @@ jobs:
           path: build/reports/
           retention-days: 14
 
-  native:
-    name: Native build and execution
-    if: github.event_name != 'workflow_dispatch'
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-24.04' || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
-    timeout-minutes: 180
+  changes:
+    name: Select native changes
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      native: ${{ steps.changes.outputs.native }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: Select native changes
-        id: changes
+      - id: changes
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.sha }}
         run: python3 .github/scripts/select-native-changes.py
-      - name: Reserve build space
-        if: steps.changes.outputs.native == 'true' && runner.environment == 'github-hosted'
-        run: |
-          # Leave room for downloaded toolchains and concurrent native builds.
-          available_kib=$(df --output=avail -k / | tail -n 1)
-          if (( available_kib < 20 * 1024 * 1024 )); then
-            sudo rm -rf /usr/local/lib/android
-          fi
-          df -h /
+
+  native-packages:
+    name: Compiler, SDK and core execution
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-24.04' || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/nix
-        if: steps.changes.outputs.native == 'true'
-      - name: Check Rust, installed application, SDK and C++ formatting
-        if: steps.changes.outputs.native == 'true'
+      - name: Check installed tools, SDK and core semantics
         run: |
           mkdir -p build/reports
-          nix build -L --keep-going --no-link \
-            .#checks.x86_64-linux.rust \
+          python3 .github/scripts/build-nix.py \
             .#checks.x86_64-linux.application \
             .#checks.x86_64-linux.compiler-consumer \
+            .#checks.x86_64-linux.core \
             .#checks.x86_64-linux.sdk \
             .#checks.x86_64-linux.sources \
             .#checks.x86_64-linux.format \
             2>&1 | tee build/reports/native-checks.log
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always() && steps.changes.outputs.native == 'true'
+        if: always()
         with:
           name: native-checks-${{ github.run_id }}
           path: build/reports/
           retention-days: 14
 
+  rust:
+    name: Rust tests and lint
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-24.04' || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/nix
+      - name: Check the Rust workspace with cached dependencies
+        run: |
+          mkdir -p build/reports
+          python3 .github/scripts/build-nix.py .#checks.x86_64-linux.rust \
+            2>&1 | tee build/reports/rust-checks.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: rust-checks-${{ github.run_id }}
+          path: build/reports/
+          retention-days: 14
+
+  native:
+    # Preserve the existing required-check name across the job split.
+    name: Native build and execution
+    needs: [changes, native-packages, rust]
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'push')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every selected native check
+        env:
+          SELECTION_RESULT: ${{ needs.changes.result }}
+          SELECTED: ${{ needs.changes.outputs.native }}
+          PACKAGES_RESULT: ${{ needs.native-packages.result }}
+          RUST_RESULT: ${{ needs.rust.result }}
+        run: |
+          test "$SELECTION_RESULT" = success
+          if [ "$SELECTED" = true ]; then
+            test "$PACKAGES_RESULT" = success
+            test "$RUST_RESULT" = success
+          else
+            test "$SELECTED" = false
+            test "$PACKAGES_RESULT" = skipped
+            test "$RUST_RESULT" = skipped
+          fi
 
   main:
     name: Full main packages and checks
-    if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'main' || inputs.scope == 'cache')
+    needs: [changes, native]
+    if: always() && ((github.event_name == 'push' && needs.changes.outputs.native == 'true' && needs.native.result == 'success') || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'main' || inputs.scope == 'cache')))
     runs-on: ${{ vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: ${{ inputs.scope == 'cache' && 360 || 180 }}
     steps:
@@ -122,11 +173,10 @@ jobs:
           nix config show sandbox > build/reports/environment/sandbox.txt
           test "$(cat build/reports/environment/sandbox.txt)" = true
       - name: Check all main packages in the sandbox
-        run: nix flake check -L --keep-going 2>&1 | tee build/reports/nix-check.log
-      - name: Retain successful check records
         run: |
-          nix build .#checks.x86_64-linux.project --out-link build/nix-project
-          cp -RL build/nix-project/reports build/reports/packaged
+          nix flake check --no-build
+          python3 .github/scripts/check-nix-inputs.py
+          python3 .github/scripts/build-nix.py --all-checks 2>&1 | tee build/reports/nix-check.log
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -136,13 +186,13 @@ jobs:
 
   optional:
     name: Optional (${{ matrix.package }})
-    if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'optional')
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'optional'))
     runs-on: ${{ vars.ZKC_OPTIONAL_RUNNER || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
-        package: [lean-checks, lean-toolchain-checks, arklib, llzk, compiler-sanitize]
+        package: ${{ fromJSON(github.event_name == 'schedule' && '["compiler-sanitize", "compiler-domain-checks", "compiler-domain-shared-checks"]' || '["lean-checks", "lean-toolchain-checks", "arklib", "llzk", "compiler-sanitize", "compiler-domain-checks", "compiler-domain-shared-checks"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
