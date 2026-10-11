@@ -190,9 +190,8 @@ enum Choice{Some(Fr),None()}
     must(compileEntry(checked));
   }
   for (const auto &definition :
-       {"struct Secret {value:Fr}",
-        "struct Secret:Copy+Drop+Share {pub value:Fr}",
-        "enum Secret:Copy+Drop+Share {Some(Fr)}",
+       {"struct Secret {value:Fr}", "#[sealed] struct Secret {pub value:Fr}",
+        "#[sealed] enum Secret {Some(Fr)}",
         "struct Hidden{value:Fr}struct Secret{pub value:Hidden}"})
     refuses(prefix + definition + relay + "run Demo=Relay<Secret>;",
             "source.permission");
@@ -223,77 +222,80 @@ run Demo=Run;
           "private output schema incorrectly advertises Wire");
 }
 void typing() {
-  for (auto &[source, code] : std::vector<std::pair<std::string, std::string>>{
-           {"math fn bad<T:Type>(x:T)->T{return x;}", "source.mode"},
-           {"struct Bad<T:Type>:Copy {pub value:T}", "source.permission"},
-           {"type Recursive=Recursive;", "source.cycle"},
-           {"struct Recursive {pub next:Recursive}", "source.cycle"},
-           {"enum Bad {A(),A()}", "source.duplicate"},
-           {"enum Empty {}", "source.type"},
-           {"interface Bad {domain F=field(\"bls12-381.fr\");}",
-            "source.syntax"},
-           {"interface Bad {run Demo=Run;}", "source.syntax"},
-           {"fn bad(a:[Fr;2])->Fr{return a[2];}", "source.index"},
-           {"fn bad(a:[Fr;2],i:index)->Fr{return a[i];}", "source.index"},
-           {"math fn bad<F:Field>(x:F)->F{return x+2;}", "source.literal"},
-           {"fn bad<N:nat>(x:[Fr;N])->Fr where () {return x[0];}",
-            "source.bound"},
-           {"type Bad=[Fr;18446744073709551615+1];", "source.natural"},
-           {"fn bad<N:nat+Copy>()->bool{return true;}", "source.permission"},
-           {"fn bad<N:nat>()->bool where Copy(N) {return true;}",
-            "source.permission"},
-           {"fn bad(x:Fr)->bool effects() {require true;return true;}",
-            "source.effect"},
-           {"fn bad(x:Fr)->Fr {let y=if true { missing}else{ x};return y;}",
-            "source.name"},
-           {"enum Choice {A(Fr),B()} fn bad(v:Choice)->Fr {return match v "
-            "{A(x)=>{ x}};}",
-            "source.match"},
-           {"enum Choice {A(Fr),B()} fn bad(v:Choice)->Fr {return match v "
-            "{A(x)=>{ x},A(x)=>{ x}};}",
-            "source.match"},
-           {"struct Pair {pub left:Fr,pub right:Fr} fn bad(x:Fr)->Pair{return "
-            "Pair{left:x,left:x};}",
-            "source.duplicate"},
-           {"fn bad<T:Type+Copy>(x:T)->bool{return true;}", "source.drop"},
-           {"struct Token:Drop {} fn bad(t:Token)->(Token,Token){return(t,t);}",
-            "source.move"},
-           {"struct Token:Copy {} fn bad(t:Token)->bool{return true;}",
-            "source.drop"},
-           {"struct Token:Copy {} fn bad(t:Token)->(){drop t;return ();}",
-            "source.drop"},
-           {"struct Token:Share {} fn bad(t:Token,go:bool)->Token{return if go "
-            "{ t}else{ Token{}};}",
-            "source.drop"},
-           {"struct Token:Drop {} fn bad(t:Token,n:index)->(){for _ in 0..n "
-            "{consume t;}return ();}",
-            "source.permission"},
-           {"struct Token:Drop {} struct Pair {pub a:Token,pub b:Token} fn "
-            "bad(p:Pair)->Pair{let a=p.a;return p;}",
-            "source.move"},
-           {"struct Token:Copy {} struct Pair {pub a:Token,pub b:Token} fn "
-            "bad(p:Pair)->Token{return p.a;}",
-            "source.drop"},
-           {"interface I{math fn f(x:bool)->bool;}module C:I{fn "
-            "f(x:bool)->bool{return x;}}",
-            "source.conformance"},
-           {"interface I{fn f(x:bool)->bool effects();}module C:I{fn "
-            "f(x:bool)->bool{require x;return x;}}",
-            "source.effect"},
-           {"interface I{type Scalar:Field;}module C:I{type "
-            "Scalar:Field=bool;}",
-            "source.type"},
-           {"interface I{type State:Copy+Drop;}module C:I{type "
-            "State:Drop=bool;}",
-            "source.conformance"},
-           {"interface I{}interface J{}module C:I{}fn f<T:J>()->bool{return "
-            "true;}fn bad()->bool{return f<C>();}",
-            "source.conformance"},
-           {"interface I{fn f<T:Type+Copy+Drop>(x:T)->T effects(stop, "
-            "opaque);}module C:I{fn "
-            "f<T:Type+Copy+Drop>(x:T)->T{return x;}}",
-            "source.unsupported"},
-       })
+  for (
+      auto &[source, code] : std::vector<std::pair<std::string, std::string>>{
+          {"math fn bad<T:Type>(x:T)->T{return x;}", "source.mode"},
+          {"#[affine] struct Bad<T:Type> {pub value:T}", "source.permission"},
+          {"type Recursive=Recursive;", "source.cycle"},
+          {"struct Recursive {pub next:Recursive}", "source.cycle"},
+          {"enum Bad {A(),A()}", "source.duplicate"},
+          {"enum Empty {}", "source.type"},
+          {"interface Bad {domain F=field(\"bls12-381.fr\");}",
+           "source.syntax"},
+          {"interface Bad {run Demo=Run;}", "source.syntax"},
+          {"fn bad(a:[Fr;2])->Fr{return a[2];}", "source.index"},
+          {"fn bad(a:[Fr;2],i:index)->Fr{return a[i];}", "source.index"},
+          {"math fn bad<F:Field>(x:F)->F{return x+2;}", "source.literal"},
+          {"fn bad<N:nat>(x:[Fr;N])->Fr where () {return x[0];}",
+           "source.bound"},
+          {"type Bad=[Fr;18446744073709551615+1];", "source.natural"},
+          {"fn bad<N:nat+Copy>()->bool{return true;}", "source.permission"},
+          {"fn bad<N:nat>()->bool where Copy(N) {return true;}",
+           "source.permission"},
+          {"fn bad(x:Fr)->bool effects() {require true;return true;}",
+           "source.effect"},
+          {"fn bad(x:Fr)->Fr {let y=if true { missing}else{ x};return y;}",
+           "source.name"},
+          {"enum Choice {A(Fr),B()} fn bad(v:Choice)->Fr {return match v "
+           "{A(x)=>{ x}};}",
+           "source.match"},
+          {"enum Choice {A(Fr),B()} fn bad(v:Choice)->Fr {return match v "
+           "{A(x)=>{ x},A(x)=>{ x}};}",
+           "source.match"},
+          {"struct Pair {pub left:Fr,pub right:Fr} fn bad(x:Fr)->Pair{return "
+           "Pair{left:x,left:x};}",
+           "source.duplicate"},
+          {"#[affine] struct Token {} fn "
+           "bad(t:Token)->(Token,Token){return(t,t);}",
+           "source.move"},
+          {"#[linear] struct Token {} fn bad(t:Token)->bool{return true;}",
+           "source.drop"},
+          {"#[linear] struct Token {} fn bad(t:Token)->(){drop t;return ();}",
+           "source.drop"},
+          {"#[linear] struct Token {} fn bad(t:Token,go:bool)->Token{return if "
+           "go "
+           "{ t}else{ Token{}};}",
+           "source.drop"},
+          {"#[affine] struct Token {} fn bad(t:Token,n:index)->(){for _ in "
+           "0..n "
+           "{consume t;}return ();}",
+           "source.permission"},
+          {"#[affine] struct Token {} struct Pair {pub a:Token,pub b:Token} fn "
+           "bad(p:Pair)->Pair{let a=p.a;return p;}",
+           "source.move"},
+          {"#[linear] struct Token {} struct Pair {pub a:Token,pub b:Token} fn "
+           "bad(p:Pair)->Token{return p.a;}",
+           "source.drop"},
+          {"interface I{math fn f(x:bool)->bool;}module C:I{fn "
+           "f(x:bool)->bool{return x;}}",
+           "source.conformance"},
+          {"interface I{fn f(x:bool)->bool effects();}module C:I{fn "
+           "f(x:bool)->bool{require x;return x;}}",
+           "source.effect"},
+          {"interface I{type Scalar:Field;}module C:I{type "
+           "Scalar:Field=bool;}",
+           "source.type"},
+          {"interface I{type State:Copy+Drop;}module C:I{#[affine] type "
+           "State=bool;}",
+           "source.conformance"},
+          {"interface I{}interface J{}module C:I{}fn f<T:J>()->bool{return "
+           "true;}fn bad()->bool{return f<C>();}",
+           "source.conformance"},
+          {"interface I{fn f<T:Type+Copy+Drop>(x:T)->T effects(stop, "
+           "opaque);}module C:I{fn "
+           "f<T:Type+Copy+Drop>(x:T)->T{return x;}}",
+           "source.unsupported"},
+      })
     refuses(prefix + source, code);
   refuses(prefix + "enum Opt<T:Type>{Some(T),None()}fn "
                    "forget<T:Type>(o:Opt<T>)->(){consume o;return ();}",
@@ -326,9 +328,8 @@ math fn keep<C:Mix>(x:Fr,y:Fr)->Fr{let t=C::mix(x,y);return x;}
 protocol Run roles(A,B)(x:Fr@A,y:Fr@B)->(r:Fr@A){return(r=keep<Add>(x,y));}
 )",
           "source.roles");
-  refuses(prefix + "struct Local:Copy+Drop {}protocol Run "
-                   "roles(P,V)()->(r:Local@P){let x=Local{};return(r=x);}",
-          "source.permission");
+  check(prefix + "#[sealed] struct Local {}protocol Run "
+                 "roles(P,V)()->(r:Local@P){let x=Local{};return(r=x);}");
   check(prefix + "struct Box<N:nat>{pub x:[Fr;N]}fn "
                  "id<N:nat,M:nat>(x:Box<N+M>)->Box<M+N>{return x;}fn "
                  "useIt<N:nat>(x:Box<N>)->Box<N+0>{return id<N,0>(x);}");
@@ -364,8 +365,8 @@ interface I{type S:Field;fn f(x:S)->S effects(stop, opaque);}
 module K<F:Field>:I{type S:Field=F;fn f(x:S)->S where Wire(S){return x;}}
 )",
           "source.conformance");
-  refuses(prefix +
-              "struct Token:Drop{}fn f()->bool where Copy(Token){return true;}",
+  refuses(prefix + "#[affine] struct Token{}fn f()->bool where "
+                   "Copy(Token){return true;}",
           "source.permission");
   auto boxedScalar = original(prefix + R"(
 domain Curve=group("bls12-381.g1");
@@ -456,7 +457,7 @@ module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return
       prefix + "fn f(x:Fr)->Fr{return x;}protocol Run "
                "roles(P)(x:Fr@P)->(r:Fr@P){return(r=f(x));}run Demo=Run;")));
   refuses(prefix +
-              "struct Secret:Copy+Drop+Share+Wire {pub x:bool}protocol "
+              "#[sealed] struct Secret {pub x:bool}protocol "
               "Run<T:Type+Copy+Drop+Share+Wire> "
               "roles(P)(x:T@P)->(r:T@P){return(r=x);}run Demo=Run<Secret>;",
           "source.permission");
@@ -480,7 +481,7 @@ module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return
       must(prepareOriginal(must(closeEntry(libraryProject, "m::Demo"))));
   must(compileEntry(libraryOriginal));
   auto variantPrivacy = must(capture(
-      {{"lib", "module lib;pub enum Ticket:Drop{Valid(bool)}", "lib.zkc"},
+      {{"lib", "module lib;#[affine] pub enum Ticket{Valid(bool)}", "lib.zkc"},
        {"m",
         "module m;use lib::{Ticket};fn peek(t:Ticket)->bool{return match t "
         "{Valid(x)=>{ x}};}",
@@ -491,7 +492,8 @@ module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return
       StringRef(toString(privateMatch.takeError())).contains("source.private"),
       "wrong private match refusal");
   auto inaccessible = must(capture(
-      {{"lib", "module lib;pub struct Restricted:Copy {pub x:bool}", "lib.zkc"},
+      {{"lib", "module lib;#[linear] pub struct Restricted {pub x:bool}",
+        "lib.zkc"},
        {"m",
         "module m;use lib::{Restricted};fn bad(x:bool)->Restricted{return "
         "Restricted{x:x};}",
@@ -516,11 +518,11 @@ module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return
   check(prefix + "interface I<N:nat>{fn f()->bool effects(stop, opaque) where "
                  "1<=N;}module "
                  "C<N:nat>:I<N>{fn f()->bool where 1<=N{return true;}}");
-  check(prefix + "struct Token:Copy {}fn forward(t:Token)->Token{let "
+  check(prefix + "#[linear] struct Token {}fn forward(t:Token)->Token{let "
                  "second=t;return second;}");
-  check(prefix +
-        "struct Token:Share {}fn forward(t:Token,go:bool)->Token{return if go "
-        "{ t}else{stop \"reject\";};}");
+  check(prefix + "#[linear] struct Token {}fn "
+                 "forward(t:Token,go:bool)->Token{return if go "
+                 "{ t}else{stop \"reject\";};}");
   check(prefix +
         "math fn first<F:Field,N:nat,M:nat>(a:[F;N+M])->[F;M+N]{return a;}");
   refuses(
@@ -538,17 +540,17 @@ module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return
                "Run roles(P)(x:Fr@P)->(r:Fr@P){let r @P "
                "=nested(x);return(r=r);}run Demo=Run;");
   must(compileEntry(nestedConstructor));
-  refuses(prefix +
-              "enum Secret:Copy+Drop+Share+Wire {A(bool)}protocol Run "
-              "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}run Demo=Run;",
-          "source.permission");
+  closureRefuses(
+      prefix + "#[sealed] enum Secret {A(bool)}protocol Run "
+               "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}run Demo=Run;",
+      "source.ingress");
   refuses(prefix + "struct Copy {}", "source.name");
   refuses(prefix +
-              "enum Secret:Copy+Drop+Share+Wire {A(bool)}fn "
+              "#[sealed] enum Secret {A(bool)}fn "
               "make()->Secret{return Secret::A(true);}protocol Run "
               "roles(P,V)()->(){let x @P =make();let y=send P->V(x);return();}",
           "source.permission");
-  refuses(prefix + "struct Token:Drop+Share+Wire {}fn make()->Token{return "
+  refuses(prefix + "#[affine] struct Token {}fn make()->Token{return "
                    "Token{};}protocol Run roles(P,V)()->(){let x @P "
                    "=make();let y=send P->V(x);return();}",
           "source.permission");
@@ -566,7 +568,7 @@ fn need<T:Type+Wire>(x:T)->T{return x;}
 fn read<G:Group>(x:Wrapped<G>)->G::Scalar where Wire(G::Scalar){return need(x.x);}
 )");
   auto emptyArray =
-      original(prefix + "struct Token:Share {}fn empty()->[Token;0]{return "
+      original(prefix + "#[linear] struct Token {}fn empty()->[Token;0]{return "
                         "[];}protocol Run roles(P)()->(r:[Token;0]@P){let r @P "
                         "=empty();return(r=r);}run Demo=Run;");
   auto emptySchema = must(json::parse(emptyArray.interfaceJson()));
@@ -744,7 +746,7 @@ protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let v @P =make(x);let y @P =get(v);retur
   // Representation checking owns nominal permission promises, even for an
   // otherwise unused module. Semantic queries may trust checked metadata.
   refuses(prefix + R"(
-struct Token:Drop{}
+#[affine] struct Token{}
 interface I{type Out:Copy+Drop;}
 module C:I{type Out:Copy+Drop=Token;}
 )",
@@ -806,7 +808,7 @@ run Demo=Run;)");
                   mlir::StringAttr::get(module.getContext(), "role00000001"));
   });
   auto custodyVariant = original(prefix + R"(
-enum Choice:Drop {unpack(), Other(Fr)}
+#[affine] enum Choice {unpack(), Other(Fr)}
 fn get()->Fr{let v=Choice::unpack();return match v {Other(x)=>{ x},unpack()=>{let zero:Fr=0; zero}};}
 protocol Run roles(P)()->(r:Fr@P){let r @P =get();return(r=r);}run Demo=Run;)");
   must(compileEntry(custodyVariant));
@@ -814,7 +816,7 @@ protocol Run roles(P)()->(r:Fr@P){let r @P =get();return(r=r);}run Demo=Run;)");
     first(module, "local.exec.resource_unit_consume")->erase();
   });
   auto nominal = original(prefix + R"(
-struct Tok<N:nat>:Drop {}
+#[affine] struct Tok<N:nat> {}
 struct Holder<N:nat>{pub token:Tok<N+1>}
 fn wrap()->Holder<1>{return Holder<1>{token:Tok<2>{}};}
 fn finish(h:Holder<1>)->(){let t=h.token;consume t;return ();}
@@ -822,7 +824,7 @@ protocol Run roles(P)()->(){let h @P =wrap();let done @P =finish(h);return();}ru
   must(compileEntry(nominal));
   auto resource = original(prefix + R"(
 interface I{type State;fn make()->State effects(stop, opaque);fn done(x:State)->() effects(stop, opaque);}
-module C:I{type State: Type =();fn make()->State{return State(());}fn done(x:State)->(){consume x;return ();}}
+module C:I{#[linear] type State=();fn make()->State{return State(());}fn done(x:State)->(){consume x;return ();}}
 fn forward<T:I>()->(){let x=T::make();return T::done(x);}
 protocol Run roles(P)()->(){let r @P =forward<C>();return();}run Demo=Run;)");
   require(resource.bytes().contains("resource_unit"),

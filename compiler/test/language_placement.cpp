@@ -58,11 +58,11 @@ std::vector<unsigned> callOwners(const Body &body) {
   return result;
 }
 void examples() {
-  native("struct Ticket:Drop {} fn make()->Ticket{return Ticket{};}"
+  native("#[affine] struct Ticket {} fn make()->Ticket{return Ticket{};}"
          "fn consumeTicket(x:Ticket)->bool{consume x;return true;}"
          "protocol Run roles(P,V)()->(r:bool@V){return consumeTicket(make());}"
          "run Demo=Run;");
-  refuses("struct Ticket:Drop {} fn make()->Ticket{return Ticket{};}"
+  refuses("#[affine] struct Ticket {} fn make()->Ticket{return Ticket{};}"
           "protocol Run roles(P,V)()->(){let _=make();return ();}",
           "source.owner");
   native("interface Select{math fn selected(x:F,y:F)->F;}"

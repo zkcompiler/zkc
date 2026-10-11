@@ -47,21 +47,6 @@ std::optional<ValueId> BodyChecker::capturePlace(const FreePlace &source,
   if (!p)
     return {};
   auto [value, path] = *p;
-  auto type = projected(body.values[value.index].type, path, span);
-  auto caps =
-      type ? checker.types.permissions(*type, span, &decl) : std::nullopt;
-  if (!caps)
-    return {};
-  if (caps->copy && !caps->drop) {
-    // Inferred copies introduce no authored obligation. Branches propagate
-    // guaranteed uses back to this place; possibly empty loops cannot do so.
-    if (!available(value, path)) {
-      fail("source.move", "capture overlaps a moved place", span);
-      return {};
-    }
-    return emit(Projection{value, path}, *type,
-                body.values[value.index].components, span);
-  }
   return project(value, path, span);
 }
 bool BodyChecker::importPlace(BodyChecker &nested, const FreePlace &place,

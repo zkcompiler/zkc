@@ -79,6 +79,16 @@ Error Checker::run() {
         nominal.arguments.push_back(parameterType(parameter));
       if (!types.permissions(nominal, decl.span, &decl))
         return types.takeError();
+    } else if (decl.kind == Declaration::Kind::Associated && !decl.abstract &&
+               !isStaticOnly(decl.domain)) {
+      const auto &owner = output.declarations[decl.parent->index];
+      Type module(Type::Kind::Module, owner.qualifiedName);
+      for (const auto &parameter : owner.parameters)
+        module.arguments.push_back(parameterType(parameter));
+      Type associated(Type::Kind::Associated, decl.qualifiedName);
+      associated.arguments.push_back(std::move(module));
+      if (!types.permissions(associated, decl.span, &decl))
+        return types.takeError();
     }
   for (const auto &decl : output.declarations)
     if (decl.kind == Declaration::Kind::Math)
@@ -194,6 +204,8 @@ bool Checker::collect() {
     decl.abstract = source.abstract;
     decl.completes = source.completes;
     decl.permissions = source.permissions;
+    decl.resource = source.resource;
+    decl.sealed = source.sealed || source.resource.has_value();
     if (source.effects)
       decl.effectAllowance = EffectSummary{*source.effects};
     decl.inputOrder = source.inputOrder;

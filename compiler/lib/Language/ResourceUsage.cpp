@@ -104,22 +104,4 @@ bool BodyChecker::available(ValueId value, ArrayRef<unsigned> path) {
   }
   return true;
 }
-bool BodyChecker::intersectUses(Uses &common, const Uses &other, Span span) {
-  std::vector<std::vector<unsigned>> paths;
-  for (const auto &a : common.used)
-    for (const auto &b : other.used) {
-      if (!checker.types.charge(a.size() + b.size() + 1, span))
-        return false;
-      if (prefix(a, b))
-        paths.push_back(b);
-      else if (prefix(b, a))
-        paths.push_back(a);
-    }
-  std::sort(paths.begin(), paths.end());
-  common.used.clear();
-  for (auto &path : paths)
-    if (common.used.empty() || !prefix(common.used.back(), path))
-      common.used.push_back(std::move(path));
-  return true;
-}
 } // namespace zkc::language::detail

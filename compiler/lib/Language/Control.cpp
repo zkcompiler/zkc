@@ -243,42 +243,6 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
       return {};
     }
   }
-  if (!loop)
-    for (unsigned i = 0; i < captures.size(); ++i) {
-      auto operand = captures[i].second;
-      auto caps = checker.types.permissions(body.values[operand.index].type,
-                                            expr.span, &decl);
-      if (!caps)
-        return {};
-      if (!caps->copy || caps->drop)
-        continue;
-      std::optional<Uses> common;
-      for (auto &arm : arms) {
-        if (arm.body->stopped)
-          continue;
-        auto &nested = *arm.checker;
-        auto input = arm.captures[i];
-        if (!common)
-          common = nested.uses[input.index];
-        else if (!intersectUses(*common, nested.uses[input.index], expr.span))
-          return {};
-        // Only the inferred input is exempt. User-created copies and aliases
-        // still have their own no-Drop obligations.
-        if (!nested.use(input, expr.span))
-          return {};
-      }
-      if (common) {
-        auto origin = place(captures[i].first, expr.span);
-        if (!origin)
-          return {};
-        for (const auto &path : common->used) {
-          auto full = origin->second;
-          full.insert(full.end(), path.begin(), path.end());
-          if (!use(origin->first, expr.span, full))
-            return {};
-        }
-      }
-    }
   Type packedType(Type::Kind::Unit);
   std::vector<Type> types;
   if (resultType->kind != Type::Kind::Unit)

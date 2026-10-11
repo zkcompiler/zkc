@@ -111,7 +111,6 @@ private:
   bool finishValue(ValueId, Span);
   bool finishOwner(unsigned, Span);
   bool available(ValueId, llvm::ArrayRef<unsigned> = {});
-  bool intersectUses(Uses &, const Uses &, Span);
   std::optional<ValueId> input(const Type &, std::vector<unsigned>, Span);
   bool bindPattern(const Pattern &, ValueId, unsigned = 1);
   bool bindResults(const Statement &, llvm::ArrayRef<ValueId>);

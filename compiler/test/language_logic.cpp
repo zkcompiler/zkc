@@ -92,12 +92,12 @@ int main() {
   });
   cases.run("conditional consumption keeps existing affine joins", [] {
     take(check(R"(
-      struct Ticket:Drop{}
+      #[affine] struct Ticket{}
       fn use_ticket(x:Ticket){consume x;return true;}
       fn f(go:bool,x:Ticket){return go&&use_ticket(x);}
     )"));
     refuses(check(R"(
-      struct Ticket:Share{}
+      #[linear] struct Ticket{}
       fn use_ticket(x:Ticket){consume x;return true;}
       fn f(go:bool,x:Ticket){return go&&use_ticket(x);}
     )"),

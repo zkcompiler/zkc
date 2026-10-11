@@ -735,7 +735,7 @@ void distributedRepetition() {
       replace(read("conditional_query.zkc"), "module sample;", "module m;"));
   must(compileEntry(conditional));
   const std::string affine = R"(module m;
-struct State:Drop {} fn make()->State{return State{};}
+#[affine] struct State {} fn make()->State{return State{};}
 fn identity(x:State)->State{return x;}
 fn consume_state(x:State)->(){consume x;return ();}
 protocol Run roles(P)(n:index@P)->(){
@@ -859,7 +859,7 @@ void selectedClosure() {
           "capture stopped binding unselected source");
   must(prepareOriginal(must(closeEntry(project, "m::Demo"))));
   auto privateState = original(R"(module m;
-    struct State:Drop {} fn make()->State{return State{};}
+    #[affine] struct State {} fn make()->State{return State{};}
     fn discard(state:State)->(){consume state;return ();}
     protocol Create roles(P)()->(state:State@P){let state @P =make();return(state=state);}
     protocol Consume roles(P)(state:State@P)->(){let done @P =discard(state);return();}

@@ -6,6 +6,9 @@
 #include <vector>
 
 namespace zkc::language {
+/// Authored resource restrictions. Ordinary declarations derive their usage
+/// properties from their representation instead.
+enum class Resource { Affine, Linear };
 struct Permissions {
   bool copy = false, drop = false, share = false, wire = false;
   bool operator==(const Permissions &b) const {

@@ -127,7 +127,7 @@ run Demo=Run;
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
 def test_all_stopped_regions_preserve_selected_stop(toolchain, journal, directory, flags):
     source = '''module sample;
-struct Ticket:Share {}
+#[linear] struct Ticket {}
 fn work(go:bool)->index {
   let ticket=Ticket{};
   return if go { stop "reject"; } else { {stop "abort";} };
@@ -146,7 +146,7 @@ run Demo=Run;
 
 def test_stopping_loop_retains_zero_trip_state(toolchain, journal, directory):
     source = '''module sample;
-struct Ticket:Share {}
+#[linear] struct Ticket {}
 fn work(n:index,go:bool)->index {
   let mut ticket=Ticket{};
   for _ in 0..n {
@@ -171,8 +171,8 @@ run Demo=Run;
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
 def test_restoration_and_nested_stopped_inference(toolchain, journal, directory, flags):
     source = '''module sample;
-struct State:Drop { value:index }
-struct Required:Copy {}
+#[affine] struct State { value:index }
+#[sealed] struct Snapshot {}
 fn make(x:index)->State{return State{value:x};}
 fn take(s:State)->index{let State{value}=s;return value;}
 fn pair(a:index,s:State)->index{return kernel("index.add",a,take(s));}
@@ -180,7 +180,7 @@ fn work(x:index,go:bool,halt:bool)->index {
   let mut state=make(x);
   if go{consume state;}else{consume state;}
   let total=pair({state=make(x);x},state);
-  let k=Required{};
+  let k=Snapshot{};
   if go{consume k;}
   consume k;
   let result=if halt{

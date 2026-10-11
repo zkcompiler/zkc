@@ -54,7 +54,7 @@ bool Checker::requirements(Declaration &decl) {
       for (auto &p : decl.parameters)
         if (p.atom == lhs->domain) {
           if (req.permission == "Copy")
-            p.permissions.copy = true;
+            p.permissions.copy = p.permissions.drop = true;
           else if (req.permission == "Drop")
             p.permissions.drop = true;
           else if (req.permission == "Share")
@@ -90,7 +90,7 @@ bool Checker::requirements(Declaration &decl) {
                             req.span);
         Permissions caps;
         if (req.permission == "Copy")
-          caps.copy = true;
+          caps.copy = caps.drop = true;
         else if (req.permission == "Drop")
           caps.drop = true;
         else if (req.permission == "Share")
@@ -171,6 +171,12 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     }
   }
   auto &source = *sources[id.index];
+  if (decl.resource && decl.permissions &&
+      (decl.permissions->copy ||
+       (*decl.resource == Resource::Linear && decl.permissions->drop)))
+    return types.fail("source.resource",
+                      "associated promises contradict the resource restriction",
+                      decl.span);
   if (decl.kind == Declaration::Kind::Associated && !source.parameters.empty())
     return types.fail(
         "source.unsupported",

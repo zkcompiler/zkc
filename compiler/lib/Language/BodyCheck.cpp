@@ -167,7 +167,7 @@ bool BodyChecker::restricted(const Type &type) {
   if (type.kind == Type::Kind::Associated || type.kind == Type::Kind::Parameter)
     return true;
   auto *d = checker.types.typeDeclaration(type);
-  return d && d->permissions.has_value();
+  return d && d->sealed;
 }
 std::optional<Type> BodyChecker::projected(Type type, ArrayRef<unsigned> path,
                                            Span span) {

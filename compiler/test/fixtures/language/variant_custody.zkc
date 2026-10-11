@@ -1,6 +1,6 @@
 module sample;
 domain Fr = field("bls12-381.fr");
-enum Choice:Drop { A(Fr), B(), C(Fr, Fr), unpack() }
+#[affine] enum Choice { A(Fr), B(), C(Fr, Fr), unpack() }
 fn make(x: Fr, y: Fr, a: bool, b: bool) -> Choice {
   return if a {
     if b { Choice::unpack() } else { Choice::A(x) }

@@ -5,7 +5,7 @@ using namespace zkc::language;
 using namespace zkc::test;
 namespace {
 const std::string prelude = R"(module m;
-struct Claim:Share {}
+#[linear] struct Claim {}
 fn make()->Claim {return Claim{};}
 fn discharge(x:Claim)->(){consume x;return ();}
 fn pair()->(Claim,Claim){return (make(),make());}
@@ -25,6 +25,39 @@ void native(StringRef text) {
 } // namespace
 int main() {
   Cases cases;
+  cases.run("ordinary and sealed data derive reusable usage", [] {
+    take(check(R"(
+struct Data {pub flag:bool}
+#[sealed] struct Snapshot {pub flag:bool}
+fn copies(x:Data,s:Snapshot)->(Data,Data){let ignored=s;return(x,x);}
+fn copy_implies_drop<T:Type+Copy>(x:T)->(){return ();}
+module Box {
+ type State:Type=bool;
+ fn duplicate(s:State)->(State,State){return(s,s);}
+}
+)"));
+  });
+  cases.run("explicit resource restrictions are structural", [] {
+    take(check(
+        "#[affine] struct Optional {} fn ignore(x:Optional)->(){return ();}"));
+    refuses(check("#[affine] struct Invalid {value:Claim}"),
+            "source.permission");
+    refuses(check("struct Wrapper {pub value:Claim} "
+                  "fn duplicate(x:Wrapper)->(Wrapper,Wrapper){return(x,x);}"),
+            "source.move");
+    refuses(check("#[linear] struct Required {} "
+                  "fn ignore(x:Required)->(){return ();}"),
+            "source.drop");
+  });
+  cases.run(
+      "resource attributes reject contradictions and unrelated declarations",
+      [] {
+        refuses(check("#[affine] #[linear] struct Conflict {}"),
+                "source.resource");
+        refuses(check("#[sealed] fn invalid()->(){return ();}"),
+                "source.resource");
+        refuses(check("#[linear] type Conflict:Copy=bool;"), "source.resource");
+      });
   cases.run("early completion cannot skip a live normal-exit obligation", [] {
     refuses(check(R"(
 protocol Run roles(P)(go:bool@P)->(accepted:bool@P) completes {

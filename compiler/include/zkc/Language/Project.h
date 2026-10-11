@@ -654,6 +654,9 @@ struct Declaration {
   std::vector<DataPrecondition> dataPreconditions;
   std::vector<PermissionBound> permissionBounds;
   std::vector<CapabilityBound> capabilityBounds;
+  std::optional<Resource> resource;
+  bool sealed = false;
+  /// Explicit promises on associated types, independent of constructor access.
   std::optional<Permissions> permissions;
   std::vector<TypeField> fields;
   std::vector<Alternative> alternatives;

@@ -707,16 +707,27 @@ polynomial elimination produces ordinary executable calculations.
 | `Share` | Participant placement may admit multiple components. |
 | `Wire` | A source decoder may construct this value at an external boundary, subject to target codec and layout admission. |
 
-Permissions are independent: `Copy` does not imply `Drop`. Products, arrays and
-variants derive permissions from all their element/payload types. Explicit
-permissions on a record or variant restrict those derived permissions; they cannot
-add permissions that its fields lack. Restricted nominal constructors and private
-record fields do not derive `Wire`; writing `Wire` on a restricted record or
-variant is refused without an admitted validator. A private associated
-implementation cannot promise `Wire` from its representation alone. `Field` and
-`Group` parameters promise `Copy`
-and `Drop`. Ground domain availability, sharing and transport still pass the
-installed native type policy and codecs.
+Ordinary records, variants, products and arrays derive reuse and abandonment
+from their fields. `Copy` implies `Drop`. Explicit restrictions use attributes:
+
+```zkc
+#[affine] struct Ticket { value: bool }
+#[linear] struct Claim {}
+#[sealed] struct Snapshot { pub value: bool }
+```
+
+`#[affine]` forbids copying and permits abandonment only if every field permits
+it. `#[linear]` forbids copying and requires transfer or consumption on every
+successful path. Both seal construction and representation access to the defining
+module. `#[sealed]` supplies that access boundary without restricting ordinary
+usage. Restrictions cannot grant properties missing from a field. These
+attributes also apply to opaque type definitions.
+
+Private fields, sealed declarations and opaque associated types do not grant
+external constructor authority. Concrete associated types derive usage from their
+representation; abstract types expose only their declared promises. `Field` and
+`Group` parameters promise `Copy` and `Drop`. Target representation, custody and
+codec checks remain independent.
 
 Fields are private unless marked `pub`. A restricted nominal constructor and its
 representation are available in its defining module and descendants. Private associated
@@ -921,8 +932,9 @@ An interface declares associated types/domains and math/local member signatures.
 A module may select one interface and must define every required member exactly
 once. Additional declarations and private helpers are allowed. A generic `M: I`
 client sees only `I`; concrete module paths may use additional public members. Associated
-runtime types default to no permissions; their promised permissions must be supported
-by their representation. Associated `Field` and `Group` declarations expose their
+abstract runtime types expose only their promised usage properties. Concrete
+associated types derive usage properties from their representation; explicit
+resource attributes can strengthen those restrictions. Associated `Field` and `Group` declarations expose their
 selected domain. Conformance checks callable modes, types, permissions, natural
 preconditions, callback acceptance contracts and implementation effects. An
 implementation cannot require more than its interface allows. Interfaces and
@@ -935,7 +947,8 @@ parameters on associated types are rejected.
 `type Name = T;` is always a transparent alias. `type Name: Type = T;` or
 `type Name: Copy + Drop = T;` declares a sealed associated type, including outside
 an interface implementation. Interface `type Name;` is an abstract requirement;
-its implementation must explicitly declare a nominal type with `:`. Interface
+its implementation must explicitly declare a nominal type with `:` or a resource
+or sealing attribute. Interface
 membership never changes an alias's meaning. The module path and canonical static
 arguments determine nominal identity, independent of imports or file layout.
 Records and variants are ordinary module declarations. An abstract call or type projection

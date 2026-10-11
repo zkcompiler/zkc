@@ -221,7 +221,7 @@ void kernelProducts() {
 }
 void authority() {
   const std::string lib = R"(module lib;
-    pub struct Secret:Copy+Drop {pub value:bool}
+    #[sealed] pub struct Secret {pub value:bool}
     pub struct Hidden {value:bool}
     pub struct Public {pub first:bool,pub second:bool}
     pub type Alias=Public;
@@ -306,12 +306,12 @@ void refusals() {
   refuses(prefix + "type Bad<T:Type>=builtin(\"sequence\",T);" + unit,
           "source.sequence");
   refuses(prefix +
-              "struct Token:Drop {pub value:Fr}type "
+              "#[affine] struct Token {pub value:Fr}type "
               "Bad=builtin(\"sequence\",Token);" +
               unit,
           "source.sequence");
   refuses(prefix +
-              "struct Token:Copy {pub value:Fr}type "
+              "#[linear] struct Token {pub value:Fr}type "
               "Bad=builtin(\"sequence\",Token);" +
               unit,
           "source.sequence");

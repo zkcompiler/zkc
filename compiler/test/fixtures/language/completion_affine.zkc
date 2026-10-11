@@ -1,6 +1,6 @@
 module sample;
 domain Fr = field("bls12-381.fr");
-struct State: Drop { value: Fr }
+#[affine] struct State { value: Fr }
 fn make(x: Fr) -> State { return State { value: x }; }
 protocol Run roles(P)(n: index @P, go: bool @P, x: Fr @P) -> (state: State @P) completes {
   let mut state @P = make(x);

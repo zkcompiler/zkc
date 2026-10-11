@@ -1,6 +1,6 @@
 module sample;
 
-struct Ticket:Share {}
+#[linear] struct Ticket {}
 enum State { Live(Ticket), Empty() }
 
 fn work(n:index, go:bool)->() {

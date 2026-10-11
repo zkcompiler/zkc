@@ -523,7 +523,7 @@ run Demo=Run;)zkc");
   cases.run("custody and variants bind the logical identity digest", [] {
     for (
         StringRef code : {
-            R"zkc(module sample; struct Token:Drop{} fn mint()->Token{return Token{};}
+            R"zkc(module sample; #[affine] struct Token{} fn mint()->Token{return Token{};}
       protocol Run roles(P)()->(x:Token@P){let t @P =mint();return(x=t);}run Demo=Run;)zkc",
             R"zkc(module sample; enum Choice{A(bool),B()}
       protocol Run roles(P)(x:Choice@P)->(y:Choice@P){return(y=x);}run Demo=Run;)zkc"}) {
@@ -701,7 +701,7 @@ run Demo=Run;)zkc");
       "variants empty products and custody survive independent reading", [] {
         auto source = compile(R"zkc(module sample;
 domain Fr=field("bls12-381.fr");
-struct State:Drop {pub value:Fr}
+#[affine] struct State {pub value:Fr}
 enum Choice {Some(Fr), None()}
 fn make(x:Fr)->State {return State{value:x};}
 protocol Run roles(P)(choice:Choice@P, empty:[Fr;0]@P, x:Fr@P)
@@ -752,7 +752,7 @@ run Demo=Run;)zkc");
   cases.run(
       "nominal Share survives affine children at single-role outputs", [] {
         auto source = compile(R"zkc(module sample;
-struct Ticket:Share {}
+#[linear] struct Ticket {}
 struct Wrapper {ticket:Ticket}
 fn make()->Wrapper {return Wrapper{ticket:Ticket{}};}
 protocol Run roles(P)()->(result:Wrapper@P) {let value @P =make(); return(result=value);}
@@ -801,7 +801,7 @@ run Demo=Run;)zkc");
   });
   cases.run("native admission checks custody placement before metadata", [] {
     auto source = compile(R"zkc(module sample;
-struct Token:Drop {}
+#[affine] struct Token {}
 fn mint()->Token {return Token{};}
 protocol Run roles(P,V)()->(t:Token@P) {let t @P =mint();return(t=t);}
 run Demo=Run;)zkc");
@@ -825,7 +825,7 @@ run Demo=Run;)zkc");
   });
   cases.run("native nominal anchors cannot acquire two source labels", [] {
     auto source = compile(R"zkc(module sample;
-struct Token:Drop {}
+#[affine] struct Token {}
 enum Choice {Some(bool),None()}
 fn mint()->Token {return Token{};}
 protocol Run roles(P)(v:Choice@P)->(a:Token@P,b:Token@P,x:Choice@P,y:Choice@P) {

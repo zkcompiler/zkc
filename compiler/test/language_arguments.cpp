@@ -149,7 +149,7 @@ int main() {
   });
   cases.run("written argument order governs affine moves", [] {
     const std::string declarations = R"(
-      struct Ticket:Drop{}
+      #[affine] struct Ticket{}
       fn take(s:(Ticket,index))->index{let(t,n)=s;consume t;return n;}
       fn pair(a:index,b:index){return(a,b);}
     )";

@@ -32,11 +32,6 @@ bool Checker::conformance(DeclarationId id) {
                                  provided->associatedSort != sort))
         return types.fail("source.conformance",
                           "associated domain sort differs", provided->span);
-      if (!provided->permissions.value_or(Permissions{})
-               .includes(required.permissions.value_or(Permissions{})))
-        return types.fail("source.conformance",
-                          "associated type lacks promised permissions",
-                          provided->span);
       if (isStaticOnly(provided->domain)) {
         if (!isDomainSort(sort))
           return types.fail(
@@ -45,12 +40,19 @@ bool Checker::conformance(DeclarationId id) {
               provided->span);
         continue;
       }
-      auto caps = types.permissions(provided->domain, provided->span, &module);
+      Type actual(Type::Kind::Associated, provided->qualifiedName);
+      actual.arguments = {self};
+      auto caps = types.permissions(actual, provided->span, &module);
       if (!caps)
         return false;
-      if (!caps->includes(provided->permissions.value_or(Permissions{})))
-        return types.fail("source.permission",
-                          "associated permissions exceed representation",
+      auto promised = required.permissions.value_or(Permissions{});
+      if (required.resource) {
+        promised.copy = false;
+        promised.drop = *required.resource == Resource::Affine;
+      }
+      if (!caps->includes(promised))
+        return types.fail("source.conformance",
+                          "associated type lacks promised permissions",
                           provided->span);
     } else {
       if (!body(provided->id, 1))

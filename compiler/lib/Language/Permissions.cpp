@@ -136,6 +136,7 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
           include(bound.permissions);
       }
     }
+    inherent.drop |= inherent.copy;
     return inherent;
   };
   if (isStaticOnly(type)) {
@@ -150,7 +151,37 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
       fail("source.type", "unknown associated type", span);
       return {};
     }
-    return scoped(decl->permissions.value_or(Permissions{}));
+    Permissions result;
+    if (decl->abstract)
+      result = decl->permissions.value_or(Permissions{});
+    else {
+      auto representation = fields(type, span, depth + 1);
+      auto properties = representation
+                            ? permissions(representation->front().type, span,
+                                          scope, depth + 1)
+                            : std::nullopt;
+      if (!properties)
+        return {};
+      result = *properties;
+      if (decl->permissions && !result.includes(*decl->permissions)) {
+        fail("source.permission", "associated promises exceed representation",
+             decl->span);
+        return {};
+      }
+    }
+    if (decl->resource) {
+      if (*decl->resource == Resource::Affine && !result.drop &&
+          !decl->abstract) {
+        fail("source.permission", "affine representation must permit Drop",
+             decl->span);
+        return {};
+      }
+      result.copy = false;
+      result.drop = *decl->resource == Resource::Affine;
+    }
+    // An opaque representation is not an external construction authority.
+    result.wire = false;
+    return scoped(result);
   }
   if (type.kind == K::Boolean || type.kind == K::Index ||
       type.kind == K::Field || type.kind == K::Group || type.kind == K::Unit)
@@ -247,16 +278,17 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
       return {};
     result = intersect(result, *p);
   }
-  if (auto *decl = typeDeclaration(type); decl && decl->permissions) {
-    // Explicit nominal permissions seal constructor authority. Without a
-    // declared validator, that authority cannot arrive from a wire decoder.
-    result.wire = false;
-    if (!result.includes(*decl->permissions)) {
-      fail("source.permission", "declared permissions exceed field permissions",
-           decl->span);
-      return {};
+  if (auto *decl = typeDeclaration(type)) {
+    if (decl->sealed)
+      result.wire = false;
+    if (decl->resource) {
+      if (*decl->resource == Resource::Affine && !result.drop) {
+        fail("source.permission", "affine fields must permit Drop", decl->span);
+        return {};
+      }
+      result.copy = false;
+      result.drop = *decl->resource == Resource::Affine;
     }
-    result = *decl->permissions;
   }
   return result;
 }
@@ -440,7 +472,7 @@ std::optional<unsigned> Semantics::fieldIndex(const Declaration &decl,
                                               Span span) {
   auto *nominal = typeDeclaration(type);
   if (type.kind == Type::Kind::Associated ||
-      type.kind == Type::Kind::Parameter || (nominal && nominal->permissions)) {
+      type.kind == Type::Kind::Parameter || (nominal && nominal->sealed)) {
     fail("source.private",
          "restricted values require their module's unpack or consume operation",
          span);

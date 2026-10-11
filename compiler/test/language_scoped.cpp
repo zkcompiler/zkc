@@ -517,7 +517,7 @@ run Run=Demo;
         });
   cases.run("affine explicit parameters and mutable callback state", [] {
     succeeds(R"(
-struct Token:Drop {}
+#[affine] struct Token {}
 fn carry(x:Token,n:index)->Token{return forward(x,fn(y)=>{let mut state=y;for _ in 0..n {let old=state;consume old;state=Token{};}state});}
 fn work(n:index)->bool{let value=carry(Token{},n);consume value;return true;}
 protocol Demo roles(P)(n:index@P)->(r:bool@P){return work(n);}run Run=Demo;
@@ -556,7 +556,7 @@ math fn h(x:Fr,y:Fr)->Fr{return g<Fr,Impl<Fr>>(x,y);}
   cases.run("callback after whole reassignment does not capture moved input",
             [] {
               succeeds(R"(
-struct Token:Drop {}
+#[affine] struct Token {}
 struct Holder {pub v:Fr,pub t:Token}
 fn f(x:Fr,c:bool,h:Holder)->Fr{
  let mut s=h;let old=s;
@@ -652,13 +652,13 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return f(x,a);}run Run=Demo;
       {"fn f(x:Fr)->Fr{return apply(x,fn((a,b))=>a+b);}", "source.type"},
       {"fn f(x:Fr)->Fr{return apply(x,fn(a, b)=>a+b);}", "source.scoped"},
       {"fn f(x:Fr)->Fr{return apply(x,fn(y)=>f(y));}", "source.cycle"},
-      {"struct Token:Drop {} fn f(x:Fr,t:Token)->Fr{return "
+      {"#[affine] struct Token {} fn f(x:Fr,t:Token)->Fr{return "
        "apply(x,fn(y)=>{consume t;y});}",
        "source.scoped-capture"},
-      {"struct Token:Copy {} fn f(x:Fr,t:Token)->Fr{return "
+      {"#[linear] struct Token {} fn f(x:Fr,t:Token)->Fr{return "
        "apply(x,fn(y)=>{consume t;y});}",
        "source.scoped-capture"},
-      {"struct Token:Drop {} fn f(t:Token)->(Token,Token){return "
+      {"#[affine] struct Token {} fn f(t:Token)->(Token,Token){return "
        "apply(t,fn(y)=>(y,y));}",
        "source.move"},
       {"protocol Demo roles(P)(x:Fr@P,coins:Random<Fr>@P)->(r:Fr@P){return "

@@ -291,10 +291,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       return error("source.layout", "nominal static arity differs");
     for (unsigned i = 0; i < args->size(); ++i)
       bindings.emplace(owner->parameters[i].atom, (*args)[i]);
-    if (decl->permissions || type.kind == K::Associated)
-      result->permissions = decl->permissions.value_or(Permissions{});
-    result->custody = (decl->permissions || type.kind == K::Associated) &&
-                      !result->permissions.copy;
+    result->custody = decl->resource.has_value();
     if (result->custody) {
       auto slot = "zkl_resource_" + detail::digest(key);
       auto [entry, inserted] = slots.emplace(slot, key);

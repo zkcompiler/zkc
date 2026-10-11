@@ -120,7 +120,7 @@ int main() {
       });
   cases.run("type lookahead does not move values or execute effects", [&] {
     compile(identity + R"(
-      struct Token:Drop {value:bool}
+      #[affine] struct Token {value:bool}
       fn f(x:Token,b:bool){
         return id(if b{x}else{x});
       }
@@ -131,7 +131,7 @@ int main() {
       run Demo=Run;
     )");
     refuses(check(identity + R"(
-      struct Token:Drop {}
+      #[affine] struct Token {}
       fn f(x:Token,b:bool){
         let y=id(if b{x}else{x});return (y,x);
       }
