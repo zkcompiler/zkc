@@ -252,6 +252,27 @@ component Impl:Contract{fn run(rows:domain<Fr>,columns:domain<Fr>,body:fn(r:Fr,c
                               clause + ")->Fr effects(stop){return 0;}}"),
                         "source.conformance");
               });
+  cases.run("associated callback contracts survive generic substitution", [] {
+    auto project = take(check(R"(
+interface Contract<T:Type+Copy+Drop>{
+ type Item:Copy+Drop;
+ fn run(rows:domain<Item>,body:fn(item:Item)->T effects(stop)
+   where item_from(item,rows))->T effects(stop);
+}
+component Impl<F:Field>:Contract<F>{
+ type Item:Copy+Drop=F;
+ fn run(rows:domain<Item>,body:fn(item:Item)->F effects(stop)
+   where item_from(item,rows))->F effects(stop){
+   return fold(rows,0,fn(state,item)=>state+body(item));
+ }
+}
+)"));
+    if (auto error = checkScopedElaboration(project))
+      throw std::runtime_error(toString(std::move(error)));
+    auto &implementation = const_cast<Declaration &>(named(project, "Impl"));
+    implementation.implementation->arguments.front() = Type{};
+    errorIs(checkScopedElaboration(project), "source.scoped-witness");
+  });
   for (const auto &contract :
        {std::pair{"origins", "rows:domain<Fr>,body:fn(item:Fr)->Fr "
                              "effects(stop) where item_from(item,rows)"},
