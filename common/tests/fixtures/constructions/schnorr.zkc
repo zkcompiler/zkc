@@ -5,19 +5,19 @@ use spongefish as transcript;
 domain G=group("bls12-381.g1");
 interface TranscriptState {
  type State:Copy+Drop;
- fn initialize()->State;
- fn start(t:State,tag:Bytes,session:Bytes,base:G,point:G)->State;
- fn point(t:State,value:G)->State;
- fn scalar(t:State,value:G::Scalar)->State;
- fn draw(t:State)->(State,G::Scalar);
+ fn initialize()->State effects(stop, opaque);
+ fn start(t:State,tag:Bytes,session:Bytes,base:G,public_point:G)->State effects(stop, opaque);
+ fn point(t:State,value:G)->State effects(stop, opaque);
+ fn scalar(t:State,value:G::Scalar)->State effects(stop, opaque);
+ fn draw(t:State)->(State,G::Scalar) effects(stop, opaque);
 }
-component Provider:TranscriptState {
+module Provider:TranscriptState {
   type State:Copy+Drop=builtin("shake128_state");
   fn initialize()->State{return State(shake::init());}
-  fn start(t:State,tag:Bytes,session:Bytes,base:G,point:G)->State {
+  fn start(t:State,tag:Bytes,session:Bytes,base:G,public_point:G)->State {
     let t=transcript::initialize(tag,session);
     let t=transcript::observe_point(t,base);
-    return State(transcript::observe_point(t,point));
+    return State(transcript::observe_point(t,public_point));
   }
   fn point(t:State,value:G)->State {return State(transcript::observe_point(unpack(t),value));}
   fn scalar(t:State,value:G::Scalar)->State {return State(transcript::observe_scalar(unpack(t),value));}

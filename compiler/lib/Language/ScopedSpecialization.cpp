@@ -11,7 +11,7 @@ using namespace llvm;
 namespace zkc::language::detail {
 namespace {
 bool same(Span a, Span b) {
-  return a.module.index == b.module.index && a.begin == b.begin &&
+  return a.source.index == b.source.index && a.begin == b.begin &&
          a.end == b.end;
 }
 bool same(ArrayRef<ValueId> a, ArrayRef<ValueId> b) {
@@ -63,15 +63,15 @@ class SpecializationCheck {
                             ArrayRef<Type> arguments) {
     auto result = types.substitution(declaration, arguments);
     auto parent = declaration.parent;
-    while (parent && source[parent->index].kind != Declaration::Kind::Component)
+    while (parent && source[parent->index].kind != Declaration::Kind::Module)
       parent = source[parent->index].parent;
     if (parent) {
-      const auto &component = source[parent->index];
-      Type self(Type::Kind::Component, component.qualifiedName);
+      const auto &module = source[parent->index];
+      Type self(Type::Kind::Module, module.qualifiedName);
       self.arguments.assign(arguments.begin(),
-                            arguments.begin() + component.parameters.size());
-      if (component.implementation)
-        result.emplace("self:" + component.implementation->domain, self);
+                            arguments.begin() + module.parameters.size());
+      if (module.implementation)
+        result.emplace("self:" + module.implementation->domain, self);
     }
     return result;
   }
@@ -283,21 +283,20 @@ class SpecializationCheck {
             a.argumentOrder != b.argumentOrder ||
             a.scopedArguments != b.scopedArguments ||
             a.domainArguments != b.domainArguments ||
-            bool(a.target.component) != bool(b.target.component) ||
+            bool(a.target.module) != bool(b.target.module) ||
             bool(a.notation) != bool(b.notation) ||
             (a.notation && *a.notation != *b.notation) ||
             bool(a.origin) != bool(b.origin) ||
             (a.origin && !same(*a.origin, *b.origin)))
           return refuse(op.span, "call evidence differs");
-        if (a.target.component &&
-            !typeEqual(*a.target.component, *b.target.component, subst,
-                       op.span))
+        if (a.target.module &&
+            !typeEqual(*a.target.module, *b.target.module, subst, op.span))
           return false;
       }
       if (const auto *invoke = std::get_if<ScopedInvoke>(&op.action)) {
         const auto *call = std::get_if<HelperCall>(&out.action);
         if (!call || invoke->binding >= original.scopedBindings.size() ||
-            !call->arguments.empty() || call->component || call->owner ||
+            !call->arguments.empty() || call->module || call->owner ||
             !call->scopedArguments.empty() || !call->domainArguments.empty())
           return refuse(op.span);
         auto selected =
@@ -351,25 +350,25 @@ class SpecializationCheck {
               if (!statics)
                 return false;
               if constexpr (std::is_same_v<T, HelperCall>) {
-                if (bool(action.component) != bool(value.component) ||
+                if (bool(action.module) != bool(value.module) ||
                     action.owner != value.owner ||
                     !value.scopedArguments.empty() ||
                     !value.domainArguments.empty())
                   return false;
-                if (action.component) {
-                  auto component = type(*action.component, subst, op.span);
-                  if (!component || *component != *value.component)
+                if (action.module) {
+                  auto module = type(*action.module, subst, op.span);
+                  if (!module || *module != *value.module)
                     return false;
-                  auto *definition = types.typeDeclaration(*component);
+                  auto *definition = types.typeDeclaration(*module);
                   if (!definition ||
-                      definition->kind != Declaration::Kind::Component)
+                      definition->kind != Declaration::Kind::Module)
                     return false;
                   bool found = false;
                   for (auto member : definition->members)
                     if (source[member.index].name ==
                         source[target.index].name) {
                       target = member;
-                      *statics = component->arguments;
+                      *statics = module->arguments;
                       found = true;
                       break;
                     }
@@ -652,16 +651,16 @@ class SpecializationCheck {
     auto method = [&](const CallableReference &x, const CallableReference &y,
                       ArrayRef<Type> args, ArrayRef<Type> closedArgs) {
       if (x.declaration.index >= source.size() ||
-          !optionalType(x.component, y.component))
+          !optionalType(x.module, y.module))
         return false;
       auto selected = arguments(args, subst, actual.span);
       if (!selected)
         return false;
       auto target = x.declaration;
-      if (x.component) {
-        auto bound = type(*x.component, subst, actual.span);
+      if (x.module) {
+        auto bound = type(*x.module, subst, actual.span);
         auto *owner = bound ? types.typeDeclaration(*bound) : nullptr;
-        if (!owner || owner->kind != Declaration::Kind::Component ||
+        if (!owner || owner->kind != Declaration::Kind::Module ||
             !types.charge(owner->members.size(), actual.span))
           return false;
         auto found = llvm::find_if(owner->members, [&](DeclarationId member) {

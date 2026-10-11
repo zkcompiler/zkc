@@ -176,7 +176,7 @@ class Composition {
     TypeInference types(checker.types);
     auto constraints =
         instantiateCallable(types, checker.types, callee, *target, expr.span);
-    unsigned inherited = target->component && callee.parent
+    unsigned inherited = target->module && callee.parent
                              ? checker.output.declarations[callee.parent->index]
                                    .parameters.size()
                              : 0;
@@ -312,9 +312,9 @@ instantiateDomain(Semantics &types, const Declaration &callee,
   if (!types.charge(operands.size() + domains.size() + order.size() + 1, span))
     return {};
   auto substitution = types.substitution(callee, arguments);
-  if (target.component && callee.parent) {
+  if (target.module && callee.parent) {
     auto inherited =
-        types.boundMemberSubstitution(callee, *target.component, span);
+        types.boundMemberSubstitution(callee, *target.module, span);
     if (!inherited)
       return {};
     for (const auto &[name, value] : *inherited)

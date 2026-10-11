@@ -82,7 +82,7 @@ int main() {
             "source.call");
     refuses(check(R"(
       interface I{type Value:Drop;fn make(x:index)->Value effects(stop, opaque);}
-      component Impl:I{
+      module Impl:I{
         type Value:Drop=bool;
         fn make(x:index)->Value{return Value(payload=x);}
       }
@@ -92,7 +92,7 @@ int main() {
   cases.run("interface names and concrete names bind their own contracts", [] {
     compile(R"(
       interface Ops<T:Type>{fn use_value(first:T,second:index)->(T,index) effects(stop, opaque);}
-      component Impl<T:Type>:Ops<T>{
+      module Impl<T:Type>:Ops<T>{
         fn use_value(a:T,b:index)->(T,index){return(a,b);}
       }
       fn abstract_call<C:Ops<bool>>(x:bool,n:index){
@@ -179,13 +179,13 @@ int main() {
         "source.duplicate");
     refuses(check(R"(
       interface I{type Value:Drop;}
-      component Impl<T:Type+Drop,N:nat>:I{type Value:Drop=[T;N];}
+      module Impl<T:Type+Drop,N:nat>:I{type Value:Drop=[T;N];}
       fn f(x:bool){return Impl::Value<N=2,T=bool>([x,x]);}
     )"),
-            "source.generic");
+            "source.private");
     refuses(check(R"(
       interface I{type Value:Drop;fn make(x:bool)->Value effects(stop, opaque);}
-      component Impl:I{
+      module Impl:I{
         type Value:Drop=bool;
         fn make(x:bool)->Value{return Value<Wrong=bool>(x);}
       }

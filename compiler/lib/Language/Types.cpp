@@ -31,8 +31,7 @@ StringRef assetSort(const Type &type) {
   return type.kind == Type::Kind::Asset ? StringRef(type.sort) : StringRef();
 }
 bool isStaticOnly(const Type &type) {
-  return type.kind == Type::Kind::Natural ||
-         type.kind == Type::Kind::Component ||
+  return type.kind == Type::Kind::Natural || type.kind == Type::Kind::Module ||
          type.kind == Type::Kind::Domain || type.kind == Type::Kind::Asset;
 }
 StringRef typeKindName(Type::Kind kind) {
@@ -61,8 +60,8 @@ StringRef typeKindName(Type::Kind kind) {
     return "associated";
   case Type::Kind::Natural:
     return "natural";
-  case Type::Kind::Component:
-    return "component";
+  case Type::Kind::Module:
+    return "module";
   case Type::Kind::Builtin:
     return "builtin";
   case Type::Kind::Formal:

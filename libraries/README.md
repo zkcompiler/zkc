@@ -59,7 +59,7 @@ trial of that snapshot, and its executed work remains chargeable.
 `zkc::computation` demonstrates ordinary user-defined combinators. Its Math
 functions accept total scoped bodies; its Local functions use `effects(body)`
 to preserve the supplied callback effects and support affine explicit inputs. Captures require Copy+Drop and become explicit
-private-helper arguments. The [component client](../examples/projects/scoped-computations/README.md)
+private-helper arguments. The [module client](../examples/projects/scoped-computations/README.md)
 forwards nested callbacks with record/vector captures and a checked lookup.
 
 ### Finite computations
@@ -102,7 +102,7 @@ body and skip the body on false. Predicate failures propagate.
 `accumulate<I, T, C>` starts from `C::identity()` and applies `C::combine` in
 traversal order. The `Combiner<T>` interface supplies total operations without
 claiming algebraic laws. The field sum/product and group sum functions select
-standard components. A custom nonassociative combiner still preserves order;
+standard modules. A custom nonassociative combiner still preserves order;
 no optimization law follows just from implementing the interface. Group sums
 require `ScalarAction(G)`, including empty sums.
 
@@ -184,8 +184,8 @@ formal evaluation and vector arithmetic. The embedded scalar prelude supplies
 field arithmetic and equality, group addition/equality and `point * scalar`
 scaling, Boolean equality, and index arithmetic/equality. Its named functions
 and operators share the compiler's native operation identities. Asset-specific
-ring operations and component-specific PCS operations stay in their owning
-libraries, using explicit asset/component parameters and installed kernels.
+ring operations and module-specific PCS operations stay in their owning
+libraries, using explicit asset/module parameters and installed kernels.
 
 Use `zkc::curve::identity<G>()` for a nullary mathematical group zero. Its
 result fixes the exact group; no point is needed, including for empty sums.

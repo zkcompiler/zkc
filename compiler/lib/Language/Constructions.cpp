@@ -94,8 +94,8 @@ bool Checker::constructions() {
       for (auto *value : {&result.provider, &result.state})
         if (*value && !replace(**value))
           return false;
-      if (result.initializer && result.initializer->component &&
-          !replace(*result.initializer->component))
+      if (result.initializer && result.initializer->module &&
+          !replace(*result.initializer->module))
         return false;
       for (auto &argument : result.initializerArguments)
         if (!replace(argument))
@@ -121,7 +121,7 @@ bool Checker::constructions() {
         if (!replace(codec.provider) || !replace(codec.record))
           return false;
         for (auto *method : {&codec.initialize, &codec.write, &codec.finish}) {
-          if (method->target.component && !replace(*method->target.component))
+          if (method->target.module && !replace(*method->target.module))
             return false;
           for (auto &argument : method->arguments)
             if (!replace(argument))
@@ -201,10 +201,12 @@ bool Checker::constructions() {
         result.state = std::move(*nativeState);
         result.root = ConstructionDefinition::Root::Host;
       } else {
-        if (provider->kind != Type::Kind::Component)
+        if (provider->kind != Type::Kind::Module)
           return types.fail("source.construction",
-                            "transcript requires a component provider",
+                            "transcript requires a module provider",
                             syntax.provider->span);
+        if (!constructionMember(*provider, "State", syntax.provider->span))
+          return false;
         auto stateType =
             types.associated(*provider, "State", syntax.provider->span);
         if (!stateType)
@@ -217,20 +219,9 @@ bool Checker::constructions() {
               "source.construction",
               "source-created transcript state requires Copy and Drop",
               decl.span);
-        const Declaration *owner =
-            provider->symbolic
-                ? &output.declarations[types.parameter(provider->domain)
-                                           ->interface->index]
-                : types.typeDeclaration(*provider);
-        if (!types.charge(owner->members.size(), decl.span))
+        auto member = constructionMember(*provider, "initialize", decl.span);
+        if (!member)
           return false;
-        auto member = llvm::find_if(owner->members, [&](DeclarationId member) {
-          return output.declarations[member.index].name == "initialize";
-        });
-        if (member == owner->members.end())
-          return types.fail("source.construction",
-                            "transcript provider requires initialize",
-                            decl.span);
         const auto &factory = output.declarations[member->index];
         auto bindings =
             types.boundMemberSubstitution(factory, *provider, decl.span);
@@ -238,7 +229,8 @@ bool Checker::constructions() {
           return false;
         if (factory.kind != Declaration::Kind::Local ||
             !factory.inputs.empty() || factory.outputs.size() != 1 ||
-            factory.parameters.size() != owner->parameters.size())
+            factory.parameters.size() !=
+                output.declarations[factory.parent->index].parameters.size())
           return types.fail(
               "source.construction",
               "initialize must be a Local factory with no runtime arguments",

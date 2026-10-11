@@ -132,7 +132,7 @@ with case('target admission failure names its phase and related source declarati
     assert 'related source declaration: expansion::' in diagnostic
     assert f'at {source}:' in diagnostic
 
-for name in ('record', 'array', 'loop', 'variant', 'resource', 'component',
+for name in ('record', 'array', 'loop', 'variant', 'resource', 'module',
              'associated', 'associated_domain', 'bool', 'boolean_formula', 'branch', 'resource_control', 'group', 'variant_wire', 'variant_custody', 'index', 'dynamic', 'matrix', 'trace', 'vector_rounds', 'host_values'):
     args = ['--source-format=zkc', '--entry=sample::Demo',
             f'--module=sample={FIXTURES / (name + ".zkc")}']

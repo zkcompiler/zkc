@@ -366,7 +366,7 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
       // natural arguments (which may only become representable at closure).
       if (known.body && known.kind == Declaration::Kind::Math &&
           !known.body->parameterizedSummary && call->scopedArguments.empty() &&
-          call->domainArguments.empty() && (!call->component || known.origin)) {
+          call->domainArguments.empty() && (!call->module || known.origin)) {
         auto project =
             [&](ArrayRef<unsigned> indices) -> std::optional<Dependencies> {
           std::vector<Dependencies> selected;
@@ -417,17 +417,17 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
             return {};
           arguments.push_back(*value);
         }
-        if (call->component && !known.origin) {
-          auto component = types.substitute(*call->component, statics, op.span);
-          if (!component)
+        if (call->module && !known.origin) {
+          auto module = types.substitute(*call->module, statics, op.span);
+          if (!module)
             return {};
-          auto *definition = types.typeDeclaration(*component);
-          if (definition && definition->kind == Declaration::Kind::Component)
+          auto *definition = types.typeDeclaration(*module);
+          if (definition && definition->kind == Declaration::Kind::Module)
             for (auto member : definition->members)
               if (declarations[member.index].name ==
                   declarations[target.index].name) {
                 target = member;
-                arguments = component->arguments;
+                arguments = module->arguments;
                 break;
               }
         }

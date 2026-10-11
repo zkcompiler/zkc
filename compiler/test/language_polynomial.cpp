@@ -177,7 +177,7 @@ int main(int argc, char **argv) {
           "source.formal");
   refuses("formal associated representation", R"(
     interface I{type Item:Copy+Drop;}
-    component C:I{type Item=Poly<1>;}
+    module C:I{type Item: Type =Poly<1>;}
   )",
           "source.formal");
   for (StringRef roles : {"P", "(P,V)"})

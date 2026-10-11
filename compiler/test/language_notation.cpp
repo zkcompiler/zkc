@@ -8,8 +8,8 @@ using zkc::test::refuses;
 using zkc::test::require;
 using zkc::test::take;
 namespace {
-Expected<SyntaxModule> syntax(StringRef prefix, StringRef expression,
-                              const Limits &limits = {}) {
+Expected<SyntaxDeclaration> syntax(StringRef prefix, StringRef expression,
+                                   const Limits &limits = {}) {
   SourceBuffer source{"m",
                       "module m;" + prefix.str() +
                           "fn f(a:bool,b:bool,c:bool)->bool{return " +
@@ -52,7 +52,7 @@ std::string shape(const SyntaxDeclaration &decl, unsigned index) {
 void hasShape(StringRef declarations, StringRef expression,
               StringRef expected) {
   auto parsed = take(syntax(declarations, expression));
-  const auto &decl = parsed.declarations.front();
+  const auto &decl = parsed.members.front();
   auto actual = shape(decl, decl.bodies.front().results.front().second);
   require(actual == expected, "unexpected parse: " + actual);
 }

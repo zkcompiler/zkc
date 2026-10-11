@@ -6,21 +6,48 @@
 #include <limits>
 using namespace llvm;
 namespace zkc::language::detail {
+std::optional<std::vector<bool>>
+Checker::enclosingParameters(const Declaration &context,
+                             const Declaration &target, Span span) {
+  if (!types.charge(context.parameters.size() + target.parameters.size() + 1,
+                    span))
+    return {};
+  std::set<std::string> available;
+  for (const auto &parameter : context.parameters)
+    available.insert(parameter.atom);
+  std::vector<bool> result;
+  for (const auto &parameter : target.parameters)
+    result.push_back(available.count(parameter.atom));
+  return result;
+}
 std::optional<std::vector<Type>>
 Checker::arguments(const Declaration &context, const Declaration &target,
                    ArrayRef<SyntaxType> syntax, Span span,
                    ArrayRef<ArgumentLabel> labels) {
-  auto binding =
-      bindArguments(types, argumentNames<Parameter>(target.parameters),
-                    syntax.size(), labels, true, span, "source.generic");
-  if (!binding)
-    return {};
   std::vector<Type> result(target.parameters.size());
-  for (unsigned i = 0; i < syntax.size(); ++i) {
-    auto arg = type(context, syntax[i]);
-    if (!arg)
+  auto enclosing = enclosingParameters(context, target, span);
+  if (!enclosing)
+    return {};
+  bool lexical =
+      syntax.empty() && target.parent &&
+      output.declarations[target.parent->index].parameters.size() ==
+          target.parameters.size() &&
+      llvm::all_of(*enclosing, [](bool available) { return available; });
+  if (lexical) {
+    for (unsigned i = 0; i < target.parameters.size(); ++i)
+      result[i] = parameterType(target.parameters[i]);
+  } else {
+    auto binding =
+        bindArguments(types, argumentNames<Parameter>(target.parameters),
+                      syntax.size(), labels, true, span, "source.generic");
+    if (!binding)
       return {};
-    result[(*binding)[i]] = std::move(*arg);
+    for (unsigned i = 0; i < syntax.size(); ++i) {
+      auto arg = type(context, syntax[i]);
+      if (!arg)
+        return {};
+      result[(*binding)[i]] = std::move(*arg);
+    }
   }
   if (formingParameters.count(context.id.index)) {
     for (const auto &argument : result)
@@ -222,26 +249,40 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
     return {};
   auto &decl = output.declarations[id->index];
   if (decl.kind == Declaration::Kind::Associated) {
-    if (!s.arguments.empty()) {
-      types.fail("source.generic",
-                 "associated types inherit their component's static arguments",
-                 s.span);
-      return {};
-    }
     auto &parent = output.declarations[decl.parent->index];
-    if ((!context.parent || context.parent->index != parent.id.index) &&
-        (parent.kind == Declaration::Kind::Interface ||
-         !parent.parameters.empty())) {
-      types.fail("source.generic", "associated type requires a bound component",
-                 s.span);
-      return {};
-    }
-    Type base(K::Component, parent.kind == Declaration::Kind::Interface
-                                ? "self:" + parent.qualifiedName
-                                : parent.qualifiedName);
+    Type base(K::Module, parent.kind == Declaration::Kind::Interface
+                             ? "self:" + parent.qualifiedName
+                             : parent.qualifiedName);
     base.symbolic = parent.kind == Declaration::Kind::Interface;
-    for (auto &p : parent.parameters)
-      base.arguments.push_back(parameterType(p));
+    if (!s.arguments.empty()) {
+      if (base.symbolic) {
+        types.fail("source.generic", "interface type requires a bound module",
+                   s.span);
+        return {};
+      }
+      auto args = arguments(context, parent, s.arguments, s.span, s.labels);
+      if (!args)
+        return {};
+      base.arguments = std::move(*args);
+    } else {
+      if (base.symbolic &&
+          (!context.parent || context.parent->index != parent.id.index)) {
+        types.fail("source.generic", "interface type requires a bound module",
+                   s.span);
+        return {};
+      }
+      for (const auto &parameter : parent.parameters) {
+        if (llvm::none_of(context.parameters, [&](const Parameter &available) {
+              return parameter.atom == available.atom;
+            })) {
+          types.fail("source.generic",
+                     "associated type needs its module's static arguments",
+                     s.span);
+          return {};
+        }
+        base.arguments.push_back(parameterType(parameter));
+      }
+    }
     return types.associated(base, decl.name, s.span);
   }
   auto args = arguments(context, decl, s.arguments, s.span, s.labels);
@@ -257,11 +298,11 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
     result.kind = K::Record;
   else if (decl.kind == Declaration::Kind::Variant)
     result.kind = K::Variant;
-  else if (decl.kind == Declaration::Kind::Component ||
+  else if (decl.kind == Declaration::Kind::Module ||
            decl.kind == Declaration::Kind::Interface)
-    result.kind = K::Component;
+    result.kind = K::Module;
   else {
-    types.fail("source.type", "expected a type, domain, or static component",
+    types.fail("source.type", "expected a type, domain, or static module",
                s.span);
     return {};
   }

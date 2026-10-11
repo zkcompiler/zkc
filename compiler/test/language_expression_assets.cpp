@@ -378,10 +378,10 @@ run Demo = Count<Recurrence>;
     require(rows.protocol().inputs[0].type.kind == Type::Kind::Array &&
                 rows.protocol().inputs[0].type.dimension.closedValue() == 2,
             "alias did not close its projected length");
-    auto component =
+    auto module =
         source("interface Eval<T: Field> { fn eval(v: Vector<T>) -> Vector<T> "
                "effects(stop, opaque); }\n"
-               "component Fixed<T: Field, A: Ring>: Eval<T> {\n"
+               "module Fixed<T: Field, A: Ring>: Eval<T> {\n"
                "  fn eval(v: Vector<T>) -> Vector<T> {"
                " return kernel<T>(\"ring.point\", v; A); }\n}\n"
                "fn through<T: Field, E: Eval<T>>(v: Vector<T>) -> Vector<T> {"
@@ -389,11 +389,10 @@ run Demo = Count<Recurrence>;
                "protocol Dispatch roles(E)(v: Vector<F>@E)->(r: Vector<F>@E)"
                " { let r @E = through<F, Fixed<F, Product>>(v);"
                " return (r=r); }\nrun Selected = Dispatch;\n");
-    auto dispatched =
-        take(close(component, {product()}, {}, "sample::Selected"));
+    auto dispatched = take(close(module, {product()}, {}, "sample::Selected"));
     require(ringReferences(dispatched).size() == 1 &&
                 dispatched.assets().size() == 1,
-            "component member did not close its asset parameter");
+            "module member did not close its asset parameter");
     auto generic = source("domain Cube = ring(asset cube);\n"
                           "run Other = Run<Cube>;\n");
     auto first = take(close(generic, {product(), cubic("cube")}));

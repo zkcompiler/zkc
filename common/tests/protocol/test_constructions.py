@@ -38,7 +38,7 @@ construction Derived<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{
   on message delivery(t,value){return t;}
   on query challenge(t){return H::draw(t);}
 }
-component Provider:TestTranscript<F>{
+module Provider:TestTranscript<F>{
   type State:Copy+Drop=STATE;
   fn initialize()->State{return State(INITIAL);}
   fn observe(t:State,v:F)->State{return t;}
@@ -101,7 +101,7 @@ def test_custom_index_query_keeps_the_service_range(toolchain, journal, director
     source.write_text('''module sample;
     domain F=field("koala-bear.ext8-binomial3");
     interface ProviderType {type State:Copy+Drop;fn initialize()->State effects(stop, opaque);}
-    component Provider:ProviderType {
+    module Provider:ProviderType {
       type State:Copy+Drop=();
       fn initialize()->State{return State(());}
     }
@@ -272,7 +272,7 @@ def test_source_construction_cryptographic_histories(toolchain, journal, directo
     modules = {'sample': root / f'common/tests/fixtures/constructions/{protocol}.zkc',
                'spongefish': root / 'libraries/spongefish/lib.zkc'}
     modules.update({f'zkc::{name}': root / f'libraries/zkc/{name}.zkc'
-                    for name in ['bytes', 'shake128', 'encoding', 'vector', 'boolean']})
+                    for name in ['bytes', 'shake128', 'encoding', 'vector', 'boolean', 'finite', 'sequence', 'accumulation', 'curve']})
     if protocol == 'sumcheck':
         modules['sumcheck'] = root / 'libraries/sumcheck/lib.zkc'
     package = directory / 'proof.zkpkg'
@@ -314,7 +314,7 @@ def test_source_construction_cryptographic_histories(toolchain, journal, directo
         assert not rejected['execution']['cleanup_errors']
 
 
-@pytest.mark.parametrize('suite', ['merlin3.bls12-381.fr64be/0', 'spongefish0.7.4.keccak.bls12-381.fr64be/0'])
+@pytest.mark.parametrize('suite', ['merlin3.bls12-381.fr64be/0', 'spongefish0.8.0.keccak.bls12-381.fr64be/0'])
 @pytest.mark.parametrize('flags', [[], ['--release-storage']])
 def test_managed_provider_methods_are_ordinary_checked_functions(toolchain, journal, directory, suite, flags):
     from pathlib import Path

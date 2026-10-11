@@ -5,7 +5,7 @@
 namespace zkc::language::detail {
 class Checker {
 public:
-  Checker(std::vector<SyntaxModule>, CheckedStorage &, Work &);
+  Checker(std::vector<SyntaxDeclaration>, CheckedStorage &, Work &);
   // Lazy signature completion captures this driver; keep its address stable.
   Checker(const Checker &) = delete;
   Checker &operator=(const Checker &) = delete;
@@ -29,6 +29,8 @@ public:
             llvm::ArrayRef<SyntaxType>, Span,
             llvm::ArrayRef<ArgumentLabel> = {});
 
+  std::optional<std::vector<bool>>
+  enclosingParameters(const Declaration &, const Declaration &, Span);
   bool bindingName(const Declaration &, llvm::StringRef, Span);
   std::optional<CallableReference> callable(const Declaration &,
                                             llvm::StringRef, Span);
@@ -68,13 +70,19 @@ public:
 private:
   std::optional<Type> elaborateType(const Declaration &, const SyntaxType &,
                                     unsigned);
-  std::vector<SyntaxModule> syntax;
+  std::vector<SyntaxDeclaration> syntax;
   std::map<unsigned, std::shared_ptr<const SyntaxDeclaration>> retainedSyntax;
-  std::map<std::string, ModuleId> modules;
+  std::map<std::string, DeclarationId> modules;
+  std::vector<DeclarationId> moduleIds;
+  struct ModuleBinding {
+    DeclarationId target;
+    Span span;
+    bool isPublic;
+  };
+  bool checkingVisibility = false;
+  std::function<bool(DeclarationId)> loadImports;
   std::map<std::string, DeclarationId> qualified;
-  std::vector<std::map<std::string, DeclarationId>> visible;
-  std::vector<std::map<std::string, DeclarationId>> exportedNames;
-  std::vector<std::map<std::string, ModuleId>> aliases, exportedAliases;
+  std::vector<std::map<std::string, ModuleBinding>> visible;
   using OperatorSite = std::pair<unsigned, unsigned>;
   std::vector<std::vector<OperatorSite>> visibleOperators, exportedOperators;
   std::map<OperatorSite, OperatorBinding> moduleOperators;
@@ -92,17 +100,19 @@ private:
   std::map<unsigned, std::vector<DeferredApplication>> deferredApplications;
   bool entries();
   bool constructions();
+  std::optional<DeclarationId> constructionMember(const Type &, llvm::StringRef,
+                                                  Span);
   bool constructionCodec(Declaration &, const SyntaxConstruction &,
                          ConstructionDefinition &, const Substitution &);
   bool configureSetups(Declaration &, const Declaration &,
                        llvm::ArrayRef<SyntaxSetupSlot>);
   bool collect();
   bool imports();
-  std::vector<unsigned> importOrder;
   bool prepareNotationSyntax();
   bool prepareOperators();
-  std::optional<DeclarationId> moduleMember(ModuleId, llvm::StringRef, Span,
-                                            unsigned = 1);
+  std::optional<DeclarationId> member(const Declaration &, DeclarationId,
+                                      llvm::StringRef, Span);
+  bool moduleContracts();
   bool signature(DeclarationId, unsigned = 1);
   bool conformance(DeclarationId);
   bool requirements(Declaration &);

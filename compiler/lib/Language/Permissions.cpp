@@ -337,13 +337,20 @@ bool Semantics::mathematicalData(const Type &type, Span span,
   }
   return true;
 }
+bool Semantics::withinModule(DeclarationId context, DeclarationId owner) const {
+  for (auto id = std::optional(context); id;
+       id = declarations[id->index].parent)
+    if (id->index == owner.index)
+      return true;
+  return false;
+}
 bool Semantics::constructorAllowed(const Declaration &context,
                                    const Type &type) const {
   auto *decl = typeDeclaration(type);
   return decl &&
          (type.kind == Type::Kind::Record || type.kind == Type::Kind::Variant ||
           type.kind == Type::Kind::Associated) &&
-         decl->module.index == context.module.index;
+         withinModule(context.module, decl->module);
 }
 bool Semantics::ingress(const Type &type, Span span) {
   if (!executableType(type, span))

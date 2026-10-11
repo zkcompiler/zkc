@@ -20,7 +20,7 @@ interface TestTranscript<T:Field>{
   fn observe(t:State,value:T)->State effects(stop, opaque);
   fn draw(t:State)->(State,T) effects(stop, opaque);
 }
-component Provider:TestTranscript<F>{
+module Provider:TestTranscript<F>{
   type State:Copy+Drop=index;
   fn initialize()->State{return State(0);}
   fn observe(t:State,value:F)->State{return t;}

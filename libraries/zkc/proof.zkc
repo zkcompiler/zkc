@@ -12,7 +12,7 @@ pub interface StreamCodec {
   fn append(record:Record,chunk:Bytes)->(Record,Bytes) effects(stop, opaque);
   fn take(record:Record,count:index)->(Record,(index,index)) effects(stop, opaque);
 }
-pub component Stream:StreamCodec {
+pub module Stream:StreamCodec {
   type Record:Copy+Drop=(Bytes,index);
   fn initialize(layout:())->Record {return Record((bytes::empty(),0));}
   fn write(record:Record)->Bytes {let (buffer,offset)=unpack(record);return buffer;}

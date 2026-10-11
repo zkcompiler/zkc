@@ -65,7 +65,7 @@ def test_private_verifier_entropy_cannot_replace_a_delivery(toolchain, journal, 
     # Remove an unused construction whose exact coverage intentionally no
     # longer matches this altered protocol.
     start = text.index('construction Derived<')
-    end = text.index('component Provider:', start)
+    end = text.index('module Provider:', start)
     text = text[:start] + text[end:]
     source = directory / 'main.zkc'
     source.write_text(text)
@@ -135,7 +135,7 @@ domain F=field("bls12-381.fr");
 domain E=field("koala-bear.ext8-binomial3");
 domain Host=transcript("merlin3.bls12-381.fr64be/0");
 interface ProviderType {type State:Copy+Drop;fn initialize()->State effects(stop, opaque);}
-component Provider:ProviderType {
+module Provider:ProviderType {
   type State:Copy+Drop=index;
   fn initialize()->State{return State(0);}
 }

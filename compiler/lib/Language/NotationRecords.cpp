@@ -7,7 +7,7 @@ using namespace llvm;
 namespace zkc::language::detail {
 namespace {
 using Site = std::tuple<uint32_t, uint32_t, uint32_t>;
-Site site(Span span) { return {span.module.index, span.begin, span.end}; }
+Site site(Span span) { return {span.source.index, span.begin, span.end}; }
 } // namespace
 
 bool Checker::retainNotations() {
@@ -15,9 +15,9 @@ bool Checker::retainNotations() {
   // Every loop charges before allocating its retained records or lookup tables.
   // Temporary indexes only connect already-checked evidence, never select a
   // callable or recreate the inference candidate search.
-  if (!types.charge(syntax.size() + sources.size(), Span{{0}, 0, 0}))
+  if (!types.charge(moduleIds.size() + sources.size(), Span{{0}, 0, 0}))
     return false;
-  std::vector<uint32_t> moduleScopes(syntax.size());
+  std::vector<uint32_t> moduleScopes(sources.size());
   std::map<OperatorSite, uint32_t> moduleBindings;
   std::map<Site, uint32_t> bindingSites;
   std::vector<std::map<std::string, uint32_t>> descriptorsByScope;
@@ -76,9 +76,9 @@ bool Checker::retainNotations() {
     record.targetSpan = source.target.span;
     record.isPublic = source.isPublic && !local;
     record.local = local;
-    if (binding.target.component) {
-      record.component = printType(*binding.target.component, source.span);
-      if (!record.component)
+    if (binding.target.module) {
+      record.module = printType(*binding.target.module, source.span);
+      if (!record.module)
         return {};
     }
     for (const auto &argument : binding.arguments) {
@@ -103,10 +103,10 @@ bool Checker::retainNotations() {
                                   {},
                                   source.filtered->span,
                                   {}};
-      if (binding.filtered->target.component) {
-        target.component =
-            printType(*binding.filtered->target.component, source.span);
-        if (!target.component)
+      if (binding.filtered->target.module) {
+        target.module =
+            printType(*binding.filtered->target.module, source.span);
+        if (!target.module)
           return {};
       }
       for (const auto &argument : binding.filtered->arguments) {
@@ -134,8 +134,8 @@ bool Checker::retainNotations() {
                           1,
                       source.span))
       return {};
-    if (binding.target.component &&
-        !types.chargeType(*binding.target.component, source.span))
+    if (binding.target.module &&
+        !types.chargeType(*binding.target.module, source.span))
       return {};
     for (const auto &argument : binding.arguments)
       if (argument && !types.chargeType(*argument, source.span))
@@ -160,28 +160,35 @@ bool Checker::retainNotations() {
     familiesByScope[scope][descriptor.key()][binding.identity].push_back(id);
     return true;
   };
-  for (const auto &module : syntax) {
-    Span span{module.id, 0,
-              uint32_t((*output.sources)[module.id.index].text.size())};
+  for (auto id : moduleIds) {
+    const auto &declaration = output.declarations[id.index];
+    Span span = declaration.span;
     if (!types.charge(1, span))
       return false;
     NotationScopeRecord scope;
     scope.span = span;
-    moduleScopes[module.id.index] = addScope(std::move(scope));
+    scope.owner = id;
+    scope.isPublic = declaration.isPublic;
+    if (declaration.parent) {
+      scope.parent = moduleScopes[declaration.parent->index];
+      scope.isPublic &= records.scopes[*scope.parent].isPublic;
+    }
+    moduleScopes[id.index] = addScope(std::move(scope));
   }
-  for (const auto &module : syntax) {
-    auto scope = moduleScopes[module.id.index];
+  for (auto id : moduleIds) {
+    const auto &module = *sources[id.index];
+    auto scope = moduleScopes[id.index];
     for (unsigned i = 0; i < module.operators.size(); ++i) {
-      auto binding =
-          addBinding(module.operators[i],
-                     moduleOperators.at({module.id.index, i}), scope, false);
+      auto binding = addBinding(
+          module.operators[i], moduleOperators.at({id.index, i}), scope, false);
       if (!binding)
         return false;
-      moduleBindings.emplace(OperatorSite{module.id.index, i}, *binding);
+      moduleBindings.emplace(OperatorSite{id.index, i}, *binding);
     }
   }
-  for (const auto &module : syntax) {
-    auto scope = moduleScopes[module.id.index];
+  for (auto id : moduleIds) {
+    const auto &module = *sources[id.index];
+    auto scope = moduleScopes[id.index];
     auto &record = records.scopes[scope];
     for (const auto &import : module.imports) {
       if (!types.charge(import.names.size() + import.operators.size() +
@@ -194,12 +201,12 @@ bool Checker::retainNotations() {
         for (const auto &name : *names)
           if (!types.charge(name.size(), import.span))
             return false;
-      record.imports.push_back({modules.at(import.module), import.span,
-                                import.alias, import.names, import.operators,
+      record.imports.push_back({*import.target, import.span, import.alias,
+                                import.names, import.operators,
                                 import.notations, import.reductions,
                                 import.isPublic, import.indexing});
     }
-    for (auto original : visibleOperators[module.id.index]) {
+    for (auto original : visibleOperators[id.index]) {
       if (!types.charge(1, record.span))
         return false;
       auto binding = moduleBindings.at(original);
@@ -207,12 +214,12 @@ bool Checker::retainNotations() {
         return false;
       record.visible.push_back(binding);
     }
-    for (auto original : exportedOperators[module.id.index]) {
+    for (auto original : exportedOperators[id.index]) {
       if (!types.charge(1, record.span))
         return false;
       record.exported.push_back(moduleBindings.at(original));
     }
-    for (const auto &[key, syntax] : *notationEnvironments[module.id.index]) {
+    for (const auto &[key, syntax] : *notationEnvironments[id.index]) {
       if (!types.charge(key.size() + 1, syntax.span))
         return false;
       std::optional<uint32_t> descriptor;
@@ -482,10 +489,10 @@ bool Checker::retainNotations() {
               return false;
             selection.arguments.push_back(std::move(*text));
           }
-          if (binding.target.component) {
-            selection.component =
-                printType(*binding.target.component, operation.span);
-            if (!selection.component)
+          if (binding.target.module) {
+            selection.module =
+                printType(*binding.target.module, operation.span);
+            if (!selection.module)
               return false;
           }
           const Family *family = nullptr;

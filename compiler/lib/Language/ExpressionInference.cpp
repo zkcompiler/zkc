@@ -149,7 +149,7 @@ class ExpressionInference {
         output.callees.emplace(id, *target);
         contexts.emplace(
             id, CallContext{scopedMode.value_or(owner.body.mode), scopedDepth});
-        auto outputs = application(id, callee, target->component, depth);
+        auto outputs = application(id, callee, target->module, depth);
         if (outputs.size() == 1)
           types.equal(result, outputs.front(), expr.span);
       }
@@ -369,15 +369,14 @@ class ExpressionInference {
   /// `rows` lifts the marked data inputs and every result of a pointwise map
   /// to native vectors of the helper's scalar types.
   std::vector<Variable> application(uint32_t id, const Declaration &callee,
-                                    std::optional<Type> component,
-                                    unsigned depth,
+                                    std::optional<Type> module, unsigned depth,
                                     const std::vector<bool> &rows = {},
                                     ArrayRef<std::optional<Type>> bound = {}) {
     const auto &expr = syntax.expressions[id];
     if (!accountCall(id, callee, expr.kind == K::Map))
       return {};
     auto constraints = instantiateCallable(types, checker.types, callee,
-                                           {callee.id, component}, expr.span);
+                                           {callee.id, module}, expr.span);
     if (checker.types.diagnostic)
       return {};
     const auto &parameters = constraints.parameters;
@@ -386,7 +385,7 @@ class ExpressionInference {
         types.equal(parameters.at(callee.parameters[i].atom),
                     known(*bound[i], expr.span), expr.span);
     unsigned inherited = 0;
-    if (component && callee.parent)
+    if (module && callee.parent)
       inherited =
           checker.output.declarations[callee.parent->index].parameters.size();
     auto staticBinding =
@@ -403,6 +402,20 @@ class ExpressionInference {
             parameters.at(
                 callee.parameters[inherited + (*staticBinding)[i]].atom),
             annotation(expr.arguments[i]), expr.span);
+    // Reuse enclosing binders only for omitted slots. Written arguments and
+    // explicit holes retain their normal inference behavior.
+    auto enclosing = checker.enclosingParameters(decl, callee, expr.span);
+    if (!enclosing)
+      return {};
+    std::vector<bool> written(callee.parameters.size(), false);
+    for (auto position : *staticBinding)
+      written[inherited + position] = true;
+    for (unsigned i = inherited; i < callee.parameters.size(); ++i)
+      if ((*enclosing)[i] && !written[i]) {
+        const auto &parameter = callee.parameters[i];
+        types.equal(parameters.at(parameter.atom),
+                    known(parameterType(parameter), expr.span), expr.span);
+      }
     auto binding =
         bindArguments(checker.types, inputNames(callee), expr.children.size(),
                       expr.callLabels, true, expr.span, "source.call");
@@ -471,7 +484,7 @@ class ExpressionInference {
     output.callees.emplace(id, *target);
     const auto &callee = checker.output.declarations[target->declaration.index];
     if (callee.kind != Declaration::Kind::Math || callee.abstract ||
-        target->component) {
+        target->module) {
       fail("source.map", "map selects a static, defined math fn", expr.span);
       return;
     }
@@ -723,7 +736,7 @@ class ExpressionInference {
     }
     types.equal(
         result.type,
-        packed(application(id, callee, target->component, depth), expr.span),
+        packed(application(id, callee, target->module, depth), expr.span),
         expr.span);
   }
   Result expression(uint32_t id, unsigned depth) {
@@ -901,11 +914,11 @@ class ExpressionInference {
         output.callees.emplace(id, target);
         const auto &callee =
             checker.output.declarations[target.declaration.index];
-        types.equal(result.type,
-                    packed(application(id, callee, target.component, depth, {},
-                                       arguments),
-                           expr.span),
-                    expr.span);
+        types.equal(
+            result.type,
+            packed(application(id, callee, target.module, depth, {}, arguments),
+                   expr.span),
+            expr.span);
         break;
       }
       std::vector<Variable> inputs;

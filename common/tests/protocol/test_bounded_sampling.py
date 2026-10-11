@@ -7,7 +7,7 @@ from input_files import input_files
 
 SOURCE = '''module sample;
 use zkc::sampling::{Words,uniform_index};
-component TestWords:Words {
+module TestWords:Words {
   type State:Copy+Drop=(index,index);
   fn next(state:State)->(State,index){
     let(word,count)=unpack(state);
@@ -71,7 +71,7 @@ def test_non_power_of_two_construction_uses_an_explicit_sampler(toolchain, journ
     text += '''
     domain E=field("koala-bear.ext8-binomial3");
     interface ProviderType {type State:Copy+Drop;fn initialize()->State;}
-    component Provider:ProviderType {
+    module Provider:ProviderType {
       type State:Copy+Drop=index;
       fn initialize()->State{return State(0);}
     }
@@ -122,7 +122,7 @@ def test_explicit_transcript_trials_preserve_state_and_charge_work(toolchain, jo
     type Indices=builtin("indices");
     domain E=field("koala-bear.ext8-binomial3");
     interface ProviderType {type State:Copy+Drop;fn initialize()->State;}
-    component Provider:ProviderType {
+    module Provider:ProviderType {
       type State:Copy+Drop=Indices;
       fn initialize()->State{return State(kernel("external.openvm.init"));}
     }

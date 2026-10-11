@@ -10,7 +10,7 @@ using namespace llvm;
 namespace zkc::language {
 namespace {
 bool sameSpan(Span a, Span b) {
-  return a.module.index == b.module.index && a.begin == b.begin &&
+  return a.source.index == b.source.index && a.begin == b.begin &&
          a.end == b.end;
 }
 bool sameSelector(const SpecificationSelector &a,
@@ -213,9 +213,9 @@ class Comparison {
       if (decl.specificationBlock) {
         auto span = *decl.specificationBlock;
         if (decl.kind != Declaration::Kind::Protocol ||
-            span.module.index != decl.span.module.index ||
+            span.source.index != decl.span.source.index ||
             span.begin < decl.span.begin || span.end > decl.span.end ||
-            !blocks.emplace(Start{span.module.index, span.begin}, &decl).second)
+            !blocks.emplace(Start{span.source.index, span.begin}, &decl).second)
           return fail("source specification block inventory differs");
       } else if (!decl.specifications.empty())
         return fail("source clauses have no specification block");
@@ -263,7 +263,7 @@ class Comparison {
         unsigned cursor = i + 2;
         for (const auto &clause : decl.specifications) {
           if (cursor >= tokens.size() || !charge(1) ||
-              clause.span.module.index != module ||
+              clause.span.source.index != module ||
               clause.span.begin != tokens[cursor]->span.begin ||
               spelling(cursor) != clauseKind(clause.kind) ||
               spelling(cursor + 1) != clause.name ||

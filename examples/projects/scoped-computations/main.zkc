@@ -9,7 +9,7 @@ interface Transform<F: Field> {
   fn run(value: F, body: fn(F) -> F effects(stop)) -> F effects(stop);
 }
 
-component Increment<F: Field>: Transform<F> {
+module Increment<F: Field>: Transform<F> {
   fn adjust(value: F) -> F effects() { return value + 1; }
   fn run(value: F, body: fn(F) -> F effects(stop)) -> F effects(stop) {
     return computation::forward(value, fn(x) => body(adjust(x)));

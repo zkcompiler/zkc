@@ -102,7 +102,7 @@ int main() {
       struct Data{proof:bool,run:bool}
       enum Choice{proof(),run(bool)}
       interface Helpers{math fn proof(run:bool)->bool;}
-      component Helper:Helpers{math fn proof(run:bool)->bool{return run;}}
+      module Helper:Helpers{math fn proof(run:bool)->bool{return run;}}
       math fn identity(value:bool)->bool{
         let data=Data{proof:value,run:value};
         let proof=data.proof;let run=proof;return Helper::proof(run);
@@ -211,11 +211,11 @@ int main() {
             "diagnostic omitted actual matches: " + message);
   });
   cases.run(
-      "closed component dispatch bounds the actual and cached call graph", [] {
+      "closed module dispatch bounds the actual and cached call graph", [] {
         const std::string declarations = R"(module sample;
       interface Step { math fn run(x:bool)->bool; }
-      component Base:Step {math fn run(x:bool)->bool{return x;}}
-      component Wrap<C:Step>:Step {math fn run(x:bool)->bool{return C::run(x);}}
+      module Base:Step {math fn run(x:bool)->bool{return x;}}
+      module Wrap<C:Step>:Step {math fn run(x:bool)->bool{return C::run(x);}}
       math fn extra<C:Step>(x:bool)->bool{return C::run(x);}
       protocol Run<C:Step> roles(P)(x:bool@P)->(r:bool@P){
         let first=C::run(x);return(r=first);

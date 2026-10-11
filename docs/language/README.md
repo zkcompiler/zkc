@@ -91,7 +91,7 @@ zkc check --project=libraries/zkc/zkc.toml --declarations
 The report's `declarations` array lists public mathematical functions,
 local functions and protocols by qualified name. It shows static parameters,
 permissions, input/output types, participant roles, services, completed
-requirements and effects. Members name their interface/component owner and mark
+requirements and effects. Members name their interface/module owner and mark
 inherited parameters; abstract members report their allowance explicitly.
 Inferred natural/capability requirements are marked; written effect allowances
 are separate from actual body effects. Each effect summary contains fixed

@@ -22,7 +22,7 @@ use zkc::finite as finite;
 use zkc::finite_domain as domains;
 use zkc::accumulation::{Combiner};
 domain F=field("koala-bear");
-component Decimal:Combiner<F>{
+module Decimal:Combiner<F>{
  math fn identity()->F{return 0;}
  math fn combine(state:F,value:F)->F{return state*10+value;}
 }
@@ -221,7 +221,7 @@ use zkc::accumulation::{Combiner};
 use zkc::FINITE_MODULE as finite;
 use zkc::finite_domain as domains;
 domain F=field("koala-bear");
-component Decimal:Combiner<F>{
+module Decimal:Combiner<F>{
  math fn identity()->F{return 0;}
  math fn combine(state:F,value:F)->F{return state*10+value;}
 }

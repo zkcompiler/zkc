@@ -97,14 +97,15 @@ the source call-depth and work bounds.
 
 ### Construction bodies
 
-A construction can select a component with `transcript Provider;` and a
+A construction can select a module implementing an interface with `transcript Provider;` and a
 finite set of verifier services with `replace {base, extension};`. The singleton
 spelling is `replace challenges;`. Empty and duplicate selections refuse. The
 compiler orders selected services by their original input positions. Every
 selected service has the same owner; its actual query contract fixes the handler
 result type independently of the provider's state or domain. The provider declares an associated
 `State` and a zero-runtime-argument Local `initialize()` returning that state.
-Source-created state requires `Copy` and `Drop`; private state need not permit
+Both members must belong to the implemented interface; private helpers do not
+satisfy provider selection. Source-created state requires `Copy` and `Drop`; private state need not permit
 sharing or serialization.
 
 An installed closed transcript domain can also be selected as the provider. Its
@@ -176,7 +177,7 @@ applies to mathematical handlers, while root transport covers the whole proof.
 
 ### Record codecs
 
-`format Codec;` selects an ordinary component with an associated
+`format Codec;` selects an ordinary module implementing an interface with an associated
 `Record: Copy + Drop` and these Local methods:
 
 ```text
@@ -185,7 +186,8 @@ write(record: Record) -> Bytes
 finish(record: Record, proof: Bytes) -> ()
 ```
 
-The compiler checks these signatures structurally; the interface name is an
+The associated type and selected methods must be required by the implemented
+interface. The compiler checks these signatures structurally; the interface name is an
 ordinary library choice. Bare `format Codec;` passes `()` to `initialize`.
 `format Codec(rounds, size);` passes the named shared original inputs in order:
 a single input keeps its type, and multiple inputs form a tuple. Layout inputs

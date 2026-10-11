@@ -15,7 +15,7 @@ struct Origin {
 };
 using Origins = std::vector<std::optional<Origin>>;
 using SpanKey = std::tuple<uint32_t, uint32_t, uint32_t>;
-SpanKey key(Span span) { return {span.module.index, span.begin, span.end}; }
+SpanKey key(Span span) { return {span.source.index, span.begin, span.end}; }
 
 // Independently relate source place reads and authored call operands to the
 // checked SSA graph. Projection provenance is reconstructed from operations,

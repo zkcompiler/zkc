@@ -6,11 +6,11 @@ use zkc::vector::{Vector};
 domain F=field("bls12-381.fr");
 interface TranscriptState {
   type State:Copy+Drop;
-  fn initialize()->State;
-  fn observe(t:State,value:F)->State;
-  fn draw(t:State)->(State,F);
+  fn initialize()->State effects(stop, opaque);
+  fn observe(t:State,value:F)->State effects(stop, opaque);
+  fn draw(t:State)->(State,F) effects(stop, opaque);
 }
-component Provider:TranscriptState {
+module Provider:TranscriptState {
   type State:Copy+Drop=builtin("shake128_state");
   fn initialize()->State{return State(shake::init());}
   fn observe(t:State,value:F)->State{return State(transcript::observe_scalar(unpack(t),value));}

@@ -2,121 +2,110 @@
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::language::detail {
+bool Checker::moduleContracts() {
+  // Interface membership determines the public contract before imports are
+  // authorized. Full type/effect conformance follows signature formation.
+  for (auto id : moduleIds) {
+    auto &module = output.declarations[id.index];
+    auto &written = *sources[id.index];
+    if (!written.definition)
+      continue;
+    auto target =
+        resolve(module, written.definition->name, written.definition->span);
+    if (!target)
+      return false;
+    const auto &contract = output.declarations[target->index];
+    if (contract.kind != Declaration::Kind::Interface)
+      return types.fail("source.conformance",
+                        "module must implement an interface", module.span);
+    if (!types.charge(contract.members.size() + module.members.size(),
+                      module.span))
+      return false;
+    for (auto required : contract.members) {
+      const auto &member = output.declarations[required.index];
+      auto found = visible[id.index].find(member.name);
+      if (found == visible[id.index].end())
+        continue; // The conformance checker reports missing members.
+      auto &provided = output.declarations[found->second.target.index];
+      if (!provided.parent || provided.parent->index != id.index)
+        continue; // Imports do not implement an authored interface member.
+      provided.isPublic = true;
+      found->second.isPublic = true;
+    }
+  }
+  return true;
+}
 bool Checker::imports() {
-  const auto count = syntax.size();
-  aliases.resize(count);
-  exportedAliases.resize(count);
-  exportedNames.resize(count);
+  const auto count = sources.size();
   visibleOperators.resize(count);
   exportedOperators.resize(count);
-  std::vector<std::vector<unsigned>> edges(count);
-  for (const auto &module : syntax) {
-    auto id = module.id.index;
-    for (const auto &[name, declaration] : visible[id])
-      if (output.declarations[declaration.index].isPublic)
-        exportedNames[id].emplace(name, declaration);
-    for (unsigned i = 0; i < module.operators.size(); ++i) {
+  for (auto module : moduleIds) {
+    auto id = module.index;
+    const auto &source = *sources[id];
+    for (unsigned i = 0; i < source.operators.size(); ++i) {
       visibleOperators[id].emplace_back(id, i);
-      if (module.operators[i].isPublic)
+      if (source.operators[i].isPublic)
         exportedOperators[id].emplace_back(id, i);
     }
-    for (const auto &import : module.imports) {
-      auto target = modules.find(import.module);
-      if (target == modules.end())
-        return types.fail("source.import",
-                          "module was not explicitly captured: " +
-                              import.module,
-                          import.span);
-      edges[id].push_back(target->second.index);
-    }
-    llvm::sort(edges[id]);
   }
-  std::vector<unsigned> state(count), height(count), order;
-  std::function<bool(unsigned, unsigned)> visit = [&](unsigned id,
-                                                      unsigned depth) {
-    Span span{ModuleId{id}, 0, 0};
-    if (!types.charge(1, span))
+  std::vector<unsigned> state(count), height(count);
+  unsigned depth = 0;
+  loadImports = [&](DeclarationId module) {
+    const auto id = module.index;
+    const auto &context = output.declarations[id];
+    if (!types.charge(1, context.span))
       return false;
-    if (depth > work.limits.importDepth)
-      return types.fail("source.limit", "import depth limit exceeded", span);
+    if (depth >= work.limits.importDepth ||
+        height[id] > work.limits.importDepth - depth)
+      return types.fail("source.limit", "import depth limit exceeded",
+                        context.span);
+    // Lexical lookup may consult the scope currently binding an import.
+    // Only an actual import edge back into that scope is a cycle.
     if (state[id] == 1)
-      return types.fail("source.cycle", "cyclic module imports", span);
+      return true;
     if (state[id] == 2)
-      return depth - 1 + height[id] <= work.limits.importDepth ||
-             types.fail("source.limit", "import depth limit exceeded", span);
+      return true;
     state[id] = 1;
+    ++depth;
     height[id] = 1;
-    for (auto edge : edges[id]) {
-      if (!visit(edge, depth + 1))
+    for (auto &import : sources[id]->imports) {
+      auto selected = resolve(context, import.module, import.span, false);
+      if (!selected || output.declarations[selected->index].kind !=
+                           Declaration::Kind::Module)
+        return types.diagnostic
+                   ? false
+                   : types.fail("source.import",
+                                "import does not name a captured module: " +
+                                    import.module,
+                                import.span);
+      import.target = *selected;
+      const auto target = selected->index;
+      if (state[target] == 1)
+        return types.fail("source.cycle", "cyclic module imports", import.span);
+      if (!loadImports(*selected))
         return false;
-      height[id] = std::max(height[id], height[edge] + 1);
-    }
-    state[id] = 2;
-    order.push_back(id);
-    return true;
-  };
-  for (unsigned i = 0; i < count; ++i)
-    if (!visit(i, 1))
-      return false;
-  importOrder = order;
-  for (auto id : order) {
-    for (const auto &import : syntax[id].imports) {
-      const auto target = modules.at(import.module).index;
-      auto name = [&](StringRef spelling,
-                      std::optional<DeclarationId> declaration,
-                      std::optional<ModuleId> module) {
-        const auto key = spelling.str();
+      height[id] = std::max(height[id], height[target] + 1);
+      auto bind = [&](StringRef name, DeclarationId target) {
         if (!types.charge(1, import.span))
           return false;
-        if (declaration) {
-          if (aliases[id].count(key))
-            return types.fail("source.duplicate",
-                              "import conflicts with module alias: " + spelling,
-                              import.span);
-          auto [position, inserted] = visible[id].emplace(key, *declaration);
-          if (!inserted && position->second.index != declaration->index)
-            return types.fail("source.duplicate",
-                              "import conflicts with visible name: " + spelling,
-                              import.span);
-          if (import.isPublic)
-            exportedNames[id].emplace(key, *declaration);
-        } else {
-          if (visible[id].count(key))
-            return types.fail("source.duplicate",
-                              "module alias conflicts with visible name: " +
-                                  spelling,
-                              import.span);
-          auto [position, inserted] = aliases[id].emplace(key, *module);
-          if (!inserted && position->second.index != module->index)
-            return types.fail("source.duplicate",
-                              "conflicting module aliases: " + spelling,
-                              import.span);
-          if (import.isPublic)
-            exportedAliases[id].emplace(key, *module);
-        }
+        auto [position, inserted] = visible[id].emplace(
+            name.str(), ModuleBinding{target, import.span, import.isPublic});
+        if (!inserted && position->second.target.index != target.index)
+          return types.fail("source.duplicate",
+                            "import conflicts with visible name: " + name,
+                            import.span);
+        position->second.isPublic |= import.isPublic;
         return true;
       };
-      for (const auto &selected : import.names) {
-        auto declaration = exportedNames[target].find(selected);
-        auto alias = exportedAliases[target].find(selected);
-        if (declaration != exportedNames[target].end()) {
-          if (!name(selected, declaration->second, {}))
-            return false;
-        } else if (alias != exportedAliases[target].end()) {
-          if (!name(selected, {}, alias->second))
-            return false;
-        } else {
-          if (auto found = visible[target].find(selected);
-              found != visible[target].end())
-            return types.fail("source.private",
-                              "cannot import private declaration: " + selected,
-                              import.span,
-                              {output.declarations[found->second.index].span});
-          return types.fail("source.import",
-                            "unknown public import: " + selected, import.span);
-        }
+      for (const auto &name : import.names) {
+        auto found = visible[target].find(name);
+        if (found == visible[target].end())
+          return types.fail("source.import", "unknown import: " + name,
+                            import.span);
+        if (!bind(name, found->second.target))
+          return false;
       }
-      if (import.alias && !name(*import.alias, {}, ModuleId{target}))
+      if (import.alias && !bind(*import.alias, *selected))
         return false;
       std::set<std::string> selectedOperators(import.operators.begin(),
                                               import.operators.end());
@@ -128,7 +117,7 @@ bool Checker::imports() {
       for (auto site : exportedOperators[target]) {
         if (!types.charge(1, import.span))
           return false;
-        const auto &binding = syntax[site.first].operators[site.second];
+        const auto &binding = sources[site.first]->operators[site.second];
         const auto &symbol = binding.symbol;
         bool indexing =
             binding.notation &&
@@ -177,61 +166,75 @@ bool Checker::imports() {
       llvm::sort(*sites);
       sites->erase(std::unique(sites->begin(), sites->end()), sites->end());
     }
+    --depth;
+    state[id] = 2;
+    return true;
+  };
+  for (auto id : moduleIds)
+    if (!loadImports(id))
+      return false;
+  loadImports = {};
+  if (!moduleContracts())
+    return false;
+  checkingVisibility = true;
+  for (auto id : moduleIds) {
+    const auto &context = output.declarations[id.index];
+    for (const auto &import : sources[id.index]->imports) {
+      auto target = resolve(context, import.module, import.span);
+      if (!target)
+        return false;
+      auto exportable = [&](DeclarationId declaration) {
+        return !import.isPublic ||
+               output.declarations[declaration.index].isPublic ||
+               types.fail(
+                   "source.private",
+                   "a public import cannot publish a private declaration",
+                   import.span, {output.declarations[declaration.index].span});
+      };
+      if (import.alias && !exportable(*target))
+        return false;
+      for (const auto &name : import.names) {
+        auto selected = member(context, *target, name, import.span);
+        if (!selected || !exportable(*selected))
+          return false;
+      }
+    }
+  }
+  // Lexical notation is inherited without publishing it from child modules.
+  for (auto id : moduleIds) {
+    const auto &module = output.declarations[id.index];
+    if (!module.parent)
+      continue;
+    auto parent = module.parent->index;
+    if (!types.charge(visibleOperators[parent].size(), module.span))
+      return false;
+    visibleOperators[id.index].insert(visibleOperators[id.index].end(),
+                                      visibleOperators[parent].begin(),
+                                      visibleOperators[parent].end());
   }
   if (auto prelude = modules.find("zkc::prelude"); prelude != modules.end()) {
     const auto id = prelude->second.index;
-    if (!syntax[id].imports.empty())
+    if (!sources[id]->imports.empty())
       return types.fail("source.import",
                         "installed prelude cannot import captured modules",
-                        syntax[id].imports.front().span);
-    for (unsigned i = 0; i < count; ++i) {
+                        sources[id]->imports.front().span);
+    for (auto module : moduleIds) {
+      auto i = module.index;
       if (i == id)
         continue;
-      if (!types.charge(exportedOperators[id].size(), Span{ModuleId{i}, 0, 0}))
+      if (!types.charge(exportedOperators[id].size(),
+                        output.declarations[i].span))
         return false;
       visibleOperators[i].insert(visibleOperators[i].end(),
                                  exportedOperators[id].begin(),
                                  exportedOperators[id].end());
-      llvm::sort(visibleOperators[i]);
-      visibleOperators[i].erase(
-          std::unique(visibleOperators[i].begin(), visibleOperators[i].end()),
-          visibleOperators[i].end());
     }
   }
+  for (auto module : moduleIds) {
+    auto &sites = visibleOperators[module.index];
+    llvm::sort(sites);
+    sites.erase(std::unique(sites.begin(), sites.end()), sites.end());
+  }
   return true;
-}
-
-std::optional<DeclarationId> Checker::moduleMember(ModuleId module,
-                                                   StringRef path, Span span,
-                                                   unsigned depth) {
-  if (!types.charge(1, span))
-    return {};
-  if (depth > work.limits.importDepth) {
-    types.fail("source.limit", "qualified module alias depth exceeded", span);
-    return {};
-  }
-  auto [head, tail] = path.split("::");
-  if (auto alias = exportedAliases[module.index].find(head.str());
-      alias != exportedAliases[module.index].end())
-    return moduleMember(alias->second, tail, span, depth + 1);
-  auto found = exportedNames[module.index].find(head.str());
-  if (found == exportedNames[module.index].end())
-    return {};
-  auto result = found->second;
-  while (!tail.empty()) {
-    auto [name, rest] = tail.split("::");
-    const auto &members = output.declarations[result.index].members;
-    if (!types.charge(members.size() + 1, span))
-      return {};
-    auto member = llvm::find_if(members, [&, name = name](DeclarationId id) {
-      return output.declarations[id.index].name == name &&
-             !output.declarations[id.index].anonymous;
-    });
-    if (member == members.end())
-      return {};
-    result = *member;
-    tail = rest;
-  }
-  return result;
 }
 } // namespace zkc::language::detail

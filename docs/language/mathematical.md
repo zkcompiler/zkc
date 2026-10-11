@@ -159,9 +159,34 @@ interface maps back to named fields.
 
 Generic libraries declare the permissions they use. A mathematical parameter
 needs `Copy + Drop`; a protocol message also needs `Share + Wire`. A plain `Type`
-parameter promises none. These permissions are independent. Components select
+parameter promises none. These permissions are independent. Modules select
 interface implementations statically and can seal an associated representation.
 Library clients need neither its representation nor a runtime dispatch table.
+
+A file and a nested `module` use the same scope and visibility rules:
+
+```zkc
+interface Increment<F: Field> { math fn apply(x: F) -> F; }
+module AddOne<F: Field>: Increment<F> {
+  math fn offset() -> F { return 1; }
+  math fn apply(x: F) -> F { return x + offset(); }
+  pub module Helpers {
+    pub math fn twice(x: F) -> F { return apply(apply(x)); }
+  }
+}
+```
+
+`apply` implements the interface and is public through `AddOne`. `offset` is
+private but available to descendants. `Helpers` inherits `F`; a concrete caller
+can write `AddOne::Helpers::twice<Fr>(value)`. Generic clients bounded by
+`Increment<Fr>` see only `apply`.
+
+To move a child to a file, replace its body with `pub module Helpers;`, capture
+`parent::Helpers` in `zkc.toml`, and start that file with
+`module parent::Helpers;`. Its scope and authority remain the same. No directory
+is searched implicitly. `type Alias = T;` is transparent; `type State: Type = T;`
+seals a representation that only the owning module and descendants can construct
+or unpack. Entry declarations belong in modules without open static parameters.
 
 Blocks use lexical names. `if` and `match` produce their final expression;
 `let mut` and whole-name assignment describe changing state. The compiler derives
@@ -209,7 +234,7 @@ come first; every runtime parameter must still be supplied. For example,
 `affine(r = challenge, high = next, low = current)` makes the interpolation roles
 visible. Expressions evaluate in written order even when the parameters are
 reordered. Unspecified static arguments must have one inferred solution; the
-compiler does not choose a field or component by default.
+compiler does not choose a field or module by default.
 
 Use `!`, `&&` and `||` for Boolean expressions:
 
@@ -257,11 +282,11 @@ fn samples<F: Field>(x: F) {
 array elements does not affect type inference. A statement still needs enough
 information on its own: write `let zero: F = 0;` when no expression supplies the
 field type. A later use of `zero` does not determine that earlier declaration.
-Component choices, protocol role remapping and ambiguous owners stay explicit.
+Module choices, protocol role remapping and ambiguous owners stay explicit.
 
 The maintained fixtures cover [arrays](../../compiler/test/fixtures/language/array.zkc),
 [variants](../../compiler/test/fixtures/language/variant.zkc),
-[static components](../../compiler/test/fixtures/language/component.zkc),
+[static modules](../../compiler/test/fixtures/language/module.zkc),
 [associated domains](../../compiler/test/fixtures/language/associated_domain.zkc),
 and [affine control and stop cleanup](../../compiler/test/fixtures/language/resource_control.zkc).
 Generic associated types can declare explicit bounds such as

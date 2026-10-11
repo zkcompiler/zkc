@@ -26,7 +26,7 @@ int main() {
                 "expected a dimension conflict");
         const auto &diagnostic = analysis.diagnostics().front();
         require(diagnostic.code == "source.type" && diagnostic.primary &&
-                    diagnostic.primary->module.index == 1,
+                    diagnostic.primary->source.index == 1,
                 "deferred conflict does not locate the call");
         auto text = formatDiagnostics(analysis.diagnostics(), &captured);
         require(text.find("note: related source at library.zkc:2:") !=
@@ -113,8 +113,8 @@ int main() {
         auto bytes = take(inspectDeclarations(project));
         auto json = take(json::parse(bytes));
         auto *items = json.getAsArray();
-        require(items && items->size() == 3, bytes);
-        auto *first = (*items)[0].getAsObject();
+        require(items && items->size() == 4, bytes);
+        auto *first = (*items)[1].getAsObject();
         require(first->getString("name") == "m::Run",
                 "declarations are not sorted");
         require(bytes.find("private_helper") == std::string::npos &&
@@ -129,18 +129,18 @@ int main() {
         zkc::test::refuses(inspectDeclarations(project, limits),
                            "source.limit");
       });
-  cases.run("component inspection keeps abstract and inherited allowances", [] {
+  cases.run("module inspection keeps abstract and inherited allowances", [] {
     auto captured = take(capture({{"m", R"(module m;
       pub interface Boxed<F:Field>{
         type State; fn make(x:F)->State effects(stop, opaque); fn open(x:State)->F effects(stop, opaque);
       }
-      pub component Box<F:Field>:Boxed<F>{
-        type State=F;
+      pub module Box<F:Field>:Boxed<F>{
+        type State: Type =F;
         fn make(x:F)->State{return State(x);}
         fn open(x:State)->F{return unpack(x);}
       }
-      component Hidden<F:Field>:Boxed<F>{
-        type State=F;
+      module Hidden<F:Field>:Boxed<F>{
+        type State: Type =F;
         fn make(x:F)->State{return State(x);}
         fn open(x:State)->F{return unpack(x);}
       }
@@ -150,21 +150,23 @@ int main() {
     auto bytes = take(inspectDeclarations(project));
     auto value = take(json::parse(bytes));
     auto *items = value.getAsArray();
-    require(items && items->size() == 4, bytes);
+    require(items && items->size() == 7, bytes);
     for (auto &item : *items) {
       auto *decl = item.getAsObject();
+      if (decl->getString("kind") != "local")
+        continue;
       auto name = *decl->getString("name");
       bool abstract = name.starts_with("m::Boxed::");
       require(decl->getBoolean("abstract") == abstract &&
                   decl->getObject("owner")->getString("kind") ==
-                      (abstract ? "interface" : "component"),
+                      (abstract ? "interface" : "module"),
               "member owner or abstract status missing");
       auto *effects = decl->getObject("effects");
       require(effects->getBoolean("stop") == abstract &&
                   effects->getBoolean("opaque") == abstract,
               "abstract allowance and actual body effects differ");
       require(decl->getArray("parameters")->size() == 1,
-              "enclosing component parameters are missing");
+              "enclosing module parameters are missing");
       require(decl->getArray("parameters")
                       ->front()
                       .getAsObject()
@@ -185,7 +187,7 @@ int main() {
     }
     require(bytes.find("Hidden") == std::string::npos &&
                 bytes.find("self:") == std::string::npos,
-            "private component members or internal self names leaked");
+            "private module members or internal self names leaked");
   });
   cases.run(
       "resolved natural expressions retain readable mathematical structure",
@@ -219,7 +221,7 @@ int main() {
         auto project = take(analyze(captured).checkedProject());
         auto value = take(json::parse(take(inspectDeclarations(project))));
         auto *parameters =
-            value.getAsArray()->front().getAsObject()->getArray("parameters");
+            value.getAsArray()->back().getAsObject()->getArray("parameters");
         require(parameters->size() == 2 &&
                     (*parameters)[0].getAsObject()->getBoolean("inherited") ==
                         true &&

@@ -19,7 +19,7 @@
 #include <vector>
 
 namespace zkc::language {
-struct ModuleId {
+struct SourceId {
   uint32_t index;
 };
 struct DeclarationId {
@@ -32,7 +32,7 @@ struct ServiceId {
   uint32_t index;
 };
 struct Span {
-  ModuleId module;
+  SourceId source;
   uint32_t begin, end;
 };
 struct Diagnostic {
@@ -129,11 +129,11 @@ struct MathValue {
         literal(std::move(literal)), staticArguments(std::move(statics)),
         parameters(std::move(parameters)) {}
 };
-/// A callable resolved in its definition environment. Component members retain
-/// the explicit component term until ordinary entry specialization.
+/// A callable resolved in its definition environment. Module members retain
+/// the explicit module term until ordinary entry specialization.
 struct CallableReference {
   DeclarationId declaration;
-  std::optional<Type> component;
+  std::optional<Type> module;
 };
 /// The tracked Local effects, also used as fixed callback acceptance ceilings.
 struct Effects {
@@ -267,7 +267,7 @@ struct HelperCall {
   DeclarationId callee;
   std::vector<ValueId> operands;
   std::vector<Type> arguments;
-  std::optional<Type> component;
+  std::optional<Type> module;
   std::optional<unsigned> owner;
   std::vector<unsigned> scopedArguments = {};
   std::vector<unsigned> domainArguments = {};
@@ -458,7 +458,7 @@ struct Body {
   std::vector<std::vector<unsigned>> formationRequirements;
 };
 struct Parameter {
-  enum class Sort { Type, Natural, Component, Domain, Asset } sort;
+  enum class Sort { Type, Natural, Module, Domain, Asset } sort;
   std::string name, atom;
   /// Catalog sort of a Domain parameter or asset sort of an Asset parameter.
   std::string domainSort;
@@ -636,12 +636,13 @@ struct Declaration {
     Record,
     Variant,
     Interface,
-    Component,
+    Module,
     Associated,
     Relation
   } kind;
   DeclarationId id;
-  ModuleId module;
+  /// Cached owning module, derived from the declaration tree; self for modules.
+  DeclarationId module;
   std::string name, qualifiedName, symbol;
   bool isPublic = false;
   Span span;
@@ -758,12 +759,12 @@ llvm::Error checkScopedSpecialization(const ClosedEntry &, const Limits & = {});
 /// Only successful analysis can construct this immutable owning handle.
 class CheckedProject {
 public:
-  /// Includes installation sources; module IDs index this array.
+  /// Includes installation sources; source IDs index this array.
   llvm::ArrayRef<SourceBuffer> sources() const;
   const CapturedProject &capture() const;
   llvm::ArrayRef<Asset> assets() const;
   llvm::ArrayRef<Declaration> declarations() const;
-  llvm::ArrayRef<Token> tokens(ModuleId) const;
+  llvm::ArrayRef<Token> tokens(SourceId) const;
   llvm::StringRef installationIdentity() const;
   uint64_t checkedWork() const;
   uint64_t checkedDeclarations() const;
@@ -788,10 +789,10 @@ private:
 /// Recovery tokens and diagnostics cannot be promoted to checked state.
 class Analysis {
 public:
-  /// Includes installation sources; module IDs index this array.
+  /// Includes installation sources; source IDs index this array.
   llvm::ArrayRef<SourceBuffer> sources() const;
   llvm::ArrayRef<Diagnostic> diagnostics() const;
-  llvm::ArrayRef<Token> tokens(ModuleId) const;
+  llvm::ArrayRef<Token> tokens(SourceId) const;
   llvm::Expected<CheckedProject> checkedProject() const;
 
 private:

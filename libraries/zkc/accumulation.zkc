@@ -6,17 +6,17 @@ pub interface Combiner<T: Type + Copy + Drop> {
   math fn combine(state: T, value: T) -> T;
 }
 
-pub component FieldSum<F: Field>: Combiner<F> {
+pub module FieldSum<F: Field>: Combiner<F> {
   math fn identity() -> F { return 0; }
   math fn combine(state: F, value: F) -> F { return state + value; }
 }
 
-pub component FieldProduct<F: Field>: Combiner<F> {
+pub module FieldProduct<F: Field>: Combiner<F> {
   math fn identity() -> F { return 1; }
   math fn combine(state: F, value: F) -> F { return state * value; }
 }
 
-pub component GroupSum<G: Group>: Combiner<G> where zkc::curve::ScalarAction(G) {
+pub module GroupSum<G: Group>: Combiner<G> where zkc::curve::ScalarAction(G) {
   math fn identity() -> G { return zkc::curve::identity<G>(); }
   math fn combine(state: G, value: G) -> G { return state + value; }
 }

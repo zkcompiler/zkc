@@ -83,7 +83,7 @@ code. `dot(left, right)` must use each hole once in that order. A wrapper functi
 can rearrange already evaluated values. Every notation operand evaluates once
 in written order, preserving the target's effects, stops and resource rules.
 Targets need the matching number of data parameters and a written result type.
-Static arguments and explicit component members work as for named calls.
+Static arguments and explicit module members work as for named calls.
 
 Module bindings apply throughout the module. Inside a body, place bindings
 before statements; the complete declaration prefix is visible, including later

@@ -35,8 +35,8 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
     case Parameter::Sort::Natural:
       sort = "nat";
       break;
-    case Parameter::Sort::Component:
-      sort = "component";
+    case Parameter::Sort::Module:
+      sort = "module";
       break;
     case Parameter::Sort::Domain:
     case Parameter::Sort::Asset:
@@ -183,13 +183,14 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
       {"requirements", std::move(requirements)},
       {"effects", renderEffects(effects)},
       {"source",
-       json::Object{{"module", project.sources()[decl.module.index].module},
-                    {"origin", project.sources()[decl.module.index].origin ==
-                                       SourceOrigin::Installation
-                                   ? "installation"
-                                   : "captured"},
-                    {"begin", decl.span.begin},
-                    {"end", decl.span.end}}}};
+       json::Object{
+           {"module", project.sources()[decl.span.source.index].module},
+           {"origin", project.sources()[decl.span.source.index].origin ==
+                              SourceOrigin::Installation
+                          ? "installation"
+                          : "captured"},
+           {"begin", decl.span.begin},
+           {"end", decl.span.end}}}};
   if (decl.construction) {
     for (StringRef key : {"abstract", "definition", "roles", "input_order",
                           "inputs", "outputs", "services", "effects"})
@@ -286,11 +287,29 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
     auto allowance = decl.effectAllowance.value_or(EffectSummary{});
     result["effect_allowance"] = renderEffects(allowance);
   }
+  if (decl.kind == Declaration::Kind::Module ||
+      decl.kind == Declaration::Kind::Interface) {
+    for (StringRef key : {"abstract", "definition", "roles", "input_order",
+                          "inputs", "scoped_inputs", "outputs", "services",
+                          "effects", "effect_allowance"})
+      result.erase(key);
+    result["kind"] =
+        decl.kind == Declaration::Kind::Module ? "module" : "interface";
+    if (decl.implementation)
+      result["implements"] = type(*decl.implementation);
+    json::Array members;
+    for (auto id : decl.members) {
+      const auto &member = project.declarations()[id.index];
+      if (member.isPublic && !member.anonymous)
+        members.push_back(member.qualifiedName);
+    }
+    result["members"] = std::move(members);
+  }
   if (owner) {
     json::Object parent{{"name", owner->qualifiedName},
                         {"kind", owner->kind == Declaration::Kind::Interface
                                      ? "interface"
-                                     : "component"}};
+                                     : "module"}};
     if (owner->implementation)
       parent["implements"] = type(*owner->implementation);
     result["owner"] = std::move(parent);
@@ -327,23 +346,28 @@ Expected<std::string> inspectDeclarations(const CheckedProject &project,
   for (const auto &decl : project.declarations()) {
     // The project inventory describes captured modules. Installed definitions
     // remain available through the checked source/declaration API.
-    if (project.sources()[decl.module.index].origin ==
+    if (project.sources()[decl.span.source.index].origin ==
         SourceOrigin::Installation)
       continue;
     if (decl.kind != Declaration::Kind::Math &&
         decl.kind != Declaration::Kind::Local &&
         decl.kind != Declaration::Kind::DomainFunction &&
         decl.kind != Declaration::Kind::Protocol &&
-        decl.kind != Declaration::Kind::Construction)
+        decl.kind != Declaration::Kind::Construction &&
+        decl.kind != Declaration::Kind::Module &&
+        decl.kind != Declaration::Kind::Interface)
       continue;
     if (decl.anonymous && decl.parent &&
         project.declarations()[decl.parent->index].kind ==
             Declaration::Kind::Construction)
       continue;
     const Declaration *owner = &decl;
-    while (owner->parent)
+    bool exposed = owner->isPublic;
+    while (owner->parent) {
       owner = &project.declarations()[owner->parent->index];
-    if (owner->isPublic)
+      exposed &= owner->isPublic;
+    }
+    if (exposed)
       declarations.push_back(&decl);
   }
   llvm::sort(declarations, [](auto *a, auto *b) {

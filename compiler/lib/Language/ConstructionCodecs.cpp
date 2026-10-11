@@ -2,6 +2,30 @@
 #include "zkc/Language/Builtins.h"
 using namespace llvm;
 namespace zkc::language::detail {
+std::optional<DeclarationId>
+Checker::constructionMember(const Type &provider, StringRef name, Span span) {
+  const Declaration *contract = nullptr;
+  if (provider.symbolic) {
+    auto *parameter = types.parameter(provider.domain);
+    if (parameter && parameter->interface)
+      contract = &output.declarations[parameter->interface->index];
+  } else if (auto *module = types.typeDeclaration(provider);
+             module && module->implementation)
+    contract = types.typeDeclaration(*module->implementation);
+  if (!contract || contract->kind != Declaration::Kind::Interface) {
+    types.fail("source.construction", "provider must implement an interface",
+               span);
+    return {};
+  }
+  if (!types.charge(contract->members.size(), span))
+    return {};
+  for (auto id : contract->members)
+    if (output.declarations[id.index].name == name)
+      return id;
+  types.fail("source.construction", "provider interface requires " + name,
+             span);
+  return {};
+}
 bool Checker::constructionCodec(Declaration &decl,
                                 const SyntaxConstruction &syntax,
                                 ConstructionDefinition &result,
@@ -15,9 +39,11 @@ bool Checker::constructionCodec(Declaration &decl,
   auto provider = type(decl, *syntax.codec);
   if (!provider)
     return false;
-  if (provider->kind != Type::Kind::Component)
-    return types.fail("source.construction",
-                      "record format requires a component", syntax.codec->span);
+  if (provider->kind != Type::Kind::Module)
+    return types.fail("source.construction", "record format requires a module",
+                      syntax.codec->span);
+  if (!constructionMember(*provider, "Record", syntax.codec->span))
+    return false;
   auto record = types.associated(*provider, "Record", syntax.codec->span);
   if (!record)
     return false;
@@ -59,24 +85,15 @@ bool Checker::constructionCodec(Declaration &decl,
     Type single = layout.arguments.front();
     layout = std::move(single);
   }
-  const Declaration *owner =
-      provider->symbolic
-          ? &output.declarations[types.parameter(provider->domain)
-                                     ->interface->index]
-          : types.typeDeclaration(*provider);
   auto method = [&](StringRef name, ArrayRef<Type> inputs,
                     ArrayRef<Type> outputs, ConstructionMethod &selected) {
-    if (!types.charge(owner->members.size(), decl.span))
+    auto found = constructionMember(*provider, name, decl.span);
+    if (!found)
       return false;
-    auto found = find_if(owner->members, [&](DeclarationId member) {
-      return output.declarations[member.index].name == name;
-    });
-    if (found == owner->members.end())
-      return types.fail("source.construction", "codec requires " + name.str(),
-                        decl.span);
     const auto &function = output.declarations[found->index];
     if (function.kind != Declaration::Kind::Local ||
-        function.parameters.size() != owner->parameters.size() ||
+        function.parameters.size() !=
+            output.declarations[function.parent->index].parameters.size() ||
         function.inputs.size() != inputs.size() ||
         function.outputs.size() != outputs.size())
       return types.fail("source.construction",

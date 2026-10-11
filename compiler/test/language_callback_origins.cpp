@@ -231,7 +231,7 @@ interface Grid{
  fn run(rows:domain<Fr>,columns:domain<Fr>,term:fn(r:Fr,c:Fr)->Fr effects(stop)
  where item_from(r,rows),item_from(c,columns))->Fr effects(stop);
 }
-component Impl:Grid{
+module Impl:Grid{
  fn run(a:domain<Fr>,b:domain<Fr>,body:fn(x:Fr,y:Fr)->Fr effects(stop)
  where item_from(y,b),item_from(x,a))->Fr effects(stop){return grid(a,b,body);}
 }
@@ -242,13 +242,12 @@ protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){
   });
   for (const auto &clause :
        {"", " where item_from(c,rows)", " where item_from(r,columns)"})
-    cases.run("component rejects changed callback promise" +
-                  std::string(clause),
+    cases.run("module rejects changed callback promise" + std::string(clause),
               [&] {
                 refuses(check(std::string(R"(
 interface Contract{fn run(rows:domain<Fr>,columns:domain<Fr>,body:fn(r:Fr,c:Fr)->Fr effects(stop)
  where item_from(r,rows))->Fr effects(stop);}
-component Impl:Contract{fn run(rows:domain<Fr>,columns:domain<Fr>,body:fn(r:Fr,c:Fr)->Fr effects(stop))") +
+module Impl:Contract{fn run(rows:domain<Fr>,columns:domain<Fr>,body:fn(r:Fr,c:Fr)->Fr effects(stop))") +
                               clause + ")->Fr effects(stop){return 0;}}"),
                         "source.conformance");
               });
@@ -259,7 +258,7 @@ interface Contract<T:Type+Copy+Drop>{
  fn run(rows:domain<Item>,body:fn(item:Item)->T effects(stop)
    where item_from(item,rows))->T effects(stop);
 }
-component Impl<F:Field>:Contract<F>{
+module Impl<F:Field>:Contract<F>{
  type Item:Copy+Drop=F;
  fn run(rows:domain<Item>,body:fn(item:Item)->F effects(stop)
    where item_from(item,rows))->F effects(stop){
@@ -285,8 +284,7 @@ component Impl<F:Field>:Contract<F>{
         std::pair{"argument order",
                   "body:fn(Fr)->Fr effects(stop),rows:domain<Fr>"}})
     cases.run(
-        "independent component callback contract: " +
-            std::string(contract.first),
+        "independent module callback contract: " + std::string(contract.first),
         [&] {
           const std::string offered =
               "rows:domain<Fr>,body:fn(Fr)->Fr effects(stop)";
@@ -296,13 +294,13 @@ component Impl<F:Field>:Contract<F>{
                                     "interface Offered{fn run(" +
                                     offered +
                                     ")->Fr effects();}"
-                                    "component Impl:Offered{fn run(" +
+                                    "module Impl:Offered{fn run(" +
                                     offered +
                                     ")->Fr effects(){return 0;}}"
-                                    "component Anchor:Required{fn run(" +
+                                    "module Anchor:Required{fn run(" +
                                     required + ")->Fr effects(){return 0;}}"));
           // Every declaration still agrees with its own retained source. Only
-          // the relation between the component and its selected interface is
+          // the relation between the module and its selected interface is
           // changed.
           auto &implementation =
               const_cast<Declaration &>(named(project, "Impl"));
@@ -393,16 +391,16 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs
                     report.find("\"input_labels\"") != std::string::npos,
                 "inspection schema did not migrate");
         auto *declarations = json.getAsArray();
-        require(declarations && declarations->size() == 2,
+        require(declarations && declarations->size() == 3,
                 "public inventory differs");
-        const auto *first = (*declarations)[0].getAsObject();
+        const auto *first = (*declarations)[1].getAsObject();
         const auto *firstCallback =
             (*first->getArray("scoped_inputs"))[0].getAsObject();
         const auto *firstLabels = firstCallback->getArray("input_labels");
         require(firstLabels && firstLabels->size() == 2 &&
                     (*firstLabels)[1].getAsNull(),
                 "unnamed callback input is not null");
-        const auto *grid = (*declarations)[1].getAsObject();
+        const auto *grid = (*declarations)[2].getAsObject();
         require(grid, "missing grid inspection");
         const auto *parameters = grid->getArray("scoped_inputs");
         require(parameters && parameters->size() == 1,

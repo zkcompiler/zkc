@@ -180,7 +180,7 @@ int main() {
       fn result<T:Type>(x:T)->T{return x;}
       fn contextual()->index{return result<_>(1);}
       interface Ops{fn get()->bool effects(stop, opaque);}
-      component Impl:Ops{fn get(){return true;}}
+      module Impl:Ops{fn get(){return true;}}
       fn invoke<T:Type+Drop,C:Ops>(x:T){return C::get();}
       fn caller(x:bool){return invoke<_,Impl>(x);}
     )"));
@@ -286,28 +286,28 @@ int main() {
     )"),
             "source.permission");
   });
-  cases.run("component results and requirements obey interface promises", [] {
+  cases.run("module results and requirements obey interface promises", [] {
     take(check(R"(
       interface Roots<F:Field>{
         fn root(n:index)->F effects(stop, opaque) where zkc::algebra::TwoAdicField(F);
       }
-      component Impl<F:Field>:Roots<F>{
+      module Impl<F:Field>:Roots<F>{
         fn root(n:index){return kernel<F>("poly.domain_root",n);}
       }
     )"));
     refuses(check(R"(
       interface Roots<F:Field>{fn root(n:index)->F effects(stop, opaque);}
-      component Impl<F:Field>:Roots<F>{
+      module Impl<F:Field>:Roots<F>{
         fn root(n:index){return kernel<F>("poly.domain_root",n);}
       }
     )"),
             "source.conformance");
     refuses(check(R"(
       interface A{fn f(x:bool)->bool effects();}
-      component B:A{fn f(x:bool){require x;return x;}}
+      module B:A{fn f(x:bool){require x;return x;}}
     )"),
             "source.effect");
-    refuses(check("interface A{fn f()->bool effects(stop, opaque);}component "
+    refuses(check("interface A{fn f()->bool effects(stop, opaque);}module "
                   "B:A{fn f(){return ();}}"),
             "source.conformance");
   });
@@ -376,11 +376,11 @@ int main() {
         take(check("fn f(b:bool)->bool{let u={if b{stop "
                    "\"reject\";}true};return u;}"));
       });
-  cases.run("component and interface arities remain independent", [] {
+  cases.run("module and interface arities remain independent", [] {
     compile(R"(
       domain F=field("bls12-381.fr");domain G=group("bls12-381.g1");
       interface Increment<T:Field>{math fn add(x:T)->T;}
-      component Plus<T:Field,H:Group>:Increment<T>{math fn add(x:T)->T{return x+1;}}
+      module Plus<T:Field,H:Group>:Increment<T>{math fn add(x:T)->T{return x+1;}}
       math fn indirect<T:Field,C:Increment<T>>(x:T)->T{return C::add(x);}
       protocol Run roles(P)(x:F@P)->(r:F@P){
         return Plus::add<F,G>(x)+indirect<F,Plus<F,G>>(x);

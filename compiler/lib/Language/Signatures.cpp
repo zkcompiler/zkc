@@ -151,11 +151,11 @@ bool Checker::chargeStaticSignature(const Declaration &decl) {
 }
 bool Checker::signature(DeclarationId id, unsigned depth) {
   auto &decl = output.declarations[id.index];
+  if (signatureState[id.index] == 2)
+    return true;
   if (depth > work.limits.typeDepth || signatureDepth >= work.limits.typeDepth)
     return types.fail("source.limit", "type declaration depth limit",
                       decl.span);
-  if (signatureState[id.index] == 2)
-    return true;
   if (signatureState[id.index] == 1)
     return types.fail("source.cycle", "recursive type or static signature",
                       decl.span);
@@ -186,6 +186,9 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     decl.capabilityBounds =
         output.declarations[decl.parent->index].capabilityBounds;
   }
+  if (decl.kind == Declaration::Kind::Entry && !decl.parameters.empty())
+    return types.fail("source.entry",
+                      "Entries must be declared in a closed module", decl.span);
   for (auto &p : decl.parameters) {
     if (p.name == decl.name)
       return types.fail("source.shadow",
@@ -221,18 +224,16 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       auto &interface = output.declarations[target->index];
       if (interface.kind != Declaration::Kind::Interface)
         return types.fail("source.generic",
-                          "component parameter requires an interface",
-                          src.span);
+                          "module parameter requires an interface", src.span);
       auto args = arguments(decl, interface, src.constraint.arguments, src.span,
                             src.constraint.labels);
       if (!args)
         return false;
-      p.sort = Parameter::Sort::Component;
+      p.sort = Parameter::Sort::Module;
       p.interface = *target;
       p.arguments = std::move(*args);
     }
-    if (p.sort != Parameter::Sort::Component &&
-        !src.constraint.arguments.empty())
+    if (p.sort != Parameter::Sort::Module && !src.constraint.arguments.empty())
       return types.fail("source.generic", "static sort does not take arguments",
                         src.span);
     if (isStaticOnly(parameterType(p)) && !(p.permissions == Permissions{}))
@@ -274,11 +275,11 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     auto def = type(decl, *source.definition, depth + 1);
     if (!def)
       return false;
-    if (decl.kind == Declaration::Kind::Component) {
+    if (decl.kind == Declaration::Kind::Module) {
       auto *target = types.typeDeclaration(*def);
       if (!target || target->kind != Declaration::Kind::Interface)
         return types.fail("source.conformance",
-                          "component must implement an interface", decl.span);
+                          "module must implement an interface", decl.span);
       decl.implementation = *def;
     } else {
       bool domain = decl.kind == Declaration::Kind::Associated &&

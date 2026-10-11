@@ -11,14 +11,35 @@ Names retain exact NFC UTF-8 bytes, with no silent normalization. The lexical
 contract also defines contextual keywords, ASCII strings, UTF-8 comments and
 mathematical tokens. Tokens retain trivia and original UTF-8 byte spans.
 
-Module declarations are private unless prefixed with `pub`. Interface/component
-members are exposed through their owner; associated representations retain their
-constructor privacy. A declaration can be named
-through `use module::{Name, Other};` or by its qualified path when its module
-is captured. Imports never discover files. Imports, declarations, static parameters
-and local bindings cannot shadow visible declarations or module aliases. Lexical binding rules are
-defined in [protocol bodies](protocols.md#bindings-and-local-control). Imports, types and call graphs
-must be acyclic. Every declaration is checked, including unused generic bodies.
+A file body and an inline `module Name { ... }` are the same static module
+construct. Modules may contain declarations, imports, notation and nested modules.
+A header may have static parameters, an interface and requirements:
+`module Name<N: nat>: Contract<N> where 1 <= N { ... }`. The file form uses a
+semicolon instead of braces and consumes the remainder of the captured file.
+
+`module Child;` links the separately captured `parent::Child` file to its parent;
+`pub module Child;` also exposes that child. The child file declares its complete
+logical path and its own parameters/interface. It inherits its parent's names,
+static parameters and requirements, exactly as an inline body does. The manifest
+must capture both files. A captured descendant of another captured module must
+have this explicit link; missing children, duplicate inline/file bodies and
+unlinked descendants refuse. No files are discovered and no bodies are merged.
+A path prefix without its own captured declaration is only a namespace prefix.
+
+File roots are public. Other declarations are private unless prefixed with `pub`.
+Private names and representation authority are available in their owning module
+and descendants; parents and siblings gain no access from sharing a file. A
+public qualified path requires each traversed module/member to be accessible.
+Interface members and the corresponding authored implementation members are
+public through their owner. Additional implementation helpers remain private
+unless marked `pub`.
+
+Imports and direct declarations share one binding table per module. Duplicate
+names refuse; child declarations may use names present in ancestor scopes. Static
+parameters and runtime bindings cannot shadow visible declarations or module
+aliases. [Body binding rules](protocols.md#bindings-and-local-control) define local
+scope. Import, type and call dependencies must be acyclic. Every declaration is
+checked, including unused generic bodies. Modules have no runtime value or object.
 
 Capture accepts named assets as explicit bytes alongside modules. Formats are
 `r1cs-json`, `r1cs-binary`, `air-json`, `ring-json` and `relation-bundle-json`;
@@ -70,8 +91,8 @@ publication, including file aliases. See [Entry selection](entries.md#selection)
 for canonical names and check scopes, and the [project guide](../../language/README.md#project-inputs)
 for default output paths.
 
-Qualified references first resolve their root in the enclosing component and
-then the module's visible declarations, including imports. A resolved lexical
+Qualified references first resolve their root in the nearest lexical scope,
+then each enclosing module, including imports. A resolved lexical
 root owns the rest of the path: a missing or private member does not fall back
 to an unrelated captured module. If no lexical root exists, a qualified module
 path is considered. A leading `::` explicitly selects an absolute module path,
@@ -91,16 +112,19 @@ public delimiter shape; `reduction ∑` selects a public reduction binding.
 `indexing []` selects all exported indexing arities.
 A qualified reference alone activates no notation.
 `pub use` reexports the selected names, aliases and bindings with their original identities; ordinary
-imports remain private. Duplicate imports of the same identity are harmless.
+imports remain private. A reexport requires the selected declaration itself to be
+public. It may expose a public item through an accessible private ancestor without
+changing the item's identity or making that ancestor public. Duplicate imports of the same identity are harmless.
 Conflicting names/aliases, missing exports and import cycles refuse. Captured
 module ordering and import ordering do not choose overloads. Exported bindings
 carry their resolved descriptors, including those introduced privately; their
 targets must still be public. [Notation scope](notation.md#imports-and-lexical-scope)
 defines descriptor conflicts, whole-module visibility and local replacement.
 
-The reserved `zkc::prelude` module belongs to the compiler installation. Its exact
+The `zkc` root is reserved. The `zkc::prelude` module belongs to the compiler installation. Its exact
 source is embedded and included in installation identity. Captures cannot supply
-that module or claim an installation origin. Its public scalar operator bindings
+either name or claim an installation origin. Installed sources cannot be linked
+as external children. Its public scalar operator bindings
 are visible by default; its function names require qualification or explicit
 import. The prelude itself has no imports or inherited operator environment.
 There is no runtime source-file lookup. Capture identity and captured file/byte
@@ -112,7 +136,8 @@ captured inputs.
 ## Definition checking and Entry closure
 
 Analysis first collects fixed declaration headers and body token ranges, resolves
-the existing import graph, then parses bodies under immutable notation environments.
+module/import bindings, authorizes visibility and orders notation dependencies,
+then parses bodies under immutable notation environments.
 It checks unused bodies too; [staging](notation.md#staging-and-retained-evidence)
 defines declaration-prefix collection and work accounting.
 
@@ -127,9 +152,12 @@ closure roots, even when execution never calls them. An
 unselected Entry's target-admission failure does not invalidate another Entry;
 source errors in any definition still reject analysis.
 
+Entries must belong to a closed module scope; they cannot retain inherited static
+parameters. A client module selects a generic protocol with concrete arguments.
+
 An instance key contains the qualified declaration name, canonical static
 arguments and selected scoped helper identities, with each component length
-framed. Scoped helper identities retain their lexical body and component
+framed. Scoped helper identities retain their lexical body and module
 substitution. Runtime capture values and caller participants are operands, not
 instance-key components. A declaration fixes its body mode.
 Declaration symbols use the [UTF-8 segment encoding](translation.md#source-and-native-names)
@@ -144,8 +172,9 @@ the exact generated symbol and retained closure identify one specialization.
 Adding an unreachable definition changes capture identity but does not rename
 reachable instances. Template bodies are shared immutably. Specialization has its own work and instance budgets; retained templates do not consume the emitted-declaration allowance. Only reachable body copies are specialized before original emission.
 
-`zkc check --declarations` adds a diagnostic array of completed public callable
-contracts from captured modules, sorted by qualified name, under `declarations`.
+`zkc check --declarations` adds a diagnostic array of public modules, interfaces,
+completed callable contracts and constructions from captured modules, sorted by qualified name, under `declarations`.
+Module/interface records report public member names and any implemented contract.
 Installation declarations remain accessible through the checked SDK graph. Callable members
 are visible through their public owner. Members identify that owner and mark
 inherited static parameters; `abstract` distinguishes interface declarations
@@ -182,7 +211,7 @@ enum Choice<T: Type> { Some(T), None() }
 ```
 
 Runtime types comprise `bool`, `index`, unit `()`, tuples, fixed arrays, installed
-fields/groups, native data containers, nominal records/variants and associated component types. `(T,)`
+fields/groups, native data containers, nominal records/variants and associated module types. `(T,)`
 is a singleton tuple; `(T)` is grouping. A record's identity includes its declaration
 and every static argument, including phantom arguments. Variant identity includes
 its declaration and static arguments, not only its payload layout. Aliases expand
@@ -243,7 +272,7 @@ Catalog associations project domains, such as `G::Scalar`, `C::ValueField`,
 `C::PointField`, `C::EvaluationField`, `T::ChallengeField`, and
 `F::PairingG1::Scalar`. Generic checking uses the catalog's owner/result sorts;
 selection requires each association to exist for the installed identity. Closed
-associated fields/groups are identical to their directly declared types. A component
+associated fields/groups are identical to their directly declared types. A module
 may expose an associated domain (`type C: Commitment`); this adds no runtime value
 or constructor. Static-only domains have no Copy, Drop, Share or Wire permission.
 Naming a transcript domain does not expose managed transcript operations as local
@@ -300,9 +329,9 @@ specification selectors and body operations, including calls. Inference records
 requirements; it does not prove them or invent catalog facts. Every concrete
 application still checks them. A written `where` clause is complete: checking
 cannot silently add a condition. `where ()` states that the sort and parameter
-bounds suffice. Abstract members, relations, types, interfaces and components
-retain explicit preconditions. Component implementations may infer member
-conditions only when their interface and component contract establish them.
+bounds suffice. Abstract members, relations, types, interfaces and modules
+retain explicit preconditions. Module implementations may infer member
+conditions only when their interface and module contract establish them.
 
 `Copy`, `Drop`, `Share` and `Wire` remain explicit resource permissions. Omitting
 them from `T: Type` promises none; `Field` and `Group` retain their inherent Copy
@@ -312,11 +341,11 @@ does not change move behavior, select participants or insert communication.
 The checked declaration API exposes completed result types and requirements;
 each inferred bound records its origin span and `inferred` flag.
 
-Bounds apply to generic type and component applications as well as calls. Parent
+Bounds apply to generic type and module applications as well as calls. Parent
 bounds are inherited. Associated type declarations cannot introduce their own
-capability requirements; inherited component bounds still apply. A component member
+capability requirements; inherited module bounds still apply. A module member
 cannot add requirements beyond those
-provided by its component and interface member; interface bounds are substituted
+provided by its module and interface member; interface bounds are substituted
 through the implementation's parameters and associated types. Type applications
 inside a clause use its complete set of bounds, independent of written order.
 Specialization discharges and removes bounds. They introduce no runtime values,
@@ -503,9 +532,9 @@ A binder is an ordinary statically selected finite consumer call. The example
 has the same computation as `sum(zip(xs, ys), fn((x, y)) => x * y + α)`.
 The [notation contract](notation.md#finite-reduction-syntax) fixes its parsing,
 selection and optional predicate. Names, tuple patterns, `_`, lexical captures,
-component dispatch and nested computations use the ordinary scoped-function
+module dispatch and nested computations use the ordinary scoped-function
 machinery. There is no separate ring-body checker or generated-map subsystem.
-Binders work directly in protocols, local functions and component members;
+Binders work directly in protocols, local functions and module members;
 mathematical functions use a binding to a total mathematical consumer.
 
 The first argument is a [finite domain](#finite-domains), including ordinary
@@ -680,8 +709,8 @@ and `Drop`. Ground domain availability, sharing and transport still pass the
 installed native type policy and codecs.
 
 Fields are private unless marked `pub`. A restricted nominal constructor and its
-representation are available only in its defining module. Private associated
-representations are sealed behind component members. `unpack(value)` requires
+representation are available in its defining module and descendants. Private associated
+representations are sealed behind module members. `unpack(value)` requires
 that module's authority; it consumes the wrapper and returns its fields (a tuple
 for a record, the representation for an associated type). Restricted values do
 not expose ordinary field projection. `consume value;` requires constructor
@@ -704,14 +733,14 @@ Entry ingress is checked after generic selection. Internal protocol applications
 existing values and do not introduce an ingress boundary. A public native
 representation does not grant authority to construct a private source value.
 
-## Callables and static components
+## Callables and static modules
 
 ```text
 math fn square<F: Field>(x: F) -> F { return x * x; }
 interface Increment<F: Field> {
   math fn apply(x: F) -> F;
 }
-component PlusOne<F: Field>: Increment<F> {
+module PlusOne<F: Field>: Increment<F> {
   math fn apply(x: F) -> F { return x + 1; }
 }
 math fn applyIncrement<C: Increment<Fr>>(x: Fr) -> Fr {
@@ -754,7 +783,7 @@ the same parameters as `pair(flag, n)`, while evaluating `n` before `flag`.
 Every value or managed-service parameter must be supplied exactly once. Unknown
 names, duplicate bindings, missing/excess arguments and a positional argument
 after a named argument refuse with `source.call`. Runtime arguments have no
-defaults. Interface calls use the interface's parameter names; concrete component
+defaults. Interface calls use the interface's parameter names; concrete module
 calls use the implementation's names. Renaming a public parameter changes this
 source contract even though parameter names do not affect type conformance.
 
@@ -772,10 +801,10 @@ names: `pair<B = index>(flag, n)` fixes `B` and infers other parameters. Omit
 the whole list, supply a positional prefix, select parameters by name, or use `_`
 for a whole slot, as in `choose<_, Impl>(value)`. Positional arguments must precede
 named ones. Explicit slots constrain inference. Every missing slot or hole must
-have one consistent solution; there are no default types, dimensions or component
+have one consistent solution; there are no default types, dimensions or module
 implementations. Holes are whole call slots, not nested type syntax or kernel,
 intrinsic, constructor or Entry arguments. There is no global instance search,
-runtime component dispatch or inference through noninjective associations.
+runtime module dispatch or inference through noninjective associations.
 Each call has fresh inference variables; the enclosing definition's parameters
 remain fixed. Associated types and compound natural expressions normalize
 forward after their inputs are known, without inferring those inputs from a
@@ -786,9 +815,13 @@ Types, constructors, relation applications and Entries accept named static
 arguments with complete coverage, such as `Box<T = Fr>` or
 `run Demo = Run<N = 8, F = Fr>;`. These contexts do not infer missing arguments
 or accept holes. Invalid static name binding uses `source.generic`. A bound
-component already supplies its inherited parameters; a member call cannot
-override them. Associated types inherit their component's arguments and accept
-no separate static list. Fixed primitive static interfaces remain positional.
+module already supplies its inherited parameters; a member call cannot
+override them. Associated types inherit their module's arguments. A direct
+reference `Store::State<F, N>` supplies those arguments; a bound `S::State` uses
+its module term. Within the same generic scope, omitted inherited arguments
+reuse identical enclosing binders in type references and calls. Written arguments
+and inference holes retain their usual meaning. Fixed primitive static interfaces
+remain positional.
 
 ### Library-defined operators
 
@@ -803,12 +836,12 @@ Public bindings require public targets. Unused bindings are checked too.
 Reduction descriptors have one mapped-vector operand and the additional
 [finite reduction target rules](#finite-reduction-binders).
 
-A block can begin with `operator + = A::add;`, where `A` is an explicit component
+A block can begin with `operator + = A::add;`, where `A` is an explicit module
 parameter, or with other callable bindings. Targets accept partial static
 arguments, names and holes, such as `operator * = scale<F = F>;`. The nearest
 block declaring a descriptor replaces its entire inherited callable family;
 there is no fallback based on operand types. Target names resolve at the binding's
-definition site. Component dictionaries are explicit, with no instance search.
+definition site. Module dictionaries are explicit, with no instance search.
 
 Named, operator and delimited calls share signature constraints. Candidates are
 filtered by descriptor arity before input-coherence checking. Each statement is
@@ -828,7 +861,7 @@ meanings use `source.operator`; exhausted search uses `source.limit`.
 Only the selected target proceeds through ordinary body, cycle, permission,
 requirement, effect and participant checks. Every operand evaluates once in written
 order. Collecting constraints evaluates no operand and introduces no synthetic
-`let` boundary. Definition checking retains the chosen target, statics, component,
+`let` boundary. Definition checking retains the chosen target, statics, module,
 source binding and canonical visible family. A separate structural checker re-enumerates
 the descriptor-specific lexical family from the checked scope, validates descriptor
 identity, arity and binding origin, checks input coherence and the complete authored
@@ -872,21 +905,29 @@ checking count toward token, declaration and work limits for the invocation.
 `!`, `&&` and `||` keep their fixed Boolean control/formula semantics and are not
 redefined by library equality bindings.
 
-### Components and body modes
+### Modules and body modes
 
 An interface declares associated types/domains and math/local member signatures.
-A component selects one interface and defines every member exactly once. Associated
+A module may select one interface and must define every required member exactly
+once. Additional declarations and private helpers are allowed. A generic `M: I`
+client sees only `I`; concrete module paths may use additional public members. Associated
 runtime types default to no permissions; their promised permissions must be supported
 by their representation. Associated `Field` and `Group` declarations expose their
 selected domain. Conformance checks callable modes, types, permissions, natural
 preconditions, callback acceptance contracts and implementation effects. An
 implementation cannot require more than its interface allows. Interfaces and
-components may have static parameters;
+modules may have static parameters;
 abstract signatures may declare member-specific generic parameters.
-`Component::method<F, ...>(value)` supplies the component parameters directly;
-`C::method(value)` through a bound component uses the parameters already in `C`.
-Records and variants are module declarations. An abstract call or type projection
-requires a bound component; a free interface name cannot select an implementation.
+`Module::method<F, ...>(value)` supplies the module parameters directly;
+`C::method(value)` through a bound module uses the parameters already in `C`.
+`type Name = T;` is always a transparent alias. `type Name: Type = T;` or
+`type Name: Copy + Drop = T;` declares a sealed associated type, including outside
+an interface implementation. Interface `type Name;` is an abstract requirement;
+its implementation must explicitly declare a nominal type with `:`. Interface
+membership never changes an alias's meaning. The module path and canonical static
+arguments determine nominal identity, independent of imports or file layout.
+Records and variants are ordinary module declarations. An abstract call or type projection
+requires a bound module; a free interface name cannot select an implementation.
 
 Defined Local functions infer a symbolic union of fixed `stop` and `opaque`
 effects and dependencies on invoked callback inputs. An optional `effects(...)`
@@ -910,7 +951,7 @@ For each tracked label, a fixed effect on the left requires a fixed allowance
 on the right; a dependency requires the same slot on the right unless that
 label is allowed unconditionally. Labels excluded by a callback ceiling do not
 contribute. Comparing maximum effect sets is insufficient: `effects(first)`
-does not permit invoking `second`, even when their ceilings match. Component
+does not permit invoking `second`, even when their ceilings match. Module
 input contracts remain equal after substitution, including callback mode, types,
 ceilings and domain contracts. The implementation body must be pointwise within
 both its own written output bound and the interface output contract. A wider
@@ -954,7 +995,7 @@ product, explicit matrix rows/columns/coordinate order, and fixed source arrays.
 The [finite IR contract](../ir/finite.md#domain-declarations) defines enumeration
 and admission. Defined factories compose domain calls and immutable aliases;
 ordinary computations producing their data operands stay at the call site.
-Interface and component members use the same resolved factory identities.
+Interface and module members use the same resolved factory identities.
 
 At an expected scoped-domain input, an ordinary collection expression has one
 implicit element traversal: native vectors, group vectors, immutable sequences,
@@ -1121,7 +1162,7 @@ requirement.
 
 ## Scoped computations
 
-Named Math and Local functions, including interface/component members, may take
+Named Math and Local functions, including interface/module members, may take
 statically bound, nonescaping computations as a separate input category:
 
 ```zkc
@@ -1179,7 +1220,7 @@ Conditions require compiler-tracked whole original items from exact domains,
 not value membership or equality. Each invoker proves the conditions and a
 literal body assumes them. A canonical position-to-domain map excludes source
 labels, clause order and spans from semantic compatibility and specialization
-identity. Interface/component conformance requires exact normalized map equality
+identity. Interface/module conformance requires exact normalized map equality
 after type substitution; it does not apply forwarding subtyping. Source-bearing
 artifacts may still change when labels change. Parsing, normalization, map
 substitution and independent witness reconstruction charge the shared work budget.
@@ -1214,7 +1255,7 @@ invocation effect, but eager arguments, domain operands and capture evaluation
 retain their effects. Local finite admission still contributes `stop`, including
 empty traversals, and registered Local finite callbacks exclude `opaque`.
 
-A Local computation cannot be invoked in Math. Component members retain lexical
+A Local computation cannot be invoked in Math. Module members retain lexical
 member resolution, notation and `self`, including through nested lambdas.
 Open bodies have one canonical symbolic effect summary. Specialization produces
 a closed summary from the selected helpers; independent extraction and closure
@@ -1223,8 +1264,8 @@ Immutable authored signatures independently anchor callback ceilings, item-origi
 selectors and output contracts, including abstract declarations.
 Origin maps belong to the declaration's callback parameters, whose domain slots
 they reference; body signatures carry only types, mode and effects. Independent
-checking also compares a component's callback contracts with its interface after
-substituting the component's types.
+checking also compares a module's callback contracts with its interface after
+substituting the module's types.
 Dependency normalization, substitution and witness traversal use the shared
 work budget.
 
@@ -1269,7 +1310,7 @@ captures independently of mathematical result dependencies.
 Closure materializes ordinary private helpers with explicit capture inputs and
 specializes accepting functions with the selected helpers. Their hidden data
 inputs follow ordinary data inputs; forwarding passes the matching environment
-in that order. The key includes the lexical body, closed static/component
+in that order. The key includes the lexical body, closed static/module
 context, signature/layout and recursively selected scoped captures. Runtime
 values and caller roles do not prevent code reuse. Scoped invocations are gone
 before MLIR emission. Expansion, flattened environments, summary work and helper
@@ -1310,7 +1351,7 @@ there is no legacy suffix or inspection alias. Enclosing `requirements` remain
 obligations of the enclosing signature. `input_order` retains `data`, `service`,
 `domain` and `scoped` categories. This diagnostic view does not add runtime
 interface fields. The [computation library](../../../libraries/zkc/computation.zkc)
-and [component example](../../../examples/projects/scoped-computations/README.md)
+and [module example](../../../examples/projects/scoped-computations/README.md)
 exercise user-defined apply/forward combinators. General finite domains, named consumers and mathematical binders use this same
 foundation.
 

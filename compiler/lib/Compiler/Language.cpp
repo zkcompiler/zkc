@@ -49,8 +49,8 @@ public:
     }
   }
   DiagnosticLocation location(Span span) const {
-    const auto &source = entry.project().sources()[span.module.index];
-    const auto &offsets = lines[span.module.index];
+    const auto &source = entry.project().sources()[span.source.index];
+    const auto &offsets = lines[span.source.index];
     auto line = std::upper_bound(offsets.begin(), offsets.end(), span.begin);
     unsigned number = line - offsets.begin();
     return {source.diagnosticPath.empty() ? source.module
@@ -267,7 +267,7 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
   for (const auto &location : storage->report.locations) {
     for (uint64_t value :
          {uint64_t(location.line), uint64_t(location.column),
-          uint64_t(location.source.module.index),
+          uint64_t(location.source.source.index),
           uint64_t(location.source.begin), uint64_t(location.source.end)}) {
       for (unsigned i = 0; i < 8; ++i)
         mapIdentity.push_back(static_cast<char>(value >> (i * 8)));

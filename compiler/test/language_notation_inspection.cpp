@@ -225,7 +225,7 @@ int main() {
           auto begin = *span->getInteger("begin"),
                end = *span->getInteger("end");
           auto source =
-              StringRef(project.sources()[*span->getInteger("module")].text);
+              StringRef(project.sources()[*span->getInteger("source")].text);
           require(end - begin == 2 &&
                       source.slice(begin, end) == *operand->getString("text"),
                   "UTF-8 source spans were counted as characters");

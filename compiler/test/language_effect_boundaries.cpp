@@ -34,7 +34,7 @@ void diagnosticAt(const Semantics &types, StringRef code, Span span) {
   require(types.diagnostic && types.diagnostic->code == code,
           "wrong effect diagnostic identifier");
   const auto &primary = types.diagnostic->primary;
-  require(primary && primary->module.index == span.module.index &&
+  require(primary && primary->source.index == span.source.index &&
               primary->begin == span.begin && primary->end == span.end,
           "effect diagnostic lost its source span");
 }

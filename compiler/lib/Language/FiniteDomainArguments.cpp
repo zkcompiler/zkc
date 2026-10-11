@@ -100,8 +100,8 @@ bool BodyChecker::captureDomains(
     for (const auto &argument : source.arguments)
       if (!checker.types.chargeType(argument, span))
         return false;
-    if (source.factory && source.factory->component &&
-        !checker.types.chargeType(*source.factory->component, span))
+    if (source.factory && source.factory->module &&
+        !checker.types.chargeType(*source.factory->module, span))
       return false;
     DomainBinding copy = source;
     for (auto &operand : copy.operands) {

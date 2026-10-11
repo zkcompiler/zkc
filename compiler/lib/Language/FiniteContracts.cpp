@@ -251,7 +251,7 @@ class ContractCheck {
           return {};
         return newDomain(found->second);
       }
-      // A generic component's implementation is not evidence available to its
+      // A generic module's implementation is not evidence available to its
       // clients. Only the checked recipe of a concrete factory supplies facts.
       if (!callee.abstract && callee.domainDefinition) {
         const auto &definition = *callee.domainDefinition;

@@ -343,7 +343,7 @@ int main() {
   });
   cases.run("proof target authority follows the derived purposes", [] {
     // A witness group vector cannot be a verifier input, even when the
-    // clause selects the prover's component of a shared port.
+    // clause selects the prover's module of a shared port.
     refusesMentioning(
         close(
             substitute(source(signature, "bundle(asset machine)",

@@ -61,7 +61,7 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
   std::vector<bool> scopes(records.scopes.size());
   auto originAllowed = [&](Span span) {
     return options.includeInstallation ||
-           project.sources()[span.module.index].origin ==
+           project.sources()[span.source.index].origin ==
                SourceOrigin::Captured;
   };
   for (unsigned i = 0; i < scopes.size(); ++i) {
@@ -122,13 +122,13 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
   json::OStream json(out);
   auto span = [&](Span value) {
     json.object([&] {
-      json.attribute("module", value.module.index);
+      json.attribute("source", value.source.index);
       json.attribute("begin", value.begin);
       json.attribute("end", value.end);
     });
   };
   auto location = [&](Span value) {
-    const auto &source = project.sources()[value.module.index];
+    const auto &source = project.sources()[value.source.index];
     json.attribute("module", source.module);
     json.attribute("origin", source.origin == SourceOrigin::Captured
                                  ? "captured"
@@ -138,7 +138,7 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
     json.attributeEnd();
   };
   auto text = [&](Span value) {
-    return StringRef(project.sources()[value.module.index].text)
+    return StringRef(project.sources()[value.source.index].text)
         .slice(value.begin, value.end);
   };
   auto strings = [&](StringRef name, const std::vector<std::string> &values) {
@@ -234,9 +234,9 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
           json.attributeBegin("target_definition_span");
           span(project.declarations()[binding.target.index].span);
           json.attributeEnd();
-          json.attribute("component", binding.component
-                                          ? json::Value(*binding.component)
-                                          : json::Value(nullptr));
+          json.attribute("receiver", binding.module
+                                         ? json::Value(*binding.module)
+                                         : json::Value(nullptr));
           json.attributeBegin("target_span");
           span(binding.targetSpan);
           json.attributeEnd();
@@ -260,9 +260,9 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
                   "target",
                   project.declarations()[target.target.index].qualifiedName);
               json.attribute("target_declaration", target.target.index);
-              json.attribute("component", target.component
-                                              ? json::Value(*target.component)
-                                              : json::Value(nullptr));
+              json.attribute("receiver", target.module
+                                             ? json::Value(*target.module)
+                                             : json::Value(nullptr));
               json.attributeBegin("target_span");
               span(target.span);
               json.attributeEnd();
@@ -289,7 +289,7 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
         json.object([&] {
           json.attribute("id", i);
           location(scope.span);
-          json.attribute("kind", scope.owner ? "lexical" : "module");
+          json.attribute("kind", scope.body ? "lexical" : "module");
           json.attribute("parent", scope.parent && scopes[*scope.parent]
                                        ? json::Value(*scope.parent)
                                        : json::Value(nullptr));
@@ -298,9 +298,10 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
                 "owner",
                 project.declarations()[scope.owner->index].qualifiedName);
             json.attribute("owner_declaration", scope.owner->index);
-            json.attribute("body", *scope.body);
+            if (scope.body)
+              json.attribute("body", *scope.body);
           }
-          json.attribute("binding_policy", scope.owner
+          json.attribute("binding_policy", scope.body
                                                ? "replace-matching-descriptor"
                                                : "module-visibility");
           references("descriptors", scope.descriptors, descriptors);
@@ -313,12 +314,14 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
                 break;
               if ((!options.includePrivate && !import.isPublic) ||
                   (!options.includeInstallation &&
-                   project.sources()[import.module.index].origin ==
-                       SourceOrigin::Installation))
+                   project.sources()[project.declarations()[import.module.index]
+                                         .span.source.index]
+                           .origin == SourceOrigin::Installation))
                 continue;
               json.object([&] {
-                json.attribute("module",
-                               project.sources()[import.module.index].module);
+                json.attribute(
+                    "module",
+                    project.declarations()[import.module.index].qualifiedName);
                 json.attributeBegin("span");
                 span(import.span);
                 json.attributeEnd();
@@ -425,10 +428,9 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
                   "target",
                   project.declarations()[evidence.target.declaration.index]
                       .qualifiedName);
-              json.attribute("component",
-                             selection->component
-                                 ? json::Value(*selection->component)
-                                 : json::Value(nullptr));
+              json.attribute("receiver", selection->module
+                                             ? json::Value(*selection->module)
+                                             : json::Value(nullptr));
               strings("static_arguments", selection->arguments);
               json.attributeBegin("rendering");
               json.rawValueBegin();

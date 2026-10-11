@@ -13,13 +13,13 @@ fn field_bytes(f:F)->Bytes=primitive("encoding.field_be");
 fn field_read(b:Bytes)->(bool,F)=primitive("encoding.field_from_be");
 interface Codec {
   type Record:Copy+Drop;
-  fn initialize(layout:())->Record;
-  fn write(r:Record)->Bytes;
-  fn finish(r:Record,proof:Bytes)->();
-  fn encode(r:Record,value:(F,F))->(Record,Bytes);
-  fn receive(r:Record,proof:Bytes)->(Record,(index,index));
+  fn initialize(layout:())->Record effects(stop, opaque);
+  fn write(r:Record)->Bytes effects(stop, opaque);
+  fn finish(r:Record,proof:Bytes)->() effects(stop, opaque);
+  fn encode(r:Record,value:(F,F))->(Record,Bytes) effects(stop, opaque);
+  fn receive(r:Record,proof:Bytes)->(Record,(index,index)) effects(stop, opaque);
 }
-component Packing:Codec {
+module Packing:Codec {
   type Record:Copy+Drop=(Bytes,index);
   fn initialize(layout:())->Record{return Record((empty(),0));}
   fn write(r:Record)->Bytes{let (b,n)=unpack(r);return b;}
@@ -182,17 +182,17 @@ fn concat(a:Bytes,b:Bytes)->Bytes=primitive("bytes.concat");
 fn length(b:Bytes)->index=primitive("bytes.length");
 fn field_bytes(f:F)->Bytes=primitive("encoding.field_be");
 fn field_read(b:Bytes)->(bool,F)=primitive("encoding.field_from_be");
-interface Transcript {type State:Copy+Drop;fn initialize()->State;}
-component History:Transcript{type State:Copy+Drop=();fn initialize()->State{return State(());}}
+interface Transcript {type State:Copy+Drop;fn initialize()->State effects(stop, opaque);}
+module History:Transcript{type State:Copy+Drop=();fn initialize()->State{return State(());}}
 interface Codec {
   type Record:Copy+Drop;
-  fn initialize(rounds:index)->Record;
-  fn write(r:Record)->Bytes;
-  fn finish(r:Record,proof:Bytes)->();
-  fn encode(r:Record,value:(F,F))->(Record,(Bytes,Bytes));
-  fn receive(r:Record,proof:Bytes)->(Record,((index,index),(index,index)));
+  fn initialize(rounds:index)->Record effects(stop, opaque);
+  fn write(r:Record)->Bytes effects(stop, opaque);
+  fn finish(r:Record,proof:Bytes)->() effects(stop, opaque);
+  fn encode(r:Record,value:(F,F))->(Record,(Bytes,Bytes)) effects(stop, opaque);
+  fn receive(r:Record,proof:Bytes)->(Record,((index,index),(index,index))) effects(stop, opaque);
 }
-component Grouped:Codec{
+module Grouped:Codec{
   type Record:Copy+Drop=(Bytes,Bytes,index,index);
   fn initialize(rounds:index)->Record{return Record((empty(),empty(),0,rounds));}
   fn write(r:Record)->Bytes{let(l,r,i,n)=unpack(r);return concat(l,r);}
@@ -366,11 +366,11 @@ def test_empty_record_and_state_keep_conditional_finalization(toolchain, journal
     type Bytes=builtin("bytes");
     fn empty()->Bytes=primitive("bytes.empty");
     fn length(b:Bytes)->index=primitive("bytes.length");
-    interface Transcript {type State:Copy+Drop;fn initialize()->State;}
-    component History:Transcript {type State:Copy+Drop=();fn initialize()->State{return State(());}}
-    interface Codec {type Record:Copy+Drop;fn initialize(x:())->Record;
-      fn write(r:Record)->Bytes;fn finish(r:Record,proof:Bytes)->();}
-    component Empty:Codec {type Record:Copy+Drop=();fn initialize(x:())->Record{return Record(());}
+    interface Transcript {type State:Copy+Drop;fn initialize()->State effects(stop, opaque);}
+    module History:Transcript {type State:Copy+Drop=();fn initialize()->State{return State(());}}
+    interface Codec {type Record:Copy+Drop;fn initialize(x:())->Record effects(stop, opaque);
+      fn write(r:Record)->Bytes effects(stop, opaque);fn finish(r:Record,proof:Bytes)->() effects(stop, opaque);}
+    module Empty:Codec {type Record:Copy+Drop=();fn initialize(x:())->Record{return Record(());}
       fn write(r:Record)->Bytes{return empty();}
       fn finish(r:Record,proof:Bytes)->(){require length(proof)==0;return ();}}
     protocol End roles(P,V)(go:bool@(P,V),challenges:Random<F>@V)->(ok:bool@V) completes {
@@ -437,9 +437,9 @@ def test_wire_observation_uses_original_bytes_before_permissive_decode(toolchain
     # explicit wire observation makes that byte contribute to the challenge.
     text = SOURCE.replace('STATE', 'Bytes').replace('INITIAL', 'empty()')
     text = text.replace('LOOP_START', '').replace('LOOP_END', '')
-    text = text.replace('fn draw(t:State)->(State,T);',
-                        'fn draw(t:State)->(State,T);fn wire(t:State,b:Bytes)->State;')
-    text = text.replace('return(t,1);', 'return(t,reduce(unpack(t)));')
+    text = text.replace('fn draw(t:State)->(State,T) effects(stop, opaque);',
+                        'fn draw(t:State)->(State,T) effects(stop, opaque);fn wire(t:State,b:Bytes)->State effects(stop, opaque);')
+    text = text.replace('return(t,1);', 'return(t,scalar_from_bytes(unpack(t)));')
     text = text.replace('fn draw(t:State)->(State,F){',
                         'fn wire(t:State,b:Bytes)->State{return State(b);}\n  fn draw(t:State)->(State,F){')
     extra = CODEC.replace('BASE', 'base Derived<F,Provider>;')
@@ -452,7 +452,7 @@ def test_wire_observation_uses_original_bytes_before_permissive_decode(toolchain
     source = directory / 'main.zkc'
     source.write_text(text + extra + '''
       fn append(b:Bytes,byte:index)->Bytes=primitive("bytes.append");
-      fn reduce(b:Bytes)->F=primitive("encoding.field_reduce_be");
+      fn scalar_from_bytes(b:Bytes)->F=primitive("encoding.field_reduce_be");
     ''')
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',

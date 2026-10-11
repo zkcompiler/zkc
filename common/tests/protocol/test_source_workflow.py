@@ -311,7 +311,8 @@ pub protocol Run roles(P,V)(x:bool@(P,V))->(out:bool@V){
     source.write_text(source.read_text().replace('unresolved =', 'unresolved @P ='))
     checked = journal.json([*command, '--declarations'])
     declarations = checked['declarations']
-    assert [d['name'] for d in declarations] == ['library::identity', 'library::zero', 'main::Run']
+    assert [d['name'] for d in declarations] == ['library', 'library::identity', 'library::zero', 'main', 'main::Run']
+    declarations = [d for d in declarations if d['kind'] != 'module']
     assert declarations[-1]['roles'] == ['P', 'V']
     assert declarations[1]['outputs'][0]['type'] == 'F'
     assert declarations[1]['parameters'][0]['sort'] == 'Field'

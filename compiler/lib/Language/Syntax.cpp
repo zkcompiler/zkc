@@ -7,7 +7,7 @@
 
 using namespace llvm;
 namespace zkc::language::detail {
-Error lex(const SourceBuffer &source, ModuleId module, Work &work,
+Error lex(const SourceBuffer &source, SourceId module, Work &work,
           std::vector<Token> &tokens) {
   StringRef text = source.text;
   size_t offset = 0;
@@ -108,7 +108,7 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
 namespace {
 class Parser {
 public:
-  Parser(const SourceBuffer &source, ModuleId module, ArrayRef<Token> input,
+  Parser(const SourceBuffer &source, SourceId module, ArrayRef<Token> input,
          Work &work)
       : source(source), module(module), work(work) {
     for (const auto &token : input)
@@ -116,17 +116,42 @@ public:
           token.kind != TokenKind::Comment)
         tokens.push_back(token);
   }
-  Expected<SyntaxModule> run() {
-    SyntaxModule output{module, {}, {}, {}};
-    std::string moduleName;
-    if (!expect("module") || !path(moduleName) || !expect(";"))
+  Expected<SyntaxDeclaration> run() {
+    SyntaxDeclaration output;
+    output.kind = Declaration::Kind::Module;
+    output.isPublic = true;
+    output.span = current().span;
+    if (auto error = work.count(work.declarations, work.limits.declarations,
+                                "declaration count", output.span))
+      return error;
+    if (!expect("module") || !path(output.name) || !moduleHeader(output) ||
+        !expect(";"))
       return takeError();
-    if (moduleName != source.module) {
+    if (output.name != source.module) {
       fail("source.module",
            "module declaration does not match captured logical name");
       return takeError();
     }
-    while (!atEnd() && !diagnostic) {
+    if (!moduleBody(output, 0) || !atEnd()) {
+      if (!diagnostic)
+        fail("source.syntax", "unexpected token after module body");
+      return takeError();
+    }
+    output.span.end = uint32_t(source.text.size());
+    return output;
+  }
+  bool moduleHeader(SyntaxDeclaration &output) {
+    if (!parameters(output.parameters))
+      return false;
+    if (take(":")) {
+      output.definition.emplace();
+      if (!type(*output.definition))
+        return false;
+    }
+    return requirements(output);
+  }
+  bool moduleBody(SyntaxDeclaration &output, unsigned depth) {
+    while (!atEnd() && !at("}") && !diagnostic) {
       if (at("use") || (at("pub") && look(1) == "use")) {
         Import import;
         import.span = current().span;
@@ -202,30 +227,28 @@ public:
           break;
         output.operators.push_back(std::move(*binding));
       } else {
-        auto decl = declaration(false, false, 1);
+        auto decl = declaration(false, false, depth + 1);
         if (!decl)
           break;
-        output.declarations.push_back(std::move(*decl));
+        output.members.push_back(std::move(*decl));
       }
     }
-    if (diagnostic)
-      return takeError();
-    return output;
+    return !diagnostic;
   }
 
-  Error finish(SyntaxModule &syntax,
+  Error finish(SyntaxDeclaration &syntax,
                std::shared_ptr<const NotationEnvironment> environment) {
     headersOnly = false;
     notationEnvironment = std::move(environment);
-    for (auto &declaration : syntax.declarations)
-      if (!finish(declaration))
+    for (auto &declaration : syntax.members)
+      if (declaration.kind != Declaration::Kind::Module && !finish(declaration))
         return takeError();
     return Error::success();
   }
 
 private:
   const SourceBuffer &source;
-  ModuleId module;
+  SourceId module;
   Work &work;
   std::vector<Token> tokens;
   size_t cursor = 0;
@@ -237,7 +260,7 @@ private:
   bool finish(SyntaxDeclaration &declaration) {
     // Inline relation specifications precede their protocol body in the source.
     for (auto &member : declaration.members)
-      if (!finish(member))
+      if (member.kind != Declaration::Kind::Module && !finish(member))
         return false;
     if (auto pending = declaration.deferredBody) {
       cursor = pending->begin;
@@ -1509,7 +1532,8 @@ private:
           member ? Declaration::Kind::Associated : Declaration::Kind::Alias;
       if (!name(d.name) || !parameters(d.parameters))
         return {};
-      if (member && take(":")) {
+      if (take(":")) {
+        d.kind = Declaration::Kind::Associated;
         d.permissions.emplace();
         if (!at("Copy") && !at("Drop") && !at("Share") && !at("Wire")) {
           if (current().kind != TokenKind::Word) {
@@ -1585,28 +1609,30 @@ private:
         } while (take(",") && !at("}"));
       if (!expect("}"))
         return {};
-    } else if (at("interface") || at("component")) {
+    } else if (take("module")) {
       if (member) {
-        fail("source.syntax", "nested component declarations are not admitted");
+        fail("source.syntax", "modules are not interface members");
         return {};
       }
-      bool interface = take("interface");
-      if (!interface)
-        advance();
-      d.kind = interface ? Declaration::Kind::Interface
-                         : Declaration::Kind::Component;
-      if (!name(d.name) || !parameters(d.parameters))
+      d.kind = Declaration::Kind::Module;
+      if (!name(d.name))
         return {};
-      if (!interface) {
-        SyntaxType target;
-        if (!expect(":") || !type(target))
-          return {};
-        d.definition = std::move(target);
+      if (take(";"))
+        d.externalModule = true;
+      else if (!moduleHeader(d) || !expect("{") || !moduleBody(d, depth) ||
+               !expect("}"))
+        return {};
+    } else if (take("interface")) {
+      if (member) {
+        fail("source.syntax", "nested interfaces are not interface members");
+        return {};
       }
-      if (!requirements(d) || !expect("{"))
+      d.kind = Declaration::Kind::Interface;
+      if (!name(d.name) || !parameters(d.parameters) || !requirements(d) ||
+          !expect("{"))
         return {};
       while (!at("}") && !atEnd()) {
-        auto child = declaration(true, interface, depth + 1);
+        auto child = declaration(true, true, depth + 1);
         if (!child)
           return {};
         d.members.push_back(std::move(*child));
@@ -1626,8 +1652,7 @@ private:
         return {};
       }
       if (protocol && member) {
-        fail("source.unsupported",
-             "protocol component members belong to protocol composition");
+        fail("source.unsupported", "protocols are not interface members");
         return {};
       }
       d.kind = domainFunction ? Declaration::Kind::DomainFunction
@@ -1839,7 +1864,7 @@ private:
         } else {
           Expression product;
           product.kind = Expression::Kind::DomainProduct;
-          product.span = {span.module, decl.expressions[*domain].span.begin,
+          product.span = {span.source, decl.expressions[*domain].span.begin,
                           previousEnd};
           product.children = {*domain, *nextDomain};
           domain = appendExpression(decl, std::move(product));
@@ -1847,7 +1872,7 @@ private:
             return {};
           Pattern pair;
           pair.kind = Pattern::Kind::Tuple;
-          pair.span = {span.module, binding.span.begin, nextPattern->span.end};
+          pair.span = {span.source, binding.span.begin, nextPattern->span.end};
           pair.children.push_back(std::move(binding));
           pair.children.push_back(std::move(*nextPattern));
           binding = std::move(pair);
@@ -1866,7 +1891,7 @@ private:
         region.span.end = previousEnd;
         Expression lambda;
         lambda.kind = Expression::Kind::Lambda;
-        lambda.span = {span.module, binding.span.begin, previousEnd};
+        lambda.span = {span.source, binding.span.begin, previousEnd};
         lambda.payloads = {{binding}};
         lambda.regions.push_back(decl.bodies.size());
         decl.bodies.push_back(std::move(region));
@@ -2688,19 +2713,19 @@ private:
   }
 };
 } // namespace
-Expected<SyntaxModule> parse(const SourceBuffer &source, ModuleId module,
-                             ArrayRef<Token> tokens, Work &work) {
+Expected<SyntaxDeclaration> parse(const SourceBuffer &source, SourceId module,
+                                  ArrayRef<Token> tokens, Work &work) {
   if (auto error = work.charge(tokens.size(), Span{module, 0, 0}))
     return std::move(error);
   return Parser(source, module, tokens, work).run();
 }
-Error parseBodies(const SourceBuffer &source, SyntaxModule &module,
+Error parseBodies(const SourceBuffer &source, SyntaxDeclaration &module,
                   ArrayRef<Token> tokens,
                   std::shared_ptr<const NotationEnvironment> environment,
                   Work &work) {
-  if (auto error = work.charge(tokens.size(), Span{module.id, 0, 0}))
+  if (auto error = work.charge(tokens.size(), module.span))
     return error;
-  return Parser(source, module.id, tokens, work)
+  return Parser(source, module.span.source, tokens, work)
       .finish(module, std::move(environment));
 }
 } // namespace zkc::language::detail
