@@ -17,7 +17,7 @@ Expected<CheckedProject> check(StringRef source, const Limits &limits = {}) {
 }
 const Declaration &named(ArrayRef<Declaration> declarations, StringRef name) {
   for (const auto &decl : declarations)
-    if (decl.name == name)
+    if (decl.name == name && decl.body)
       return decl;
   throw std::runtime_error("missing declaration: " + name.str());
 }
@@ -136,6 +136,21 @@ run Run=Demo;
     limits.callDepth = 2;
     take(check(source, limits));
   });
+  cases.run("formal lookup needs no extra expression level", [] {
+    Limits limits;
+    limits.callDepth = limits.expressionDepth = 1;
+    Work work{limits};
+    std::vector<Declaration> declarations;
+    Semantics types(declarations, {}, work);
+    Body body{};
+    body.mode = Body::Mode::Local;
+    body.scopedBindings = {formal()};
+    body.operations.push_back({ScopedInvoke{0, {}, 0}, {}, invocationSpan, 0});
+    auto effect = inferEffects(types, declarations, body);
+    require(effect && effect->dependencies ==
+                          std::map<unsigned, Effects>{{0, {true, true}}},
+            "formal lookup consumed another expression level");
+  });
   for (unsigned depth : {1u, 2u})
     cases.run("capture expression depth " + std::to_string(depth), [&] {
       Limits limits;
@@ -169,7 +184,8 @@ run Run=Demo;
     require(!bindingEffects(types, body, 0), "cyclic capture accepted");
     diagnosticAt(types, "source.limit", bindingSpan);
   });
-  for (StringRef malformed : {"index", "body", "capture", "dependency"})
+  for (StringRef malformed :
+       {"index", "body", "empty-body", "capture", "dependency"})
     cases.run("malformed callback diagnostic: " + malformed, [&] {
       Limits limits;
       Work work{limits};
@@ -182,6 +198,10 @@ run Run=Demo;
       if (malformed == "body") {
         auto binding = formal();
         binding.parameter.reset();
+        body.scopedBindings = {binding};
+      } else if (malformed == "empty-body") {
+        auto binding = captured(0);
+        binding.computation = std::make_shared<ScopedComputation>();
         body.scopedBindings = {binding};
       } else if (malformed == "capture") {
         body.scopedBindings = {captured(1)};
@@ -332,7 +352,7 @@ fn get<F:Field>(xs:Vector<F>,i:index)->F effects()=primitive("vector.get");
             std::string mode = math ? "math " : "";
             std::string effect = math ? "" : " effects(stop)";
             std::string predicate =
-                filtered ? "predicate:" + mode + "fn(item:Fr)->bool" + effect +
+                filtered ? "accept:" + mode + "fn(item:Fr)->bool" + effect +
                                " where item_from(item,rows),"
                          : "";
             return mode + "fn fold(rows:domain<Fr>,initial:Fr," + predicate +
