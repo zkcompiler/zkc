@@ -451,7 +451,7 @@ module { "protocol.module"() ({
             text = edit(text, "func.return %v1022", "func.return %v0");
           std::string declarations;
           // Live output also faces the 400,000-node Local artifact bound. With
-          // unused source arithmetic, 97 maps charge 99,716 helper operations
+          // unused source arithmetic, 97 maps charge 99,522 helper operations
           // while their compact candidates remain inside that separate bound.
           for (unsigned i = 1; i < (unused ? 97u : 24u); ++i)
             declarations += " algebra.map_realize @mapped" + std::to_string(i) +
