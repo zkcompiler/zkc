@@ -390,7 +390,7 @@ def test_copyable_construction_state_survives_untaken_completion(toolchain, jour
     text = text.replace('public:T@(P,V),', 'go:bool@(P,V),public:T@(P,V),')
     text = text.replace('->(ok:bool@V){', '->(ok:bool@V) completes{')
     text = text.replace('let first=send P->V((secret,secret));', 'let first=send P->V((secret,secret));\n'
-                        'let ()=finish_if @P(go)();let ()=finish_if @V(go)(ok=true);')
+                        'let ()=finish_if @P(go)();let _=finish_if @V(go)(ok=true);')
     text = text.replace('public{public,rounds}', 'public{go,public,rounds}')
     source.write_text(text)
     package = directory / 'proof.zkpkg'

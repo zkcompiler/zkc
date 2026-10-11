@@ -304,9 +304,9 @@ struct Require {
 struct ProtocolCompletion {
   ValueId condition;
   unsigned owner;
-  /// Owner output order; continuations index the logical values moved on false.
+  /// Every owner output, in declaration order. False returns all logical
+  /// values; translation supplies native successors for their affine leaves.
   std::vector<ValueId> values;
-  std::vector<unsigned> continuations;
 };
 struct Exchange {
   unsigned sender, receiver;

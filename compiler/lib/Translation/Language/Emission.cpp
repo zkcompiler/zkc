@@ -755,14 +755,7 @@ class Emitter {
         for (unsigned i = 0; i < outputs.size(); ++i)
           if (affine[i])
             outputs[i] = actual->getResult(successor++);
-        unsigned offset = 0;
-        for (unsigned i = 0; i < completion->values.size(); ++i) {
-          unsigned width = values[completion->values[i].index].size();
-          if (llvm::is_contained(completion->continuations, i))
-            result.append(outputs.begin() + offset,
-                          outputs.begin() + offset + width);
-          offset += width;
-        }
+        result = std::move(outputs);
       } else if (auto *check = std::get_if<Require>(&op.action)) {
         const bool protocol = source.mode == Body::Mode::Protocol;
         if (source.mode == Body::Mode::Math ||

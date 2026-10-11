@@ -657,8 +657,7 @@ void participantCompletion() {
            {"(result = x)", "()", "source.completion"},
            {"(result = x)", "(unknown = x)", "source.completion"},
            {"(result = x)", "(result = x, result = x)", "source.completion"},
-           {"let () = finish_if", "let unusedResult = finish_if",
-            "source.binding"},
+           {"let _ = finish_if", "let () = finish_if", "source.binding"},
            {"finish_if @V(go)", "finish_if @V(x)", "source.type"},
        })
     sourceRefuses(replace(source, from, to), code);

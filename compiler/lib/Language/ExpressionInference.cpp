@@ -1039,11 +1039,8 @@ class ExpressionInference {
       auto roles = checker.roles(decl, {expr.text}, expr.span);
       if (roles)
         for (const auto &port : decl.outputs)
-          if (llvm::is_contained(port.roles, roles->front())) {
-            auto caps = checker.types.permissions(port.type, expr.span, &decl);
-            if (caps && !caps->copy)
-              continuations.push_back(known(port.type, expr.span));
-          }
+          if (llvm::is_contained(port.roles, roles->front()))
+            continuations.push_back(known(port.type, expr.span));
       types.equal(result.type, packed(std::move(continuations), expr.span),
                   expr.span);
       break;

@@ -33,8 +33,8 @@ BodyChecker::complete(const Statement &statement) {
       ports.emplace(port.name, outputs.size());
       outputs.push_back(&port);
     }
-  ProtocolCompletion operation{
-      *condition, owner, std::vector<ValueId>(outputs.size()), {}};
+  ProtocolCompletion operation{*condition, owner,
+                               std::vector<ValueId>(outputs.size())};
   std::set<unsigned> seen;
   for (unsigned i = 0; i < expr.labels.size(); ++i) {
     auto found = ports.find(expr.labels[i]);
@@ -58,6 +58,11 @@ BodyChecker::complete(const Statement &statement) {
          expr.span);
     return {};
   }
+  // Outputs have now transferred on the true edge. Resolve all owner choices
+  // before checking the values that successful completion would leave behind.
+  // This is a complete statement RHS, so its binding adds no placement demands.
+  if ((placement && !settle(*placement)) || !finishOwner(owner, expr.span))
+    return {};
   std::vector<Value> results;
   for (unsigned i = 0; i < outputs.size(); ++i) {
     auto caps = checker.types.permissions(outputs[i]->type, expr.span, &decl);
@@ -69,10 +74,7 @@ BodyChecker::complete(const Statement &statement) {
            "completion cannot discard components without Drop", expr.span);
       return {};
     }
-    if (!caps->copy) {
-      operation.continuations.push_back(i);
-      results.push_back({outputs[i]->type, *role, expr.span});
-    }
+    results.push_back({outputs[i]->type, *role, expr.span});
   }
   auto emitted =
       emitResults(std::move(operation), std::move(results), expr.span);

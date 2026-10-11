@@ -280,7 +280,7 @@ void protocols() {
     protocol Run roles(P)(n:index@P,go:bool@P,x:Fr@P)->(a:State@P,b:State@P,data:Fr@P)completes{
       let mut a@P=make(x);let mut b@P=make(x);
       for _ in 0..n roles(P) max 4{
-        let (nextA,nextB)=finish_if @P(go)(data=x,b=b,a=a);
+        let (nextA,nextB,_)=finish_if @P(go)(data=x,b=b,a=a);
         a=nextA;b=nextB;
       }return(a,b,data=x);
     }run Demo=Run;

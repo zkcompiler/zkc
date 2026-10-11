@@ -222,7 +222,7 @@ def test_child_start_codec_and_conditional_completion(toolchain, journal, direct
         'secret:F@P,challenges:Random<F>@V)->(ok:bool@V) completes{')
     text = text.replace(
         '#[site(final_pick)]',
-        'let ()=finish_if @P(done(rounds))();let ()=finish_if @V(done(rounds))(ok=true);'
+        'let ()=finish_if @P(done(rounds))();let _=finish_if @V(done(rounds))(ok=true);'
         '#[site(final_pick)]')
     source = directory / 'main.zkc'
     source.write_text(text + '\nfn done(rounds:index)->bool{return rounds==1;}')

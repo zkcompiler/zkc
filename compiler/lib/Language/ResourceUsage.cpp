@@ -42,6 +42,17 @@ bool BodyChecker::finish(Span span) {
       return false;
   return true;
 }
+bool BodyChecker::finishOwner(unsigned owner, Span span) {
+  for (auto *scope = this; scope; scope = scope->enclosing)
+    for (unsigned i = 0; i < scope->body.values.size(); ++i) {
+      if (!checker.types.charge(1, span))
+        return false;
+      if (llvm::is_contained(scope->body.values[i].components, owner) &&
+          !scope->finishValue(ValueId{i}, span))
+        return false;
+    }
+  return true;
+}
 bool BodyChecker::finishValue(ValueId value, Span span) {
   auto &state = uses[value.index];
   std::function<bool(const Type &, std::vector<unsigned>, unsigned)> check =

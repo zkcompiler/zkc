@@ -149,7 +149,7 @@ void examples() {
           "for _ in 0..count(n) roles(P,V) max 4{}return ();}",
           "source.roles");
   native("protocol Run roles(P,V)(s:F@(P,V),go:bool@V)->(r:F@V)completes{"
-         "let ()=finish_if @V(yes(go))(r=f(s));return f(s);}run Demo=Run;");
+         "let _=finish_if @V(yes(go))(r=f(s));return f(s);}run Demo=Run;");
   native("fn check(go:bool)->bool{require go;return go;}"
          "protocol Run roles(P,V)(go:bool@V)->(r:bool@V){require "
          "yes(go);return check(go);}run Demo=Run;");

@@ -54,6 +54,8 @@ private:
   bool demand(ValueId, llvm::ArrayRef<unsigned>, Span);
   bool settle(Placement &);
   std::optional<std::vector<unsigned>> activeRoles;
+  /// Protocol repetition may complete an owner in every enclosing scope.
+  BodyChecker *enclosing = nullptr;
   struct BindingState {
     Type type;
     std::vector<unsigned> roles;
@@ -107,6 +109,7 @@ private:
   bool use(ValueId, Span, llvm::ArrayRef<unsigned> = {});
   bool finish(Span);
   bool finishValue(ValueId, Span);
+  bool finishOwner(unsigned, Span);
   bool available(ValueId, llvm::ArrayRef<unsigned> = {});
   bool intersectUses(Uses &, const Uses &, Span);
   std::optional<ValueId> input(const Type &, std::vector<unsigned>, Span);

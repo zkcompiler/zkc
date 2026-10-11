@@ -29,14 +29,14 @@ BodyChecker::regionStates(const RegionInputs &inputs, Span span) {
   auto states = inputs.writes;
   for (const auto &place : inputs.places) {
     const auto &state = bindings.at(place.binding);
-    auto caps = checker.types.permissions(state.type, span, &decl);
-    if (!caps)
+    if (!checker.types.charge(1, span))
       return {};
     // A partially moved root can only supply its remaining places. Assignment
     // may restore the whole binding in a branch, but loops need an initial
     // root.
-    if (syntax.bindings[place.binding.index].mutableBinding && !caps->copy &&
-        state.value && available(*state.value))
+    // Authored mutability decides state, independently of usage inference.
+    if (syntax.bindings[place.binding.index].mutableBinding && state.value &&
+        available(*state.value))
       states.insert(place.binding);
   }
   return states;

@@ -734,14 +734,7 @@ class Comparator {
           return fail("completion owner, site or affine successors differ");
         for (unsigned i = 0; i < positions.size(); ++i)
           input[positions[i]] = actual->getResult(i);
-        unsigned offset = 1;
-        for (unsigned port = 0; port < completion->values.size(); ++port) {
-          unsigned width = values[completion->values[port].index].size();
-          if (llvm::is_contained(completion->continuations, port))
-            result.append(input.begin() + offset,
-                          input.begin() + offset + width);
-          offset += width;
-        }
+        result.append(input.begin() + 1, input.end());
       } else if (auto *check = std::get_if<Require>(&op.action)) {
         const bool protocol = source.mode == Body::Mode::Protocol;
         if (source.mode == Body::Mode::Math ||
@@ -926,7 +919,8 @@ class Comparator {
       // derived native availability; it must contain the source guarantee.
       bool derived = std::holds_alternative<MathValue>(op.action) ||
                      std::holds_alternative<Construct>(op.action) ||
-                     std::holds_alternative<Projection>(op.action);
+                     std::holds_alternative<Projection>(op.action) ||
+                     std::holds_alternative<ProtocolCompletion>(op.action);
       if (auto *call = std::get_if<HelperCall>(&op.action))
         derived = !call->owner;
       unsigned offset = 0;

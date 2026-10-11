@@ -507,7 +507,6 @@ class SpecializationCheck {
             } else if constexpr (std::is_same_v<T, ProtocolCompletion>)
               return map(action.condition).index == value.condition.index &&
                      action.owner == value.owner &&
-                     action.continuations == value.continuations &&
                      same(value.values, mapped(action.values));
             else if constexpr (std::is_same_v<T, LocalControl>) {
               if (action.kind != value.kind ||

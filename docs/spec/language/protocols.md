@@ -346,7 +346,7 @@ iteration and is never hoisted or evaluated speculatively.
 
 ```text
 protocol Run roles(V)(go: bool @V, x: Fr @V) -> (result: Fr @V) completes {
-  let () = finish_if @V(go) (result = x);
+  let _ = finish_if @V(go) (result = x);
   return (result = x + x);
 }
 ```
@@ -363,13 +363,18 @@ its remaining actions. False continues. Neither path informs peers or equates
 shared output components. Every suffix remains statically checked. This action
 is normal completion, distinct from a guard failure or host retry decision.
 
-The binding list names the outputs without `Copy`, in declaration order. Those
-values move on both paths; false returns fresh continuations. Copyable outputs
-remain usable through their original bindings. A product continuation preserves
-its copyable data leaves and replaces each native affine leaf with the action's
-successor. Generic definitions retain their declared move discipline even when
-an instantiation selects a copyable type. Normal cleanup follows the existing
-[entry completion contract](../ir/completion.md).
+The binding list names every owner output in declaration order. Its shape is
+independent of usage properties: false returns all supplied logical values.
+A product continuation preserves its ordinary data leaves and replaces each
+native affine leaf with the action's successor. Restricted outputs transfer on
+both paths and must be used through their continuations on false. Ordinary
+outputs may also remain usable through their original bindings.
+
+True completion must discharge every live non-droppable value of that owner,
+including values outside an enclosing repeat and remaining fields of partially
+moved products. Transferring an output discharges its obligation. Completing one
+participant does not discharge another participant's values. Normal cleanup
+follows the existing [entry completion contract](../ir/completion.md).
 
 ## Relations and specification clauses
 

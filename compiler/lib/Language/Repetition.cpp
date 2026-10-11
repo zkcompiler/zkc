@@ -35,11 +35,24 @@ bool BodyChecker::repeat(const Expression &expr) {
   auto selectedStates = regionStates(*summary, expr.span);
   if (!selectedStates)
     return false;
-  const auto &states = *selectedStates;
+  auto &states = *selectedStates;
+  // A read of a mutable family may select fewer participants than its binding.
+  // Keep that read as an invariant; only authored updates require the complete
+  // family to travel through the loop's state ports.
+  for (auto it = states.begin(); it != states.end();) {
+    const auto &state = bindings.at(*it);
+    if (!summary->writes.count(*it) &&
+        !std::includes(roles->begin(), roles->end(), state.roles.begin(),
+                       state.roles.end()))
+      it = states.erase(it);
+    else
+      ++it;
+  }
   ProtocolRepeat operation{*roles, *count, maximum->dimension, {}, {}, {}, {}};
   auto region = std::make_shared<Body>();
   region->mode = Body::Mode::Protocol;
   BodyChecker nested(checker, decl, syntax, *region, callDepth);
+  nested.enclosing = this;
   nested.activeRoles = *roles;
   auto index = nested.input(Type(Type::Kind::Index), *roles, expr.index.span);
   if (!index)
