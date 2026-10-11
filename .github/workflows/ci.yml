@@ -165,7 +165,7 @@ jobs:
     # Preserve the existing required-check name across the job split.
     name: Native build and execution
     needs: [changes, native-packages, rust]
-    if: always() && (github.event_name == 'pull_request' || github.event_name == 'push')
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -189,7 +189,7 @@ jobs:
   main:
     name: Full main packages and checks
     needs: [changes, native]
-    if: always() && ((github.event_name == 'push' && needs.changes.outputs.native == 'true' && needs.native.result == 'success') || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'main' || inputs.scope == 'cache')))
+    if: ${{ !cancelled() && ((github.event_name == 'push' && needs.changes.outputs.native == 'true' && needs.native.result == 'success') || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'main' || inputs.scope == 'cache'))) }}
     runs-on: ${{ vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: ${{ inputs.scope == 'cache' && 360 || 180 }}
     steps:
