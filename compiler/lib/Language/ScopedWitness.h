@@ -16,6 +16,11 @@ struct ScopedSource {
   std::map<BindingId, unsigned> scoped, domains;
   ScopedSignature signature;
 };
+struct ScopedInvocationSource {
+  DeclarationId owner;
+  uint32_t expression;
+  std::shared_ptr<const SyntaxDeclaration> syntax;
+};
 struct ScopedCallSource {
   DeclarationId owner, target;
   uint32_t expression;

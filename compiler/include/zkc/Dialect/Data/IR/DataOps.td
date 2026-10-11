@@ -4,6 +4,7 @@ include "zkc/Dialect/Data/IR/DataDialect.td"
 include "zkc/Dialect/Types.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "zkc/Dialect/Kernels.td"
+include "zkc/Interfaces/Mathematical.td"
 include "mlir/IR/SymbolInterfaces.td"
 
 def Data_DomainOp : Op<DataDialect, "domain", [Symbol, IsolatedFromAbove, SingleBlock]> {
@@ -58,7 +59,8 @@ def SequenceEmptyExecOp : KernelOp<DataDialect, "exec.sequence_empty", [OpSequen
 def SequenceAppendExecOp : KernelOp<DataDialect, "exec.sequence_append", [OpSequenceAppend]>;
 def SequenceLengthExecOp : KernelOp<DataDialect, "exec.sequence_length", [OpSequenceLength]>;
 def SequenceAtExecOp : KernelOp<DataDialect, "exec.sequence_at", [OpSequenceAt]>;
-class DataExpression<string name> : Op<DataDialect, name, [Pure]> {
+class DataExpression<string name, list<Trait> traits = []>
+    : Op<DataDialect, name, !listconcat([Pure], traits)> {
   let hasVerifier = 1;
 }
 def Data_SequenceEmptyOp : DataExpression<"sequence_empty"> {
@@ -72,15 +74,15 @@ def Data_SequenceLengthOp : DataExpression<"sequence_length"> {
   let arguments = (ins Sequence:$input);
   let results = (outs UI64:$output);
 }
-def Data_IndexOp : DataExpression<"index"> {
+def Data_IndexOp : DataExpression<"index", [DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
   let arguments = (ins StrAttr:$value);
   let results = (outs UI64:$output);
 }
-def Data_EqualOp : DataExpression<"index_equal"> {
+def Data_EqualOp : DataExpression<"index_equal", [DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
   let arguments = (ins UI64:$lhs, UI64:$rhs);
   let results = (outs I1:$output);
 }
-def Data_LessOp : DataExpression<"index_less"> {
+def Data_LessOp : DataExpression<"index_less", [DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
   let arguments = (ins UI64:$lhs, UI64:$rhs);
   let results = (outs I1:$output);
 }

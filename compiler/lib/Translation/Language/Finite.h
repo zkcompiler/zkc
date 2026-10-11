@@ -17,7 +17,7 @@ emitFinite(const ClosedEntry &, const Body &, const FiniteComputation &,
 llvm::Expected<llvm::SmallVector<mlir::Value>>
 compareFinite(const ClosedEntry &, const Body &, const FiniteComputation &,
               const Type &, llvm::ArrayRef<llvm::SmallVector<mlir::Value>>,
-              mlir::Operation &,
+              mlir::Block &, mlir::Block::iterator &,
               const std::map<std::string, mlir::Operation *> &definitions,
               std::set<mlir::Operation *> &used, Layouts &,
               llvm::StringRef prefix, llvm::StringRef site, const Limits &,

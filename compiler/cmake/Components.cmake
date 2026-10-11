@@ -98,6 +98,7 @@ add_zkc_component(Language
   lib/Language/Scoped.cpp
   lib/Language/FiniteDomains.cpp
   lib/Language/FiniteDefinitions.cpp
+  lib/Language/FiniteContracts.cpp
   lib/Language/FiniteDomainArguments.cpp
   lib/Language/DomainClosure.cpp
   lib/Language/DomainWitness.cpp

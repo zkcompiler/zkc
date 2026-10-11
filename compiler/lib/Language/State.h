@@ -13,6 +13,7 @@ struct CaptureStorage {
 struct ReductionSource;
 struct ScopedSource;
 struct ScopedCallSource;
+struct ScopedInvocationSource;
 struct CheckedStorage {
   explicit CheckedStorage(CapturedProject capture)
       : capture(std::move(capture)) {}
@@ -28,6 +29,7 @@ struct CheckedStorage {
   std::vector<std::shared_ptr<const ReductionSource>> reductions;
   std::vector<std::shared_ptr<const ScopedSource>> scopedSources;
   std::vector<std::shared_ptr<const ScopedCallSource>> scopedCalls;
+  std::vector<std::shared_ptr<const ScopedInvocationSource>> scopedInvocations;
 };
 struct ClosedStorage {
   std::vector<Asset> assets;

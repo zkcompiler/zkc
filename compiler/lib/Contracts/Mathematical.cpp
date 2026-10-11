@@ -5,6 +5,9 @@ llvm::ArrayRef<MathematicalIntrinsic> mathematicalIntrinsics() {
   using I = MathematicalIdentity;
   using D = MathematicalIntrinsic::Domain;
   static const MathematicalIntrinsic values[] = {
+      {"index.constant", I::IndexConstant, D::Index, 1},
+      {"index.equal", I::IndexEqual, D::Index, 0, false, true},
+      {"index.less", I::IndexLess, D::Index, 0, false, true},
       {"field.add", I::FieldAdd, D::Field, 0, false, true},
       {"field.sub", I::FieldSubtract, D::Field, 0, false, true},
       {"field.mul", I::FieldMultiply, D::Field, 0, false, true},

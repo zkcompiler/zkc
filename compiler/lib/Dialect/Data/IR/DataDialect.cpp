@@ -70,6 +70,22 @@ LogicalResult IndexOp::verify() {
     return refuse(*this, "expected a canonical unsigned 64-bit natural");
   return success();
 }
+std::optional<MathematicalIdentity> IndexOp::getMathematicalIdentity() {
+  return MathematicalIdentity::IndexConstant;
+}
+SmallVector<unsigned> IndexOp::getOperandDependencies(unsigned) { return {}; }
+std::optional<MathematicalIdentity> EqualOp::getMathematicalIdentity() {
+  return MathematicalIdentity::IndexEqual;
+}
+SmallVector<unsigned> EqualOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
+}
+std::optional<MathematicalIdentity> LessOp::getMathematicalIdentity() {
+  return MathematicalIdentity::IndexLess;
+}
+SmallVector<unsigned> LessOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
+}
 LogicalResult EqualOp::verify() { return success(); }
 LogicalResult LessOp::verify() { return success(); }
 LogicalResult MakeOp::verify() {

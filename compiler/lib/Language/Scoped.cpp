@@ -168,8 +168,8 @@ BodyChecker::scopedArgument(uint32_t id, const ScopedSignature &signature,
   body.scopedBindings.push_back(std::move(binding));
   return index;
 }
-std::optional<ValueId> BodyChecker::invokeScoped(const Expression &expr,
-                                                 unsigned depth) {
+std::optional<ValueId> BodyChecker::invokeScoped(uint32_t id, unsigned depth) {
+  const auto &expr = syntax.expressions[id];
   auto found = scoped.find(*expr.binding);
   if (found == scoped.end()) {
     fail("source.scoped", "lexical binding is not callable", expr.span);
@@ -185,8 +185,10 @@ std::optional<ValueId> BodyChecker::invokeScoped(const Expression &expr,
   std::vector<ValueId> operands;
   for (unsigned i = 0; i < expr.children.size(); ++i) {
     auto value = expression(expr.children[i], signature.inputs[i], depth + 1);
-    if (!value || !use(*value, expr.span))
+    if (!value || !use(*value, expr.span) ||
+        !checker.types.charge(1, expr.span))
       return {};
+    body.expressionValues.insert_or_assign(expr.children[i], *value);
     operands.push_back(*value);
   }
   body.mayStop |= signature.allowance.mayStop;
@@ -195,11 +197,22 @@ std::optional<ValueId> BodyChecker::invokeScoped(const Expression &expr,
   auto dependencies = combine(operands, expr.span);
   if (!dependencies)
     return {};
-  return emit(ScopedInvoke{found->second, std::move(operands)},
+  if (!checker.types.charge(1, expr.span))
+    return {};
+  auto source = uint32_t(checker.scopedInvocations.size());
+  checker.scopedInvocations.push_back(std::make_shared<ScopedInvocationSource>(
+      ScopedInvocationSource{decl.id, id, {}}));
+  return emit(ScopedInvoke{found->second, std::move(operands), source},
               signature.result, ordered ? Components{} : *dependencies,
               expr.span);
 }
 bool Checker::retainScopedSources() {
+  for (auto &source : scopedInvocations) {
+    source->syntax = retainSyntax(source->owner);
+    if (!source->syntax)
+      return false;
+    output.scopedInvocations.push_back(std::move(source));
+  }
   for (auto &source : scopedSources) {
     source->syntax = retainSyntax(source->owner);
     if (!source->syntax)

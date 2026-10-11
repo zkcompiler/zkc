@@ -10,6 +10,23 @@ Semantics::intrinsicSignature(const Declaration *scope, StringRef name,
                               ArrayRef<std::string> parameters, Span span) {
   const auto *intrinsic = mathematicalIntrinsic(name);
   using K = Type::Kind;
+  if (intrinsic && intrinsic->domain == MathematicalIntrinsic::Domain::Index) {
+    if (intrinsic->identity == MathematicalIdentity::IndexConstant) {
+      if (arguments.size() != 1 || arguments.front().kind != K::Natural ||
+          !parameters.empty()) {
+        fail("source.intrinsic", "index constant requires one static natural",
+             span);
+        return {};
+      }
+      return CallSignature{{}, {Type(K::Index)}};
+    }
+    if (!arguments.empty() || !parameters.empty()) {
+      fail("source.intrinsic",
+           "index comparison has no static roots or parameters", span);
+      return {};
+    }
+    return CallSignature{{Type(K::Index), Type(K::Index)}, {Type{}}};
+  }
   if (intrinsic &&
       intrinsic->domain == MathematicalIntrinsic::Domain::Boolean) {
     if (!arguments.empty() || !parameters.empty()) {

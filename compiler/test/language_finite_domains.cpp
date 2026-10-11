@@ -37,6 +37,166 @@ const Declaration &declarationNamed(const CheckedProject &project,
 } // namespace
 int main() {
   Cases cases;
+
+  const std::string finitePrelude = R"(
+domain Fr=field("koala-bear");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+fn apply<A:Type,B:Type>(x:A,body:scoped fn(A)->B !{stop})->B !{stop}{return body(x);}
+)";
+  for (const auto &body :
+       {std::string("return fold(rows,0,fun s x=>s+term(x));"),
+        std::string("let alias=rows;return fold(alias,0,fun s x=>s+term(x));"),
+        std::string(
+            "return fold(step=fun s x=>s+term(x),initial=0,rows=rows);"),
+        std::string("return fold(rows,0,fun s x=>apply(s,fun t=>t+term(x)));"),
+        std::string("return fold(rows,0,fun s x=>{let value=if flag {term(x)} "
+                    "else {0};s+value});"),
+        std::string("return fold(rows,0,fun s x=>{let mut result:Fr=s;for j in "
+                    "0..2 {result=result+term(x);}result});")})
+    cases.run("restricted item forwarding " + body, [&] {
+      auto project = take(check(finitePrelude + R"(
+fn sum(rows:scoped domain<Fr>,flag:bool,term:scoped fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{
+)" + body + R"(
+}
+fn reordered(unused:scoped domain<Fr>,rows:scoped domain<Fr>,term:scoped fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{return sum(rows,true,term);}
+protocol Demo roles(P)(xs:Vector<Fr>@P,shift:Fr@P)->(r:Fr@P){return reordered(elements(xs),elements(xs),fun x=>x+shift);}run Run=Demo;
+)"));
+      take(closeEntry(project, "m::Run"));
+    });
+  for (const auto &body :
+       {std::string("return term(0);"), std::string("return apply(0,term);"),
+        std::string("return fold(b,0,fun s x=>s+term(x));"),
+        std::string("return fold(a,0,fun s x=>s+term(x+1));"),
+        std::string("return fold(a,0,fun s x=>apply(x,fun y=>s+term(y)));"),
+        std::string("return fold(a,0,fun s x=>{let mut y=x;for i in 0..2 "
+                    "{y=term(y);}s+y});")})
+    cases.run("restricted item refusal " + body, [&] {
+      refuses(check(finitePrelude + R"(
+fn invalid(a:scoped domain<Fr>,b:scoped domain<Fr>,term:scoped fn(Fr)->Fr !{stop} on(a))->Fr !{stop}{
+)" + body + "}"),
+              "source.scoped-domain");
+    });
+  cases.run("unrestricted callbacks satisfy a restricted consumer", [&] {
+    take(check(finitePrelude + R"(
+fn wrapper(rows:scoped domain<Fr>,step:scoped fn(Fr,Fr)->Fr !{stop})->Fr !{stop}{return fold(rows,0,step);}
+)"));
+  });
+  cases.run("restricted forwarding cannot switch formal domain", [&] {
+    refuses(check(finitePrelude + R"(
+fn wrapper(a:scoped domain<Fr>,b:scoped domain<Fr>,step:scoped fn(Fr,Fr)->Fr !{stop} on(a))->Fr !{stop}{return fold(b,0,step);}
+)"),
+            "source.scoped-domain");
+  });
+  cases.run("reconstructed product is not a genuine domain item", [&] {
+    refuses(check(finitePrelude + R"(
+fn wrapper(rows:scoped domain<(Fr,Fr)>,term:scoped fn((Fr,Fr))->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fun s (a,b)=>s+term((a,b)));}
+)"),
+            "source.scoped-domain");
+  });
+  cases.run("retained witness rechecks finite invocation contracts", [&] {
+    auto project = take(check(finitePrelude + R"(
+fn wrapper(rows:scoped domain<Fr>,step:scoped fn(Fr,Fr)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,step);}
+)"));
+    // Weakening the selected callee must not authorize a restricted callback.
+    auto &fold =
+        const_cast<Declaration &>(declarationNamed(project, "m::fold"));
+    fold.scopedInputs[0].signature.itemDomain.reset();
+    auto error = checkScopedElaboration(project);
+    require(bool(error), "weakened item contract accepted");
+    require(toString(std::move(error)).find("source.scoped-witness") !=
+                std::string::npos,
+            "wrong item contract refusal");
+  });
+  for (bool valid : {false, true})
+    cases.run(valid ? "nested regions retain restricted formal order"
+                    : "nested regions refuse fabricated restricted item",
+              [&] {
+                std::string source =
+                    finitePrelude + R"(
+fn nested(rows:scoped domain<Fr>,free:scoped fn(Fr)->Fr !{stop},term:scoped fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{
+ return fold(rows,0,fun state item=>{let mut result:Fr=state;
+   for j in 0..2 {let value=if true {term()" +
+                    std::string(valid ? "item" : "0") +
+                    R"()} else {free(item)};result=result+value;}
+   result});
+}
+)";
+                if (valid) {
+                  auto project = take(check(source));
+                  if (auto error = checkScopedElaboration(project))
+                    throw std::runtime_error(toString(std::move(error)));
+                } else
+                  refuses(check(source), "source.scoped-domain");
+              });
+  for (bool mutateFormal : {false, true})
+    cases.run(
+        mutateFormal ? "scoped formal parameter mutation refuses"
+                     : "scoped invocation target mutation refuses",
+        [&] {
+          auto project = take(check(finitePrelude + R"(
+fn nested(rows:scoped domain<Fr>,free:scoped fn(Fr)->Fr !{stop},term:scoped fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{
+ return fold(rows,0,fun state item=>{let mut result:Fr=state;
+   for j in 0..2 {let value=if true {term(item)} else {free(item)};result=result+value;}
+   result});
+}
+)"));
+          bool changed = false;
+          std::function<void(Body &)> mutate = [&](Body &body) {
+            for (auto &op : body.operations) {
+              if (auto *invoke = std::get_if<ScopedInvoke>(&op.action);
+                  invoke && !changed && invoke->binding == 1) {
+                if (mutateFormal)
+                  body.scopedBindings[1].parameter = 0;
+                else
+                  invoke->binding = 0;
+                changed = true;
+              }
+              if (auto *control = std::get_if<LocalControl>(&op.action))
+                for (const auto &region : control->regions)
+                  mutate(const_cast<Body &>(*region));
+            }
+            for (auto &binding : body.scopedBindings)
+              if (binding.computation)
+                mutate(const_cast<Body &>(*binding.computation->body));
+          };
+          mutate(
+              const_cast<Body &>(*declarationNamed(project, "m::nested").body));
+          require(changed, "scoped witness mutation target missing");
+          auto error = checkScopedElaboration(project);
+          require(bool(error), "corrupted scoped invocation accepted");
+          require(toString(std::move(error)).find("source.scoped-witness") !=
+                      std::string::npos,
+                  "wrong scoped identity refusal");
+        });
+  cases.run("scoped invocation operand order mutation refuses", [&] {
+    auto project = take(check(R"(
+domain Fr=field("koala-bear");
+fn apply(a:Fr,b:Fr,body:scoped fn(Fr,Fr)->Fr !{})->Fr{return body(a,b);}
+)"));
+    auto &body =
+        const_cast<Body &>(*declarationNamed(project, "m::apply").body);
+    bool changed = false;
+    for (auto &op : body.operations)
+      if (auto *invoke = std::get_if<ScopedInvoke>(&op.action)) {
+        std::swap(invoke->operands[0], invoke->operands[1]);
+        changed = true;
+      }
+    require(changed, "missing scoped invocation");
+    auto error = checkScopedElaboration(project);
+    require(bool(error), "scoped operand permutation accepted");
+    require(toString(std::move(error)).find("source.scoped-witness") !=
+                std::string::npos,
+            "wrong invocation operand refusal");
+  });
+  cases.run("total index literal overflow refuses", [&] {
+    refuses(check("math fn bad()->index{return 18446744073709551616;}"),
+            "source.literal");
+  });
+  cases.run("index intrinsic static arguments refuse", [&] {
+    refuses(check("math fn bad(a:index,b:index)->bool{return "
+                  "intrinsic<1>(\"index.less\",a,b);}"),
+            "source.intrinsic");
+  });
   cases.run("registered finite definitions retain ordered callback slots", [] {
     auto project = take(check(R"(
 fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");

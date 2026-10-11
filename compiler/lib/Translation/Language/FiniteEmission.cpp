@@ -121,26 +121,119 @@ class FiniteEmitter {
     }
     return result;
   }
+  // Fixed source arrays use their ordinary flattened ABI at the source
+  // boundary. Materialize the existing immutable Sequence carrier once per
+  // domain input, preserving product and Unit elements without a new ABI.
+  std::optional<mlir::Value> array(unsigned index) {
+    const auto &source = finite.domain->inputs[index];
+    auto input = values[finite.domainOperands[index].index];
+    auto packed = take(layouts.packed(source.arguments.front()));
+    if (!packed)
+      return {};
+    auto element =
+        protocol::decodeBoundType(builder.getContext(), packed->carrier);
+    if (!element) {
+      failure = error("source.layout", "array element dialect unavailable");
+      return {};
+    }
+    auto size = source.dimension.closedValue();
+    auto width = packed->flat->leaves.size();
+    if ((width && size > input.size() / width) ||
+        size * width != input.size()) {
+      failure = error("source.layout", "array flattened extent differs");
+      return {};
+    }
+    auto sequence = data::SequenceType::get(builder.getContext(), element);
+    auto suffix = "_array_" + std::to_string(index);
+    auto name = prefix + suffix;
+    auto signature =
+        builder.getFunctionType(mlir::ValueRange(input).getTypes(), {sequence});
+    {
+      mlir::OpBuilder::InsertionGuard guard(builder);
+      builder.setInsertionPointToEnd(&definitions);
+      auto *helper =
+          make("func.func", {}, {},
+               {text("sym_name", name), text("sym_visibility", "private"),
+                builder.getNamedAttr("function_type",
+                                     mlir::TypeAttr::get(signature))},
+               true);
+      if (!helper)
+        return {};
+      auto &block = helper->getRegion(0).front();
+      for (auto value : input)
+        block.addArgument(value.getType(), location);
+      builder.setInsertionPointToEnd(&block);
+      auto *empty = make("data.sequence_empty", {sequence}, {});
+      if (!empty)
+        return {};
+      auto result = empty->getResult(0);
+      if (!charge(size + input.size()))
+        return {};
+      for (uint64_t i = 0; i < size; ++i) {
+        if (!count(packed->product ? 1 : 0))
+          return {};
+        auto item = take(emitPack(builder, location, *packed,
+                                  block.getArguments().slice(i * width, width),
+                                  PackingMode::Mathematical));
+        if (!item)
+          return {};
+        auto *append =
+            make("data.sequence_append", {sequence}, {result, *item});
+        if (!append)
+          return {};
+        result = append->getResult(0);
+      }
+      if (!make("func.return", {}, result))
+        return {};
+      if (local) {
+        builder.setInsertionPointToEnd(&definitions);
+        if (!make("local.realize", {}, {},
+                  {text("sym_name", name + "_realize"), symbol("helper", name),
+                   builder.getNamedAttr("function_type",
+                                        mlir::TypeAttr::get(signature))}))
+          return {};
+      }
+    }
+    SmallVector<mlir::NamedAttribute> attrs{
+        symbol("callee", local ? name + "_realize" : name)};
+    if (local)
+      attrs.push_back(text("site", site.str() + suffix));
+    auto *call =
+        make(local ? "local.apply" : "func.call", {sequence}, input, attrs);
+    return call ? std::optional<mlir::Value>(call->getResult(0)) : std::nullopt;
+  }
+  bool domainInputs() {
+    for (unsigned i = 0; i < finite.domainOperands.size(); ++i) {
+      if (finite.domain->inputs[i].kind == Type::Kind::Array) {
+        auto adapted = array(i);
+        if (!adapted)
+          return false;
+        domainOperands.push_back(*adapted);
+      } else {
+        const auto &input = values[finite.domainOperands[i].index];
+        if (input.size() != 1) {
+          failure = error("source.layout",
+                          "domain input requires one native carrier");
+          return false;
+        }
+        domainOperands.push_back(input.front());
+      }
+    }
+    return true;
+  }
   bool descriptor() {
     mlir::OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToEnd(&definitions);
     const auto &shape = *finite.domain;
     std::vector<mlir::Value> nodes;
-    // Ordinary descriptor inputs are native containers or index values. The
-    // structural-array adapter is supplied outside this declaration.
-    for (unsigned i = 0; i < shape.inputs.size(); ++i)
-      if (values[finite.domainOperands[i].index].size() != 1) {
-        failure = error("source.layout",
-                        "structural domain input needs its collection adapter");
-        return false;
-      }
     for (const auto &node : shape.nodes) {
       Types items;
       if (node.kind == DomainBinding::Kind::Zip ||
           node.kind == DomainBinding::Kind::Product) {
         for (auto child : node.children)
           llvm::append_range(items, itemTypes.at(child));
-      } else if (node.kind == DomainBinding::Kind::Elements &&
+      } else if ((node.kind == DomainBinding::Kind::Elements ||
+                  node.kind == DomainBinding::Kind::SourceArray) &&
                  mlir::isa<data::SequenceType>(
                      domainOperands[node.operands.front().index].getType())) {
         items.push_back(
@@ -185,6 +278,7 @@ class FiniteEmitter {
       SmallVector<mlir::NamedAttribute> attributes;
       switch (node.kind) {
       case DomainBinding::Kind::Elements:
+      case DomainBinding::Kind::SourceArray:
         name = "data.domain_elements";
         break;
       case DomainBinding::Kind::Indices:
@@ -245,7 +339,8 @@ class FiniteEmitter {
       }
       return result;
     }
-    if (node.kind == DomainBinding::Kind::Elements &&
+    if ((node.kind == DomainBinding::Kind::Elements ||
+         node.kind == DomainBinding::Kind::SourceArray) &&
         mlir::isa<data::SequenceType>(
             domainOperands[node.operands.front().index].getType())) {
       auto packed = take(layouts.packed(node.item));
@@ -351,7 +446,8 @@ public:
     (void)!!failure;
   }
   Expected<Values> run() {
-    domainOperands = flatten(finite.domainOperands);
+    if (!domainInputs())
+      return std::move(failure);
     initial = flatten(finite.operands);
     auto body = capturePorts(finite.body.captures);
     auto predicate = finite.predicate

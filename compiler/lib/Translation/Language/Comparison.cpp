@@ -461,7 +461,16 @@ class Comparator {
         for (unsigned i = 0; i < dependencies.size(); ++i)
           if (dependencies[i] != i)
             return fail("mathematical dependency order differs");
-        if (math->identity == MathematicalIdentity::FieldConstant) {
+        if (math->identity == MathematicalIdentity::IndexConstant) {
+          auto literal =
+              math->literal.empty()
+                  ? std::to_string(
+                        math->staticArguments.front().dimension.closedValue())
+                  : math->literal;
+          if (!attributes(*actual, {"value"}) ||
+              !string(*actual, "value", literal))
+            return fail("index literal differs");
+        } else if (math->identity == MathematicalIdentity::FieldConstant) {
           if (!attributes(*actual, {"value"}) ||
               !string(*actual, "value", math->literal))
             return fail("field literal differs");
@@ -599,15 +608,18 @@ class Comparator {
       } else if (auto *finite = std::get_if<FiniteComputation>(&op.action)) {
         if (cursor == block.end())
           return fail("omitted finite computation");
-        auto &actual = *cursor++;
-        auto compared = take(
-            compareFinite(project, source, *finite,
-                          source.values[op.results.front().index].type, values,
-                          actual, finiteDefinitions, usedFiniteDefinitions,
-                          layouts, "finite_" + decl.symbol + "_" + site, site,
-                          limits, report.operations, remaining));
-        if (!compared || !record(actual, op.span))
+        auto first = cursor;
+        auto compared = take(compareFinite(
+            project, source, *finite,
+            source.values[op.results.front().index].type, values, block, cursor,
+            finiteDefinitions, usedFiniteDefinitions, layouts,
+            "finite_" + decl.symbol + "_" + site, site, limits,
+            report.operations, remaining));
+        if (!compared)
           return false;
+        for (auto emitted = first; emitted != cursor; ++emitted)
+          if (!record(*emitted, op.span))
+            return false;
         result = std::move(*compared);
       } else if (auto *bulk = std::get_if<BulkApplication>(&op.action)) {
         auto &target = project.declarations()[bulk->callee.index];

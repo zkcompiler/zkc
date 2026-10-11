@@ -218,6 +218,8 @@ struct ClosureLayout {
 struct ScopedInvoke {
   unsigned binding;
   std::vector<ValueId> operands;
+  /// Retained authored invocation, independently checked before closure.
+  uint32_t source;
 };
 /// A registered finite definition uses the same static environments as an
 /// authored helper. Fold operands contain its initial logical state; collect

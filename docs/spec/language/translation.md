@@ -47,7 +47,12 @@ reuse domain or capture ports; equal types do not justify reuse. Local definitio
 emit preparation callables and ordinary `local.apply` sites; Math definitions
 emit Algebra finite expressions. An independent reader checks constructor order,
 callback targets, operand mappings, packing and complete auxiliary-definition
-coverage against the closed source operation.
+coverage against the closed source operation. Fixed source-array operands are
+converted once to immutable sequences by private total helpers, using the
+ordinary element layout and preserving order and zero-width Unit elements.
+The source ABI remains flattened. Local callers use unconditional realizations
+of these helpers; mathematical callers use ordinary calls. The independent
+reader checks every packing and append operation and the conversion occurrence.
 
 Math helpers become private `func.func` definitions. A selected formula relation
 adds a non-callable `relation.declare` and a private Boolean `func.func`; its exact

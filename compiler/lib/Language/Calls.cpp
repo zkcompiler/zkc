@@ -11,16 +11,15 @@ namespace zkc::language::detail {
 std::optional<ValueId> BodyChecker::call(const Expression &expr,
                                          unsigned depth) {
   if (expr.binding)
-    return invokeScoped(expr, depth);
+    return invokeScoped(uint32_t(&expr - syntax.expressions.data()), depth);
   if (expr.roles) {
     fail("source.call", "role mappings belong to protocol calls", expr.span);
     return {};
   }
   if (expr.kind == Expression::Kind::Call && expr.text == "index") {
-    if (!local() || expr.arguments.size() != 1 || !expr.children.empty() ||
+    if (expr.arguments.size() != 1 || !expr.children.empty() ||
         !expr.staticLabels.empty() || !expr.callLabels.empty()) {
-      fail("source.call",
-           "index<N>() requires one static natural in local mode", expr.span);
+      fail("source.call", "index<N>() requires one static natural", expr.span);
       return {};
     }
     auto value = checker.type(decl, expr.arguments.front());
@@ -30,8 +29,13 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
       fail("source.type", "index<N>() requires a natural", expr.span);
       return {};
     }
-    return emit(LocalPrimitive{"index.constant", {}, {}, {*value}},
-                Type(Type::Kind::Index), {}, expr.span);
+    if (local())
+      return emit(LocalPrimitive{"index.constant", {}, {}, {*value}},
+                  Type(Type::Kind::Index), {}, expr.span);
+    return emit(
+        MathValue{MathematicalIdentity::IndexConstant, {}, {}, {*value}},
+        Type(Type::Kind::Index), math() ? std::vector<unsigned>{} : allRoles(),
+        expr.span);
   }
   if (expr.kind == Expression::Kind::Call && expr.text == "unpack") {
     if (!local() || expr.children.size() != 1 || !expr.arguments.empty() ||

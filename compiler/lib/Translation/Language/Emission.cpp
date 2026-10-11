@@ -438,6 +438,15 @@ class Emitter {
         default: {
           StringRef name;
           switch (math->identity) {
+          case MathematicalIdentity::IndexConstant:
+            name = "data.index";
+            break;
+          case MathematicalIdentity::IndexEqual:
+            name = "data.index_equal";
+            break;
+          case MathematicalIdentity::IndexLess:
+            name = "data.index_less";
+            break;
           case MathematicalIdentity::BooleanAnd:
             name = "arith.andi";
             break;
@@ -524,6 +533,11 @@ class Emitter {
           SmallVector<mlir::NamedAttribute> attrs;
           if (!math->literal.empty())
             attrs.push_back(text("value", math->literal));
+          else if (math->identity == MathematicalIdentity::IndexConstant)
+            attrs.push_back(text(
+                "value",
+                std::to_string(
+                    math->staticArguments.front().dimension.closedValue())));
           if (math->identity == MathematicalIdentity::ArrayAt ||
               math->identity == MathematicalIdentity::PolynomialSum) {
             auto value = math->staticArguments[2].dimension.closedValue();

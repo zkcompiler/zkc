@@ -24,7 +24,8 @@ class FiniteCheck {
   const FiniteComputation &finite;
   const Type &resultType;
   ArrayRef<Values> values;
-  mlir::Operation &actual;
+  mlir::Block &sourceBlock;
+  mlir::Block::iterator &sourceCursor;
   const std::map<std::string, mlir::Operation *> &definitions;
   std::set<mlir::Operation *> &used;
   Layouts &layouts;
@@ -149,16 +150,98 @@ class FiniteCheck {
     auto *op = &*cursor++;
     if (!count() || op->getName().getStringRef() != kind ||
         !llvm::equal(op->getOperands(), operands) ||
-        op->getResultTypes() != outputs || !attributes(*op, attrs)) {
+        op->getResultTypes() != outputs || op->getNumSuccessors() ||
+        !attributes(*op, attrs)) {
       fail("finite auxiliary operation differs");
       return nullptr;
     }
     return op;
   }
+  bool domainInputs() {
+    for (unsigned i = 0; i < finite.domainOperands.size(); ++i) {
+      const auto &source = finite.domain->inputs[i];
+      const auto &input = values[finite.domainOperands[i].index];
+      if (source.kind != Type::Kind::Array) {
+        if (input.size() != 1)
+          return fail("finite domain input carrier differs");
+        data.push_back(input.front());
+        continue;
+      }
+      auto packed = take(layouts.packed(source.arguments.front()));
+      if (!packed)
+        return false;
+      auto element = protocol::decodeBoundType(context, packed->carrier);
+      if (!element)
+        return fail("array element dialect unavailable");
+      auto size = source.dimension.closedValue();
+      auto width = packed->flat->leaves.size();
+      if ((width && size > input.size() / width) ||
+          size * width != input.size())
+        return fail("array flattened extent differs");
+      auto sequence = data::SequenceType::get(context, element);
+      auto suffix = "_array_" + std::to_string(i);
+      auto *helper = definition(
+          suffix, "func.func", mlir::ValueRange(input).getTypes(), {sequence},
+          true, {"sym_name", "sym_visibility", "function_type"});
+      if (!helper || !text(*helper, "sym_visibility", "private"))
+        return fail("array adapter visibility differs");
+      auto &block = helper->getRegion(0).front();
+      auto cursor = block.begin();
+      auto *empty =
+          next(block, cursor, "data.sequence_empty", {}, {sequence}, {});
+      if (!empty || empty->getNumRegions())
+        return fail("array adapter initial sequence differs");
+      mlir::Value result = empty->getResult(0);
+      if (!charge(size + input.size()))
+        return false;
+      for (uint64_t j = 0; j < size; ++j) {
+        auto leaves = block.getArguments().slice(j * width, width);
+        mlir::Value item;
+        if (packed->product) {
+          auto *pack = next(block, cursor, "data.make", leaves, {element},
+                            {"alternative"});
+          if (!pack || pack->getNumRegions() ||
+              !text(*pack, "alternative", packed->alternative))
+            return fail("array element packing differs");
+          item = pack->getResult(0);
+        } else {
+          if (leaves.size() != 1)
+            return fail("array scalar element layout differs");
+          item = leaves.front();
+        }
+        auto *append = next(block, cursor, "data.sequence_append",
+                            {result, item}, {sequence}, {});
+        if (!append || append->getNumRegions())
+          return fail("array element order differs");
+        result = append->getResult(0);
+      }
+      auto *ret = next(block, cursor, "func.return", result, {}, {});
+      if (!ret || ret->getNumRegions() || cursor != block.end())
+        return fail("array adapter result or work differs");
+      if (local) {
+        auto *realize =
+            definition(suffix + "_realize", "local.realize",
+                       mlir::ValueRange(input).getTypes(), {sequence}, false,
+                       {"sym_name", "helper", "function_type"});
+        if (!realize || !symbol(*realize, "helper", prefix + suffix))
+          return fail("array adapter realization differs");
+      }
+      SmallVector<StringRef> attrs{"callee"};
+      if (local)
+        attrs.push_back("site");
+      auto *call =
+          next(sourceBlock, sourceCursor, local ? "local.apply" : "func.call",
+               input, {sequence}, attrs);
+      if (!call || call->getNumRegions() ||
+          !symbol(*call, "callee",
+                  prefix + suffix + (local ? "_realize" : "")) ||
+          (local && !text(*call, "site", site.str() + suffix)))
+        return fail("array adapter occurrence differs");
+      data.push_back(call->getResult(0));
+    }
+    return true;
+  }
   bool descriptor() {
-    for (auto input : finite.domainOperands)
-      if (values[input.index].size() != 1)
-        return fail("structural domain input lacks an adapter");
     const auto &shape = *finite.domain;
     for (const auto &node : shape.nodes) {
       Types result;
@@ -166,7 +249,8 @@ class FiniteCheck {
           node.kind == DomainBinding::Kind::Product) {
         for (auto child : node.children)
           llvm::append_range(result, items.at(child));
-      } else if (node.kind == DomainBinding::Kind::Elements &&
+      } else if ((node.kind == DomainBinding::Kind::Elements ||
+                  node.kind == DomainBinding::Kind::SourceArray) &&
                  mlir::isa<data::SequenceType>(
                      data[node.operands.front().index].getType()))
         result.push_back(mlir::cast<data::SequenceType>(
@@ -202,6 +286,7 @@ class FiniteCheck {
       SmallVector<StringRef> attrs;
       switch (node.kind) {
       case DomainBinding::Kind::Elements:
+      case DomainBinding::Kind::SourceArray:
         name = "data.domain_elements";
         break;
       case DomainBinding::Kind::Indices:
@@ -272,7 +357,8 @@ class FiniteCheck {
       }
       return result;
     }
-    if (node.kind != DomainBinding::Kind::Elements ||
+    if ((node.kind != DomainBinding::Kind::Elements &&
+         node.kind != DomainBinding::Kind::SourceArray) ||
         !mlir::isa<data::SequenceType>(
             data[node.operands.front().index].getType()))
       return Values(arguments);
@@ -408,20 +494,23 @@ class FiniteCheck {
 public:
   FiniteCheck(const ClosedEntry &project, const Body &source,
               const FiniteComputation &finite, const Type &resultType,
-              ArrayRef<Values> values, mlir::Operation &actual,
+              ArrayRef<Values> values, mlir::Block &sourceBlock,
+              mlir::Block::iterator &sourceCursor,
               const std::map<std::string, mlir::Operation *> &definitions,
               std::set<mlir::Operation *> &used, Layouts &layouts,
               StringRef prefix, StringRef site, const Limits &limits,
               uint64_t &operations, uint64_t &remaining)
       : project(project), finite(finite), resultType(resultType),
-        values(values), actual(actual), definitions(definitions), used(used),
-        layouts(layouts), prefix(prefix), site(site), limits(limits),
-        operations(operations), remaining(remaining),
-        local(source.mode == Body::Mode::Local), context(actual.getContext()) {
+        values(values), sourceBlock(sourceBlock), sourceCursor(sourceCursor),
+        definitions(definitions), used(used), layouts(layouts), prefix(prefix),
+        site(site), limits(limits), operations(operations),
+        remaining(remaining), local(source.mode == Body::Mode::Local),
+        context(sourceBlock.getParentOp()->getContext()) {
     (void)!!failure;
   }
   Expected<Values> run() {
-    data = flatten(finite.domainOperands);
+    if (!domainInputs())
+      return std::move(failure);
     initial = flatten(finite.operands);
     if (!ports(finite.body.captures, bodyPorts) ||
         (finite.predicate &&
@@ -443,6 +532,11 @@ public:
     SmallVector<StringRef> attrs{"domain", fold ? "step" : "body"};
     if (finite.predicate)
       attrs.push_back("predicate");
+    if (sourceCursor == sourceBlock.end()) {
+      fail("omitted finite computation");
+      return std::move(failure);
+    }
+    auto &actual = *sourceCursor++;
     mlir::Operation *contract = &actual;
     if (local) {
       attrs.append({"sym_name", "function_type"});
@@ -479,13 +573,13 @@ public:
 Expected<SmallVector<mlir::Value>>
 compareFinite(const ClosedEntry &project, const Body &source,
               const FiniteComputation &finite, const Type &resultType,
-              ArrayRef<SmallVector<mlir::Value>> values,
-              mlir::Operation &actual,
+              ArrayRef<SmallVector<mlir::Value>> values, mlir::Block &block,
+              mlir::Block::iterator &cursor,
               const std::map<std::string, mlir::Operation *> &definitions,
               std::set<mlir::Operation *> &used, Layouts &layouts,
               StringRef prefix, StringRef site, const Limits &limits,
               uint64_t &operations, uint64_t &remaining) {
-  return FiniteCheck(project, source, finite, resultType, values, actual,
+  return FiniteCheck(project, source, finite, resultType, values, block, cursor,
                      definitions, used, layouts, prefix, site, limits,
                      operations, remaining)
       .run();

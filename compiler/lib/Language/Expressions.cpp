@@ -139,14 +139,16 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
           fail("source.literal", "index literal overflows uint64", expr.span);
           return {};
         }
-        if (!local()) {
-          fail("source.mode", "index literals currently require local mode",
-               expr.span);
-          return {};
-        }
-        result =
-            emit(LocalPrimitive{"index.constant", {}, {std::to_string(number)}},
-                 type, {}, expr.span);
+        if (local())
+          result = emit(
+              LocalPrimitive{"index.constant", {}, {std::to_string(number)}},
+              type, {}, expr.span);
+        else
+          result = emit(MathValue{MathematicalIdentity::IndexConstant,
+                                  {},
+                                  std::to_string(number)},
+                        type, math() ? std::vector<unsigned>{} : allRoles(),
+                        expr.span);
       } else {
         if (type.symbolic) {
           if (auto error = protocol::checkGenericParameters("field.constant",

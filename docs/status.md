@@ -99,9 +99,15 @@ participant availability and specialization mutations. Registered finite folds
 and collects now reach retained finite IR through independently checked adapters.
 Native source tests cover ordered and Unit state, mixed state dependencies,
 filtered stops, strict zip admission, packed record sequences, repeated calls,
-dependent inner ranges and mutable capture snapshots. Fixed source-array domain
-adaptation, source item-provenance enforcement and total source bounds remain
-open; these checks are required before the general library/notation migration.
+dependent inner ranges and mutable capture snapshots. Fixed source arrays now
+adapt through independently checked sequence construction, including records,
+empty arrays and Unit items. Total source bounds remain open. Source item-provenance checks
+now cover generic restricted forwarding, named argument order, nested captures
+and invariant local-region inputs, including independent witness revalidation.
+Retained witnesses also check formal callback slots and authored invocation
+identities through nested regions. Total index literals, static natural index construction and comparisons now
+support mathematical ranges and filters through ordinary realization. Total
+access bounds precede the general library and notation migration.
 The existing finite-vector reductions retain the following restrictions.
 [Finite reduction binders](spec/language/definitions.md#finite-vector-reductions)
 support named reducers and library-owned `∑`/`∏`, explicit strict zip and

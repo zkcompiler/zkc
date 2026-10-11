@@ -1,4 +1,5 @@
 #include "ScopedWitness.h"
+#include "FiniteContracts.h"
 #include "Semantics.h"
 #include <algorithm>
 using namespace llvm;
@@ -266,6 +267,7 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   Semantics types(storage.declarations, storage.assets, work);
   std::vector<unsigned> uses(storage.scopedSources.size());
   std::vector<unsigned> callUses(storage.scopedCalls.size());
+  std::vector<unsigned> invocationUses(storage.scopedInvocations.size());
   auto checkCall = [&](const Body &body, const Operation &op) {
     auto refuse = [&] {
       return types.fail("source.scoped-witness",
@@ -364,62 +366,142 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     }
     return true;
   };
-  std::function<bool(const Body &, unsigned)> visit = [&](const Body &body,
-                                                          unsigned depth) {
-    if (depth > work.limits.expressionDepth)
-      return types.fail("source.limit", "scoped witness body depth", {});
-    if (!types.charge(body.values.size() + body.operations.size() + 1, {}))
-      return false;
-    std::vector<const Operation *> producers(body.values.size());
-    for (const auto &op : body.operations)
-      for (auto value : op.results) {
-        if (value.index >= producers.size() || producers[value.index])
-          return types.fail("source.scoped-witness", "invalid operation result",
-                            op.span);
-        producers[value.index] = &op;
-      }
-    for (const auto &binding : body.scopedBindings) {
-      if (!types.charge(1, binding.span))
-        return false;
-      if (binding.parameter) {
-        if (binding.source || binding.computation ||
-            !binding.captures.empty() || !binding.scopedCaptures.empty() ||
-            !binding.domainCaptures.empty())
-          return types.fail("source.scoped-witness",
-                            "formal scoped binding has an environment",
-                            binding.span);
-        continue;
-      }
-      if (!binding.source || *binding.source >= storage.scopedSources.size() ||
-          !binding.computation || ++uses[*binding.source] != 1)
-        return types.fail("source.scoped-witness",
-                          "missing or duplicated scoped source witness",
-                          binding.span);
-      const auto &source = *storage.scopedSources[*binding.source];
-      if (!source.syntax || source.owner.index >= storage.declarations.size() ||
-          !CaptureCheck(types, source, storage.declarations[source.owner.index],
-                        producers)
-               .run(body, binding) ||
-          !checkScopedValues(types, storage, source, binding) ||
-          !visit(*binding.computation->body, depth + 1))
-        return false;
-    }
-    for (const auto &op : body.operations) {
-      if (!types.charge(1, op.span) || !checkCall(body, op))
-        return false;
-      if (const auto *control = std::get_if<LocalControl>(&op.action))
-        for (const auto &region : control->regions)
-          if (!visit(*region, depth + 1))
-            return false;
-      if (const auto *repeat = std::get_if<ProtocolRepeat>(&op.action))
-        if (!visit(*repeat->region, depth + 1))
+  using Formal = std::pair<const ScopedSignature *, Span>;
+  std::function<bool(const Body &, ArrayRef<Formal>, unsigned)> visit =
+      [&](const Body &body, ArrayRef<Formal> formals, unsigned depth) {
+        if (depth > work.limits.expressionDepth)
+          return types.fail("source.limit", "scoped witness body depth", {});
+        if (!types.charge(body.values.size() + body.operations.size() + 1, {}))
           return false;
-    }
-    return true;
-  };
-  for (const auto &decl : storage.declarations)
-    if (decl.body && !visit(*decl.body, 1))
+        std::vector<const Operation *> producers(body.values.size());
+        for (const auto &op : body.operations)
+          for (auto value : op.results) {
+            if (value.index >= producers.size() || producers[value.index])
+              return types.fail("source.scoped-witness",
+                                "invalid operation result", op.span);
+            producers[value.index] = &op;
+          }
+        if (body.scopedBindings.size() < formals.size())
+          return types.fail("source.scoped-witness", "missing scoped formal",
+                            {});
+        unsigned formalIndex = 0;
+        for (const auto &binding : body.scopedBindings) {
+          if (!types.charge(1, binding.span))
+            return false;
+          if (binding.parameter) {
+            if (formalIndex >= formals.size() ||
+                *binding.parameter != formalIndex ||
+                !(binding.signature == *formals[formalIndex].first) ||
+                !same(binding.span, formals[formalIndex].second))
+              return types.fail("source.scoped-witness",
+                                "scoped formal identity differs", binding.span);
+            ++formalIndex;
+            if (binding.source || binding.computation ||
+                !binding.captures.empty() || !binding.scopedCaptures.empty() ||
+                !binding.domainCaptures.empty())
+              return types.fail("source.scoped-witness",
+                                "formal scoped binding has an environment",
+                                binding.span);
+            continue;
+          }
+          if (formalIndex != formals.size())
+            return types.fail("source.scoped-witness",
+                              "scoped formal order differs", binding.span);
+          if (!binding.source ||
+              *binding.source >= storage.scopedSources.size() ||
+              !binding.computation || ++uses[*binding.source] != 1)
+            return types.fail("source.scoped-witness",
+                              "missing or duplicated scoped source witness",
+                              binding.span);
+          const auto &source = *storage.scopedSources[*binding.source];
+          if (!types.charge(binding.scopedCaptures.size(), binding.span))
+            return false;
+          std::vector<Formal> captured;
+          for (auto index : binding.scopedCaptures) {
+            if (index >= body.scopedBindings.size() ||
+                !body.scopedBindings[index].parameter)
+              return types.fail("source.scoped-witness",
+                                "invalid captured scoped formal", binding.span);
+            const auto &formal = body.scopedBindings[index];
+            captured.emplace_back(&formal.signature, formal.span);
+          }
+          if (!source.syntax ||
+              source.owner.index >= storage.declarations.size() ||
+              !CaptureCheck(types, source,
+                            storage.declarations[source.owner.index], producers)
+                   .run(body, binding) ||
+              !checkScopedValues(types, storage, source, binding) ||
+              !visit(*binding.computation->body, captured, depth + 1))
+            return false;
+        }
+        for (const auto &op : body.operations) {
+          if (!types.charge(1, op.span) || !checkCall(body, op))
+            return false;
+          if (const auto *invoke = std::get_if<ScopedInvoke>(&op.action)) {
+            auto refuse = [&] {
+              return types.fail("source.scoped-witness",
+                                "scoped invocation target differs", op.span);
+            };
+            if (invoke->source >= storage.scopedInvocations.size() ||
+                ++invocationUses[invoke->source] != 1 ||
+                invoke->binding >= body.scopedBindings.size())
+              return refuse();
+            const auto &source = *storage.scopedInvocations[invoke->source];
+            if (!source.syntax ||
+                source.owner.index >= storage.declarations.size() ||
+                source.expression >= source.syntax->expressions.size())
+              return refuse();
+            const auto &expr = source.syntax->expressions[source.expression];
+            if (expr.kind != Expression::Kind::Call || !expr.binding ||
+                !same(expr.span, op.span))
+              return refuse();
+            if (expr.binding->index >= source.syntax->bindings.size())
+              return refuse();
+            const auto &lexical = source.syntax->bindings[expr.binding->index];
+            const auto &selected = body.scopedBindings[invoke->binding];
+            // Scoped names refer to declaration formals. Extraction and
+            // region forwarding preserve their original declaration span;
+            // the expected identity comes from resolved source syntax, not
+            // another producer-recorded body-slot map.
+            if (!lexical.scoped || !selected.parameter ||
+                !same(lexical.span, selected.span))
+              return refuse();
+            if (invoke->operands.size() != expr.children.size() ||
+                !types.charge(expr.children.size(), op.span))
+              return types.diagnostic ? false : refuse();
+            for (unsigned i = 0; i < expr.children.size(); ++i) {
+              auto value = body.expressionValues.find(expr.children[i]);
+              if (value == body.expressionValues.end() ||
+                  value->second.index != invoke->operands[i].index)
+                return refuse();
+            }
+          }
+          if (const auto *control = std::get_if<LocalControl>(&op.action))
+            for (const auto &region : control->regions)
+              if (!visit(*region, formals, depth + 1))
+                return false;
+          if (const auto *repeat = std::get_if<ProtocolRepeat>(&op.action))
+            if (!visit(*repeat->region, {}, depth + 1))
+              return false;
+        }
+        return true;
+      };
+  for (const auto &decl : storage.declarations) {
+    if (!decl.body)
+      continue;
+    if (!types.charge(decl.scopedInputs.size(), decl.span))
       return types.takeError();
+    std::vector<Formal> formals;
+    for (const auto &parameter : decl.scopedInputs)
+      formals.emplace_back(&parameter.signature, parameter.span);
+    if (!visit(*decl.body, formals, 1) ||
+        !checkFiniteContracts(types, storage.declarations, decl, *decl.body))
+      return types.takeError();
+  }
+  for (auto count : invocationUses)
+    if (count != 1)
+      return failure("source.scoped-witness",
+                     "missing scoped invocation occurrence");
   for (auto count : uses)
     if (count != 1)
       return failure("source.scoped-witness", "missing scoped occurrence");

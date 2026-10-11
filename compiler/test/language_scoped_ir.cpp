@@ -148,6 +148,141 @@ protocol Run roles(P)(xs:Sequence<Row>@P)->(r:Sequence<Row>@P){return collect(el
     take(compileEntry(original));
     take(compileEntry(original, {false, false}));
   });
+  for (bool mathematical : {false, true})
+    for (unsigned count : {0u, 1u, 3u})
+      cases.run(
+          "fixed array finite pipeline " + std::to_string(mathematical) + "/" +
+              std::to_string(count),
+          [&] {
+            std::string mode = mathematical ? "math " : "";
+            std::string effects = mathematical ? "" : " !{stop}";
+            auto captured = take(capture(
+                {{"sample",
+                  std::string(R"(module sample;
+domain Fr=field("koala-bear");
+struct Row {pub a:Fr,pub b:Fr}
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
+)") + mode +
+                      "fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped "
+                      "domain<I>,initial:S,step:scoped " +
+                      mode + "fn(S,I)->S" + effects + " on(rows))->S" +
+                      effects + "=finite(\"" +
+                      (mathematical ? "math.fold" : "local.fold") + R"(");
+protocol Run roles(P)(xs:[Row;)" +
+                      std::to_string(count) +
+                      R"(]@P,shift:Fr@P)->(r:Fr@P){return fold(array(xs),0,fun state row=>state+row.a+row.b+shift);}run Demo=Run;
+)",
+                  "array.zkc"}}));
+            auto entry = take(closeEntry(
+                take(analyze(captured).checkedProject()), "sample::Demo"));
+            auto original = take(prepareOriginal(entry));
+            require(original.bytes().contains("data.sequence_empty"),
+                    "source array adapter missing");
+            take(compileEntry(original));
+            take(compileEntry(original, {false, false}));
+            auto bytes = take(emitOriginal(entry, context));
+            auto module =
+                mlir::parseSourceString<mlir::ModuleOp>(bytes, &context);
+            require(bool(module), "array original did not parse");
+            take(compareOriginal(entry, *module));
+            if (!mathematical && count == 3) {
+              for (unsigned mutation = 0; mutation < 4; ++mutation) {
+                auto altered =
+                    mlir::parseSourceString<mlir::ModuleOp>(bytes, &context);
+                bool changed = false;
+                altered->walk([&](mlir::Operation *op) {
+                  if (changed)
+                    return;
+                  auto name = op->getName().getStringRef();
+                  if (!mutation && name == "local.realize") {
+                    auto helper =
+                        op->getAttrOfType<mlir::FlatSymbolRefAttr>("helper");
+                    if (helper && helper.getValue().contains("_array_")) {
+                      op->setAttr("helper", mlir::FlatSymbolRefAttr::get(
+                                                &context, "wrong_array"));
+                      changed = true;
+                    }
+                  } else if (mutation && name == "local.apply") {
+                    auto callee =
+                        op->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
+                    if (!callee || !callee.getValue().contains("_array_"))
+                      return;
+                    if (mutation == 1)
+                      op->setAttr(
+                          "callee",
+                          mlir::FlatSymbolRefAttr::get(
+                              &context, callee.getValue().drop_back(8)));
+                    else if (mutation == 2)
+                      op->setAttr("site", mlir::StringAttr::get(
+                                              &context, "wrong_array_site"));
+                    else {
+                      auto first = op->getOperand(0);
+                      op->setOperand(0, op->getOperand(2));
+                      op->setOperand(2, first);
+                    }
+                    changed = true;
+                  }
+                });
+                require(changed, "array local mutation target missing");
+                auto refused = compareOriginal(entry, *altered);
+                require(!refused, "corrupted array adapter accepted");
+                auto diagnostic = toString(refused.takeError());
+                require(diagnostic.find("source.correspondence") !=
+                                std::string::npos ||
+                            diagnostic.find("target.admission") !=
+                                std::string::npos,
+                        "unexpected array adapter refusal");
+              }
+            }
+            if (count) {
+              bool changed = false;
+              module->walk([&](mlir::Operation *op) {
+                if (!changed && op->getName().getStringRef() == "data.make" &&
+                    op->getNumOperands() == 2) {
+                  auto first = op->getOperand(0);
+                  op->setOperand(0, op->getOperand(1));
+                  op->setOperand(1, first);
+                  changed = true;
+                }
+              });
+              require(changed, "array mutation target missing");
+              refuses(compareOriginal(entry, *module), "source.correspondence");
+            }
+          });
+  cases.run("total index expressions and range filters", [&] {
+    auto captured = take(capture({{"sample", R"(module sample;
+domain Fr=field("koala-bear");
+domain fn range(lower:index,upper:index)->scoped domain<index>=domain("range");
+math fn filtered<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,keep:scoped math fn(I)->bool on(rows),step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold_where");
+math fn threshold<N:nat>()->index{return index<N>();}
+math fn work(n:index)->(Fr,bool,index){
+ let result:Fr=filtered(range(0,n),0,fun i=>intrinsic("index.less",i,threshold<2>()),fun state item=>state+1);
+ return(result,intrinsic("index.equal",n,2),18446744073709551615);
+}
+protocol Run roles(P)(n:index@P)->(r:(Fr,bool,index)@P){return work(n);}run Demo=Run;
+)",
+                                   "indices.zkc"}}));
+    auto entry = take(
+        closeEntry(take(analyze(captured).checkedProject()), "sample::Demo"));
+    auto original = take(prepareOriginal(entry));
+    require(original.bytes().contains("data.index_less") &&
+                original.bytes().contains("data.index_equal"),
+            "total index identities missing");
+    take(compileEntry(original));
+    take(compileEntry(original, {false, false}));
+    auto bytes = take(emitOriginal(entry, context));
+    auto module = mlir::parseSourceString<mlir::ModuleOp>(bytes, &context);
+    require(bool(module), "total index original did not parse");
+    bool changed = false;
+    module->walk([&](mlir::Operation *op) {
+      if (!changed && op->getName().getStringRef() == "data.index") {
+        op->setAttr("value", mlir::StringAttr::get(&context, "3"));
+        changed = true;
+      }
+    });
+    require(changed, "index mutation target missing");
+    refuses(compareOriginal(entry, *module), "source.correspondence");
+  });
   for (unsigned mutation = 0; mutation < 3; ++mutation)
     cases.run(
         "finite native adapter corruption " + std::to_string(mutation), [&] {

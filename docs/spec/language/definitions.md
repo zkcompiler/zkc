@@ -323,8 +323,13 @@ Fixed arrays have bounded closed lengths after selection. `[a, b]` constructs an
 array; `a[0]` uses a numeric static index. A symbolic length needs a corresponding
 bound for that index, inferred or written under the contract rules above.
 Dynamic array indexing is outside this profile.
-Runtime loops and `index<N>()` in local code can use a closed natural as an index
-value. Indices are not field elements.
+Runtime loops can use a closed natural as an index value. Index literals and
+`index<N>()` are also available in Math and protocol expressions; they denote
+unsigned 64-bit values. `intrinsic("index.equal", a, b)` and
+`intrinsic("index.less", a, b)` are total mathematical comparisons. The prelude's
+index equality uses that mathematical identity and keeps its direct native
+operation in Local code. Index addition, subtraction and multiplication retain
+their checked Local semantics. Indices are not field elements.
 
 ## Native data and library kernels
 
@@ -1010,7 +1015,31 @@ then calls its step in enumeration order; an empty fold returns its initial
 state after admission. A collect preserves body-result order. Stops propagate
 through the ordinary Local path. No associativity law is assumed for a fold.
 Nested finite calls admit their own domains only on reached body invocations.
+Fixed source arrays use the same finite consumer through a checked immutable
+sequence conversion; this preserves their ordinary flattened source ABI and
+array element order, including empty arrays and Unit elements.
 The [status page](../../status.md) records source integration coverage.
+
+An `on(rows)` parameter may be forwarded to another parameter restricted to the
+same domain. An unrestricted parameter can be used by a restricted consumer;
+the reverse is refused. Generic definitions are checked with distinct abstract
+domain identities, independently of their eventual callers. A wrapper cannot
+promise items from `a` and forward its callback to a fold over `b`.
+
+Literal bodies receive an item fact for the selected domain. Immutable aliases,
+capture snapshots and invariant region inputs preserve it. Invoking a restricted
+callback requires its whole item, so constructing an equal-looking tuple or
+performing arithmetic does not establish provenance. Control results and loop
+state successors are fresh; a loop may capture an item as an invariant and call
+the callback on that captured item. Domain aliases retain identity; separate
+factory applications do not imply domain equality.
+
+These contracts are checked over the completed typed body and its static call
+environments. Named arguments can therefore place the callback before the domain
+without delaying its capture snapshots. The retained source witness reruns the
+same semantic validation from the actual graph. `source.scoped-domain` reports
+an invocation or forwarding contract that cannot be established. This check
+alone grants no total indexing bound.
 
 ## Scoped computations
 

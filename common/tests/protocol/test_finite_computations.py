@@ -120,3 +120,93 @@ protocol Run roles(P)(xs:Sequence<Row>@P)->(result:(F,F)@P){return work(xs);}run
     records = record_inputs(toolchain, journal, directory, flags)
     xs = records.run('input', {'a': '2', 'b': '3', 'enabled': True})['xs']
     assert entry.run('records', {'xs': xs})['result'] == ['13', '11']
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_generic_item_restrictions_through_nested_scopes(toolchain, journal, directory, flags):
+    source = PREFIX + '''
+fn apply<A:Type,B:Type>(value:A,body:scoped fn(A)->B !{stop})->B !{stop}{return body(value);}
+fn sum(rows:scoped domain<F>,flag:bool,body:scoped fn(F)->F !{stop} on(rows))->F !{stop}{
+ return fold(step=fun state item=>apply(state,fun initial=>{
+   let mut total:F=initial;
+   for i in 0..2 {let value=if flag {body(item)} else {0};total=total+value;}
+   total
+ }),rows=rows,initial=0);
+}
+protocol Run roles(P)(xs:Vector<F>@P,flag:bool@P,shift:F@P)->(result:F@P){
+ return sum(elements(xs),flag,fun item=>item+shift);
+}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    assert entry.run('empty', {'xs': [], 'flag': True, 'shift': '4'})['result'] == '0'
+    assert entry.run('selected', {'xs': ['2', '3'], 'flag': True, 'shift': '4'})['result'] == '26'
+    assert entry.run('skipped', {'xs': ['2', '3'], 'flag': False, 'shift': '4'})['result'] == '0'
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_fixed_arrays_preserve_elements_indices_and_empty_unit(toolchain, journal, directory, flags):
+    source = PREFIX + '''
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
+domain fn array_indices<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<index>=domain("indices");
+fn work(a:F,b:F)->(F,F,F,F){
+ let xs=[a,b];
+ let order=fold(array(xs),0,fun state item=>state*10+item);
+ let positions:F=fold(array_indices(xs),0,fun state item=>state+1);
+ let empty:[F;0]=[];
+ let units=[(),(),()];
+ let zero=fold(array(empty),a,fun state item=>state+item);
+ let three:F=fold(array(units),0,fun state item=>state+1);
+ return(order,positions,zero,three);
+}
+protocol Run roles(P)(a:F@P,b:F@P)->(result:(F,F,F,F)@P){return work(a,b);}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    assert entry.run('arrays', {'a': '2', 'b': '7'})['result'] == ['27', '2', '2', '3']
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_fixed_record_arrays_zip_and_capture_original(toolchain, journal, directory, flags):
+    source = PREFIX + '''
+struct Row {pub value:F,pub enabled:bool}
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
+fn work(a:F,b:F)->F{
+ let xs=[Row{value:a,enabled:true},Row{value:b,enabled:true}];
+ let ys=[b,a];
+ return fold(zip(array(xs),array(ys)),0,fun state (row,other)=>{
+   require row.enabled;
+   state+row.value*other+xs[0].value
+ });
+}
+protocol Run roles(P)(a:F@P,b:F@P)->(result:F@P){return work(a,b);}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    assert entry.run('records', {'a': '2', 'b': '7'})['result'] == '32'
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_total_fixed_array_fold_realization(toolchain, journal, directory, flags):
+    source = PREFIX + '''
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
+math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold");
+math fn work(a:F,b:F)->F{return total(array([(a,b),(b,a)]),0,fun state (x,y)=>state*100+x*10+y);}
+protocol Run roles(P)(a:F@P,b:F@P)->(result:F@P){return work(a,b);}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    assert entry.run('total', {'a': '2', 'b': '7'})['result'] == '2772'
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_total_index_range_and_predicate(toolchain, journal, directory, flags):
+    source = PREFIX + '''
+math fn total_filtered<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,keep:scoped math fn(I)->bool on(rows),step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold_where");
+math fn threshold<N:nat>()->index{return index<N>();}
+math fn work(n:index)->(F,bool,index){
+ let result:F=total_filtered(range(0,n),0,fun i=>intrinsic("index.less",i,threshold<2>()),fun state item=>state+1);
+ return(result,intrinsic("index.equal",n,2),18446744073709551615);
+}
+protocol Run roles(P)(n:index@P)->(result:(F,bool,index)@P){return work(n);}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    assert entry.run('empty', {'n': 0})['result'] == ['0', False, '18446744073709551615']
+    assert entry.run('two', {'n': 2})['result'] == ['2', True, '18446744073709551615']
+    assert entry.run('filtered', {'n': 5})['result'] == ['2', False, '18446744073709551615']

@@ -66,6 +66,7 @@ public:
   std::vector<std::shared_ptr<ReductionSource>> reductionSources;
   std::vector<std::shared_ptr<ScopedSource>> scopedSources;
   std::vector<std::shared_ptr<ScopedCallSource>> scopedCalls;
+  std::vector<std::shared_ptr<ScopedInvocationSource>> scopedInvocations;
   bool retainScopedSources();
   std::shared_ptr<const SyntaxDeclaration> retainSyntax(DeclarationId);
   bool finalizeReductions();

@@ -105,7 +105,7 @@ int main() {
                     .identity == zkc::MathematicalIdentity::FieldAdd,
             "math identity changed");
   });
-  cases.run("protocol index primitives retain owned helper calls", [&] {
+  cases.run("protocol index arithmetic retains an owned helper call", [&] {
     auto project = take(check(R"(
       protocol Run roles(P)(a:index@P,b:index@P)->(sum:index@P,same:bool@P){
         let sum@P=a+b;let same@P=a==b;return(sum,same);
@@ -118,8 +118,8 @@ int main() {
                            [](const auto &op) {
                              return std::holds_alternative<HelperCall>(
                                  op.action);
-                           }) == 2,
-            "protocol index calls lost their helper boundaries");
+                           }) == 1,
+            "protocol index arithmetic lost its helper boundary");
     take(prepareOriginal(take(closeEntry(project, "m::Demo"))));
   });
   cases.run("primitive helper boundaries count toward source call depth", [&] {
@@ -289,7 +289,7 @@ int main() {
            {"type V=builtin(\"vector\",F);fn f(a:V,b:V)->V !{} = "
             "primitive(\"vector.add\");",
             "source.effect"},
-           {"fn f()->index=primitive(\"index.constant\");", "source.kernel"},
+           {"fn f()->index=primitive(\"index.constant\");", "source.primitive"},
            {"operator + = f;fn f(a:F,b:F){return a;}", "source.operator"},
            {"operator == = f;fn f(a:F,b:F)->F{return a;}", "source.operator"},
            {"fn f(a:F,b:F)->F{let x=a;operator + = f;return a;}",

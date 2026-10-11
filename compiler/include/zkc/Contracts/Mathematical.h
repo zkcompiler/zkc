@@ -15,6 +15,9 @@ enum class MathematicalIdentity {
   GroupScale,
   GroupEqual,
   Pairing,
+  IndexConstant,
+  IndexEqual,
+  IndexLess,
   BooleanConstant,
   BooleanAnd,
   BooleanOr,
@@ -43,7 +46,7 @@ enum class MathematicalIdentity {
 /// field root followed by naturals; Boolean operations have no static roots.
 /// Domain points are canonical field literals, independently checked by IR.
 struct MathematicalIntrinsic {
-  enum class Domain { Boolean, Field, Group };
+  enum class Domain { Boolean, Index, Field, Group };
   llvm::StringRef name;
   MathematicalIdentity identity;
   Domain domain;

@@ -67,7 +67,7 @@ private:
   std::optional<unsigned> domainArgument(uint32_t, unsigned);
   std::optional<unsigned> scopedArgument(uint32_t, const ScopedSignature &,
                                          unsigned);
-  std::optional<ValueId> invokeScoped(const Expression &, unsigned);
+  std::optional<ValueId> invokeScoped(uint32_t, unsigned);
   bool inheritScoped(BodyChecker &);
   bool inheritDomains(BodyChecker &, const std::set<BindingId> &,
                       std::vector<unsigned> &);

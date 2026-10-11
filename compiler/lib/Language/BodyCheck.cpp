@@ -1,4 +1,5 @@
 #include "BodyCheck.h"
+#include "FiniteContracts.h"
 #include "zkc/Contracts/Kernels.h"
 #include <algorithm>
 #include <numeric>
@@ -575,6 +576,8 @@ bool Checker::body(DeclarationId id, unsigned depth) {
       return false;
   if (!check.run(sources[id.index]->bodies.front(), decl.outputs,
                  result.mode == Body::Mode::Protocol))
+    return false;
+  if (!checkFiniteContracts(types, output.declarations, decl, result))
     return false;
   for (auto &p : decl.outputs) {
     auto caps = types.permissions(p.type, p.span, &decl);
