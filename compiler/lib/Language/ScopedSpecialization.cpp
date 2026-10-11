@@ -1019,6 +1019,11 @@ public:
       return types.takeError();
     const auto *proof = authored.proof();
     const auto *closedProof = entry.entry().proof();
+    if (bool(proof) != bool(closedProof) ||
+        bool(proof && proof->selectedConstruction) !=
+            bool(closedProof && closedProof->selectedConstruction))
+      return failure("source.scoped-specialization",
+                     "selected construction differs", authored.span);
     if (proof && proof->selectedConstruction) {
       if (!closedProof || !closedProof->selectedConstruction ||
           proof->selectedConstruction->index >= source.size() ||

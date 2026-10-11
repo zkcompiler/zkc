@@ -127,7 +127,7 @@ pub(super) fn produce_admitted_with_limit<B: Backend>(
     expected_binding: &[u8; 32],
     transport: Transport,
     limit: usize,
-    encode: impl Fn(&B, &B::Value) -> Result<Vec<u8>, ArtifactFailure>,
+    encode: impl for<'a> Fn(&B, &'a B::Value) -> Result<std::borrow::Cow<'a, [u8]>, ArtifactFailure>,
 ) -> ArtifactReport<Produced<B::Value>> {
     if let Some(report) = entry_report(runner) {
         return report;

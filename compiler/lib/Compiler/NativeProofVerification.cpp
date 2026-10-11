@@ -143,6 +143,8 @@ class TranscriptCorrespondence {
         !isa<ArrayAttr>(origin[1]) || !cast<ArrayAttr>(origin[1]).empty())
       return false;
     auto *rule = rules.lookup(event.site);
+    if (!rule && plan && !plan->nativeBase)
+      return false;
     if (!rule && event.bound && !isPowerOf2_64(*event.bound))
       return false;
     SmallVector<Type> inputs(stateTypes), outputs;
@@ -678,7 +680,11 @@ public:
     }
   }
   bool check(pir::ProtocolModuleOp before, pir::ProtocolModuleOp after) {
-    if (!attributes(before, after))
+    if (!attributes(before, after) ||
+        (plan &&
+         (!plan->symbol || plan->symbol.getValue() != policy.construction ||
+          plan->suite != policy.suite ||
+          !llvm::equal(plan->services, policy.services))))
       return false;
     llvm::StringSet<> origins, queries;
     for (const auto &event : events) {

@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 /// Selected by an authenticated deployment, independently of proof contents.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -22,14 +22,14 @@ impl ProofFormat {
             Self::RawBytes => "raw.bytes/0",
         }
     }
-    pub(super) fn encode(
+    pub(super) fn encode<'a>(
         self,
         backend: &zkc_backends::NativeBackend,
-        value: &zkc_backends::Value,
-    ) -> Result<Vec<u8>, super::ArtifactFailure> {
+        value: &'a zkc_backends::Value,
+    ) -> Result<Cow<'a, [u8]>, super::ArtifactFailure> {
         match self {
-            Self::Native => backend.encode_native_value(value),
-            Self::RawBytes => backend.encode_raw_bytes(value),
+            Self::Native => backend.encode_native_value(value).map(Cow::Owned),
+            Self::RawBytes => backend.encode_raw_bytes(value).map(Cow::Borrowed),
         }
         .map_err(super::ArtifactFailure::NativeWire)
     }

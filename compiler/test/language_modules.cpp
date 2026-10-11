@@ -24,6 +24,30 @@ const Declaration &named(const CheckedProject &project, StringRef name) {
 } // namespace
 int main() {
   Cases cases;
+  for (StringRef imported : {"use ::m::Lib::{N};", "use ::m::Lib as N;"})
+    cases.run(
+        "inherited parameters cannot shadow child import " + imported.str(),
+        [&] {
+          refuses(check("module m;module Lib{pub type N=bool;}"
+                        "module M<N:nat>{module Child{" +
+                        imported.str() +
+                        "pub math fn size(xs:[bool;N])->[bool;N]{return xs;}"
+                        "}}"),
+                  "source.shadow");
+        });
+  cases.run("external children check inherited parameters against imports", [] {
+    refuses(check(std::vector<SourceBuffer>{
+                {"lib", "module lib;", "lib.zkc"},
+                {"m", "module m<N:nat>;module Child;", "m.zkc"},
+                {"m::Child", "module m::Child;use ::lib as N;", "child.zkc"}}),
+            "source.shadow");
+  });
+  for (StringRef signature :
+       {"math fn f<T:Type+Copy+Drop>(x:T)->T;", "math fn f(T:bool)->bool;"})
+    cases.run("interface members prevent shadowing in " + signature.str(), [&] {
+      refuses(check("module m;interface I{type T;" + signature.str() + "}"),
+              "source.shadow");
+    });
   cases.run("file and inline modules share declaration identity", [] {
     auto project = take(check(R"(module m;
       module Inner { pub math fn yes()->bool{return true;} }

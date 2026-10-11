@@ -94,6 +94,7 @@ bool Checker::constructionCodec(Declaration &decl,
     if (function.kind != Declaration::Kind::Local ||
         function.parameters.size() !=
             output.declarations[function.parent->index].parameters.size() ||
+        function.inputOrder.size() != function.inputs.size() ||
         function.inputs.size() != inputs.size() ||
         function.outputs.size() != outputs.size())
       return types.fail("source.construction",

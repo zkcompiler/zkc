@@ -112,6 +112,16 @@ fn admit(value: &Json) -> Result<NativeDeployment> {
 }
 
 #[test]
+fn oversized_event_inventories_refuse_before_decoding_their_rows() {
+    for field in [3, 5] {
+        let mut value = deployment();
+        value[2][field] = json!(vec![json!([]); 2049]);
+        seal(&mut value);
+        assert_eq!(admit(&value).unwrap_err(), "native-proof-event-map");
+    }
+}
+
+#[test]
 fn raw_transport_requires_one_byte_message_and_executes_through_the_sdk() {
     let mut value = deployment();
     value[2][1][9] = json!("raw.bytes/0");

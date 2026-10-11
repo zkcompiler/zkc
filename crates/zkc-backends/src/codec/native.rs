@@ -233,19 +233,16 @@ impl NativeBackend {
         }
         structured::retained(self, ty, bytes)
     }
-    /// Raw Bytes transport has no tag, length prefix or deployment header.
-    pub fn encode_raw_bytes(&self, value: &Value) -> Result<Vec<u8>, NativeWireError> {
+    /// Raw Bytes transport borrows its payload without a tag, length prefix or
+    /// deployment header. The transport checks its buffer limit before copying.
+    pub fn encode_raw_bytes<'a>(&self, value: &'a Value) -> Result<&'a [u8], NativeWireError> {
         let Value::Bytes(bytes) = value else {
             return Err(unsupported());
         };
         self.policy()
             .bytes(bytes.len())
             .map_err(|_| NativeWireError::Limit)?;
-        let mut out = Vec::new();
-        out.try_reserve_exact(bytes.len())
-            .map_err(|_| NativeWireError::Limit)?;
-        out.extend_from_slice(bytes);
-        Ok(out)
+        Ok(bytes)
     }
     /// The expected type comes from the admitted receive action.
     pub fn decode_raw_bytes(

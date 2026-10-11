@@ -138,6 +138,52 @@ int main(int argc, char **argv) {
                                                      policy, events))
       throw std::runtime_error(toString(std::move(e)));
   });
+  cases.run("native fallback requires the selected plan's permission", [&] {
+    auto candidate =
+        OwningOpRef<ModuleOp>(cast<ModuleOp>((*built.module)->clone()));
+    auto selected = policy;
+    selected.construction = "derived";
+    auto root = *candidate->getOps<pir::ProtocolModuleOp>().begin();
+    auto projection =
+        *root.getBody().front().getOps<pir::ProjectionOp>().begin();
+    NamedAttrList interface(
+        cast<DictionaryAttr>(projection.getInterfaces()[0]));
+    NamedAttrList construction(
+        cast<DictionaryAttr>(interface.get("construction")));
+    construction.set("plan", StringAttr::get(&context, selected.construction));
+    interface.set("construction", construction.getDictionary(&context));
+    projection.setInterfacesAttr(
+        ArrayAttr::get(&context, {interface.getDictionary(&context)}));
+    require(succeeded(verify(*candidate)), "named native plan remains formed");
+    protocol::ConstructionPlan plan{};
+    plan.root = protocol::ConstructionPlan::Root::Host;
+    plan.symbol = FlatSymbolRefAttr::get(&context, selected.construction);
+    plan.suite = selected.suite;
+    plan.services.assign(selected.services.begin(), selected.services.end());
+    plan.nativeBase = true;
+    plan.state.push_back(
+        local::CapabilityType::get(&context, "transcript:" + selected.suite));
+    if (auto error = zkc::detail::verifyNativeTranscript(
+            *projected, *candidate, selected, events, &plan))
+      throw std::runtime_error(toString(std::move(error)));
+    for (StringRef mutation : {"fallback", "suite", "services", "selection"}) {
+      auto altered = plan;
+      if (mutation == "fallback")
+        altered.nativeBase = false;
+      else if (mutation == "suite")
+        altered.suite = "different";
+      else if (mutation == "services")
+        altered.services.clear();
+      else
+        altered.symbol = FlatSymbolRefAttr::get(&context, "other");
+      auto error = zkc::detail::verifyNativeTranscript(
+          *projected, *candidate, selected, events, &altered);
+      require(bool(error) &&
+                  namesIdentifier(toString(std::move(error)),
+                                  "native-transcript-correspondence"),
+              "changed plan permission accepted");
+    }
+  });
   auto mutation = [&](StringRef name,
                       llvm::function_ref<bool(ModuleOp)> change) {
     cases.run(name, [&] {

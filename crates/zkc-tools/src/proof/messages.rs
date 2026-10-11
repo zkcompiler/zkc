@@ -20,8 +20,13 @@ impl<'a> MessageLayout<'a> {
     pub(super) fn read(descriptor: &'a [Json], policy: &DeploymentPolicy<'_>) -> Result<Self> {
         let (entry, producer, validator) = (policy.entry, policy.producer, policy.validator);
         let suite = policy.suite;
+        let event_rows = list(&descriptor[3])?;
+        let message_rows = list(&descriptor[5])?;
+        if event_rows.len() > 2048 || message_rows.len() > 2048 {
+            return Err("native-proof-event-map".into());
+        }
         let mut messages = BTreeMap::new();
-        for row in list(&descriptor[5])? {
+        for row in message_rows {
             let row = array(row, 3)?;
             let origin = text(&row[0])?;
             let ty = wire_type(text(&row[1])?, false)?;
@@ -36,7 +41,7 @@ impl<'a> MessageLayout<'a> {
         let mut queries = 0;
         let mut observed_messages = 0;
         let mut wire_origins = Vec::new();
-        for row in list(&descriptor[3])? {
+        for row in event_rows {
             // ["query", origin] draws a field challenge; ["index", origin,
             // bound] draws UniformIndex(bound); ["message", origin] observes.
             let row = list(row)?;
@@ -156,10 +161,7 @@ impl<'a> MessageLayout<'a> {
                 });
             }
         }
-        if queries != policy.draw_count
-            || observed_messages != messages.len()
-            || origins.len() > 2048
-        {
+        if queries != policy.draw_count || observed_messages != messages.len() {
             return Err("native-proof-event-map".into());
         }
         if policy.format == super::ProofFormat::RawBytes

@@ -103,7 +103,7 @@ spelling is `replace challenges;`. Empty and duplicate selections refuse. The
 compiler orders selected services by their original input positions. Every
 selected service has the same owner; its actual query contract fixes the handler
 result type independently of the provider's state or domain. The provider declares an associated
-`State` and a zero-runtime-argument Local `initialize()` returning that state.
+`State` and a zero-argument Local `initialize()` returning that state.
 Both members must belong to the implemented interface; private helpers do not
 satisfy provider selection. Source-created state requires `Copy` and `Drop`; private state need not permit
 sharing or serialization.
@@ -187,8 +187,9 @@ finish(record: Record, proof: Bytes) -> ()
 ```
 
 The associated type and selected methods must be required by the implemented
-interface. The compiler checks these signatures structurally; the interface name is an
-ordinary library choice. Bare `format Codec;` passes `()` to `initialize`.
+interface. The compiler checks the complete signatures, including the absence
+of callback and finite-domain arguments; the interface name is an ordinary
+library choice. Bare `format Codec;` passes `()` to `initialize`.
 `format Codec(rounds, size);` passes the named shared original inputs in order:
 a single input keeps its type, and multiple inputs form a tuple. Layout inputs
 must be available at both participants. An inherited format and its input

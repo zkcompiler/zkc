@@ -131,11 +131,14 @@ bool Checker::bindingName(const Declaration &decl, StringRef name, Span span) {
   if (llvm::any_of(decl.parameters, [&](auto &p) { return p.name == name; }))
     return types.fail("source.shadow", "binding shadows a static parameter",
                       span);
-  for (auto scope = std::optional(decl.module); scope;
-       scope = output.declarations[scope->index].parent) {
-    if (visible[scope->index].count(name.str()))
+  auto scope = decl.kind == Declaration::Kind::Module ? std::optional(decl.id)
+                                                      : decl.parent;
+  for (; scope; scope = output.declarations[scope->index].parent) {
+    if (member(decl, *scope, name, span))
       return types.fail("source.shadow",
                         "binding shadows a visible declaration", span);
+    if (types.diagnostic)
+      return false;
   }
   return true;
 }
@@ -266,8 +269,7 @@ bool Checker::collect() {
       moduleIds.push_back(id);
       module = id;
     }
-    if (parent && !decl.anonymous &&
-        output.declarations[parent->index].kind == Declaration::Kind::Module)
+    if (parent && !decl.anonymous)
       visible[parent->index].emplace(
           decl.name, ModuleBinding{id, decl.span, decl.isPublic});
     output.declarations.push_back(std::move(decl));
@@ -322,22 +324,13 @@ std::optional<DeclarationId> Checker::member(const Declaration &context,
     }
     return target;
   };
-  if (decl.kind == Declaration::Kind::Module) {
-    if (loadBinding && !loadBinding(owner, name))
-      return {};
-    auto found = visible[owner.index].find(name.str());
-    if (found != visible[owner.index].end())
-      return check(found->second.target, found->second.isPublic,
-                   found->second.span);
-  } else {
-    if (!types.charge(decl.members.size(), span))
-      return {};
-    for (auto id : decl.members) {
-      const auto &child = output.declarations[id.index];
-      if (!child.anonymous && child.name == name)
-        return check(id, child.isPublic, child.span);
-    }
-  }
+  if (decl.kind == Declaration::Kind::Module && loadBinding &&
+      !loadBinding(owner, name))
+    return {};
+  auto found = visible[owner.index].find(name.str());
+  if (found != visible[owner.index].end())
+    return check(found->second.target, found->second.isPublic,
+                 found->second.span);
   return {};
 }
 std::optional<DeclarationId>

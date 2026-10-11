@@ -228,12 +228,12 @@ bool Checker::constructions() {
         if (!bindings)
           return false;
         if (factory.kind != Declaration::Kind::Local ||
-            !factory.inputs.empty() || factory.outputs.size() != 1 ||
+            !factory.inputOrder.empty() || factory.outputs.size() != 1 ||
             factory.parameters.size() !=
                 output.declarations[factory.parent->index].parameters.size())
           return types.fail(
               "source.construction",
-              "initialize must be a Local factory with no runtime arguments",
+              "initialize must be a Local factory with no call arguments",
               decl.span);
         auto output = types.substitute(factory.outputs.front().type, *bindings,
                                        decl.span);
@@ -552,6 +552,10 @@ bool Checker::constructions() {
                           "duplicate construction selector", source.span);
       std::vector<Type> inputs{*result.state}, outputs{*result.state};
       if (rule.kind == ConstructionRule::Kind::Start) {
+        if (source.parameters.empty())
+          return types.fail("source.construction",
+                            "start handler requires a state parameter",
+                            source.span);
         for (const auto &parameter :
              ArrayRef<SyntaxName>(source.parameters).drop_front()) {
           if (!types.charge(target.inputs.size(), parameter.span))

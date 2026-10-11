@@ -100,12 +100,17 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
                                  binding.span))
       return std::move(error);
   }
-  for (unsigned i = 0; i < descriptors.size(); ++i) {
-    const auto &descriptor = records.descriptors[i];
-    descriptors[i] =
-        descriptors[i] || (originAllowed(descriptor.span) &&
-                           (options.includePrivate || descriptor.isPublic));
-  }
+  // A descriptor's public flag is relative to its defining module. Retain
+  // unbound syntax only when it is visible in an included scope; a public
+  // operator inside a private module must not leak through this table.
+  for (unsigned i = 0; i < scopes.size(); ++i)
+    if (scopes[i])
+      for (auto id : records.scopes[i].descriptors) {
+        const auto &descriptor = records.descriptors[id];
+        if (originAllowed(descriptor.span) &&
+            (options.includePrivate || descriptor.isPublic))
+          descriptors[id] = true;
+      }
   for (const auto &occurrence : records.occurrences) {
     uint64_t count = occurrence.operands.size();
     for (const auto &operand : occurrence.operands)

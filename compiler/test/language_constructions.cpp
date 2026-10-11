@@ -102,6 +102,45 @@ int main() {
   zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  cases.run("start handlers require a state parameter", [&] {
+    refuses(checked(replace("on start(t,public)", "on start()")),
+            "source.construction");
+  });
+  for (bool addSelection : {false, true})
+    cases.run(
+        addSelection ? "closure cannot add a construction selection"
+                     : "closure cannot change a run into a proof",
+        [&] {
+          std::string source =
+              "module m;protocol R roles(P)()->(ok:bool@P){return true;}run "
+              "Run=R;";
+          if (addSelection) {
+            source = (program + deployment).str();
+            auto at = source.find("construction Derived<F,Provider>;");
+            require(at != std::string::npos, "source construction selection");
+            source.replace(
+                at, StringRef("construction Derived<F,Provider>;").size(),
+                "construction "
+                "fiat_shamir(\"merlin3.bls12-381.fr64be/0\",challenges);");
+          }
+          auto project = take(checked(source));
+          auto closed =
+              take(closeEntry(project, addSelection ? "m::Demo" : "m::Run"));
+          auto &entry = const_cast<Declaration &>(closed.entry());
+          if (addSelection) {
+            require(entry.proof() && !entry.proof()->selectedConstruction,
+                    "native proof starts without a source construction");
+            std::get<ProofEntry>(entry.configuration).selectedConstruction =
+                DeclarationId{0};
+          } else {
+            entry.configuration = ProofEntry{};
+          }
+          auto error = checkScopedSpecialization(closed);
+          require(bool(error) &&
+                      namesIdentifier(toString(std::move(error)),
+                                      "source.scoped-specialization"),
+                  "changed entry configuration accepted");
+        });
   for (StringRef mutation : {"factory", "handler", "codec", "body"})
     cases.run(
         "independent construction closure refuses changed " + mutation, [&] {
@@ -1164,5 +1203,35 @@ int main() {
             .size());
     refuses(checked(text), "source.construction");
   });
+  for (StringRef argument :
+       {"callback:fn()->bool effects()", "rows:domain<bool>"}) {
+    auto addArgument = [&](StringRef source, StringRef method) {
+      std::string text = source.str(), prefix = "fn " + method.str() + "(";
+      size_t position = 0;
+      unsigned changed = 0;
+      while ((position = text.find(prefix, position)) != std::string::npos) {
+        position += prefix.size();
+        std::string addition = argument.str();
+        if (text[position] != ')')
+          addition += ',';
+        text.insert(position, addition);
+        position += addition.size();
+        ++changed;
+      }
+      require(changed == 2, "interface and implementation method not found");
+      return text;
+    };
+    cases.run("transcript factory rejects extra " + argument.str(), [&] {
+      refuses(checked(addArgument((program + deployment).str(), "initialize")),
+              "source.construction");
+    });
+    for (StringRef method : {"initialize", "write", "finish"})
+      cases.run("codec " + method.str() + " rejects extra " + argument.str(),
+                [&] {
+                  refuses(checked(program.str() + deployment.str() +
+                                  addArgument(codec, method)),
+                          "source.construction");
+                });
+  }
   return cases.result();
 }

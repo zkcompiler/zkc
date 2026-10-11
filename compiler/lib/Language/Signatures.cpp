@@ -195,10 +195,14 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     return types.fail("source.entry",
                       "Entries must be declared in a closed module", decl.span);
   for (auto &p : decl.parameters) {
-    if (p.name == decl.name)
-      return types.fail("source.shadow",
-                        "member shadows an inherited static parameter",
-                        decl.span);
+    if (!types.charge(1, decl.span))
+      return false;
+    if (p.name == decl.name || (decl.kind == Declaration::Kind::Module &&
+                                visible[decl.id.index].count(p.name)))
+      return types.fail(
+          "source.shadow",
+          "declaration or import shadows an inherited static parameter",
+          decl.span);
   }
   formingParameters.insert(id.index);
   for (auto &src : source.parameters) {

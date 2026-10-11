@@ -267,7 +267,8 @@ availability.
 
 The `zkc.notations/0` diagnostic JSON contains descriptors, bindings, scopes and
 occurrences. It retains checked-project-local identities, source origins and
-original UTF-8 byte spans. Default public inventory omits private/local data;
+original UTF-8 byte spans. Default public inventory omits private/local data,
+including descriptors confined to private module scopes;
 installation data is independently opt-in. Descriptor views explain spelling,
 fixity, power or delimiter shape; bindings explain targets, statics, visibility
 and definition locations; occurrences explain authored operand order and checked
