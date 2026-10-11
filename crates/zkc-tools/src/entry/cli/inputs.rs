@@ -29,7 +29,8 @@ impl Operation {
                 "--witness",
                 "--context",
                 "--transcript-budget",
-                "--allow-header-only",
+                "--external-work",
+                "--allow-authored",
                 "--attempts",
             ],
             Self::Prove => &["--session", "--input", "--limits"],
@@ -93,8 +94,8 @@ impl Options {
         if let Some(file) = args.value("--setups") {
             options.setups = files::authority(&read(file, 65536)?)?;
         }
-        if args.has("--allow-header-only") {
-            options.proof.binding = BindingPolicy::AllowHeaderOnly;
+        if args.has("--allow-authored") {
+            options.proof.binding = BindingPolicy::AllowAuthored;
         }
         if let Some(count) = args.value("--attempts") {
             options.attempts = Some(AttemptOptions {
@@ -142,6 +143,13 @@ impl Options {
                         return Err("native-proof-context-limit".into());
                     }
                     options.context = crate::host::inputs::unhex(&json!(value))?;
+                }
+                "--external-work" => {
+                    let n = value.parse::<u64>().expect("admitted count");
+                    if n > zkc_backends::NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT {
+                        return Err("native-proof-external-work-limit".into());
+                    }
+                    options.proof.external_work = n;
                 }
                 "--transcript-budget" => {
                     let n = value.parse::<u64>().expect("admitted count");

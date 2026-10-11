@@ -3,6 +3,12 @@
 include "mlir/IR/AttrTypeBase.td"
 include "zkc/Dialect/Data/IR/DataDialect.td"
 include "zkc/Interfaces/Collection.td"
+def Bytes : TypeDef<DataDialect, "Bytes",
+    [DeclareTypeInterfaceMethods<CollectionTypeInterface>]> {
+  let mnemonic = "bytes";
+  let summary = "immutable byte string with a runtime length";
+  let assemblyFormat = "";
+}
 def Domain : TypeDef<DataDialect, "Domain"> {
   let mnemonic = "domain";
   let summary = "preparation-only ordered finite item parameter list";

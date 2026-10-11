@@ -23,17 +23,17 @@ std::optional<CallableReference> Checker::callable(const Declaration &decl,
       SyntaxType term;
       term.name = parameter.name;
       term.span = span;
-      auto component = type(decl, term);
-      if (!component)
+      auto module = type(decl, term);
+      if (!module)
         return {};
       auto &interface = output.declarations[parameter.interface->index];
       for (auto id : interface.members)
         if (output.declarations[id.index].name == parts.second)
-          return CallableReference{id, *component};
+          return CallableReference{id, *module};
       types.fail("source.call", "unknown interface member", span);
       return {};
     }
-  // A bound component member takes precedence over a nominal alternative.
+  // A bound module member takes precedence over a nominal alternative.
   auto alternative = name.rsplit("::");
   if (!alternative.second.empty()) {
     auto nominal = resolve(decl, alternative.first, span, false);
@@ -46,7 +46,7 @@ std::optional<CallableReference> Checker::callable(const Declaration &decl,
     return {};
   if (output.declarations[id->index].abstract &&
       output.declarations[id->index].kind != Declaration::Kind::Associated) {
-    types.fail("source.call", "abstract call requires a bound component", span);
+    types.fail("source.call", "abstract call requires a bound module", span);
     return {};
   }
   return CallableReference{*id, {}};

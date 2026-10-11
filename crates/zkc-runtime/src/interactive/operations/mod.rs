@@ -1,9 +1,12 @@
 //! Finite independently authored runtime installation. Artifact declarations can
 //! select these owners, never install or override them.
+mod bytes;
 mod control;
 mod curve;
+mod encoding;
 mod external;
 mod field;
+mod hash;
 mod index;
 mod matrix;
 mod oracle;
@@ -194,6 +197,9 @@ fn installed() -> Result<&'static Registry> {
     REGISTRY
         .get_or_init(|| {
             let registry = Registry::assemble(&[
+                &bytes::CONTRIBUTION,
+                &encoding::CONTRIBUTION,
+                &hash::CONTRIBUTION,
                 &control::CONTRIBUTION,
                 &curve::CONTRIBUTION,
                 &external::CONTRIBUTION,

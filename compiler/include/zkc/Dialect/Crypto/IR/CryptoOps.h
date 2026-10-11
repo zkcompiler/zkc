@@ -10,6 +10,7 @@
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "zkc/Dialect/Crypto/IR/CryptoDialect.h"
+#include "zkc/Dialect/Crypto/IR/CryptoTypes.h"
 #include "zkc/Dialect/KernelSupport.h"
 #include "zkc/Interfaces/LinearContraction.h"
 #define GET_OP_CLASSES

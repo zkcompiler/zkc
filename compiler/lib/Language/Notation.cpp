@@ -58,7 +58,7 @@ Error insertNotation(NotationEnvironment &environment,
   return Error::success();
 }
 } // namespace
-NotationEnvironment fixedNotationEnvironment(ModuleId module) {
+NotationEnvironment fixedNotationEnvironment(SourceId sourceId) {
   NotationEnvironment result;
   auto add = [&](StringRef symbol, Position position, unsigned precedence,
                  Association association, unsigned arity) {
@@ -69,7 +69,7 @@ NotationEnvironment fixedNotationEnvironment(ModuleId module) {
     descriptor->association = association;
     descriptor->arity = arity;
     result.emplace(descriptor->key(),
-                   NotationSyntax{descriptor, Span{module, 0, 0}});
+                   NotationSyntax{descriptor, Span{sourceId, 0, 0}});
   };
   add("||", Position::Infix, 10, Association::Left, 2);
   add("&&", Position::Infix, 20, Association::Left, 2);
@@ -132,20 +132,51 @@ Error resolveNotationSyntax(std::vector<SyntaxOperator> &bindings,
   return Error::success();
 }
 bool Checker::prepareNotationSyntax() {
-  notationEnvironments.resize(syntax.size());
-  std::vector<unsigned> order = importOrder;
-  if (auto prelude = modules.find("zkc::prelude"); prelude != modules.end()) {
-    auto id = prelude->second.index;
-    order.erase(std::remove(order.begin(), order.end(), id), order.end());
-    order.insert(order.begin(), id);
-  }
+  notationEnvironments.resize(sources.size());
+  // Syntax depends on the lexical parent and on the original sites of visible
+  // notation. Name-only imports do not create syntax dependencies.
+  std::vector<unsigned> order, state(sources.size()), height(sources.size());
+  auto visit = [&](auto &&self, unsigned id, unsigned depth) -> bool {
+    auto span = sources[id]->span;
+    if (!types.charge(1, span))
+      return false;
+    if (depth >= work.limits.importDepth ||
+        height[id] > work.limits.importDepth - depth)
+      return types.fail("source.limit", "notation dependency depth exceeded",
+                        span);
+    if (state[id] == 2)
+      return true;
+    if (state[id] == 1)
+      return types.fail("source.cycle", "cyclic lexical and imported notation",
+                        span);
+    state[id] = 1;
+    height[id] = 1;
+    auto dependency = [&](unsigned other) {
+      if (!self(self, other, depth + 1))
+        return false;
+      height[id] = std::max(height[id], height[other] + 1);
+      return true;
+    };
+    if (auto parent = output.declarations[id].parent)
+      if (!dependency(parent->index))
+        return false;
+    for (auto site : visibleOperators[id])
+      if (site.first != id && !dependency(site.first))
+        return false;
+    state[id] = 2;
+    order.push_back(id);
+    return true;
+  };
+  for (auto id : moduleIds)
+    if (!visit(visit, id.index, 0))
+      return false;
   for (unsigned id : order) {
-    auto environment = fixedNotationEnvironment(ModuleId{id});
+    auto environment = fixedNotationEnvironment(sources[id]->span.source);
     // Imports carry syntax resolved at the binding's original definition site.
     for (auto site : visibleOperators[id]) {
       if (site.first == id)
         continue;
-      const auto &binding = syntax[site.first].operators[site.second];
+      const auto &binding = sources[site.first]->operators[site.second];
       if (!binding.notation)
         return types.fail(
             "source.notation-visibility",
@@ -158,7 +189,7 @@ bool Checker::prepareNotationSyntax() {
       }
     }
     if (auto error =
-            resolveNotationSyntax(syntax[id].operators, environment, work)) {
+            resolveNotationSyntax(sources[id]->operators, environment, work)) {
       types.diagnostic = diagnose(std::move(error));
       return false;
     }

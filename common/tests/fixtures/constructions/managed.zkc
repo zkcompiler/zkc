@@ -1,0 +1,24 @@
+module sample;
+use zkc::transcript as history;
+use zkc::bytes as bytes;
+use zkc::encoding as encoding;
+domain F=field("bls12-381.fr");
+domain T=transcript("merlin3.bls12-381.fr64be/0");
+protocol Round roles(P,V)(public:F@(P,V),secret:F@P,challenges:Random<F>@V)->(ok:bool@V){
+  #[site(commitment)] let first=send P->V(secret);
+  #[site(challenge)] let c=challenges.draw();
+  #[site(delivery)] let actual=send V->P(c);
+  #[site(response)] let last=send P->V(secret+actual);
+  return last==first+c;
+}
+construction Derived for Round {
+  transcript T;replace challenges;
+  on start(t,public){return history::observe(t,bytes::empty(),encoding::field_be(public));}
+  on message {commitment,response}(t,value){
+    let tag=bytes::append(bytes::empty(),1);
+    return history::observe(t,tag,encoding::field_be(value));
+  }
+  on query challenge(t){return history::challenge(t,bytes::append(bytes::empty(),2));}
+  on message delivery(t,value){return t;}
+}
+proof Demo=Round {prover P;verifier V;public{public};accept ok;construction Derived;}

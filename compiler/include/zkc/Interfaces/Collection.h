@@ -11,6 +11,7 @@ enum class CollectionKind {
   FieldVector,
   GroupVector,
   Indices,
+  Bytes,
   FieldMatrix,
   FieldArray,
   FixedVector,

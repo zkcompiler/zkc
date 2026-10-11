@@ -300,7 +300,7 @@ compileNativeProof(StringRef text, StringRef filename,
     unsigned serviceIndex = 0;
     for (auto input : port.getAs<ArrayAttr>("service_inputs")) {
       auto originalInput = cast<IntegerAttr>(input).getInt();
-      if (policy->service == originalInput)
+      if (is_contained(policy->services, originalInput))
         continue;
       // Projection verification owns the service map. Serialize its installed
       // names and ingress indices instead of reconstructing generated names.

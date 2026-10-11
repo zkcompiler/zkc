@@ -30,14 +30,15 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   // Cross-check every installed nominal type against the explicit design table.
-  const llvm::StringSet<> totals{"bool",    "field",  "group",  "index",
-                                 "indices", "vector", "matrix", "groups"};
+  const llvm::StringSet<> totals{"bool",   "field",   "group",
+                                 "index",  "indices", "vector",
+                                 "matrix", "groups",  "bytes"};
   const llvm::StringSet<> wires{
       "index", "indices", "vector", "matrix",     "polynomial",  "table",
       "point", "round",   "groups", "commitment", "commitments", "proof"};
   const llvm::StringSet<> locals{
-      "opening_states", "prover_key", "verifier_key", "opening_state", "rng",
-      "nonce",          "transcript", "resource_unit"};
+      "opening_states", "prover_key", "verifier_key",  "opening_state", "rng",
+      "nonce",          "transcript", "resource_unit", "shake128_state"};
   for (const auto &instance : protocol::installedDomains().allLogicalTypes()) {
     protocol::BoundType type{instance.kind, instance.domain, {}};
     cases.run(type.spelling(), [&] {

@@ -106,7 +106,7 @@ This minimal example returns a received Boolean as the selected validator decisi
 It exercises deployment and proof framing; it does not establish a cryptographic
 statement. Real protocols author their equations and guards in the same IR.
 The empty suite selects transcript-free execution under the native proof policy. Both commands
-explicitly acknowledge header-only binding with `--allow-header-only`.
+explicitly acknowledge header-only binding with `--allow-authored`.
 
 <!-- executable: native-proof -->
 ```sh
@@ -124,7 +124,7 @@ module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : () -> () }
 IR
 cat > "$work_dir/policy.json" <<'JSON'
-["zkc.native-proof-policy/0", "main", "P", "V", "0", "", "", [], []]
+["zkc.native-proof-policy/0", "main", "P", "V", "0", "", [], [], [], "zkc.framed/0", ""]
 JSON
 "$compiler" protocol-proof "$work_dir/message.mlir" "$work_dir/policy.json" > "$work_dir/deployment.json"
 # Authorize these exact bytes from our own trusted compilation.
@@ -135,8 +135,8 @@ JSON
 cat > "$work_dir/validator-inputs.json" <<'JSON'
 ["zkc.native-proof-inputs/0", [], [], "", [], "0"]
 JSON
-"$native" --json prove-bundle "$work_dir/deployment.json" "$pin" "$work_dir/producer-inputs.json" "$work_dir/proof.bin" --allow-header-only > "$work_dir/producer.json"
-"$native" --json verify-bundle "$work_dir/deployment.json" "$pin" "$work_dir/validator-inputs.json" "$work_dir/proof.bin" --allow-header-only > "$work_dir/validator.json"
+"$native" --json prove-bundle "$work_dir/deployment.json" "$pin" "$work_dir/producer-inputs.json" "$work_dir/proof.bin" --allow-authored > "$work_dir/producer.json"
+"$native" --json verify-bundle "$work_dir/deployment.json" "$pin" "$work_dir/validator-inputs.json" "$work_dir/proof.bin" --allow-authored > "$work_dir/validator.json"
 cat "$work_dir/validator.json"
 printf 'Proof files: %s\n' "$work_dir"
 ```

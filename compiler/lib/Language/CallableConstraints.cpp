@@ -18,8 +18,8 @@ CallableConstraints instantiateCallable(TypeInference &types,
     case Parameter::Sort::Natural:
       types.requireKinds(value, {T::Natural}, span);
       break;
-    case Parameter::Sort::Component:
-      types.requireKinds(value, {T::Component}, span);
+    case Parameter::Sort::Module:
+      types.requireKinds(value, {T::Module}, span);
       break;
     case Parameter::Sort::Asset:
       types.requireKinds(value, {T::Asset}, span);
@@ -30,9 +30,9 @@ CallableConstraints instantiateCallable(TypeInference &types,
       break;
     }
   }
-  if (result.target.component) {
-    auto bindings = semantics.boundMemberSubstitution(
-        callee, *result.target.component, span);
+  if (result.target.module) {
+    auto bindings =
+        semantics.boundMemberSubstitution(callee, *result.target.module, span);
     if (!bindings)
       return result;
     for (const auto &[name, type] : *bindings) {
@@ -66,9 +66,9 @@ callableArguments(TypeInference &types, Semantics &semantics,
     known.push_back(std::move(value));
   }
   Substitution extra;
-  if (constraints.target.component) {
+  if (constraints.target.module) {
     auto bound = semantics.boundMemberSubstitution(
-        callee, *constraints.target.component, span);
+        callee, *constraints.target.module, span);
     if (!bound)
       return {};
     extra = std::move(*bound);

@@ -227,6 +227,18 @@ fn write(ty: &PhysicalType, value: &Json, out: &mut Buffer, depth: usize) -> Res
     }
     if let Some(tag) = structured::tag(ty) {
         match ty.kind() {
+            Type::Bytes => {
+                let values = array(value)?;
+                out.header(tag)?;
+                out.count(values.len())?;
+                for v in values {
+                    let byte = v
+                        .as_u64()
+                        .and_then(|n| u8::try_from(n).ok())
+                        .ok_or("entry-input-byte")?;
+                    out.put(&[byte])?;
+                }
+            }
             Type::Indices => {
                 let values = array(value)?;
                 out.header(tag)?;
@@ -403,6 +415,9 @@ impl serde::Serialize for Frame<'_> {
             };
         }
         if structured::tag(ty).is_some() {
+            if ty.kind() == Type::Bytes {
+                return serializer.collect_seq(bytes[10..].iter().copied());
+            }
             if ty.kind() == Type::Indices {
                 return serializer.collect_seq(
                     bytes[10..]
@@ -503,6 +518,7 @@ mod tests {
             Value::RistrettoGroup(crate::RistrettoPoint::default()),
             Value::Vector(vec![crate::Scalar::from(1), crate::Scalar::from(2)].into()),
             Value::Indices(vec![0, u64::MAX].into()),
+            Value::Bytes(vec![0, 127, 128, 255].into()),
             Value::FieldArray(
                 crate::FieldArray::new(
                     LogicalType::field_array(Identity::Bls12381Fr, 2).unwrap(),

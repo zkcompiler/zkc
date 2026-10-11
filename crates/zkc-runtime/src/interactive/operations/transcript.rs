@@ -3,6 +3,46 @@ use super::*;
 use Type::*;
 
 pub(super) const CONTRACTS: &[Contract] = &[
+    Contract::new(
+        "transcript.observe",
+        (
+            &[Transcript, Bytes, Bytes],
+            &[Transcript],
+            AttributeRule::None,
+        ),
+    )
+    .implemented_by(&[
+        "arkworks/transcript.observe",
+        "dalek/transcript.observe",
+        "plonky3/transcript.observe",
+        "spongefish/transcript.observe",
+    ])
+    .history(),
+    Contract::new(
+        "transcript.challenge",
+        (
+            &[Transcript, Bytes],
+            &[Transcript, Field],
+            AttributeRule::None,
+        ),
+    )
+    .implemented_by(&[
+        "arkworks/transcript.challenge",
+        "dalek/transcript.challenge",
+        "plonky3/transcript.challenge",
+        "spongefish/transcript.challenge",
+    ])
+    .history(),
+    Contract::new(
+        "transcript.index",
+        (
+            &[Transcript, Bytes, Index],
+            &[Transcript, Index],
+            AttributeRule::None,
+        ),
+    )
+    .implemented_by(&["plonky3/transcript.index"])
+    .history(),
     Contract {
         alternatives: true,
         ..Contract::custom("transcript.native.indexed.observe.data")
@@ -85,15 +125,17 @@ fn resolve(
     }
     // UniformIndex transitions exist only for the suite whose challenge field
     // has index randomness; other suites' byte samplers are not installed.
-    if binding.contract == "transcript.native.indexed.index"
-        && primary != Identity::Merlin3KoalaBearExt8
+    if matches!(
+        binding.contract.as_str(),
+        "transcript.native.indexed.index" | "transcript.index"
+    ) && primary != Identity::Merlin3KoalaBearExt8
     {
         return Err(support::failure());
     }
     support::instantiate(shape, field, |kind| {
         if kind == Transcript {
             LogicalType::new(kind, primary)
-        } else if kind == Indices {
+        } else if kind == Indices || kind == Bytes {
             LogicalType::new(kind, Identity::None)
         } else {
             support::field_type(kind, field)

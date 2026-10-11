@@ -5,7 +5,7 @@ use super::{Port, RoleMap, index, input_kind, wire_codec, wire_type};
 use crate::host::inputs::{Result, array, list, text};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
-use zkc_runtime::interactive::{Admitted, LogicalType, PhysicalType, Type};
+use zkc_runtime::interactive::{Admitted, ConstructionPlan, LogicalType, PhysicalType, Type};
 
 /// Borrowed policy fields after syntactic checks. Public selection is checked
 /// later against the actual validator inputs, after message and role checks.
@@ -15,15 +15,19 @@ pub(super) struct DeploymentPolicy<'a> {
     pub(super) validator: &'a str,
     pub(super) original_acceptance: usize,
     pub(super) suite: Option<&'a str>,
+    pub(super) construction: &'a str,
+    pub(super) format: super::ProofFormat,
     public_selection: &'a Json,
     pub(super) draw_count: usize,
+    replaced_services: Vec<usize>,
 }
 impl<'a> DeploymentPolicy<'a> {
     pub(super) fn read(value: &'a Json) -> Result<Self> {
-        let policy = array(value, 9)?;
+        let policy = array(value, 11)?;
         if text(&policy[0])? != "zkc.native-proof-policy/0" {
             return Err("native-proof-policy".into());
         }
+        let construction = text(&policy[10])?;
         let (entry, producer, validator) =
             (text(&policy[1])?, text(&policy[2])?, text(&policy[3])?);
         if producer == validator {
@@ -32,15 +36,27 @@ impl<'a> DeploymentPolicy<'a> {
         let original_acceptance = index(&policy[4])?;
         let suite = text(&policy[5])?;
         let suite = (!suite.is_empty()).then_some(suite);
+        let format = super::ProofFormat::parse(text(&policy[9])?).ok_or("native-proof-format")?;
+        if format == super::ProofFormat::RawBytes && construction.is_empty() && suite.is_some() {
+            return Err("native-proof-format".into());
+        }
         let draws = list(&policy[8])?;
-        if draws.len() > 64
-            || (suite.is_some() != !draws.is_empty())
-            || suite.is_some() != !text(&policy[6])?.is_empty()
-        {
+        let selected = suite.is_some() || !construction.is_empty();
+        let selected_services = list(&policy[6])?;
+        if selected_services.len() > 1024 {
             return Err("native-proof-policy".into());
         }
-        if suite.is_some() {
-            index(&policy[6])?;
+        let replaced_services = selected_services
+            .iter()
+            .map(index)
+            .collect::<Result<Vec<_>>>()?;
+        if draws.len() > 64
+            || construction.is_empty() && (suite.is_some() != !draws.is_empty())
+            || selected != !replaced_services.is_empty()
+            || !replaced_services.windows(2).all(|pair| pair[0] < pair[1])
+            || construction.is_empty() && suite.is_some() && replaced_services.len() != 1
+        {
+            return Err("native-proof-policy".into());
         }
         let mut selected_sites = std::collections::BTreeSet::new();
         for draw in draws {
@@ -61,8 +77,11 @@ impl<'a> DeploymentPolicy<'a> {
             validator,
             original_acceptance,
             suite,
+            construction,
+            format,
             public_selection: &policy[7],
             draw_count: draws.len(),
+            replaced_services,
         })
     }
 }
@@ -79,6 +98,7 @@ impl RoleInterface {
         policy: &DeploymentPolicy<'_>,
         role_map: &Json,
         public_map: &Json,
+        construction: Option<&ConstructionPlan>,
     ) -> Result<Self> {
         let (entry, producer, validator) = (policy.entry, policy.producer, policy.validator);
         let suite = policy.suite;
@@ -96,11 +116,20 @@ impl RoleInterface {
             if role.participant != text(&row[1])? {
                 return Err("native-proof-role-map".into());
             }
-            let extra = usize::from(suite.is_some());
-            if role.inputs.len() < extra || role.outputs.len() < extra {
+            let inputs = construction
+                .map_or(usize::from(suite.is_some()), ConstructionPlan::input_slots)
+                + usize::from(
+                    construction.is_some_and(ConstructionPlan::has_codec) && role_name == validator,
+                );
+            let outputs = construction
+                .map_or(usize::from(suite.is_some()), ConstructionPlan::output_slots)
+                + usize::from(
+                    construction.is_some_and(ConstructionPlan::has_codec) && role_name == producer,
+                );
+            if role.inputs.len() < inputs || role.outputs.len() < outputs {
                 return Err("native-proof-port-map".into());
             }
-            let input_types = role.inputs[..role.inputs.len() - extra]
+            let input_types = role.inputs[..role.inputs.len() - inputs]
                 .iter()
                 .map(|(_, t)| t.clone())
                 .collect::<Vec<_>>();
@@ -108,7 +137,7 @@ impl RoleInterface {
             for ty in &input_types {
                 input_kind(ty)?;
             }
-            let outputs = ports(&row[3], &role.outputs[..role.outputs.len() - extra])?;
+            let outputs = ports(&row[3], &role.outputs[..role.outputs.len() - outputs])?;
             // This host returns proof bytes and retires its issued roots. It
             // has no caller-owned backend in which other affine outputs could
             // remain live, unlike the general bundle host.
@@ -128,8 +157,6 @@ impl RoleInterface {
                 if text(&row[1])? != service.name
                     || text(&row[2])? != service.contract.name()
                     || index(&row[3])? != service.input_index
-                    || data.iter().any(|p| p.original == original)
-                    || services.contains(&original)
                 {
                     return Err("native-proof-service-map".into());
                 }
@@ -163,6 +190,20 @@ impl RoleInterface {
         }
         if maps.len() != 2 || !maps.contains_key(producer) || !maps.contains_key(validator) {
             return Err("native-proof-role-map".into());
+        }
+        let mut authorities: std::collections::BTreeSet<_> =
+            policy.replaced_services.iter().copied().collect();
+        for original in maps.values().flat_map(|role| &role.services) {
+            if !authorities.insert(*original) {
+                return Err("native-proof-service-map".into());
+            }
+        }
+        if maps
+            .values()
+            .flat_map(|role| &role.data)
+            .any(|port| authorities.contains(&port.original))
+        {
+            return Err("native-proof-service-map".into());
         }
         for port in &maps[producer].data {
             if maps[validator]

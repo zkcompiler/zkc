@@ -320,12 +320,45 @@ fn job(
         schemas.charge(1 + completion.path.len())?;
         check_decision(protocol, completion, prover)?;
     }
-    let derived = match construction {
-        Construction::Authored {} => None,
-        Construction::FiatShamir { suite, service } => {
+    match construction.as_ref() {
+        Construction::Authored { .. } => (),
+        Construction::Derived {
+            symbol,
+            suite,
+            services,
+            ..
+        } => {
+            schemas.charge(symbol.len() + suite.as_ref().map_or(0, String::len))?;
+            require(!symbol.is_empty() && symbol.len() <= 4096, E::Selection)?;
+            require(!services.is_empty(), E::Selection)?;
+            require(
+                services.windows(2).all(|pair| pair[0] < pair[1]),
+                E::Selection,
+            )?;
+            schemas.charge(services.len())?;
+            for &service in services {
+                let selected = protocol
+                    .services
+                    .get(service as usize)
+                    .ok_or(E::Selection)?;
+                require(&selected.owner == verifier, E::Selection)?;
+            }
+            if let Some(suite) = suite {
+                LogicalType::parse(&format!("transcript:{suite}")).map_err(|_| E::Selection)?;
+            }
+        }
+        Construction::FiatShamir {
+            suite,
+            services,
+            format,
+        } => {
+            require(
+                *format == crate::proof::ProofFormat::Native && services.len() == 1,
+                E::Selection,
+            )?;
             let selected = protocol
                 .services
-                .get(*service as usize)
+                .get(services[0] as usize)
                 .ok_or(E::Selection)?;
             let ty =
                 LogicalType::parse(&format!("transcript:{suite}")).map_err(|_| E::Selection)?;
@@ -335,15 +368,8 @@ fn job(
                     && ty.identity().scalar_field() == Some(contract.field()),
                 E::Selection,
             )?;
-            Some(*service as usize)
         }
     };
-    for (index, service) in protocol.services.iter().enumerate() {
-        require(
-            &service.owner != verifier || Some(index) == derived,
-            E::Selection,
-        )?;
-    }
     if let Some(target) = target {
         let clause = protocol
             .clauses

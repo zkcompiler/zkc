@@ -163,57 +163,56 @@ llvm::Error checkSignatureSources(const CheckedStorage &storage, Work &work) {
     return failure("source.scoped-witness", "invalid signature source owner");
   return llvm::Error::success();
 }
-llvm::Error checkComponentContracts(const CheckedStorage &storage, Work &work) {
+llvm::Error checkModuleContracts(const CheckedStorage &storage, Work &work) {
   Semantics types(storage.declarations, storage.assets, work);
-  for (const auto &component : storage.declarations) {
-    if (!types.charge(1, component.span))
+  for (const auto &module : storage.declarations) {
+    if (!types.charge(1, module.span))
       return types.takeError();
-    if (component.kind != Declaration::Kind::Component ||
-        !component.implementation)
+    if (module.kind != Declaration::Kind::Module || !module.implementation)
       continue;
-    const auto *interface = types.typeDeclaration(*component.implementation);
+    const auto *interface = types.typeDeclaration(*module.implementation);
     if (!interface)
-      return failure("source.scoped-witness", "missing component interface",
-                     component.span);
-    if (!types.charge(component.parameters.size() + 1, component.span) ||
-        !types.chargeType(*component.implementation, component.span))
+      return failure("source.scoped-witness", "missing module interface",
+                     module.span);
+    if (!types.charge(module.parameters.size() + 1, module.span) ||
+        !types.chargeType(*module.implementation, module.span))
       return types.takeError();
     auto bindings =
-        types.substitution(*interface, component.implementation->arguments);
-    Type self(Type::Kind::Component, component.qualifiedName);
-    for (const auto &parameter : component.parameters)
+        types.substitution(*interface, module.implementation->arguments);
+    Type self(Type::Kind::Module, module.qualifiedName);
+    for (const auto &parameter : module.parameters)
       self.arguments.push_back(parameterType(parameter));
     bindings.emplace("self:" + interface->qualifiedName, std::move(self));
     for (auto requiredId : interface->members) {
-      if (!types.charge(component.members.size() + 1, component.span))
+      if (!types.charge(module.members.size() + 1, module.span))
         return types.takeError();
       if (requiredId.index >= storage.declarations.size())
         return failure("source.scoped-witness", "invalid interface member",
-                       component.span);
+                       module.span);
       const auto &required = storage.declarations[requiredId.index];
       if (required.kind != Declaration::Kind::Local &&
           required.kind != Declaration::Kind::Math)
         continue;
       const Declaration *provided = nullptr;
-      for (auto id : component.members) {
+      for (auto id : module.members) {
         if (id.index >= storage.declarations.size())
-          return failure("source.scoped-witness", "invalid component member",
-                         component.span);
+          return failure("source.scoped-witness", "invalid module member",
+                         module.span);
         const auto &member = storage.declarations[id.index];
         if (member.name == required.name)
           provided = &member;
       }
       if (!provided || !provided->body)
         return failure("source.scoped-witness", "missing implementation member",
-                       component.span);
+                       module.span);
       if (!checkMemberInputs(types, required, *provided, bindings))
         return types.takeError();
       if (!effectsWithin(types, provided->body->effects,
                          required.effectAllowance.value_or(EffectSummary{}),
-                         component.span)) {
+                         module.span)) {
         types.fail("source.scoped-witness",
                    "implementation exceeds interface effect contract",
-                   component.span);
+                   module.span);
         return types.takeError();
       }
     }

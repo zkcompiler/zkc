@@ -27,10 +27,11 @@ for suffix, options in [
                     "V",
                     "0",
                     "",
-                    "",
+                    [],
                     ["2", "3", "4", "5", "8", "9", "10", "11"],
                     [],
-                ]
+                    "zkc.framed/0",
+                 ""]
             )
         )
         candidate = OUT / (name + ".candidate.mlir")
@@ -127,10 +128,11 @@ with case("derived transcript observes two authorized setups"):
                 "V",
                 "0",
                 "merlin3.bls12-381.fr64be/0",
-                "12",
+                ["12"],
                 ["2", "3", "4", "5", "8", "9", "10", "11"],
                 [["draw", "challenge"]],
-            ]
+                "zkc.framed/0",
+             ""]
         )
     )
     (OUT / "derived.deployment").write_text(

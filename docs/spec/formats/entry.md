@@ -16,10 +16,21 @@ A run `job` has only `kind: "run"`. A proof job has exactly `kind: "proof"`,
 `construction`. Roles are original source roster names; `public` is a sorted
 array of logical input indices. Acceptance uses the selector format below. Completion is either
 a producer Boolean output selector or JSON null. Target is a clause name or JSON null. An authored
-construction has only `kind: "authored"`; a derived construction has exactly
-`kind: "fiat_shamir"`, `suite` and logical `service` index. Independent reading
-checks these choices against the original signature and the exact native statement.
-Source comparison separately checks that they match the selected checked Entry.
+construction has `kind: "authored"` and `format`. A native construction has
+`kind: "fiat_shamir"`, `format`, `suite` and `services`, a singleton array of
+logical service indices. A programmable construction has `kind: "derived"`,
+`format`, `suite`, `services` and `symbol`. Its suite is a managed transcript
+identity or null for a local root; its symbol names the checked construction.
+Its service array is nonempty and strictly increasing. Every selected service
+belongs to the verifier. Query domains follow their actual service contracts,
+independently of a programmable provider's domain. Unselected services remain
+explicit participant inputs.
+
+Format is `zkc.framed/0` or `raw.bytes/0`; native shorthand requires framing.
+A programmable record codec uses raw bytes. Independent reading checks these
+choices against the original signature, selected construction closure and
+native statement. Source comparison separately checks that they match the
+selected checked Entry.
 
 `setups` is an array of records with exactly `name` and `inputs`. Each input
 selector has exactly `port` and `path`, using logical input and product-field

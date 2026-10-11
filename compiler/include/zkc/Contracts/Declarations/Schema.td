@@ -109,6 +109,8 @@ class ZKC_Facet : ZKC_Declaration;
 def PublicReplay : ZKC_Facet;
 def AcceptanceGuard : ZKC_Facet;
 def Conjunction : ZKC_Facet;
+def SourceHistory : ZKC_Facet;
+def ManagedHistory : ZKC_Facet;
 class ZKC_History<int input, int output> : ZKC_Facet {
   int stateInput = input;
   int stateOutput = output;

@@ -7,6 +7,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
+#include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
@@ -379,7 +380,7 @@ class Comparator {
         resultLayouts.push_back(*layout);
       }
       Values result;
-      auto site = "s" + std::to_string(siteOrdinal++);
+      auto site = nativeSiteName(op.site.value_or(""), siteOrdinal++);
       if (auto *projection = std::get_if<Projection>(&op.action)) {
         auto selected =
             take(layouts.get(source.values[projection->input.index].type));
@@ -964,6 +965,131 @@ class Comparator {
     return cursor == block.end() || fail("extra operations after source body");
   }
 
+  bool construction(const Declaration &definition,
+                    protocol_ir::ConstructionOp record) {
+    if (!record)
+      return fail("missing construction selection");
+    mlir::SymbolTableCollection symbols;
+    auto plan = take(protocol::readConstructionPlan(record, symbols));
+    if (!plan)
+      return false;
+    const auto &source = *definition.construction;
+    const auto &target = project.declarations()[definition.target->index];
+    if (plan->symbol.getValue() != definition.symbol ||
+        plan->target.getValue() != target.symbol ||
+        plan->provider != typeIdentity(*source.provider) ||
+        plan->suite != source.suite || plan->nativeBase != source.nativeBase ||
+        plan->rootOnly !=
+            (definition.proofFormat.has_value() || source.nativeBase) ||
+        (plan->root == protocol::ConstructionPlan::Root::Local) !=
+            (source.root == ConstructionDefinition::Root::Local) ||
+        plan->rules.size() != source.rules.size() ||
+        plan->applications.size() != source.applications.size())
+      return fail("construction identity or root differs");
+    for (auto [expected, actual] :
+         zip(source.applications, plan->applications)) {
+      std::string site;
+      for (const auto &part : expected.path) {
+        auto label = nativeSiteName(part, 0);
+        site = site.empty()
+                   ? label
+                   : mathematical::expandedApplicationSite(site, label);
+      }
+      if (!charge(site.size() + 1) || actual.site != site ||
+          actual.construction.getValue() !=
+              project.declarations()[expected.construction.index].symbol)
+        return fail("construction application differs");
+    }
+    if (bool(plan->initializer) != bool(source.initializer) ||
+        (source.initializer &&
+         plan->initializer.getValue() !=
+             project.declarations()[source.initializer->declaration.index]
+                 .symbol))
+      return fail("construction initializer differs");
+    auto state = take(layouts.get(*source.state));
+    if (!state || !types(plan->state, (*state)->leaves))
+      return false;
+    std::vector<unsigned> offsets{0};
+    for (const auto &port : target.inputs) {
+      auto layout = take(layouts.get(port.type));
+      if (!layout)
+        return false;
+      offsets.push_back(offsets.back() + (*layout)->leaves.size());
+    }
+    SmallVector<unsigned> replaced;
+    for (auto port : source.services)
+      replaced.push_back(offsets.back() + port);
+    if (plan->services != replaced)
+      return fail("construction replacement authority differs");
+    if (bool(plan->codec) != bool(source.codec))
+      return fail("construction record format differs");
+    if (source.codec) {
+      const auto &expected = *source.codec;
+      const auto &actual = *plan->codec;
+      auto record = take(layouts.get(expected.record));
+      if (!record || !types(actual.record, (*record)->leaves))
+        return false;
+      SmallVector<unsigned> inputs;
+      for (unsigned port : expected.inputs)
+        for (unsigned i = offsets[port]; i < offsets[port + 1]; ++i)
+          inputs.push_back(i);
+      if (actual.provider != typeIdentity(expected.provider) ||
+          actual.inputs != inputs)
+        return fail("construction codec or layout inputs differ");
+      for (auto [method, reference] :
+           {std::pair{&expected.initialize, actual.initialize},
+            std::pair{&expected.write, actual.write},
+            std::pair{&expected.finish, actual.finish}})
+        if (reference.getValue() !=
+            project.declarations()[method->target.declaration.index].symbol)
+          return fail("construction codec method differs");
+    }
+    for (auto [expected, actual] : zip(source.rules, plan->rules)) {
+      if (!charge(expected.path.size() + expected.inputs.size() + 1))
+        return false;
+      const auto &handler = project.declarations()[expected.handler.index];
+      if (actual.kind != expected.kind ||
+          actual.handler.getValue() != handler.symbol)
+        return fail("construction handler selection differs");
+      if (expected.kind == ConstructionRule::Kind::Start) {
+        SmallVector<unsigned> ports;
+        for (auto port : expected.inputs)
+          for (unsigned i = offsets[port]; i < offsets[port + 1]; ++i)
+            ports.push_back(i);
+        if (ports != actual.inputs)
+          return fail("construction start inputs differ");
+        continue;
+      }
+      auto layout = take(layouts.get(*expected.payload));
+      if (!layout || !types(actual.payload, (*layout)->leaves))
+        return false;
+      if (expected.chunks) {
+        auto chunks = take(layouts.get(*expected.chunks));
+        if (!chunks || !types(actual.chunks, (*chunks)->leaves))
+          return false;
+      } else if (!actual.chunks.empty())
+        return fail("unexpected codec byte shape");
+      for (auto [i, site] : enumerate(actual.sites)) {
+        std::string prefix;
+        for (const auto &part : ArrayRef(expected.path).drop_back()) {
+          auto label = nativeSiteName(part, 0);
+          prefix = prefix.empty()
+                       ? label
+                       : mathematical::expandedApplicationSite(prefix, label);
+        }
+        auto label = nativeSiteName(expected.path.back(), 0);
+        if (expected.kind != ConstructionRule::Kind::Query)
+          label += "_" + std::to_string(i);
+        auto name = prefix.empty()
+                        ? label
+                        : mathematical::expandedApplicationSite(prefix, label);
+        if (!charge(name.size()) || site != name)
+          return fail("construction occurrence selector differs");
+      }
+    }
+    return true;
+  }
+
 public:
   Comparator(const ClosedEntry &project, mlir::ModuleOp module,
              const Limits &limits)
@@ -983,6 +1109,7 @@ public:
         !llvm::hasSingleElement(native.getBody()))
       return error("source.correspondence", "unexpected original module");
     SmallVector<mlir::Operation *> functions;
+    std::map<std::string, protocol_ir::ConstructionOp> constructions;
     std::map<std::string, relation::DeclareOp> relations;
     std::set<std::string> realizedHelpers;
     std::set<std::pair<std::string, std::vector<bool>>> mappedHelpers;
@@ -994,7 +1121,11 @@ public:
                        "duplicate finite auxiliary symbol");
         continue;
       }
-      if (auto declaration = mlir::dyn_cast<relation::DeclareOp>(op)) {
+      if (auto record = mlir::dyn_cast<protocol_ir::ConstructionOp>(op)) {
+        if (!constructions.emplace(record.getSymName().str(), record).second)
+          return error("source.correspondence",
+                       "duplicate construction selection");
+      } else if (auto declaration = mlir::dyn_cast<relation::DeclareOp>(op)) {
         if (!relations.emplace(declaration.getSymName().str(), declaration)
                  .second)
           return error("source.correspondence", "duplicate relation symbol");
@@ -1032,6 +1163,27 @@ public:
       } else
         functions.push_back(&op);
     }
+    SmallVector<DeclarationId> pendingConstructions;
+    if (const auto *proof = project.entry().proof();
+        proof && proof->construction == ProofEntry::Construction::Derived)
+      pendingConstructions.push_back(*proof->selectedConstruction);
+    std::set<unsigned> checkedConstructions;
+    while (!pendingConstructions.empty()) {
+      auto selected = pendingConstructions.pop_back_val();
+      if (!checkedConstructions.insert(selected.index).second)
+        continue;
+      const auto &definition = project.declarations()[selected.index];
+      auto found = constructions.find(definition.symbol);
+      if (found == constructions.end())
+        return error("source.correspondence", "missing construction selection");
+      if (!construction(definition, found->second))
+        return takeFailure();
+      for (const auto &application : definition.construction->applications)
+        pendingConstructions.push_back(application.construction);
+    }
+    if (checkedConstructions.size() != constructions.size())
+      return error("source.correspondence",
+                   "unexpected construction selection");
     unsigned index = 0;
     mlir::SymbolTableCollection symbols;
     relation::FormulaIdentities formulas(remaining, limits.irBytes);

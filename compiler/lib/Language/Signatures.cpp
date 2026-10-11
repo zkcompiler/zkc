@@ -151,11 +151,11 @@ bool Checker::chargeStaticSignature(const Declaration &decl) {
 }
 bool Checker::signature(DeclarationId id, unsigned depth) {
   auto &decl = output.declarations[id.index];
+  if (signatureState[id.index] == 2)
+    return true;
   if (depth > work.limits.typeDepth || signatureDepth >= work.limits.typeDepth)
     return types.fail("source.limit", "type declaration depth limit",
                       decl.span);
-  if (signatureState[id.index] == 2)
-    return true;
   if (signatureState[id.index] == 1)
     return types.fail("source.cycle", "recursive type or static signature",
                       decl.span);
@@ -171,6 +171,11 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     }
   }
   auto &source = *sources[id.index];
+  if (decl.kind == Declaration::Kind::Associated && !source.parameters.empty())
+    return types.fail(
+        "source.unsupported",
+        "associated types use only their owner's static parameters",
+        source.parameters.front().span);
   ++signatureDepth;
   auto restoreDepth = llvm::scope_exit([&] { --signatureDepth; });
   signatureState[id.index] = 1;
@@ -186,11 +191,24 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     decl.capabilityBounds =
         output.declarations[decl.parent->index].capabilityBounds;
   }
+  if (decl.kind == Declaration::Kind::Entry && !decl.parameters.empty())
+    return types.fail("source.entry",
+                      "Entries must be declared in a closed module", decl.span);
   for (auto &p : decl.parameters) {
+    if (!types.charge(1, decl.span))
+      return false;
     if (p.name == decl.name)
       return types.fail("source.shadow",
                         "member shadows an inherited static parameter",
                         decl.span);
+    if (decl.kind == Declaration::Kind::Module) {
+      auto binding = visible[decl.id.index].find(p.name);
+      if (binding != visible[decl.id.index].end())
+        return types.fail(
+            "source.shadow",
+            "declaration or import shadows an inherited static parameter",
+            binding->second.span);
+    }
   }
   formingParameters.insert(id.index);
   for (auto &src : source.parameters) {
@@ -221,18 +239,16 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       auto &interface = output.declarations[target->index];
       if (interface.kind != Declaration::Kind::Interface)
         return types.fail("source.generic",
-                          "component parameter requires an interface",
-                          src.span);
+                          "module parameter requires an interface", src.span);
       auto args = arguments(decl, interface, src.constraint.arguments, src.span,
                             src.constraint.labels);
       if (!args)
         return false;
-      p.sort = Parameter::Sort::Component;
+      p.sort = Parameter::Sort::Module;
       p.interface = *target;
       p.arguments = std::move(*args);
     }
-    if (p.sort != Parameter::Sort::Component &&
-        !src.constraint.arguments.empty())
+    if (p.sort != Parameter::Sort::Module && !src.constraint.arguments.empty())
       return types.fail("source.generic", "static sort does not take arguments",
                         src.span);
     if (isStaticOnly(parameterType(p)) && !(p.permissions == Permissions{}))
@@ -255,15 +271,30 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         return false;
   }
   deferredApplications.erase(id.index);
+  if (decl.kind == Declaration::Kind::Construction) {
+    auto target = resolve(decl, source.target, source.span);
+    if (!target || !signature(*target, depth + 1))
+      return false;
+    const auto &definition = output.declarations[target->index];
+    if (definition.kind != Declaration::Kind::Protocol)
+      return types.fail("source.construction",
+                        "construction target must be a protocol", source.span);
+    auto selected = arguments(decl, definition, source.targetArguments,
+                              source.span, source.targetLabels);
+    if (!selected)
+      return false;
+    decl.target = *target;
+    decl.staticArguments = std::move(*selected);
+  }
   if (source.definition) {
     auto def = type(decl, *source.definition, depth + 1);
     if (!def)
       return false;
-    if (decl.kind == Declaration::Kind::Component) {
+    if (decl.kind == Declaration::Kind::Module) {
       auto *target = types.typeDeclaration(*def);
       if (!target || target->kind != Declaration::Kind::Interface)
         return types.fail("source.conformance",
-                          "component must implement an interface", decl.span);
+                          "module must implement an interface", decl.span);
       decl.implementation = *def;
     } else {
       bool domain = decl.kind == Declaration::Kind::Associated &&
@@ -335,6 +366,12 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       decl.kind == Declaration::Kind::DomainFunction ||
       decl.kind == Declaration::Kind::Protocol ||
       decl.kind == Declaration::Kind::Relation) {
+    // Construction handlers receive their ports from the selected protocol
+    // occurrence before their ordinary Local body is checked.
+    if (source.constructionHandler) {
+      signatureState[id.index] = 2;
+      return true;
+    }
     decl.roles = source.roles;
     std::set<std::string> roster(decl.roles.begin(), decl.roles.end());
     if (roster.size() != decl.roles.size())

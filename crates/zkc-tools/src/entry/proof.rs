@@ -11,18 +11,21 @@ use zkc_backends::NativeBackend;
 
 type Result<T> = std::result::Result<T, String>;
 
-/// Authored deployments bind public inputs/context in the artifact header only.
-/// Applications must acknowledge that scope explicitly before admitting one.
+/// Require Host absorption of the authorized invocation at managed transcript
+/// initialization, or explicitly permit a library-owned binding policy.
+/// Neither choice establishes that message handlers or samplers are secure.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BindingPolicy {
     #[default]
     TranscriptRequired,
-    AllowHeaderOnly,
+    AllowAuthored,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BindingScope {
     Transcript,
     HeaderOnly,
+    /// Binding is entirely defined by the authored protocol; there is no Host header.
+    Authored,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct ProofOptions {
@@ -134,10 +137,12 @@ impl ProofEntry {
         let completion = proof.completion;
         let scope = if proof.suite.is_some() {
             BindingScope::Transcript
-        } else {
+        } else if proof.format == crate::proof::ProofFormat::Native {
             BindingScope::HeaderOnly
+        } else {
+            BindingScope::Authored
         };
-        if scope == BindingScope::HeaderOnly && options.binding == BindingPolicy::TranscriptRequired
+        if scope != BindingScope::Transcript && options.binding == BindingPolicy::TranscriptRequired
         {
             return Err(E::new(P::Admission, "entry-proof-binding-policy"));
         }
@@ -310,7 +315,7 @@ impl ProofEntry {
     }
     fn inputs(&self, request: ProofRequest, producer: bool) -> Result<ProofInputs> {
         let role = &self.interface.roles()[if producer { self.roles.0 } else { self.roles.1 }];
-        let derived = self.interface.proof().and_then(|p| p.transcript).is_some();
+        let managed = self.native.entry().transcript().is_some();
         let keys = setups::public_keys(&self.interface, &request.setups, self.native.capacity())?;
         let public = arguments::values(self.interface.public_ports(), request.public, Some(&keys))?;
         let inputs = arguments::proof_inputs(
@@ -325,7 +330,7 @@ impl ProofEntry {
             inputs,
             services: arguments::services(self.interface.services(role), request.private.services)?,
             context: request.context,
-            transcript_budget: request.transcript_budget.unwrap_or(if derived {
+            transcript_budget: request.transcript_budget.unwrap_or(if managed {
                 super::DEFAULT_DRAW_BUDGET
             } else {
                 0

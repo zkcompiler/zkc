@@ -31,15 +31,15 @@ Type parameterType(const Parameter &p) {
                    ? domainType(p.domainSort, p.atom)
                : p.sort == Parameter::Sort::Asset
                    ? assetType(p.domainSort, p.atom)
-                   : Type(p.sort == Parameter::Sort::Natural     ? K::Natural
-                          : p.sort == Parameter::Sort::Component ? K::Component
-                                                                 : K::Parameter,
+                   : Type(p.sort == Parameter::Sort::Natural  ? K::Natural
+                          : p.sort == Parameter::Sort::Module ? K::Module
+                                                              : K::Parameter,
                           p.atom);
   value.symbolic = true;
   value.assumptions = p.permissions;
   if (p.sort == Parameter::Sort::Natural)
     value.dimension = cantFail(Natural::atom(p.atom));
-  if (p.sort == Parameter::Sort::Component)
+  if (p.sort == Parameter::Sort::Module)
     value.arguments = p.arguments;
   return value;
 }
@@ -69,6 +69,59 @@ Error Semantics::takeError() {
   return result;
 }
 bool valueType(const Type &type) { return !isStaticOnly(type); }
+bool Semantics::chargeConstruction(const ConstructionDefinition &value,
+                                   Span span) {
+  if (!charge(value.suite.size() + value.rules.size() +
+                  value.applications.size() + 1,
+              span))
+    return false;
+  for (const auto *type : {&value.provider, &value.state})
+    if (*type && !chargeType(**type, span))
+      return false;
+  if (value.initializer && value.initializer->module &&
+      !chargeType(*value.initializer->module, span))
+    return false;
+  for (const auto *arguments : {&value.arguments, &value.initializerArguments})
+    for (const auto &argument : *arguments)
+      if (!chargeType(argument, span))
+        return false;
+  if (value.codec) {
+    const auto &codec = *value.codec;
+    if (!chargeType(codec.provider, span) || !chargeType(codec.record, span) ||
+        !charge(codec.inputs.size() + 1, span))
+      return false;
+    for (const auto *method :
+         {&codec.initialize, &codec.write, &codec.finish}) {
+      if (method->target.module && !chargeType(*method->target.module, span))
+        return false;
+      for (const auto &argument : method->arguments)
+        if (!chargeType(argument, span))
+          return false;
+    }
+  }
+  for (const auto &application : value.applications) {
+    for (const auto &part : application.path)
+      if (!charge(part.size() + 1, application.span))
+        return false;
+    for (const auto &argument : application.arguments)
+      if (!chargeType(argument, application.span))
+        return false;
+  }
+  for (const auto &rule : value.rules) {
+    if (!charge(rule.inputs.size() + 1, rule.span))
+      return false;
+    for (const auto &part : rule.path)
+      if (!charge(part.size() + 1, rule.span))
+        return false;
+    for (const auto &argument : rule.arguments)
+      if (!chargeType(argument, rule.span))
+        return false;
+    for (const auto *type : {&rule.payload, &rule.chunks})
+      if (*type && !chargeType(**type, rule.span))
+        return false;
+  }
+  return true;
+}
 bool Semantics::chargeType(const Type &type, Span span) {
   auto cost =
       typeComplexity(type, work.limits.typeNodes, work.limits.typeDepth);
@@ -86,7 +139,7 @@ const Parameter *Semantics::parameter(StringRef atom) const {
 const Declaration *Semantics::typeDeclaration(const Type &type) const {
   using K = Type::Kind;
   if (type.kind != K::Record && type.kind != K::Variant &&
-      type.kind != K::Associated && type.kind != K::Component)
+      type.kind != K::Associated && type.kind != K::Module)
     return nullptr;
   auto found = qualified.find(type.domain);
   return found == qualified.end() ? nullptr
@@ -232,9 +285,8 @@ std::optional<Type> Semantics::associated(const Type &base, StringRef member,
     }
     return std::move(*result);
   }
-  if (base.kind != Type::Kind::Component) {
-    fail("source.type", "associated member requires a component or domain",
-         span);
+  if (base.kind != Type::Kind::Module) {
+    fail("source.type", "associated member requires a module or domain", span);
     return {};
   }
   const Declaration *owner = nullptr;
@@ -249,7 +301,7 @@ std::optional<Type> Semantics::associated(const Type &base, StringRef member,
   } else
     owner = typeDeclaration(base);
   if (!owner) {
-    fail("source.type", "unknown associated component", span);
+    fail("source.type", "unknown associated module", span);
     return {};
   }
   if (!charge(owner->members.size(), span))
@@ -284,21 +336,21 @@ std::optional<Type> Semantics::associated(const Type &base, StringRef member,
 }
 std::optional<Substitution>
 Semantics::boundMemberSubstitution(const Declaration &callee,
-                                   const Type &component, Span span) {
+                                   const Type &module, Span span) {
   if (!callee.parent) {
     fail("source.call", "bound callable has no interface owner", span);
     return {};
   }
   const auto &parent = declarations[callee.parent->index];
-  Type interface = component;
-  if (!component.symbolic && parent.kind == Declaration::Kind::Interface) {
-    const auto *owner = typeDeclaration(component);
+  Type interface = module;
+  if (!module.symbolic && parent.kind == Declaration::Kind::Interface) {
+    const auto *owner = typeDeclaration(module);
     if (!owner || !owner->implementation) {
-      fail("source.conformance", "bound callable requires a component", span);
+      fail("source.conformance", "bound callable requires a module", span);
       return {};
     }
     auto selected = substitute(*owner->implementation,
-                               substitution(*owner, component.arguments), span);
+                               substitution(*owner, module.arguments), span);
     if (!selected)
       return {};
     interface = std::move(*selected);
@@ -311,7 +363,7 @@ Semantics::boundMemberSubstitution(const Declaration &callee,
   Substitution result;
   for (unsigned i = 0; i < parent.parameters.size(); ++i)
     result.emplace(callee.parameters[i].atom, interface.arguments[i]);
-  result.emplace("self:" + parent.qualifiedName, component);
+  result.emplace("self:" + parent.qualifiedName, module);
   return result;
 }
 
@@ -367,8 +419,8 @@ bool Semantics::checkKnownArgumentSorts(const Declaration &target,
       if (kind && !executableType(a, span))
         return false;
       break;
-    case Parameter::Sort::Component: {
-      kind = a.kind == Type::Kind::Component;
+    case Parameter::Sort::Module: {
+      kind = a.kind == Type::Kind::Module;
       if (!kind)
         break;
       const Declaration *actual = nullptr;
@@ -380,11 +432,10 @@ bool Semantics::checkKnownArgumentSorts(const Declaration &target,
           actualArgs = param->arguments;
         }
       } else {
-        auto component = typeDeclaration(a);
-        if (component && component->implementation) {
-          auto selected =
-              substitute(*component->implementation,
-                         substitution(*component, a.arguments), span);
+        auto module = typeDeclaration(a);
+        if (module && module->implementation) {
+          auto selected = substitute(*module->implementation,
+                                     substitution(*module, a.arguments), span);
           if (!selected)
             return false;
           actual = typeDeclaration(*selected);
@@ -393,7 +444,7 @@ bool Semantics::checkKnownArgumentSorts(const Declaration &target,
       }
       if (!actual || !p.interface || actual->id.index != p.interface->index)
         return fail("source.conformance",
-                    "component does not implement required interface", span);
+                    "module does not implement required interface", span);
       if (actualArgs.size() != p.arguments.size())
         return fail("source.conformance", "interface static arguments differ",
                     span);

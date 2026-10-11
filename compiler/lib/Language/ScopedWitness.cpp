@@ -11,7 +11,7 @@ using namespace llvm;
 namespace zkc::language::detail {
 namespace {
 bool same(Span a, Span b) {
-  return a.module.index == b.module.index && a.begin == b.begin &&
+  return a.source.index == b.source.index && a.begin == b.begin &&
          a.end == b.end;
 }
 class CaptureCheck {
@@ -413,7 +413,7 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
               application.parameter || !application.factory ||
               application.factory->declaration.index !=
                   authored.target.declaration.index ||
-              application.factory->component != authored.target.component ||
+              application.factory->module != authored.target.module ||
               application.arguments != authored.arguments)
             return refuse();
           const auto &factory =
@@ -431,11 +431,11 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
           if (!order || *order != application.argumentOrder)
             return refuse();
           auto substitution = types.substitution(factory, authored.arguments);
-          if (authored.target.component && factory.parent)
+          if (authored.target.module && factory.parent)
             substitution.emplace(
                 "self:" +
                     storage.declarations[factory.parent->index].qualifiedName,
-                *authored.target.component);
+                *authored.target.module);
           auto item = types.substitute(*factory.domainResult, substitution,
                                        argument.span);
           if (!item || *item != application.item)
@@ -674,7 +674,7 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
       return types.takeError();
     }
   }
-  if (auto error = checkComponentContracts(storage, work))
+  if (auto error = checkModuleContracts(storage, work))
     return error;
   for (auto count : invocationUses)
     if (count != 1)

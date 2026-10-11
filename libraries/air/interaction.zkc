@@ -128,7 +128,7 @@ pub struct Layout {
 
 // A challenge-dependent reduction of every channel's multiset equality to
 // per-table auxiliary columns, per-table claims and global claims. One
-// component serves every table, so tables cannot mix reductions. Record
+// module serves every table, so tables cannot mix reductions. Record
 // values may be on the table's rows, on a larger evaluation domain or at a
 // single point (rows = 1): `constraints` is the same arithmetic for each.
 pub interface Reduction<F: Field> {
@@ -141,7 +141,7 @@ pub interface Reduction<F: Field> {
   fn start(channels: index) -> Vector<F> effects(stop, opaque);
   fn fold(records: Interactions, claims: Vector<F>, accumulator: Vector<F>) -> Vector<F> effects(stop, opaque);
   fn global(accumulator: Vector<F>, channels: index) -> Vector<F> effects(stop, opaque);
-  fn close(accumulator: Vector<F>, global: Vector<F>, channels: index) -> bool effects(stop, opaque);
+  fn close(accumulator: Vector<F>, global_sum: Vector<F>, channels: index) -> bool effects(stop, opaque);
   fn admits(push: index, pull: index, characteristic: index) -> bool effects(stop, opaque);
 }
 
@@ -178,7 +178,7 @@ fn channel_term<F: Field>(records: Interactions, values: Vector<F>, inverses: Ve
 // and per used channel a running sum S of its signed terms, opened at the row
 // and at the previous row, whose last row is the table's claim. The channel
 // closes when its claims sum to zero over present tables.
-pub component LogUp<F: Field>: Reduction<F> {
+pub module LogUp<F: Field>: Reduction<F> {
   fn layout(records: Interactions, height: index) -> Layout {
     let sums = used_channels(records);
     let mut opened = index_list();
@@ -285,8 +285,8 @@ pub component LogUp<F: Field>: Reduction<F> {
     return result;
   }
   fn global(accumulator: Vector<F>, channels: index) -> Vector<F> { return empty<F>(); }
-  fn close(accumulator: Vector<F>, global: Vector<F>, channels: index) -> bool {
-    return both(length(global) == 0,
+  fn close(accumulator: Vector<F>, global_sum: Vector<F>, channels: index) -> bool {
+    return both(length(global_sum) == 0,
       kernel<F>("vector.equal", accumulator, fill<F>(0, channels)));
   }
   // A field sum of natural Boolean counts is their natural sum only below the
@@ -332,7 +332,7 @@ fn row_factor<F: Field>(records: Interactions, values: Vector<F>, rows: index,
 // table's claim. Each channel has a global inverse claim: the channel closes
 // when its push and pull claim products agree and the push product times the
 // inverse claim is one.
-pub component GrandProduct<F: Field>: Reduction<F> {
+pub module GrandProduct<F: Field>: Reduction<F> {
   fn layout(records: Interactions, height: index) -> Layout {
     let keys = used_keys(records);
     let mut opened = index_list();
@@ -423,13 +423,13 @@ pub component GrandProduct<F: Field>: Reduction<F> {
     }
     return result;
   }
-  fn close(accumulator: Vector<F>, global: Vector<F>, channels: index) -> bool {
-    let mut closed = both(length(accumulator) == 2 * channels, length(global) == channels);
+  fn close(accumulator: Vector<F>, global_sum: Vector<F>, channels: index) -> bool {
+    let mut closed = both(length(accumulator) == 2 * channels, length(global_sum) == channels);
     if closed {
       for channel in 0..channels {
         let push = get(accumulator, 2 * channel);
         let pull = get(accumulator, 2 * channel + 1);
-        closed = both(closed, both(push == pull, push * get(global, channel) == 1));
+        closed = both(closed, both(push == pull, push * get(global_sum, channel) == 1));
       }
     }
     return closed;

@@ -172,8 +172,8 @@ fn stop(text: &mut String, report: &Value, native_role: &str, reason: &Value) {
     writeln!(text, "Stopped {name}: {reason}").unwrap();
 }
 fn requirements(requirements: &Value, text: &mut String) {
-    if requirements["allow_header_only"] == true {
-        text.push_str("Authored proof: explicit --allow-header-only is required.\n");
+    if requirements["allow_authored"] == true {
+        text.push_str("Authored proof: explicit --allow-authored is required.\n");
     }
     if let Some(keys) = requirements["setups"].as_array().filter(|v| !v.is_empty()) {
         writeln!(

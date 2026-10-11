@@ -123,6 +123,7 @@ impl Interface {
                 "acceptance":selection(acceptance),
                 "completion":completion.as_deref().map(selection),
                 "transcript_suite":self.proof().and_then(|p| p.suite.as_deref()),
+                "proof_format":self.proof().map(|p| p.format.name()),
             })),
         };
         json!({"entry":self.entry(), "protocol":self.protocol(),

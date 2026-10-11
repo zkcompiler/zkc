@@ -71,6 +71,15 @@ ArrayAttr statementBindings(zkc::protocol_ir::MathematicalOp program,
 
 LogicalResult verifyProtocolPreparationPreserved(Operation *before,
                                                  Operation *after) {
+  auto constructions = [](Operation *module) {
+    SmallVector<DictionaryAttr> result;
+    for (auto record :
+         module->getRegion(0).front().getOps<protocol_ir::ConstructionOp>())
+      result.push_back(record->getAttrDictionary());
+    return result;
+  };
+  if (constructions(before) != constructions(after))
+    return refuseLocal(after, "preparation changed the selected construction");
   bool applications = false;
   before->walk([&](protocol_ir::ApplyOp) { applications = true; });
   if (applications)
@@ -352,6 +361,16 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate) {
         if (isa<protocol_ir::LocalCallOp>(action) &&
             map.get("callee") != action->getAttr("callee"))
           return refuse(result, "role projection changed an authored callee");
+        if (auto query = dyn_cast<protocol_ir::QueryOp>(action)) {
+          auto argument = cast<BlockArgument>(query.getReference());
+          while (auto repeat = dyn_cast<protocol_ir::RepeatOp>(
+                     argument.getOwner()->getParentOp()))
+            argument = cast<BlockArgument>(
+                repeat.getInputs()[argument.getArgNumber()]);
+          auto authority = map.getAs<IntegerAttr>("service");
+          if (!authority || authority.getInt() != argument.getArgNumber())
+            return refuse(result, "role projection changed a query authority");
+        }
         llvm::DenseSet<Attribute> owners;
         for (auto targetItem : map.getAs<ArrayAttr>("targets")) {
           auto target = cast<DictionaryAttr>(targetItem);
@@ -359,7 +378,8 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate) {
               symbolTables.lookupNearestSymbolFrom<protocol_ir::ParticipantOp>(
                   result, target.getAs<FlatSymbolRefAttr>("participant"));
           owners.insert(participant.getRoleAttr());
-          if (isa<protocol_ir::RepeatOp>(action))
+          if (isa<protocol_ir::RepeatOp, protocol_ir::ConstructionStartOp>(
+                  action))
             continue;
           auto operation = target.getAs<StringAttr>("operation").getValue();
           auto owner = action->getAttrOfType<StringAttr>(
@@ -369,6 +389,13 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate) {
                                                       : "owner");
           if (participant.getRoleAttr() != owner)
             return refuse(result, "role projection changed an action owner");
+        }
+        if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(action)) {
+          if (owners.size() != start.getRoles().size() ||
+              !all_of(start.getRoles(),
+                      [&](Attribute role) { return owners.contains(role); }))
+            return refuse(result,
+                          "role projection changed construction participants");
         }
         if (auto loop = dyn_cast<protocol_ir::RepeatOp>(action)) {
           if (map.get("maximum") != loop.getMaximumAttr() ||

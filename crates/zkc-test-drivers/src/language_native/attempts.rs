@@ -32,7 +32,7 @@ fn request(producing: bool, done: bool) -> ProofRequest {
 pub(super) fn run(directory: &Path) {
     for (name, suite) in [("Derived", 0), ("Derived", 1), ("Plain", 0)] {
         let options = ProofOptions {
-            binding: BindingPolicy::AllowHeaderOnly,
+            binding: BindingPolicy::AllowAuthored,
             ..Default::default()
         };
         let publication = package(directory, name, suite);
@@ -197,7 +197,7 @@ pub(super) fn run(directory: &Path) {
         }
     }
     let options = ProofOptions {
-        binding: BindingPolicy::AllowHeaderOnly,
+        binding: BindingPolicy::AllowAuthored,
         ..Default::default()
     };
     let once =

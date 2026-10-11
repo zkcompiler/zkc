@@ -255,13 +255,28 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
         out.value(nullptr);
       out.attributeEnd();
       out.attributeObject("construction", [&] {
-        bool derived =
+        bool native =
             proof->construction == ProofEntry::Construction::FiatShamir;
-        out.attribute("kind", derived ? "fiat_shamir" : "authored");
-        if (derived) {
-          out.attribute("suite", proof->suite);
-          out.attribute("service", *proof->service);
+        bool selected =
+            proof->construction == ProofEntry::Construction::Derived;
+        out.attribute("kind", selected ? "derived"
+                              : native ? "fiat_shamir"
+                                       : "authored");
+        out.attribute("format", protocol::proofFormatName(proof->format));
+        if (native || selected) {
+          if (selected && proof->suite.empty())
+            out.attribute("suite", nullptr);
+          else
+            out.attribute("suite", proof->suite);
+          out.attributeArray("services", [&] {
+            for (auto service : proof->services)
+              out.value(service);
+          });
         }
+        if (selected)
+          out.attribute(
+              "symbol",
+              entry.declarations()[proof->selectedConstruction->index].symbol);
       });
     });
     out.attributeArray("protocols", [&] {

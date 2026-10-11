@@ -7,6 +7,10 @@
 using namespace llvm;
 
 namespace zkc::language {
+std::string nativeSiteName(StringRef label, uint64_t ordinal) {
+  return label.empty() ? "s" + std::to_string(ordinal)
+                       : "label_" + encodeNominalIdentity(label);
+}
 namespace {
 struct Range {
   uint32_t first, last;

@@ -205,7 +205,7 @@ run Demo=Run;)";
 void nameResolution() {
   const std::string definitions = R"(module m;
 interface I { type State: Copy + Drop; }
-component C: I { type State: Copy + Drop = bool; }
+module C: I { type State: Copy + Drop = bool; }
 )";
   const std::string unrelated =
       "module C;pub domain State=field(\"bls12-381.fr\");"
@@ -224,7 +224,7 @@ component C: I { type State: Copy + Drop = bool; }
                 [](const auto &decl) { return decl.qualifiedName == "m::f"; })
                     ->inputs.front()
                     .type.kind == Type::Kind::Associated,
-            "captured module replaced lexical component member");
+            "captured module replaced lexical module member");
     refuses(checked("fn f(x:C::Missing)->bool{return x;}", extra),
             "source.name");
     refuses(checked("fn f(x:C::State)->index{return x;}", extra),
@@ -234,7 +234,7 @@ component C: I { type State: Copy + Drop = bool; }
   auto captureMember = must(
       capture({{"m", definitions + "fn f(x:C::Ghost)->bool{return x;}", {}},
                {"m::C", "module m::C;pub type Ghost=bool;", {}}}));
-  refuses(analyze(captureMember).checkedProject(), "source.name");
+  refuses(analyze(captureMember).checkedProject(), "source.duplicate");
   // Private prefix lookup must preserve the original refusal and its source.
   auto project = must(capture(
       {{"a", "module a;domain G=group(\"bls12-381.g1\");", {}},
@@ -246,12 +246,12 @@ component C: I { type State: Copy + Drop = bool; }
   require(analysis.diagnostics().front().primary.has_value(),
           "private projection lost source location");
 
-  // Repeated lookups in a wide component must account for the member scans.
+  // Repeated lookups in a wide module must account for the member scans.
   constexpr unsigned width = 512, uses = 32;
   std::string wide = "module m;interface I{";
   for (unsigned i = 0; i < width; ++i)
     wide += "type T" + std::to_string(i) + ": Copy + Drop;";
-  wide += "}component C:I{";
+  wide += "}module C:I{";
   for (unsigned i = 0; i < width; ++i)
     wide += "type T" + std::to_string(i) + ": Copy + Drop=bool;";
   wide += "}";
@@ -270,7 +270,7 @@ component C: I { type State: Copy + Drop = bool; }
     wide += "fn f" + std::to_string(i) + "(x:C::T511)->C::T511{return x;}";
   auto full = check(wide);
   require(full.checkedWork() >= baseWork + 2 * width * uses,
-          "component lookup scans escaped the work budget");
+          "module lookup scans escaped the work budget");
   Limits limit;
   limit.work = full.checkedWork() - 1;
   sourceRefuses(wide, "source.limit", limit);
@@ -306,7 +306,7 @@ void semanticDiagnosticLocations() {
     require(diagnostic.code == "source.natural", "arithmetic code changed");
     require(diagnostic.primary.has_value(), "arithmetic source span lost");
     auto span = *diagnostic.primary;
-    require(span.module.index == 0 &&
+    require(span.source.index == 0 &&
                 StringRef(source).slice(span.begin, span.end) == expression,
             "arithmetic span does not select the failing expression");
   }
@@ -355,7 +355,7 @@ void depthAndAggregateBounds() {
   }
   uint64_t tokenCount = 0;
   for (unsigned i = 0; i < all.sources().size(); ++i)
-    tokenCount += all.tokens(ModuleId{i}).size();
+    tokenCount += all.tokens(SourceId{i}).size();
   for (auto member : {&Limits::tokens, &Limits::declarations,
                       &Limits::operations, &Limits::work}) {
     limits = {};
@@ -607,7 +607,7 @@ void reviewedSourceBoundaries() {
 protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:(Fr,Fr)@B){let t=(x,y);return(r=t);}run Demo=Run;)",
            R"(module m;domain Fr=field("bls12-381.fr");
 interface Mix {math fn mix(a:Fr,b:Fr)->Fr;}
-component First:Mix {math fn mix(a:Fr,b:Fr)->Fr{return a;}}
+module First:Mix {math fn mix(a:Fr,b:Fr)->Fr{return a;}}
 math fn keep<C:Mix>(x:Fr,y:Fr)->Fr{return C::mix(x,y);}
 protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:Fr@B){return(r=keep<First>(x,y));}run Demo=Run;)",
            R"(module m;domain Fr=field("bls12-381.fr");
@@ -626,12 +626,12 @@ protocol Relay<T:Type+Copy+Drop+Share+Wire> roles(P,V)(x:T@P)->(r:T@V){let y=sen
   refuses(closeEntry(emptyMessage, "m::Demo"), "source.wire");
   auto distinct = original(R"(module m;domain Fr=field("bls12-381.fr");
 interface Mix {math fn mix(a:Fr,b:Fr)->Fr;}
-component First:Mix {math fn mix(a:Fr,b:Fr)->Fr{return a;}}
-component Second:Mix {math fn mix(a:Fr,b:Fr)->Fr{return b;}}
+module First:Mix {math fn mix(a:Fr,b:Fr)->Fr{return a;}}
+module Second:Mix {math fn mix(a:Fr,b:Fr)->Fr{return b;}}
 math fn keep<C:Mix>(x:Fr,y:Fr)->Fr{return C::mix(x,y);}
 protocol Run roles(P)(x:Fr@P,y:Fr@P)->(a:Fr@P,b:Fr@P){return(a=keep<First>(x,y),b=keep<Second>(x,y));}run Demo=Run;)");
   must(compileEntry(distinct));
-  mutation(distinct, "selected component changed", [](auto m) {
+  mutation(distinct, "selected module changed", [](auto m) {
     std::vector<mlir::Operation *> calls;
     m.walk([&](mlir::Operation *op) {
       if (op->getName().getStringRef() == "func.call")
@@ -923,7 +923,7 @@ void bounds() {
   sourceRefuses(basic, "source.limit", limits);
   uint64_t tokenCount = 0;
   for (unsigned i = 0; i < project.sources().size(); ++i)
-    tokenCount += project.tokens(ModuleId{i}).size();
+    tokenCount += project.tokens(SourceId{i}).size();
   limits = {};
   limits.tokens = tokenCount;
   check(basic, limits);

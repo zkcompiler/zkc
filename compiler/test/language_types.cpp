@@ -85,6 +85,96 @@ void mutation(const CheckedOriginal &source,
 }
 const std::string prefix = "module m;domain Fr=field(\"bls12-381.fr\");\n";
 const std::string unit = "protocol Run roles(P)()->(){return();}run Demo=Run;";
+void byteDataAndHistory() {
+  auto bytes = original(R"(
+module m;
+type Bytes=builtin("bytes");
+fn empty()->Bytes{return kernel("bytes.empty");}
+fn append(a:Bytes,b:index)->Bytes{return kernel("bytes.append",a,b);}
+fn concat(a:Bytes,b:Bytes)->Bytes{return kernel("bytes.concat",a,b);}
+fn slice(a:Bytes,b:index,c:index)->Bytes{return kernel("bytes.slice",a,b,c);}
+fn at(a:Bytes,b:index)->index{return kernel("bytes.at",a,b);}
+fn length(a:Bytes)->index{return kernel("bytes.length",a);}
+fn equal(a:Bytes,b:Bytes)->bool{return kernel("bytes.equal",a,b);}
+fn build()->Bytes {
+  return concat(append(empty(), 255), append(empty(), 0));
+}
+fn valid(c:Bytes)->bool {
+  return equal(slice(c, 0, 1), append(empty(), at(c, 0))) && length(c) == 2;
+}
+protocol Relay roles(P,V)()->(accepted:bool@V) {
+  let b @P = build();
+  let c = send P->V(b);
+  let accepted @V = valid(c);
+  return(accepted=accepted);
+}
+run Demo=Relay;
+)");
+  must(compileEntry(bytes));
+  auto history = original(R"(
+module m;
+
+fn sample()->index {
+  let state = kernel("external.openvm.init");
+  let (next, result) = kernel("external.openvm.sample", state);
+  return result;
+}
+protocol Run roles(P)()->(r:index@P){let r @P=sample();return(r=r);}
+run Demo=Run;
+)");
+  require(StringRef(history.bytes()).contains("crypto.exec.openvm_sample"),
+          "source history lost its ordered operation");
+  must(compileEntry(history));
+  auto shake = original(R"(
+module m;
+type Bytes=builtin("bytes");
+type State=builtin("shake128_state");
+fn digest(input:Bytes)->Bytes {
+  let state=kernel("shake128.init");
+  let state=kernel("shake128.absorb",state,input);
+  let (next,bytes)=kernel("shake128.squeeze",state,32);
+  let (unused,discarded)=kernel("shake128.squeeze",next,17);
+  return bytes;
+}
+protocol Run roles(P)(input:Bytes@P)->(r:Bytes@P){let r @P=digest(input);return(r=r);}
+run Demo=Run;
+)");
+  require(StringRef(shake.bytes()).count("crypto.exec.shake128_squeeze") == 2,
+          "unused history transition disappeared from source IR");
+  must(compileEntry(shake));
+  auto encoding = original(R"(
+module m;
+domain F=field("bls12-381.fr");
+domain G=group("bls12-381.g1");
+fn roundtrip(point:G,value:F)->bool {
+  let encoded=kernel<G>("encoding.group_compressed",point);
+  let (valid,decoded)=kernel<G>("encoding.group_from_compressed",encoded);
+  require valid;
+  let scalar=kernel<F>("encoding.field_be",value);
+  let (valid,decodedScalar)=kernel<F>("encoding.field_from_be",scalar);
+  require valid;
+  return decoded == point && decodedScalar == value;
+}
+protocol Run roles(P)(point:G@P,value:F@P)->(r:bool@P) {
+  let r @P=roundtrip(point,value);return(r=r);
+}
+run Demo=Run;
+)");
+  must(compileEntry(encoding));
+  closureRefuses(R"(module m;type State=builtin("shake128_state");
+protocol Run roles(P)(s:State@P)->(){return();}run Demo=Run;)",
+                 "source.ingress");
+  refuses(R"(module m;type State=builtin("shake128_state");
+protocol Run roles(P,V)(s:State@P)->(){let r=send P->V(s);return();})",
+          "source.permission");
+
+  refuses(R"(
+module m;
+domain F=field("bls12-381.fr");
+fn forged()->F { return kernel<F>("random.draw"); }
+)",
+          "source.kernel");
+}
 void wireAuthority() {
   const std::string relay = R"(
 protocol Relay<T:Type+Copy+Drop+Share+Wire> roles(P,V)(x:T@P)->(r:T@V){
@@ -111,7 +201,7 @@ enum Choice{Some(Fr),None()}
                "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}run Demo=Run;",
       "source.ingress");
   refuses(prefix +
-              "interface I{type State:Wire;}component C:I{type State:Wire=Fr;}",
+              "interface I{type State:Wire;}module C:I{type State:Wire=Fr;}",
           "source.permission");
   auto emitted = original(prefix + R"(
 struct Secret{value:Fr}
@@ -184,23 +274,23 @@ void typing() {
            {"struct Token:Copy {} struct Pair {pub a:Token,pub b:Token} fn "
             "bad(p:Pair)->Token{return p.a;}",
             "source.drop"},
-           {"interface I{math fn f(x:bool)->bool;}component C:I{fn "
+           {"interface I{math fn f(x:bool)->bool;}module C:I{fn "
             "f(x:bool)->bool{return x;}}",
             "source.conformance"},
-           {"interface I{fn f(x:bool)->bool effects();}component C:I{fn "
+           {"interface I{fn f(x:bool)->bool effects();}module C:I{fn "
             "f(x:bool)->bool{require x;return x;}}",
             "source.effect"},
-           {"interface I{type Scalar:Field;}component C:I{type "
+           {"interface I{type Scalar:Field;}module C:I{type "
             "Scalar:Field=bool;}",
             "source.type"},
-           {"interface I{type State:Copy+Drop;}component C:I{type "
+           {"interface I{type State:Copy+Drop;}module C:I{type "
             "State:Drop=bool;}",
             "source.conformance"},
-           {"interface I{}interface J{}component C:I{}fn f<T:J>()->bool{return "
+           {"interface I{}interface J{}module C:I{}fn f<T:J>()->bool{return "
             "true;}fn bad()->bool{return f<C>();}",
             "source.conformance"},
            {"interface I{fn f<T:Type+Copy+Drop>(x:T)->T effects(stop, "
-            "opaque);}component C:I{fn "
+            "opaque);}module C:I{fn "
             "f<T:Type+Copy+Drop>(x:T)->T{return x;}}",
             "source.unsupported"},
        })
@@ -209,7 +299,7 @@ void typing() {
                    "forget<T:Type>(o:Opt<T>)->(){consume o;return ();}",
           "source.type");
   refuses(prefix + "interface Eat<X:Type>{type T;fn eat(x:X)->() effects(stop, "
-                   "opaque);}component "
+                   "opaque);}module "
                    "Sink<T:Type>:Eat<T>{type T=();fn eat(x:T)->(){consume "
                    "x;return ();}}",
           "source.shadow");
@@ -219,18 +309,19 @@ void typing() {
   refuses(prefix + "interface I{type State;}fn "
                    "unused<T:Type>(x:I::State)->I::State{return x;}",
           "source.generic");
-  refuses(prefix +
-              "interface I{type State;}component C<T:Type>:I{type State=T;}fn "
-              "unused<T:Type>(x:C::State)->C::State{return x;}",
-          "source.generic");
+  refuses(
+      prefix +
+          "interface I{type State;}module C<T:Type>:I{type State: Type =T;}fn "
+          "unused<T:Type>(x:C::State)->C::State{return x;}",
+      "source.generic");
   refuses(prefix + "interface I{struct R{pub x:bool}}", "source.syntax");
-  refuses(prefix + "interface I{}component C:I{enum E{A()}}", "source.syntax");
+  check(prefix + "interface I{}module C:I{enum E{A()}}");
   refuses(prefix + "interface I{type State;}struct Wrap<C:I>{pub "
-                   "s:C::State}component K:I{type State=Wrap<K>;}",
+                   "s:C::State}module K:I{type State: Type =Wrap<K>;}",
           "source.cycle");
   refuses(prefix + R"(
 interface Mix{math fn mix(a:Fr,b:Fr)->Fr;}
-component Add:Mix{math fn mix(a:Fr,b:Fr)->Fr{return a+b;}}
+module Add:Mix{math fn mix(a:Fr,b:Fr)->Fr{return a+b;}}
 math fn keep<C:Mix>(x:Fr,y:Fr)->Fr{let t=C::mix(x,y);return x;}
 protocol Run roles(A,B)(x:Fr@A,y:Fr@B)->(r:Fr@A){return(r=keep<Add>(x,y));}
 )",
@@ -250,27 +341,27 @@ protocol Shared<G:Group> roles(P,V)(x:G::Scalar@(P,V))->(r:G::Scalar@(P,V)) wher
 )");
   check(prefix + R"(
 interface I<F:Field>{type Out:Field;fn f(x:Out)->Out effects(stop, opaque) where Wire(Out);}
-component K<F:Field>:I<F>{type Out:Field=F;fn f(x:Out)->Out where Wire(Out){return x;}}
+module K<F:Field>:I<F>{type Out:Field=F;fn f(x:Out)->Out where Wire(Out){return x;}}
 )");
   check(prefix + R"(
 interface I<T:Type>{fn f(x:T)->T effects(stop, opaque) where Wire(T);}
-component K<G:Group>:I<G::Scalar>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return x;}}
+module K<G:Group>:I<G::Scalar>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return x;}}
 )");
   refuses(prefix + R"(
 interface I<T:Type>{fn f(x:T)->T effects(stop, opaque);}
-component K<G:Group>:I<G::Scalar>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return x;}}
+module K<G:Group>:I<G::Scalar>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return x;}}
 )",
           "source.conformance");
   check(prefix + R"(
 interface I{type S:Field;fn f(x:S)->S effects(stop, opaque) where Wire(S);}
-component K<F:Field>:I{type S:Field=F;fn f(x:S)->S where Wire(S){return x;}}
-component Concrete:I{type S:Field=Fr;fn f(x:S)->S where Wire(S){return x;}}
+module K<F:Field>:I{type S:Field=F;fn f(x:S)->S where Wire(S){return x;}}
+module Concrete:I{type S:Field=Fr;fn f(x:S)->S where Wire(S){return x;}}
 interface J{type S:Group;fn f(x:S)->S effects(stop, opaque) where Wire(S);}
-component L<G:Group>:J{type S:Group=G;fn f(x:S)->S where Wire(S){return x;}}
+module L<G:Group>:J{type S:Group=G;fn f(x:S)->S where Wire(S){return x;}}
 )");
   refuses(prefix + R"(
 interface I{type S:Field;fn f(x:S)->S effects(stop, opaque);}
-component K<F:Field>:I{type S:Field=F;fn f(x:S)->S where Wire(S){return x;}}
+module K<F:Field>:I{type S:Field=F;fn f(x:S)->S where Wire(S){return x;}}
 )",
           "source.conformance");
   refuses(prefix +
@@ -326,11 +417,11 @@ fn g<A:I>(x:A::Out)->A::Out{return A::f(x);}
           "source.permission");
   check(prefix + R"(
 interface I<T:Type>{type Out;fn f(x:Out)->Out effects(stop, opaque) where Wire(Out);}
-component K<T:Type>:I<T>{type Out=T;fn f(x:Out)->Out where Wire(Out){return x;}}
+module K<T:Type>:I<T>{type Out: Type =T;fn f(x:Out)->Out where Wire(Out){return x;}}
 )");
   check(prefix + R"(
 interface I<G:Group>{fn f(x:G::Scalar)->G::Scalar effects(stop, opaque) where Wire(G::Scalar);}
-component K<Scalar:Group>:I<Scalar>{fn f(x:Scalar::Scalar)->Scalar::Scalar where Wire(Scalar::Scalar){return x;}}
+module K<Scalar:Group>:I<Scalar>{fn f(x:Scalar::Scalar)->Scalar::Scalar where Wire(Scalar::Scalar){return x;}}
 interface Algebra{type Scalar:Field;}
 math fn sq<C:Algebra>(x:C::Scalar)->C::Scalar{return x*x;}
 )");
@@ -352,12 +443,12 @@ fn outer<H:Group>(x:H::Scalar)->H::Scalar{return sendable<H>(x);}
           "source.permission");
   refuses(prefix + R"(
 interface I<G:Group>{fn f(x:G::Scalar)->G::Scalar effects(stop, opaque);}
-component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return x;}}
+module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return x;}}
 )",
           "source.conformance");
   check(prefix + R"(
 interface I<G:Group>{fn f(x:G::Scalar)->G::Scalar effects(stop, opaque) where Wire(G::Scalar);}
-component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return x;}}
+module C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return x;}}
 )");
   check(prefix + "protocol Run roles(P)()->(r:bool@P){let r @P "
                  "=true;return(r=r);}run Demo=Run;");
@@ -375,7 +466,7 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
           "source.permission");
   auto libraryCapture = must(capture({{"lib", R"(module lib;
         pub interface Boxed<F:Field>{type State;fn make(x:F)->State effects(stop, opaque);fn open(x:State)->F effects(stop, opaque);}
-        pub component Box<F:Field>:Boxed<F>{type State=F;fn make(x:F)->State{return State(x);}fn open(x:State)->F{return unpack(x);}}
+        pub module Box<F:Field>:Boxed<F>{type State: Type =F;fn make(x:F)->State{return State(x);}fn open(x:State)->F{return unpack(x);}}
       )",
                                        "lib.zkc"},
                                       {"m", prefix + R"(
@@ -414,18 +505,16 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
   refuses(prefix + "type Nonempty<N:nat> where 1<=N=[Fr;N];fn "
                    "bad<N:nat>(x:Nonempty<N>)->() where () {return ();}",
           "source.bound");
-  refuses(
-      prefix +
-          "interface I<N:nat>{fn f()->bool effects(stop, opaque);}component "
-          "C<N:nat>:I<N>{fn f()->bool where 1<=N{return true;}}",
-      "source.bound");
-  refuses(
-      prefix +
-          "interface I<T:Type>{fn f(x:T)->T effects(stop, opaque);}component "
-          "C<T:Type>:I<T>{fn f(x:T)->T where Copy(T){return x;}}",
-      "source.conformance");
+  refuses(prefix +
+              "interface I<N:nat>{fn f()->bool effects(stop, opaque);}module "
+              "C<N:nat>:I<N>{fn f()->bool where 1<=N{return true;}}",
+          "source.bound");
+  refuses(prefix +
+              "interface I<T:Type>{fn f(x:T)->T effects(stop, opaque);}module "
+              "C<T:Type>:I<T>{fn f(x:T)->T where Copy(T){return x;}}",
+          "source.conformance");
   check(prefix + "interface I<N:nat>{fn f()->bool effects(stop, opaque) where "
-                 "1<=N;}component "
+                 "1<=N;}module "
                  "C<N:nat>:I<N>{fn f()->bool where 1<=N{return true;}}");
   check(prefix + "struct Token:Copy {}fn forward(t:Token)->Token{let "
                  "second=t;return second;}");
@@ -465,7 +554,7 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
           "source.permission");
   auto nestedAssociated = original(prefix + R"(
 interface I{type Out;fn make()->Out effects(stop, opaque);fn finish(x:Out)->() effects(stop, opaque);}
-component C:I{type Out=();fn make()->Out{return Out(());}fn finish(x:Out)->(){consume x;return ();}}
+module C:I{type Out: Type =();fn make()->Out{return Out(());}fn finish(x:Out)->(){consume x;return ();}}
 struct Holder<A:I>{pub item:A::Out}
 fn forward<A:I>()->(){let h=Holder<A>{item:A::make()};return A::finish(h.item);}
 protocol Run roles(P)()->(){let done @P =forward<C>();return();}run Demo=Run;
@@ -513,8 +602,8 @@ fn read<G:Group>(x:Wrapped<G>)->G::Scalar where Wire(G::Scalar){return need(x.x)
 }
 void layoutsAndCorrespondence() {
   auto layoutProject =
-      check(prefix + "interface I{type Out;}component C:I{type "
-                     "Out=Fr;}component D:I{type Out=Fr;}");
+      check(prefix + "interface I{type Out;}module C:I{type "
+                     "Out:Type=Fr;}module D:I{type Out: Type =Fr;}");
   Layouts checkedLayouts(layoutProject);
   for (Type malformed :
        {Type(Type::Kind::Array), Type(Type::Kind::Associated, "m::C::Out"),
@@ -528,10 +617,9 @@ void layoutsAndCorrespondence() {
   require(!scalarLayout, "structural layout accepted a nominal identity");
   consumeError(scalarLayout.takeError());
   Type forged(Type::Kind::Associated, "m::C::Out");
-  forged.arguments = {Type(Type::Kind::Component, "m::D")};
+  forged.arguments = {Type(Type::Kind::Module, "m::D")};
   auto forgedLayout = checkedLayouts.get(forged);
-  require(!forgedLayout,
-          "associated layout accepted foreign component identity");
+  require(!forgedLayout, "associated layout accepted foreign module identity");
   consumeError(forgedLayout.takeError());
 
   auto aggregate = original(prefix + R"(
@@ -654,16 +742,16 @@ protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let v @P =make(x);let y @P =get(v);retur
   });
   check(prefix + "fn singleton(x:Fr)->(Fr,){return(x,);}");
   // Representation checking owns nominal permission promises, even for an
-  // otherwise unused component. Semantic queries may trust checked metadata.
+  // otherwise unused module. Semantic queries may trust checked metadata.
   refuses(prefix + R"(
 struct Token:Drop{}
 interface I{type Out:Copy+Drop;}
-component C:I{type Out:Copy+Drop=Token;}
+module C:I{type Out:Copy+Drop=Token;}
 )",
           "source.permission");
   auto nestedRepresentation = check(prefix + R"(
 interface I{type In:Copy+Drop;type Out:Copy+Drop;}
-component C:I{type In:Copy+Drop=bool;type Out:Copy+Drop=(In,bool);}
+module C:I{type In:Copy+Drop=bool;type Out:Copy+Drop=(In,bool);}
 fn identity(x:C::Out)->C::Out{return x;}
 )");
   Layouts nestedLayouts(nestedRepresentation);
@@ -673,10 +761,10 @@ fn identity(x:C::Out)->C::Out{return x;}
           ->outputs.front()
           .type));
   require(nested->permissions.copy && nested->leaves.size() == 2,
-          "component representation retained an unresolved self projection");
+          "module representation retained an unresolved self projection");
   auto associatedLayout = original(prefix + R"(
 interface Algebra {type Scalar:Field;}
-component BLS:Algebra {type Scalar:Field=Fr;}
+module BLS:Algebra {type Scalar:Field=Fr;}
 struct Box<C:Algebra> {pub value:C::Scalar}
 fn get<C:Algebra>(box:Box<C>)->C::Scalar {return box.value;}
 protocol Run roles(P)(box:Box<BLS>@P)->(r:Fr@P){let r @P =get<BLS>(box);return(r=r);}run Demo=Run;)");
@@ -734,7 +822,7 @@ protocol Run roles(P)()->(){let h @P =wrap();let done @P =finish(h);return();}ru
   must(compileEntry(nominal));
   auto resource = original(prefix + R"(
 interface I{type State;fn make()->State effects(stop, opaque);fn done(x:State)->() effects(stop, opaque);}
-component C:I{type State=();fn make()->State{return State(());}fn done(x:State)->(){consume x;return ();}}
+module C:I{type State: Type =();fn make()->State{return State(());}fn done(x:State)->(){consume x;return ();}}
 fn forward<T:I>()->(){let x=T::make();return T::done(x);}
 protocol Run roles(P)()->(){let r @P =forward<C>();return();}run Demo=Run;)");
   require(resource.bytes().contains("resource_unit"),
@@ -851,7 +939,7 @@ void staticDomains() {
       return kernel<C::ValueField>("vector.sum",xs);
     }
     interface Scheme{type Domain:Commitment;}
-    component KzgScheme:Scheme{type Domain:Commitment=Kzg;}
+    module KzgScheme:Scheme{type Domain:Commitment=Kzg;}
     struct Configured<S:Scheme>{pub value:S::Domain::ValueField}
     fn configured<S:Scheme>(x:Configured<S>)->S::Domain::ValueField{
       return x.value;
@@ -886,7 +974,7 @@ void staticDomains() {
         "type Bad<C:Commitment>=[C;2];", "type Bad<C:Commitment>=(C,Fr);",
         "type Bad=Kzg;", "type Bad=Kzg::Scalar;", "type Bad=Bn::ValueField;",
         "type Bad=Base::PairingG1;",
-        "component Bad:Scheme{type Domain:Commitment=Fr;}"})
+        "module Bad:Scheme{type Domain:Commitment=Fr;}"})
     refuses(domains + body + unit, "source.type");
   for (const auto &body :
        {"type Identity<T:Type>=T;type Bad=Identity<Kzg>;",
@@ -902,15 +990,18 @@ void staticDomains() {
   refuses(prefix + "domain Bad=transcript(\"multilinear.kzg.bls12-381/0\");" +
               unit,
           "source.domain");
-  refuses(domains + "type Bad=builtin(\"transcript\",Transcript);" + unit,
+  check(domains +
+        "type State=builtin(\"transcript\",Transcript);"
+        "fn advance(t:State)->State{return t;}" +
+        unit);
+  refuses(domains + "type Bad=builtin(\"transcript\",Fr);" + unit,
           "source.builtin");
   refuses(
       domains +
-          "interface I{type Out;} component Wrong:I{type Out:Commitment=Kzg;}" +
+          "interface I{type Out;} module Wrong:I{type Out:Commitment=Kzg;}" +
           unit,
       "source.conformance");
-  refuses(domains +
-              "component Wrong:Scheme{type Domain:Transcript=Transcript;}" +
+  refuses(domains + "module Wrong:Scheme{type Domain:Transcript=Transcript;}" +
               unit,
           "source.conformance");
   refuses(domains + "interface Wrong{type D:NotASort;}" + unit, "source.type");
@@ -924,17 +1015,17 @@ void staticDomains() {
           "source.builtin");
   must(compileEntry(original(domains + R"(
     interface Generic<C:Commitment>{fn get(x:C::ValueField)->C::ValueField effects(stop, opaque);}
-    component Selected<D:Commitment>:Generic<D>{
+    module Selected<D:Commitment>:Generic<D>{
       fn get(x:D::ValueField)->D::ValueField{return x;}
     }
-    component Forward<C:Commitment>:Scheme{type Domain:Commitment=C;}
+    module Forward<C:Commitment>:Scheme{type Domain:Commitment=C;}
     fn extract<C:Commitment>(x:Box<C>)->C::ValueField{return x.value;}
     fn invoke<C:Commitment,T:Generic<C>>(x:C::ValueField)->C::ValueField{
       return T::get(x);
     }
     interface View{type Domain:Commitment;
       fn identity(x:Domain::ValueField)->Domain::ValueField effects(stop, opaque);}
-    component NamedView:View{type Domain:Commitment=Kzg;
+    module NamedView:View{type Domain:Commitment=Kzg;
       fn identity(x:Domain::ValueField)->Domain::ValueField{return x;}}
     protocol Run<C:Commitment> roles(P)(x:Box<C>@P,
       c:Configured<Forward<C>>@P)->(r:C::ValueField@P)
@@ -1148,6 +1239,7 @@ void nativeData() {
 
 } // namespace
 int main() {
+  byteDataAndHistory();
   staticDomains();
   nativeData();
   wireAuthority();

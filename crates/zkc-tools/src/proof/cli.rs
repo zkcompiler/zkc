@@ -14,10 +14,10 @@ pub(crate) fn run(produce: bool, args: &crate::cli::Arguments<'_>) -> Json {
         let mut authority = None;
         let mut attempts = None;
         let mut capacity = None;
-        let mut allow_header_only = false;
+        let mut allow_authored = false;
         for &(name, value) in &args.options {
             match name {
-                "--allow-header-only" => allow_header_only = true,
+                "--allow-authored" => allow_authored = true,
                 "--setups" => {
                     authority = Some(SetupAuthority::parse(&read_regular(
                         value.unwrap(),
@@ -51,12 +51,14 @@ pub(crate) fn run(produce: bool, args: &crate::cli::Arguments<'_>) -> Json {
             authority.unwrap_or_default(),
         )?
         .with_capacity(capacity.unwrap_or_default())?;
-        report["binding_scope"] = json!(if deployment.entry().transcript().is_some() {
+        report["binding_scope"] = json!(if deployment.entry().binds_invocation() {
             "transcript"
-        } else {
+        } else if deployment.format == super::ProofFormat::Native {
             "header"
+        } else {
+            "authored"
         });
-        if deployment.entry().transcript().is_none() && !allow_header_only {
+        if !deployment.entry().binds_invocation() && !allow_authored {
             return Err("native-proof-binding-policy".into());
         }
         report["capacity"] = deployment.capacity().record();

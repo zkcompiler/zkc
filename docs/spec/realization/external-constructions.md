@@ -10,10 +10,10 @@ are copyable. Equal operands do not permit common-subexpression elimination,
 dead-call removal or speculation: calls consume work and can stop. Their kernel
 operations make no MLIR purity or speculatability claim.
 
-## Interpretation and admission
+## Serialized state envelopes
 
-An external construction state in this contract is an ordinary, copyable
-`indices` value, not an affine `transcript` capability. Every component has the
+The Monero and OpenVM construction states are ordinary, copyable
+`indices` values. Every component has the
 existing canonical unsigned 64-bit index encoding. State envelopes are
 `[1514881876, 0, suite, payload...]`. Version 0 fixes these suites:
 
@@ -90,7 +90,71 @@ bits, and tests zero. A false result **returns the reached successor state**;
 it is not an implicit rollback, halt, or retry. The authored caller decides
 whether to reject, continue, or perform a trial on a copied prior state.
 
+## SHAKE128 state
+
+`zkc::shake128::State` is an immutable, copyable, discardable local value with
+logical type `shake128_state`, MLIR type `!crypto.shake128_state`, and physical
+representation `native.shake128/0`. It has no Share or Wire permission, ingress
+codec, equality operation, or managed capability. Snapshot size is bounded independently of the absorb history; cloning and
+updating a snapshot never replay earlier absorbed bytes.
+
+| Operation | Inputs | Outputs |
+|---|---|---|
+| `shake128.init` | none | state |
+| `shake128.absorb` | state, `bytes` | successor state |
+| `shake128.squeeze` | state, `index` length | successor state, `bytes` |
+
+The abstract state is `(M, k)`, initially `(empty, 0)`. Absorbing `x` returns
+`(M || x, 0)`. Squeezing `n` returns `SHAKE128(M)[k..k+n]` and `(M, k+n)`.
+Even an empty absorb resets the read position. Absorb boundaries and previous
+reads do not become part of `M`; library code supplies framing, session binding
+and sampling rules. These semantics match the SHAKE128 XOF used by Spongefish
+0.7.4, without introducing its protocol or proof schedule into the primitive.
+
+The installed operations use `native/<operation>` with no static arguments or
+attributes. Absorb and squeeze retain ordered History effects. Allocation and
+wire limits are checked before work. Each call charges the existing cumulative
+external-work budget by `n + ceil(n/168) + 1`, using absorbed or requested bytes;
+init uses `n = 0`. Live-state accounting includes the fixed backing per distinct
+snapshot, including snapshots inside aggregates. A fork does not refund work.
+
+## Mathematical byte encodings
+
+`zkc::encoding` provides explicit encodings independently of transport and
+transcript observation. The installed implementations use arkworks for
+BLS12-381 Fr and G1. Other domains require their own installed implementations;
+the generic source signature does not promise support for every field or group.
+
+| Operation | Inputs | Outputs | Interpretation |
+|---|---|---|---|
+| `field_be<F>` | `F` | `Bytes` | Canonical 32-byte big-endian integer |
+| `field_from_be<F>` | `Bytes` | `(bool, F)` | Exact width and integer below the scalar modulus |
+| `field_reduce_be<F>` | `Bytes` | `F` | Big-endian integer reduced modulo the scalar modulus |
+| `group_compressed<G>` | `G` | `Bytes` | Canonical 48-byte compressed G1 point |
+| `group_from_compressed<G>` | `Bytes` | `(bool, G)` | Exact width, canonical encoding and prime-order subgroup check |
+
+The decoder Boolean reports validity. On invalid encoding the accompanying value
+is zero or the group identity. Decoding has no transcript effect; a caller uses
+`require valid` before observing a decoded value when the protocol requires that
+order. Resource exhaustion still stops execution. Reduction accepts an arbitrary
+bounded byte string, including empty, and is distinct from canonical decoding.
+Reduction uses constant auxiliary storage and debits two logical work units per
+input byte before computation.
+The wire format may retain the original bytes for later observation; these
+operations impose no universal re-encoding policy on a protocol.
+
 ## Construction, resources and trust boundaries
+
+The installed `SourceHistory` facet permits ordinary source calls to the
+copyable data-state transitions above. Declaration validation requires a
+matching `History` successor, a concrete Copy/Drop state constructor and no
+managed observation or sampling facet. Source calls retain their installed
+ordered operation in IR, including when a successor is unused. This permission
+does not admit managed RNG or transcript kernels through ordinary functions.
+Copyable external state carries no trusted challenge provenance. In particular,
+a wire-capable snapshot received from a peer is peer-controlled; choosing it as
+a challenge source is the author's responsibility. Only managed services carry
+compiler-tracked sampling authority.
 
 No operation prepends an artifact identity, session, source origin, domain tag or
 zkc prefix to the cryptographic input. The state envelope tags are checked

@@ -66,7 +66,7 @@ void examples() {
           "protocol Run roles(P,V)()->(){let _=make();return ();}",
           "source.owner");
   native("interface Select{math fn selected(x:F,y:F)->F;}"
-         "component First:Select{math fn selected(x:F,y:F)->F{return x;}}"
+         "module First:Select{math fn selected(x:F,y:F)->F{return x;}}"
          "protocol Run<C:Select> roles(P,V)(s:F@(P,V),p:F@P)->(){"
          "let r=C::selected(f(s),p);return ();}run Demo=Run<First>;");
   for (StringRef expression : {"f(p)", "f(f(p))", "f(s)+p", "g(f(s),p)",

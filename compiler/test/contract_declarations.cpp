@@ -193,7 +193,8 @@ int main() {
   bool foundEvaluate = false, foundMultilinear = false;
   for (const auto &e : sourceOperationExports()) {
     check(authoringStage(e.contract) == AuthoringStage::Source &&
-              !StringRef(e.contract).starts_with("transcript."),
+              (!StringRef(e.contract).starts_with("transcript.") ||
+               operationContracts(e.contract)->managedHistory),
           "construction operation leaked through export");
     if (e.module == "zkc::poly" && e.name == "evaluate")
       foundEvaluate =
@@ -245,9 +246,22 @@ int main() {
         "external.openvm.sample_bits", "external.openvm.check_witness"}) {
     auto *facets = operationContracts(key);
     check(facets && facets->history && facets->history->stateInput == 0 &&
-              facets->history->stateOutput == 0 && !facets->sampling,
+              facets->history->stateOutput == 0 && !facets->sampling &&
+              facets->sourceHistory,
           "external snapshot history or sampling authority changed");
   }
+  std::set<std::string> sourceHistories;
+  for (const auto &op : executableOperationContracts())
+    if (auto *facets = operationContracts(op.name);
+        facets && facets->sourceHistory)
+      sourceHistories.insert(op.name);
+  check(sourceHistories ==
+            std::set<std::string>{
+                "external.monero.update", "external.openvm.observe",
+                "external.openvm.sample", "external.openvm.sample_ext",
+                "external.openvm.sample_bits", "external.openvm.check_witness",
+                "shake128.absorb", "shake128.squeeze"},
+        "source History admission changed");
   check(duplicable("indices") && discardable("indices"),
         "external snapshots stopped being copyable values");
   for (auto t : {"rng", "nonce", "transcript", "capability"})

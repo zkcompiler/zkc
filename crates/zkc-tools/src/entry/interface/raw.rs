@@ -53,15 +53,28 @@ pub(in crate::entry) enum Job {
         completion: Option<Box<Selector>>,
         #[serde(deserialize_with = "present_optional")]
         target: Option<String>,
-        construction: Construction,
+        construction: Box<Construction>,
     },
 }
 #[derive(Debug, Deserialize)]
 #[serde(remote = "Self")]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub(in crate::entry) enum Construction {
-    Authored {},
-    FiatShamir { suite: String, service: u32 },
+    Authored {
+        format: crate::proof::ProofFormat,
+    },
+    Derived {
+        symbol: String,
+        #[serde(deserialize_with = "present_optional")]
+        suite: Option<String>,
+        services: Vec<u32>,
+        format: crate::proof::ProofFormat,
+    },
+    FiatShamir {
+        suite: String,
+        services: Vec<u32>,
+        format: crate::proof::ProofFormat,
+    },
 }
 #[derive(Debug, Deserialize)]
 #[serde(remote = "Self")]

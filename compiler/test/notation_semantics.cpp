@@ -242,7 +242,7 @@ int main() {
       [&] {
         auto project = take(check(field + R"(
       interface Unary<T:Field>{math fn apply(x:T)->T;}
-      component Identity<T:Field>:Unary<T>{math fn apply(x:T)->T{return x;}}
+      module Identity<T:Field>:Unary<T>{math fn apply(x:T)->T{return x;}}
       math fn invoke<T:Field,A:Unary<T>>(x:T)->T{
         operator prefix(80) ⊖ = A::apply;
         return ⊖x;

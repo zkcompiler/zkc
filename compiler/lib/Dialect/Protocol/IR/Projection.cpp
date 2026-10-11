@@ -1,6 +1,7 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
@@ -64,6 +65,7 @@ struct MetadataVerifier {
   SymbolTableCollection &tables;
   NativeTypePolicies &types;
   llvm::DenseSet<Attribute> authoredCallees;
+  llvm::DenseMap<std::pair<Attribute, Attribute>, StringAttr> queryPorts;
   llvm::DenseSet<Operation *> seenParticipants, entries;
   unsigned remaining = 1000000;
   using Occurrences =
@@ -223,31 +225,92 @@ struct MetadataVerifier {
       if ((!policy || !policy->shared) && cast<ArrayAttr>(owners).size() != 1)
         return refuse(record, "owner-local result has multiple roles");
     }
-    Type transcript;
+    SmallVector<Type> stateTypes;
+    bool hostRoot = false, programmable = false;
+    llvm::DenseSet<Attribute> constructionHelpers, codecHelpers;
+    StringAttr codecProducer, codecValidator;
     llvm::DenseSet<unsigned> removedServices;
     ArrayAttr constructedActions;
     if (construction) {
       auto format = construction.getAs<StringAttr>("format");
-      auto state = construction.getAs<TypeAttr>("transcript");
+      auto states = construction.getAs<ArrayAttr>("state");
+      auto root = construction.getAs<StringAttr>("root");
+      auto plan = construction.getAs<StringAttr>("plan");
+      auto helpers = construction.getAs<ArrayAttr>("helpers");
       auto removed = construction.getAs<ArrayAttr>("removed_services");
       constructedActions = construction.getAs<ArrayAttr>("actions");
-      if (!keys(construction,
-                {"format", "transcript", "removed_services", "actions"}) ||
+      auto codec = construction.getAs<DictionaryAttr>("codec");
+      NamedAttrList core(construction);
+      core.erase("codec");
+      if ((construction.get("codec") && !codec) ||
+          !keys(core.getDictionary(record.getContext()),
+                {"format", "state", "root", "plan", "helpers",
+                 "removed_services", "actions"}) ||
           !format || format.getValue() != "zkc.native-construction/0" ||
-          !state || !removed || removed.size() != 1 || !constructedActions)
+          !states || states.size() > 1024 || !root ||
+          (root.getValue() != "host" && root.getValue() != "local") || !plan ||
+          !helpers || helpers.size() > 16384 || !removed || removed.empty() ||
+          removed.size() > type.getNumInputs() || !constructedActions)
         return refuse(record, "invalid native construction mapping");
-      auto capability = dyn_cast<local::CapabilityType>(state.getValue());
-      if (!capability || !capability.getKind().starts_with("transcript:") ||
-          protocol::nativeChallengeField(capability.getKind().drop_front(11))
-              .empty())
-        return refuse(record, "unsupported constructed transcript type");
-      transcript = state.getValue();
+      hostRoot = root.getValue() == "host";
+      programmable = !plan.empty();
+      for (auto item : states) {
+        auto state = dyn_cast<TypeAttr>(item);
+        if (!state)
+          return refuse(record, "invalid construction state slot");
+        auto logical = protocol::encodeBoundType(state.getValue(), false);
+        if (!logical) {
+          consumeError(logical.takeError());
+          return refuse(record, "invalid construction state slot");
+        }
+        if (!hostRoot && (!protocol::duplicable(*logical) ||
+                          !protocol::discardable(*logical)))
+          return refuse(record,
+                        "local construction state requires Copy and Drop");
+        stateTypes.push_back(state.getValue());
+      }
+      if (hostRoot) {
+        auto capability =
+            stateTypes.size() == 1
+                ? dyn_cast<local::CapabilityType>(stateTypes.front())
+                : local::CapabilityType();
+        if (!capability || !capability.getKind().starts_with("transcript:") ||
+            protocol::nativeChallengeField(capability.getKind().drop_front(11))
+                .empty())
+          return refuse(record, "unsupported constructed transcript type");
+      } else if (!programmable) {
+        return refuse(record, "local root requires an explicit construction");
+      }
+      for (auto item : helpers) {
+        auto ref = dyn_cast<FlatSymbolRefAttr>(item);
+        if (!ref || !constructionHelpers.insert(ref).second ||
+            !tables.lookupNearestSymbolFrom<local::FuncOp>(record, ref))
+          return refuse(record, "invalid construction helper selection");
+      }
+      if (codec) {
+        codecProducer = codec.getAs<StringAttr>("producer");
+        codecValidator = codec.getAs<StringAttr>("validator");
+        auto helpers = codec.getAs<ArrayAttr>("helpers");
+        if (!keys(codec, {"producer", "validator", "helpers"}) ||
+            !codecProducer || !codecValidator ||
+            codecProducer == codecValidator ||
+            !is_contained(roles, codecProducer) ||
+            !is_contained(roles, codecValidator) || !helpers ||
+            helpers.empty() || helpers.size() > 14336 || !programmable)
+          return refuse(record, "invalid record codec mapping");
+        for (auto helper : helpers)
+          if (!constructionHelpers.contains(helper) ||
+              !codecHelpers.insert(helper).second)
+            return refuse(record, "invalid codec helper selection");
+      }
+      std::optional<unsigned> previousService;
       for (auto item : removed) {
         auto port = index(item, type.getNumInputs());
-        if (!port ||
+        if (!port || (previousService && *previousService >= *port) ||
             !isa<protocol_ir::ServiceReferenceType>(type.getInput(*port)) ||
             !removedServices.insert(*port).second)
           return refuse(record, "invalid removed source service");
+        previousService = *port;
       }
       // Original actions remain source records. Only the actual action map is
       // resolved against the transformed body. Source-relative construction
@@ -268,19 +331,38 @@ struct MetadataVerifier {
           bool call = kind && kind.getValue() == "protocol.local_call";
           bool exchange = kind && kind.getValue() == "protocol.exchange";
           bool loop = kind && kind.getValue() == "protocol.repeat";
+          bool start = kind && kind.getValue() == "protocol.construction_start";
           if (!kind || !site || site.getValue().empty() ||
               !sourceSites.insert(site.getValue()).second || !targets ||
               (loop ? targets.empty() || targets.size() > 2
-                    : targets.size() != (exchange ? 2u : 1u)) ||
+                    : targets.size() != (exchange || start ? 2u : 1u)) ||
               (kind.getValue() != "protocol.query" &&
                kind.getValue() != "protocol.guard" &&
                kind.getValue() != "protocol.finish_if" && !call && !exchange &&
-               !loop) ||
+               !loop && !start) ||
               !(call   ? keys(action, {"site", "kind", "targets", "callee"})
                 : loop ? keys(action,
                               {"site", "kind", "targets", "maximum", "body"})
-                       : keys(action, {"site", "kind", "targets"})))
+                : kind.getValue() == "protocol.query"
+                    ? keys(action, {"site", "kind", "targets", "service"})
+                    : keys(action, {"site", "kind", "targets"})))
             return refuse(record, "invalid original construction action");
+          if (kind.getValue() == "protocol.query") {
+            auto authority = index(action.get("service"), type.getNumInputs());
+            if (!authority || !isa<protocol_ir::ServiceReferenceType>(
+                                  type.getInput(*authority)))
+              return refuse(record, "invalid original query authority");
+            auto owner = cast<ArrayAttr>(inputs[*authority]);
+            auto target = dyn_cast<DictionaryAttr>(targets[0]);
+            if (!target || owner.size() != 1 ||
+                !any_of(participants, [&](Attribute item) {
+                  auto port = dyn_cast<DictionaryAttr>(item);
+                  return port &&
+                         port.get("participant") == target.get("participant") &&
+                         port.get("role") == owner[0];
+                }))
+              return refuse(record, "original query authority owner differs");
+          }
           if (loop) {
             auto body = action.getAs<ArrayAttr>("body");
             if (!body || !index(action.get("maximum"), 1048577) ||
@@ -307,6 +389,7 @@ struct MetadataVerifier {
                                 operation.getValue() != "protocol.receive"
                  : call   ? operation.getValue() != "local.call"
                  : loop   ? operation.getValue() != "protocol.loop"
+                 : start ? operation.getValue() != "protocol.construction_start"
                  : kind.getValue() == "protocol.query"
                      ? operation.getValue() != "protocol.service_query"
                  : kind.getValue() == "protocol.finish_if"
@@ -365,7 +448,7 @@ struct MetadataVerifier {
       targets.push_back(builder.getArrayAttr({role, participantRef}));
       SmallVector<Attribute> dataPorts, servicePorts, results, actualServices;
       SmallVector<Type> inputTypes, resultTypes;
-      unsigned ingress = 0;
+      unsigned ingress = 0, removedBefore = 0;
       for (auto [i, set] : enumerate(inputs)) {
         if (!is_contained(cast<ArrayAttr>(set), role))
           continue;
@@ -375,11 +458,16 @@ struct MetadataVerifier {
               protocol::randomServiceField(service.getContract()).empty())
             return refuse(record, "invalid service owner or contract");
           servicePorts.push_back(builder.getI64IntegerAttr(i));
-          if (!removedServices.contains(i))
+          if (!removedServices.contains(i)) {
+            auto name =
+                builder.getStringAttr("service_" + std::to_string(ingress));
+            queryPorts[{participantRef, builder.getI64IntegerAttr(i)}] = name;
             actualServices.push_back(builder.getArrayAttr(
-                {builder.getStringAttr("service_" + std::to_string(ingress)),
-                 builder.getStringAttr(service.getContract()),
-                 builder.getI64IntegerAttr(ingress)}));
+                {name, builder.getStringAttr(service.getContract()),
+                 builder.getI64IntegerAttr(ingress - removedBefore)}));
+          } else {
+            ++removedBefore;
+          }
         } else {
           dataPorts.push_back(builder.getI64IntegerAttr(i));
           inputTypes.push_back(type.getInput(i));
@@ -391,9 +479,18 @@ struct MetadataVerifier {
           results.push_back(builder.getI64IntegerAttr(i));
           resultTypes.push_back(type.getResult(i));
         }
-      if (transcript) {
-        inputTypes.push_back(transcript);
-        resultTypes.push_back(transcript);
+      if (hostRoot)
+        append_range(inputTypes, stateTypes);
+      append_range(resultTypes, stateTypes);
+      if (role == codecProducer || role == codecValidator) {
+        auto bytes =
+            protocol::decodeBoundType(builder.getContext(), {"bytes", {}, {}});
+        if (!bytes)
+          return refuse(record, "codec requires an installed Bytes type");
+        if (role == codecProducer)
+          resultTypes.push_back(bytes);
+        else
+          inputTypes.push_back(bytes);
       }
       auto participantType = participant.getFunctionType();
       auto matches = [](ArrayRef<Type> expected, ArrayRef<Type> actual) {
@@ -459,14 +556,19 @@ struct MetadataVerifier {
     if (construction) {
       if (roles.size() != 2)
         return refuse(record, "construction requires two roles");
-      unsigned removed = *removedServices.begin();
-      auto owners = cast<ArrayAttr>(inputs[removed]);
-      if (owners.size() != 1 ||
-          protocol::randomServiceField(
-              cast<protocol_ir::ServiceReferenceType>(type.getInput(removed))
-                  .getContract())
-              .empty())
-        return refuse(record, "invalid constructed service owner");
+      ArrayAttr owners;
+      for (auto removed : removedServices) {
+        auto selectedOwners = cast<ArrayAttr>(inputs[removed]);
+        if (selectedOwners.size() != 1 ||
+            (owners && owners != selectedOwners) ||
+            (codecValidator && selectedOwners[0] != codecValidator) ||
+            protocol::randomServiceField(
+                cast<protocol_ir::ServiceReferenceType>(type.getInput(removed))
+                    .getContract())
+                .empty())
+          return refuse(record, "invalid constructed service owner");
+        owners = selectedOwners;
+      }
       Attribute validator;
       for (auto item : participants) {
         auto port = cast<DictionaryAttr>(item);
@@ -489,10 +591,17 @@ struct MetadataVerifier {
           originals[action.getAs<StringAttr>("site").getValue()] = action;
           auto targets = action.getAs<ArrayAttr>("targets");
           auto kind = action.getAs<StringAttr>("kind").getValue();
-          bool remove = false;
+          bool remove = false, codecMessage = false;
+          bool start = kind == "protocol.construction_start";
+          if (start) {
+            if (!programmable)
+              return refuse(record,
+                            "construction start requires a selected plan");
+            remove = true;
+          }
           if (kind == "protocol.query")
-            remove = cast<DictionaryAttr>(targets[0]).get("participant") ==
-                     validator;
+            remove = removedServices.contains(
+                cast<IntegerAttr>(action.get("service")).getInt());
           if (kind == "protocol.exchange") {
             unsigned sends = 0, receives = 0;
             for (auto item : targets) {
@@ -505,6 +614,8 @@ struct MetadataVerifier {
             }
             if (sends != 1 || receives != 1)
               return refuse(record, "invalid original exchange directions");
+            codecMessage = codecProducer && !remove;
+            remove |= codecMessage;
           }
           if (!remove) {
             retained.push_back(action);
@@ -512,7 +623,7 @@ struct MetadataVerifier {
               retainedCallees.push_back(callee);
           } else if (kind == "protocol.query") {
             ++removedQueries;
-          } else {
+          } else if (!codecMessage && !start) {
             ++removedMessages;
           }
         }
@@ -550,9 +661,9 @@ struct MetadataVerifier {
           auto function =
               ref ? tables.lookupNearestSymbolFrom<local::FuncOp>(record, ref)
                   : local::FuncOp();
-          if (!function)
+          if (!function || !constructionHelpers.contains(ref))
             return refuse(record, "missing constructed helper");
-          if (insertedCallees.insert(ref).second &&
+          if (insertedCallees.insert(ref).second && !programmable &&
               failed(checkTranscriptHelper(function)))
             return failure();
           auto targets = action.getAs<ArrayAttr>("targets");
@@ -563,7 +674,9 @@ struct MetadataVerifier {
             auto participant =
                 target ? target.getAs<FlatSymbolRefAttr>("participant")
                        : FlatSymbolRefAttr();
-            if (!participant || !insertedUses.insert({participant, ref}).second)
+            if (!participant ||
+                (!insertedUses.insert({participant, ref}).second &&
+                 !codecHelpers.contains(ref)))
               return refuse(record, "repeated inserted transcript helper");
           }
         }
@@ -574,10 +687,12 @@ struct MetadataVerifier {
       };
       if (failed(compare(compare, actions, constructedActions, 0)))
         return failure();
-      if (!totalRemoved)
+      if (!totalRemoved && !programmable)
         return refuse(record, "unpaired constructed challenges");
+      if (insertedCallees != constructionHelpers)
+        return refuse(record, "unused construction helper selection");
       for (auto callee : retainedCallees)
-        if (insertedCallees.contains(callee))
+        if (!programmable && insertedCallees.contains(callee))
           return refuse(record,
                         "inserted transcript helper used by retained action");
     }
@@ -609,20 +724,27 @@ struct MetadataVerifier {
                                                      "protocol.local_call");
       if (!(loop ? keys(action, {"site", "kind", "targets", "maximum", "body"})
             : localCall ? keys(action, {"site", "kind", "targets", "callee"})
-                        : keys(action, {"site", "kind", "targets"})))
+            : action &&
+                    action.getAs<StringAttr>("kind") ==
+                        StringAttr::get(record.getContext(), "protocol.query")
+                ? keys(action, {"site", "kind", "targets", "service"})
+                : keys(action, {"site", "kind", "targets"})))
         return refuse(record, "invalid retained action fields");
       auto site = action.getAs<StringAttr>("site");
       auto kind = action.getAs<StringAttr>("kind");
       auto targets = action.getAs<ArrayAttr>("targets");
+      bool start = kind && kind.getValue() == "protocol.construction_start";
       if (!site || site.getValue().empty() ||
           !sites.insert(site.getValue()).second || !kind || !targets ||
           targets.empty() ||
           (kind.getValue() != "protocol.exchange" &&
            kind.getValue() != "protocol.guard" &&
            kind.getValue() != "protocol.finish_if" &&
-           kind.getValue() != "protocol.query" && !localCall && !loop) ||
-          (!loop && targets.size() !=
-                        (kind.getValue() == "protocol.exchange" ? 2u : 1u)))
+           kind.getValue() != "protocol.query" && !localCall && !loop &&
+           !start) ||
+          (!loop &&
+           targets.size() !=
+               (kind.getValue() == "protocol.exchange" || start ? 2u : 1u)))
         return refuse(record, "invalid source action occurrence");
       llvm::DenseSet<Operation *> owners;
       llvm::DenseMap<Operation *, Operation *> children;
@@ -636,16 +758,18 @@ struct MetadataVerifier {
         auto operation = target.getAs<StringAttr>("operation");
         if (!participant || !operation || !owners.insert(participant).second)
           return refuse(record, "invalid action participant reference");
-        bool allowed = kind.getValue() == "protocol.exchange"
-                           ? (operation.getValue() == "protocol.send" ||
-                              operation.getValue() == "protocol.receive")
-                       : loop      ? operation.getValue() == "protocol.loop"
-                       : localCall ? operation.getValue() == "local.call"
-                       : kind.getValue() == "protocol.query"
-                           ? operation.getValue() == "protocol.service_query"
-                       : kind.getValue() == "protocol.finish_if"
-                           ? operation.getValue() == "protocol.finish_if"
-                           : operation.getValue() == "local.guard";
+        bool allowed =
+            kind.getValue() == "protocol.exchange"
+                ? (operation.getValue() == "protocol.send" ||
+                   operation.getValue() == "protocol.receive")
+            : loop      ? operation.getValue() == "protocol.loop"
+            : localCall ? operation.getValue() == "local.call"
+            : start     ? operation.getValue() == "protocol.construction_start"
+            : kind.getValue() == "protocol.query"
+                ? operation.getValue() == "protocol.service_query"
+            : kind.getValue() == "protocol.finish_if"
+                ? operation.getValue() == "protocol.finish_if"
+                : operation.getValue() == "local.guard";
         if (!allowed)
           return refuse(record, "action target has wrong execution kind");
         // Targets retain their source projection kind. The checked profile
@@ -663,6 +787,27 @@ struct MetadataVerifier {
             !retainedActions.insert({participant, site}).second)
           return refuse(record,
                         "action occurrence is missing, changed or reordered");
+        if (start) {
+          auto boundary =
+              dyn_cast<protocol_ir::ConstructionStartOp>(found->second.second);
+          if (!boundary || boundary.getRoles().size() != targets.size() ||
+              !all_of(targets, [&](Attribute item) {
+                auto endpoint = byReference.lookup(
+                    cast<DictionaryAttr>(item).get("participant"));
+                return endpoint && is_contained(boundary.getRoles(),
+                                                endpoint.getRoleAttr());
+              }))
+            return refuse(record, "construction start role boundary differs");
+        }
+        if (kind.getValue() == "protocol.query") {
+          auto authority = action.getAs<IntegerAttr>("service");
+          auto query =
+              dyn_cast<protocol_ir::ParticipantQueryOp>(found->second.second);
+          if (!authority || !query ||
+              queryPorts.lookup({target.get("participant"), authority}) !=
+                  query.getPortAttr())
+            return refuse(record, "query authority differs from original port");
+        }
         if (loop) {
           auto projected =
               dyn_cast<protocol_ir::ProtocolLoopOp>(found->second.second);
@@ -937,6 +1082,19 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
                           "unsupported participant operation operand type");
           if (policy->affine && !consumed.insert(input).second)
             return refuse(&op, "affine participant value reused");
+        }
+        if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
+          if (start.getRoles().size() != 2 ||
+              start.getRoles()[0] == start.getRoles()[1] ||
+              !is_contained(start.getRoles(), participant.getRoleAttr()))
+            return refuse(
+                &op, "construction start requires its selected participant");
+          for (Value input : start.getInputs()) {
+            auto policy = types.get(input.getType());
+            if (!policy || !policy->shared)
+              return refuse(&op,
+                            "construction start requires shared data operands");
+          }
         }
         if (isa<protocol_ir::EmitOp, protocol_ir::AwaitOp>(op)) {
           auto type = isa<protocol_ir::EmitOp>(op) ? op.getOperand(0).getType()

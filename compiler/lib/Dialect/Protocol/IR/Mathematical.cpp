@@ -450,19 +450,19 @@ public:
         // A constant in a body is mathematically available everywhere, but
         // cannot authorize an action by a role outside this segment.
         for (auto &action : nested) {
-          if (auto child = dyn_cast<protocol_ir::RepeatOp>(action)) {
+          ArrayAttr actionRoles;
+          if (auto child = dyn_cast<protocol_ir::RepeatOp>(action))
+            actionRoles = child.getRoles();
+          else if (auto application = dyn_cast<protocol_ir::ApplyOp>(action))
+            actionRoles = application.getRoles();
+          else if (auto start =
+                       dyn_cast<protocol_ir::ConstructionStartOp>(action))
+            actionRoles = start.getRoles();
+          if (actionRoles) {
             BitVector required;
-            if (failed(roles(&action, child.getRoles(), required)) ||
+            if (failed(roles(&action, actionRoles, required)) ||
                 !subset(required, participants))
-              return refuse(&action,
-                            "nested repeat adds a nonparticipating role");
-          }
-          if (auto application = dyn_cast<protocol_ir::ApplyOp>(action)) {
-            BitVector required;
-            if (failed(roles(&action, application.getRoles(), required)) ||
-                !subset(required, participants))
-              return refuse(&action,
-                            "application adds a nonparticipating role");
+              return refuse(&action, "action adds a nonparticipating role");
           }
           for (StringRef key : {"owner", "sender", "receiver", "role"})
             if (auto owner = action.getAttrOfType<StringAttr>(key)) {
@@ -577,12 +577,25 @@ public:
         }
       } else if (isa<zkc::protocol_ir::ExchangeOp, zkc::protocol_ir::GuardOp,
                      zkc::protocol_ir::FinishIfOp, zkc::protocol_ir::QueryOp,
-                     zkc::protocol_ir::LocalCallOp>(op)) {
+                     zkc::protocol_ir::LocalCallOp,
+                     zkc::protocol_ir::ConstructionStartOp>(op)) {
         auto site = op->getAttrOfType<StringAttr>("site");
         if (!site || !name(site.getValue()) ||
             !sites.insert(site.getValue()).second)
           return refuse(op, "ordered sites must be unique identifiers");
-        if (auto completion = dyn_cast<protocol_ir::FinishIfOp>(op)) {
+        if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
+          BitVector participants;
+          if (start.getRoles().size() != 2 ||
+              failed(roles(op, start.getRoles(), participants)))
+            return refuse(op, "construction start requires two distinct roles");
+          for (Value input : start.getInputs()) {
+            auto policy = types.get(input.getType());
+            if (!policy || !policy->shared ||
+                !subset(participants, env.values.lookup(input)))
+              return refuse(op,
+                            "construction start requires shared data operands");
+          }
+        } else if (auto completion = dyn_cast<protocol_ir::FinishIfOp>(op)) {
           int owner = role(completion.getOwnerAttr());
           if (owner < 0 || any_of(
                                completion.getOperands(),
@@ -813,8 +826,9 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
     } else if (isa<data::DomainOp, local::FiniteFoldOp, local::FiniteCollectOp>(
                    op)) {
       // The descriptor and finite closure were checked before any liveness.
-    } else if (isa<local::FuncOp, local::OperationBindingOp, poly::RecipeOp,
-                   poly::RealizeOp>(op)) {
+    } else if (isa<protocol_ir::ConstructionOp, local::FuncOp,
+                   local::OperationBindingOp, poly::RecipeOp, poly::RealizeOp>(
+                   op)) {
       // Whole executable admission below checks even unused definitions.
     } else if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
       for (auto attr : declaration->getAttrs())

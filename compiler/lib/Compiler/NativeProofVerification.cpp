@@ -10,6 +10,8 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/MathExtras.h"
+#include <map>
 using namespace llvm;
 using namespace mlir;
 namespace zkc::detail {
@@ -18,9 +20,14 @@ namespace pir = protocol_ir;
 using Env = llvm::DenseMap<Value, Value>;
 class TranscriptCorrespondence {
   const NativeProofPolicy &policy;
+  const protocol::ConstructionPlan *plan;
+  StringMap<const protocol::ConstructionRule *> rules;
+  std::map<std::string, protocol::ConstructionRule> startRules;
+  llvm::StringSet<> rootHelpers, recordedHelpers;
+  bool hostRoot;
   ArrayRef<NativeTranscriptEvent> events;
   SymbolTable symbols;
-  Type stateType;
+  SmallVector<Type> stateTypes;
   StringMap<const NativeTranscriptEvent *> bySite;
   StringMap<std::string> deliveries;
   StringMap<const NativeTranscriptEvent *> checkedHelpers;
@@ -135,15 +142,24 @@ class TranscriptCorrespondence {
         cast<StringAttr>(origin[0]).getValue() != function.getSymName() ||
         !isa<ArrayAttr>(origin[1]) || !cast<ArrayAttr>(origin[1]).empty())
       return false;
-    SmallVector<Type> inputs{stateType}, outputs;
+    auto *rule = rules.lookup(event.site);
+    if (!rule && plan && !plan->nativeBase)
+      return false;
+    if (!rule && event.bound && !isPowerOf2_64(*event.bound))
+      return false;
+    SmallVector<Type> inputs(stateTypes), outputs;
     if (event.query)
       outputs.push_back(event.payload);
+    else if (event.startInputs)
+      append_range(inputs, *event.startInputs);
+    else if (rule)
+      append_range(inputs, rule->payload);
     else
       inputs.push_back(event.payload);
     unsigned data = inputs.size();
     inputs.append(event.depth, IntegerType::get(function.getContext(), 64,
                                                 IntegerType::Unsigned));
-    outputs.push_back(stateType);
+    append_range(outputs, stateTypes);
     if (function.getFunctionType() !=
             FunctionType::get(function.getContext(), inputs, outputs) ||
         !function.getBody().hasOneBlock())
@@ -163,6 +179,49 @@ class TranscriptCorrespondence {
       operands.push_back(cursor->getResult(0));
       cursor = cursor->getNextNode();
     }
+    if (rule) {
+      auto source = symbols.lookup<local::FuncOp>(rule->handler.getValue());
+      if (!source || !source.getBody().hasOneBlock())
+        return false;
+      Env env;
+      if (!bind(source.getBody().front().getArguments(), operands, env))
+        return false;
+      for (auto &op : source.getBody().front()) {
+        if (!cursor)
+          return false;
+        if (auto returned = dyn_cast<local::ReturnOp>(op)) {
+          SmallVector<Value> results;
+          if (event.query)
+            results.push_back(env.lookup(returned.getInputs().back()));
+          for (Value value : returned.getInputs().take_front(stateTypes.size()))
+            results.push_back(env.lookup(value));
+          if (event.bound) {
+            if (!kernel(cursor, "index.less", {},
+                        {results.front(), operands.back()}, {}) ||
+                cursor->getNumResults() != 1)
+              return false;
+            Value valid = cursor->getResult(0);
+            cursor = cursor->getNextNode();
+            if (!kernel(cursor, "control.require", {}, {valid}, {}) ||
+                cursor->getNumResults() != 0)
+              return false;
+            cursor = cursor->getNextNode();
+          }
+          auto actual = dyn_cast_or_null<local::ReturnOp>(cursor);
+          if (!actual || actual.getInputs() != ValueRange(results))
+            return false;
+        } else if (!exact(op, *cursor, env, 0)) {
+          return false;
+        }
+        cursor = cursor->getNextNode();
+      }
+      if (cursor)
+        return false;
+      checkedHelpers.try_emplace(function.getSymName(), &event);
+      return true;
+    }
+    if (event.startInputs)
+      return false;
     {
       if (!kernel(cursor, "indices.empty", {}, {}, {}))
         return false;
@@ -197,8 +256,8 @@ class TranscriptCorrespondence {
     return true;
   }
   bool call(Operation *&cursor, const NativeTranscriptEvent &event,
-            Value &state, Value payload, ArrayRef<Value> coordinates,
-            Value *challenge,
+            SmallVectorImpl<Value> &state, ValueRange payload,
+            ArrayRef<Value> coordinates, Value *challenge,
             SmallVectorImpl<const NativeTranscriptEvent *> &reached) {
     auto invocation = dyn_cast_if_present<local::CallOp>(cursor);
     if (!invocation || !charge())
@@ -206,16 +265,16 @@ class TranscriptCorrespondence {
     auto function = symbols.lookup<local::FuncOp>(invocation.getCallee());
     if (!function || !helper(function, event))
       return false;
-    SmallVector<Value> inputs{state};
-    if (payload)
-      inputs.push_back(payload);
+    SmallVector<Value> inputs(state.begin(), state.end());
+    append_range(inputs, payload);
     append_range(inputs, coordinates);
     if (invocation.getInputs() != ValueRange(inputs) ||
         coordinates.size() != event.depth || event.query != bool(challenge))
       return false;
     if (challenge)
       *challenge = invocation.getResult(0);
-    state = invocation.getResults().back();
+    state.clear();
+    append_range(state, invocation.getResults().take_back(stateTypes.size()));
     reached.push_back(&event);
     cursor = cursor->getNextNode();
     return true;
@@ -232,9 +291,10 @@ class TranscriptCorrespondence {
                     return WalkResult::interrupt();
                   bool required =
                       observed.contains(op) ||
-                      isa<pir::EmitOp, pir::AwaitOp, pir::FinishIfOp>(op) ||
+                      isa<pir::EmitOp, pir::AwaitOp, pir::FinishIfOp,
+                          pir::ConstructionStartOp>(op) ||
                       (isa<pir::ParticipantQueryOp>(op) &&
-                       participant.getRole() == policy.validator);
+                       bySite.contains(text(op, "site")));
                   if (required) {
                     if (isa<pir::ProtocolLoopOp>(op))
                       observedLoops.insert(op);
@@ -244,13 +304,26 @@ class TranscriptCorrespondence {
                 })
                 .wasInterrupted();
   }
-  bool body(Block &a, Block &b, Env env, Value state,
+  bool body(Block &a, Block &b, Env env, SmallVector<Value> state,
             ArrayRef<Value> coordinates, StringRef role,
             SmallVectorImpl<const NativeTranscriptEvent *> &reached,
-            unsigned depth) {
+            unsigned depth, Operation *first = nullptr) {
     if (depth > 64)
       return false;
-    Operation *cursor = &b.front();
+    Operation *cursor = first ? first : &b.front();
+    SmallVector<Value> payloadGroup;
+    auto observe = [&](const NativeTranscriptEvent &event, Value payload) {
+      payloadGroup.push_back(payload);
+      auto *rule = rules.lookup(event.site);
+      if (rule && rule->sites.back() != event.site) {
+        reached.push_back(&event);
+        return true;
+      }
+      bool valid = call(cursor, event, state, payloadGroup, coordinates,
+                        nullptr, reached);
+      payloadGroup.clear();
+      return valid;
+    };
     llvm::DenseMap<const NativeTranscriptEvent *, Value> challenges;
     for (auto &op : a) {
       checkpoint =
@@ -258,9 +331,7 @@ class TranscriptCorrespondence {
       if (!charge() || !cursor)
         return false;
       auto event = bySite.find(text(&op, "site"));
-      if (event == bySite.end() &&
-          (isa<pir::EmitOp, pir::AwaitOp>(op) ||
-           (isa<pir::ParticipantQueryOp>(op) && role == policy.validator)))
+      if (event == bySite.end() && isa<pir::EmitOp, pir::AwaitOp>(op))
         return false;
       if (auto loop = dyn_cast<pir::ProtocolLoopOp>(op);
           loop && observedLoops.contains(loop)) {
@@ -268,16 +339,21 @@ class TranscriptCorrespondence {
         unsigned split = 1 + loop.getCarried();
         if (!actual || !loop.getMaximum() ||
             !attributes(&op, cursor, {"carried"}) ||
-            actual.getCarried() != loop.getCarried() + 1 ||
-            actual.getNumOperands() !=
-                loop.getNumOperands() + 1 + coordinates.size() ||
-            actual.getNumResults() != loop.getNumResults() + 1 ||
-            actual.getInputs()[split] != state ||
-            actual.getResults().back().getType() != stateType ||
+            actual.getCarried() != loop.getCarried() + stateTypes.size() ||
+            actual.getNumOperands() != loop.getNumOperands() +
+                                           stateTypes.size() +
+                                           coordinates.size() ||
+            actual.getNumResults() !=
+                loop.getNumResults() + stateTypes.size() ||
+            actual.getInputs().slice(split, stateTypes.size()) !=
+                ValueRange(state) ||
+            !llvm::equal(
+                actual.getResults().take_back(stateTypes.size()).getTypes(),
+                stateTypes) ||
             !operands(loop.getInputs().take_front(split),
                       actual.getInputs().take_front(split), env) ||
             !operands(loop.getInputs().drop_front(split),
-                      actual.getInputs().slice(split + 1,
+                      actual.getInputs().slice(split + stateTypes.size(),
                                                loop.getNumOperands() - split),
                       env) ||
             actual.getInputs().take_back(coordinates.size()) !=
@@ -287,47 +363,74 @@ class TranscriptCorrespondence {
         auto &y = actual.getBody().front();
         Env inner;
         if (y.getNumArguments() !=
-                x.getNumArguments() + 1 + coordinates.size() ||
-            y.getArgument(split).getType() != stateType ||
+                x.getNumArguments() + stateTypes.size() + coordinates.size() ||
+            !llvm::equal(ValueRange(y.getArguments())
+                             .slice(split, stateTypes.size())
+                             .getTypes(),
+                         stateTypes) ||
             !bind(x.getArguments().take_front(split),
                   y.getArguments().take_front(split), inner) ||
-            !bind(
-                x.getArguments().drop_front(split),
-                y.getArguments().slice(split + 1, x.getNumArguments() - split),
-                inner))
+            !bind(x.getArguments().drop_front(split),
+                  y.getArguments().slice(split + stateTypes.size(),
+                                         x.getNumArguments() - split),
+                  inner))
           return false;
         SmallVector<Value> indices(
             y.getArguments().take_back(coordinates.size()));
         indices.push_back(y.getArgument(0));
-        if (!body(x, y, std::move(inner), y.getArgument(split), indices, role,
-                  reached, depth + 1) ||
-            !bind(loop.getResults(), actual.getResults().drop_back(), env))
+        if (!body(x, y, std::move(inner),
+                  SmallVector<Value>(
+                      y.getArguments().slice(split, stateTypes.size())),
+                  indices, role, reached, depth + 1) ||
+            !bind(loop.getResults(),
+                  actual.getResults().drop_back(stateTypes.size()), env))
           return false;
-        state = actual.getResults().back();
+        state.clear();
+        append_range(state, actual.getResults().take_back(stateTypes.size()));
         cursor = cursor->getNextNode();
       } else if (isa<pir::FinishOp, pir::ProtocolYieldOp, pir::FinishIfOp>(
                      op)) {
-        bool continuing = isa<pir::FinishIfOp>(op);
+        bool continuing =
+            isa<pir::FinishIfOp>(op) &&
+            (!plan || plan->root == protocol::ConstructionPlan::Root::Host);
         if (op.getName() != cursor->getName() || !attributes(&op, cursor) ||
-            cursor->getNumOperands() != op.getNumOperands() + 1 ||
+            cursor->getNumOperands() !=
+                op.getNumOperands() + stateTypes.size() ||
             cursor->getNumResults() !=
-                op.getNumResults() + unsigned(continuing) ||
-            cursor->getOperands().back() != state ||
-            !operands(op.getOperands(), cursor->getOperands().drop_back(),
+                op.getNumResults() + (continuing ? stateTypes.size() : 0) ||
+            cursor->getOperands().take_back(stateTypes.size()) !=
+                ValueRange(state) ||
+            !operands(op.getOperands(),
+                      cursor->getOperands().drop_back(stateTypes.size()),
                       env) ||
             !bind(op.getResults(),
                   cursor->getResults().take_front(op.getNumResults()), env))
           return false;
         if (continuing) {
-          state = cursor->getResults().back();
-          if (state.getType() != stateType)
+          state.clear();
+          append_range(state,
+                       cursor->getResults().take_back(stateTypes.size()));
+          if (!llvm::equal(
+                  cursor->getResults().take_back(stateTypes.size()).getTypes(),
+                  stateTypes))
             return false;
         }
         cursor = cursor->getNextNode();
       } else if (event != bySite.end()) {
         const auto &fact = *event->second;
         auto delivery = deliveries.find(fact.site);
-        if (isa<pir::ParticipantQueryOp>(op)) {
+        if (auto start = dyn_cast<pir::ConstructionStartOp>(op)) {
+          SmallVector<Value> inputs;
+          for (Value input : start.getInputs()) {
+            auto value = env.lookup(input);
+            if (!value)
+              return false;
+            inputs.push_back(value);
+          }
+          if (!fact.startInputs || !payloadGroup.empty() ||
+              !call(cursor, fact, state, inputs, coordinates, nullptr, reached))
+            return false;
+        } else if (isa<pir::ParticipantQueryOp>(op)) {
           Value challenge;
           if (role != policy.validator || !fact.query ||
               !call(cursor, fact, state, {}, coordinates, &challenge,
@@ -356,8 +459,7 @@ class TranscriptCorrespondence {
             payload = env.lookup(receive.getOutput());
             cursor = cursor->getNextNode();
           }
-          if (!call(cursor, fact, state, payload, coordinates, nullptr,
-                    reached))
+          if (!observe(fact, payload))
             return false;
         } else if (auto send = dyn_cast<pir::EmitOp>(op)) {
           if (fact.query ||
@@ -376,8 +478,7 @@ class TranscriptCorrespondence {
                 challenges.lookup(query->second) != payload)
               return false;
           }
-          if (!payload || !call(cursor, fact, state, payload, coordinates,
-                                nullptr, reached))
+          if (!payload || !observe(fact, payload))
             return false;
         } else
           return false;
@@ -387,32 +488,118 @@ class TranscriptCorrespondence {
         cursor = cursor->getNextNode();
       }
     }
-    return !cursor;
+    return !cursor && payloadGroup.empty();
   }
   bool participant(pir::ParticipantOp a, pir::ParticipantOp b) {
     if (!indexObservedLoops(a) ||
         !attributes(a, b, {"function_type", "service_ports"}))
       return false;
     auto x = a.getFunctionType(), y = b.getFunctionType();
-    if (y.getNumInputs() != x.getNumInputs() + 1 ||
-        y.getNumResults() != x.getNumResults() + 1 ||
-        y.getInputs().drop_back() != x.getInputs() ||
-        y.getResults().drop_back() != x.getResults() ||
-        y.getInputs().back() != stateType || y.getResults().back() != stateType)
+    unsigned extraInputs = hostRoot ? stateTypes.size() : 0;
+    if (y.getNumInputs() != x.getNumInputs() + extraInputs ||
+        y.getNumResults() != x.getNumResults() + stateTypes.size() ||
+        y.getInputs().drop_back(extraInputs) != x.getInputs() ||
+        y.getResults().drop_back(stateTypes.size()) != x.getResults() ||
+        (hostRoot &&
+         y.getInputs().take_back(extraInputs) != ArrayRef<Type>(stateTypes)) ||
+        y.getResults().take_back(stateTypes.size()) !=
+            ArrayRef<Type>(stateTypes))
       return false;
+    auto retained = a->getAttrOfType<ArrayAttr>("service_ports");
     if (a.getRole() == policy.validator) {
-      if (b->hasAttr("service_ports"))
+      auto records =
+          a->getParentOp()->getRegion(0).front().getOps<pir::ProjectionOp>();
+      if (!hasSingleElement(records))
         return false;
-    } else if (a->getAttr("service_ports") != b->getAttr("service_ports"))
+      auto source = cast<DictionaryAttr>((*records.begin()).getInterfaces()[0]);
+      auto owners = source.getAs<ArrayAttr>("input_roles");
+      if (!owners || policy.services.empty() ||
+          policy.services.back() >= owners.size())
+        return false;
+      SmallVector<unsigned> selected;
+      unsigned ingress = 0;
+      for (auto [i, roles] : enumerate(owners)) {
+        if (!is_contained(cast<ArrayAttr>(roles), a.getRoleAttr()))
+          continue;
+        if (is_contained(policy.services, i))
+          selected.push_back(ingress);
+        ++ingress;
+      }
+      SmallVector<Attribute> kept;
+      if (retained)
+        for (auto port : retained)
+          if (auto row = cast<ArrayAttr>(port);
+              !is_contained(selected, cast<IntegerAttr>(row[2]).getInt())) {
+            auto ingress = cast<IntegerAttr>(row[2]).getInt();
+            kept.push_back(ArrayAttr::get(
+                a.getContext(),
+                {row[0], row[1],
+                 IntegerAttr::get(
+                     IntegerType::get(a.getContext(), 64),
+                     ingress - llvm::count_if(selected, [&](unsigned port) {
+                       return port < ingress;
+                     }))}));
+          }
+      retained =
+          kept.empty() ? ArrayAttr() : ArrayAttr::get(a.getContext(), kept);
+    }
+    if (retained != b->getAttrOfType<ArrayAttr>("service_ports"))
       return false;
     auto &before = a.getBody().front();
     auto &after = b.getBody().front();
     Env env;
-    if (!bind(before.getArguments(), after.getArguments().drop_back(), env))
+    if (!bind(before.getArguments(),
+              after.getArguments().drop_back(extraInputs), env))
       return false;
     SmallVector<const NativeTranscriptEvent *> reached;
-    if (!body(before, after, std::move(env), after.getArguments().back(), {},
-              a.getRole(), reached, 0) ||
+    SmallVector<Value> state(after.getArguments().take_back(extraInputs));
+    Operation *cursor = &after.front();
+    auto rootCall = [&](FlatSymbolRefAttr reference, ValueRange operands) {
+      auto call = dyn_cast_if_present<local::CallOp>(cursor);
+      if (!call || call.getCalleeAttr() != reference ||
+          call.getInputs() != operands ||
+          !llvm::equal(call.getResultTypes(), stateTypes))
+        return false;
+      rootHelpers.insert(reference.getValue());
+      state.assign(call.getResults().begin(), call.getResults().end());
+      cursor = cursor->getNextNode();
+      return true;
+    };
+    if (plan) {
+      if (!hostRoot && !rootCall(plan->initializer, {}))
+        return false;
+      for (const auto &rule : plan->rules) {
+        if (rule.kind != protocol::ConstructionRule::Kind::Start)
+          continue;
+        SmallVector<Value> operands(state);
+        auto records =
+            a->getParentOp()->getRegion(0).front().getOps<pir::ProjectionOp>();
+        if (!hasSingleElement(records))
+          return false;
+        auto interface =
+            cast<DictionaryAttr>((*records.begin()).getInterfaces()[0]);
+        for (auto item : interface.getAs<ArrayAttr>("participants")) {
+          auto port = cast<DictionaryAttr>(item);
+          if (port.getAs<FlatSymbolRefAttr>("participant") !=
+              FlatSymbolRefAttr::get(a))
+            continue;
+          auto inputs = port.getAs<ArrayAttr>("inputs");
+          for (unsigned original : rule.inputs) {
+            auto found = llvm::find_if(inputs, [&](Attribute value) {
+              return cast<IntegerAttr>(value).getInt() == original;
+            });
+            if (found == inputs.end())
+              return false;
+            operands.push_back(after.getArgument(found - inputs.begin()));
+          }
+        }
+        if (!rootCall(rule.handler, operands))
+          return false;
+      }
+    }
+    if (!cursor ||
+        !body(before, after, std::move(env), std::move(state), {}, a.getRole(),
+              reached, 0, cursor) ||
         reached.size() != events.size())
       return false;
     for (auto [actual, expected] : zip(reached, events))
@@ -428,30 +615,76 @@ class TranscriptCorrespondence {
     NamedAttrList after(cast<DictionaryAttr>(b.getInterfaces()[0]));
     auto construction =
         dyn_cast_if_present<DictionaryAttr>(after.erase("construction"));
-    if (!construction || construction.size() != 4 ||
+    auto states =
+        construction ? construction.getAs<ArrayAttr>("state") : ArrayAttr();
+    auto helpers =
+        construction ? construction.getAs<ArrayAttr>("helpers") : ArrayAttr();
+    if (!construction || construction.size() != 7 ||
         after.getDictionary(a.getContext()) != before ||
-        !construction.getAs<StringAttr>("format") ||
-        construction.getAs<StringAttr>("format").getValue() !=
-            "zkc.native-construction/0" ||
-        !construction.getAs<TypeAttr>("transcript") ||
-        construction.getAs<TypeAttr>("transcript").getValue() != stateType)
+        construction.getAs<StringAttr>("format") !=
+            StringAttr::get(a.getContext(), "zkc.native-construction/0") ||
+        construction.getAs<StringAttr>("plan") !=
+            StringAttr::get(a.getContext(), policy.construction) ||
+        construction.getAs<StringAttr>("root") !=
+            StringAttr::get(a.getContext(), hostRoot ? "host" : "local") ||
+        !states || states.size() != stateTypes.size() || !helpers)
       return false;
+    for (auto [type, value] : zip(stateTypes, states))
+      if (value != TypeAttr::get(type))
+        return false;
+    for (auto value : helpers) {
+      auto ref = dyn_cast<FlatSymbolRefAttr>(value);
+      if (!ref || !recordedHelpers.insert(ref.getValue()).second)
+        return false;
+    }
     auto removed = construction.getAs<ArrayAttr>("removed_services");
-    return removed && removed.size() == 1 && policy.service &&
-           isa<IntegerAttr>(removed[0]) &&
-           cast<IntegerAttr>(removed[0]).getInt() == *policy.service &&
-           bool(construction.getAs<ArrayAttr>("actions"));
+    if (!removed || removed.size() != policy.services.size())
+      return false;
+    for (auto [attr, service] : zip(removed, policy.services)) {
+      auto port = dyn_cast<IntegerAttr>(attr);
+      if (!port || port.getInt() != service)
+        return false;
+    }
+    return bool(construction.getAs<ArrayAttr>("actions"));
   }
 
 public:
-  TranscriptCorrespondence(pir::ProtocolModuleOp candidate,
-                           const NativeProofPolicy &policy,
-                           ArrayRef<NativeTranscriptEvent> events)
-      : policy(policy), events(events), symbols(candidate),
-        stateType(local::CapabilityType::get(candidate.getContext(),
-                                             "transcript:" + policy.suite)) {}
+  TranscriptCorrespondence(
+      pir::ProtocolModuleOp candidate, const NativeProofPolicy &policy,
+      ArrayRef<NativeTranscriptEvent> events,
+      const protocol::ConstructionPlan *plan,
+      ArrayRef<protocol::ConstructionInvocation> invocations)
+      : policy(policy), plan(plan),
+        hostRoot(!plan || plan->root == protocol::ConstructionPlan::Root::Host),
+        events(events), symbols(candidate) {
+    if (plan) {
+      stateTypes = plan->state;
+      for (const auto &rule : plan->rules)
+        if (!protocol::isCodecRule(rule.kind))
+          for (const auto &site : rule.sites)
+            rules[site] = &rule;
+    } else {
+      stateTypes.push_back(local::CapabilityType::get(
+          candidate.getContext(), "transcript:" + policy.suite));
+    }
+    for (const auto &invocation : invocations) {
+      auto inserted = startRules.emplace(
+          invocation.site,
+          protocol::ConstructionRule{protocol::ConstructionRuleKind::Start,
+                                     invocation.handler,
+                                     {invocation.site},
+                                     invocation.inputs,
+                                     {},
+                                     {}});
+      rules[invocation.site] = &inserted.first->second;
+    }
+  }
   bool check(pir::ProtocolModuleOp before, pir::ProtocolModuleOp after) {
-    if (!attributes(before, after))
+    if (!attributes(before, after) ||
+        (plan &&
+         (!plan->symbol || plan->symbol.getValue() != policy.construction ||
+          plan->suite != policy.suite ||
+          !llvm::equal(plan->services, policy.services))))
       return false;
     llvm::StringSet<> origins, queries;
     for (const auto &event : events) {
@@ -510,7 +743,19 @@ public:
         continue;
       return false;
     }
-    return projections == 1 && checkedHelpers.size() == events.size();
+    unsigned expectedHelpers = count_if(events, [&](const auto &event) {
+      auto *rule = rules.lookup(event.site);
+      return !rule || rule->sites.back() == event.site;
+    });
+    if (recordedHelpers.size() != checkedHelpers.size() + rootHelpers.size())
+      return false;
+    for (const auto &item : checkedHelpers)
+      if (!recordedHelpers.count(item.first()))
+        return false;
+    for (const auto &item : rootHelpers)
+      if (!recordedHelpers.count(item.first()))
+        return false;
+    return projections == 1 && checkedHelpers.size() == expectedHelpers;
   }
   bool exhausted() const { return !remaining; }
   StringRef detail() const { return checkpoint; }
@@ -543,16 +788,18 @@ Error verifyNativeEntrySelection(ModuleOp prepared, ModuleOp selected,
     return error("native-entry-correspondence");
   return Error::success();
 }
-Error verifyNativeTranscript(ModuleOp projected, ModuleOp constructed,
-                             const NativeProofPolicy &policy,
-                             ArrayRef<NativeTranscriptEvent> events) {
+Error verifyNativeTranscript(
+    ModuleOp projected, ModuleOp constructed, const NativeProofPolicy &policy,
+    ArrayRef<NativeTranscriptEvent> events,
+    const protocol::ConstructionPlan *plan,
+    ArrayRef<protocol::ConstructionInvocation> invocations) {
   if (!projected || !constructed ||
       projected.getContext() != constructed.getContext() ||
       failed(verify(projected)) || failed(verify(constructed)) ||
       !hasSingleElement(*projected.getBody()) ||
       !hasSingleElement(*constructed.getBody()))
     return error("native-transcript-subject");
-  if (policy.suite.empty()) {
+  if (policy.suite.empty() && !plan) {
     if (!OperationEquivalence::isEquivalentTo(
             projected, constructed, OperationEquivalence::IgnoreLocations))
       return error("native-transcript-correspondence");
@@ -563,7 +810,7 @@ Error verifyNativeTranscript(ModuleOp projected, ModuleOp constructed,
   if (!before || !after || before.getProfile() != pir::Profile::Participant ||
       after.getProfile() != pir::Profile::Participant)
     return error("native-transcript-subject");
-  TranscriptCorrespondence checker(after, policy, events);
+  TranscriptCorrespondence checker(after, policy, events, plan, invocations);
   if (!checker.check(before, after))
     return error(checker.exhausted() ? "native-transcript-limit"
                                      : "native-transcript-correspondence",

@@ -206,7 +206,10 @@ class LoweringVerifier {
       if (auto group =
               dyn_cast<algebra::GroupType>(collection.getElementType()))
         return take("curve.length", inputs, {group.getDomain()});
-      return take("indices.length", inputs);
+      return take(collection.getCollectionKind() == CollectionKind::Bytes
+                      ? "bytes.length"
+                      : "indices.length",
+                  inputs);
     }
     if (auto constant = dyn_cast<data::IndexOp>(source))
       return take("index.constant", {}, {}, {constant.getValue()});

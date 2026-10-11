@@ -134,26 +134,26 @@ fn mathematical(x:Fr,body:math fn(Fr)->Fr)->Fr effects(body){return body(x);}
   cases.run("interface output dependencies preserve alpha-renamed slots", [] {
     succeeds(R"(
 interface I{fn run(x:Fr,body:fn(Fr)->Fr)->Fr effects(body);}
-component C:I{fn run(x:Fr,renamed:fn(Fr)->Fr)->Fr{return renamed(x);}}
+module C:I{fn run(x:Fr,renamed:fn(Fr)->Fr)->Fr{return renamed(x);}}
 fn through<T:I>(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){return T::run(x,f);}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return through<C>(x,fn(y)=>y);}
 run Run=Demo;)");
     refuses(check(R"(
 interface I{fn run(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr effects(a);}
-component C:I{fn run(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr{return b(x);}}
+module C:I{fn run(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr{return b(x);}}
 )"),
             "source.effect");
   });
-  cases.run("component bodies refine their written output ceilings", [] {
+  cases.run("module bodies refine their written output ceilings", [] {
     succeeds(R"(
 interface I{fn run(x:Fr)->Fr effects();}
-component C:I{fn run(x:Fr)->Fr effects(stop){return x;}}
+module C:I{fn run(x:Fr)->Fr effects(stop){return x;}}
 fn through<T:I>(x:Fr)->Fr effects(){return T::run(x);}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return through<C>(x);}
 run Run=Demo;)");
     refuses(check(R"(
 interface I{fn run(x:Fr)->Fr effects();}
-component C:I{fn run(x:Fr)->Fr effects(stop){require x==1;return x;}}
+module C:I{fn run(x:Fr)->Fr effects(stop){require x==1;return x;}}
 )"),
             "source.effect");
   });
@@ -419,10 +419,10 @@ protocol Demo roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return iterate(x,n,fn(y)=>y+x
 protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return(r=forward_math(x,fn(y)=>y+a));}
 run Run=Demo;)");
   });
-  cases.run("component nested scoped capture and record projections", [] {
+  cases.run("module nested scoped capture and record projections", [] {
     succeeds(R"(
 interface Transform<F:Field>{fn adjust(x:F)->F effects();fn run(x:F,body:fn(F)->F effects(stop))->F effects(stop);}
-component Increment<F:Field>:Transform<F>{
+module Increment<F:Field>:Transform<F>{
  fn adjust(x:F)->F effects(){return x+1;}
  fn run(x:F,body:fn(F)->F effects(stop))->F effects(stop){return forward(x,fn(y)=>body(adjust(y)));}
 }
@@ -539,7 +539,7 @@ protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}run Run=Demo;
   cases.run("abstract Math callback captures survive wrapper summaries", [] {
     const std::string helpers = R"(
 interface MathOps<F:Field>{math fn run(x:F,body:math fn(F)->F)->F;}
-component Impl<F:Field>:MathOps<F>{math fn run(x:F,body:math fn(F)->F)->F{return body(x);}}
+module Impl<F:Field>:MathOps<F>{math fn run(x:F,body:math fn(F)->F)->F{return body(x);}}
 math fn g<F:Field,C:MathOps<F>>(x:F,y:F)->F{return C::run(x,fn(t)=>t+y);}
 math fn h(x:Fr,y:Fr)->Fr{return g<Fr,Impl<Fr>>(x,y);}
 )";
@@ -664,7 +664,7 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return f(x,a);}run Run=Demo;
       {"protocol Demo roles(P)(x:Fr@P,coins:Random<Fr>@P)->(r:Fr@P){return "
        "apply(x,fn(y)=>y+coins.draw());}run Run=Demo;",
        "source.scoped-capture"},
-      {"interface I{fn f(x:Fr,b:fn(Fr)->Fr effects())->Fr effects();}component "
+      {"interface I{fn f(x:Fr,b:fn(Fr)->Fr effects())->Fr effects();}module "
        "C:I{fn f(x:Fr,b:fn(Fr)->Fr effects(stop))->Fr effects(stop){return "
        "b(x);}}",
        "source.conformance"},
@@ -1062,6 +1062,8 @@ pub fn selected(x:Fr)->Fr effects(){return inspect(x,fn(y)=>y,fn(y)=>y);}
         bool found = false;
         for (auto &item : *value.getAsArray()) {
           auto &decl = *item.getAsObject();
+          if (decl.getString("kind") == "module")
+            continue;
           auto &effects = *decl.getObject("effects");
           require(effects.getBoolean("stop") == false &&
                       effects.getBoolean("opaque") == false,

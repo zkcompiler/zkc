@@ -202,6 +202,34 @@ int main(int argc, char **argv) {
               "dimension is not a constant");
     });
   });
+  cases.run("dynamic byte dimension uses the byte length recipe", [&] {
+    auto text = replace(fixture, " local.realize @realized", R"(
+ func.func private @byte_dimension(%bytes:!data.bytes)->ui64 {
+   %n = "data.dim"(%bytes){axis=0:i64}:(!data.bytes)->ui64
+   func.return %n:ui64
+ }
+ local.realize @byte_dimension_exec = @byte_dimension : (!data.bytes)->ui64
+ local.realize @realized)");
+    auto module = parseSourceString<ModuleOp>(text, &context);
+    require(bool(module), "byte dimension fixture refused");
+    auto candidate = copy(*module);
+    require(succeeded(mathematical::expandMathRealizations(*candidate)),
+            "byte dimension realization failed");
+    require(succeeded(mathematical::verifyMathRealizationsPreserved(
+                *module, *candidate)),
+            "byte dimension recipe comparison failed");
+    bool found = false;
+    candidate->walk([&](local::FuncOp function) {
+      if (function.getSymName() != "byte_dimension_exec")
+        return;
+      found = true;
+      auto &block = function.getBody().front();
+      require(block.front().getName().getStringRef() ==
+                  "data.exec.bytes_length",
+              "byte dimension selected a different container recipe");
+    });
+    require(found, "byte dimension realization missing");
+  });
   cases.run("array recipe rejects shortened vector construction", [&] {
     auto before = copy(*expanded);
     auto function = realized(*before);

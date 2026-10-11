@@ -227,7 +227,7 @@ int main() {
           "source.map");
   refusal("interface member requires a defined helper",
           "interface Step<F: Field> { math fn apply(x: F) -> F; }\n"
-          "component One<F: Field>: Step<F> {\n"
+          "module One<F: Field>: Step<F> {\n"
           "  math fn apply(x: F) -> F { return x + 1; }\n}\n"
           "fn f<C: Step<Fr>>(a: Vector<Fr>) -> Vector<Fr> {\n"
           "  return map C::apply(each a);\n}\n",

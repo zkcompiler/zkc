@@ -1,7 +1,9 @@
 #ifndef ZKC_LANGUAGE_PROJECT_H
 #define ZKC_LANGUAGE_PROJECT_H
 
+#include "zkc/Contracts/Construction.h"
 #include "zkc/Contracts/Mathematical.h"
+#include "zkc/Contracts/ProofFormat.h"
 #include "zkc/Language/Assets.h"
 #include "zkc/Language/Notation.h"
 #include "zkc/Language/Types.h"
@@ -17,7 +19,7 @@
 #include <vector>
 
 namespace zkc::language {
-struct ModuleId {
+struct SourceId {
   uint32_t index;
 };
 struct DeclarationId {
@@ -30,7 +32,7 @@ struct ServiceId {
   uint32_t index;
 };
 struct Span {
-  ModuleId module;
+  SourceId source;
   uint32_t begin, end;
 };
 struct Diagnostic {
@@ -127,11 +129,11 @@ struct MathValue {
         literal(std::move(literal)), staticArguments(std::move(statics)),
         parameters(std::move(parameters)) {}
 };
-/// A callable resolved in its definition environment. Component members retain
-/// the explicit component term until ordinary entry specialization.
+/// A callable resolved in its definition environment. Module members retain
+/// the explicit module term until ordinary entry specialization.
 struct CallableReference {
   DeclarationId declaration;
-  std::optional<Type> component;
+  std::optional<Type> module;
 };
 /// The tracked Local effects, also used as fixed callback acceptance ceilings.
 struct Effects {
@@ -265,7 +267,7 @@ struct HelperCall {
   DeclarationId callee;
   std::vector<ValueId> operands;
   std::vector<Type> arguments;
-  std::optional<Type> component;
+  std::optional<Type> module;
   std::optional<unsigned> owner;
   std::vector<unsigned> scopedArguments = {};
   std::vector<unsigned> domainArguments = {};
@@ -432,6 +434,8 @@ struct Operation {
   Span span;
   uint32_t statement;
   std::optional<CallBinding> binding = {};
+  /// An authored selector, independent of generated operation ordinals.
+  std::optional<std::string> site = {};
 };
 struct Body {
   enum class Mode { Math, Local, Protocol } mode;
@@ -454,7 +458,7 @@ struct Body {
   std::vector<std::vector<unsigned>> formationRequirements;
 };
 struct Parameter {
-  enum class Sort { Type, Natural, Component, Domain, Asset } sort;
+  enum class Sort { Type, Natural, Module, Domain, Asset } sort;
   std::string name, atom;
   /// Catalog sort of a Domain parameter or asset sort of an Asset parameter.
   std::string domainSort;
@@ -547,20 +551,70 @@ struct SetupSlot {
 };
 enum class EntryKind { Run, Proof };
 struct RunEntry {};
+/// A checked association of ordinary Local code with a protocol occurrence.
+struct ConstructionRule {
+  using Kind = protocol::ConstructionRuleKind;
+  Kind kind;
+  std::vector<std::string> path;
+  DeclarationId handler;
+  std::vector<Type> arguments;
+  std::vector<unsigned> inputs;
+  Span span;
+  std::optional<Type> payload, chunks;
+};
+struct ConstructionMethod {
+  CallableReference target;
+  std::vector<Type> arguments;
+};
+struct ConstructionCodec {
+  Type provider, record;
+  ConstructionMethod initialize, write, finish;
+  /// Actual shared protocol inputs used to initialize the layout record.
+  std::vector<unsigned> inputs;
+};
+/// A child owns the complete mathematical construction at one labelled call.
+/// Arguments specialize the child construction, not the protocol call inputs.
+struct ConstructionApplication {
+  DeclarationId construction;
+  std::vector<Type> arguments;
+  std::vector<std::string> path;
+  Span span;
+};
+struct ConstructionDefinition {
+  enum class Base { None, Authored, Native, Named } base = Base::None;
+  enum class Root { None, Host, Local } root = Root::None;
+  std::optional<DeclarationId> parent;
+  std::vector<Type> arguments;
+  std::optional<Type> provider;
+  std::optional<Type> state;
+  std::optional<CallableReference> initializer;
+  std::vector<Type> initializerArguments;
+  std::vector<unsigned> services;
+  std::string suite;
+  bool nativeBase = false;
+  std::vector<ConstructionRule> rules;
+  std::vector<ConstructionApplication> applications;
+  std::optional<ConstructionCodec> codec;
+};
 /// Explicit two-participant proof job choices. Public inputs name whole logical
 /// ports; acceptance can select a Boolean product component. Service indices
 /// refer to managed ports, independently of native data flattening.
 struct ProofEntry {
   enum class Construction {
     Authored,
-    FiatShamir
+    FiatShamir,
+    Derived
   } construction = Construction::Authored;
   unsigned prover = 0, verifier = 0;
   std::vector<unsigned> publicInputs;
   SpecificationSelector acceptance;
   std::optional<SpecificationSelector> completion;
-  std::optional<unsigned> target, service;
+  std::optional<unsigned> target;
+  std::vector<unsigned> services;
   std::string suite;
+  std::optional<DeclarationId> selectedConstruction;
+  std::vector<Type> constructionArguments;
+  protocol::ProofFormat format = protocol::ProofFormat::Native;
   Span span;
 };
 /// A validated instance of an installed primitive scheme. The static roots are
@@ -576,17 +630,19 @@ struct Declaration {
     Math,
     Local,
     Protocol,
+    Construction,
     Entry,
     Alias,
     Record,
     Variant,
     Interface,
-    Component,
+    Module,
     Associated,
     Relation
   } kind;
   DeclarationId id;
-  ModuleId module;
+  /// Cached owning module, derived from the declaration tree; self for modules.
+  DeclarationId module;
   std::string name, qualifiedName, symbol;
   bool isPublic = false;
   Span span;
@@ -639,6 +695,8 @@ struct Declaration {
   std::optional<RelationDefinition> relation;
   std::vector<SpecificationClause> specifications;
   std::optional<DeclarationId> target;
+  std::optional<protocol::ProofFormat> proofFormat;
+  std::optional<ConstructionDefinition> construction;
   std::variant<RunEntry, ProofEntry> configuration;
   EntryKind entryKind() const {
     return std::holds_alternative<ProofEntry>(configuration) ? EntryKind::Proof
@@ -701,12 +759,12 @@ llvm::Error checkScopedSpecialization(const ClosedEntry &, const Limits & = {});
 /// Only successful analysis can construct this immutable owning handle.
 class CheckedProject {
 public:
-  /// Includes installation sources; module IDs index this array.
+  /// Includes installation sources; source IDs index this array.
   llvm::ArrayRef<SourceBuffer> sources() const;
   const CapturedProject &capture() const;
   llvm::ArrayRef<Asset> assets() const;
   llvm::ArrayRef<Declaration> declarations() const;
-  llvm::ArrayRef<Token> tokens(ModuleId) const;
+  llvm::ArrayRef<Token> tokens(SourceId) const;
   llvm::StringRef installationIdentity() const;
   uint64_t checkedWork() const;
   uint64_t checkedDeclarations() const;
@@ -731,10 +789,10 @@ private:
 /// Recovery tokens and diagnostics cannot be promoted to checked state.
 class Analysis {
 public:
-  /// Includes installation sources; module IDs index this array.
+  /// Includes installation sources; source IDs index this array.
   llvm::ArrayRef<SourceBuffer> sources() const;
   llvm::ArrayRef<Diagnostic> diagnostics() const;
-  llvm::ArrayRef<Token> tokens(ModuleId) const;
+  llvm::ArrayRef<Token> tokens(SourceId) const;
   llvm::Expected<CheckedProject> checkedProject() const;
 
 private:

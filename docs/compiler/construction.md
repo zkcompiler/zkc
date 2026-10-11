@@ -13,6 +13,7 @@ common source + explicit construction policy
     → admit source occurrences and verifier dependencies
     → project unsimplified participants
     → construct role-local transcripts and check the actual candidate
+    → apply a selected record codec and independently check transport
     → simplify → exec → physical → participant programs
 ```
 
@@ -32,14 +33,21 @@ map exists.
 ## Admission and checking
 
 Source admission fixes entry, roles, acceptance, public bindings, suite and
-selected validator service/draws. `selectNativeProofDraws` can resolve ordered
-query/delivery occurrences when that service is explicit and the input draw list
+selected validator services and draws. `selectNativeProofDraws` can resolve ordered
+query/delivery occurrences when that service set is explicit and the input draw list
 is empty. It preserves original IR and returns a complete strict policy.
 `NativeProofSelection` exposes this through the Entry compiler; explicit policy
 callers retain exact occurrence selection.
 
-Construction adds internal transcript input/results, removes the selected
-validator service, and rewrites the admitted challenge deliveries. A selected
+`prepareProtocol` takes selected application starts as explicit semantic inputs
+and returns an owned, independently checked candidate. Pass options contain only
+simplification and mathematical selection choices. The same mathematical policy
+governs transcript helpers, projection and executable lowering; deployment
+records retain those choices for validation.
+
+Construction removes the selected validator services and rewrites their admitted
+challenge deliveries. Managed state has internal transcript input/results;
+source-created state uses its checked initializer. A selected
 `index` query becomes a [UniformIndex transition](../spec/ir/construction.md#uniformindex-transitions)
 whose helper materializes the source's constant bound, so both roles absorb the
 same deployment-fixed domain. It introduces no participant data ports. Hosts receive authorized public values for root
@@ -53,9 +61,11 @@ then checks lowering, executable bytes and deployment maps.
 
 ## Encoding and message semantics
 
-The invocation root binds source/policy identity, ordered actual public values,
-application context and applicable setup material. The complete canonical root
-enters the suite under `binding`; its SHA-256 digest binds the proof header.
+For managed state, the invocation root contains source/policy identity, ordered
+actual public values, application context and applicable setup material. The
+complete canonical root enters the suite under `binding`; native framing places
+its SHA-256 digest in the proof header. Custom handlers decide how subsequent
+transitions use that state.
 [Deployment formats](../spec/formats/proof.md) own exact bytes.
 
 Occurrences encode original entry/call/repeat paths and source sites, with
@@ -65,9 +75,13 @@ describes loop structure without a second executable graph.
 
 Canonical receive decoding precedes observation. [Structured frames](../spec/formats/messages.md)
 bind complete types, tags, lengths and payloads. Records, alternatives, nominal
-numerical collections and sequences use the same typed codec. Copyability alone grants neither
-wire permission nor cross-role availability. External byte formats need an
-adapter preserving the bytes their construction observes.
+numerical collections, bytes and sequences use the same typed codec. Copyability
+alone grants neither wire permission nor cross-role availability. A selected
+record codec uses ordinary Local functions for encoding, range selection,
+decoding and finalization. Compiler-owned slices preserve the exact proof bytes
+observed by optional wire handlers. Decoded values feed mathematical handlers.
+The common Host transports one bounded raw buffer and executes no codec-specific
+algorithm.
 
 ## Authored transcripts
 
@@ -79,14 +93,18 @@ snapshot does not attest its history or reachability; every executed trial still
 charges primitive work. Affine RNG and derived-transcript resources keep their
 own custody rules.
 
-The Host binds public context into the outer header. Authored code decides what
+With native framing, the Host binds public context into the outer header. Authored code decides what
 enters its cryptographic state: automatically hashing the zkc header would
 change the authored algorithm. `binding_scope = "header"` states this limited
-guarantee, and the CLI requires `--allow-header-only` acknowledgement. Admission
+guarantee, and the CLI requires `--allow-authored` acknowledgement. Admission
 does not require every received message to be observed.
 
-Byte words currently use eight bytes per index plus framing. They preserve
-values without claiming upstream proof-wire compatibility. Bounded search and
+A format-only source construction can select `RawBytes`: one authored `Bytes`
+message becomes the entire proof without a header or prefix. The report then
+uses `binding_scope = "authored"`; source code owns statement/context binding.
+The [Spongefish example](../../examples/projects/spongefish-schnorr/README.md)
+uses this path for an external 80-byte record. Byte data and mathematical
+encodings are independent of native transport frames. Bounded search and
 early participant return use [ordinary control](control.md); retry remains an
 explicit returned decision handled by the [attempt Host](../runtime/attempts.md).
 

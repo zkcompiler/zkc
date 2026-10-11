@@ -72,6 +72,7 @@ bool isCalculationContract(StringRef contract) {
                                           "vector.append",
                                           "vector.length",
                                           "matrix.dimension",
+                                          "bytes.length",
                                           "indices.length",
                                           "index.constant",
                                           "index.equal",
@@ -283,7 +284,10 @@ public:
         application.contract = "curve.length";
         application.arguments = {group.getDomain().str()};
       } else {
-        application.contract = "indices.length";
+        application.contract =
+            collection.getCollectionKind() == CollectionKind::Bytes
+                ? "bytes.length"
+                : "indices.length";
       }
       auto name = protocol::boundOperationName(application.contract);
       if (name.empty())

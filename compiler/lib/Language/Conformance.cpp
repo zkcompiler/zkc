@@ -5,31 +5,27 @@
 using namespace llvm;
 namespace zkc::language::detail {
 bool Checker::conformance(DeclarationId id) {
-  auto &component = output.declarations[id.index];
-  auto &selected = *component.implementation;
+  auto &module = output.declarations[id.index];
+  auto &selected = *module.implementation;
   auto *interface = types.typeDeclaration(selected);
   auto bindings = types.substitution(*interface, selected.arguments);
-  Type self(Type::Kind::Component, component.qualifiedName);
-  for (auto &p : component.parameters)
+  Type self(Type::Kind::Module, module.qualifiedName);
+  for (auto &p : module.parameters)
     self.arguments.push_back(parameterType(p));
   bindings.emplace("self:" + interface->qualifiedName, self);
-  if (interface->members.size() != component.members.size())
-    return types.fail("source.conformance",
-                      "component must implement every member exactly once",
-                      component.span);
   for (auto requiredId : interface->members) {
     auto &required = output.declarations[requiredId.index];
     const Declaration *provided = nullptr;
-    if (!types.charge(component.members.size(), required.span))
+    if (!types.charge(module.members.size(), required.span))
       return false;
-    for (auto providedId : component.members)
+    for (auto providedId : module.members)
       if (output.declarations[providedId.index].name == required.name)
         provided = &output.declarations[providedId.index];
     if (!provided || provided->kind != required.kind)
       return types.fail(
           "source.conformance",
-          "component member missing or has a different callable mode",
-          component.span);
+          "module member missing or has a different callable mode",
+          module.span);
     if (required.kind == Declaration::Kind::Associated) {
       auto sort = required.associatedSort;
       if (isDomainSort(sort) && (domainSort(provided->domain) != sort ||
@@ -49,8 +45,7 @@ bool Checker::conformance(DeclarationId id) {
               provided->span);
         continue;
       }
-      auto caps =
-          types.permissions(provided->domain, provided->span, &component);
+      auto caps = types.permissions(provided->domain, provided->span, &module);
       if (!caps)
         return false;
       if (!caps->includes(provided->permissions.value_or(Permissions{})))
@@ -73,19 +68,19 @@ bool Checker::conformance(DeclarationId id) {
         return types.fail("source.conformance", "member arity differs",
                           provided->span);
       if (required.parameters.size() != interface->parameters.size() ||
-          provided->parameters.size() != component.parameters.size())
+          provided->parameters.size() != module.parameters.size())
         return types.fail("source.unsupported",
                           "member-level generic parameters need a separate "
                           "conformance contract",
                           provided->span);
-      if (!chargeStaticSignature(component))
+      if (!chargeStaticSignature(module))
         return false;
       Declaration available{};
-      available.span = component.span;
-      available.parameters = component.parameters;
-      available.bounds = component.bounds;
-      available.permissionBounds = component.permissionBounds;
-      available.capabilityBounds = component.capabilityBounds;
+      available.span = module.span;
+      available.parameters = module.parameters;
+      available.bounds = module.bounds;
+      available.permissionBounds = module.permissionBounds;
+      available.capabilityBounds = module.capabilityBounds;
       for (const auto &bound : required.capabilityBounds) {
         CapabilityBound assumption{bound.predicate, {}, bound.span};
         for (const auto &argument : bound.arguments) {
@@ -151,7 +146,7 @@ bool Checker::conformance(DeclarationId id) {
       for (unsigned i = 0; i < provided->parameters.size(); ++i) {
         if (isStaticOnly(parameterType(provided->parameters[i])))
           continue;
-        auto allowed = types.permissions(parameterType(component.parameters[i]),
+        auto allowed = types.permissions(parameterType(module.parameters[i]),
                                          provided->span, &available);
         if (!allowed)
           return false;

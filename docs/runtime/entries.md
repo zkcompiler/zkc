@@ -101,7 +101,7 @@ project command. Both create only required groups. Null leaves are unfilled
 placeholders, except for actual unit values. Neither command invents dynamic
 lengths or chooses variant cases. `inputs init` reports suggested command arguments.
 All initialization commands report additional `requirements`: an authored proof
-needs explicit `--allow-header-only`, and each setup slot needs independent
+needs explicit `--allow-authored`, and each setup slot needs independent
 `--setups` authority and `--key` material. Initialization never grants those permissions.
 `inspect` describes the schema, choices and whether each input has an installed
 constructor. `inputs check --operation=...`
@@ -165,7 +165,7 @@ zkc verify --package=proof.zkpkg --sha256=EXPECTED_SHA256 \
 
 Pinned package mode cannot be mixed with source options or an Entry name.
 Rehashing an unknown package does not authorize it. Authored proof jobs require
-`--allow-header-only`; derived jobs choose their transcript suite in source.
+`--allow-authored`; derived jobs choose their transcript suite in source.
 
 Use `--service=ROLE.NAME=COUNT`, `--transcript-budget=COUNT` and `--context=HEX`
 for invocation settings. Explicit zero budgets remain zero. `--capacity=FILE`

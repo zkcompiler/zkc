@@ -36,8 +36,8 @@ def compile_case(name, source, policy, family='schnorr', rounds=1, *options):
 
 def policy(suite, public=None):
     return ['zkc.native-proof-policy/0', 'main', 'Alice', 'Bob', '0', suite,
-            '4' if suite else '', public or ['0', '2'],
-            [['draw_challenge', 'challenge']] if suite else []]
+            ['4'] if suite else [], public or ['0', '2'],
+            [['draw_challenge', 'challenge']] if suite else [], "zkc.framed/0", ""]
 
 
 def with_pure_helpers(source):
@@ -81,7 +81,7 @@ for i, suite in enumerate(SUITES):
                                 '%no = arith.constant false\n"protocol.return"(%no, %ok) : (i1, i1) -> ()')
         source = source.replace(' -> (i1), roles=', ' -> (i1, i1), roles=')
         source = source.replace('output_roles=[["Bob"]]', 'output_roles=[["Bob"], ["Bob"]]')
-        p = policy(suite, ['2', '4']); p[4] = '1'; p[6] = '0'
+        p = policy(suite, ['2', '4']); p[4] = '1'; p[6] = ['0']
         compile_case(f'reordered_{i}', source, p)
         manifest[-1].update(value_ports=[4, 3, 2, 1, 0], nonce_port=1, challenge_port=0)
     with case(f'role entry and site renaming suite {i}'):
@@ -204,7 +204,7 @@ with case('retained action cannot disguise an extra inserted helper call'):
     forged = candidate.replace(challenge[0], inserted_call + challenge[0].replace(f'({state})', '(%extra_state)'), 1)
     participant = re.search(r'"protocol.participant"[^\n]+sym_name = "([^\"]+)"', candidate)[1]
     extra = f'{{callee = @{helper}, kind = "protocol.local_call", site = "authored_extra", targets = [{{operation = "local.call", participant = @{participant}}}]}}'
-    original_next = '{kind = "protocol.query", site = "draw_challenge",'
+    original_next = '{kind = "protocol.query", service = 4 : i64, site = "draw_challenge",'
     assert original_next in forged
     forged = forged.replace(original_next, extra + ', ' + original_next, 1)
     inserted = f'{{callee = @{helper}, kind = "protocol.local_call", site = "{site}", targets = [{{operation = "local.call", participant = @{participant}}}]}}'
@@ -259,13 +259,13 @@ with case('draw and delivery cannot enclose another message'):
     source_path.write_text(schnorr.replace('%challenge =', '%intervening = protocol.exchange %r {sender="Alice", receiver="Bob", site="intervening"} : !algebra.group<"bls12-381.g1">\n%challenge ='))
     commands.verified(source_path.read_text(), None)
     commands.run([compiler, 'protocol-proof', source_path, policy_path], refuses='native-proof-prefix')
-with case('unused validator services are not ambient inputs'):
+with case('unselected validator services remain explicit participant inputs'):
     added = schnorr.replace(f'%challenge_service: {service}):', f'%challenge_service: {service}, %other: {service}):')
     added = added.replace(f', {service}) -> (i1)', f', {service}, {service}) -> (i1)')
     added = added.replace('["Alice"], ["Bob"]], output_roles', '["Alice"], ["Bob"], ["Bob"]], output_roles')
     source_path.write_text(added)
     commands.verified(added, None)
-    commands.run([compiler, 'protocol-proof', source_path, policy_path], refuses='native-proof-verifier-service')
+    commands.run([compiler, 'protocol-proof', source_path, policy_path])
 with case('all unsigned public data must be bound'):
     added = schnorr.replace(f'%challenge_service: {service}):', f'%challenge_service: {service}, %n: ui64):')
     added = added.replace(f', {service}) -> (i1)', f', {service}, ui64) -> (i1)')

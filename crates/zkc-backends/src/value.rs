@@ -42,6 +42,10 @@ impl Default for Policy {
     }
 }
 impl Policy {
+    pub(crate) fn bytes(&self, n: usize) -> Result<()> {
+        self.wire(n)?;
+        self.output(size(n, 1)?, usize::MAX)
+    }
     pub(crate) fn vector(&self, n: usize) -> Result<()> {
         self.vector_width(n, 32)
     }
@@ -158,6 +162,8 @@ value_inventory! {
     OracleStates(crate::oracle::Domain, Arc<[crate::oracle::State]>),
     Index(u64),
     Indices(Arc<[u64]>),
+    Bytes(Arc<[u8]>),
+    Shake128State(Arc<crate::hash::Shake128State>),
     Matrix(crate::matrix::SparseCoo<Scalar>),
     RistrettoMatrix(crate::matrix::SparseCoo<crate::RistrettoScalar>),
     KoalaBearMatrix(crate::matrix::SparseCoo<crate::KoalaBear>),
@@ -402,6 +408,12 @@ impl Value {
             Self::Bool(_) => (Type::Bool, Identity::None, Representation::Bool),
             Self::Index(_) => (Type::Index, Identity::None, Representation::Index),
             Self::Indices(_) => (Type::Indices, Identity::None, Representation::Indices),
+            Self::Bytes(_) => (Type::Bytes, Identity::None, Representation::Bytes),
+            Self::Shake128State(_) => (
+                Type::Shake128State,
+                Identity::None,
+                Representation::Shake128State,
+            ),
             Self::Rng(t) => (Type::Rng, t.identity(), Representation::Resource),
             Self::Commitment(_) => (
                 Type::Commitment,
@@ -466,8 +478,10 @@ impl Value {
         let elements = match ty {
             Type::Table | Type::Point | Type::Vector | Type::Polynomial => wire_len / 32,
             Type::Indices => wire_len / 8,
+            Type::Bytes => wire_len,
             Type::Groups => wire_len / 48,
             Type::Proof => wire_len / 96,
+            Type::Shake128State => return Err(refused("nonserializable")),
             Type::Sequence
             | Type::FieldArray
             | Type::FixedVector
@@ -542,6 +556,7 @@ impl Value {
             policy.wire(wire_len)?;
             let bytes = match ty.kind() {
                 Type::Vector | Type::Polynomial => size(wire_len / 4, 4)?,
+                Type::Shake128State => return Err(refused("nonserializable")),
                 Type::Sequence
                 | Type::FieldArray
                 | Type::FixedVector
@@ -557,6 +572,7 @@ impl Value {
                 | Type::Bool
                 | Type::Index
                 | Type::Indices
+                | Type::Bytes
                 | Type::Rng
                 | Type::Commitment
                 | Type::OpeningState
@@ -605,6 +621,8 @@ impl Value {
             Self::Bn254G1Vector(v) => Backing::of(v, bytes),
             Self::Bn254G2Vector(v) => Backing::of(v, bytes),
             Self::Indices(v) => Backing::of(v, bytes),
+            Self::Bytes(v) => Backing::of(v, bytes),
+            Self::Shake128State(v) => Backing::of(v, bytes),
             Self::KoalaBearExt8Vector(v) | Self::KoalaBearExt8Polynomial(v) => {
                 Backing::of(v, bytes)
             }
@@ -676,6 +694,8 @@ impl Value {
             | Self::OracleStates(..)
             | Self::Index(..)
             | Self::Indices(..)
+            | Self::Bytes(..)
+            | Self::Shake128State(..)
             | Self::Matrix(..)
             | Self::RistrettoMatrix(..)
             | Self::KoalaBearMatrix(..)
@@ -846,6 +866,8 @@ impl RuntimeValue for Value {
             Self::Bn254G1Vector(v) => size(v.len(), std::mem::size_of::<crate::Bn254G1>()),
             Self::Bn254G2Vector(v) => size(v.len(), std::mem::size_of::<crate::Bn254G2>()),
             Self::Indices(v) => size(v.len(), 8),
+            Self::Bytes(v) => size(v.len(), 1),
+            Self::Shake128State(_) => Ok(crate::hash::Shake128State::RETAINED_BYTES),
             Self::Matrix(m) => m.retained_bytes(),
             Self::RistrettoMatrix(m) => m.retained_bytes(),
             Self::KoalaBearMatrix(m) => m.retained_bytes(),
@@ -939,6 +961,8 @@ fn payload_bytes(ty: Type, elements: usize) -> Result<usize> {
     match ty {
         Type::Table | Type::Point | Type::Vector | Type::Polynomial => size(elements, 32),
         Type::Indices => size(elements, 8),
+        Type::Bytes => size(elements, 1),
+        Type::Shake128State => Ok(crate::hash::Shake128State::RETAINED_BYTES),
         Type::Groups | Type::VerifierKey => size(elements, 128),
         Type::Proof => size(elements, 192),
         Type::Sequence
@@ -1219,7 +1243,13 @@ mod retained_parts_tests {
             crate::oracle::Domain::Extension,
             vec![state.clone(), state.clone()].into(),
         );
+        let snapshot = Value::Shake128State(Arc::new(Default::default()));
+        let repeated_snapshot = sequence(vec![snapshot.clone(), snapshot.clone()]);
+        assert_eq!(parts(&snapshot).1, parts(&snapshot.clone()).1);
+        assert!(charged(&repeated_snapshot) < repeated_snapshot.retained_bytes());
         let distinct = [
+            Value::Bytes(Arc::from([1, 2, 3])),
+            snapshot,
             vector.clone(),
             Value::Vector(scalars.clone()),
             diagonal.clone(),

@@ -6,6 +6,7 @@ include "zkc/Dialect/Base.td"
 def CryptoDialect : ZKCDialect {
   let name = "crypto";
   let cppNamespace = "::zkc::crypto";
+  let useDefaultTypePrinterParser = 1;
 }
 
 #endif

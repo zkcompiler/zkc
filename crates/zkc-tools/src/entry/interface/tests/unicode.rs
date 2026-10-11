@@ -578,13 +578,16 @@ fn proof_fixture() -> (Value, String) {
             "role00000000",
             "0",
             "",
-            "",
+            [],
             ["0"],
-            []
+            [],
+            "zkc.framed/0",
+            ""
         ],
         "zkc.native-origin/0",
         [],
         [["role00000000", "0", "bool", "zkcv.bool/0"]],
+        [],
         []
     ]);
     let artifact = json!([
@@ -622,7 +625,7 @@ fn proof_fixture() -> (Value, String) {
         "protocols":[{"symbol":"main","roles":["検証者","証明者"],"services":[],"clauses":[],
             "inputs":[port("公開",0,json!([0]),json!(["検証者","証明者"]),boolean.clone()),port("秘密",1,json!([1]),json!(["証明者"]),boolean.clone())],
             "outputs":[port("受理",0,json!([0]),json!(["検証者"]),boolean.clone()),port("結果",1,json!([1]),json!(["証明者"]),boolean)]}],
-        "job":{"kind":"proof","prover":"証明者","verifier":"検証者","public":[0],"acceptance":selector("output",0,"検証者"),"completion":null,"target":null,"construction":{"kind":"authored"}}});
+        "job":{"kind":"proof","prover":"証明者","verifier":"検証者","public":[0],"acceptance":selector("output",0,"検証者"),"completion":null,"target":null,"construction":{"kind":"authored", "format": "zkc.framed/0"}}});
     (doc, artifact)
 }
 fn proof_request(interface: &Interface, producer: bool) -> ProofRequest {
@@ -658,7 +661,7 @@ fn unicode_proof_requests_bind_the_selected_prover_and_verifier_roster_indices()
     assert!(code.contains("PROVER: &::core::primitive::str = \"証明者\""));
     assert!(code.contains("VERIFIER: &::core::primitive::str = \"検証者\""));
     let options = ProofOptions {
-        binding: BindingPolicy::AllowHeaderOnly,
+        binding: BindingPolicy::AllowAuthored,
         ..Default::default()
     };
     let prover =
@@ -742,7 +745,7 @@ fn unicode_setup_material_is_injected_into_both_independent_proof_requests() {
     doc["job"]["public"] = json!([0, 2]);
     doc["setups"] = json!([{"name":"鍵₂","inputs":[{"port":2,"path":[]}]}]);
     let options = ProofOptions {
-        binding: BindingPolicy::AllowHeaderOnly,
+        binding: BindingPolicy::AllowAuthored,
         ..Default::default()
     };
     let keys =
@@ -807,7 +810,7 @@ fn proof_package_binds_every_compilation_choice_to_the_deployment() {
         )
         .unwrap();
         let options = ProofOptions {
-            binding: BindingPolicy::AllowHeaderOnly,
+            binding: BindingPolicy::AllowAuthored,
             ..Default::default()
         };
         let refused = ProofEntry::admit(changed, options, SetupAuthority::default());
@@ -830,7 +833,7 @@ fn proof_package_binds_every_compilation_choice_to_the_deployment() {
     )
     .unwrap();
     let options = ProofOptions {
-        binding: BindingPolicy::AllowHeaderOnly,
+        binding: BindingPolicy::AllowAuthored,
         ..Default::default()
     };
     assert!(ProofEntry::admit(changed, options, SetupAuthority::default()).is_ok());

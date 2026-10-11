@@ -6,7 +6,7 @@
 #include <numeric>
 using namespace llvm;
 namespace zkc::language::detail {
-Checker::Checker(std::vector<SyntaxModule> syntax, CheckedStorage &output,
+Checker::Checker(std::vector<SyntaxDeclaration> syntax, CheckedStorage &output,
                  Work &work)
     : output(output), work(work),
       types(output.declarations, output.assets, work,
@@ -17,10 +17,15 @@ Error Checker::run() {
     return error;
   if (!collect() || !imports() || !prepareNotationSyntax())
     return types.takeError();
-  for (auto &module : syntax)
-    if (auto error = parseBodies((*output.sources)[module.id.index], module,
-                                 output.tokens[module.id.index],
-                                 notationEnvironments[module.id.index], work))
+  std::vector<std::vector<BodyParseScope>> bodyScopes(output.sources->size());
+  for (auto id : moduleIds) {
+    auto *module = sources[id.index];
+    bodyScopes[module->span.source.index].push_back(
+        {module, notationEnvironments[id.index]});
+  }
+  for (unsigned i = 0; i < bodyScopes.size(); ++i)
+    if (auto error = parseBodies((*output.sources)[i], SourceId{i},
+                                 output.tokens[i], bodyScopes[i], work))
       return error;
   for (auto &decl : output.declarations)
     if (!decl.abstract && !sources[decl.id.index]->explicitRequirements &&
@@ -50,7 +55,7 @@ Error Checker::run() {
   };
   signatureState.resize(output.declarations.size());
   for (unsigned i = 0; i < output.declarations.size(); ++i)
-    if (!signature(DeclarationId{i}))
+    if (!sources[i]->constructionHandler && !signature(DeclarationId{i}))
       return types.takeError();
   if (!prepareOperators())
     return types.takeError();
@@ -59,7 +64,8 @@ Error Checker::run() {
   bodyState.resize(output.declarations.size());
   bodyHeights.resize(bodyState.size());
   for (auto &decl : output.declarations)
-    if (decl.kind == Declaration::Kind::Component && !conformance(decl.id))
+    if (decl.kind == Declaration::Kind::Module && decl.implementation &&
+        !conformance(decl.id))
       return types.takeError();
   if (!representations())
     return types.takeError();
@@ -96,10 +102,10 @@ Error Checker::run() {
          decl.kind == Declaration::Kind::Protocol ||
          (decl.kind == Declaration::Kind::Relation &&
           decl.relation->kind == RelationDefinition::Kind::Formula)) &&
-        !decl.abstract && !body(decl.id, 1))
+        !decl.abstract && !sources[i]->constructionHandler && !body(decl.id, 1))
       return types.takeError();
   }
-  if (!entries())
+  if (!constructions() || !entries())
     return types.takeError();
   inferredContracts.clear();
   types.inferCapability = {};
@@ -122,33 +128,68 @@ Checker::retainSyntax(DeclarationId owner) {
   return retained;
 }
 bool Checker::bindingName(const Declaration &decl, StringRef name, Span span) {
-  if (visible[decl.module.index].count(name.str()) ||
-      aliases[decl.module.index].count(name.str()) ||
-      llvm::any_of(decl.parameters, [&](auto &p) { return p.name == name; }))
-    return types.fail("source.shadow",
-                      "binding shadows a visible declaration, module alias or "
-                      "static parameter",
+  if (llvm::any_of(decl.parameters, [&](auto &p) { return p.name == name; }))
+    return types.fail("source.shadow", "binding shadows a static parameter",
                       span);
+  auto scope = decl.kind == Declaration::Kind::Module ? std::optional(decl.id)
+                                                      : decl.parent;
+  for (; scope; scope = output.declarations[scope->index].parent) {
+    if (member(decl, *scope, name, span))
+      return types.fail("source.shadow",
+                        "binding shadows a visible declaration", span);
+    if (types.diagnostic)
+      return false;
+  }
   return true;
 }
 bool Checker::collect() {
-  visible.resize(syntax.size());
-  std::function<bool(SyntaxDeclaration &, ModuleId,
-                     std::optional<DeclarationId>)>
+  std::map<std::string, SyntaxDeclaration *> files;
+  std::set<std::string> linked;
+  for (auto &root : syntax)
+    files.emplace(root.name, &root);
+  std::function<bool(SyntaxDeclaration &, DeclarationId,
+                     std::optional<DeclarationId>, std::string, unsigned)>
       add;
-  add = [&](SyntaxDeclaration &source, ModuleId module,
-            std::optional<DeclarationId> parent) {
+  add = [&](SyntaxDeclaration &written, DeclarationId module,
+            std::optional<DeclarationId> parent, std::string path,
+            unsigned depth) {
+    if (depth > work.limits.parseDepth || !types.charge(1, written.span))
+      return types.diagnostic
+                 ? false
+                 : types.fail("source.limit", "module nesting limit",
+                              written.span);
+    SyntaxDeclaration *definition = &written;
+    if (written.externalModule) {
+      auto found = files.find(path);
+      if (found == files.end())
+        return types.fail("source.module",
+                          "external module was not captured: " + path,
+                          written.span);
+      if ((*output.sources)[found->second->span.source.index].origin ==
+          SourceOrigin::Installation)
+        return types.fail("source.module",
+                          "installation modules cannot be linked as children",
+                          written.span);
+      if (!linked.insert(path).second)
+        return types.fail("source.duplicate",
+                          "external module was linked twice", written.span);
+      definition = found->second;
+      definition->isPublic = written.isPublic;
+    } else if (parent && files.count(path))
+      return types.fail("source.duplicate",
+                        "captured module path collides with a declaration",
+                        written.span);
+    auto &source = *definition;
     Declaration decl;
     decl.id = {uint32_t(output.declarations.size())};
-    decl.module = module;
+    decl.module = source.kind == Declaration::Kind::Module ? decl.id : module;
     decl.kind = source.kind;
-    decl.name = source.name;
+    decl.name = StringRef(path).rsplit("::").second.str();
+    if (decl.name.empty())
+      decl.name = path;
     decl.parent = parent;
     decl.span = source.span;
-    decl.qualifiedName =
-        (parent ? output.declarations[parent->index].qualifiedName
-                : (*output.sources)[module.index].module) +
-        "::" + source.name;
+    decl.qualifiedName = std::move(path);
     decl.isPublic = source.isPublic;
     decl.abstract = source.abstract;
     decl.completes = source.completes;
@@ -159,6 +200,7 @@ bool Checker::collect() {
     decl.associatedSort = source.associatedSort;
     decl.anonymous = source.anonymous;
     decl.specificationBlock = source.specificationBlock;
+    decl.proofFormat = source.proofFormat;
     if (source.relation) {
       const auto &definition = *source.relation;
       decl.relation = RelationDefinition{
@@ -172,9 +214,6 @@ bool Checker::collect() {
                            "::<" + source.name + ">";
     if (!decl.anonymous &&
         !qualified.emplace(decl.qualifiedName, decl.id).second)
-      return types.fail("source.duplicate",
-                        "duplicate declaration: " + decl.name, decl.span);
-    if (!parent && !visible[module.index].emplace(decl.name, decl.id).second)
       return types.fail("source.duplicate",
                         "duplicate declaration: " + decl.name, decl.span);
     auto symbol =
@@ -222,107 +261,131 @@ bool Checker::collect() {
     }
     auto id = decl.id;
     sources.push_back(&source);
+    visible.emplace_back();
+    if (decl.kind == Declaration::Kind::Module) {
+      if (!modules.emplace(decl.qualifiedName, id).second)
+        return types.fail("source.duplicate", "duplicate module body",
+                          decl.span);
+      moduleIds.push_back(id);
+      module = id;
+    }
+    if (parent && !decl.anonymous)
+      visible[parent->index].emplace(
+          decl.name, ScopeBinding{id, decl.span, decl.isPublic});
     output.declarations.push_back(std::move(decl));
     if (parent)
       output.declarations[parent->index].members.push_back(id);
     for (auto &member : source.members)
-      if (!add(member, module, id))
+      if (!add(member, module, id,
+               output.declarations[id.index].qualifiedName + "::" + member.name,
+               depth + 1))
         return false;
     return true;
   };
-  for (auto &module : syntax) {
-    modules.emplace((*output.sources)[module.id.index].module, module.id);
-    for (auto &decl : module.declarations)
-      if (!add(decl, module.id, {}))
-        return false;
+  // A captured descendant is attached only through an authored child link.
+  for (auto &root : syntax) {
+    bool descendant = false;
+    auto prefix = StringRef(root.name);
+    while (prefix.contains("::")) {
+      prefix = prefix.rsplit("::").first;
+      if ((*output.sources)[root.span.source.index].origin !=
+              SourceOrigin::Installation &&
+          files.count(prefix.str())) {
+        descendant = true;
+        break;
+      }
+    }
+    if (!descendant && !add(root, {}, {}, root.name, 1))
+      return false;
+  }
+  for (auto &root : syntax) {
+    auto found = modules.find(root.name);
+    if (found == modules.end())
+      return types.fail("source.module",
+                        "captured child needs an external module declaration",
+                        root.span);
   }
   return true;
 }
-std::optional<DeclarationId> Checker::resolve(const Declaration &context,
-                                              StringRef name, Span span,
-                                              bool required) {
+std::optional<DeclarationId> Checker::member(const Declaration &context,
+                                             DeclarationId owner,
+                                             StringRef name, Span span) {
+  const auto &decl = output.declarations[owner.index];
+  if (!types.charge(1, span))
+    return {};
+  auto check = [&](DeclarationId target, bool isPublic,
+                   Span definition) -> std::optional<DeclarationId> {
+    if (checkingVisibility && !isPublic &&
+        !types.withinModule(context.module, decl.module)) {
+      types.fail("source.private",
+                 "cannot reference private declaration: " + name, span,
+                 {definition});
+      return {};
+    }
+    return target;
+  };
+  if (decl.kind == Declaration::Kind::Module && loadBinding &&
+      !loadBinding(owner, name))
+    return {};
+  auto found = visible[owner.index].find(name.str());
+  if (found != visible[owner.index].end())
+    return check(found->second.target, found->second.isPublic,
+                 found->second.span);
+  return {};
+}
+std::optional<DeclarationId>
+Checker::resolve(const Declaration &context, StringRef name, Span span,
+                 bool required, std::vector<ModuleLookup> *route) {
   if (!types.charge(1, span))
     return {};
   const bool absolute = name.consume_front("::");
   auto [head, tail] = name.split("::");
-  auto member = [&](DeclarationId owner,
-                    StringRef part) -> std::optional<DeclarationId> {
-    const auto &members = output.declarations[owner.index].members;
-    if (!types.charge(members.size(), span))
-      return {};
-    for (auto id : members)
-      if (!output.declarations[id.index].anonymous &&
-          output.declarations[id.index].name == part)
-        return id;
-    return {};
-  };
   std::optional<DeclarationId> root;
-  std::optional<ModuleId> moduleRoot;
   if (!absolute) {
-    for (auto parent = context.parent; parent;
-         parent = output.declarations[parent->index].parent) {
-      root = member(*parent, head);
+    auto scope = context.kind == Declaration::Kind::Module
+                     ? std::optional(context.id)
+                     : context.parent;
+    for (; scope; scope = output.declarations[scope->index].parent) {
+      root = member(context, *scope, head, span);
       if (types.diagnostic)
         return {};
-      if (root)
+      if (root) {
+        if (route)
+          route->push_back({*scope, head.str()});
         break;
-    }
-    if (!root) {
-      auto found = visible[context.module.index].find(head.str());
-      if (found != visible[context.module.index].end())
-        root = found->second;
-      else if (auto alias = aliases[context.module.index].find(head.str());
-               alias != aliases[context.module.index].end())
-        moduleRoot = alias->second;
+      }
     }
   }
-  // Descend actual declaration members. A same-named captured module is not
-  // part of a lexical declaration's scope, including when a member is absent.
-  std::optional<DeclarationId> resolved = root;
-  if (root) {
-    while (resolved && !tail.empty()) {
-      if (!types.charge(1, span))
-        return {};
-      auto next = tail.split("::");
-      resolved = member(*resolved, next.first);
-      if (types.diagnostic)
-        return {};
-      tail = next.second;
-    }
-  } else if (moduleRoot) {
-    resolved = moduleMember(*moduleRoot, tail, span);
-  } else if (auto found = qualified.find(name.str());
-             found != qualified.end()) {
-    resolved = found->second;
-  } else {
-    auto prefix = name.contains("::") ? name.rsplit("::").first : StringRef{};
+  if (!root) {
+    // Only source roots enter global lookup. Descendants are reached through
+    // actual bindings, so absolute paths and aliases obey the same privacy.
+    StringRef prefix = name;
     while (!prefix.empty()) {
-      auto module = modules.find(prefix.str());
-      if (module != modules.end()) {
-        resolved = moduleMember(module->second,
-                                name.drop_front(prefix.size() + 2), span);
+      auto found = modules.find(prefix.str());
+      if (found != modules.end() &&
+          !output.declarations[found->second.index].parent) {
+        root = found->second;
+        tail = name.size() == prefix.size()
+                   ? StringRef{}
+                   : name.drop_front(prefix.size() + 2);
         break;
       }
       prefix = prefix.contains("::") ? prefix.rsplit("::").first : StringRef{};
     }
   }
-  if (!resolved) {
-    if (required)
-      types.fail("source.name", "unknown declaration: " + name, span);
-    return {};
-  }
-  auto id = *resolved;
-  for (auto current = std::optional<DeclarationId>{id}; current;
-       current = output.declarations[current->index].parent) {
-    const auto &ancestor = output.declarations[current->index];
-    if (ancestor.module.index != context.module.index && !ancestor.isPublic) {
-      types.fail("source.private",
-                 "cannot reference private declaration: " + name, span,
-                 {ancestor.span});
+  while (root && !tail.empty()) {
+    auto next = tail.split("::");
+    auto owner = *root;
+    root = member(context, owner, next.first, span);
+    if (root && route)
+      route->push_back({owner, next.first.str()});
+    if (types.diagnostic)
       return {};
-    }
+    tail = next.second;
   }
-  return id;
+  if (!root && required)
+    types.fail("source.name", "unknown declaration: " + name, span);
+  return root;
 }
 std::optional<std::vector<unsigned>> Checker::roles(const Declaration &decl,
                                                     ArrayRef<std::string> names,
@@ -346,7 +409,7 @@ std::optional<std::vector<unsigned>> Checker::roles(const Declaration &decl,
   }
   return result;
 }
-Error check(std::vector<SyntaxModule> syntax, CheckedStorage &output,
+Error check(std::vector<SyntaxDeclaration> syntax, CheckedStorage &output,
             Work &work) {
   return Checker(std::move(syntax), output, work).run();
 }

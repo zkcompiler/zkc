@@ -59,6 +59,13 @@ def Data_BoundedMatrixAtOp : Op<DataDialect, "bounded_matrix_at", [Pure, Declare
   let results = (outs AnyType:$output);
   let hasVerifier = 1;
 }
+def BytesEmptyExecOp : KernelOp<DataDialect, "exec.bytes_empty", [OpBytesEmpty]>;
+def BytesAppendExecOp : KernelOp<DataDialect, "exec.bytes_append", [OpBytesAppend]>;
+def BytesConcatExecOp : KernelOp<DataDialect, "exec.bytes_concat", [OpBytesConcat]>;
+def BytesSliceExecOp : KernelOp<DataDialect, "exec.bytes_slice", [OpBytesSlice]>;
+def BytesAtExecOp : KernelOp<DataDialect, "exec.bytes_at", [OpBytesAt]>;
+def BytesLengthExecOp : KernelOp<DataDialect, "exec.bytes_length", [OpBytesLength]>;
+def BytesEqualExecOp : KernelOp<DataDialect, "exec.bytes_equal", [OpBytesEqual]>;
 def SequenceEmptyExecOp : KernelOp<DataDialect, "exec.sequence_empty", [OpSequenceEmpty]>;
 def SequenceAppendExecOp : KernelOp<DataDialect, "exec.sequence_append", [OpSequenceAppend]>;
 def SequenceLengthExecOp : KernelOp<DataDialect, "exec.sequence_length", [OpSequenceLength]>;
@@ -103,7 +110,7 @@ def Data_IsOp : DataExpression<"is"> {
   let results = (outs I1:$output);
 }
 def Data_DimOp : DataExpression<"dim"> {
-  let arguments = (ins AnyTypeOf<[FieldVector, GroupVector, Indices,
+  let arguments = (ins AnyTypeOf<[FieldVector, GroupVector, Indices, Bytes,
                                  FieldMatrix, FieldArray]>:$input,
                        I64Attr:$axis);
   let results = (outs UI64:$output);

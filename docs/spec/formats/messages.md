@@ -14,7 +14,7 @@ deployment authority or transport support in another Host.
 
 The complete logical message grammar is:
 
-- `bool`, `index`, `indices`;
+- `bool`, `index`, `indices`, `bytes`;
 - scalar fields BLS12-381 Fr, BN254 Fr, Ristretto scalar, KoalaBear base and
   KoalaBear ext8; groups BLS12-381 G1, BN254 G1/G2/GT and Ristretto;
 - field `vector` and sparse `matrix` in each installed scalar domain;
@@ -58,6 +58,7 @@ All integers below are unsigned little-endian. All frames begin with ASCII
 | 66 | BLS scalar vector | `count:u32`, then exactly `count` canonical 32-byte scalars |
 | 67 | BLS G1 vector | `count:u32`, then exactly `count` canonical compressed 48-byte subgroup points |
 | 68 | Indices | `count:u32`, then exactly `count` unsigned 64-bit indices |
+| 70 | Bytes | `count:u32`, then exactly `count` uninterpreted bytes |
 
 The expected descriptor determines alternative bounds and active payload count;
 there is no additional payload-count field. Empty variants and collections use
@@ -101,7 +102,7 @@ actual root, caller-supplied width/height/index, row and path. Merkle leaves
 require no KZG setup; their opening state remains local.
 
 Descriptor codec identity is `zkc.native-data/0` for vectors, group vectors,
-matrices, indices and recursive containers. Fixed scalar/group, PCS and Merkle
+matrices, indices, bytes and recursive containers. Fixed scalar/group, PCS and Merkle
 root/path leaves retain their installed ZKCV codec identities. Matching public ZKCV bytes do not equate descriptor codec identities:
 the descriptor separately binds the exact type, representation and consumer.
 Types are authenticated by the deployment/descriptor binding, not encoded again

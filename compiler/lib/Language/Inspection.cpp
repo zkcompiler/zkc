@@ -35,8 +35,8 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
     case Parameter::Sort::Natural:
       sort = "nat";
       break;
-    case Parameter::Sort::Component:
-      sort = "component";
+    case Parameter::Sort::Module:
+      sort = "module";
       break;
     case Parameter::Sort::Domain:
     case Parameter::Sort::Asset:
@@ -183,13 +183,91 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
       {"requirements", std::move(requirements)},
       {"effects", renderEffects(effects)},
       {"source",
-       json::Object{{"module", project.sources()[decl.module.index].module},
-                    {"origin", project.sources()[decl.module.index].origin ==
-                                       SourceOrigin::Installation
-                                   ? "installation"
-                                   : "captured"},
-                    {"begin", decl.span.begin},
-                    {"end", decl.span.end}}}};
+       json::Object{
+           {"module", project.sources()[decl.span.source.index].module},
+           {"origin", project.sources()[decl.span.source.index].origin ==
+                              SourceOrigin::Installation
+                          ? "installation"
+                          : "captured"},
+           {"begin", decl.span.begin},
+           {"end", decl.span.end}}}};
+  if (decl.construction) {
+    for (StringRef key : {"abstract", "definition", "roles", "input_order",
+                          "inputs", "outputs", "services", "effects"})
+      result.erase(key);
+    result["kind"] = "construction";
+    const auto &construction = *decl.construction;
+    const auto &target = project.declarations()[decl.target->index];
+    json::Array arguments, rules;
+    for (const auto &argument : decl.staticArguments)
+      arguments.push_back(type(argument));
+    result["target"] = json::Object{{"name", target.qualifiedName},
+                                    {"arguments", std::move(arguments)}};
+    result["provider"] = construction.provider
+                             ? json::Value(type(*construction.provider))
+                             : json::Value(nullptr);
+    result["state"] = construction.state
+                          ? json::Value(type(*construction.state))
+                          : json::Value(nullptr);
+    result["root"] =
+        construction.root == ConstructionDefinition::Root::Local  ? "local"
+        : construction.root == ConstructionDefinition::Root::Host ? "host"
+                                                                  : "none";
+    json::Array replaced;
+    for (auto port : construction.services)
+      replaced.push_back(target.services[port].name);
+    result["replace"] = std::move(replaced);
+    result["suite"] = construction.suite;
+    result["format"] = protocol::proofFormatName(
+        decl.proofFormat.value_or(protocol::ProofFormat::Native));
+    if (construction.codec) {
+      json::Array inputs;
+      for (auto index : construction.codec->inputs)
+        inputs.push_back(target.inputs[index].name);
+      result["codec"] =
+          json::Object{{"provider", type(construction.codec->provider)},
+                       {"record", type(construction.codec->record)},
+                       {"inputs", std::move(inputs)}};
+    }
+    result["base"] =
+        construction.parent
+            ? project.declarations()[construction.parent->index].qualifiedName
+        : construction.base == ConstructionDefinition::Base::Native
+            ? "fiat_shamir"
+        : construction.base == ConstructionDefinition::Base::Authored
+            ? "authored"
+            : "";
+    for (const auto &rule : construction.rules) {
+      json::Array path, inputs;
+      for (const auto &part : rule.path)
+        path.push_back(part);
+      for (auto input : rule.inputs)
+        inputs.push_back(target.inputs[input].name);
+      rules.push_back(json::Object{
+          {"kind", protocol::constructionRuleName(rule.kind)},
+          {"path", std::move(path)},
+          {"inputs", std::move(inputs)},
+          {"handler",
+           project.declarations()[rule.handler.index].qualifiedName}});
+    }
+    result["rules"] = std::move(rules);
+    json::Array applications;
+    for (const auto &application : construction.applications) {
+      json::Array path, arguments;
+      for (const auto &part : application.path)
+        path.push_back(part);
+      for (const auto &argument : application.arguments)
+        arguments.push_back(type(argument));
+      applications.push_back(
+          json::Object{{"construction",
+                        project.declarations()[application.construction.index]
+                            .qualifiedName},
+                       {"arguments", std::move(arguments)},
+                       {"path", std::move(path)}});
+    }
+    result["applications"] = std::move(applications);
+    return result;
+  }
   if (decl.primitive)
     result["primitive"] = decl.primitive->identity;
   if (decl.finiteDefinition)
@@ -209,11 +287,29 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
     auto allowance = decl.effectAllowance.value_or(EffectSummary{});
     result["effect_allowance"] = renderEffects(allowance);
   }
+  if (decl.kind == Declaration::Kind::Module ||
+      decl.kind == Declaration::Kind::Interface) {
+    for (StringRef key : {"abstract", "definition", "roles", "input_order",
+                          "inputs", "scoped_inputs", "outputs", "services",
+                          "effects", "effect_allowance"})
+      result.erase(key);
+    result["kind"] =
+        decl.kind == Declaration::Kind::Module ? "module" : "interface";
+    if (decl.implementation)
+      result["implements"] = type(*decl.implementation);
+    json::Array members;
+    for (auto id : decl.members) {
+      const auto &member = project.declarations()[id.index];
+      if (member.isPublic && !member.anonymous)
+        members.push_back(member.qualifiedName);
+    }
+    result["members"] = std::move(members);
+  }
   if (owner) {
     json::Object parent{{"name", owner->qualifiedName},
                         {"kind", owner->kind == Declaration::Kind::Interface
                                      ? "interface"
-                                     : "component"}};
+                                     : "module"}};
     if (owner->implementation)
       parent["implements"] = type(*owner->implementation);
     result["owner"] = std::move(parent);
@@ -250,18 +346,28 @@ Expected<std::string> inspectDeclarations(const CheckedProject &project,
   for (const auto &decl : project.declarations()) {
     // The project inventory describes captured modules. Installed definitions
     // remain available through the checked source/declaration API.
-    if (project.sources()[decl.module.index].origin ==
+    if (project.sources()[decl.span.source.index].origin ==
         SourceOrigin::Installation)
       continue;
     if (decl.kind != Declaration::Kind::Math &&
         decl.kind != Declaration::Kind::Local &&
         decl.kind != Declaration::Kind::DomainFunction &&
-        decl.kind != Declaration::Kind::Protocol)
+        decl.kind != Declaration::Kind::Protocol &&
+        decl.kind != Declaration::Kind::Construction &&
+        decl.kind != Declaration::Kind::Module &&
+        decl.kind != Declaration::Kind::Interface)
+      continue;
+    if (decl.anonymous && decl.parent &&
+        project.declarations()[decl.parent->index].kind ==
+            Declaration::Kind::Construction)
       continue;
     const Declaration *owner = &decl;
-    while (owner->parent)
+    bool exposed = owner->isPublic;
+    while (owner->parent) {
       owner = &project.declarations()[owner->parent->index];
-    if (owner->isPublic)
+      exposed &= owner->isPublic;
+    }
+    if (exposed)
       declarations.push_back(&decl);
   }
   llvm::sort(declarations, [](auto *a, auto *b) {

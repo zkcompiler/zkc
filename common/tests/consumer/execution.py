@@ -57,17 +57,17 @@ def main():
                           refusal="native-proof-binding-policy")
             assert refused["binding_scope"] == "header" and refused["phase"] == "admission"
             assert proof.read_bytes() == b"previous proof"
-        result = run("prove-bundle", deployment, pin, producer, proof, "--allow-header-only")
+        result = run("prove-bundle", deployment, pin, producer, proof, "--allow-authored")
         assert result["status"] == "produced" and result["binding_scope"] == "header"
-        result = run("verify-bundle", deployment, pin, validator, proof, "--allow-header-only")
+        result = run("verify-bundle", deployment, pin, validator, proof, "--allow-authored")
         assert result["status"] == "accepted" and result["binding_scope"] == "header"
         for data, code in [(proof.read_bytes()[:-1], "proof-truncated"),
                            (proof.read_bytes() + b"x", "proof-trailing")]:
             malformed = work / "malformed.bin"
             malformed.write_bytes(data)
             run("verify-bundle", deployment, pin, validator, malformed,
-                "--allow-header-only", refusal=code)
-        for options in [[], ["--allow-header-only"]]:
+                "--allow-authored", refusal=code)
+        for options in [[], ["--allow-authored"]]:
             refused = run("verify-bundle", deployment, "00" * 32, validator, proof,
                           *options, refusal="native-proof-deployment-binding")
             assert "binding_scope" not in refused
@@ -87,12 +87,12 @@ def main():
         witness = write("witness.json", {"x": True})
         proof = work / "named-proof.bin"
         proving = ["prove", f"--package={package}", f"--sha256={pin}", f"--witness={witness}", f"--output={proof}"]
-        verifying = ["verify", f"--package={package}", f"--sha256={pin}", f"--proof={proof}", "--allow-header-only"]
+        verifying = ["verify", f"--package={package}", f"--sha256={pin}", f"--proof={proof}", "--allow-authored"]
         run(*proving, refusal="entry-proof-binding-policy")
-        assert run(*proving, "--allow-header-only")["status"] == "produced"
+        assert run(*proving, "--allow-authored")["status"] == "produced"
         assert run(*verifying)["status"] == "accepted"
         witness.write_text(json.dumps({"x": False}))
-        run(*proving, "--allow-header-only")
+        run(*proving, "--allow-authored")
         run(*verifying, refusal="artifact-rejected")
     print("Installed source Entries, bundle and independent proof execution passed")
 

@@ -74,7 +74,7 @@ fn describe_plan(interfaces: &[Interface], report: &mut Json) {
 }
 fn requirements(interface: &Interface) -> Json {
     json!({
-        "allow_header_only": interface.proof().is_some_and(|p| p.suite.is_none()),
+        "allow_authored": interface.proof().is_some_and(|p| p.suite.is_none()),
         "setups": interface.setup_names().collect::<Vec<_>>(),
     })
 }

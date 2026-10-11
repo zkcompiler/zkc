@@ -106,4 +106,4 @@ def test_published_mathematical_walkthrough(marker, toolchain, directory, journa
         candidate = output / "invalid.bin"
         candidate.write_bytes(data)
         journal.json([toolchain.runtime, '--json', "verify-bundle", deployment, expected,
-                      output / "validator-inputs.json", candidate, "--allow-header-only"], refuses=code)
+                      output / "validator-inputs.json", candidate, "--allow-authored"], refuses=code)

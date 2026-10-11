@@ -140,7 +140,7 @@ Math or Local functions with one written result and no data or service inputs.
 Generic parameter sorts, permissions, interfaces, partial static arguments,
 item/result/output types, callback modes, allowances and normalized origin maps must correspond after
 parameter renaming. Each target retains its own independently checked input
-conditions and component identity; the pair asserts no equivalence law.
+conditions and module identity; the pair asserts no equivalence law.
 
 `with` requires the companion from that binding. A local unfiltered declaration
 replaces the entire inherited pair; it does not retain an outer predicate target.
@@ -176,6 +176,10 @@ definition environment, not a descriptor chosen by its importer. Capturing a
 module remains separate from importing it; imports never discover source files.
 
 Module declarations have whole-module scope, including uses in earlier bodies.
+Children inherit their parent's notation. Syntax environments are ordered by
+lexical containment and the original sites of imported notation; name-only
+imports add no notation dependency. A parent importing a child's notation while
+that child inherits the parent environment forms a cycle and refuses.
 A body or nested block first collects its entire declaration prefix, adds its
 explicit descriptors, resolves short bindings and freezes the environment before
 parsing statements. A short binding can therefore refer to an explicit descriptor
@@ -185,7 +189,7 @@ A local binding replaces the inherited callable family for its descriptor key.
 Nested blocks inherit that replacement; unsuitable local targets never trigger
 fallback to outer targets. Prefix and infix families remain separate. Local
 replacement cannot change an inherited shape or repair conflicting module
-imports. Component dictionaries remain explicit.
+imports. Module dictionaries remain explicit.
 
 Reduction bindings follow the same module, reexport and declaration-prefix
 rules. `reduction ∑ = my_sum;` in a block replaces that descriptor's inherited
@@ -230,7 +234,7 @@ Capture validation and lexing precede fixed declaration headers and opaque body
 token ranges. The existing acyclic import/export graph determines immutable
 module notation environments. Bodies then parse in those environments before
 ordinary declaration and callable checks. This applies to helpers, protocols,
-relations, inline relation members and component members. Invalid syntax in an
+relations, inline relation members and module members. Invalid syntax in an
 unused body still rejects the project. Both parser traversals consume work;
 tokens, declarations and operations are counted once.
 
@@ -246,6 +250,12 @@ native source-to-IR comparison. This does not independently verify parsing.
 
 ## Inspection
 
+Spans use a `source` index into the checked source inventory. Logical module
+scopes have a declaration owner and an optional parent; lexical body scopes also
+have a `body` index. Binding and call `receiver` fields identify a statically
+bound module, separately from the source location's `module` name.
+
+
 `inspectNotations(CheckedProject, NotationInspectionOptions, Limits)` is the
 read-only Language inspection surface. `NotationInspectionOptions` has
 `includePrivate` and `includeInstallation`, both false by default. The
@@ -257,7 +267,8 @@ availability.
 
 The `zkc.notations/0` diagnostic JSON contains descriptors, bindings, scopes and
 occurrences. It retains checked-project-local identities, source origins and
-original UTF-8 byte spans. Default public inventory omits private/local data;
+original UTF-8 byte spans. Default public inventory omits private/local data,
+including descriptors confined to private module scopes;
 installation data is independently opt-in. Descriptor views explain spelling,
 fixity, power or delimiter shape; bindings explain targets, statics, visibility
 and definition locations; occurrences explain authored operand order and checked

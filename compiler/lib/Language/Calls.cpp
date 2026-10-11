@@ -147,11 +147,11 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   }
   const auto &staticArgs = inference->arguments.at(id);
   auto subst = checker.types.substitution(callee, staticArgs);
-  if (target.component && callee.parent)
+  if (target.module && callee.parent)
     subst.emplace(
         "self:" +
             checker.output.declarations[callee.parent->index].qualifiedName,
-        *target.component);
+        *target.module);
   const auto &binding = inference->inputs.at(id);
   std::vector<ValueId> args(callee.inputs.size());
   std::vector<ValueId> authoredOperands;
@@ -339,8 +339,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
           for (const auto &argument : statics)
             if (!checker.types.chargeType(argument, expr.span))
               return false;
-          if (selected->component &&
-              !checker.types.chargeType(*selected->component, expr.span))
+          if (selected->module &&
+              !checker.types.chargeType(*selected->module, expr.span))
             return false;
           source.domainCalls.emplace(expression,
                                      DomainCallSource{*selected, statics});
@@ -450,7 +450,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   auto result = emitCall(HelperCall{callee.id,
                                     std::move(args),
                                     staticArgs,
-                                    target.component,
+                                    target.module,
                                     {},
                                     scopedArgs,
                                     domainArgs},

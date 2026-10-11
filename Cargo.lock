@@ -1055,7 +1055,7 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a1a49f4d9c8b8cbdab61e25d9de1b78b3c8347dd2fb88b11d990b3efa8cdd3a"
 dependencies = [
- "p3-challenger",
+ "p3-challenger 0.4.3",
  "p3-field 0.4.3",
  "p3-mds 0.4.3",
  "p3-monty-31 0.4.3",
@@ -1075,6 +1075,20 @@ dependencies = [
  "p3-monty-31 0.4.3",
  "p3-symmetric 0.4.3",
  "p3-util 0.4.3",
+ "tracing",
+]
+
+[[package]]
+name = "p3-challenger"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84d5d5e1ecf2c80b09b48ce870e8abd08b643454101c5dc9d0fd71bfbd78224d"
+dependencies = [
+ "p3-field 0.6.3",
+ "p3-maybe-rayon 0.6.3",
+ "p3-monty-31 0.6.3",
+ "p3-symmetric 0.6.3",
+ "p3-util 0.6.3",
  "tracing",
 ]
 
@@ -1105,6 +1119,21 @@ dependencies = [
  "p3-maybe-rayon 0.4.3",
  "p3-util 0.4.3",
  "spin 0.10.1",
+ "tracing",
+]
+
+[[package]]
+name = "p3-dft"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4321a952da2721ecd85ca593ea189798dfb4e439a2cc1378ce1442091880f173"
+dependencies = [
+ "itertools 0.15.0",
+ "p3-field 0.6.3",
+ "p3-matrix 0.6.3",
+ "p3-maybe-rayon 0.6.3",
+ "p3-util 0.6.3",
+ "spin 0.12.3",
  "tracing",
 ]
 
@@ -1141,6 +1170,22 @@ dependencies = [
 
 [[package]]
 name = "p3-field"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53db75d38e04fc255826f388eca9d05976733dc9754aa3db411bc9ea1a37c1a0"
+dependencies = [
+ "itertools 0.15.0",
+ "num-bigint 0.5.1",
+ "p3-maybe-rayon 0.6.3",
+ "p3-util 0.6.3",
+ "paste",
+ "rand 0.10.3",
+ "serde",
+ "tracing",
+]
+
+[[package]]
+name = "p3-field"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7cc6ecaf9cd198bb7d3b07eedf0c1524ca8fff07cffe8928785e302f45156cf"
@@ -1168,6 +1213,22 @@ dependencies = [
 
 [[package]]
 name = "p3-koala-bear"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70cbc82137c157673e2d33d95f936a94ce237a790d46e0a2b3165dccfc385dd6"
+dependencies = [
+ "p3-challenger 0.6.3",
+ "p3-field 0.6.3",
+ "p3-mds 0.6.3",
+ "p3-monty-31 0.6.3",
+ "p3-poseidon1 0.6.3",
+ "p3-poseidon2 0.6.3",
+ "p3-symmetric 0.6.3",
+ "rand 0.10.3",
+]
+
+[[package]]
+name = "p3-koala-bear"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3e053df3a9e96ccdf9fd25b90e6109b1e08c6f61f285c6b2f360d7099806785"
@@ -1175,7 +1236,7 @@ dependencies = [
  "p3-field 0.8.0",
  "p3-mds 0.8.0",
  "p3-monty-31 0.8.0",
- "p3-poseidon1",
+ "p3-poseidon1 0.8.0",
  "p3-poseidon2 0.8.0",
  "p3-symmetric 0.8.0",
  "rand 0.10.3",
@@ -1192,6 +1253,21 @@ dependencies = [
  "p3-maybe-rayon 0.4.3",
  "p3-util 0.4.3",
  "rand 0.9.5",
+ "serde",
+ "tracing",
+]
+
+[[package]]
+name = "p3-matrix"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "473eb920c446a6f4536e0d3528fbdca2a23c0e24e1d0d7767452e6d385dd335c"
+dependencies = [
+ "itertools 0.15.0",
+ "p3-field 0.6.3",
+ "p3-maybe-rayon 0.6.3",
+ "p3-util 0.6.3",
+ "rand 0.10.3",
  "serde",
  "tracing",
 ]
@@ -1219,6 +1295,12 @@ checksum = "54afab3883d8a14676b492709d6c4e9fa535c36718b737db0817aacfaaaa11f6"
 
 [[package]]
 name = "p3-maybe-rayon"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6fddfd435f96394769414cf5590b77058aa506659bf20d6592e9d1989e04440"
+
+[[package]]
+name = "p3-maybe-rayon"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe1d83295d958b3d098e11b7868ac35c866c9c0432ce5266b90f7844dad513de"
@@ -1234,6 +1316,19 @@ dependencies = [
  "p3-symmetric 0.4.3",
  "p3-util 0.4.3",
  "rand 0.9.5",
+]
+
+[[package]]
+name = "p3-mds"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "551ba0ab2cccd89f85a99450224898aff224e323bbf61f777ba6344f0896ef10"
+dependencies = [
+ "p3-dft 0.6.3",
+ "p3-field 0.6.3",
+ "p3-symmetric 0.6.3",
+ "p3-util 0.6.3",
+ "rand 0.10.3",
 ]
 
 [[package]]
@@ -1294,6 +1389,30 @@ dependencies = [
 
 [[package]]
 name = "p3-monty-31"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "871f635f7340cd0868b17e43e0c98fefdafdaed90469d0725caf6d8372a2a47c"
+dependencies = [
+ "itertools 0.15.0",
+ "num-bigint 0.5.1",
+ "p3-dft 0.6.3",
+ "p3-field 0.6.3",
+ "p3-matrix 0.6.3",
+ "p3-maybe-rayon 0.6.3",
+ "p3-mds 0.6.3",
+ "p3-poseidon1 0.6.3",
+ "p3-poseidon2 0.6.3",
+ "p3-symmetric 0.6.3",
+ "p3-util 0.6.3",
+ "paste",
+ "rand 0.10.3",
+ "serde",
+ "spin 0.12.3",
+ "tracing",
+]
+
+[[package]]
+name = "p3-monty-31"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "636c04267f40c93213d19ead4c828f3ac3e8a452a0f6fb0a352db605e8d838b1"
@@ -1305,7 +1424,7 @@ dependencies = [
  "p3-matrix 0.8.0",
  "p3-maybe-rayon 0.8.0",
  "p3-mds 0.8.0",
- "p3-poseidon1",
+ "p3-poseidon1 0.8.0",
  "p3-poseidon2 0.8.0",
  "p3-symmetric 0.8.0",
  "p3-util 0.8.0",
@@ -1313,6 +1432,18 @@ dependencies = [
  "serde",
  "spin 0.12.3",
  "tracing",
+]
+
+[[package]]
+name = "p3-poseidon1"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d0d304e9a1f29c0d66534aa84e69528e2118351fdce08dcf5898af4e0fecc32"
+dependencies = [
+ "p3-field 0.6.3",
+ "p3-mds 0.6.3",
+ "p3-symmetric 0.6.3",
+ "rand 0.10.3",
 ]
 
 [[package]]
@@ -1342,6 +1473,19 @@ dependencies = [
 
 [[package]]
 name = "p3-poseidon2"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43eb8a73a26d14becaed1c67c3e8a047e4311d7909b402383c82ca9643ba17c6"
+dependencies = [
+ "p3-field 0.6.3",
+ "p3-mds 0.6.3",
+ "p3-symmetric 0.6.3",
+ "p3-util 0.6.3",
+ "rand 0.10.3",
+]
+
+[[package]]
+name = "p3-poseidon2"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3950061c69b220c60f76c72e6de54be97e2e5dc169a5374e9b57d6118114c8cf"
@@ -1367,6 +1511,18 @@ dependencies = [
 
 [[package]]
 name = "p3-symmetric"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2015ea80cad969b6aabf27a04884286fe1354393b166d968ee0d80a95126b2a4"
+dependencies = [
+ "itertools 0.15.0",
+ "p3-field 0.6.3",
+ "p3-util 0.6.3",
+ "serde",
+]
+
+[[package]]
+name = "p3-symmetric"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb7b7cc37b4f9592c57bfceabc737de757267b23ae956b2e648d24461f93fb42"
@@ -1386,6 +1542,15 @@ checksum = "911154accf66034b0eec4452956c088f92a200b37a8225c1caed74cfbd38cc8d"
 dependencies = [
  "serde",
  "transpose",
+]
+
+[[package]]
+name = "p3-util"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c5466fc40e6df89d3b291a2eff16b33e68e8571207790370137ec18090aadab"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -1726,6 +1891,16 @@ dependencies = [
 
 [[package]]
 name = "sha3"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be176f1a57ce4e3d31c1a166222d9768de5954f811601fb7ca06fc8203905ce1"
+dependencies = [
+ "digest 0.11.3",
+ "keccak 0.2.2",
+]
+
+[[package]]
+name = "sha3"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc9bad02c26382724b2d2692c6f179285e4b54eeecd7968f52a50059c3c11759"
@@ -1798,6 +1973,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a0219bd7d979d58245a4f41f695e1ac9f8befdffadd7f61f1bae9e39abc6620"
 dependencies = [
  "zeroize",
+]
+
+[[package]]
+name = "spongefish"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9500412294eeadb2c7eb513714b37c79670b55ee718f84408bb68d7b3e0c69aa"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "digest 0.11.3",
+ "p3-koala-bear 0.6.3",
+ "rand 0.8.8",
+ "sha2 0.11.0",
+ "sha3 0.11.0",
 ]
 
 [[package]]
@@ -2285,13 +2476,13 @@ dependencies = [
  "curve25519-dalek",
  "merlin",
  "p3-baby-bear",
- "p3-challenger",
+ "p3-challenger 0.4.3",
  "p3-commit",
  "p3-dft 0.8.0",
  "p3-field 0.4.3",
  "p3-field 0.8.0",
  "p3-keccak",
- "p3-koala-bear",
+ "p3-koala-bear 0.8.0",
  "p3-matrix 0.8.0",
  "p3-merkle-tree",
  "p3-symmetric 0.4.3",
@@ -2300,8 +2491,9 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
- "sha3",
- "spongefish",
+ "sha3 0.12.0",
+ "shake",
+ "spongefish 0.8.0",
  "zkc-arkworks",
  "zkc-runtime",
  "zkc-test-support",
@@ -2331,14 +2523,15 @@ dependencies = [
  "merlin",
  "num-bigint 0.5.1",
  "p3-baby-bear",
- "p3-challenger",
+ "p3-challenger 0.4.3",
  "p3-field 0.4.3",
  "p3-field 0.8.0",
  "serde",
  "serde_json",
  "sha2 0.11.0",
- "sha3",
- "spongefish",
+ "sha3 0.12.0",
+ "spongefish 0.7.4",
+ "spongefish 0.8.0",
  "zkc-arkworks",
  "zkc-backends",
  "zkc-runtime",

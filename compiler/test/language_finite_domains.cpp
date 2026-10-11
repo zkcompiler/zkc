@@ -113,7 +113,7 @@ fn work(xs:Vector<Fr>)->Fr{return sum(indices(xs),fn(i)=>xs[i]);}
                     operation.binding->family[0] = "forged";
                     ++operation.span.begin;
                   } else if (mutation == 4)
-                    ++operation.span.module.index;
+                    ++operation.span.source.index;
                   else if (mutation == 5 || mutation == 8) {
                     auto result = operation.results.front();
                     for (auto it = body.expressionValues.begin();
@@ -542,27 +542,27 @@ pub math fn read(xs:Inputs,i:index,j:index)->bool
       refuses(check("domain Fr=field(\"koala-bear\");" + source.str()),
               "source.data-bound");
     });
-  cases.run("component data conditions may reorder or weaken", [&] {
+  cases.run("module data conditions may reorder or weaken", [&] {
     take(check(R"(
 interface Read<F:Field> {
  math fn read(xs:Vector<F>,ys:Vector<F>,i:index)->F
   where in_bounds(i,xs),equal_extent(xs,ys);
 }
-component Reader<F:Field>:Read<F> {
+module Reader<F:Field>:Read<F> {
  math fn read(left:Vector<F>,right:Vector<F>,j:index)->F
   where equal_extent(left,right),in_bounds(j,left) {
   return intrinsic<Vector<F>>("container.at",right,j);
  }
 }
-component Constant<F:Field>:Read<F> {
+module Constant<F:Field>:Read<F> {
  math fn read(xs:Vector<F>,ys:Vector<F>,i:index)->F {return 0;}
 }
 )"));
   });
-  cases.run("component cannot strengthen data conditions", [&] {
+  cases.run("module cannot strengthen data conditions", [&] {
     refuses(check(R"(
 interface Read<F:Field> {math fn read(xs:Vector<F>,i:index)->F;}
-component Reader<F:Field>:Read<F> {
+module Reader<F:Field>:Read<F> {
  math fn read(xs:Vector<F>,i:index)->F where in_bounds(i,xs){return 0;}
 }
 )"),
@@ -887,10 +887,10 @@ struct Row{pub value:index,pub valid:bool}
 domain fn rows(xs:Sequence<Row>)->domain<Row>=domain("elements");
 )"));
   });
-  cases.run("component factory conformance", [] {
+  cases.run("module factory conformance", [] {
     take(check(R"(
 interface Domain<F:Field>{domain fn rows(xs:Vector<F>)->domain<F>;}
-component All<F:Field>:Domain<F>{domain fn rows(xs:Vector<F>)->domain<F>=domain("elements");}
+module All<F:Field>:Domain<F>{domain fn rows(xs:Vector<F>)->domain<F>=domain("elements");}
 )"));
   });
   cases.run("ordinary helpers retain domain aliases and forwarding", [] {
@@ -910,7 +910,7 @@ fn example<F:Field>(xs:Vector<F>,fallback:F)->F {
     require(call.domainArguments == std::vector<unsigned>{0},
             "domain call lost recipe identity");
   });
-  cases.run("abstract component factory survives typed composition", [] {
+  cases.run("abstract module factory survives typed composition", [] {
     auto project = take(check(R"(
 interface Domain<F:Field>{domain fn rows(xs:Vector<F>)->domain<F>;}
 domain fn selected<F:Field,C:Domain<F>>(xs:Vector<F>)->domain<(F,F)> {
@@ -920,7 +920,7 @@ domain fn selected<F:Field,C:Domain<F>>(xs:Vector<F>)->domain<(F,F)> {
     const auto &definition =
         *declarationNamed(project, "m::selected").domainDefinition;
     require(definition.bindings[0].kind == DomainBinding::Kind::Application &&
-                definition.bindings[0].factory->component.has_value(),
+                definition.bindings[0].factory->module.has_value(),
             "abstract factory selection was not retained");
   });
   cases.run("closure preserves factory admission and operand identity", [] {
@@ -959,11 +959,11 @@ fn example(a:Vector<Fr>,b:Vector<Fr>)->bool {
     require(selected->shape->identity != shared->shape->identity,
             "specialization identity erased alias relationships");
   });
-  cases.run("closed abstract factory selects component recipe", [] {
+  cases.run("closed abstract factory selects module recipe", [] {
     auto project = take(check(R"(
 domain Fr=field("koala-bear");
 interface Domain<F:Field>{domain fn rows(xs:Vector<F>)->domain<F>;}
-component All<F:Field>:Domain<F>{domain fn rows(xs:Vector<F>)->domain<F>=domain("elements");}
+module All<F:Field>:Domain<F>{domain fn rows(xs:Vector<F>)->domain<F>=domain("elements");}
 domain fn selected<F:Field,C:Domain<F>>(xs:Vector<F>)->domain<F>{return C::rows(xs);}
 fn example(xs:Vector<Fr>)->bool {let rows=selected<Fr,All<Fr>>(xs);return true;}
 )"));
@@ -979,7 +979,7 @@ fn example(xs:Vector<Fr>)->bool {let rows=selected<Fr,All<Fr>>(xs);return true;}
             types.diagnostic ? types.diagnostic->message : "closure failed");
     require(selected->shape->nodes.size() == 1 &&
                 selected->shape->nodes[0].kind == DomainBinding::Kind::Elements,
-            "component factory did not close to its selected constructor");
+            "module factory did not close to its selected constructor");
   });
   cases.run("named factory arguments preserve child admission order", [] {
     auto project = take(check(R"(

@@ -196,6 +196,7 @@ struct Statement {
   std::optional<std::vector<std::string>> roles;
   std::optional<std::pair<std::string, std::string>> exchange;
   std::optional<std::string> owner;
+  std::optional<std::string> site;
   uint32_t expression;
   Span span;
 };
@@ -252,6 +253,7 @@ struct SyntaxProofEntry {
   std::optional<SyntaxName> target, service;
   ProofEntry::Construction construction = ProofEntry::Construction::Authored;
   std::string suite;
+  std::optional<SyntaxType> selectedConstruction;
   Span span;
 };
 struct Binding {
@@ -270,6 +272,37 @@ struct DeferredBody {
   size_t begin, end;
   unsigned depth;
   bool protocol;
+};
+struct SyntaxConstructionRule {
+  ConstructionRule::Kind kind;
+  std::vector<SyntaxName> path;
+  unsigned member;
+  std::vector<SyntaxName> parameters;
+  Span span;
+};
+struct SyntaxConstructionApplication {
+  SyntaxType construction;
+  std::vector<SyntaxName> path;
+  Span span;
+};
+struct SyntaxConstruction {
+  ConstructionDefinition::Base base = ConstructionDefinition::Base::None;
+  std::optional<SyntaxType> parent, provider;
+  std::optional<SyntaxType> codec;
+  std::vector<SyntaxName> layout;
+  std::vector<SyntaxName> services;
+  std::string suite;
+  std::vector<SyntaxConstructionRule> rules;
+  std::vector<SyntaxConstructionApplication> applications;
+};
+struct Import {
+  std::string module;
+  std::optional<DeclarationId> target;
+  std::vector<std::string> names;
+  Span span;
+  std::optional<std::string> alias;
+  std::vector<std::string> operators, notations, reductions;
+  bool isPublic = false, indexing = false;
 };
 struct SyntaxDeclaration {
   Declaration::Kind kind;
@@ -308,6 +341,9 @@ struct SyntaxDeclaration {
   std::vector<SyntaxPort> fields;
   std::vector<SyntaxAlternative> alternatives;
   std::vector<SyntaxDeclaration> members;
+  std::vector<Import> imports;
+  std::vector<SyntaxOperator> operators;
+  bool externalModule = false;
   bool abstract = false;
   std::string associatedSort;
   std::optional<SyntaxRelation> relation;
@@ -315,6 +351,9 @@ struct SyntaxDeclaration {
   std::optional<Span> specificationBlock;
   std::vector<SyntaxClause> specifications;
   std::optional<SyntaxProofEntry> proof;
+  std::optional<protocol::ProofFormat> proofFormat;
+  std::optional<SyntaxConstruction> construction;
+  bool constructionHandler = false;
   std::vector<SyntaxSetupSlot> setups;
   bool entryBlock = false;
   EntryKind entryKind = EntryKind::Run;
@@ -330,33 +369,24 @@ staticSubscriptIndex(const SyntaxDeclaration &syntax, const Expression &expr) {
     return {};
   return index.text;
 }
-struct Import {
-  std::string module;
-  std::vector<std::string> names;
-  Span span;
-  std::optional<std::string> alias;
-  std::vector<std::string> operators, notations, reductions;
-  bool isPublic = false, indexing = false;
-};
+
 std::string operatorBindingKey(const OperatorBinding &,
                                llvm::ArrayRef<Declaration>);
 llvm::StringRef operatorSymbol(const Expression &);
-struct SyntaxModule {
-  ModuleId id;
-  std::vector<Import> imports;
-  std::vector<SyntaxDeclaration> declarations;
-  std::vector<SyntaxOperator> operators;
+
+llvm::Error lex(const SourceBuffer &, SourceId, Work &, std::vector<Token> &);
+llvm::Expected<SyntaxDeclaration> parse(const SourceBuffer &, SourceId,
+                                        llvm::ArrayRef<Token>, Work &);
+struct BodyParseScope {
+  SyntaxDeclaration *module;
+  std::shared_ptr<const NotationEnvironment> environment;
 };
-llvm::Error lex(const SourceBuffer &, ModuleId, Work &, std::vector<Token> &);
-llvm::Expected<SyntaxModule> parse(const SourceBuffer &, ModuleId,
-                                   llvm::ArrayRef<Token>, Work &);
-llvm::Error parseBodies(const SourceBuffer &, SyntaxModule &,
-                        llvm::ArrayRef<Token>,
-                        std::shared_ptr<const NotationEnvironment>, Work &);
-NotationEnvironment fixedNotationEnvironment(ModuleId);
+llvm::Error parseBodies(const SourceBuffer &, SourceId, llvm::ArrayRef<Token>,
+                        llvm::ArrayRef<BodyParseScope>, Work &);
+NotationEnvironment fixedNotationEnvironment(SourceId);
 llvm::Error resolveNotationSyntax(std::vector<SyntaxOperator> &,
                                   NotationEnvironment &, Work &);
-llvm::Error check(std::vector<SyntaxModule>, CheckedStorage &, Work &);
+llvm::Error check(std::vector<SyntaxDeclaration>, CheckedStorage &, Work &);
 llvm::Error checkSetups(const ClosedEntry &, Layouts &, Work &);
 llvm::Error checkCapabilityInstallation();
 } // namespace zkc::language::detail

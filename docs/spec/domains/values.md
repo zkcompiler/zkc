@@ -145,6 +145,24 @@ The independent Lean binding consumer admits the operation and type. Its
 current executable value reference explicitly refuses target decoding with
 `reference-pairing-target-unsupported`; it provides no native GT adequacy proof.
 
+## Byte strings
+
+`bytes` is an immutable byte string, exposed as `zkc::bytes::Bytes`. It has Copy,
+Drop, Share and Wire permissions. The native representation is `native.bytes/0`;
+the canonical MLIR type is `!data.bytes`. Its collection interface exposes
+unsigned byte elements and one runtime extent. This grants neither numeric
+interpretation nor finite-operation admission. Bytes do not imply an integer,
+field or point encoding.
+
+`zkc::bytes` exports `empty`, `append`, `concat`, `slice`, `at`, `length` and
+`equal`. `append` checks that its index operand is in 0..255. `slice` takes a
+start and length; the complete interval must be in bounds, including an empty
+slice. No operation truncates, wraps or pads. Output allocation and byte limits
+are checked before copying. Byte storage is charged by its byte length, not by
+the numerical-element limit. Readable input/output uses JSON arrays of integers
+in 0..255. [Native message framing](../formats/messages.md) remains separate
+from the byte payload.
+
 ## Checked indices
 
 The installed `index` value is a natural number strictly below `2^64`.

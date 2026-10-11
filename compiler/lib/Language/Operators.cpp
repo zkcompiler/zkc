@@ -24,8 +24,7 @@ std::string operatorBindingKey(const OperatorBinding &binding,
     frame(key, std::to_string(notation.arity));
   }
   frame(key, declarations[binding.target.declaration.index].qualifiedName);
-  frame(key, binding.target.component ? typeIdentity(*binding.target.component)
-                                      : "");
+  frame(key, binding.target.module ? typeIdentity(*binding.target.module) : "");
   for (const auto &argument : binding.arguments)
     frame(key, argument ? typeIdentity(*argument) : "");
   if (binding.notation &&
@@ -35,8 +34,8 @@ std::string operatorBindingKey(const OperatorBinding &binding,
     frame(
         key,
         declarations[binding.filtered->target.declaration.index].qualifiedName);
-    frame(key, binding.filtered->target.component
-                   ? typeIdentity(*binding.filtered->target.component)
+    frame(key, binding.filtered->target.module
+                   ? typeIdentity(*binding.filtered->target.module)
                    : "");
     for (const auto &argument : binding.filtered->arguments)
       frame(key, argument ? typeIdentity(*argument) : "");
@@ -102,18 +101,13 @@ Checker::operatorBinding(const Declaration &context,
                source.span, {callee.span});
     return {};
   }
-  if (source.isPublic) {
-    for (auto id = std::optional(callee.id); id;
-         id = output.declarations[id->index].parent)
-      if (!output.declarations[id->index].isPublic) {
-        types.fail("source.private",
-                   "public operator exposes a private callable", source.span,
-                   {output.declarations[id->index].span});
-        return {};
-      }
+  if (source.isPublic && !callee.isPublic) {
+    types.fail("source.private", "public notation requires a public callable",
+               source.span, {callee.span});
+    return {};
   }
   const unsigned inherited =
-      target->component && callee.parent
+      target->module && callee.parent
           ? output.declarations[callee.parent->index].parameters.size()
           : 0;
   auto positions =
@@ -142,6 +136,19 @@ Checker::operatorBinding(const Declaration &context,
     equations.equal(signature.parameters.at(callee.parameters[position].atom),
                     equations.known(*value, argument.span), argument.span);
   }
+  auto enclosing = enclosingParameters(context, callee, source.span);
+  if (!enclosing)
+    return {};
+  std::vector<bool> written(callee.parameters.size(), false);
+  for (auto position : *positions)
+    written[inherited + position] = true;
+  for (unsigned i = inherited; i < callee.parameters.size(); ++i)
+    if ((*enclosing)[i] && !written[i]) {
+      auto value = parameterType(callee.parameters[i]);
+      result.arguments[i] = value;
+      equations.equal(signature.parameters.at(callee.parameters[i].atom),
+                      equations.known(value, source.span), source.span);
+    }
   equations.solve(source.span);
   (void)callableArguments(equations, types, callee, signature, source.span);
   if (types.diagnostic)
@@ -218,16 +225,14 @@ Checker::operatorBinding(const Declaration &context,
 }
 
 bool Checker::prepareOperators() {
-  for (const auto &module : syntax) {
-    Declaration context{};
-    context.module = module.id;
-    context.span = Span{module.id, 0, 0};
+  for (auto id : moduleIds) {
+    const auto &context = output.declarations[id.index];
+    const auto &module = *sources[id.index];
     for (unsigned i = 0; i < module.operators.size(); ++i) {
       auto binding = operatorBinding(context, module.operators[i]);
       if (!binding)
         return false;
-      moduleOperators.emplace(OperatorSite{module.id.index, i},
-                              std::move(*binding));
+      moduleOperators.emplace(OperatorSite{id.index, i}, std::move(*binding));
     }
   }
   return true;

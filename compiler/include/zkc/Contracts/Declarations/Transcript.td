@@ -34,3 +34,40 @@ def OpIndexedTranscriptObserveData : ZKC_Operation<"transcript.native.indexed.ob
   let parameters = NativeOrigin;
   let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];
 }
+
+// Source methods consume an existing managed state. Labels are explicit byte
+// values, without a generated event origin or implicit occurrence coordinates.
+def SourceTranscript : ZKC_Root<"T", TranscriptDomain>;
+def SourceChallengeField : ZKC_Project<SourceTranscript, TranscriptChallengeField>;
+def SourceFieldSample : ZKC_Sampling<TranscriptProvider, FieldSample> {
+  let valueOutput = 1;
+  let stateOutput = 0;
+}
+def SourceIndexSample : ZKC_Sampling<TranscriptProvider, IndexSample, 2> {
+  let valueOutput = 1;
+  let stateOutput = 0;
+}
+def OpTranscriptObserve : ZKC_Operation<"transcript.observe", [SourceTranscript],
+    [ZKC_Apply<TypeTranscript, [SourceTranscript]>, ZKC_Apply<TypeBytes, []>, ZKC_Apply<TypeBytes, []>],
+    [ZKC_Apply<TypeTranscript, [SourceTranscript]>],
+    [ZKC_Holds<CapabilityTranscript, [SourceTranscript]>]> {
+  int ordinal = 176;
+  let facets = [ZKC_Observation<0, 2, 0>, ZKC_History<0, 0>, ManagedHistory];
+}
+def OpTranscriptChallenge : ZKC_Operation<"transcript.challenge", [SourceTranscript, SourceChallengeField],
+    [ZKC_Apply<TypeTranscript, [SourceTranscript]>, ZKC_Apply<TypeBytes, []>],
+    [ZKC_Apply<TypeTranscript, [SourceTranscript]>, ZKC_Apply<TypeField, [SourceChallengeField]>],
+    [ZKC_Holds<CapabilityFieldTranscript, [SourceTranscript]>]> {
+  int ordinal = 177;
+  let facets = [SourceFieldSample, ZKC_History<0, 0>, ManagedHistory];
+}
+def OpTranscriptIndex : ZKC_Operation<"transcript.index", [SourceTranscript],
+    [ZKC_Apply<TypeTranscript, [SourceTranscript]>, ZKC_Apply<TypeBytes, []>, ZKC_Apply<TypeIndex, []>],
+    [ZKC_Apply<TypeTranscript, [SourceTranscript]>, ZKC_Apply<TypeIndex, []>],
+    [ZKC_Holds<CapabilityIndexTranscript, [SourceTranscript]>]> {
+  int ordinal = 178;
+  let facets = [SourceIndexSample, ZKC_History<0, 0>, ManagedHistory];
+}
+def ExportTranscriptObserve : ZKC_OperationExport<"zkc::transcript", "observe", OpTranscriptObserve, ["state", "label", "value"]>;
+def ExportTranscriptChallenge : ZKC_OperationExport<"zkc::transcript", "challenge", OpTranscriptChallenge, ["state", "label"]>;
+def ExportTranscriptIndex : ZKC_OperationExport<"zkc::transcript", "challenge_index", OpTranscriptIndex, ["state", "label", "bound"]>;

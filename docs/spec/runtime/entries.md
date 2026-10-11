@@ -213,11 +213,13 @@ in the caller's service map. Products and nominal alternatives use the same
 logical schema and common admission as run calls.
 
 `ProofOptions::binding` defaults to `TranscriptRequired`. Authored construction
-requires explicit `AllowHeaderOnly`; otherwise admission returns
+requires explicit `AllowAuthored`; otherwise admission returns
 `entry-proof-binding-policy`. `binding_scope()` and each `ProofReport` distinguish
-`Transcript` from `HeaderOnly`. This identifies the selected binding mechanism,
+`Transcript`, `HeaderOnly` (native-framed authored code), and `Authored` (raw
+bytes with no Host header). This identifies the selected binding mechanism,
 not a cryptographic security judgment. The authored header checks consistency;
-it does not by itself prevent rewrapping a proof under another context.
+it does not by itself prevent rewrapping a proof under another context. Raw
+authored code must bind its own application statement and context as required.
 
 A successful `ProofReport` reconstructs that participant's named original
 outputs, including empty products. Rejection, stop, refusal or cleanup failure
@@ -442,7 +444,7 @@ guessed. Verification never selects witness files. Template publication never
 replaces an existing file, including a file created after preflight. Multi-file
 publication reports exactly which files succeeded if a later publication fails.
 The `inputs init` report pairs generated `commands` with `requirements`;
-`prepare`, `new` and `init` report requirements per Entry. `allow_header_only`
+`prepare`, `new` and `init` report requirements per Entry. `allow_authored`
 indicates explicit policy acknowledgement, and `setups` lists slots requiring
 independent `--setups` authority and `--key` material. Neither is synthesized.
 

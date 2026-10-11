@@ -5,6 +5,8 @@
 using namespace mlir;
 namespace zkc::protocol::type_adapters {
 namespace {
+using Shake128Adapter = NullaryAdapter<zkc::crypto::Shake128StateType>;
+using BytesAdapter = NullaryAdapter<zkc::data::BytesType>;
 Type decodeSequence(MLIRContext *context, const BoundType &type) {
   if (type.arguments.size() != 1 ||
       type.arguments[0].kind != TypeArgument::Kind::Type)

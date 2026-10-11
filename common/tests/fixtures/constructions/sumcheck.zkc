@@ -1,0 +1,34 @@
+module sample;
+use sumcheck::{Sumcheck};
+use zkc::shake128 as shake;
+use spongefish as transcript;
+use zkc::vector::{Vector};
+domain F=field("bls12-381.fr");
+interface TranscriptState {
+  type State:Copy+Drop;
+  fn initialize()->State effects(stop, opaque);
+  fn observe(t:State,value:F)->State effects(stop, opaque);
+  fn draw(t:State)->(State,F) effects(stop, opaque);
+}
+module Provider:TranscriptState {
+  type State:Copy+Drop=builtin("shake128_state");
+  fn initialize()->State{return State(shake::init());}
+  fn observe(t:State,value:F)->State{return State(transcript::observe_scalar(unpack(t),value));}
+  fn draw(t:State)->(State,F){
+    let (t,value)=transcript::challenge<F>(unpack(t));
+    return (State(t),value);
+  }
+}
+construction Derived for Sumcheck<F,4> {
+  transcript Provider;replace challenges;
+  on start(t){return t;}
+  on message round(t,value){
+    let t=Provider::observe(t,value.0);
+    return Provider::observe(t,value.1);
+  }
+  on query challenge(t){return Provider::draw(t);}
+  on message delivery(t,value){return t;}
+}
+proof Demo=Sumcheck<F,4>{
+  prover P;verifier V;public{values,claim,rounds};accept accepted;construction Derived;
+}

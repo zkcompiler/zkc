@@ -179,7 +179,7 @@ pub(super) fn run(directory: &Path) {
     );
     let publication = package(directory, "Prove");
     let options = ProofOptions {
-        binding: BindingPolicy::AllowHeaderOnly,
+        binding: BindingPolicy::AllowAuthored,
         ..Default::default()
     };
     let prover = ProofEntry::admit(publication.clone(), options, pins()).unwrap();

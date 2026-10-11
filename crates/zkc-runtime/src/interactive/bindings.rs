@@ -200,7 +200,10 @@ pub(crate) fn valid_static_argument(name: &str) -> bool {
     else {
         return false;
     };
-    if matches!(body, "bool" | "index" | "indices") {
+    if matches!(
+        body,
+        "bool" | "index" | "indices" | "bytes" | "shake128_state"
+    ) {
         return true;
     }
     let Some((kind, nominal)) = body.split_once('.') else {
@@ -247,7 +250,9 @@ impl LogicalType {
             | Type::FixedVector
             | Type::ResourceUnit
             | Type::Variant => false,
-            Type::Bool | Type::Index | Type::Indices => identity == None,
+            Type::Bool | Type::Index | Type::Indices | Type::Bytes | Type::Shake128State => {
+                identity == None
+            }
             Type::Field | Type::Matrix | Type::Vector | Type::Polynomial | Type::Round => {
                 matches!(
                     identity,
@@ -320,7 +325,10 @@ impl LogicalType {
         if let Some(domain) = self.resource_domain {
             return format!("resource_unit:{}", domain.name());
         }
-        if matches!(self.kind, Type::Bool | Type::Index | Type::Indices) {
+        if matches!(
+            self.kind,
+            Type::Bool | Type::Index | Type::Indices | Type::Bytes | Type::Shake128State
+        ) {
             return self.kind.name().into();
         }
         format!("{}:{}", self.kind.name(), self.identity.name())
@@ -352,23 +360,22 @@ impl LogicalType {
                 .is_some_and(|(f, n)| f == Identity::Bls12381Fr && n <= 1_048_576)
             || matches!(
                 (self.kind(), self.identity()),
-                (Type::Bool | Type::Index | Type::Indices, Identity::None)
-                    | (
-                        Type::Field | Type::Vector | Type::Matrix,
-                        Identity::Bn254Fr
-                            | Identity::Ristretto255Scalar
-                            | Identity::KoalaBear
-                            | Identity::KoalaBearExt8
-                    )
-                    | (
-                        Type::Group | Type::Groups,
-                        Identity::Bn254G1 | Identity::Bn254G2 | Identity::Ristretto255Group
-                    )
-                    | (
-                        Type::Field | Type::Vector | Type::Matrix,
-                        Identity::Bls12381Fr
-                    )
-                    | (Type::Group | Type::Groups, Identity::Bls12381G1)
+                (
+                    Type::Bool | Type::Index | Type::Indices | Type::Bytes,
+                    Identity::None
+                ) | (
+                    Type::Field | Type::Vector | Type::Matrix,
+                    Identity::Bn254Fr
+                        | Identity::Ristretto255Scalar
+                        | Identity::KoalaBear
+                        | Identity::KoalaBearExt8
+                ) | (
+                    Type::Group | Type::Groups,
+                    Identity::Bn254G1 | Identity::Bn254G2 | Identity::Ristretto255Group
+                ) | (
+                    Type::Field | Type::Vector | Type::Matrix,
+                    Identity::Bls12381Fr
+                ) | (Type::Group | Type::Groups, Identity::Bls12381G1)
                     | (
                         Type::Commitment | Type::Proof,
                         Identity::MultilinearKzgBls12381
@@ -467,7 +474,11 @@ impl LogicalType {
             });
         }
         let (kind, identity) = spelling.split_once(':').unwrap_or((spelling, ""));
-        if matches!(kind, "bool" | "index" | "indices") != identity.is_empty() {
+        if matches!(
+            kind,
+            "bool" | "index" | "indices" | "bytes" | "shake128_state"
+        ) != identity.is_empty()
+        {
             return Err(error("explicit nominal identity required"));
         }
         // The current kind grammar requires complete nominal identity.
@@ -533,6 +544,8 @@ pub enum Representation {
     Bool,
     Index,
     Indices,
+    Bytes,
+    Shake128State,
     Fr,
     TableLsb,
     TableMsb,
@@ -591,6 +604,8 @@ impl Representation {
             Self::Bool => "native.bool/0",
             Self::Index => "native.index/0",
             Self::Indices => "native.indices/0",
+            Self::Bytes => "native.bytes/0",
+            Self::Shake128State => "native.shake128/0",
             Self::Fr => "arkworks.fr/0",
             Self::TableLsb => "arkworks.mle-lsb/0",
             Self::TableMsb => "arkworks.mle-msb/0",
@@ -652,6 +667,8 @@ impl Representation {
             Self::Bool,
             Self::Index,
             Self::Indices,
+            Self::Bytes,
+            Self::Shake128State,
             Self::Fr,
             Self::TableLsb,
             Self::TableMsb,
@@ -781,6 +798,8 @@ impl PhysicalType {
             (T::Bool, I::None) => R::Bool,
             (T::Index, I::None) => R::Index,
             (T::Indices, I::None) => R::Indices,
+            (T::Bytes, I::None) => R::Bytes,
+            (T::Shake128State, I::None) => R::Shake128State,
             (T::Field, I::Bls12381Fr) => R::Fr,
             (T::Table, I::Bls12381Fr) => R::TableLsb,
             (T::Point, I::Bls12381Fr) => R::Point,
@@ -839,6 +858,7 @@ impl PhysicalType {
                 | Type::Vector
                 | Type::Groups
                 | Type::Indices
+                | Type::Bytes
                 | Type::Matrix
         ) && self.logical.is_native_message_data()
             && Self::default_for(self.logical.clone()).ok().as_ref() == Some(self)

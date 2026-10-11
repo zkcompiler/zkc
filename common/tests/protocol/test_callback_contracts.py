@@ -18,13 +18,13 @@ fn apply<A:Type,B:Type>(value:A,body:fn(A)->B)->B effects(body){return body(valu
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
-def test_effect_dependencies_through_component_and_nested_capture(
+def test_effect_dependencies_through_module_and_nested_capture(
         toolchain, journal, directory, flags):
     source = PREFIX + '''
 interface Transform {
  fn run(value:F,first:fn(F)->F,second:fn(F)->F)->F effects(first,second);
 }
-component Pipeline:Transform {
+module Pipeline:Transform {
  fn run(value:F,first:fn(F)->F,second:fn(F)->F)->F {
   return apply(value,fn(x)=>apply(first(x),fn(y)=>second(y)));
  }

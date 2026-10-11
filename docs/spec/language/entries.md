@@ -49,7 +49,8 @@ application must call `prove_attempts` with a larger count to authorize retries.
 
 `construction authored;` selects the existing no-derived-transcript profile.
 A `fiat_shamir` construction names an installed suite and exactly one verifier
-random service with the corresponding field. Other verifier services refuse.
+random service with the corresponding field. Other verifier services remain
+explicit private services in the verifier program.
 The native compiler resolves the service's actual ordered query/delivery pairs,
 including static applications and repeated occurrences. Both `draw()` and
 `index<N>()` queries of that service are selected; each becomes a transition of
@@ -59,6 +60,24 @@ unused selected service, omitted delivery or transformed challenge refuses; sour
 authors do not supply generated site names. These checks establish supported
 construction, not a security theorem. Native proof admission and its limits still
 apply to the resulting program.
+
+A named construction associates the protocol specialization with deployment
+choices. It may have ordinary static parameters and requirements:
+
+```zkc
+construction ExternalWire<G: Group + Share> for Schnorr<G> {
+  base authored;
+  format RawBytes;
+}
+```
+
+An Entry selects it with `construction ExternalWire<G>;`. Its target and closed
+static arguments must equal the Entry's target. `base authored` retains the
+protocol's explicit transcript operations. An omitted format uses native
+framing. `RawBytes` carries exactly one nonrepeated prover-to-verifier `Bytes`
+message unchanged. The library must parse its record, check its acceptance
+condition and reject unconsumed bytes. Format selection never depends on
+candidate proof contents. These transport choices add no transcript binding.
 
 `target` is optional. It names an existing target clause with the same acceptance
 selector. Export requires entry-input operands, with witness ports unavailable at
@@ -75,6 +94,145 @@ must have the same run/proof kind and inherit the protocol, closed arguments,
 setup associations and every job choice. Cycles, partial
 overrides and static re-specialization of an Entry refuse. Alias resolution uses
 the source call-depth and work bounds.
+
+### Construction bodies
+
+A construction can select a module implementing an interface with `transcript Provider;` and a
+finite set of verifier services with `replace {base, extension};`. The singleton
+spelling is `replace challenges;`. Empty and duplicate selections refuse. The
+compiler orders selected services by their original input positions. Every
+selected service has the same owner; its actual query contract fixes the handler
+result type independently of the provider's state or domain. The provider declares an associated
+`State` and a zero-argument Local `initialize()` returning that state.
+Both members must belong to the implemented interface; private helpers do not
+satisfy provider selection. Source-created state requires `Copy` and `Drop`; private state need not permit
+sharing or serialization.
+
+An installed closed transcript domain can also be selected as the provider. Its
+`State` is the affine `zkc::transcript::State<T>` supplied by the Host, with the
+authorized invocation already absorbed. `zkc::transcript::observe`, `challenge`
+and `challenge_index` advance that state using explicit byte labels. They do not
+add generated site labels or loop coordinates. There is no source initializer
+for a managed state. `base fiat_shamir("suite", challenges);` uses the same
+managed root and supplies the native rules for selectors without an override.
+
+Handlers are ordinary typed Local bodies:
+
+- `on start(t, input, ...)` receives the state and named original protocol
+  inputs, each available at both participants. It returns the next state.
+- `on message label(t, value)` receives one complete logical message payload
+  and returns the next state.
+- `on query label(t)` returns `(state, value)`. An index query also supplies its
+  request bound as the second handler parameter.
+
+Selectors use [source site labels](protocols.md#site-labels). A dotted selector
+descends through labelled protocol applications. A finite group, such as
+`on message {commitment, response}(t, value)`, checks the body separately at
+each selected payload type. Parameter annotations are optional and, when
+written, must match the selected signature. Bodies cannot capture protocol
+locals or undeclared inputs.
+
+`base Other<...>;` inherits a construction for the same protocol specialization.
+The provider and replacement authority remain fixed. A handler replaces the
+whole inherited rule at that selector; other rules remain inherited. Without a
+native base, the resolved construction must have a start handler and cover every
+message and every query on the selected authority. Bases must be acyclic.
+
+Retained verifier services remain explicit Host inputs with their own budgets.
+Their replies may affect verifier-local guards, completion and acceptance. They
+cannot affect outgoing messages, shared construction state, child-start inputs
+or counts of loops containing shared construction events. Runtime admission
+checks the actual Local bodies and repeated data flow conservatively; algebraic
+cancellation of a private dependency is not inferred.
+
+Each selected query and its delivery form one ordered construction event.
+Retained queries belong before or after that pair. Both participants' loop
+counts for shared events must be independent of unpublished private values.
+Early completion remains explicit and may depend on private values; admission
+does not claim termination independence.
+
+### Child constructions
+
+`apply Child<...> at call.path;` delegates one complete labelled protocol call.
+The child's target and static arguments must match that call. Its closed
+provider, state, initializer and root must match the parent, and its selected
+services must be exactly the child ports mapped to the parent's selected
+authorities, with the same verifier. All aliases of a selected parent authority
+must be selected in the child; selected child ports cannot map to an unselected
+parent authority. Parent services absent from the call require no child port. Selections must be disjoint and
+acyclic. Inheritance can replace a whole child selection; parent mathematical
+handlers cannot override individual leaves inside it.
+
+The root initializes state once per participant. Each selected call invokes the
+child's `on start` on the live state and that call's actual shared arguments,
+before the child body. An event-free child still starts; a call inside a
+zero-trip loop does not. Children must cover their messages and selected queries
+without a native fallback. No implicit child domain tag is added.
+
+Only the root selects a record format. A child with an explicit or inherited
+format, or an inherited native root-binding requirement, refuses. A native-root
+parent may delegate to an explicit child using the same managed provider.
+Parent record-codec rules still cover delegated message leaves: child ownership
+applies to mathematical handlers, while root transport covers the whole proof.
+
+### Record codecs
+
+`format Codec;` selects an ordinary module implementing an interface with an associated
+`Record: Copy + Drop` and these Local methods:
+
+```text
+initialize(layout: Layout) -> Record
+write(record: Record) -> Bytes
+finish(record: Record, proof: Bytes) -> ()
+```
+
+The associated type and selected methods must be required by the implemented
+interface. The compiler checks the complete signatures, including the absence
+of callback and finite-domain arguments; the interface name is an ordinary
+library choice. Bare `format Codec;` passes `()` to `initialize`.
+`format Codec(rounds, size);` passes the named shared original inputs in order:
+a single input keeps its type, and multiple inputs form a tuple. Layout inputs
+must be available at both participants. An inherited format and its input
+selection remain fixed; a different format needs its own construction.
+
+The construction supplies rules for every prover-to-verifier message:
+
+| Rule | Parameters | Result |
+|---|---|---|
+| `on encode site` | Record, actual logical payload | `(Record, Chunks)` |
+| `on receive site` | Record, original proof Bytes | `(Record, Ranges)` |
+| `on decode site` | Chunks | Logical payload |
+| `on wire site` (optional) | Transcript state, Chunks | Transcript state |
+
+Chunks defaults to `Bytes`. Annotating the decode parameter with a nonempty
+product such as `(Bytes, Bytes)` selects multiple disjoint chunks. Ranges has
+the same shape, replacing each `Bytes` with `(index, index)` for offset and
+length. The compiler slices the actual immutable proof with bounds checks;
+receive cannot substitute a different buffer. Decode sees only these chunks.
+Codec rules do not cover erased challenge deliveries.
+
+For example, `zkc::proof::Stream` accumulates sequential chunks and checks EOF:
+
+```zkc
+format Stream;
+on encode response(r, value) { return Stream::append(r, encoding::field_be(value)); }
+on receive response(r, proof) { return Stream::take(r, 32); }
+on decode response(chunk) {
+  let (valid, value) = encoding::field_from_be<F>(chunk);
+  require valid;
+  return value;
+}
+```
+
+On the verifier, receive and slicing precede wire observation, decoding, then
+mathematical observation. On the prover, encoding precedes wire and mathematical
+observation. Omit `on wire` when the transcript observes only decoded values.
+Codec functions use ordinary data computation; only wire and mathematical
+handlers receive transcript authority. Record state is separate from transcript
+state and cannot enter ordinary protocol operands or outputs. The exact exit
+and failure rules are defined by [record construction](../ir/construction.md#record-transport).
+A well-typed codec does not establish injectivity, byte coverage, round-trip
+correctness or protocol security.
 
 ### Selection
 

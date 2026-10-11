@@ -7,7 +7,7 @@
 
 using namespace llvm;
 namespace zkc::language::detail {
-Error lex(const SourceBuffer &source, ModuleId module, Work &work,
+Error lex(const SourceBuffer &source, SourceId sourceId, Work &work,
           std::vector<Token> &tokens) {
   StringRef text = source.text;
   size_t offset = 0;
@@ -17,7 +17,7 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
     auto scalar = decodeSourceScalar(text, offset);
     if (!scalar)
       return failure("source.unicode", "invalid UTF-8 scalar",
-                     Span{module, uint32_t(begin), uint32_t(begin + 1)});
+                     Span{sourceId, uint32_t(begin), uint32_t(begin + 1)});
     char c = text[offset];
     offset += scalar->bytes;
     if (isSpace(c)) {
@@ -38,15 +38,15 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
       }
       if (offset - begin > work.limits.identifierBytes)
         return failure("source.limit", "identifier byte limit exceeded",
-                       Span{module, uint32_t(begin), uint32_t(offset)});
+                       Span{sourceId, uint32_t(begin), uint32_t(offset)});
       if (!isSourceNFC(text.slice(begin, offset)))
         return failure("source.nfc", "source identifiers require NFC spelling",
-                       Span{module, uint32_t(begin), uint32_t(offset)});
+                       Span{sourceId, uint32_t(begin), uint32_t(offset)});
       if (isUnsupported(text.slice(begin, offset)))
         return failure("source.unsupported",
                        "feature is outside this source fragment: " +
                            text.slice(begin, offset),
-                       Span{module, uint32_t(begin), uint32_t(offset)});
+                       Span{sourceId, uint32_t(begin), uint32_t(offset)});
     } else if (isDigit(c)) {
       kind = TokenKind::Decimal;
       while (offset < text.size() && isDigit(text[offset]))
@@ -58,11 +58,11 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
         if (byte < 32 || byte > 126 || byte == '\\')
           return failure("source.string",
                          "expected an unescaped printable ASCII string",
-                         Span{module, uint32_t(begin), uint32_t(offset)});
+                         Span{sourceId, uint32_t(begin), uint32_t(offset)});
       }
       if (offset == text.size())
         return failure("source.string", "unterminated string",
-                       Span{module, uint32_t(begin), uint32_t(offset)});
+                       Span{sourceId, uint32_t(begin), uint32_t(offset)});
       ++offset;
     } else if (scalar->value > 127) {
       kind = TokenKind::Punctuation;
@@ -71,7 +71,7 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
           !isSourceDelimiterCloser(scalar->value))
         return failure("source.unicode",
                        "character is outside the source token profile",
-                       Span{module, uint32_t(begin), uint32_t(offset)});
+                       Span{sourceId, uint32_t(begin), uint32_t(offset)});
     } else {
       kind = TokenKind::Punctuation;
       if (offset < text.size() && ((c == ':' && text[offset] == ':') ||
@@ -83,11 +83,11 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
                                    (c == '|' && text[offset] == '|') ||
                                    (c == '.' && text[offset] == '.')))
         ++offset;
-      else if (!StringRef(";,:(){}@=+-*<>[]!.").contains(c))
+      else if (!StringRef(";,:(){}@=+-*<>[]!.#").contains(c))
         return failure("source.token", "unsupported source character",
-                       Span{module, uint32_t(begin), uint32_t(offset)});
+                       Span{sourceId, uint32_t(begin), uint32_t(offset)});
     }
-    Span span{module, uint32_t(begin), uint32_t(offset)};
+    Span span{sourceId, uint32_t(begin), uint32_t(offset)};
     if (kind != TokenKind::Whitespace && kind != TokenKind::Comment &&
         offset - begin > work.limits.tokenBytes)
       return failure("source.limit", "token byte limit exceeded", span);
@@ -98,7 +98,7 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
       return error;
     tokens.push_back({kind, span});
   }
-  Span end{module, uint32_t(offset), uint32_t(offset)};
+  Span end{sourceId, uint32_t(offset), uint32_t(offset)};
   if (auto error =
           work.count(work.tokens, work.limits.tokens, "token count", end))
     return error;
@@ -108,32 +108,60 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
 namespace {
 class Parser {
 public:
-  Parser(const SourceBuffer &source, ModuleId module, ArrayRef<Token> input,
+  Parser(const SourceBuffer &source, SourceId sourceId, ArrayRef<Token> input,
          Work &work)
-      : source(source), module(module), work(work) {
+      : source(source), sourceId(sourceId), work(work) {
     for (const auto &token : input)
       if (token.kind != TokenKind::Whitespace &&
           token.kind != TokenKind::Comment)
         tokens.push_back(token);
   }
-  Expected<SyntaxModule> run() {
-    SyntaxModule output{module, {}, {}, {}};
-    std::string moduleName;
-    if (!expect("module") || !path(moduleName) || !expect(";"))
+  Expected<SyntaxDeclaration> run() {
+    SyntaxDeclaration output;
+    output.kind = Declaration::Kind::Module;
+    output.isPublic = true;
+    output.span = current().span;
+    if (auto error = work.count(work.declarations, work.limits.declarations,
+                                "declaration count", output.span))
+      return error;
+    if (!expect("module") || !path(output.name) || !moduleHeader(output) ||
+        !expect(";"))
       return takeError();
-    if (moduleName != source.module) {
+    if (output.name != source.module) {
       fail("source.module",
            "module declaration does not match captured logical name");
       return takeError();
     }
-    while (!atEnd() && !diagnostic) {
+    if (!moduleBody(output, 0) || !atEnd()) {
+      if (!diagnostic)
+        fail("source.syntax", "unexpected token after module body");
+      return takeError();
+    }
+    output.span.end = uint32_t(source.text.size());
+    return output;
+  }
+  bool moduleHeader(SyntaxDeclaration &output) {
+    if (!parameters(output.parameters))
+      return false;
+    if (take(":")) {
+      output.definition.emplace();
+      if (!type(*output.definition))
+        return false;
+    }
+    return requirements(output);
+  }
+  bool moduleBody(SyntaxDeclaration &output, unsigned depth) {
+    while (!atEnd() && !at("}") && !diagnostic) {
       if (at("use") || (at("pub") && look(1) == "use")) {
         Import import;
         import.span = current().span;
         import.isPublic = take("pub");
         advance(); // use
+        bool absolute = take("::");
         if (!name(import.module))
           break;
+        if (absolute)
+          import.module.insert(0, "::");
         bool selected = false;
         while (take("::")) {
           if (at("{")) {
@@ -202,30 +230,28 @@ public:
           break;
         output.operators.push_back(std::move(*binding));
       } else {
-        auto decl = declaration(false, false, 1);
+        auto decl = declaration(false, false, depth + 1);
         if (!decl)
           break;
-        output.declarations.push_back(std::move(*decl));
+        output.members.push_back(std::move(*decl));
       }
     }
-    if (diagnostic)
-      return takeError();
-    return output;
+    return !diagnostic;
   }
 
-  Error finish(SyntaxModule &syntax,
+  Error finish(SyntaxDeclaration &syntax,
                std::shared_ptr<const NotationEnvironment> environment) {
     headersOnly = false;
     notationEnvironment = std::move(environment);
-    for (auto &declaration : syntax.declarations)
-      if (!finish(declaration))
+    for (auto &declaration : syntax.members)
+      if (declaration.kind != Declaration::Kind::Module && !finish(declaration))
         return takeError();
     return Error::success();
   }
 
 private:
   const SourceBuffer &source;
-  ModuleId module;
+  SourceId sourceId;
   Work &work;
   std::vector<Token> tokens;
   size_t cursor = 0;
@@ -237,7 +263,7 @@ private:
   bool finish(SyntaxDeclaration &declaration) {
     // Inline relation specifications precede their protocol body in the source.
     for (auto &member : declaration.members)
-      if (!finish(member))
+      if (member.kind != Declaration::Kind::Module && !finish(member))
         return false;
     if (auto pending = declaration.deferredBody) {
       cursor = pending->begin;
@@ -421,7 +447,7 @@ private:
       descriptor->symbol = text().str();
       if (result.explicitNotation &&
           static_cast<unsigned char>(text().front()) < 128) {
-        auto fixed = fixedNotationEnvironment(module);
+        auto fixed = fixedNotationEnvironment(sourceId);
         auto found = fixed.find(descriptor->key());
         if (found == fixed.end() || *found->second.descriptor != *descriptor) {
           fail("source.notation-conflict", "ASCII operator syntax is fixed");
@@ -948,9 +974,13 @@ private:
           if (!expect("(") || !string(value.suite) || !expect(",") ||
               !named(*value.service) || !expect(")") || !expect(";"))
             return false;
-        } else
-          return fail("source.entry",
-                      "expected authored or fiat_shamir construction");
+        } else {
+          value.selectedConstruction.emplace();
+          if (!type(*value.selectedConstruction) ||
+              value.selectedConstruction->kind != SyntaxType::Kind::Name ||
+              !expect(";"))
+            return fail("source.entry", "expected a construction selection");
+        }
       } else
         return fail("source.entry", "unknown Entry choice");
     }
@@ -1285,6 +1315,198 @@ private:
           return {};
       } else if (!body(d, false, false, 1))
         return {};
+    } else if (take("construction")) {
+      d.kind = Declaration::Kind::Construction;
+      if (member) {
+        fail("source.construction", "constructions belong at module scope");
+        return {};
+      }
+      SyntaxType target;
+      if (!name(d.name) || !parameters(d.parameters) || !expect("for") ||
+          !type(target) || target.kind != SyntaxType::Kind::Name ||
+          !requirements(d) || !expect("{"))
+        return {};
+      d.target = target.name;
+      d.targetArguments = std::move(target.arguments);
+      d.targetLabels = std::move(target.labels);
+      d.construction.emplace();
+      auto &construction = *d.construction;
+      std::set<std::string> choices;
+      while (!at("}") && !atEnd()) {
+        auto span = current().span;
+        std::string key;
+        if (!name(key))
+          return {};
+        if (key == "apply") {
+          SyntaxConstructionApplication application;
+          application.span = span;
+          if (!type(application.construction) ||
+              application.construction.kind != SyntaxType::Kind::Name ||
+              !expect("at"))
+            return {};
+          do {
+            SyntaxName part;
+            part.span = current().span;
+            if (!name(part.name))
+              return {};
+            part.span.end = previousEnd;
+            application.path.push_back(std::move(part));
+          } while (take("."));
+          if (!expect(";"))
+            return {};
+          application.span.end = previousEnd;
+          construction.applications.push_back(std::move(application));
+          continue;
+        }
+        if (key == "on") {
+          ConstructionRule::Kind kind;
+          std::vector<std::vector<SyntaxName>> selectors;
+          if (take("start")) {
+            kind = ConstructionRule::Kind::Start;
+            selectors.emplace_back();
+          } else {
+            std::string event;
+            if (!name(event))
+              return {};
+            auto parsed = protocol::parseConstructionRuleKind(event);
+            if (!parsed || *parsed == ConstructionRule::Kind::Start) {
+              fail("source.construction", "unknown construction rule kind");
+              return {};
+            }
+            kind = *parsed;
+            bool group = take("{");
+            do {
+              std::vector<SyntaxName> path;
+              do {
+                SyntaxName part;
+                part.span = current().span;
+                if (!name(part.name))
+                  return {};
+                part.span.end = previousEnd;
+                path.push_back(std::move(part));
+              } while (take("."));
+              selectors.push_back(std::move(path));
+            } while (group && take(",") && !at("}"));
+            if (group && !expect("}"))
+              return {};
+          }
+          SyntaxDeclaration handler;
+          handler.kind = Declaration::Kind::Local;
+          handler.anonymous = handler.constructionHandler = true;
+          handler.span = span;
+          std::vector<SyntaxName> parameters;
+          if (!expect("("))
+            return {};
+          if (!at(")"))
+            do {
+              SyntaxPort port;
+              port.span = current().span;
+              if (!name(port.name))
+                return {};
+              parameters.push_back({port.name, port.span});
+              if (take(":")) {
+                if (!type(port.type))
+                  return {};
+              }
+              handler.inputs.push_back(std::move(port));
+            } while (take(",") && !at(")"));
+          if (!expect(")") || !body(handler, false, false, depth + 1))
+            return {};
+          handler.span.end = previousEnd;
+          for (auto &path : selectors) {
+            if (!accept(work.count(work.declarations, work.limits.declarations,
+                                   "declaration count", span)))
+              return {};
+            auto member = unsigned(d.members.size());
+            handler.name = "handler_" + std::to_string(member);
+            d.members.push_back(handler);
+            construction.rules.push_back(
+                {kind, std::move(path), member, parameters, handler.span});
+          }
+          continue;
+        }
+        if (!choices.insert(key).second) {
+          fail("source.construction", "duplicate construction clause");
+          return {};
+        }
+        if (key == "base") {
+          if (take("authored"))
+            construction.base = ConstructionDefinition::Base::Authored;
+          else if (take("fiat_shamir")) {
+            if (!construction.services.empty()) {
+              fail("source.construction",
+                   "query authority was already selected");
+              return {};
+            }
+            construction.base = ConstructionDefinition::Base::Native;
+            SyntaxName service;
+            if (!expect("(") || !string(construction.suite) || !expect(","))
+              return {};
+            service.span = current().span;
+            if (!name(service.name) || !expect(")"))
+              return {};
+            construction.services.push_back(std::move(service));
+          } else {
+            construction.base = ConstructionDefinition::Base::Named;
+            construction.parent.emplace();
+            if (!type(*construction.parent))
+              return {};
+          }
+          if (!expect(";"))
+            return {};
+        } else if (key == "transcript") {
+          construction.provider.emplace();
+          if (!type(*construction.provider) || !expect(";"))
+            return {};
+        } else if (key == "replace") {
+          if (!construction.services.empty()) {
+            fail("source.construction", "query authority was already selected");
+            return {};
+          }
+          bool set = take("{");
+          do {
+            SyntaxName service;
+            service.span = current().span;
+            if (!name(service.name))
+              return {};
+            service.span.end = previousEnd;
+            construction.services.push_back(std::move(service));
+          } while (set && take(",") && !at("}"));
+          if ((set && !expect("}")) || !expect(";"))
+            return {};
+        } else if (key == "format") {
+          if (take("RawBytes"))
+            d.proofFormat = protocol::ProofFormat::RawBytes;
+          else if (take("Native"))
+            d.proofFormat = protocol::ProofFormat::Native;
+          else {
+            construction.codec.emplace();
+            if (!type(*construction.codec))
+              return {};
+            d.proofFormat = protocol::ProofFormat::RawBytes;
+            if (take("(")) {
+              if (!at(")"))
+                do {
+                  SyntaxName input;
+                  input.span = current().span;
+                  if (!name(input.name))
+                    return {};
+                  input.span.end = previousEnd;
+                  construction.layout.push_back(std::move(input));
+                } while (take(",") && !at(")"));
+              if (!expect(")"))
+                return {};
+            }
+          }
+          if (!expect(";"))
+            return {};
+        } else {
+          fail("source.construction", "unknown construction clause");
+          return {};
+        }
+      }
+      if (!expect("}"))
+        return {};
     } else if (at("run") || at("proof")) {
       d.entryKind = at("proof") ? EntryKind::Proof : EntryKind::Run;
       advance();
@@ -1313,7 +1535,8 @@ private:
           member ? Declaration::Kind::Associated : Declaration::Kind::Alias;
       if (!name(d.name) || !parameters(d.parameters))
         return {};
-      if (member && take(":")) {
+      if (take(":")) {
+        d.kind = Declaration::Kind::Associated;
         d.permissions.emplace();
         if (!at("Copy") && !at("Drop") && !at("Share") && !at("Wire")) {
           if (current().kind != TokenKind::Word) {
@@ -1389,28 +1612,30 @@ private:
         } while (take(",") && !at("}"));
       if (!expect("}"))
         return {};
-    } else if (at("interface") || at("component")) {
+    } else if (take("module")) {
       if (member) {
-        fail("source.syntax", "nested component declarations are not admitted");
+        fail("source.syntax", "modules are not interface members");
         return {};
       }
-      bool interface = take("interface");
-      if (!interface)
-        advance();
-      d.kind = interface ? Declaration::Kind::Interface
-                         : Declaration::Kind::Component;
-      if (!name(d.name) || !parameters(d.parameters))
+      d.kind = Declaration::Kind::Module;
+      if (!name(d.name))
         return {};
-      if (!interface) {
-        SyntaxType target;
-        if (!expect(":") || !type(target))
-          return {};
-        d.definition = std::move(target);
+      if (take(";"))
+        d.externalModule = true;
+      else if (!moduleHeader(d) || !expect("{") || !moduleBody(d, depth) ||
+               !expect("}"))
+        return {};
+    } else if (take("interface")) {
+      if (member) {
+        fail("source.syntax", "nested interfaces are not interface members");
+        return {};
       }
-      if (!requirements(d) || !expect("{"))
+      d.kind = Declaration::Kind::Interface;
+      if (!name(d.name) || !parameters(d.parameters) || !requirements(d) ||
+          !expect("{"))
         return {};
       while (!at("}") && !atEnd()) {
-        auto child = declaration(true, interface, depth + 1);
+        auto child = declaration(true, true, depth + 1);
         if (!child)
           return {};
         d.members.push_back(std::move(*child));
@@ -1430,8 +1655,7 @@ private:
         return {};
       }
       if (protocol && member) {
-        fail("source.unsupported",
-             "protocol component members belong to protocol composition");
+        fail("source.unsupported", "protocols are not interface members");
         return {};
       }
       d.kind = domainFunction ? Declaration::Kind::DomainFunction
@@ -1643,7 +1867,7 @@ private:
         } else {
           Expression product;
           product.kind = Expression::Kind::DomainProduct;
-          product.span = {span.module, decl.expressions[*domain].span.begin,
+          product.span = {span.source, decl.expressions[*domain].span.begin,
                           previousEnd};
           product.children = {*domain, *nextDomain};
           domain = appendExpression(decl, std::move(product));
@@ -1651,7 +1875,7 @@ private:
             return {};
           Pattern pair;
           pair.kind = Pattern::Kind::Tuple;
-          pair.span = {span.module, binding.span.begin, nextPattern->span.end};
+          pair.span = {span.source, binding.span.begin, nextPattern->span.end};
           pair.children.push_back(std::move(binding));
           pair.children.push_back(std::move(*nextPattern));
           binding = std::move(pair);
@@ -1670,7 +1894,7 @@ private:
         region.span.end = previousEnd;
         Expression lambda;
         lambda.kind = Expression::Kind::Lambda;
-        lambda.span = {span.module, binding.span.begin, previousEnd};
+        lambda.span = {span.source, binding.span.begin, previousEnd};
         lambda.payloads = {{binding}};
         lambda.regions.push_back(decl.bodies.size());
         decl.bodies.push_back(std::move(region));
@@ -2379,6 +2603,21 @@ private:
       }
       Statement s;
       s.span = current().span;
+      if (take("#")) {
+        if (!protocol) {
+          fail("source.site", "site labels belong to protocol statements");
+          return {};
+        }
+        std::string label;
+        if (!expect("[") || !expect("site") || !expect("(") || !name(label) ||
+            !expect(")") || !expect("]"))
+          return {};
+        s.site = std::move(label);
+        if (at("return") || at("stop") || at("#")) {
+          fail("source.site", "one label must select a message, query or call");
+          return {};
+        }
+      }
       if (take("require")) {
         s.kind = Statement::Kind::Require;
         if (take("@")) {
@@ -2477,19 +2716,21 @@ private:
   }
 };
 } // namespace
-Expected<SyntaxModule> parse(const SourceBuffer &source, ModuleId module,
-                             ArrayRef<Token> tokens, Work &work) {
-  if (auto error = work.charge(tokens.size(), Span{module, 0, 0}))
+Expected<SyntaxDeclaration> parse(const SourceBuffer &source, SourceId sourceId,
+                                  ArrayRef<Token> tokens, Work &work) {
+  if (auto error = work.charge(tokens.size(), Span{sourceId, 0, 0}))
     return std::move(error);
-  return Parser(source, module, tokens, work).run();
+  return Parser(source, sourceId, tokens, work).run();
 }
-Error parseBodies(const SourceBuffer &source, SyntaxModule &module,
-                  ArrayRef<Token> tokens,
-                  std::shared_ptr<const NotationEnvironment> environment,
+Error parseBodies(const SourceBuffer &source, SourceId id,
+                  ArrayRef<Token> tokens, ArrayRef<BodyParseScope> scopes,
                   Work &work) {
-  if (auto error = work.charge(tokens.size(), Span{module.id, 0, 0}))
+  if (auto error = work.charge(tokens.size(), Span{id, 0, 0}))
     return error;
-  return Parser(source, module.id, tokens, work)
-      .finish(module, std::move(environment));
+  Parser parser(source, id, tokens, work);
+  for (const auto &scope : scopes)
+    if (auto error = parser.finish(*scope.module, scope.environment))
+      return error;
+  return Error::success();
 }
 } // namespace zkc::language::detail

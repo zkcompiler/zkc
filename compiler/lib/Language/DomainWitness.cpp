@@ -158,18 +158,18 @@ class DomainCheck {
         return {};
       arguments.push_back(*value);
     }
-    if (binding.factory->component) {
-      auto component =
-          type(*binding.factory->component, context.statics, binding.span);
-      if (!component)
+    if (binding.factory->module) {
+      auto module =
+          type(*binding.factory->module, context.statics, binding.span);
+      if (!module)
         return {};
-      const auto *owner = types.typeDeclaration(*component);
+      const auto *owner = types.typeDeclaration(*module);
       const auto &abstract = declarations[target.index];
-      if (!owner || owner->kind != Declaration::Kind::Component ||
+      if (!owner || owner->kind != Declaration::Kind::Module ||
           !abstract.parent ||
           !types.charge(owner->members.size(), binding.span)) {
         if (!types.diagnostic)
-          refuse(binding.span, "factory component selection differs");
+          refuse(binding.span, "factory module selection differs");
         return {};
       }
       auto member = llvm::find_if(owner->members, [&](DeclarationId id) {
@@ -183,7 +183,7 @@ class DomainCheck {
       }
       auto own = ArrayRef(arguments).drop_front(inherited).vec();
       target = *member;
-      arguments = component->arguments;
+      arguments = module->arguments;
       arguments.insert(arguments.end(), own.begin(), own.end());
     }
     const auto &callee = declarations[target.index];
@@ -203,10 +203,10 @@ class DomainCheck {
                    types.substitution(callee, arguments),
                    {},
                    {}};
-    if (callee.parent && declarations[callee.parent->index].kind ==
-                             Declaration::Kind::Component) {
+    if (callee.parent &&
+        declarations[callee.parent->index].kind == Declaration::Kind::Module) {
       const auto &owner = declarations[callee.parent->index];
-      Type self(Type::Kind::Component, owner.qualifiedName);
+      Type self(Type::Kind::Module, owner.qualifiedName);
       self.arguments.assign(arguments.begin(),
                             arguments.begin() + owner.parameters.size());
       if (owner.implementation)

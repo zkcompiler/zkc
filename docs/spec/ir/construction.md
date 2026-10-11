@@ -1,6 +1,6 @@
 # Transcript construction
 
-This is a native contract. [Construction](construction.md),
+This is a native contract. [Compilation](../../compiler/construction.md),
 [transport](../formats/proof.md), [execution](../runtime/proofs.md)
 and [attempts](../runtime/attempts.md) define separate boundaries.
 [Proof usage](../../runtime/proofs.md) explains their application.
@@ -47,30 +47,157 @@ Construction does not issue a dummy zero-budget RNG to stand in for a
 transcript. Resource mappings describe correspondence; transcript generations
 need not equal source RNG generations.
 
-The construction has one validator random service port. A direct
-query takes exactly that service reference and is either a `draw`, with no data
-arguments and one field result, or an `index`, whose only data argument is its
-constant UniformIndex bound and whose result is one index. Its sole delivery uses
-that exact SSA result: derived values and `protocol.restrict_roles` wrappers
-refuse. Pairing is checked in the same source
-block after unsimplified static expansion, retaining the authored call path.
-There is no intervening query or producer-to-validator message. Two outstanding
-draws, batched/derived delivery and undelivered private coins refuse this profile.
-It refuses other validator service ports, unselected queries, unused selected
-draws, nonchallenge reverse messages, existing transcript inputs, and selected
-draws hidden in local programs. Those restrictions bound the constructor, not
-the common IR or every authored deployment.
+Native shorthand selects one validator random service port. A programmable
+construction selects a nonempty finite set of ports owned by that validator.
+Each direct query takes its actual selected service reference: `draw` returns
+that contract's field; `index` takes its constant UniformIndex bound and returns
+one index. Query result domains need not match the provider's state domain.
+Native fallback rules still require the installed suite's query domain.
 
-The selected authority includes every alias of its root. The construction's
-single validator port and native service owner contract exclude another
-validator alias and cross-owner binding respectively. A deployment attempting to
-share the validator challenge root with producer entropy refuses at registry
-admission. That owner check does not prove independently distributed randomness
-across distinct roots. Broader selectors must account for all reachable aliases.
+Each selected query has one delivery using its exact SSA result: derived values
+and `protocol.restrict_roles` wrappers refuse. Pairing is checked in the same
+source block after unsimplified static expansion, retaining the authored call
+path. There is no intervening query or producer-to-validator message. Two
+outstanding draws, batched/derived delivery, unused selected draws,
+nonchallenge reverse messages, existing transcript inputs and selected draws
+hidden in local programs refuse this profile. These restrictions bound the
+constructor, not the common IR.
+
+Unselected verifier queries remain explicit private service actions. Their
+replies may affect local guards and acceptance, but cannot flow into shared
+construction state, child-start arguments or counts of shared-event loops.
+Runtime admission checks actual Local bodies, control dependence and loop fixed
+points. It conservatively retains dependencies even when ordinary arithmetic
+would cancel them. Construction does not turn private entropy into a public
+challenge or prove independence of distinct randomness roots.
+
+A child's selected ports must be the exact preimage of the parent's selected
+set through the call's service mapping. Every alias of a selected parent root
+is selected; every selected child port maps to a selected parent root. Parent
+roots not passed to that call need no child counterpart. The mapped verifier
+owner is checked separately. Registry admission refuses cross-owner sharing of
+a randomness root; this owner check does not establish independent randomness.
+
+## Programmable state and handlers
+
+A selected `protocol.construction` symbol binds a protocol, provider, replaced
+services, state slots, root factory and typed Local handlers. Preparation preserves
+that record exactly. Construction admits its event coverage and authority before
+consuming the record and projecting participant programs.
+
+Construction checks sequencing, selected operands and authority. An authored
+handler can ignore or reset copyable state through ordinary computation; these
+checks do not establish an absorption law or security of the chosen transcript.
+
+Records retain child associations as `applications = [{site, construction},
+...]`; `root_only` records an explicit/inherited format or native-root
+requirement that prevents child reuse. The independent resolver checks original
+call targets, role and service mappings, closed provider identity and complete
+child coverage before producing an execution selection. The emitted module
+contains exactly the selected construction closure.
+
+Preparation inserts an ordered `protocol.construction_start` at each selected
+application. Its operands are the actual selected callee inputs, available at
+both participants; its `roles` and `site` identify the owners and occurrence.
+Inside a repeat, both roles must participate in that repeat, even for a start
+with no inputs or with only body-local constants.
+Correspondence checks its position against the original call. Projection
+preserves it at both roles. Construction consumes it into ordinary Local calls
+on the current state, actual arguments and enclosing loop coordinates. It is
+neither a runtime opcode nor a second state initializer. Starts of empty
+children remain ordered; zero-trip loops execute no starts.
+
+A local root calls its zero-argument factory once per participant, followed by
+the start handler on that role's actual selected original inputs. Local state
+requires `Copy` and `Drop`; it may contain several native slots or none. State
+slots are internal results, not application outputs. A host root instead uses
+the selected managed transcript capability described below. Only the selected
+handler closure can consume it; original protocol ports and unrelated Local
+functions cannot introduce another transcript root. Checked `ManagedHistory`
+operations expose byte observation, field sampling and supported index sampling
+to ordinary source functions. This facet permits advancing existing state and
+does not authorize acquisition, copying or reset.
+
+One message handler receives the ordered native leaves of its source payload
+after the last send or receive. Total calculations may separate those leaves;
+another ordered effect may not. Each role uses its actual local values. A query
+handler receives the current state and, for an index request, its admitted static
+bound. Its returned sample replaces the original query or corresponding receive;
+its returned state feeds the next handler. Handler bodies retain ordinary Local
+control, effects and failure behavior.
+
+The construction pass carries the complete state vector through affected loops,
+completion and final return, including zero-slot state with ordered handler calls.
+Custom adapters preserve the selected prepared body and reorder only the query
+result ABI. Dynamic occurrence coordinates remain explicit adapter operands;
+custom bodies absorb only what they explicitly compute and observe.
+
+Projection metadata records the selected plan, root kind, ordered state types,
+helper symbols, the sorted removed-service set and resulting action map.
+Every original query action retains its original service input index; only
+queries selected by those indices may disappear. Retained service names keep
+their original identities while ingress positions account for removed ports. The source-relative
+checker independently checks those records, factory/start operands, handler
+bodies, message grouping and every state successor. A same-typed value cannot
+replace the selected successor. Construction also bounds repeated handler
+expansion before generating adapters.
+
+## Record transport
+
+A selected record codec transforms typed prover-to-verifier transport after
+transcript construction. It preserves the ordered mathematical message and
+query evidence. Each source message has matching encode, receive and decode
+rules, plus an optional wire rule. Challenge deliveries have no record payload.
+Rules operate on the full logical payload, whose native leaves remain ordered.
+Only total mathematical calculations may separate leaves when grouping them.
+
+The verifier executes receive on its current Record and original proof, slices
+the returned ranges from that same proof, observes those chunks through the wire
+rule if selected, decodes them, then invokes the mathematical handlers on the
+actual decoded values. The prover encodes its actual message and executes the
+same selected wire and mathematical handlers in order. These handlers form a
+contiguous sequence; unrelated local calls and service queries cannot interrupt
+it. Verifier calculations that lay between the original leaves follow the
+observations; only total calculations may be crossed. Range selection may be
+noncontiguous: a round's two chunks can come from separate `L[]` and `R[]`
+regions. Future messages are decoded only at their own occurrences.
+
+Record initialization follows root state initialization and start, once per
+participant even with no messages or zero loop trips. It receives only its
+selected actual shared original inputs. Every protocol loop carries Record
+separately after transcript state. The verifier also captures the original proof
+through isolated loop regions. Record versions, proof ingress, ranges, chunks
+and final encoded bytes are internal codec values. Ordinary calculations,
+loop bounds, guards and public outputs cannot consume them. Decoded payloads
+and the checked transcript-state successors cross that boundary.
+
+Before each successful return, the prover calls write on the current Record;
+the verifier calls finish on the current Record and original proof. Conditional
+completion invokes its finalizer only on the taken branch. Its untaken prover
+branch returns an unused empty Bytes placeholder. Copyable state and bytes do
+not acquire affine continuation slots. Earlier stops skip finalization. Finish
+runs even when the mathematical result is false; its framing failure precedes
+the Host's Boolean rejection. Finalization can precede pure data calculations
+outlined for the return, but no later record or transcript step is allowed.
+The Host publishes the prover's internal Bytes result only after successful
+return and cleanup. Record never becomes an application result.
+
+The compiler independently compares the transport transformation with its
+transcript-constructed input, including retained calculations, helper bodies,
+SSA operands, metadata and exits. Runtime admission checks the actual executable
+codec sequence and internal-value boundary, then exposes its checked logical
+messages to the transcript checker. That temporary admission view is not an
+executable program. Both roles execute ordinary Local functions through the
+same Runner; the Host dispatches neither protocol names nor codec names.
+
+Record selection emits raw proof bytes without native headers or message frames.
+The codec's finish method owns EOF and record coverage. Admission checks wiring
+and authority, not injectivity, complete byte coverage, agreement between
+encoded chunks and selected ranges, or correctness of an external parser.
 
 ## Transcript state and occurrence identity
 
-Each internally constructed role owns a distinct affine transcript capability.
+In the installed native construction, each role owns a distinct affine transcript capability.
 The host initializes it from the authorized invocation binding and selected
 suite; it is not a user-supplied token. Initialization absorbs the full
 canonical root bytes under the installed suite's fixed `binding` label. The
@@ -101,7 +228,7 @@ programs. The [occurrence encoding](#native-occurrence-encoding) fixes those
 bytes and bounds. Generated helper names and runtime diagnostic frames do not
 determine transcript identity. Occurrence resolution precedes optimization.
 
-Each inserted transition is top-level in a straight-line local helper containing
+Each inserted native transition is top-level in a straight-line local helper containing
 only its coordinate construction, transition, complete return and admitted
 storage releases. A UniformIndex helper additionally begins with exactly one
 `index.constant` whose parameter is the event's bound and whose result is the
@@ -118,12 +245,15 @@ source owner, not the executing producer. These structural checks are repeated
 at proof admission against the actual final artifact, after optimization.
 
 Proof admission also closes the generated state chain: each role has exactly one
-chain from its mapped internal transcript input to its mapped internal result,
-and every transition is a listed native-origin operation. Only those operations
-and their explicit helper entry/return wiring may consume or produce that suite
-state. No extra transition, alternate state root, dropped successor,
-or native-origin operation elsewhere is admitted. An occurrence-list match
-alone is insufficient to establish the actual transcript sequence.
+chain from its mapped internal transcript input to its mapped internal result.
+Native adapters use the listed native-origin operations. Custom adapters execute
+their selected ordinary Local bodies, including explicit managed transitions;
+the construction checker compares those bodies and their operands with the
+prepared source. No extra adapter, alternate state root, dropped successor or
+native-origin operation elsewhere is admitted. An occurrence-list match alone
+is insufficient to establish the actual transcript sequence. Invocation binding
+records absorption at managed initialization; it does not establish that a
+custom body uses the state to sample a challenge or samples uniformly.
 
 The indexed-origin attribute rule checks lowercase, even-length hex and its
 bound before decoding the exact static template grammar, empty coordinate array
@@ -208,6 +338,7 @@ An indexed native kernel carries the bounded static template:
 ["zkc.native-origin-template/0", entry, [step, ...], [], event]
 event = ["query", protocol, site, service_port, service_contract, method, owner]
       | ["message", protocol, site, schema, sender, receiver]
+      | ["start", original_caller_protocol, original_apply_site]
 step = ["apply", original_caller_protocol, original_apply_site]
      | ["repeat", original_protocol, original_repeat_site]
 ```
@@ -217,6 +348,10 @@ little-endian UTF-8 byte count and string bytes, or tag 1 followed by a u64
 little-endian element count and recursively encoded elements. An application
 step precedes its callee's steps; a repeat step precedes every event in its body.
 The path excludes the final event. Roles reflect static application substitution.
+For a child start the path excludes that child's apply step; it records the
+caller's enclosing applications and repeats. The following child events include
+the apply step. Start origins identify ordinary construction calls and do not
+select a transcript kernel or prescribe bytes to absorb.
 Service ports are `input_N`, with the original input index as a canonical u64
 decimal. A message schema is its original source site. The checked wire map
 connects it to the prepared site without using generated names in the origin.
@@ -282,7 +417,9 @@ the same mapping. Every listed event must appear, and every helper must be used.
 Observation operands must be the actual sent/received value or the newly derived
 challenge delivery. The state must flow from the internal entry port through
 every transition and loop to the final internal result. Capturing, dropping,
-substituting or bypassing that state refuses.
+substituting or bypassing that state refuses. Copyable state values also cannot
+appear in ordinary Local arguments, messages, loop captures or application
+outputs. Unrelated values of the same type remain ordinary data.
 
 Draw/delivery pairs remain within one source block. A selected draw cannot remain
 pending at a loop boundary. Original guards, local work, producer service draws,

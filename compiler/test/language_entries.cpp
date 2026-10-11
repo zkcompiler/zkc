@@ -51,6 +51,34 @@ std::string replaceText(std::string text, StringRef before, StringRef after) {
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  cases.run("construction targets and static arguments are checked", [] {
+    std::string text = R"(module sample;
+      domain F=field("bls12-381.fr");
+      domain Other=field("koala-bear");
+      protocol Work<T:Field> roles(P,V)(ok:bool@V)->(ok:bool@V){return ok;}
+      protocol Different<T:Field> roles(P,V)(ok:bool@V)->(ok:bool@V){return ok;}
+      construction ExternalWire<T:Field> for Work<T>{base authored;format RawBytes;}
+      proof Demo=Work<F>{prover P;verifier V;public{ok};accept ok;construction ExternalWire<F>;}
+    )";
+    auto entry = take(close(text));
+    require(entry.entry().proof()->format ==
+                zkc::protocol::ProofFormat::RawBytes,
+            "Entry lost its selected proof format");
+    refuses(close(replaceText(text, "construction ExternalWire<F>;",
+                              "construction ExternalWire<Other>;")),
+            "source.construction");
+    refuses(close(replaceText(text, "for Work<T>", "for Different<T>")),
+            "source.construction");
+    refuses(close(replaceText(text, "base authored;", "")),
+            "source.construction");
+    refuses(close(replaceText(text, "format RawBytes;",
+                              "format RawBytes;format RawBytes;")),
+            "source.construction");
+    auto native = take(close(replaceText(text, "format RawBytes;", "")));
+    require(native.entry().proof()->format ==
+                zkc::protocol::ProofFormat::Native,
+            "construction without format changed the default");
+  });
   cases.run("execution kind is explicit and contextual", [] {
     take(close((base + "run Demo=Round{}").str()));
     refuses(close((base + "proof Demo=Round;").str()), "source.entry");
@@ -74,7 +102,7 @@ int main() {
       struct Data{proof:bool,run:bool}
       enum Choice{proof(),run(bool)}
       interface Helpers{math fn proof(run:bool)->bool;}
-      component Helper:Helpers{math fn proof(run:bool)->bool{return run;}}
+      module Helper:Helpers{math fn proof(run:bool)->bool{return run;}}
       math fn identity(value:bool)->bool{
         let data=Data{proof:value,run:value};
         let proof=data.proof;let run=proof;return Helper::proof(run);
@@ -183,11 +211,11 @@ int main() {
             "diagnostic omitted actual matches: " + message);
   });
   cases.run(
-      "closed component dispatch bounds the actual and cached call graph", [] {
+      "closed module dispatch bounds the actual and cached call graph", [] {
         const std::string declarations = R"(module sample;
       interface Step { math fn run(x:bool)->bool; }
-      component Base:Step {math fn run(x:bool)->bool{return x;}}
-      component Wrap<C:Step>:Step {math fn run(x:bool)->bool{return C::run(x);}}
+      module Base:Step {math fn run(x:bool)->bool{return x;}}
+      module Wrap<C:Step>:Step {math fn run(x:bool)->bool{return C::run(x);}}
       math fn extra<C:Step>(x:bool)->bool{return C::run(x);}
       protocol Run<C:Step> roles(P)(x:bool@P)->(r:bool@P){
         let first=C::run(x);return(r=first);
@@ -212,9 +240,9 @@ int main() {
     const auto &proof = *selected.entry().proof();
     require(proof.prover == 0 && proof.verifier == 1 &&
                 proof.publicInputs == std::vector<unsigned>{0} &&
-                proof.service == 0 && proof.target == 0 &&
-                proof.acceptance.port == 0 && proof.acceptance.role == 1 &&
-                proof.acceptance.path.empty(),
+                proof.services == std::vector<unsigned>{0} &&
+                proof.target == 0 && proof.acceptance.port == 0 &&
+                proof.acceptance.role == 1 && proof.acceptance.path.empty(),
             "logical Entry choices differ");
     auto alias = take(close(
         (base + "proof Demo=Next;proof Next=Concrete;proof Concrete=Round" +
@@ -234,7 +262,7 @@ int main() {
       proof Demo=Verify{prover P;verifier V;public{ok};accept accepted;construction authored;})"));
               require(selected.entry().proof()->construction ==
                               ProofEntry::Construction::Authored &&
-                          !selected.entry().proof()->service &&
+                          selected.entry().proof()->services.empty() &&
                           !selected.entry().proof()->target,
                       "authored choices changed");
             });
@@ -249,6 +277,14 @@ int main() {
                     std::vector<unsigned>{0},
                 "acceptance product projection lost");
       });
+  cases.run("authored Entry retains verifier services", [&] {
+    auto selected = take(close(replaceText(
+        source(),
+        "construction fiat_shamir(\"merlin3.bls12-381.fr64be/0\", coins);",
+        "construction authored;")));
+    require(selected.entry().proof()->services.empty(),
+            "authored Entry replaces no authority");
+  });
   for (auto change : std::initializer_list<std::pair<StringRef, StringRef>>{
            {"prover P;", ""},
            {"verifier V;", ""},
@@ -266,9 +302,7 @@ int main() {
            {"accept ok", "accept absent"},
            {"target claim", "target absent"},
            {", coins)", ", absent)"},
-           {"merlin3.bls12-381.fr64be/0", "uninstalled"},
-           {"construction fiat_shamir(\"merlin3.bls12-381.fr64be/0\", coins);",
-            "construction authored;"}})
+           {"merlin3.bls12-381.fr64be/0", "uninstalled"}})
     cases.run(
         "invalid explicit choice: " + change.first + " -> " + change.second,
         [&] {

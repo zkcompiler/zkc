@@ -2,6 +2,7 @@
 #include "ArtifactJson.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/LogicalTree.h"
@@ -31,6 +32,22 @@ Expected<json::Array> ports(pir::MathematicalOp source,
       program.participants.size() != source.getRoles().size())
     return error("native-deployment-correspondence");
   json::Array maps;
+  unsigned stateInputs = !policy.suite.empty(), stateOutputs = stateInputs;
+  bool codec = false;
+  if (!policy.construction.empty()) {
+    SymbolTableCollection symbols;
+    auto record = symbols.lookupNearestSymbolFrom<pir::ConstructionOp>(
+        source, StringAttr::get(source.getContext(), policy.construction));
+    if (!record)
+      return error("native-deployment-construction");
+    auto plan = protocol::readConstructionPlan(record, symbols);
+    if (!plan)
+      return plan.takeError();
+    codec = plan->codec.has_value();
+    stateOutputs = plan->state.size();
+    stateInputs =
+        plan->root == protocol::ConstructionPlan::Root::Host ? stateOutputs : 0;
+  }
   auto type = source.getFunctionType();
   for (auto item : source.getRoles()) {
     auto role = cast<StringAttr>(item);
@@ -48,19 +65,18 @@ Expected<json::Array> ports(pir::MathematicalOp source,
     for (auto [i, owners] : enumerate(source.getInputRoles())) {
       if (!owns(owners, role))
         continue;
+      if (is_contained(policy.services, i))
+        continue;
       if (auto reference =
               dyn_cast<pir::ServiceReferenceType>(type.getInput(i))) {
-        if (policy.service != i) {
-          if (service == participant->services.size())
-            return error("native-deployment-correspondence");
-          const auto &port = participant->services[service++];
-          if (port.contract != reference.getContract() ||
-              port.inputIndex != ingress)
-            return error("native-deployment-correspondence");
-          services.push_back(json::Array{std::to_string(i), port.name,
-                                         port.contract,
-                                         std::to_string(ingress)});
-        }
+        if (service == participant->services.size())
+          return error("native-deployment-correspondence");
+        const auto &port = participant->services[service++];
+        if (port.contract != reference.getContract() ||
+            port.inputIndex != ingress)
+          return error("native-deployment-correspondence");
+        services.push_back(json::Array{std::to_string(i), port.name,
+                                       port.contract, std::to_string(ingress)});
       } else {
         auto logical = protocol::encodeBoundType(type.getInput(i), false);
         if (!logical)
@@ -80,10 +96,13 @@ Expected<json::Array> ports(pir::MathematicalOp source,
         return logical.takeError();
       outputs.push_back(json::Array{std::to_string(i), logical->spelling()});
     }
-    unsigned state = !policy.suite.empty();
     if (service != participant->services.size() ||
-        participant->arguments.size() != inputs.size() + state ||
-        participant->results.size() != outputs.size() + state ||
+        participant->arguments.size() !=
+            inputs.size() + stateInputs +
+                unsigned(codec && role.getValue() == policy.validator) ||
+        participant->results.size() !=
+            outputs.size() + stateOutputs +
+                unsigned(codec && role.getValue() == policy.producer) ||
         (role.getValue() == policy.validator && acceptance.empty()))
       return error("native-deployment-correspondence");
     maps.push_back(json::Array{role.str(), participant->name, std::move(inputs),
@@ -117,7 +136,7 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
   if (!actualDescriptor)
     return actualDescriptor.takeError();
   auto *record = out[2].getAsArray();
-  if (!candidate || !record || record->size() != 6 ||
+  if (!candidate || !record || record->size() != 7 ||
       (*record)[0].getAsString() != "zkc.native-proof-descriptor/0" ||
       (*record)[1] != encodeNativeProofPolicy(policy) ||
       out[0].getAsString() != "zkc.native-proof/0" ||

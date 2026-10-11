@@ -17,7 +17,7 @@ struct Permissions {
            (!b.wire || wire);
   }
 };
-/// A resolved source term. Natural, Domain, Asset and Component are static
+/// A resolved source term. Natural, Domain, Asset and Module are static
 /// sorts and cannot form runtime values. Parameters carry
 /// declaration-qualified atom identities. Nominal arguments include phantom
 /// parameters; representation is not identity.
@@ -35,7 +35,7 @@ struct Type {
     Parameter,
     Associated,
     Natural,
-    Component,
+    Module,
     Builtin,
     Formal,
     Domain,

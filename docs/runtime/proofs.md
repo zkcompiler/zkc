@@ -12,6 +12,10 @@ Source applications use `entry::ProofEntry` with named values. The
 [Entry guide](entries.md) covers commands and optional generated Rust bindings.
 Lower-level applications use `zkc_tools::proof::NativeDeployment`; the
 [bundle walkthrough](bundles.md#separate-producer-and-validator) is executable.
+`ProofEntry` requires transcript binding by default and exposes an explicit
+authored-policy option. `NativeDeployment` executes the trusted pinned
+deployment's declared construction; callers using this lower-level API select
+their binding policy before admission.
 
 `NativeDeployment::admit` takes an independently trusted 32-byte SHA-256 pin and
 setup authority. CLI adapters parse hexadecimal spelling. The Host hashes and
@@ -24,7 +28,12 @@ provider/key declarations. `Invocation` selects `Prove`, `Verify(&proof)` or
 `Attempts(&policy)`. `ProofInputs::decode` adapts positional records to the same
 typed inputs. Shared `InputValue`, `Capacity` and `ProverMaterial` live in
 `zkc_tools::execution`.
-Public values are canonically bound; private values can avoid a wire roundtrip.
+Managed native transcripts canonically bind public values and Host context.
+An authored transcript binds only what its source observes. In particular, raw
+proof transport adds no header or context bytes. Its report fingerprint identifies
+the invocation but does not bind the proof cryptographically; applications that
+need a session identifier in an external transcript pass it as a public protocol
+input and observe it in source. Private values can avoid a wire roundtrip.
 Reusable `ProverMaterial` shares immutable material across calls while each
 invocation retains its own setup admission, quotas, RNG and live resources.
 
@@ -45,11 +54,18 @@ capability retention is reserved before issuance. Loading and execution have
 separate [capacity ledgers](../spec/runtime/capacity.md). A stopped initializer
 does not open a proof reader or writer.
 
+Selected query authorities become transcript transitions. Other randomness
+services remain explicit participant inputs with separate budgets. Verification
+can use these private services for local checks; dependency admission prevents
+private replies from entering shared construction state or shared loop counts.
+The Host dispatches retained queries through the same service mechanism used by
+ordinary participant execution.
+
 ## Execution and results
 
 Derived construction uses explicit affine transcript state. Authored execution
 uses the program's own calls and binds context only as declared; CLI use requires
-`--allow-header-only`. [Construction](../compiler/construction.md) explains
+`--allow-authored`. [Construction](../compiler/construction.md) explains
 this distinction.
 
 A validator succeeds only after its actual selected Boolean is true, normal
@@ -67,3 +83,8 @@ CLI diagnostics omit application values and proof payloads. Requested outputs
 follow [file publication](../spec/runtime/publication.md); a publication failure
 does not trigger a rerun. [Attempts](attempts.md) separately authorize retries
 while retaining consumed provider state and work.
+
+Authored jobs may lower the cumulative primitive-work ceiling with
+`--external-work=COUNT` (including zero), up to the installed default. Failed
+transitions retain consumed work and cleanup reporting. This is an execution
+limit, not a security estimate.

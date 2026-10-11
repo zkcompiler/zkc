@@ -162,6 +162,10 @@ class Projector {
             operation = zkc::protocol_ir::EmitOp::getOperationName();
           else if (exchange.getReceiverAttr() == role)
             operation = zkc::protocol_ir::AwaitOp::getOperationName();
+        } else if (auto start =
+                       dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
+          if (is_contained(start.getRoles(), role))
+            operation = protocol_ir::ConstructionStartOp::getOperationName();
         } else if (isa<zkc::protocol_ir::LocalCallOp>(op)) {
           if (op.getAttr("role") == role)
             operation = zkc::local::CallOp::getOperationName();
@@ -185,6 +189,15 @@ class Projector {
       action.set("targets", builder.getArrayAttr(targets));
       if (isa<zkc::protocol_ir::LocalCallOp>(op))
         action.set("callee", op.getAttr("callee"));
+      if (auto query = dyn_cast<protocol_ir::QueryOp>(op)) {
+        auto argument = cast<BlockArgument>(query.getReference());
+        while (auto repeat = dyn_cast<protocol_ir::RepeatOp>(
+                   argument.getOwner()->getParentOp()))
+          argument =
+              cast<BlockArgument>(repeat.getInputs()[argument.getArgNumber()]);
+        action.set("service",
+                   builder.getI64IntegerAttr(argument.getArgNumber()));
+      }
       if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op)) {
         action.set("maximum", repeat.getMaximumAttr());
         action.set("body",
@@ -267,6 +280,9 @@ class Projector {
       if (auto completion = dyn_cast<protocol_ir::FinishIfOp>(op))
         if (completion.getOwnerAttr() == roleName)
           append_range(pending, completion.getOperands());
+      if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(op))
+        if (is_contained(start.getRoles(), roleName))
+          append_range(pending, start.getInputs());
       if (auto query = dyn_cast<zkc::protocol_ir::QueryOp>(op))
         if (query.getOwnerAttr() == roleName)
           llvm::append_range(pending, query.getInputs());
@@ -411,6 +427,14 @@ class Projector {
         for (auto [old, value] :
              zip(call.getResults(), invocation.getResults()))
           mapping.map(old, value);
+      } else if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
+        if (!is_contained(start.getRoles(), roleName))
+          continue;
+        SmallVector<Value> inputs;
+        for (Value input : start.getInputs())
+          inputs.push_back(mapping.lookup(input));
+        protocol_ir::ConstructionStartOp::create(
+            builder, op.getLoc(), inputs, start.getRoles(), start.getSite());
       } else if (auto query = dyn_cast<zkc::protocol_ir::QueryOp>(op)) {
         if (query.getOwnerAttr() != roleName)
           continue;
@@ -520,6 +544,15 @@ public:
   OwningOpRef<ModuleOp> run(ModuleOp source) {
     auto common =
         cast<zkc::protocol_ir::ProtocolModuleOp>(source.getBody()->front());
+    if (!common.getBody()
+             .front()
+             .getOps<zkc::protocol_ir::ConstructionOp>()
+             .empty()) {
+      (void)diagnostics::emit(
+          common.emitOpError(), "protocol-construction",
+          "selected construction must be consumed by proof construction");
+      return {};
+    }
     // Bound the prospective role expansion before allocating participant bodies
     // or performing one dependency traversal per role. Preparation may already
     // have removed valid unused total work, so charge the current SSA graph.
@@ -763,9 +796,7 @@ LogicalResult simplifyCalculations(Operation *body) {
   // Select patterns only from the admitted primitive vocabulary present in
   // this body. Do not collect every pattern registered with this context.
   body->walk([&](Operation *op) {
-    // Tensor container identity is part of the closed profile. Exclude these
-    // operations from both upstream folders and canonicalization patterns.
-    if (!isTotal(op) || op->getName().getDialectNamespace() == "tensor")
+    if (!isTotal(op))
       return;
     worklist.push_back(op);
     if (names.insert(op->getName()).second)
@@ -844,7 +875,8 @@ namespace {
 // Admit and realize Local algorithms before generic total simplification. The
 // accepted Local definitions are frozen for preparation and projection checks.
 OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
-                                    MathematicalSelectionPolicy policy) {
+                                    MathematicalSelectionPolicy policy,
+                                    ArrayRef<ApplicationStart> starts = {}) {
   auto candidate = rewriteLocalAlgorithms(source, policy);
   if (!candidate)
     return {};
@@ -852,8 +884,8 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
       cast<zkc::protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
   OwningOpRef<protocol_ir::ProtocolModuleOp> beforeApplications(
       cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
-  if (failed(expandApplications(unit)) || failed(verify(*candidate)) ||
-      failed(verifyPreparedValues(*beforeApplications, unit)))
+  if (failed(expandApplications(unit, starts)) || failed(verify(*candidate)) ||
+      failed(verifyPreparedValues(*beforeApplications, unit, starts)))
     return {};
   OwningOpRef<protocol_ir::ProtocolModuleOp> expanded(
       cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
@@ -1013,6 +1045,12 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
   }
 };
 } // namespace
+
+OwningOpRef<ModuleOp> prepareProtocol(ModuleOp source, bool simplify,
+                                      MathematicalSelectionPolicy policy,
+                                      ArrayRef<ApplicationStart> starts) {
+  return prepareSource(source, simplify, policy, starts);
+}
 
 std::optional<PreparedProtocol>
 PreparedProtocol::prepare(ModuleOp source, MathematicalSelectionPolicy policy) {

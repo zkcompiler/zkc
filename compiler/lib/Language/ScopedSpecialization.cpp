@@ -11,7 +11,7 @@ using namespace llvm;
 namespace zkc::language::detail {
 namespace {
 bool same(Span a, Span b) {
-  return a.module.index == b.module.index && a.begin == b.begin &&
+  return a.source.index == b.source.index && a.begin == b.begin &&
          a.end == b.end;
 }
 bool same(ArrayRef<ValueId> a, ArrayRef<ValueId> b) {
@@ -63,15 +63,15 @@ class SpecializationCheck {
                             ArrayRef<Type> arguments) {
     auto result = types.substitution(declaration, arguments);
     auto parent = declaration.parent;
-    while (parent && source[parent->index].kind != Declaration::Kind::Component)
+    while (parent && source[parent->index].kind != Declaration::Kind::Module)
       parent = source[parent->index].parent;
     if (parent) {
-      const auto &component = source[parent->index];
-      Type self(Type::Kind::Component, component.qualifiedName);
+      const auto &module = source[parent->index];
+      Type self(Type::Kind::Module, module.qualifiedName);
       self.arguments.assign(arguments.begin(),
-                            arguments.begin() + component.parameters.size());
-      if (component.implementation)
-        result.emplace("self:" + component.implementation->domain, self);
+                            arguments.begin() + module.parameters.size());
+      if (module.implementation)
+        result.emplace("self:" + module.implementation->domain, self);
     }
     return result;
   }
@@ -283,21 +283,20 @@ class SpecializationCheck {
             a.argumentOrder != b.argumentOrder ||
             a.scopedArguments != b.scopedArguments ||
             a.domainArguments != b.domainArguments ||
-            bool(a.target.component) != bool(b.target.component) ||
+            bool(a.target.module) != bool(b.target.module) ||
             bool(a.notation) != bool(b.notation) ||
             (a.notation && *a.notation != *b.notation) ||
             bool(a.origin) != bool(b.origin) ||
             (a.origin && !same(*a.origin, *b.origin)))
           return refuse(op.span, "call evidence differs");
-        if (a.target.component &&
-            !typeEqual(*a.target.component, *b.target.component, subst,
-                       op.span))
+        if (a.target.module &&
+            !typeEqual(*a.target.module, *b.target.module, subst, op.span))
           return false;
       }
       if (const auto *invoke = std::get_if<ScopedInvoke>(&op.action)) {
         const auto *call = std::get_if<HelperCall>(&out.action);
         if (!call || invoke->binding >= original.scopedBindings.size() ||
-            !call->arguments.empty() || call->component || call->owner ||
+            !call->arguments.empty() || call->module || call->owner ||
             !call->scopedArguments.empty() || !call->domainArguments.empty())
           return refuse(op.span);
         auto selected =
@@ -351,25 +350,25 @@ class SpecializationCheck {
               if (!statics)
                 return false;
               if constexpr (std::is_same_v<T, HelperCall>) {
-                if (bool(action.component) != bool(value.component) ||
+                if (bool(action.module) != bool(value.module) ||
                     action.owner != value.owner ||
                     !value.scopedArguments.empty() ||
                     !value.domainArguments.empty())
                   return false;
-                if (action.component) {
-                  auto component = type(*action.component, subst, op.span);
-                  if (!component || *component != *value.component)
+                if (action.module) {
+                  auto module = type(*action.module, subst, op.span);
+                  if (!module || *module != *value.module)
                     return false;
-                  auto *definition = types.typeDeclaration(*component);
+                  auto *definition = types.typeDeclaration(*module);
                   if (!definition ||
-                      definition->kind != Declaration::Kind::Component)
+                      definition->kind != Declaration::Kind::Module)
                     return false;
                   bool found = false;
                   for (auto member : definition->members)
                     if (source[member.index].name ==
                         source[target.index].name) {
                       target = member;
-                      *statics = component->arguments;
+                      *statics = module->arguments;
                       found = true;
                       break;
                     }
@@ -630,6 +629,106 @@ class SpecializationCheck {
     }
     return true;
   }
+  bool construction(const Declaration &original, const Declaration &actual,
+                    const Substitution &subst, unsigned depth) {
+    if (bool(original.construction) != bool(actual.construction))
+      return refuse(actual.span, "construction presence differs");
+    if (!original.construction)
+      return true;
+    const auto &a = *original.construction;
+    const auto &b = *actual.construction;
+    if (!types.charge(a.rules.size() + a.applications.size() + 1, actual.span))
+      return false;
+    auto optionalType = [&](const auto &x, const auto &y) {
+      return bool(x) == bool(y) &&
+             (!x || typeEqual(*x, *y, subst, actual.span));
+    };
+    auto edge = [&](DeclarationId x, DeclarationId y, ArrayRef<Type> args) {
+      auto selected = arguments(args, subst, actual.span);
+      return selected && x.index < source.size() &&
+             instance(y, source[x.index], nullptr, *selected, {}, depth + 1);
+    };
+    auto method = [&](const CallableReference &x, const CallableReference &y,
+                      ArrayRef<Type> args, ArrayRef<Type> closedArgs) {
+      if (x.declaration.index >= source.size() ||
+          !optionalType(x.module, y.module))
+        return false;
+      auto selected = arguments(args, subst, actual.span);
+      if (!selected)
+        return false;
+      auto target = x.declaration;
+      if (x.module) {
+        auto bound = type(*x.module, subst, actual.span);
+        auto *owner = bound ? types.typeDeclaration(*bound) : nullptr;
+        if (!owner || owner->kind != Declaration::Kind::Module ||
+            !types.charge(owner->members.size(), actual.span))
+          return false;
+        auto found = llvm::find_if(owner->members, [&](DeclarationId member) {
+          return source[member.index].name == source[target.index].name;
+        });
+        if (found == owner->members.end() ||
+            ArrayRef<Type>(bound->arguments) != closedArgs)
+          return false;
+        target = *found;
+        *selected = bound->arguments;
+      }
+      if (ArrayRef<Type>(*selected) != closedArgs)
+        return false;
+      return instance(y.declaration, source[target.index], nullptr, *selected,
+                      {}, depth + 1);
+    };
+    if (a.base != b.base || a.root != b.root || a.services != b.services ||
+        a.suite != b.suite || a.nativeBase != b.nativeBase ||
+        a.rules.size() != b.rules.size() ||
+        a.applications.size() != b.applications.size() ||
+        bool(a.parent) != bool(b.parent) ||
+        bool(a.initializer) != bool(b.initializer) ||
+        bool(a.codec) != bool(b.codec) ||
+        !optionalType(a.provider, b.provider) ||
+        !optionalType(a.state, b.state) || !original.target || !actual.target ||
+        !edge(*original.target, *actual.target, original.staticArguments))
+      return refuse(actual.span, "construction closure differs");
+    auto parentArgs = arguments(a.arguments, subst, actual.span);
+    if (!parentArgs || *parentArgs != b.arguments ||
+        (a.parent && !edge(*a.parent, *b.parent, a.arguments)) ||
+        (a.initializer &&
+         !method(*a.initializer, *b.initializer, a.initializerArguments,
+                 b.initializerArguments)))
+      return refuse(actual.span, "construction provider closure differs");
+    if (a.codec) {
+      if (a.codec->inputs != b.codec->inputs ||
+          !typeEqual(a.codec->provider, b.codec->provider, subst,
+                     actual.span) ||
+          !typeEqual(a.codec->record, b.codec->record, subst, actual.span))
+        return refuse(actual.span, "record codec closure differs");
+      for (auto pair : {std::pair{&a.codec->initialize, &b.codec->initialize},
+                        std::pair{&a.codec->write, &b.codec->write},
+                        std::pair{&a.codec->finish, &b.codec->finish}})
+        if (!method(pair.first->target, pair.second->target,
+                    pair.first->arguments, pair.second->arguments))
+          return refuse(actual.span, "record codec method differs");
+    }
+    for (unsigned i = 0; i < a.applications.size(); ++i) {
+      auto args = arguments(a.applications[i].arguments, subst, actual.span);
+      if (!args || *args != b.applications[i].arguments ||
+          a.applications[i].path != b.applications[i].path ||
+          !edge(a.applications[i].construction, b.applications[i].construction,
+                a.applications[i].arguments))
+        return refuse(actual.span, "child construction closure differs");
+    }
+    for (unsigned i = 0; i < a.rules.size(); ++i) {
+      const auto &x = a.rules[i];
+      const auto &y = b.rules[i];
+      auto args = arguments(x.arguments, subst, x.span);
+      if (!args || *args != y.arguments || x.kind != y.kind ||
+          x.path != y.path || x.inputs != y.inputs ||
+          !optionalType(x.payload, y.payload) ||
+          !optionalType(x.chunks, y.chunks) ||
+          !edge(x.handler, y.handler, x.arguments))
+        return refuse(actual.span, "construction handler closure differs");
+    }
+    return true;
+  }
   bool instance(DeclarationId id, const Declaration &original,
                 const ScopedComputation *computation, ArrayRef<Type> statics,
                 ArrayRef<DeclarationId> selected, unsigned depth,
@@ -681,6 +780,8 @@ class SpecializationCheck {
     if (!active.insert(id.index).second)
       return refuse(actual.span, "recursive specialization witness");
     auto subst = substitution(original, statics);
+    if (!computation && !construction(original, actual, subst, depth))
+      return false;
     if (!computation) {
       if (actual.specifications.size() != original.specifications.size() ||
           actual.roles != original.roles ||
@@ -916,6 +1017,23 @@ public:
     if (!instance(entry.protocol().id, source[authored.target->index], nullptr,
                   authored.staticArguments, {}, 1))
       return types.takeError();
+    const auto *proof = authored.proof();
+    const auto *closedProof = entry.entry().proof();
+    if (bool(proof) != bool(closedProof) ||
+        bool(proof && proof->selectedConstruction) !=
+            bool(closedProof && closedProof->selectedConstruction))
+      return failure("source.scoped-specialization",
+                     "selected construction differs", authored.span);
+    if (proof && proof->selectedConstruction) {
+      if (proof->selectedConstruction->index >= source.size() ||
+          !instance(*closedProof->selectedConstruction,
+                    source[proof->selectedConstruction->index], nullptr,
+                    proof->constructionArguments, {}, 1))
+        return types.diagnostic
+                   ? types.takeError()
+                   : failure("source.scoped-specialization",
+                             "selected construction differs", authored.span);
+    }
     for (const auto &declaration : candidate)
       if (declaration.body && !checked.count(declaration.id.index))
         return failure("source.scoped-specialization",

@@ -512,7 +512,8 @@ void Model::validateFacets(const Record *op) {
         port(r, "otherInput", false);
     } else {
       require(kind == "PublicReplay" || kind == "AcceptanceGuard" ||
-                  kind == "Conjunction",
+                  kind == "Conjunction" || kind == "SourceHistory" ||
+                  kind == "ManagedHistory",
               op, "unsupported semantic facet");
       if (kind == "AcceptanceGuard")
         require(inputs.size() == 1 && outputs.empty() &&
@@ -527,6 +528,24 @@ void Model::validateFacets(const Record *op) {
                     sameType(inputs[0], outputs[0]),
                 op, "conjunction signature mismatch");
     }
+  }
+  if (kinds.count("ManagedHistory")) {
+    require(history && name(op->getValueAsDef("stage")) == "Source", op,
+            "managed authoring requires an explicit source history transition");
+    port(history, "stateInput", false, "transcript");
+    port(history, "stateOutput", true, "transcript");
+  }
+  if (kinds.count("SourceHistory")) {
+    require(history && !sampling && !observation &&
+                name(op->getValueAsDef("stage")) == "Source",
+            op, "source history requires an explicit data-state transition");
+    auto *state = port(history, "stateInput", false);
+    require(state->isSubClassOf("ZKC_Apply"), op,
+            "source history requires a concrete state constructor");
+    auto *type = state->getValueAsDef("constructor");
+    require(type->getValueAsBit("copy") && type->getValueAsBit("drop") &&
+                state->getValueAsListOfDefs("arguments").empty(),
+            op, "source history state must be copyable and discardable data");
   }
   if (observation ||
       (sampling && name(sampling->getValueAsDef("provider")) == "Transcript")) {
@@ -596,6 +615,10 @@ void emitFacets(raw_ostream &os, const Record *op) {
       os << "c.acceptanceGuard = true;\n";
     else if (kind == "Conjunction")
       os << "c.conjunction = true;\n";
+    else if (kind == "SourceHistory")
+      os << "c.sourceHistory = true;\n";
+    else if (kind == "ManagedHistory")
+      os << "c.managedHistory = true;\n";
     else if (kind == "History")
       os << "c.history = HistoryContract{" << number(r, "stateInput") << ", "
          << number(r, "stateOutput") << "};\n";

@@ -2,6 +2,8 @@
 def TypeBool : ZKC_Type<"bool", [], PublicValue, 1, 1> { int ordinal = 0; }
 def TypeIndex : ZKC_Type<"index", [], PublicValue, 1, 1> { int ordinal = 1; }
 def TypeIndices : ZKC_Type<"indices", [], PublicValue, 1, 1> { int ordinal = 2; }
+def TypeShake128State : ZKC_Type<"shake128_state", [], PrivateImmutable, 1, 1> { int ordinal = 26; }
+def TypeBytes : ZKC_Type<"bytes", [], PublicValue, 1, 1> { int ordinal = 25; }
 def TypeField : ZKC_Type<"field", [FieldDomain], PublicValue, 1, 1> { int ordinal = 3; }
 def TypeVector : ZKC_Type<"vector", [FieldDomain], PublicValue, 1, 1> { int ordinal = 4; }
 def TypeMatrix : ZKC_Type<"matrix", [FieldDomain], PublicValue, 1, 1> { int ordinal = 5; }
@@ -44,6 +46,8 @@ def ExportTypeProverKey : ZKC_TypeExport<"zkc::pcs", "ProverKey", TypeProverKey>
 def ExportTypeVerifierKey : ZKC_TypeExport<"zkc::pcs", "VerifierKey", TypeVerifierKey>;
 def ExportTypeOpeningState : ZKC_TypeExport<"zkc::pcs", "OpeningState", TypeOpeningState>;
 def ExportTypeIndices : ZKC_TypeExport<"zkc::algebra", "Indices", TypeIndices>;
+def ExportTypeShake128State : ZKC_TypeExport<"zkc::shake128", "State", TypeShake128State>;
+def ExportTypeBytes : ZKC_TypeExport<"zkc::bytes", "Bytes", TypeBytes>;
 
 // Source families reduce only for an explicitly known nominal element head.
 def VectorFamily : ZKC_TypeFamily<"vector-family">;

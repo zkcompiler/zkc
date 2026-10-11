@@ -11,11 +11,10 @@ bool sameOperands(ArrayRef<ValueId> a, ArrayRef<ValueId> b) {
                     [](ValueId x, ValueId y) { return x.index == y.index; });
 }
 bool sameTarget(const CallableReference &a, const CallableReference &b) {
-  return a.declaration.index == b.declaration.index &&
-         a.component == b.component;
+  return a.declaration.index == b.declaration.index && a.module == b.module;
 }
 bool sameSpan(Span a, Span b) {
-  return a.module.index == b.module.index && a.begin == b.begin &&
+  return a.source.index == b.source.index && a.begin == b.begin &&
          a.end == b.end;
 }
 bool checkNotationArity(Semantics &types, const NotationDescriptor &notation,
@@ -89,8 +88,7 @@ class GroundMatch {
            actual.kind != Type::Kind::Natural) ||
           (parameter->sort == S::Asset &&
            assetSort(actual) != parameter->domainSort) ||
-          (parameter->sort == S::Component &&
-           actual.kind != Type::Kind::Component) ||
+          (parameter->sort == S::Module && actual.kind != Type::Kind::Module) ||
           (parameter->sort == S::Type &&
            (!valueType(actual) || actual.kind == Type::Kind::Formal)))
         return false;
@@ -154,9 +152,9 @@ public:
     for (unsigned i = 0; i < binding.arguments.size(); ++i)
       if (binding.arguments[i])
         bound.emplace(callee.parameters[i].atom, *binding.arguments[i]);
-    if (binding.target.component) {
-      auto inherited = types.boundMemberSubstitution(
-          callee, *binding.target.component, span);
+    if (binding.target.module) {
+      auto inherited =
+          types.boundMemberSubstitution(callee, *binding.target.module, span);
       if (!inherited)
         return excluded();
       for (const auto &[name, value] : *inherited)
@@ -435,10 +433,10 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
       if (arguments[i] && *arguments[i] != witness.arguments[i])
         return refuse();
     auto substitution = types.substitution(selected, witness.arguments);
-    if (target.component && selected.parent)
+    if (target.module && selected.parent)
       substitution.emplace(
           "self:" + declarations[selected.parent->index].qualifiedName,
-          *target.component);
+          *target.module);
     auto result =
         types.substitute(selected.outputs[0].type, substitution, span);
     return result && (*result == output || refuse());
@@ -456,9 +454,9 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
        notation.symbol == "==" && selected.outputs.front().type != Type{}))
     return refuse();
   auto subst = types.substitution(selected, witness.arguments);
-  if (witness.target.component && selected.parent)
+  if (witness.target.module && selected.parent)
     subst.emplace("self:" + declarations[selected.parent->index].qualifiedName,
-                  *witness.target.component);
+                  *witness.target.module);
   bool found = false;
   for (unsigned i = 0; i < expected.size(); ++i) {
     const auto &binding = expected[i];
@@ -542,9 +540,9 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
       operation.results.front().index >= body.values.size())
     return refuse();
   auto subst = types.substitution(callee, binding.arguments);
-  if (binding.target.component && callee.parent)
+  if (binding.target.module && callee.parent)
     subst.emplace("self:" + declarations[callee.parent->index].qualifiedName,
-                  *binding.target.component);
+                  *binding.target.module);
   for (unsigned i = 0; i < binding.operands.size(); ++i) {
     auto expected =
         types.substitute(callee.inputs[i].type, subst, operation.span);
@@ -573,7 +571,7 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
     auto *action = std::get_if<HelperCall>(&operation.action);
     return (action && action->callee.index == callee.id.index &&
             action->arguments == binding.arguments &&
-            action->component == binding.target.component &&
+            action->module == binding.target.module &&
             action->scopedArguments == binding.scopedArguments &&
             action->domainArguments == binding.domainArguments &&
             sameOperands(action->operands, binding.operands)) ||

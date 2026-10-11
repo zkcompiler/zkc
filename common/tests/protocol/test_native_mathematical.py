@@ -98,7 +98,7 @@ def check_authored_transcript_commands(toolchain, journal, directory):
         deployment = directory / f'{name}.deployment'
         proof = directory / f'{name}.cli.proof'
         args = [deployment, hashlib.sha256(deployment.read_bytes()).hexdigest()]
-        options = ['--allow-header-only']
+        options = ['--allow-authored']
         if case['family'] == 'prefix':
             options.append(f'--attempt-policy={attempt_policy}')
         produced = journal.json([toolchain.runtime, '--json', 'prove-bundle', *args,
@@ -123,7 +123,7 @@ def check_authored_transcript_commands(toolchain, journal, directory):
             else:
                 assert summary == prefix_summaries[early]
         checked = journal.json([toolchain.runtime, '--json', 'verify-bundle', *args,
-                                directory / f'{name}.validator.json', proof, '--allow-header-only'])
+                                directory / f'{name}.validator.json', proof, '--allow-authored'])
         assert checked['status'] == 'accepted', checked
         assert checked['external_work_limit'] == 16777216
         assert proof.read_bytes() == (directory / f'{name}.proof').read_bytes()
@@ -140,7 +140,7 @@ def check_nested_proof_commands(toolchain, journal, directory):
         args = [deployment, hashlib.sha256(deployment.read_bytes()).hexdigest()]
         options = [f'--setups={directory / "nested.setups.json"}'] if case['family'] == 'batched-openings' else []
         if case['family'] in ('batched-openings', 'ragged-matrices', 'matrix'):
-            options.append('--allow-header-only')
+            options.append('--allow-authored')
         produced = journal.json([toolchain.runtime, '--json', 'prove-bundle', *args,
                                  directory / f'{name}.producer.json', proof, *options])
         assert produced['status'] == 'produced'
@@ -162,7 +162,7 @@ def check_native_proof_commands(toolchain, journal, directory):
         proof = directory / f'{name}.cli.proof'
         args = [deployment, pin]
         # This named fixture uses an authored fixed challenge. The others use FS.
-        options = ['--allow-header-only'] if name == 'authored' else []
+        options = ['--allow-authored'] if name == 'authored' else []
         if name == 'authored':
             proof.write_bytes(b'previous proof')
             for command, request in [('prove-bundle', producer), ('verify-bundle', validator)]:
@@ -245,7 +245,7 @@ def check_committed_proof_commands(toolchain, journal, directory):
         proof = directory / f'{name}.cli.proof'
         authority = directory / f'{name}.setups.json'
         pin = f'--setups={authority}'
-        options = ['--allow-header-only'] if case['family'] in ('authored', 'structured') else []
+        options = ['--allow-authored'] if case['family'] in ('authored', 'structured') else []
         journal.json([toolchain.runtime, '--json', 'prove-bundle', *args, producer, proof], refuses='native-proof-key-authority')
         assert not proof.exists()
         assert journal.json([toolchain.runtime, '--json', 'prove-bundle', *args, producer, proof, pin, *options])['status'] == 'produced'
@@ -319,7 +319,7 @@ def check_structured_proof_commands(toolchain, journal, directory):
         name = case['name']
         deployment = directory / f'{name}.deployment'
         pin = hashlib.sha256(deployment.read_bytes()).hexdigest()
-        options = ['--allow-header-only'] if 'standalone' in case else []
+        options = ['--allow-authored'] if 'standalone' in case else []
         for stem in ([name] if 'standalone' in case else
                      [f'{name}_{tag}_{count}' for tag, count in [(0, 0), (1, 4), (2, 7)]]):
             producer = directory / f'{stem}.producer.json'
@@ -372,7 +372,7 @@ def check_relation_binding_commands(toolchain, journal, directory):
         deployment = directory / f'{name}.deployment'
         args = [deployment, hashlib.sha256(deployment.read_bytes()).hexdigest()]
         # Only the explicitly derived fixtures request compiler transcript construction.
-        options = [] if name.endswith('_derived') else ['--allow-header-only']
+        options = [] if name.endswith('_derived') else ['--allow-authored']
         proof = directory / f'{name}.cli.proof'
         report = journal.json([toolchain.runtime, '--json', 'prove-bundle', *args,
                                directory / f'{name}.producer.json', proof, *options])
@@ -398,7 +398,7 @@ def check_domain_commands(toolchain, journal, directory, setups):
         options = [f'--setups={directory / (name + ".setups.json")}'] if setups else []
         # Base setup cases use authored transcripts; derived and early cases use FS.
         if setups and name != 'derived' and not case.get('early'):
-            options.append('--allow-header-only')
+            options.append('--allow-authored')
         proof = directory / f'{name}.cli.proof'
         producer = directory / f'{name}.producer.json'
         validator = directory / f'{name}.validator.json'
@@ -437,7 +437,7 @@ def check_composition_commands(toolchain, journal, directory):
     for name in ['qap-composition', 'air-composition', 'target-accumulation']:
         deployment = directory / f'{name}.deployment'
         args = [deployment, hashlib.sha256(deployment.read_bytes()).hexdigest()]
-        options = [] if name == 'air-composition' else ['--allow-header-only']
+        options = [] if name == 'air-composition' else ['--allow-authored']
         proof = directory / f'{name}.cli.proof'
         producer = directory / f'{name}.producer.json'
         validator = directory / f'{name}.validator.json'
@@ -562,7 +562,7 @@ def check_source_setup_commands(toolchain, journal, directory):
                 *[f'--key={p.stem.removeprefix("cli-vk-")}={p}' for p in sorted(directory.glob('cli-vk-*.bin'))]]
     proof = directory / 'separate-cli-pcs-proof.bin'
     target = [f'--package={package}', f'--sha256={pin}', *settings,
-              f'--public={directory / "cli-public.json"}', '--allow-header-only']
+              f'--public={directory / "cli-public.json"}', '--allow-authored']
     producing = [toolchain.runtime, '--json', 'prove', *target, f'--witness={directory / "cli-witness.json"}']
     journal.run([*producing, f'--output={proof}'])
     journal.run([toolchain.runtime, '--json', 'verify', *target, f'--proof={proof}'])

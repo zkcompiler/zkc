@@ -30,6 +30,16 @@ void zkc::data::DataDialect::initialize() {
       >();
 }
 namespace zkc::data {
+CollectionKind BytesType::getCollectionKind() const {
+  return CollectionKind::Bytes;
+}
+Type BytesType::getElementType() const {
+  return IntegerType::get(getContext(), 8, IntegerType::Unsigned);
+}
+unsigned BytesType::getRank() const { return 1; }
+std::optional<uint64_t> BytesType::getStaticExtent(unsigned) const {
+  return std::nullopt;
+}
 CollectionKind SequenceType::getCollectionKind() const {
   return CollectionKind::Sequence;
 }
@@ -149,15 +159,6 @@ LogicalResult DimOp::verify() {
   auto axis = getAxisAttr().getInt();
   if (axis < 0 || uint64_t(axis) >= collection.getRank())
     return refuse(*this, "collection dimension axis");
-  auto bound = protocol::encodeBoundType(getInput().getType(), false);
-  if (!bound) {
-    llvm::consumeError(bound.takeError());
-    return refuse(*this, "unsupported canonical collection");
-  }
-  if (bound->kind != "vector" && bound->kind != "matrix" &&
-      bound->kind != "indices" && bound->kind != "groups" &&
-      bound->kind != "field_array")
-    return refuse(*this, "unsupported collection shape observation");
   return success();
 }
 } // namespace zkc::data

@@ -73,6 +73,11 @@ unsigned removeAbsorption(ModuleOp module, StringRef origin) {
   };
   construction.set(
       "actions", filter(filter, cast<ArrayAttr>(construction.get("actions"))));
+  SmallVector<Attribute> helpers;
+  for (auto ref : cast<ArrayAttr>(construction.get("helpers")))
+    if (cast<FlatSymbolRefAttr>(ref).getValue() != helper)
+      helpers.push_back(ref);
+  construction.set("helpers", ArrayAttr::get(context, helpers));
   interface.set("construction", construction.getDictionary(context));
   projection.setInterfacesAttr(
       ArrayAttr::get(context, {interface.getDictionary(context)}));
@@ -107,7 +112,7 @@ int main(int argc, char **argv) {
   auto source = parseSourceFile<ModuleOp>(argv[1], &context);
   require(bool(source), "fixture parse");
   auto policy = take(parseNativeProofPolicy(
-      R"(["zkc.native-proof-policy/0", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/0", "4", ["0", "2"], [["draw_challenge", "challenge"]]])"));
+      R"(["zkc.native-proof-policy/0", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/0", ["4"], ["0", "2"], [["draw_challenge", "challenge"]], "zkc.framed/0", ""])"));
   auto built = take(constructNativeProof(*source, policy));
   auto projected = OwningOpRef<ModuleOp>(cast<ModuleOp>((*source)->clone()));
   PassManager passes(&context);
@@ -132,6 +137,52 @@ int main(int argc, char **argv) {
     if (auto e = zkc::detail::verifyNativeTranscript(*projected, *built.module,
                                                      policy, events))
       throw std::runtime_error(toString(std::move(e)));
+  });
+  cases.run("native fallback requires the selected plan's permission", [&] {
+    auto candidate =
+        OwningOpRef<ModuleOp>(cast<ModuleOp>((*built.module)->clone()));
+    auto selected = policy;
+    selected.construction = "derived";
+    auto root = *candidate->getOps<pir::ProtocolModuleOp>().begin();
+    auto projection =
+        *root.getBody().front().getOps<pir::ProjectionOp>().begin();
+    NamedAttrList interface(
+        cast<DictionaryAttr>(projection.getInterfaces()[0]));
+    NamedAttrList construction(
+        cast<DictionaryAttr>(interface.get("construction")));
+    construction.set("plan", StringAttr::get(&context, selected.construction));
+    interface.set("construction", construction.getDictionary(&context));
+    projection.setInterfacesAttr(
+        ArrayAttr::get(&context, {interface.getDictionary(&context)}));
+    require(succeeded(verify(*candidate)), "named native plan remains formed");
+    protocol::ConstructionPlan plan{};
+    plan.root = protocol::ConstructionPlan::Root::Host;
+    plan.symbol = FlatSymbolRefAttr::get(&context, selected.construction);
+    plan.suite = selected.suite;
+    plan.services.assign(selected.services.begin(), selected.services.end());
+    plan.nativeBase = true;
+    plan.state.push_back(
+        local::CapabilityType::get(&context, "transcript:" + selected.suite));
+    if (auto error = zkc::detail::verifyNativeTranscript(
+            *projected, *candidate, selected, events, &plan))
+      throw std::runtime_error(toString(std::move(error)));
+    for (StringRef mutation : {"fallback", "suite", "services", "selection"}) {
+      auto altered = plan;
+      if (mutation == "fallback")
+        altered.nativeBase = false;
+      else if (mutation == "suite")
+        altered.suite = "different";
+      else if (mutation == "services")
+        altered.services.clear();
+      else
+        altered.symbol = FlatSymbolRefAttr::get(&context, "other");
+      auto error = zkc::detail::verifyNativeTranscript(
+          *projected, *candidate, selected, events, &altered);
+      require(bool(error) &&
+                  namesIdentifier(toString(std::move(error)),
+                                  "native-transcript-correspondence"),
+              "changed plan permission accepted");
+    }
   });
   auto mutation = [&](StringRef name,
                       llvm::function_ref<bool(ModuleOp)> change) {
@@ -261,7 +312,7 @@ int main(int argc, char **argv) {
     auto input = parseSourceString<ModuleOp>(loopFixture, &context);
     require(bool(input), "loop fixture parse");
     auto selected = take(parseNativeProofPolicy(
-        R"(["zkc.native-proof-policy/0","main","P","V","0","merlin3.bls12-381.fr64be/0","2",["0","1"],[["draw","challenge"]]])"));
+        R"(["zkc.native-proof-policy/0","main","P","V","0","merlin3.bls12-381.fr64be/0",["2"],["0","1"],[["draw","challenge"]], "zkc.framed/0", ""])"));
     auto construction = take(constructNativeProof(*input, selected));
     SmallVector<zkc::detail::NativeTranscriptEvent> facts;
     auto &sequence = *(*construction.descriptor.getAsArray())[3].getAsArray();

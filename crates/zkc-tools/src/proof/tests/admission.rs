@@ -61,9 +61,11 @@ fn deployment() -> Json {
             "V",
             "3",
             "",
-            "",
+            [],
             ["2"],
-            []
+            [],
+            "zkc.framed/0",
+            ""
         ],
         "zkc.native-origin/0",
         [["message", first], ["message", second]],
@@ -71,7 +73,8 @@ fn deployment() -> Json {
         [
             [first, "bool", "zkcv.bool/0"],
             [second, "bool", "zkcv.bool/0"]
-        ]
+        ],
+        []
     ]);
     let mut result = json!([
         "zkc.native-proof/0",
@@ -106,6 +109,82 @@ fn seal(value: &mut Json) {
 fn admit(value: &Json) -> Result<NativeDeployment> {
     let bytes = serde_json::to_vec(value).unwrap();
     NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+}
+
+#[test]
+fn oversized_event_inventories_refuse_before_decoding_their_rows() {
+    for field in [3, 5] {
+        let mut value = deployment();
+        value[2][field] = json!(vec![json!([]); 2049]);
+        seal(&mut value);
+        assert_eq!(admit(&value).unwrap_err(), "native-proof-event-map");
+    }
+}
+
+#[test]
+fn raw_transport_requires_one_byte_message_and_executes_through_the_sdk() {
+    let mut value = deployment();
+    value[2][1][9] = json!("raw.bytes/0");
+    seal(&mut value);
+    assert_eq!(admit(&value).unwrap_err(), "native-proof-format");
+    let mut program: Json = serde_json::from_str(value[4].as_str().unwrap()).unwrap();
+    for i in [0, 1] {
+        program[3][0][4][i][1] = json!("bytes@native.bytes/0");
+        value[6][0][2][i][1] = json!("bytes");
+    }
+    program[3][0][6].as_array_mut().unwrap().remove(1);
+    program[3][1][6].as_array_mut().unwrap().remove(1);
+    program[3][1][6][0][5] = json!("bytes@native.bytes/0");
+    program[3][1][6][1][1] = json!(["public"]);
+    value[4] = json!(program.to_string());
+    value[2][3].as_array_mut().unwrap().truncate(1);
+    value[2][5].as_array_mut().unwrap().truncate(1);
+    value[2][5][0][1] = json!("bytes");
+    value[2][5][0][2] = json!("zkc.native-data/0");
+    value[8].as_array_mut().unwrap().truncate(1);
+    seal(&mut value);
+    let host = admit(&value).unwrap();
+    let input = || {
+        InputValue::Native(Box::new(Value::Bytes(std::sync::Arc::from(
+            &b"raw payload"[..],
+        ))))
+    };
+    let mut producer = request(true, true, true);
+    producer.inputs[0] = input();
+    producer.inputs[1] = input();
+    let proof = host
+        .execute(&producer, Invocation::Prove)
+        .unwrap()
+        .outcome
+        .unwrap();
+    assert_eq!(proof, b"raw payload");
+    let verified = host
+        .execute(&request(false, true, true), Invocation::Verify(&proof))
+        .unwrap();
+    assert!(verified.outcome.is_ok());
+    assert!(verified.cleanup_errors.is_empty());
+    assert_eq!(verified.bytes, proof.len());
+    assert_eq!(verified.messages, 1);
+
+    // Raw transport preserves the authored algorithm. Host context identifies
+    // a report; it is not silently prepended to an external proof transcript.
+    let mut other_context = request(false, true, true);
+    other_context.context = b"another host invocation".to_vec();
+    let other = host
+        .execute(&other_context, Invocation::Verify(&proof))
+        .unwrap();
+    assert!(other.outcome.is_ok());
+    assert_ne!(other.binding, verified.binding);
+
+    producer.inputs[0] = InputValue::Native(Box::new(Value::Bytes(std::sync::Arc::from([]))));
+    let empty = host.execute(&producer, Invocation::Prove).unwrap();
+    assert!(empty.outcome.unwrap().is_empty());
+    let empty = host
+        .execute(&request(false, true, true), Invocation::Verify(&[]))
+        .unwrap();
+    assert!(empty.outcome.is_ok());
+    assert_eq!(empty.messages, 1);
+    assert_eq!(empty.bytes, 0);
 }
 
 fn request(producer: bool, decision: bool, public: bool) -> ProofInputs {
@@ -154,7 +233,7 @@ fn proof_cli_preserves_trusted_inputs_and_publishes_only_to_distinct_regular_pat
             input.display().to_string(),
             destination.display().to_string(),
             format!("--setups={}", authority.display()),
-            "--allow-header-only".into(),
+            "--allow-authored".into(),
         ]
     };
     for path in [&bundle, &input, &authority] {
@@ -204,15 +283,15 @@ fn proof_cli_rejects_malformed_pins_before_typed_admission() {
     std::fs::write(&bundle, b"[").unwrap();
     std::fs::write(&proof, b"previous proof").unwrap();
     for command in ["prove-bundle", "verify-bundle"] {
-        for allow_header_only in [false, true] {
+        for allow_authored in [false, true] {
             let mut args = vec![
                 bundle.display().to_string(),
                 String::new(),
                 inputs.display().to_string(),
                 proof.display().to_string(),
             ];
-            if allow_header_only {
-                args.push("--allow-header-only".into());
+            if allow_authored {
+                args.push("--allow-authored".into());
             }
             for pin in [
                 String::new(),
@@ -318,7 +397,7 @@ fn proof_cli_requires_explicit_header_policy_after_independent_pin_admission() {
             crate::cli::run(command, &absent)["code"],
             "native-proof-binding-policy"
         );
-        for options in [vec![], vec!["--allow-header-only"]] {
+        for options in [vec![], vec!["--allow-authored"]] {
             let mut wrong_pin = args.clone();
             wrong_pin[1] = "0".repeat(64);
             wrong_pin.extend(options.into_iter().map(String::from));
@@ -327,8 +406,8 @@ fn proof_cli_requires_explicit_header_policy_after_independent_pin_admission() {
             assert!(refused.get("binding_scope").is_none());
         }
         for options in [
-            vec!["--allow-header-only", "--allow-header-only"],
-            vec!["--allow-header-only=true"],
+            vec!["--allow-authored", "--allow-authored"],
+            vec!["--allow-authored=true"],
         ] {
             let mut invalid = args.clone();
             invalid.extend(options.into_iter().map(String::from));
@@ -336,7 +415,7 @@ fn proof_cli_requires_explicit_header_policy_after_independent_pin_admission() {
             assert_eq!(std::fs::read(&proof).unwrap(), previous);
         }
         let mut allowed = args;
-        allowed.push("--allow-header-only".into());
+        allowed.push("--allow-authored".into());
         let accepted = crate::cli::run(command, &allowed);
         assert!(crate::cli::succeeded(&accepted), "{accepted}");
         assert_eq!(accepted["status"], status);

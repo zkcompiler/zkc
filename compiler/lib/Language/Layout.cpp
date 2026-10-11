@@ -263,9 +263,8 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   if (type.kind == K::Array && type.arguments.size() != 1)
     return error("source.layout", "array requires one element type");
   if (type.kind == K::Associated &&
-      (type.arguments.size() != 1 ||
-       type.arguments.front().kind != K::Component))
-    return error("source.layout", "associated type requires one component");
+      (type.arguments.size() != 1 || type.arguments.front().kind != K::Module))
+    return error("source.layout", "associated type requires one module");
   auto result = std::make_shared<Layout>();
   result->type = type;
   result->permissions = {true, true, true, true};
@@ -285,7 +284,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       owner = &definitions[decl->parent->index];
       if (type.arguments.front().domain != owner->qualifiedName ||
           decl->abstract)
-        return error("source.layout", "associated component identity differs");
+        return error("source.layout", "associated module identity differs");
       args = &type.arguments.front().arguments;
     }
     if (owner->parameters.size() != args->size())

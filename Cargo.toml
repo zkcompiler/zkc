@@ -49,7 +49,10 @@ rand = "=0.10.3"
 serde = "=1.0.229"
 sha2 = "=0.11.0"
 sha3 = "=0.12.0"
+shake = "=0.1.0"
 spongefish = { version = "=0.8.0", default-features = false }
+# Independent external-proof oracle; production providers use the current pin.
+spongefish-074 = { package = "spongefish", version = "=0.7.4", default-features = false }
 
 # OpenVM adapters use the separately pinned 0.4.3 family.
 p3-baby-bear-043 = { package = "p3-baby-bear", version = "=0.4.3" }

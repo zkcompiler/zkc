@@ -99,6 +99,28 @@ with exact nominal identity and payload layouts. A noncopyable restricted nomina
 or associated value has a leading `resource_unit` custody leaf even when its data
 is empty. Custody slot identities use the complete SHA-256 digest of canonical source type identity, with collision refusal; traversal order does not affect them. Empty unrestricted products have no leaves, but remain logical values.
 
+## Selected constructions
+
+A closed programmable construction emits one `protocol.construction` symbol
+beside its target `protocol.func` and ordinary Local functions. It retains the
+provider identity, root kind, ordered state types, initializer symbol,
+sorted replacement service indices, native-base requirement and resolved handler rules.
+Rules refer to Local symbols. Start selectors identify original flattened input
+ports; message selectors retain the ordered native leaves of one logical
+payload. Query bodies retain the source `(state, value)` result order.
+Each rule dictionary contains `kind`, `handler`, `sites`, `inputs`, `payload`
+and `chunks`. Codec rules retain payload and chunk types separately. The optional
+`codec` dictionary contains exactly `provider`, `record`, `initialize`, `write`,
+`finish` and `inputs`: a closed provider identity, native Record types, three
+Local symbols and the ordered original layout input indices.
+
+Independent source comparison checks the complete selection, including handler
+identity and every call-qualified site. Native record verification checks
+signatures, shared start inputs and root permissions. Preparation preserves the
+record exactly. Ordinary projection refuses an unconsumed construction;
+the proof constructor must admit its occurrences and consume the selection
+before projecting participants.
+
 ## Source and native names
 
 Source names follow the [Unicode profile](lexical.md); native identities retain
@@ -193,3 +215,11 @@ mutable original IR. The existing compiler receives those bytes and the selected
 protocol symbol. Run jobs emit `zkc.run/0`; proof jobs use the native proof policy
 and deployment schemas. Both contain ordinary `zkc.program/0` participant programs.
 Every protocol in the selected closure passes target preparation.
+
+The selected Entry interface represents this association as
+`construction: {kind: "derived", format, symbol, suite, service}`. `suite` is null
+for a Local factory. The independently read interface checks the selected
+Protocol record, provider suite and original replaced service set. The Host binds
+that symbol to the executable construction plan and uses the ordinary compiled
+participant programs. A custom selection does not inherit the installed
+construction's invocation-binding claim.

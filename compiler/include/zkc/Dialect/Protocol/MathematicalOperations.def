@@ -64,6 +64,8 @@ ZKC_MATH_OPERATION(data::LessOp, Total, Context::Protocol | Context::Participant
 ZKC_MATH_OPERATION(data::MakeOp, Total, Context::Protocol | Context::Participant | Context::Helper, "alternative")
 ZKC_MATH_OPERATION(data::GetOp, Total, Context::Protocol | Context::Participant | Context::Helper, "index")
 ZKC_MATH_OPERATION(data::IsOp, Total, Context::Protocol | Context::Participant | Context::Helper, "alternative")
+
+ZKC_MATH_OPERATION(protocol_ir::ConstructionStartOp, Action, Context::Protocol | Context::Participant, "site", "roles")
 ZKC_MATH_OPERATION(algebra::FiniteFoldOp, Total, Context::Protocol | Context::Participant | Context::Helper, "domain", "step", "predicate")
 ZKC_MATH_OPERATION(algebra::FiniteCollectOp, Total, Context::Protocol | Context::Participant | Context::Helper, "domain", "body", "predicate")
 ZKC_MATH_OPERATION(data::BoundedAtOp, Total, Context::Protocol | Context::Participant | Context::Helper)

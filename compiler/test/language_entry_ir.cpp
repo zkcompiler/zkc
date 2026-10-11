@@ -187,7 +187,8 @@ proof 公開=実行{setup 設定{鍵,秘密};prover 証明;verifier 検証;
   cases.run("source proof compilation retains exact Entry selections", [&] {
     auto checked = original(source);
     const auto &view = checked.interface();
-    require(view.proof && view.proof->target == 0 && view.proof->service == 1 &&
+    require(view.proof && view.proof->target == 0 &&
+                view.proof->services == std::vector<unsigned>{1} &&
                 view.proof->publicInputs == std::vector<unsigned>({0, 1}),
             "Entry choices not retained");
     auto module = parse(checked.bytes());
@@ -223,7 +224,7 @@ proof 公開=実行{setup 設定{鍵,秘密};prover 証明;verifier 検証;
         require(policy[1].getAsString() == checked.entry().protocol().symbol &&
                     policy[2].getAsString() == "role00000000" &&
                     policy[3].getAsString() == "role00000001" &&
-                    policy[6].getAsString() == "4" &&
+                    policy[6] == json::Value(json::Array{"4"}) &&
                     policy[8].getAsArray()->size() == 1,
                 "derived native policy differs");
         require(compiled.options().simplify == simplify &&

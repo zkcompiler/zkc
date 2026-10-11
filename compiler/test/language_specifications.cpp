@@ -300,10 +300,6 @@ int main() {
                          ("module Run;" + visibility +
                           "relation clause_0(statement a:bool){return true;}")
                              .str(),
-                         {}},
-                        {"sample::Run",
-                         "module sample::Run;pub relation clause_0(statement "
-                         "a:bool){return true;}",
                          {}}}));
       auto entry = take(
           closeEntry(take(analyze(captured).checkedProject()), "sample::Demo"));

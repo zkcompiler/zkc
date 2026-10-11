@@ -141,29 +141,28 @@ class Closure {
         return {};
       arguments.push_back(*closed);
     }
-    if (binding.factory->component) {
+    if (binding.factory->module) {
       auto componentType =
-          type(*binding.factory->component, context.statics, binding.span);
+          type(*binding.factory->module, context.statics, binding.span);
       if (!componentType)
         return {};
-      const auto *component = types.typeDeclaration(*componentType);
+      const auto *module = types.typeDeclaration(*componentType);
       const auto &abstract = declarations[target.index];
-      if (!component || component->kind != Declaration::Kind::Component ||
+      if (!module || module->kind != Declaration::Kind::Module ||
           !abstract.parent ||
-          !types.charge(component->members.size(), binding.span)) {
+          !types.charge(module->members.size(), binding.span)) {
         if (!types.diagnostic)
           refuse(binding.span,
-                 "domain factory dispatch needs a concrete component");
+                 "domain factory dispatch needs a concrete module");
         return {};
       }
-      auto selected = llvm::find_if(component->members, [&](DeclarationId id) {
+      auto selected = llvm::find_if(module->members, [&](DeclarationId id) {
         return declarations[id.index].name == abstract.name;
       });
       const auto inherited =
           declarations[abstract.parent->index].parameters.size();
-      if (selected == component->members.end() ||
-          arguments.size() < inherited) {
-        refuse(binding.span, "domain factory component member differs");
+      if (selected == module->members.end() || arguments.size() < inherited) {
+        refuse(binding.span, "domain factory module member differs");
         return {};
       }
       target = *selected;
@@ -188,14 +187,14 @@ class Closure {
                    types.substitution(callee, arguments),
                    {},
                    {}};
-    if (callee.parent && declarations[callee.parent->index].kind ==
-                             Declaration::Kind::Component) {
-      const auto &component = declarations[callee.parent->index];
-      Type self(Type::Kind::Component, component.qualifiedName);
+    if (callee.parent &&
+        declarations[callee.parent->index].kind == Declaration::Kind::Module) {
+      const auto &module = declarations[callee.parent->index];
+      Type self(Type::Kind::Module, module.qualifiedName);
       self.arguments.assign(arguments.begin(),
-                            arguments.begin() + component.parameters.size());
-      if (component.implementation)
-        nested.statics.emplace("self:" + component.implementation->domain,
+                            arguments.begin() + module.parameters.size());
+      if (module.implementation)
+        nested.statics.emplace("self:" + module.implementation->domain,
                                std::move(self));
     }
     for (auto operand : binding.operands) {

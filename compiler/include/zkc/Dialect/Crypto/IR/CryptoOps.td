@@ -8,6 +8,16 @@ include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "zkc/Dialect/Kernels.td"
 
+def EncodingFieldBeOp : KernelOp<CryptoDialect, "exec.encoding_field_be", [OpEncodingFieldBe]>;
+def EncodingFieldFromBeOp : KernelOp<CryptoDialect, "exec.encoding_field_from_be", [OpEncodingFieldFromBe]>;
+def EncodingFieldReduceBeOp : KernelOp<CryptoDialect, "exec.encoding_field_reduce_be", [OpEncodingFieldReduceBe]>;
+def EncodingGroupCompressedOp : KernelOp<CryptoDialect, "exec.encoding_group_compressed", [OpEncodingGroupCompressed]>;
+def EncodingGroupFromCompressedOp : KernelOp<CryptoDialect, "exec.encoding_group_from_compressed", [OpEncodingGroupFromCompressed]>;
+
+def Shake128InitOp : KernelOp<CryptoDialect, "exec.shake128_init", [OpShake128Init]>;
+def Shake128AbsorbOp : KernelOp<CryptoDialect, "exec.shake128_absorb", [OpShake128Absorb]>;
+def Shake128SqueezeOp : KernelOp<CryptoDialect, "exec.shake128_squeeze", [OpShake128Squeeze]>;
+
 def CurveCommitOp : KernelOp<CryptoDialect, "exec.curve_commit", [OpCurveCommit]>;
 
 def CurveResponseOp : KernelOp<CryptoDialect, "exec.curve_response", [OpCurveResponse]>;
@@ -90,6 +100,12 @@ def RandomIndexOp : KernelOp<CryptoDialect, "exec.random_index", [OpRandomIndex]
 
 def RandomVectorOp : KernelOp<CryptoDialect, "exec.random_vector", [OpRandomVector]>;
 
+def TranscriptObserveOp : KernelOp<CryptoDialect,
+    "exec.transcript_observe", [OpTranscriptObserve]>;
+def TranscriptChallengeOp : KernelOp<CryptoDialect,
+    "exec.transcript_challenge", [OpTranscriptChallenge]>;
+def TranscriptIndexOp : KernelOp<CryptoDialect,
+    "exec.transcript_index", [OpTranscriptIndex]>;
 def IndexedTranscriptChallengeOp : KernelOp<CryptoDialect,
     "exec.indexed_transcript_challenge", [OpIndexedTranscriptChallenge]>;
 def IndexedTranscriptObserveDataOp : KernelOp<CryptoDialect,

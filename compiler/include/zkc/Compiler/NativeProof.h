@@ -2,23 +2,29 @@
 #define ZKC_COMPILER_NATIVEPROOF_H
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Compiler/Compilation.h"
+#include "zkc/Contracts/ProofFormat.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 #include "llvm/Support/JSON.h"
 #include <variant>
 namespace zkc {
-/// Current /4 deployment policy. The source remains independently owned.
+/// Current deployment policy. The source remains independently owned.
 struct NativeProofPolicy {
   std::string entry, producer, validator, suite;
+  /// Empty selects the installed native/authored construction. Otherwise this
+  /// names the exact protocol.construction symbol in the original module.
+  std::string construction;
+  protocol::ProofFormat format = protocol::ProofFormat::Native;
   unsigned acceptance = 0;
-  std::optional<unsigned> service;
+  /// Replaced verifier authorities, in strictly increasing source input order.
+  std::vector<unsigned> services;
   std::vector<unsigned> publicInputs;
   std::vector<std::pair<std::string, std::string>> draws;
 };
 llvm::Expected<NativeProofPolicy> parseNativeProofPolicy(llvm::StringRef text);
 llvm::json::Value encodeNativeProofPolicy(const NativeProofPolicy &policy);
 /// Resolve the ordered query/delivery occurrences of the explicitly selected
-/// verifier service. All other policy choices remain explicit; input draws must
-/// be empty. Uses the same source preparation and event admission as
+/// verifier services. All other policy choices remain explicit; input draws
+/// must be empty. Uses the same source preparation and event admission as
 /// construction, including roles, public inputs, exact delivered values and
 /// ordering. Returns a complete strict policy without mutating the source.
 llvm::Expected<NativeProofPolicy>
@@ -34,7 +40,8 @@ struct NativeProofConstruction {
 };
 /// Admit original source, prepare/project without simplification and construct
 /// role-local transcripts. No source IR is mutated and no cryptographic theorem
-/// is asserted. An empty suite selects the authored no-transcript profile.
+/// is asserted. Empty suite and construction selectors select the authored
+/// profile; a construction symbol selects its checked Local handler plan.
 llvm::Expected<NativeProofConstruction>
 constructNativeProof(mlir::ModuleOp source, const NativeProofPolicy &policy,
                      MathematicalSelectionPolicy mathematicalSelection = {});

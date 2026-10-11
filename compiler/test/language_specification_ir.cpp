@@ -202,9 +202,8 @@ int main() {
         refuses(readInterface(bytes, zkc::printJson(encoded)),
                 "target.admission");
       });
-  cases.run(
-      "reused generic component clauses bind actual values and roles", [&] {
-        auto original = take(prepareOriginal(close(R"(module sample;
+  cases.run("reused generic module clauses bind actual values and roles", [&] {
+    auto original = take(prepareOriginal(close(R"(module sample;
       domain Fr=field("bls12-381.fr");domain K=field("bn254.fr");
       relation Equal<F:Field>(statement x:F,witness y:F){return x==y;}
       protocol Step<F:Field> roles(A,B)(x:F@A,y:F@B)->(a:F@A,b:F@B,ok:bool@B)
@@ -225,143 +224,139 @@ int main() {
         }
         return(a=u,b=v);
       }run Demo=Run;)")));
-        unsigned calls = 0, nested = 0;
-        std::set<std::string> callees;
-        std::set<std::vector<unsigned>> paths;
-        auto error = inspectApplications(
-            original, [&](const ApplicationOccurrence &occurrence) -> Error {
-              ++calls;
-              callees.insert(occurrence.callee.symbol);
-              require(paths
-                          .insert(std::vector<unsigned>(occurrence.path.begin(),
-                                                        occurrence.path.end()))
-                          .second,
-                      "distinct applications share a path");
-              require(occurrence.clauses.size() == 1,
-                      "component contract missing");
-              const auto &clause = occurrence.clauses[0];
-              require(clause.subject[0].values[0] ==
-                              occurrence.operation->getOperand(0) &&
-                          clause.subject[1].values[0] ==
-                              occurrence.operation->getOperand(1) &&
-                          (*clause.residual)[0].values[0] ==
-                              occurrence.operation->getResult(0) &&
-                          (*clause.residual)[1].values[0] ==
-                              occurrence.operation->getResult(1) &&
-                          clause.decision->values[0] ==
-                              occurrence.operation->getResult(2),
-                      "component selector did not bind actual SSA");
-              require(clause.subject[0].role == occurrence.roles[0] &&
-                          clause.subject[1].role == occurrence.roles[1] &&
-                          clause.decision->role == occurrence.roles[1],
-                      "role substitution differs");
-              if (calls == 2)
-                require(occurrence.roles == ArrayRef<unsigned>({1, 0}),
-                        "swapped participants lost");
-              if (occurrence.path.size() == 3) {
-                ++nested;
-                require(
-                    mlir::isa<mlir::BlockArgument>(clause.subject[0].values[0]),
+    unsigned calls = 0, nested = 0;
+    std::set<std::string> callees;
+    std::set<std::vector<unsigned>> paths;
+    auto error = inspectApplications(
+        original, [&](const ApplicationOccurrence &occurrence) -> Error {
+          ++calls;
+          callees.insert(occurrence.callee.symbol);
+          require(paths
+                      .insert(std::vector<unsigned>(occurrence.path.begin(),
+                                                    occurrence.path.end()))
+                      .second,
+                  "distinct applications share a path");
+          require(occurrence.clauses.size() == 1, "module contract missing");
+          const auto &clause = occurrence.clauses[0];
+          require(clause.subject[0].values[0] ==
+                          occurrence.operation->getOperand(0) &&
+                      clause.subject[1].values[0] ==
+                          occurrence.operation->getOperand(1) &&
+                      (*clause.residual)[0].values[0] ==
+                          occurrence.operation->getResult(0) &&
+                      (*clause.residual)[1].values[0] ==
+                          occurrence.operation->getResult(1) &&
+                      clause.decision->values[0] ==
+                          occurrence.operation->getResult(2),
+                  "module selector did not bind actual SSA");
+          require(clause.subject[0].role == occurrence.roles[0] &&
+                      clause.subject[1].role == occurrence.roles[1] &&
+                      clause.decision->role == occurrence.roles[1],
+                  "role substitution differs");
+          if (calls == 2)
+            require(occurrence.roles == ArrayRef<unsigned>({1, 0}),
+                    "swapped participants lost");
+          if (occurrence.path.size() == 3) {
+            ++nested;
+            require(mlir::isa<mlir::BlockArgument>(clause.subject[0].values[0]),
                     "repeat operand was rebound to outer entry input");
-              }
-              return Error::success();
-            });
-        if (error)
-          throw std::runtime_error(toString(std::move(error)));
-        require(calls == 4 && nested == 1 && callees.size() == 2,
-                "application or generic-instance inventory differs");
-        unsigned untrustedCalls = 0;
-        if (auto error = inspectApplications(
-                original.bytes(), original.interfaceJson(),
-                [&](const ApplicationOccurrence &) -> Error {
-                  ++untrustedCalls;
-                  return Error::success();
-                }))
-          throw std::runtime_error(toString(std::move(error)));
-        require(untrustedCalls == calls, "trusted and byte inspection differ");
-        Limits tight;
-        tight.interfaceBytes = original.interfaceJson().size() - 1;
-        unsigned tightCalls = 0;
-        auto tooSmall = inspectApplications(
-            original,
-            [&](const ApplicationOccurrence &) -> Error {
-              ++tightCalls;
-              return Error::success();
-            },
-            tight);
-        require(bool(tooSmall) && tightCalls == 0,
-                "retained inspection bypasses tighter admission limits");
-        consumeError(std::move(tooSmall));
-        auto visitorError = inspectApplications(
-            original, [&](const ApplicationOccurrence &) -> Error {
-              return createStringError(inconvertibleErrorCode(),
-                                       "retained visitor stop");
-            });
-        require(bool(visitorError) && toString(std::move(visitorError)) ==
-                                          "retained visitor stop",
-                "retained inspection swallowed the visitor error");
-
-        take(compileEntry(original));
-        for (unsigned mutation = 0; mutation < 4; ++mutation) {
-          auto candidate = parse(original.bytes());
-          zkc::protocol_ir::ApplyOp call;
-          candidate->walk([&](zkc::protocol_ir::ApplyOp op) {
-            if (!call)
-              call = op;
-          });
-          require(bool(call), "no application to mutate");
-          auto role = call.getRoles()[0];
-          if (mutation == 0)
-            call.setRolesAttr(mlir::ArrayAttr::get(&context, {role}));
-          else if (mutation == 1)
-            call.setRolesAttr(mlir::ArrayAttr::get(&context, {role, role}));
-          else if (mutation == 2)
-            call->eraseOperand(0);
-          else {
-            auto nested = mlir::ModuleOp::create(call.getLoc());
-            call->getBlock()->getOperations().insert(call->getIterator(),
-                                                     nested);
           }
-          std::string bytes;
-          raw_string_ostream stream(bytes);
-          candidate->print(stream, zkc::canonicalPrintingFlags());
-          unsigned visited = 0;
-          auto rejected =
-              inspectApplications(bytes, original.interfaceJson(),
-                                  [&](const ApplicationOccurrence &) -> Error {
-                                    ++visited;
-                                    return Error::success();
-                                  });
-          require(bool(rejected) && visited == 0,
-                  "malformed application reached inspection callback");
-          require(StringRef(toString(std::move(rejected)))
-                      .contains("target.admission"),
-                  "malformed application did not fail native admission");
-        }
-        unsigned callbacks = 0;
-        auto stopped =
+          return Error::success();
+        });
+    if (error)
+      throw std::runtime_error(toString(std::move(error)));
+    require(calls == 4 && nested == 1 && callees.size() == 2,
+            "application or generic-instance inventory differs");
+    unsigned untrustedCalls = 0;
+    if (auto error =
             inspectApplications(original.bytes(), original.interfaceJson(),
                                 [&](const ApplicationOccurrence &) -> Error {
-                                  ++callbacks;
-                                  return createStringError(
-                                      inconvertibleErrorCode(), "visitor stop");
-                                });
-        require(bool(stopped) && callbacks == 1,
-                "visitor refusal did not stop inspection");
-        consumeError(std::move(stopped));
-        callbacks = 0;
-        auto encoded = take(json::parse(original.interfaceJson()));
-        encoded.getAsObject()->getArray("protocols")->clear();
-        auto malformed =
-            inspectApplications(original.bytes(), zkc::printJson(encoded),
-                                [&](const ApplicationOccurrence &) -> Error {
-                                  ++callbacks;
+                                  ++untrustedCalls;
                                   return Error::success();
-                                });
-        require(bool(malformed) && callbacks == 0,
-                "inspection ran before complete admission");
-        consumeError(std::move(malformed));
+                                }))
+      throw std::runtime_error(toString(std::move(error)));
+    require(untrustedCalls == calls, "trusted and byte inspection differ");
+    Limits tight;
+    tight.interfaceBytes = original.interfaceJson().size() - 1;
+    unsigned tightCalls = 0;
+    auto tooSmall = inspectApplications(
+        original,
+        [&](const ApplicationOccurrence &) -> Error {
+          ++tightCalls;
+          return Error::success();
+        },
+        tight);
+    require(bool(tooSmall) && tightCalls == 0,
+            "retained inspection bypasses tighter admission limits");
+    consumeError(std::move(tooSmall));
+    auto visitorError = inspectApplications(
+        original, [&](const ApplicationOccurrence &) -> Error {
+          return createStringError(inconvertibleErrorCode(),
+                                   "retained visitor stop");
+        });
+    require(bool(visitorError) &&
+                toString(std::move(visitorError)) == "retained visitor stop",
+            "retained inspection swallowed the visitor error");
+
+    take(compileEntry(original));
+    for (unsigned mutation = 0; mutation < 4; ++mutation) {
+      auto candidate = parse(original.bytes());
+      zkc::protocol_ir::ApplyOp call;
+      candidate->walk([&](zkc::protocol_ir::ApplyOp op) {
+        if (!call)
+          call = op;
       });
+      require(bool(call), "no application to mutate");
+      auto role = call.getRoles()[0];
+      if (mutation == 0)
+        call.setRolesAttr(mlir::ArrayAttr::get(&context, {role}));
+      else if (mutation == 1)
+        call.setRolesAttr(mlir::ArrayAttr::get(&context, {role, role}));
+      else if (mutation == 2)
+        call->eraseOperand(0);
+      else {
+        auto nested = mlir::ModuleOp::create(call.getLoc());
+        call->getBlock()->getOperations().insert(call->getIterator(), nested);
+      }
+      std::string bytes;
+      raw_string_ostream stream(bytes);
+      candidate->print(stream, zkc::canonicalPrintingFlags());
+      unsigned visited = 0;
+      auto rejected =
+          inspectApplications(bytes, original.interfaceJson(),
+                              [&](const ApplicationOccurrence &) -> Error {
+                                ++visited;
+                                return Error::success();
+                              });
+      require(bool(rejected) && visited == 0,
+              "malformed application reached inspection callback");
+      require(
+          StringRef(toString(std::move(rejected))).contains("target.admission"),
+          "malformed application did not fail native admission");
+    }
+    unsigned callbacks = 0;
+    auto stopped = inspectApplications(
+        original.bytes(), original.interfaceJson(),
+        [&](const ApplicationOccurrence &) -> Error {
+          ++callbacks;
+          return createStringError(inconvertibleErrorCode(), "visitor stop");
+        });
+    require(bool(stopped) && callbacks == 1,
+            "visitor refusal did not stop inspection");
+    consumeError(std::move(stopped));
+    callbacks = 0;
+    auto encoded = take(json::parse(original.interfaceJson()));
+    encoded.getAsObject()->getArray("protocols")->clear();
+    auto malformed =
+        inspectApplications(original.bytes(), zkc::printJson(encoded),
+                            [&](const ApplicationOccurrence &) -> Error {
+                              ++callbacks;
+                              return Error::success();
+                            });
+    require(bool(malformed) && callbacks == 0,
+            "inspection ran before complete admission");
+    consumeError(std::move(malformed));
+  });
   cases.run("malformed specification metadata refuses structurally", [&] {
     auto original = take(prepareOriginal(entry));
     auto mutate = [&](function_ref<void(json::Object &, json::Object &)>

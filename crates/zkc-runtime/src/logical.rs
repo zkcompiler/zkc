@@ -147,10 +147,11 @@ pub fn natural_index(s: &str) -> Result<u64> {
     }
     s.parse().map_err(|_| CodecError("natural-index"))
 }
-/// A canonical UniformIndex bound: a power of two from 1 through 2^63.
+/// A canonical ideal UniformIndex request: any positive u64 bound.
+/// The selected realization separately checks its supported sampling algorithm.
 pub fn uniform_index_bound(s: &str) -> Result<u64> {
     let bound = natural_index(s).map_err(|_| CodecError("index-bound"))?;
-    if !bound.is_power_of_two() {
+    if bound == 0 {
         return Err(CodecError("index-bound"));
     }
     Ok(bound)
@@ -216,6 +217,7 @@ pub fn native_origin_template(attrs: &[String], kind: &str) -> Result<Vec<u8>> {
     let fields = match kind {
         "query" => 7,
         "message" => 6,
+        "start" => 3,
         _ => 0,
     };
     if parts.len() != 5

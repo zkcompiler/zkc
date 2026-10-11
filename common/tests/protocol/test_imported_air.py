@@ -312,8 +312,8 @@ def test_disclosed_trace_proof_uses_verifier_data_and_packaged_relation(
     producer = input_files(journal, 'producer.json', public=public, witness={'trace': inputs['trace']})
     verifier = input_files(journal, 'verifier.json', public=public)
     proof = directory / 'trace.bin'
-    journal.json([toolchain.runtime, '--json', 'prove', f'--package={client.package}', f'--sha256={client.pin}', *producer, f'--output={proof}', '--allow-header-only'])
-    result = journal.json([toolchain.runtime, '--json', 'verify', f'--package={client.package}', f'--sha256={client.pin}', *verifier, f'--proof={proof}', '--allow-header-only'])
+    journal.json([toolchain.runtime, '--json', 'prove', f'--package={client.package}', f'--sha256={client.pin}', *producer, f'--output={proof}', '--allow-authored'])
+    result = journal.json([toolchain.runtime, '--json', 'verify', f'--package={client.package}', f'--sha256={client.pin}', *verifier, f'--proof={proof}', '--allow-authored'])
     assert result['status'] == 'accepted'
     package = json.loads(client.package.read_text())
     interface = json.loads(package['interface'])
@@ -328,8 +328,8 @@ def test_disclosed_trace_proof_uses_verifier_data_and_packaged_relation(
     bad_trace = maintained('trace-changed-trace')['trace']
     producer = input_files(journal, 'invalid-producer.json', public=public, witness={'trace': bad_trace})
     invalid = directory / 'invalid-trace.bin'
-    journal.json([toolchain.runtime, '--json', 'prove', f'--package={client.package}', f'--sha256={client.pin}', *producer, f'--output={invalid}', '--allow-header-only'])
-    journal.json([toolchain.runtime, '--json', 'verify', f'--package={client.package}', f'--sha256={client.pin}', *verifier, f'--proof={invalid}', '--allow-header-only'], refuses='artifact-rejected')
+    journal.json([toolchain.runtime, '--json', 'prove', f'--package={client.package}', f'--sha256={client.pin}', *producer, f'--output={invalid}', '--allow-authored'])
+    journal.json([toolchain.runtime, '--json', 'verify', f'--package={client.package}', f'--sha256={client.pin}', *verifier, f'--proof={invalid}', '--allow-authored'], refuses='artifact-rejected')
 
 
 @pytest.mark.parametrize('extra', ['table', 'channel'])

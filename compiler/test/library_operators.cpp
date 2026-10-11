@@ -75,9 +75,9 @@ int main() {
         check(field + "pub math fn add(a:F,b:F)->F=primitive(\"field.add\");"));
     auto report = take(llvm::json::parse(take(inspectDeclarations(project))));
     auto *items = report.getAsArray();
-    require(items && items->size() == 1,
+    require(items && items->size() == 2,
             "installation declarations leaked into captured inventory");
-    auto *item = items->front().getAsObject();
+    auto *item = items->back().getAsObject();
     require(item && item->getString("definition") == "primitive" &&
                 item->getString("primitive") == "field.add" &&
                 item->getObject("source")->getString("origin") == "captured",
@@ -314,16 +314,15 @@ int main() {
     limits.declarations = 1;
     refuses(check("", limits), "source.limit");
   });
-  cases.run("explicit component operators retain their definition binding",
-            [&] {
-              take(check(R"(
+  cases.run("explicit module operators retain their definition binding", [&] {
+    take(check(R"(
       interface Arithmetic<T:Type+Copy+Drop>{math fn add(a:T,b:T)->T;}
       math fn sum<T:Type+Copy+Drop,A:Arithmetic<T>>(a:T,b:T)->T {
         operator + = A::add;
         return a+b;
       }
     )"));
-            });
+  });
   cases.run(
       "many constrained scalar statements fit the normal work budget", [&] {
         std::string source = field + "fn many(x:F)->F{";
@@ -405,10 +404,10 @@ int main() {
     )"),
             "source.operator");
   });
-  cases.run("definition component binding survives entry specialization", [&] {
+  cases.run("definition module binding survives entry specialization", [&] {
     auto project = take(check(field + R"(
       interface Arithmetic<T:Field>{math fn add(a:T,b:T)->T;}
-      component Ordinary<T:Field>:Arithmetic<T>{
+      module Ordinary<T:Field>:Arithmetic<T>{
         math fn add(a:T,b:T)->T{return a+b;}
       }
       math fn sum<T:Field,A:Arithmetic<T>>(a:T,b:T)->T{

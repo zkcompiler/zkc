@@ -33,6 +33,7 @@ public:
   };
 
   bool chargeType(const Type &, Span);
+  bool chargeConstruction(const ConstructionDefinition &, Span);
   const Parameter *parameter(llvm::StringRef) const;
   const Declaration *typeDeclaration(const Type &) const;
   bool symbolic(const Type &) const;
@@ -63,8 +64,8 @@ public:
                       const Substitution &extra = {});
   /// Signature matching only. Capabilities, permissions and natural bounds
   /// are checked after resolution, never used to choose an overload.
-  std::optional<Substitution>
-  boundMemberSubstitution(const Declaration &, const Type &component, Span);
+  std::optional<Substitution> boundMemberSubstitution(const Declaration &,
+                                                      const Type &module, Span);
   bool checkKnownArgumentSorts(const Declaration &,
                                llvm::ArrayRef<std::optional<Type>>, Span,
                                const Substitution &extra = {});
@@ -75,6 +76,7 @@ public:
   bool capabilityFormation(const CapabilityBound &);
   bool entails(const Declaration *, const CapabilityBound &,
                llvm::StringRef code = "source.capability");
+  bool withinModule(DeclarationId context, DeclarationId owner) const;
   bool constructorAllowed(const Declaration &, const Type &) const;
   bool ingress(const Type &, Span);
   // Checks representation, not permissions: even a zero-length formal array

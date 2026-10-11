@@ -173,198 +173,231 @@ std::optional<Type> BodyChecker::projected(Type type, ArrayRef<unsigned> path,
                                            Span span) {
   return checker.types.projectedType(decl, std::move(type), path, span);
 }
-bool BodyChecker::statements(const SyntaxBody &source) {
-  for (const auto &s : source.statements) {
-    if (body.stopped)
-      return fail("source.unreachable", "statement follows a guaranteed stop",
-                  s.span);
-    StatementPlacement inference(*this);
-    const auto &expr = syntax.expressions[s.expression];
-    if (s.kind == Statement::Kind::Let && expr.kind == Expression::Kind::Name &&
-        expr.binding && syntax.bindings[expr.binding->index].service) {
-      auto root = service(expr);
-      if (!root)
-        return false;
-      services.emplace(*s.pattern.binding, *root);
-      ++statement;
+bool BodyChecker::labelSite(const Statement &source, size_t firstOperation) {
+  if (!source.site)
+    return true;
+  if (!protocol())
+    return fail("source.site", "site labels require protocol mode",
+                source.span);
+  if (!checker.types.charge(body.operations.size() - firstOperation + 1,
+                            source.span))
+    return false;
+  Operation *selected = nullptr;
+  const auto &expression = syntax.expressions[source.expression];
+  for (auto &operation : llvm::drop_begin(body.operations, firstOperation)) {
+    bool eligible =
+        std::holds_alternative<Exchange>(operation.action) ||
+        std::holds_alternative<ServiceQuery>(operation.action) ||
+        std::holds_alternative<ProtocolApplication>(operation.action);
+    if (!eligible)
       continue;
-    }
-    if (s.kind == Statement::Kind::Let && s.pattern.binding &&
-        syntax.bindings[s.pattern.binding->index].domain) {
-      TypeScope types(*this, s.expression, {}, true);
-      if (!types)
-        return false;
-      auto value = domainArgument(s.expression, 1);
-      if (!value || !inference.commit())
-        return false;
-      domains.emplace(*s.pattern.binding, *value);
-      ++statement;
-      continue;
-    }
-    if (expr.kind == Expression::Kind::FinishIf) {
-      auto results = complete(s);
+    if (selected)
+      return fail("source.site",
+                  "labelled statement contains several protocol events",
+                  source.span);
+    selected = &operation;
+  }
+  if (!selected ||
+      (!source.exchange && (selected->span.begin != expression.span.begin ||
+                            selected->span.end != expression.span.end)))
+    return fail("source.site",
+                "label must select an outer message, query or protocol call",
+                source.span);
+  selected->site = source.site;
+  return true;
+}
+bool BodyChecker::statementBody(const Statement &s) {
+  if (body.stopped)
+    return fail("source.unreachable", "statement follows a guaranteed stop",
+                s.span);
+  StatementPlacement inference(*this);
+  const auto &expr = syntax.expressions[s.expression];
+  if (s.kind == Statement::Kind::Let && expr.kind == Expression::Kind::Name &&
+      expr.binding && syntax.bindings[expr.binding->index].service) {
+    auto root = service(expr);
+    if (!root)
+      return false;
+    services.emplace(*s.pattern.binding, *root);
+    return true;
+  }
+  if (s.kind == Statement::Kind::Let && s.pattern.binding &&
+      syntax.bindings[s.pattern.binding->index].domain) {
+    TypeScope types(*this, s.expression, {}, true);
+    if (!types)
+      return false;
+    auto value = domainArgument(s.expression, 1);
+    if (!value || !inference.commit())
+      return false;
+    domains.emplace(*s.pattern.binding, *value);
+    return true;
+  }
+  if (expr.kind == Expression::Kind::FinishIf) {
+    auto results = complete(s);
+    if (!results || !inference.commit() || !bindResults(s, *results))
+      return false;
+    return true;
+  }
+  if (expr.kind == Expression::Kind::Call && !expr.binding) {
+    auto target = checker.resolve(decl, expr.text, expr.span, false);
+    if (checker.types.diagnostic)
+      return false;
+    if (target && checker.output.declarations[target->index].kind ==
+                      Declaration::Kind::Protocol) {
+      if (s.exchange || (s.kind != Statement::Kind::Let &&
+                         s.kind != Statement::Kind::Assign &&
+                         s.kind != Statement::Kind::Expression))
+        return fail("source.mode",
+                    "protocol application requires a complete statement",
+                    s.span);
+      auto results = application(expr);
       if (!results || !inference.commit() || !bindResults(s, *results))
         return false;
-      ++statement;
-      continue;
+      return true;
     }
-    if (expr.kind == Expression::Kind::Call && !expr.binding) {
-      auto target = checker.resolve(decl, expr.text, expr.span, false);
-      if (checker.types.diagnostic)
+  }
+  std::optional<Type> expected;
+  std::optional<std::vector<unsigned>> selected;
+  if (s.type) {
+    expected = checker.type(decl, *s.type);
+    if (!expected)
+      return false;
+  }
+  if (s.roles) {
+    selected = checker.roles(decl, *s.roles, s.span);
+    if (!selected || !active(*selected, s.span))
+      return false;
+  }
+  if (s.kind == Statement::Kind::Assign) {
+    auto found = bindings.find(*s.pattern.binding);
+    if (found == bindings.end())
+      return fail("source.assignment",
+                  "assignment target is not in this region", s.span);
+    expected = found->second.type;
+    selected = found->second.roles;
+  }
+  std::optional<unsigned> requireOwner;
+  if (s.kind == Statement::Kind::Require && s.owner) {
+    auto roles = checker.roles(decl, {*s.owner}, s.span);
+    if (!roles || !active(*roles, s.span))
+      return false;
+    requireOwner = roles->front();
+  }
+  if (s.kind == Statement::Kind::Require)
+    expected = Type{};
+  if (s.kind == Statement::Kind::Expression && !s.terminated)
+    expected = Type(Type::Kind::Unit);
+  auto value = expression(s.expression, expected, 1,
+                          s.kind != Statement::Kind::Let &&
+                              s.kind != Statement::Kind::Assign);
+  if (!value) {
+    if (!body.stopped || checker.types.diagnostic)
+      return false;
+    if (s.kind != Statement::Kind::Let && s.kind != Statement::Kind::Assign &&
+        s.kind != Statement::Kind::Expression)
+      return fail("source.unreachable",
+                  "statement action follows an operand that always stops",
+                  s.span);
+    return true;
+  }
+  if (s.kind == Statement::Kind::Require) {
+    if (math())
+      return fail("source.mode", "require needs ordered execution", s.span);
+    std::optional<unsigned> variable;
+    if (protocol()) {
+      auto chosen = placement->owner(s.span);
+      if (!chosen)
         return false;
-      if (target && checker.output.declarations[target->index].kind ==
-                        Declaration::Kind::Protocol) {
-        if (s.exchange || (s.kind != Statement::Kind::Let &&
-                           s.kind != Statement::Kind::Assign &&
-                           s.kind != Statement::Kind::Expression))
-          return fail("source.mode",
-                      "protocol application requires a complete statement",
+      variable = chosen->owners.front();
+      if ((requireOwner &&
+           !placement->demand(*chosen, {*requireOwner}, s.span)) ||
+          !placement->together(*chosen, components(*value), s.span))
+        return false;
+    }
+    if (!inference.commit())
+      return false;
+    if (variable)
+      requireOwner = inference.state->selected(*variable);
+    if (!use(*value, s.span) ||
+        !emitResults(Require{*value, requireOwner}, {}, s.span))
+      return false;
+    return true;
+  }
+  if (s.exchange) {
+    auto sender = checker.roles(decl, {s.exchange->first}, s.span),
+         receiver = checker.roles(decl, {s.exchange->second}, s.span);
+    if (!sender || !receiver || !active(*sender, s.span) ||
+        !active(*receiver, s.span))
+      return false;
+    auto before = body.values[value->index];
+    if (!checker.types.executableType(before.type, s.span))
+      return false;
+    auto caps = checker.types.permissions(before.type, s.span, &decl);
+    if (!caps)
+      return false;
+    if (!caps->copy || !caps->drop || !caps->share || !caps->wire)
+      return fail("source.permission",
+                  "send requires Copy, Drop, Share and Wire", s.span);
+    if (*sender == *receiver)
+      return fail("source.send", "sender and receiver must be distinct",
+                  s.span);
+    if (!demand(*value, *sender, s.span) || !inference.commit())
+      return false;
+    if (!use(*value, s.span))
+      return false;
+    value = emit(Exchange{sender->front(), receiver->front(), *value},
+                 before.type, *receiver, s.span);
+    if (!value)
+      return false;
+  }
+  if (s.kind == Statement::Kind::Let || s.kind == Statement::Kind::Assign ||
+      s.kind == Statement::Kind::Expression) {
+    if (!s.exchange && protocol() &&
+        (!demand(*value, selected.value_or(std::vector<unsigned>{}), s.span) ||
+         !inference.commit()))
+      return false;
+    if (!bindResults(s, {*value}))
+      return false;
+  } else {
+    auto &type = body.values[value->index].type;
+    auto caps = checker.types.permissions(type, s.span, &decl);
+    if (!caps)
+      return false;
+    if (!local())
+      return fail("source.mode",
+                  "explicit resource disposal belongs in local functions",
+                  s.span);
+    if (s.kind == Statement::Kind::Drop && !caps->drop)
+      return fail("source.drop", "explicit drop requires Drop", s.span);
+    if (s.kind == Statement::Kind::Consume &&
+        !checker.types.constructorAllowed(decl, type))
+      return fail("source.private", "consume requires constructor authority",
+                  s.span);
+    if (s.kind == Statement::Kind::Consume) {
+      auto fs = checker.types.fields(type, s.span);
+      if (!fs)
+        return false;
+      for (auto &f : *fs) {
+        auto child = checker.types.permissions(f.type, s.span, &decl);
+        if (!child)
+          return false;
+        if (!child->drop)
+          return fail("source.drop",
+                      "unpack and transfer mandatory fields before consuming "
+                      "the wrapper",
                       s.span);
-        auto results = application(expr);
-        if (!results || !inference.commit() || !bindResults(s, *results))
-          return false;
-        ++statement;
-        continue;
       }
     }
-    std::optional<Type> expected;
-    std::optional<std::vector<unsigned>> selected;
-    if (s.type) {
-      expected = checker.type(decl, *s.type);
-      if (!expected)
-        return false;
-    }
-    if (s.roles) {
-      selected = checker.roles(decl, *s.roles, s.span);
-      if (!selected || !active(*selected, s.span))
-        return false;
-    }
-    if (s.kind == Statement::Kind::Assign) {
-      auto found = bindings.find(*s.pattern.binding);
-      if (found == bindings.end())
-        return fail("source.assignment",
-                    "assignment target is not in this region", s.span);
-      expected = found->second.type;
-      selected = found->second.roles;
-    }
-    std::optional<unsigned> requireOwner;
-    if (s.kind == Statement::Kind::Require && s.owner) {
-      auto roles = checker.roles(decl, {*s.owner}, s.span);
-      if (!roles || !active(*roles, s.span))
-        return false;
-      requireOwner = roles->front();
-    }
-    if (s.kind == Statement::Kind::Require)
-      expected = Type{};
-    if (s.kind == Statement::Kind::Expression && !s.terminated)
-      expected = Type(Type::Kind::Unit);
-    auto value = expression(s.expression, expected, 1,
-                            s.kind != Statement::Kind::Let &&
-                                s.kind != Statement::Kind::Assign);
-    if (!value) {
-      if (!body.stopped || checker.types.diagnostic)
-        return false;
-      if (s.kind != Statement::Kind::Let && s.kind != Statement::Kind::Assign &&
-          s.kind != Statement::Kind::Expression)
-        return fail("source.unreachable",
-                    "statement action follows an operand that always stops",
-                    s.span);
-      continue;
-    }
-    if (s.kind == Statement::Kind::Require) {
-      if (math())
-        return fail("source.mode", "require needs ordered execution", s.span);
-      std::optional<unsigned> variable;
-      if (protocol()) {
-        auto chosen = placement->owner(s.span);
-        if (!chosen)
-          return false;
-        variable = chosen->owners.front();
-        if ((requireOwner &&
-             !placement->demand(*chosen, {*requireOwner}, s.span)) ||
-            !placement->together(*chosen, components(*value), s.span))
-          return false;
-      }
-      if (!inference.commit())
-        return false;
-      if (variable)
-        requireOwner = inference.state->selected(*variable);
-      if (!use(*value, s.span) ||
-          !emitResults(Require{*value, requireOwner}, {}, s.span))
-        return false;
-      ++statement;
-      continue;
-    }
-    if (s.exchange) {
-      auto sender = checker.roles(decl, {s.exchange->first}, s.span),
-           receiver = checker.roles(decl, {s.exchange->second}, s.span);
-      if (!sender || !receiver || !active(*sender, s.span) ||
-          !active(*receiver, s.span))
-        return false;
-      auto before = body.values[value->index];
-      if (!checker.types.executableType(before.type, s.span))
-        return false;
-      auto caps = checker.types.permissions(before.type, s.span, &decl);
-      if (!caps)
-        return false;
-      if (!caps->copy || !caps->drop || !caps->share || !caps->wire)
-        return fail("source.permission",
-                    "send requires Copy, Drop, Share and Wire", s.span);
-      if (*sender == *receiver)
-        return fail("source.send", "sender and receiver must be distinct",
-                    s.span);
-      if (!demand(*value, *sender, s.span) || !inference.commit())
-        return false;
-      if (!use(*value, s.span))
-        return false;
-      value = emit(Exchange{sender->front(), receiver->front(), *value},
-                   before.type, *receiver, s.span);
-      if (!value)
-        return false;
-    }
-    if (s.kind == Statement::Kind::Let || s.kind == Statement::Kind::Assign ||
-        s.kind == Statement::Kind::Expression) {
-      if (!s.exchange && protocol() &&
-          (!demand(*value, selected.value_or(std::vector<unsigned>{}),
-                   s.span) ||
-           !inference.commit()))
-        return false;
-      if (!bindResults(s, {*value}))
-        return false;
-    } else {
-      auto &type = body.values[value->index].type;
-      auto caps = checker.types.permissions(type, s.span, &decl);
-      if (!caps)
-        return false;
-      if (!local())
-        return fail("source.mode",
-                    "explicit resource disposal belongs in local functions",
-                    s.span);
-      if (s.kind == Statement::Kind::Drop && !caps->drop)
-        return fail("source.drop", "explicit drop requires Drop", s.span);
-      if (s.kind == Statement::Kind::Consume &&
-          !checker.types.constructorAllowed(decl, type))
-        return fail("source.private", "consume requires constructor authority",
-                    s.span);
-      if (s.kind == Statement::Kind::Consume) {
-        auto fs = checker.types.fields(type, s.span);
-        if (!fs)
-          return false;
-        for (auto &f : *fs) {
-          auto child = checker.types.permissions(f.type, s.span, &decl);
-          if (!child)
-            return false;
-          if (!child->drop)
-            return fail("source.drop",
-                        "unpack and transfer mandatory fields before consuming "
-                        "the wrapper",
-                        s.span);
-        }
-      }
-      if (!use(*value, s.span) ||
-          !emit(Consume{*value}, Type(Type::Kind::Unit), {}, s.span))
-        return false;
-    }
+    if (!use(*value, s.span) ||
+        !emit(Consume{*value}, Type(Type::Kind::Unit), {}, s.span))
+      return false;
+  }
+  return true;
+}
+bool BodyChecker::statements(const SyntaxBody &source) {
+  for (const auto &s : source.statements) {
+    auto begin = body.operations.size();
+    if (!statementBody(s) || !labelSite(s, begin))
+      return false;
     ++statement;
   }
   if (body.stopped &&
@@ -541,6 +574,17 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     inferredContracts.erase(&decl);
     return true;
   }
+  std::set<std::string> sites;
+  for (const auto &region : sources[id.index]->bodies)
+    for (const auto &statement : region.statements) {
+      if (!statement.site)
+        continue;
+      if (!types.charge(statement.site->size() + 1, statement.span))
+        return false;
+      if (!sites.insert(*statement.site).second)
+        return types.fail("source.site", "duplicate site label in protocol",
+                          statement.span);
+    }
   BodyChecker check(*this, decl, *sources[id.index], result, depth);
   for (unsigned i = 0; i < decl.inputs.size(); ++i) {
     auto &p = decl.inputs[i];

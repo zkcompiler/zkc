@@ -435,6 +435,7 @@ fn existing_numeric_message_types_keep_value_serialization_checks() {
         "vector:bls12-381.fr",
         "groups:bls12-381.g1",
         "indices",
+        "bytes",
         "matrix:bls12-381.fr",
     ] {
         let ty = PhysicalType::default_for(LogicalType::parse(logical).unwrap()).unwrap();

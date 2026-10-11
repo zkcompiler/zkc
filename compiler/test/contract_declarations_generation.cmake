@@ -26,6 +26,42 @@ function(declaration_case name definitions expected_error)
   set(failures "${failures}" PARENT_SCOPE)
 endfunction()
 declaration_case(valid "" "")
+declaration_case(managed-history-missing-state [=[
+def Bad : ZKC_Operation<"bad.history", [], [], []> {
+  let facets = [ManagedHistory];
+}
+]=] "managed authoring requires an explicit source history transition")
+declaration_case(managed-history-data-state [=[
+def State : ZKC_Type<"state", [], PrivateImmutable, 1, 1>;
+def Bad : ZKC_Operation<"bad.history", [], [ZKC_Apply<State>], [ZKC_Apply<State>]> {
+  let facets = [ZKC_History<0, 0>, ManagedHistory];
+}
+]=] "facet port constructor mismatch")
+declaration_case(managed-history-late-stage [=[
+def State : ZKC_Type<"transcript", [], Affine, 0, 0>;
+def Bad : ZKC_Operation<"bad.history", [], [ZKC_Apply<State>], [ZKC_Apply<State>]> {
+  let stage = Construction;
+  let facets = [ZKC_History<0, 0>, ManagedHistory];
+}
+]=] "managed authoring requires an explicit source history transition")
+declaration_case(source-history-missing-state [=[
+def Bad : ZKC_Operation<"bad.history", [], [], []> {
+  let facets = [SourceHistory];
+}
+]=] "source history requires an explicit data-state transition")
+declaration_case(source-history-managed-state [=[
+def State : ZKC_Type<"state", [], Affine, 0, 0>;
+def Bad : ZKC_Operation<"bad.history", [], [ZKC_Apply<State>], [ZKC_Apply<State>]> {
+  let facets = [ZKC_History<0, 0>, SourceHistory];
+}
+]=] "source history state must be copyable and discardable data")
+declaration_case(source-history-successor [=[
+def State : ZKC_Type<"state", [], PrivateImmutable, 1, 1>;
+def Other : ZKC_Type<"other", [], PrivateImmutable, 1, 1>;
+def Bad : ZKC_Operation<"bad.history", [], [ZKC_Apply<State>], [ZKC_Apply<Other>]> {
+  let facets = [ZKC_History<0, 0>, SourceHistory];
+}
+]=] "history successor type mismatch")
 declaration_case(duplicate-type [=[
 def Duplicate : ZKC_Type<"field", [FDomain]>;
 ]=] "duplicate type ownership")

@@ -1,4 +1,5 @@
 #include "../lib/Transforms/MathematicalComparison.h"
+#include "mlir/AsmParser/AsmParser.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/IRMapping.h"
@@ -566,17 +567,15 @@ int main() {
     require(!compareMap(*module),
             "unused malformed literal escaped Ring admission");
   });
-  cases.run("unused uninstalled source field is checked", [&] {
-    auto module = parseSourceString<ModuleOp>(laneFixture, &context);
-    require(bool(module), "fixture refused");
-    SymbolTable symbols(&module->getBody()->front());
-    auto source = symbols.lookup<func::FuncOp>("formula");
-    OpBuilder builder(&source.getBody().front().back());
-    algebra::ConstantFieldOp::create(
-        builder, source.getLoc(),
-        algebra::FieldType::get(&context, "uninstalled.field"), "0");
-    require(!compareMap(*module),
-            "unused nominal field escaped Ring admission");
+  cases.run("uninstalled source field is refused at type formation", [&] {
+    bool diagnosed = false;
+    ScopedDiagnosticHandler expected(&context, [&](Diagnostic &d) {
+      diagnosed |= d.str().find("unknown-domain") != std::string::npos;
+      return success();
+    });
+    require(!parseType("!algebra.field<\"uninstalled.field\">", &context) &&
+                diagnosed,
+            "uninstalled field reached mathematical comparison");
   });
   cases.run("unused operation outside source fragment is checked", [&] {
     auto module = parseSourceString<ModuleOp>(laneFixture, &context);

@@ -5,6 +5,6 @@ namespace zkc::language::detail {
 /// Recheck callback contracts against independently retained authored syntax.
 llvm::Error checkSignatureSources(const CheckedStorage &, Work &);
 /// Recheck callback inputs and implementation effects against the interface.
-llvm::Error checkComponentContracts(const CheckedStorage &, Work &);
+llvm::Error checkModuleContracts(const CheckedStorage &, Work &);
 } // namespace zkc::language::detail
 #endif

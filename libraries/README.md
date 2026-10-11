@@ -23,19 +23,43 @@ concrete domains, Entries and transcript constructions in
 | [`zkc::symbolic`](zkc/symbolic.zkc) | `Array`, `Polynomial`, pack/get/mle/from_coefficients/coefficients/evaluate/fix_prefix/sum_suffix/fix_table/add/multiply/constant | Total formal polynomial expressions |
 | [`zkc::curve`](zkc/curve.zkc) | identity, `Groups`, elements/indices/at/collect | Total group zero, group collection traversal and bounded access |
 | [`zkc::boolean`](zkc/boolean.zkc) | both/either/different/negate | Total Boolean formulas; eager operands |
+| [`zkc::bytes`](zkc/bytes.zkc) | `Bytes`, empty/append/concat/slice/at/length/equal | Bounded immutable byte strings; slices and byte values are checked |
+| [`zkc::shake128`](zkc/shake128.zkc) | `State`, init/absorb/squeeze | Private copyable XOF snapshots; ordered transitions and bounded work |
+| [`zkc::proof`](zkc/proof.zkc) | `StreamCodec`, `Stream` | Ordinary sequential record accumulation, offset selection and exact EOF; encoding and observations belong to the construction |
+| [`zkc::transcript`](zkc/transcript.zkc) | `State`, observe/challenge/challenge_index | Explicit methods on a construction's managed affine state; no source initializer |
+| [`zkc::sampling`](zkc/sampling.zkc) | `Words`, `uniform_index` | Bounded rejection over explicit 64-bit word providers; positive u64 ranges and explicit exhaustion |
+| [`zkc::encoding`](zkc/encoding.zkc) | field_be/field_from_be/field_reduce_be/group_compressed/group_from_compressed | Explicit mathematical codecs; currently BLS12-381 Fr and G1 |
 | [`schnorr`](schnorr/lib.zkc) | `DLog<G>`, `Schnorr<G>` | Discrete-log relation and three-message group protocol |
+| [`spongefish`, `spongefish_schnorr`](spongefish/README.md) | SHAKE128 framing, point/scalar observations, challenges and explicit Schnorr | Spongefish 0.7.4 BLS12-381 G1 specialization; authored 80-byte proofs |
 | [`sumcheck`](sumcheck/lib.zkc) | `Sumcheck<F, Max>` | Bounded multilinear Sumcheck over a public evaluation table |
 | [`expression_sumcheck`](sumcheck/expression.zkc) | `Sumcheck<F, Max, A: Ring>` | Sumcheck for a captured ring expression over public multilinear tables |
 | [`fri`](fri/lib.zkc) | `LowDegree<C, LogSize, TerminalLog, Rounds, Queries>` | Binary FRI over a natural-order two-adic coset |
 | [`air_polynomial`, `air_table`, `air_stark`](air/README.md) | Scope polynomials, Bundle opening equations and `TableArgument` | A nonhiding KoalaBear/Ext8 argument for one present table, composed with FRI |
 | [`air_interaction`, `air_bundle`](air/README.md#whole-bundle-argument) | `Reduction<F>`, `LogUp<F>`, `GrandProduct<F>`, `ThreeTableArgument` | Three-table multiset arguments with phased auxiliary commitments and shared FRI |
 
+### Bounded sampling
+
+`zkc::sampling::uniform_index<W, Attempts>(state, bound)` returns the next
+provider state and an index in `[0, bound)`. `W: Words` supplies one unsigned
+64-bit word per `next` call; the interface does not require copyable state.
+`bound` may be any positive u64. Zero rejects before a provider call. The
+sampler stops drawing after the first accepted word; exhausting `Attempts`
+stops with `exhausted`, including when the attempt count is zero. Bound one
+still consumes one word when an attempt is available.
+
+The rejected prefix has length `2^64 mod bound`. The accepted interval therefore
+contains equally many representatives of each residue. Under independent
+uniform provider words, the result conditioned on success is uniform. Provider
+uniformity and independence are premises; compiler checks and deterministic
+test vectors do not establish them. A copied provider state is an explicit
+trial of that snapshot, and its executed work remains chargeable.
+
 ### Mathematics
 
 `zkc::computation` demonstrates ordinary user-defined combinators. Its Math
 functions accept total scoped bodies; its Local functions use `effects(body)`
 to preserve the supplied callback effects and support affine explicit inputs. Captures require Copy+Drop and become explicit
-private-helper arguments. The [component client](../examples/projects/scoped-computations/README.md)
+private-helper arguments. The [module client](../examples/projects/scoped-computations/README.md)
 forwards nested callbacks with record/vector captures and a checked lookup.
 
 ### Finite computations
@@ -78,7 +102,7 @@ body and skip the body on false. Predicate failures propagate.
 `accumulate<I, T, C>` starts from `C::identity()` and applies `C::combine` in
 traversal order. The `Combiner<T>` interface supplies total operations without
 claiming algebraic laws. The field sum/product and group sum functions select
-standard components. A custom nonassociative combiner still preserves order;
+standard modules. A custom nonassociative combiner still preserves order;
 no optimization law follows just from implementing the interface. Group sums
 require `ScalarAction(G)`, including empty sums.
 
@@ -166,8 +190,8 @@ formal evaluation and vector arithmetic. The embedded scalar prelude supplies
 field arithmetic and equality, group addition/equality and `point * scalar`
 scaling, Boolean equality, and index arithmetic/equality. Its named functions
 and operators share the compiler's native operation identities. Asset-specific
-ring operations and component-specific PCS operations stay in their owning
-libraries, using explicit asset/component parameters and installed kernels.
+ring operations and module-specific PCS operations stay in their owning
+libraries, using explicit asset/module parameters and installed kernels.
 
 Use `zkc::curve::identity<G>()` for a nullary mathematical group zero. Its
 result fixes the exact group; no point is needed, including for empty sums.

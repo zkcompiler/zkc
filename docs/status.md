@@ -49,20 +49,21 @@ and mathematical correspondence. `zkc check` and `compile` accept explicit
 [project manifests](language/README.md#project-inputs) or module/asset maps.
 Language resolves explicit modules and R1CS/AIR Assets, checks generic libraries
 and closes selected Entries. It supports scalar mathematics, Boolean formulas,
-nominal products/variants, static parameters and components, capabilities and
+nominal products/variants, static parameters, unified file/inline/external modules,
+explicit interface conformance, capabilities and
 permissions, lexical scopes and patterns, mutable bindings with inferred region
 state/captures, statement-scoped participant inference, nested ordered calls,
 helper result inference, expression-wide structural type constraints, partial
 static arguments with positional or named binding, named value/service arguments,
 Unicode 17 NFC names, scoped mathematical operators and paired-delimiter calls
-with import activation, explicit fixity and local component bindings, catalog-checked
+with import activation, explicit fixity and local module bindings, catalog-checked
 primitive definitions and an embedded scalar prelude,
 local short-circuit Boolean operators and total Boolean formulas, inferred catalog/natural
 preconditions with explicit contract checking, unified data/service arguments,
 source rejection with `require`, formal polynomial intrinsics, checked
 pointwise `map` of scalar helpers over vectors, general finite reductions,
 statically bound scoped Math/Local callbacks with generic apply/forward and
-component wrappers, local control,
+module wrappers, local control,
 messages, services, static protocol composition, bounded repetition and conditional completion.
 Independent source comparison checks emitted MLIR against checked definitions;
 [source semantics](spec/language/README.md) owns exact limits.
@@ -77,13 +78,14 @@ for source correspondence; it does not interpret retained MLIR. Maintained
 
 Fixed source arrays use static numeric indexing. Private ingress without an
 admitted validator, member-generic conformance and zero-leaf messages refuse.
-Abstract member-generic signatures can be checked and inspected, but components
-implementing them are not supported.
+Abstract callable signatures with member generics can be checked and inspected,
+but modules implementing them are not supported. Associated types cannot
+introduce member-specific static parameters.
 Resource permission inference, implicit role remapping, natural equation solving
 and inversion of associated types are outside the source profile.
 [Scoped computations](spec/language/definitions.md#scoped-computations) use the
 ordinary checked Body and type solver. Projection-aware Copy+Drop captures,
-mutable snapshots, static scoped captures and lexical component resolution close
+mutable snapshots, static scoped captures and lexical module resolution close
 to ordinary private helpers with explicit environment inputs. Independent
 capture and specialization checks reject mapping and coverage mutations before
 source-to-MLIR comparison. Compiler and native tests cover fixed modes, effects,
@@ -91,7 +93,7 @@ owner inference, forwarding, aggregate captures and authored evaluation order.
 Runtime function values, escaping computations, outer writes and captured
 services are unsupported.
 [Finite domains](spec/language/definitions.md#finite-domains) support registered
-constructors, composed factories, component selection, static helper arguments,
+constructors, composed factories, module selection, static helper arguments,
 callback captures and nested local/protocol control. Joint closure retains
 immutable operand aliases and independent witnesses check closed recipes and
 capture layouts. Source checking and native tests cover forwarding, zero trips,
@@ -105,7 +107,7 @@ empty arrays and Unit items. Source item-provenance checks
 now cover callback-local `where item_from(input, domain)`, optional input labels,
 arbitrary slots, multiple independent origins, generic restricted forwarding,
 named argument order, nested captures and invariant local-region inputs. Native
-controls include exact normalized component conformance, independent authored
+controls include exact normalized module conformance, independent authored
 selector reconstruction and mutation refusal. Inner conditions preserve outer
 catalog/natural inference. Labels and canonical maps are exposed separately in
 declaration inspection; they add no runtime closure or finite IR attributes.
@@ -119,14 +121,14 @@ cover all retained zip/matrix-view formation and exact fixed collection sizes;
 sequence constructor evidence preserves fixed-array lengths across adapters.
 Fixed field-array output follows the installed BLS12-381.Fr contracts; other
 field backends may lack that realization. The [shared libraries](../libraries/README.md#finite-computations)
-now expose ordered and total folds, collection, explicit combiner components,
+now expose ordered and total folds, collection, explicit combiner modules,
 field/group accumulation, filters and materialized vector reducers. Ordinary
 collection arguments share one checked conversion at scoped-domain parameters;
 matrices require explicit views. Source/native tests exercise records, group
 commitments, nonassociative order, nested domains, skipped inverse failures and
 reducer failure order. [Finite binders](spec/language/definitions.md#finite-reduction-binders)
 now use that same path: Local and total Math targets, filters, independent products,
-dependent nesting, aggregate captures and direct protocol/component use. One
+dependent nesting, aggregate captures and direct protocol/module use. One
 lexical binding is selected before body/result inference. Shared source/domain/
 scoped witnesses replace the old ring-only extraction checker. Library-owned indexing now uses the same typed callable selection and retained
 binding checks. Standard vector, matrix, group, sequence, index and field-array
@@ -191,9 +193,10 @@ alone add no runtime guard, satisfaction fact or security theorem.
 | OpenVM relation comparison | The optional [OpenVM adapter](../compiler/adapters/openvm/README.md) captures five upstream AIRs for a KoalaBear RV32 branch slice. Upstream recorder/DAG/debug checks, the adapter evaluator and both native Bundle evaluators agree on selected traces and mutations. Its memory-bus test partner permits inconsistent reads, so these checks establish neither execution nor termination under VM semantics, nor authentication of initial memory. Deployed BabyBear, persistent memory, full ISA and OpenVM proof compatibility are outside this selection. Its field-balance relation is separate from the Boolean-multiset machine proof profile. |
 | Clean export comparison | A [pinned Clean flat AIR export](../lean/integrations/clean/README.md) is compared with native finite-AIR evaluation and the KoalaBear/Ext8 ring provider on fixed honest, invalid and mutated rows. This checks native agreement on those rows; it does not prove the native decoders correct. |
 | Native proofs | Separate producer/validator execution, derived or authored transcripts, structured framing and authorized setups; [proof contract](compiler/construction.md). One policy covers flat, iterated, PCS and structured programs in `zkc.program/0`. |
+| Programmable constructions | [Labelled messages and queries](spec/language/entries.md) select ordinary typed Local handlers, one inherited base and whole-rule overrides. Checked plans preserve state, actual payloads and loop order through participant lowering and independent runtime admission. Providers use private copyable data or an authorized managed transcript with explicit byte-labelled methods. Finite authority sets retain each query's actual service contract; unselected verifier services remain private, with checked dependencies and explicit budgets. Whole-call delegation preserves one live root, actual child-start inputs and root codec coverage across nested, repeated and empty children. Iterated Sumcheck and Schnorr exercise execution and malformed-input order; record codecs support sequential and disjoint round chunks, original-byte observations and conditional completion. |
 | Attempts and retained work | [Persistent attempts](runtime/attempts.md) retain provider state, failed work and unpublished buffers under explicit application policy. |
 | Retained storage and work | [Runtime ledgers](spec/runtime/capacity.md#retained-values-and-logical-work) count each shared immutable allocation once while retained and once when produced, with a separate logical-work ceiling charged at every kernel use. 65,536 extension-field rows committed once and opened 64 times complete within default budgets. Only row openings, accessors and length queries declare partial read extents. These are retained-payload charges, not peak-memory measurements. |
-| Authored transcripts | Explicit external initialization, trial/live checks and snapshots under [authored transcript contracts](compiler/construction.md); admission does not prove transcript completeness or snapshot reachability. |
+| Authored transcripts | Explicit external initialization, trial/live checks and snapshots under [authored transcript contracts](compiler/construction.md). Source libraries have bounded `Bytes`, private copyable SHAKE128 snapshots and BLS12-381 Fr/G1 byte codecs. A format-only construction selects native framing or one raw `Bytes` message. Pinned Spongefish Schnorr tests cover both directions, the fixed 80-byte vector and ordered decoder failures; they do not establish complete parser equivalence or soundness. Admission does not prove transcript completeness or snapshot reachability. |
 | Host applications | Named Entry inputs/results, joint bundles, proof jobs, reusable immutable prover material and generated Rust data bindings through the common Hosts; [Entry guide](runtime/entries.md). |
 
 Setup input associations and authorized incoming PCS values follow the
@@ -204,8 +207,11 @@ Registered services cover four RNG distributions/providers. Each offers field
 `draw`; the KoalaBear octic service also offers [UniformIndex](spec/runtime/services.md#uniformindex-realization)
 sampling over a static power-of-two domain (`coins.index<N>()`), interactively and
 as a typed [derived transcript transition](spec/ir/construction.md#uniformindex-transitions)
-under its Merlin suite. Other fields, runtime or non-power-of-two bounds,
-out-of-domain and rejection sampling, and retries are not supported. Tests check
+under its Merlin suite. Explicit query handlers support other positive static
+u64 bounds; `zkc::sampling` supplies bounded rejection over ordinary word
+providers. The installed interactive and native transcript samplers retain
+their power-of-two restriction. Runtime query bounds and other service fields
+remain unsupported. Tests check
 prover/verifier agreement and an independent replay of the framing; they make no
 uniformity or Fiat–Shamir security claim. Arbitrary user-defined
 request/reply service families remain an extension. Domain and kernel contributions

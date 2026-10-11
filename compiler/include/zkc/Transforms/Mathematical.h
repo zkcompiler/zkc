@@ -3,9 +3,26 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
 namespace zkc::mathematical {
+/// Preserve the start of one selected expanded application. Input indices
+/// refer to the callee's original argument list, before role substitution.
+/// Selection comes from a checked construction; expansion and correspondence
+/// independently validate that the exact occurrence and shared inputs exist.
+struct ApplicationStart {
+  std::string protocol, site;
+  llvm::SmallVector<unsigned> inputs;
+};
+/// Prepare an owned candidate without modifying the source. Selected
+/// application starts are semantic construction inputs, not pass options.
+/// Expansion and correspondence check each selection before publication.
+mlir::OwningOpRef<mlir::ModuleOp>
+prepareProtocol(mlir::ModuleOp source, bool simplify = true,
+                MathematicalSelectionPolicy policy = {},
+                llvm::ArrayRef<ApplicationStart> starts = {});
+
 /// Checked Local algorithm-selection window on an immutable protocol source.
 /// Returns an owned candidate only after admission and independent checks of
 /// actual nested-collection, finite, map and fusion rewrites and staged helper

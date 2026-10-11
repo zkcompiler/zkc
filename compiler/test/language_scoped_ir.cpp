@@ -39,7 +39,7 @@ int main() {
   zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
-  cases.run("component example emits closure-free ordinary helpers", [&] {
+  cases.run("module example emits closure-free ordinary helpers", [&] {
     auto entry = example();
     auto original = take(prepareOriginal(entry));
     require(original.bytes().contains("protocol.local_call") &&

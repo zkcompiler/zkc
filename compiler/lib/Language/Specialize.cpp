@@ -56,8 +56,8 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
     for (const auto &argument : domain.arguments)
       if (!types.chargeType(argument, domain.span))
         return false;
-    if (domain.factory && domain.factory->component &&
-        !types.chargeType(*domain.factory->component, domain.span))
+    if (domain.factory && domain.factory->module &&
+        !types.chargeType(*domain.factory->module, domain.span))
       return false;
   }
   for (const auto &service : body.services)
@@ -66,7 +66,8 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
         !types.chargeType(service.field, service.span))
       return false;
   for (const auto &op : body.operations) {
-    if (!types.charge(op.results.size(), op.span))
+    if (!types.charge(op.results.size() + (op.site ? op.site->size() : 0),
+                      op.span))
       return false;
     if (op.binding) {
       const auto &binding = *op.binding;
@@ -87,8 +88,8 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
       for (const auto &arg : binding.arguments)
         if (!types.chargeType(arg, op.span))
           return false;
-      if (binding.target.component &&
-          !types.chargeType(*binding.target.component, op.span))
+      if (binding.target.module &&
+          !types.chargeType(*binding.target.module, op.span))
         return false;
     }
     if (const auto *math = std::get_if<MathValue>(&op.action)) {
@@ -129,7 +130,7 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
       for (const auto &argument : call->arguments)
         if (!types.chargeType(argument, op.span))
           return false;
-      if (call->component && !types.chargeType(*call->component, op.span))
+      if (call->module && !types.chargeType(*call->module, op.span))
         return false;
     } else if (const auto *bulk = std::get_if<BulkApplication>(&op.action)) {
       if (!types.charge(bulk->operands.size() + bulk->mapped.size() + 1,
@@ -203,6 +204,37 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
              types.fail("source.service",
                         "no installed random service for selected field",
                         port.span);
+    };
+    auto closeCallable = [&](DeclarationId &target, std::optional<Type> &module,
+                             std::vector<Type> &arguments,
+                             const Substitution &bindings, Span span) {
+      for (auto &argument : arguments)
+        if (!closeType(argument, bindings, span))
+          return false;
+      if (auto origin = declarations[target.index].origin) {
+        arguments = declarations[target.index].staticArguments;
+        target = *origin;
+      }
+      if (!module)
+        return true;
+      if (!closeType(*module, bindings, span))
+        return false;
+      const auto *owner = types.typeDeclaration(*module);
+      if (!owner || owner->kind != Declaration::Kind::Module)
+        return types.fail("source.conformance",
+                          "static dispatch did not select a module", span);
+      if (!types.charge(owner->members.size(), span))
+        return false;
+      const auto name = declarations[target.index].name;
+      auto found = llvm::find_if(owner->members, [&](auto id) {
+        return declarations[id.index].name == name;
+      });
+      if (found == owner->members.end())
+        return types.fail("source.conformance",
+                          "static dispatch member missing", span);
+      target = *found;
+      arguments = module->arguments;
+      return true;
     };
     closeBody = [&](Body &body, const Substitution &bindings, Body::Mode mode,
                     unsigned depth, unsigned &height,
@@ -420,8 +452,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           for (auto &argument : op.binding->arguments)
             if (!closeType(argument, bindings, op.span))
               return false;
-          if (op.binding->target.component &&
-              !closeType(*op.binding->target.component, bindings, op.span))
+          if (op.binding->target.module &&
+              !closeType(*op.binding->target.module, bindings, op.span))
             return false;
           // Target and family retain their definition identities. The action
           // below selects instances; notation is never resolved at a caller.
@@ -519,34 +551,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           height = std::max(height, heights.at(instance->index) + 1);
           application->callee = *instance;
         } else if (auto *call = std::get_if<HelperCall>(&op.action)) {
-          for (auto &arg : call->arguments)
-            if (!closeType(arg, bindings, op.span))
-              return false;
           DeclarationId target = call->callee;
-          if (auto origin = declarations[target.index].origin) {
-            call->arguments = declarations[target.index].staticArguments;
-            target = *origin;
-          }
-          if (call->component) {
-            if (!closeType(*call->component, bindings, op.span))
-              return false;
-            auto *component = types.typeDeclaration(*call->component);
-            if (!component || component->kind != Declaration::Kind::Component)
-              return types.fail("source.conformance",
-                                "static dispatch did not select a component",
-                                op.span);
-            if (!types.charge(component->members.size(), op.span))
-              return false;
-            const auto name = declarations[target.index].name;
-            auto found = llvm::find_if(component->members, [&](auto id) {
-              return declarations[id.index].name == name;
-            });
-            if (found == component->members.end())
-              return types.fail("source.conformance",
-                                "static dispatch member missing", op.span);
-            target = *found;
-            call->arguments = call->component->arguments;
-          }
+          if (!closeCallable(target, call->module, call->arguments, bindings,
+                             op.span))
+            return false;
           std::vector<DeclarationId> selected;
           std::vector<ValueId> hiddenCaptures;
           for (auto argument : call->scopedArguments) {
@@ -634,8 +642,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           if (!protocol::uniformIndexBound(bound.dimension.closedValue()))
             return types.fail(
                 "source.service",
-                "selected index domain must be a power of two no greater "
-                "than 2^63",
+                "selected index domain must be a positive u64 natural",
                 op.span);
           query->bound = bound.dimension;
         } else if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
@@ -822,7 +829,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                       ? Body::Mode::Protocol
                   : source.kind == Declaration::Kind::Local ? Body::Mode::Local
                                                             : Body::Mode::Math;
-      if ((!source.body && source.kind != Declaration::Kind::Relation) ||
+      if ((!source.body && source.kind != Declaration::Kind::Relation &&
+           source.kind != Declaration::Kind::Construction) ||
           source.abstract) {
         types.fail("source.call", "cannot specialize an abstract callable",
                    source.span);
@@ -958,6 +966,10 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                                              clause.decision->span))
           return {};
       }
+      if (source.construction &&
+          !types.chargeConstruction(*source.construction, source.span))
+        return {};
+      auto targetArguments = source.staticArguments;
       if (source.effectAllowance &&
           !types.charge(source.effectAllowance->dependencies.size() + 1,
                         source.span))
@@ -1020,11 +1032,11 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       auto bindings = types.substitution(result, args);
       auto lexicalParent = result.parent;
       while (lexicalParent && declarations[lexicalParent->index].kind !=
-                                  Declaration::Kind::Component)
+                                  Declaration::Kind::Module)
         lexicalParent = declarations[lexicalParent->index].parent;
       if (lexicalParent) {
         auto &parent = declarations[lexicalParent->index];
-        Type self(Type::Kind::Component, parent.qualifiedName);
+        Type self(Type::Kind::Module, parent.qualifiedName);
         self.arguments.assign(args.begin(),
                               args.begin() + parent.parameters.size());
         if (parent.implementation)
@@ -1178,6 +1190,86 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         result.dataPreconditions = std::move(*requirements);
         result.body = std::move(body);
       }
+      if (result.construction) {
+        auto &construction = *result.construction;
+        for (auto &argument : targetArguments)
+          if (!closeType(argument, bindings, result.span))
+            return {};
+        auto target =
+            instantiate(*result.target, targetArguments, depth + 1, {}, {}, {});
+        if (!target)
+          return {};
+        result.target = *target;
+        for (auto *term : {&construction.provider, &construction.state})
+          if (*term && !closeType(**term, bindings, result.span))
+            return {};
+        for (auto &argument : construction.arguments)
+          if (!closeType(argument, bindings, result.span))
+            return {};
+        if (construction.parent) {
+          auto parent =
+              instantiate(*construction.parent, construction.arguments,
+                          depth + 1, {}, {}, {});
+          if (!parent)
+            return {};
+          construction.parent = *parent;
+        }
+        if (construction.initializer) {
+          auto &factory = *construction.initializer;
+          if (!closeCallable(factory.declaration, factory.module,
+                             construction.initializerArguments, bindings,
+                             result.span))
+            return {};
+          auto initializer = instantiate(factory.declaration,
+                                         construction.initializerArguments,
+                                         depth + 1, {}, {}, {});
+          if (!initializer)
+            return {};
+          factory.declaration = *initializer;
+        }
+        if (construction.codec) {
+          auto &codec = *construction.codec;
+          if (!closeType(codec.provider, bindings, result.span) ||
+              !closeType(codec.record, bindings, result.span))
+            return {};
+          for (auto *method :
+               {&codec.initialize, &codec.write, &codec.finish}) {
+            if (!closeCallable(method->target.declaration,
+                               method->target.module, method->arguments,
+                               bindings, result.span))
+              return {};
+            auto closed = instantiate(method->target.declaration,
+                                      method->arguments, depth + 1, {}, {}, {});
+            if (!closed)
+              return {};
+            method->target.declaration = *closed;
+          }
+        }
+        for (auto &application : construction.applications) {
+          for (auto &argument : application.arguments)
+            if (!closeType(argument, bindings, application.span))
+              return {};
+          auto child =
+              instantiate(application.construction, application.arguments,
+                          depth + 1, {}, {}, {});
+          if (!child)
+            return {};
+          application.construction = *child;
+        }
+        for (auto &rule : construction.rules) {
+          for (auto *value : {&rule.payload, &rule.chunks})
+            if (*value && !closeType(**value, bindings, rule.span))
+              return {};
+          for (auto &argument : rule.arguments)
+            if (!closeType(argument, bindings, rule.span))
+              return {};
+          auto handler =
+              instantiate(rule.handler, rule.arguments, depth + 1, {}, {}, {});
+          if (!handler)
+            return {};
+          rule.handler = *handler;
+        }
+      }
       result.scopedInputs.clear();
       result.domainInputs.clear();
       result.inputOrder.clear();
@@ -1206,6 +1298,16 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
     if (!types.checkProofEntry(declarations[selected.index],
                                declarations[instance->index]))
       return false;
+    if (const auto *proof = declarations[selected.index].proof();
+        proof && proof->selectedConstruction) {
+      auto constructionArguments = proof->constructionArguments;
+      auto construction = instantiate(*proof->selectedConstruction,
+                                      constructionArguments, 1, {}, {}, {});
+      if (!construction)
+        return false;
+      std::get<ProofEntry>(declarations[selected.index].configuration)
+          .selectedConstruction = *construction;
+    }
     const auto &inputs = declarations[instance->index].inputs;
     for (unsigned i = 0; i < inputs.size(); ++i) {
       const auto &port = inputs[i];

@@ -319,20 +319,13 @@ fn query_templates_name_their_method_and_index_bounds_are_canonical() {
         ("2", 2),
         ("32", 32),
         ("9223372036854775808", 1 << 63),
+        ("3", 3),
+        ("9223372036854775809", (1 << 63) + 1),
+        ("18446744073709551615", u64::MAX),
     ] {
         assert_eq!(uniform_index_bound(text).unwrap(), bound);
     }
-    for text in [
-        "",
-        "0",
-        "3",
-        "032",
-        "+8",
-        "8 ",
-        "9223372036854775809",
-        "18446744073709551615",
-        "18446744073709551616",
-    ] {
+    for text in ["", "0", "032", "+8", "8 ", "18446744073709551616"] {
         assert!(uniform_index_bound(text).is_err(), "{text:?}");
     }
 

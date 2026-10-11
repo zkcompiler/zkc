@@ -89,7 +89,7 @@ inline bool nativeMessageData(const BoundType &type) {
   return (type.kind == "group" && type.identity == "bn254.gt") ||
          nativeFieldArrayWire(type) ||
          ((type.kind == "bool" || type.kind == "index" ||
-           type.kind == "indices") &&
+           type.kind == "indices" || type.kind == "bytes") &&
           type.identity.empty()) ||
          ((type.kind == "field" || type.kind == "vector" ||
            type.kind == "matrix") &&
@@ -116,7 +116,8 @@ inline bool nativeMessageData(const BoundType &type) {
 inline bool nativeDataFrame(const BoundType &type) {
   return (type.kind == "matrix" || type.kind == "sequence" ||
           type.kind == "variant" || type.kind == "vector" ||
-          type.kind == "groups" || type.kind == "indices") &&
+          type.kind == "groups" || type.kind == "indices" ||
+          type.kind == "bytes") &&
          nativeMessageData(type);
 }
 inline bool nativeSetupType(const BoundType &type) {

@@ -19,7 +19,7 @@ use serde_json::{Value as Json, json};
 pub use setups::SetupAuthority;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-pub use wire::{FormatError, MAX_PROOF_BYTES, ProofReader, ProofWriter};
+pub use wire::{FormatError, MAX_PROOF_BYTES, ProofFormat, ProofReader, ProofWriter};
 use zkc_backends::{
     Capability, Domain, EntryPolicy, NativeBackend, Policy, Value,
     services::{ServiceReference, ServiceRegistry},
@@ -43,7 +43,10 @@ pub(crate) struct RoleMap {
     pub(crate) services: Vec<usize>,
     pub(crate) outputs: Vec<Port>,
 }
-/// Immutable deployment admitted against an independently supplied digest.
+/// Low-level deployment admitted against an independently supplied digest.
+/// This API executes the pinned algorithm, including authored constructions;
+/// it does not impose an application binding policy. Use [`crate::entry::ProofEntry`]
+/// with [`crate::entry::ProofOptions`] to require managed transcript binding.
 #[derive(Clone, Debug)]
 pub struct NativeDeployment {
     ring_assets: zkc_backends::ring::Registry,
@@ -57,6 +60,7 @@ pub struct NativeDeployment {
     entry: NativeProofEntry,
     source: String,
     descriptor: Json,
+    format: ProofFormat,
     public: Vec<Port>,
     maps: BTreeMap<String, RoleMap>,
 }
@@ -66,7 +70,9 @@ pub(crate) struct SourceInterface<'a> {
     pub choices: [bool; 4],
     pub acceptance: usize,
     pub suite: Option<&'a str>,
-    pub service: Option<usize>,
+    pub construction: &'a str,
+    pub format: ProofFormat,
+    pub services: Vec<usize>,
     pub public: &'a [Port],
     pub roles: &'a BTreeMap<String, RoleMap>,
 }
@@ -236,7 +242,7 @@ impl NativeDeployment {
         }
         let source = text(&envelope[1])?.to_owned();
         digest(&source)?;
-        let descriptor = array(&envelope[2], 6)?;
+        let descriptor = array(&envelope[2], 7)?;
         if text(&descriptor[0])? != "zkc.native-proof-descriptor/0"
             || text(&descriptor[2])? != "zkc.native-origin/0"
         {
@@ -260,6 +266,17 @@ impl NativeDeployment {
         let policy = interface::DeploymentPolicy::read(&descriptor[1])?;
         let (entry, producer, validator) = (policy.entry, policy.producer, policy.validator);
         let suite = policy.suite;
+        let construction = zkc_runtime::interactive::ConstructionPlan::read(&descriptor[6])
+            .map_err(|e| e.to_string())?;
+        if construction.as_ref().map_or("", |p| p.symbol()) != policy.construction {
+            return Err("native-proof-construction".into());
+        }
+        if construction
+            .as_ref()
+            .is_some_and(|plan| plan.has_codec() != (policy.format == ProofFormat::RawBytes))
+        {
+            return Err("native-proof-format".into());
+        }
         let admitted = {
             let dummy = NativeBackend::new(
                 Policy::default(),
@@ -275,7 +292,13 @@ impl NativeDeployment {
             maps,
             public,
             acceptance,
-        } = interface::RoleInterface::read(&admitted, &policy, &envelope[6], &descriptor[4])?;
+        } = interface::RoleInterface::read(
+            &admitted,
+            &policy,
+            &envelope[6],
+            &descriptor[4],
+            construction.as_ref(),
+        )?;
         let keys = public
             .iter()
             .filter(|p| p.logical.kind() == Type::VerifierKey)
@@ -300,14 +323,22 @@ impl NativeDeployment {
         }
         let setups = authority;
         setups.check(&public, &maps)?;
+        let source_inputs = maps
+            .iter()
+            .map(|(role, map)| (role.clone(), map.data.iter().map(|p| p.original).collect()))
+            .collect();
         let proof_entry = NativeProofEntry::new(
             admitted,
             entry,
             producer,
             validator,
             acceptance.ok_or("native-proof-acceptance-map")?,
-            suite,
-            &messages.events,
+            zkc_runtime::interactive::ProofConstruction {
+                suite,
+                events: &messages.events,
+                plan: construction.as_ref(),
+                source_inputs: &source_inputs,
+            },
         )
         .map_err(|e| e.to_string())?;
         Ok(Self {
@@ -327,6 +358,7 @@ impl NativeDeployment {
             entry: proof_entry,
             source,
             descriptor: envelope[2].clone(),
+            format: policy.format,
             public,
             maps,
         })
@@ -363,14 +395,19 @@ impl NativeDeployment {
     pub(crate) fn source_interface(&self) -> SourceInterface<'_> {
         let policy = &self.descriptor[1];
         let suite = policy[5].as_str().expect("admitted policy suite");
-        let service = policy[6].as_str().expect("admitted policy service");
+        let services = policy[6].as_array().expect("admitted policy services");
         SourceInterface {
             publication: &self.publication,
             source: &self.source,
             choices: self.choices,
             acceptance: index(&policy[4]).expect("admitted acceptance"),
             suite: (!suite.is_empty()).then_some(suite),
-            service: (!service.is_empty()).then(|| index(&policy[6]).expect("admitted service")),
+            construction: policy[10].as_str().expect("admitted construction"),
+            format: self.format,
+            services: services
+                .iter()
+                .map(|value| index(value).expect("admitted service"))
+                .collect(),
             public: &self.public,
             roles: &self.maps,
         }
@@ -380,8 +417,8 @@ impl NativeDeployment {
     /// default. This setting applies to every later invocation on this value;
     /// each allowance covers all attempts and successful or failed trial calls.
     /// It changes no program or transcript bytes and is reported separately
-    /// from deployment and attempt-policy identities. CLI execution uses the
-    /// default cap. Zero permits only transitions with zero primitive work.
+    /// from deployment and attempt-policy identities. The CLI exposes the same
+    /// cap through `--external-work`. Zero permits only zero-work transitions.
     pub fn with_external_work_limit(mut self, limit: u64) -> Result<Self> {
         if limit > NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT {
             return Err("native-proof-external-work-limit".into());
@@ -392,6 +429,9 @@ impl NativeDeployment {
 
     /// Execute immutable role inputs with an explicit production, verification
     /// or retry request. Public inputs and setups remain application-authorized.
+    /// Authored execution follows the pinned program's own binding algorithm.
+    /// For local/authored RawBytes, context identifies the report only; pass
+    /// any context the protocol must authenticate through its public data ports.
     pub fn execute(
         &self,
         input: &ProofInputs,
@@ -522,6 +562,16 @@ impl NativeDeployment {
                 }
                 values.push(state);
             }
+            if self.entry.has_record_codec()
+                && let Some(proof) = proof
+            {
+                let ty = &role.inputs.last().expect("admitted codec input").1;
+                values.push(
+                    backend
+                        .decode_raw_bytes(ty, proof)
+                        .map_err(|e| e.to_string())?,
+                );
+            }
             let mut service_ports = BTreeMap::new();
             for ((port, budget), service) in mapping
                 .services
@@ -597,14 +647,11 @@ impl NativeDeployment {
                 Ok(mut runner) => {
                     match proof {
                         None => {
-                            let produced = driver::produce_admitted(
+                            let produced = driver::produce_native(
                                 &mut runner,
                                 &binding,
-                                |backend, value| {
-                                    backend
-                                        .encode_native_value(value)
-                                        .map_err(driver::ArtifactFailure::NativeWire)
-                                },
+                                self.transport(),
+                                MAX_PROOF_BYTES,
                             );
                             retain_driver_stop(&mut report, &produced);
                             report.outcome = produced
@@ -623,6 +670,7 @@ impl NativeDeployment {
                                 &mut runner,
                                 proof,
                                 &binding,
+                                self.transport(),
                                 self.entry.acceptance(),
                             );
                             retain_driver_stop(&mut report, &validated);
@@ -652,6 +700,14 @@ impl NativeDeployment {
     }
     /// Native admission has checked the output map against the role signature.
     /// Private successors belong to cleanup, not immutable application results.
+    fn transport(&self) -> driver::Transport {
+        if self.entry.has_record_codec() {
+            driver::Transport::Record
+        } else {
+            driver::Transport::Messages(self.format)
+        }
+    }
+
     fn original_outputs(&self, role: &EntryRole, values: Vec<Value>) -> BTreeMap<usize, Value> {
         self.maps[&role.role]
             .outputs

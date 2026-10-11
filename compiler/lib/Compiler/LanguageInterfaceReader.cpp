@@ -5,6 +5,7 @@
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
@@ -44,6 +45,7 @@ class Reader {
       relationIdentities;
   std::map<std::string, protocol_ir::MathematicalOp> nativeProtocols;
   std::map<std::string, relation::DeclareOp> nativeRelations;
+  std::map<std::string, protocol_ir::ConstructionOp> nativeConstructions;
   std::map<std::string, mlir::func::FuncOp> helpers;
   relation::FormulaIdentities formulas;
   std::map<const InterfaceSchema *, std::string> schemaIdentities;
@@ -320,13 +322,14 @@ class Reader {
             : value.kind == K::Builtin &&
                   (leafKind == "vector" || leafKind == "matrix" ||
                    leafKind == "groups" || leafKind == "indices" ||
-                   leafKind == "polynomial" || leafKind == "table" ||
-                   leafKind == "point" || leafKind == "round" ||
-                   leafKind == "sequence" || leafKind == "field_array" ||
-                   leafKind == "commitment" || leafKind == "commitments" ||
-                   leafKind == "proof" || leafKind == "prover_key" ||
-                   leafKind == "verifier_key" || leafKind == "opening_state" ||
-                   leafKind == "opening_states");
+                   leafKind == "transcript" || leafKind == "bytes" ||
+                   leafKind == "shake128_state" || leafKind == "polynomial" ||
+                   leafKind == "table" || leafKind == "point" ||
+                   leafKind == "round" || leafKind == "sequence" ||
+                   leafKind == "field_array" || leafKind == "commitment" ||
+                   leafKind == "commitments" || leafKind == "proof" ||
+                   leafKind == "prover_key" || leafKind == "verifier_key" ||
+                   leafKind == "opening_state" || leafKind == "opening_states");
     return matched || fail("logical kind differs from native leaf kind");
   }
   std::shared_ptr<const InterfaceSchema>
@@ -1238,36 +1241,93 @@ class Reader {
     if (!constructionObject)
       return fail("Entry construction must be an object");
     auto constructionKind = text(*constructionObject, "kind");
-    if (!constructionKind)
-      return false;
+    auto format = text(*constructionObject, "format");
+    auto parsedFormat =
+        format ? protocol::parseProofFormat(*format) : std::nullopt;
+    if (!constructionKind || !parsedFormat)
+      return fail("unknown Entry proof format");
+    proof.format = *parsedFormat;
+    auto readServices = [&]() {
+      auto *services = array(*constructionObject, "services");
+      if (!services || services->empty() ||
+          services->size() > current->services.size())
+        return fail("construction requires verifier service inputs");
+      for (const auto &value : *services) {
+        auto service = value.getAsInteger();
+        if (!service || *service < 0 ||
+            uint64_t(*service) >= current->services.size() ||
+            (!proof.services.empty() &&
+             proof.services.back() >= uint64_t(*service)) ||
+            current->services[*service].owner != proof.verifier)
+          return fail("construction services must select verifier inputs in "
+                      "original order");
+        proof.services.push_back(unsigned(*service));
+      }
+      return true;
+    };
     if (*constructionKind == "authored") {
-      if (!object(construction, {"kind"}))
+      if (!object(construction, {"kind", "format"}))
         return false;
     } else if (*constructionKind == "fiat_shamir") {
-      if (!object(construction, {"kind", "suite", "service"}))
+      if (!object(construction, {"kind", "format", "suite", "services"}))
         return false;
       auto suite = text(*constructionObject, "suite");
-      auto service = natural(*constructionObject, "service");
-      if (!suite || !service)
+      if (!readServices())
         return false;
-      if (*service >= current->services.size() ||
-          current->services[*service].owner != proof.verifier ||
+      if (!suite)
+        return false;
+      if (proof.format != protocol::ProofFormat::Native ||
+          proof.services.size() != 1 ||
           protocol::nativeChallengeField(*suite).empty() ||
           protocol::nativeChallengeField(*suite) !=
               protocol::randomServiceField(
-                  current->services[*service].contract))
+                  current->services[proof.services.front()].contract))
         return fail("construction suite or verifier service differs");
       proof.construction = ProofEntry::Construction::FiatShamir;
       proof.suite = suite->str();
-      proof.service = *service;
+    } else if (*constructionKind == "derived") {
+      if (!object(construction,
+                  {"kind", "format", "suite", "services", "symbol"}))
+        return false;
+      auto symbol = text(*constructionObject, "symbol");
+      if (!readServices())
+        return false;
+      std::string suite;
+      if (constructionObject->get("suite")->kind() != json::Value::Null) {
+        auto name = text(*constructionObject, "suite");
+        if (!name)
+          return false;
+        suite = name->str();
+      }
+      if (!symbol)
+        return fail("construction selection or verifier service differs");
+      auto found = nativeConstructions.find(symbol->str());
+      if (found == nativeConstructions.end())
+        return fail("construction record differs");
+      mlir::SymbolTableCollection symbols;
+      auto resolved = protocol::resolveConstructionPlan(found->second, symbols);
+      if (!resolved) {
+        consumeError(resolved.takeError());
+        return fail("invalid construction record");
+      }
+      const auto &plan = resolved->plan;
+      SmallVector<unsigned> selectedServices;
+      for (auto service : proof.services)
+        selectedServices.push_back(current->services[service].native);
+      if (resolved->definitions.size() != nativeConstructions.size() ||
+          plan.codec.has_value() !=
+              (proof.format == protocol::ProofFormat::RawBytes) ||
+          plan.target.getValue() != current->symbol || plan.suite != suite ||
+          plan.services != selectedServices)
+        return fail("construction record differs");
+      proof.construction = ProofEntry::Construction::Derived;
+      proof.selectedConstruction = symbol->str();
+      proof.suite = suite;
     } else
       return fail("unknown Entry construction");
-    for (unsigned i = 0; i < current->services.size(); ++i) {
-      if (!charge(1))
-        return false;
-      if (current->services[i].owner == proof.verifier && proof.service != i)
-        return fail("verifier service is outside the selected construction");
-    }
+    if (proof.construction != ProofEntry::Construction::Derived &&
+        !nativeConstructions.empty())
+      return fail("unselected construction record");
     if (obj->get("target")->kind() != json::Value::Null) {
       auto target = text(*obj, "target", limits.identifierBytes);
       if (!target)
@@ -1392,6 +1452,10 @@ class Reader {
         return false;
       if (auto function = mlir::dyn_cast<protocol_ir::MathematicalOp>(op))
         nativeProtocols.emplace(function.getSymName().str(), function);
+      else if (auto construction =
+                   mlir::dyn_cast<protocol_ir::ConstructionOp>(op))
+        nativeConstructions.emplace(construction.getSymName().str(),
+                                    construction);
       else if (auto relation = mlir::dyn_cast<relation::DeclareOp>(op))
         nativeRelations.emplace(relation.getSymName().str(), relation);
       else if (auto helper = mlir::dyn_cast<mlir::func::FuncOp>(op))

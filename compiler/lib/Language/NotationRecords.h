@@ -15,7 +15,7 @@ struct NotationDescriptorRecord {
 };
 struct NotationTargetRecord {
   DeclarationId target;
-  std::optional<std::string> component;
+  std::optional<std::string> module;
   std::vector<std::optional<std::string>> arguments;
   Span span;
   std::vector<Span> authoredArguments;
@@ -23,7 +23,7 @@ struct NotationTargetRecord {
 struct NotationBindingRecord {
   uint32_t descriptor, scope;
   DeclarationId target;
-  std::optional<std::string> component;
+  std::optional<std::string> module;
   std::vector<std::optional<std::string>> arguments;
   Span span, targetSpan;
   std::vector<Span> authoredArguments;
@@ -33,7 +33,7 @@ struct NotationBindingRecord {
   std::optional<NotationTargetRecord> filtered;
 };
 struct NotationImportRecord {
-  ModuleId module;
+  DeclarationId module;
   Span span;
   std::optional<std::string> alias;
   std::vector<std::string> names, operators, notations, reductions;
@@ -63,7 +63,7 @@ struct NotationEmissionRecord {
   // Never points into the temporary syntax tree or a solver candidate cache.
   const Operation *emitted;
   std::vector<std::string> arguments;
-  std::optional<std::string> component;
+  std::optional<std::string> module;
   std::vector<uint32_t> family;
 };
 struct NotationOccurrenceRecord {

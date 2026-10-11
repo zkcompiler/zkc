@@ -10,7 +10,7 @@ using namespace llvm;
 namespace zkc::language {
 namespace {
 bool sameSpan(Span a, Span b) {
-  return a.module.index == b.module.index && a.begin == b.begin &&
+  return a.source.index == b.source.index && a.begin == b.begin &&
          a.end == b.end;
 }
 bool sameSelector(const SpecificationSelector &a,
@@ -213,9 +213,9 @@ class Comparison {
       if (decl.specificationBlock) {
         auto span = *decl.specificationBlock;
         if (decl.kind != Declaration::Kind::Protocol ||
-            span.module.index != decl.span.module.index ||
+            span.source.index != decl.span.source.index ||
             span.begin < decl.span.begin || span.end > decl.span.end ||
-            !blocks.emplace(Start{span.module.index, span.begin}, &decl).second)
+            !blocks.emplace(Start{span.source.index, span.begin}, &decl).second)
           return fail("source specification block inventory differs");
       } else if (!decl.specifications.empty())
         return fail("source clauses have no specification block");
@@ -235,7 +235,7 @@ class Comparison {
           return false;
     }
     for (const auto &decl : entry.project().declarations())
-      if (decl.anonymous && !anonymous.count(decl.id.index))
+      if (decl.anonymous && decl.relation && !anonymous.count(decl.id.index))
         return fail("source omitted an inline predicate binding");
     auto sources = entry.project().sources();
     for (unsigned module = 0; module < sources.size(); ++module) {
@@ -263,7 +263,7 @@ class Comparison {
         unsigned cursor = i + 2;
         for (const auto &clause : decl.specifications) {
           if (cursor >= tokens.size() || !charge(1) ||
-              clause.span.module.index != module ||
+              clause.span.source.index != module ||
               clause.span.begin != tokens[cursor]->span.begin ||
               spelling(cursor) != clauseKind(clause.kind) ||
               spelling(cursor + 1) != clause.name ||
@@ -370,16 +370,22 @@ class Comparison {
     if (!charge(source->publicInputs.size() + actual.publicInputs.size() + 1))
       return false;
     return (source->construction == actual.construction &&
+            source->format == actual.format &&
             source->prover == actual.prover &&
             source->verifier == actual.verifier &&
             source->publicInputs == actual.publicInputs &&
             source->target == actual.target &&
-            source->service == actual.service &&
+            source->services == actual.services &&
             bool(source->completion) == bool(actual.completion) &&
             (!source->completion ||
              selector(entry.protocol(), *source->completion,
                       *actual.completion)) &&
             text(source->suite, actual.suite) &&
+            text(source->construction == ProofEntry::Construction::Derived
+                     ? entry.declarations()[source->selectedConstruction->index]
+                           .symbol
+                     : "",
+                 actual.selectedConstruction) &&
             selector(entry.protocol(), source->acceptance,
                      actual.acceptance)) ||
            fail("source Entry choices differ");

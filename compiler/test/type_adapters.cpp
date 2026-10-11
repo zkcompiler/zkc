@@ -31,6 +31,11 @@ void roundTrip(MLIRContext &context, const BoundType &bound, bool physical) {
   require(encoded == bound, "logical identity or representation changed");
   require(decodeBoundType(&context, encoded) == native,
           "native type identity changed");
+  std::string printed;
+  llvm::raw_string_ostream stream(printed);
+  native.print(stream);
+  require(mlir::parseType(printed, &context) == native,
+          "textual native type roundtrip changed identity");
 }
 } // namespace
 
@@ -113,6 +118,8 @@ int main() {
   std::vector<std::pair<std::string, Type>> nativeCases{
       {"bool", IntegerType::get(&context, 1)},
       {"index", IntegerType::get(&context, 64, IntegerType::Unsigned)},
+      {"bytes", zkc::data::BytesType::get(&context)},
+      {"shake128_state", zkc::crypto::Shake128StateType::get(&context)},
       {"indices", zkc::algebra::IndicesType::get(&context)},
       {"field:" + field, zkc::algebra::FieldType::get(&context, field)},
       {"matrix:" + field, zkc::algebra::FieldMatrixType::get(&context, field)},
@@ -179,7 +186,8 @@ int main() {
               "native parser/printer changed identity");
       if (isa<zkc::algebra::FieldVectorType, zkc::algebra::GroupVectorType,
               zkc::algebra::IndicesType, zkc::algebra::FieldMatrixType,
-              zkc::algebra::FieldArrayType>(native))
+              zkc::algebra::FieldArrayType, zkc::data::BytesType,
+              zkc::crypto::Shake128StateType>(native))
         roundTrip(context, take(defaultRepresentation(bound)), true);
     });
     if (spelling == "bool" || spelling == "index")

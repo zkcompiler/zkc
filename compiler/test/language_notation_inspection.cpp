@@ -178,6 +178,34 @@ int main() {
               value.getAsObject()->getString("visibility") == "public",
               "includeInstallation implicitly included private/local bindings");
       });
+  cases.run("private module notation stays outside the public inventory", [] {
+    auto project = check({{"m", R"(module m;
+      module Hidden {
+        pub module Inner {
+          pub math fn combine<F:Field>(x:F,y:F)->F{return x+y;}
+          pub operator infixl(70) ⊙ = combine;
+        }
+      }
+      pub module Visible {
+        pub math fn combine<F:Field>(x:F,y:F)->F{return x+y;}
+        pub operator infixl(70) ⊗ = combine;
+      }
+    )",
+                           "m.zkc"}});
+    for (bool installation : {false, true}) {
+      auto publicView = report(project, {false, installation});
+      auto privateView = report(project, {true, installation});
+      for (const auto &descriptor : array(publicView, "descriptors"))
+        require(descriptor.getAsObject()->getString("symbol") != "⊙",
+                "private module descriptor leaked into public inventory");
+      find(array(publicView, "descriptors"), "symbol", "⊗");
+      find(array(privateView, "descriptors"), "symbol", "⊙");
+      find(array(privateView, "bindings"), "target",
+           "m::Hidden::Inner::combine");
+      referencesClose(publicView);
+      referencesClose(privateView);
+    }
+  });
   cases.run("prelude bindings remain visible in their own scope", [] {
     auto view = report(inventory(), {false, true});
     const auto &scope = find(array(view, "scopes"), "module", "zkc::prelude");
@@ -225,7 +253,7 @@ int main() {
           auto begin = *span->getInteger("begin"),
                end = *span->getInteger("end");
           auto source =
-              StringRef(project.sources()[*span->getInteger("module")].text);
+              StringRef(project.sources()[*span->getInteger("source")].text);
           require(end - begin == 2 &&
                       source.slice(begin, end) == *operand->getString("text"),
                   "UTF-8 source spans were counted as characters");

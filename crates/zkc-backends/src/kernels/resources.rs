@@ -13,6 +13,22 @@ pub(crate) fn apply(
 ) -> Result<Vec<Value>> {
     use Value::*;
     match (name, args) {
+        ("transcript.observe", [Transcript(t), Bytes(label), Bytes(value)]) => {
+            p.output(512, i.max_output_bytes)?;
+            Ok(vec![Transcript(
+                r.transcript_observe(i.frame, t, label, value)?,
+            )])
+        }
+        ("transcript.challenge", [Transcript(t), Bytes(label)]) => {
+            p.output(1024, i.max_output_bytes)?;
+            let (value, next) = r.transcript_challenge_value(i.frame, t, label)?;
+            Ok(vec![Transcript(next), value])
+        }
+        ("transcript.index", [Transcript(t), Bytes(label), Index(bound)]) => {
+            p.output(1024, i.max_output_bytes)?;
+            let (value, next) = r.transcript_index(i.frame, t, label, *bound)?;
+            Ok(vec![Transcript(next), value])
+        }
         ("random.index", [Rng(t), Index(bound)]) => {
             p.output(1024, i.max_output_bytes)?;
             let (v, t) = r.draw_index(i.frame, t, *bound)?;
@@ -109,6 +125,37 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::{curve, random, transcript};
     use zkc_runtime::interactive::{AttributeRule, Type::*};
     &[
+        transcript::challenge(
+            "transcript.observe",
+            &[Transcript, Bytes, Bytes],
+            &[Transcript],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/transcript.observe",
+            "dalek/transcript.observe",
+            "plonky3/transcript.observe",
+            "spongefish/transcript.observe",
+        ]),
+        transcript::challenge(
+            "transcript.challenge",
+            &[Transcript, Bytes],
+            &[Transcript, Field],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/transcript.challenge",
+            "dalek/transcript.challenge",
+            "plonky3/transcript.challenge",
+            "spongefish/transcript.challenge",
+        ]),
+        transcript::challenge(
+            "transcript.index",
+            &[Transcript, Bytes, Index],
+            &[Transcript, Index],
+            AttributeRule::None,
+        )
+        .implemented_by(&["plonky3/transcript.index"]),
         transcript::observation(
             "transcript.native.indexed.observe.data",
             &[],

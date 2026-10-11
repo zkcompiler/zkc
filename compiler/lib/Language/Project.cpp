@@ -108,16 +108,15 @@ bool isUnsupported(StringRef name) {
 }
 bool isReserved(StringRef name) {
   static const std::set<StringRef> words = {
-      "module", "use",       "pub",       "domain",    "field",        "group",
-      "math",   "fn",        "protocol",  "roles",     "let",          "return",
-      "send",   "bool",      "true",      "false",     "index",        "type",
-      "struct", "enum",      "interface", "component", "where",        "nat",
-      "mut",    "if",        "else",      "max",       "match",        "for",
-      "in",     "drop",      "consume",   "require",   "stop",         "opaque",
-      "Type",   "Field",     "Group",     "Copy",      "Drop",         "Share",
-      "Wire",   "completes", "finish_if", "builtin",   "kernel",       "pow2",
-      "formal", "intrinsic", "relation",  "spec",      "construction", "map",
-      "each"};
+      "module",    "use",       "pub",       "domain",       "field",  "group",
+      "math",      "fn",        "protocol",  "roles",        "let",    "return",
+      "send",      "bool",      "true",      "false",        "index",  "type",
+      "struct",    "enum",      "interface", "where",        "nat",    "mut",
+      "if",        "else",      "max",       "match",        "for",    "in",
+      "drop",      "consume",   "require",   "stop",         "opaque", "Type",
+      "Field",     "Group",     "Copy",      "Drop",         "Share",  "Wire",
+      "completes", "finish_if", "builtin",   "kernel",       "pow2",   "formal",
+      "intrinsic", "relation",  "spec",      "construction", "map",    "each"};
   return words.count(name) || isUnsupported(name);
 }
 bool isIdentifier(StringRef name) { return isSourceIdentifier(name); }
@@ -166,9 +165,10 @@ static Error checkSources(ArrayRef<SourceBuffer> sources,
   std::set<StringRef> names;
   for (const auto &source : sources) {
     if (source.origin != SourceOrigin::Captured ||
-        source.module == "zkc::prelude")
-      return failure("source.module",
-                     "zkc::prelude is reserved for installation sources");
+        (source.module == "zkc" || source.module == "zkc::prelude"))
+      return failure(
+          "source.module",
+          "zkc and zkc::prelude are reserved for installation sources");
     if (source.diagnosticPath.size() > 4096)
       return failure("source.limit", "diagnostic path byte limit exceeded");
     if (source.text.size() > limits.fileBytes ||
@@ -272,7 +272,7 @@ ArrayRef<Asset> CheckedProject::assets() const { return storage->assets; }
 ArrayRef<Declaration> CheckedProject::declarations() const {
   return storage->declarations;
 }
-ArrayRef<Token> CheckedProject::tokens(ModuleId id) const {
+ArrayRef<Token> CheckedProject::tokens(SourceId id) const {
   return id.index < storage->tokens.size()
              ? ArrayRef<Token>(storage->tokens[id.index])
              : ArrayRef<Token>();
@@ -298,7 +298,7 @@ Analysis::Analysis(std::shared_ptr<const detail::AnalysisStorage> storage)
 ArrayRef<Diagnostic> Analysis::diagnostics() const {
   return storage->diagnostics;
 }
-ArrayRef<Token> Analysis::tokens(ModuleId id) const {
+ArrayRef<Token> Analysis::tokens(SourceId id) const {
   return id.index < storage->tokens.size()
              ? ArrayRef<Token>(storage->tokens[id.index])
              : ArrayRef<Token>();
@@ -338,13 +338,13 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits) {
       checked->assets.push_back(std::move(*value));
     }
     checked->tokens.resize(sources->size());
-    std::vector<detail::SyntaxModule> modules;
+    std::vector<detail::SyntaxDeclaration> modules;
     for (unsigned i = 0; i < sources->size(); ++i) {
       if (auto error =
-              detail::lex((*sources)[i], ModuleId{i}, work, checked->tokens[i]))
+              detail::lex((*sources)[i], SourceId{i}, work, checked->tokens[i]))
         return error;
       auto syntax =
-          detail::parse((*sources)[i], ModuleId{i}, checked->tokens[i], work);
+          detail::parse((*sources)[i], SourceId{i}, checked->tokens[i], work);
       if (!syntax)
         return syntax.takeError();
       modules.push_back(std::move(*syntax));

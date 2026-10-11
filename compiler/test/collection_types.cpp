@@ -24,6 +24,7 @@ int main() {
   auto array = algebra::FieldArrayType::get(&context, field.getDomain(), 4);
   auto fixed = algebra::FixedVectorType::get(&context, field, 4);
   auto sequence = data::SequenceType::get(&context, vector);
+  auto bytes = data::BytesType::get(&context);
   struct Expected {
     Type type;
     CollectionKind kind;
@@ -51,6 +52,11 @@ int main() {
         Expected{array, CollectionKind::FieldArray, field, 1, 4},
         Expected{fixed, CollectionKind::FixedVector, field, 1, 4},
         Expected{sequence, CollectionKind::Sequence, vector, 1, {}},
+        Expected{bytes,
+                 CollectionKind::Bytes,
+                 IntegerType::get(&context, 8, IntegerType::Unsigned),
+                 1,
+                 {}},
         Expected{algebra::FieldArrayType::get(&context, field.getDomain(), 0),
                  CollectionKind::FieldArray, field, 1, 0},
         Expected{algebra::FixedVectorType::get(&context, field, 0),
@@ -79,6 +85,8 @@ int main() {
             "existing finite collection admission changed");
     require(!finite::elementType(fixed),
             "collection interface granted FixedVector finite admission");
+    require(!finite::elementType(bytes),
+            "collection interface granted Bytes finite admission");
     require(!isa<CollectionTypeInterface>(field),
             "scalar acquired collection structure");
     auto tensor = RankedTensorType::get({4}, field);
@@ -87,6 +95,13 @@ int main() {
     auto bound = encodeBoundType(tensor, false);
     require(!bound, "builtin tensor shape still determines logical identity");
     llvm::consumeError(bound.takeError());
+    auto byteTensor = RankedTensorType::get(
+        {ShapedType::kDynamic},
+        IntegerType::get(&context, 8, IntegerType::Unsigned));
+    auto encodedBytes = encodeBoundType(byteTensor, false);
+    require(!encodedBytes && !isa<CollectionTypeInterface>(byteTensor),
+            "builtin byte tensor acquired a nominal Bytes identity");
+    llvm::consumeError(encodedBytes.takeError());
     require(!(take(encodeBoundType(array, false)) ==
               take(encodeBoundType(fixed, false))),
             "equal-sized aggregate families collapsed");

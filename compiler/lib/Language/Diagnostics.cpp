@@ -38,16 +38,16 @@ public:
   Renderer(ArrayRef<SourceBuffer> sources, raw_ostream &out)
       : sources(sources), out(out) {}
   void location(Span span) {
-    if (span.module.index >= sources.size()) {
+    if (span.source.index >= sources.size()) {
       out << " (invalid source span)\n";
       return;
     }
-    const auto &source = sources[span.module.index];
+    const auto &source = sources[span.source.index];
     if (span.begin > span.end || span.end > source.text.size()) {
       out << " (invalid source span)\n";
       return;
     }
-    auto [it, inserted] = lines.try_emplace(span.module.index);
+    auto [it, inserted] = lines.try_emplace(span.source.index);
     auto &starts = it->second;
     if (inserted) {
       starts.push_back(0);
@@ -85,11 +85,11 @@ public:
       out << '\n';
     std::set<std::tuple<unsigned, unsigned, unsigned>> seen;
     if (value.primary)
-      seen.emplace(value.primary->module.index, value.primary->begin,
+      seen.emplace(value.primary->source.index, value.primary->begin,
                    value.primary->end);
     unsigned shown = 0;
     for (auto span : value.related) {
-      if (!seen.emplace(span.module.index, span.begin, span.end).second)
+      if (!seen.emplace(span.source.index, span.begin, span.end).second)
         continue;
       if (shown++ == 4) {
         out << "note: further related locations omitted\n";

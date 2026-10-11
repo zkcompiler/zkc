@@ -6,7 +6,8 @@ This native contract defines proof execution, completion and failure.
 ## Completion and failure
 
 Validation accepts only after the selected Boolean result is true, the role has
-returned normally, and the proof reader is exhausted. A true result with
+returned normally, and framing has completed: the native proof reader is
+exhausted, or the selected record codec's finish method has succeeded. A true result with
 trailing bytes is not acceptance. Stop reasons retain their distinctions; host
 failures are not coerced into an ordinary false result. A partial proof is never
 a completed producer result. Successful completion permits [per-file publication](publication.md), with
@@ -38,8 +39,14 @@ unit check is a defense against a broken backend or host custody contract:
 execution. Admitted completed executions do not normally reach this refusal.
 
 Completed draws, transcript transitions, consumed bytes and work remain consumed
-on rejection, stop, cancellation and failed attempts. Decoding finishes before
-the receive is accepted and before its subsequent transcript observation. A
+on rejection, stop, cancellation and failed attempts. Native decoding finishes before
+the receive is accepted and before its subsequent transcript observation.
+Record codecs separate ordered receive, original-byte wire observation, decode
+and mathematical observation as specified by [record transport](../ir/construction.md#record-transport).
+Their Host acquires the bounded original Bytes buffer once; each slice and
+function uses the ordinary Runner work and storage ledgers. Acquired byte count
+is independent of how far parsing progressed. The prover reports one raw buffer
+publication; the verifier reports zero typed message receives. A
 length consumed before truncation remains consumed in the reported prefix.
 
 The constructor preserves a finite attempt body; the native Host repeats it
@@ -106,7 +113,7 @@ load successfully and then report an execution limit at its first attempt.
 original common-program output indices. Producer and validator results use their
 own role maps. It is `None` on rejection, body failure, attempt exhaustion or
 cleanup failure, and `Some` with an empty map when success has no copyable
-original results. Generated transcript results and private RNG/nonce successors
+original results. Internal encoded proof bytes, generated transcript results and private RNG/nonce successors
 remain lifecycle state and are retired; they are not exported as data. Result
 selection follows the admitted output map and physical duplicability.
 

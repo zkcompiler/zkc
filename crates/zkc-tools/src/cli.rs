@@ -7,9 +7,9 @@ pub use render::human;
 
 const SETUPS: Opt = Opt::new("--setups=AUTHORITY");
 const CAPACITY: Opt = Opt::new("--capacity=LIMITS");
-const HEADER: Opt = Opt::new("--allow-header-only");
+const AUTHORED: Opt = Opt::new("--allow-authored");
 const RESULTS: Opt = Opt::new("--results=FILE");
-const BUNDLE_PROOF: &str = "DEPLOYMENT is zkc-compile protocol-proof output. EXPECTED_SHA256 must come from\ntrusted compilation or deployment configuration. INPUTS supplies public bindings\nand one role's invocation values. Authored transcripts require --allow-header-only.";
+const BUNDLE_PROOF: &str = "DEPLOYMENT is zkc-compile protocol-proof output. EXPECTED_SHA256 must come from\ntrusted compilation or deployment configuration. INPUTS supplies public bindings\nand one role's invocation values. Authored transcripts require --allow-authored.";
 // Source and pinned package modes share spelling, but cannot be combined.
 macro_rules! entry_options {
     (@inspection $($extra:expr),* $(,)?) => {
@@ -125,9 +125,10 @@ Use inputs check to validate existing input contents; no protocol is executed.",
             Opt::new("--key=SLOT=FILE").repeated(),
             Opt::new("--context=HEX").hex(None),
             Opt::new("--transcript-budget=COUNT").unsigned(),
+            Opt::new("--external-work=COUNT").unsigned(),
             SETUPS,
             CAPACITY,
-            HEADER,
+            AUTHORED,
             Opt::new("--limits=LIMITS"),
             Opt::new("--attempts=COUNT").unsigned(),
         ),
@@ -162,9 +163,10 @@ Use inputs check to validate existing input contents; no protocol is executed.",
             Opt::new("--key=SLOT=FILE").repeated(),
             Opt::new("--context=HEX").hex(None),
             Opt::new("--transcript-budget=COUNT").unsigned(),
+            Opt::new("--external-work=COUNT").unsigned(),
             SETUPS,
             CAPACITY,
-            HEADER,
+            AUTHORED,
             Opt::new("--attempts=COUNT").unsigned(),
             RESULTS,
         ),
@@ -181,9 +183,10 @@ Use inputs check to validate existing input contents; no protocol is executed.",
             Opt::new("--key=SLOT=FILE").repeated(),
             Opt::new("--context=HEX").hex(None),
             Opt::new("--transcript-budget=COUNT").unsigned(),
+            Opt::new("--external-work=COUNT").unsigned(),
             SETUPS,
             CAPACITY,
-            HEADER,
+            AUTHORED,
             RESULTS,
         ),
         description: ENTRY,
@@ -206,14 +209,14 @@ Use inputs check to validate existing input contents; no protocol is executed.",
         name: "prove-bundle",
         summary: "Produce a proof from a pinned deployment",
         positional: "DEPLOYMENT EXPECTED_SHA256 INPUTS PROOF",
-        options: &[SETUPS, Opt::new("--attempt-policy=FILE"), CAPACITY, HEADER],
+        options: &[SETUPS, Opt::new("--attempt-policy=FILE"), CAPACITY, AUTHORED],
         description: BUNDLE_PROOF,
     },
     Command {
         name: "verify-bundle",
         summary: "Verify a proof with a pinned deployment",
         positional: "DEPLOYMENT EXPECTED_SHA256 INPUTS PROOF",
-        options: &[SETUPS, CAPACITY, HEADER],
+        options: &[SETUPS, CAPACITY, AUTHORED],
         description: BUNDLE_PROOF,
     },
 ];
@@ -424,7 +427,7 @@ mod tests {
     fn flags_values_duplicates_and_producer_options_are_checked_once() {
         let prove = command("prove").unwrap();
         for options in [
-            vec!["--allow-header-only="],
+            vec!["--allow-authored="],
             vec!["--results"],
             vec!["--results="],
             vec!["--attempts=3", "--attempts=4"],
@@ -446,7 +449,7 @@ mod tests {
                 "cli-option"
             );
         }
-        let values = args(&["--results=out", "Example", "--allow-header-only"]);
+        let values = args(&["--results=out", "Example", "--allow-authored"]);
         assert_eq!(prove.parse(&values).unwrap().positional, ["Example"]);
         let values = args(&["--", "-p"]);
         assert_eq!(
