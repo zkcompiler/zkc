@@ -97,6 +97,47 @@ fn thread<T:Type>(x:T,b:bool,n:index)->T {
 })",
              "thread", false, false);
   });
+  cases.run("stopped captures retain the outer transfer", [&] {
+    contract(R"(
+fn guard<T:Type>(x:T,bad:bool)->T {
+ if bad {let y=x;stop "reject";} else {}
+ return x;
+})",
+             "guard", true, true);
+    take(check(R"(
+fn guard<T:Type>(x:T,bad:bool)->T where Copy(T) {
+ if bad {let y=x;stop "reject";} else {}
+ return x;
+})"));
+    refuses(check(R"(
+fn guard<T:Type>(x:T,bad:bool)->T where Drop(T) {
+ if bad {let y=x;stop "reject";} else {}
+ return x;
+})"),
+            "source.move");
+  });
+  cases.run("partial state moves preserve the whole joined successor", [&] {
+    contract(R"(
+fn tail<T:Type>(p:(T,T),q:(T,T),b:bool)->(T,T) {
+ let mut state=p;let first=state.0;
+ if b {state=q;} else {}
+ return(first,state.1);
+})",
+             "tail", true, true);
+    take(check(R"(
+fn tail<T:Type>(p:(T,T),q:(T,T),b:bool)->(T,T) where Copy(T) {
+ let mut state=p;let first=state.0;
+ if b {state=q;} else {}
+ return(first,state.1);
+})"));
+    refuses(check(R"(
+fn tail<T:Type>(p:(T,T),q:(T,T),b:bool)->(T,T) where Drop(T) {
+ let mut state=p;let first=state.0;
+ if b {state=q;} else {}
+ return(first,state.1);
+})"),
+            "source.move");
+  });
   cases.run("repeated invariant use infers Copy", [&] {
     contract("fn repeat<T:Type>(x:T,n:index)->(){for _ in 0..n {let "
              "value=x;}return ();}",

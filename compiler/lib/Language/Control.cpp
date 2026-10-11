@@ -102,14 +102,10 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
                     "supply its successor")) {
       return {};
     }
-    std::optional<ValueId> value;
-    if (collectingBranch) {
-      auto selected = place(p, expr.span);
-      if (selected)
-        value = transport(selected->first, selected->second, expr.span);
-    } else
-      value = capturePlace(p, expr.span);
-    if (!value || (!collectingBranch && !use(*value, expr.span)))
+    // Captures are transferred into the control. Unlike mutable state they
+    // are not returned from its arms, so the collector must own fresh inputs.
+    auto value = capturePlace(p, expr.span);
+    if (!value || !use(*value, expr.span))
       return {};
     captures.emplace_back(p, *value);
     operation.operands.push_back(*value);
@@ -200,9 +196,6 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
       arm.captures.push_back(ValueId{uint32_t(arm.body->values.size())});
       if (!importPlace(nested, p, operand, expr.span))
         return {};
-      if (collectingBranch)
-        nested.usageValues[arm.captures.back().index] = plan->usage.within(
-            usageValues[operand.index], nested.usageGuard, expr.span);
       if (loop && !nested.use(arm.captures.back(), expr.span))
         return {};
     }
@@ -335,8 +328,10 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
           continue;
         auto &nested = *arm.checker;
         const auto value = *nested.bindings.at(id).value;
-        auto origins = plan->usage.within(nested.usageValues[value.index],
-                                          nested.usageGuard, expr.span);
+        auto origins =
+            plan->usage.join(plan->usage.within(nested.usageValues[value.index],
+                                                nested.usageGuard, expr.span),
+                             expr.span);
         state.insert(state.end(), origins.begin(), origins.end());
       }
       fields.push_back(std::move(state));

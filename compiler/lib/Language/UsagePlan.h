@@ -11,11 +11,16 @@ class UsagePlan {
 public:
   using Guard = unsigned;
   static constexpr Guard never = 0, always = 1;
+  struct Transfer {
+    std::vector<unsigned> path;
+    uint64_t before;
+  };
   struct Part {
     std::vector<unsigned> path;
     unsigned origin;
     std::vector<unsigned> sourcePath;
     Guard guard;
+    std::vector<Transfer> transfers;
   };
   using Value = std::vector<Part>;
   using Requirement = std::function<bool(const Type &, Usage, Span,
@@ -27,6 +32,9 @@ public:
   Guard intersect(Guard, Guard, Span);
   Guard unite(Guard, Guard, Span);
   Value own(const Type &, Span, Guard);
+  /// A joined state is available as a whole. Only later authored uses demand
+  /// that earlier partial moves preserve that whole successor.
+  Value join(Value, Span);
   Value within(const Value &, Guard, Span);
   Value project(const Value &, llvm::ArrayRef<unsigned>, Span);
   Value product(llvm::ArrayRef<Value>, Span);
@@ -48,13 +56,13 @@ private:
   std::map<std::pair<unsigned, std::vector<Guard>>, Guard> unique;
   std::map<std::tuple<bool, Guard, Guard>, Guard> combinations;
   Guard node(unsigned, std::vector<Guard>, Span);
-  Guard combine(bool disjunction, Guard, Guard, Span, unsigned = 1);
-  Guard negate(Guard, Span, unsigned = 1);
+  Guard combine(bool disjunction, Guard, Guard, Span);
   struct Use {
     std::vector<unsigned> path;
     Guard guard;
     Span span;
     uint64_t order;
+    std::vector<Transfer> transfers;
   };
   struct Origin {
     Type type;

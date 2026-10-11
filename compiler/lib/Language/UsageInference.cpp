@@ -46,7 +46,11 @@ bool Checker::inferUsage(Declaration &decl, Body::Mode mode, unsigned depth) {
   scratch.mode = mode;
   bodyPlans.emplace(decl.id.index, &plan);
   {
-    scope_exit restore([&] { bodyPlans.erase(decl.id.index); });
+    auto outputs = decl.outputs;
+    scope_exit restore([&] {
+      bodyPlans.erase(decl.id.index);
+      decl.outputs = std::move(outputs);
+    });
     if (!checkBody(decl, scratch, depth))
       return false;
   }

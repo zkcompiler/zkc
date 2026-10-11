@@ -41,41 +41,63 @@ UsagePlan::Guard UsagePlan::arm(unsigned variable, unsigned ordinal,
   return node(variable, std::move(children), span);
 }
 UsagePlan::Guard UsagePlan::combine(bool disjunction, Guard a, Guard b,
-                                    Span span, unsigned depth) {
-  if (!types.charge(1, span))
-    return never;
-  if (depth > types.work.limits.expressionDepth) {
-    types.fail("source.limit", "usage branch depth exceeded", span);
-    return never;
-  }
-  if (a > b)
-    std::swap(a, b);
-  if (a == b || b == (disjunction ? never : always))
-    return a;
-  if (a == (disjunction ? never : always))
-    return b;
-  if (a == (disjunction ? always : never))
-    return a;
-  if (b == (disjunction ? always : never))
-    return b;
-  auto key = std::make_tuple(disjunction, a, b);
-  auto found = combinations.find(key);
-  if (found != combinations.end())
-    return found->second;
-  auto variable = std::min(nodes[a].variable, nodes[b].variable);
-  // Recursive interning may reallocate nodes, so retain child IDs by value.
-  const auto left = nodes[a], right = nodes[b];
-  std::vector<Guard> children;
-  for (unsigned i = 0; i < arities[variable]; ++i) {
-    children.push_back(combine(
-        disjunction, left.variable == variable ? left.children[i] : a,
-        right.variable == variable ? right.children[i] : b, span, depth + 1));
+                                    Span span) {
+  auto known = [&](Guard a, Guard b) -> std::optional<Guard> {
+    if (a > b)
+      std::swap(a, b);
+    if (a == b || b == (disjunction ? never : always))
+      return a;
+    if (a == (disjunction ? never : always))
+      return b;
+    if (a == (disjunction ? always : never))
+      return a;
+    if (b == (disjunction ? always : never))
+      return b;
+    auto found = combinations.find({disjunction, a, b});
+    return found == combinations.end() ? std::nullopt
+                                       : std::optional(found->second);
+  };
+  // An explicit work stack makes sequential guards independent of expression
+  // nesting limits. Every expanded diagram edge consumes the shared work
+  // budget.
+  std::vector<std::pair<Guard, Guard>> pending{{a, b}};
+  while (!pending.empty()) {
+    auto [left, right] = pending.back();
+    if (!types.charge(1, span))
+      return never;
+    if (known(left, right)) {
+      pending.pop_back();
+      continue;
+    }
+    auto variable = std::min(nodes[left].variable, nodes[right].variable);
+    // Interning children can reallocate nodes; retain IDs by value.
+    auto l = nodes[left], r = nodes[right];
+    std::vector<Guard> children;
+    bool complete = true;
+    for (unsigned i = 0; i < arities[variable]; ++i) {
+      if (!types.charge(1, span))
+        return never;
+      Guard x = l.variable == variable ? l.children[i] : left;
+      Guard y = r.variable == variable ? r.children[i] : right;
+      if (auto child = known(x, y))
+        children.push_back(*child);
+      else {
+        pending.emplace_back(x, y);
+        complete = false;
+        break;
+      }
+    }
+    if (!complete)
+      continue;
+    auto result = node(variable, std::move(children), span);
     if (types.diagnostic)
       return never;
+    if (left > right)
+      std::swap(left, right);
+    combinations.emplace(std::make_tuple(disjunction, left, right), result);
+    pending.pop_back();
   }
-  auto result = node(variable, std::move(children), span);
-  combinations.emplace(key, result);
-  return result;
+  return *known(a, b);
 }
 UsagePlan::Guard UsagePlan::intersect(Guard a, Guard b, Span span) {
   return combine(false, a, b, span);
@@ -83,23 +105,24 @@ UsagePlan::Guard UsagePlan::intersect(Guard a, Guard b, Span span) {
 UsagePlan::Guard UsagePlan::unite(Guard a, Guard b, Span span) {
   return combine(true, a, b, span);
 }
-UsagePlan::Guard UsagePlan::negate(Guard guard, Span span, unsigned depth) {
-  if (guard < 2)
-    return 1 - guard;
-  if (depth > types.work.limits.expressionDepth || !types.charge(1, span)) {
-    if (!types.diagnostic)
-      types.fail("source.limit", "usage branch depth exceeded", span);
-    return never;
-  }
-  auto entry = nodes[guard];
-  for (auto &child : entry.children)
-    child = negate(child, span, depth + 1);
-  return node(entry.variable, std::move(entry.children), span);
-}
 UsagePlan::Value UsagePlan::own(const Type &type, Span span, Guard guard) {
   unsigned origin = origins.size();
   origins.push_back({type, span, {}});
-  return {{{}, origin, {}, guard}};
+  return {{{}, origin, {}, guard, {}}};
+}
+UsagePlan::Value UsagePlan::join(Value value, Span span) {
+  for (auto &part : value) {
+    if (!types.charge(part.sourcePath.size() + part.transfers.size() + 1, span))
+      return {};
+    auto found = llvm::find_if(part.transfers, [&](const auto &transfer) {
+      return transfer.path == part.sourcePath;
+    });
+    if (found == part.transfers.end())
+      part.transfers.push_back({part.sourcePath, order});
+    else
+      found->before = order;
+  }
+  return value;
 }
 UsagePlan::Value UsagePlan::within(const Value &value, Guard guard, Span span) {
   Value result;
@@ -119,11 +142,13 @@ UsagePlan::Value UsagePlan::project(const Value &value, ArrayRef<unsigned> path,
     if (prefix(part.path, path)) {
       auto source = part.sourcePath;
       source.insert(source.end(), path.begin() + part.path.size(), path.end());
-      result.push_back({{}, part.origin, std::move(source), part.guard});
+      result.push_back(
+          {{}, part.origin, std::move(source), part.guard, part.transfers});
     } else if (prefix(path, part.path)) {
       result.push_back({std::vector<unsigned>(part.path.begin() + path.size(),
                                               part.path.end()),
-                        part.origin, part.sourcePath, part.guard});
+                        part.origin, part.sourcePath, part.guard,
+                        part.transfers});
     }
   }
   return result;
@@ -144,8 +169,9 @@ bool UsagePlan::use(const Value &value, ArrayRef<unsigned> path, Guard guard,
   auto selected = within(project(value, path, span), guard, span);
   ++order;
   for (auto &part : selected)
-    origins[part.origin].uses.push_back(
-        {std::move(part.sourcePath), part.guard, span, order});
+    origins[part.origin].uses.push_back({std::move(part.sourcePath), part.guard,
+                                         span, order,
+                                         std::move(part.transfers)});
   return !types.diagnostic;
 }
 bool UsagePlan::finish(const Value &value, Guard guard, Span span,
@@ -163,6 +189,11 @@ bool UsagePlan::finishPlace(const Exit &exit, const Type &type,
                ? false
                : types.fail("source.limit", "usage obligation depth exceeded",
                             exit.span);
+  auto properties = types.permissions(type, exit.span, &scope);
+  if (!properties)
+    return false;
+  if (properties->drop)
+    return true;
   Guard covered = never;
   for (const auto &use : origins[exit.origin].uses) {
     if (!types.charge(use.path.size() + 1, exit.span))
@@ -170,13 +201,9 @@ bool UsagePlan::finishPlace(const Exit &exit, const Type &type,
     if ((!exit.before || use.order <= *exit.before) && prefix(use.path, path))
       covered = unite(covered, use.guard, exit.span);
   }
-  if (intersect(exit.guard, negate(covered, exit.span), exit.span) == never)
+  // Reduced diagrams are canonical: this implication needs no complement walk.
+  if (intersect(exit.guard, covered, exit.span) == exit.guard)
     return !types.diagnostic;
-  auto properties = types.permissions(type, exit.span, &scope);
-  if (!properties)
-    return false;
-  if (properties->drop)
-    return true;
   const auto *decl = types.typeDeclaration(type);
   bool structural =
       type.kind == Type::Kind::Tuple ||
@@ -201,22 +228,65 @@ bool UsagePlan::finishPlace(const Exit &exit, const Type &type,
                  "value without Drop remains unused on a continuing path");
 }
 bool UsagePlan::solve(const Requirement &require) {
-  // Every authored use is checked, including prefixes of stopped paths.
-  for (const auto &origin : origins)
-    for (unsigned i = 0; i < origin.uses.size(); ++i)
-      for (unsigned j = 0; j < i; ++j) {
-        const auto &use = origin.uses[i], &prior = origin.uses[j];
-        if (!types.charge(use.path.size() + prior.path.size() + 1, use.span))
+  // A path's prefix unions replace pairwise comparisons of all its uses.
+  // Once Copy is required for that path, later duplication adds no condition.
+  struct History {
+    Type type;
+    bool copy;
+    std::vector<std::pair<uint64_t, Guard>> prefixes;
+  };
+  for (const auto &origin : origins) {
+    std::map<std::vector<unsigned>, History> paths;
+    for (const auto &use : origin.uses) {
+      for (auto &[path, history] : paths) {
+        if (!types.charge(path.size() + use.path.size() + use.transfers.size() +
+                              1,
+                          use.span))
           return false;
-        if ((!prefix(use.path, prior.path) && !prefix(prior.path, use.path)) ||
-            intersect(use.guard, prior.guard, use.span) == never)
+        if (history.copy)
           continue;
-        auto type =
-            types.projectedType(scope, origin.type, prior.path, use.span);
-        if (!type || !require(*type, Usage::Copy, use.span, "source.move",
-                              "value or overlapping field was already moved"))
+        Guard prior = never;
+        if (prefix(path, use.path) || prefix(use.path, path))
+          prior = history.prefixes.back().second;
+        for (const auto &transfer : use.transfers) {
+          if (!types.charge(transfer.path.size() + 1, use.span))
+            return false;
+          if (!prefix(path, transfer.path) && !prefix(transfer.path, path))
+            continue;
+          auto at = std::upper_bound(history.prefixes.begin(),
+                                     history.prefixes.end(), transfer.before,
+                                     [](uint64_t order, const auto &entry) {
+                                       return order < entry.first;
+                                     });
+          if (at != history.prefixes.begin())
+            prior = unite(prior, std::prev(at)->second, use.span);
+        }
+        if (intersect(prior, use.guard, use.span) == never)
+          continue;
+        if (!require(history.type, Usage::Copy, use.span, "source.move",
+                     "value or joined state was already moved"))
           return false;
+        history.copy = true;
       }
+      auto found = paths.find(use.path);
+      if (found == paths.end()) {
+        auto type = types.projectedType(scope, origin.type, use.path, use.span);
+        auto properties =
+            type ? types.permissions(*type, use.span, &scope) : std::nullopt;
+        if (!properties)
+          return false;
+        found =
+            paths.emplace(use.path, History{*type, properties->copy, {}}).first;
+      }
+      auto &history = found->second;
+      if (!history.copy) {
+        Guard previous =
+            history.prefixes.empty() ? never : history.prefixes.back().second;
+        history.prefixes.emplace_back(use.order,
+                                      unite(previous, use.guard, use.span));
+      }
+    }
+  }
   for (const auto &exit : exits) {
     auto type = types.projectedType(scope, origins[exit.origin].type, exit.path,
                                     exit.span);

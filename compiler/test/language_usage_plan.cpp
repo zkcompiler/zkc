@@ -126,5 +126,62 @@ int main() {
     e.solve();
     require(e.requirements.empty(), "nested branches lost coverage");
   });
+  cases.run("joined successors remember partial moves", [] {
+    Environment e;
+    Type tuple(Type::Kind::Tuple);
+    tuple.arguments = {e.parameter, e.parameter};
+    auto value = e.plan.own(tuple, {}, Plan::always);
+    e.plan.use(value, {0}, Plan::always, {});
+    auto joined = e.plan.join(value, {});
+    e.plan.use(joined, {1}, Plan::always, {});
+    e.solve();
+    require(e.needs(Usage::Copy), "whole successor lost partial consumption");
+  });
+  cases.run("an unused joined successor adds no Copy", [] {
+    Environment e;
+    Type tuple(Type::Kind::Tuple);
+    tuple.arguments = {e.parameter, e.parameter};
+    auto value = e.plan.own(tuple, {}, Plan::always);
+    e.plan.use(value, {0}, Plan::always, {});
+    e.plan.join(value, {});
+    e.solve();
+    require(!e.needs(Usage::Copy), "unused successor required Copy");
+  });
+  cases.run("shared guard diagrams stay bounded", [] {
+    Environment e;
+    auto value = e.plan.own(e.parameter, {}, Plan::always);
+    auto continuing = Plan::always;
+    for (unsigned i = 0; i < 40; ++i) {
+      auto branch = e.plan.branch(3);
+      auto arms = e.plan.unite(e.plan.arm(branch, 0, {}),
+                               e.plan.arm(branch, 1, {}), {});
+      continuing = e.plan.intersect(continuing, arms, {});
+    }
+    e.plan.finish(value, continuing, {}, false);
+    e.solve();
+    require(e.needs(Usage::Drop), "nonempty continuing guard disappeared");
+  });
+  cases.run("sequential guards do not consume expression nesting", [] {
+    Environment e;
+    e.limits.expressionDepth = 8;
+    auto value = e.plan.own(e.parameter, {}, Plan::always);
+    auto continuing = Plan::always;
+    for (unsigned i = 0; i < 40; ++i) {
+      auto branch = e.plan.branch(2);
+      continuing = e.plan.intersect(continuing, e.plan.arm(branch, 0, {}), {});
+    }
+    e.plan.use(value, {}, continuing, {});
+    e.plan.finish(value, continuing, {}, false);
+    e.solve();
+    require(e.requirements.empty(), "sequential guard coverage differs");
+  });
+  cases.run("repeated uses of one path aggregate their guards", [] {
+    Environment e;
+    auto value = e.plan.own(e.parameter, {}, Plan::always);
+    for (unsigned i = 0; i < 4000; ++i)
+      e.plan.use(value, {}, Plan::always, {});
+    e.solve();
+    require(e.needs(Usage::Copy), "repetition lost Copy");
+  });
   return cases.result();
 }
