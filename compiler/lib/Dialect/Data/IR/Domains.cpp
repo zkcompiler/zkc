@@ -153,23 +153,41 @@ BoundedMatrixAtOp::getOperandDependencies(unsigned result) {
 }
 LogicalResult BoundedAtOp::verify() {
   if (!(*this)->getAttrs().empty() ||
-      finite::elementType(getInput().getType()) != getOutput().getType() ||
-      !finite::provesBound(getIndex(), getInput(), 0))
+      finite::elementType(getInput().getType()) != getOutput().getType())
     return diagnostics::emit(
         emitOpError(), "finite-bound",
         "lookup requires exact container/index provenance");
+  uint64_t remaining = 65536;
+  auto status = finite::boundStatus(getIndex(), getInput(), 0, remaining);
+  if (status != facts::Status::Proven)
+    return diagnostics::emit(
+        emitOpError(),
+        status == facts::Status::Capacity ? "finite-analysis-limit"
+                                          : "finite-bound",
+        status == facts::Status::Capacity
+            ? "finite evidence work limit"
+            : "lookup requires exact container/index provenance");
   return success();
 }
 LogicalResult BoundedMatrixAtOp::verify() {
-  uint64_t remaining = 65536;
   if (!(*this)->getAttrs().empty() ||
-      finite::elementType(getInput().getType(), true) !=
-          getOutput().getType() ||
-      !finite::provesBound(getRow(), getInput(), 0, remaining) ||
-      !finite::provesBound(getColumn(), getInput(), 1, remaining))
+      finite::elementType(getInput().getType(), true) != getOutput().getType())
     return diagnostics::emit(
         emitOpError(), "finite-bound",
         "matrix lookup requires both exact coordinate bounds");
+  uint64_t remaining = 65536;
+  for (auto [axis, index] :
+       llvm::enumerate(ValueRange{getRow(), getColumn()})) {
+    auto status = finite::boundStatus(index, getInput(), axis, remaining);
+    if (status != facts::Status::Proven)
+      return diagnostics::emit(
+          emitOpError(),
+          status == facts::Status::Capacity ? "finite-analysis-limit"
+                                            : "finite-bound",
+          status == facts::Status::Capacity
+              ? "finite evidence work limit"
+              : "matrix lookup requires both exact coordinate bounds");
+  }
   return success();
 }
 } // namespace zkc::data

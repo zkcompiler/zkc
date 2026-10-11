@@ -201,21 +201,13 @@ public:
   bool withinDepth(unsigned depth, ComparisonCapacity reason) {
     return depth <= 64 || exhaust(reason);
   }
-  // Evidence APIs return bool. One sentinel unit distinguishes spending the
-  // last permitted unit from attempting further work, without classifying a
-  // successful exact-boundary proof as exhaustion. Never publish an overrun.
+  // Retain the evidence status at the caller's exact allowance, including a
+  // successful proof that spends its final unit and structural exhaustion.
   template <typename Query> bool evidence(Query query) {
-    uint64_t allowance = remaining;
-    uint64_t probe = allowance == UINT64_MAX ? allowance : allowance + 1;
-    uint64_t initial = probe;
-    bool proved = query(probe);
-    uint64_t spent = initial - probe;
-    if (spent > allowance) {
-      remaining = 0;
+    auto status = query(remaining);
+    if (status == facts::Status::Capacity)
       return exhaust(ComparisonCapacity::Work);
-    }
-    remaining -= spent;
-    return proved;
+    return status == facts::Status::Proven;
   }
   void useNeutralLaws() { neutralLaws = true; }
   bool charge(uint64_t work = 1) {
@@ -690,7 +682,7 @@ class Comparison {
                           extent.container == entry.second.container &&
                           terms.evidence(
                               [&, selectedAxis = axis](uint64_t &work) {
-                                return finite::provesEqualExtent(
+                                return finite::equalExtentStatus(
                                     op.getOperand(0), selectedAxis, entry.first,
                                     extent.axis, work);
                               })) {
@@ -711,7 +703,7 @@ class Comparison {
                 // bound must already follow from source formation before an
                 // eager scalar contraction is permitted.
                 if (!terms.evidence([&, selectedAxis = axis](uint64_t &work) {
-                      return finite::provesBound(
+                      return finite::boundStatus(
                           op.getOperand(selectedAxis + 1), op.getOperand(0),
                           selectedAxis, work);
                     }))

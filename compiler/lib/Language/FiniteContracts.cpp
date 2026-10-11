@@ -1,7 +1,8 @@
 #include "FiniteContracts.h"
 #include "DataRequirements.h"
 #include "FiniteFormation.h"
-#include "ValueOrigins.h"
+#include "MathematicalFacts.h"
+#include "llvm/ADT/ScopeExit.h"
 #include <limits>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -19,11 +20,7 @@ struct ItemBound {
   ValueOrigin container;
   unsigned axis;
 };
-struct DataFact {
-  DataPrecondition::Kind kind;
-  ValueOrigin left, right;
-  unsigned leftAxis = 0, rightAxis = 0;
-};
+using DataFact = SourceDataFact;
 
 // A generic declaration is checked with distinct abstract domain identities.
 // Literal bodies are checked at their binding occurrence, after all eager
@@ -31,6 +28,7 @@ struct DataFact {
 // to checking without changing when captures or ordinary values are evaluated.
 class ContractCheck {
   Semantics &types;
+  MathematicalFacts mathematical;
   ArrayRef<Declaration> declarations;
   unsigned nextValue = 0;
   std::vector<std::vector<ItemBound>> domainBounds;
@@ -78,7 +76,10 @@ class ContractCheck {
       result.second.insert(result.second.end(), local->second.begin(),
                            local->second.end());
     }
-    valueTypes.emplace(result, context.body.values[id.index].type);
+    const auto &type = context.body.values[id.index].type;
+    if (!established(mathematical.record(result, type, span), span))
+      return {};
+    valueTypes.emplace(result, type);
     return result;
   }
   std::optional<ValueOrigin> select(Context &context,
@@ -98,6 +99,8 @@ class ContractCheck {
       return {};
     result->second.insert(result->second.end(), selector.path.begin(),
                           selector.path.end());
+    if (!established(mathematical.record(*result, *selected, span), span))
+      return {};
     valueTypes.emplace(*result, *selected);
     return result;
   }
@@ -114,66 +117,34 @@ class ContractCheck {
   }
   std::optional<Natural> extent(const ValueOrigin &origin, unsigned axis) {
     auto found = valueTypes.find(origin);
-    if (found == valueTypes.end() || axis)
+    if (found == valueTypes.end())
       return {};
-    const auto &type = found->second;
-    if (type.kind == Type::Kind::Array)
-      return type.dimension;
-    if (type.kind == Type::Kind::Builtin && type.domain == "field_array" &&
-        type.arguments.size() == 2)
-      return type.arguments[1].dimension;
-    return {};
+    auto *dimension = staticExtent(found->second, axis);
+    return dimension ? std::optional<Natural>(*dimension) : std::nullopt;
   }
-  bool equalExtent(const ValueOrigin &left, unsigned leftAxis,
-                   const ValueOrigin &right, unsigned rightAxis, Span span) {
-    auto a = extent(left, leftAxis), b = extent(right, rightAxis);
-    if (a && b && *a == *b)
+  bool established(facts::Status status, Span span) {
+    if (status == facts::Status::Proven)
       return true;
-    using Extent = std::pair<ValueOrigin, unsigned>;
-    std::vector<Extent> pending{{left, leftAxis}};
-    std::set<Extent> seen;
-    while (!pending.empty()) {
-      auto current = std::move(pending.back());
-      pending.pop_back();
-      if (current == Extent{right, rightAxis})
-        return true;
-      if (!seen.insert(current).second)
-        continue;
-      if (!types.charge(assumptions.size() + 1, span))
-        return false;
-      for (const auto &fact : assumptions)
-        if (fact.kind == DataPrecondition::Kind::EqualExtent) {
-          Extent lhs{fact.left, fact.leftAxis}, rhs{fact.right, fact.rightAxis};
-          if (current == lhs)
-            pending.push_back(rhs);
-          if (current == rhs)
-            pending.push_back(lhs);
-        }
-    }
-    return false;
+    if (status == facts::Status::Capacity)
+      return types.fail("source.limit", "mathematical fact checking work",
+                        span);
+    return types.fail("source.data-bound", "invalid mathematical premise",
+                      span);
   }
-  bool holds(const DataFact &needed, Span span) {
-    if (needed.kind == DataPrecondition::Kind::EqualExtent)
-      return equalExtent(needed.left, needed.leftAxis, needed.right,
-                         needed.rightAxis, span);
-    auto constant = constants.find(needed.left);
-    auto size = extent(needed.right, needed.rightAxis);
-    if (constant != constants.end() && size && size->isClosed() &&
-        constant->second < size->closedValue())
-      return true;
-    if (!types.charge(assumptions.size() + 1, span))
+  bool assume(DataFact fact, Span span) {
+    if (!established(mathematical.assume(fact, span), span))
       return false;
-    for (const auto &fact : assumptions)
-      if (fact.kind == DataPrecondition::Kind::IndexBound &&
-          fact.left == needed.left &&
-          equalExtent(fact.right, fact.rightAxis, needed.right,
-                      needed.rightAxis, span))
-        return true;
-    return false;
+    assumptions.push_back(std::move(fact));
+    return true;
   }
   bool prove(const DataFact &needed, Span span) {
-    if (holds(needed, span))
+    auto status = mathematical.prove(needed, span);
+    if (status == facts::Status::Proven)
       return true;
+    // Only missing evidence may infer a declaration precondition. Exhaustion
+    // is never a mathematical premise, even in a residual helper contract.
+    if (status == facts::Status::Capacity)
+      return established(status, span);
     if (types.diagnostic)
       return false;
     if (needed.kind == DataPrecondition::Kind::EqualExtent) {
@@ -192,13 +163,17 @@ class ContractCheck {
         needed.left.first >= rootInputs && needed.right.first < rootInputs) {
       // A finite item is local to the callback. Lift its unmet container link
       // to an ordinary input extent condition on the enclosing helper.
-      for (const auto &fact : assumptions)
+      for (const auto &fact : assumptions) {
+        if (!types.charge(
+                fact.left.second.size() + fact.right.second.size() + 1, span))
+          return false;
         if (fact.kind == DataPrecondition::Kind::IndexBound &&
             fact.left == needed.left && fact.right.first < rootInputs) {
           DataFact equal{DataPrecondition::Kind::EqualExtent, fact.right,
                          needed.right, fact.rightAxis, needed.rightAxis};
           return prove(equal, span);
         }
+      }
     }
     if (!infer || owner->kind != Declaration::Kind::Math ||
         needed.left.first >= rootInputs || needed.right.first >= rootInputs)
@@ -221,8 +196,7 @@ class ContractCheck {
                           "helper exceeds 1024 data preconditions", span);
       requirements.push_back(std::move(result));
     }
-    assumptions.push_back(needed);
-    return true;
+    return assume(needed, span);
   }
   unsigned newDomain(std::vector<ItemBound> facts = {}) {
     unsigned id = domainBounds.size();
@@ -504,6 +478,14 @@ class ContractCheck {
                       Span span) {
     if (!bounded(depth, span) || callback.helper.index >= declarations.size())
       return types.diagnostic ? false : refuse(span, "invalid finite helper");
+    auto parentScope = mathematical.scope();
+    auto savedAssumptions = assumptions.size();
+    if (!established(mathematical.enter(span), span))
+      return false;
+    auto restore = llvm::scope_exit([&] {
+      mathematical.restore(parentScope);
+      assumptions.resize(savedAssumptions);
+    });
     const auto &helper = declarations[callback.helper.index];
     unsigned explicitInputs = itemInput + 1;
     if (helper.inputs.size() != explicitInputs + callback.captures.size() ||
@@ -515,6 +497,10 @@ class ContractCheck {
     std::vector<ValueOrigin> inputs;
     for (unsigned i = 0; i < explicitInputs; ++i) {
       inputs.push_back({nextValue++, {}});
+      if (!established(
+              mathematical.record(inputs.back(), helper.inputs[i].type, span),
+              span))
+        return false;
       valueTypes.emplace(inputs.back(), helper.inputs[i].type);
     }
     for (auto capture : callback.captures) {
@@ -524,10 +510,15 @@ class ContractCheck {
       inputs.push_back(std::move(*origin));
     }
     for (const auto &fact : domainBounds[domain]) {
+      if (!types.charge(inputs[itemInput].second.size() + fact.path.size() + 1,
+                        span))
+        return false;
       auto index = inputs[itemInput];
       index.second = fact.path;
-      assumptions.push_back({DataPrecondition::Kind::IndexBound,
-                             std::move(index), fact.container, 0, fact.axis});
+      if (!assume({DataPrecondition::Kind::IndexBound, std::move(index),
+                   fact.container, 0, fact.axis},
+                  span))
+        return false;
     }
     auto selected =
         [&](const InputSelector &selector) -> std::optional<ValueOrigin> {
@@ -543,6 +534,8 @@ class ContractCheck {
       auto type = types.projectedType(helper, helper.inputs[selector.port].type,
                                       selector.path, span);
       if (!type)
+        return {};
+      if (!established(mathematical.record(result, *type, span), span))
         return {};
       valueTypes.emplace(result, *type);
       return result;
@@ -639,6 +632,14 @@ class ContractCheck {
       return refuse({}, "body input coverage differs");
     if (source.values.size() > std::numeric_limits<unsigned>::max() - nextValue)
       return types.fail("source.limit", "data provenance identity limit", {});
+    auto parentScope = mathematical.scope();
+    auto savedAssumptions = assumptions.size();
+    if (!established(mathematical.enter({}), {}))
+      return false;
+    auto restore = llvm::scope_exit([&] {
+      mathematical.restore(parentScope);
+      assumptions.resize(savedAssumptions);
+    });
     unsigned base = nextValue;
     nextValue += source.values.size();
     if (values.empty())
@@ -656,7 +657,8 @@ class ContractCheck {
             condition(context, arguments, requirement, requirement.span);
         if (!assumed)
           return false;
-        assumptions.push_back(std::move(*assumed));
+        if (!assume(std::move(*assumed), requirement.span))
+          return false;
       }
     }
     for (const auto &binding : source.domainBindings) {
@@ -707,9 +709,10 @@ class ContractCheck {
         index.second.insert(index.second.end(),
                             bound.path.begin() + item->path.size(),
                             bound.path.end());
-        assumptions.push_back({DataPrecondition::Kind::IndexBound,
-                               std::move(index), bound.container, 0,
-                               bound.axis});
+        if (!assume({DataPrecondition::Kind::IndexBound, std::move(index),
+                     bound.container, 0, bound.axis},
+                    {}))
+          return false;
       }
     }
     for (const auto &op : source.operations) {
@@ -743,8 +746,12 @@ class ContractCheck {
           if (!literal.getAsInteger(10, n))
             constant = n;
         }
-        if (constant)
+        if (constant) {
+          if (!established(mathematical.constant(*identity, *constant, op.span),
+                           op.span))
+            return false;
           constants.emplace(*identity, *constant);
+        }
       }
       if (const auto *math = std::get_if<MathValue>(&op.action);
           math && (math->identity == MathematicalIdentity::ContainerAt ||
@@ -832,8 +839,8 @@ class ContractCheck {
 public:
   ContractCheck(Semantics &types, ArrayRef<Declaration> declarations,
                 bool infer = false, bool allowAdditional = false)
-      : types(types), declarations(declarations), infer(infer),
-        allowAdditional(allowAdditional) {}
+      : types(types), mathematical(types), declarations(declarations),
+        infer(infer), allowAdditional(allowAdditional) {}
   std::vector<DataPrecondition> takeRequirements() {
     return std::move(requirements);
   }

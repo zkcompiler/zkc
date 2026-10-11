@@ -1171,6 +1171,9 @@ matrix view, including unused factory intermediates and empty enumerations.
 A fixed-size collect requires an exact unfiltered cardinality. Failure to derive
 these facts is `source.data-bound`; installed backend support remains a separate
 requirement.
+For Local collects, that size must follow from the formal input types retained
+by the emitted declaration. Call-site constants and source-array lengths erased
+by conversion to dynamic Sequence inputs cannot establish a fixed Local result.
 
 ## Scoped computations
 
