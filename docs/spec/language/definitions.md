@@ -391,7 +391,7 @@ fn columns<F: Field>(matrix: Matrix<F>) -> index {
 
 `builtin` selects a logical constructor from the installed catalog. Its argument
 count and kinds are checked. This profile admits `vector`, `matrix`, `groups`,
-`indices`, `polynomial`, `table`, `point`, `round`, `sequence`, `field_array`,
+`indices`, `bytes`, `polynomial`, `table`, `point`, `round`, `sequence`, `field_array`,
 `commitment`, `commitments`, `proof`, `prover_key`, `verifier_key`, `opening_state`
 and `opening_states`, as well as scalar `field`, `group`, `bool` and `index`. Runtime collections remain
 one native value; fixed source arrays retain their structural layout. Runtime
@@ -1171,6 +1171,9 @@ matrix view, including unused factory intermediates and empty enumerations.
 A fixed-size collect requires an exact unfiltered cardinality. Failure to derive
 these facts is `source.data-bound`; installed backend support remains a separate
 requirement.
+For Local collects, that size must follow from the formal input types retained
+by the emitted declaration. Call-site constants and source-array lengths erased
+by conversion to dynamic Sequence inputs cannot establish a fixed Local result.
 
 ## Scoped computations
 

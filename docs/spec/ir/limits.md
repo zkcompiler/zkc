@@ -13,6 +13,8 @@ An exhausted checker refuses; it does not establish semantic inequivalence.
 | Pointwise map formulas and correspondence | Shared helper expansion budget; expanded formula within the Ring view limits of 65,536 nodes and depth 1,024; 1,000,000 matcher steps |
 | Mathematical preparation helper copying | 100,000 operations and 1,000,000 operand/result slots, cumulative across realization stages |
 | Optional finite recognition | Separate cumulative allowances of 100,000 structural, equation and extent/bound-evidence steps |
+| Standalone finite formation facts | 65,536 shared extraction/derivation steps; nested queries do not reset the allowance |
+| SSA fact extraction | At most 256 nested interpretation frames, including domain traversal, helper and actual/formal environments; exhaustion returns Capacity |
 | Finite correspondence | 100,000 required-reader units per declaration or total expression; optional comparison capped at 100,000 and the reader's remaining allowance |
 | Optional lane realization | 1,000,000 work units; exhaustion retains ordered execution |
 | Required finite expressions and polynomial expansion | Separate cumulative allowances of 100,000 each |

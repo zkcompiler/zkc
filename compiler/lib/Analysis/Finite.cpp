@@ -1,5 +1,7 @@
 #include "zkc/Analysis/Finite.h"
+#include "FiniteCardinality.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "zkc/Analysis/MathematicalFacts.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
@@ -18,6 +20,34 @@ LogicalResult refuse(Operation *op, StringRef reason,
                      StringRef code = "finite-formation") {
   return diagnostics::emit(op->emitOpError(), code, reason);
 }
+LogicalResult requireEvidence(Operation *op, facts::Status status,
+                              StringRef reason,
+                              StringRef code = "finite-bound") {
+  if (status == facts::Status::Capacity)
+    return refuse(op, "finite evidence work limit", "finite-analysis-limit");
+  return status == facts::Status::Proven ? success() : refuse(op, reason, code);
+}
+// Called only by the enclosing closure after local and symbol verification.
+LogicalResult verifyBoundedAccess(Operation *op) {
+  uint64_t remaining = 65536;
+  auto check = [&](Value container, ValueRange indices,
+                   StringRef reason) -> LogicalResult {
+    // Both matrix coordinates consume the same allowance.
+    for (auto [axis, index] : llvm::enumerate(indices))
+      if (failed(requireEvidence(
+              op, boundStatus(index, container, axis, remaining), reason)))
+        return failure();
+    return success();
+  };
+  if (auto access = dyn_cast<data::BoundedAtOp>(op))
+    return check(access.getInput(), ValueRange{access.getIndex()},
+                 "lookup requires exact container/index provenance");
+  if (auto access = dyn_cast<data::BoundedMatrixAtOp>(op))
+    return check(access.getInput(),
+                 ValueRange{access.getRow(), access.getColumn()},
+                 "matrix lookup requires both exact coordinate bounds");
+  return success();
+}
 FunctionType signature(Operation *op) {
   auto attr = op ? op->getAttrOfType<TypeAttr>("function_type") : TypeAttr();
   return attr ? dyn_cast<FunctionType>(attr.getValue()) : FunctionType();
@@ -26,80 +56,36 @@ Operation *resolve(Operation *op, StringRef key) {
   auto ref = op->getAttrOfType<FlatSymbolRefAttr>(key);
   return ref ? SymbolTable::lookupNearestSymbolFrom(op, ref) : nullptr;
 }
+// One immutable symbol-closure view and one allowance for a complete
+// formation check. Nested queries never create their own work budgets.
 struct EvidenceWork {
   uint64_t local = 65536;
-  uint64_t &remaining = local;
-  EvidenceWork() = default;
-  explicit EvidenceWork(uint64_t &remaining) : remaining(remaining) {}
-  EvidenceWork(const EvidenceWork &) = delete;
-  EvidenceWork &operator=(const EvidenceWork &) = delete;
-  llvm::DenseMap<std::pair<Operation *, unsigned>, std::optional<unsigned>>
-      inputs;
-  llvm::DenseMap<Value, Value> forwarded;
-  llvm::DenseMap<std::pair<Value, unsigned>, std::optional<uint64_t>> extents;
-  bool charge(uint64_t count = 1) {
-    if (count > remaining) {
-      remaining = 0;
-      return false;
-    }
-    remaining -= count;
-    return true;
+  uint64_t &remaining;
+  facts::Work context;
+  MathematicalFactAnalysis analysis;
+  explicit EvidenceWork(Operation *subject)
+      : remaining(local), context(remaining),
+        analysis(MathematicalFactAnalysis::rootFor(subject)) {}
+  EvidenceWork(Operation *subject, uint64_t &remaining)
+      : remaining(remaining), context(remaining),
+        analysis(MathematicalFactAnalysis::rootFor(subject)) {}
+  bool charge(uint64_t count = 1) { return context.charge(count); }
+  facts::Status status(bool proven) const {
+    return context.exhausted() ? facts::Status::Capacity
+           : proven            ? facts::Status::Proven
+                               : facts::Status::Unknown;
   }
 };
-bool provesBoundUnder(Value, Value, unsigned, EvidenceWork &);
-// Only exact argument forwarding transfers an SSA relationship. A successor,
-// shifted index or reconstructed container cannot acquire its predecessor's
-// fact.
-std::optional<unsigned> forwardedInput(Operation *helper, unsigned result,
-                                       unsigned depth, EvidenceWork &work) {
-  if (!work.charge() || depth > 64 || !isa_and_nonnull<func::FuncOp>(helper) ||
-      !helper->getRegion(0).hasOneBlock())
-    return std::nullopt;
-  auto key = std::make_pair(helper, result);
-  if (auto found = work.inputs.find(key); found != work.inputs.end())
-    return found->second;
-  auto &block = helper->getRegion(0).front();
-  if (block.empty() || !isa<func::ReturnOp>(block.back()) ||
-      result >= block.back().getNumOperands())
-    return std::nullopt;
-  Value value = block.back().getOperand(result);
-  for (unsigned step = 0; step < 64 && work.charge(); ++step) {
-    if (auto arg = dyn_cast<BlockArgument>(value)) {
-      auto input = arg.getOwner() == &block
-                       ? std::optional<unsigned>(arg.getArgNumber())
-                       : std::nullopt;
-      work.inputs.try_emplace(key, input);
-      return input;
-    }
-    auto call = value.getDefiningOp<func::CallOp>();
-    if (!call)
-      return std::nullopt;
-    auto input = forwardedInput(resolve(call, "callee"),
-                                cast<OpResult>(value).getResultNumber(),
-                                depth + 1, work);
-    if (!input || *input >= call.getNumOperands())
-      return std::nullopt;
-    value = call.getOperand(*input);
-  }
-  return std::nullopt;
+Operation *valueOwner(Value value) {
+  return value ? value.getParentRegion()->getParentOp() : nullptr;
 }
-Value forwarded(Value value, EvidenceWork &work) {
-  if (auto found = work.forwarded.find(value); found != work.forwarded.end())
-    return found->second;
-  auto original = value;
-  for (unsigned step = 0; step < 64 && work.charge(); ++step) {
-    auto call = value.getDefiningOp<func::CallOp>();
-    if (!call)
-      break;
-    auto input =
-        forwardedInput(resolve(call, "callee"),
-                       cast<OpResult>(value).getResultNumber(), 0, work);
-    if (!input || *input >= call.getNumOperands())
-      break;
-    value = call.getOperand(*input);
-  }
-  work.forwarded.try_emplace(original, value);
-  return value;
+facts::Status equalUnder(Value left, unsigned la, Value right, unsigned ra,
+                         EvidenceWork &work) {
+  return work.analysis.equalExtent(left, la, right, ra, work.context);
+}
+facts::Status provesBoundUnder(Value index, Value container, unsigned axis,
+                               EvidenceWork &work) {
+  return work.analysis.bound(index, container, axis, work.context);
 }
 bool index(Type type) { return type.isUnsignedInteger(64); }
 bool axis(Type type, unsigned axis) {
@@ -107,133 +93,9 @@ bool axis(Type type, unsigned axis) {
   return collection && axis < collection.getRank() &&
          bool(elementType(type, collection.getRank() == 2));
 }
-std::optional<uint64_t> staticExtent(Type type, unsigned axis) {
-  if (auto collection = dyn_cast<CollectionTypeInterface>(type))
-    return collection.getStaticExtent(axis);
-  return std::nullopt;
-}
-// Constructor evidence can preserve a fixed extent across a private helper
-// even when the Sequence carrier itself is dynamically sized. Only inspect
-// exact immutable constructors and returns, with bounded work and call depth.
-// An input or an unrecognized producer supplies no such evidence.
-std::optional<uint64_t> constructedExtent(Value value, unsigned axis,
-                                          uint64_t &remaining,
-                                          unsigned depth = 0) {
-  if (!remaining || depth > 64)
-    return std::nullopt;
-  --remaining;
-  if (auto size = staticExtent(value.getType(), axis))
-    return size;
-  if (axis || !isa<data::SequenceType>(value.getType()))
-    return std::nullopt;
-  uint64_t appended = 0;
-  while (remaining) {
-    --remaining;
-    if (value.getDefiningOp<data::SequenceEmptyOp>())
-      return appended;
-    if (auto append = value.getDefiningOp<data::SequenceAppendOp>()) {
-      if (appended == UINT64_MAX)
-        return std::nullopt;
-      ++appended;
-      value = append->getOperand(0);
-      continue;
-    }
-    auto call = value.getDefiningOp<func::CallOp>();
-    auto *helper = call ? resolve(call, "callee") : nullptr;
-    if (!isa_and_nonnull<func::FuncOp>(helper) ||
-        !helper->getRegion(0).hasOneBlock())
-      return std::nullopt;
-    auto &body = helper->getRegion(0).front();
-    auto result = cast<OpResult>(value).getResultNumber();
-    if (body.empty() || !isa<func::ReturnOp>(body.back()) ||
-        result >= body.back().getNumOperands())
-      return std::nullopt;
-    auto size = constructedExtent(body.back().getOperand(result), axis,
-                                  remaining, depth + 1);
-    if (!size || *size > UINT64_MAX - appended)
-      return std::nullopt;
-    return *size + appended;
-  }
-  return std::nullopt;
-}
-std::optional<uint64_t> knownExtent(Value value, unsigned axis,
-                                    EvidenceWork &work) {
-  auto key = std::make_pair(value, axis);
-  if (auto found = work.extents.find(key); found != work.extents.end())
-    return found->second;
-  auto result = constructedExtent(forwarded(value, work), axis, work.remaining);
-  work.extents.try_emplace(key, result);
-  return result;
-}
-std::optional<uint64_t> constant(Value value) {
-  if (auto op = value.getDefiningOp<data::IndexOp>()) {
-    uint64_t n;
-    if (!op.getValue().getAsInteger(10, n))
-      return n;
-  }
-  return std::nullopt;
-}
-Operation *argumentOwner(Value value) {
-  auto arg = dyn_cast<BlockArgument>(value);
-  return arg ? arg.getOwner()->getParentOp() : nullptr;
-}
 ArrayAttr preconditions(Operation *owner) {
   return owner ? owner->getAttrOfType<ArrayAttr>("data.preconditions")
                : ArrayAttr();
-}
-struct Extent {
-  Value container;
-  unsigned axis = 0;
-};
-// Formal equal-extent assumptions form an undirected relation. Its closure
-// never equates containers for element identity; only their selected extents.
-bool equalUnder(Value left, unsigned la, Value right, unsigned ra,
-                EvidenceWork &work) {
-  if (!work.charge())
-    return false;
-  if (left == right && la == ra)
-    return true;
-  left = forwarded(left, work);
-  right = forwarded(right, work);
-  if (left == right && la == ra)
-    return true;
-  auto a = knownExtent(left, la, work), b = knownExtent(right, ra, work);
-  if (a && b)
-    return *a == *b;
-  Operation *owner = argumentOwner(left);
-  if (!owner || owner != argumentOwner(right) || owner->getNumRegions() != 1 ||
-      !owner->getRegion(0).hasOneBlock())
-    return false;
-  auto attrs = preconditions(owner);
-  if (!attrs)
-    return false;
-  SmallVector<Extent> pending{{left, la}}, seen;
-  auto &block = owner->getRegion(0).front();
-  while (!pending.empty()) {
-    auto current = pending.pop_back_val();
-    if (current.container == right && current.axis == ra)
-      return true;
-    if (any_of(seen, [&](Extent x) {
-          return x.container == current.container && x.axis == current.axis;
-        }))
-      continue;
-    seen.push_back(current);
-    if (!work.charge(attrs.size() + 1))
-      return false;
-    for (auto attr : attrs)
-      if (auto equal = dyn_cast<data::EqualExtentAttr>(attr)) {
-        if (equal.getLeftArg() >= block.getNumArguments() ||
-            equal.getRightArg() >= block.getNumArguments())
-          continue;
-        Extent x{block.getArgument(equal.getLeftArg()), equal.getLeftAxis()};
-        Extent y{block.getArgument(equal.getRightArg()), equal.getRightAxis()};
-        if (x.container == current.container && x.axis == current.axis)
-          pending.push_back(y);
-        if (y.container == current.container && y.axis == current.axis)
-          pending.push_back(x);
-      }
-  }
-  return false;
 }
 // Each index item can carry a bound to one exact domain argument and axis.
 struct ItemBound {
@@ -265,96 +127,37 @@ SmallVector<ItemBound> itemBounds(Value descriptor, EvidenceWork &work) {
 Value domainResult(data::DomainOp domain) {
   return domain.getBody().front().back().getOperand(0);
 }
-struct Cardinality {
-  Value container;
-  unsigned axis = 0;
-  std::optional<uint64_t> fixed;
-};
-Cardinality extent(Value domain, const Computation &c, EvidenceWork &work) {
-  if (!work.charge())
-    return {};
-  auto *op = domain.getDefiningOp();
-  if (isa<data::DomainZipOp>(op))
-    return extent(op->getOperand(0), c, work);
-  if (isa<data::DomainProductOp>(op)) {
-    std::optional<uint64_t> count = 1;
-    for (Value child : op->getOperands()) {
-      auto factor = extent(child, c, work).fixed;
-      if (factor && !*factor)
-        return {{}, 0, 0};
-      if (!factor || !count || (*factor && *count > UINT64_MAX / *factor))
-        count.reset();
-      else
-        *count *= *factor;
-    }
-    return {{}, 0, count};
-  }
-  if (isa<data::DomainElementsOp, data::DomainIndicesOp,
-          data::DomainMatrixRowOp, data::DomainMatrixColumnOp>(op)) {
-    unsigned axis = isa<data::DomainMatrixRowOp>(op) ? 1 : 0;
-    if (auto indices = dyn_cast<data::DomainIndicesOp>(op))
-      axis = indices.getAxis();
-    auto arg = cast<BlockArgument>(op->getOperand(0));
-    Value actual =
-        c.total ? c.operation->getOperand(arg.getArgNumber()) : Value(arg);
-    return {actual, axis, knownExtent(actual, axis, work)};
-  }
-  if (auto range = dyn_cast<data::DomainRangeOp>(op); range && c.total) {
-    auto lo = constant(c.operation->getOperand(
-        cast<BlockArgument>(range.getLower()).getArgNumber()));
-    auto hi = constant(c.operation->getOperand(
-        cast<BlockArgument>(range.getUpper()).getArgNumber()));
-    if (lo && hi)
-      return {{}, 0, *hi > *lo ? *hi - *lo : 0};
-  }
-  return {};
-}
-bool sameExtent(Cardinality a, Cardinality b, EvidenceWork &work) {
-  if (a.fixed && b.fixed)
-    return *a.fixed == *b.fixed;
-  return a.container && b.container &&
-         equalUnder(a.container, a.axis, b.container, b.axis, work);
-}
-bool sameCardinality(Value left, Value right, const Computation &c,
-                     EvidenceWork &work) {
-  if (!work.charge())
-    return false;
-  if (left == right ||
-      sameExtent(extent(left, c, work), extent(right, c, work), work))
-    return true;
-  auto *a = left.getDefiningOp(), *b = right.getDefiningOp();
-  if (isa<data::DomainZipOp>(a))
-    return sameCardinality(a->getOperand(0), right, c, work);
-  if (isa<data::DomainZipOp>(b))
-    return sameCardinality(left, b->getOperand(0), c, work);
-  if (isa<data::DomainProductOp>(a) && isa<data::DomainProductOp>(b) &&
-      a->getNumOperands() == b->getNumOperands()) {
-    for (auto [x, y] : zip(a->getOperands(), b->getOperands()))
-      if (!sameCardinality(x, y, c, work))
-        return false;
-    return true;
-  }
-  if (isa<data::DomainRangeOp>(a) && isa<data::DomainRangeOp>(b)) {
-    for (auto [x, y] : zip(a->getOperands(), b->getOperands())) {
-      if (c.total) {
-        x = c.operation->getOperand(cast<BlockArgument>(x).getArgNumber());
-        y = c.operation->getOperand(cast<BlockArgument>(y).getArgNumber());
-      }
-      if (forwarded(x, work) != forwarded(y, work))
-        return false;
-    }
-    return true;
-  }
-  if (isa<data::DomainMatrixCoordinatesOp>(a) &&
-      isa<data::DomainMatrixCoordinatesOp>(b)) {
-    Value x = a->getOperand(0), y = b->getOperand(0);
-    if (c.total) {
-      x = c.operation->getOperand(cast<BlockArgument>(x).getArgNumber());
-      y = c.operation->getOperand(cast<BlockArgument>(y).getArgNumber());
-    }
-    return equalUnder(x, 0, y, 0, work) && equalUnder(x, 1, y, 1, work);
-  }
-  return false;
+template <typename Query>
+auto domainEvidence(const Computation &c, EvidenceWork &work, Query query) {
+  auto actual = [&](facts::DomainLeaf leaf) {
+    Value value = detail::domainValue(leaf);
+    return c.total ? c.operation->getOperand(
+                         cast<BlockArgument>(value).getArgNumber())
+                   : value;
+  };
+  auto node = detail::cardinalityNode;
+  auto child = detail::cardinalityChild;
+  auto extent = [&](facts::DomainExtent leaf, unsigned depth) {
+    return work.analysis.cardinality(actual(leaf.value), leaf.axis,
+                                     work.context, depth);
+  };
+  auto integer = [&](facts::DomainLeaf leaf, unsigned depth) {
+    return work.analysis.integer(actual(leaf), work.context, depth);
+  };
+  auto same = [&](facts::DomainLeaf a, facts::DomainLeaf b, unsigned depth) {
+    auto left = work.analysis.origin(actual(a), work.context, depth);
+    auto right = work.analysis.origin(actual(b), work.context, depth);
+    return work.status(left.value && right.value &&
+                       *left.value == *right.value);
+  };
+  auto equal = [&](facts::DomainExtent a, facts::DomainExtent b,
+                   unsigned depth) {
+    return work.analysis.equalExtent(actual(a.value), a.axis, actual(b.value),
+                                     b.axis, work.context, depth);
+  };
+  facts::DomainCardinality cardinality(
+      work.context, {node, child, extent, integer, same, equal}, 256);
+  return query(cardinality);
 }
 LogicalResult helperAssumptions(const Computation &c, CallbackRole role,
                                 EvidenceWork &work) {
@@ -368,10 +171,12 @@ LogicalResult helperAssumptions(const Computation &c, CallbackRole role,
   if (failed(verifyPreconditions(helper)))
     return failure();
   auto items = itemBounds(domainResult(c.domain), work);
+  if (work.context.exhausted())
+    return requireEvidence(c.operation, facts::Status::Capacity, {});
   if (items.size() != callback->formals.items.size())
     return refuse(c.operation, "finite item bound partition", "finite-bound");
   if (!work.charge(attrs.size() + 1))
-    return refuse(c.operation, "finite evidence work limit", "finite-bound");
+    return requireEvidence(c.operation, facts::Status::Capacity, {});
   unsigned offset = callback->formals.state.size();
   unsigned argBase = offset + callback->formals.items.size();
   llvm::DenseMap<Value, Value> invariants;
@@ -404,53 +209,28 @@ LogicalResult helperAssumptions(const Computation &c, CallbackRole role,
         // This transfers only a bound, never container or element identity.
         if (!valid && fact.argument >= 0 && actual(a))
           valid = equalUnder(c.operation->getOperand(fact.argument), fact.axis,
-                             actual(a), bound.getAxis(), work);
+                             actual(a), bound.getAxis(),
+                             work) == facts::Status::Proven;
       }
       if (!valid && actual(i) && actual(a))
-        valid = provesBoundUnder(actual(i), actual(a), bound.getAxis(), work);
-      if (!valid)
-        return refuse(c.operation,
-                      "finite helper bound is not discharged by the domain",
-                      "finite-bound");
+        valid = provesBoundUnder(actual(i), actual(a), bound.getAxis(), work) ==
+                facts::Status::Proven;
+      if (failed(requireEvidence(
+              c.operation, work.status(valid),
+              "finite helper bound is not discharged by the domain")))
+        return failure();
     } else if (auto equal = dyn_cast<data::EqualExtentAttr>(attr)) {
       Value l = actual(equal.getLeftArg()), r = actual(equal.getRightArg());
-      if (!l || !r ||
-          !equalUnder(l, equal.getLeftAxis(), r, equal.getRightAxis(), work))
-        return refuse(c.operation,
-                      "finite helper equal extent is not discharged",
-                      "finite-bound");
+      auto status = l && r ? equalUnder(l, equal.getLeftAxis(), r,
+                                        equal.getRightAxis(), work)
+                           : work.status(false);
+      if (failed(
+              requireEvidence(c.operation, status,
+                              "finite helper equal extent is not discharged")))
+        return failure();
     }
   }
   return success();
-}
-bool provesBoundUnder(Value idx, Value container, unsigned selectedAxis,
-                      EvidenceWork &work) {
-  if (!work.charge())
-    return false;
-  idx = forwarded(idx, work);
-  container = forwarded(container, work);
-  if (!index(idx.getType()) || !axis(container.getType(), selectedAxis))
-    return false;
-  auto n = constant(idx), size = knownExtent(container, selectedAxis, work);
-  if (n && size && *n < *size)
-    return true;
-  auto arg = dyn_cast<BlockArgument>(idx);
-  auto owner = argumentOwner(idx);
-  auto attrs = preconditions(owner);
-  if (!arg || !attrs || owner->getNumRegions() != 1 ||
-      !owner->getRegion(0).hasOneBlock())
-    return false;
-  auto &block = owner->getRegion(0).front();
-  if (arg.getOwner() != &block || !work.charge(attrs.size() + 1))
-    return false;
-  for (auto attr : attrs)
-    if (auto bound = dyn_cast<data::IndexBoundAttr>(attr))
-      if (bound.getIndexArg() == arg.getArgNumber() &&
-          bound.getContainerArg() < block.getNumArguments() &&
-          equalUnder(block.getArgument(bound.getContainerArg()),
-                     bound.getAxis(), container, selectedAxis, work))
-        return true;
-  return false;
 }
 } // namespace
 Type elementType(Type container, bool matrix) {
@@ -477,21 +257,31 @@ bool isDeclaration(Operation *op) {
   return isa_and_nonnull<local::FiniteFoldOp, local::FiniteCollectOp>(op);
 }
 bool provesEqualExtent(Value a, unsigned aa, Value b, unsigned ba) {
-  EvidenceWork work;
-  return equalUnder(a, aa, b, ba, work);
+  EvidenceWork work(valueOwner(a));
+  return equalUnder(a, aa, b, ba, work) == facts::Status::Proven;
 }
 bool provesBound(Value idx, Value container, unsigned selectedAxis) {
-  EvidenceWork work;
-  return provesBoundUnder(idx, container, selectedAxis, work);
+  EvidenceWork work(valueOwner(idx));
+  return provesBoundUnder(idx, container, selectedAxis, work) ==
+         facts::Status::Proven;
 }
 bool provesEqualExtent(Value a, unsigned aa, Value b, unsigned ba,
                        uint64_t &remaining) {
-  EvidenceWork work(remaining);
+  return equalExtentStatus(a, aa, b, ba, remaining) == facts::Status::Proven;
+}
+facts::Status equalExtentStatus(Value a, unsigned aa, Value b, unsigned ba,
+                                uint64_t &remaining) {
+  EvidenceWork work(valueOwner(a), remaining);
   return equalUnder(a, aa, b, ba, work);
 }
 bool provesBound(Value idx, Value container, unsigned selectedAxis,
                  uint64_t &remaining) {
-  EvidenceWork work(remaining);
+  return boundStatus(idx, container, selectedAxis, remaining) ==
+         facts::Status::Proven;
+}
+facts::Status boundStatus(Value idx, Value container, unsigned selectedAxis,
+                          uint64_t &remaining) {
+  EvidenceWork work(valueOwner(idx), remaining);
   return provesBoundUnder(idx, container, selectedAxis, work);
 }
 LogicalResult verifyPreconditions(Operation *helper) {
@@ -522,7 +312,7 @@ LogicalResult verifyPreconditions(Operation *helper) {
   return success();
 }
 LogicalResult verifyCallPreconditions(Operation *call) {
-  EvidenceWork work;
+  EvidenceWork work(call);
   auto *helper = resolve(call, "callee");
   auto attrs = preconditions(helper);
   if (!attrs)
@@ -532,20 +322,29 @@ LogicalResult verifyCallPreconditions(Operation *call) {
   for (auto attr : attrs) {
     if (auto bound = dyn_cast<data::IndexBoundAttr>(attr)) {
       if (bound.getIndexArg() >= call->getNumOperands() ||
-          bound.getContainerArg() >= call->getNumOperands() ||
-          !provesBoundUnder(call->getOperand(bound.getIndexArg()),
-                            call->getOperand(bound.getContainerArg()),
-                            bound.getAxis(), work))
+          bound.getContainerArg() >= call->getNumOperands())
         return refuse(call, "call does not discharge index bound",
                       "finite-bound");
+      if (failed(requireEvidence(
+              call,
+              provesBoundUnder(call->getOperand(bound.getIndexArg()),
+                               call->getOperand(bound.getContainerArg()),
+                               bound.getAxis(), work),
+              "call does not discharge index bound")))
+        return failure();
     } else if (auto equal = dyn_cast<data::EqualExtentAttr>(attr)) {
       if (equal.getLeftArg() >= call->getNumOperands() ||
-          equal.getRightArg() >= call->getNumOperands() ||
-          !equalUnder(call->getOperand(equal.getLeftArg()), equal.getLeftAxis(),
-                      call->getOperand(equal.getRightArg()),
-                      equal.getRightAxis(), work))
+          equal.getRightArg() >= call->getNumOperands())
         return refuse(call, "call does not discharge equal extent",
                       "finite-bound");
+      if (failed(
+              requireEvidence(call,
+                              equalUnder(call->getOperand(equal.getLeftArg()),
+                                         equal.getLeftAxis(),
+                                         call->getOperand(equal.getRightArg()),
+                                         equal.getRightAxis(), work),
+                              "call does not discharge equal extent")))
+        return failure();
     }
   }
   return success();
@@ -755,7 +554,7 @@ LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
         (c.collect && p->affine))
       return refuse(op, "finite result policy");
   }
-  EvidenceWork work;
+  EvidenceWork work(op);
   if (failed(helperAssumptions(c, callback->role, work)) ||
       (c.predicate &&
        failed(helperAssumptions(c, CallbackRole::Predicate, work))))
@@ -763,10 +562,16 @@ LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
   if (c.total) {
     for (auto &constructor : c.domain.getBody().front()) {
       if (auto zip = dyn_cast<data::DomainZipOp>(constructor)) {
-        for (Value child : zip.getOperands().drop_front())
-          if (!sameCardinality(zip.getOperand(0), child, c, work))
-            return refuse(op, "total zip requires equal-extent evidence",
-                          "finite-bound");
+        for (Value child : zip.getOperands().drop_front()) {
+          auto same =
+              domainEvidence(c, work, [&](facts::DomainCardinality &view) {
+                return view.equal(detail::domainRef(zip.getOperand(0)),
+                                  detail::domainRef(child));
+              });
+          if (failed(requireEvidence(
+                  op, same, "total zip requires equal-extent evidence")))
+            return failure();
+        }
       }
       if (isa<data::DomainMatrixRowOp, data::DomainMatrixColumnOp>(
               constructor)) {
@@ -774,22 +579,29 @@ LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
             cast<BlockArgument>(constructor.getOperand(0)).getArgNumber());
         auto selector = c.operation->getOperand(
             cast<BlockArgument>(constructor.getOperand(1)).getArgNumber());
-        if (!provesBoundUnder(selector, container,
-                              isa<data::DomainMatrixRowOp>(constructor) ? 0 : 1,
-                              work))
-          return refuse(op, "total matrix view requires a selector bound",
-                        "finite-bound");
+        if (failed(requireEvidence(
+                op,
+                provesBoundUnder(
+                    selector, container,
+                    isa<data::DomainMatrixRowOp>(constructor) ? 0 : 1, work),
+                "total matrix view requires a selector bound")))
+          return failure();
       }
     }
   }
   if (c.collect)
     if (auto array =
             dyn_cast<algebra::FieldArrayType>(c.signature.getResult(0))) {
-      auto card = extent(domainResult(c.domain), c, work);
-      if (c.predicate || !card.fixed || *card.fixed != array.getLength())
-        return refuse(
-            op,
-            "fixed collection requires proven exact unfiltered cardinality");
+      auto card = domainEvidence(c, work, [&](facts::DomainCardinality &view) {
+        return view.exact(detail::domainRef(domainResult(c.domain)));
+      });
+      if (failed(requireEvidence(
+              op,
+              work.status(!c.predicate && card.value &&
+                          *card.value == array.getLength()),
+              "fixed collection requires proven exact unfiltered cardinality",
+              "finite-formation")))
+        return failure();
     }
   return success();
 }
@@ -798,13 +610,16 @@ LogicalResult verifyClosure(Operation *unit) {
   unit->walk([&](Operation *op) { hasFinite |= isComputation(op); });
   if (!hasFinite) {
     // Preserve the existing pure/local cycle diagnostics in units without a
-    // finite reference edge. Preconditions still apply to ordinary calls.
+    // finite reference edge. Call premises and bounded accesses still require
+    // evidence from this verified symbol closure.
     auto checked = unit->walk([&](Operation *op) -> WalkResult {
       if (isa<func::FuncOp, local::FuncOp>(op) &&
           failed(verifyPreconditions(op)))
         return WalkResult::interrupt();
       if (isa<func::CallOp, local::ApplyOp>(op) &&
           failed(verifyCallPreconditions(op)))
+        return WalkResult::interrupt();
+      if (failed(verifyBoundedAccess(op)))
         return WalkResult::interrupt();
       return WalkResult::advance();
     });
@@ -831,13 +646,15 @@ LogicalResult verifyClosure(Operation *unit) {
       }
       --work;
       // Symbol-table region verification has already checked each finite ABI.
-      // This traversal owns reference cycles and call premises, not another
-      // independent replay of every finite computation's verification.
+      // This traversal owns reference cycles, call premises and access bounds,
+      // not another replay of every finite computation's verification.
       if (isa<func::FuncOp, local::FuncOp>(op) &&
           failed(verifyPreconditions(op)))
         return WalkResult::interrupt();
       if (isa<func::CallOp, local::ApplyOp>(op) &&
           failed(verifyCallPreconditions(op)))
+        return WalkResult::interrupt();
+      if (failed(verifyBoundedAccess(op)))
         return WalkResult::interrupt();
       for (StringRef edge : {"callee", "helper", "step", "body", "predicate"}) {
         if (!op->hasAttrOfType<FlatSymbolRefAttr>(edge))

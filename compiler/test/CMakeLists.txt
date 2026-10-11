@@ -12,6 +12,17 @@ function(add_zkc_test name component)
   endif()
 endfunction()
 
+add_zkc_test(mathematical_facts Contracts mathematical-facts)
+add_zkc_test(finite_cardinality Contracts finite-cardinality)
+add_zkc_test(mathematical_fact_analysis IR mathematical-fact-analysis)
+mlir_target_link_libraries(zkc-mathematical_fact_analysis-test PRIVATE
+  MLIRParser MLIRPass)
+add_zkc_test(language_mathematical_facts Language language-mathematical-facts)
+add_zkc_test(language_finite_cardinality Language language-finite-cardinality)
+add_zkc_test(mathematical_fact_lifetime IR mathematical-fact-lifetime)
+mlir_target_link_libraries(zkc-mathematical_fact_lifetime-test PRIVATE
+  MLIRParser MLIRPass)
+
 add_zkc_test(finite_direct_emission Transforms finite-direct-emission)
 target_compile_definitions(zkc-finite_direct_emission-test PRIVATE
   ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
@@ -37,6 +48,12 @@ mlir_target_link_libraries(zkc-mathematical_recipes-test PRIVATE MLIRParser)
 
 add_zkc_test(realization_emission Transforms realization-emission)
 mlir_target_link_libraries(zkc-realization_emission-test PRIVATE MLIRParser)
+
+add_zkc_test(pass_dependencies Transforms pass-dependencies)
+mlir_target_link_libraries(zkc-pass_dependencies-test PRIVATE MLIRParser MLIRPass)
+
+add_zkc_test(bounded_access_verification Transforms bounded-access-verification)
+mlir_target_link_libraries(zkc-bounded_access_verification-test PRIVATE MLIRParser MLIRPass)
 
 add_zkc_test(mathematical_stages Transforms mathematical-stages)
 target_compile_definitions(zkc-mathematical_stages-test PRIVATE

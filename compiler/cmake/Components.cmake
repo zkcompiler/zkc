@@ -38,6 +38,8 @@ add_zkc_component(Contracts
   lib/Contracts/Implementations.cpp
   lib/Contracts/Operations.cpp
   lib/Contracts/Mathematical.cpp
+  lib/Contracts/MathematicalFacts.cpp
+  lib/Contracts/FiniteCardinality.cpp
   lib/Contracts/RingExpression.cpp
   lib/Contracts/RingSharing.cpp
   lib/Contracts/Domains.cpp
@@ -103,6 +105,7 @@ add_zkc_component(Language
   lib/Language/FiniteDomains.cpp
   lib/Language/FiniteDefinitions.cpp
   lib/Language/FiniteContracts.cpp
+  lib/Language/MathematicalFacts.cpp
   lib/Language/FiniteFormation.cpp
   lib/Language/DataRequirements.cpp
   lib/Language/FiniteDomainArguments.cpp
@@ -165,6 +168,7 @@ add_zkc_component(IR
   lib/Analysis/Finite.cpp
   lib/Analysis/Computation.cpp
   lib/Analysis/ComputationMeaning.cpp
+  lib/Analysis/MathematicalFacts.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
   lib/Dialect/Algebra/IR/Mathematical.cpp
   lib/Dialect/Algebra/IR/Maps.cpp

@@ -77,6 +77,20 @@ operational limits.
 
 ## Analysis and realization boundaries
 
+The [shared fact contracts](../spec/domains/mathematical-facts.md) keep extent
+equality and index bounds separate from exact value identity. Contracts owns the
+MLIR-free derivation kernel; Language and Analysis independently extract premises
+from source origins and SSA. A query reports proven evidence, missing evidence
+or exhausted work. Learning a count preserves the nominal container family and
+every ordered admission obligation.
+
+Each analysis describes an immutable subject and its inspected helper closure.
+Source checking retains its occurrence-specific origins and symbolic natural
+dimensions. SSA checking substitutes exact helper arguments and reads actual
+result constructors. Independent candidate readers construct their own facts;
+they do not consume a producer's selected classification. These shared rules and
+their adapters belong to the native checking trust boundary.
+
 Typed domain operations remain the mathematical representation. Contracts own
 declaration-generated identities and closed scalar/access laws with exact nominal
 ports. The [operation-contract guide](operation-contracts.md#mathematical-meaning-and-realization)

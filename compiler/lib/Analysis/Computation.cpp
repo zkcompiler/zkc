@@ -1,5 +1,6 @@
 #include "zkc/Analysis/Computation.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "zkc/Analysis/MathematicalFacts.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
@@ -47,13 +48,16 @@ bool hasExtent(Operation *factor) {
 struct AccessAnalysis {
   ComputationView &view;
   ComputationWork &work;
+  MathematicalFactAnalysis &factAnalysis;
+  facts::Work &evidence;
   mutable bool complete = true;
   SmallVector<Value> inputs;
   llvm::DenseMap<Value, unsigned> inputPositions, itemPositions;
   bool extentIteration;
 
-  AccessAnalysis(ComputationView &view, bool aligned, ComputationWork &work)
-      : view(view), work(work),
+  AccessAnalysis(ComputationView &view, bool aligned, ComputationWork &work,
+                 MathematicalFactAnalysis &factAnalysis, facts::Work &evidence)
+      : view(view), work(work), factAnalysis(factAnalysis), evidence(evidence),
         inputs(view.computation.signature.getNumInputs()),
         extentIteration(
             aligned && llvm::all_of(view.items, [&](const auto &item) {
@@ -127,8 +131,8 @@ private:
         continue;
       auto factorAxis = extentAxis(factor);
       if ((*domain == input && factorAxis == axis) ||
-          provesEqualExtent(inputs[*domain], factorAxis, inputs[input], axis,
-                            work.evidence))
+          factAnalysis.equalExtent(inputs[*domain], factorAxis, inputs[input],
+                                   axis, evidence) == facts::Status::Proven)
         return true;
     }
     return false;
@@ -222,8 +226,8 @@ private:
       // Indexed access runs only on nonempty iterations. A bound is required
       // before introducing eager selected-row/column admission.
       if (!result.selectedIndex ||
-          !provesBound(op->getOperand(selected), op->getOperand(0), 1 - axis,
-                       work.evidence))
+          factAnalysis.bound(op->getOperand(selected), op->getOperand(0),
+                             1 - axis, evidence) != facts::Status::Proven)
         return std::nullopt;
     }
     return result;
@@ -250,11 +254,15 @@ std::optional<IterationKind> iterationKind(Operation *op) {
 }
 class ComputationAnalysis {
   ComputationWork &work;
+  MathematicalFactAnalysis factAnalysis;
+  facts::Work evidence;
   llvm::DenseSet<Operation *> active;
   SymbolTableCollection symbols;
 
 public:
-  explicit ComputationAnalysis(ComputationWork &work) : work(work) {}
+  ComputationAnalysis(ComputationWork &work, Operation *subject)
+      : work(work), factAnalysis(MathematicalFactAnalysis::rootFor(subject)),
+        evidence(work.evidence) {}
   std::optional<ComputationView>
   read(Computation c, Operation *occurrence,
        ArrayRef<Operation *> parentPath = {},
@@ -464,7 +472,7 @@ public:
                                      : std::nullopt});
     if (result.results.size() == 1)
       result.result = result.results.front();
-    AccessAnalysis accesses(result, aligned, work);
+    AccessAnalysis accesses(result, aligned, work, factAnalysis, evidence);
     if (!accesses.complete)
       return std::nullopt;
     return result;
@@ -479,6 +487,6 @@ std::optional<ComputationView> analyzeComputation(Computation c,
 }
 std::optional<ComputationView> analyzeComputation(Computation c,
                                                   ComputationWork &work) {
-  return ComputationAnalysis(work).read(c, c.operation);
+  return ComputationAnalysis(work, c.operation).read(c, c.operation);
 }
 } // namespace zkc::finite

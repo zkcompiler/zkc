@@ -5,6 +5,12 @@ in the existing [mathematical profiles](protocols.md). Its executable counterpar
 uses [Local control](control.md). A preparation descriptor is not a native value
 or an executable callback.
 
+Shape and bound premises use the [shared mathematical fact
+contracts](../domains/mathematical-facts.md). Exact origins, selected axes and
+scope remain part of every fact; equal shape does not identify two containers.
+Ordered domain admission remains authoritative even when result cardinality is
+known independently.
+
 ## Domain declarations
 
 Domain formation is bounded to 1024 arguments/items, 4096 constructor-body
@@ -113,6 +119,11 @@ Collection results are field vectors, group vectors, indices, immutable sequence
 or fixed field arrays with a proven exact cardinality. Filtering cannot justify
 an exact fixed result size without additional evidence.
 
+A Local fixed result is checked on its declaration's formal inputs. It cannot
+use a range literal or dynamic-container count known only at one application.
+Native static field-array extents survive this boundary; a source array lowered
+to a dynamic Sequence does not carry its source length as a declaration fact.
+
 ## Ordered evaluation
 
 At a call, eager operands execute in authored order, followed by complete domain
@@ -131,7 +142,11 @@ occurred on the first item.
 
 `data.bounded_at(container, index)` and
 `data.bounded_matrix_at(matrix, row, column)` require checked provenance; neither
-accepts an `in_bounds` assertion. Private helpers may declare parameter relations:
+accepts an `in_bounds` assertion. Their operation verifiers check local attributes
+and types. The enclosing symbol closure establishes semantic bounds after helper
+structure has been verified, including units without a finite computation.
+Verifying an isolated access is therefore not whole-program admission. Private
+helpers may declare parameter relations:
 
 ```mlir
 data.preconditions = [#data.index_bound<indexArg, containerArg, axis>,
@@ -154,9 +169,13 @@ do not acquire assumptions from type equality alone.
 Extent analysis also recognizes an exact immutable `data.sequence_empty` /
 `data.sequence_append` chain returned by an ordinary Math helper. This permits
 fixed source-array adapters to retain their length evidence across calls without
-changing the dynamic Sequence carrier. Each finite admission or call-condition check shares a 65,536-visit budget
-across forwarding, bounds, extents and cardinality queries. Forwarding and extent
-results are cached within that check; helper traversal has call depth 64.
+changing the dynamic Sequence carrier. Exact unfiltered collection counts can
+also supply extent evidence; filtered results normally supply only upper bounds.
+Each finite admission or call-condition check shares a 65,536-step allowance
+across forwarding, bounds, extents and cardinality queries. Helper observations
+are cached within the immutable symbol closure. Fact extraction allows 256
+interpretation frames, including actual/formal substitution; the independent
+helper-closure admission limit remains 64 call levels.
 An unknown producer or exhausted search gives no fixed extent;
 no size annotation is trusted. Equal lengths still do not equate container values.
 

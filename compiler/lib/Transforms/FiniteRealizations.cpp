@@ -227,7 +227,7 @@ class Realizer {
     SmallVector<std::string> args{
         cast<algebra::FieldType>(elementType(vector)).getDomain().str()};
     return mathematical::realizeLanes(
-        body, inputs, vector, sizes.lookup(root), &work.lanes,
+        body, inputs, vector, sizes.lookup(root), &work.lanes, recipes,
         [&](StringRef contract, ValueRange operands, Type output,
             ArrayRef<std::string> parameters) {
           return emit(contract, operands, output, args, parameters);
@@ -323,13 +323,9 @@ public:
       selection = mathematical::selectComputation(computation, {true, false},
                                                   work.matching, recipes);
     const ComputationView *view = selection.view ? &*selection.view : nullptr;
-    SmallVector<Operation *> fallbackAdmission;
-    if (!view)
-      for (auto &op : computation.domain.getBody().front().without_terminator())
-        fallbackAdmission.push_back(&op);
-    ArrayRef<Operation *> admission =
-        view ? ArrayRef<Operation *>(view->admission)
-             : ArrayRef<Operation *>(fallbackAdmission);
+    SmallVector<Operation *> admission;
+    for (auto &op : computation.domain.getBody().front().without_terminator())
+      admission.push_back(&op);
     values.clear();
     sizes.clear();
     lowers.clear();
@@ -401,9 +397,7 @@ public:
       assert(col && col->empty && "admitted collection construction required");
       initial.push_back(emit(*col->empty, {}, col->storage));
     }
-    Value root =
-        view ? view->iteration[view->root].descriptor
-             : computation.domain.getBody().front().back().getOperand(0);
+    Value root = computation.domain.getBody().front().back().getOperand(0);
     Value zero = number(0), upper = sizes.lookup(root);
     // Capture only Copy/Drop values; each affine state is in the carried
     // prefix.

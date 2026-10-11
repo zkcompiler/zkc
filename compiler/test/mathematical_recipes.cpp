@@ -78,6 +78,47 @@ int main() {
   Cases cases;
   using namespace mathematical;
   const MathematicalRecipes absent{{}, {}};
+  cases.run("lane emission retains the selected inventory", [&] {
+    auto text = fixture("collect");
+    auto body = text.find("   %y =");
+    require(body != std::string::npos, "missing collection formula");
+    text.insert(
+        body, "   %two = \"algebra.exec.field_constant\"() "
+              "{binding=@constant,parameters=[\"2\"],site=\"two\"} : ()->!F\n");
+    auto binding = text.find(" \"local.binding\"");
+    require(binding != std::string::npos, "missing binding insertion point");
+    text.insert(binding,
+                " \"local.binding\"() {sym_name=\"constant\","
+                "contract=\"field.constant\",arguments=[\"bls12-381.fr\"],"
+                "implementation=\"\"} : ()->()\n");
+    auto operands = text.find("(%x,%x)");
+    require(operands != std::string::npos, "missing multiplication operands");
+    text.replace(operands, std::string("(%x,%x)").size(), "(%x,%two)");
+    auto source = parseSourceString<ModuleOp>(text, &context);
+    require(bool(source), "scalar/lane fixture refused");
+    const auto &installed = mathematicalRecipes();
+    llvm::SmallVector<LaneRecipe> lanes(installed.lanes);
+    for (auto &recipe : lanes)
+      if (recipe.identity == MathematicalIdentity::FieldMultiply)
+        recipe.mixed = {};
+    // Both recipes implement multiplication. With no mixed scalar/vector
+    // recipe, the supplied inventory requires a broadcast and packed multiply.
+    const MathematicalRecipes broadcast{lanes, installed.reductions,
+                                        installed.matrixContractions};
+    auto direct = clone(*source), expanded = clone(*source);
+    require(
+        succeeded(finite::realizeLocals(*direct, {}, nullptr, installed)) &&
+            succeeded(finite::realizeLocals(*expanded, {}, nullptr, broadcast)),
+        "valid selected lane recipe did not pass independent checking");
+    require(
+        hasKernel(*direct, "vector.scale") &&
+            !hasKernel(*expanded, "vector.scale") &&
+            hasKernel(*expanded, "vector.fill") &&
+            hasKernel(*expanded, "vector.mul"),
+        "lane emission replaced the selected inventory with global recipes");
+    require(succeeded(finite::verifyRealizations(*source, *expanded)),
+            "broadcast realization changed the source meaning");
+  });
   cases.run("two-member inventory has no implicit matrix recipes", [&] {
     const auto &installed = mathematicalRecipes();
     const MathematicalRecipes original{installed.lanes, installed.reductions};

@@ -13,6 +13,7 @@ Logical collections have dedicated nominal MLIR types:
 |---|---|
 | `ui64` | `index` |
 | `!algebra.indices` | `indices` |
+| `!data.bytes` | `bytes` |
 | `!algebra.field_vector<"F">` | `vector:F` |
 | `!algebra.field_matrix<"F">` | `matrix:F` |
 | `!algebra.group_vector<"G">` | `groups:G` |
@@ -22,7 +23,7 @@ Logical collections have dedicated nominal MLIR types:
 
 Storage layouts are physical choices. Matrices have row then column axes,
 including when either extent is zero; sparse storage does not change rank.
-Vectors, matrices and indices have runtime extents. Field arrays and fixed
+Vectors, matrices, indices and bytes have runtime extents. Field arrays and fixed
 vectors retain their length in type identity. Learning a vector's length or a
 matrix's dimensions cannot change its nominal family, logical encoding or codec
 permission. There is no builtin tensor compatibility alias for these types.
@@ -68,7 +69,7 @@ The operations are:
 - `data.get`: extract an in-range field from a **single-alternative** product.
 - `data.is`: test one declared alternative without extracting its payload.
 - `data.dim`: observe an in-range axis of a field vector, group vector, indices,
-  field matrix or field array, including a zero extent. Sequences and fixed
+  field matrix, field array or bytes, including a zero extent. Sequences and fixed
   vectors do not gain admission through the collection interface.
 
 Sum elimination uses ordered `local.match`. Dynamic indexing, equal-length zip,

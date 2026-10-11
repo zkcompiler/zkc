@@ -153,23 +153,21 @@ BoundedMatrixAtOp::getOperandDependencies(unsigned result) {
 }
 LogicalResult BoundedAtOp::verify() {
   if (!(*this)->getAttrs().empty() ||
-      finite::elementType(getInput().getType()) != getOutput().getType() ||
-      !finite::provesBound(getIndex(), getInput(), 0))
+      finite::elementType(getInput().getType()) != getOutput().getType())
     return diagnostics::emit(
         emitOpError(), "finite-bound",
         "lookup requires exact container/index provenance");
+  // Bound evidence may inspect sibling helpers; the enclosing symbol closure
+  // verifies it after all operation structure has been checked.
   return success();
 }
 LogicalResult BoundedMatrixAtOp::verify() {
-  uint64_t remaining = 65536;
   if (!(*this)->getAttrs().empty() ||
-      finite::elementType(getInput().getType(), true) !=
-          getOutput().getType() ||
-      !finite::provesBound(getRow(), getInput(), 0, remaining) ||
-      !finite::provesBound(getColumn(), getInput(), 1, remaining))
+      finite::elementType(getInput().getType(), true) != getOutput().getType())
     return diagnostics::emit(
         emitOpError(), "finite-bound",
         "matrix lookup requires both exact coordinate bounds");
+  // The enclosing symbol closure establishes both coordinate bounds.
   return success();
 }
 } // namespace zkc::data

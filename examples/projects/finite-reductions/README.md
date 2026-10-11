@@ -1,5 +1,12 @@
 # Finite vector reductions
 
+The compiler checks extent equality and index bounds through the shared
+[mathematical fact rules](../../../docs/spec/domains/mathematical-facts.md).
+Source origins and SSA are checked independently. Equal vector lengths permit
+bound transfer but do not make the vectors interchangeable, and known counts
+leave every ordered domain check in place. This foundation adds no syntax or
+imports to the examples below.
+
 The [Entry](main.zkc) computes the same weighted sum with imported `∑`,
 named `finite::sum`, and `vec::dot`. It also computes `∏ x in left, (x + α)`,
 which captures the scalar `α` once for all rows. The vector library supplies

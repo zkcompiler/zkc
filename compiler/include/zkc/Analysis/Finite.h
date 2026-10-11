@@ -1,5 +1,6 @@
 #ifndef ZKC_ANALYSIS_FINITE_H
 #define ZKC_ANALYSIS_FINITE_H
+#include "zkc/Contracts/MathematicalFacts.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "llvm/ADT/BitVector.h"
 
@@ -60,10 +61,20 @@ mlir::LogicalResult verify(mlir::Operation *op);
 mlir::LogicalResult verifyLocal(mlir::Operation *op);
 mlir::LogicalResult verifyReferences(mlir::Operation *op,
                                      mlir::SymbolTableCollection &symbols);
-// Region-level closure checks after local and symbol-user verification.
+// Region-level closure checks after every body has passed local and symbol-user
+// verification. Owns bounded-access evidence even in units without finite
+// computations; isolated access verification checks only structure. Recheck
+// the closure after changing any inspected helper body.
 mlir::LogicalResult verifyClosure(mlir::Operation *unit);
 mlir::LogicalResult verifyPreconditions(mlir::Operation *helper);
 mlir::LogicalResult verifyCallPreconditions(mlir::Operation *call);
+// Mandatory checks and comparison readers retain Capacity explicitly. The
+// caller owns this cumulative allowance; these queries never replenish it.
+facts::Status boundStatus(mlir::Value index, mlir::Value container,
+                          unsigned axis, uint64_t &remaining);
+facts::Status equalExtentStatus(mlir::Value left, unsigned leftAxis,
+                                mlir::Value right, unsigned rightAxis,
+                                uint64_t &remaining);
 bool provesBound(mlir::Value index, mlir::Value container, unsigned axis);
 bool provesEqualExtent(mlir::Value left, unsigned leftAxis, mlir::Value right,
                        unsigned rightAxis);

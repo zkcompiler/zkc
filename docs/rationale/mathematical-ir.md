@@ -69,6 +69,28 @@ primitive dialect conversion until they can meet its rewrite contract.
 
 ## Analysis, choices and checking
 
+Shape and bound derivation lives in a small MLIR-free Contracts kernel. Source
+checking and SSA analysis independently extract exact origins, extents and
+helper premises into its vocabulary. This shares mathematical rules without
+making source checking depend on MLIR or letting a candidate checker trust an
+optimizer's selected access classification. The shared kernel remains part of
+the native checking trust boundary.
+
+SSA helper observations are reusable within an immutable symbol closure;
+caller-owned allowances pay for each query and its nested extraction. MLIR's
+analysis manager can govern that closure's lifetime across passes. A manually
+held analysis must still be cleared after an in-pass mutation. This avoids
+storing mutable work budgets in an analysis that the pass manager may rebuild.
+
+Current consumers need exact local and helper queries. They do not propagate
+successful Local guards or loop invariants, so a global DataFlow solver would
+add machinery without replacing a current analysis. The fact kernel supports
+conservative scope intersection for future control-flow adapters. A restricted
+upstream ValueBounds experiment handles small non-overflowing arithmetic, but
+its integer interpretation does not grant a model for arbitrary native `ui64`
+or nominal collections. Production use awaits an affine consumer with explicit
+range, overflow and analysis-work contracts.
+
 The structural computation view borrows the admitted SSA: ordered domain
 constructors, occurrence-specific axes, actual/formal environments, accesses,
 state and results. Private transformation equations interpret that structure;
