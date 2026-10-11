@@ -25,47 +25,74 @@ Operation *resolve(Operation *op, StringRef key) {
   auto ref = op->getAttrOfType<FlatSymbolRefAttr>(key);
   return ref ? SymbolTable::lookupNearestSymbolFrom(op, ref) : nullptr;
 }
+struct EvidenceWork {
+  uint64_t remaining = 65536;
+  llvm::DenseMap<std::pair<Operation *, unsigned>, std::optional<unsigned>>
+      inputs;
+  llvm::DenseMap<Value, Value> forwarded;
+  llvm::DenseMap<std::pair<Value, unsigned>, std::optional<uint64_t>> extents;
+  bool charge(uint64_t count = 1) {
+    if (count > remaining) {
+      remaining = 0;
+      return false;
+    }
+    remaining -= count;
+    return true;
+  }
+};
+bool provesBoundUnder(Value, Value, unsigned, EvidenceWork &);
 // Only exact argument forwarding transfers an SSA relationship. A successor,
 // shifted index or reconstructed container cannot acquire its predecessor's
 // fact.
 std::optional<unsigned> forwardedInput(Operation *helper, unsigned result,
-                                       unsigned depth) {
-  if (depth > 64 || !isa_and_nonnull<func::FuncOp>(helper) ||
+                                       unsigned depth, EvidenceWork &work) {
+  if (!work.charge() || depth > 64 || !isa_and_nonnull<func::FuncOp>(helper) ||
       !helper->getRegion(0).hasOneBlock())
     return std::nullopt;
+  auto key = std::make_pair(helper, result);
+  if (auto found = work.inputs.find(key); found != work.inputs.end())
+    return found->second;
   auto &block = helper->getRegion(0).front();
   if (block.empty() || !isa<func::ReturnOp>(block.back()) ||
       result >= block.back().getNumOperands())
     return std::nullopt;
   Value value = block.back().getOperand(result);
-  for (unsigned work = 0; work < 64; ++work) {
-    if (auto arg = dyn_cast<BlockArgument>(value))
-      return arg.getOwner() == &block
-                 ? std::optional<unsigned>(arg.getArgNumber())
-                 : std::nullopt;
+  for (unsigned step = 0; step < 64 && work.charge(); ++step) {
+    if (auto arg = dyn_cast<BlockArgument>(value)) {
+      auto input = arg.getOwner() == &block
+                       ? std::optional<unsigned>(arg.getArgNumber())
+                       : std::nullopt;
+      work.inputs.try_emplace(key, input);
+      return input;
+    }
     auto call = value.getDefiningOp<func::CallOp>();
     if (!call)
       return std::nullopt;
-    auto input =
-        forwardedInput(resolve(call, "callee"),
-                       cast<OpResult>(value).getResultNumber(), depth + 1);
+    auto input = forwardedInput(resolve(call, "callee"),
+                                cast<OpResult>(value).getResultNumber(),
+                                depth + 1, work);
     if (!input || *input >= call.getNumOperands())
       return std::nullopt;
     value = call.getOperand(*input);
   }
   return std::nullopt;
 }
-Value forwarded(Value value) {
-  for (unsigned work = 0; work < 64; ++work) {
+Value forwarded(Value value, EvidenceWork &work) {
+  if (auto found = work.forwarded.find(value); found != work.forwarded.end())
+    return found->second;
+  auto original = value;
+  for (unsigned step = 0; step < 64 && work.charge(); ++step) {
     auto call = value.getDefiningOp<func::CallOp>();
     if (!call)
       break;
-    auto input = forwardedInput(resolve(call, "callee"),
-                                cast<OpResult>(value).getResultNumber(), 0);
+    auto input =
+        forwardedInput(resolve(call, "callee"),
+                       cast<OpResult>(value).getResultNumber(), 0, work);
     if (!input || *input >= call.getNumOperands())
       break;
     value = call.getOperand(*input);
   }
+  work.forwarded.try_emplace(original, value);
   return value;
 }
 bool index(Type type) { return type.isUnsignedInteger(64); }
@@ -80,6 +107,59 @@ std::optional<uint64_t> staticExtent(Type type, unsigned axis) {
     if (axis < unsigned(tensor.getRank()) && !tensor.isDynamicDim(axis))
       return tensor.getDimSize(axis);
   return std::nullopt;
+}
+// Constructor evidence can preserve a fixed extent across a private helper
+// even when the Sequence carrier itself is dynamically sized. Only inspect
+// exact immutable constructors and returns, with bounded work and call depth.
+// An input or an unrecognized producer supplies no such evidence.
+std::optional<uint64_t> constructedExtent(Value value, unsigned axis,
+                                          uint64_t &remaining,
+                                          unsigned depth = 0) {
+  if (!remaining || depth > 64)
+    return std::nullopt;
+  --remaining;
+  if (auto size = staticExtent(value.getType(), axis))
+    return size;
+  if (axis || !isa<data::SequenceType>(value.getType()))
+    return std::nullopt;
+  uint64_t appended = 0;
+  while (remaining) {
+    --remaining;
+    if (value.getDefiningOp<data::SequenceEmptyOp>())
+      return appended;
+    if (auto append = value.getDefiningOp<data::SequenceAppendOp>()) {
+      if (appended == UINT64_MAX)
+        return std::nullopt;
+      ++appended;
+      value = append->getOperand(0);
+      continue;
+    }
+    auto call = value.getDefiningOp<func::CallOp>();
+    auto *helper = call ? resolve(call, "callee") : nullptr;
+    if (!isa_and_nonnull<func::FuncOp>(helper) ||
+        !helper->getRegion(0).hasOneBlock())
+      return std::nullopt;
+    auto &body = helper->getRegion(0).front();
+    auto result = cast<OpResult>(value).getResultNumber();
+    if (body.empty() || !isa<func::ReturnOp>(body.back()) ||
+        result >= body.back().getNumOperands())
+      return std::nullopt;
+    auto size = constructedExtent(body.back().getOperand(result), axis,
+                                  remaining, depth + 1);
+    if (!size || *size > UINT64_MAX - appended)
+      return std::nullopt;
+    return *size + appended;
+  }
+  return std::nullopt;
+}
+std::optional<uint64_t> knownExtent(Value value, unsigned axis,
+                                    EvidenceWork &work) {
+  auto key = std::make_pair(value, axis);
+  if (auto found = work.extents.find(key); found != work.extents.end())
+    return found->second;
+  auto result = constructedExtent(forwarded(value, work), axis, work.remaining);
+  work.extents.try_emplace(key, result);
+  return result;
 }
 std::optional<uint64_t> constant(Value value) {
   if (auto op = value.getDefiningOp<data::IndexOp>()) {
@@ -103,17 +183,22 @@ struct Extent {
 };
 // Formal equal-extent assumptions form an undirected relation. Its closure
 // never equates containers for element identity; only their selected extents.
-bool equalUnder(Value left, unsigned la, Value right, unsigned ra) {
-  left = forwarded(left);
-  right = forwarded(right);
-  auto a = staticExtent(left.getType(), la),
-       b = staticExtent(right.getType(), ra);
-  if (a && b)
-    return *a == *b;
+bool equalUnder(Value left, unsigned la, Value right, unsigned ra,
+                EvidenceWork &work) {
+  if (!work.charge())
+    return false;
   if (left == right && la == ra)
     return true;
+  left = forwarded(left, work);
+  right = forwarded(right, work);
+  if (left == right && la == ra)
+    return true;
+  auto a = knownExtent(left, la, work), b = knownExtent(right, ra, work);
+  if (a && b)
+    return *a == *b;
   Operation *owner = argumentOwner(left);
-  if (!owner || owner != argumentOwner(right))
+  if (!owner || owner != argumentOwner(right) || owner->getNumRegions() != 1 ||
+      !owner->getRegion(0).hasOneBlock())
     return false;
   auto attrs = preconditions(owner);
   if (!attrs)
@@ -129,6 +214,8 @@ bool equalUnder(Value left, unsigned la, Value right, unsigned ra) {
         }))
       continue;
     seen.push_back(current);
+    if (!work.charge(attrs.size() + 1))
+      return false;
     for (auto attr : attrs)
       if (auto equal = dyn_cast<data::EqualExtentAttr>(attr)) {
         if (equal.getLeftArg() >= block.getNumArguments() ||
@@ -149,12 +236,14 @@ struct ItemBound {
   int argument = -1;
   unsigned axis = 0;
 };
-SmallVector<ItemBound> itemBounds(Value descriptor) {
+SmallVector<ItemBound> itemBounds(Value descriptor, EvidenceWork &work) {
+  if (!work.charge())
+    return {};
   auto *op = descriptor.getDefiningOp();
   if (isa<data::DomainZipOp, data::DomainProductOp>(op)) {
     SmallVector<ItemBound> result;
     for (Value child : op->getOperands())
-      append_range(result, itemBounds(child));
+      append_range(result, itemBounds(child, work));
     return result;
   }
   auto container = op->getNumOperands()
@@ -177,14 +266,16 @@ struct Cardinality {
   unsigned axis = 0;
   std::optional<uint64_t> fixed;
 };
-Cardinality extent(Value domain, const Computation &c) {
+Cardinality extent(Value domain, const Computation &c, EvidenceWork &work) {
+  if (!work.charge())
+    return {};
   auto *op = domain.getDefiningOp();
   if (isa<data::DomainZipOp>(op))
-    return extent(op->getOperand(0), c);
+    return extent(op->getOperand(0), c, work);
   if (isa<data::DomainProductOp>(op)) {
     std::optional<uint64_t> count = 1;
     for (Value child : op->getOperands()) {
-      auto factor = extent(child, c).fixed;
+      auto factor = extent(child, c, work).fixed;
       if (factor && !*factor)
         return {{}, 0, 0};
       if (!factor || !count || (*factor && *count > UINT64_MAX / *factor))
@@ -202,7 +293,7 @@ Cardinality extent(Value domain, const Computation &c) {
     auto arg = cast<BlockArgument>(op->getOperand(0));
     Value actual =
         c.total ? c.operation->getOperand(arg.getArgNumber()) : Value(arg);
-    return {actual, axis, staticExtent(actual.getType(), axis)};
+    return {actual, axis, knownExtent(actual, axis, work)};
   }
   if (auto range = dyn_cast<data::DomainRangeOp>(op); range && c.total) {
     auto lo = constant(c.operation->getOperand(
@@ -214,24 +305,28 @@ Cardinality extent(Value domain, const Computation &c) {
   }
   return {};
 }
-bool sameExtent(Cardinality a, Cardinality b) {
+bool sameExtent(Cardinality a, Cardinality b, EvidenceWork &work) {
   if (a.fixed && b.fixed)
     return *a.fixed == *b.fixed;
   return a.container && b.container &&
-         equalUnder(a.container, a.axis, b.container, b.axis);
+         equalUnder(a.container, a.axis, b.container, b.axis, work);
 }
-bool sameCardinality(Value left, Value right, const Computation &c) {
-  if (left == right || sameExtent(extent(left, c), extent(right, c)))
+bool sameCardinality(Value left, Value right, const Computation &c,
+                     EvidenceWork &work) {
+  if (!work.charge())
+    return false;
+  if (left == right ||
+      sameExtent(extent(left, c, work), extent(right, c, work), work))
     return true;
   auto *a = left.getDefiningOp(), *b = right.getDefiningOp();
   if (isa<data::DomainZipOp>(a))
-    return sameCardinality(a->getOperand(0), right, c);
+    return sameCardinality(a->getOperand(0), right, c, work);
   if (isa<data::DomainZipOp>(b))
-    return sameCardinality(left, b->getOperand(0), c);
+    return sameCardinality(left, b->getOperand(0), c, work);
   if (isa<data::DomainProductOp>(a) && isa<data::DomainProductOp>(b) &&
       a->getNumOperands() == b->getNumOperands()) {
     for (auto [x, y] : zip(a->getOperands(), b->getOperands()))
-      if (!sameCardinality(x, y, c))
+      if (!sameCardinality(x, y, c, work))
         return false;
     return true;
   }
@@ -241,7 +336,7 @@ bool sameCardinality(Value left, Value right, const Computation &c) {
         x = c.operation->getOperand(cast<BlockArgument>(x).getArgNumber());
         y = c.operation->getOperand(cast<BlockArgument>(y).getArgNumber());
       }
-      if (forwarded(x) != forwarded(y))
+      if (forwarded(x, work) != forwarded(y, work))
         return false;
     }
     return true;
@@ -253,18 +348,20 @@ bool sameCardinality(Value left, Value right, const Computation &c) {
       x = c.operation->getOperand(cast<BlockArgument>(x).getArgNumber());
       y = c.operation->getOperand(cast<BlockArgument>(y).getArgNumber());
     }
-    return equalUnder(x, 0, y, 0) && equalUnder(x, 1, y, 1);
+    return equalUnder(x, 0, y, 0, work) && equalUnder(x, 1, y, 1, work);
   }
   return false;
 }
 LogicalResult helperAssumptions(const Computation &c, Operation *helper,
-                                bool step) {
+                                bool step, EvidenceWork &work) {
   auto attrs = preconditions(helper);
   if (!attrs)
     return success();
   if (failed(verifyPreconditions(helper)))
     return failure();
-  auto items = itemBounds(domainResult(c.domain));
+  auto items = itemBounds(domainResult(c.domain), work);
+  if (!work.charge(attrs.size() + 1))
+    return refuse(c.operation, "finite evidence work limit", "finite-bound");
   unsigned offset = step ? c.states : 0;
   unsigned argBase = offset + items.size();
   auto actual = [&](unsigned param) -> Value {
@@ -277,18 +374,20 @@ LogicalResult helperAssumptions(const Computation &c, Operation *helper,
     if (auto bound = dyn_cast<data::IndexBoundAttr>(attr)) {
       unsigned i = bound.getIndexArg(), a = bound.getContainerArg();
       bool valid = false;
-      if (i >= offset && i < argBase && a >= argBase &&
-          a < argBase + c.arguments) {
+      if (i >= offset && i < argBase && a >= argBase) {
         auto fact = items[i - offset];
-        valid =
-            fact.argument == int(a - argBase) && fact.axis == bound.getAxis();
-        if (!valid && fact.argument >= 0 && c.total)
-          valid =
-              equalUnder(c.operation->getOperand(fact.argument), fact.axis,
-                         c.operation->getOperand(a - argBase), bound.getAxis());
+        valid = a < argBase + c.arguments &&
+                fact.argument == int(a - argBase) &&
+                fact.axis == bound.getAxis();
+        // A total computation can read a captured container using the domain
+        // index when the caller establishes equality of the selected extents.
+        // This transfers only a bound, never container or element identity.
+        if (!valid && fact.argument >= 0 && actual(a))
+          valid = equalUnder(c.operation->getOperand(fact.argument), fact.axis,
+                             actual(a), bound.getAxis(), work);
       }
       if (!valid && actual(i) && actual(a))
-        valid = provesBound(actual(i), actual(a), bound.getAxis());
+        valid = provesBoundUnder(actual(i), actual(a), bound.getAxis(), work);
       if (!valid)
         return refuse(c.operation,
                       "finite helper bound is not discharged by the domain",
@@ -296,13 +395,42 @@ LogicalResult helperAssumptions(const Computation &c, Operation *helper,
     } else if (auto equal = dyn_cast<data::EqualExtentAttr>(attr)) {
       Value l = actual(equal.getLeftArg()), r = actual(equal.getRightArg());
       if (!l || !r ||
-          !equalUnder(l, equal.getLeftAxis(), r, equal.getRightAxis()))
+          !equalUnder(l, equal.getLeftAxis(), r, equal.getRightAxis(), work))
         return refuse(c.operation,
                       "finite helper equal extent is not discharged",
                       "finite-bound");
     }
   }
   return success();
+}
+bool provesBoundUnder(Value idx, Value container, unsigned selectedAxis,
+                      EvidenceWork &work) {
+  if (!work.charge())
+    return false;
+  idx = forwarded(idx, work);
+  container = forwarded(container, work);
+  if (!index(idx.getType()) || !axis(container.getType(), selectedAxis))
+    return false;
+  auto n = constant(idx), size = knownExtent(container, selectedAxis, work);
+  if (n && size && *n < *size)
+    return true;
+  auto arg = dyn_cast<BlockArgument>(idx);
+  auto owner = argumentOwner(idx);
+  auto attrs = preconditions(owner);
+  if (!arg || !attrs || owner->getNumRegions() != 1 ||
+      !owner->getRegion(0).hasOneBlock())
+    return false;
+  auto &block = owner->getRegion(0).front();
+  if (arg.getOwner() != &block || !work.charge(attrs.size() + 1))
+    return false;
+  for (auto attr : attrs)
+    if (auto bound = dyn_cast<data::IndexBoundAttr>(attr))
+      if (bound.getIndexArg() == arg.getArgNumber() &&
+          bound.getContainerArg() < block.getNumArguments() &&
+          equalUnder(block.getArgument(bound.getContainerArg()),
+                     bound.getAxis(), container, selectedAxis, work))
+        return true;
+  return false;
 }
 } // namespace
 Type elementType(Type container, bool matrix) {
@@ -331,32 +459,12 @@ bool isDeclaration(Operation *op) {
   return isa_and_nonnull<local::FiniteFoldOp, local::FiniteCollectOp>(op);
 }
 bool provesEqualExtent(Value a, unsigned aa, Value b, unsigned ba) {
-  return equalUnder(a, aa, b, ba);
+  EvidenceWork work;
+  return equalUnder(a, aa, b, ba, work);
 }
 bool provesBound(Value idx, Value container, unsigned selectedAxis) {
-  idx = forwarded(idx);
-  container = forwarded(container);
-  if (!index(idx.getType()) || !axis(container.getType(), selectedAxis))
-    return false;
-  auto n = constant(idx),
-       size = staticExtent(container.getType(), selectedAxis);
-  if (n && size && *n < *size)
-    return true;
-  auto arg = dyn_cast<BlockArgument>(idx);
-  auto owner = argumentOwner(idx);
-  auto attrs = preconditions(owner);
-  if (!arg || !attrs || owner->getNumRegions() != 1 ||
-      owner->getRegion(0).empty())
-    return false;
-  auto &block = owner->getRegion(0).front();
-  for (auto attr : attrs)
-    if (auto bound = dyn_cast<data::IndexBoundAttr>(attr))
-      if (bound.getIndexArg() == arg.getArgNumber() &&
-          bound.getContainerArg() < block.getNumArguments() &&
-          equalUnder(block.getArgument(bound.getContainerArg()),
-                     bound.getAxis(), container, selectedAxis))
-        return true;
-  return false;
+  EvidenceWork work;
+  return provesBoundUnder(idx, container, selectedAxis, work);
 }
 LogicalResult verifyPreconditions(Operation *helper) {
   auto raw = helper->getAttr("data.preconditions");
@@ -386,6 +494,7 @@ LogicalResult verifyPreconditions(Operation *helper) {
   return success();
 }
 LogicalResult verifyCallPreconditions(Operation *call) {
+  EvidenceWork work;
   auto *helper = resolve(call, "callee");
   auto attrs = preconditions(helper);
   if (!attrs)
@@ -396,9 +505,9 @@ LogicalResult verifyCallPreconditions(Operation *call) {
     if (auto bound = dyn_cast<data::IndexBoundAttr>(attr)) {
       if (bound.getIndexArg() >= call->getNumOperands() ||
           bound.getContainerArg() >= call->getNumOperands() ||
-          !provesBound(call->getOperand(bound.getIndexArg()),
-                       call->getOperand(bound.getContainerArg()),
-                       bound.getAxis()))
+          !provesBoundUnder(call->getOperand(bound.getIndexArg()),
+                            call->getOperand(bound.getContainerArg()),
+                            bound.getAxis(), work))
         return refuse(call, "call does not discharge index bound",
                       "finite-bound");
     } else if (auto equal = dyn_cast<data::EqualExtentAttr>(attr)) {
@@ -406,7 +515,7 @@ LogicalResult verifyCallPreconditions(Operation *call) {
           equal.getRightArg() >= call->getNumOperands() ||
           !equalUnder(call->getOperand(equal.getLeftArg()), equal.getLeftAxis(),
                       call->getOperand(equal.getRightArg()),
-                      equal.getRightAxis()))
+                      equal.getRightAxis(), work))
         return refuse(call, "call does not discharge equal extent",
                       "finite-bound");
     }
@@ -524,14 +633,15 @@ LogicalResult verify(Operation *op) {
         (c.collect && p->affine))
       return refuse(op, "finite result policy");
   }
-  if (failed(helperAssumptions(c, c.helper, !c.collect)) ||
-      (c.predicate && failed(helperAssumptions(c, c.predicate, false))))
+  EvidenceWork work;
+  if (failed(helperAssumptions(c, c.helper, !c.collect, work)) ||
+      (c.predicate && failed(helperAssumptions(c, c.predicate, false, work))))
     return failure();
   if (c.total) {
     for (auto &constructor : c.domain.getBody().front()) {
       if (auto zip = dyn_cast<data::DomainZipOp>(constructor)) {
         for (Value child : zip.getOperands().drop_front())
-          if (!sameCardinality(zip.getOperand(0), child, c))
+          if (!sameCardinality(zip.getOperand(0), child, c, work))
             return refuse(op, "total zip requires equal-extent evidence",
                           "finite-bound");
       }
@@ -541,8 +651,9 @@ LogicalResult verify(Operation *op) {
             cast<BlockArgument>(constructor.getOperand(0)).getArgNumber());
         auto selector = c.operation->getOperand(
             cast<BlockArgument>(constructor.getOperand(1)).getArgNumber());
-        if (!provesBound(selector, container,
-                         isa<data::DomainMatrixRowOp>(constructor) ? 0 : 1))
+        if (!provesBoundUnder(selector, container,
+                              isa<data::DomainMatrixRowOp>(constructor) ? 0 : 1,
+                              work))
           return refuse(op, "total matrix view requires a selector bound",
                         "finite-bound");
       }
@@ -551,7 +662,7 @@ LogicalResult verify(Operation *op) {
   if (c.collect)
     if (auto tensor = dyn_cast<RankedTensorType>(c.signature.getResult(0));
         tensor && !tensor.isDynamicDim(0)) {
-      auto card = extent(domainResult(c.domain), c);
+      auto card = extent(domainResult(c.domain), c, work);
       if (c.predicate || !card.fixed ||
           *card.fixed != uint64_t(tensor.getDimSize(0)))
         return refuse(

@@ -7,6 +7,8 @@ using namespace llvm;
 namespace zkc::language::detail {
 bool Checker::requirements(Declaration &decl) {
   for (auto &req : sources[decl.id.index]->requirements) {
+    if (req.data)
+      continue;
     if (!req.capability.empty()) {
       if (decl.kind == Declaration::Kind::Associated)
         return types.fail("source.unsupported",
@@ -120,6 +122,10 @@ bool Checker::chargeStaticSignature(const Declaration &decl) {
       if (!types.chargeType(argument, decl.span))
         return false;
   }
+  for (const auto &bound : decl.dataPreconditions)
+    if (!types.charge(bound.left.path.size() + bound.right.path.size() + 1,
+                      bound.span))
+      return false;
   for (const auto &bound : decl.capabilityBounds) {
     if (!types.charge(bound.predicate.size() + 1, bound.span))
       return false;
@@ -507,6 +513,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                         "scoped callbacks or an effect allowance",
                         decl.span);
   }
+  if (!dataRequirements(decl))
+    return false;
   if (decl.kind == Declaration::Kind::Relation && !relation(decl))
     return false;
   signatureState[id.index] = 2;

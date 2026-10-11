@@ -96,6 +96,21 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                      {"type", type(bound.type)},
                      {"permissions", permissions(bound.permissions)},
                      {"inferred", false}});
+  auto selector = [&](const InputSelector &input, unsigned axis) {
+    json::Array path;
+    for (auto index : input.path)
+      path.push_back(index);
+    return json::Object{{"input", decl.inputs[input.port].name},
+                        {"path", std::move(path)},
+                        {"axis", axis}};
+  };
+  for (const auto &condition : decl.dataPreconditions)
+    requirements.push_back(json::Object{
+        {"kind", condition.kind == DataPrecondition::Kind::IndexBound
+                     ? "index_bound"
+                     : "equal_extent"},
+        {"left", selector(condition.left, condition.leftAxis)},
+        {"right", selector(condition.right, condition.rightAxis)}});
   json::Array scoped;
   for (const auto &parameter : decl.scopedInputs) {
     json::Array inputs;

@@ -462,6 +462,26 @@ struct Alternative {
   std::vector<TypeField> fields;
   Span span;
 };
+/// A logical input subtree, selected by immutable product projections.
+struct InputSelector {
+  unsigned port = 0;
+  std::vector<unsigned> path;
+  Span span;
+};
+/// Preconditions on immutable callable inputs. These are distinct from static
+/// natural bounds and from protocol relation clauses.
+struct DataPrecondition {
+  enum class Kind { IndexBound, EqualExtent } kind;
+  InputSelector left, right;
+  unsigned leftAxis = 0, rightAxis = 0;
+  Span span;
+  bool operator==(const DataPrecondition &other) const {
+    return kind == other.kind && left.port == other.left.port &&
+           left.path == other.left.path && right.port == other.right.port &&
+           right.path == other.right.path && leftAxis == other.leftAxis &&
+           rightAxis == other.rightAxis;
+  }
+};
 struct NaturalBound {
   Natural lhs, rhs;
   Span span;
@@ -508,15 +528,9 @@ struct SpecificationClause {
   std::optional<SpecificationSelector> decision;
   Span span;
 };
-/// A logical input subtree, shared by every participant component of the port.
-struct EntryInput {
-  unsigned port = 0;
-  std::vector<unsigned> path;
-  Span span;
-};
 struct SetupSlot {
   std::string name;
-  std::vector<EntryInput> inputs;
+  std::vector<InputSelector> inputs;
   Span span;
 };
 enum class EntryKind { Run, Proof };
@@ -573,6 +587,7 @@ struct Declaration {
   Type domain;
   std::vector<Parameter> parameters;
   std::vector<NaturalBound> bounds;
+  std::vector<DataPrecondition> dataPreconditions;
   std::vector<PermissionBound> permissionBounds;
   std::vector<CapabilityBound> capabilityBounds;
   std::optional<Permissions> permissions;

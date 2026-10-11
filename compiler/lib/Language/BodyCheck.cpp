@@ -525,7 +525,8 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   if (!resolveBindings(*this, decl, *sources[id.index]))
     return false;
   if (sources[id.index]->primitive) {
-    if (!primitiveBody(decl, result))
+    if (!primitiveBody(decl, result) ||
+        !checkFiniteContracts(types, output.declarations, decl, result))
       return false;
     decl.body = std::make_shared<Body>(std::move(result));
     bodyState[id.index] = 2;
@@ -533,7 +534,8 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     return true;
   }
   if (sources[id.index]->finiteDefinition) {
-    if (!finiteBody(decl, result))
+    if (!finiteBody(decl, result) ||
+        !checkFiniteContracts(types, output.declarations, decl, result))
       return false;
     decl.body = std::make_shared<Body>(std::move(result));
     bodyState[id.index] = 2;

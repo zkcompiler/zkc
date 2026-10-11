@@ -1,3 +1,4 @@
+#include "DataPreconditions.h"
 #include "Finite.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/AsmState.h"
@@ -421,6 +422,23 @@ class Emitter {
             return false;
       } else if (auto *math = std::get_if<MathValue>(&op.action)) {
         auto operands = flatten(math->operands);
+        auto outputs = resultTypes;
+        std::optional<PackedLayout> packed;
+        if (math->identity == MathematicalIdentity::ContainerAt &&
+            source.values[math->operands.front().index].type.domain ==
+                "sequence") {
+          packed = take(
+              layouts.packed(source.values[op.results.front().index].type));
+          if (!packed)
+            return false;
+          auto carrier = protocol::decodeBoundType(&context, packed->carrier);
+          if (!carrier) {
+            failure = error("source.layout",
+                            "total sequence result dialect unavailable");
+            return false;
+          }
+          outputs = {carrier};
+        }
         mlir::Operation *actual = nullptr;
         switch (math->identity) {
         case MathematicalIdentity::BooleanConstant:
@@ -438,6 +456,12 @@ class Emitter {
         default: {
           StringRef name;
           switch (math->identity) {
+          case MathematicalIdentity::ContainerAt:
+            name = "data.bounded_at";
+            break;
+          case MathematicalIdentity::MatrixAt:
+            name = "data.bounded_matrix_at";
+            break;
           case MathematicalIdentity::IndexConstant:
             name = "data.index";
             break;
@@ -550,13 +574,27 @@ class Emitter {
                   MathematicalIdentity::PolynomialEvaluateDomain ||
               math->identity == MathematicalIdentity::PolynomialInterpolate)
             attrs.push_back(attr("points", strings(math->parameters)));
-          actual = make(name, resultTypes, operands, attrs);
+          actual = make(name, outputs, operands, attrs);
           break;
         }
         }
         if (!actual)
           return false;
         result = Values(actual->getResults());
+        if (packed && packed->product) {
+          if (packed->flat->leaves.size() > limits.operations - operations) {
+            failure = error("source.limit",
+                            "total sequence projection operation limit");
+            return false;
+          }
+          operations += packed->flat->leaves.size();
+          auto decoded =
+              take(emitUnpack(builder, location, *packed, result.front(),
+                              PackingMode::Mathematical, site + "_unpack"));
+          if (!decoded)
+            return false;
+          result = std::move(*decoded);
+        }
       } else if (auto *local = std::get_if<LocalPrimitive>(&op.action)) {
         auto operands = flatten(local->operands);
         std::optional<PackedLayout> packed;
@@ -942,6 +980,13 @@ public:
           text("sym_name", decl.relation ? formulaSymbol(decl) : decl.symbol),
           attr("function_type",
                mlir::TypeAttr::get(builder.getFunctionType(ins, outs)))};
+      if (!decl.dataPreconditions.empty()) {
+        auto conditions = take(flattenDataPreconditions(decl, layouts));
+        if (!conditions)
+          return std::move(failure);
+        attrs.push_back(attr("data.preconditions",
+                             emitDataPreconditions(&context, *conditions)));
+      }
       bool protocol = decl.kind == Declaration::Kind::Protocol,
            local = decl.kind == Declaration::Kind::Local;
       if (protocol) {

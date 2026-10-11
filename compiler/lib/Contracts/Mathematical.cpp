@@ -5,6 +5,8 @@ llvm::ArrayRef<MathematicalIntrinsic> mathematicalIntrinsics() {
   using I = MathematicalIdentity;
   using D = MathematicalIntrinsic::Domain;
   static const MathematicalIntrinsic values[] = {
+      {"container.at", I::ContainerAt, D::Collection},
+      {"matrix.at", I::MatrixAt, D::Collection},
       {"index.constant", I::IndexConstant, D::Index, 1},
       {"index.equal", I::IndexEqual, D::Index, 0, false, true},
       {"index.less", I::IndexLess, D::Index, 0, false, true},

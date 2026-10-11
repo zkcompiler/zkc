@@ -99,6 +99,8 @@ add_zkc_component(Language
   lib/Language/FiniteDomains.cpp
   lib/Language/FiniteDefinitions.cpp
   lib/Language/FiniteContracts.cpp
+  lib/Language/FiniteFormation.cpp
+  lib/Language/DataRequirements.cpp
   lib/Language/FiniteDomainArguments.cpp
   lib/Language/DomainClosure.cpp
   lib/Language/DomainWitness.cpp
@@ -202,6 +204,7 @@ add_zkc_component(IR
 )
 add_zkc_component(Translation
   lib/Translation/Language/Emission.cpp
+  lib/Translation/Language/DataPreconditions.cpp
   lib/Translation/Language/FiniteEmission.cpp
   lib/Translation/Language/FiniteComparison.cpp
   lib/Translation/Language/Comparison.cpp

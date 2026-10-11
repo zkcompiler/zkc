@@ -125,6 +125,20 @@ identity. Bounds from `indices(xs)` do not authorize a distinct `ys`, an appende
 successor, or a shifted index without further evidence. Dynamic total zip likewise
 requires an equal-extent derivation; a Local runtime guard is not a Math proof.
 
+A finite callback's bound may refer to a captured container when a total
+consumer proves its selected extent equals that of the domain container.
+Local consumers retain exact domain-argument bounds; captures or carried state
+do not acquire assumptions from type equality alone.
+
+Extent analysis also recognizes an exact immutable `data.sequence_empty` /
+`data.sequence_append` chain returned by an ordinary Math helper. This permits
+fixed source-array adapters to retain their length evidence across calls without
+changing the dynamic Sequence carrier. Each finite admission or call-condition check shares a 65,536-visit budget
+across forwarding, bounds, extents and cardinality queries. Forwarding and extent
+results are cached within that check; helper traversal has call depth 64.
+An unknown producer or exhausted search gives no fixed extent;
+no size annotation is trusted. Equal lengths still do not equate container values.
+
 Static-reference cycle checks include ordinary calls, finite helper/predicate
 references, nested finite computations and Math realizations. Whole-unit formation
 precedes liveness and includes dead operations and polynomial observations reached

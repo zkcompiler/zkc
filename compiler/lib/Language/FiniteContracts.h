@@ -7,5 +7,12 @@ namespace zkc::language::detail {
 /// its provenance facts are reconstructed, never accepted as annotations.
 bool checkFiniteContracts(Semantics &, llvm::ArrayRef<Declaration>,
                           const Declaration &, const Body &);
+/// Propagate requirements through a closed helper graph. Callees must already
+/// carry their checked requirements. Residual facts may mention only immutable
+/// mathematical input places; entry execution never acquires assumptions.
+std::optional<std::vector<DataPrecondition>>
+deriveDataPreconditions(Semantics &, llvm::ArrayRef<Declaration>,
+                        const Declaration &, const Body &,
+                        bool allowAdditional);
 } // namespace zkc::language::detail
 #endif

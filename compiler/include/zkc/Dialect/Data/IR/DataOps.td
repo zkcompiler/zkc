@@ -45,12 +45,12 @@ def Data_DomainYieldOp : Op<DataDialect, "domain_yield",
     [Terminator, HasParent<"::zkc::data::DomainOp">]> {
   let arguments = (ins Domain:$input);
 }
-def Data_BoundedAtOp : Op<DataDialect, "bounded_at", [Pure]> {
+def Data_BoundedAtOp : Op<DataDialect, "bounded_at", [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
   let arguments = (ins AnyType:$input, UI64:$index);
   let results = (outs AnyType:$output);
   let hasVerifier = 1;
 }
-def Data_BoundedMatrixAtOp : Op<DataDialect, "bounded_matrix_at", [Pure]> {
+def Data_BoundedMatrixAtOp : Op<DataDialect, "bounded_matrix_at", [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
   let arguments = (ins AnyRankedTensor:$input, UI64:$row, UI64:$column);
   let results = (outs AnyType:$output);
   let hasVerifier = 1;

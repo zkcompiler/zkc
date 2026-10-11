@@ -1,6 +1,8 @@
 #include "BodySummary.h"
 #include "ClosureInputs.h"
+#include "DataRequirements.h"
 #include "DomainWitness.h"
+#include "FiniteContracts.h"
 #include "zkc/Language/Project.h"
 #include <algorithm>
 #include <set>
@@ -831,6 +833,25 @@ class SpecializationCheck {
         (templateBody && !body(*templateBody, *actual.body, subst, environment,
                                domains, depth, &layout)))
       return refuse(actual.span);
+    if (actual.body) {
+      auto assumptions = mapDataPreconditions(
+          types,
+          computation ? ArrayRef<DataPrecondition>{}
+                      : ArrayRef(original.dataPreconditions),
+          layout.inputs);
+      if (!assumptions)
+        return false;
+      Declaration expected = actual;
+      expected.dataPreconditions = std::move(*assumptions);
+      auto requirements = deriveDataPreconditions(
+          types, candidate, expected, *actual.body,
+          computation || !original.scopedInputs.empty() ||
+              !original.domainInputs.empty());
+      if (!requirements || *requirements != actual.dataPreconditions)
+        return types.diagnostic
+                   ? false
+                   : refuse(actual.span, "closed data preconditions differ");
+    }
     active.erase(id.index);
     checked.insert(id.index);
     return true;

@@ -188,6 +188,209 @@ fn apply(a:Fr,b:Fr,body:scoped fn(Fr,Fr)->Fr !{})->Fr{return body(a,b);}
                 std::string::npos,
             "wrong invocation operand refusal");
   });
+  cases.run("mathematical data preconditions select logical input places", [&] {
+    auto project = take(check(R"(
+domain Fr=field("koala-bear");
+
+
+struct Inputs {pub vector:Vector<Fr>,pub matrix:Matrix<Fr>}
+pub math fn read(xs:Inputs,i:index,j:index)->bool
+ where in_bounds(i,xs.vector),in_bounds(j,xs.matrix,1),equal_extent(xs.vector,xs.matrix,0,0)
+ {return true;}
+)"));
+    const auto &decl = declarationNamed(project, "m::read");
+    require(decl.dataPreconditions.size() == 3 &&
+                decl.dataPreconditions[0].left.port == 1 &&
+                decl.dataPreconditions[0].right.path ==
+                    std::vector<unsigned>{0} &&
+                decl.dataPreconditions[1].rightAxis == 1,
+            "data precondition selectors differ");
+    auto inspected = take(inspectDeclarations(project));
+    require(inspected.find("index_bound") != std::string::npos &&
+                inspected.find("equal_extent") != std::string::npos,
+            "declaration inspection lost data conditions");
+  });
+  for (StringRef source :
+       {"fn f(xs:Vector<Fr>,i:index)->bool where in_bounds(i,xs){return true;}",
+        "math fn f(xs:Vector<Fr>,i:index)->bool where in_bounds(i,xs,1){return "
+        "true;}",
+        "math fn f(xs:Vector<Fr>,i:index)->bool where in_bounds(i,ys){return "
+        "true;}",
+        "math fn f(xs:Vector<Fr>,i:Fr)->bool where in_bounds(i,xs){return "
+        "true;}",
+        "math fn f(xs:Vector<Fr>,i:index)->bool where "
+        "in_bounds(i,xs),in_bounds(i,xs){return true;}"})
+    cases.run("invalid data precondition " + source.str(), [&] {
+      refuses(check("domain Fr=field(\"koala-bear\");" + source.str()),
+              "source.data-bound");
+    });
+  cases.run("component data conditions may reorder or weaken", [&] {
+    take(check(R"(
+interface Read<F:Field> {
+ math fn read(xs:Vector<F>,ys:Vector<F>,i:index)->F
+  where in_bounds(i,xs),equal_extent(xs,ys);
+}
+component Reader<F:Field>:Read<F> {
+ math fn read(left:Vector<F>,right:Vector<F>,j:index)->F
+  where equal_extent(left,right),in_bounds(j,left) {
+  return intrinsic<Vector<F>>("container.at",right,j);
+ }
+}
+component Constant<F:Field>:Read<F> {
+ math fn read(xs:Vector<F>,ys:Vector<F>,i:index)->F {return 0;}
+}
+)"));
+  });
+  cases.run("component cannot strengthen data conditions", [&] {
+    refuses(check(R"(
+interface Read<F:Field> {math fn read(xs:Vector<F>,i:index)->F;}
+component Reader<F:Field>:Read<F> {
+ math fn read(xs:Vector<F>,i:index)->F where in_bounds(i,xs){return 0;}
+}
+)"),
+            "source.conformance");
+  });
+  cases.run("declared data bounds compose through ordinary mathematical calls",
+            [&] {
+              take(check(R"(
+domain Fr=field("koala-bear");
+math fn at(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs) {return intrinsic<Vector<Fr>>("container.at",xs,i);}
+math fn forward(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr
+ where in_bounds(i,xs),equal_extent(xs,ys) {return at(ys,i);}
+)"));
+            });
+  for (StringRef body : {"return at(xs,i);", "let ignored=at(xs,i);return 0;"})
+    cases.run("generic caller must establish data preconditions " + body.str(),
+              [&] {
+                refuses(check(R"(
+domain Fr=field("koala-bear");
+math fn at(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs) {return intrinsic<Vector<Fr>>("container.at",xs,i);}
+math fn invalid(xs:Vector<Fr>,i:index)->Fr {)" +
+                              body.str() + "}"),
+                        "source.data-bound");
+              });
+  cases.run("wrong container bound refuses", [&] {
+    refuses(check(R"(
+domain Fr=field("koala-bear");
+math fn invalid(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs) {
+ return intrinsic<Vector<Fr>>("container.at",ys,i);
+})"),
+            "source.data-bound");
+  });
+  const std::string boundPrelude = R"(
+domain Fr=field("koala-bear");
+math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold");
+math fn at(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs) {return intrinsic<Vector<Fr>>("container.at",xs,i);}
+domain fn paired(xs:Vector<Fr>,ys:Vector<Fr>)->scoped domain<(index,index)>{return zip(indices(xs),indices(ys));}
+domain fn coords(xs:Matrix<Fr>)->scoped domain<(index,index)>=domain("matrix.coordinates.row_major");
+)";
+  for (StringRef source :
+       {"math fn work(xs:Vector<Fr>)->Fr{return total(indices(xs),0,fun state "
+        "i=>state+at(xs,i));}",
+        "math fn work(xs:Vector<Fr>)->Fr{return total(step=fun state "
+        "i=>state+at(xs,i),initial=0,rows=indices(xs));}",
+        "struct Data {pub xs:Vector<Fr>} math fn work(data:Data)->Fr{return "
+        "total(indices(data.xs),0,fun state i=>state+at(data.xs,i));}",
+        "math fn work(xs:Vector<Fr>)->Fr{let alias=xs;return "
+        "total(indices(xs),0,fun state i=>state+at(alias,i));}",
+        "math fn apply(i:index,body:scoped math fn(index)->Fr)->Fr{return "
+        "body(i);} math fn work(xs:Vector<Fr>)->Fr{return "
+        "total(indices(xs),0,fun state i=>state+apply(i,fun "
+        "unused=>at(xs,i)));}",
+        "math fn work(xs:Matrix<Fr>)->Fr{return total(coords(xs),0,fun state "
+        "(i,j)=>state+intrinsic<Matrix<Fr>>(\"matrix.at\",xs,i,j));}",
+        "math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr where "
+        "equal_extent(xs,ys){return total(paired(xs,ys),0,fun state "
+        "(i,j)=>state+at(xs,i)+at(ys,j));}"})
+    cases.run("finite item establishes exact bound " + source.str(), [&] {
+      auto project = take(check(boundPrelude + source.str()));
+      if (auto error = checkScopedElaboration(project))
+        throw std::runtime_error(toString(std::move(error)));
+    });
+  for (StringRef source :
+       {"math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return "
+        "total(indices(xs),0,fun state i=>state+at(ys,i));}",
+        "math fn work(xs:Vector<Fr>,n:index)->Fr{return total(range(0,n),0,fun "
+        "state i=>state+at(xs,i));}",
+        "math fn work(xs:Matrix<Fr>)->Fr{return total(coords(xs),0,fun state "
+        "(i,j)=>state+intrinsic<Matrix<Fr>>(\"matrix.at\",xs,j,i));}",
+        "math fn apply(i:index,body:scoped math fn(index)->Fr)->Fr{return "
+        "body(i);} math fn work(xs:Vector<Fr>)->Fr{return "
+        "total(indices(xs),0,fun state i=>state+apply(i,fun j=>at(xs,j)));}"})
+    cases.run("finite item cannot invent a bound " + source.str(), [&] {
+      refuses(check(boundPrelude + source.str()), "source.data-bound");
+    });
+  cases.run("closed total finite helper discharges extracted bounds", [&] {
+    auto project = take(check(boundPrelude + R"(
+math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr where equal_extent(xs,ys) {
+ return total(indices(xs),0,fun state i=>state+at(ys,i));
+}
+math fn same(xs:Vector<Fr>)->Fr{return work(xs,xs);}
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return same(xs);}run Run=Demo;
+)"));
+    auto closed = take(closeEntry(project, "m::Run"));
+    unsigned bounds = 0, extents = 0;
+    for (const auto &decl : closed.declarations())
+      for (const auto &condition : decl.dataPreconditions)
+        if (condition.kind == DataPrecondition::Kind::IndexBound)
+          ++bounds;
+        else
+          ++extents;
+    require(bounds && extents, "closure lost data requirements");
+    if (auto error = checkScopedSpecialization(closed))
+      throw std::runtime_error(toString(std::move(error)));
+    for (const auto &decl : closed.declarations())
+      if (decl.body && decl.origin && !decl.dataPreconditions.empty()) {
+        const_cast<Declaration &>(decl).dataPreconditions.clear();
+        break;
+      }
+    auto error = checkScopedSpecialization(closed);
+    require(bool(error), "dropped closed precondition accepted");
+    consumeError(std::move(error));
+  });
+  for (
+      const std::string &source : {
+          R"(math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return total(zip(elements(xs),elements(ys)),0,fun state pair=>state);}
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}run Run=Demo;)",
+          R"(domain fn choose(xs:Vector<Fr>,ys:Vector<Fr>)->scoped domain<Fr>{let unused=zip(elements(xs),elements(ys));return elements(xs);}
+math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return total(choose(xs,ys),0,fun state item=>state);}
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}run Run=Demo;)",
+          R"(domain fn row(xs:Matrix<Fr>,i:index)->scoped domain<Fr>=domain("matrix.row");
+math fn work(xs:Matrix<Fr>,i:index)->Fr{return total(row(xs,i),0,fun state item=>state+item);}
+protocol Demo roles(P)(xs:Matrix<Fr>@P,i:index@P)->(r:Fr@P){return work(xs,i);}run Run=Demo;)",
+          R"(domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
+math fn work(a:Fr)->Fr{let empty:[Fr;0]=[];return total(zip(array(empty),array([a])),0,fun state item=>state);}
+protocol Demo roles(P)(a:Fr@P)->(r:Fr@P){return work(a);}run Run=Demo;)",
+          R"(type Array<F:Field,N:nat>=builtin("field_array",F,N);
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
+math fn collect<I:Type+Copy+Drop,N:nat>(rows:scoped domain<I>,body:scoped math fn(I)->Fr on(rows))->Array<Fr,N>=finite("math.collect.field_array");
+math fn work(a:Fr)->Array<Fr,3>{return collect(array([a,a]),fun x=>x);}
+protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,3>@P){return work(a);}run Run=Demo;)",
+      })
+    cases.run("total formation is checked before native emission " +
+                  source.substr(0, 60),
+              [&] {
+                auto project = take(check(boundPrelude + source));
+                refuses(closeEntry(project, "m::Run"), "source.data-bound");
+              });
+  cases.run("ordinary Math contracts cannot gain caller-specific assumptions",
+            [&] {
+              auto project = take(check(boundPrelude + R"(
+math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
+ return total(zip(elements(xs),elements(ys)),0,fun state item=>state);
+}
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs,xs);}run Run=Demo;
+)"));
+              refuses(closeEntry(project, "m::Run"), "source.data-bound");
+            });
+  cases.run("contradictory fixed extent condition refuses", [&] {
+    refuses(check(R"(
+domain Fr=field("bls12-381.fr");
+type Array<F:Field,N:nat>=builtin("field_array",F,N);
+math fn bad(xs:Array<Fr,3>,ys:Array<Fr,5>)->bool where equal_extent(xs,ys){return true;}
+)"),
+            "source.data-bound");
+  });
   cases.run("total index literal overflow refuses", [&] {
     refuses(check("math fn bad()->index{return 18446744073709551616;}"),
             "source.literal");

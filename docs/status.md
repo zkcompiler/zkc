@@ -101,13 +101,20 @@ Native source tests cover ordered and Unit state, mixed state dependencies,
 filtered stops, strict zip admission, packed record sequences, repeated calls,
 dependent inner ranges and mutable capture snapshots. Fixed source arrays now
 adapt through independently checked sequence construction, including records,
-empty arrays and Unit items. Total source bounds remain open. Source item-provenance checks
+empty arrays and Unit items. Source item-provenance checks
 now cover generic restricted forwarding, named argument order, nested captures
 and invariant local-region inputs, including independent witness revalidation.
 Retained witnesses also check formal callback slots and authored invocation
 identities through nested regions. Total index literals, static natural index construction and comparisons now
 support mathematical ranges and filters through ordinary realization. Total
-access bounds precede the general library and notation migration.
+access now uses exact item/container bounds, declared Math input conditions and
+callee-first closure requirements. Native checks independently discharge each
+call and finite callback, including equal-extent captures. Closed source checks
+cover all retained zip/matrix-view formation and exact fixed collection sizes;
+sequence constructor evidence preserves fixed-array lengths across adapters.
+Fixed field-array output follows the installed BLS12-381.Fr contracts; other
+field backends may lack that realization. General library and notation migration
+remains a separate step.
 The existing finite-vector reductions retain the following restrictions.
 [Finite reduction binders](spec/language/definitions.md#finite-vector-reductions)
 support named reducers and library-owned `∑`/`∏`, explicit strict zip and

@@ -1,7 +1,9 @@
 #include "BodyMapping.h"
 #include "BodySummary.h"
 #include "ClosureInputs.h"
+#include "DataRequirements.h"
 #include "DomainClosure.h"
+#include "FiniteContracts.h"
 #include "Semantics.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/Services.h"
@@ -319,6 +321,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           helper.domainResult.reset();
           helper.domainDefinition.reset();
           helper.finiteDefinition.reset();
+          helper.dataPreconditions.clear();
           helper.generatedReduction.reset();
           helper.body = computation.body;
           helper.effectAllowance = computation.signature.allowance;
@@ -1126,6 +1129,18 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           for (const auto &value : body->values)
             if (!types.mathematicalData(value.type, value.span))
               return {};
+        auto assumptions = mapDataPreconditions(types, result.dataPreconditions,
+                                                layout.inputs);
+        if (!assumptions)
+          return {};
+        result.dataPreconditions = std::move(*assumptions);
+        auto requirements = deriveDataPreconditions(
+            types, declarations, result, *body,
+            result.scopedOrigin || !result.scopedInputs.empty() ||
+                !result.domainInputs.empty());
+        if (!requirements)
+          return {};
+        result.dataPreconditions = std::move(*requirements);
         result.body = std::move(body);
       }
       result.scopedInputs.clear();
@@ -1166,7 +1181,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                   port.type.domain == "verifier_key");
       bool initialized = llvm::any_of(
           declarations[selected.index].setups, [&](const SetupSlot &slot) {
-            return llvm::any_of(slot.inputs, [&](const EntryInput &input) {
+            return llvm::any_of(slot.inputs, [&](const InputSelector &input) {
               return input.port == i && input.path.empty();
             });
           });

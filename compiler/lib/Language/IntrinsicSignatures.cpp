@@ -1,3 +1,4 @@
+#include "DataRequirements.h"
 #include "Semantics.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Language/Builtins.h"
@@ -10,6 +11,24 @@ Semantics::intrinsicSignature(const Declaration *scope, StringRef name,
                               ArrayRef<std::string> parameters, Span span) {
   const auto *intrinsic = mathematicalIntrinsic(name);
   using K = Type::Kind;
+  if (intrinsic &&
+      intrinsic->domain == MathematicalIntrinsic::Domain::Collection) {
+    bool matrix = intrinsic->identity == MathematicalIdentity::MatrixAt;
+    auto element = arguments.size() == 1
+                       ? collectionElement(arguments.front(), matrix)
+                       : std::nullopt;
+    if (!element || !parameters.empty()) {
+      fail("source.intrinsic", "total access requires a native collection type",
+           span);
+      return {};
+    }
+    if (!mathematicalData(arguments.front(), span, scope))
+      return {};
+    std::vector<Type> inputs{arguments.front(), Type(K::Index)};
+    if (matrix)
+      inputs.push_back(Type(K::Index));
+    return CallSignature{std::move(inputs), {*element}};
+  }
   if (intrinsic && intrinsic->domain == MathematicalIntrinsic::Domain::Index) {
     if (intrinsic->identity == MathematicalIdentity::IndexConstant) {
       if (arguments.size() != 1 || arguments.front().kind != K::Natural ||

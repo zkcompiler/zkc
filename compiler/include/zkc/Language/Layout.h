@@ -94,7 +94,7 @@ public:
   llvm::Expected<LayoutSlice> select(const Declaration &,
                                      const SpecificationSelector &);
   llvm::Expected<LayoutSlice> selectInput(const Declaration &,
-                                          const EntryInput &);
+                                          const InputSelector &);
 
 private:
   friend class detail::Semantics;

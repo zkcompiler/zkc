@@ -251,6 +251,28 @@ int main(int argc, char **argv) {
                     "(!V,!F,!F,!V)->(!F,!F)\n   ");
     refusesIR(wrong, context, "finite-bound");
   });
+  cases.run("domain indices can bound a proven captured container", [&] {
+    auto text = replace(fixture("total-state"), "%i:ui64,%xs:!V)",
+                        "%i:ui64,%xs:!V,%ys:!V)");
+    text =
+        replace(text, "#data.index_bound<2,3,0>", "#data.index_bound<2,4,0>");
+    text = replace(text, "(%xs,%i) :", "(%ys,%i) :");
+    text = replace(text, "(%xs,%a,%b) {domain", "(%xs,%a,%b,%xs) {domain");
+    text = replace(text, "(!V,!F,!F)->(!F,!F)\n   ",
+                   "(!V,!F,!F,!V)->(!F,!F)\n   ");
+    auto module = parseSourceString<ModuleOp>(text, &context);
+    require(bool(module), "exact captured-container bound refused");
+    pipeline(*module);
+    auto wrong = replace(text, "^entry(%xs:!V,%a:!F,%b:!F)",
+                         "^entry(%xs:!V,%a:!F,%b:!F,%other:!V)");
+    wrong =
+        replace(wrong, "(%xs,%a,%b,%xs) {domain", "(%xs,%a,%b,%other) {domain");
+    wrong = replace(wrong, "sym_name=\"main\",function_type=(!V,!F,!F)",
+                    "sym_name=\"main\",function_type=(!V,!F,!F,!V)");
+    wrong = replace(wrong, "input_roles=[[\"P\"],[\"P\"],[\"P\"]]",
+                    "input_roles=[[\"P\"],[\"P\"],[\"P\"],[\"P\"]]");
+    refusesIR(wrong, context, "finite-bound");
+  });
   cases.run("dead helper polynomial observation refused", [&] {
     auto wrong =
         replace(fixture("total-state"), "   func.return",
@@ -438,6 +460,73 @@ int main(int argc, char **argv) {
     text = replace(text, "input_roles=[[\"P\"],[\"P\"]]",
                    "input_roles=[[\"P\"],[\"P\"],[\"P\"]]");
     refusesIR(text, context, "finite-bound");
+  });
+  cases.run("forwarding evidence reuses a shared helper graph", [&] {
+    std::string helpers;
+    for (unsigned level = 0; level < 9; ++level) {
+      helpers += " func.func private @forward_" + std::to_string(level) +
+                 "(%x:ui64)->ui64 {\n";
+      std::string value = "%x";
+      if (level < 8)
+        for (unsigned call = 0; call < 63; ++call) {
+          auto next = "%v" + std::to_string(call);
+          helpers += "  " + next + " = func.call @forward_" +
+                     std::to_string(level + 1) + "(" + value +
+                     ") : (ui64)->ui64\n";
+          value = next;
+        }
+      helpers += "  func.return " + value + " : ui64\n }\n";
+    }
+    auto text = replace(fixture("total-state"), " func.func private @step",
+                        helpers + " func.func private @step");
+    text = replace(
+        text, "   %v =",
+        "   %forward = func.call @forward_0(%i) : (ui64)->ui64\n   %v =");
+    text = replace(text, "(%xs,%i) :", "(%xs,%forward) :");
+    // Exercise the evidence query itself. Whole-unit expanded analysis has a
+    // separate operation budget and intentionally rejects this helper graph.
+    ParserConfig config(&context, false);
+    auto module = parseSourceString<ModuleOp>(text, config);
+    require(bool(module), "forwarding graph did not parse");
+    bool checked = false;
+    module->walk([&](data::BoundedAtOp access) {
+      require(
+          finite::provesBound(access->getOperand(1), access->getOperand(0), 0),
+          "shared forwarding evidence exhausted work");
+      checked = true;
+    });
+    require(checked, "missing forwarding access");
+    refusesIR(text, context, "mathematical-analysis-limit");
+  });
+  cases.run("fixed Sequence extent is checked through ordinary returns", [&] {
+    std::string helpers = R"mlir(
+ func.func private @make()->!data.sequence<i1> {
+   %s = "data.sequence_empty"() : ()->!data.sequence<i1>
+   %b = arith.constant true
+   %t = "data.sequence_append"(%s,%b) : (!data.sequence<i1>,i1)->!data.sequence<i1>
+   func.return %t : !data.sequence<i1>
+ }
+ func.func private @relay()->!data.sequence<i1> {
+   %s = func.call @make() : ()->!data.sequence<i1>
+   func.return %s : !data.sequence<i1>
+ }
+ func.func private @read()->i1 {
+   %s = func.call @relay() : ()->!data.sequence<i1>
+   %i = "data.index"() {value="0"} : ()->ui64
+   %b = "data.bounded_at"(%s,%i) : (!data.sequence<i1>,ui64)->i1
+   func.return %b : i1
+ }
+)mlir";
+    auto text = replace(source, " \"local.binding\"()",
+                        helpers + " \"local.binding\"()");
+    require(bool(parseSourceString<ModuleOp>(text, &context)),
+            "returned constructor extent refused");
+    refusesIR(replace(text, "func.return %t :", "func.return %s :"), context,
+              "finite-bound");
+    auto unknown =
+        replace(text, "@read()->i1", "@read(%unknown:!data.sequence<i1>)->i1");
+    unknown = replace(unknown, "(%s,%i) :", "(%unknown,%i) :");
+    refusesIR(unknown, context, "finite-bound");
   });
   cases.run("actual total multi-result candidate exchanged", [&] {
     auto before = parseSourceString<ModuleOp>(fixture("total-state"), &context);

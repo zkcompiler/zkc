@@ -110,6 +110,7 @@ private:
   bool signature(DeclarationId, unsigned = 1);
   bool conformance(DeclarationId);
   bool requirements(Declaration &);
+  bool dataRequirements(Declaration &);
 };
 bool resolveBindings(Checker &, Declaration &, SyntaxDeclaration &);
 bool elaborateExpressions(Checker &, SyntaxDeclaration &);

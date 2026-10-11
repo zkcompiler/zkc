@@ -137,6 +137,20 @@ LogicalResult DomainMatrixCoordinatesOp::verify() {
   auto index = indexType(getContext());
   return constructor(*this, {index, index}, {"order"});
 }
+std::optional<MathematicalIdentity> BoundedAtOp::getMathematicalIdentity() {
+  return MathematicalIdentity::ContainerAt;
+}
+SmallVector<unsigned> BoundedAtOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
+}
+std::optional<MathematicalIdentity>
+BoundedMatrixAtOp::getMathematicalIdentity() {
+  return MathematicalIdentity::MatrixAt;
+}
+SmallVector<unsigned>
+BoundedMatrixAtOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1, 2} : SmallVector<unsigned>{};
+}
 LogicalResult BoundedAtOp::verify() {
   if (!(*this)->getAttrs().empty() ||
       finite::elementType(getInput().getType()) != getOutput().getType() ||

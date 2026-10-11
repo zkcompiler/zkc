@@ -658,6 +658,38 @@ private:
     } while (take(",") && !at(">"));
     return expect(">");
   }
+  bool inputSelector(SyntaxInputSelector &selector) {
+    selector.span = current().span;
+    if (!name(selector.port) || !selectorPath(selector))
+      return false;
+    selector.span.end = previousEnd;
+    return true;
+  }
+  bool dataRequirement(SyntaxRequirement &req) {
+    bool bound = take("in_bounds");
+    if (!bound)
+      advance();
+    req.data = bound ? DataPrecondition::Kind::IndexBound
+                     : DataPrecondition::Kind::EqualExtent;
+    if (!expect("(") || !inputSelector(req.left) || !expect(",") ||
+        !inputSelector(req.right))
+      return false;
+    auto axis = [&](unsigned &result) {
+      if (current().kind != TokenKind::Decimal ||
+          text().getAsInteger(10, result) || result > 1)
+        return fail("source.data-bound", "expected a collection axis, 0 or 1");
+      advance();
+      return true;
+    };
+    if (take(",")) {
+      if (bound) {
+        if (!axis(req.rightAxis))
+          return false;
+      } else if (!axis(req.leftAxis) || !expect(",") || !axis(req.rightAxis))
+        return false;
+    }
+    return expect(")");
+  }
   bool requirements(SyntaxDeclaration &decl) {
     if (!take("where"))
       return true;
@@ -667,7 +699,10 @@ private:
     do {
       SyntaxRequirement req;
       req.span = current().span;
-      if (at("Copy") || at("Drop") || at("Share") || at("Wire")) {
+      if (at("in_bounds") || at("equal_extent")) {
+        if (!dataRequirement(req))
+          return false;
+      } else if (at("Copy") || at("Drop") || at("Share") || at("Wire")) {
         req.permission = text().str();
         advance();
         if (!expect("(") || !type(req.lhs) || !expect(")"))
@@ -738,7 +773,7 @@ private:
     advance();
     return true;
   }
-  bool selectorPath(SyntaxSelector &value) {
+  template <class Selector> bool selectorPath(Selector &value) {
     while (take(".")) {
       if (current().kind == TokenKind::Decimal) {
         value.path.push_back(text().str());

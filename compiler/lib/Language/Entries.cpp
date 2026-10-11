@@ -122,7 +122,7 @@ bool Checker::configureSetups(Declaration &entry, const Declaration &protocol,
       if (found == protocol.inputs.end())
         return types.fail("source.entry",
                           "setup selector names an absent input", input.span);
-      EntryInput selected{
+      InputSelector selected{
           unsigned(found - protocol.inputs.begin()), {}, input.span};
       auto current = types.substitute(found->type, bindings, input.span);
       if (!current)

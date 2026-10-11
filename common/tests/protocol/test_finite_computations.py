@@ -210,3 +210,49 @@ protocol Run roles(P)(n:index@P)->(result:(F,bool,index)@P){return work(n);}run 
     assert entry.run('empty', {'n': 0})['result'] == ['0', False, '18446744073709551615']
     assert entry.run('two', {'n': 2})['result'] == ['2', True, '18446744073709551615']
     assert entry.run('filtered', {'n': 5})['result'] == ['2', False, '18446744073709551615']
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_total_bounds_on_distinct_captures_records_and_coordinates(toolchain, journal, directory, flags):
+    source = PREFIX + '''
+type Matrix<E:Field>=builtin("matrix",E);
+struct Row {pub value:F,pub enabled:bool}
+domain fn positions(xs:Sequence<Row>)->scoped domain<index>=domain("indices");
+domain fn coords(xs:Matrix<F>)->scoped domain<(index,index)>=domain("matrix.coordinates.row_major");
+domain fn row_indices(xs:Matrix<F>)->scoped domain<index>=domain("indices.rows");
+domain fn row(xs:Matrix<F>,i:index)->scoped domain<F>=domain("matrix.row");
+math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold");
+math fn at(xs:Vector<F>,i:index)->F where in_bounds(i,xs){return intrinsic<Vector<F>>("container.at",xs,i);}
+math fn read(xs:Sequence<Row>,i:index)->Row where in_bounds(i,xs){return intrinsic<Sequence<Row>>("container.at",xs,i);}
+math fn inner(xs:Vector<F>,ys:Vector<F>)->F where equal_extent(xs,ys){return total(indices(xs),0,fun s i=>s+at(ys,i));}
+math fn work(xs:Vector<F>,rows:Sequence<Row>,matrix:Matrix<F>)->(F,F,F,F){
+ let first=inner(xs,xs);
+ let records:F=total(positions(rows),0,fun s i=>{let record=read(rows,i);s+record.value});
+ let entries:F=total(coords(matrix),0,fun s (i,j)=>s+intrinsic<Matrix<F>>("matrix.at",matrix,i,j));
+ let nested:F=total(row_indices(matrix),0,fun outer i=>outer+total(row(matrix,i),0,fun row_state item=>row_state+item));
+ return(first,records,entries,nested);
+}
+protocol Run roles(P)(xs:Vector<F>@P,rows:Sequence<Row>@P,matrix:Matrix<F>@P)->(result:(F,F,F,F)@P){return work(xs,rows,matrix);}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    empty_matrix = {'rows': '0', 'columns': '3', 'entries': []}
+    assert entry.run('empty', {'xs': [], 'rows': [], 'matrix': empty_matrix})['result'] == ['0', '0', '0', '0']
+    records = record_inputs(toolchain, journal, directory, flags)
+    rows = records.run('input', {'a': '3', 'b': '9', 'enabled': True})['xs']
+    matrix = {'rows': '2', 'columns': '3', 'entries': [[0, 0, '2'], [1, 2, '7']]}
+    assert entry.run('total', {'xs': ['5', '8'], 'rows': rows, 'matrix': matrix})['result'] == ['13', '12', '9', '9']
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_total_fixed_zip_collection(toolchain, journal, directory, flags):
+    source = '''module sample;
+domain F=field("bls12-381.fr");
+type Array<E:Field,N:nat>=builtin("field_array",E,N);
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
+math fn collect<I:Type+Copy+Drop,N:nat>(rows:scoped domain<I>,body:scoped math fn(I)->F on(rows))->Array<F,N>=finite("math.collect.field_array");
+math fn work(xs:[F;2],ys:[F;2])->Array<F,2>{return collect(zip(array(xs),array(ys)),fun (x,y)=>x+10*y);}
+protocol Run roles(P)(xs:[F;2]@P,ys:[F;2]@P)->(result:Array<F,2>@P){return work(xs,ys);}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    assert entry.run('total', {'xs': ['2', '3'], 'ys': ['7', '11']})['result'] == ['72', '113']

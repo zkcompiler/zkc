@@ -2,6 +2,7 @@
 #include "Arguments.h"
 #include "CallableConstraints.h"
 #include "Checker.h"
+#include "DataRequirements.h"
 #include "llvm/ADT/STLExtras.h"
 #include <numeric>
 using namespace llvm;
@@ -37,19 +38,6 @@ std::optional<Constructor> constructor(StringRef name) {
     return Constructor{Kind::SourceArray, 0};
   return {};
 }
-std::optional<Type> element(const Type &container) {
-  if (container.kind != Type::Kind::Builtin)
-    return {};
-  if (container.domain == "indices" && container.arguments.empty())
-    return Type(Type::Kind::Index);
-  if ((container.domain == "vector" || container.domain == "groups" ||
-       container.domain == "sequence") &&
-      container.arguments.size() == 1)
-    return container.arguments.front();
-  if (container.domain == "field_array" && container.arguments.size() == 2)
-    return container.arguments.front();
-  return {};
-}
 bool matrix(const Type &type) {
   return type.kind == Type::Kind::Builtin && type.domain == "matrix" &&
          type.arguments.size() == 1;
@@ -64,12 +52,12 @@ bool matches(const Declaration &decl, Constructor ctor) {
   };
   switch (ctor.kind) {
   case Kind::Elements:
-    return data(1) && element(decl.inputs[0].type) == result;
+    return data(1) && collectionElement(decl.inputs[0].type) == result;
   case Kind::Indices:
     return data(1) && result == index &&
            (matrix(decl.inputs[0].type) ||
             (ctor.axis == 0 &&
-             (element(decl.inputs[0].type) ||
+             (collectionElement(decl.inputs[0].type) ||
               decl.inputs[0].type.kind == Type::Kind::Array)));
   case Kind::Range:
     return data(2) && result == index && decl.inputs[0].type == index &&

@@ -90,7 +90,15 @@ struct SyntaxParameter {
   Permissions permissions;
   Span span;
 };
+struct SyntaxInputSelector {
+  std::string port;
+  std::vector<std::string> path;
+  Span span;
+};
 struct SyntaxRequirement {
+  std::optional<DataPrecondition::Kind> data;
+  SyntaxInputSelector left, right;
+  unsigned leftAxis = 0, rightAxis = 0;
   std::string permission, capability;
   std::vector<SyntaxType> arguments;
   SyntaxType lhs, rhs;

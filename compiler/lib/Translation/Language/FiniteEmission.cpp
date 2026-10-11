@@ -1,3 +1,4 @@
+#include "DataPreconditions.h"
 #include "Finite.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -409,6 +410,38 @@ class FiniteEmitter {
         states.size() + itemTypes[finite.domain->result].size();
     for (auto port : ports)
       operands.push_back(block.getArgument(environment + port));
+    auto conditions = take(flattenDataPreconditions(helper, layouts));
+    if (!conditions)
+      return false;
+    for (auto &condition : *conditions) {
+      if (condition.left >= operands.size() ||
+          condition.right >= operands.size()) {
+        failure =
+            error("source.data-bound", "finite condition exceeds helper ABI");
+        return false;
+      }
+      auto left = mlir::dyn_cast<mlir::BlockArgument>(operands[condition.left]);
+      auto right =
+          mlir::dyn_cast<mlir::BlockArgument>(operands[condition.right]);
+      if (!left || !right || left.getOwner() != &block ||
+          right.getOwner() != &block) {
+        failure = error("source.data-bound",
+                        "finite condition requires direct adapter ports");
+        return false;
+      }
+      condition.left = left.getArgNumber();
+      condition.right = right.getArgNumber();
+    }
+    if (!conditions->empty()) {
+      if (local) {
+        failure = error("source.data-bound",
+                        "Local finite helper cannot assume bounds");
+        return false;
+      }
+      declaration->setAttr(
+          "data.preconditions",
+          emitDataPreconditions(builder.getContext(), *conditions));
+    }
     SmallVector<mlir::NamedAttribute> callAttrs{
         symbol("callee", helper.symbol)};
     if (local)

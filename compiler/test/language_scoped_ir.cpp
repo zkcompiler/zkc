@@ -249,6 +249,71 @@ protocol Run roles(P)(xs:[Row;)" +
               refuses(compareOriginal(entry, *module), "source.correspondence");
             }
           });
+  for (
+      const std::string &work : {
+          R"(math fn work(xs:Vector<Fr>)->Fr{return total(indices(xs),0,fun state i=>state+at(xs,i));}
+protocol Run roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);})",
+          R"(math fn inner(xs:Vector<Fr>,ys:Vector<Fr>)->Fr where equal_extent(xs,ys){return total(indices(xs),0,fun state i=>state+at(ys,i));}
+math fn work(xs:Vector<Fr>)->Fr{return inner(xs,xs);}
+protocol Run roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);})",
+          R"(struct Row {pub value:Fr,pub enabled:bool}
+domain fn positions(xs:Sequence<Row>)->scoped domain<index>=domain("indices");
+math fn get(xs:Sequence<Row>,i:index)->Row where in_bounds(i,xs){return intrinsic<Sequence<Row>>("container.at",xs,i);}
+math fn work(xs:Sequence<Row>)->Fr{return total(positions(xs),0,fun state i=>{let row=get(xs,i);state+row.value});}
+protocol Run roles(P)(xs:Sequence<Row>@P)->(r:Fr@P){return work(xs);})",
+          R"(domain fn coords(xs:Matrix<Fr>)->scoped domain<(index,index)>=domain("matrix.coordinates.row_major");
+math fn work(xs:Matrix<Fr>)->Fr{return total(coords(xs),0,fun state (i,j)=>state+intrinsic<Matrix<Fr>>("matrix.at",xs,i,j));}
+protocol Run roles(P)(xs:Matrix<Fr>@P)->(r:Fr@P){return work(xs);})"})
+    cases.run("total bounds compile " + work.substr(0, 70), [&] {
+      auto captured = take(capture({{"sample", std::string(R"(module sample;
+domain Fr=field("koala-bear");
+type Vector<F:Field>=builtin("vector",F);
+type Matrix<F:Field>=builtin("matrix",F);
+type Sequence<T:Type+Copy+Drop>=builtin("sequence",T);
+domain fn indices(xs:Vector<Fr>)->scoped domain<index>=domain("indices");
+math fn at(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return intrinsic<Vector<Fr>>("container.at",xs,i);}
+math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold");
+)") + work + "run Demo=Run;",
+                                     "bounds.zkc"}}));
+      auto entry = take(
+          closeEntry(take(analyze(captured).checkedProject()), "sample::Demo"));
+      auto original = take(prepareOriginal(entry));
+      require(original.bytes().contains("data.preconditions"),
+              "missing native data requirements");
+      take(compileEntry(original));
+      take(compileEntry(original, {false, false}));
+      auto module =
+          mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);
+      require(bool(module), "bound original did not parse");
+      bool changed = false;
+      module->walk([&](mlir::Operation *op) {
+        if (!changed && op->hasAttr("data.preconditions")) {
+          op->removeAttr("data.preconditions");
+          changed = true;
+        }
+      });
+      require(changed, "missing bound mutation target");
+      auto comparison = compareOriginal(entry, *module);
+      require(!comparison, "removed native bound accepted");
+      consumeError(comparison.takeError());
+    });
+  cases.run("fixed array extents survive total zip and collection", [&] {
+    auto captured = take(capture({{"sample", R"(module sample;
+domain Fr=field("bls12-381.fr");
+type Array<F:Field,N:nat>=builtin("field_array",F,N);
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
+math fn collect<I:Type+Copy+Drop,N:nat>(rows:scoped domain<I>,body:scoped math fn(I)->Fr on(rows))->Array<Fr,N>=finite("math.collect.field_array");
+math fn work(xs:[Fr;2],ys:[Fr;2])->Array<Fr,2>{return collect(zip(array(xs),array(ys)),fun (x,y)=>x+y);}
+protocol Run roles(P)(xs:[Fr;2]@P,ys:[Fr;2]@P)->(r:Array<Fr,2>@P){return work(xs,ys);}run Demo=Run;
+)",
+                                   "fixed.zkc"}}));
+    auto entry = take(
+        closeEntry(take(analyze(captured).checkedProject()), "sample::Demo"));
+    auto original = take(prepareOriginal(entry));
+    take(compileEntry(original));
+    take(compileEntry(original, {false, false}));
+  });
   cases.run("total index expressions and range filters", [&] {
     auto captured = take(capture({{"sample", R"(module sample;
 domain Fr=field("koala-bear");

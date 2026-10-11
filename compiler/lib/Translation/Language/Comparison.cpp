@@ -1,3 +1,4 @@
+#include "DataPreconditions.h"
 #include "Finite.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/SymbolTable.h"
@@ -22,7 +23,7 @@ using namespace llvm;
 namespace zkc::language {
 namespace {
 using Values = SmallVector<mlir::Value>;
-bool attributes(mlir::Operation &op, std::initializer_list<StringRef> names) {
+bool attributes(mlir::Operation &op, ArrayRef<StringRef> names) {
   return op.getAttrs().size() == names.size() &&
          llvm::all_of(names, [&](auto name) { return bool(op.getAttr(name)); });
 }
@@ -448,8 +449,17 @@ class Comparator {
             return false;
       } else if (auto *math = std::get_if<MathValue>(&op.action)) {
         auto operands = flatten(math->operands);
-        auto *actual =
-            next(block, cursor, op.span, "", operands, leaves.size());
+        std::optional<PackedLayout> packed;
+        if (math->identity == MathematicalIdentity::ContainerAt &&
+            source.values[math->operands.front().index].type.domain ==
+                "sequence") {
+          packed = take(
+              layouts.packed(source.values[op.results.front().index].type));
+          if (!packed)
+            return false;
+        }
+        auto *actual = next(block, cursor, op.span, "", operands,
+                            packed ? 1 : leaves.size());
         if (!actual)
           return false;
         auto interface = mlir::dyn_cast<MathematicalOpInterface>(actual);
@@ -505,6 +515,24 @@ class Comparator {
         } else if (!attributes(*actual, {}))
           return fail("extra mathematical attributes");
         result = Values(actual->getResults());
+        if (packed &&
+            !types(actual->getResultTypes(), {packed->carrier.spelling()}))
+          return fail("total sequence result carrier differs");
+        if (packed && packed->product) {
+          auto carrier = result.front();
+          result.clear();
+          for (unsigned i = 0; i < leaves.size(); ++i) {
+            auto *project =
+                next(block, cursor, op.span, "data.get", carrier, 1);
+            if (!project || !attributes(*project, {"index"}) ||
+                !types(project->getResultTypes(), {leaves[i]}))
+              return fail("total sequence projection differs");
+            auto index = project->getAttrOfType<mlir::IntegerAttr>("index");
+            if (!index || !index.getType().isInteger(64) || index.getInt() != i)
+              return fail("total sequence projection index differs");
+            result.push_back(project->getResult(0));
+          }
+        }
       } else if (auto *local = std::get_if<LocalPrimitive>(&op.action)) {
         auto operands = flatten(local->operands);
         auto outputs = leaves;
@@ -1027,7 +1055,7 @@ public:
           !llvm::hasSingleElement(function.getRegion(0)))
         return error("source.correspondence",
                      "definition identity or structure differs");
-      auto names =
+      SmallVector<StringRef> names =
           protocol
               ? std::initializer_list<StringRef>{"sym_name", "function_type",
                                                  "roles", "input_roles",
@@ -1037,6 +1065,14 @@ public:
                                                  "logical_origin"}
               : std::initializer_list<StringRef>{"sym_name", "function_type",
                                                  "sym_visibility"};
+      auto conditions = take(flattenDataPreconditions(decl, layouts));
+      if (!conditions)
+        return std::move(failure);
+      if (!conditions->empty())
+        names.push_back("data.preconditions");
+      if (!compareDataPreconditions(function, *conditions))
+        return error("source.correspondence",
+                     "helper data preconditions differ");
       if (!attributes(function, names) ||
           (!protocol && !local &&
            !string(function, "sym_visibility", "private")))

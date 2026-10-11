@@ -166,7 +166,7 @@ Expected<LayoutSlice> Layouts::select(const Declaration &decl,
                 selector.path);
 }
 Expected<LayoutSlice> Layouts::selectInput(const Declaration &decl,
-                                           const EntryInput &selector) {
+                                           const InputSelector &selector) {
   return select(decl.inputs, selector.port, selector.path);
 }
 Expected<LayoutSlice> Layouts::select(ArrayRef<Port> ports, unsigned port,

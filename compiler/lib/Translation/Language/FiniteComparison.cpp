@@ -1,3 +1,4 @@
+#include "DataPreconditions.h"
 #include "Finite.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
@@ -433,6 +434,8 @@ class FiniteCheck {
     SmallVector<StringRef> attrs{"sym_name", "sym_visibility", "function_type"};
     if (local)
       attrs.push_back("logical_origin");
+    if (!helper.dataPreconditions.empty())
+      attrs.push_back("data.preconditions");
     auto *op = definition(suffix, local ? "local.func" : "func.func", inputs,
                           adapterOutputs, true, attrs);
     if (!op || !text(*op, "sym_visibility", "private"))
@@ -462,6 +465,25 @@ class FiniteCheck {
     unsigned start = stateTypes.size() + items[finite.domain->result].size();
     for (auto port : ports)
       operands.push_back(block.getArgument(start + port));
+    auto conditions = take(flattenDataPreconditions(helper, layouts));
+    if (!conditions)
+      return false;
+    for (auto &condition : *conditions) {
+      if (condition.left >= operands.size() ||
+          condition.right >= operands.size())
+        return fail("finite condition exceeds callback inputs");
+      auto left = mlir::dyn_cast<mlir::BlockArgument>(operands[condition.left]);
+      auto right =
+          mlir::dyn_cast<mlir::BlockArgument>(operands[condition.right]);
+      if (!left || !right || left.getOwner() != &block ||
+          right.getOwner() != &block)
+        return fail("finite condition is not an adapter input");
+      condition.left = left.getArgNumber();
+      condition.right = right.getArgNumber();
+    }
+    if ((local && !conditions->empty()) ||
+        !compareDataPreconditions(*op, *conditions))
+      return fail("finite adapter data preconditions differ");
     SmallVector<StringRef> callAttrs{"callee"};
     if (local)
       callAttrs.push_back("site");

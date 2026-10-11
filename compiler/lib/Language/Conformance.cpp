@@ -59,6 +59,14 @@ bool Checker::conformance(DeclarationId id) {
     } else {
       if (!body(provided->id, 1))
         return false;
+      if (!llvm::all_of(provided->dataPreconditions,
+                        [&](const auto &condition) {
+                          return llvm::is_contained(required.dataPreconditions,
+                                                    condition);
+                        }))
+        return types.fail("source.conformance",
+                          "member strengthens data preconditions",
+                          provided->span);
       if (required.inputs.size() != provided->inputs.size() ||
           required.outputs.size() != provided->outputs.size())
         return types.fail("source.conformance", "member arity differs",

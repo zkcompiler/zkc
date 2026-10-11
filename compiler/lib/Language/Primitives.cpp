@@ -155,6 +155,8 @@ mathematicalRoots(Semantics &types, const Declaration &decl,
     return refuse();
   const auto &input = decl.inputs.front().type;
   const auto &output = decl.outputs.front().type;
+  if (intrinsic.domain == MathematicalIntrinsic::Domain::Collection)
+    return std::vector<Type>{input};
   if (intrinsic.scalar)
     return std::vector<Type>{input};
   const Type *anchor = &input;

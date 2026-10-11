@@ -54,6 +54,14 @@ The source ABI remains flattened. Local callers use unconditional realizations
 of these helpers; mathematical callers use ordinary calls. The independent
 reader checks every packing and append operation and the conversion occurrence.
 
+Logical input conditions are flattened through the same product layout as the
+helper signature and emitted as `data.preconditions`. Finite adapters remap them
+to their state/item/domain/capture ports. The source comparator reads each
+condition and selector independently; native finite analysis then discharges
+conditions at actual calls and consumers. Closure specialization independently
+recomputes residual requirements from the checked candidate body. These checks
+preserve the unconditional contract of `local.realize`.
+
 Math helpers become private `func.func` definitions. A selected formula relation
 adds a non-callable `relation.declare` and a private Boolean `func.func`; its exact
 link is retained in the interface. Opaque and captured relations emit declarations

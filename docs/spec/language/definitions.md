@@ -1041,6 +1041,64 @@ same semantic validation from the actual graph. `source.scoped-domain` reports
 an invocation or forwarding contract that cannot be established. This check
 alone grants no total indexing bound.
 
+### Total access and data preconditions
+
+A total access needs a bound on the exact immutable container and index. Math
+functions can declare input conditions separately from static type/natural
+requirements:
+
+```zkc
+math fn at<F: Field>(xs: Vector<F>, i: index) -> F
+  where in_bounds(i, xs) {
+  return intrinsic<Vector<F>>("container.at", xs, i);
+}
+
+math fn read_other<F: Field>(xs: Vector<F>, ys: Vector<F>, i: index) -> F
+  where in_bounds(i, xs), equal_extent(xs, ys) {
+  return at(ys, i);
+}
+```
+
+Selectors name input ports and immutable product fields, such as `record.values`
+or `pair.0`. `in_bounds(i, xs, axis)` defaults to axis zero;
+`equal_extent(xs, ys, left_axis, right_axis)` defaults both axes to zero.
+A vector-like container has axis zero; a matrix has row axis zero and column
+axis one. These conditions are supported on native collection carriers,
+including packed sequences and fixed field arrays. A flattened source array is
+not a single carrier and cannot be used in a declared data condition. Implementations may use a subset of their interface member's conditions,
+with logical selectors and axes matched by input position; condition order is
+irrelevant. Additional conditions require an explicit interface contract.
+Declaration inspection includes these conditions in `requirements`.
+
+`container.at` takes the complete container type as its static argument and
+returns its logical element. `matrix.at<Matrix<F>>(m, row, column)` requires
+both coordinate bounds. The corresponding intrinsics are written
+`intrinsic<Container>("container.at", xs, i)` and
+`intrinsic<Matrix<F>>("matrix.at", m, row, column)`. Packed sequence records and
+tuples are unpacked using their ordinary source layout.
+
+An item from `indices(xs)` establishes its bound to `xs`; matrix coordinates
+establish both axis bounds. Zip/product item projections and invariant captures
+preserve those facts. Equal extents transfer bounds between containers without
+equating their elements. A range item, shifted index, reconstructed value or
+mutable successor supplies no implicit container bound. Constant indices can
+use known fixed extents. Invalid accesses are rejected even when their results
+are unused.
+
+An ordinary Math call discharges its callee's conditions. Local and protocol code
+can realize an unconditional whole Math computation; they cannot assume input
+conditions or treat a runtime check as a Math proof. At closure, extracted helpers
+receive explicit conditions on their ordinary inputs. The enclosing finite
+computation discharges callback conditions from its domain, captures and input
+conditions. Ordinary Math functions must discharge all requirements using their
+declared conditions. Specialized scoped/domain combinators can carry residual
+conditions for their selected static environments; a caller does not silently
+strengthen an ordinary function's contract. Closed descriptor formation also checks every retained zip and
+matrix view, including unused factory intermediates and empty enumerations.
+A fixed-size collect requires an exact unfiltered cardinality. Failure to derive
+these facts is `source.data-bound`; installed backend support remains a separate
+requirement.
+
 ## Scoped computations
 
 Named Math and Local functions, including interface/component members, may take
