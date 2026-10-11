@@ -99,6 +99,7 @@ add_zkc_component(Language
   lib/Language/FiniteDomains.cpp
   lib/Language/FiniteDomainArguments.cpp
   lib/Language/DomainClosure.cpp
+  lib/Language/DomainWitness.cpp
   lib/Language/ValueOrigins.cpp
   lib/Language/ClosureInputs.cpp
   lib/Language/FreePlaces.cpp

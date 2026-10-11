@@ -190,23 +190,13 @@ struct DomainBinding {
   std::optional<CallableReference> factory = {};
   std::vector<Type> arguments = {};
   std::vector<unsigned> argumentOrder = {};
-};
-/// A factory application retains its selected declaration and substitution.
-/// This witness is checked against the factory's typed constructor template.
-struct DomainApplication {
-  CallableReference target;
-  std::vector<Type> arguments;
-  std::vector<ValueId> operands;
-  std::vector<unsigned> domains;
-  std::vector<unsigned> argumentOrder;
-  unsigned result;
-  Span span;
+  /// Authored expression identity within the owning lexical declaration.
+  std::optional<uint32_t> expression = {};
 };
 struct DomainDefinition {
   std::optional<DomainBinding::Kind> constructor;
   unsigned axis = 0;
   std::vector<DomainBinding> bindings;
-  std::vector<DomainApplication> applications;
   unsigned result = 0;
 };
 /// Static alias partition for a closed callable. Authored ports remain in the
@@ -396,7 +386,6 @@ struct Body {
   std::vector<ServicePort> services;
   std::vector<ScopedBinding> scopedBindings;
   std::vector<DomainBinding> domainBindings;
-  std::vector<DomainApplication> domainApplications;
   /// Source expression results retained for independent scoped extraction
   /// checks.
   std::map<uint32_t, ValueId> expressionValues;

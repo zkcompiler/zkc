@@ -14,7 +14,12 @@ class Closure {
   DomainShape shape;
   std::vector<ValueId> operands;
   std::map<ValueOrigin, unsigned> inputs;
-  ValueOrigins origins;
+  ValueOrigins &origins;
+  std::map<std::string, unsigned> factories;
+  std::set<std::string> activeFactories;
+  std::vector<unsigned> constructorDepths;
+  // Include the terminal yield in the descriptor operation and depth limits.
+  static constexpr unsigned maxInputs = 1024, maxNodes = 4095, maxDepth = 63;
   struct Context {
     ArrayRef<DomainBinding> nodes;
     std::vector<ValueId> data;
@@ -62,6 +67,11 @@ class Closure {
         refuse(span, "domain operands require Copy and Drop");
       return {};
     }
+    if (operands.size() >= maxInputs) {
+      types.fail("source.limit", "finite descriptor exceeds 1024 data inputs",
+                 span);
+      return {};
+    }
     unsigned index = operands.size();
     inputs.emplace(std::move(*identity), index);
     operands.push_back(value);
@@ -76,8 +86,40 @@ class Closure {
       refuse({}, "invalid closed domain environment");
       return {};
     }
-    // An inherited descriptor contains already-closed constructors. Its operand
-    // references are relative to its own data ports, not this caller's SSA.
+    if (selected.operands.size() > maxInputs ||
+        selected.shape->nodes.size() > maxNodes) {
+      types.fail("source.limit",
+                 "inherited descriptor exceeds formation bounds", {});
+      return {};
+    }
+    if (!types.charge(
+            selected.operands.size() + selected.shape->nodes.size() + 1, {}))
+      return {};
+    for (unsigned i = 0; i < selected.operands.size(); ++i) {
+      auto value = selected.operands[i];
+      if (value.index >= body.values.size()) {
+        refuse({}, "inherited domain operand is outside the current body");
+        return {};
+      }
+      if (!types.chargeType(selected.shape->inputs[i], {}))
+        return {};
+      auto actual = type(body.values[value.index].type, statics, {});
+      if (!actual || *actual != selected.shape->inputs[i]) {
+        if (!types.diagnostic)
+          refuse({}, "inherited domain input type differs");
+        return {};
+      }
+    }
+    for (const auto &node : selected.shape->nodes)
+      if (node.kind == DomainBinding::Kind::Parameter ||
+          node.kind == DomainBinding::Kind::Application || node.parameter ||
+          node.factory || !node.arguments.empty() ||
+          !node.argumentOrder.empty()) {
+        refuse(node.span, "inherited descriptor contains an open factory node");
+        return {};
+      }
+    // Shape node operands are descriptor-port indices; environment operands
+    // have already been remapped into this body's ordinary SSA input space.
     Context context{selected.shape->nodes, selected.operands, {}, {}, {}, {}};
     for (unsigned i = 0; i < context.nodes.size(); ++i)
       if (!node(context, i, depth + 1))
@@ -183,6 +225,41 @@ class Closure {
         return {};
       nested.domains[slot.index] = *selected;
     }
+    // Cache a selected recipe by its concrete static arguments and immutable
+    // input places. Eager source operands have already run, and every domain
+    // argument above has already joined this descriptor's admission graph.
+    std::string key;
+    frame(key, std::to_string(target.index));
+    for (const auto &argument : arguments) {
+      if (!types.chargeType(argument, binding.span))
+        return {};
+      frame(key, typeIdentity(argument));
+    }
+    frame(key, "data");
+    for (auto value : nested.data) {
+      auto origin = origins.get(value, binding.span);
+      if (!origin)
+        return {};
+      frame(key, std::to_string(origin->first));
+      frame(key, std::to_string(origin->second.size()));
+      for (auto field : origin->second)
+        frame(key, std::to_string(field));
+    }
+    frame(key, "domains");
+    for (auto domain : nested.domains)
+      frame(key, std::to_string(domain));
+    uint64_t levels = 1;
+    for (auto count = factories.size() + activeFactories.size(); count > 1;
+         count >>= 1)
+      ++levels;
+    if (!types.charge((key.size() + 1) * levels * 3, binding.span))
+      return {};
+    if (auto found = factories.find(key); found != factories.end())
+      return found->second;
+    if (!activeFactories.insert(key).second) {
+      refuse(binding.span, "cyclic selected domain factory");
+      return {};
+    }
     // The complete selected recipe is the admission boundary, including nodes
     // not used to enumerate its result. All constructor edges remain explicit.
     for (unsigned i = 0; i < nested.nodes.size(); ++i)
@@ -192,7 +269,10 @@ class Closure {
       refuse(binding.span, "factory result mapping differs");
       return {};
     }
-    return nested.memo.at(definition.result);
+    auto result = nested.memo.at(definition.result);
+    activeFactories.erase(key);
+    factories.emplace(std::move(key), result);
+    return result;
   }
   std::optional<unsigned> node(Context &context, unsigned index,
                                unsigned depth) {
@@ -230,7 +310,7 @@ class Closure {
       }
       result = selected;
     } else if (binding.kind == DomainBinding::Kind::Application)
-      result = application(context, binding, depth + 1);
+      result = application(context, binding, depth);
     else {
       auto item = type(binding.item, context.statics, binding.span);
       if (!item)
@@ -253,11 +333,28 @@ class Closure {
           return {};
         closed.children.push_back(*value);
       }
+      unsigned constructorDepth = 1;
+      for (auto child : closed.children)
+        constructorDepth =
+            std::max(constructorDepth, constructorDepths[child] + 1);
+      if (shape.nodes.size() >= maxNodes || constructorDepth > maxDepth) {
+        types.fail("source.limit",
+                   "finite descriptor constructor bound exceeded",
+                   binding.span);
+        return {};
+      }
       result = shape.nodes.size();
+      constructorDepths.push_back(constructorDepth);
       shape.nodes.push_back(std::move(closed));
     }
     if (!result)
       return {};
+    auto expectedItem = type(binding.item, context.statics, binding.span);
+    if (!expectedItem || *expectedItem != shape.nodes[*result].item) {
+      if (!types.diagnostic)
+        refuse(binding.span, "closed domain item type differs from its source");
+      return {};
+    }
     context.active.erase(index);
     context.memo.emplace(index, *result);
     return result;
@@ -266,9 +363,9 @@ class Closure {
 public:
   Closure(Semantics &types, ArrayRef<Declaration> declarations,
           const Body &body, const Substitution &statics,
-          ArrayRef<DomainEnvironment> environment)
+          ArrayRef<DomainEnvironment> environment, ValueOrigins &origins)
       : types(types), declarations(declarations), body(body), statics(statics),
-        environment(environment), origins(types, body) {}
+        environment(environment), origins(origins) {}
   std::optional<DomainEnvironment> run(unsigned root) {
     if (!types.charge(body.values.size() + body.operations.size() +
                           environment.size(),
@@ -317,7 +414,15 @@ public:
 std::optional<DomainEnvironment>
 closeDomain(Semantics &types, ArrayRef<Declaration> declarations,
             const Body &body, unsigned index, const Substitution &statics,
-            ArrayRef<DomainEnvironment> environment) {
-  return Closure(types, declarations, body, statics, environment).run(index);
+            ArrayRef<DomainEnvironment> environment, ValueOrigins *cache) {
+  ValueOrigins localOrigins(types, body);
+  auto &origins = cache ? *cache : localOrigins;
+  if (!origins.describes(body)) {
+    types.fail("source.finite-domain",
+               "origin cache belongs to a different body", {});
+    return {};
+  }
+  return Closure(types, declarations, body, statics, environment, origins)
+      .run(index);
 }
 } // namespace zkc::language::detail

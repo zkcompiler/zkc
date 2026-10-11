@@ -99,7 +99,7 @@ std::optional<unsigned> BodyChecker::domainArgument(uint32_t id,
     }
   }
   return instantiateDomain(checker.types, callee, target, arguments, operands,
-                           domainArguments, order, body.domainBindings,
-                           body.domainApplications, expr.span);
+                           domainArguments, order, body.domainBindings, id,
+                           expr.span);
 }
 } // namespace zkc::language::detail

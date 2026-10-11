@@ -12,14 +12,14 @@ struct ClosureInputs {
 /// place. The layout records all aliases; it never depends on runtime contents.
 std::optional<ClosureInputs> closeInputs(Semantics &, const Body &,
                                          llvm::ArrayRef<std::optional<ValueId>>,
-                                         llvm::ArrayRef<ValueId> captures,
-                                         Span);
+                                         llvm::ArrayRef<ValueId> captures, Span,
+                                         ValueOrigins *cache = nullptr);
 /// Check a supplied layout relationally against caller SSA identities. This
 /// does not compute a preferred layout or invoke the specialization producer.
 std::optional<std::vector<std::optional<ValueId>>>
 bindClosureInputs(Semantics &, const Body &,
                   llvm::ArrayRef<std::optional<ValueId>> authored,
                   llvm::ArrayRef<ValueId> captures, const ClosureLayout &,
-                  unsigned ports, Span);
+                  unsigned ports, Span, ValueOrigins *cache = nullptr);
 } // namespace zkc::language::detail
 #endif

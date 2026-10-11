@@ -11,17 +11,14 @@ void mapBodyValues(Body &body, const std::function<ValueId(ValueId)> &map) {
     value = map(value);
   for (auto &domain : body.domainBindings)
     list(domain.operands);
-  for (auto &application : body.domainApplications)
-    list(application.operands);
   for (auto &binding : body.scopedBindings)
     list(binding.captures);
   for (auto &op : body.operations) {
     list(op.results);
     if (op.binding)
       list(op.binding->operands);
-    if (op.reduction)
-      for (auto &entry : op.reduction->expressions)
-        entry.second = map(entry.second);
+    // Reduction expression witnesses refer to the extracted helper's SSA,
+    // which has a separate value space from this enclosing body.
     std::visit(
         [&](auto &action) {
           using T = std::decay_t<decltype(action)>;

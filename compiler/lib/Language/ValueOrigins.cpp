@@ -20,42 +20,51 @@ bool ValueOrigins::initialize() {
   initialized = true;
   return true;
 }
-std::optional<ValueOrigin> ValueOrigins::get(ValueId value, Span span,
-                                             unsigned depth) {
-  if (!initialize() || !types.charge(1, span))
+std::optional<ValueOrigin> ValueOrigins::get(ValueId value, Span span) {
+  if (!initialize())
     return {};
-  if (depth > types.work.limits.expressionDepth) {
-    types.fail("source.limit", "SSA projection origin depth exceeded", span);
-    return {};
-  }
-  if (value.index >= origins.size()) {
-    types.fail("source.value-origin", "SSA operand is outside its body", span);
-    return {};
-  }
-  if (origins[value.index]) {
-    if (!types.charge(origins[value.index]->second.size() + 1, span))
+  const auto requested = value;
+  std::vector<ValueId> chain;
+  // Empty-path projections include ordinary let aliases. Their chain length
+  // is bounded by SSA work, not by syntactic expression nesting or the stack.
+  while (true) {
+    if (!types.charge(1, span))
       return {};
-    return origins[value.index];
-  }
-  if (!active.insert(value.index).second) {
-    types.fail("source.value-origin", "cyclic SSA projection", span);
-    return {};
-  }
-  ValueOrigin result{value.index, {}};
-  if (const auto *projection = projections[value.index]) {
-    auto parent = get(projection->input, span, depth + 1);
-    if (!parent ||
-        !types.charge(parent->second.size() + projection->path.size() + 1,
-                      span))
+    if (value.index >= origins.size()) {
+      types.fail("source.value-origin", "SSA operand is outside its body",
+                 span);
       return {};
-    result = std::move(*parent);
-    result.second.insert(result.second.end(), projection->path.begin(),
-                         projection->path.end());
+    }
+    if (origins[value.index])
+      break;
+    if (!active.insert(value.index).second) {
+      types.fail("source.value-origin", "cyclic SSA projection", span);
+      return {};
+    }
+    chain.push_back(value);
+    if (const auto *projection = projections[value.index])
+      value = projection->input;
+    else {
+      origins[value.index] = ValueOrigin{value.index, {}};
+      break;
+    }
   }
-  if (!types.charge(result.second.size() + 1, span))
+  for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+    auto current = it->index;
+    if (const auto *projection = projections[current]) {
+      const auto &parent = *origins[projection->input.index];
+      if (!types.charge(parent.second.size() + projection->path.size() + 1,
+                        span))
+        return {};
+      ValueOrigin result = parent;
+      result.second.insert(result.second.end(), projection->path.begin(),
+                           projection->path.end());
+      origins[current] = std::move(result);
+    }
+    active.erase(current);
+  }
+  if (!types.charge(origins[requested.index]->second.size() + 1, span))
     return {};
-  active.erase(value.index);
-  origins[value.index] = result;
-  return result;
+  return origins[requested.index];
 }
 } // namespace zkc::language::detail

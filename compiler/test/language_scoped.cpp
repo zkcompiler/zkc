@@ -98,6 +98,120 @@ run Run=Demo;
         require(bool(error), "forged capture alias was accepted");
         consumeError(std::move(error));
       });
+  cases.run("long sequential let aliases close without expression recursion",
+            [] {
+              std::string program = "fn chain(x:Fr)->Fr !{stop}{let a0=x;";
+              for (unsigned i = 1; i <= 150; ++i)
+                program += "let a" + std::to_string(i) + "=a" +
+                           std::to_string(i - 1) + ";";
+              program += "return apply(a150,fun y=>y+a150);}";
+              program += "protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return "
+                         "chain(x);}run Run=Demo;";
+              auto closed = take(closeEntry(take(check(program)), "m::Run"));
+              if (auto error = checkScopedSpecialization(closed))
+                throw std::runtime_error(toString(std::move(error)));
+            });
+  cases.run("many scoped calls share one body origin table", [] {
+    std::string program =
+        "fn wide(x:Fr,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{";
+    for (unsigned i = 0; i < 1200; ++i)
+      program += "let a" + std::to_string(i) + "=apply(x,body);";
+    program +=
+        "return x;}protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return "
+        "wide(x,fun y=>y+a);}run Run=Demo;";
+    auto closed = take(closeEntry(take(check(program)), "m::Run"));
+    if (auto error = checkScopedSpecialization(closed))
+      throw std::runtime_error(toString(std::move(error)));
+  });
+  cases.run("protocol edge rejects coordinated forged input aliases", [] {
+    auto closed = take(closeEntry(take(check(R"(
+protocol Inner roles(P)(a:Fr@P,b:Fr@P)->(r:Fr@P){return a-b;}
+protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){let r=Inner(x,y);return r;}run Run=Demo;
+)")),
+                                  "m::Run"));
+    bool changed = false;
+    for (const auto &declaration : closed.declarations())
+      if (declaration.body && declaration.name == "Inner") {
+        auto &selected = const_cast<Declaration &>(declaration);
+        selected.closureLayout.inputs = {0, 0};
+        auto body = std::make_shared<Body>(*selected.body);
+        selected.body = body;
+        for (auto &op : body->operations)
+          if (auto *math = std::get_if<MathValue>(&op.action))
+            for (auto &operand : math->operands)
+              if (operand.index == 1) {
+                operand.index = 0;
+                changed = true;
+              }
+      }
+    require(changed, "protocol mutation did not reach the second operand");
+    auto error = checkScopedSpecialization(closed);
+    require(bool(error), "forged specialization accepted");
+    require(toString(std::move(error)).find("source.scoped-specialization") !=
+                std::string::npos,
+            "wrong specialization refusal");
+  });
+  cases.run("truncated hidden input body is rejected before reading ports", [] {
+    auto closed = take(closeEntry(take(check(R"(
+fn twice(x:Fr,y:Fr,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{return body(x)+y;}
+protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return twice(x,x,fun y=>y+a);}run Run=Demo;
+)")),
+                                  "m::Run"));
+    bool changed = false;
+    for (const auto &declaration : closed.declarations())
+      if (declaration.body && declaration.name == "twice") {
+        require(declaration.inputs.size() == 3, "missing hidden input");
+        auto body = std::make_shared<Body>(*declaration.body);
+        const_cast<Declaration &>(declaration).body = body;
+        body->values.resize(2);
+        changed = true;
+      }
+    require(changed, "missing candidate body");
+    auto error = checkScopedSpecialization(closed);
+    require(bool(error), "forged specialization accepted");
+    require(toString(std::move(error)).find("source.scoped-specialization") !=
+                std::string::npos,
+            "wrong specialization refusal");
+  });
+  cases.run("reduction expression evidence keeps the helper value space", [] {
+    auto project = take(check(R"(
+fn sum<F:Field>(xs:Vector<F>)->F=primitive("vector.sum");
+fn g(xs:Vector<Fr>,a:Fr,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{let r=reduce sum [x in xs]{x+a};return body(r);}
+protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return g(xs,a,fun y=>y+b);}run Run=Demo;
+)"));
+    const ReductionBinding *evidence = nullptr;
+    for (const auto &declaration : project.declarations())
+      if (declaration.name == "g" && declaration.body)
+        for (const auto &op : declaration.body->operations)
+          if (op.reduction)
+            evidence = &*op.reduction;
+    require(evidence != nullptr, "missing source reduction evidence");
+    auto closed = take(closeEntry(project, "m::Run"));
+    bool checked = false;
+    for (const auto &declaration : closed.declarations())
+      if (declaration.name == "g" && declaration.body) {
+        require(declaration.inputs.size() == 3,
+                "helper did not gain a capture port");
+        for (const auto &op : declaration.body->operations)
+          if (op.reduction) {
+            require(op.reduction->expressions.size() ==
+                        evidence->expressions.size(),
+                    "reduction expression coverage changed");
+            for (const auto &entry : evidence->expressions) {
+              auto expression = entry.first;
+              auto value = entry.second;
+              auto found = llvm::find_if(
+                  op.reduction->expressions,
+                  [&](const auto &entry) { return entry.first == expression; });
+              require(found != op.reduction->expressions.end() &&
+                          found->second.index == value.index,
+                      "enclosing capture layout rewrote a nested helper value");
+            }
+            checked = true;
+          }
+      }
+    require(checked, "missing closed reduction evidence");
+  });
   cases.run("generic Math apply and forwarding", [] {
     succeeds(R"(
 protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return(r=forward_math(x,fun y=>y+a));}

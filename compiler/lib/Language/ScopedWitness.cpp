@@ -333,15 +333,10 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
           if (lexical == source.domains.end() || lexical->second != index)
             return refuse();
         } else if (argument.kind == Expression::Kind::Call) {
-          unsigned matches = 0;
-          for (const auto &application : body.domainApplications) {
-            if (!types.charge(1, application.span))
-              return false;
-            if (same(application.span, argument.span) &&
-                application.result == index)
-              ++matches;
-          }
-          if (matches != 1)
+          const auto &application = body.domainBindings[index];
+          if (application.kind != DomainBinding::Kind::Application ||
+              application.expression != expr.children[i] ||
+              !same(application.span, argument.span))
             return refuse();
         } else
           return refuse();

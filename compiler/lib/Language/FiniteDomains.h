@@ -9,8 +9,7 @@ std::optional<unsigned>
 instantiateDomain(Semantics &, const Declaration &, const CallableReference &,
                   llvm::ArrayRef<Type>, llvm::ArrayRef<ValueId>,
                   llvm::ArrayRef<unsigned>, llvm::ArrayRef<unsigned>,
-                  std::vector<DomainBinding> &,
-                  std::vector<DomainApplication> &, Span);
+                  std::vector<DomainBinding> &, uint32_t expression, Span);
 struct DomainOperands {
   std::vector<ValueId> values;
   bool parameterized = false;

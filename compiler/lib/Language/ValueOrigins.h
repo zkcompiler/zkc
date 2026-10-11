@@ -16,7 +16,8 @@ class ValueOrigins {
 
 public:
   ValueOrigins(Semantics &types, const Body &body) : types(types), body(body) {}
-  std::optional<ValueOrigin> get(ValueId, Span = {}, unsigned depth = 1);
+  bool describes(const Body &value) const { return &value == &body; }
+  std::optional<ValueOrigin> get(ValueId, Span = {});
 };
 } // namespace zkc::language::detail
 #endif

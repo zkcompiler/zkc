@@ -175,6 +175,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                     unsigned depth, unsigned &height,
                     const std::vector<Environment> &environment) {
       body.mode = mode;
+      ValueOrigins bodyOrigins(types, body);
       for (auto &service : body.services)
         if (!closeService(service, bindings))
           return false;
@@ -292,8 +293,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             computation.signature.inputs.size());
         for (auto capture : binding.captures)
           authored.push_back(capture);
-        auto inputs =
-            closeInputs(types, body, authored, hiddenCaptures, binding.span);
+        auto inputs = closeInputs(types, body, authored, hiddenCaptures,
+                                  binding.span, &bodyOrigins);
         if (!inputs)
           return {};
         auto helper =
@@ -473,8 +474,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             std::vector<std::optional<ValueId>> authored;
             for (auto operand : call->operands)
               authored.push_back(operand);
-            auto inputs =
-                closeInputs(types, body, authored, hiddenCaptures, op.span);
+            auto inputs = closeInputs(types, body, authored, hiddenCaptures,
+                                      op.span, &bodyOrigins);
             if (!inputs)
               return false;
             layout = std::move(inputs->layout);

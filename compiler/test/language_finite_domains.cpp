@@ -1,6 +1,8 @@
+#include "../lib/Language/BodyMapping.h"
 #include "../lib/Language/BodySummary.h"
 #include "../lib/Language/ClosureInputs.h"
 #include "../lib/Language/DomainClosure.h"
+#include "../lib/Language/DomainWitness.h"
 #include "support/NativeCases.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/Project.h"
@@ -61,7 +63,9 @@ pub domain fn forward<T:Type+Copy+Drop>(rows:scoped domain<T>)->scoped domain<T>
 )"));
         const auto &paired =
             *declarationNamed(project, "m::paired").domainDefinition;
-        require(paired.bindings.size() == 3 && paired.applications.size() == 3,
+        require(paired.bindings.size() == 3 && paired.bindings[0].expression &&
+                    paired.bindings[1].expression &&
+                    paired.bindings[2].expression,
                 "composition lost typed constructor applications");
         require(paired.bindings[0].operands[0].index == 0 &&
                     paired.bindings[1].operands[0].index == 1 &&
@@ -100,7 +104,7 @@ fn example<F:Field>(xs:Vector<F>,fallback:F)->F {
 )"));
     const auto &body = *declarationNamed(project, "m::example").body;
     require(body.domainBindings.size() == 1 &&
-                body.domainApplications.size() == 1,
+                body.domainBindings.front().expression.has_value(),
             "domain aliases copied or erased their recipe");
     const auto &call = std::get<HelperCall>(body.operations.back().action);
     require(call.domainArguments == std::vector<unsigned>{0},
@@ -307,6 +311,170 @@ fn example(xs:Pair,other:Vector<Fr>)->(Vector<Fr>,Vector<Fr>,Vector<Fr>){
         zkc::language::detail::ValueOrigins origins(types, corrupt);
         require(!origins.get(projection.input),
                 "cyclic projection origin was accepted");
+      });
+  cases.run(
+      "shared factory expansion stays bounded across forty forwarding levels",
+      [] {
+        std::string source = "domain fn layer0(a:index,b:index)->scoped "
+                             "domain<index>{return range(a,b);}";
+        for (unsigned i = 1; i <= 40; ++i) {
+          auto previous = "layer" + std::to_string(i - 1);
+          source +=
+              "domain fn layer" + std::to_string(i) +
+              "(a:index,b:index)->scoped domain<index>{let unused=" + previous +
+              "(a,b);return " + previous + "(a,b);}";
+        }
+        source += "fn example(a:index,b:index)->index{let "
+                  "rows=layer40(a,b);return a;}";
+        auto project = take(check(source));
+        const auto &body = *declarationNamed(project, "m::example").body;
+        std::vector<Declaration> declarations(project.declarations().begin(),
+                                              project.declarations().end());
+        zkc::language::detail::Work work{Limits{}};
+        zkc::language::detail::Semantics types(declarations, project.assets(),
+                                               work);
+        auto result = zkc::language::detail::closeDomain(types, declarations,
+                                                         body, 0, {}, {});
+        require(result.has_value(), types.diagnostic ? types.diagnostic->message
+                                                     : "missing closed domain");
+        require(result->shape->nodes.size() == 1 &&
+                    result->shape->inputs.size() == 2,
+                "shared factory graph expanded repeated selected recipes");
+        require(zkc::language::detail::checkDomainClosure(
+                    types, declarations, body, 0, {}, {}, *result),
+                types.diagnostic ? types.diagnostic->message
+                                 : "shared factory witness failed");
+      });
+  cases.run(
+      "inherited domain inputs and descriptor size are checked at closure", [] {
+        auto project = take(check("fn forward(a:index,b:index,rows:scoped "
+                                  "domain<index>)->index{return a;}"));
+        const auto &body = *declarationNamed(project, "m::forward").body;
+        std::vector<Declaration> declarations(project.declarations().begin(),
+                                              project.declarations().end());
+        for (unsigned mutation = 0; mutation < 3; ++mutation) {
+          auto shape = std::make_shared<zkc::language::detail::DomainShape>();
+          shape->inputs = {Type(Type::Kind::Index), Type(Type::Kind::Index)};
+          shape->nodes.push_back({DomainBinding::Kind::Range,
+                                  Type(Type::Kind::Index),
+                                  {{0}, {1}},
+                                  {}});
+          shape->result = 0;
+          if (mutation == 1)
+            shape->inputs.front() = Type{};
+          if (mutation == 2)
+            shape->nodes.resize(4096, shape->nodes.front());
+          zkc::language::detail::Work work{Limits{}};
+          zkc::language::detail::Semantics types(declarations, project.assets(),
+                                                 work);
+          auto result = zkc::language::detail::closeDomain(
+              types, declarations, body, 0, {}, {{shape, {{0}, {1}}}});
+          if (mutation == 0)
+            require(result.has_value(), types.diagnostic
+                                            ? types.diagnostic->message
+                                            : "valid inherited shape refused");
+          else {
+            require(!result && types.diagnostic,
+                    "invalid inherited descriptor accepted");
+            require(
+                types.diagnostic->code ==
+                    (mutation == 1 ? "source.finite-domain" : "source.limit"),
+                "wrong inherited descriptor refusal");
+          }
+        }
+      });
+  cases.run(
+      "domain call occurrence identity is checked independently of its span",
+      [] {
+        auto project = take(check(R"(
+fn ignore(rows:scoped domain<index>,fallback:index)->index{return fallback;}
+fn example(a:index,b:index)->index{return ignore(range(a,b),a);}
+)"));
+        auto &decl =
+            const_cast<Declaration &>(declarationNamed(project, "m::example"));
+        auto body = std::make_shared<Body>(*decl.body);
+        decl.body = body;
+        ++*body->domainBindings.front().expression;
+        auto error = checkScopedElaboration(project);
+        require(bool(error), "changed domain expression identity was accepted");
+        require(toString(std::move(error)).find("source.scoped-witness") !=
+                    std::string::npos,
+                "wrong source occurrence refusal");
+      });
+  cases.run(
+      "descriptor witness checks admission and operand mappings without its "
+      "key",
+      [] {
+        auto project = take(check(R"(
+domain fn prepared(a:index,b:index,c:index,d:index)->scoped domain<index>{
+ let checked=zip(range(a,b),range(c,d));return range(a,b);
+}
+fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);return a;}
+)"));
+        const auto &body = *declarationNamed(project, "m::example").body;
+        std::vector<Declaration> declarations(project.declarations().begin(),
+                                              project.declarations().end());
+        zkc::language::detail::Work work{Limits{}};
+        zkc::language::detail::Semantics types(declarations, project.assets(),
+                                               work);
+        auto original = zkc::language::detail::closeDomain(types, declarations,
+                                                           body, 0, {}, {});
+        require(original.has_value(), types.diagnostic
+                                          ? types.diagnostic->message
+                                          : "closure failed");
+        require(original->shape->nodes.size() == 3 &&
+                    original->shape->result == 0,
+                "missing retained check-only zip");
+        Body caller = body;
+        caller.values.insert(caller.values.begin(), body.values.front());
+        ++caller.inputs;
+        auto shifted = [](ValueId value) { return ValueId{value.index + 1}; };
+        zkc::language::detail::mapBodyValues(caller, shifted);
+        auto inputs = zkc::language::detail::bindDomainInputs(
+            types, declarations, body, caller, shifted, 0, {}, {},
+            *original->shape);
+        require(inputs && inputs->size() == original->operands.size(),
+                "mapped descriptor witness failed");
+        for (unsigned i = 0; i < inputs->size(); ++i)
+          require((*inputs)[i].index == original->operands[i].index + 1,
+                  "domain witness confused template and caller SSA spaces");
+        for (unsigned mutation = 0; mutation < 9; ++mutation) {
+          auto candidate = *original;
+          auto shape = std::make_shared<zkc::language::detail::DomainShape>(
+              *candidate.shape);
+          candidate.shape = shape;
+          shape->identity = "untrusted producer key";
+          if (mutation == 1)
+            shape->nodes.pop_back();
+          if (mutation == 2)
+            std::swap(shape->nodes[0], shape->nodes[1]);
+          if (mutation == 3)
+            std::swap(candidate.operands[0], candidate.operands[2]);
+          if (mutation == 4)
+            std::swap(shape->nodes[0].operands[0], shape->nodes[0].operands[1]);
+          if (mutation == 5)
+            shape->result = 1;
+          if (mutation == 6)
+            shape->nodes.push_back(shape->nodes.front());
+          if (mutation == 7)
+            shape->inputs.front() = Type{};
+          if (mutation == 8)
+            shape->nodes.front().expression = 7;
+          zkc::language::detail::Work witnessWork{Limits{}};
+          zkc::language::detail::Semantics witness(
+              declarations, project.assets(), witnessWork);
+          bool valid = zkc::language::detail::checkDomainClosure(
+              witness, declarations, body, 0, {}, {}, candidate);
+          if (mutation == 0)
+            require(valid, witness.diagnostic ? witness.diagnostic->message
+                                              : "valid descriptor refused");
+          else
+            require(!valid && witness.diagnostic &&
+                        witness.diagnostic->code == "source.domain-witness",
+                    "corrupt descriptor accepted or refused for the wrong "
+                    "reason: " +
+                        std::to_string(mutation));
+        }
       });
   const std::vector<std::pair<std::string, std::string>> invalid = {
       {R"(domain fn bad(x:index)->scoped domain<index>=domain("unknown");)",

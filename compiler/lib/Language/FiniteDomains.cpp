@@ -235,9 +235,9 @@ class Composition {
     for (const auto &bound : callee.bounds)
       if (!checker.types.assumptions(decl, bound, substitution, expr.span))
         return {};
-    return instantiateDomain(
-        checker.types, callee, *target, *arguments, operands, domainArguments,
-        *order, definition.bindings, definition.applications, expr.span);
+    return instantiateDomain(checker.types, callee, *target, *arguments,
+                             operands, domainArguments, *order,
+                             definition.bindings, id, expr.span);
   }
 
 public:
@@ -281,8 +281,8 @@ instantiateDomain(Semantics &types, const Declaration &callee,
                   const CallableReference &target, ArrayRef<Type> arguments,
                   ArrayRef<ValueId> operands, ArrayRef<unsigned> domains,
                   ArrayRef<unsigned> order,
-                  std::vector<DomainBinding> &bindings,
-                  std::vector<DomainApplication> &applications, Span span) {
+                  std::vector<DomainBinding> &bindings, uint32_t expression,
+                  Span span) {
   if (!types.charge(operands.size() + domains.size() + order.size() + 1, span))
     return {};
   auto substitution = types.substitution(callee, arguments);
@@ -311,9 +311,8 @@ instantiateDomain(Semantics &types, const Declaration &callee,
                       span,
                       target,
                       arguments.vec(),
-                      order.vec()});
-  applications.push_back({target, arguments.vec(), operands.vec(),
-                          domains.vec(), order.vec(), result, span});
+                      order.vec(),
+                      expression});
   return result;
 }
 bool Checker::domainBody(Declaration &decl, unsigned depth) {

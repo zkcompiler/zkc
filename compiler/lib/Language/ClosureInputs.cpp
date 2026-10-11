@@ -4,12 +4,18 @@ namespace zkc::language::detail {
 std::optional<ClosureInputs>
 closeInputs(Semantics &types, const Body &body,
             ArrayRef<std::optional<ValueId>> authored,
-            ArrayRef<ValueId> captures, Span span) {
+            ArrayRef<ValueId> captures, Span span, ValueOrigins *cache) {
   if (!types.charge(authored.size() + captures.size() + 1, span))
     return {};
   ClosureInputs result;
   result.operands.assign(authored.begin(), authored.end());
-  ValueOrigins origins(types, body);
+  ValueOrigins localOrigins(types, body);
+  auto &origins = cache ? *cache : localOrigins;
+  if (!origins.describes(body)) {
+    types.fail("source.closure-inputs",
+               "origin cache belongs to a different body", span);
+    return {};
+  }
   std::map<ValueOrigin, unsigned> selected;
   auto select = [&](ValueId value, unsigned fresh,
                     bool capture) -> std::optional<unsigned> {
@@ -66,7 +72,7 @@ std::optional<std::vector<std::optional<ValueId>>>
 bindClosureInputs(Semantics &types, const Body &body,
                   ArrayRef<std::optional<ValueId>> authored,
                   ArrayRef<ValueId> captures, const ClosureLayout &layout,
-                  unsigned ports, Span span) {
+                  unsigned ports, Span span, ValueOrigins *cache) {
   auto refuse = [&]() {
     types.fail("source.closure-inputs",
                "closed input aliases differ from caller SSA places", span);
@@ -80,7 +86,13 @@ bindClosureInputs(Semantics &types, const Body &body,
     return {};
   std::vector<std::optional<ValueId>> result(authored.begin(), authored.end());
   result.resize(ports);
-  ValueOrigins origins(types, body);
+  ValueOrigins localOrigins(types, body);
+  auto &origins = cache ? *cache : localOrigins;
+  if (!origins.describes(body)) {
+    types.fail("source.closure-inputs",
+               "origin cache belongs to a different body", span);
+    return {};
+  }
   auto equal = [&](ValueId a, ValueId b) {
     if (a.index >= body.values.size() || b.index >= body.values.size() ||
         body.values[a.index].type != body.values[b.index].type)
