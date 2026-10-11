@@ -1,11 +1,17 @@
 """Sparse native matrices checked against dense integer arithmetic via Entry."""
 
 import random
+from pathlib import Path
 
 import pytest
 
 from outcomes import stopped
 from entry import Entry
+from octic_reference import ZERO, add, mul
+
+ROOT = Path(__file__).resolve().parents[3]
+MODULES = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
+           for name in ('vector', 'matrix', 'finite', 'sequence', 'accumulation', 'curve')]
 
 FIELDS = [
     ('bls12-381.fr', 23, 66, 1, 32,
@@ -25,6 +31,69 @@ def matrix_wire(tag, width, rows, columns, entries):
 def vector_wire(tag, width, values):
     return (b'ZKCV\x00' + bytes([tag]) + len(values).to_bytes(4, 'little')
             + b''.join(x.to_bytes(width, 'little') for x in values)).hex()
+
+
+@pytest.mark.parametrize('field', ['bls12-381.fr', 'bn254.fr', 'ristretto255.scalar',
+                                  'koala-bear', 'koala-bear.ext8-binomial3'])
+@pytest.mark.parametrize('contract', ['row_dot', 'column_dot'])
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
+def test_matrix_contraction_library(toolchain, journal, directory, field, contract, flags):
+    source = f'''module sample;
+use zkc::matrix::{{Matrix}};
+use zkc::vector::{{Vector}};
+domain F=field("{field}");
+fn work(m:Matrix<F>,v:Vector<F>,selected:index)->F {{
+  return zkc::matrix::{contract}(m,v,selected);
+}}
+protocol Run roles(P)(m:Matrix<F>@P,v:Vector<F>@P,selected:index@P)->(result:F@P) {{
+  return work(m,v,selected);
+}}
+run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
+    row = contract == 'row_dot'
+    extension = field == 'koala-bear.ext8-binomial3'
+
+    def coefficient(n):
+        return [n, 1, 0, 0, 0, 0, 0, 1] if extension else n
+
+    def encode(value):
+        return [str(n) for n in value] if extension else str(value)
+
+    entries = [(0, 0, coefficient(3)), (0, 4, coefficient(5)),
+               (2, 0, coefficient(7)), (2, 2, coefficient(11))]
+    values = [coefficient(n) for n in ([2, 3, 5, 7, 11] if row else [13, 17, 19, 23])]
+    inputs = {'m': {'rows': '4', 'columns': '5',
+                    'entries': [[str(r), str(c), encode(a)] for r, c, a in entries]},
+              'v': [encode(a) for a in values]}
+    for selected in range(4 if row else 5):
+        expected = ZERO[:] if extension else 0
+        for r, c, a in entries:
+            if (r if row else c) == selected:
+                value = values[c if row else r]
+                expected = add(expected, mul(a, value)) if extension else expected + a * value
+        assert entry.run(f'selected-{selected}', inputs | {'selected': str(selected)})['result'] == encode(expected)
+
+    for selected in [4 if row else 5, 2**32, 2**64 - 1]:
+        report = entry.run(f'bad-index-{selected}', inputs | {'selected': str(selected)},
+                           refuses='entry-run-incomplete')
+        assert 'matrix-index' in str(report)
+    for selected in ['0', str(2**64 - 1)]:
+        report = entry.run(f'bad-shape-{selected}', inputs | {'selected': selected, 'v': []},
+                           refuses='entry-run-incomplete')
+        assert 'matrix-shape' in str(report)
+
+    rows, columns = (65536, 0) if row else (0, 65536)
+    zero_inputs = {'m': {'rows': str(rows), 'columns': str(columns), 'entries': []},
+                   'v': [], 'selected': '65535'}
+    assert entry.run('maximum-selected-empty-inner', zero_inputs)['result'] == encode(ZERO if extension else 0)
+    for rows, columns in ([(0, 0), (0, 3)] if row else [(0, 0), (3, 0)]):
+        empty_selected = {'m': {'rows': str(rows), 'columns': str(columns), 'entries': []},
+                          'v': [encode(coefficient(1)) for _ in range(columns if row else rows)],
+                          'selected': '0'}
+        report = entry.run(f'empty-selected-{rows}-{columns}', empty_selected,
+                           refuses='entry-run-incomplete')
+        assert 'matrix-index' in str(report)
 
 
 @pytest.mark.parametrize('field,matrix_tag,vector_tag,scalar_tag,width,modulus', FIELDS)

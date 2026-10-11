@@ -2,6 +2,7 @@
 #define ZKC_COMPILER_POLYNOMIAL_REDUCTION_H
 
 #include "mlir/IR/BuiltinOps.h"
+#include "zkc/Transforms/MathematicalSelection.h"
 #include "llvm/Support/JSON.h"
 
 namespace zkc {
@@ -13,9 +14,9 @@ namespace zkc {
 /// must pass ordinary admission. Mathematical rewrites after this check remain
 /// trusted/tested and invalidate the report unless owned by checked
 /// compilation.
-llvm::Expected<llvm::json::Value>
-checkPolynomialReductions(mlir::ModuleOp original, mlir::ModuleOp candidate,
-                          llvm::StringRef requirements,
-                          bool fuseVectorReductions = false);
+llvm::Expected<llvm::json::Value> checkPolynomialReductions(
+    mlir::ModuleOp original, mlir::ModuleOp candidate,
+    llvm::StringRef requirements,
+    MathematicalSelectionPolicy mathematicalSelection = {});
 } // namespace zkc
 #endif

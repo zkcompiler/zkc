@@ -29,12 +29,13 @@ struct ValueCorrespondence::Implementation {
   // Both source and candidate traversal, term interning and independent laws
   // consume work. Leave room for the admitted 100000-operation preparation
   // expansion; this remains a separate conservative implementation limit.
-  size_t remaining = 4000000;
+  size_t remaining;
   bool exhausted = false;
   bool roleComponents;
 
-  explicit Implementation(Operation *op, bool components)
-      : diagnostic(op), builder(op->getContext()), roleComponents(components) {}
+  explicit Implementation(Operation *op, bool components, size_t work)
+      : diagnostic(op), builder(op->getContext()), remaining(work),
+        roleComponents(components) {}
   bool charge(size_t amount = 1) {
     if (exhausted || amount > remaining) {
       exhausted = true;
@@ -280,8 +281,10 @@ struct ValueCorrespondence::Implementation {
   }
 };
 
-ValueCorrespondence::ValueCorrespondence(Operation *op, bool roleComponents)
-    : implementation(std::make_unique<Implementation>(op, roleComponents)) {}
+ValueCorrespondence::ValueCorrespondence(Operation *op, bool roleComponents,
+                                         size_t work)
+    : implementation(
+          std::make_unique<Implementation>(op, roleComponents, work)) {}
 ValueCorrespondence::~ValueCorrespondence() = default;
 ValueCorrespondence::Environment ValueCorrespondence::environment() {
   auto id = implementation->scopes.size();
@@ -446,6 +449,9 @@ bool ValueCorrespondence::compare(Environment a, Value x, Environment b,
 }
 bool ValueCorrespondence::charge(size_t amount) {
   return implementation->charge(amount);
+}
+bool ValueCorrespondence::workExhausted() const {
+  return implementation->exhausted;
 }
 LogicalResult ValueCorrespondence::refuse(StringRef detail) {
   return diagnostics::emit(implementation->diagnostic->emitOpError(),

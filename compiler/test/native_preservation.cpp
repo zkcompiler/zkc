@@ -380,6 +380,8 @@ int main(int argc, char **argv) {
                      [](auto &a) { (*a[7].getAsArray())[0] = "false"; });
   deploymentMutation("recorded fusion choice changed",
                      [](auto &a) { (*a[7].getAsArray())[2] = "true"; });
+  deploymentMutation("recorded finite choice changed",
+                     [](auto &a) { (*a[7].getAsArray())[3] = "false"; });
   deploymentMutation("selected policy changed", [](auto &a) {
     (*(*a[2].getAsArray())[1].getAsArray())[1] = "other";
   });

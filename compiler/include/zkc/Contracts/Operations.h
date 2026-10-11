@@ -1,10 +1,64 @@
 #ifndef ZKC_CONTRACTS_OPERATIONS_H
 #define ZKC_CONTRACTS_OPERATIONS_H
 
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Mathematical.h"
 #include "llvm/ADT/StringRef.h"
 #include <optional>
 
 namespace zkc::protocol {
+
+/// Closed scalar laws used by computation analysis. A field ring and a group
+/// module are different algebras; neither purity nor a user attribute grants
+/// one of these facets. Applicability is checked on complete nominal ports.
+enum class ComputationAlgebra { FieldRing, GroupModule, Access };
+enum class AccessRule { Element, MatrixCell };
+struct ScalarLawContract {
+  ComputationAlgebra algebra;
+  bool associative = false;
+  bool commutative = false;
+  /// No logical stop on admitted scalar inputs. Does not describe resources.
+  bool total = false;
+};
+struct LaneLiftingContract {
+  llvm::StringRef rows;
+  /// Optional mixed scalar/lane kernel and the scalar port in that kernel.
+  llvm::StringRef mixed;
+  unsigned scalarOperand = 1;
+  /// Source scalar operand positions in the row kernel's native input order.
+  /// Group action uses (point, scalar), while scale_each uses (scalars,
+  /// points).
+  unsigned first = 0, second = 1;
+};
+struct ReductionContract {
+  llvm::StringRef direct;
+  std::optional<MathematicalIdentity> term;
+  llvm::StringRef contraction;
+  /// Source term operand positions in the contraction's native input order.
+  unsigned first = 0, second = 1;
+  llvm::StringRef matrixRow, matrixColumn;
+};
+struct ComputationContract {
+  llvm::StringRef key;
+  MathematicalIdentity identity;
+  ScalarLawContract law;
+  std::optional<LaneLiftingContract> lanes;
+  std::optional<ReductionContract> reduction;
+  std::optional<AccessRule> access;
+};
+/// Closed vocabulary, without application authority. Unknown operations have
+/// no positive facet. Access facets are successful-value equations only.
+const ComputationContract *computationContract(llvm::StringRef key);
+const ComputationContract *computationContract(MathematicalIdentity identity);
+/// Admit an exact logical application for mathematical replacement. Explicit
+/// implementation choices and physical representations are deliberately not
+/// replaceable. The native signature resolver checks nominal identities,
+/// associated scalar fields, parameters and installed domain requirements.
+const ComputationContract *
+admitComputationContract(const BindingApplication &,
+                         llvm::ArrayRef<BoundType> inputs,
+                         llvm::ArrayRef<BoundType> outputs,
+                         llvm::ArrayRef<std::string> parameters = {});
 
 enum class RandomnessProvider { Entropy, Transcript };
 enum class SampleDomain { Field, FieldVector, BoundedIndex };

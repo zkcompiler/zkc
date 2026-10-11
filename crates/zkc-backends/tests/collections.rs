@@ -10,6 +10,8 @@ mod field_array;
 mod fixed_vector;
 #[path = "collections/matrix.rs"]
 mod matrix;
+#[path = "collections/matrix_contraction.rs"]
+mod matrix_contraction;
 #[path = "collections/matrix_identity.rs"]
 mod matrix_identity;
 #[path = "collections/sequence_execution.rs"]

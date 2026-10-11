@@ -323,6 +323,24 @@ int main(int argc, char **argv) {
       op.setOperand(0, op->getBlock()->getArgument(0));
     });
   });
+  mutation("realized result replaced by a same-type input",
+           [&](ModuleOp module) {
+             auto function = realized(module);
+             function.getBody().front().back().setOperand(
+                 0, function.getArgument(0));
+           });
+  mutation("realized polynomial evaluation operand changed",
+           [&](ModuleOp module) {
+             auto function = realized(module);
+             bool changed = false;
+             function.walk([&](Operation *op) {
+               if (!changed && isa<algebra::FieldProductOp>(op)) {
+                 op->setOperand(1, function.getArgument(0));
+                 changed = true;
+               }
+             });
+             require(changed, "missing polynomial multiplication");
+           });
   mutation("partial runtime operation inserted", [&](ModuleOp module) {
     auto function = realized(module);
     auto *returned = &function.getBody().front().back();

@@ -2,6 +2,7 @@
 #define ZKC_TRANSFORMS_MATHEMATICALVALUES_H
 #include "zkc/Dialect/Operations.h"
 #include "llvm/ADT/DenseMap.h"
+#include <cstddef>
 #include <map>
 #include <memory>
 namespace zkc::mathematical {
@@ -19,7 +20,8 @@ public:
     unsigned coordinate = 0;
   };
   explicit ValueCorrespondence(mlir::Operation *diagnostic,
-                               bool roleComponents = false);
+                               bool roleComponents = false,
+                               size_t work = 4000000);
   ~ValueCorrespondence();
   Environment environment();
   Term anchor(mlir::Type type);
@@ -36,6 +38,7 @@ public:
   bool equal(Term a, Term b);
   bool compare(Environment a, mlir::Value x, Environment b, mlir::Value y);
   bool charge(size_t amount = 1);
+  bool workExhausted() const;
   mlir::LogicalResult refuse(llvm::StringRef detail);
 
 private:

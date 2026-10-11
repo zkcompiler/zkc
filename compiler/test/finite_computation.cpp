@@ -1,3 +1,4 @@
+#include "../lib/Transforms/LaneRealization.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
@@ -58,6 +59,28 @@ std::string fixture(StringRef name) {
   text << stream.rdbuf();
   return text.str();
 }
+std::string linearCollect(unsigned additions, bool subtract = false) {
+  auto text = fixture("collect");
+  auto begin = text.find("   %y =");
+  auto end = text.find("\n }", begin);
+  require(begin != std::string::npos && end != std::string::npos,
+          "missing collect helper body");
+  std::string body, previous = "%x";
+  for (unsigned i = 0; i < additions; ++i) {
+    auto next = "%v" + std::to_string(i);
+    body += "   " + next + " = \"algebra.exec." +
+            (subtract ? "field_subtract\"(%x," + previous
+                      : "field_add\"(" + previous + ",%x") +
+            ") {binding=@mul,parameters=[],site=\"step" + std::to_string(i) +
+            "\"} : (!F,!F)->!F\n";
+    previous = next;
+  }
+  body += "   local.return " + previous + " : !F";
+  text.replace(begin, end - begin, body);
+  return replace(text, "contract=\"field.mul\"",
+                 subtract ? "contract=\"field.sub\""
+                          : "contract=\"field.add\"");
+}
 void refusesIR(StringRef text, MLIRContext &context, StringRef code) {
   SmallVector<std::string> codes;
   ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {
@@ -72,9 +95,9 @@ void refusesIR(StringRef text, MLIRContext &context, StringRef code) {
 }
 void pipeline(ModuleOp module, bool optimize = true) {
   PassManager pm(module.getContext());
-  pm.addPass(protocol::createProjectProtocolPass(optimize));
+  pm.addPass(protocol::createProjectProtocolPass(optimize, {optimize, false}));
   pm.addPass(protocol::createEliminatePolynomialsPass());
-  pm.addPass(protocol::createLowerMathPass(optimize));
+  pm.addPass(protocol::createLowerMathPass({optimize, false}));
   pm.addPass(protocol::createSelectPhysicalPass());
   require(succeeded(pm.run(module)), "finite pipeline failed");
 }
@@ -88,10 +111,143 @@ int main(int argc, char **argv) {
   Cases cases;
   auto original = parseSourceString<ModuleOp>(source, &context);
   require(bool(original), "finite source refused");
+  cases.run("lane outcomes distinguish decline from construction failure", [&] {
+    auto module = parseSourceString<ModuleOp>(fixture("collect"), &context);
+    require(bool(module), "collect was refused");
+    SymbolTable symbols(&module->getBody()->front());
+    auto helper = symbols.lookup<local::FuncOp>("square");
+    auto vector = helper.getArgument(1);
+    llvm::DenseMap<Value, mathematical::LaneInput> inputs;
+    inputs[helper.getArgument(0)] = {vector, true};
+    inputs[vector] = {vector, false};
+    unsigned emitted = 0;
+    auto emit = [&](StringRef, ValueRange, Type, ArrayRef<std::string>) {
+      ++emitted;
+      return Value();
+    };
+    uint64_t remaining = 0;
+    auto declined = take(mathematical::realizeLanes(helper.getBody().front(),
+                                                    inputs, vector.getType(),
+                                                    {}, &remaining, emit));
+    require(declined.status == mathematical::LaneRealizationStatus::Capacity &&
+                declined.reason == "mathematical-lane-work" && !emitted,
+            "optional capacity emitted part of a candidate");
+    remaining = 1000;
+    auto work = symbols.lookup<local::FuncOp>("work");
+    llvm::DenseMap<Value, mathematical::LaneInput> noInputs;
+    auto unsupported = take(
+        mathematical::realizeLanes(work.getBody().front(), noInputs,
+                                   vector.getType(), {}, &remaining, emit));
+    require(unsupported.status ==
+                    mathematical::LaneRealizationStatus::Unsupported &&
+                unsupported.reason == "mathematical-lane-unsupported" &&
+                !emitted,
+            "unsupported formula emitted part of a candidate");
+    remaining = 1000;
+    refuses(mathematical::realizeLanes(helper.getBody().front(), inputs,
+                                       vector.getType(), {}, &remaining, emit),
+            "mathematical-lane-realization");
+    require(emitted == 1, "construction failure did not come from the emitter");
+  });
+  for (unsigned additions : {1023u, 1024u})
+    cases.run("optional lane depth " + std::to_string(additions), [&] {
+      auto text = linearCollect(additions);
+      for (bool prepare : {false, true}) {
+        auto module = parseSourceString<ModuleOp>(text, &context);
+        require(bool(module), "valid linear collect was refused");
+        if (prepare) {
+          PassManager pm(&context);
+          pm.addPass(protocol::createPrepareProtocolPass());
+          require(succeeded(pm.run(*module)), "prepare lost ordered fallback");
+        } else
+          require(succeeded(finite::realizeLocals(*module)),
+                  "optional Ring capacity rejected ordered collect");
+        bool loop = false, lanes = false;
+        module->walk([&](Operation *op) {
+          loop |= isa<local::LocalForOp>(op);
+          lanes |= op->getName().getStringRef() == "algebra.exec.vector_add";
+        });
+        require(loop == (additions == 1024) && lanes == !loop,
+                "depth boundary did not select bulk or clean fallback");
+      }
+    });
+  for (unsigned subtractions : {511u, 512u})
+    cases.run(
+        "right-nested subtraction depth " + std::to_string(subtractions), [&] {
+          auto module = parseSourceString<ModuleOp>(
+              linearCollect(subtractions, true), &context);
+          require(bool(module), "valid subtraction collection was refused");
+          require(succeeded(finite::realizeLocals(*module)),
+                  "subtraction depth rejected ordered fallback");
+          bool loop = false, lanes = false;
+          module->walk([&](Operation *op) {
+            loop |= isa<local::LocalForOp>(op);
+            lanes |= op->getName().getStringRef() == "algebra.exec.vector_sub";
+          });
+          require(loop == (subtractions == 512) && lanes == !loop,
+                  "subtraction's extra negation depth lost clean fallback");
+        });
+  cases.run("lane work is shared across definitions", [&] {
+    auto text = fixture("collect");
+    auto begin = text.find(" \"local.finite_collect\"");
+    auto end = text.find('\n', begin);
+    require(begin != std::string::npos && end != std::string::npos,
+            "missing collect declaration");
+    auto second = replace(text.substr(begin, end - begin),
+                          "sym_name=\"collect\"", "sym_name=\"second\"");
+    text.insert(end, "\n" + second);
+    for (uint64_t allowance : {0u, 64u}) {
+      auto module = parseSourceString<ModuleOp>(text, &context);
+      require(bool(module), "two collects were refused");
+      mathematical::RealizationWork work;
+      work.lanes = allowance;
+      require(succeeded(finite::realizeLocals(*module, {}, &work)),
+              "lane exhaustion refused an ordered implementation");
+      unsigned loops = 0, lanes = 0;
+      module->walk([&](Operation *op) {
+        loops += isa<local::LocalForOp>(op);
+        lanes += op->getName().getStringRef() == "algebra.exec.vector_mul";
+      });
+      require(loops == (allowance ? 1u : 2u) && lanes == 2 - loops,
+              "lane budget was reset or a declined candidate emitted payload");
+      require(work.lanes == 0, "lane work was not charged to the caller");
+    }
+  });
+  cases.run("bound queries share the enclosing work budget", [&] {
+    auto module = parseSourceString<ModuleOp>(fixture("total-state"), &context);
+    require(bool(module), "total-state source refused");
+    bool checked = false;
+    module->walk([&](data::BoundedAtOp access) {
+      uint64_t remaining = 65536;
+      require(finite::provesBound(access.getOperand(1), access.getOperand(0), 0,
+                                  remaining),
+              "known bound was lost");
+      auto consumed = 65536 - remaining;
+      require(consumed > 0, "bound query did not charge its enclosing budget");
+      remaining = consumed;
+      require(finite::provesBound(access.getOperand(1), access.getOperand(0), 0,
+                                  remaining) &&
+                  remaining == 0,
+              "bound query charged inconsistently");
+      require(!finite::provesBound(access.getOperand(1), access.getOperand(0),
+                                   0, remaining),
+              "exhausted bound query acquired a fresh budget");
+      remaining = 1;
+      require(finite::provesEqualExtent(access.getOperand(0), 0,
+                                        access.getOperand(0), 0, remaining) &&
+                  remaining == 0,
+              "extent evidence did not consume shared work");
+      require(!finite::provesEqualExtent(access.getOperand(0), 0,
+                                         access.getOperand(0), 0, remaining),
+              "exhausted extent query acquired a fresh budget");
+      checked = true;
+    });
+    require(checked, "missing source bound access");
+  });
   for (bool optimize : {false, true})
     cases.run(optimize ? "native sum" : "generic fold", [&] {
       OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*original)->clone()));
-      require(succeeded(finite::realizeLocals(*candidate, optimize)),
+      require(succeeded(finite::realizeLocals(*candidate, {optimize, false})),
               "finite realization failed");
       require(succeeded(finite::verifyRealizations(*original, *candidate)),
               "independent correspondence failed");
@@ -116,12 +272,74 @@ int main(int argc, char **argv) {
     cases.run(optimize ? "optimized pipeline" : "fallback pipeline", [&] {
       OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*original)->clone()));
       PassManager pm(&context);
-      pm.addPass(protocol::createProjectProtocolPass(optimize));
+      pm.addPass(
+          protocol::createProjectProtocolPass(optimize, {optimize, false}));
       pm.addPass(protocol::createEliminatePolynomialsPass());
-      pm.addPass(protocol::createLowerMathPass(optimize));
+      pm.addPass(protocol::createLowerMathPass({optimize, false}));
       pm.addPass(protocol::createSelectPhysicalPass());
       require(succeeded(pm.run(*candidate)), "finite pipeline failed");
     });
+  for (bool simplify : {false, true})
+    for (bool bulk : {false, true})
+      cases.run(
+          std::string("finite policy independent of simplify ") +
+              (simplify ? "on/" : "off/") + (bulk ? "bulk" : "loop"),
+          [&] {
+            for (bool fuse : {false, true}) {
+              MathematicalSelectionPolicy policy{bulk, fuse};
+              OwningOpRef<ModuleOp> candidate(
+                  cast<ModuleOp>((*original)->clone()));
+              PassManager prepare(&context);
+              prepare.addPass(
+                  protocol::createPrepareProtocolPass(simplify, policy));
+              require(succeeded(prepare.run(*candidate)),
+                      "policy preparation failed");
+              bool sum = false, loop = false;
+              candidate->walk([&](Operation *op) {
+                sum |=
+                    op->getName().getStringRef() == "algebra.exec.vector_sum";
+                loop |= isa<local::LocalForOp>(op);
+              });
+              require(sum == bulk && loop == !bulk,
+                      "finite selection followed simplify or fusion");
+              OwningOpRef<ModuleOp> projected(
+                  cast<ModuleOp>((*candidate)->clone()));
+              PassManager project(&context);
+              project.addPass(
+                  protocol::createProjectProtocolPass(simplify, policy));
+              require(succeeded(project.run(*projected)),
+                      "policy projection failed");
+              require(succeeded(mathematical::verifyAuthoredLocalsPreserved(
+                          &candidate->getBody()->front(),
+                          &projected->getBody()->front())),
+                      "projection changed accepted Local algorithms");
+              auto total = parseSourceString<ModuleOp>(fixture("total-collect"),
+                                                       &context);
+              require(bool(total), "total fixture refused");
+              PassManager demand(&context);
+              demand.addPass(
+                  protocol::createProjectProtocolPass(simplify, policy));
+              demand.addPass(protocol::createLowerMathPass(policy));
+              require(succeeded(demand.run(*total)),
+                      "total demand policy failed");
+              bool totalLoop = false;
+              total->walk([&](local::LocalForOp) { totalLoop = true; });
+              require(totalLoop == !bulk,
+                      "total demand ignored finite family policy");
+            }
+          });
+  cases.run("default preparation selects bulk without generic simplify", [&] {
+    auto candidate = mathematical::rewriteLocalAlgorithms(*original);
+    require(bool(candidate), "checked Local preparation failed");
+    bool sum = false, originalFinite = false;
+    candidate->walk([&](Operation *op) {
+      sum |= op->getName().getStringRef() == "algebra.exec.vector_sum";
+    });
+    original->walk(
+        [&](Operation *op) { originalFinite |= finite::isDeclaration(op); });
+    require(sum && originalFinite,
+            "default preparation changed source or omitted bulk selection");
+  });
   cases.run("descriptor arbitrary expression refused", [&] {
     auto invalid = replace(
         source, "   %d =",
@@ -380,7 +598,7 @@ int main(int argc, char **argv) {
   cases.run("actual predicate arms exchanged", [&] {
     auto before = parseSourceString<ModuleOp>(fixture("filter"), &context);
     OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-    require(succeeded(finite::realizeLocals(*after, false)),
+    require(succeeded(finite::realizeLocals(*after, {false, false})),
             "realization failed");
     local::LocalIfOp branch;
     after->walk([&](local::LocalIfOp op) { branch = op; });
@@ -536,7 +754,7 @@ int main(int argc, char **argv) {
     require(succeeded(project.run(*before)), "projection failed");
     OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
     PassManager lower(&context);
-    lower.addPass(protocol::createLowerMathPass(false));
+    lower.addPass(protocol::createLowerMathPass({false, false}));
     require(succeeded(lower.run(*after)), "lowering failed");
     bool changed = false;
     after->walk([&](local::ReturnOp op) {

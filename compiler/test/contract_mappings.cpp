@@ -113,6 +113,8 @@ constexpr ExpectedMapping expected[] = {
     {"matrix.bilinear", "algebra.exec.matrix_bilinear"},
     {"matrix.dimension", "algebra.exec.matrix_dimension"},
     {"matrix.get", "algebra.exec.matrix_get"},
+    {"matrix.row_dot", "algebra.exec.matrix_row_dot"},
+    {"matrix.column_dot", "algebra.exec.matrix_column_dot"},
     {"matrix.shape_check", "algebra.exec.matrix_shape_check"},
     {"matrix.identity_check", "algebra.exec.matrix_identity_check"},
     {"vector.constant", "algebra.exec.vector_constant"},

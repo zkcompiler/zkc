@@ -73,9 +73,20 @@ with case('Entry packages retain exact source, interface and artifact bytes'):
     assert json.loads(package['interface']) == interface
     assert package['artifact'] == commands.run([compiler, 'language-bundle', *options]).removesuffix('\n')
     assert package['options'] == {'simplify': True, 'release_storage': False,
-                                  'fuse_vector_reductions': False}
+                                  'finite_bulk': True, 'fuse_vector_reductions': False}
     assert package_bytes.endswith('}')
     (OUT / 'transfer.zkpkg').write_text(package_bytes)
+
+for flags, expected in [
+    (['--no-simplify'], {'simplify': False, 'finite_bulk': True, 'fuse_vector_reductions': False}),
+    (['--no-finite-bulk'], {'simplify': True, 'finite_bulk': False, 'fuse_vector_reductions': False}),
+    (['--no-finite-bulk', '--fuse-vector-reductions'],
+     {'simplify': True, 'finite_bulk': False, 'fuse_vector_reductions': True}),
+]:
+    with case(f'independent mathematical choices {flags}'):
+        selected = json.loads(commands.run([compiler, 'language-package', *options, *flags]))
+        assert selected['options'] == {'release_storage': False, **expected}
+        commands.run([compiler, 'language-check', *options, *flags], refuses='source.options')
 
 with case('same-signature protocols execute through distinct Entries'):
     source = OUT / 'entries.zkc'

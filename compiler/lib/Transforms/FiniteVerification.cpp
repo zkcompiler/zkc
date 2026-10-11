@@ -1,9 +1,11 @@
-#include "FiniteSupport.h"
+#include "MathematicalComparison.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Analysis/Computation.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseSet.h"
@@ -23,14 +25,15 @@ class Reader {
   bool valid = true, inlineMode = false;
   HelperReader helperReader;
   SmallVector<Value> expressionResults;
-  unsigned remaining = 100000;
+  uint64_t remaining = 100000;
   void fail() { valid = false; }
   Operation *consume(StringRef name) {
-    if (!valid || !cursor || !remaining-- ||
+    if (!valid || !cursor || !remaining ||
         cursor->getName().getStringRef() != name) {
       fail();
       return nullptr;
     }
+    --remaining;
     auto *op = cursor;
     cursor = cursor->getNextNode();
     return op;
@@ -295,95 +298,6 @@ class Reader {
     return {kernel(col.family + ".append", {state[0], next[0]},
                    state[0].getType(), col.arguments)};
   }
-  bool elementwise(ValueRange entry, const Elementwise &plan) {
-    auto &body = c.helper->getRegion(0).front();
-    Value root = c.domain.getBody().front().back().getOperand(0);
-    SmallVector<Operation *> factors;
-    domainLeaves(root, factors);
-    llvm::DenseMap<Value, Value> mapped;
-    for (auto [i, factor] : llvm::enumerate(factors))
-      if (isa<data::DomainElementsOp>(factor))
-        mapped[body.getArgument(i)] = actual.lookup(factor->getOperand(0));
-    for (auto [a, b] :
-         zip(body.getArguments().drop_front(factors.size()), entry))
-      mapped[a] = b;
-    Type vector = c.signature.getResult(0), field = elementType(vector);
-    SmallVector<std::string> args{
-        cast<algebra::FieldType>(field).getDomain().str()};
-    auto broadcast = [&](Value value) {
-      return kernel("vector.fill", {value, cardinalities.lookup(root)}, vector,
-                    args);
-    };
-    for (auto &op : body.without_terminator()) {
-      if (!valid)
-        return false;
-      Value result;
-      if (auto constant = fieldConstant(&op))
-        result = kernel("field.constant", {}, field, args, {*constant});
-      else if (auto input = plan.lookups.lookup(op.getResult(0)))
-        result = mapped.lookup(input);
-      else {
-        bool leftRows =
-            plan.modes.lookup(op.getOperand(0)) == FormulaMode::Rows;
-        bool rightRows =
-            plan.modes.lookup(op.getOperand(1)) == FormulaMode::Rows;
-        Value left = mapped.lookup(op.getOperand(0)),
-              right = mapped.lookup(op.getOperand(1));
-        auto suffix = arithmetic(&op).drop_front(6);
-        if (!leftRows && !rightRows)
-          result = kernel(arithmetic(&op), {left, right}, field, args);
-        else if (suffix == "mul" && leftRows != rightRows)
-          result = kernel("vector.scale",
-                          {leftRows ? left : right, leftRows ? right : left},
-                          vector, args);
-        else {
-          if (!leftRows)
-            left = broadcast(left);
-          if (!rightRows)
-            right = broadcast(right);
-          result =
-              kernel(("vector." + suffix).str(), {left, right}, vector, args);
-        }
-      }
-      mapped[op.getResult(0)] = result;
-    }
-    Value returned = body.back().getOperand(0),
-          result = mapped.lookup(returned);
-    if (plan.modes.lookup(returned) == FormulaMode::Scalar)
-      result = broadcast(result);
-    finish(result ? ValueRange{result} : ValueRange{});
-    return valid;
-  }
-  bool bulk(ValueRange entry, const Reduction &r) {
-    SmallVector<Operation *> factors;
-    std::function<void(Value)> read = [&](Value domain) {
-      auto *op = domain.getDefiningOp();
-      if (isa<data::DomainZipOp>(op))
-        for (Value v : op->getOperands())
-          read(v);
-      else
-        factors.push_back(op);
-    };
-    read(c.domain.getBody().front().back().getOperand(0));
-    SmallVector<Value> operands;
-    for (unsigned i : r.items)
-      operands.push_back(actual.lookup(factors[i]->getOperand(0)));
-    auto col = collection(operands[r.kernel == "curve.msm" ? 1 : 0].getType());
-    Type result = c.signature.getResult(0);
-    Value value;
-    if (StringRef(r.kernel).starts_with("matrix.")) {
-      Type vector = RankedTensorType::get({ShapedType::kDynamic}, result);
-      Value rows = kernel(r.kernel, operands, vector, col.arguments);
-      value = kernel("vector.get",
-                     {rows, actual.lookup(factors[r.items[0]]->getOperand(1))},
-                     result, col.arguments);
-    } else
-      value = kernel(r.kernel, operands, result, col.arguments);
-    value =
-        kernel(r.combine, {entry[c.arguments], value}, result, col.arguments);
-    finish(value ? ValueRange{value} : ValueRange{});
-    return valid;
-  }
 
 public:
   Reader(Computation computation, SymbolTable &symbols,
@@ -426,31 +340,26 @@ public:
     admission();
     if (!valid)
       return false;
-    if (auto plan = recognizeBilinear(c);
-        plan && cursor &&
-        cursor->getName().getStringRef() ==
-            protocol::boundOperationName("matrix.bilinear")) {
-      auto type = c.signature.getResult(0);
-      auto col = collection(actual.lookup(plan->matrix).getType());
-      Value result =
-          kernel("matrix.bilinear",
-                 {actual.lookup(plan->matrix), actual.lookup(plan->left),
-                  actual.lookup(plan->right)},
-                 type, col.arguments);
-      result = kernel("field.add", {entry[c.arguments], result}, type,
-                      col.arguments);
-      finish(result ? ValueRange{result} : ValueRange{});
-      return valid;
+    Value rootDomain = c.domain.getBody().front().back().getOperand(0);
+    if (mathematical::hasFinitePayloadContract(cursor, symbols) ||
+        // An identity collect can return an existing vector without emitting
+        // payload. Its ordered alternative starts with an empty container.
+        (c.collect && cursor &&
+         isa<RankedTensorType>(c.signature.getResult(0)) &&
+         cursor->getName().getStringRef() !=
+             protocol::boundOperationName("vector.empty"))) {
+      // Semantic comparison is optional. Its bounded interpretation and
+      // normalization cannot spend the ordered reader's admission budget.
+      uint64_t comparisonWork = remaining;
+      if (auto result = mathematical::compareFinitePayload(
+              c, entry, cardinalities.lookup(rootDomain), cursor, symbols,
+              bindings, comparisonWork,
+              inlineMode ? nullptr : &begin->getBlock()->back());
+          succeeded(result)) {
+        finish(ValueRange{*result});
+        return valid;
+      }
     }
-    if (auto r = recognizeReduction(c);
-        r && cursor &&
-        cursor->getName().getStringRef() ==
-            protocol::boundOperationName(r->kernel))
-      return bulk(entry, *r);
-    if (auto plan = recognizeElementwise(c);
-        plan && (!cursor || cursor->getName().getStringRef() !=
-                                protocol::boundOperationName("vector.empty")))
-      return elementwise(entry, *plan);
     SmallVector<Value> state, env;
     append_range(env, entry.take_front(c.arguments));
     append_range(env, entry.drop_front(c.arguments + c.states));

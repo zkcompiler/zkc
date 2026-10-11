@@ -31,3 +31,19 @@ protocol Compute roles(P)(xs: Vector<F> @P, ys: Vector<F> @P,
           matrix_total = matrix_sum(matrix));
 }
 run Demo = Compute;
+
+// A scalar demand contracts only the selected row. A collection demand can
+// contract all rows once; an empty row domain never enters its inner fold.
+fn all_rows(matrix: Matrix<F>, xs: Vector<F>, seed: F) -> Vector<F> {
+  return zkc::vector::collect(zkc::matrix::row_indices(matrix), fn(row) =>
+    finite::fold(domains::zip(zkc::matrix::row_values(matrix, row), xs), seed,
+                 fn(sum, (a, b)) => sum + a * b));
+}
+
+protocol MatrixProducts roles(P)(matrix: Matrix<F> @P, xs: Vector<F> @P,
+                                 row: index @P, seed: F @P)
+  -> (selected: F @P, rows: Vector<F> @P) {
+  let row_result @P = zkc::matrix::row_dot(matrix, xs, row);
+  return (selected = row_result, rows = all_rows(matrix, xs, seed));
+}
+run MatrixDemo = MatrixProducts;

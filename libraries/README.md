@@ -17,7 +17,7 @@ concrete domains, Entries and transcript constructions in
 | [`zkc::computation`](zkc/computation.zkc) | apply_math/forward_math/apply/forward/twice | Generic statically bound callbacks; fixed modes and effects that depend on the selected callback |
 | [`zkc::vector`](zkc/vector.zkc) | `Vector`, length/get/at/elements/indices/sum/product/split/add/hadamard/scale/dot/fill/collect/collect_where/reduce/fold/has_length, reduction bindings `∑`/`∏` | Ordered finite vectors; fold pairs contiguous halves |
 | [`zkc::sequence`](zkc/sequence.zkc) | `Sequence`, empty/append/length/get/at/elements/indices | Immutable sequences of executable Copy + Drop elements, including source products |
-| [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, get/at/multiply/transpose_multiply/bilinear/rows/columns and explicit finite views | Ordered sparse matrix operations |
+| [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, get/at/row_dot/column_dot/multiply/transpose_multiply/bilinear/rows/columns and explicit finite views | Ordered sparse matrix operations |
 | [`zkc::field_array`](zkc/field_array.zkc) | `Array`, from_vector/get/at/elements/indices/collect | Fixed-length field arrays with checked native construction and dynamic access |
 | [`zkc::polynomial`](zkc/polynomial.zkc) | `Polynomial`, from_coefficients/evaluate/boundary | Runtime univariate polynomial data; boundary is p(0) + p(1) |
 | [`zkc::symbolic`](zkc/symbolic.zkc) | `Array`, `Polynomial`, pack/get/mle/from_coefficients/coefficients/evaluate/fix_prefix/sum_suffix/fix_table/add/multiply/constant | Total formal polynomial expressions |
@@ -112,6 +112,12 @@ It fixes one Boolean coordinate of an evaluation table. FRI folding additionally
 uses its coset points and keeps its separate domain-specific operation.
 `has_length<F, N>` compares the dynamic
 length with explicit static `N`; it does not resize or pad a vector.
+
+`zkc::matrix::row_dot(matrix, values, row)` and `column_dot(matrix, values,
+column)` compute one selected contraction without materializing all outputs.
+The compiler selects these same scalar contracts for supported finite row and
+column reductions. Whole row/column collections can select a matvec while
+retaining the empty-outer behavior of the authored nested computation.
 
 `zkc::matrix::get(matrix, row, column)` checks both dynamic coordinates and
 returns the coefficient in the matrix's field. An absent in-range sparse cell

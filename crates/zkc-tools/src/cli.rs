@@ -25,7 +25,7 @@ macro_rules! entry_options {
     };
     ($($extra:expr),* $(,)?) => {
         entry_options!(@inspection Opt::new("--no-simplify"),
-            Opt::new("--release-storage"), Opt::new("--fuse-vector-reductions"), $($extra),*)
+            Opt::new("--release-storage"), Opt::new("--fuse-vector-reductions"), Opt::new("--no-finite-bulk"), $($extra),*)
     };
 }
 const ENTRY: &str = "Select ENTRY by unique short or qualified name. With no name, execution selects the\nsole Entry of the required kind. Use project discovery, --project or explicit modules.\nPinned execution uses --package and --sha256 together and no source options.\nProject inputs default to inputs/<qualified.name>/. Proofs default to
@@ -69,7 +69,7 @@ not capture-preserving rewrites.\nChecking does not execute the protocol or esta
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
             Opt::new("--no-simplify"),
             Opt::new("--release-storage"),
-            Opt::new("--fuse-vector-reductions"),
+            Opt::new("--fuse-vector-reductions"), Opt::new("--no-finite-bulk"),
         ],
         description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.\nProject output defaults to build/zkc/<qualified.name>.zkpkg beside the manifest.\nExplicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
     },

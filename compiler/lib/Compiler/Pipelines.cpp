@@ -11,6 +11,9 @@ struct ParticipantOptions : mlir::PassPipelineOptions<ParticipantOptions> {
   Option<bool> linear{
       *this, "linear-contractions", llvm::cl::init(false),
       llvm::cl::desc("Select eligible local diagonal contractions")};
+  Option<bool> optimizeFinite{
+      *this, "optimize-finite", llvm::cl::init(true),
+      llvm::cl::desc("Select checked bulk finite realizations")};
   Option<bool> fuseVectorReductions{
       *this, "fuse-vector-reductions", llvm::cl::init(false),
       llvm::cl::desc("Fuse admitted vector maps and reductions")};
@@ -22,11 +25,12 @@ void registerCompilerPipelines() {
   static mlir::PassPipelineRegistration<ParticipantOptions> participants(
       "zkc-participant-pipeline", "Project and plan an interactive protocol",
       [](mlir::OpPassManager &pm, const ParticipantOptions &options) {
-        pm.addPass(protocol::createProjectProtocolPass(
-            true, options.fuseVectorReductions));
+        MathematicalSelectionPolicy policy{options.optimizeFinite,
+                                           options.fuseVectorReductions};
+        pm.addPass(protocol::createProjectProtocolPass(true, policy));
         if (!options.projectOnly) {
           pm.addPass(protocol::createEliminatePolynomialsPass());
-          pm.addPass(protocol::createLowerMathPass());
+          pm.addPass(protocol::createLowerMathPass(policy));
           pm.addPass(protocol::createSelectPhysicalPass({}, options.linear,
                                                         options.release));
         }
