@@ -101,15 +101,35 @@ fn bad(x:Fr)->Fr effects(){return unused(argument(x),fn(y)=>y);}
                         R"(interface I{fn f(x:Fr)->Fr;})",
                         R"(fn f(x:Fr)->Fr effects() effects(){return x;})",
                         R"(fn f(x:Fr)->Fr where () effects(){return x;})"}) {
-      refuses(check(source),
-              StringRef(source).contains("effects() effects()") ||
-                      StringRef(source).contains("where () effects()")
-                  ? "source.syntax"
-                  : "source.effect");
+      refuses(check(source), StringRef(source).contains("effects() effects()")
+                                 ? "source.syntax"
+                                 : "source.effect");
     }
     refuses(check("fn f(x:Fr)->Fr effects(stop,stop){return x;}"),
             "source.duplicate");
     succeeds("fn effects(x:Fr)->Fr effects(){return x;}");
+    succeeds(R"(
+fn parameter(effects:Fr)->Fr{return effects;}
+fn binding(x:Fr)->Fr{let effects=x;return effects;}
+fn callback(x:Fr,effects:fn(Fr)->Fr)->Fr effects(effects){return effects(x);}
+)");
+    refuses(check("fn f<N:nat>(xs:[bool;N])->bool where 1<=N effects(){return "
+                  "xs[0];}"),
+            "source.effect");
+  });
+  cases.run("total callback references contribute no output effects", [] {
+    auto project = take(check(R"(
+fn local(x:Fr,body:fn(Fr)->Fr effects())->Fr effects(body){return body(x);}
+fn mathematical(x:Fr,body:math fn(Fr)->Fr)->Fr effects(body){return body(x);}
+)"));
+    for (const auto &decl : project.declarations())
+      if (decl.name == "local" || decl.name == "mathematical") {
+        require(decl.effectAllowance == EffectSummary{} &&
+                    decl.body->effects == EffectSummary{},
+                "total callback retained a spurious effect dependency");
+      }
+    if (auto error = checkScopedElaboration(project))
+      throw std::runtime_error(toString(std::move(error)));
   });
   cases.run("interface output dependencies preserve alpha-renamed slots", [] {
     succeeds(R"(
@@ -121,6 +141,19 @@ run Run=Demo;)");
     refuses(check(R"(
 interface I{fn run(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr effects(a);}
 component C:I{fn run(x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr)->Fr{return b(x);}}
+)"),
+            "source.effect");
+  });
+  cases.run("component bodies refine their written output ceilings", [] {
+    succeeds(R"(
+interface I{fn run(x:Fr)->Fr effects();}
+component C:I{fn run(x:Fr)->Fr effects(stop){return x;}}
+fn through<T:I>(x:Fr)->Fr effects(){return T::run(x);}
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return through<C>(x);}
+run Run=Demo;)");
+    refuses(check(R"(
+interface I{fn run(x:Fr)->Fr effects();}
+component C:I{fn run(x:Fr)->Fr effects(stop){require x==1;return x;}}
 )"),
             "source.effect");
   });

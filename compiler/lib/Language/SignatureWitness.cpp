@@ -14,7 +14,7 @@ bool checkOrigins(Semantics &types, const Declaration &decl,
   const auto &signature = parameter.signature;
   if (!types.charge(written.inputLabels.size() + source.domainInputs.size() +
                         written.itemOrigins.size() +
-                        signature.itemOrigins.size() + 1,
+                        parameter.itemOrigins.size() + 1,
                     parameter.span))
     return false;
   if (written.inputLabels.size() != signature.inputs.size() ||
@@ -49,8 +49,57 @@ bool checkOrigins(Semantics &types, const Declaration &decl,
         !expected.emplace(input->second, domain->second).second)
       return refuse("invalid authored callback item origin");
   }
-  return signature.itemOrigins == expected ||
+  return parameter.itemOrigins == expected ||
          refuse("callback item origins differ from authored selectors");
+}
+
+bool checkMemberInputs(Semantics &types, const Declaration &required,
+                       const Declaration &provided,
+                       const Substitution &bindings) {
+  auto refuse = [&] {
+    return types.fail("source.scoped-witness",
+                      "implementation callback contract differs from interface",
+                      provided.span);
+  };
+  if (!types.charge(required.inputOrder.size() + required.domainInputs.size() +
+                        required.scopedInputs.size() + 1,
+                    provided.span))
+    return false;
+  if (required.kind != provided.kind ||
+      required.inputOrder.size() != provided.inputOrder.size() ||
+      required.domainInputs.size() != provided.domainInputs.size() ||
+      required.scopedInputs.size() != provided.scopedInputs.size())
+    return refuse();
+  for (unsigned i = 0; i < required.inputOrder.size(); ++i)
+    if (required.inputOrder[i].kind != provided.inputOrder[i].kind ||
+        required.inputOrder[i].index != provided.inputOrder[i].index)
+      return refuse();
+  auto sameType = [&](const Type &expected, const Type &actual) {
+    auto resolved = types.substitute(expected, bindings, provided.span);
+    return resolved && (*resolved == actual || refuse());
+  };
+  for (unsigned i = 0; i < required.domainInputs.size(); ++i)
+    if (!sameType(required.domainInputs[i].item, provided.domainInputs[i].item))
+      return false;
+  for (unsigned i = 0; i < required.scopedInputs.size(); ++i) {
+    const auto &expected = required.scopedInputs[i];
+    const auto &actual = provided.scopedInputs[i];
+    if (!types.charge(expected.itemOrigins.size() + actual.itemOrigins.size() +
+                          expected.signature.inputs.size() + 1,
+                      provided.span))
+      return false;
+    if (expected.itemOrigins != actual.itemOrigins ||
+        expected.signature.mode != actual.signature.mode ||
+        expected.signature.allowance != actual.signature.allowance ||
+        expected.signature.inputs.size() != actual.signature.inputs.size())
+      return refuse();
+    for (unsigned j = 0; j < expected.signature.inputs.size(); ++j)
+      if (!sameType(expected.signature.inputs[j], actual.signature.inputs[j]))
+        return false;
+    if (!sameType(expected.signature.result, actual.signature.result))
+      return false;
+  }
+  return true;
 }
 } // namespace
 llvm::Error checkSignatureSources(const CheckedStorage &storage, Work &work) {
@@ -114,7 +163,7 @@ llvm::Error checkSignatureSources(const CheckedStorage &storage, Work &work) {
     return failure("source.scoped-witness", "invalid signature source owner");
   return llvm::Error::success();
 }
-llvm::Error checkComponentEffects(const CheckedStorage &storage, Work &work) {
+llvm::Error checkComponentContracts(const CheckedStorage &storage, Work &work) {
   Semantics types(storage.declarations, storage.assets, work);
   for (const auto &component : storage.declarations) {
     if (!types.charge(1, component.span))
@@ -126,6 +175,15 @@ llvm::Error checkComponentEffects(const CheckedStorage &storage, Work &work) {
     if (!interface)
       return failure("source.scoped-witness", "missing component interface",
                      component.span);
+    if (!types.charge(component.parameters.size() + 1, component.span) ||
+        !types.chargeType(*component.implementation, component.span))
+      return types.takeError();
+    auto bindings =
+        types.substitution(*interface, component.implementation->arguments);
+    Type self(Type::Kind::Component, component.qualifiedName);
+    for (const auto &parameter : component.parameters)
+      self.arguments.push_back(parameterType(parameter));
+    bindings.emplace("self:" + interface->qualifiedName, std::move(self));
     for (auto requiredId : interface->members) {
       if (!types.charge(component.members.size() + 1, component.span))
         return types.takeError();
@@ -145,8 +203,12 @@ llvm::Error checkComponentEffects(const CheckedStorage &storage, Work &work) {
         if (member.name == required.name)
           provided = &member;
       }
-      if (!provided || !provided->body ||
-          !effectsWithin(types, provided->body->effects,
+      if (!provided || !provided->body)
+        return failure("source.scoped-witness", "missing implementation member",
+                       component.span);
+      if (!checkMemberInputs(types, required, *provided, bindings))
+        return types.takeError();
+      if (!effectsWithin(types, provided->body->effects,
                          required.effectAllowance.value_or(EffectSummary{}),
                          component.span)) {
         types.fail("source.scoped-witness",

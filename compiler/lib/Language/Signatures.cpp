@@ -450,6 +450,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         return types.fail("source.type", "scoped result must be data",
                           src.span);
       signature.result = *result;
+      std::map<unsigned, unsigned> itemOrigins;
       std::map<std::string, unsigned> labels;
       for (unsigned i = 0; i < written.inputLabels.size(); ++i) {
         const auto &label = written.inputLabels[i];
@@ -480,7 +481,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
               "source.finite-domain",
               "item_from input type differs from domain item type",
               condition.span);
-        if (!signature.itemOrigins
+        if (!itemOrigins
                  .emplace(input->second,
                           unsigned(domain - decl.domainInputs.begin()))
                  .second)
@@ -501,8 +502,9 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         if (!types.executableType(signature.result, src.span))
           return false;
       }
-      decl.scopedInputs.push_back(
-          {src.name, std::move(signature), src.span, written.inputLabels});
+      decl.scopedInputs.push_back({src.name, std::move(signature), src.span,
+                                   written.inputLabels,
+                                   std::move(itemOrigins)});
     }
     if (decl.kind == Declaration::Kind::Local && decl.abstract &&
         !decl.effectAllowance)

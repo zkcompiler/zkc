@@ -192,6 +192,9 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
                                     span);
                 return joinEffects(types, result, action.region->effects, span);
               } else if constexpr (std::is_same_v<Action, LocalPrimitive>) {
+                // Explicit kernels retain their ordered boundary. Source
+                // constants and mathematical primitives have narrower effects,
+                // independently of a backend implementation's failure modes.
                 result.fixed.mayStop |=
                     action.origin == LocalPrimitive::Origin::Kernel ||
                     (action.contract != "index.equal" &&

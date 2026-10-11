@@ -777,7 +777,7 @@ private:
       }
       req.span.end = previousEnd;
       decl.requirements.push_back(std::move(req));
-    } while (take(",") && !at("{") && !at(";") && !at("!"));
+    } while (take(",") && !at("{") && !at(";"));
     return true;
   }
   bool effects(SyntaxDeclaration &decl) {
@@ -1493,6 +1493,10 @@ private:
       }
       if (!effects(d) || !requirements(d))
         return {};
+      if (d.explicitRequirements && at("effects")) {
+        fail("source.effect", "effects(...) must precede where");
+        return {};
+      }
       if (protocol && !specifications(d))
         return {};
       d.abstract = abstract;

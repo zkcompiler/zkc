@@ -45,7 +45,6 @@ class ExpressionInference {
     std::vector<Variable> inputs;
     Variable result;
     Effects allowance;
-    std::map<unsigned, unsigned> itemOrigins;
   };
   std::map<uint32_t, ScopedEquations> scopedEquations;
   std::optional<ScopedSignature> scopedSignature(const Expression &expr) {
@@ -60,14 +59,11 @@ class ExpressionInference {
                       const TypeInference::Parameters &parameters,
                       unsigned depth) {
     const auto &expr = syntax.expressions[id];
-    if (!checker.types.charge(signature.itemOrigins.size(), expr.span))
-      return;
     ScopedEquations equations{
         signature.mode,
         {},
         types.instantiate(signature.result, parameters, expr.span),
-        signature.allowance,
-        signature.itemOrigins};
+        signature.allowance};
     for (const auto &input : signature.inputs)
       equations.inputs.push_back(
           types.instantiate(input, parameters, expr.span));
@@ -1075,11 +1071,7 @@ public:
       output.domainItems.emplace(id, *type);
     }
     for (const auto &[id, equations] : scopedEquations) {
-      if (!checker.types.charge(equations.itemOrigins.size(),
-                                syntax.expressions[id].span))
-        return {};
-      ScopedSignature signature{
-          equations.mode, {}, {}, equations.allowance, equations.itemOrigins};
+      ScopedSignature signature{equations.mode, {}, {}, equations.allowance};
       for (auto input : equations.inputs) {
         auto type = types.get(input, syntax.expressions[id].span);
         if (!type)

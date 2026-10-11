@@ -205,8 +205,9 @@ bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
   if (callee.inputOrder[0].kind != K::Domain || callee.inputOrder[0].index != 0)
     return refuse();
   for (unsigned i = 0; i < count; ++i) {
-    const auto &signature = callee.scopedInputs[i].signature;
-    if (!types.charge(signature.itemOrigins.size(), span) ||
+    const auto &parameter = callee.scopedInputs[i];
+    const auto &signature = parameter.signature;
+    if (!types.charge(parameter.itemOrigins.size(), span) ||
         !types.chargeType(callee.domainInputs[0].item, span) ||
         !types.chargeType(signature.result, span))
       return false;
@@ -216,8 +217,8 @@ bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
     if (callee.inputOrder[i + 1].kind != K::Scoped ||
         callee.inputOrder[i + 1].index != i ||
         signature.inputs != std::vector<Type>{callee.domainInputs[0].item} ||
-        (!signature.itemOrigins.empty() &&
-         signature.itemOrigins != std::map<unsigned, unsigned>{{0, 0}}))
+        (!parameter.itemOrigins.empty() &&
+         parameter.itemOrigins != std::map<unsigned, unsigned>{{0, 0}}))
       return refuse();
   }
   if (filtered) {
@@ -225,7 +226,8 @@ bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
     const auto &body = callee.scopedInputs[1].signature;
     if (predicate.result != Type{} || predicate.mode != body.mode ||
         !(predicate.allowance == body.allowance) ||
-        predicate.itemOrigins != body.itemOrigins)
+        callee.scopedInputs[0].itemOrigins !=
+            callee.scopedInputs[1].itemOrigins)
       return refuse();
   }
   return true;

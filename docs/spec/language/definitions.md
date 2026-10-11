@@ -862,7 +862,8 @@ addition/subtraction/multiplication/equality. Group scaling is `point * scalar`.
 Total scalar calls emit mathematical or local primitive operations directly.
 Index arithmetic retains possible failure; index equality is total. Ordered
 vector operations retain shape checks and stop behavior. Calls to ordered
-primitives in protocols keep the participant-owned helper boundary. Formal
+primitives in protocols keep the participant-owned helper boundary. The stopping
+bound is a source contract, not inferred from a backend implementation. Formal
 intrinsics called from local code retain the existing realization boundary.
 Retained helper calls, including mapped primitives, count toward the call-depth
 limit; directly emitted primitive operations add no helper edge.
@@ -878,8 +879,9 @@ A component selects one interface and defines every member exactly once. Associa
 runtime types default to no permissions; their promised permissions must be supported
 by their representation. Associated `Field` and `Group` declarations expose their
 selected domain. Conformance checks callable modes, types, permissions, natural
-preconditions and effect allowances. An implementation cannot require more than
-its interface allows. Interfaces and components may have static parameters;
+preconditions, callback acceptance contracts and implementation effects. An
+implementation cannot require more than its interface allows. Interfaces and
+components may have static parameters;
 abstract signatures may declare member-specific generic parameters.
 `Component::method<F, ...>(value)` supplies the component parameters directly;
 `C::method(value)` through a bound component uses the parameters already in `C`.
@@ -911,7 +913,8 @@ contribute. Comparing maximum effect sets is insufficient: `effects(first)`
 does not permit invoking `second`, even when their ceilings match. Component
 input contracts remain equal after substitution, including callback mode, types,
 ceilings and domain contracts. The implementation body must be pointwise within
-the interface output contract.
+both its own written output bound and the interface output contract. A wider
+written bound on a defined member does not discard its more precise body summary.
 
 Bodies use lexical `let` and `let mut` bindings, whole-name assignment, nested
 block expressions and a final `return`. [Body semantics](protocols.md#bindings-and-local-control)
@@ -1218,6 +1221,10 @@ a closed summary from the selected helpers; independent extraction and closure
 checks reconstruct effects from operations and validate retained identities.
 Immutable authored signatures independently anchor callback ceilings, item-origin
 selectors and output contracts, including abstract declarations.
+Origin maps belong to the declaration's callback parameters, whose domain slots
+they reference; body signatures carry only types, mode and effects. Independent
+checking also compares a component's callback contracts with its interface after
+substituting the component's types.
 Dependency normalization, substitution and witness traversal use the shared
 work budget.
 

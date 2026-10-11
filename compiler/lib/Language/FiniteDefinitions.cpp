@@ -1,5 +1,6 @@
 #include "Checker.h"
 #include "Effects.h"
+#include "FiniteContracts.h"
 using namespace llvm;
 namespace zkc::language::detail {
 bool Checker::finiteBody(Declaration &decl, Body &body) {
@@ -18,6 +19,8 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
                   "function signature of the selected mode");
   bool filtered = name.consume_back("_where");
   const bool fold = name == "fold";
+  const auto kind =
+      fold ? FiniteApplication::Kind::Fold : FiniteApplication::Kind::Collect;
   if (!fold && !name.consume_front("collect."))
     return refuse("unknown finite definition identity");
   if (decl.inputs.size() != unsigned(fold) ||
@@ -48,12 +51,14 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
   }
   const auto mode =
       mathematical ? ScopedSignature::Mode::Math : ScopedSignature::Mode::Local;
-  auto matches = [&](const ScopedSignature &signature, ArrayRef<Type> inputs,
-                     const Type &result) {
+  auto matches = [&](const ScopedParameter &parameter, ArrayRef<Type> inputs,
+                     const Type &result, bool predicate = false) {
+    const auto &signature = parameter.signature;
     return signature.mode == mode && ArrayRef(signature.inputs) == inputs &&
            signature.result == result &&
-           signature.itemOrigins ==
-               std::map<unsigned, unsigned>{{unsigned(inputs.size() - 1), 0}} &&
+           parameter.itemOrigins ==
+               std::map<unsigned, unsigned>{
+                   {finiteItemInput(kind, predicate), 0}} &&
            !signature.allowance.opaque &&
            (!mathematical || !signature.allowance.mayStop);
   };
@@ -62,10 +67,10 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
     inputs.push_back(output);
   inputs.push_back(item);
   unsigned bodyIndex = filtered ? 1 : 0;
-  if (!matches(decl.scopedInputs[bodyIndex].signature, inputs, element))
+  if (!matches(decl.scopedInputs[bodyIndex], inputs, element))
     return refuse(
         "finite body must accept the selected item and state on its domain");
-  if (filtered && !matches(decl.scopedInputs[0].signature, {item}, Type{}))
+  if (filtered && !matches(decl.scopedInputs[0], {item}, Type{}, true))
     return refuse("finite predicate must return bool on its domain");
   for (const auto &type : {item, element, output}) {
     if (!types.permissions(type, decl.span, &decl) ||
@@ -99,9 +104,7 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
   ValueId result{unsigned(body.values.size())};
   body.values.push_back({output, {}, decl.span});
   body.operations.push_back(
-      {FiniteApplication{fold ? FiniteApplication::Kind::Fold
-                              : FiniteApplication::Kind::Collect,
-                         0, bodyIndex,
+      {FiniteApplication{kind, 0, bodyIndex,
                          filtered ? std::optional<unsigned>(0) : std::nullopt,
                          std::move(operands)},
        {result},

@@ -201,10 +201,9 @@ bool Checker::conformance(DeclarationId id) {
                             provided->span);
       }
       for (unsigned i = 0; i < required.scopedInputs.size(); ++i) {
-        if (!types.charge(
-                required.scopedInputs[i].signature.itemOrigins.size() +
-                    provided->scopedInputs[i].signature.itemOrigins.size(),
-                provided->span))
+        if (!types.charge(required.scopedInputs[i].itemOrigins.size() +
+                              provided->scopedInputs[i].itemOrigins.size(),
+                          provided->span))
           return false;
         auto expected = required.scopedInputs[i].signature;
         for (auto &input : expected.inputs) {
@@ -218,7 +217,9 @@ bool Checker::conformance(DeclarationId id) {
         if (!value)
           return false;
         expected.result = *value;
-        if (!(expected == provided->scopedInputs[i].signature))
+        if (!(expected == provided->scopedInputs[i].signature) ||
+            required.scopedInputs[i].itemOrigins !=
+                provided->scopedInputs[i].itemOrigins)
           return types.fail("source.conformance",
                             "scoped member signature differs", provided->span);
       }

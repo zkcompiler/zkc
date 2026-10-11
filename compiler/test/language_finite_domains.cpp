@@ -418,7 +418,7 @@ fn wrapper(rows:domain<Fr>,step:fn(Fr,item:Fr)->Fr effects(stop) where item_from
     // Weakening the selected callee must not authorize a restricted callback.
     auto &fold =
         const_cast<Declaration &>(declarationNamed(project, "m::fold"));
-    fold.scopedInputs[0].signature.itemOrigins.clear();
+    fold.scopedInputs[0].itemOrigins.clear();
     auto error = checkScopedElaboration(project);
     require(bool(error), "weakened item contract accepted");
     require(toString(std::move(error)).find("source.scoped-witness") !=

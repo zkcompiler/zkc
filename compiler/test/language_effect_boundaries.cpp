@@ -136,6 +136,65 @@ run Run=Demo;
     limits.callDepth = 2;
     take(check(source, limits));
   });
+  for (StringRef kind : {"if", "match", "for"})
+    cases.run("region callback capture preserves a later formal: " + kind, [&] {
+      std::string statements, flagType = "bool";
+      if (kind == "if")
+        statements = "return if go {invoke(x,fn(y)=>b(y))} else {x};";
+      else if (kind == "match") {
+        flagType = "Choice";
+        statements = "return match go {Left(v)=>{invoke(v,fn(y)=>b(y))},"
+                     "Right(v)=>{v}};";
+      } else
+        statements = "let mut value=x;for _ in 0..n "
+                     "{value=invoke(value,fn(y)=>b(y));}return value;";
+      auto source =
+          "enum Choice {Left(Fr),Right(Fr)}"
+          "fn invoke(x:Fr,f:fn(Fr)->Fr)->Fr effects(f){return f(x);}"
+          "fn pick(go:" +
+          flagType +
+          ",n:index,x:Fr,a:fn(Fr)->Fr,b:fn(Fr)->Fr effects(stop))->Fr "
+          "effects(b){" +
+          statements + "}protocol Demo roles(P)(go:" + flagType +
+          "@P,n:index@P,x:Fr@P)->(r:Fr@P){"
+          "return pick(go,n,x,fn(v)=>v,fn(v)=>{require v==1;v});}"
+          "run Run=Demo;";
+      auto project = take(check(source));
+      const auto &decl = named(project.declarations(), "pick");
+      require(decl.body->effects.dependencies ==
+                      std::map<unsigned, Effects>{{1, {true, false}}} &&
+                  decl.body->effects.fixed == Effects{},
+              "region capture changed callback effect identity");
+      succeeds(checkScopedElaboration(project));
+      auto closed = take(closeEntry(project, "m::Run"));
+      const auto &closedEffects =
+          named(closed.declarations(), "pick").body->effects;
+      require(closedEffects.fixed == Effects{true, false} &&
+                  closedEffects.dependencies.empty(),
+              "region callback effect was lost during specialization");
+      succeeds(checkScopedSpecialization(closed));
+      auto wrongContract = source;
+      wrongContract.replace(wrongContract.find("effects(b)"),
+                            StringRef("effects(b)").size(), "effects(a)");
+      refuses(check(wrongContract), "source.effect");
+
+      auto body = std::make_shared<Body>(*decl.body);
+      bool changed = false;
+      for (auto &op : body->operations)
+        if (auto *control = std::get_if<LocalControl>(&op.action)) {
+          require(!control->regions.empty(), "missing control arm");
+          auto region = std::make_shared<Body>(*control->regions.front());
+          require(region->scopedBindings.size() >= 2,
+                  "missing inherited callback parameters");
+          std::swap(region->scopedBindings[0], region->scopedBindings[1]);
+          control->regions.front() = std::move(region);
+          changed = true;
+          break;
+        }
+      require(changed, "missing control operation");
+      const_cast<Declaration &>(decl).body = std::move(body);
+      refuses(checkScopedElaboration(project), "source.scoped-witness");
+    });
   cases.run("formal lookup needs no extra expression level", [] {
     Limits limits;
     limits.callDepth = limits.expressionDepth = 1;

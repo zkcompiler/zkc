@@ -132,7 +132,7 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                                !parameter.inputLabels[i].empty()
                            ? json::Value(parameter.inputLabels[i])
                            : json::Value(nullptr));
-    for (const auto &[input, domain] : parameter.signature.itemOrigins)
+    for (const auto &[input, domain] : parameter.itemOrigins)
       origins.push_back(json::Object{{"input", input}, {"domain", domain}});
     (*scoped.back().getAsObject())["input_labels"] = std::move(labels);
     (*scoped.back().getAsObject())["item_origins"] = std::move(origins);

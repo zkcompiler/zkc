@@ -444,12 +444,12 @@ class ContractCheck {
     }
     for (unsigned i = 0; i < call.scopedArguments.size(); ++i) {
       OriginMap expected;
-      const auto &signature = callee.scopedInputs[i].signature;
-      if (!types.charge(signature.itemOrigins.size(), span))
+      const auto &parameter = callee.scopedInputs[i];
+      if (!types.charge(parameter.itemOrigins.size(), span))
         return false;
-      for (const auto &[input, formal] : signature.itemOrigins) {
+      for (const auto &[input, formal] : parameter.itemOrigins) {
         unsigned selected;
-        if (input >= signature.inputs.size() ||
+        if (input >= parameter.signature.inputs.size() ||
             formal >= call.domainArguments.size() ||
             !domain(context, call.domainArguments[formal], selected, span))
           return types.diagnostic ? false : refuse(span, "invalid item origin");
@@ -500,11 +500,12 @@ class ContractCheck {
     return true;
   }
   bool closedCallback(Context &context, const FiniteCallback &callback,
-                      unsigned domain, bool step, unsigned depth, Span span) {
+                      unsigned domain, unsigned itemInput, unsigned depth,
+                      Span span) {
     if (!bounded(depth, span) || callback.helper.index >= declarations.size())
       return types.diagnostic ? false : refuse(span, "invalid finite helper");
     const auto &helper = declarations[callback.helper.index];
-    unsigned explicitInputs = step ? 2 : 1;
+    unsigned explicitInputs = itemInput + 1;
     if (helper.inputs.size() != explicitInputs + callback.captures.size() ||
         domain >= domainBounds.size())
       return refuse(span, "finite helper input fact coverage differs");
@@ -523,7 +524,7 @@ class ContractCheck {
       inputs.push_back(std::move(*origin));
     }
     for (const auto &fact : domainBounds[domain]) {
-      auto index = inputs[step ? 1 : 0];
+      auto index = inputs[itemInput];
       index.second = fact.path;
       assumptions.push_back({DataPrecondition::Kind::IndexBound,
                              std::move(index), fact.container, 0, fact.axis});
@@ -619,11 +620,11 @@ class ContractCheck {
       return false;
     unsigned selected = domains[finite.domain->result];
     return closedCallback(context, finite.body, selected,
-                          finite.kind == FiniteApplication::Kind::Fold,
-                          depth + 1, span) &&
+                          finiteItemInput(finite.kind), depth + 1, span) &&
            (!finite.predicate ||
-            closedCallback(context, *finite.predicate, selected, false,
-                           depth + 1, span));
+            closedCallback(context, *finite.predicate, selected,
+                           finiteItemInput(finite.kind, true), depth + 1,
+                           span));
   }
   bool body(const Body &source, Facts inputs, Restrictions scoped,
             ArrayRef<unsigned> environment, unsigned depth,
@@ -788,12 +789,12 @@ class ContractCheck {
         unsigned selected;
         if (!domain(context, finite->domain, selected, op.span) ||
             !callback(context, finite->body,
-                      {{finite->kind == FiniteApplication::Kind::Fold ? 1u : 0u,
-                        selected}},
-                      depth + 1, op.span) ||
+                      {{finiteItemInput(finite->kind), selected}}, depth + 1,
+                      op.span) ||
             (finite->predicate &&
-             !callback(context, *finite->predicate, {{0, selected}}, depth + 1,
-                       op.span)))
+             !callback(context, *finite->predicate,
+                       {{finiteItemInput(finite->kind, true), selected}},
+                       depth + 1, op.span)))
           return false;
       } else if (const auto *finite =
                      std::get_if<FiniteComputation>(&op.action)) {
@@ -852,9 +853,9 @@ public:
     Restrictions selected;
     for (const auto &parameter : decl.scopedInputs) {
       OriginMap origins;
-      if (!types.charge(parameter.signature.itemOrigins.size(), parameter.span))
+      if (!types.charge(parameter.itemOrigins.size(), parameter.span))
         return false;
-      for (const auto &[input, formal] : parameter.signature.itemOrigins) {
+      for (const auto &[input, formal] : parameter.itemOrigins) {
         if (input >= parameter.signature.inputs.size() ||
             formal >= domains.size())
           return refuse(parameter.span, "invalid declared item origin");

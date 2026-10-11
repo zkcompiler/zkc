@@ -545,8 +545,7 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                             {});
         unsigned formalIndex = 0;
         for (const auto &binding : body.scopedBindings) {
-          if (!types.charge(binding.signature.itemOrigins.size() + 1,
-                            binding.span))
+          if (!types.charge(1, binding.span))
             return false;
           if (binding.parameter) {
             if (formalIndex >= formals.size() ||
@@ -675,7 +674,7 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
       return types.takeError();
     }
   }
-  if (auto error = checkComponentEffects(storage, work))
+  if (auto error = checkComponentContracts(storage, work))
     return error;
   for (auto count : invocationUses)
     if (count != 1)

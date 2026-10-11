@@ -59,7 +59,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){
     auto closed = take(closeEntry(project, "m::Run"));
     if (auto error = checkScopedSpecialization(closed))
       throw std::runtime_error(toString(std::move(error)));
-    require(named(project, "permute").scopedInputs[0].signature.itemOrigins ==
+    require(named(project, "permute").scopedInputs[0].itemOrigins ==
                 std::map<unsigned, unsigned>{{0, 1}, {2, 0}},
             "requirements are not normalized by explicit position");
   });
@@ -147,6 +147,31 @@ fn parse(body:fn(x:Fr)->Fr effects() where item_from(x,rows),item_from:Fr,
 fn empty(body:fn(Fr)->Fr effects() where (),x:Fr)->Fr effects(){return body(x);}
 )"));
   });
+  for (StringRef expression : {"if go {fold(rows,0,step)} else {0}",
+                               "invoke(0,fn(_)=>fold(rows,0,step))"})
+    cases.run("restricted callback forwarding inside a region: " + expression,
+              [&] {
+                auto source = R"(
+fn invoke(x:Fr,body:fn(Fr)->Fr effects(stop))->Fr effects(stop){return body(x);}
+fn forward(go:bool,rows:domain<Fr>,columns:domain<Fr>,
+ step:fn(Fr,item:Fr)->Fr effects(stop) where item_from(item,rows)
+)->Fr effects(stop){return )" +
+                              expression.str() + R"(;}
+protocol Demo roles(P)(go:bool@P,xs:Vector<Fr>@P)->(r:Fr@P){
+ return forward(go,elements(xs),elements(xs),fn(state,item)=>state+item);
+}run Run=Demo;
+)";
+                auto project = take(check(source));
+                if (auto error = checkScopedElaboration(project))
+                  throw std::runtime_error(toString(std::move(error)));
+                auto closed = take(closeEntry(project, "m::Run"));
+                if (auto error = checkScopedSpecialization(closed))
+                  throw std::runtime_error(toString(std::move(error)));
+                source.replace(source.find("fold(rows,0,step)"),
+                               StringRef("fold(rows,0,step)").size(),
+                               "fold(columns,0,step)");
+                refuses(check(source), "source.scoped-domain");
+              });
   cases.run("origin clause heads remain ordinary declaration names", [] {
     take(check(
         "fn on(x:Fr)->Fr{return x;} fn item_from(x:Fr)->Fr{return on(x);}"));
@@ -227,6 +252,43 @@ component Impl:Contract{fn run(rows:domain<Fr>,columns:domain<Fr>,body:fn(r:Fr,c
                               clause + ")->Fr effects(stop){return 0;}}"),
                         "source.conformance");
               });
+  for (const auto &contract :
+       {std::pair{"origins", "rows:domain<Fr>,body:fn(item:Fr)->Fr "
+                             "effects(stop) where item_from(item,rows)"},
+        std::pair{"ceiling", "rows:domain<Fr>,body:fn(Fr)->Fr effects()"},
+        std::pair{"mode", "rows:domain<Fr>,body:math fn(Fr)->Fr"},
+        std::pair{"input type",
+                  "rows:domain<Fr>,body:fn(index)->Fr effects(stop)"},
+        std::pair{"result type",
+                  "rows:domain<Fr>,body:fn(Fr)->index effects(stop)"},
+        std::pair{"argument order",
+                  "body:fn(Fr)->Fr effects(stop),rows:domain<Fr>"}})
+    cases.run(
+        "independent component callback contract: " +
+            std::string(contract.first),
+        [&] {
+          const std::string offered =
+              "rows:domain<Fr>,body:fn(Fr)->Fr effects(stop)";
+          const std::string required = contract.second;
+          auto project = take(check("interface Required{fn run(" + required +
+                                    ")->Fr effects();}"
+                                    "interface Offered{fn run(" +
+                                    offered +
+                                    ")->Fr effects();}"
+                                    "component Impl:Offered{fn run(" +
+                                    offered +
+                                    ")->Fr effects(){return 0;}}"
+                                    "component Anchor:Required{fn run(" +
+                                    required + ")->Fr effects(){return 0;}}"));
+          // Every declaration still agrees with its own retained source. Only
+          // the relation between the component and its selected interface is
+          // changed.
+          auto &implementation =
+              const_cast<Declaration &>(named(project, "Impl"));
+          implementation.implementation =
+              named(project, "Anchor").implementation;
+          errorIs(checkScopedElaboration(project), "source.scoped-witness");
+        });
   for (const auto &outer : {"", " where ()", " where 1<=N"})
     cases.run("callback where preserves natural inference" + std::string(outer),
               [&] {
@@ -290,7 +352,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs
     cases.run("independent formal contract mutation " + Twine(mutation), [&] {
       auto project = take(check(""));
       auto &decl = const_cast<Declaration &>(named(project, "grid"));
-      auto &origins = decl.scopedInputs[0].signature.itemOrigins;
+      auto &origins = decl.scopedInputs[0].itemOrigins;
       if (mutation == 0)
         origins = {{1, 0}, {0, 1}};
       else if (mutation == 1)
@@ -353,7 +415,7 @@ interface Grid {
     for (const auto &decl : project.declarations())
       if (decl.abstract && decl.name == "run") {
         auto &changed = const_cast<Declaration &>(decl);
-        changed.scopedInputs.front().signature.itemOrigins = {{0, 1}, {1, 0}};
+        changed.scopedInputs.front().itemOrigins = {{0, 1}, {1, 0}};
         mutated = true;
       }
     require(mutated, "missing abstract contract fixture");

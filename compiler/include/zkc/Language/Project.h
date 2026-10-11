@@ -162,13 +162,9 @@ struct ScopedSignature {
   std::vector<Type> inputs;
   Type result;
   Effects allowance;
-  /// Canonical input position -> enclosing domain formal position.
-  /// Each invocation must supply the whole original item of that domain.
-  std::map<unsigned, unsigned> itemOrigins = {};
   bool operator==(const ScopedSignature &other) const {
     return mode == other.mode && inputs == other.inputs &&
-           result == other.result && allowance == other.allowance &&
-           itemOrigins == other.itemOrigins;
+           result == other.result && allowance == other.allowance;
   }
 };
 struct ScopedParameter {
@@ -177,6 +173,9 @@ struct ScopedParameter {
   Span span;
   /// Source-only labels; excluded from semantic signature identity.
   std::vector<std::string> inputLabels = {};
+  /// Canonical input position -> this declaration's domain formal position.
+  /// Each invocation must supply the whole original item of that domain.
+  std::map<unsigned, unsigned> itemOrigins = {};
 };
 /// Finite domains are a separate static argument category. Their ordinary
 /// operands remain checked data values with authored evaluation order.
