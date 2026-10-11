@@ -108,6 +108,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/nix
+        with:
+          cache-key-target: .#checks.x86_64-linux.rust
       - name: Check the Rust workspace with cached dependencies
         run: |
           mkdir -p build/reports

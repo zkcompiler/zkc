@@ -13,6 +13,9 @@ inputs:
   cache-scope:
     description: Separate store snapshots for jobs with different build graphs
     default: "${{ github.job }}"
+  cache-key-target:
+    description: Optional flake target whose derivation identifies this snapshot
+    default: ""
   cache-save:
     description: Save a new snapshot after a successful job
     default: "true"
@@ -61,10 +64,23 @@ runs:
       if: inputs.require-cache == 'true'
       shell: bash
       run: bash .github/scripts/check-nix-cache.sh --assert-empty
+    - name: Select the cache identity
+      id: cache-identity
+      if: inputs.cache == 'true'
+      env:
+        CACHE_KEY_TARGET: ${{ inputs.cache-key-target }}
+      shell: bash
+      run: |
+        identity=$GITHUB_SHA
+        if [ -n "$CACHE_KEY_TARGET" ]; then
+          derivation=$(nix eval --raw "$CACHE_KEY_TARGET.drvPath")
+          identity=${derivation##*/}
+        fi
+        echo "identity=$identity" >> "$GITHUB_OUTPUT"
     - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
       if: inputs.cache == 'true'
       with:
-        primary-key: nix-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock') }}-${{ github.sha }}
+        primary-key: nix-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock') }}-${{ steps.cache-identity.outputs.identity }}
         restore-prefixes-first-match: |
           nix-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock') }}-
         save: ${{ inputs.cache-save }}
