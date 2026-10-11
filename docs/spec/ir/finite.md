@@ -199,7 +199,11 @@ path even when their mathematical meaning is known.
 The analysis retains all constructors in admission order separately from the
 items of the returned descriptor, and retains every helper instruction even
 when no bulk equation applies. Reduction, elementwise and bilinear selection
-consume this common view. Extent premises for optional selection come from
+consume this common view through separate transient equation matches; the
+structural record contains no selected strategy or operation name. Axis identity
+includes the domain occurrence and coordinate. Exact input environments retain
+domain inputs, seeds, items and invariant captures without substituting an
+initial seed for recurrent state. Extent premises for optional selection come from
 the source domain and admitted helper preconditions; occurrence-only evidence
 that the independent reader cannot reconstruct retains the ordered realization.
 
@@ -212,9 +216,10 @@ failures; they cannot authorize publishing an unchecked candidate. Explicit map
 realization, which requires its bulk implementation, reports a diagnostic when
 that implementation is unavailable.
 
-One finite realization stage shares work across its definitions and nested
-expressions: 1,000,000 lane work units, 100,000 expanded helper operations,
-1,000,000 helper operand/result slots and 100,000 polynomial expansion units.
+One Local preparation invocation shares realization work across helper, finite
+and map realization: 1,000,000 optional lane work units, 100,000 expanded helper
+operations, 1,000,000 helper operand/result slots, 100,000 polynomial expansion
+units and 100,000 total finite expressions.
 Lane work reserves eight units per operation, block argument and operand/result
 slot before building or emitting its formula. These are compiler implementation limits,
 separate from runtime resources and Ring's own admission bounds. Standalone
@@ -222,8 +227,26 @@ transform invocations start a fresh stage scope; an enclosing caller can supply
 the shared context. Required helper expansion reports a capacity refusal.
 Bound/extent queries made by the independent payload reader consume its enclosing
 comparison budget rather than obtaining a fresh allowance for every query.
-Required maps retain their separate cumulative helper admission limits instead
-of consuming the optional finite-strategy allowance.
+Required maps consume the shared helper-copy allowance, independently of optional
+lane work. The staged ordinary-call expander retains its own cumulative
+occurrence and work accounting. Diagnostic stage observations never reset either
+context. A private candidate publishes only after its source/candidate reader
+accepts; failure leaves the source and externally published occurrence state
+unchanged.
+
+Each finite declaration or total-expression check has a separate required-reader
+allowance of 100,000 work units. Optional exact payload comparison receives at
+most 100,000 units, capped by the required reader's remaining allowance without
+spending it. A successful comparison may consume its final unit. Work or
+representation exhaustion is distinguished from a correspondence mismatch.
+On optional comparison exhaustion, the enclosing candidate is discarded and
+retried once from the immutable source with finite bulk selection disabled.
+The retry preserves spent optional recognition/lane work and reserves required
+construction work for ordered execution. Declaration realization retries its
+whole module; total-expression realization retries its selected calculations.
+Already checked earlier stages remain unchanged. An observed mismatch fails
+immediately. Required-reader exhaustion, or exhaustion of the ordered retry,
+refuses with `finite-verification-capacity`; it never publishes unchecked IR.
 
 The independent reader reconstructs the source domain and payload and reads
 actual candidate operands separately. It does not use the selector's classified

@@ -15,6 +15,38 @@ struct Computation {
   unsigned arguments = 0, states = 0, captures = 0;
   bool total = false, collect = false;
 };
+enum class CallbackRole { Step, Body, Predicate };
+enum class CallbackExit { Return, Stop };
+struct EntryValues {
+  mlir::ValueRange domain, initialState, captures;
+};
+struct CallbackValues {
+  mlir::ValueRange state, items, domain, captures;
+};
+// Borrowed, checked views; rebuild after changing the source subject. These
+// describe only the ABI, not helper closure admission or expression meaning.
+struct CallbackView {
+  mlir::Operation *symbol;
+  mlir::Block *body;
+  mlir::FunctionType signature;
+  CallbackRole role;
+  CallbackValues formals;
+  mlir::Operation *terminator;
+  CallbackExit exit;
+  mlir::ValueRange returned;
+};
+struct CallEnvironment {
+  CallbackView callback;
+  // Complete formal order. Aliased actuals retain distinct formal positions.
+  llvm::SmallVector<mlir::Value> actuals;
+  mlir::FailureOr<mlir::Value> lookup(mlir::BlockArgument formal) const;
+};
+mlir::FailureOr<EntryValues> partitionEntry(const Computation &computation,
+                                            mlir::ValueRange actuals);
+mlir::FailureOr<CallbackView> readCallback(const Computation &computation,
+                                           CallbackRole role);
+mlir::FailureOr<CallEnvironment> bindCallback(const CallbackView &callback,
+                                              CallbackValues actuals);
 mlir::FailureOr<mlir::StringAttr> closureKey(mlir::Operation *op);
 bool isComputation(mlir::Operation *op);
 bool isDeclaration(mlir::Operation *op);

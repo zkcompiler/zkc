@@ -29,5 +29,11 @@ paths preserve values and required shape checks under sufficient resources;
 resource exhaustion can differ. The [integration controls](../../../common/tests/protocol/test_finite_reductions.py)
 exercise these distinctions with independent field arithmetic.
 
+The scalar spelling stays available to analysis before recipe selection. The
+compiler recognizes its contraction equation, then selects an installed logical
+operation and independently checks the emitted body. An unavailable recipe or
+exhausted optional recognition allowance retains the ordered loop. The source
+library API and imports are the same on both paths.
+
 See the [language guide](../../../docs/language/notation.md) for scope and imports,
 and the [compiler guide](../../../docs/compiler/mathematics.md) for the optimization boundary.

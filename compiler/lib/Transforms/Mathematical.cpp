@@ -30,6 +30,7 @@
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringSet.h"
+#include <chrono>
 #include <map>
 
 using namespace mlir;
@@ -819,8 +820,59 @@ LogicalResult simplifyCalculations(Operation *body) {
   return success();
 }
 
-OwningOpRef<ModuleOp>
-rewriteLocalAlgorithms(ModuleOp source, MathematicalSelectionPolicy policy) {
+namespace {
+uint64_t operationCount(ModuleOp module) {
+  uint64_t count = 0;
+  module.walk([&](Operation *) { ++count; });
+  return count;
+}
+// Keep RetainMaps through Finish inside one invocation: the occurrence record
+// and cumulative expansion budget are not recomputable pass analyses.
+LogicalResult runRealizationStage(ModuleOp module, StringRef name,
+                                  RealizationTrace *trace,
+                                  llvm::function_ref<LogicalResult()> action) {
+  if (!trace)
+    return action();
+  RealizationStage record;
+  record.name = name.str();
+  record.operationsBefore = operationCount(module);
+  if (trace->ir) {
+    *trace->ir << "// Before mathematical stage: " << name << "\n";
+    module.print(*trace->ir);
+    *trace->ir << "\n";
+  }
+  auto start = std::chrono::steady_clock::now();
+  auto result = action();
+  record.microseconds = std::chrono::duration_cast<std::chrono::microseconds>(
+                            std::chrono::steady_clock::now() - start)
+                            .count();
+  record.completed = succeeded(result);
+  record.operationsAfter = operationCount(module);
+  if (trace->remarks)
+    module.emitRemark() << "mathematical stage " << name << ": "
+                        << (record.completed ? "completed" : "refused") << ", "
+                        << record.operationsBefore << " -> "
+                        << record.operationsAfter << " operations, "
+                        << record.microseconds << " us";
+  if (trace->ir) {
+    *trace->ir << "// After mathematical stage: " << name << " ("
+               << (record.completed ? "completed" : "refused") << ")\n";
+    module.print(*trace->ir);
+    *trace->ir << "\n";
+  }
+  trace->stages.push_back(std::move(record));
+  return result;
+}
+} // namespace
+OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
+                                             MathematicalSelectionPolicy policy,
+                                             RealizationTrace *trace) {
+  if (trace) {
+    trace->policy = policy;
+    trace->stages.clear();
+    trace->initialWork = {};
+    trace->remainingWork = {};
+  }
   if (failed(verify(source)))
     return {};
   if (!llvm::hasSingleElement(*source.getBody())) {
@@ -838,35 +890,75 @@ rewriteLocalAlgorithms(ModuleOp source, MathematicalSelectionPolicy policy) {
     return {};
   }
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
-  if (failed(expandPolynomialRecipes(*candidate)) ||
-      failed(expandMathRealizations(*candidate, policy)))
+  RealizationWork work;
+  if (trace) {
+    trace->initialWork = work;
+    std::string configuration;
+    llvm::raw_string_ostream out(configuration);
+    out << "finite-bulk=" << policy.finiteBulk
+        << ", vector-reduction-fusion=" << policy.vectorReductionFusion
+        << ", lane-work=" << work.lanes
+        << ", helper-operations=" << work.helperOperations
+        << ", helper-slots=" << work.helperSlots
+        << ", polynomial-work=" << work.polynomial
+        << ", finite-expressions=" << work.finiteExpressions
+        << ", structural-work=" << work.matching.structural
+        << ", equation-work=" << work.matching.equations
+        << ", evidence-work=" << work.matching.evidence;
+    if (trace->remarks)
+      candidate->emitRemark() << "mathematical preparation: " << configuration;
+    if (trace->ir)
+      *trace->ir << "// Mathematical preparation: " << configuration << "\n";
+  }
+  auto stage = [&](StringRef name, llvm::function_ref<LogicalResult()> action) {
+    auto result = runRealizationStage(*candidate, name, trace, action);
+    if (trace)
+      trace->remainingWork = work;
+    return result;
+  };
+  if (failed(stage("polynomial-recipes",
+                   [&] { return expandPolynomialRecipes(*candidate); })) ||
+      failed(stage("math-realizations", [&] {
+        return expandMathRealizations(*candidate, policy, &work);
+      })))
     return {};
-  // Each service owns its proposed candidate and invokes its independent
-  // source/candidate reader before publication. Compose those checked edges
-  // directly: another clone and the same check here would duplicate their work.
-  // Retain structure until nested and ordinary finite selection and optional
-  // fusion finish; projection later freezes their accepted Local definitions.
+  // Services publish independently checked edges. Retain structure through
+  // nested/ordinary finite selection and fusion, using the same expansion
+  // state for both phases. Observability does not split this transaction.
   bool retain = policy.vectorReductionFusion;
   candidate->walk([&](Operation *op) { retain |= finite::isDeclaration(op); });
   protocol::AlgorithmExpansionState expansion;
-  if (retain &&
-      (failed(protocol::expandAlgorithms(
-           *candidate, protocol::AlgorithmExpansionPhase::RetainMaps,
-           expansion)) ||
-       failed(
-           nested::rewriteFiniteCollections(*candidate, expansion, policy)) ||
-       failed(finite::realizeLocals(*candidate, policy)) ||
-       (policy.vectorReductionFusion &&
-        failed(mathematical::fuseVectorReductions(*candidate, expansion)))))
-    return {};
-  if (failed(expandMapRealizations(*candidate)))
-    return {};
-  // Without a retained computation there is no intermediate selection window.
-  // A single expansion preserves its work budget and ordinary call-free path.
-  if (retain ? failed(protocol::expandAlgorithms(
-                   *candidate, protocol::AlgorithmExpansionPhase::Finish,
-                   expansion))
-             : failed(protocol::expandAlgorithms(*candidate)))
+  if (retain) {
+    if (failed(stage("retain-computations",
+                     [&] {
+                       return protocol::expandAlgorithms(
+                           *candidate,
+                           protocol::AlgorithmExpansionPhase::RetainMaps,
+                           expansion);
+                     })) ||
+        failed(stage("nested-contractions",
+                     [&] {
+                       return nested::rewriteFiniteCollections(
+                           *candidate, expansion, policy, &work);
+                     })) ||
+        failed(stage("finite-realizations", [&] {
+          return finite::realizeLocals(*candidate, policy, &work);
+        })))
+      return {};
+    if (policy.vectorReductionFusion && failed(stage("vector-reductions", [&] {
+          return mathematical::fuseVectorReductions(*candidate, expansion);
+        })))
+      return {};
+  }
+  if (failed(stage("map-realizations",
+                   [&] { return expandMapRealizations(*candidate, &work); })) ||
+      failed(stage("finish-expansion", [&] {
+        return retain
+                   ? protocol::expandAlgorithms(
+                         *candidate, protocol::AlgorithmExpansionPhase::Finish,
+                         expansion)
+                   : protocol::expandAlgorithms(*candidate);
+      })))
     return {};
   return candidate;
 }
@@ -876,8 +968,9 @@ namespace {
 // accepted Local definitions are frozen for preparation and projection checks.
 OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
                                     MathematicalSelectionPolicy policy,
-                                    ArrayRef<ApplicationStart> starts = {}) {
-  auto candidate = rewriteLocalAlgorithms(source, policy);
+                                    ArrayRef<ApplicationStart> starts = {},
+                                    RealizationTrace *trace = nullptr) {
+  auto candidate = rewriteLocalAlgorithms(source, policy, trace);
   if (!candidate)
     return {};
   auto unit =
@@ -951,6 +1044,15 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
       llvm::cl::desc(
           "Fuse admitted vector reductions under sufficient resources"),
       llvm::cl::init(false)};
+  Option<bool> traceMathematics{
+      *this, "trace-mathematics",
+      llvm::cl::desc("Report mathematical preparation stages and measurements"),
+      llvm::cl::init(false)};
+  Option<bool> dumpMathematics{
+      *this, "dump-mathematics",
+      llvm::cl::desc(
+          "Dump IR before and after mathematical preparation stages"),
+      llvm::cl::init(false)};
   StringRef getArgument() const final { return "zkc-prepare-protocol"; }
   StringRef getDescription() const final {
     return "Admit mathematical definitions, expand pure helpers, and simplify "
@@ -958,8 +1060,12 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   }
   void runOnOperation() final {
     auto source = getOperation();
-    auto candidate =
-        prepareSource(source, simplify, {optimizeFinite, fuseVectorReductions});
+    RealizationTrace trace;
+    trace.remarks = traceMathematics;
+    trace.ir = dumpMathematics ? &llvm::errs() : nullptr;
+    auto candidate = prepareSource(
+        source, simplify, {optimizeFinite, fuseVectorReductions}, {},
+        traceMathematics || dumpMathematics ? &trace : nullptr);
     if (!candidate)
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());

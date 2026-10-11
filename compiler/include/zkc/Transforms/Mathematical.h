@@ -2,6 +2,7 @@
 #define ZKC_TRANSFORMS_MATHEMATICAL_H
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Transforms/MathematicalSelection.h"
+#include "zkc/Transforms/MathematicalTrace.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -30,7 +31,8 @@ prepareProtocol(mlir::ModuleOp source, bool simplify = true,
 /// this accepted Local input.
 mlir::OwningOpRef<mlir::ModuleOp>
 rewriteLocalAlgorithms(mlir::ModuleOp source,
-                       MathematicalSelectionPolicy policy = {});
+                       MathematicalSelectionPolicy policy = {},
+                       RealizationTrace *trace = nullptr);
 
 /// Admit the whole mathematical module, then check polynomial observations in
 /// selected pure helpers even when no execution path calls them. Expansion and
@@ -59,7 +61,8 @@ mlir::LogicalResult expandPolynomialRecipes(mlir::ModuleOp module);
 /// and calculation lowerers. Calls remain ordered and expand with local.apply.
 mlir::LogicalResult
 expandMathRealizations(mlir::ModuleOp module,
-                       MathematicalSelectionPolicy policy = {});
+                       MathematicalSelectionPolicy policy = {},
+                       RealizationWork *work = nullptr);
 /// Structural containment check, not an independent proof of the math lowerers.
 /// Checks retained declarations, data-only recipes and binding accounting.
 mlir::LogicalResult verifyMathRealizationsPreserved(mlir::ModuleOp original,
@@ -71,7 +74,8 @@ mlir::LogicalResult verifyMathRealizationsPreserved(mlir::ModuleOp original,
 /// checks every rowwise input's length against the first before arithmetic,
 /// then applies the live formula with O(formula) checked vector operations.
 /// Calls remain ordered local.apply occurrences.
-mlir::LogicalResult expandMapRealizations(mlir::ModuleOp module);
+mlir::LogicalResult expandMapRealizations(mlir::ModuleOp module,
+                                          RealizationWork *work = nullptr);
 /// Independently interpret the retained scalar formula and actual candidate
 /// payload under admitted ring laws. Check ordered shape guards, return use,
 /// bindings and unchanged declarations separately from payload equivalence. It

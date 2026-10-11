@@ -21,3 +21,20 @@ class ZKC_ReductionRecipe<ZKC_Operation combine, ZKC_Operation target,
   // actions use the group input even though MSM's native first input is scalar.
   int staticSourceOperand = 0;
 }
+
+// Closed matrix contraction algorithms. The form determines semantic input
+// roles, free/reduced matrix axes and scalar versus lane-wise seed combining.
+// The scalar declarations retain ownership of the underlying field laws.
+class ZKC_MatrixContractionRecipe<ZKC_Operation combine, ZKC_Operation product,
+    ZKC_Operation target, string form, ZKC_Operation seedCombine,
+    list<int> order, list<int> free, list<int> reduced> {
+  ZKC_Operation source = combine;
+  ZKC_Operation term = product;
+  ZKC_Operation endpoint = target;
+  ZKC_Operation seedCombiner = seedCombine;
+  string kind = form;
+  list<int> operands = order;
+  list<int> freeAxes = free;
+  list<int> reducedAxes = reduced;
+  list<int> staticArguments = [0];
+}

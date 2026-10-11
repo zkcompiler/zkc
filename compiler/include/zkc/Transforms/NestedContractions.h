@@ -4,6 +4,7 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/MathematicalSelection.h"
+#include "zkc/Transforms/MathematicalWork.h"
 
 namespace zkc::nested {
 /// Checked collection of all matrix row/column contractions. Run in the
@@ -23,14 +24,16 @@ namespace zkc::nested {
 mlir::LogicalResult
 rewriteFiniteCollections(mlir::ModuleOp module,
                          protocol::AlgorithmExpansionState &state,
-                         MathematicalSelectionPolicy policy = {});
+                         MathematicalSelectionPolicy policy = {},
+                         mathematical::RealizationWork *work = nullptr);
 
 /// Raw pre-expansion IR entry, only for modules with no prior helper
 /// expansion paths. Uses a temporary origin record for the checked rewrite.
 /// Callers retaining origins through Finish must use the staged overload above.
 mlir::LogicalResult
 rewriteFiniteCollections(mlir::ModuleOp module,
-                         MathematicalSelectionPolicy policy = {});
+                         MathematicalSelectionPolicy policy = {},
+                         mathematical::RealizationWork *work = nullptr);
 
 /// Independently reads the actual source domains, callback operands, scalar
 /// laws, seeds, candidate control and unchanged context. Does not invoke the

@@ -401,6 +401,42 @@ int main(int argc, char **argv) {
       require(bool(module), "matrix fixture refused");
       pipeline(*module);
     });
+  for (bool optimize : {false, true})
+    cases.run(
+        optimize ? "bulk identity collect retains eager ignored capture"
+                 : "ordered identity collect retains eager ignored capture",
+        [&] {
+          auto text = replace(
+              fixture("total-collect"),
+              "   %y = algebra.field_multiply %x,%factor : (!F,!F)->!F\n"
+              "   %z = algebra.field_add %y,%factor : (!F,!F)->!F\n"
+              "   func.return %z : !F",
+              "   func.return %x : !F");
+          text = replace(
+              text, "   %r = \"algebra.finite_collect\"(%xs,%factor)",
+              "   %capture = algebra.field_add %factor,%factor : (!F,!F)->!F\n"
+              "   %r = \"algebra.finite_collect\"(%xs,%capture)");
+          auto module = parseSourceString<ModuleOp>(text, &context);
+          require(bool(module), "ignored capture fixture refused");
+          PassManager lower(&context);
+          lower.addPass(
+              protocol::createProjectProtocolPass(optimize, {optimize, false}));
+          lower.addPass(protocol::createEliminatePolynomialsPass());
+          lower.addPass(protocol::createLowerMathPass({optimize, false}));
+          require(succeeded(lower.run(*module)),
+                  "ignored capture lowering failed");
+          unsigned additions = 0;
+          module->walk([&](Operation *op) {
+            additions += op->getName().getStringRef() ==
+                         protocol::boundOperationName("field.add");
+          });
+          require(additions == 1,
+                  "eager capture calculation was removed or duplicated");
+          PassManager physical(&context);
+          physical.addPass(protocol::createSelectPhysicalPass());
+          require(succeeded(physical.run(*module)),
+                  "ignored capture physical selection failed");
+        });
   cases.run("finite repeated state fixed point and conservative cloning", [&] {
     auto module = parseSourceString<ModuleOp>(fixture("total-state"), &context);
     require(bool(module), "total fixture refused");

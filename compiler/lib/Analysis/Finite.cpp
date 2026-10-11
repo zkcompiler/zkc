@@ -356,23 +356,39 @@ bool sameCardinality(Value left, Value right, const Computation &c,
   }
   return false;
 }
-LogicalResult helperAssumptions(const Computation &c, Operation *helper,
-                                bool step, EvidenceWork &work) {
+LogicalResult helperAssumptions(const Computation &c, CallbackRole role,
+                                EvidenceWork &work) {
+  auto callback = readCallback(c, role);
+  if (failed(callback))
+    return failure();
+  auto *helper = callback->symbol;
   auto attrs = preconditions(helper);
   if (!attrs)
     return success();
   if (failed(verifyPreconditions(helper)))
     return failure();
   auto items = itemBounds(domainResult(c.domain), work);
+  if (items.size() != callback->formals.items.size())
+    return refuse(c.operation, "finite item bound partition", "finite-bound");
   if (!work.charge(attrs.size() + 1))
     return refuse(c.operation, "finite evidence work limit", "finite-bound");
-  unsigned offset = step ? c.states : 0;
-  unsigned argBase = offset + items.size();
+  unsigned offset = callback->formals.state.size();
+  unsigned argBase = offset + callback->formals.items.size();
+  llvm::DenseMap<Value, Value> invariants;
+  if (c.total) {
+    auto entry = partitionEntry(c, c.operation->getOperands());
+    if (failed(entry))
+      return failure();
+    for (auto [formal, actual] : zip(callback->formals.domain, entry->domain))
+      invariants[formal] = actual;
+    for (auto [formal, actual] :
+         zip(callback->formals.captures, entry->captures))
+      invariants[formal] = actual;
+  }
   auto actual = [&](unsigned param) -> Value {
-    if (!c.total || param < argBase)
-      return {};
-    unsigned i = param - argBase;
-    return c.operation->getOperand(i < c.arguments ? i : i + c.states);
+    return param < callback->body->getNumArguments()
+               ? invariants.lookup(callback->body->getArgument(param))
+               : Value();
   };
   for (auto attr : attrs) {
     if (auto bound = dyn_cast<data::IndexBoundAttr>(attr)) {
@@ -574,6 +590,113 @@ LogicalResult describe(Operation *op, Computation &c, Operation *symbolRoot,
   c.captures = c.signature.getNumInputs() - c.arguments - c.states;
   return success();
 }
+namespace {
+bool entryShape(const Computation &c) {
+  if (!c.signature || !c.domain ||
+      c.signature.getNumInputs() != c.arguments + c.states + c.captures ||
+      (c.collect ? c.states != 0 || c.signature.getNumResults() != 1
+                 : c.states != c.signature.getNumResults()))
+    return false;
+  auto domainType = signature(c.domain);
+  return domainType && domainType.getNumInputs() == c.arguments &&
+         domainType.getNumResults() == 1 &&
+         isa<data::DomainType>(domainType.getResult(0)) &&
+         c.signature.getInputs().take_front(c.arguments) ==
+             domainType.getInputs() &&
+         (c.collect || c.signature.getInputs().slice(c.arguments, c.states) ==
+                           c.signature.getResults());
+}
+bool sameTypes(ValueRange values, TypeRange types) {
+  return values.size() == types.size() &&
+         llvm::all_of(llvm::zip(values, types), [](auto pair) {
+           auto [value, type] = pair;
+           return value && value.getType() == type;
+         });
+}
+} // namespace
+FailureOr<EntryValues> partitionEntry(const Computation &c,
+                                      ValueRange actuals) {
+  if (!entryShape(c) || !sameTypes(actuals, c.signature.getInputs()))
+    return failure();
+  return EntryValues{actuals.take_front(c.arguments),
+                     actuals.slice(c.arguments, c.states),
+                     actuals.drop_front(c.arguments + c.states)};
+}
+FailureOr<CallbackView> readCallback(const Computation &c, CallbackRole role) {
+  if (!entryShape(c) || (role == CallbackRole::Step && c.collect) ||
+      (role == CallbackRole::Body && !c.collect))
+    return failure();
+  auto *helper = role == CallbackRole::Predicate ? c.predicate : c.helper;
+  auto type = signature(helper);
+  auto visibility = helper ? helper->getAttrOfType<StringAttr>("sym_visibility")
+                           : StringAttr();
+  if (!type || !visibility || visibility.getValue() != "private" ||
+      (c.total ? !isa<func::FuncOp>(helper) : !isa<local::FuncOp>(helper)) ||
+      helper->getNumRegions() != 1 || !helper->getRegion(0).hasOneBlock())
+    return failure();
+  auto &body = helper->getRegion(0).front();
+  auto items =
+      cast<data::DomainType>(signature(c.domain).getResult(0)).getItemTypes();
+  unsigned states = role == CallbackRole::Step ? c.states : 0;
+  SmallVector<Type> inputs, outputs;
+  if (states)
+    append_range(inputs, c.signature.getResults());
+  append_range(inputs, items);
+  append_range(inputs, c.signature.getInputs().take_front(c.arguments));
+  append_range(inputs,
+               c.signature.getInputs().drop_front(c.arguments + c.states));
+  if (role == CallbackRole::Predicate)
+    outputs.push_back(IntegerType::get(helper->getContext(), 1));
+  else if (role == CallbackRole::Body) {
+    auto element = elementType(c.signature.getResult(0));
+    if (!element)
+      return failure();
+    outputs.push_back(element);
+  } else
+    append_range(outputs, c.signature.getResults());
+  if (type.getInputs() != ArrayRef<Type>(inputs) ||
+      type.getResults() != ArrayRef<Type>(outputs) || body.empty() ||
+      !sameTypes(body.getArguments(), inputs))
+    return failure();
+  auto *terminator = &body.back();
+  bool stop = !c.total && isa<local::StopOp>(terminator);
+  if (!stop && ((c.total ? !isa<func::ReturnOp>(terminator)
+                         : !isa<local::ReturnOp>(terminator)) ||
+                !sameTypes(terminator->getOperands(), outputs)))
+    return failure();
+  ValueRange formals = body.getArguments();
+  return CallbackView{
+      helper,
+      &body,
+      type,
+      role,
+      {formals.take_front(states), formals.slice(states, items.size()),
+       formals.slice(states + items.size(), c.arguments),
+       formals.drop_front(states + items.size() + c.arguments)},
+      terminator,
+      stop ? CallbackExit::Stop : CallbackExit::Return,
+      stop ? ValueRange{} : ValueRange(terminator->getOperands())};
+}
+FailureOr<CallEnvironment> bindCallback(const CallbackView &callback,
+                                        CallbackValues actuals) {
+  CallEnvironment result{callback, {}};
+  for (auto [formal, actual] :
+       {std::pair{callback.formals.state, actuals.state},
+        std::pair{callback.formals.items, actuals.items},
+        std::pair{callback.formals.domain, actuals.domain},
+        std::pair{callback.formals.captures, actuals.captures}}) {
+    if (!sameTypes(actual, formal.getTypes()))
+      return failure();
+    append_range(result.actuals, actual);
+  }
+  return result;
+}
+FailureOr<Value> CallEnvironment::lookup(BlockArgument formal) const {
+  if (!formal || formal.getOwner() != callback.body ||
+      formal.getArgNumber() >= actuals.size())
+    return failure();
+  return actuals[formal.getArgNumber()];
+}
 LogicalResult verifyLocal(Operation *op) {
   if (!isComputation(op))
     return refuse(op, "expected finite computation");
@@ -605,47 +728,12 @@ LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
   Computation c;
   if (failed(describe(op, c, nullptr, &symbols)))
     return failure();
-  auto dt = c.domain.getFunctionType();
   auto inputs = c.signature.getInputs();
-  if (inputs.take_front(c.arguments) != dt.getInputs() ||
-      (!c.collect &&
-       inputs.slice(c.arguments, c.states) != c.signature.getResults()))
-    return refuse(op, "finite domain/state signature");
-  SmallVector<Type> hi;
-  if (!c.collect)
-    append_range(hi, c.signature.getResults());
-  append_range(hi, cast<data::DomainType>(dt.getResult(0)).getItemTypes());
-  append_range(hi, dt.getInputs());
-  append_range(hi, inputs.drop_front(c.arguments + c.states));
-  Type element = c.collect ? elementType(c.signature.getResult(0)) : Type();
-  if (c.collect && !element)
-    return refuse(op, "collect requires an explicit native collection result");
-  SmallVector<Type> outputs;
-  if (c.collect)
-    outputs.push_back(element);
-  else
-    append_range(outputs, c.signature.getResults());
-  auto checkHelper = [&](Operation *helper, ArrayRef<Type> args,
-                         ArrayRef<Type> results) -> LogicalResult {
-    auto type = signature(helper);
-    auto visibility = helper->getAttrOfType<StringAttr>("sym_visibility");
-    if (!type || type.getInputs() != args || type.getResults() != results ||
-        !visibility || visibility.getValue() != "private" ||
-        helper->getNumRegions() != 1 || !helper->getRegion(0).hasOneBlock() ||
-        helper->getRegion(0).front().empty() ||
-        (c.total ? !isa<func::FuncOp>(helper) : !isa<local::FuncOp>(helper)))
-      return refuse(op,
-                    "expected defined private helper with exact finite ABI");
-    return success();
-  };
-  if (failed(checkHelper(c.helper, hi, outputs)))
-    return failure();
-  if (c.predicate) {
-    auto pi = ArrayRef<Type>(hi).drop_front(c.states);
-    if (failed(checkHelper(c.predicate, pi,
-                           {IntegerType::get(op->getContext(), 1)})))
-      return failure();
-  }
+  auto callback =
+      readCallback(c, c.collect ? CallbackRole::Body : CallbackRole::Step);
+  if (failed(callback) ||
+      (c.predicate && failed(readCallback(c, CallbackRole::Predicate))))
+    return refuse(op, "expected defined private helper with exact finite ABI");
   auto native = [&](Type type) {
     auto bound = protocol::encodeBoundType(type, false);
     if (!bound) {
@@ -668,8 +756,9 @@ LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
       return refuse(op, "finite result policy");
   }
   EvidenceWork work;
-  if (failed(helperAssumptions(c, c.helper, !c.collect, work)) ||
-      (c.predicate && failed(helperAssumptions(c, c.predicate, false, work))))
+  if (failed(helperAssumptions(c, callback->role, work)) ||
+      (c.predicate &&
+       failed(helperAssumptions(c, CallbackRole::Predicate, work))))
     return failure();
   if (c.total) {
     for (auto &constructor : c.domain.getBody().front()) {
@@ -904,31 +993,42 @@ public:
     BitVector admission(size);
     for (unsigned i = 0; i < c.arguments; ++i)
       admission.set(i);
+    auto callback =
+        readCallback(c, c.collect ? CallbackRole::Body : CallbackRole::Step);
+    if (failed(callback))
+      return failure();
+    llvm::DenseMap<Value, BitVector> dependencies;
+    auto inputs = [&](ValueRange formals, unsigned base) {
+      for (auto [i, formal] : enumerate(formals)) {
+        BitVector bits(size);
+        bits.set(base + i);
+        dependencies[formal] = std::move(bits);
+      }
+    };
+    inputs(callback->formals.state, c.arguments);
+    inputs(callback->formals.domain, 0);
+    inputs(callback->formals.captures, c.arguments + c.states);
+    for (Value formal : callback->formals.items)
+      dependencies[formal] = admission;
     SmallVector<BitVector> args;
-    for (unsigned i = 0; i < c.states; ++i) {
-      BitVector b(size);
-      b.set(c.arguments + i);
-      args.push_back(b);
-    }
-    auto items = cast<data::DomainType>(c.domain.getFunctionType().getResult(0))
-                     .getItemTypes();
-    for (unsigned i = 0; i < items.size(); ++i)
-      args.push_back(admission);
-    for (unsigned i = 0; i < c.arguments; ++i) {
-      BitVector b(size);
-      b.set(i);
-      args.push_back(b);
-    }
-    for (unsigned i = c.arguments + c.states; i < size; ++i) {
-      BitVector b(size);
-      b.set(i);
-      args.push_back(b);
-    }
+    for (Value formal : callback->body->getArguments())
+      args.push_back(dependencies.lookup(formal));
     if (c.predicate) {
       const Summary *predicate;
       if (failed(helper(c.predicate, predicate)))
         return failure();
-      auto pa = ArrayRef<BitVector>(args).drop_front(c.states);
+      auto predicateABI = readCallback(c, CallbackRole::Predicate);
+      if (failed(predicateABI))
+        return failure();
+      auto binding = bindCallback(*predicateABI, {{},
+                                                  callback->formals.items,
+                                                  callback->formals.domain,
+                                                  callback->formals.captures});
+      if (failed(binding))
+        return failure();
+      SmallVector<BitVector> pa;
+      for (Value actual : binding->actuals)
+        pa.push_back(dependencies.lookup(actual));
       for (auto &bits : predicate->results)
         admission |= substitute(bits, pa, size);
       for (auto &bits : predicate->formation)

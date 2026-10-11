@@ -1,4 +1,5 @@
 #include "AlgorithmSupport.h"
+#include "CheckedCandidate.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
@@ -352,15 +353,16 @@ static LogicalResult expandAlgorithmsImpl(ModuleOp module,
       if (allowUnrecordedNoop && !calls && !origins && !input.retained &&
           phase == AlgorithmExpansionPhase::Finish)
         return success();
-      OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
+      mathematical::CheckedCandidate candidate(module);
       Expander expansion(module, phase, input);
       if (failed(expansion.run(*candidate)) || failed(verify(*candidate)))
         return failure();
       auto output = expansion.takeRecord();
-      if (failed(detail::checkAlgorithmExpansion(module, *candidate, phase,
-                                                 input, output, true)))
+      if (failed(candidate.publish([&](ModuleOp before, ModuleOp after) {
+            return detail::checkAlgorithmExpansion(before, after, phase, input,
+                                                   output, true);
+          })))
         return failure();
-      module.getBodyRegion().takeBody(candidate->getBodyRegion());
       detail::AlgorithmStateAccess::set(state, std::move(output));
       if (origins)
         *origins = expansion.takeOrigins();

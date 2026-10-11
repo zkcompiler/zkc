@@ -1,7 +1,9 @@
+#include "CollectionInterpretation.h"
 #include "HelperNormalization.h"
 #include "MathematicalSupport.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "zkc/Analysis/Computation.h"
+#include "zkc/Analysis/ComputationMeaning.h"
+#include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
@@ -27,8 +29,22 @@ class LoweringVerifier {
   SymbolTable sourceSymbols, symbols;
   const CheckedHelperNormalizations &helpers;
   size_t remaining = 1000000;
+  finite::VerificationLimits finiteLimits;
+  finite::VerificationResult finiteOutcome{finite::VerificationStatus::Mismatch,
+                                           {}};
+  finite::VerificationResult *reportedOutcome = nullptr;
 
   LogicalResult refuse(Operation *op, StringRef detail) {
+    if (finiteOutcome.status == finite::VerificationStatus::OptionalCapacity ||
+        finiteOutcome.status == finite::VerificationStatus::RequiredCapacity) {
+      if (reportedOutcome) {
+        *reportedOutcome = finiteOutcome;
+        return failure();
+      }
+      return diagnostics::emit(op->emitOpError(),
+                               "finite-verification-capacity",
+                               finiteOutcome.detail);
+    }
     return diagnostics::emit(op->emitOpError(),
                              "mathematical-lowering-preservation", detail);
   }
@@ -99,7 +115,9 @@ class LoweringVerifier {
 
   FailureOr<SmallVector<Value>>
   finiteRecipe(Operation *source, Operation *&cursor, ValueRange inputs) {
-    return finite::verifyExpression(
+    finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
+                                       {}};
+    auto result = finite::verifyExpression(
         source, inputs, cursor,
         [&](Operation *helper, ValueRange args,
             Operation *&at) -> FailureOr<SmallVector<Value>> {
@@ -148,7 +166,13 @@ class LoweringVerifier {
           }
           return results;
         },
-        before);
+        before, finiteLimits, outcome);
+    // A recursive finite callback may already have reported capacity; its
+    // enclosing ordered reader must not replace that cause with a mismatch.
+    if (failed(result) &&
+        finiteOutcome.status == finite::VerificationStatus::Mismatch)
+      finiteOutcome = outcome;
+    return result;
   }
   Value recipe(Operation *source, Operation *&cursor, ValueRange inputs) {
     auto take = [&](StringRef contract, ValueRange operands,
@@ -161,15 +185,11 @@ class LoweringVerifier {
       return value;
     };
     if (isa<data::BoundedAtOp, data::BoundedMatrixAtOp>(source)) {
-      auto col = finite::collection(inputs[0].getType());
+      auto col = interpretCollection(inputs[0].getType());
       SmallVector<StringRef> args;
       for (auto &arg : col.arguments)
         args.push_back(arg);
-      return take(col.family +
-                      (col.family == "sequence" || col.family == "indices"
-                           ? ".at"
-                           : ".get"),
-                  inputs, args);
+      return take(col.access, inputs, args);
     }
     if (isa<data::SequenceEmptyOp, data::SequenceAppendOp,
             data::SequenceLengthOp>(source)) {
@@ -602,9 +622,12 @@ class LoweringVerifier {
 public:
   LoweringVerifier(protocol_ir::ProtocolModuleOp before,
                    protocol_ir::ProtocolModuleOp after,
-                   const CheckedHelperNormalizations &helpers)
+                   const CheckedHelperNormalizations &helpers,
+                   finite::VerificationLimits finiteLimits = {},
+                   finite::VerificationResult *outcome = nullptr)
       : before(before), after(after), sourceSymbols(before), symbols(after),
-        helpers(helpers) {}
+        helpers(helpers), finiteLimits(finiteLimits), reportedOutcome(outcome) {
+  }
   LogicalResult calculations(ArrayRef<local::FuncOp> functions,
                              bool realization = false) {
     for (auto target : functions) {
@@ -655,6 +678,15 @@ public:
           cursor = nullptr;
           continue;
         }
+        if (auto sourceGuard = dyn_cast<local::GuardOp>(op)) {
+          // Participant outlining includes the guard at its demand boundary.
+          // It has no result, but its condition and rejection remain part of
+          // the independently checked calculation.
+          if (realization || inputs.size() != 1 ||
+              !guard(sourceGuard, cursor, inputs.front()))
+            return refuse(target, "realized calculation changed its guard");
+          continue;
+        }
         if (finite::isComputation(&op)) {
           auto *begin = cursor;
           auto results = finiteRecipe(&op, cursor, inputs);
@@ -673,8 +705,11 @@ public:
           return refuse(target, "unexpected realized mathematical operation");
         auto *begin = cursor;
         auto value = recipe(&op, cursor, inputs);
+        // A checked finite realization may discard an ignored capture in an
+        // outlined participant calculation. Its eagerly computed primitive
+        // still has to match exactly, even when it is no longer used.
         if (!value || value.getType() != op.getResult(0).getType() ||
-            value.use_empty())
+            (realization && value.use_empty()))
           return refuse(
               target,
               "realized calculation changed a recipe, operand or liveness");
@@ -790,6 +825,23 @@ public:
 LogicalResult verifyCalculationRecipes(protocol_ir::ProtocolModuleOp original,
                                        protocol_ir::ProtocolModuleOp candidate,
                                        ArrayRef<local::FuncOp> functions) {
+  finite::VerificationResult outcome{finite::VerificationStatus::Mismatch, {}};
+  auto result =
+      verifyCalculationRecipes(original, candidate, functions, {}, outcome);
+  if (failed(result) &&
+      (outcome.status == finite::VerificationStatus::OptionalCapacity ||
+       outcome.status == finite::VerificationStatus::RequiredCapacity))
+    return diagnostics::emit(candidate.emitError(),
+                             "finite-verification-capacity", outcome.detail);
+  return result;
+}
+LogicalResult verifyCalculationRecipes(protocol_ir::ProtocolModuleOp original,
+                                       protocol_ir::ProtocolModuleOp candidate,
+                                       ArrayRef<local::FuncOp> functions,
+                                       finite::VerificationLimits limits,
+                                       finite::VerificationResult &outcome) {
+  outcome = {finite::VerificationStatus::Mismatch,
+             "calculation recipes differ"};
   CheckedHelperNormalizations helpers(original);
   SymbolTable symbols(original);
   for (auto function : functions) {
@@ -797,7 +849,11 @@ LogicalResult verifyCalculationRecipes(protocol_ir::ProtocolModuleOp original,
     if (!source || failed(helpers.prepare(source)))
       return failure();
   }
-  return LoweringVerifier(original, candidate, helpers).calculations(functions);
+  auto result = LoweringVerifier(original, candidate, helpers, limits, &outcome)
+                    .calculations(functions);
+  if (succeeded(result))
+    outcome = {finite::VerificationStatus::Verified, {}};
+  return result;
 }
 LogicalResult
 verifyRealizedHelperRecipes(protocol_ir::ProtocolModuleOp original,

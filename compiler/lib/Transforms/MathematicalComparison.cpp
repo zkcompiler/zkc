@@ -8,6 +8,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Interfaces/Collection.h"
+#include "zkc/Support/Refusal.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
@@ -30,6 +31,7 @@ constexpr Term invalidTerm = UINT32_MAX;
 // extending a chain shares its prefixes, and doubling a DAG never unfolds it.
 class Terms {
   uint64_t &remaining;
+  ComparisonCapacity capacity = ComparisonCapacity::None;
   std::vector<ring::Input> inputs;
   std::vector<ring::Node> nodes;
   std::map<std::tuple<ring::Kind, std::string, std::string, Term, Term, Term>,
@@ -80,8 +82,12 @@ class Terms {
       depth += std::max(depths[node.left], depths[node.right]);
     else if (node.kind == ring::Kind::Neg)
       depth += depths[node.left];
-    if (nodes.size() >= ring::Limits::nodes || depth > ring::Limits::depth) {
-      valid = false;
+    if (nodes.size() >= ring::Limits::nodes) {
+      exhaust(ComparisonCapacity::Nodes);
+      return invalidTerm;
+    }
+    if (depth > ring::Limits::depth) {
+      exhaust(ComparisonCapacity::Depth);
       return invalidTerm;
     }
     Term result = nodes.size();
@@ -144,7 +150,7 @@ class Terms {
         return invalidTerm;
       auto count = a.count.zext(width) + b.count.zext(width);
       if (count.getActiveBits() > countBits) {
-        valid = false;
+        exhaust(ComparisonCapacity::Multiplicity);
         return invalidTerm;
       }
       result = leaf(a.first, count);
@@ -185,12 +191,37 @@ class Terms {
 
 public:
   explicit Terms(uint64_t &remaining) : remaining(remaining) {}
+  ComparisonCapacity exhausted() const { return capacity; }
+  bool exhaust(ComparisonCapacity reason) {
+    if (capacity == ComparisonCapacity::None)
+      capacity = reason;
+    valid = false;
+    return false;
+  }
+  bool withinDepth(unsigned depth, ComparisonCapacity reason) {
+    return depth <= 64 || exhaust(reason);
+  }
+  // Evidence APIs return bool. One sentinel unit distinguishes spending the
+  // last permitted unit from attempting further work, without classifying a
+  // successful exact-boundary proof as exhaustion. Never publish an overrun.
+  template <typename Query> bool evidence(Query query) {
+    uint64_t allowance = remaining;
+    uint64_t probe = allowance == UINT64_MAX ? allowance : allowance + 1;
+    uint64_t initial = probe;
+    bool proved = query(probe);
+    uint64_t spent = initial - probe;
+    if (spent > allowance) {
+      remaining = 0;
+      return exhaust(ComparisonCapacity::Work);
+    }
+    remaining -= spent;
+    return proved;
+  }
   void useNeutralLaws() { neutralLaws = true; }
   bool charge(uint64_t work = 1) {
     if (remaining < work) {
       remaining = 0;
-      valid = false;
-      return false;
+      return exhaust(ComparisonCapacity::Work);
     }
     remaining -= work;
     return true;
@@ -201,7 +232,7 @@ public:
     if (found != atoms.end())
       return found->second;
     if (inputs.size() >= ring::Limits::inputs) {
-      valid = false;
+      exhaust(ComparisonCapacity::Inputs);
       return invalidTerm;
     }
     Term result = insert(ring::Node::slot(inputs.size()));
@@ -339,7 +370,7 @@ public:
     return std::make_pair(kind, result->second);
   }
   bool admit() {
-    if (!valid || nodes.empty() || !remaining)
+    if (!valid || nodes.empty())
       return false;
     // Sink outputs retain all constructed nodes, so an invalid unused literal
     // or a field mismatch cannot disappear during liveness pruning.
@@ -355,12 +386,18 @@ public:
     for (Term i = 0; i < nodes.size(); ++i)
       if (!used[i])
         outputs.push_back(i);
-    if (nodes.size() > remaining)
+    if (outputs.size() > ring::Limits::outputs)
+      return exhaust(ComparisonCapacity::Outputs);
+    if (!charge(nodes.size()))
       return false;
-    remaining -= nodes.size();
     auto expression = ring::Expression::create(inputs, nodes, outputs);
     if (!expression) {
-      consumeError(expression.takeError());
+      handleAllErrors(expression.takeError(), [&](const zkc::Refusal &error) {
+        if (error.code == "ring-limit")
+          exhaust(ComparisonCapacity::Encoding);
+        else if (error.code == "ring-depth")
+          exhaust(ComparisonCapacity::Depth);
+      });
       return false;
     }
     return true;
@@ -478,7 +515,6 @@ struct Dimension {
 
 class Comparison {
   Terms terms;
-  uint64_t &remaining;
   SymbolTable &symbols;
   llvm::DenseSet<Operation *> usedBindings;
   llvm::DenseMap<Value, unsigned> identities;
@@ -548,7 +584,8 @@ class Comparison {
   }
   std::optional<SmallVector<Meaning>>
   readSource(Block &block, ArrayRef<Meaning> inputs, unsigned depth = 0) {
-    if (!terms.charge(inputs.size() + 1) || depth > 64 ||
+    if (!terms.charge(inputs.size() + 1) ||
+        !terms.withinDepth(depth, ComparisonCapacity::HelperDepth) ||
         inputs.size() != block.getNumArguments() || block.empty() ||
         !isa<func::ReturnOp, local::ReturnOp>(block.back()) ||
         !block.back().getAttrs().empty())
@@ -651,9 +688,12 @@ class Comparison {
                     for (Extent extent : dimensions[index.identity].equal)
                       if (terms.charge() &&
                           extent.container == entry.second.container &&
-                          finite::provesEqualExtent(op.getOperand(0), axis,
-                                                    entry.first, extent.axis,
-                                                    remaining)) {
+                          terms.evidence(
+                              [&, selectedAxis = axis](uint64_t &work) {
+                                return finite::provesEqualExtent(
+                                    op.getOperand(0), selectedAxis, entry.first,
+                                    extent.axis, work);
+                              })) {
                         equal = true;
                         break;
                       }
@@ -670,8 +710,11 @@ class Comparison {
                 // A captured selector may fail on a zero-trip source. Its
                 // bound must already follow from source formation before an
                 // eager scalar contraction is permitted.
-                if (!finite::provesBound(op.getOperand(axis + 1),
-                                         op.getOperand(0), axis, remaining))
+                if (!terms.evidence([&, selectedAxis = axis](uint64_t &work) {
+                      return finite::provesBound(
+                          op.getOperand(selectedAxis + 1), op.getOperand(0),
+                          selectedAxis, work);
+                    }))
                   return {};
                 selectedBounds.insert(key);
               }
@@ -708,7 +751,8 @@ class Comparison {
   bool domain(Value descriptor, const llvm::DenseMap<Value, Value> &mapping,
               unsigned dimension, SmallVectorImpl<Meaning> &items,
               unsigned depth = 0) {
-    if (!terms.charge() || depth > 64)
+    if (!terms.charge() ||
+        !terms.withinDepth(depth, ComparisonCapacity::DomainDepth))
       return false;
     Operation *op = descriptor.getDefiningOp();
     if (!op)
@@ -917,7 +961,8 @@ class Comparison {
 
 public:
   Comparison(SymbolTable &symbols, Value rows, uint64_t &remaining)
-      : terms(remaining), remaining(remaining), symbols(symbols), rows(rows) {}
+      : terms(remaining), symbols(symbols), rows(rows) {}
+  ComparisonCapacity exhausted() const { return terms.exhausted(); }
   FailureOr<Value> map(Block &source, ArrayRef<bool> rowwise, ValueRange inputs,
                        Operation *&cursor,
                        llvm::DenseSet<Operation *> &bindings, Operation *end,
@@ -1042,7 +1087,6 @@ class ModuleComparison {
     unsigned left = 0, right = 0;
   };
   SymbolTable &symbols;
-  uint64_t &remaining;
   Terms fieldTerms;
   std::vector<Node> nodes{{Unknown}};
   std::map<std::tuple<Kind, unsigned, unsigned>, unsigned> shared;
@@ -1050,12 +1094,7 @@ class ModuleComparison {
   std::map<unsigned, unsigned> meanings;
   llvm::DenseMap<Value, unsigned> identities;
   llvm::DenseSet<Operation *> used;
-  bool charge() {
-    if (!remaining)
-      return false;
-    --remaining;
-    return true;
-  }
+  bool charge() { return fieldTerms.charge(); }
   unsigned identity(Value value) {
     return identities.try_emplace(value, identities.size()).first->second;
   }
@@ -1106,7 +1145,8 @@ class ModuleComparison {
     return result;
   }
   unsigned source(Block &block, ArrayRef<unsigned> args, unsigned depth = 0) {
-    if (depth > 64 || block.empty() || args.size() != block.getNumArguments() ||
+    if (!fieldTerms.withinDepth(depth, ComparisonCapacity::HelperDepth) ||
+        block.empty() || args.size() != block.getNumArguments() ||
         !isa<func::ReturnOp, local::ReturnOp>(block.back()) ||
         block.back().getNumOperands() != 1)
       return 0;
@@ -1211,7 +1251,8 @@ class ModuleComparison {
   bool elements(Value value, const llvm::DenseMap<Value, Value> &mapping,
                 SmallVectorImpl<unsigned> &items,
                 llvm::DenseSet<Value> &containers, unsigned depth = 0) {
-    if (!charge() || depth > 64)
+    if (!charge() ||
+        !fieldTerms.withinDepth(depth, ComparisonCapacity::DomainDepth))
       return false;
     auto *op = value.getDefiningOp();
     if (isa_and_nonnull<data::DomainZipOp>(op)) {
@@ -1238,9 +1279,10 @@ class ModuleComparison {
 
 public:
   ModuleComparison(SymbolTable &symbols, uint64_t &remaining)
-      : symbols(symbols), remaining(remaining), fieldTerms(remaining) {
+      : symbols(symbols), fieldTerms(remaining) {
     fieldTerms.useNeutralLaws();
   }
+  ComparisonCapacity exhausted() const { return fieldTerms.exhausted(); }
   FailureOr<Value> check(const finite::Computation &computation,
                          ValueRange inputs, Operation *&cursor,
                          llvm::DenseSet<Operation *> &bindings,
@@ -1359,13 +1401,49 @@ FailureOr<Value> compareFinitePayload(const finite::Computation &source,
                                       ValueRange inputs, Value rows,
                                       Operation *&cursor, SymbolTable &symbols,
                                       llvm::DenseSet<Operation *> &bindings,
-                                      uint64_t &remaining, Operation *end) {
+                                      uint64_t &remaining, Operation *end,
+                                      ComparisonCapacity *capacity) {
+  if (capacity)
+    *capacity = ComparisonCapacity::None;
+  auto check = [&](auto &comparison, auto result) -> FailureOr<Value> {
+    if (failed(result) && capacity)
+      *capacity = comparison.exhausted();
+    return result;
+  };
   if (source.signature.getNumResults() == 1 &&
-      isa<algebra::GroupType>(source.signature.getResult(0)))
-    return ModuleComparison(symbols, remaining)
-        .check(source, inputs, cursor, bindings, end);
-  return Comparison(symbols, rows, remaining)
-      .finite(source, inputs, cursor, bindings, end);
+      isa<algebra::GroupType>(source.signature.getResult(0))) {
+    ModuleComparison comparison(symbols, remaining);
+    return check(comparison,
+                 comparison.check(source, inputs, cursor, bindings, end));
+  }
+  Comparison comparison(symbols, rows, remaining);
+  return check(comparison,
+               comparison.finite(source, inputs, cursor, bindings, end));
+}
+StringRef comparisonCapacityName(ComparisonCapacity capacity) {
+  switch (capacity) {
+  case ComparisonCapacity::None:
+    return "none";
+  case ComparisonCapacity::Work:
+    return "finite comparison work";
+  case ComparisonCapacity::Inputs:
+    return "finite comparison term inputs";
+  case ComparisonCapacity::Nodes:
+    return "finite comparison term nodes";
+  case ComparisonCapacity::Depth:
+    return "finite comparison term depth";
+  case ComparisonCapacity::Outputs:
+    return "finite comparison term outputs";
+  case ComparisonCapacity::Encoding:
+    return "finite comparison term encoding bytes";
+  case ComparisonCapacity::Multiplicity:
+    return "finite comparison term multiplicity";
+  case ComparisonCapacity::HelperDepth:
+    return "finite comparison helper depth";
+  case ComparisonCapacity::DomainDepth:
+    return "finite comparison domain depth";
+  }
+  llvm_unreachable("unknown comparison capacity");
 }
 bool hasFinitePayloadContract(Operation *cursor, SymbolTable &symbols) {
   if (!cursor)

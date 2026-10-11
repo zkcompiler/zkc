@@ -144,12 +144,107 @@ void validateEndpoint(const Record *recipe, const Record *source,
                 sourceTerms.argument(requirement)),
             recipe, "recipe endpoint missing source capability");
 }
+void validateFieldEndpoint(const Record *recipe, const Record *source,
+                           const Record *target, ArrayRef<StringRef> inputHeads,
+                           StringRef outputHead) {
+  auto mapping = recipe->getValueAsListOfInts("staticArguments");
+  require(ArrayRef<int64_t>(mapping) == ArrayRef<int64_t>{0}, recipe,
+          "recipe requires the source domain root mapping");
+  Endpoint terms(recipe, source, target, mapping);
+  auto inputs = target->getValueAsListOfDefs("inputs");
+  auto outputs = target->getValueAsListOfDefs("outputs");
+  require(inputs.size() == inputHeads.size() && outputs.size() == 1, recipe,
+          "matrix contraction endpoint arity mismatch");
+  require(name(target->getValueAsDef("parameters")) == "None", recipe,
+          "recipe endpoint parameters unsupported");
+  for (auto [input, expected] : zip(inputs, inputHeads))
+    require(head(input) == expected && terms.argument(input) == "$0", recipe,
+            "matrix contraction endpoint input nominal type mismatch");
+  require(head(outputs[0]) == outputHead && terms.argument(outputs[0]) == "$0",
+          recipe, "matrix contraction endpoint result nominal type mismatch");
+  require(terms.requirement(target, "Field", "$0"), recipe,
+          "matrix contraction endpoint requires the source field capability");
+}
+void validateMatrixContraction(const Record *recipe) {
+  auto *source = recipe->getValueAsDef("source");
+  auto *term = recipe->getValueAsDef("term");
+  auto *combine = meaning(source);
+  auto *product = meaning(term);
+  require(combine && product && name(combine) == "FieldAdd" &&
+              name(product) == "FieldMultiply" && optional(combine, "laws") &&
+              optional(product, "laws"),
+          recipe, "matrix contraction requires field sum and product meanings");
+  auto *combineLaws = combine->getValueAsDef("laws");
+  auto *productLaws = product->getValueAsDef("laws");
+  for (const auto *laws : {combineLaws, productLaws})
+    require(laws->getValueAsString("algebra") == "FieldRing" &&
+                laws->getValueAsBit("associative") &&
+                laws->getValueAsBit("commutative") &&
+                laws->getValueAsBit("total"),
+            recipe, "matrix contraction requires total commutative field laws");
+  require(combineLaws->getValueAsString("leftIdentity") == "Zero" &&
+              combineLaws->getValueAsString("rightIdentity") == "Zero" &&
+              productLaws->getValueAsString("annihilator") == "Zero",
+          recipe, "matrix contraction requires additive zero and annihilator");
+  validateFieldEndpoint(recipe, source, source, {"field", "field"}, "field");
+  validateFieldEndpoint(recipe, source, term, {"field", "field"}, "field");
+
+  StringRef form = recipe->getValueAsString("kind");
+  require(
+      is_contained(ArrayRef<StringRef>{"Bilinear", "Rows", "Columns"}, form),
+      recipe, "unknown matrix contraction form");
+  bool bilinear = form == "Bilinear";
+  auto order = recipe->getValueAsListOfInts("operands");
+  unsigned arity = bilinear ? 3 : 2;
+  std::set<int64_t> used;
+  require(order.size() == arity, recipe,
+          "matrix contraction operand mapping arity");
+  for (auto position : order)
+    require(position >= 0 && size_t(position) < arity &&
+                used.insert(position).second,
+            recipe, "recipe operand mapping must be a permutation");
+  // Nominal types alone cannot distinguish left/right vector roles or the
+  // two matvec orientations. The closed form ties these roles to the declared
+  // endpoint interpretation, without redefining scalar law facets.
+  require(ArrayRef<int64_t>(order) ==
+              (bilinear ? ArrayRef<int64_t>{0, 1, 2} : ArrayRef<int64_t>{0, 1}),
+          recipe,
+          "matrix contraction requires matrix then ordered vector roles");
+  auto free = recipe->getValueAsListOfInts("freeAxes");
+  auto reduced = recipe->getValueAsListOfInts("reducedAxes");
+  require(bilinear ? free.empty() &&
+                         ArrayRef<int64_t>(reduced) == ArrayRef<int64_t>{0, 1}
+                   : ArrayRef<int64_t>(free) ==
+                             ArrayRef<int64_t>{form == "Rows" ? 0 : 1} &&
+                         ArrayRef<int64_t>(reduced) ==
+                             ArrayRef<int64_t>{form == "Rows" ? 1 : 0},
+          recipe, "matrix contraction free and reduced axis roles mismatch");
+  auto *target = recipe->getValueAsDef("endpoint");
+  validateFieldEndpoint(recipe, source, target,
+                        bilinear
+                            ? ArrayRef<StringRef>{"matrix", "vector", "vector"}
+                            : ArrayRef<StringRef>{"matrix", "vector"},
+                        bilinear ? "field" : "vector");
+  require(name(target) == (bilinear         ? "matrix.bilinear"
+                           : form == "Rows" ? "matrix.mul_vector"
+                                            : "matrix.transpose_mul_vector"),
+          recipe, "matrix contraction endpoint does not implement axis roles");
+  auto *seed = recipe->getValueAsDef("seedCombiner");
+  validateFieldEndpoint(recipe, source, seed,
+                        bilinear ? ArrayRef<StringRef>{"field", "field"}
+                                 : ArrayRef<StringRef>{"vector", "vector"},
+                        bilinear ? "field" : "vector");
+  require(bilinear ? meaning(seed) == combine : name(seed) == "vector.add",
+          recipe, "matrix contraction seed combiner meaning mismatch");
+}
 } // namespace
 bool emitMathematicalRecipes(raw_ostream &os, const RecordKeeper &records) {
   validateContractDeclarations(records);
   auto lanes = records.getAllDerivedDefinitions("ZKC_LaneRecipe");
   auto reductions = records.getAllDerivedDefinitions("ZKC_ReductionRecipe");
-  std::set<std::string> laneKeys, reductionKeys;
+  auto matrices =
+      records.getAllDerivedDefinitions("ZKC_MatrixContractionRecipe");
+  std::set<std::string> laneKeys, reductionKeys, matrixKeys;
   for (const auto *r : lanes) {
     auto *source = r->getValueAsDef("source");
     auto *identity = meaning(source);
@@ -223,6 +318,15 @@ bool emitMathematicalRecipes(raw_ostream &os, const RecordKeeper &records) {
     require(reductionKeys.insert(key).second, r,
             "duplicate reduction recipe meaning");
   }
+  for (const auto *r : matrices) {
+    validateMatrixContraction(r);
+    auto key = (name(meaning(r->getValueAsDef("source"))) + ":" +
+                name(meaning(r->getValueAsDef("term"))) + ":" +
+                r->getValueAsString("kind"))
+                   .str();
+    require(matrixKeys.insert(key).second, r,
+            "duplicate matrix contraction recipe meaning");
+  }
   os << "// Generated private realization associations. Do not edit.\n"
         "static const LaneRecipe laneRecipes[] = {\n";
   for (const auto *r : lanes) {
@@ -250,6 +354,22 @@ bool emitMathematicalRecipes(raw_ostream &os, const RecordKeeper &records) {
        << "\", " << order[0] << ", " << (order.size() > 1 ? order[1] : 0)
        << ", " << r->getValueAsInt("staticSourceOperand")
        << ", protocol::ScalarIdentity::"
+       << meaning(source)->getValueAsDef("laws")->getValueAsString(
+              "leftIdentity")
+       << "},\n";
+  }
+  os << "};\nstatic const MatrixContractionRecipe matrixContractionRecipes[] = "
+        "{\n";
+  for (const auto *r : matrices) {
+    auto *source = r->getValueAsDef("source");
+    auto order = r->getValueAsListOfInts("operands");
+    os << "{MathematicalIdentity::" << name(meaning(source))
+       << ", MathematicalIdentity::" << name(meaning(r->getValueAsDef("term")))
+       << ", MatrixContractionForm::" << r->getValueAsString("kind") << ", \""
+       << name(r->getValueAsDef("endpoint")) << "\", \""
+       << name(r->getValueAsDef("seedCombiner")) << "\", {" << order[0] << ", "
+       << order[1] << ", " << (order.size() == 3 ? order[2] : 0) << "}, "
+       << order.size() << ", protocol::ScalarIdentity::"
        << meaning(source)->getValueAsDef("laws")->getValueAsString(
               "leftIdentity")
        << "},\n";

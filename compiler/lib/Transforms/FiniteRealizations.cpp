@@ -1,8 +1,13 @@
-#include "AlgorithmSupport.h"
+#include "CheckedCandidate.h"
+#include "CollectionRealization.h"
 #include "ComputationSelection.h"
+#include "FiniteVerification.h"
 #include "LaneRealization.h"
 #include "MathematicalSupport.h"
+#include "RealizationEmission.h"
+#include "RecipeRealizations.h"
 #include "mlir/IR/IRMapping.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Contracts/Operations.h"
@@ -11,74 +16,50 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Transforms/Finite.h"
-#include "llvm/ADT/StringSet.h"
-#include <map>
 using namespace mlir;
 using namespace llvm;
 namespace zkc::finite {
 namespace {
 class Realizer {
   protocol_ir::ProtocolModuleOp unit;
-  OpBuilder builder;
+  RewriterBase &builder;
+  SymbolTableCollection symbols;
   Location loc;
   Type index, boolean;
-  llvm::StringSet<> names;
-  unsigned next = 0, occurrence = 0;
-  std::map<std::pair<std::string, std::vector<std::string>>, std::string>
-      bindings;
+  mathematical::RealizationEmitter emitter;
+  unsigned occurrence = 0;
   llvm::DenseMap<Value, Value> values, sizes, lowers;
   Computation computation;
   mathematical::RealizationWork &work;
+  const mathematical::MathematicalRecipes &recipes;
   bool failedHelper = false;
   std::string sitePrefix = "finite_";
   std::string site() { return sitePrefix + std::to_string(occurrence++); }
-  FlatSymbolRefAttr binding(StringRef contract, ArrayRef<std::string> args) {
-    auto key = std::make_pair(
-        contract.str(), std::vector<std::string>(args.begin(), args.end()));
-    auto found = bindings.find(key);
-    if (found == bindings.end()) {
-      std::string name;
-      do {
-        name = "_finite_binding_" + std::to_string(next++);
-      } while (!names.insert(name).second);
-      OpBuilder::InsertionGuard guard(builder);
-      builder.setInsertionPointToStart(&unit.getBody().front());
-      SmallVector<Attribute> attrs;
-      for (auto &arg : args)
-        attrs.push_back(builder.getStringAttr(arg));
-      local::OperationBindingOp::create(builder, loc, name, contract,
-                                        builder.getArrayAttr(attrs), "");
-      found = bindings.emplace(std::move(key), name).first;
-    }
-    return FlatSymbolRefAttr::get(builder.getContext(), found->second);
+  Value emit(const protocol::BindingApplication &application, ValueRange inputs,
+             Type output, ArrayRef<std::string> params = {}) {
+    SmallVector<Type> outputs;
+    if (output)
+      outputs.push_back(output);
+    auto *op = emitter.emit(builder, loc, site(), application, inputs, outputs,
+                            params);
+    return output ? op->getResult(0) : Value();
   }
   Value emit(StringRef contract, ValueRange inputs, Type output,
              ArrayRef<std::string> args = {},
              ArrayRef<std::string> params = {}) {
-    OperationState state(loc, protocol::boundOperationName(contract));
-    state.addOperands(inputs);
-    if (output)
-      state.addTypes(output);
-    state.addAttribute("binding", binding(contract, args));
-    state.addAttribute("site", builder.getStringAttr(site()));
-    SmallVector<Attribute> attrs;
-    for (auto &p : params)
-      attrs.push_back(builder.getStringAttr(p));
-    state.addAttribute("parameters", builder.getArrayAttr(attrs));
-    auto *op = builder.create(state);
-    return output ? op->getResult(0) : Value();
+    return emit({contract.str(), {args.begin(), args.end()}, ""}, inputs,
+                output, params);
   }
   Value number(uint64_t n) {
     return emit("index.constant", {}, index, {}, {std::to_string(n)});
   }
   Value length(Value input, unsigned axis = 0) {
-    auto col = collection(input.getType());
-    if (col.family == "field_array")
-      return number(cast<algebra::FieldArrayType>(input.getType()).getLength());
-    return emit(
-        col.family == "matrix" ? "matrix.dimension" : col.family + ".length",
-        input, index, col.arguments,
-        col.family == "matrix" ? ArrayRef<std::string>{std::to_string(axis)}
+    auto col = mathematical::collectionRealization(input.getType());
+    assert(col && axis < col->rank && "admitted collection axis required");
+    if (col->staticExtent)
+      return number(*col->staticExtent);
+    return emit(*col->length, input, index,
+                col->rank == 2 ? ArrayRef<std::string>{std::to_string(axis)}
                                : ArrayRef<std::string>{});
   }
   void require(Value condition) { emit("control.require", condition, {}, {}); }
@@ -93,11 +74,9 @@ class Realizer {
     return builder.create(state);
   }
   Block *region(Operation *op, unsigned i, TypeRange types) {
-    auto *block = new Block();
-    op->getRegion(i).push_back(block);
-    for (Type type : types)
-      block->addArgument(type, loc);
-    builder.setInsertionPointToEnd(block);
+    auto *block =
+        builder.createBlock(&op->getRegion(i), op->getRegion(i).end(), types,
+                            SmallVector<Location>(types.size(), loc));
     return block;
   }
   void yield(ValueRange values) {
@@ -113,10 +92,16 @@ class Realizer {
   }
   Value reversedRange(Value lower, Value upper) {
     Value less = emit("index.less", {lower, upper}, boolean);
-    auto *branch = control("local.if", {less, lower, upper}, {index}, 2);
-    auto *yes = region(branch, 0, {index, index});
-    yield(emit("index.sub", {yes->getArgument(1), yes->getArgument(0)}, index));
-    region(branch, 1, {index, index});
+    SmallVector<Value> inputs{less, lower};
+    if (upper != lower)
+      inputs.push_back(upper);
+    SmallVector<Type> types(inputs.size() - 1, index);
+    auto *branch = control("local.if", inputs, {index}, 2);
+    auto *yes = region(branch, 0, types);
+    yield(emit("index.sub",
+               {yes->getArgument(upper == lower ? 0 : 1), yes->getArgument(0)},
+               index));
+    region(branch, 1, types);
     yield(number(0));
     builder.setInsertionPointAfter(branch);
     return branch->getResult(0);
@@ -213,22 +198,21 @@ class Realizer {
                  : SmallVector<Value>{minor, major};
     }
     Value container = actual(op->getOperand(0));
-    auto col = collection(container.getType());
+    auto col = mathematical::collectionRealization(container.getType());
+    assert(col && col->get && "admitted collection read required");
     if (isa<data::DomainMatrixRowOp, data::DomainMatrixColumnOp>(op)) {
       Value selected = actual(op->getOperand(1));
       bool row = isa<data::DomainMatrixRowOp>(op);
       return {emit(
-          "matrix.get",
+          *col->get,
           {container, row ? selected : position, row ? position : selected},
-          col.element, col.arguments)};
+          col->element)};
     }
-    StringRef suffix =
-        col.family == "indices" || col.family == "sequence" ? ".at" : ".get";
-    return {emit(col.family + suffix.str(), {container, position}, col.element,
-                 col.arguments)};
+    return {emit(*col->get, {container, position}, col->element)};
   }
   Expected<mathematical::LaneRealizationResult>
-  elementwise(const ComputationView &view, ValueRange entry) {
+  elementwise(const ComputationView &view,
+              const mathematical::Elementwise &equation, ValueRange entry) {
     auto &body = computation.helper->getRegion(0).front();
     Value root = view.iteration[view.root].descriptor;
     llvm::DenseMap<Value, mathematical::LaneInput> inputs;
@@ -237,7 +221,7 @@ class Realizer {
         inputs[access.value] = {entry[access.input], true};
     for (const auto &capture : view.captures)
       inputs[capture.formal] = {entry[capture.input], false};
-    for (auto [lookup, container] : view.elementwise->lookups)
+    for (auto [lookup, container] : equation.lookups)
       inputs[lookup] = {inputs.lookup(container).value, true};
     auto vector = computation.signature.getResult(0);
     SmallVector<std::string> args{
@@ -249,9 +233,20 @@ class Realizer {
           return emit(contract, operands, output, args, parameters);
         });
   }
-  SmallVector<Value> apply(Operation *helper, ValueRange arguments) {
-    auto type = cast<FunctionType>(
-        helper->getAttrOfType<TypeAttr>("function_type").getValue());
+  SmallVector<Value> apply(CallbackRole role, CallbackValues actuals) {
+    auto callback = readCallback(computation, role);
+    if (failed(callback)) {
+      failedHelper = true;
+      return {};
+    }
+    auto environment = bindCallback(*callback, actuals);
+    if (failed(environment)) {
+      failedHelper = true;
+      return {};
+    }
+    auto *helper = callback->symbol;
+    auto type = callback->signature;
+    ValueRange arguments = environment->actuals;
     if (computation.total) {
       auto math = cast<func::FuncOp>(helper);
       if (failed(mathematical::chargeHelperOperations(
@@ -259,6 +254,8 @@ class Realizer {
         failedHelper = true;
         return {};
       }
+      // Detached normalization subject, separate from body emission. Expansion
+      // and polynomial elimination remain fallible and consume shared work.
       OwningOpRef<func::FuncOp> scratch(cast<func::FuncOp>(math->clone()));
       SymbolTableCollection tables;
       if (failed(mathematical::inlineHelpers(*scratch, work.helperOperations,
@@ -273,7 +270,9 @@ class Realizer {
         mapping.map(a, b);
       for (auto &op : scratch->front().without_terminator()) {
         auto *copy = builder.clone(op, mapping);
-        copy->setAttr("site", builder.getStringAttr(site()));
+        builder.modifyOpInPlace(copy, [&] {
+          copy->setAttr("site", builder.getStringAttr(site()));
+        });
       }
       SmallVector<Value> results;
       for (Value v : scratch->front().back().getOperands())
@@ -287,37 +286,42 @@ class Realizer {
   }
   SmallVector<Value> transition(ValueRange state, ValueRange item,
                                 ValueRange environment) {
-    SmallVector<Value> args;
-    if (!computation.collect)
-      append_range(args, state);
-    append_range(args, item);
-    append_range(args, environment);
-    auto result = apply(computation.helper, args);
+    auto result =
+        apply(computation.collect ? CallbackRole::Body : CallbackRole::Step,
+              {computation.collect ? ValueRange{} : state, item,
+               environment.take_front(computation.arguments),
+               environment.drop_front(computation.arguments)});
     if (failedHelper)
       return {};
     if (!computation.collect)
       return result;
-    auto col = collection(state[0].getType());
-    return {emit(col.family + ".append", {state[0], result[0]},
-                 state[0].getType(), col.arguments)};
+    auto col = mathematical::collectionRealization(state[0].getType());
+    assert(col && col->append && "admitted collection append required");
+    return {emit(*col->append, {state[0], result[0]}, state[0].getType())};
   }
 
 public:
-  Realizer(protocol_ir::ProtocolModuleOp unit,
-           mathematical::RealizationWork &work)
-      : unit(unit), builder(unit.getContext()), loc(unit.getLoc()),
+  Realizer(protocol_ir::ProtocolModuleOp unit, RewriterBase &builder,
+           mathematical::RealizationWork &work,
+           const mathematical::MathematicalRecipes &recipes =
+               mathematical::mathematicalRecipes())
+      : unit(unit), builder(builder), loc(unit.getLoc()),
         index(IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned)),
-        boolean(builder.getI1Type()), work(work) {
-    for (auto &op : unit.getBody().front())
-      if (auto name = SymbolTable::getSymbolName(&op))
-        names.insert(name.getValue());
-  }
-  LogicalResult run(Operation *declaration, bool optimize,
-                    StringRef expressionName = {}) {
-    if (failed(describe(declaration, computation)))
+        boolean(builder.getI1Type()), emitter(unit, "_finite_binding_"),
+        work(work), recipes(recipes) {}
+  FailureOr<SmallVector<Value>> emitBody(Operation *source, ValueRange entry,
+                                         bool optimize) {
+    if (failed(describe(source, computation, unit, &symbols)))
       return failure();
-    auto selection =
-        mathematical::selectComputation(computation, {optimize, false});
+    auto partitions = partitionEntry(computation, entry);
+    if (failed(partitions))
+      return failure();
+    // Ordered emission reads the domain directly. It needs no optional
+    // structural/equation work, including when retrying a discarded proposal.
+    mathematical::ComputationSelection selection;
+    if (optimize)
+      selection = mathematical::selectComputation(computation, {true, false},
+                                                  work.matching, recipes);
     const ComputationView *view = selection.view ? &*selection.view : nullptr;
     SmallVector<Operation *> fallbackAdmission;
     if (!view)
@@ -331,103 +335,71 @@ public:
     lowers.clear();
     occurrence = 0;
     failedHelper = false;
-    loc = declaration->getLoc();
+    loc = source->getLoc();
     if (computation.total)
-      sitePrefix =
-          declaration->getAttrOfType<StringAttr>("site").getValue().str() +
-          "_finite_";
-    builder.setInsertionPointToEnd(&unit.getBody().front());
-    auto name = computation.total ? builder.getStringAttr(expressionName)
-                                  : SymbolTable::getSymbolName(declaration);
-    auto function = local::FuncOp::create(builder, loc, name.getValue(),
-                                          computation.signature);
-    function->setAttr("logical_origin",
-                      builder.getArrayAttr({name, builder.getArrayAttr({})}));
-    auto *entry = function.addEntryBlock();
-    builder.setInsertionPointToEnd(entry);
+      sitePrefix = source->getAttrOfType<StringAttr>("site").getValue().str() +
+                   "_finite_";
+    else
+      sitePrefix = "finite_";
     for (auto [formal, actual] :
          zip(computation.domain.getBody().front().getArguments(),
-             entry->getArguments()))
+             partitions->domain))
       values[formal] = actual;
     admit(admission);
-    SmallVector<Value> initial, environment;
-    if (view) {
-      for (const auto &seed : view->seeds)
-        initial.push_back(entry->getArgument(seed.input));
-      for (const auto &capture : view->captures)
-        environment.push_back(entry->getArgument(capture.input));
-    } else {
-      append_range(initial, entry->getArguments().slice(computation.arguments,
-                                                        computation.states));
-      append_range(environment,
-                   entry->getArguments().take_front(computation.arguments));
-      append_range(environment,
-                   entry->getArguments().drop_front(computation.arguments +
-                                                    computation.states));
-    }
+    SmallVector<Value> initial(partitions->initialState), environment;
+    append_range(environment, partitions->domain);
+    append_range(environment, partitions->captures);
     if (selection.kind == mathematical::RealizationKind::Bilinear) {
-      const auto &plan = view->bilinear;
+      const auto &plan = selection.equations.bilinear;
       auto type = computation.signature.getResult(0);
-      auto col = collection(values.lookup(plan->matrix).getType());
-      Value result =
-          emit("matrix.bilinear",
-               {values.lookup(plan->matrix), values.lookup(plan->left),
-                values.lookup(plan->right)},
-               type, col.arguments);
-      result =
-          emit("field.add", {initial.front(), result}, type, col.arguments);
-      local::ReturnOp::create(builder, loc, result);
-      if (!computation.total)
-        declaration->erase();
-      return success();
+      auto col = mathematical::collectionRealization(
+          values.lookup(plan->matrix).getType());
+      const auto &recipe = *selection.matrix;
+      SmallVector<Value> roles{values.lookup(plan->matrix),
+                               values.lookup(plan->left),
+                               values.lookup(plan->right)};
+      SmallVector<Value> inputs;
+      for (unsigned i = 0; i < recipe.arity; ++i)
+        inputs.push_back(roles[recipe.operands[i]]);
+      Value result = emit(recipe.target, inputs, type, col->get->arguments);
+      result = emit(recipe.seedCombiner, {initial.front(), result}, type,
+                    col->get->arguments);
+      return SmallVector<Value>{result};
     }
     if (selection.kind == mathematical::RealizationKind::Reduction) {
       const auto &reduction = selection.reduction;
       SmallVector<Value> inputs;
       for (unsigned position : reduction->inputs)
-        inputs.push_back(entry->getArgument(position));
+        inputs.push_back(entry[position]);
       if (reduction->selectedIndex)
-        inputs.push_back(entry->getArgument(*reduction->selectedIndex));
+        inputs.push_back(entry[*reduction->selectedIndex]);
       auto resultType = computation.signature.getResult(0);
-      auto col = collection(
-          entry->getArgument(reduction->staticSourceInput).getType());
-      Value reduced =
-          emit(reduction->recipe->target, inputs, resultType, col.arguments);
+      auto col = mathematical::collectionRealization(
+          entry[reduction->staticSourceInput].getType());
+      Value reduced = emit(reduction->recipe->target, inputs, resultType,
+                           col->get->arguments);
       Value result =
           emit(reduction->recipe->combiner, {initial.front(), reduced},
-               resultType, col.arguments);
-      local::ReturnOp::create(builder, loc, result);
-      if (!computation.total)
-        declaration->erase();
-      return success();
+               resultType, col->get->arguments);
+      return SmallVector<Value>{result};
     }
     if (selection.kind == mathematical::RealizationKind::Elementwise) {
-      auto result = elementwise(*view, entry->getArguments());
-      if (!result)
-        return diagnostics::emit(declaration->emitOpError(),
-                                 result.takeError());
+      auto result = elementwise(*view, *selection.equations.elementwise, entry);
+      if (!result) {
+        diagnostics::emit(source->emitOpError(), result.takeError());
+        return failure();
+      }
       if (result->status == mathematical::LaneRealizationStatus::Realized) {
-        local::ReturnOp::create(builder, loc, result->value);
-        if (!computation.total)
-          declaration->erase();
-        return success();
+        return SmallVector<Value>{result->value};
       }
       // A declined optional formula has emitted no payload or bindings. Keep
       // the complete admission above and continue with the ordinary loop.
     }
     if (computation.collect) {
       auto result = computation.signature.getResult(0);
-      auto col = collection(result);
-      // Fixed arrays are collected in their corresponding dynamic field vector.
-      Type storage =
-          col.family == "field_array"
-              ? Type(algebra::FieldVectorType::get(
-                    col.element.getContext(),
-                    cast<algebra::FieldType>(col.element).getDomain()))
-              : result;
-      col = collection(storage);
-      initial.push_back(
-          emit(col.family + ".empty", {}, storage, col.arguments));
+      auto col = mathematical::collectionRealization(result);
+      assert(col && col->empty && "admitted collection construction required");
+      initial.push_back(emit(*col->empty, {}, col->storage));
     }
     Value root =
         view ? view->iteration[view->root].descriptor
@@ -469,9 +441,12 @@ public:
       env.push_back(mapping.lookup(v));
     SmallVector<Value> next;
     if (computation.predicate) {
-      SmallVector<Value> args(item);
-      append_range(args, env);
-      auto predicate = apply(computation.predicate, args);
+      auto predicate =
+          apply(CallbackRole::Predicate,
+                {{},
+                 item,
+                 ValueRange(env).take_front(computation.arguments),
+                 ValueRange(env).drop_front(computation.arguments)});
       if (failedHelper)
         return failure();
       Value condition = predicate[0];
@@ -500,7 +475,11 @@ public:
           result.push_back(branchMapping.lookup(value));
         return result;
       };
-      yield(transition(remap(state), remap(item), remap(env)));
+      auto transitionResults =
+          transition(remap(state), remap(item), remap(env));
+      if (failedHelper)
+        return failure();
+      yield(transitionResults);
       auto *no = region(branch, 1, branchTypes);
       for (auto [a, b] : zip(branchCaptures, no->getArguments()))
         branchMapping.map(a, b);
@@ -509,21 +488,53 @@ public:
       append_range(next, branch->getResults());
     } else
       next = transition(state, item, env);
+    if (failedHelper)
+      return failure();
     append_range(next, captured);
     yield(next);
     builder.setInsertionPointAfter(loop);
     SmallVector<Value> results(loop->getResults());
     if (computation.collect &&
         computation.signature.getResult(0) != results[0].getType()) {
-      auto col = collection(computation.signature.getResult(0));
-      results[0] = emit("field_array.from_vector", results,
-                        computation.signature.getResult(0), col.arguments);
+      auto col = mathematical::collectionRealization(
+          computation.signature.getResult(0));
+      assert(col && col->wrap && "admitted collection wrapper required");
+      results[0] =
+          emit(*col->wrap, results, computation.signature.getResult(0));
     }
-    local::ReturnOp::create(builder, loc, results);
-    if (!computation.total)
-      declaration->erase();
-    return failure(failedHelper);
+    return results;
   }
+  LogicalResult run(Operation *declaration, bool optimize) {
+    Computation source;
+    if (failed(describe(declaration, source, unit, &symbols)))
+      return failure();
+    builder.setInsertionPointToEnd(&unit.getBody().front());
+    auto name = SymbolTable::getSymbolName(declaration);
+    auto function = local::FuncOp::create(builder, declaration->getLoc(),
+                                          name.getValue(), source.signature);
+    builder.modifyOpInPlace(function, [&] {
+      function->setAttr("logical_origin",
+                        builder.getArrayAttr({name, builder.getArrayAttr({})}));
+    });
+    auto *entry = builder.createBlock(
+        &function.getBody(), function.getBody().end(),
+        source.signature.getInputs(),
+        SmallVector<Location>(source.signature.getNumInputs(),
+                              declaration->getLoc()));
+    auto results = emitBody(declaration, entry->getArguments(), optimize);
+    if (failed(results))
+      return failure();
+    local::ReturnOp::create(builder, declaration->getLoc(), *results);
+    builder.eraseOp(declaration);
+    symbols.invalidateSymbolTable(unit);
+    return success();
+  }
+};
+// RewriterBase's builder-copy constructor retains the caller's listener and
+// insertion point. All new operations, blocks and bindings use this rewriter.
+class BodyRewriter : public RewriterBase {
+public:
+  explicit BodyRewriter(const OpBuilder &builder) : RewriterBase(builder) {}
 };
 } // namespace
 FailureOr<SmallVector<Value>>
@@ -534,49 +545,73 @@ realizeExpression(Operation *op, ValueRange inputs, OpBuilder &builder,
   auto site = op->getAttrOfType<StringAttr>("site");
   if (!unit || !site || site.getValue().empty())
     return failure();
-  SymbolTable symbols(unit);
-  unsigned next = 0;
-  std::string name;
-  do {
-    name = "_finite_expression_" + std::to_string(next++);
-  } while (symbols.lookup(name));
   mathematical::RealizationWork standalone;
-  Realizer realizer(unit, work ? *work : standalone);
-  if (failed(realizer.run(op, policy.finiteBulk, name)))
-    return failure();
-  auto function = cast<local::FuncOp>(SymbolTable::lookupSymbolIn(unit, name));
-  IRMapping mapping;
-  for (auto [a, b] : zip(function.getArguments(), inputs))
-    mapping.map(a, b);
-  for (auto &instruction : function.getBody().front().without_terminator()) {
-    auto *copy = builder.clone(instruction, mapping);
-    if (failed(protocol::detail::canonicalizeCaptures(copy)))
-      return failure();
-  }
-  SmallVector<Value> outputs;
-  for (Value v : function.getBody().front().back().getOperands())
-    outputs.push_back(mapping.lookup(v));
-  function.erase();
-  return outputs;
+  BodyRewriter rewriter(builder);
+  Realizer realizer(unit, rewriter, work ? *work : standalone);
+  auto results = realizer.emitBody(op, inputs, policy.finiteBulk);
+  builder.restoreInsertionPoint(rewriter.saveInsertionPoint());
+  return results;
 }
 
 LogicalResult realizeLocals(ModuleOp module, MathematicalSelectionPolicy policy,
                             mathematical::RealizationWork *work) {
+  return realizeLocals(module, policy, work,
+                       mathematical::mathematicalRecipes());
+}
+
+LogicalResult realizeLocals(ModuleOp module, MathematicalSelectionPolicy policy,
+                            mathematical::RealizationWork *work,
+                            const mathematical::MathematicalRecipes &recipes) {
+  return realizeLocalsWithLimits(module, policy, work, recipes, {});
+}
+
+LogicalResult
+realizeLocalsWithLimits(ModuleOp module, MathematicalSelectionPolicy policy,
+                        mathematical::RealizationWork *work,
+                        const mathematical::MathematicalRecipes &recipes,
+                        VerificationLimits limits) {
   if (failed(mlir::verify(module)) || !hasSingleElement(*module.getBody()))
     return failure();
-  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
-  auto unit =
-      dyn_cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
-  if (!unit)
-    return failure();
   mathematical::RealizationWork standalone;
-  Realizer realizer(unit, work ? *work : standalone);
-  for (auto &op : make_early_inc_range(unit.getBody().front()))
-    if (isDeclaration(&op) && failed(realizer.run(&op, policy.finiteBulk)))
+  auto &available = work ? *work : standalone;
+  bool optimize = policy.finiteBulk;
+  for (;;) {
+    // Reserve required ordered work independently of a speculative proposal.
+    // A retry always starts from the admitted source, never from bulk output.
+    auto attemptWork = available;
+    mathematical::CheckedCandidate candidate(module);
+    auto unit =
+        dyn_cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+    if (!unit)
       return failure();
-  if (failed(verifyRealizations(module, *candidate)))
-    return failure();
-  module.getBodyRegion().takeBody(candidate->getBodyRegion());
-  return success();
+    IRRewriter rewriter(module.getContext());
+    Realizer realizer(unit, rewriter, attemptWork, recipes);
+    auto retainOptionalWork = [&] {
+      available.matching = attemptWork.matching;
+      available.lanes = attemptWork.lanes;
+    };
+    for (auto &op : make_early_inc_range(unit.getBody().front()))
+      if (isDeclaration(&op) && failed(realizer.run(&op, optimize))) {
+        retainOptionalWork();
+        return failure();
+      }
+    // Matching/lane allowances remain cumulative even when the candidate is
+    // discarded. Only required construction work has an ordered reserve.
+    retainOptionalWork();
+    VerificationResult checked{VerificationStatus::Mismatch, {}};
+    auto published = candidate.publish([&](ModuleOp source, ModuleOp proposal) {
+      checked = checkRealizations(source, proposal, limits);
+      if (checked.status == VerificationStatus::OptionalCapacity && optimize)
+        return failure();
+      return checked.diagnose(proposal);
+    });
+    if (succeeded(published)) {
+      available = attemptWork;
+      return success();
+    }
+    if (!optimize || checked.status != VerificationStatus::OptionalCapacity)
+      return failure();
+    optimize = false;
+  }
 }
 } // namespace zkc::finite

@@ -12,15 +12,37 @@ function(add_zkc_test name component)
   endif()
 endfunction()
 
+add_zkc_test(finite_direct_emission Transforms finite-direct-emission)
+target_compile_definitions(zkc-finite_direct_emission-test PRIVATE
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-finite_direct_emission-test PRIVATE MLIRParser)
+
+add_zkc_test(finite_abi IR finite-abi)
+mlir_target_link_libraries(zkc-finite_abi-test PRIVATE MLIRParser)
+
 add_zkc_test(computation_analysis IR computation-analysis)
 target_compile_definitions(zkc-computation_analysis-test PRIVATE
   ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
 mlir_target_link_libraries(zkc-computation_analysis-test PRIVATE MLIRParser)
 
+add_zkc_test(computation_equations Transforms computation-equations)
+target_compile_definitions(zkc-computation_equations-test PRIVATE
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-computation_equations-test PRIVATE MLIRParser)
+
 add_zkc_test(mathematical_recipes Transforms mathematical-recipes)
 target_compile_definitions(zkc-mathematical_recipes-test PRIVATE
   ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
 mlir_target_link_libraries(zkc-mathematical_recipes-test PRIVATE MLIRParser)
+
+add_zkc_test(realization_emission Transforms realization-emission)
+mlir_target_link_libraries(zkc-realization_emission-test PRIVATE MLIRParser)
+
+add_zkc_test(mathematical_stages Transforms mathematical-stages)
+target_compile_definitions(zkc-mathematical_stages-test PRIVATE
+  ZKC_MATH_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical"
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-mathematical_stages-test PRIVATE MLIRParser)
 
 add_zkc_test(finite_computation Transforms finite-computation)
 target_compile_definitions(zkc-finite_computation-test PRIVATE
@@ -314,3 +336,13 @@ add_zkc_test(nested_contractions_source Compiler nested-contractions-source)
 target_compile_definitions(zkc-nested_contractions_source-test PRIVATE
   ZKC_NESTED_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/language/nested-matrix.zkc")
 mlir_target_link_libraries(zkc-nested_contractions_source-test PRIVATE MLIRParser)
+
+add_zkc_test(finite_verification_capacity Transforms finite-verification-capacity)
+target_compile_definitions(zkc-finite_verification_capacity-test PRIVATE
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-finite_verification_capacity-test PRIVATE MLIRParser)
+
+add_zkc_test(total_verification_capacity Transforms total-verification-capacity)
+target_compile_definitions(zkc-total_verification_capacity-test PRIVATE
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-total_verification_capacity-test PRIVATE MLIRParser)

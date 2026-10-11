@@ -79,40 +79,53 @@ operational limits.
 
 Typed domain operations remain the mathematical representation. Contracts own
 declaration-generated identities and closed scalar/access laws with exact nominal
-ports. Transforms own the lane and reduction recipe associations; the
-[operation-contract guide](operation-contracts.md#mathematical-meaning-and-realization)
-describes their separate queries and checks. `Analysis/Computation` derives
-bounded, read-only views of existing SSA:
-iteration and admission order, accesses, captures, seeds, nested calls and result
-demand. These views borrow the current IR and must be recomputed after changes.
-They are neither serialized evidence nor a second mathematical language.
+ports. The [operation-contract guide](operation-contracts.md#mathematical-meaning-and-realization)
+describes how logical meaning remains independent of installed realizations.
 
-One structural analysis records constructor provenance for each helper item and
-the complete payload, including unused instructions. Concrete reduction,
-elementwise and bilinear equations consume these facts and a shared admission
-of the payload's installed contracts. Bilinear selection is part of the same
-view. Finite realization uses its admission order and seed/capture mappings;
-if bounded analysis cannot produce a view, the ordered realization derives the
-same mappings directly from the finite ABI. Selection never uses an extent fact
-known only on a total operation's actual operands: the source domain or helper
-premises must also make it available to the independent reader.
+The compiler answers three separate questions:
 
-Reduction views retain the combiner, term and semantic operand roles without
-selecting a native operation or its operand order. Transforms select among
-installed recipes and the ordered fallback. Map and
-finite field formulas share lane emission, including scalar subexpression
-sharing and cached broadcasts. Their common lane analysis takes explicit lane
-arguments and treats other arguments of the exact field type as uniform. It
-retains only indexed-read mappings used by the emitter, with no public scalar
-mode inventory. A separate reader reconstructs meanings from
-actual source and candidate operations without the selector's classifications.
-Closed Ring laws justify its bounded comparison; ordered guards, helper
-expansion and unchanged context have their own checks.
+| Owner | Question | Retained information |
+|---|---|---|
+| `Analysis/Computation` | What does this admitted SSA computation contain? | Ordered domain constructors, axes, accesses, payload, nested calls, input environments, seeds, predicates and yields |
+| Transforms equation matching | Which supported equation describes this computation? | Pointwise/reduction/contraction roles and exact source occurrences, accesses, seeds and admission premises |
+| Transforms recipe selection | Which available logical algorithm can realize that equation? | Selected operations and operand order, or a reason to retain ordered execution |
+
+Physical implementation selection remains a later responsibility. Structural
+views contain no reduction, elementwise or bilinear strategy choice. Every view
+and equation witness borrows the current IR and must be recomputed after mutation
+or cloning. Neither is serialized evidence or another editable mathematical graph.
+
+An axis identifies a constructor coordinate at an exact invocation and traversal
+path. Reusing a descriptor in both factors of a product does not merge the axes.
+Equal extents establish neither axis identity nor equal elements. Indexed accesses
+retain their actual index SSA; non-affine accesses are not forced into affine maps.
+The structural view retains all domain constructors in admission order, including
+unused ones, and every helper instruction. Nested views carry exact actual/formal
+mappings; recurrence state remains distinct from its initial seed.
+
+Equation matching uses these environments for reductions and nested collection
+composition. Transient witnesses retain free/reduced axes, accesses, seed and yield
+mappings, and the occurrence at which admission is required. They guide producers;
+independent readers reconstruct source and candidate meaning without consuming
+these witnesses. Recognition misses and unavailable recipes retain the ordered
+path. Explicit implementation constraints independently prevent replacement.
+
+Bilinear reduction and whole row/column contractions use the same closed recipe
+boundary. Recipes validate nominal signatures, operand and axis roles, and seeded
+combination. The independent correspondence readers do not import those recipes.
+
+Map and finite field formulas share lane emission, including scalar subexpression
+sharing and cached broadcasts. Collection realization uses explicit typed contract
+choices; collection interfaces expose observations without granting execution
+permission. A candidate-local binding allocator avoids duplicate generated bindings
+and collisions with authored symbols, while preserving authored implementation pins.
 
 Indexed-access recognition currently covers field vectors and field matrices.
-Group-vector indexing remains an ordered realization; zipped group/scalar
-elements can select MSM. Extending this access vocabulary and consolidating the
-collection execution adapters are separate from the nominal type migration.
+Group-vector indexing retains ordered execution; zipped group/scalar elements can
+select MSM. Closed Ring laws justify bounded field comparison; group/module
+contractions have a separate interpretation. Admission order, helper expansion,
+seed/result mappings and unchanged surrounding declarations remain separately
+checked obligations.
 
 Helper normalization has an explicit checked boundary. The producer proposes
 an expanded polynomial-free body; a separate reader follows the original helper
@@ -125,11 +138,22 @@ normalization cannot hide a substitution
 or polynomial error. This is native compiler correspondence checking; the
 independent Lean models do not establish a bridge to this implementation.
 
-Optional finite strategies share a work allowance and may decline before payload
-emission. Their ordered fallback retains full domain admission. Required maps
-use their existing cumulative helper limits; an optional optimization allowance
-does not impose a new map admission limit. Domain constructors retain unknown
-MLIR effects until their ordered admission is explicit in the lowered code.
+Optional finite recognition shares separate structural, equation and bound/extent
+allowances across definitions and nested occurrences. Optional lane emission has
+its own allowance. Exhaustion retains ordered execution with full domain admission;
+it does not consume the reserve for required expansion. Required map and helper
+copies consume cumulative operation and slot budgets across the preparation
+window. Domain constructors retain unknown MLIR effects until their ordered
+admission is explicit in the lowered code.
+
+Finite correspondence distinguishes a mismatch from exhausted comparison work.
+If an optional bulk candidate exceeds comparison capacity, the service discards
+it and retries ordered realization once from the immutable source. This applies
+to Local finite declarations and total finite expressions in outlined calculations
+or `local.realize`. The retry preserves spent optional work and a separate reserve
+for required construction. The ordered candidate must still pass independent
+checking. Required-reader exhaustion reports `finite-verification-capacity`;
+a correspondence mismatch remains a refusal.
 
 Demand determines the contraction's size. A single selected row or column uses
 `matrix.row_dot` or `matrix.column_dot` and returns one scalar. Collecting a
@@ -141,6 +165,8 @@ callbacks retain ordered execution.
 
 This nested strategy is a bounded rule for an outer matrix-index collection
 and an inner scalar dot fold with direct capture mappings and a uniform seed.
+Neutral `+ 0` and `* 1` spellings compose through the inner and outer callbacks;
+general contraction-plus-bias expressions still retain ordered execution.
 It consumes the compositional view, but its conditional matvec emitter and
 independent structural reader remain specific to that rule. It does not recover
 contractions from arbitrary authored loops or provide general nested-program
@@ -197,12 +223,43 @@ projection and execution lowering retain their structural Local preservation
 checks against the accepted preparation result. No additional profile or
 post-projection Local rewrite window is introduced.
 
+### Inspecting preparation
+
+`rewriteLocalAlgorithms` optionally fills `RealizationTrace` with the effective
+selection policy, initial/remaining realization allowances, and each stage's
+completion status, elapsed microseconds and operation counts. Counts include
+nested regions and declarations; timings include each service's checks. A completed
+stage can be a no-op. These measurements do not measure native runtime work or memory.
+
+For tool-driven inspection:
+
+```sh
+zkc-opt input.mlir --zkc-prepare-protocol='trace-mathematics=true'
+zkc-opt input.mlir --zkc-prepare-protocol='dump-mathematics=true'
+```
+
+Remarks and labeled before/after IR go to the diagnostic stream. `RetainMaps`
+through `Finish` remains one stateful invocation; diagnostic phases do not reset
+its occurrence or work accounting. Standalone transformations begin a new scope
+unless their caller supplies shared work. A private candidate is published only
+after its own reader accepts the actual source/candidate pair. Rejected proposals
+leave the original body and external expansion state unchanged. Stage records and
+IR dumps carry no independent proof authority.
+
 Fusion compares values and
 ordered shape refusals under sufficient resources; changed allocation and
 instruction charges may change exhaustion.
 No general optimization theorem, backend-failure equivalence or peak-memory
 improvement follows. The independent Lean reduction laws cover their list
 model, with no source capture or native runtime adequacy theorem.
+
+Finite comparison distinguishes a mismatch from exhausted checker capacity.
+An optional candidate that exhausts comparison is discarded; the transaction
+retries once with ordered finite execution and reserved required work. This is
+a conservative whole-candidate fallback, so sibling computations can also lose
+bulk selection. Required-reader exhaustion reports
+`finite-verification-capacity`. The [finite contract](../spec/ir/finite.md)
+defines these per-subject allowances separately from stage-wide recognition.
 
 ## Protocol and relation consumers
 

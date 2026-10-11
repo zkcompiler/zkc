@@ -23,8 +23,13 @@ The outer domain is precisely the corresponding `indices(M)` axis. The inner
 matrix view uses that same matrix and the actual outer index. The other factor
 is the actual captured vector, identified through the nested call and callback
 parameter mappings. The seed is a captured scalar or a field constant and is
-independent of the outer index. The returned step has exactly the admitted
-field multiplication and addition; either commutative operand order is allowed.
+independent of the outer index. The returned step denotes the admitted field multiplication and addition;
+either commutative operand order is allowed. Bounded neutral additions of zero
+and multiplications by one may surround its result, factors or state, or the
+outer returned inner result. The source reader reconstructs these identities
+independently. Every instruction, including unused work, must still belong to
+the admitted total scalar fragment; neutral result syntax cannot hide an effect
+or remove an implementation constraint.
 Additional ignored vector lanes and nested strict zips retain their admission.
 
 If the outer extent is zero, the result is an empty vector. No inner domain

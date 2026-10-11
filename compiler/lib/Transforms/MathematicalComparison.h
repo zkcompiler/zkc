@@ -7,6 +7,20 @@
 #include "llvm/ADT/DenseSet.h"
 
 namespace zkc::mathematical {
+/// Limits of the independent interpreter, not evidence of inequivalence.
+enum class ComparisonCapacity {
+  None,
+  Work,
+  Inputs,
+  Nodes,
+  Depth,
+  Outputs,
+  Encoding,
+  Multiplicity,
+  HelperDepth,
+  DomainDepth
+};
+llvm::StringRef comparisonCapacityName(ComparisonCapacity capacity);
 /// Compare a closed scalar formula with actual scalar/lane instructions after
 /// the caller has checked all ordered input length guards. Every source and
 /// candidate payload operation, including unused operations, must belong to
@@ -40,12 +54,14 @@ compareLaneSum(mlir::Block &source, llvm::ArrayRef<bool> rowwise,
 /// root cardinality already read by the ordered admission checker. No selector,
 /// emitter plan, or producer access map is accepted. Unsupported ordered
 /// computations return failure so the caller can use its ordered loop reader.
-mlir::FailureOr<mlir::Value>
-compareFinitePayload(const finite::Computation &source, mlir::ValueRange inputs,
-                     mlir::Value rows, mlir::Operation *&cursor,
-                     mlir::SymbolTable &symbols,
-                     llvm::DenseSet<mlir::Operation *> &bindings,
-                     uint64_t &remaining, mlir::Operation *end = nullptr);
+/// If supplied, capacity is reset on entry and names an exhausted interpreter
+/// limit on failure. A successful comparison may consume exactly its allowance.
+/// Cursor and bindings are published only on success.
+mlir::FailureOr<mlir::Value> compareFinitePayload(
+    const finite::Computation &source, mlir::ValueRange inputs,
+    mlir::Value rows, mlir::Operation *&cursor, mlir::SymbolTable &symbols,
+    llvm::DenseSet<mlir::Operation *> &bindings, uint64_t &remaining,
+    mlir::Operation *end = nullptr, ComparisonCapacity *capacity = nullptr);
 
 /// Cheap candidate-side gate for the optional finite semantic comparison.
 /// Ordered recipes begin with index constants or empty containers and must

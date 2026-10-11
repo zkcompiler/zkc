@@ -1,5 +1,6 @@
 #include "zkc/Transforms/VectorReductions.h"
 #include "AlgorithmSupport.h"
+#include "CheckedCandidate.h"
 #include "ComputationSelection.h"
 #include "MathematicalSupport.h"
 #include "mlir/IR/IRMapping.h"
@@ -483,12 +484,13 @@ LogicalResult fuseVectorReductions(ModuleOp module,
   for (const auto &[name, product] : *products)
     if (auto selected = selectMapSum(product, recipes))
       reductions.emplace(name, std::move(*selected));
-  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
+  mathematical::CheckedCandidate candidate(module);
   Record output = input;
   if (failed(Rewriter(unit(*candidate), output).run(reductions)) ||
-      failed(check(module, *candidate, input, output)))
+      failed(candidate.publish([&](ModuleOp before, ModuleOp after) {
+        return check(before, after, input, output);
+      })))
     return failure();
-  module.getBodyRegion().takeBody(candidate->getBodyRegion());
   StateAccess::set(state, std::move(output));
   return success();
 }

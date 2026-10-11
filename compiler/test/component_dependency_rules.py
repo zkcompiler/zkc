@@ -346,3 +346,16 @@ rejects("prepared protocol bridge grants no other private transform header",
         root / "lib/Compiler/Compilation.cpp",
         lambda text: '#include "../Transforms/MathematicalSupport.h"\n' + text,
         "private component dependency")
+
+for source in ("FiniteVerification", "MathLoweringVerification",
+               "MathematicalComparison", "NestedContractionVerification"):
+    for header in ("ComputationEquations.h", "ComputationSelection.h",
+                   "RealizationEmission.h", "zkc/Analysis/Computation.h"):
+        rejects(f"independent reader excludes producer machinery: {source} -> {header}",
+                root / f"lib/Transforms/{source}.cpp",
+                lambda text, header=header: f'#include "{header}"\n' + text,
+                "independent reader imports producer machinery")
+rejects("independent reader boundary is transitive",
+        root / "lib/Transforms/MathematicalComparison.h",
+        lambda text: '#include "ComputationSelection.h"\n' + text,
+        "independent reader imports producer machinery")

@@ -5,241 +5,35 @@
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/ScopeExit.h"
 
 using namespace mlir;
 using namespace llvm;
 namespace zkc::finite {
-Collection collection(Type type) {
-  Collection c;
-  auto bound = protocol::encodeBoundType(type, false);
-  if (!bound) {
-    consumeError(bound.takeError());
-    return c;
-  }
-  c.element = elementType(type, bound->kind == "matrix");
-  c.family = bound->kind == "groups" ? "curve" : bound->kind;
-  if (c.family == "sequence") {
-    auto item = protocol::encodeBoundType(c.element, false);
-    if (item)
-      c.arguments.push_back(item->spelling());
-    else
-      consumeError(item.takeError());
-  } else if (auto field = dyn_cast_if_present<algebra::FieldType>(c.element)) {
-    c.arguments.push_back(field.getDomain().str());
-    if (c.family == "field_array")
-      c.arguments.push_back(
-          std::to_string(cast<algebra::FieldArrayType>(type).getLength()));
-  } else if (auto group = dyn_cast_if_present<algebra::GroupType>(c.element))
-    c.arguments.push_back(group.getDomain().str());
-  return c;
-}
-namespace {
-std::optional<protocol::BindingApplication> semanticBinding(Operation *op) {
-  auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
-  auto declaration =
-      reference
-          ? SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
-                op, reference)
-          : local::OperationBindingOp();
-  if (!declaration || !declaration.getContractAttr() ||
-      !declaration.getArgumentsAttr() || !declaration.getImplementationAttr())
+std::optional<unsigned>
+ComputationEnvironment::inputPosition(Value formal) const {
+  if (!formal)
     return std::nullopt;
-  protocol::BindingApplication application{
-      declaration.getContract().str(),
-      {},
-      declaration.getImplementation().str()};
-  for (auto attr : declaration.getArguments()) {
-    auto value = dyn_cast<StringAttr>(attr);
-    if (!value)
-      return std::nullopt;
-    application.arguments.push_back(value.getValue().str());
-  }
-  return application;
+  for (const auto &input : inputs)
+    if (input.formal == formal || input.domainFormal == formal)
+      return input.input;
+  return std::nullopt;
 }
-} // namespace
-const protocol::ComputationContract *semantics(Operation *op) {
-  if (!op || op->getNumRegions() || op->getNumResults() != 1)
-    return nullptr;
-  protocol::BindingApplication application;
-  SmallVector<std::string> parameters;
-  if (op->hasAttr("binding")) {
-    for (auto attribute : op->getAttrs())
-      if (!is_contained(ArrayRef<StringRef>{"binding", "parameters", "site"},
-                        attribute.getName().getValue()))
-        return nullptr;
-    // Binding admission validates the original physical constraint separately.
-    // Reading mathematical meaning must not re-enter physical resolution.
-    auto binding = semanticBinding(op);
-    if (!binding)
-      return nullptr;
-    application = std::move(*binding);
-    if (!protocol::operationSupportsContract(op->getName().getStringRef(),
-                                             application.contract))
-      return nullptr;
-    auto attrs = op->getAttrOfType<ArrayAttr>("parameters");
-    if (!attrs)
-      return nullptr;
-    for (auto attr : attrs) {
-      auto value = dyn_cast<StringAttr>(attr);
-      if (!value)
-        return nullptr;
-      parameters.push_back(value.getValue().str());
-    }
-  } else {
-    // A mathematical interface alone is not a closed profile admission rule.
-    if (!isa<algebra::ConstantFieldOp, algebra::FieldAddOp,
-             algebra::SubtractFieldOp, algebra::FieldMultiplyOp,
-             algebra::GroupAddOp, algebra::GroupScaleOp, data::BoundedAtOp,
-             data::BoundedMatrixAtOp>(op))
-      return nullptr;
-    if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op)) {
-      if (op->getAttrs().size() != 1 || !constant.getValueAttr())
-        return nullptr;
-      parameters.push_back(constant.getValue().str());
-    } else if (!op->getAttrs().empty())
-      return nullptr;
-    // The admitted total syntax has explicit logical signature adapters. A
-    // meaning lookup never chooses the first executable declaration sharing it.
-    if (isa<algebra::ConstantFieldOp>(op))
-      application.contract = "field.constant";
-    else if (isa<algebra::FieldAddOp>(op))
-      application.contract = "field.add";
-    else if (isa<algebra::SubtractFieldOp>(op))
-      application.contract = "field.sub";
-    else if (isa<algebra::FieldMultiplyOp>(op))
-      application.contract = "field.mul";
-    else if (isa<algebra::GroupAddOp>(op))
-      application.contract = "curve.add";
-    else if (isa<algebra::GroupScaleOp>(op))
-      application.contract = "curve.scale";
-    else if (isa<data::BoundedAtOp>(op))
-      application.contract = "vector.get";
-    else
-      application.contract = "matrix.get";
-    auto result = protocol::encodeBoundType(op->getResult(0).getType(), false);
-    if (!result) {
-      consumeError(result.takeError());
-      return nullptr;
-    }
-    application.arguments.push_back(result->identity);
-  }
-  SmallVector<protocol::BoundType> inputs, outputs;
-  auto read = [](TypeRange types, SmallVectorImpl<protocol::BoundType> &out) {
-    for (Type type : types) {
-      auto bound = protocol::encodeBoundType(type, false);
-      if (!bound) {
-        consumeError(bound.takeError());
-        return false;
-      }
-      out.push_back(std::move(*bound));
-    }
-    return true;
-  };
-  if (!read(op->getOperandTypes(), inputs) ||
-      !read(op->getResultTypes(), outputs))
-    return nullptr;
-  return protocol::admitMathematicalMeaning(application, inputs, outputs,
-                                            parameters);
+Value ComputationEnvironment::actualInput(unsigned input) const {
+  return input < inputs.size() ? inputs[input].actual : Value();
 }
-bool replaceable(Operation *op) {
-  if (!semantics(op))
-    return false;
-  if (!op->hasAttr("binding"))
-    return true;
-  auto binding = semanticBinding(op);
-  return binding && binding->implementation.empty();
-}
-std::optional<std::string> fieldConstant(Operation *op) {
-  auto *facet = semantics(op);
-  if (!facet || facet->identity != MathematicalIdentity::FieldConstant)
-    return std::nullopt;
-  if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op))
-    return constant.getValue().str();
-  return cast<StringAttr>(op->getAttrOfType<ArrayAttr>("parameters")[0])
-      .getValue()
-      .str();
+Value ComputationEnvironment::resolveCapture(Value value) const {
+  auto position = inputPosition(value);
+  if (!position || inputs[*position].state)
+    return value;
+  const auto &input = inputs[*position];
+  return input.resolved ? input.resolved : input.formal;
 }
 namespace {
 Value domainResult(Computation c) {
   return c.domain.getBody().front().back().getOperand(0);
 }
-unsigned itemCount(Computation c) {
-  return cast<data::DomainType>(domainResult(c).getType())
-      .getItemTypes()
-      .size();
-}
-std::optional<unsigned> domainInput(Computation c, Value value) {
-  auto arg = dyn_cast<BlockArgument>(value);
-  if (!arg || arg.getOwner() != &c.domain.getBody().front())
-    return std::nullopt;
-  return arg.getArgNumber();
-}
 
-// Admit each payload instruction once, including dead work. The temporary
-// inventory is shared by the concrete equations, never exported as an AST.
-struct PayloadAnalysis {
-  ArrayRef<Operation *> operations;
-  llvm::DenseMap<Operation *, const protocol::ComputationContract *> contracts;
-  bool supported = true;
-
-  PayloadAnalysis(ArrayRef<Operation *> operations, ValueRange results,
-                  bool ordered)
-      : operations(operations) {
-    llvm::DenseSet<Value> live;
-    live.insert(results.begin(), results.end());
-    for (Operation *op : llvm::reverse(operations)) {
-      auto *facet = semantics(op);
-      contracts[op] = facet;
-      if (!facet) {
-        supported = false;
-        continue;
-      }
-      bool used = live.contains(op->getResult(0));
-      if ((ordered && !used) || (!facet->access && !facet->law.total))
-        supported = false;
-      if (used)
-        live.insert(op->getOperands().begin(), op->getOperands().end());
-    }
-  }
-  const protocol::ComputationContract *contract(Value value) const {
-    return contracts.lookup(value.getDefiningOp());
-  }
-  std::optional<StringRef> constant(Value value) const {
-    auto *facet = contract(value);
-    if (!facet || facet->identity != MathematicalIdentity::FieldConstant)
-      return std::nullopt;
-    auto *op = value.getDefiningOp();
-    if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op))
-      return constant.getValue();
-    return cast<StringAttr>(op->getAttrOfType<ArrayAttr>("parameters")[0])
-        .getValue();
-  }
-  // Neutral expressions are followed directly in the admitted SSA. No
-  // normalized graph is manufactured and the inventory remains intact.
-  Value transparent(Value value) const {
-    for (unsigned remaining = 64; remaining; --remaining) {
-      auto *op = value.getDefiningOp();
-      auto *facet = contract(value);
-      if (!facet || op->getNumOperands() != 2 ||
-          facet->law.algebra != protocol::ComputationAlgebra::FieldRing)
-        break;
-      auto left = constant(op->getOperand(0));
-      auto right = constant(op->getOperand(1));
-      auto identity = [](std::optional<StringRef> value,
-                         protocol::ScalarIdentity identity) {
-        return (identity == protocol::ScalarIdentity::Zero && value == "0") ||
-               (identity == protocol::ScalarIdentity::One && value == "1");
-      };
-      if (identity(right, facet->law.rightIdentity))
-        value = op->getOperand(0);
-      else if (identity(left, facet->law.leftIdentity))
-        value = op->getOperand(1);
-      else
-        break;
-    }
-    return value;
-  }
-};
 unsigned extentAxis(Operation *factor) {
   if (auto indices = dyn_cast<data::DomainIndicesOp>(factor))
     return indices.getAxis();
@@ -250,22 +44,24 @@ bool hasExtent(Operation *factor) {
                          data::DomainMatrixRowOp, data::DomainMatrixColumnOp>(
       factor);
 }
-struct ComputationFacts {
+struct AccessAnalysis {
   ComputationView &view;
-  PayloadAnalysis payload;
+  ComputationWork &work;
+  mutable bool complete = true;
   SmallVector<Value> inputs;
-  llvm::DenseMap<Value, unsigned> inputPositions, itemPositions,
-      accessPositions;
-  bool aligned, extentIteration, completeAccesses = true;
+  llvm::DenseMap<Value, unsigned> inputPositions, itemPositions;
+  bool extentIteration;
 
-  ComputationFacts(ComputationView &view, bool aligned)
-      : view(view), payload(view.payload, view.results,
-                            !isa<func::FuncOp>(view.computation.helper)),
-        inputs(view.computation.signature.getNumInputs()), aligned(aligned),
+  AccessAnalysis(ComputationView &view, bool aligned, ComputationWork &work)
+      : view(view), work(work),
+        inputs(view.computation.signature.getNumInputs()),
         extentIteration(
             aligned && llvm::all_of(view.items, [&](const auto &item) {
               return hasExtent(view.iteration[item.iteration].operation);
             })) {
+    if (!charge(inputs.size() + view.captures.size() + 2 * view.items.size() +
+                view.payload.size()))
+      return;
     for (const auto &capture : view.captures) {
       inputs[capture.input] = capture.formal;
       inputPositions[capture.formal] = capture.input;
@@ -276,13 +72,11 @@ struct ComputationFacts {
       if (auto access = readAccess(item.formal))
         addAccess(*access);
     for (Operation *op : view.payload) {
-      auto *facet = payload.contracts.lookup(op);
+      auto *facet = semantics(op);
       if (!facet || !facet->access)
         continue;
       if (auto access = readAccess(op->getResult(0)))
         addAccess(*access);
-      else
-        completeAccesses = false;
     }
   }
   Operation *factor(unsigned item) const {
@@ -300,60 +94,77 @@ struct ComputationFacts {
                ? std::nullopt
                : std::optional<unsigned>(found->second);
   }
-  const Access *access(Value value) const {
-    auto found = accessPositions.find(payload.transparent(value));
-    return found == accessPositions.end() ? nullptr
-                                          : &view.accesses[found->second];
-  }
 
 private:
-  void addAccess(const Access &access) {
-    accessPositions[access.value] = view.accesses.size();
-    view.accesses.push_back(access);
+  bool charge(uint64_t count = 1) const {
+    complete &= consumeComputationWork(work.structural, count);
+    return complete;
+  }
+  void addAccess(Access access) {
+    access.container = inputs[access.input];
+    access.axes.push_back(view.items[access.item].axis);
+    if (access.columnItem)
+      access.axes.push_back(view.items[*access.columnItem].axis);
+    if (auto *facet = semantics(access.operation); facet && facet->access)
+      append_range(access.indices,
+                   access.operation->getOperands().drop_front());
+    else if (access.selectedIndex)
+      access.indices.push_back(inputs[*access.selectedIndex]);
+    view.accesses.push_back(std::move(access));
   }
   // A flat zip admits equal cardinalities before traversal. Only helper
   // premises and source-domain identity are shared with the independent reader;
   // facts known solely on a total operation's actual operands are insufficient.
   bool equalIterationExtent(unsigned input, unsigned axis) const {
     for (const auto &item : view.items) {
+      if (!charge())
+        return false;
       auto *factor = view.iteration[item.iteration].operation;
       if (!hasExtent(factor))
         continue;
-      auto domain = domainInput(view.computation, factor->getOperand(0));
+      auto domain = view.environment.inputPosition(factor->getOperand(0));
       if (!domain)
         continue;
       auto factorAxis = extentAxis(factor);
       if ((*domain == input && factorAxis == axis) ||
-          provesEqualExtent(inputs[*domain], factorAxis, inputs[input], axis))
+          provesEqualExtent(inputs[*domain], factorAxis, inputs[input], axis,
+                            work.evidence))
         return true;
     }
     return false;
   }
   std::optional<Access> readAccess(Value value) const {
-    auto c = view.computation;
     if (auto position = item(value)) {
       auto *leaf = factor(*position);
       if (!isa<data::DomainElementsOp, data::DomainMatrixRowOp,
                data::DomainMatrixColumnOp>(leaf))
         return std::nullopt;
-      auto input = domainInput(c, leaf->getOperand(0));
+      auto input = view.environment.inputPosition(leaf->getOperand(0));
       if (!input)
         return std::nullopt;
-      Access result{AccessKind::Element, *input, *position,
-                    std::nullopt,        value,  leaf,
-                    std::nullopt};
+      Access result{AccessKind::Element,
+                    *input,
+                    *position,
+                    std::nullopt,
+                    value,
+                    leaf,
+                    std::nullopt,
+                    {},
+                    {},
+                    {}};
       if (isa<data::DomainMatrixRowOp, data::DomainMatrixColumnOp>(leaf)) {
         result.kind = isa<data::DomainMatrixRowOp>(leaf)
                           ? AccessKind::MatrixRow
                           : AccessKind::MatrixColumn;
-        result.selectedIndex = domainInput(c, leaf->getOperand(1));
+        result.selectedIndex =
+            view.environment.inputPosition(leaf->getOperand(1));
         if (!result.selectedIndex)
           return std::nullopt;
       }
       return result;
     }
     auto *op = value.getDefiningOp();
-    auto *facet = payload.contract(value);
+    auto *facet = semantics(op);
     if (!facet || !facet->access)
       return std::nullopt;
     auto container = input(op->getOperand(0));
@@ -364,12 +175,11 @@ private:
       auto row = item(op->getOperand(1)), column = item(op->getOperand(2));
       if (row && column) {
         // Two enumerated coordinates retain their exact axes.
-        // The bilinear equation below additionally requires a root product.
         for (auto [position, axis] :
              {std::pair{*row, 0u}, std::pair{*column, 1u}}) {
           auto indices = dyn_cast<data::DomainIndicesOp>(factor(position));
           if (!indices || indices.getAxis() != axis ||
-              domainInput(c, indices.getInput()) != container)
+              view.environment.inputPosition(indices.getInput()) != container)
             return std::nullopt;
         }
         return Access{AccessKind::MatrixCell,
@@ -378,7 +188,10 @@ private:
                       std::nullopt,
                       value,
                       op,
-                      *column};
+                      *column,
+                      {},
+                      {},
+                      {}};
       }
       if (column) {
         varying = 2;
@@ -392,9 +205,16 @@ private:
         !isa<data::DomainIndicesOp>(factor(*position)) ||
         !equalIterationExtent(*container, axis))
       return std::nullopt;
-    Access result{AccessKind::Indexed, *container, *position,
-                  std::nullopt,        value,      op,
-                  std::nullopt};
+    Access result{AccessKind::Indexed,
+                  *container,
+                  *position,
+                  std::nullopt,
+                  value,
+                  op,
+                  std::nullopt,
+                  {},
+                  {},
+                  {}};
     if (selected) {
       result.kind =
           varying == 2 ? AccessKind::MatrixRow : AccessKind::MatrixColumn;
@@ -402,239 +222,13 @@ private:
       // Indexed access runs only on nonempty iterations. A bound is required
       // before introducing eager selected-row/column admission.
       if (!result.selectedIndex ||
-          !provesBound(op->getOperand(selected), op->getOperand(0), 1 - axis))
+          !provesBound(op->getOperand(selected), op->getOperand(0), 1 - axis,
+                       work.evidence))
         return std::nullopt;
     }
     return result;
   }
 };
-struct Combine {
-  Operation *operation;
-  Value term;
-  const protocol::ComputationContract *facet;
-};
-std::optional<Combine> combine(const ComputationFacts &facts) {
-  const auto &view = facts.view;
-  auto c = view.computation;
-  if (!view.result || c.collect || view.seeds.size() != 1 || c.predicate)
-    return std::nullopt;
-  Value result = facts.payload.transparent(view.result);
-  auto *facet = facts.payload.contract(result);
-  auto *op = result.getDefiningOp();
-  if (!facet || !facet->law.associative || op->getNumOperands() != 2)
-    return std::nullopt;
-  Value accumulator = view.seeds.front().formal;
-  Value left = facts.payload.transparent(op->getOperand(0));
-  Value right = facts.payload.transparent(op->getOperand(1));
-  if (left == accumulator && right != accumulator)
-    return Combine{op, right, facet};
-  if (facet->law.commutative && right == accumulator && left != accumulator)
-    return Combine{op, left, facet};
-  return std::nullopt;
-}
-std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
-                                          const Combine &combined) {
-  if (!facts.extentIteration || !facts.payload.supported ||
-      !facts.completeAccesses ||
-      llvm::any_of(facts.view.accesses, [](const Access &access) {
-        return access.kind == AccessKind::MatrixCell;
-      }))
-    return std::nullopt;
-  auto c = facts.view.computation;
-  Reduction result;
-  result.combine = combined.facet->identity;
-  result.accumulator = facts.view.seeds.front().formal;
-  result.term = combined.term;
-  result.combiner = combined.operation;
-  if (auto *direct = facts.access(combined.term)) {
-    result.accesses.push_back(*direct);
-  } else {
-    Value term = facts.payload.transparent(combined.term);
-    auto *facet = facts.payload.contract(term);
-    auto *op = term.getDefiningOp();
-    if (!facet || op->getNumOperands() != 2)
-      return std::nullopt;
-    // This bounded matcher recognizes two maintained term equations. Their
-    // recognition is independent of whether a realization is installed.
-    using I = MathematicalIdentity;
-    if (!((result.combine == I::FieldAdd &&
-           facet->identity == I::FieldMultiply) ||
-          (result.combine == I::GroupAdd && facet->identity == I::GroupScale)))
-      return std::nullopt;
-    auto *first = facts.access(op->getOperand(0));
-    auto *second = facts.access(op->getOperand(1));
-    if (!first || !second)
-      return std::nullopt;
-    result.termIdentity = facet->identity;
-    result.accesses = {*first, *second};
-  }
-  for (unsigned i = 0; i < result.accesses.size(); ++i) {
-    const auto &at = result.accesses[i];
-    bool matrix =
-        at.kind == AccessKind::MatrixRow || at.kind == AccessKind::MatrixColumn;
-    auto container = collection(c.signature.getInput(at.input));
-    if (!matrix) {
-      if (container.family != "vector" && container.family != "curve")
-        return std::nullopt;
-      continue;
-    }
-    if (result.combine != MathematicalIdentity::FieldAdd ||
-        result.termIdentity != MathematicalIdentity::FieldMultiply ||
-        result.accesses.size() != 2 ||
-        collection(c.signature.getInput(result.accesses[1 - i].input)).family !=
-            "vector")
-      return std::nullopt;
-    result.demand = at.kind == AccessKind::MatrixRow ? DemandKind::MatrixRow
-                                                     : DemandKind::MatrixColumn;
-    result.selectedIndex = at.selectedIndex;
-    result.matrixOperand = i;
-    break;
-  }
-  for (const auto &at : result.accesses)
-    result.inputs.push_back(at.input);
-  return result;
-}
-
-std::optional<Elementwise>
-analyzeLanes(Block &body, Type field, ValueRange laneArguments,
-             const llvm::DenseMap<Value, Value> &lookups,
-             const PayloadAnalysis &payload) {
-  if (!isa<algebra::FieldType>(field) || body.empty() || !payload.supported ||
-      !isa<func::ReturnOp, local::ReturnOp>(body.back()) ||
-      body.back().getNumOperands() != 1 ||
-      body.back().getOperand(0).getType() != field)
-    return std::nullopt;
-  llvm::DenseSet<Value> scalars, lanes;
-  for (Value argument : body.getArguments())
-    if (argument.getType() == field)
-      scalars.insert(argument);
-  for (Value value : laneArguments) {
-    auto argument = dyn_cast<BlockArgument>(value);
-    if (!argument || argument.getOwner() != &body || value.getType() != field)
-      return std::nullopt;
-    scalars.erase(value);
-    lanes.insert(value);
-  }
-  Elementwise result;
-  for (Operation *op : payload.operations) {
-    auto *facet = payload.contracts.lookup(op);
-    Value value = op->getResult(0);
-    if (value.getType() != field)
-      return std::nullopt;
-    if (facet->identity == MathematicalIdentity::FieldConstant) {
-      scalars.insert(value);
-      continue;
-    }
-    if (auto found = lookups.find(value); found != lookups.end()) {
-      lanes.insert(value);
-      result.lookups[value] = found->second;
-      continue;
-    }
-    if (op->getNumOperands() != 2 ||
-        facet->law.algebra != protocol::ComputationAlgebra::FieldRing ||
-        !is_contained(
-            ArrayRef<MathematicalIdentity>{MathematicalIdentity::FieldAdd,
-                                           MathematicalIdentity::FieldSubtract,
-                                           MathematicalIdentity::FieldMultiply},
-            facet->identity))
-      return std::nullopt;
-    Value left = op->getOperand(0), right = op->getOperand(1);
-    if ((!scalars.contains(left) && !lanes.contains(left)) ||
-        (!scalars.contains(right) && !lanes.contains(right)))
-      return std::nullopt;
-    (lanes.contains(left) || lanes.contains(right) ? lanes : scalars)
-        .insert(value);
-  }
-  Value returned = body.back().getOperand(0);
-  if (!lanes.contains(returned) && !scalars.contains(returned))
-    return std::nullopt;
-  return result;
-}
-std::optional<Elementwise> analyzeElementwise(const ComputationFacts &facts) {
-  const auto &view = facts.view;
-  auto c = view.computation;
-  if (!c.collect || c.predicate || !facts.aligned || !view.result ||
-      collection(c.signature.getResult(0)).family != "vector")
-    return std::nullopt;
-  Type field = elementType(c.signature.getResult(0));
-  SmallVector<Value> lanes;
-  for (auto [i, item] : enumerate(view.items)) {
-    auto *factor = facts.factor(i);
-    if (!isa<data::DomainElementsOp, data::DomainIndicesOp>(factor) ||
-        collection(factor->getOperand(0).getType()).family != "vector")
-      return std::nullopt;
-    if (isa<data::DomainElementsOp>(factor))
-      lanes.push_back(item.formal);
-  }
-  llvm::DenseMap<Value, Value> lookups;
-  for (const auto &access : view.accesses)
-    if (access.kind == AccessKind::Indexed &&
-        domainInput(c, facts.factor(access.item)->getOperand(0)) ==
-            access.input)
-      lookups[access.value] = facts.inputs[access.input];
-  return analyzeLanes(c.helper->getRegion(0).front(), field, lanes, lookups,
-                      facts.payload);
-}
-std::optional<Bilinear> analyzeBilinear(const ComputationFacts &facts,
-                                        const Combine &combined) {
-  const auto &view = facts.view;
-  const auto &product = view.iteration[view.root];
-  if (combined.facet->identity != MathematicalIdentity::FieldAdd ||
-      !facts.payload.supported || !facts.completeAccesses ||
-      product.kind != IterationKind::Product || product.children.size() != 2 ||
-      view.items.size() != 4)
-    return std::nullopt;
-  Value matrix, left, right;
-  for (unsigned axis = 0; axis < 2; ++axis) {
-    const auto &zip = view.iteration[product.children[axis]];
-    if (zip.kind != IterationKind::Zip || zip.children.size() != 2)
-      return std::nullopt;
-    auto indices = dyn_cast<data::DomainIndicesOp>(
-        view.iteration[zip.children[0]].operation);
-    auto elements = dyn_cast<data::DomainElementsOp>(
-        view.iteration[zip.children[1]].operation);
-    if (!indices || !elements || indices.getAxis() != axis ||
-        collection(indices.getInput().getType()).family != "matrix" ||
-        collection(elements.getInput().getType()).family != "vector")
-      return std::nullopt;
-    if (matrix && matrix != indices.getInput())
-      return std::nullopt;
-    matrix = indices.getInput();
-    (axis ? right : left) = elements.getInput();
-  }
-  SmallVector<Value> terms, pending{combined.term};
-  unsigned remaining = 100000;
-  while (!pending.empty() && remaining--) {
-    Value value = facts.payload.transparent(pending.pop_back_val());
-    auto *facet = facts.payload.contract(value);
-    if (facet && facet->identity == MathematicalIdentity::FieldMultiply)
-      append_range(pending, value.getDefiningOp()->getOperands());
-    else
-      terms.push_back(value);
-    if (terms.size() > 3)
-      return std::nullopt;
-  }
-  Value leftItem = view.items[1].formal, rightItem = view.items[3].formal;
-  if (!pending.empty() || terms.size() != 3 || !is_contained(terms, leftItem) ||
-      !is_contained(terms, rightItem))
-    return std::nullopt;
-  Value cell;
-  for (Value term : terms)
-    if (term != leftItem && term != rightItem)
-      cell = term;
-  const auto *access = cell ? facts.access(cell) : nullptr;
-  if (!access || access->kind != AccessKind::MatrixCell || access->item != 0 ||
-      access->columnItem != 2 ||
-      domainInput(view.computation, matrix) != access->input)
-    return std::nullopt;
-  // No other indexed access, including dead access, may disappear under the
-  // product identity. Enumerated element arguments remain in the shared view.
-  for (Operation *op : view.payload)
-    if (facts.payload.contracts.lookup(op)->access && op != access->operation)
-      return std::nullopt;
-  return Bilinear{matrix, left, right};
-}
-
 std::optional<IterationKind> iterationKind(Operation *op) {
   if (isa<data::DomainElementsOp>(op))
     return IterationKind::Elements;
@@ -655,29 +249,39 @@ std::optional<IterationKind> iterationKind(Operation *op) {
   return std::nullopt;
 }
 class ComputationAnalysis {
-  unsigned remaining;
+  ComputationWork &work;
   llvm::DenseSet<Operation *> active;
+  SymbolTableCollection symbols;
 
 public:
-  explicit ComputationAnalysis(unsigned budget) : remaining(budget) {}
-  std::optional<ComputationView> read(Computation c, Operation *occurrence) {
-    if (!remaining || !c.helper || active.size() >= 64 ||
-        !active.insert(c.helper).second || c.helper->getNumRegions() != 1 ||
-        !c.helper->getRegion(0).hasOneBlock())
+  explicit ComputationAnalysis(ComputationWork &work) : work(work) {}
+  std::optional<ComputationView>
+  read(Computation c, Operation *occurrence,
+       ArrayRef<Operation *> parentPath = {},
+       const llvm::DenseMap<Value, Value> &enclosing =
+           llvm::DenseMap<Value, Value>()) {
+    if (!c.helper || active.size() >= 64 || c.helper->getNumRegions() != 1 ||
+        !c.helper->getRegion(0).hasOneBlock() ||
+        !consumeComputationWork(
+            work.structural,
+            1 + c.signature.getNumInputs() + c.signature.getNumResults() +
+                c.helper->getRegion(0).front().getNumArguments()))
       return std::nullopt;
-    --remaining;
-    auto &body = c.helper->getRegion(0).front();
-    if (body.empty() || !isa<func::ReturnOp, local::ReturnOp>(body.back()))
+    auto callback =
+        readCallback(c, c.collect ? CallbackRole::Body : CallbackRole::Step);
+    if (failed(callback))
       return std::nullopt;
+    auto &body = *callback->body;
     ComputationView result;
     result.computation = c;
     result.occurrence = occurrence;
-    result.demand = c.collect ? DemandKind::Collection : DemandKind::Scalar;
+    result.terminator = callback->terminator;
+    append_range(result.occurrencePath, parentPath);
+    result.occurrencePath.push_back(occurrence);
     llvm::DenseMap<Value, unsigned> iterations;
     for (auto &op : c.domain.getBody().front().without_terminator()) {
-      if (!remaining)
+      if (!consumeComputationWork(work.structural, 1 + op.getNumOperands()))
         return std::nullopt;
-      --remaining;
       auto kind = iterationKind(&op);
       if (!kind || op.getNumResults() != 1)
         return std::nullopt;
@@ -694,115 +298,187 @@ public:
       result.admission.push_back(&op);
     }
     auto root = iterations.find(domainResult(c));
-    if (root == iterations.end() ||
-        body.getNumArguments() != c.signature.getNumInputs() + itemCount(c))
+    if (root == iterations.end())
       return std::nullopt;
     result.root = root->second;
     bool aligned = true;
-    SmallVector<unsigned> pending{result.root};
+    struct PendingAxis {
+      unsigned iteration;
+      SmallVector<unsigned> path;
+    };
+    SmallVector<PendingAxis> pending{{result.root, {}}};
     while (!pending.empty()) {
-      if (!remaining)
+      if (!consumeComputationWork(work.structural))
         return std::nullopt;
-      --remaining;
-      unsigned position = pending.pop_back_val();
+      auto pendingAxis = pending.pop_back_val();
+      unsigned position = pendingAxis.iteration;
       const auto &iteration = result.iteration[position];
       if (iteration.kind == IterationKind::Zip ||
           iteration.kind == IterationKind::Product) {
         aligned &= iteration.kind != IterationKind::Product;
-        append_range(pending, llvm::reverse(iteration.children));
+        for (unsigned child = iteration.children.size(); child; --child) {
+          if (!consumeComputationWork(work.structural,
+                                      1 + pendingAxis.path.size()))
+            return std::nullopt;
+          auto path = pendingAxis.path;
+          path.push_back(child - 1);
+          pending.push_back({iteration.children[child - 1], std::move(path)});
+        }
       } else {
         unsigned count = cast<data::DomainType>(iteration.descriptor.getType())
                              .getItemTypes()
                              .size();
         for (unsigned i = 0; i < count; ++i) {
-          if (result.items.size() >= itemCount(c))
+          if (!consumeComputationWork(work.structural,
+                                      1 + pendingAxis.path.size()) ||
+              result.items.size() >= callback->formals.items.size())
             return std::nullopt;
-          result.items.push_back(
-              {position, body.getArgument(c.states + result.items.size())});
+          Axis axis;
+          axis.identity = {result.occurrencePath, iteration.operation,
+                           pendingAxis.path, i};
+          if (hasExtent(iteration.operation) ||
+              iteration.kind == IterationKind::Coordinates) {
+            axis.container = iteration.operation->getOperand(0);
+            axis.containerAxis = iteration.kind == IterationKind::Coordinates
+                                     ? i
+                                     : extentAxis(iteration.operation);
+          }
+          result.items.push_back({position,
+                                  callback->formals.items[result.items.size()],
+                                  static_cast<unsigned>(result.axes.size())});
+          result.axes.push_back(std::move(axis));
         }
       }
     }
-    if (result.items.size() != itemCount(c))
+    if (result.items.size() != callback->formals.items.size())
       return std::nullopt;
     auto actual = [&](unsigned input) -> Value {
       return occurrence && input < occurrence->getNumOperands()
                  ? occurrence->getOperand(input)
                  : Value();
     };
-    for (unsigned i = 0; i < c.states; ++i)
-      result.seeds.push_back(
-          {c.arguments + i, body.getArgument(i), actual(c.arguments + i)});
-    unsigned base = c.states + result.items.size();
-    for (unsigned input = 0; input < c.signature.getNumInputs(); ++input) {
-      if (input >= c.arguments && input < c.arguments + c.states)
-        continue;
-      unsigned formal = base + input - (input >= c.arguments ? c.states : 0);
-      result.captures.push_back(
-          {input, body.getArgument(formal), actual(input)});
+    // Reorder checked callback formals into the entry ABI. Positions remain
+    // distinct even when an occurrence passes one actual more than once.
+    SmallVector<Value> entryFormals;
+    append_range(entryFormals, callback->formals.domain);
+    append_range(entryFormals, callback->formals.state);
+    append_range(entryFormals, callback->formals.captures);
+    auto entry = partitionEntry(c, entryFormals);
+    if (failed(entry) || (occurrence && !isDeclaration(occurrence) &&
+                          failed(partitionEntry(c, occurrence->getOperands()))))
+      return std::nullopt;
+    for (auto [input, formal] : enumerate(entryFormals)) {
+      bool state = input >= entry->domain.size() &&
+                   input < entry->domain.size() + entry->initialState.size();
+      Value operand = actual(input);
+      Value resolved = enclosing.lookup(operand);
+      InputReference binding{static_cast<unsigned>(input),
+                             formal,
+                             operand,
+                             input < entry->domain.size()
+                                 ? c.domain.getBody().front().getArgument(input)
+                                 : Value(),
+                             resolved ? resolved : operand,
+                             state};
+      result.environment.inputs.push_back(binding);
+      (state ? result.seeds : result.captures).push_back(binding);
     }
-    for (auto &op : body.without_terminator()) {
-      if (!remaining)
-        return std::nullopt;
-      --remaining;
-      result.payload.push_back(&op);
-      Operation *definition = &op;
-      if (isa<local::ApplyOp, func::CallOp>(op)) {
-        auto reference = op.getAttrOfType<FlatSymbolRefAttr>("callee");
-        definition = reference
-                         ? SymbolTable::lookupNearestSymbolFrom(&op, reference)
-                         : nullptr;
+    // Map invariant captures only. A step's state is a recurrence variable,
+    // not an alias for its seed; an item is local to this iteration occurrence.
+    llvm::DenseMap<Value, Value> bindings;
+    for (const auto &capture : result.captures)
+      bindings[capture.formal] =
+          result.environment.resolveCapture(capture.formal);
+    auto readPayload = [&](Block &block, SmallVectorImpl<Operation *> &payload,
+                           const llvm::DenseMap<Value, Value> &environment) {
+      // A helper is active only while its own callback is being traversed.
+      // A predicate may invoke an acyclic fold that shares this step helper.
+      Operation *callback = block.getParentOp();
+      if (active.size() >= 64 || !active.insert(callback).second)
+        return false;
+      auto release = llvm::scope_exit([&] { active.erase(callback); });
+      for (auto &op : block.without_terminator()) {
+        if (!consumeComputationWork(work.structural, 1 + op.getNumOperands()))
+          return false;
+        payload.push_back(&op);
+        Operation *definition = &op;
+        if (isa<local::ApplyOp, func::CallOp>(op)) {
+          auto reference = op.getAttrOfType<FlatSymbolRefAttr>("callee");
+          definition = reference
+                           ? symbols.lookupNearestSymbolFrom(&op, reference)
+                           : nullptr;
+        }
+        if (!definition || !isComputation(definition))
+          continue;
+        Computation child;
+        if (failed(describe(definition, child, nullptr, &symbols)))
+          return false;
+        auto nested = read(child, &op, result.occurrencePath, environment);
+        if (!nested)
+          return false;
+        result.nested.push_back(std::move(*nested));
       }
-      if (!definition || !isComputation(definition))
-        continue;
-      Computation child;
-      if (failed(describe(definition, child)))
+      return true;
+    };
+    if (c.predicate) {
+      if (!consumeComputationWork(work.structural,
+                                  1 + callback->signature.getNumInputs()))
         return std::nullopt;
-      auto nested = read(child, &op);
-      if (!nested)
+      auto predicate = readCallback(c, CallbackRole::Predicate);
+      if (failed(predicate))
         return std::nullopt;
-      result.nested.push_back(std::move(*nested));
+      auto environment = bindCallback(*predicate, {{},
+                                                   callback->formals.items,
+                                                   callback->formals.domain,
+                                                   callback->formals.captures});
+      if (failed(environment))
+        return std::nullopt;
+      result.predicateTerminator = predicate->terminator;
+      llvm::DenseMap<Value, Value> predicateBindings;
+      for (auto [formal, source] :
+           zip(predicate->body->getArguments(), environment->actuals)) {
+        result.predicateArguments.push_back({formal, source});
+        Value resolved = bindings.lookup(source);
+        predicateBindings[formal] = resolved ? resolved : source;
+      }
+      if (!readPayload(*predicate->body, result.predicatePayload,
+                       predicateBindings))
+        return std::nullopt;
+      append_range(result.predicateResults, predicate->returned);
     }
-    append_range(result.results, body.back().getOperands());
+    if (!readPayload(body, result.payload, bindings))
+      return std::nullopt;
+    append_range(result.results, callback->returned);
+    for (auto [i, yielded] : enumerate(result.results))
+      result.resultMappings.push_back(
+          {static_cast<unsigned>(i), yielded,
+           occurrence && i < occurrence->getNumResults()
+               ? occurrence->getResult(i)
+               : Value(),
+           !c.collect && i < result.seeds.size() ? result.seeds[i].actual
+                                                 : Value(),
+           !c.collect ? std::optional<unsigned>(result.seeds[i].input)
+                      : std::nullopt,
+           c.signature.getResult(i),
+           c.collect && !c.predicate ? std::optional<unsigned>(result.root)
+                                     : std::nullopt});
     if (result.results.size() == 1)
       result.result = result.results.front();
-    result.replaceable = llvm::all_of(
-        result.payload, [](Operation *op) { return replaceable(op); });
-    ComputationFacts facts(result, aligned);
-    if (auto combined = combine(facts)) {
-      result.reduction = analyzeReduction(facts, *combined);
-      result.bilinear = analyzeBilinear(facts, *combined);
-    }
-    result.elementwise = analyzeElementwise(facts);
-    if (result.reduction)
-      result.demand = result.reduction->demand;
-    active.erase(c.helper);
+    AccessAnalysis accesses(result, aligned, work);
+    if (!accesses.complete)
+      return std::nullopt;
     return result;
   }
 };
 } // namespace
-std::optional<Elementwise>
-analyzeLaneFormula(Block &body, Type field, ValueRange laneArguments,
-                   const llvm::DenseMap<Value, Value> &indices) {
-  if (body.empty())
-    return std::nullopt;
-  SmallVector<Operation *> operations;
-  for (auto &op : body.without_terminator())
-    operations.push_back(&op);
-  PayloadAnalysis payload(operations, body.back().getOperands(),
-                          isa<local::FuncOp>(body.getParentOp()));
-  llvm::DenseMap<Value, Value> lookups;
-  for (Operation *op : operations) {
-    auto *facet = payload.contracts.lookup(op);
-    if (facet && facet->access == protocol::AccessRule::Element &&
-        op->getNumOperands() == 2 &&
-        indices.lookup(op->getOperand(1)) == op->getOperand(0) &&
-        collection(op->getOperand(0).getType()).family == "vector")
-      lookups[op->getResult(0)] = op->getOperand(0);
-  }
-  return analyzeLanes(body, field, laneArguments, lookups, payload);
-}
 std::optional<ComputationView> analyzeComputation(Computation c,
                                                   unsigned budget) {
-  return ComputationAnalysis(budget).read(c, c.operation);
+  ComputationWork work;
+  work.structural = budget;
+  return analyzeComputation(c, work);
+}
+std::optional<ComputationView> analyzeComputation(Computation c,
+                                                  ComputationWork &work) {
+  return ComputationAnalysis(work).read(c, c.operation);
 }
 } // namespace zkc::finite

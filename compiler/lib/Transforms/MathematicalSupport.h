@@ -1,11 +1,13 @@
 #ifndef ZKC_TRANSFORMS_MATHEMATICALSUPPORT_H
 #define ZKC_TRANSFORMS_MATHEMATICALSUPPORT_H
+#include "FiniteVerification.h"
 #include "zkc/Dialect/Operations.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 #include "zkc/Transforms/VectorReductions.h"
 #include "llvm/ADT/DenseSet.h"
 #include <map>
 namespace zkc::mathematical {
+struct RealizationWork;
 // Bounded derived view: every map formula is admitted, including dead work;
 // entries identify exactly a multiplication of two rowwise argument slots in
 // scalar operand order. Reduction recipe selection remains separate; no IR or
@@ -50,6 +52,14 @@ mlir::LogicalResult
 verifyCalculationRecipes(protocol_ir::ProtocolModuleOp original,
                          protocol_ir::ProtocolModuleOp candidate,
                          llvm::ArrayRef<local::FuncOp> functions);
+// The typed outcome allows the private producer to retry only optional finite
+// comparison exhaustion; it does not weaken the actual recipe reader.
+mlir::LogicalResult
+verifyCalculationRecipes(protocol_ir::ProtocolModuleOp original,
+                         protocol_ir::ProtocolModuleOp candidate,
+                         llvm::ArrayRef<local::FuncOp> functions,
+                         finite::VerificationLimits limits,
+                         finite::VerificationResult &outcome);
 class CheckedHelperNormalizations;
 // Compare original local.realize helpers to complete actual executable bodies,
 // composing independently checked normalization proposals and recipe reading.
@@ -63,9 +73,23 @@ verifyRealizedHelperRecipes(protocol_ir::ProtocolModuleOp original,
                             protocol_ir::ProtocolModuleOp candidate,
                             llvm::ArrayRef<local::FuncOp> functions,
                             const CheckedHelperNormalizations &helpers);
+// Success preserves function handles and replaces their checked bodies, adding
+// only generated bindings. Failure leaves the unit unchanged; outer services
+// own complete module admission.
 mlir::LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
                                       llvm::ArrayRef<local::FuncOp> functions,
-                                      MathematicalSelectionPolicy policy = {});
+                                      MathematicalSelectionPolicy policy = {},
+                                      RealizationWork *work = nullptr);
+mlir::LogicalResult expandMathRealizations(mlir::ModuleOp module,
+                                           MathematicalSelectionPolicy policy,
+                                           RealizationWork *work,
+                                           finite::VerificationLimits limits);
+// Capacity-configured private entry; uses the same checked candidate path.
+mlir::LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
+                                      llvm::ArrayRef<local::FuncOp> functions,
+                                      MathematicalSelectionPolicy policy,
+                                      RealizationWork *work,
+                                      finite::VerificationLimits limits);
 // Internal rewrite entry used by preparation and participant simplification.
 // The caller has already admitted the complete unit.
 mlir::LogicalResult simplifyCalculations(mlir::Operation *body);
