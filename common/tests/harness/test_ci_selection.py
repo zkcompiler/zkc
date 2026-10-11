@@ -37,6 +37,8 @@ def select(repo, base, output):
     ("uv.lock", False, True),
     ("lean/Zkc.lean", False, False),
     ("compiler/CMakeLists.txt", False, True),
+    ("compiler/test/\uac00.cpp", False, True),
+    ("compiler/test/line\nbreak.cpp", False, True),
     ("crates/zkc-tools/build.rs", False, True),
     ("common/unicode/README.md", False, False),
     ("docs/README.md", False, False),
