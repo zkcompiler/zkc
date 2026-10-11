@@ -94,6 +94,36 @@ setup associations and every job choice. Cycles, partial
 overrides and static re-specialization of an Entry refuse. Alias resolution uses
 the source call-depth and work bounds.
 
+### Construction bodies
+
+A construction can select a component with `transcript Provider;` and a
+verifier service with `replace challenges;`. The provider declares an associated
+`State` and a zero-runtime-argument Local `initialize()` returning that state.
+Source-created state requires `Copy` and `Drop`; private state need not permit
+sharing or serialization.
+
+Handlers are ordinary typed Local bodies:
+
+- `on start(t, input, ...)` receives the state and named original protocol
+  inputs, each available at both participants. It returns the next state.
+- `on message label(t, value)` receives one complete logical message payload
+  and returns the next state.
+- `on query label(t)` returns `(state, value)`. An index query also supplies its
+  request bound as the second handler parameter.
+
+Selectors use [source site labels](protocols.md#site-labels). A dotted selector
+descends through labelled protocol applications. A finite group, such as
+`on message {commitment, response}(t, value)`, checks the body separately at
+each selected payload type. Parameter annotations are optional and, when
+written, must match the selected signature. Bodies cannot capture protocol
+locals or undeclared inputs.
+
+`base Other<...>;` inherits a construction for the same protocol specialization.
+The provider and replacement authority remain fixed. A handler replaces the
+whole inherited rule at that selector; other rules remain inherited. Without a
+native base, the resolved construction must have a start handler and cover every
+message and every query on the selected authority. Bases must be acyclic.
+
 ### Selection
 
 The checked project exposes all Entry declaration IDs sorted by qualified name.

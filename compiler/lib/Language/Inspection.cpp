@@ -134,6 +134,61 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                                    : "captured"},
                     {"begin", decl.span.begin},
                     {"end", decl.span.end}}}};
+  if (decl.construction) {
+    for (StringRef key : {"abstract", "definition", "roles", "input_order",
+                          "inputs", "outputs", "services", "effects"})
+      result.erase(key);
+    result["kind"] = "construction";
+    const auto &construction = *decl.construction;
+    const auto &target = project.declarations()[decl.target->index];
+    json::Array arguments, rules;
+    for (const auto &argument : decl.staticArguments)
+      arguments.push_back(type(argument));
+    result["target"] = json::Object{{"name", target.qualifiedName},
+                                    {"arguments", std::move(arguments)}};
+    result["provider"] = construction.provider
+                             ? json::Value(type(*construction.provider))
+                             : json::Value(nullptr);
+    result["state"] = construction.state
+                          ? json::Value(type(*construction.state))
+                          : json::Value(nullptr);
+    result["root"] =
+        construction.root == ConstructionDefinition::Root::Local  ? "local"
+        : construction.root == ConstructionDefinition::Root::Host ? "host"
+                                                                  : "none";
+    result["replace"] =
+        construction.service
+            ? json::Value(target.services[*construction.service].name)
+            : json::Value(nullptr);
+    result["suite"] = construction.suite;
+    result["format"] = protocol::proofFormatName(
+        decl.proofFormat.value_or(protocol::ProofFormat::Native));
+    result["base"] =
+        construction.parent
+            ? project.declarations()[construction.parent->index].qualifiedName
+        : construction.base == ConstructionDefinition::Base::Native
+            ? "fiat_shamir"
+        : construction.base == ConstructionDefinition::Base::Authored
+            ? "authored"
+            : "";
+    for (const auto &rule : construction.rules) {
+      json::Array path, inputs;
+      for (const auto &part : rule.path)
+        path.push_back(part);
+      for (auto input : rule.inputs)
+        inputs.push_back(target.inputs[input].name);
+      rules.push_back(json::Object{
+          {"kind", rule.kind == ConstructionRule::Kind::Start     ? "start"
+                   : rule.kind == ConstructionRule::Kind::Message ? "message"
+                                                                  : "query"},
+          {"path", std::move(path)},
+          {"inputs", std::move(inputs)},
+          {"handler",
+           project.declarations()[rule.handler.index].qualifiedName}});
+    }
+    result["rules"] = std::move(rules);
+    return result;
+  }
   if (decl.primitive)
     result["primitive"] = decl.primitive->identity;
   if (decl.effectAllowance || decl.abstract) {
@@ -187,9 +242,14 @@ Expected<std::string> inspectDeclarations(const CheckedProject &project,
       continue;
     if (decl.kind != Declaration::Kind::Math &&
         decl.kind != Declaration::Kind::Local &&
-        decl.kind != Declaration::Kind::Protocol)
+        decl.kind != Declaration::Kind::Protocol &&
+        decl.kind != Declaration::Kind::Construction)
       continue;
     if (decl.generatedReduction)
+      continue;
+    if (decl.anonymous && decl.parent &&
+        project.declarations()[decl.parent->index].kind ==
+            Declaration::Kind::Construction)
       continue;
     const Declaration *owner = &decl;
     while (owner->parent)

@@ -2,6 +2,7 @@
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Builders.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Printing.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -819,6 +820,110 @@ class Emitter {
                 {}, results, {});
   }
 
+  bool construction() {
+    const auto *proof = project.entry().proof();
+    if (!proof || proof->construction != ProofEntry::Construction::Derived)
+      return true;
+    const auto &definition =
+        project.declarations()[proof->selectedConstruction->index];
+    const auto &plan = *definition.construction;
+    auto stateLayout = take(layouts.get(*plan.state));
+    if (!stateLayout)
+      return false;
+    auto state = types(**stateLayout);
+    if (!state)
+      return false;
+    auto typeAttrs = [&](mlir::TypeRange values) {
+      SmallVector<mlir::Attribute> attrs;
+      for (auto type : values)
+        attrs.push_back(mlir::TypeAttr::get(type));
+      return builder.getArrayAttr(attrs);
+    };
+    std::vector<unsigned> offsets{0};
+    for (const auto &port : project.protocol().inputs) {
+      auto layout = take(layouts.get(port.type));
+      if (!layout)
+        return false;
+      offsets.push_back(offsets.back() + (*layout)->leaves.size());
+    }
+    SmallVector<mlir::Attribute> rules;
+    for (const auto &rule : plan.rules) {
+      const auto &handler = project.declarations()[rule.handler.index];
+      SmallVector<mlir::Type> payload;
+      SmallVector<int64_t> inputs;
+      std::vector<std::string> sites;
+      StringRef kind = rule.kind == ConstructionRule::Kind::Start ? "start"
+                       : rule.kind == ConstructionRule::Kind::Message
+                           ? "message"
+                           : "query";
+      if (rule.kind == ConstructionRule::Kind::Start) {
+        for (auto port : rule.inputs)
+          for (unsigned i = offsets[port]; i < offsets[port + 1]; ++i)
+            inputs.push_back(i);
+      } else {
+        auto layout =
+            take(layouts.get(kind == "message" ? handler.inputs[1].type
+                                               : handler.outputs.front().type));
+        if (!layout)
+          return false;
+        auto native = types(**layout);
+        if (!native)
+          return false;
+        payload = kind == "message"
+                      ? *native
+                      : SmallVector<mlir::Type>(
+                            ArrayRef(*native).drop_front(state->size()));
+        auto qualified = [&](std::string site) {
+          std::string prefix;
+          for (auto &part : ArrayRef(rule.path).drop_back()) {
+            auto label = nativeSiteName(part, 0);
+            prefix = prefix.empty()
+                         ? label
+                         : mathematical::expandedApplicationSite(prefix, label);
+          }
+          return prefix.empty()
+                     ? site
+                     : mathematical::expandedApplicationSite(prefix, site);
+        };
+        auto label = nativeSiteName(rule.path.back(), 0);
+        if (kind == "query")
+          sites.push_back(qualified(label));
+        else
+          for (unsigned i = 0; i < payload.size(); ++i)
+            sites.push_back(qualified(label + "_" + std::to_string(i)));
+      }
+      rules.push_back(builder.getDictionaryAttr(
+          {text("kind", kind),
+           attr("handler",
+                mlir::FlatSymbolRefAttr::get(&context, handler.symbol)),
+           attr("sites", strings(sites)),
+           attr("inputs", builder.getDenseI64ArrayAttr(inputs)),
+           attr("payload", typeAttrs(payload))}));
+    }
+    SmallVector<mlir::NamedAttribute> attrs{
+        text("sym_name", definition.symbol),
+        attr("target",
+             mlir::FlatSymbolRefAttr::get(&context, project.protocol().symbol)),
+        text("provider", typeIdentity(*plan.provider)),
+        text("root", plan.root == ConstructionDefinition::Root::Local ? "local"
+                                                                      : "host"),
+        attr("state", typeAttrs(*state)),
+        text("suite", plan.suite),
+        attr("service",
+             builder.getI64IntegerAttr(offsets.back() + *plan.service)),
+        attr("native_base", builder.getBoolAttr(!plan.suite.empty())),
+        attr("rules", builder.getArrayAttr(rules))};
+    if (plan.initializer)
+      attrs.push_back(
+          attr("initializer",
+               mlir::FlatSymbolRefAttr::get(
+                   &context,
+                   project.declarations()[plan.initializer->declaration.index]
+                       .symbol)));
+    builder.setInsertionPointToEnd(definitions);
+    return make("protocol.construction", {}, {}, attrs);
+  }
+
 public:
   Emitter(const ClosedEntry &project, mlir::MLIRContext &context,
           const Limits &limits)
@@ -901,6 +1006,8 @@ public:
       if (!body(decl, *decl.body, function->getRegion(0).front()))
         return std::move(failure);
     }
+    if (!construction())
+      return std::move(failure);
     mlir::SymbolTable table(unit);
     relation::FormulaIdentities formulas(remaining, limits.irBytes);
     LayoutIdentities schemaIdentities(remaining);

@@ -165,6 +165,7 @@ add_zkc_component(IR
   lib/Dialect/Protocol/IR/Mathematical.cpp
   lib/Dialect/Protocol/IR/ResourceOrigins.cpp
   lib/Dialect/Protocol/IR/Applications.cpp
+  lib/Dialect/Protocol/IR/Construction.cpp
   lib/Dialect/Protocol/IR/Projection.cpp
   lib/Dialect/Protocol/Execution.cpp
   lib/Dialect/Relation/IR/AIR.cpp

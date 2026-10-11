@@ -25,6 +25,18 @@ def ProtocolEntryOp : Op<ProtocolDialect, "entry", [Symbol, HasParent<"zkc::prot
   let arguments = (ins SymbolNameAttr:$sym_name, ArrayAttr:$targets);
 }
 
+// A selected construction is a declaration over an original protocol. Its
+// ordinary Local functions remain independently checked executable bodies.
+// Construction consumes this record before participant projection.
+def ConstructionOp : Op<ProtocolDialect, "construction",
+    [Symbol, HasParent<"zkc::protocol_ir::ProtocolModuleOp">,
+     DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let arguments = (ins SymbolNameAttr:$sym_name, FlatSymbolRefAttr:$target, StrAttr:$provider,
+    StrAttr:$root, ArrayAttr:$state,
+    OptionalAttr<FlatSymbolRefAttr>:$initializer, StrAttr:$suite,
+    I64Attr:$service, BoolAttr:$native_base, ArrayAttr:$rules);
+}
+
 // Static protocol composition, expanded before participant projection.
 def ApplyOp : Op<ProtocolDialect, "apply",
     [MemoryEffects<[MemRead, MemWrite]>,

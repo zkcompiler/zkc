@@ -32,6 +32,7 @@ public:
   };
 
   bool chargeType(const Type &, Span);
+  bool chargeConstruction(const ConstructionDefinition &, Span);
   const Parameter *parameter(llvm::StringRef) const;
   const Declaration *typeDeclaration(const Type &) const;
   bool symbolic(const Type &) const;

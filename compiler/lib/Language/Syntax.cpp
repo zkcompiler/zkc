@@ -1217,6 +1217,11 @@ private:
           if (take("authored"))
             construction.base = ConstructionDefinition::Base::Authored;
           else if (take("fiat_shamir")) {
+            if (construction.service) {
+              fail("source.construction",
+                   "query authority was already selected");
+              return {};
+            }
             construction.base = ConstructionDefinition::Base::Native;
             SyntaxName service;
             if (!expect("(") || !string(construction.suite) || !expect(","))

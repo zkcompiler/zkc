@@ -71,6 +71,15 @@ ArrayAttr statementBindings(zkc::protocol_ir::MathematicalOp program,
 
 LogicalResult verifyProtocolPreparationPreserved(Operation *before,
                                                  Operation *after) {
+  auto constructions = [](Operation *module) {
+    SmallVector<DictionaryAttr> result;
+    for (auto record :
+         module->getRegion(0).front().getOps<protocol_ir::ConstructionOp>())
+      result.push_back(record->getAttrDictionary());
+    return result;
+  };
+  if (constructions(before) != constructions(after))
+    return refuseLocal(after, "preparation changed the selected construction");
   bool applications = false;
   before->walk([&](protocol_ir::ApplyOp) { applications = true; });
   if (applications)

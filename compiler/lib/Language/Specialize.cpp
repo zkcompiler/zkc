@@ -487,21 +487,9 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                                              clause.decision->span))
           return {};
       }
-      if (source.construction) {
-        const auto &construction = *source.construction;
-        if (!types.charge(construction.rules.size() + 1, source.span))
-          return {};
-        for (const auto &rule : construction.rules) {
-          if (!types.charge(rule.inputs.size() + 1, rule.span))
-            return {};
-          for (const auto &part : rule.path)
-            if (!types.charge(part.size() + 1, rule.span))
-              return {};
-          for (const auto &argument : rule.arguments)
-            if (!types.chargeType(argument, rule.span))
-              return {};
-        }
-      }
+      if (source.construction &&
+          !types.chargeConstruction(*source.construction, source.span))
+        return {};
       auto targetArguments = source.staticArguments;
       Declaration result = source;
       DeclarationId id{uint32_t(declarations.size())};

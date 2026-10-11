@@ -727,8 +727,9 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
             map.emitOpError(), "mathematical-analysis-limit",
             "realized helpers exceed the shared expansion budget");
       remainingRealizations -= summary->expandedOperations;
-    } else if (isa<local::FuncOp, local::OperationBindingOp, poly::RecipeOp,
-                   poly::RealizeOp>(op)) {
+    } else if (isa<protocol_ir::ConstructionOp, local::FuncOp,
+                   local::OperationBindingOp, poly::RecipeOp, poly::RealizeOp>(
+                   op)) {
       // Whole executable admission below checks even unused definitions.
     } else if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
       for (auto attr : declaration->getAttrs())

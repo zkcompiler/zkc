@@ -54,6 +54,23 @@ with exact nominal identity and payload layouts. A noncopyable restricted nomina
 or associated value has a leading `resource_unit` custody leaf even when its data
 is empty. Custody slot identities use the complete SHA-256 digest of canonical source type identity, with collision refusal; traversal order does not affect them. Empty unrestricted products have no leaves, but remain logical values.
 
+## Selected constructions
+
+A closed programmable construction emits one `protocol.construction` symbol
+beside its target `protocol.func` and ordinary Local functions. It retains the
+provider identity, root kind, ordered state types, initializer symbol,
+replacement service index, native-base requirement and resolved handler rules.
+Rules refer to Local symbols. Start selectors identify original flattened input
+ports; message selectors retain the ordered native leaves of one logical
+payload. Query bodies retain the source `(state, value)` result order.
+
+Independent source comparison checks the complete selection, including handler
+identity and every call-qualified site. Native record verification checks
+signatures, shared start inputs and root permissions. Preparation preserves the
+record exactly. Ordinary projection refuses an unconsumed construction;
+the proof constructor must admit its occurrences and consume the selection
+before projecting participants.
+
 ## Source and native names
 
 Source names follow the [Unicode profile](lexical.md); native identities retain

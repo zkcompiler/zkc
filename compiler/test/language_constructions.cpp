@@ -1,5 +1,14 @@
+#include "mlir/IR/Builders.h"
+#include "mlir/Parser/Parser.h"
+#include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Protocol/Construction.h"
+#include "zkc/Dialect/Registry.h"
+#include "zkc/Language/Inspection.h"
 #include "zkc/Language/Project.h"
+#include "zkc/Transforms/Passes.h"
+#include "zkc/Translation/Language.h"
+#include "llvm/Support/JSON.h"
 using namespace llvm;
 using namespace zkc::language;
 using zkc::test::refuses;
@@ -31,11 +40,21 @@ construction Derived<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{
   on query challenge(t){return H::draw(t);}
 }
 )";
-Expected<CheckedProject> checked(StringRef source) {
+constexpr StringLiteral deployment = R"(
+      component Provider:TestTranscript<F>{
+        type State:Copy+Drop=(index,index);
+        fn initialize()->State{return State((0,0));}
+        fn observe(t:State,v:F)->State{return t;}
+        fn draw(t:State)->(State,F){return (t,1);}
+      }
+      proof Demo=Round<F>{prover P;verifier V;public{public};accept ok;
+        construction Derived<F,Provider>;}
+    )";
+Expected<CheckedProject> checked(StringRef source, const Limits &limits = {}) {
   auto captured = capture({{"m", source.str(), "construction.zkc"}});
   if (!captured)
     return captured.takeError();
-  return analyze(*captured).checkedProject();
+  return analyze(*captured, limits).checkedProject();
 }
 std::string replace(StringRef from, StringRef to) {
   auto text = program.str();
@@ -47,6 +66,10 @@ std::string replace(StringRef from, StringRef to) {
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  mlir::DialectRegistry registry;
+  zkc::registerDialects(registry);
+  mlir::MLIRContext context(registry);
+  context.loadAllAvailableDialects();
   cases.run("typed handlers use ordinary Local declarations", [&] {
     auto project = take(checked(program));
     unsigned handlers = 0;
@@ -79,18 +102,30 @@ int main() {
     require(found->construction->rules.size() == 5,
             "override replaces one rule");
   });
+  cases.run(
+      "inspection reports checked selections and hides anonymous bodies", [&] {
+        auto project = take(checked(
+            replace("construction Derived", "pub construction Derived")));
+        auto report = take(json::parse(take(inspectDeclarations(project))));
+        unsigned constructors = 0;
+        for (const auto &value : *report.getAsArray()) {
+          const auto &declaration = *value.getAsObject();
+          require(!declaration.getString("name")->contains("handler_"),
+                  "anonymous construction functions are not public inventory "
+                  "entries");
+          if (declaration.getString("kind") == "construction") {
+            ++constructors;
+            require(declaration.getString("replace") == "challenges" &&
+                        declaration.getString("root") == "local" &&
+                        declaration.getArray("rules")->size() == 5,
+                    "inspection retains checked authority, root and complete "
+                    "rule set");
+          }
+        }
+        require(constructors == 1, "selected public construction appears once");
+      });
   cases.run("Entry closes the selected factory and every handler", [&] {
-    auto project = take(checked((program + R"(
-      component Provider:TestTranscript<F>{
-        type State:Copy+Drop=(index,index);
-        fn initialize()->State{return State((0,0));}
-        fn observe(t:State,v:F)->State{return t;}
-        fn draw(t:State)->(State,F){return (t,1);}
-      }
-      proof Demo=Round<F>{prover P;verifier V;public{public};accept ok;
-        construction Derived<F,Provider>;}
-    )")
-                                    .str()));
+    auto project = take(checked((program + deployment).str()));
     auto closed = take(closeEntry(project, "m::Demo"));
     const auto *proof = closed.entry().proof();
     require(proof->construction == ProofEntry::Construction::Derived,
@@ -109,6 +144,120 @@ int main() {
       require(handler.parameters.empty() && handler.body != nullptr,
               "closed handler retained before templates are erased");
     }
+    auto bytes = take(emitOriginal(closed, context));
+    auto parsed = mlir::parseSourceString<mlir::ModuleOp>(bytes, &context);
+    require(bool(parsed), "typed construction IR parses");
+    take(compareOriginal(closed, *parsed));
+    auto module = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+        parsed->getBody()->front());
+    auto record = *module.getBody()
+                       .front()
+                       .getOps<zkc::protocol_ir::ConstructionOp>()
+                       .begin();
+    mlir::SymbolTableCollection symbols;
+    auto native = take(zkc::protocol::readConstructionPlan(record, symbols));
+    require(native.state.size() == 2 && native.rules.size() == 5,
+            "logical construction state and rules lower explicitly");
+    {
+      auto candidate = mlir::OwningOpRef<mlir::ModuleOp>(
+          mlir::cast<mlir::ModuleOp>(parsed->clone()));
+      mlir::PassManager prepare(&context);
+      prepare.addPass(zkc::protocol::createPrepareProtocolPass());
+      require(mlir::succeeded(prepare.run(*candidate)),
+              "preparation preserves selected construction");
+      auto prepared = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+          candidate->getBody()->front());
+      auto preserved = *prepared.getBody()
+                            .front()
+                            .getOps<zkc::protocol_ir::ConstructionOp>()
+                            .begin();
+      require(preserved->getAttrDictionary() == record->getAttrDictionary(),
+              "preparation cannot change construction metadata");
+      bool refused = false;
+      mlir::ScopedDiagnosticHandler diagnostic(
+          &context, [&](mlir::Diagnostic &diagnostic) {
+            refused |=
+                StringRef(diagnostic.str()).contains("protocol-construction");
+            return mlir::success();
+          });
+      mlir::PassManager project(&context);
+      project.addPass(zkc::protocol::createProjectProtocolPass());
+      require(mlir::failed(project.run(*candidate)) && refused,
+              "ordinary projection must not discard the selected construction");
+    }
+    auto original = record.getRules();
+    mlir::OpBuilder builder(&context);
+    SmallVector<mlir::Attribute> rules(original.getValue());
+    mlir::NamedAttrList changed(mlir::cast<mlir::DictionaryAttr>(rules[1]));
+    changed.set("handler", native.rules[2].handler);
+    rules[1] = changed.getDictionary(&context);
+    record.setRulesAttr(builder.getArrayAttr(rules));
+    refuses(compareOriginal(closed, *parsed), "source.correspondence");
+    record.setRulesAttr(original);
+    auto wrongStart =
+        mlir::NamedAttrList(mlir::cast<mlir::DictionaryAttr>(original[0]));
+    wrongStart.set("inputs", builder.getDenseI64ArrayAttr({1}));
+    rules.assign(original.begin(), original.end());
+    rules[0] = wrongStart.getDictionary(&context);
+    record.setRulesAttr(builder.getArrayAttr(rules));
+    refuses(compareOriginal(closed, *parsed), "target.admission");
+    record.setRulesAttr(original);
+    changed = mlir::NamedAttrList(mlir::cast<mlir::DictionaryAttr>(rules[1]));
+    changed.set("sites", builder.getStrArrayAttr({"other-occurrence"}));
+    rules.assign(original.begin(), original.end());
+    rules[1] = changed.getDictionary(&context);
+    record.setRulesAttr(builder.getArrayAttr(rules));
+    refuses(compareOriginal(closed, *parsed), "source.correspondence");
+    record.setRulesAttr(original);
+    record.setProvider("another-provider");
+    refuses(compareOriginal(closed, *parsed), "source.correspondence");
+  });
+  cases.run("tuple messages select one handler over all native leaves", [&] {
+    auto source = program.str();
+    for (auto [from, to] :
+         {std::pair<StringRef, StringRef>{"send P->V(secret)",
+                                          "send P->V((secret,secret))"},
+          {"send P->V(secret+actual)",
+           "send P->V((secret+actual,secret+actual))"},
+          {"return last==first+c;",
+           "let (a,b)=first;let (x,y)=last;return x==a+c;"},
+          {"return H::observe(t,value);",
+           "let (x,y)=value;return H::observe(t,x);"}}) {
+      auto position = source.find(from.str());
+      require(position != std::string::npos, "tuple fixture replacement");
+      source.replace(position, from.size(), to.str());
+    }
+    auto closed =
+        take(closeEntry(take(checked(source + deployment.str())), "m::Demo"));
+    auto parsed = mlir::parseSourceString<mlir::ModuleOp>(
+        take(emitOriginal(closed, context)), &context);
+    require(bool(parsed), "parse tuple construction");
+    take(compareOriginal(closed, *parsed));
+    auto unit = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+        parsed->getBody()->front());
+    auto record = *unit.getBody()
+                       .front()
+                       .getOps<zkc::protocol_ir::ConstructionOp>()
+                       .begin();
+    mlir::SymbolTableCollection symbols;
+    auto plan = take(zkc::protocol::readConstructionPlan(record, symbols));
+    require(plan.rules[1].sites.size() == 2 &&
+                plan.rules[2].sites.size() == 2 &&
+                plan.rules[1].payload.size() == 2 && plan.rules.size() == 5,
+            "two wire leaves belong to one logical handler invocation");
+  });
+  cases.run("inherited construction checking respects the work budget", [&] {
+    std::string source = program.str();
+    for (unsigned i = 0; i < 24; ++i) {
+      auto parent = i ? "Layer" + std::to_string(i - 1) : "Derived";
+      source += "construction Layer" + std::to_string(i) +
+                "<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{base " +
+                parent + "<T,H>;}";
+    }
+    auto project = take(checked(source));
+    Limits limits;
+    limits.work = project.checkedWork() - 1;
+    refuses(checked(source, limits), "source.limit");
   });
   cases.run("selectors descend through labelled protocol applications", [&] {
     auto text = replace("protocol Round<T:", "protocol Child<T:");
@@ -149,6 +298,9 @@ int main() {
       {"on message {commitment,response}", "on message commitment"},
       {"transcript H;", ""},
       {"replace challenges;", "replace absent;"},
+      {"replace challenges;",
+       "replace challenges; base "
+       "fiat_shamir(\"merlin3.bls12-381.fr64be/0\",challenges);"},
       {"on message delivery(t,value)", "on message delivery(t,value:bool)"},
       {"fn initialize()->State;", "fn initialize(v:T)->State;"},
   };

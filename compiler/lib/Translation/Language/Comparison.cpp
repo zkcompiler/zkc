@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
+#include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
@@ -861,6 +862,101 @@ class Comparator {
     return cursor == block.end() || fail("extra operations after source body");
   }
 
+  bool construction(protocol_ir::ConstructionOp record) {
+    const auto *proof = project.entry().proof();
+    bool selected =
+        proof && proof->construction == ProofEntry::Construction::Derived;
+    if (!selected)
+      return !record || fail("unexpected construction selection");
+    if (!record)
+      return fail("missing construction selection");
+    mlir::SymbolTableCollection symbols;
+    auto plan = take(protocol::readConstructionPlan(record, symbols));
+    if (!plan)
+      return false;
+    const auto &definition =
+        project.declarations()[proof->selectedConstruction->index];
+    const auto &source = *definition.construction;
+    const auto &target = project.protocol();
+    if (plan->symbol.getValue() != definition.symbol ||
+        plan->target.getValue() != target.symbol ||
+        plan->provider != typeIdentity(*source.provider) ||
+        plan->suite != source.suite ||
+        plan->nativeBase != !source.suite.empty() ||
+        (plan->root == protocol::ConstructionPlan::Root::Local) !=
+            (source.root == ConstructionDefinition::Root::Local) ||
+        plan->rules.size() != source.rules.size())
+      return fail("construction identity or root differs");
+    if (bool(plan->initializer) != bool(source.initializer) ||
+        (source.initializer &&
+         plan->initializer.getValue() !=
+             project.declarations()[source.initializer->declaration.index]
+                 .symbol))
+      return fail("construction initializer differs");
+    auto state = take(layouts.get(*source.state));
+    if (!state || !types(plan->state, (*state)->leaves))
+      return false;
+    std::vector<unsigned> offsets{0};
+    for (const auto &port : target.inputs) {
+      auto layout = take(layouts.get(port.type));
+      if (!layout)
+        return false;
+      offsets.push_back(offsets.back() + (*layout)->leaves.size());
+    }
+    if (plan->service != offsets.back() + *source.service)
+      return fail("construction replacement authority differs");
+    for (auto [expected, actual] : zip(source.rules, plan->rules)) {
+      if (!charge(expected.path.size() + expected.inputs.size() + 1))
+        return false;
+      const auto &handler = project.declarations()[expected.handler.index];
+      auto kind = expected.kind == ConstructionRule::Kind::Start
+                      ? protocol::ConstructionRule::Kind::Start
+                  : expected.kind == ConstructionRule::Kind::Message
+                      ? protocol::ConstructionRule::Kind::Message
+                      : protocol::ConstructionRule::Kind::Query;
+      if (actual.kind != kind || actual.handler.getValue() != handler.symbol)
+        return fail("construction handler selection differs");
+      if (expected.kind == ConstructionRule::Kind::Start) {
+        SmallVector<unsigned> ports;
+        for (auto port : expected.inputs)
+          for (unsigned i = offsets[port]; i < offsets[port + 1]; ++i)
+            ports.push_back(i);
+        if (ports != actual.inputs)
+          return fail("construction start inputs differ");
+        continue;
+      }
+      auto layout =
+          take(layouts.get(expected.kind == ConstructionRule::Kind::Message
+                               ? handler.inputs[1].type
+                               : handler.outputs.front().type));
+      if (!layout)
+        return false;
+      auto leaves = ArrayRef((*layout)->leaves);
+      if (expected.kind == ConstructionRule::Kind::Query)
+        leaves = leaves.drop_front((*state)->leaves.size());
+      if (!types(actual.payload, leaves))
+        return false;
+      for (auto [i, site] : enumerate(actual.sites)) {
+        std::string prefix;
+        for (const auto &part : ArrayRef(expected.path).drop_back()) {
+          auto label = nativeSiteName(part, 0);
+          prefix = prefix.empty()
+                       ? label
+                       : mathematical::expandedApplicationSite(prefix, label);
+        }
+        auto label = nativeSiteName(expected.path.back(), 0);
+        if (expected.kind == ConstructionRule::Kind::Message)
+          label += "_" + std::to_string(i);
+        auto name = prefix.empty()
+                        ? label
+                        : mathematical::expandedApplicationSite(prefix, label);
+        if (!charge(name.size()) || site != name)
+          return fail("construction occurrence selector differs");
+      }
+    }
+    return true;
+  }
+
 public:
   Comparator(const ClosedEntry &project, mlir::ModuleOp module,
              const Limits &limits)
@@ -880,11 +976,17 @@ public:
         !llvm::hasSingleElement(native.getBody()))
       return error("source.correspondence", "unexpected original module");
     SmallVector<mlir::Operation *> functions;
+    protocol_ir::ConstructionOp selectedConstruction;
     std::map<std::string, relation::DeclareOp> relations;
     std::set<std::string> realizedHelpers;
     std::set<std::pair<std::string, std::vector<bool>>> mappedHelpers;
     for (auto &op : native.getBody().front()) {
-      if (auto declaration = mlir::dyn_cast<relation::DeclareOp>(op)) {
+      if (auto record = mlir::dyn_cast<protocol_ir::ConstructionOp>(op)) {
+        if (selectedConstruction)
+          return error("source.correspondence",
+                       "duplicate construction selection");
+        selectedConstruction = record;
+      } else if (auto declaration = mlir::dyn_cast<relation::DeclareOp>(op)) {
         if (!relations.emplace(declaration.getSymName().str(), declaration)
                  .second)
           return error("source.correspondence", "duplicate relation symbol");
@@ -922,6 +1024,8 @@ public:
       } else
         functions.push_back(&op);
     }
+    if (!construction(selectedConstruction))
+      return takeFailure();
     unsigned index = 0;
     mlir::SymbolTableCollection symbols;
     relation::FormulaIdentities formulas(remaining, limits.irBytes);

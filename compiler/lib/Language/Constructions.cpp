@@ -63,6 +63,8 @@ bool Checker::constructions() {
                                   "base specialization differs from protocol",
                                   syntax.parent->span);
       }
+      if (!types.chargeConstruction(*base.construction, syntax.parent->span))
+        return false;
       result = *base.construction;
       result.base = ConstructionDefinition::Base::Named;
       result.parent = *parent;
@@ -210,6 +212,9 @@ bool Checker::constructions() {
       for (const auto &operation : body.operations) {
         if (!types.charge(1, operation.span))
           return false;
+        for (const auto &part : prefix)
+          if (!types.charge(part.size() + 1, operation.span))
+            return false;
         std::vector<std::string> path(prefix.begin(), prefix.end());
         if (operation.site)
           path.push_back(*operation.site);
@@ -282,6 +287,8 @@ bool Checker::constructions() {
       if (rule.kind == ConstructionRule::Kind::Start) {
         for (const auto &parameter :
              ArrayRef<SyntaxName>(source.parameters).drop_front()) {
+          if (!types.charge(target.inputs.size(), parameter.span))
+            return false;
           auto found = llvm::find_if(target.inputs, [&](const Port &port) {
             return port.name == parameter.name;
           });
@@ -357,6 +364,8 @@ bool Checker::constructions() {
         return false;
       for (const auto &parameter : handler.parameters)
         rule.arguments.push_back(parameterType(parameter));
+      if (!types.charge(result.rules.size(), source.span))
+        return false;
       auto prior =
           llvm::find_if(result.rules, [&](const ConstructionRule &prior) {
             return prior.kind == rule.kind && prior.path == rule.path;
@@ -372,7 +381,9 @@ bool Checker::constructions() {
           }))
         return types.fail("source.construction",
                           "construction requires on start", decl.span);
-      for (const auto &site : sites)
+      for (const auto &site : sites) {
+        if (!types.charge(result.rules.size(), decl.span))
+          return false;
         if (!site.labelled ||
             llvm::none_of(result.rules, [&](const ConstructionRule &rule) {
               return rule.kind == site.kind && rule.path == site.path;
@@ -381,6 +392,7 @@ bool Checker::constructions() {
               "source.construction",
               "construction does not cover every message and selected query",
               decl.span);
+      }
     }
     decl.construction = std::move(result);
     state[id.index] = 2;

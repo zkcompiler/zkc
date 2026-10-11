@@ -517,6 +517,15 @@ public:
   OwningOpRef<ModuleOp> run(ModuleOp source) {
     auto common =
         cast<zkc::protocol_ir::ProtocolModuleOp>(source.getBody()->front());
+    if (!common.getBody()
+             .front()
+             .getOps<zkc::protocol_ir::ConstructionOp>()
+             .empty()) {
+      (void)diagnostics::emit(
+          common.emitOpError(), "protocol-construction",
+          "selected construction must be consumed by proof construction");
+      return {};
+    }
     // Bound the prospective role expansion before allocating participant bodies
     // or performing one dependency traversal per role. Preparation may already
     // have removed valid unused total work, so charge the current SSA graph.

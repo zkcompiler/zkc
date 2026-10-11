@@ -69,6 +69,32 @@ Error Semantics::takeError() {
   return result;
 }
 bool valueType(const Type &type) { return !isStaticOnly(type); }
+bool Semantics::chargeConstruction(const ConstructionDefinition &value,
+                                   Span span) {
+  if (!charge(value.suite.size() + value.rules.size() + 1, span))
+    return false;
+  for (const auto *type : {&value.provider, &value.state})
+    if (*type && !chargeType(**type, span))
+      return false;
+  if (value.initializer && value.initializer->component &&
+      !chargeType(*value.initializer->component, span))
+    return false;
+  for (const auto *arguments : {&value.arguments, &value.initializerArguments})
+    for (const auto &argument : *arguments)
+      if (!chargeType(argument, span))
+        return false;
+  for (const auto &rule : value.rules) {
+    if (!charge(rule.inputs.size() + 1, rule.span))
+      return false;
+    for (const auto &part : rule.path)
+      if (!charge(part.size() + 1, rule.span))
+        return false;
+    for (const auto &argument : rule.arguments)
+      if (!chargeType(argument, rule.span))
+        return false;
+  }
+  return true;
+}
 bool Semantics::chargeType(const Type &type, Span span) {
   auto cost =
       typeComplexity(type, work.limits.typeNodes, work.limits.typeDepth);
