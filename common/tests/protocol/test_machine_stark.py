@@ -17,7 +17,9 @@ import json
 import pytest
 
 
-def check_transcript_schedule(package):
+@pytest.mark.parametrize('entry', ['ProofLogUp', 'ProofProduct'])
+def test_machine_transcript_schedule(compiled_projects, toolchain, journal, directory, entry):
+    package, _ = compile_entry(toolchain, journal, directory, entry, compiled_projects=compiled_projects)
     descriptor = json.loads(json.loads(package.read_text())['artifact'])[2]
     assert descriptor[0] == 'zkc.native-proof-descriptor/0'
     policy = descriptor[1]
@@ -59,7 +61,6 @@ def check_transcript_schedule(package):
 @pytest.mark.parametrize('run', ['store-load', 'arithmetic-only', 'store-load-initial-seven'])
 def test_machine_proofs_produce_and_verify(compiled_projects, toolchain, journal, directory, entry, run):
     package, pin = compile_entry(toolchain, journal, directory, entry, compiled_projects=compiled_projects)
-    check_transcript_schedule(package)
     prove_and_verify(toolchain, journal, directory, package, pin, run, requests(run))
 
 
