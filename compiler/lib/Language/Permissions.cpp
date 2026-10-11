@@ -181,7 +181,9 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
     }
     // An opaque representation is not an external construction authority.
     result.wire = false;
-    return scoped(result);
+    // Generic assumptions refine unknown properties, never an authored
+    // restriction on this nominal type.
+    return decl->resource ? std::optional(result) : scoped(result);
   }
   if (type.kind == K::Boolean || type.kind == K::Index ||
       type.kind == K::Field || type.kind == K::Group || type.kind == K::Unit)

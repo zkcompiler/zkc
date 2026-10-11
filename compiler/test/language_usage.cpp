@@ -57,6 +57,12 @@ module Box {
         refuses(check("#[sealed] fn invalid()->(){return ();}"),
                 "source.resource");
         refuses(check("#[linear] type Conflict:Copy=bool;"), "source.resource");
+        refuses(check(R"(
+interface Linear {#[linear] type Token;}
+fn duplicate<C:Linear>(x:C::Token)->(C::Token,C::Token)
+ where Copy(C::Token) {return(x,x);}
+)"),
+                "source.move");
       });
   cases.run("early completion cannot skip a live normal-exit obligation", [] {
     refuses(check(R"(
