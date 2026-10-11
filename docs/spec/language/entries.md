@@ -102,6 +102,14 @@ verifier service with `replace challenges;`. The provider declares an associated
 Source-created state requires `Copy` and `Drop`; private state need not permit
 sharing or serialization.
 
+An installed closed transcript domain can also be selected as the provider. Its
+`State` is the affine `zkc::transcript::State<T>` supplied by the Host, with the
+authorized invocation already absorbed. `zkc::transcript::observe`, `challenge`
+and `challenge_index` advance that state using explicit byte labels. They do not
+add generated site labels or loop coordinates. There is no source initializer
+for a managed state. `base fiat_shamir("suite", challenges);` uses the same
+managed root and supplies the native rules for selectors without an override.
+
 Handlers are ordinary typed Local bodies:
 
 - `on start(t, input, ...)` receives the state and named original protocol

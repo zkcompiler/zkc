@@ -2,6 +2,9 @@
   "profile": "zkc.contract-conformance-coverage",
   "operations": {
     "field": [
+      "encoding.field_be",
+      "encoding.field_from_be",
+      "encoding.field_reduce_be",
       "ring.point",
       "ring.rows",
       "ring.coefficients",
@@ -90,6 +93,8 @@
       "vector.equal"
     ],
     "group": [
+      "encoding.group_compressed",
+      "encoding.group_from_compressed",
       "curve.neg",
       "curve.nonidentity",
       "curve.msm",
@@ -127,6 +132,16 @@
       "pcs.equal"
     ],
     "nullary": [
+      "bytes.empty",
+      "bytes.append",
+      "bytes.concat",
+      "bytes.slice",
+      "bytes.at",
+      "bytes.length",
+      "bytes.equal",
+      "shake128.init",
+      "shake128.absorb",
+      "shake128.squeeze",
       "external.monero.init",
       "external.monero.hash",
       "external.monero.update",
@@ -175,7 +190,10 @@
     ],
     "transcript": [
       "transcript.native.indexed.challenge",
-      "transcript.native.indexed.index"
+      "transcript.native.indexed.index",
+      "transcript.observe",
+      "transcript.challenge",
+      "transcript.index"
     ],
     "array": [
       "field_array.from_vector",
@@ -193,6 +211,8 @@
   },
   "types": {
     "atomic": [
+      "bytes",
+      "shake128_state",
       "bool",
       "index",
       "indices",

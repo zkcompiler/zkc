@@ -18,9 +18,10 @@ Semantics::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
     return {};
   }
   const auto *effects = protocol::operationContracts(contract);
-  if (protocol::samplingContract(contract) ||
-      (protocol::isHistoryTransition(contract) &&
-       (!effects || !effects->sourceHistory))) {
+  if ((!effects || !effects->managedHistory) &&
+      (protocol::samplingContract(contract) ||
+       (protocol::isHistoryTransition(contract) &&
+        (!effects || !effects->sourceHistory)))) {
     fail("source.kernel", "operation requires a managed effect interface",
          span);
     return {};

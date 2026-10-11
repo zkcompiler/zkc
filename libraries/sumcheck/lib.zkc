@@ -21,10 +21,10 @@ pub protocol Sumcheck<F: Field+Share+Wire, Max: nat> roles(P, V)
   let mut current = claim;
   for _ in 0..rounds roles(P, V) max Max {
     let parts = sums(tableP);
-    let actual = send P -> V(parts);
+    #[site(round)] let actual = send P -> V(parts);
     require current == actual.0 + actual.1;
-    let cv = challenges.draw();
-    let cp = send V -> P(cv);
+    #[site(challenge)] let cv = challenges.draw();
+    #[site(delivery)] let cp = send V -> P(cv);
     tableP = fold(tableP, cp);
     tableV = fold(tableV, cv);
     current = (1 - cv) * actual.0 + cv * actual.1;

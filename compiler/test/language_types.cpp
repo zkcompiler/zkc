@@ -984,7 +984,11 @@ void staticDomains() {
   refuses(prefix + "domain Bad=transcript(\"multilinear.kzg.bls12-381/0\");" +
               unit,
           "source.domain");
-  refuses(domains + "type Bad=builtin(\"transcript\",Transcript);" + unit,
+  check(domains +
+        "type State=builtin(\"transcript\",Transcript);"
+        "fn advance(t:State)->State{return t;}" +
+        unit);
+  refuses(domains + "type Bad=builtin(\"transcript\",Fr);" + unit,
           "source.builtin");
   refuses(
       domains +

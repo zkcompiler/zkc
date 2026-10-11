@@ -1,5 +1,6 @@
 #include "Checker.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Language/Builtins.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <numeric>
 using namespace llvm;
@@ -115,9 +116,15 @@ bool Checker::constructions() {
                           decl.span);
       result.root = ConstructionDefinition::Root::Host;
       result.suite = syntax.suite;
+      result.nativeBase = true;
       if (protocol::nativeChallengeField(result.suite).empty())
         return types.fail("source.construction",
                           "unknown native transcript suite", decl.span);
+      result.provider = domainType("Transcript", result.suite);
+      auto nativeState = builtinType("transcript", {*result.provider});
+      if (!nativeState)
+        return types.accept(nativeState.takeError(), decl.span);
+      result.state = std::move(*nativeState);
     }
     if (syntax.service) {
       auto found = llvm::find_if(target.services, [&](const ServicePort &port) {
@@ -133,70 +140,85 @@ bool Checker::constructions() {
       auto provider = type(decl, *syntax.provider);
       if (!provider)
         return false;
-      if (provider->kind != Type::Kind::Component)
-        return types.fail("source.construction",
-                          "transcript requires a component provider",
-                          syntax.provider->span);
-      auto stateType =
-          types.associated(*provider, "State", syntax.provider->span);
-      if (!stateType)
-        return false;
-      auto permissions = types.permissions(*stateType, decl.span, &decl);
-      if (!permissions)
-        return false;
-      if (!permissions->copy || !permissions->drop)
+      if (domainSort(*provider) == "Transcript" && provider->symbolic)
         return types.fail(
             "source.construction",
-            "source-created transcript state requires Copy and Drop",
-            decl.span);
-      const Declaration *owner =
-          provider->symbolic
-              ? &output.declarations[types.parameter(provider->domain)
-                                         ->interface->index]
-              : types.typeDeclaration(*provider);
-      if (!types.charge(owner->members.size(), decl.span))
-        return false;
-      auto member = llvm::find_if(owner->members, [&](DeclarationId member) {
-        return output.declarations[member.index].name == "initialize";
-      });
-      if (member == owner->members.end())
-        return types.fail("source.construction",
-                          "transcript provider requires initialize", decl.span);
-      const auto &factory = output.declarations[member->index];
-      auto bindings =
-          types.boundMemberSubstitution(factory, *provider, decl.span);
-      if (!bindings)
-        return false;
-      if (factory.kind != Declaration::Kind::Local || !factory.inputs.empty() ||
-          factory.outputs.size() != 1 ||
-          factory.parameters.size() != owner->parameters.size())
-        return types.fail(
-            "source.construction",
-            "initialize must be a Local factory with no runtime arguments",
-            decl.span);
-      auto output =
-          types.substitute(factory.outputs.front().type, *bindings, decl.span);
-      if (!output || *output != *stateType)
-        return types.diagnostic
-                   ? false
-                   : types.fail("source.construction",
-                                "initialize must return provider State",
-                                decl.span);
-      result.provider = std::move(*provider);
-      result.root = ConstructionDefinition::Root::Local;
-      result.state = std::move(*stateType);
-      result.initializer = CallableReference{*member, result.provider};
-      for (const auto &parameter : factory.parameters)
-        result.initializerArguments.push_back(bindings->at(parameter.atom));
+            "managed transcript provider must select a closed suite",
+            syntax.provider->span);
+      if (domainSort(*provider) == "Transcript" && !provider->symbolic) {
+        result.provider = *provider;
+        result.suite = provider->domain;
+        if (protocol::nativeChallengeField(result.suite).empty())
+          return types.fail("source.construction",
+                            "unknown managed transcript suite", decl.span);
+        auto nativeState = builtinType("transcript", {*provider});
+        if (!nativeState)
+          return types.accept(nativeState.takeError(), decl.span);
+        result.state = std::move(*nativeState);
+        result.root = ConstructionDefinition::Root::Host;
+      } else {
+        if (provider->kind != Type::Kind::Component)
+          return types.fail("source.construction",
+                            "transcript requires a component provider",
+                            syntax.provider->span);
+        auto stateType =
+            types.associated(*provider, "State", syntax.provider->span);
+        if (!stateType)
+          return false;
+        auto permissions = types.permissions(*stateType, decl.span, &decl);
+        if (!permissions)
+          return false;
+        if (!permissions->copy || !permissions->drop)
+          return types.fail(
+              "source.construction",
+              "source-created transcript state requires Copy and Drop",
+              decl.span);
+        const Declaration *owner =
+            provider->symbolic
+                ? &output.declarations[types.parameter(provider->domain)
+                                           ->interface->index]
+                : types.typeDeclaration(*provider);
+        if (!types.charge(owner->members.size(), decl.span))
+          return false;
+        auto member = llvm::find_if(owner->members, [&](DeclarationId member) {
+          return output.declarations[member.index].name == "initialize";
+        });
+        if (member == owner->members.end())
+          return types.fail("source.construction",
+                            "transcript provider requires initialize",
+                            decl.span);
+        const auto &factory = output.declarations[member->index];
+        auto bindings =
+            types.boundMemberSubstitution(factory, *provider, decl.span);
+        if (!bindings)
+          return false;
+        if (factory.kind != Declaration::Kind::Local ||
+            !factory.inputs.empty() || factory.outputs.size() != 1 ||
+            factory.parameters.size() != owner->parameters.size())
+          return types.fail(
+              "source.construction",
+              "initialize must be a Local factory with no runtime arguments",
+              decl.span);
+        auto output = types.substitute(factory.outputs.front().type, *bindings,
+                                       decl.span);
+        if (!output || *output != *stateType)
+          return types.diagnostic
+                     ? false
+                     : types.fail("source.construction",
+                                  "initialize must return provider State",
+                                  decl.span);
+        result.provider = std::move(*provider);
+        result.root = ConstructionDefinition::Root::Local;
+        result.state = std::move(*stateType);
+        result.initializer = CallableReference{*member, result.provider};
+        for (const auto &parameter : factory.parameters)
+          result.initializerArguments.push_back(bindings->at(parameter.atom));
+      }
     }
     if (!result.service || (!result.provider && result.suite.empty()))
       return types.fail("source.construction",
                         "construction requires a transcript provider and "
                         "replacement authority",
-                        decl.span);
-    if (!result.state && !syntax.rules.empty())
-      return types.fail("source.construction",
-                        "native provider methods are not yet available",
                         decl.span);
 
     std::vector<ConstructionSite> sites;
@@ -375,7 +397,7 @@ bool Checker::constructions() {
       else
         *prior = std::move(rule);
     }
-    if (result.suite.empty()) {
+    if (!result.nativeBase) {
       if (llvm::none_of(result.rules, [](const ConstructionRule &rule) {
             return rule.kind == ConstructionRule::Kind::Start;
           }))

@@ -249,7 +249,7 @@ def candidates(inventory):
         if group == "resource":
             choices = [(["Ticket"], "logical")]
         elif group == "nullary":
-            choices = [([], "native" if name.startswith(("index.", "indices.", "external.")) else "arkworks")]
+            choices = [([], "native" if name.startswith(("index.", "indices.", "external.", "bytes.", "shake128.")) else "arkworks")]
         elif group == "sequence":
             choices = [([payload], "native") for payload in
                        ["index", "field:bn254.fr", "group:bn254.g2", "field:koala-bear",

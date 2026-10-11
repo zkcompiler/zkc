@@ -1,0 +1,46 @@
+module sample;
+use zkc::bytes::{Bytes};
+use zkc::shake128 as shake;
+use spongefish as transcript;
+domain G=group("bls12-381.g1");
+interface TranscriptState {
+ type State:Copy+Drop;
+ fn initialize()->State;
+ fn start(t:State,tag:Bytes,session:Bytes,base:G,point:G)->State;
+ fn point(t:State,value:G)->State;
+ fn scalar(t:State,value:G::Scalar)->State;
+ fn draw(t:State)->(State,G::Scalar);
+}
+component Provider:TranscriptState {
+  type State:Copy+Drop=builtin("shake128_state");
+  fn initialize()->State{return State(shake::init());}
+  fn start(t:State,tag:Bytes,session:Bytes,base:G,point:G)->State {
+    let t=transcript::initialize(tag,session);
+    let t=transcript::observe_point(t,base);
+    return State(transcript::observe_point(t,point));
+  }
+  fn point(t:State,value:G)->State {return State(transcript::observe_point(unpack(t),value));}
+  fn scalar(t:State,value:G::Scalar)->State {return State(transcript::observe_scalar(unpack(t),value));}
+  fn draw(t:State)->(State,G::Scalar) {
+    let (t,value)=transcript::challenge<G::Scalar>(unpack(t));
+    return (State(t),value);
+  }
+}
+protocol Fixed roles(P,V)
+    (tag:Bytes@(P,V),session:Bytes@(P,V),base:G@(P,V),point:G@(P,V),
+     scalar:G::Scalar@P,nonce:G::Scalar@P,challenges:Random<G::Scalar>@V)->(accepted:bool@V) {
+  #[site(commitment)] let commitment=send P->V(base*nonce);
+  #[site(challenge)] let challenge=challenges.draw();
+  #[site(delivery)] let actual=send V->P(challenge);
+  #[site(response)] let response=send P->V(nonce+actual*scalar);
+  return base*response==commitment+point*challenge;
+}
+construction Derived for Fixed {
+  transcript Provider;replace challenges;
+  on start(t,tag,session,base,point){return Provider::start(t,tag,session,base,point);}
+  on message commitment(t,value){return Provider::point(t,value);}
+  on query challenge(t){return Provider::draw(t);}
+  on message delivery(t,value){return t;}
+  on message response(t,value){return Provider::scalar(t,value);}
+}
+proof Demo=Fixed {prover P;verifier V;public{tag,session,base,point};accept accepted;construction Derived;}

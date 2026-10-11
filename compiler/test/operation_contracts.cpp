@@ -117,8 +117,10 @@ int main() {
                   kernel.outputs[observation->stateOutput] == "transcript",
               "observation port outside transcript signature");
       auto suffix = kernel.key;
-      require(suffix.consume_front("transcript.native.indexed.observe.") &&
-                  suffix == kernel.inputs[observation->payloadInput],
+      require((kernel.key == "transcript.observe" &&
+               kernel.inputs[observation->payloadInput] == "bytes") ||
+                  (suffix.consume_front("transcript.native.indexed.observe.") &&
+                   suffix == kernel.inputs[observation->payloadInput]),
               "observation payload differs from its logical contract");
     }
     if (auto map = kernel.contracts.diagonalMap)

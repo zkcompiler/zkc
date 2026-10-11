@@ -11,8 +11,9 @@ use zkc_backends::NativeBackend;
 
 type Result<T> = std::result::Result<T, String>;
 
-/// Authored deployments leave transcript binding to protocol code. Applications
-/// must acknowledge that responsibility explicitly before admitting one.
+/// Require Host absorption of the authorized invocation at managed transcript
+/// initialization, or explicitly permit a library-owned binding policy.
+/// Neither choice establishes that message handlers or samplers are secure.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BindingPolicy {
     #[default]
@@ -134,7 +135,7 @@ impl ProofEntry {
             .ok_or_else(|| E::new(P::Admission, "entry-job-kind"))?;
         let roles = (proof.prover, proof.verifier);
         let completion = proof.completion;
-        let scope = if proof.suite.is_some() && proof.construction.is_none() {
+        let scope = if proof.suite.is_some() {
             BindingScope::Transcript
         } else if proof.format == crate::proof::ProofFormat::Native {
             BindingScope::HeaderOnly

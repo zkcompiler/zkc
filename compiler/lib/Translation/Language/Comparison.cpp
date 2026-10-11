@@ -881,8 +881,7 @@ class Comparator {
     if (plan->symbol.getValue() != definition.symbol ||
         plan->target.getValue() != target.symbol ||
         plan->provider != typeIdentity(*source.provider) ||
-        plan->suite != source.suite ||
-        plan->nativeBase != !source.suite.empty() ||
+        plan->suite != source.suite || plan->nativeBase != source.nativeBase ||
         (plan->root == protocol::ConstructionPlan::Root::Local) !=
             (source.root == ConstructionDefinition::Root::Local) ||
         plan->rules.size() != source.rules.size())

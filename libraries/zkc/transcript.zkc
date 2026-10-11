@@ -1,0 +1,12 @@
+module zkc::transcript;
+use zkc::bytes::{Bytes};
+
+// An affine state is supplied by the selected construction. There is no source
+// initializer; ordinary functions can only advance a state they receive.
+pub type State<T:Transcript> = builtin("transcript",T);
+pub fn observe<T:Transcript>(state:State<T>,label:Bytes,value:Bytes)->State<T>
+  = primitive("transcript.observe");
+pub fn challenge<T:Transcript>(state:State<T>,label:Bytes)->(State<T>,T::ChallengeField)
+  = primitive("transcript.challenge");
+pub fn challenge_index<T:Transcript>(state:State<T>,label:Bytes,bound:index)->(State<T>,index)
+  = primitive("transcript.index");

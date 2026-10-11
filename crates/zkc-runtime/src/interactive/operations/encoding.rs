@@ -37,16 +37,41 @@ fn resolve(
         binding.contract.as_str(),
         "encoding.group_compressed" | "encoding.group_from_compressed"
     );
-    let expected = if group {
-        Identity::Bls12381G1
-    } else {
-        Identity::Bls12381Fr
-    };
-    support::require_primary(binding, expected)?;
-    support::instantiate(contract.shape()?, Identity::Bls12381Fr, |kind| match kind {
+    let field = primary.scalar_field().ok_or_else(support::failure)?;
+    if binding.arguments.len() != 1
+        || if group {
+            primary.group() != Some(primary)
+        } else {
+            field != primary
+        }
+    {
+        return Err(support::failure());
+    }
+    support::instantiate(contract.shape()?, field, |kind| match kind {
         Group => LogicalType::new(kind, primary),
-        _ => support::field_type(kind, Identity::Bls12381Fr),
+        _ => support::field_type(kind, field),
     })
+}
+fn select(
+    binding: &OperationBinding,
+    logical: &KernelSignature<LogicalType>,
+    selection: Selection,
+) -> Result<BoundSignature> {
+    // Logical formation is generic. The installed byte algorithms are the
+    // BLS12-381 scalar and compressed G1 encodings, selected independently.
+    let group = matches!(
+        binding.contract.as_str(),
+        "encoding.group_compressed" | "encoding.group_from_compressed"
+    );
+    support::require_primary(
+        binding,
+        if group {
+            Identity::Bls12381G1
+        } else {
+            Identity::Bls12381Fr
+        },
+    )?;
+    support::select_nominal(binding, logical, selection)
 }
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
@@ -54,5 +79,5 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
     physical_only: false,
     contracts: CONTRACTS,
     resolve,
-    select: support::select_nominal,
+    select,
 };

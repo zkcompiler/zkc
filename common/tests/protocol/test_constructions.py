@@ -1,7 +1,8 @@
 """Programmable construction ABI and state-chain execution through the Host.
 
-The toy provider returns a constant challenge. These are correspondence tests,
-not cryptographic security tests or an external transcript implementation.
+Toy providers exercise state and event correspondence; cryptographic fixtures
+compare concrete histories and malformed-input order. Neither establishes
+cryptographic security or complete external-parser equivalence.
 """
 import copy
 import hashlib
@@ -194,3 +195,188 @@ def check_construction_mutations(toolchain, journal, directory, package):
         else:
             changed[2][6][1] = 'different'
         reject_deployment(toolchain, journal, directory, changed, name, reason)
+
+
+@pytest.mark.parametrize('override', [False, True])
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
+def test_native_base_supports_ordinary_affine_handlers(toolchain, journal, directory, override, flags):
+    # A no-op observation is deliberately different from the native baseline.
+    # The managed root still binds the selected deployment and public inputs.
+    source = directory / 'main.zkc'
+    text = SOURCE[:SOURCE.index('construction Derived')]
+    text = text.replace('LOOP_START', 'for _ in 0..rounds roles(P,V) max 2 {')
+    text = text.replace('LOOP_END', '}')
+    text += '''construction Native<T:Field+Share+Wire> for Round<T> {
+      base fiat_shamir("merlin3.bls12-381.fr64be/0",challenges);
+      HANDLERS
+    }
+    proof Demo=Round<F>{prover P;verifier V;public{public,rounds};accept ok;
+      construction Native<F>;}
+    '''.replace('HANDLERS', '''on start(t,public){return t;}
+      on message commitment(t,value){return t;}''' if override else '')
+    source.write_text(text)
+    package = directory / 'proof.zkpkg'
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+                             f'--module=sample={source}', 'sample::Demo', f'--output={package}', *flags])
+    public = journal.write('public.json', {'public': '5', 'rounds': '2'})
+    witness = journal.write('witness.json', {'secret': '7'})
+    args = [f'--package={package}', f'--sha256={compiled["package_sha256"]}', f'--public={public}']
+    proof = directory / 'proof.bin'
+    assert journal.json([toolchain.runtime, '--json', 'prove', *args,
+                         f'--witness={witness}', f'--output={proof}'])['binding_scope'] == 'transcript'
+    assert journal.json([toolchain.runtime, '--json', 'verify', *args,
+                         f'--proof={proof}'])['status'] == 'accepted'
+    if override and not flags:
+        deployment = json.loads(json.loads(package.read_text())['artifact'])
+        plan = deployment[2][6]
+        original = json.loads(deployment[4])
+        native_names = {row[0] for row in plan[6] if row[1] == 'native'}
+        native = next(f for f in original[2] if f[1] in native_names and len(f[3]) == 1)
+        custom = next(row[0] for row in plan[6] if row[1] == 'local')
+        for destination in (custom, plan[5][0], 'stray_native'):
+            changed = copy.deepcopy(deployment)
+            program = copy.deepcopy(original)
+            replacement = copy.deepcopy(native)
+            replacement[1] = destination
+            target = next((f for f in program[2] if f[1] == destination), None)
+            if target:
+                # Keep the existing callable signature so ordinary admission
+                # succeeds before the construction-specific authority check.
+                names = {replacement[2][0][0]: target[2][0][0],
+                         replacement[2][1][0]: target[2][1][0]}
+                coordinate = replacement[2][-1][0]
+                if target[2][-1][1].startswith('index@'):
+                    names[coordinate] = target[2][-1][0]
+                else:
+                    program[1].append(['zero_index', 'index.constant', [], 'native/index.constant'])
+                    replacement[4].insert(0, ['op', 'zero_coordinate', 'zero_index',
+                                              ['0'], [], [coordinate]])
+                def rename(value):
+                    if isinstance(value, list):
+                        return [rename(item) for item in value]
+                    return names.get(value, value)
+                replacement[4] = rename(replacement[4])
+                replacement[2] = target[2]
+            program[2] = [f for f in program[2] if f[1] != destination] + [replacement]
+            changed[4] = json.dumps(program)
+            reject_deployment(toolchain, journal, directory, changed, destination,
+                              'native-proof-transcript-operation')
+
+
+@pytest.mark.parametrize('protocol', ['schnorr', 'sumcheck'])
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage', '--fuse-vector-reductions']])
+def test_source_construction_cryptographic_histories(toolchain, journal, directory, protocol, flags):
+    from pathlib import Path
+    from test_source_transcript import PUBLIC, VECTOR
+    root = Path(__file__).resolve().parents[3]
+    modules = {'sample': root / f'common/tests/fixtures/constructions/{protocol}.zkc',
+               'spongefish': root / 'libraries/spongefish/lib.zkc'}
+    modules.update({f'zkc::{name}': root / f'libraries/zkc/{name}.zkc'
+                    for name in ['bytes', 'shake128', 'encoding', 'vector', 'boolean']})
+    if protocol == 'sumcheck':
+        modules['sumcheck'] = root / 'libraries/sumcheck/lib.zkc'
+    package = directory / 'proof.zkpkg'
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+                             *[f'--module={name}={path}' for name, path in modules.items()],
+                             'sample::Demo', f'--output={package}', *flags])
+    public_value = PUBLIC if protocol == 'schnorr' else {
+        'values': ['1', '2', '3', '4'], 'claim': '10', 'rounds': '2'}
+    public = journal.write('public.json', public_value)
+    witness = journal.write('witness.json', {'scalar': '7', 'nonce': '11'} if protocol == 'schnorr' else {})
+    args = [f'--package={package}', f'--sha256={compiled["package_sha256"]}', f'--public={public}',
+            '--allow-authored']
+    proof = directory / 'proof.bin'
+    produced = journal.json([toolchain.runtime, '--json', 'prove', *args,
+                             f'--witness={witness}', f'--output={proof}'])
+    verified = journal.json([toolchain.runtime, '--json', 'verify', *args, f'--proof={proof}'])
+    assert verified['status'] == 'accepted'
+    assert not verified['execution']['cleanup_errors']
+    if protocol == 'schnorr':
+        framed = proof.read_bytes()
+        # Native framing has a 40-byte header and a length plus six-byte codec
+        # tag per message. Its scalar codec is little endian. The mathematical
+        # messages exactly match the independently generated external vector.
+        assert len(framed) == 148
+        assert framed[54:102] == VECTOR[:48]
+        assert framed[-32:][::-1] == VECTOR[48:]
+        # The empty provider factory adds one work unit before on start.
+        assert produced['execution']['external_work'] == 842
+        assert verified['execution']['external_work'] == 842
+    else:
+        assert produced['execution']['messages'] == 4
+        candidate = bytearray(proof.read_bytes())
+        candidate[54] ^= 1  # First round field, before V's require and draw.
+        invalid = directory / 'invalid.bin'
+        invalid.write_bytes(candidate)
+        rejected = journal.json([toolchain.runtime, '--json', 'verify', *args,
+                                 f'--proof={invalid}'], refuses='artifact-stopped')
+        assert rejected['execution']['external_work'] < verified['execution']['external_work']
+        assert not rejected['execution']['cleanup_errors']
+
+
+@pytest.mark.parametrize('suite', ['merlin3.bls12-381.fr64be/0', 'spongefish0.7.4.keccak.bls12-381.fr64be/0'])
+@pytest.mark.parametrize('flags', [[], ['--release-storage']])
+def test_managed_provider_methods_are_ordinary_checked_functions(toolchain, journal, directory, suite, flags):
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[3]
+    source = directory / 'main.zkc'
+    source.write_text((root / 'common/tests/fixtures/constructions/managed.zkc').read_text()
+                      .replace('merlin3.bls12-381.fr64be/0', suite))
+    modules = {'sample': source}
+    modules.update({f'zkc::{name}': root / f'libraries/zkc/{name}.zkc'
+                    for name in ['bytes', 'encoding', 'transcript']})
+    package = directory / 'proof.zkpkg'
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+                             *[f'--module={name}={path}' for name, path in modules.items()],
+                             'sample::Demo', f'--output={package}', *flags])
+    public = journal.write('public.json', {'public': '5'})
+    witness = journal.write('witness.json', {'secret': '7'})
+    args = [f'--package={package}', f'--sha256={compiled["package_sha256"]}', f'--public={public}']
+    proof = directory / 'proof.bin'
+    produced = journal.json([toolchain.runtime, '--json', 'prove', *args,
+                             f'--witness={witness}', f'--output={proof}'])
+    assert produced['binding_scope'] == 'transcript'
+    accepted = journal.json([toolchain.runtime, '--json', 'verify', *args, f'--proof={proof}'])
+    assert accepted['status'] == 'accepted'
+    assert not accepted['execution']['cleanup_errors']
+
+
+@pytest.mark.parametrize('bound', [0, 3, 8, 9223372036854775809])
+def test_managed_index_methods_reject_invalid_bounds_and_clean_up(toolchain, journal, directory, bound):
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[3]
+    source = directory / 'main.zkc'
+    source.write_text('''module sample;
+    use zkc::transcript as history;
+    use zkc::bytes as bytes;
+    domain F=field("koala-bear.ext8-binomial3");
+    domain T=transcript("merlin3.koala-bear.ext8-binomial3.rejection31le/0");
+    protocol Choose roles(P,V)(challenges:Random<F>@V)->(ok:bool@V){
+      #[site(pick)] let choice=challenges.index<8>();
+      #[site(delivery)] let actual=send V->P(choice);
+      return true;
+    }
+    construction Custom for Choose {
+      transcript T;replace challenges;
+      on start(t){return t;}
+      on query pick(t,bound){return history::challenge_index(t,bytes::empty(),BOUND);}
+      on message delivery(t,value){return t;}
+    }
+    proof Demo=Choose{prover P;verifier V;public{};accept ok;construction Custom;}
+    '''.replace('BOUND', str(bound)))
+    package = directory / 'proof.zkpkg'
+    modules = {'sample': source, 'zkc::transcript': root / 'libraries/zkc/transcript.zkc',
+               'zkc::bytes': root / 'libraries/zkc/bytes.zkc'}
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+                             *[f'--module={name}={path}' for name, path in modules.items()],
+                             'sample::Demo', f'--output={package}'])
+    args = [f'--package={package}', f'--sha256={compiled["package_sha256"]}']
+    proof = directory / 'proof.bin'
+    produced = journal.json([toolchain.runtime, '--json', 'prove', *args, f'--output={proof}'],
+                             refuses='query-bound' if bound != 8 else None)
+    assert not produced['execution']['cleanup_errors']
+    if bound == 8:
+        assert journal.json([toolchain.runtime, '--json', 'verify', *args,
+                              f'--proof={proof}'])['status'] == 'accepted'
+    else:
+        assert not proof.exists()

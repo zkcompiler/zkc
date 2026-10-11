@@ -88,6 +88,9 @@ struct OperationContracts {
   /// Installed permission for ordinary source authoring of a copyable data
   /// history transition. It grants no managed resource or sampling authority.
   bool sourceHistory = false;
+  /// Ordinary code can advance an existing affine transcript. Root acquisition
+  /// stays with the selected construction; this grants no fresh resource.
+  bool managedHistory = false;
 };
 
 /// Resolve a logical contract key, independently of physical implementation.

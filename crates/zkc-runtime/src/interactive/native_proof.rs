@@ -445,8 +445,42 @@ fn check_index_range(function: &Function, bound: u64) -> Result<()> {
 }
 
 fn verifier_function(function: &Function) -> Result<()> {
-    if function.inputs.iter().any(|(_, t)| !verifier_data(t))
-        || function.outputs.iter().any(|t| !verifier_data(t))
+    construction_function(function, &[])
+}
+fn source_transcript_function(function: &Function, state: Option<&PhysicalType>) -> Result<()> {
+    let mut managed = function
+        .inputs
+        .iter()
+        .any(|(_, t)| t.kind() == Type::Transcript)
+        || function
+            .outputs
+            .iter()
+            .any(|t| t.kind() == Type::Transcript);
+    for op in LocalInstruction::walk(&function.body) {
+        if let LocalInstruction::Op { binding, .. } = op {
+            let declaration = binding.declaration();
+            if declaration.contract.starts_with("transcript.") {
+                if !matches!(
+                    declaration.contract.as_str(),
+                    "transcript.observe" | "transcript.challenge" | "transcript.index"
+                ) || declaration.arguments.first().map(String::as_str)
+                    != state.map(|t| t.logical().identity().name())
+                {
+                    return Err(refuse("native-proof-transcript-operation"));
+                }
+                managed = true;
+            }
+        }
+    }
+    if managed {
+        construction_function(function, state.map(std::slice::from_ref).unwrap_or(&[]))?;
+    }
+    Ok(())
+}
+fn construction_function(function: &Function, state: &[PhysicalType]) -> Result<()> {
+    let permitted = |t: &PhysicalType| verifier_data(t) || state.contains(t);
+    if function.inputs.iter().any(|(_, t)| !permitted(t))
+        || function.outputs.iter().any(|t| !permitted(t))
     {
         return Err(refuse("native-proof-verifier-resource"));
     }
@@ -457,7 +491,7 @@ fn verifier_function(function: &Function) -> Result<()> {
                 .inputs
                 .iter()
                 .chain(&signature.outputs)
-                .any(|t| !verifier_data(t))
+                .any(|t| !permitted(t))
             {
                 return Err(refuse("native-proof-verifier-resource"));
             }
@@ -769,6 +803,15 @@ impl NativeProofEntry {
         }
         let mut helpers = BTreeMap::new();
         for (name, function) in &admitted.program.functions {
+            if let Some(plan) = plan
+                && !plan.adapters.iter().any(|a| a.native && a.symbol == *name)
+            {
+                // Ordinary source definitions may remain after adapter cloning.
+                // They can use checked managed methods, never generated origins.
+                // Only planned adapter/start calls may consume the live chain.
+                source_transcript_function(function, transcript.as_ref())?;
+                continue;
+            }
             if let Some(checked) = helper(function, transcript.as_ref(), entry, validator)? {
                 helpers.insert(name.clone(), checked);
             }
@@ -809,9 +852,7 @@ impl NativeProofEntry {
                         .get(&adapter.symbol)
                         .ok_or_else(|| refuse("native-proof-construction-helper"))?;
                     let helper = custom_helper(function, &plan.state, group, entry, validator)?;
-                    if !plan.host {
-                        verifier_function(function)?;
-                    }
+                    construction_function(function, &plan.state)?;
                     helpers.insert(adapter.symbol.clone(), helper);
                 }
             }
@@ -923,8 +964,8 @@ impl NativeProofEntry {
                     {
                         return Err(refuse("native-proof-construction-root"));
                     }
-                    if validating && !plan.host {
-                        verifier_function(&admitted.program.functions[function])?;
+                    if validating {
+                        construction_function(&admitted.program.functions[function], &plan.state)?;
                     }
                     body = &body[1..];
                     Ok(outputs.clone())
@@ -1002,7 +1043,7 @@ impl NativeProofEntry {
             validator,
             acceptance,
             transcript,
-            native_binding: suite.is_some() && plan.is_none(),
+            native_binding: suite.is_some(),
         })
     }
     pub fn admitted(&self) -> &Admitted {
@@ -1020,8 +1061,8 @@ impl NativeProofEntry {
     pub fn acceptance(&self) -> usize {
         self.acceptance
     }
-    /// True only for the installed construction whose root absorbs the
-    /// canonical invocation. Custom code must establish its own binding.
+    /// The managed root absorbs the canonical invocation. This does not
+    /// establish that arbitrary handlers use their state or sample securely.
     pub fn binds_invocation(&self) -> bool {
         self.native_binding
     }

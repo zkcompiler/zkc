@@ -299,13 +299,30 @@ int main() {
             "native-proof-construction-coverage");
     record.setRulesAttr(rules);
   });
-  auto compileSource = [&](StringRef source) {
+  auto compileSource = [&](StringRef source, bool collideSites = false) {
     auto closed = take(closeEntry(take(checked(source)), "m::Demo"));
     auto text = take(emitOriginal(closed, context));
     auto parsed = mlir::parseSourceString<mlir::ModuleOp>(text, &context);
     require(bool(parsed), "parse construction source");
     auto unit = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
         parsed->getBody()->front());
+    if (collideSites) {
+      unsigned count = 0;
+      unit.walk([&](zkc::local::FuncOp function) {
+        bool changed = false;
+        function.walk([&](mlir::Operation *op) {
+          if (!changed && op->hasAttr("site")) {
+            op->setAttr("site", mlir::StringAttr::get(&context, "bound"));
+            changed = true;
+            ++count;
+          }
+        });
+      });
+      require(count != 0, "raw Local functions contain sites to collide");
+      text.clear();
+      raw_string_ostream stream(text);
+      parsed->print(stream);
+    }
     auto record = *unit.getBody()
                        .front()
                        .getOps<zkc::protocol_ir::ConstructionOp>()
@@ -319,6 +336,7 @@ int main() {
     policy.entry = plan.target.getValue().str();
     policy.construction = plan.symbol.getValue().str();
     policy.service = plan.service;
+    policy.suite = plan.suite;
     policy.producer =
         mlir::cast<mlir::StringAttr>(protocol.getRoles()[0]).str();
     policy.validator =
@@ -340,6 +358,68 @@ int main() {
     return std::make_tuple(std::move(parsed), std::move(result),
                            std::move(selected));
   };
+  cases.run("index adapters allocate fresh sites around existing Local code",
+            [&] {
+              compileSource(R"(module m;
+      domain F=field("koala-bear.ext8-binomial3");
+      fn less(x:index,y:index)->bool=primitive("index.less");
+      interface ProviderType {type State:Copy+Drop;fn initialize()->State;}
+      component Provider:ProviderType {
+        type State:Copy+Drop=();
+        fn initialize()->State{return State(());}
+      }
+      protocol Choose roles(P,V)(challenges:Random<F>@V)->(ok:bool@V){
+        #[site(pick)] let chosen=challenges.index<8>();
+        #[site(delivery)] let received=send V->P(chosen);
+        return true;
+      }
+      construction Custom for Choose {
+        transcript Provider;replace challenges;
+        on start(t){return t;}
+        on query pick(t,bound){require less(0,bound);return(t,0);}
+        on message delivery(t,value){return t;}
+      }
+      proof Demo=Choose{prover P;verifier V;public{};accept ok;construction Custom;}
+    )",
+                            true);
+            });
+  cases.run("managed methods retain selected handler authority", [&] {
+    auto source =
+        program.take_front(program.find("construction Derived")).str();
+    source += R"(
+      domain NativeSuite=transcript("merlin3.bls12-381.fr64be/0");
+      type State=builtin("transcript",NativeSuite);
+      type Bytes=builtin("bytes");
+      fn empty()->Bytes=primitive("bytes.empty");
+      fn sample(t:State,label:Bytes)->(State,F)=primitive("transcript.challenge");
+      construction Managed for Round<F> {
+        base fiat_shamir("merlin3.bls12-381.fr64be/0",challenges);
+        on query challenge(t){let (t,v)=sample(t,empty());return(t,v);}
+      }
+      proof Demo=Round<F>{prover P;verifier V;public{public};accept ok;
+        construction Managed;}
+    )";
+    auto [original, built, policy] = compileSource(source);
+    auto unit = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+        original->getBody()->front());
+    auto record = *unit.getBody()
+                       .front()
+                       .getOps<zkc::protocol_ir::ConstructionOp>()
+                       .begin();
+    mlir::SymbolTableCollection symbols;
+    auto plan = take(zkc::protocol::readConstructionPlan(record, symbols));
+    mlir::SymbolTable table(unit);
+    auto handler =
+        table.lookup<zkc::local::FuncOp>(plan.rules.front().handler.getValue());
+    auto clone = mlir::cast<zkc::local::FuncOp>(handler->clone());
+    mlir::SymbolTable::setSymbolName(clone, "unselected_managed_handler");
+    unit.getBody().front().push_back(clone);
+    require(mlir::succeeded(mlir::verify(*original)),
+            "unselected affine function remains well typed");
+    policy.draws.clear();
+    refuses(zkc::selectNativeProofDraws(*original, policy),
+            "native-proof-authored-transcript");
+  });
   cases.run("local state crosses nested protocol loops", [&] {
     auto source = replace("  #[site(commitment)]", R"(
       let mut accepted @V = true;

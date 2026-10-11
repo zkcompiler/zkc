@@ -6,6 +6,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/PassManager.h"
 #include "zkc/Contracts/NativeOrigin.h"
+#include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
@@ -726,11 +727,22 @@ class Emitter {
                                 builder.getArrayAttr({})}));
       auto *body = function.addEntryBlock();
       builder.setInsertionPointToEnd(body);
+      llvm::StringSet<> sites;
+      source.walk([&](Operation *op) {
+        if (auto site = op->getAttrOfType<StringAttr>("site"))
+          sites.insert(site.getValue());
+      });
+      auto site = [&](StringRef prefix) {
+        std::string selected = prefix.str();
+        for (unsigned i = 0; !sites.insert(selected).second; ++i)
+          selected = (prefix + "_" + Twine(i)).str();
+        return selected;
+      };
       SmallVector<Value> arguments(body->getArguments().take_front(dataInputs));
       if (event.bound)
         arguments.push_back(
             kernel("index.constant", binding("index.constant", {}), {},
-                   {event.payload}, "bound",
+                   {event.payload}, site("bound"),
                    {builder.getStringAttr(std::to_string(*event.bound))})
                 ->getResult(0));
       IRMapping mapping;
@@ -745,9 +757,9 @@ class Emitter {
           if (event.bound) {
             auto valid = kernel("index.less", binding("index.less", {}),
                                 {values.front(), arguments.back()},
-                                {builder.getI1Type()}, "range");
+                                {builder.getI1Type()}, site("range"));
             kernel("control.require", binding("control.require", {}),
-                   {valid->getResult(0)}, {}, "require_range");
+                   {valid->getResult(0)}, {}, site("require_range"));
           }
           local::ReturnOp::create(builder, module.getLoc(), values);
         } else {
@@ -1244,9 +1256,6 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
     if (checked->target.getValue() != policy.entry ||
         checked->suite != policy.suite || checked->service != policy.service)
       return error("native-proof-construction-selection");
-    // Managed source providers are admitted separately from native fallback.
-    if (checked->root == protocol::ConstructionPlan::Root::Host)
-      return error("native-proof-construction-root");
     construction = std::move(*checked);
   }
   if (construction.has_value() != !policy.construction.empty())
@@ -1258,15 +1267,42 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
   auto occurrenceMap = origins(entry, originalSymbols);
   if (!occurrenceMap)
     return occurrenceMap.takeError();
-  // No authored local can smuggle in an existing transcript.
+  // Only the selected construction closure can consume the managed root.
+  // Protocol data ports and unrelated Local code cannot introduce one.
+  llvm::DenseSet<Operation *> authorized;
+  if (construction &&
+      construction->root == protocol::ConstructionPlan::Root::Host) {
+    SmallVector<local::FuncOp> pending;
+    for (const auto &rule : construction->rules)
+      pending.push_back(
+          originalSymbols.lookup<local::FuncOp>(rule.handler.getValue()));
+    while (!pending.empty()) {
+      auto function = pending.pop_back_val();
+      if (!function || !authorized.insert(function).second)
+        continue;
+      function.walk([&](local::ApplyOp apply) {
+        pending.push_back(
+            originalSymbols.lookup<local::FuncOp>(apply.getCallee()));
+      });
+    }
+  }
   bool transcript = false;
+  bool allowed = false;
   auto checkType = [&](Type type) {
     type.walk([&](Type nested) {
       if (auto cap = dyn_cast<local::CapabilityType>(nested))
-        transcript |= cap.getKind().starts_with("transcript:");
+        transcript |=
+            cap.getKind().starts_with("transcript:") &&
+            (!allowed || cap.getKind() != "transcript:" + policy.suite);
     });
   };
   original.walk([&](Operation *op) {
+    auto function = dyn_cast<local::FuncOp>(op);
+    if (!function)
+      function = op->getParentOfType<local::FuncOp>();
+    allowed = (function && authorized.contains(function)) ||
+              (isa<pir::ConstructionOp>(op) && construction &&
+               construction->root == protocol::ConstructionPlan::Root::Host);
     for (auto type : op->getOperandTypes())
       checkType(type);
     for (auto type : op->getResultTypes())
@@ -1277,8 +1313,17 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
           checkType(type);
     for (auto attr : op->getAttrs())
       attr.getValue().walk([&](Type type) { checkType(type); });
-    if (auto binding = dyn_cast<local::OperationBindingOp>(op))
-      transcript |= binding.getContract().starts_with("transcript.");
+    if (auto binding = dyn_cast<local::OperationBindingOp>(op)) {
+      if (binding.getContract().starts_with("transcript.")) {
+        auto *effects = protocol::operationContracts(binding.getContract());
+        auto arguments = binding.getArguments();
+        transcript |=
+            !construction ||
+            construction->root != protocol::ConstructionPlan::Root::Host ||
+            !effects || !effects->managedHistory || arguments.empty() ||
+            arguments[0] != StringAttr::get(source.getContext(), policy.suite);
+      }
+    }
   });
   if (transcript)
     return error("native-proof-authored-transcript");

@@ -79,7 +79,12 @@ A local root calls its zero-argument factory once per participant, followed by
 the start handler on that role's actual selected original inputs. Local state
 requires `Copy` and `Drop`; it may contain several native slots or none. State
 slots are internal results, not application outputs. A host root instead uses
-the selected managed transcript capability described below.
+the selected managed transcript capability described below. Only the selected
+handler closure can consume it; original protocol ports and unrelated Local
+functions cannot introduce another transcript root. Checked `ManagedHistory`
+operations expose byte observation, field sampling and supported index sampling
+to ordinary source functions. This facet permits advancing existing state and
+does not authorize acquisition, copying or reset.
 
 One message handler receives the ordered native leaves of its source payload
 after the last send or receive. Total calculations may separate those leaves;
@@ -135,7 +140,7 @@ programs. The [occurrence encoding](#native-occurrence-encoding) fixes those
 bytes and bounds. Generated helper names and runtime diagnostic frames do not
 determine transcript identity. Occurrence resolution precedes optimization.
 
-Each inserted transition is top-level in a straight-line local helper containing
+Each inserted native transition is top-level in a straight-line local helper containing
 only its coordinate construction, transition, complete return and admitted
 storage releases. A UniformIndex helper additionally begins with exactly one
 `index.constant` whose parameter is the event's bound and whose result is the
@@ -152,12 +157,15 @@ source owner, not the executing producer. These structural checks are repeated
 at proof admission against the actual final artifact, after optimization.
 
 Proof admission also closes the generated state chain: each role has exactly one
-chain from its mapped internal transcript input to its mapped internal result,
-and every transition is a listed native-origin operation. Only those operations
-and their explicit helper entry/return wiring may consume or produce that suite
-state. No extra transition, alternate state root, dropped successor,
-or native-origin operation elsewhere is admitted. An occurrence-list match
-alone is insufficient to establish the actual transcript sequence.
+chain from its mapped internal transcript input to its mapped internal result.
+Native adapters use the listed native-origin operations. Custom adapters execute
+their selected ordinary Local bodies, including explicit managed transitions;
+the construction checker compares those bodies and their operands with the
+prepared source. No extra adapter, alternate state root, dropped successor or
+native-origin operation elsewhere is admitted. An occurrence-list match alone
+is insufficient to establish the actual transcript sequence. Invocation binding
+records absorption at managed initialization; it does not establish that a
+custom body uses the state to sample a challenge or samples uniformly.
 
 The indexed-origin attribute rule checks lowercase, even-length hex and its
 bound before decoding the exact static template grammar, empty coordinate array

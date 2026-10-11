@@ -62,7 +62,7 @@ impl ConstructionPlan {
         }
         let symbol = name(&row[1], false)?;
         let host = match text(&row[2])? {
-            "host" => return Err(refuse("native-proof-construction-root")),
+            "host" => true,
             "local" => false,
             _ => return Err(refuse("native-proof-construction-root")),
         };

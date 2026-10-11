@@ -131,6 +131,9 @@ table.relayout 0
 transcript.native.indexed.challenge 1
 transcript.native.indexed.index 1
 transcript.native.indexed.observe.data 1
+transcript.observe 1
+transcript.challenge 1
+transcript.index 1
 vector.add 0
 vector.append 0
 vector.at 0

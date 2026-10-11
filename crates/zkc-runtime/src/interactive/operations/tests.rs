@@ -370,6 +370,9 @@ fn independent_history_classification_matches_installed_inventory() {
     let native = "transcript.native.indexed.challenge 1
 transcript.native.indexed.index 1
 transcript.native.indexed.observe.data 1
+transcript.observe 1
+transcript.challenge 1
+transcript.index 1
 ring.point 0
 ring.rows 0
 ring.coefficients 0

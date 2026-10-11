@@ -193,7 +193,8 @@ int main() {
   bool foundEvaluate = false, foundMultilinear = false;
   for (const auto &e : sourceOperationExports()) {
     check(authoringStage(e.contract) == AuthoringStage::Source &&
-              !StringRef(e.contract).starts_with("transcript."),
+              (!StringRef(e.contract).starts_with("transcript.") ||
+               operationContracts(e.contract)->managedHistory),
           "construction operation leaked through export");
     if (e.module == "zkc::poly" && e.name == "evaluate")
       foundEvaluate =

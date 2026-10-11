@@ -911,7 +911,7 @@ class Emitter {
         text("suite", plan.suite),
         attr("service",
              builder.getI64IntegerAttr(offsets.back() + *plan.service)),
-        attr("native_base", builder.getBoolAttr(!plan.suite.empty())),
+        attr("native_base", builder.getBoolAttr(plan.nativeBase)),
         attr("rules", builder.getArrayAttr(rules))};
     if (plan.initializer)
       attrs.push_back(

@@ -388,6 +388,7 @@ struct ConstructionDefinition {
   std::vector<Type> initializerArguments;
   std::optional<unsigned> service;
   std::string suite;
+  bool nativeBase = false;
   std::vector<ConstructionRule> rules;
 };
 /// Explicit two-participant proof job choices. Public inputs name whole logical

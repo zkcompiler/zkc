@@ -100,6 +100,12 @@ def RandomIndexOp : KernelOp<CryptoDialect, "exec.random_index", [OpRandomIndex]
 
 def RandomVectorOp : KernelOp<CryptoDialect, "exec.random_vector", [OpRandomVector]>;
 
+def TranscriptObserveOp : KernelOp<CryptoDialect,
+    "exec.transcript_observe", [OpTranscriptObserve]>;
+def TranscriptChallengeOp : KernelOp<CryptoDialect,
+    "exec.transcript_challenge", [OpTranscriptChallenge]>;
+def TranscriptIndexOp : KernelOp<CryptoDialect,
+    "exec.transcript_index", [OpTranscriptIndex]>;
 def IndexedTranscriptChallengeOp : KernelOp<CryptoDialect,
     "exec.indexed_transcript_challenge", [OpIndexedTranscriptChallenge]>;
 def IndexedTranscriptObserveDataOp : KernelOp<CryptoDialect,
