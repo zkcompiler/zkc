@@ -1,3 +1,4 @@
+#include "CheckedCandidate.h"
 #include "HelperNormalization.h"
 #include "MathematicalSupport.h"
 #include "mlir/IR/IRMapping.h"
@@ -115,7 +116,14 @@ LogicalResult verifyMathRealizationsPreserved(ModuleOp original,
 }
 
 LogicalResult expandMathRealizations(ModuleOp module,
-                                     MathematicalSelectionPolicy policy) {
+                                     MathematicalSelectionPolicy policy,
+                                     RealizationWork *work) {
+  return expandMathRealizations(module, policy, work, {});
+}
+LogicalResult expandMathRealizations(ModuleOp module,
+                                     MathematicalSelectionPolicy policy,
+                                     RealizationWork *work,
+                                     finite::VerificationLimits limits) {
   if (failed(verify(module)) || !hasSingleElement(*module.getBody()))
     return failure();
   auto original =
@@ -124,14 +132,16 @@ LogicalResult expandMathRealizations(ModuleOp module,
     return diagnostics::emit(module.emitError(), "local-realization-context");
   if (original.getBody().front().getOps<local::RealizeOp>().empty())
     return success();
-  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
+  mathematical::CheckedCandidate candidate(module);
   auto unit =
       cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
   SmallVector<local::FuncOp> functions;
   SymbolTable sourceSymbols(original);
   CheckedHelperNormalizations helpers(original);
-  unsigned cloneOperations = realizedHelperOperationLimit;
-  uint64_t cloneSlots = 1000000;
+  RealizationWork standalone;
+  auto &stageWork = work ? *work : standalone;
+  auto &cloneOperations = stageWork.helperOperations;
+  auto &cloneSlots = stageWork.helperSlots;
   for (auto realization : make_early_inc_range(
            unit.getBody().front().getOps<local::RealizeOp>())) {
     auto helper = sourceSymbols.lookup<func::FuncOp>(realization.getHelper());
@@ -169,12 +179,13 @@ LogicalResult expandMathRealizations(ModuleOp module,
     local::ReturnOp::create(builder, location, results);
     functions.push_back(function);
   }
-  if (failed(lowerCalculations(unit, functions, policy)) ||
-      failed(checkRealizations(module, *candidate, &helpers)))
+  if (failed(lowerCalculations(unit, functions, policy, &stageWork, limits)) ||
+      failed(candidate.publish([&](ModuleOp before, ModuleOp after) {
+        return checkRealizations(before, after, &helpers);
+      })))
     return diagnostics::emit(
         module.emitError(), "local-realization-lowering",
         "realized body failed recipe or executable admission");
-  module.getBodyRegion().takeBody(candidate->getBodyRegion());
   return success();
 }
 } // namespace zkc::mathematical

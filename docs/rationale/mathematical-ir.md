@@ -43,3 +43,43 @@ The tradeoff is that placement and preservation need explicit analyses rather
 than being encoded in every value's type. This is a choice for the supported
 contracts, not a proof that flat SSA suits every future feature. A new region or
 type boundary should solve a concrete consumer's requirement.
+
+## Finite callbacks and direct emission
+
+Finite domains and callbacks remain symbol-based definitions. A checked ABI
+adapter partitions their inputs into current state, enumerated items, domain
+inputs and captures. Each consumer reconstructs its own mapping; equal SSA
+actuals retain distinct formal positions, and current state never becomes an
+alias for its initial seed. This supports reusable helpers and nested
+computations without duplicating their bodies in every expression.
+
+A prototype compared direct symbol-body emission with an explicit-capture
+region using MLIR's dialect conversion. Both produced the same small SCF
+loop in that experiment, including zero-trip and aliased-input cases. This
+establishes feasibility for the toy integer loop, not equivalence of the full
+zkc finite contract. It supplies no demonstrated optimization benefit that
+would justify a second canonical representation and its admission rules.
+
+The implementation instead removes temporary emission functions: finite
+expressions emit directly at the caller's insertion point through an MLIR
+rewriter. A persistent finite declaration uses the same body emitter inside
+its generated function. Callback expansion and polynomial normalization still
+use a checked scratch clone and may fail after mutation. They remain before
+primitive dialect conversion until they can meet its rewrite contract.
+
+## Analysis, choices and checking
+
+The structural computation view borrows the admitted SSA: ordered domain
+constructors, occurrence-specific axes, actual/formal environments, accesses,
+state and results. Private transformation equations interpret that structure;
+private recipes select installed logical algorithms. Removing a recipe leaves
+the recognized equation intact and retains ordered execution. These are
+analysis views and compiler choices, not new authoritative expressions.
+
+Candidate checking reconstructs the source and reads the actual emitted
+instructions. It shares nominal types, admitted scalar-law declarations and
+the finite ABI, but receives no producer equation witness, selected recipe or
+binding-emission plan. The dependency checks enforce that boundary for the
+separate finite, nested-contraction, mathematical-lowering, helper-normalization,
+algorithm and mathematical-comparison readers. This reduces accidental coupling;
+it is not a proof of the native checker or of cryptographic security.

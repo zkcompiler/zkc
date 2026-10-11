@@ -1,7 +1,9 @@
+#include "CheckedCandidate.h"
 #include "ComputationSelection.h"
 #include "LaneRealization.h"
 #include "MathematicalComparison.h"
 #include "MathematicalSupport.h"
+#include "RealizationEmission.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
@@ -13,8 +15,6 @@
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/StringSet.h"
-#include <map>
 #include <optional>
 
 using namespace mlir;
@@ -75,66 +75,32 @@ scalarFormula(algebra::MapRealizeOp map, protocol_ir::ProtocolModuleOp unit,
 // vector.fill(scalar, rows) is emitted immediately before the first operation
 // that needs it and reused afterwards. A scalar result is broadcast likewise.
 class MapRealizer {
-  protocol_ir::ProtocolModuleOp unit;
   OpBuilder builder;
-  llvm::StringSet<> names;
-  std::map<std::pair<std::string, std::vector<std::string>>, std::string>
-      bindings;
-  unsigned nextName = 0, nextSite = 0;
+  RealizationEmitter emitter;
+  unsigned nextSite = 0;
   Location loc;
   algebra::FieldType field;
   Type index, boolean, vector;
   Value rows;
 
-  FlatSymbolRefAttr binding(StringRef contract,
-                            ArrayRef<std::string> arguments) {
-    auto key = std::make_pair(
-        contract.str(),
-        std::vector<std::string>(arguments.begin(), arguments.end()));
-    auto found = bindings.find(key);
-    if (found == bindings.end()) {
-      std::string name;
-      do {
-        name = "_map_binding_" + std::to_string(nextName++);
-      } while (!names.insert(name).second);
-      OpBuilder::InsertionGuard guard(builder);
-      builder.setInsertionPointToStart(&unit.getBody().front());
-      SmallVector<Attribute> args;
-      for (const auto &arg : arguments)
-        args.push_back(builder.getStringAttr(arg));
-      local::OperationBindingOp::create(builder, loc, name, contract,
-                                        builder.getArrayAttr(args), "");
-      found = bindings.emplace(std::move(key), name).first;
-    }
-    return FlatSymbolRefAttr::get(builder.getContext(), found->second);
-  }
   Value emit(StringRef contract, ValueRange inputs, Type output,
              ArrayRef<std::string> parameters = {}) {
-    SmallVector<std::string> arguments;
+    std::vector<std::string> arguments;
     if (!boundWithoutField(contract))
       arguments.push_back(field.getDomain().str());
-    OperationState state(loc, protocol::boundOperationName(contract));
-    state.addOperands(inputs);
+    SmallVector<Type> outputs;
     if (output)
-      state.addTypes(output);
-    state.addAttribute("binding", binding(contract, arguments));
-    state.addAttribute(
-        "site", builder.getStringAttr("map_" + std::to_string(nextSite++)));
-    SmallVector<Attribute> attrs;
-    for (const auto &parameter : parameters)
-      attrs.push_back(builder.getStringAttr(parameter));
-    state.addAttribute("parameters", builder.getArrayAttr(attrs));
-    auto *op = builder.create(state);
+      outputs.push_back(output);
+    auto *op = emitter.emit(builder, loc, "map_" + std::to_string(nextSite++),
+                            {contract.str(), std::move(arguments), ""}, inputs,
+                            outputs, parameters);
     return output ? op->getResult(0) : Value();
   }
 
 public:
   explicit MapRealizer(protocol_ir::ProtocolModuleOp unit)
-      : unit(unit), builder(unit.getContext()), loc(unit.getLoc()) {
-    for (auto &op : unit.getBody().front())
-      if (auto name = SymbolTable::getSymbolName(&op))
-        names.insert(name.getValue());
-  }
+      : builder(unit.getContext()), emitter(unit, "_map_binding_"),
+        loc(unit.getLoc()) {}
   LogicalResult run(algebra::MapRealizeOp map, Block &formula) {
     loc = map.getLoc();
     nextSite = 0;
@@ -355,7 +321,7 @@ LogicalResult verifyMapRealizationsPreserved(ModuleOp original,
   return success();
 }
 
-LogicalResult expandMapRealizations(ModuleOp module) {
+LogicalResult expandMapRealizations(ModuleOp module, RealizationWork *work) {
   if (failed(verify(module)))
     return failure();
   auto original = protocolUnit(module);
@@ -364,14 +330,16 @@ LogicalResult expandMapRealizations(ModuleOp module) {
                              "expected the 'protocol' profile");
   if (original->getBody().front().getOps<algebra::MapRealizeOp>().empty())
     return success();
-  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
+  mathematical::CheckedCandidate candidate(module);
   auto unit = *protocolUnit(*candidate);
   // Derive every formula before editing the candidate's symbol table.
   SmallVector<std::pair<algebra::MapRealizeOp, OwningOpRef<func::FuncOp>>> maps;
   {
     SymbolTableCollection symbols;
-    unsigned helpers = realizedHelperOperationLimit;
-    uint64_t indices = 1000000;
+    RealizationWork standalone;
+    auto &stageWork = work ? *work : standalone;
+    auto &helpers = stageWork.helperOperations;
+    auto &indices = stageWork.helperSlots;
     for (auto map : unit.getBody().front().getOps<algebra::MapRealizeOp>()) {
       auto formula = scalarFormula(map, unit, symbols, helpers, indices);
       if (failed(formula))
@@ -383,10 +351,9 @@ LogicalResult expandMapRealizations(ModuleOp module) {
   for (auto &[map, formula] : maps)
     if (failed(realizer.run(map, formula->front())))
       return failure();
-  if (failed(verifyMapRealizationsPreserved(module, *candidate)))
+  if (failed(candidate.publish(verifyMapRealizationsPreserved)))
     return diagnostics::emit(module.emitError(), "algebra-map-lowering",
                              "realized map failed its correspondence check");
-  module.getBodyRegion().takeBody(candidate->getBodyRegion());
   return success();
 }
 

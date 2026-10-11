@@ -4,7 +4,7 @@ using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
 namespace {
-bool laneRecipesAvailable(Block &body, const finite::Elementwise &formula,
+bool laneRecipesAvailable(Block &body, const Elementwise &formula,
                           const MathematicalRecipes &recipes) {
   for (Operation &op : body.without_terminator()) {
     const auto *meaning = finite::semantics(&op);
@@ -18,10 +18,9 @@ bool laneRecipesAvailable(Block &body, const finite::Elementwise &formula,
   return true;
 }
 std::optional<SelectedReduction>
-selectReduction(const finite::Reduction &equation,
-                const MathematicalRecipes &recipes) {
+selectReduction(const Reduction &equation, const MathematicalRecipes &recipes) {
   auto form = equation.matrixOperand
-                  ? (equation.demand == finite::DemandKind::MatrixRow
+                  ? (equation.matrixAccess == finite::AccessKind::MatrixRow
                          ? ReductionForm::MatrixRow
                          : ReductionForm::MatrixColumn)
                   : (equation.termIdentity ? ReductionForm::Contraction
@@ -46,26 +45,127 @@ selectReduction(const finite::Reduction &equation,
   return result;
 }
 } // namespace
+StringRef describeSelectionOutcome(SelectionOutcome outcome) {
+  switch (outcome) {
+  case SelectionOutcome::Selected:
+    return "selected bulk realization";
+  case SelectionOutcome::AnalysisUnavailable:
+    return "ordered fallback: optional analysis unavailable";
+  case SelectionOutcome::PolicyDisabled:
+    return "ordered fallback: bulk selection disabled";
+  case SelectionOutcome::UnsupportedEquation:
+    return "ordered fallback: no supported equation";
+  case SelectionOutcome::ReplacementRestricted:
+    return "ordered fallback: payload replacement restricted";
+  case SelectionOutcome::MissingRecipe:
+    return "ordered fallback: missing recipe";
+  }
+  llvm_unreachable("unknown selection outcome");
+}
+bool canReplacePayload(const finite::ComputationView &view) {
+  return llvm::all_of(view.payload,
+                      [](Operation *op) { return finite::replaceable(op); });
+}
+bool canReplaceNestedContraction(const finite::ComputationView &view) {
+  if (view.nested.size() != 1 || !canReplacePayload(view.nested.front()))
+    return false;
+  Operation *call = view.nested.front().occurrence;
+  return llvm::all_of(view.payload, [&](Operation *op) {
+    return op == call || finite::replaceable(op);
+  });
+}
 ComputationSelection selectComputation(finite::Computation computation,
                                        MathematicalSelectionPolicy policy,
                                        const MathematicalRecipes &recipes) {
+  finite::ComputationWork work;
+  return selectComputation(computation, policy, work, recipes);
+}
+ComputationSelection selectComputation(finite::Computation computation,
+                                       MathematicalSelectionPolicy policy,
+                                       finite::ComputationWork &work,
+                                       const MathematicalRecipes &recipes) {
   ComputationSelection selection;
-  selection.view = finite::analyzeComputation(computation);
-  if (!selection.view || !policy.finiteBulk || !selection.view->replaceable)
+  selection.view = finite::analyzeComputation(computation, work);
+  if (!selection.view)
     return selection;
-  if (selection.view->bilinear)
-    selection.kind = RealizationKind::Bilinear;
-  else if (selection.view->reduction) {
-    selection.reduction = selectReduction(*selection.view->reduction, recipes);
+  selection.equations = matchComputation(*selection.view, work);
+  if (!policy.finiteBulk) {
+    selection.outcome = SelectionOutcome::PolicyDisabled;
+    return selection;
+  }
+  if (!selection.equations.bilinear && !selection.equations.reduction &&
+      !selection.equations.elementwise) {
+    selection.outcome = work.equations ? SelectionOutcome::UnsupportedEquation
+                                       : SelectionOutcome::AnalysisUnavailable;
+    return selection;
+  }
+  // Replacement and recipe checks also inspect the complete payload. Reserve
+  // their optional work before walking it; ordered emission has its own budget.
+  if (!finite::consumeComputationWork(work.equations,
+                                      selection.view->payload.size() + 1)) {
+    selection.outcome = SelectionOutcome::AnalysisUnavailable;
+    return selection;
+  }
+  if (!canReplacePayload(*selection.view)) {
+    selection.outcome = SelectionOutcome::ReplacementRestricted;
+    return selection;
+  }
+  if (selection.equations.bilinear) {
+    selection.matrix = recipes.matrixContraction(
+        MathematicalIdentity::FieldAdd, MathematicalIdentity::FieldMultiply,
+        MatrixContractionForm::Bilinear);
+    if (selection.matrix)
+      selection.kind = RealizationKind::Bilinear;
+  } else if (selection.equations.reduction) {
+    selection.reduction =
+        selectReduction(*selection.equations.reduction, recipes);
     if (selection.reduction)
       selection.kind = RealizationKind::Reduction;
-  } else if (selection.view->elementwise &&
+  } else if (selection.equations.elementwise &&
              laneRecipesAvailable(computation.helper->getRegion(0).front(),
-                                  *selection.view->elementwise, recipes))
+                                  *selection.equations.elementwise, recipes))
     selection.kind = RealizationKind::Elementwise;
+  selection.outcome = selection.kind == RealizationKind::Ordered
+                          ? SelectionOutcome::MissingRecipe
+                          : SelectionOutcome::Selected;
   return selection;
 }
-std::optional<finite::Elementwise>
+NestedContractionSelection
+selectNestedContraction(const finite::ComputationView &view,
+                        const MathematicalRecipes &recipes) {
+  finite::ComputationWork work;
+  return selectNestedContraction(view, work, recipes);
+}
+NestedContractionSelection
+selectNestedContraction(const finite::ComputationView &view,
+                        finite::ComputationWork &work,
+                        const MathematicalRecipes &recipes) {
+  NestedContractionSelection selection;
+  selection.equation = matchNestedContraction(view, work);
+  if (!selection.equation) {
+    if (!work.equations)
+      selection.outcome = SelectionOutcome::AnalysisUnavailable;
+    return selection;
+  }
+  if (!finite::consumeComputationWork(
+          work.equations,
+          view.payload.size() + view.nested.front().payload.size() + 1)) {
+    selection.outcome = SelectionOutcome::AnalysisUnavailable;
+    return selection;
+  }
+  if (!canReplaceNestedContraction(view)) {
+    selection.outcome = SelectionOutcome::ReplacementRestricted;
+    return selection;
+  }
+  selection.recipe = recipes.matrixContraction(
+      MathematicalIdentity::FieldAdd, MathematicalIdentity::FieldMultiply,
+      selection.equation->axis == 0 ? MatrixContractionForm::Rows
+                                    : MatrixContractionForm::Columns);
+  selection.outcome = selection.recipe ? SelectionOutcome::Selected
+                                       : SelectionOutcome::MissingRecipe;
+  return selection;
+}
+std::optional<Elementwise>
 selectLaneFormula(Block &formula, ArrayRef<bool> rowwise,
                   const MathematicalRecipes &recipes) {
   if (formula.empty() || formula.getNumArguments() != rowwise.size() ||
@@ -78,32 +178,24 @@ selectLaneFormula(Block &formula, ArrayRef<bool> rowwise,
   for (auto [i, argument] : enumerate(formula.getArguments()))
     if (rowwise[i])
       lanes.push_back(argument);
-  auto result = finite::analyzeLaneFormula(formula, field, lanes);
+  auto result = matchLaneFormula(formula, field, lanes);
   return result && laneRecipesAvailable(formula, *result, recipes)
              ? result
              : std::nullopt;
 }
 std::optional<std::pair<unsigned, unsigned>>
 selectMapProduct(Block &formula, ArrayRef<bool> rowwise) {
-  if (!selectLaneFormula(formula, rowwise))
+  if (formula.empty())
     return std::nullopt;
-  auto *product = formula.back().getOperand(0).getDefiningOp();
-  auto *contract = product ? finite::semantics(product) : nullptr;
-  if (!contract || contract->identity != MathematicalIdentity::FieldMultiply ||
-      product->getNumOperands() != 2)
+  if (!llvm::all_of(formula.without_terminator(),
+                    [](Operation &op) { return finite::replaceable(&op); }))
     return std::nullopt;
-  auto left = dyn_cast<BlockArgument>(product->getOperand(0));
-  auto right = dyn_cast<BlockArgument>(product->getOperand(1));
-  if (!left || !right || left.getOwner() != &formula ||
-      right.getOwner() != &formula || !rowwise[left.getArgNumber()] ||
-      !rowwise[right.getArgNumber()])
-    return std::nullopt;
-  return std::make_pair(left.getArgNumber(), right.getArgNumber());
+  return matchMapProduct(formula, rowwise);
 }
 std::optional<SelectedReduction>
 selectMapSum(std::pair<unsigned, unsigned> product,
              const MathematicalRecipes &recipes) {
-  finite::Reduction equation;
+  Reduction equation;
   equation.combine = MathematicalIdentity::FieldAdd;
   equation.termIdentity = MathematicalIdentity::FieldMultiply;
   equation.inputs = {product.first, product.second};

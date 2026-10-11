@@ -26,3 +26,10 @@ def MatrixRowDot : ZKC_ReductionRecipe<OpFieldAdd, OpMatrixRowDot, "MatrixRow"> 
 def MatrixColumnDot : ZKC_ReductionRecipe<OpFieldAdd, OpMatrixColumnDot, "MatrixColumn"> {
   let term = OpFieldMul;
 }
+
+def MatrixBilinear : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0, 1, 2], [], [0, 1]>;
+def MatrixRows : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixMulVector, "Rows", OpVectorAdd, [0, 1], [0], [1]>;
+def MatrixColumns : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixTransposeMulVector, "Columns", OpVectorAdd, [0, 1], [1], [0]>;

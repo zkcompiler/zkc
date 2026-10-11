@@ -1,3 +1,4 @@
+#include "CheckedCandidate.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Dialect/Bindings.h"
@@ -365,11 +366,9 @@ static LogicalResult realizeRecipes(ModuleOp module) {
 LogicalResult expandPolynomialRecipes(ModuleOp module) {
   if (failed(verify(module)))
     return failure();
-  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
-  if (failed(realizeRecipes(*candidate)) ||
-      failed(verifyPolynomialRecipesPreserved(module, *candidate)))
+  mathematical::CheckedCandidate candidate(module);
+  if (failed(realizeRecipes(*candidate)))
     return failure();
-  module.getBodyRegion().takeBody(candidate->getBodyRegion());
-  return success();
+  return candidate.publish(verifyPolynomialRecipesPreserved);
 }
 } // namespace zkc::mathematical

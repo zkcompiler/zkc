@@ -513,6 +513,151 @@ def Bad : ZKC_ReductionRecipe<OpFieldAdd, OpMatrixRowDot, "MatrixRow", [1,0]> {
 }
 ]=] "matrix recipe requires matrix then vector roles")
 
+recipe_case(matrix-contraction-forms [=[
+def Bilinear : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
+def Rows : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixMulVector, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+def Columns : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixTransposeMulVector, "Columns", OpVectorAdd, [0,1], [1], [0]>;
+]=] "")
+recipe_case(matrix-contraction-combiner [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldSub, OpFieldMul,
+    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
+]=] "matrix contraction requires field sum and product meanings")
+recipe_case(matrix-contraction-term [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldAdd,
+    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
+]=] "matrix contraction requires field sum and product meanings")
+recipe_case(matrix-contraction-law-premises [=[
+def RecipeLaws : ZKC_ScalarLaws<"FieldRing", "FieldBinary"> {
+  let associative = 1; let commutative = 1;
+  let leftIdentity = "Zero"; let rightIdentity = "Zero";
+}
+def RecipeMeaning : ZKC_MathematicalIdentity<"FieldAdd", 0> {
+  let laws = RecipeLaws;
+}
+def RecipeF : ZKC_Root<"F", FieldDomain>;
+def RecipeAdd : ZKC_Operation<"fixture.add", [RecipeF],
+    [ZKC_Apply<TypeField,[RecipeF]>, ZKC_Apply<TypeField,[RecipeF]>],
+    [ZKC_Apply<TypeField,[RecipeF]>], [ZKC_Holds<CapabilityField,[RecipeF]>]> {
+  let facets = [ZKC_Mathematical<RecipeMeaning>];
+}
+def Bad : ZKC_MatrixContractionRecipe<RecipeAdd, OpFieldMul,
+    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
+]=] "matrix contraction requires total commutative field laws")
+recipe_case(matrix-contraction-empty-identity [=[
+def RecipeLaws : ZKC_ScalarLaws<"FieldRing", "FieldBinary"> {
+  let associative = 1; let commutative = 1; let total = 1;
+  let leftIdentity = "One"; let rightIdentity = "One";
+}
+def RecipeMeaning : ZKC_MathematicalIdentity<"FieldAdd", 0> {
+  let laws = RecipeLaws;
+}
+def RecipeF : ZKC_Root<"F", FieldDomain>;
+def RecipeAdd : ZKC_Operation<"fixture.add", [RecipeF],
+    [ZKC_Apply<TypeField,[RecipeF]>, ZKC_Apply<TypeField,[RecipeF]>],
+    [ZKC_Apply<TypeField,[RecipeF]>], [ZKC_Holds<CapabilityField,[RecipeF]>]> {
+  let facets = [ZKC_Mathematical<RecipeMeaning>];
+}
+def Bad : ZKC_MatrixContractionRecipe<RecipeAdd, OpFieldMul,
+    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]>;
+]=] "matrix contraction requires additive zero and annihilator")
+recipe_case(matrix-contraction-form [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixBilinear, "Unknown", OpFieldAdd, [0,1,2], [], [0,1]>;
+]=] "unknown matrix contraction form")
+recipe_case(matrix-contraction-permutation [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,1], [], [0,1]>;
+]=] "recipe operand mapping must be a permutation")
+recipe_case(matrix-contraction-left-right [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,2,1], [], [0,1]>;
+]=] "matrix contraction requires matrix then ordered vector roles")
+recipe_case(matrix-contraction-matrix-role [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixMulVector, "Rows", OpVectorAdd, [1,0], [0], [1]>;
+]=] "matrix contraction requires matrix then ordered vector roles")
+recipe_case(matrix-contraction-operand-arity [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1], [], [0,1]>;
+]=] "matrix contraction operand mapping arity")
+recipe_case(matrix-contraction-row-axis [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixMulVector, "Rows", OpVectorAdd, [0,1], [1], [0]>;
+]=] "matrix contraction free and reduced axis roles mismatch")
+recipe_case(matrix-contraction-column-axis [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixTransposeMulVector, "Columns", OpVectorAdd, [0,1], [0], [1]>;
+]=] "matrix contraction free and reduced axis roles mismatch")
+recipe_case(matrix-contraction-bilinear-axes [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [0], [1]>;
+]=] "matrix contraction free and reduced axis roles mismatch")
+recipe_case(matrix-contraction-wrong-orientation [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixTransposeMulVector, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+]=] "matrix contraction endpoint does not implement axis roles")
+recipe_case(matrix-contraction-target-arity [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixBilinear, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+]=] "matrix contraction endpoint arity mismatch")
+recipe_case(matrix-contraction-target-type [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpVectorDot, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+]=] "matrix contraction endpoint input nominal type mismatch")
+recipe_case(matrix-contraction-target-result [=[
+def RecipeF : ZKC_Root<"F", FieldDomain>;
+def Wrong : ZKC_Operation<"fixture.matrix_result", [RecipeF],
+    [ZKC_Apply<TypeMatrix,[RecipeF]>, ZKC_Apply<TypeVector,[RecipeF]>],
+    [ZKC_Apply<TypeField,[RecipeF]>], [ZKC_Holds<CapabilityField,[RecipeF]>]>;
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    Wrong, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+]=] "matrix contraction endpoint result nominal type mismatch")
+recipe_case(matrix-contraction-target-capability [=[
+def RecipeF : ZKC_Root<"F", FieldDomain>;
+def Wrong : ZKC_Operation<"fixture.matrix_capability", [RecipeF],
+    [ZKC_Apply<TypeMatrix,[RecipeF]>, ZKC_Apply<TypeVector,[RecipeF]>],
+    [ZKC_Apply<TypeVector,[RecipeF]>]>;
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    Wrong, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+]=] "matrix contraction endpoint requires the source field capability")
+recipe_case(matrix-contraction-target-parameters [=[
+def RecipeF : ZKC_Root<"F", FieldDomain>;
+def Wrong : ZKC_Operation<"fixture.matrix_parameters", [RecipeF],
+    [ZKC_Apply<TypeMatrix,[RecipeF]>, ZKC_Apply<TypeVector,[RecipeF]>],
+    [ZKC_Apply<TypeVector,[RecipeF]>], [ZKC_Holds<CapabilityField,[RecipeF]>]> {
+  let parameters = NaturalParameter;
+}
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    Wrong, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+]=] "recipe endpoint parameters unsupported")
+recipe_case(matrix-contraction-seed-shape [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixMulVector, "Rows", OpFieldAdd, [0,1], [0], [1]>;
+]=] "matrix contraction endpoint input nominal type mismatch")
+recipe_case(matrix-contraction-seed-scalar-meaning [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixBilinear, "Bilinear", OpFieldSub, [0,1,2], [], [0,1]>;
+]=] "matrix contraction seed combiner meaning mismatch")
+recipe_case(matrix-contraction-seed-vector-meaning [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixMulVector, "Rows", OpVectorSub, [0,1], [0], [1]>;
+]=] "matrix contraction seed combiner meaning mismatch")
+recipe_case(matrix-contraction-static-mapping [=[
+def Bad : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixBilinear, "Bilinear", OpFieldAdd, [0,1,2], [], [0,1]> {
+  let staticArguments = [1];
+}
+]=] "recipe requires the source domain root mapping")
+recipe_case(matrix-contraction-duplicate [=[
+def A : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixMulVector, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+def B : ZKC_MatrixContractionRecipe<OpFieldAdd, OpFieldMul,
+    OpMatrixMulVector, "Rows", OpVectorAdd, [0,1], [0], [1]>;
+]=] "duplicate matrix contraction recipe meaning")
+
 declaration_case(mathematical-identity-role [=[
 def Laws : ZKC_ScalarLaws<"FieldRing", "FieldBinary"> {
   let leftIdentity = "GroupIdentity";

@@ -1,30 +1,15 @@
 #ifndef ZKC_ANALYSIS_COMPUTATION_H
 #define ZKC_ANALYSIS_COMPUTATION_H
 
+#include "zkc/Analysis/ComputationMeaning.h"
+#include "zkc/Analysis/ComputationWork.h"
 #include "zkc/Analysis/Finite.h"
-#include "zkc/Contracts/Operations.h"
 #include "llvm/ADT/DenseMap.h"
 #include <optional>
 
 namespace zkc::finite {
-struct Collection {
-  std::string family;
-  std::vector<std::string> arguments;
-  mlir::Type element;
-};
-Collection collection(mlir::Type type);
-
-/// Exact logical meaning, including explicitly constrained implementations.
-/// Unknown attributes and mismatched nominal ports have no semantic facet.
-/// No serialized analysis attribute is consulted.
-const protocol::ComputationContract *semantics(mlir::Operation *operation);
-/// Meaning alone does not authorize rebinding an explicit implementation.
-bool replaceable(mlir::Operation *operation);
-std::optional<std::string> fieldConstant(mlir::Operation *operation);
-
 /// All references below borrow the current, admitted IR. Recompute after IR
 /// changes or cloning. These views describe existing values, never expressions.
-enum class DemandKind { Scalar, MatrixRow, MatrixColumn, Collection };
 enum class AccessKind { Element, Indexed, MatrixRow, MatrixColumn, MatrixCell };
 struct Access {
   AccessKind kind = AccessKind::Element;
@@ -37,39 +22,12 @@ struct Access {
   mlir::Operation *operation = nullptr;
   /// Column item for a cell with two enumerated coordinates; item is its row.
   std::optional<unsigned> columnItem;
+  /// Existing helper container and explicit index SSA, where present.
+  mlir::Value container;
+  llvm::SmallVector<mlir::Value> indices;
+  /// Positions in ComputationView.axes; equal extents never merge identities.
+  llvm::SmallVector<unsigned> axes;
 };
-struct Reduction {
-  MathematicalIdentity combine;
-  std::optional<MathematicalIdentity> termIdentity;
-  /// Inputs in scalar term operand order, before any native permutation.
-  llvm::SmallVector<unsigned> inputs;
-  std::optional<unsigned> selectedIndex;
-  /// Position in inputs/accesses with the matrix role. Other inputs retain
-  /// source order, including the group/scalar order of a module action.
-  std::optional<unsigned> matrixOperand;
-  DemandKind demand = DemandKind::Scalar;
-  llvm::SmallVector<Access> accesses;
-  mlir::Value accumulator, term;
-  mlir::Operation *combiner = nullptr;
-};
-struct Bilinear {
-  mlir::Value matrix, left, right;
-};
-
-struct Elementwise {
-  /// Scalar indexed reads that the lane emitter replaces by their container.
-  llvm::DenseMap<mlir::Value, mlir::Value> lookups;
-};
-/// Common lane classification for an existing scalar SSA block. Every
-/// instruction is inspected, including unused instructions. indices maps an
-/// enumerated index to the exact captured container it traverses. Other exact
-/// field arguments are uniform; the returned view retains only emitter inputs.
-std::optional<Elementwise>
-analyzeLaneFormula(mlir::Block &body, mlir::Type field,
-                   mlir::ValueRange laneArguments,
-                   const llvm::DenseMap<mlir::Value, mlir::Value> &indices =
-                       llvm::DenseMap<mlir::Value, mlir::Value>());
-
 enum class IterationKind {
   Elements,
   Indices,
@@ -89,39 +47,94 @@ struct Iteration {
 struct IterationItem {
   unsigned iteration = 0;
   mlir::Value formal;
+  unsigned axis = 0;
+};
+struct AxisIdentity {
+  /// Root invocation followed by nested call occurrences, not symbol names.
+  llvm::SmallVector<mlir::Operation *> occurrence;
+  mlir::Operation *constructor = nullptr;
+  /// Child operand positions from the returned descriptor to this leaf.
+  /// Reusing one descriptor twice in a product creates distinct axes.
+  llvm::SmallVector<unsigned> path;
+  unsigned coordinate = 0;
+  bool operator==(const AxisIdentity &other) const {
+    return occurrence == other.occurrence && constructor == other.constructor &&
+           path == other.path && coordinate == other.coordinate;
+  }
+  bool operator!=(const AxisIdentity &other) const { return !(*this == other); }
+};
+struct Axis {
+  AxisIdentity identity;
+  mlir::Value container;
+  std::optional<unsigned> containerAxis;
 };
 struct InputReference {
   unsigned input = 0;
   mlir::Value formal;
   /// Empty for a declaration without a call occurrence.
   mlir::Value actual;
+  /// Domain arguments only; seeds and extra captures have no domain formal.
+  mlir::Value domainFormal;
+  /// Actual after enclosing invariant capture substitutions. State is never
+  /// substituted by its initial seed; enclosing item SSA stays
+  /// occurrence-bound.
+  mlir::Value resolved;
+  bool state = false;
+};
+struct ComputationEnvironment {
+  /// Signature order, shared by structural access and equation composition.
+  llvm::SmallVector<InputReference> inputs;
+  std::optional<unsigned> inputPosition(mlir::Value formal) const;
+  mlir::Value actualInput(unsigned input) const;
+  mlir::Value resolveCapture(mlir::Value value) const;
+};
+struct ArgumentReference {
+  mlir::Value formal, source;
+};
+struct ResultReference {
+  unsigned output = 0;
+  mlir::Value yielded;
+  /// Empty on a declaration. A collect yield is an item of this collection.
+  mlir::Value actual;
+  /// Exact zero-trip initial state at a call; absent on declarations/collect.
+  mlir::Value initial;
+  /// Preserves zero-trip identity even when analyzing a declaration.
+  std::optional<unsigned> seedInput;
+  mlir::Type type;
+  /// A collect without a predicate has the returned domain's cardinality.
+  /// Filtering provides no exact cardinality fact.
+  std::optional<unsigned> cardinality;
 };
 struct ComputationView {
   Computation computation;
   /// The actual nested call, or the total operation/declaration at the root.
   mlir::Operation *occurrence = nullptr;
+  llvm::SmallVector<mlir::Operation *> occurrencePath;
+  ComputationEnvironment environment;
   /// Constructor SSA order is also eager admission order. Unused domain
   /// constructors are retained; nested admission belongs to each nested view.
   llvm::SmallVector<Iteration> iteration;
   unsigned root = 0;
   /// Helper item order, retaining each leaf's constructor provenance.
   llvm::SmallVector<IterationItem> items;
+  llvm::SmallVector<Axis> axes;
   llvm::SmallVector<mlir::Operation *> admission;
   llvm::SmallVector<InputReference> seeds, captures;
   llvm::SmallVector<mlir::Operation *> payload;
+  /// Actual return or stop. A stop has no successful yielded results.
+  mlir::Operation *terminator = nullptr;
+  /// Predicate arguments map to helper item/capture formals, excluding state.
+  llvm::SmallVector<ArgumentReference> predicateArguments;
+  llvm::SmallVector<mlir::Operation *> predicatePayload;
+  llvm::SmallVector<mlir::Value> predicateResults;
+  mlir::Operation *predicateTerminator = nullptr;
   /// Complete supported access inventory, independent of equation selection.
   /// Unsupported operations remain in payload and gain no access fact.
   llvm::SmallVector<Access> accesses;
   std::vector<ComputationView> nested;
   llvm::SmallVector<mlir::Value> results;
+  llvm::SmallVector<ResultReference> resultMappings;
   mlir::Value result;
-  DemandKind demand = DemandKind::Scalar;
-  /// Equation recognition is independent of this occurrence's permission to
-  /// replace physical constraints. Selection must check the latter separately.
-  bool replaceable = true;
-  std::optional<Reduction> reduction;
-  std::optional<Elementwise> elementwise;
-  std::optional<Bilinear> bilinear;
 };
 /// Read-only, invocation-scoped structural analysis. The caller must already
 /// have admitted the complete helper closure. Unknown payloads remain opaque
@@ -129,5 +142,7 @@ struct ComputationView {
 /// A bounded structural walk refuses cycles/budget exhaustion without mutation.
 std::optional<ComputationView> analyzeComputation(Computation computation,
                                                   unsigned budget = 100000);
+std::optional<ComputationView> analyzeComputation(Computation computation,
+                                                  ComputationWork &work);
 } // namespace zkc::finite
 #endif

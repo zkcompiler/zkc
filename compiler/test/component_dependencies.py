@@ -174,6 +174,14 @@ def main():
         ROOT / "lib/Transforms/HelperNormalization.h",
         ROOT / "lib/Transforms/AlgorithmSupport.h",
         ROOT / "lib/Transforms/ComputationSelection.h",
+        ROOT / "lib/Transforms/ComputationEquations.h",
+        ROOT / "lib/Transforms/NestedContractionVerification.h",
+        ROOT / "lib/Transforms/RecipeRealizations.h",
+        ROOT / "lib/Transforms/FiniteVerification.h",
+        ROOT / "lib/Transforms/CheckedCandidate.h",
+        ROOT / "lib/Transforms/CollectionInterpretation.h",
+        ROOT / "lib/Transforms/CollectionRealization.h",
+        ROOT / "lib/Transforms/RealizationEmission.h",
         ROOT / "lib/Transforms/MathematicalRecipes.h",
         ROOT / "lib/Transforms/LaneRealization.h",
         ROOT / "lib/Transforms/MathematicalComparison.h",
@@ -345,6 +353,30 @@ def main():
 
         for path in public_headers[name] | {ROOT / source for source in sources}:
             visit(path)
+    # Independent readers may share declarations, ABI interpretation and their
+    # own exact comparison algebra. They cannot inherit producer recognition,
+    # selection or emission, even through an otherwise permitted header.
+    producer_headers = {
+        ROOT / "include/zkc/Analysis/Computation.h",
+        *(ROOT / f"lib/Transforms/{name}.h" for name in (
+            "ComputationEquations", "ComputationSelection", "MathematicalRecipes",
+            "CollectionRealization", "RealizationEmission", "RecipeRealizations")),
+    }
+    for reader in ("FiniteVerification", "MathLoweringVerification",
+                   "MathematicalComparison", "NestedContractionVerification",
+                   "HelperNormalizationVerification", "AlgorithmVerification"):
+        pending = [ROOT / f"lib/Transforms/{reader}.cpp"]
+        visited = set()
+        while pending:
+            path = pending.pop().resolve()
+            if path in visited:
+                continue
+            visited.add(path)
+            assert path not in producer_headers, f"independent reader imports producer machinery: {reader} -> {path}"
+            for include in re.findall(r'^\s*#\s*include\s*[<"]([^">]+)[">]', path.read_text(), re.M):
+                target = ROOT / "include" / include if include.startswith("zkc/") else path.parent / include
+                if target.is_file():
+                    pending.append(target)
     comparison = (ROOT / "lib/Translation/Language/Comparison.cpp").read_text()
     assert "emitOriginal(" not in comparison, "source comparison must not call emission"
     # Tools and extensions consume public interfaces.

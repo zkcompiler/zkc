@@ -1,6 +1,8 @@
+#include "CollectionRealization.h"
 #include "MathematicalSupport.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/IRMapping.h"
+#include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "zkc/Analysis/Computation.h"
@@ -216,13 +218,10 @@ public:
     if (!site)
       return rewriter.notifyMatchFailure(op, "missing generated occurrence");
     if (isa<data::BoundedAtOp, data::BoundedMatrixAtOp>(op)) {
-      auto col = finite::collection(inputs[0].getType());
-      protocol::BindingApplication application;
-      application.contract =
-          col.family + (col.family == "sequence" || col.family == "indices"
-                            ? ".at"
-                            : ".get");
-      application.arguments = col.arguments;
+      auto collection = collectionRealization(inputs[0].getType());
+      if (!collection || !collection->get)
+        return rewriter.notifyMatchFailure(op, "no admitted collection access");
+      const auto &application = *collection->get;
       OperationState state(op->getLoc(),
                            protocol::boundOperationName(application.contract));
       state.addOperands(inputs);
@@ -830,12 +829,15 @@ public:
 LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
                            const llvm::DenseSet<Operation *> &generated,
                            BindingSymbols &symbols,
-                           MathematicalSelectionPolicy policy = {}) {
-  // Finite control introduces regions and recursively referenced expressions.
-  // Expand it before primitive dialect conversion: detached helper construction
-  // must not escape the conversion rewriter's transaction bookkeeping.
-  unsigned finiteWork = 100000;
-  RealizationWork realizationWork;
+                           MathematicalSelectionPolicy policy = {},
+                           RealizationWork *work = nullptr) {
+  // Finite bodies emit directly before primitive conversion. Callback
+  // expansion and polynomial normalization still use a checked scratch clone
+  // and can fail after mutation, so this phase cannot yet satisfy the
+  // infallible-after-mutation recipe contract.
+  RealizationWork standalone;
+  auto &realizationWork = work ? *work : standalone;
+  auto &finiteWork = realizationWork.finiteExpressions;
   while (true) {
     Operation *next = nullptr;
     unit.walk<WalkOrder::PreOrder>([&](Operation *op) {
@@ -845,15 +847,16 @@ LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
     });
     if (!next)
       break;
-    if (!finiteWork--)
+    if (!finiteWork)
       return diagnostics::emit(next->emitError(), "finite-analysis-limit");
-    OpBuilder builder(next);
+    --finiteWork;
+    IRRewriter builder(next->getContext());
+    builder.setInsertionPoint(next);
     auto result = finite::realizeExpression(next, next->getOperands(), builder,
                                             policy, &realizationWork);
     if (failed(result))
       return failure();
-    next->replaceAllUsesWith(*result);
-    next->erase();
+    builder.replaceOp(next, *result);
   }
   ConversionTarget target(*unit.getContext());
   target.markUnknownOpDynamicallyLegal([&](Operation *op) {
@@ -926,8 +929,12 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
         generated.insert(outlinedSymbols.lookup(reference.getValue()));
       }
     }
-    if (failed(lowerRecipes(unit, generated, symbols,
-                            {optimizeFinite, fuseVectorReductions})))
+    SmallVector<local::FuncOp> calculations;
+    for (auto &definition : unit.getBody().front())
+      if (generated.contains(&definition))
+        calculations.push_back(cast<local::FuncOp>(definition));
+    if (failed(lowerCalculations(unit, calculations,
+                                 {optimizeFinite, fuseVectorReductions})))
       return signalPassFailure();
     for (auto &declaration : make_early_inc_range(unit.getBody().front()))
       if (isa<data::DomainOp, func::FuncOp>(declaration))
@@ -943,19 +950,107 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
 } // namespace
 LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
                                 ArrayRef<local::FuncOp> functions,
-                                MathematicalSelectionPolicy policy) {
-  BindingSymbols symbols(unit);
-  llvm::DenseSet<Operation *> selected;
+                                MathematicalSelectionPolicy policy,
+                                RealizationWork *work) {
+  return lowerCalculations(unit, functions, policy, work, {});
+}
+LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
+                                ArrayRef<local::FuncOp> functions,
+                                MathematicalSelectionPolicy policy,
+                                RealizationWork *work,
+                                finite::VerificationLimits limits) {
+  SmallVector<StringAttr> names;
   for (auto function : functions)
-    selected.insert(function);
-  // Preserve the admitted, polynomial-free mathematical bodies for the same
-  // independent recipe matcher used by participant lowering. This transient
-  // candidate is not an executable module until conversion finishes.
-  OwningOpRef<protocol_ir::ProtocolModuleOp> original(
-      cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
-  if (failed(lowerRecipes(unit, selected, symbols, policy)))
+    names.push_back(function.getSymNameAttr());
+  RealizationWork standalone;
+  auto &available = work ? *work : standalone;
+  for (;;) {
+    // This unit is an intermediate outlined subject, so whole-module formation
+    // belongs to the enclosing service. Keep its exact mathematical bodies
+    // immutable for independent reading and any one ordered retry.
+    auto attemptWork = available;
+    OwningOpRef<protocol_ir::ProtocolModuleOp> candidate(
+        cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
+    SymbolTable table(*candidate);
+    SmallVector<local::FuncOp> replacements;
+    llvm::DenseSet<Operation *> selected;
+    for (auto name : names) {
+      auto function = table.lookup<local::FuncOp>(name.getValue());
+      if (!function)
+        return failure();
+      replacements.push_back(function);
+      selected.insert(function);
+    }
+    BindingSymbols symbols(*candidate);
+    if (failed(
+            lowerRecipes(*candidate, selected, symbols, policy, &attemptWork)))
+      return failure();
+    finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
+                                       {}};
+    auto checked = verifyCalculationRecipes(unit, *candidate, replacements,
+                                            limits, outcome);
+    available.matching = attemptWork.matching;
+    available.lanes = attemptWork.lanes;
+    if (succeeded(checked)) {
+      // Preserve caller-owned function handles. The only mutable subjects are
+      // these checked bodies and newly emitted bindings; all other declarations
+      // and their order must match before any part is published.
+      SymbolTable originalSymbols(unit);
+      llvm::DenseSet<Operation *> selectedOriginal;
+      for (auto function : functions)
+        selectedOriginal.insert(function);
+      SmallVector<Operation *> newBindings;
+      auto original = unit.getBody().front().begin();
+      bool seenOriginal = false;
+      for (auto &definition : candidate->getBody().front()) {
+        auto name = SymbolTable::getSymbolName(&definition);
+        if (name && !originalSymbols.lookup(name)) {
+          if (seenOriginal || !isa<local::OperationBindingOp>(definition))
+            return diagnostics::emit(unit.emitError(),
+                                     "mathematical-lowering-preservation",
+                                     "unexpected calculation declaration");
+          newBindings.push_back(&definition);
+          continue;
+        }
+        seenOriginal = true;
+        // Projection records and other unnamed definitions still belong to
+        // the ordered context; they are not generated symbol declarations.
+        auto *prior =
+            original == unit.getBody().front().end() ? nullptr : &*original++;
+        if (!prior || SymbolTable::getSymbolName(prior) != name ||
+            (!selectedOriginal.contains(prior) &&
+             !OperationEquivalence::isEquivalentTo(
+                 prior, &definition, OperationEquivalence::IgnoreLocations)))
+          return diagnostics::emit(
+              unit.emitError(), "mathematical-lowering-preservation",
+              "calculation changed surrounding declarations");
+      }
+      if (original != unit.getBody().front().end() ||
+          unit->getAttrDictionary() != (*candidate)->getAttrDictionary())
+        return diagnostics::emit(unit.emitError(),
+                                 "mathematical-lowering-preservation",
+                                 "calculation changed its enclosing unit");
+      auto insertion = unit.getBody().front().begin();
+      for (auto *binding : newBindings)
+        binding->moveBefore(&unit.getBody().front(), insertion);
+      for (unsigned i = 0; i < functions.size(); ++i) {
+        auto originalFunction = functions[i];
+        originalFunction.getBody().takeBody(replacements[i].getBody());
+      }
+      available = attemptWork;
+      return success();
+    }
+    if (outcome.status == finite::VerificationStatus::OptionalCapacity &&
+        policy.finiteBulk) {
+      policy.finiteBulk = false;
+      continue;
+    }
+    if (outcome.status == finite::VerificationStatus::OptionalCapacity ||
+        outcome.status == finite::VerificationStatus::RequiredCapacity)
+      return diagnostics::emit(unit.emitError(), "finite-verification-capacity",
+                               outcome.detail);
     return failure();
-  return verifyCalculationRecipes(*original, unit, functions);
+  }
 }
 } // namespace zkc::mathematical
 std::unique_ptr<mlir::Pass>
