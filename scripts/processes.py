@@ -11,6 +11,7 @@ import locale
 import math
 import os
 import signal
+import shlex
 import subprocess
 import sys
 import threading
@@ -183,3 +184,11 @@ def run(arguments, *, input=None, text=False, capture_output=False, stdout=None,
         if check:
             result.check_returncode()
         return result
+
+
+def checked(arguments, **kwargs):
+    """Print and execute a required command with bounded cancellation cleanup."""
+    arguments = list(map(str, arguments))
+    print(f"+ {shlex.join(arguments)}", flush=True)
+    kwargs.setdefault("cleanup_grace", 5)
+    return run(arguments, check=True, **kwargs)

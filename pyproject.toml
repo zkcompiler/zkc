@@ -33,7 +33,7 @@ python-preference = "only-system"
 
 [tool.pytest.ini_options]
 testpaths = ["common/tests"]
-pythonpath = ["common/tests/support", "compiler/test/support", "scripts"]
+pythonpath = ["common/tests", "common/tests/support", "compiler/test/support", "scripts"]
 addopts = "--strict-markers --strict-config"
 # A hung tool is a failure with a stack, not a suite that never returns.
 timeout = 900

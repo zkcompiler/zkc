@@ -5,7 +5,6 @@ import json
 import os
 from pathlib import Path
 import re
-import sys
 
 import pytest
 from processes import run as run_process
@@ -73,17 +72,6 @@ def test_usage_and_execution_failures_remain_distinct(toolchain, directory):
     assert result.returncode == 1
     report = json.loads(result.stdout)
     assert report["status"] == "refused" and report["code"] == "artifact-io"
-
-
-def test_demo_entry_point(toolchain, directory, journal):
-    result = journal.attempt([sys.executable, ROOT / "common/tests/run.py", "demo"], env={
-        **os.environ,
-        "ZKC_COMPILER_BIN": str(toolchain.directories["compiler"]),
-        "ZKC_NATIVE_BIN": str(toolchain.directories["native"]),
-        "ZKC_REPORTS_DIR": str(directory / "reports"),
-    })
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "Proof accepted:" in result.stdout
 
 
 @pytest.mark.parametrize("marker", ["native-bundle", "native-proof"])

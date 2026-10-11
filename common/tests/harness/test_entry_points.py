@@ -70,9 +70,8 @@ def test_every_repository_path_a_test_file_cites_exists():
     )
 
 
-def test_every_formal_check_is_where_the_loop_that_runs_them_looks():
-    """`just test-lean` discovers formal checks and consumers; independent CLI
-    controls also live under `common/tests/support/lean/`.
+def test_every_lean_check_is_where_the_loop_that_runs_them_looks():
+    """`just test-lean` discovers Lean checks and independent consumers.
 
     Top-level formal scripts provide dependency fetching, source planning and
     reproduction. Checks belong in discovered directories; shared helpers are
@@ -168,3 +167,11 @@ def test_native_generator_and_client_pairs_remain_available():
         if example not in drivers or not drivers[example].is_file():
             missing.append(f"Rust driver {example}")
     assert not missing, "native integration coverage lost its inputs: " + ", ".join(missing)
+
+
+def test_rust_recipe_runs_only_cargo_tests():
+    import subprocess
+
+    result = subprocess.run(["just", "--justfile", str(ROOT / "justfile"), "--dry-run", "test-rust"],
+                            capture_output=True, text=True, check=True, timeout=10)
+    assert (result.stdout + result.stderr).strip() == "python3 common/tests/run.py rust"

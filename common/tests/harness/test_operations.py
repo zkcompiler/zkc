@@ -15,9 +15,10 @@ from harness import executable, load
 ROOT = Path(__file__).resolve().parents[3]
 
 
-@pytest.mark.parametrize("operation", ["fetch-lean", "lean-integration"])
-def test_repeated_preparation_keeps_previous_reports(operation, monkeypatch, tmp_path):
-    developer = load("developer", "scripts/develop.py")
+@pytest.mark.parametrize("entrypoint,operation", [("scripts/develop.py", "fetch-lean"),
+                                                   ("common/tests/run.py", "lean-integration")])
+def test_repeated_preparation_keeps_previous_reports(entrypoint, operation, monkeypatch, tmp_path):
+    developer = load("driver", entrypoint)
     outputs, calls = [], []
 
     def run(arguments, **kwargs):
@@ -48,8 +49,9 @@ def test_repeated_preparation_keeps_previous_reports(operation, monkeypatch, tmp
 
 @pytest.mark.parametrize("current", [True, False])
 def test_clean_integration_requires_the_committed_control(current, monkeypatch, tmp_path):
-    developer = load("developer", "scripts/develop.py")
-    fixture = tmp_path / "air-control.json"
+    developer = load("test_runner", "common/tests/run.py")
+    fixture = tmp_path / "common/tests/fixtures/clean/air-control.json"
+    fixture.parent.mkdir(parents=True)
     fixture.write_text('{"format":"zkc.clean-air-control/0"}\n')
     calls = []
 
@@ -59,7 +61,6 @@ def test_clean_integration_requires_the_committed_control(current, monkeypatch, 
             stdout.write(fixture.read_text() if current else "{}\n")
 
     monkeypatch.setattr(developer, "run", run)
-    monkeypatch.setattr(developer, "CLEAN_CONTROL", fixture)
     monkeypatch.setattr(developer, "ROOT", tmp_path)
     monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path / "reports"))
     monkeypatch.setattr(sys, "argv", ["develop.py", "lean-clean"])
@@ -68,15 +69,15 @@ def test_clean_integration_requires_the_committed_control(current, monkeypatch, 
     else:
         with pytest.raises(ValueError, match="air-control.json is not the current Clean export"):
             developer.main()
-    assert calls == [(["lake", "build"], developer.CLEAN),
-                     (["lake", "env", "lean", "--run", "TestsClean/Control.lean"], developer.CLEAN)]
+    assert calls == [(["lake", "env", "lean", "--run", "TestsClean/Control.lean"],
+                      tmp_path / "lean/integrations/clean")]
     root, = (tmp_path / "reports/runs").iterdir()
     assert json.loads((root / "run.json").read_text())["status"] == ("pass" if current else "failed")
 
 
 @pytest.mark.parametrize("explicit", [False, True])
 def test_install_uses_empty_prefix_and_fresh_consumer(explicit, monkeypatch, tmp_path, native_config):
-    developer = load("developer", "scripts/develop.py")
+    developer = load("test_runner", "common/tests/run.py")
     prefixes, builds, completed, discovery = [], [], [], []
 
     def run(arguments, **kwargs):
@@ -124,7 +125,7 @@ def test_install_uses_empty_prefix_and_fresh_consumer(explicit, monkeypatch, tmp
 
 @pytest.mark.parametrize("kind", ["directory", "file", "symlink", "dangling-symlink"])
 def test_install_refuses_existing_prefix_without_running_commands(kind, monkeypatch, tmp_path, native_config):
-    developer = load("developer", "scripts/develop.py")
+    developer = load("test_runner", "common/tests/run.py")
     prefix = tmp_path / "prefix"
     retained = tmp_path / "retained"
     retained.mkdir()
@@ -150,7 +151,7 @@ def test_install_refuses_existing_prefix_without_running_commands(kind, monkeypa
     assert os.path.lexists(prefix)
 
 
-@pytest.mark.parametrize("scope", ["integration", "harness", "lint"])
+@pytest.mark.parametrize("scope", ["integration", "harness", "sdk", "style", "lint"])
 def test_uv_test_and_lint_commands_never_sync(scope, monkeypatch, tmp_path):
     runner = load("runner", "common/tests/run.py")
     calls = []
@@ -159,7 +160,7 @@ def test_uv_test_and_lint_commands_never_sync(scope, monkeypatch, tmp_path):
     runner.execute(scope, SimpleNamespace())
     uv = [args for args in calls if args[0] == "uv"]
     assert len(uv) == 1
-    assert uv[0][:5] == ["uv", "run", "--no-sync", "--locked", "ruff" if scope == "lint" else "pytest"]
+    assert uv[0][:5] == ["uv", "run", "--no-sync", "--locked", "ruff" if scope in {"style", "lint"} else "pytest"]
     assert not any("sync" in args or "fetch" in args for args in calls)
 
 
@@ -200,41 +201,8 @@ Path(sys.argv[sys.argv.index("--output-junit") + 1]).write_text("<testsuite test
     assert all(report.read_text() == "<testsuite tests='1'/>" for report in reports)
 
 
-def test_demo_writes_under_current_run_reports(monkeypatch, tmp_path):
-    runner = load("runner", "common/tests/run.py")
-    tools = SimpleNamespace(compiler="compiler", runtime="runtime")
-    monkeypatch.setattr(runner, "Toolchain", lambda: tools)
-    outputs = []
-
-    def run(args, stdout=None, **kwargs):
-        assert args[1] == "--json"
-        command = args[2]
-        if stdout:
-            outputs.append(Path(stdout.name))
-            if command == "compile":
-                package = Path(next(arg.removeprefix("--output=") for arg in args
-                                    if isinstance(arg, str) and arg.startswith("--output=")))
-                package.write_bytes(b"package")
-                stdout.write(json.dumps({"package_sha256": "0" * 64}))
-            elif command in {"prove", "verify"}:
-                Path(args[-1].split("=", 1)[1]).write_bytes(b"proof")
-                stdout.write(json.dumps({"status": "produced" if command == "prove" else "accepted"}))
-
-    monkeypatch.setattr(runner, "run", run)
-    monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path / "run"))
-    runner.execute("demo", SimpleNamespace())
-    output = tmp_path / "run/demo"
-    assert all(path.parent == output for path in outputs)
-    assert (output / "proof.zkpkg").read_bytes() == b"package"
-    assert (output / "proof.bin").read_bytes() == b"proof"
-    assert json.loads((output / "validator.json").read_text())["status"] == "accepted"
-    # Reusing the same invocation output must not overwrite a prior proof.
-    with pytest.raises(FileExistsError):
-        runner.execute("demo", SimpleNamespace())
-
-
 def test_missing_installed_config_cannot_fall_back_to_an_old_package(monkeypatch, tmp_path, native_config):
-    developer = load("developer", "scripts/develop.py")
+    developer = load("test_runner", "common/tests/run.py")
     stale = tmp_path / "old-install/lib/cmake/ZkcCompiler"
     stale.mkdir(parents=True)
     config = stale / "ZkcCompilerConfig.cmake"
@@ -262,13 +230,3 @@ def test_unknown_scope_is_rejected(tmp_path):
     result = subprocess.run([sys.executable, str(ROOT / "common/tests/run.py"), "invalid-scope"],
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 2 and "invalid choice" in result.stderr
-
-
-def test_project_checks_do_not_invoke_formal_drivers(monkeypatch, tmp_path):
-    runner = load("runner", "common/tests/run.py")
-    calls = []
-    execute = runner.execute
-    monkeypatch.setattr(runner, "execute", lambda scope, args: calls.append(scope))
-    monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path))
-    execute("project", SimpleNamespace())
-    assert calls == ["integration", "demo"]

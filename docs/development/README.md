@@ -21,16 +21,11 @@ nix develop
 just doctor
 just setup
 just build
-just demo
 ```
 
-Shell entry resolves tools without implicit dependency downloads or builds.
-Setup prepares locked development dependencies; the initial setup needs network
-access. The demo compiles the maintained Schnorr Entry and independently proves
-and verifies it. [Getting started](../getting-started.md) gives the exact commands
-and input-authority boundary.
+Shell entry resolves tools without implicit dependency downloads or builds. Setup prepares locked development dependencies; the initial setup needs network access. [Getting started](../getting-started.md) walks through compiling, proving and verifying a maintained Schnorr Entry, including the input-authority boundary.
 
-Development operations expose their supported options through `python3 scripts/develop.py OPERATION --help`; options for another operation are rejected before preparation or execution.
+Development operations expose their options through `python3 scripts/develop.py OPERATION --help`; validation scopes use `python3 common/tests/run.py SCOPE --help`. Each command rejects options belonging to another operation before execution.
 
 Outside Nix, provide compatible `CC`, `CXX`, `MLIR_DIR` and, when needed,
 `LLVM_CONFIG`, plus utf8proc 2.12.0 with its CMake package (select it through
@@ -51,11 +46,7 @@ just test-integration
 just test-docs
 ```
 
-Use the [test guide](../../common/tests/README.md#selecting-checks) to choose affected
-checks. `just test` is broad integration validation and includes resource-boundary
-cases; run it when changes justify that scope. Direct test drivers use existing
-outputs and do not build dependencies. Record commands, revision, environment
-and actual results rather than treating documentation links as fresh evidence.
+Use the [test guide](../../common/tests/README.md#selecting-checks) to choose affected checks. `just test` is broad integration validation and includes resource-boundary cases; run it when changes justify that scope. Direct test drivers use existing outputs; Cargo tests and SDK checks build their own test targets and consumers. Domain installation checks explicitly prepare separate base/domain builds unless `--skip-build` selects existing ones. Record commands, revision, environment and actual results rather than treating documentation links as fresh evidence.
 
 ## Build profiles and installed consumers
 
