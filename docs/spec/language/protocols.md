@@ -57,22 +57,18 @@ an explicit type is required.
 
 Free places are reads before assignment on some continuing path, preserving
 projection privacy and partial moves. Capturing one field does not move its affine siblings.
-A noncopyable immutable branch capture transfers custody; return it explicitly to
-retain access. Mutable state is joined only when wholly available on every
+A noncopyable read-only branch capture transfers custody; return it explicitly to
+retain access. Bindings assigned by a region become state. State is joined only when wholly available on every
 continuing arm. Otherwise it becomes unavailable; each residual must be consumed
 or permit `Drop`. Assignment can restore an unavailable binding. A partially moved
-root may supply its remaining fields, but cannot supply a whole value. Inferred
-`Copy` inputs do not create authored obligations: for values without `Drop`, only
-uses guaranteed on every continuing arm discharge the corresponding outer places.
-A later outer use remains valid; explicit aliases still require their own use.
+root may supply its remaining fields, but cannot supply a whole value.
 
 Local `for i in lower..upper { ... }` evaluates both `index` bounds once, in written
-order, and produces unit. Outer assignments and referenced, wholly available
-noncopyable mutable roots become loop state. Every state slot needs a whole initial
+order, and produces unit. Outer assignments determine loop state, independently
+of usage properties. Every state slot needs a whole initial
 value and a whole successor on every continuing iteration; zero iterations retain
 the initial value. Local state may replace a resource with a newly constructed one.
-Invariant places require `Copy`. A possibly empty loop does not discharge an outer
-invariant's no-`Drop` obligation: it still needs a use outside the loop. Managed
+Invariant places require `Copy`, which also permits `Drop`. Managed
 services are unavailable inside local functions.
 
 `require condition;` stops with native reason `reject` on false and retains
@@ -330,7 +326,7 @@ types or swapping same-typed resources do not suffice.
 
 Invariant data places require `Copy`; their selected availability is the nonempty
 intersection with loop roles, with narrowing allowed only under `Drop`. A
-copyable mutable binding with no assignment can be an invariant. Managed aliases
+mutable binding with no assignment is an invariant. Managed aliases
 capture their common root once and require its owner inside the loop. Nested
 actions use only active loop participants. Mathematical component semantics remain
 unchanged; separate participant states are never bundled into a common-role tuple.
@@ -353,8 +349,11 @@ protocol Run roles(V)(go: bool @V, x: Fr @V) -> (result: Fr @V) completes {
 
 `completes` declares an Entry-only protocol: applying it as a reusable component
 refuses, including when its body has no current completion action. `finish_if`
-requires that marker and occupies a complete unannotated immutable `let` RHS. Its Boolean
-condition and named outputs must be available at its owner. The named list
+requires that marker and occupies a complete unannotated immutable `let` RHS in
+a protocol body or protocol-loop body. It cannot occur inside a value operand,
+including a block or loop used as an operand: completion must not interrupt a
+pending transfer. Its Boolean condition and named outputs must be available at
+its owner. The named list
 supplies exactly that owner's declared protocol outputs. Expressions evaluate in
 written order; native operands follow output declaration order.
 

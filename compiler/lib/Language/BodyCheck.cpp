@@ -2,6 +2,7 @@
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "zkc/Contracts/Kernels.h"
+#include "llvm/Support/SaveAndRestore.h"
 #include <algorithm>
 #include <numeric>
 using namespace llvm;
@@ -286,6 +287,11 @@ bool BodyChecker::statementBody(const Statement &s) {
     expected = Type{};
   if (s.kind == Statement::Kind::Expression && !s.terminated)
     expected = Type(Type::Kind::Unit);
+  SaveAndRestore completionScope(completionLoop,
+                                 s.kind == Statement::Kind::Expression &&
+                                         expr.kind == Expression::Kind::For
+                                     ? std::optional(s.expression)
+                                     : std::nullopt);
   auto value = expression(s.expression, expected, 1,
                           s.kind != Statement::Kind::Let &&
                               s.kind != Statement::Kind::Assign);
@@ -424,6 +430,13 @@ std::optional<ValueId> BodyChecker::tail(const SyntaxBody &source,
     return {};
   // A protocol loop body has its own tail statement. Expression-block tails
   // instead participate in the enclosing statement's demands.
+  SaveAndRestore completionScope(
+      completionLoop,
+      protocol() && !placement && source.results.size() == 1 &&
+              syntax.expressions[source.results.front().second].kind ==
+                  Expression::Kind::For
+          ? std::optional(source.results.front().second)
+          : std::nullopt);
   std::optional<StatementPlacement> inference;
   if (protocol() && !placement)
     inference.emplace(*this);

@@ -26,20 +26,11 @@ BodyChecker::regionInputs(const Expression &control) {
 }
 std::optional<std::set<BindingId>>
 BodyChecker::regionStates(const RegionInputs &inputs, Span span) {
-  auto states = inputs.writes;
-  for (const auto &place : inputs.places) {
-    const auto &state = bindings.at(place.binding);
-    if (!checker.types.charge(1, span))
-      return {};
-    // A partially moved root can only supply its remaining places. Assignment
-    // may restore the whole binding in a branch, but loops need an initial
-    // root.
-    // Authored mutability decides state, independently of usage inference.
-    if (syntax.bindings[place.binding.index].mutableBinding && state.value &&
-        available(*state.value))
-      states.insert(place.binding);
-  }
-  return states;
+  if (!checker.types.charge(inputs.writes.size() + 1, span))
+    return {};
+  // Only assignment needs a state successor. Read-only places are captures,
+  // preserving their identity and data facts regardless of usage properties.
+  return inputs.writes;
 }
 std::optional<ValueId> BodyChecker::capturePlace(const FreePlace &source,
                                                  Span span) {

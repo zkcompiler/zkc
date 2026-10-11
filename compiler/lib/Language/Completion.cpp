@@ -17,6 +17,13 @@ BodyChecker::complete(const Statement &statement) {
          expr.span);
     return {};
   }
+  if (!completionAllowed) {
+    fail("source.completion",
+         "finish_if must be a statement in a protocol body or protocol loop, "
+         "outside value operands",
+         expr.span);
+    return {};
+  }
   auto role = checker.roles(decl, {expr.text}, expr.span);
   if (!role || !active(*role, expr.span))
     return {};

@@ -37,6 +37,12 @@ module Box {
 }
 )"));
   });
+  cases.run("protocol products transfer generic resources structurally", [] {
+    take(check(R"(
+protocol Pair<T:Type> roles(P)(x:T@P,y:T@P)->(pair:(T,T)@P) {
+ return (x,y);
+})"));
+  });
   cases.run("explicit resource restrictions are structural", [] {
     take(check(
         "#[affine] struct Optional {} fn ignore(x:Optional)->(){return ();}"));
@@ -79,6 +85,26 @@ protocol Run roles(P)(go:bool@P)->(accepted:bool@P) completes {
  let claim@P=make();let done@P=discharge(claim);
  let accepted=finish_if @P(go)(accepted=true);return accepted;
 }run Demo=Run;)");
+  });
+  cases.run("completion cannot interrupt pending operand transfers", [] {
+    refuses(check(R"(
+fn discharge2(x:Claim,u:())->(){consume x;return ();}
+protocol Run roles(P)(go:bool@P)->(accepted:bool@P) completes {
+ let claim@P=make();
+ let done@P=discharge2(claim,{let _=finish_if @P(go)(accepted=true);()});
+ return true;
+})"),
+            "source.completion");
+    refuses(check(R"(
+fn discharge2(x:Claim,u:())->(){consume x;return ();}
+protocol Run roles(P)(go:bool@P,n:index@P)->(accepted:bool@P) completes {
+ let claim@P=make();
+ let done@P=discharge2(claim,{
+  for _ in 0..n roles(P) max 4 {let _=finish_if @P(go)(accepted=true);}
+  ()
+ });return true;
+})"),
+            "source.completion");
   });
   cases.run("nested completion checks obligations outside both loops", [] {
     refuses(check(R"(
