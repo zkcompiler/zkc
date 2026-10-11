@@ -1,5 +1,11 @@
 format = "zkc.project/0"
 
 [modules]
+"zkc::accumulation" = "../../../libraries/zkc/accumulation.zkc"
+"zkc::curve" = "../../../libraries/zkc/curve.zkc"
+"zkc::finite" = "../../../libraries/zkc/finite.zkc"
+"zkc::sequence" = "../../../libraries/zkc/sequence.zkc"
 example = "main.zkc"
 "zkc::vector" = "../../../libraries/zkc/vector.zkc"
+
+"zkc::finite_domain" = "../../../libraries/zkc/finite_domain.zkc"

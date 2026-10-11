@@ -62,10 +62,11 @@ def check(binary, compiler, output):
     # The shared fold crosses source-library, generic map and native realization
     # boundaries. Exercise it with the installed compiler, outside the checkout.
     shutil.copyfile(ROOT / "examples/projects/mathematics/main.zkc", output / "mathematics.zkc")
-    for name in ("vector", "symbolic"):
+    for name in ("vector", "symbolic", "accumulation", "curve", "finite", "sequence"):
         shutil.copyfile(ROOT / f"libraries/zkc/{name}.zkc", output / f"{name}.zkc")
     (output / "mathematics.toml").write_text(project_text({"format": "zkc.project/0", "modules": {
-        "example": "mathematics.zkc", "zkc::vector": "vector.zkc", "zkc::symbolic": "symbolic.zkc"
+        "example": "mathematics.zkc", **{f"zkc::{name}": f"{name}.zkc"
+        for name in ("vector", "symbolic", "accumulation", "curve", "finite", "sequence")}
     }, "assets": {}}))
     checked = json.loads(invoke("math-check", "check", "--project=mathematics.toml",
                                 "example::Run", "--declarations"))

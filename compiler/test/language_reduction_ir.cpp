@@ -12,11 +12,13 @@ const std::string source = R"(module m;
 domain Fr=field("koala-bear");
 domain Ext=field("koala-bear.ext8-binomial3");
 type Vector<F:Field>=builtin("vector",F);
-fn sum<F:Field>(xs:Vector<F>)->F=primitive("vector.sum");
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+fn sum<I:Type+Copy+Drop,F:Field>(rows:scoped domain<I>,term:scoped fn(I)->F !{stop} on(rows))->F !{stop}{return fold(rows,0,fun state item=>state+term(item));}
 reduction ∑=sum;
 math fn square<F:Field>(x:F)->F{return x*x;}
 fn f<F:Field>(xs:Vector<F>,ys:Vector<F>,a:F,b:F)->F{
-  return ∑[(x,_) in zip(xs,ys)]{let shifted=x+b;square(shifted)+a};
+  return ∑ (x,_) in zip(xs,ys),{let shifted=x+b;square(shifted)+a};
 }
 protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,a:Fr@P,b:Fr@P,
                       ext:Vector<Ext>@P,c:Ext@P,d:Ext@P)->(r:Fr@P,s:Ext@P){
@@ -36,11 +38,11 @@ int main() {
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
   cases.run(
-      "generated generic helpers close at two independent scalar fields", [&] {
+      "generic finite binders close at two independent scalar fields", [&] {
         auto entry = close();
         auto original = take(prepareOriginal(entry));
-        require(original.bytes().contains("algebra.map_realize"),
-                "map was not retained");
+        require(original.bytes().contains("data.domain_zip"),
+                "strict domain was not retained");
         take(compileEntry(original));
         take(compileEntry(original, {false, false}));
         auto bytes = take(emitOriginal(entry, context));
@@ -48,56 +50,51 @@ int main() {
         require(bool(parsed), "emission did not parse");
         take(compareOriginal(entry, *parsed));
       });
-  for (const auto &mutation :
-       {"capture-order", "row-order", "scalar-operand", "mask", "map-site",
-        "reducer-site", "reducer-operand", "helper-target"})
+  for (const auto &mutation : {"domain-order", "capture-order",
+                               "scalar-operand", "call-site", "helper-target"})
     cases.run(Twine("source/native comparison rejects ") + mutation, [&] {
       auto entry = close();
       auto bytes = take(emitOriginal(entry, context));
       auto module = mlir::parseSourceString<mlir::ModuleOp>(bytes, &context);
       require(bool(module), "emission did not parse");
-      mlir::Operation *map = nullptr, *sum = nullptr, *formula = nullptr,
-                      *recipe = nullptr;
+      bool changed = false;
       module->walk([&](mlir::Operation *op) {
+        if (changed)
+          return;
         auto name = op->getName().getStringRef();
-        if (name == "local.apply" && !map)
-          map = op;
-        if (name == "algebra.exec.vector_sum" && !sum)
-          sum = op;
-        if (name == "algebra.field_multiply" && !formula)
-          formula = op;
-        if (name == "algebra.map_realize" && !recipe)
-          recipe = op;
+        StringRef change = mutation;
+        if (change == "domain-order" && name == "data.domain_zip") {
+          auto value = op->getOperand(0);
+          op->setOperand(0, op->getOperand(1));
+          op->setOperand(1, value);
+          changed = true;
+        } else if (change == "capture-order" && name == "local.apply" &&
+                   op->getNumOperands() == 4) {
+          auto value = op->getOperand(2);
+          op->setOperand(2, op->getOperand(3));
+          op->setOperand(3, value);
+          changed = true;
+        } else if (change == "scalar-operand" &&
+                   name == "algebra.field_multiply") {
+          mlir::OperationState state(op->getLoc(), "algebra.field_add");
+          state.addTypes(op->getResultTypes());
+          state.addOperands(op->getOperands());
+          auto replacement = mlir::Operation::create(state);
+          op->getBlock()->getOperations().insert(op->getIterator(),
+                                                 replacement);
+          op->getResult(0).replaceAllUsesWith(replacement->getResult(0));
+          op->erase();
+          changed = true;
+        } else if (change == "call-site" && name == "local.apply") {
+          op->setAttr("site", mlir::StringAttr::get(&context, "s999"));
+          changed = true;
+        } else if (change == "helper-target" && name == "local.apply") {
+          op->setAttr("callee",
+                      mlir::FlatSymbolRefAttr::get(&context, "missing"));
+          changed = true;
+        }
       });
-      require(map && sum && formula && recipe, "missing reduction structure");
-      StringRef change = mutation;
-      if (change == "capture-order" || change == "row-order") {
-        unsigned left = change == "row-order" ? 0 : 2;
-        auto operand = map->getOperand(left);
-        map->setOperand(left, map->getOperand(left + 1));
-        map->setOperand(left + 1, operand);
-      } else if (change == "scalar-operand") {
-        // Change the scalar operation while retaining its operands and types.
-        mlir::OperationState state(formula->getLoc(), "algebra.field_add");
-        state.addTypes(formula->getResultTypes());
-        state.addOperands(formula->getOperands());
-        auto changed = mlir::Operation::create(state);
-        formula->getBlock()->getOperations().insert(formula->getIterator(),
-                                                    changed);
-        formula->getResult(0).replaceAllUsesWith(changed->getResult(0));
-        formula->erase();
-      } else if (change == "mask") {
-        recipe->setAttr("rowwise", mlir::DenseBoolArrayAttr::get(
-                                       &context, {true, false, false, false}));
-      } else if (change == "map-site")
-        map->setAttr("site", mlir::StringAttr::get(&context, "s999"));
-      else if (change == "reducer-site")
-        sum->setAttr("site", mlir::StringAttr::get(&context, "s999"));
-      else if (change == "reducer-operand")
-        sum->setOperand(0, map->getOperand(0));
-      else if (change == "helper-target")
-        recipe->setAttr("helper",
-                        mlir::FlatSymbolRefAttr::get(&context, "missing"));
+      require(changed, "missing finite mutation target");
       auto result = compareOriginal(entry, *module);
       require(!result, "mutated original accepted");
       auto error = toString(result.takeError());
@@ -109,22 +106,26 @@ int main() {
     auto entry = close(
         R"(module m;domain Fr=field("koala-bear");type Vector<F:Field>=builtin("vector",F);
       fn custom(xs:Vector<Fr>)->Fr{stop "reject";}
-      fn f(xs:Vector<Fr>)->Fr{return reduce custom[x in xs]{x};}
+      fn collect<I:Type+Copy+Drop,F:Field>(rows:scoped domain<I>,term:scoped fn(I)->F !{stop} on(rows))->Vector<F> !{stop}=finite("local.collect.vector");
+      fn f(xs:Vector<Fr>)->Fr{let terms=collect(xs,fun x=>x);return custom(terms);}
       protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return(r=f(xs));}run Run=Demo;)");
     auto original = take(prepareOriginal(entry));
     require(original.bytes().contains("local.stop") &&
-                original.bytes().contains("algebra.map_realize"),
+                original.bytes().contains("local.finite_collect"),
             "custom stop was replaced");
     take(compileEntry(original));
   });
   cases.run("binders in local branches and loops preserve lexical captures", [&] {
     auto entry = close(
         R"(module m;domain Fr=field("koala-bear");type Vector<F:Field>=builtin("vector",F);
-      fn sum<F:Field>(xs:Vector<F>)->F=primitive("vector.sum");
+      domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+fn sum<I:Type+Copy+Drop,F:Field>(rows:scoped domain<I>,term:scoped fn(I)->F !{stop} on(rows))->F !{stop}{return fold(rows,0,fun state item=>state+term(item));}
+      reduction ∑=sum;
       fn f(xs:Vector<Fr>,a:Fr,b:bool,n:index)->Fr{
         let mut acc=a;
-        for _ in 0..n {acc=acc+reduce sum[x in xs]{x*a};}
-        return if b {reduce sum[x in xs]{x+a}} else {acc};
+        for _ in 0..n {acc=acc+(∑ x in xs,x*a);}
+        return if b {∑ x in xs,(x+a)} else {acc};
       }
       protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:bool@P,n:index@P)->(r:Fr@P){return(r=f(xs,a,b,n));}run Run=Demo;)");
     take(compileEntry(take(prepareOriginal(entry))));

@@ -148,6 +148,7 @@ constexpr ContractRow contractRows[] = {
     {"matrix.transpose_mul_vector", Arithmetic},
     {"matrix.bilinear", Arithmetic},
     {"matrix.dimension", Arithmetic},
+    {"matrix.get", Arithmetic},
     {"matrix.shape_check", Arithmetic},
     {"matrix.identity_check", Arithmetic},
     {"poly.coefficient_count", Arithmetic},
@@ -183,6 +184,7 @@ constexpr ContractRow contractRows[] = {
     {"curve.split", Arkworks | Dalek},
     {"curve.concat", Arkworks | Dalek},
     {"curve.generator", Arkworks | Dalek},
+    {"curve.identity", Arkworks | Dalek},
     {"curve.add", Arkworks | Dalek},
     {"curve.scale", Arkworks | Dalek},
     {"curve.equal", Arkworks | Dalek},
@@ -222,6 +224,7 @@ constexpr ContractRow contractRows[] = {
     {"field_array.from_vector", Arkworks, Compatibility::Nominal,
      "bls12-381.fr"},
     {"field_array.at", Arkworks, Compatibility::Nominal, "bls12-381.fr"},
+    {"field_array.get", Arkworks, Compatibility::Nominal, "bls12-381.fr"},
     {"fixed_vector.from_vector", Plonky3, Compatibility::Nominal, "koala-bear"},
     {"fixed_vector.to_vector", Plonky3, Compatibility::Nominal, "koala-bear"},
     {"fixed_vector.dot", Plonky3, Compatibility::Nominal, "koala-bear"}};

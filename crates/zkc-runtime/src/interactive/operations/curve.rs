@@ -3,6 +3,8 @@ use super::*;
 use Type::*;
 
 pub(super) const CONTRACTS: &[Contract] = &[
+    Contract::selectable("curve.identity", (&[], &[Group], AttributeRule::None))
+        .implemented_by(&["arkworks/curve.identity", "dalek/curve.identity"]),
     Contract::selectable("curve.neg", (&[Group], &[Group], AttributeRule::None))
         .implemented_by(&["arkworks/curve.neg", "dalek/curve.neg"]),
     Contract::selectable(

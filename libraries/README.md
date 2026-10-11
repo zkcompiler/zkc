@@ -9,10 +9,19 @@ concrete domains, Entries and transcript constructions in
 
 | Module | Public exports | Contract |
 |---|---|---|
-| [`zkc::vector`](zkc/vector.zkc) | `Vector`, length/get/sum/product/split/add/hadamard/scale/dot/fill/fold/has_length, reduction bindings `∑`/`∏` | Ordered finite vectors; fold pairs contiguous halves |
-| [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, multiply/transpose_multiply/bilinear/rows/columns | Ordered sparse matrix operations |
+| [`zkc::finite_domain`](zkc/finite_domain.zkc) | range/zip/product/array | Finite traversal recipes; zip is strict and product is lexicographic |
+| [`zkc::finite`](zkc/finite.zkc) | fold/collect/accumulate/sum/product/group_sum and filtered forms | Ordered Local computations with scoped callbacks and explicit state |
+| [`zkc::finite_math`](zkc/finite_math.zkc) | Total counterparts of the finite functions | Mathematical callbacks; every domain formation and bounded read must be justified |
+| [`zkc::accumulation`](zkc/accumulation.zkc) | `Combiner`, `FieldSum`, `FieldProduct`, `GroupSum` | Explicit identity/combine implementations; no associativity or commutativity is inferred |
+| [`zkc::indices`](zkc/indices.zkc) | `Indices`, empty/append/length/get/at/elements/indices/collect | Ordered index collections, checked and total access, finite traversal |
+| [`zkc::computation`](zkc/computation.zkc) | apply_math/forward_math/apply/forward/twice | Generic statically bound scoped computations; explicit fixed modes and Local effect allowances |
+| [`zkc::vector`](zkc/vector.zkc) | `Vector`, length/get/at/elements/indices/sum/product/split/add/hadamard/scale/dot/fill/collect/collect_where/reduce/fold/has_length, reduction bindings `∑`/`∏` | Ordered finite vectors; fold pairs contiguous halves |
+| [`zkc::sequence`](zkc/sequence.zkc) | `Sequence`, empty/append/length/get/at/elements/indices | Immutable sequences of executable Copy + Drop elements, including source products |
+| [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, get/at/multiply/transpose_multiply/bilinear/rows/columns and explicit finite views | Ordered sparse matrix operations |
+| [`zkc::field_array`](zkc/field_array.zkc) | `Array`, from_vector/get/at/elements/indices/collect | Fixed-length field arrays with checked native construction and dynamic access |
 | [`zkc::polynomial`](zkc/polynomial.zkc) | `Polynomial`, from_coefficients/evaluate/boundary | Runtime univariate polynomial data; boundary is p(0) + p(1) |
 | [`zkc::symbolic`](zkc/symbolic.zkc) | `Array`, `Polynomial`, pack/get/mle/from_coefficients/coefficients/evaluate/fix_prefix/sum_suffix/fix_table/add/multiply/constant | Total formal polynomial expressions |
+| [`zkc::curve`](zkc/curve.zkc) | identity, `Groups`, elements/indices/at/collect | Total group zero, group collection traversal and bounded access |
 | [`zkc::boolean`](zkc/boolean.zkc) | both/either/different/negate | Total Boolean formulas; eager operands |
 | [`schnorr`](schnorr/lib.zkc) | `DLog<G>`, `Schnorr<G>` | Discrete-log relation and three-message group protocol |
 | [`sumcheck`](sumcheck/lib.zkc) | `Sumcheck<F, Max>` | Bounded multilinear Sumcheck over a public evaluation table |
@@ -23,6 +32,71 @@ concrete domains, Entries and transcript constructions in
 
 ### Mathematics
 
+`zkc::computation` demonstrates ordinary user-defined combinators. Its Math
+functions accept total scoped bodies; its Local functions allow `stop` and
+support affine explicit inputs. Captures require Copy+Drop and become explicit
+private-helper arguments. The [component client](../examples/projects/scoped-computations/README.md)
+forwards nested callbacks with record/vector captures and a checked lookup.
+
+### Finite computations
+
+The finite libraries use ordinary statically bound scoped functions. The input
+item, accumulated state and output element can have different types. For example:
+
+```text
+use zkc::finite as finite;
+use zkc::finite_domain as domains;
+
+let dot = finite::sum(domains::zip(xs, ys), fun (x, y) => x * y);
+let decimal = finite::fold(xs, initial, fun state x => state * 10 + x);
+let selected = finite::sum_where(rows, fun row => row.enabled,
+                                fun row => checked_value(row));
+```
+
+A native vector, group vector, sequence, index collection or fixed array supplied
+at a domain parameter traverses its elements in storage order. Source arrays
+use their existing fixed shape. `elements` names the same traversal explicitly;
+`indices` yields positions tied to that exact input. Scalars and matrices have
+no implicit element traversal. Matrix views are explicit: `row_values`,
+`column_values`, `row_indices`, `column_indices`, `coordinates` (row-major) and
+`column_coordinates`. A strict zip validates every child extent before entering
+its body, including ignored rows and empty inputs. A product traverses all pairs
+in lexicographic order. Nested calls construct inner domains only when reached.
+
+`fold` uses its explicit initial state. `collect` returns a `Sequence<T>`;
+representation-specific `vector::collect`, `curve::collect` and `indices::collect`
+return their native containers. `field_array::collect` is total and requires an
+exact proven cardinality. Filtered forms evaluate their predicate before the
+body and skip the body on false. Predicate failures propagate.
+
+`accumulate<I, T, C>` starts from `C::identity()` and applies `C::combine` in
+traversal order. The `Combiner<T>` interface supplies total operations without
+claiming algebraic laws. The field sum/product and group sum functions select
+standard components. A custom nonassociative combiner still preserves order;
+no optimization law follows just from implementing the interface. Group sums
+require `ScalarAction(G)`, including empty sums.
+
+`vector::reduce(rows, body, reducer)` materializes the body results before
+calling the arbitrary scoped reducer exactly once. The reducer sees the whole
+vector and may reject even an empty one. This differs from accumulation; the
+compiler does not infer an incremental implementation for a user reducer.
+
+`finite_math` uses the same domain and capture infrastructure with total Math
+callbacks. `vector::at`, `sequence::at`, `curve::at`, `indices::at` and
+`matrix::at` require proven bounds. Their checked `get` counterparts retain
+ordinary Local failure behavior where provided.
+
+The vector, matrix, curve, sequence, indices and field-array modules export
+library-owned indexing bindings to their total `at` functions. Import
+`indexing []` to write `values[position]` or `matrix[row, column]`; the same
+bound requirements apply as for the named call. A body-local declaration such
+as `indexing values[position] = zkc::vector::get(values, position);` selects
+checked Local access explicitly. See the [notation guide](../docs/language/notation.md#index-collections).
+The [finite computation example](../examples/projects/finite-computations/README.md)
+combines named functions, records, matrix views and total mathematical helpers.
+
+### Native mathematics and containers
+
 Import only the modules a client needs. Native `fn` definitions retain ordered
 execution and the kernels' possible stop behavior: vector split/fold requires a
 positive even length, point access checks bounds, arithmetic checks lengths,
@@ -32,6 +106,29 @@ It fixes one Boolean coordinate of an evaluation table. FRI folding additionally
 uses its coset points and keeps its separate domain-specific operation.
 `has_length<F, N>` compares the dynamic
 length with explicit static `N`; it does not resize or pad a vector.
+
+`zkc::matrix::get(matrix, row, column)` checks both dynamic coordinates and
+returns the coefficient in the matrix's field. An absent in-range sparse cell
+is zero; an out-of-range coordinate stops execution, including every access to
+a matrix with either dimension zero.
+`zkc::field_array::from_vector<F, N>(values)` checks that the vector has exactly
+`N` elements. `zkc::field_array::get(array, position)` checks `position < N`.
+Both are ordinary native functions; fixed field arrays currently execute only
+over BLS12-381 Fr. This `Array` has the same type as `zkc::symbolic::Array`.
+The symbolic module's static `get<F, N, I>` retains its mathematical bound
+requirement. A dynamic `index` alone establishes no such bound.
+
+`zkc::sequence::Sequence<T>` stores executable `Copy + Drop` values, including
+records, tuples, fixed source arrays, unit and nested sequences. `empty<T>()`
+creates an empty sequence, `append(values, value)` returns the extended sequence,
+`length(values)` returns an index, and `get(values, position)` stops when the
+zero-based position is out of bounds. These are ordinary ordered `fn` primitives.
+Products are packed only at the sequence element boundary; functions taking or
+returning records still use the ordinary source ABI. Generic helpers retain the
+written Copy/Drop requirements. Private fields and restricted constructors retain
+their module authority, and sequence formation grants no Wire permission.
+Native JSON/wire codecs retain the packed variant's nominal descriptor and ordered
+payload; decoding does not construct private source values through a Wire boundary.
 
 `zkc::symbolic::Polynomial<F, N>` is a formal expression with `N` variables.
 `zkc::polynomial::Polynomial<F>` is runtime univariate coefficient data. Use
@@ -60,6 +157,10 @@ and operators share the compiler's native operation identities. Asset-specific
 ring operations and component-specific PCS operations stay in their owning
 libraries, using explicit asset/component parameters and installed kernels.
 
+Use `zkc::curve::identity<G>()` for a nullary mathematical group zero. Its
+result fixes the exact group; no point is needed, including for empty sums.
+This is distinct from the native generator and empty group-vector operations.
+
 Import a whole math module to enable its public operators, for example
 `use zkc::vector as vec;`. Vector `+` calls `add`; vector `*` calls `scale` with
 the scalar on the right. Matrix `*` calls `multiply` on a matrix and vector.
@@ -75,14 +176,12 @@ defines ambiguity and local replacement rules. The
 [notation guide](../docs/language/notation.md) shows weighted vector expressions,
 delimiter declarations and Unicode input. Symbols preserve ordinary callable
 modes and effects; they supply no additional algebra, optimizer or security claim.
-The library owns `pub reduction ∑ = sum;` and `pub reduction ∏ = product;`.
-Write `∑ [x in xs] { x * x }` or the named
-`reduce vec::sum [x in xs] { x * x }`; selective imports use `reduction ∑`
-and `reduction ∏`. Multiple rows require explicit strict zip, including guards
-for ignored rows. `sum` returns zero on empty vectors and `product` returns one;
-`product` reduces one vector to a scalar, unlike pairwise `hadamard`.
-The [finite reduction guide](../docs/language/notation.md#reduce-finite-vectors)
-explains scalar snapshots and the restricted field-ring body.
+The vector module reexports `finite`'s paired sum/product notation. Write
+`∑ x in xs, x * x` or `finite::sum(xs, fun x => x * x)`. Selective imports use
+`reduction ∑` and `reduction ∏`; filters use `with`. Strict zip retains checks
+for ignored rows. Named `vec::sum(xs)` and `vec::product(xs)` still reduce an
+already constructed vector. The [finite reduction guide](../docs/language/notation.md#reduce-finite-domains)
+explains general domains, scoped bodies, precedence and Local/Math selection.
 
 These functions use `primitive` bodies when their ports determine the installed
 scheme. Algorithms and operations with explicit attributes retain ordinary bodies.

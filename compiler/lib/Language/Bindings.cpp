@@ -3,7 +3,7 @@
 using namespace llvm;
 namespace zkc::language::detail {
 std::optional<std::pair<BindingId, std::vector<unsigned>>>
-BodyChecker::sourcePlace(uint32_t id, unsigned depth) {
+BodyChecker::sourcePlace(uint32_t id, unsigned depth, bool optional) {
   const auto &expr = syntax.expressions[id];
   if (depth > checker.work.limits.expressionDepth ||
       !checker.types.charge(1, expr.span)) {
@@ -13,28 +13,48 @@ BodyChecker::sourcePlace(uint32_t id, unsigned depth) {
   }
   if (expr.kind == Expression::Kind::Name) {
     if (!expr.binding || !bindings.count(*expr.binding)) {
-      fail("source.name", "expected an available data binding: " + expr.text,
-           expr.span);
+      if (!optional)
+        fail("source.name", "expected an available data binding: " + expr.text,
+             expr.span);
       return {};
     }
     return std::make_pair(*expr.binding, std::vector<unsigned>{});
   }
-  if (expr.kind != Expression::Kind::Projection) {
-    fail("source.place", "field access requires a named place", expr.span);
+  if (expr.kind != Expression::Kind::Projection &&
+      expr.kind != Expression::Kind::Subscript) {
+    if (!optional)
+      fail("source.place", "field access requires a named place", expr.span);
     return {};
   }
-  auto base = sourcePlace(expr.children.front(), depth + 1);
+  auto base = sourcePlace(expr.children.front(), depth + 1, optional);
   if (!base)
     return {};
   auto type = projected(bindings.at(base->first).type, base->second, expr.span);
   if (!type)
     return {};
+  if (expr.kind == Expression::Kind::Subscript &&
+      type->kind != Type::Kind::Array) {
+    if (!optional)
+      fail("source.place",
+           "projection requires a named place; bind the indexed value with let "
+           "first",
+           expr.span);
+    return {};
+  }
   if (expr.bracket != (type->kind == Type::Kind::Array)) {
     fail("source.index", "use brackets for arrays and dots for product fields",
          expr.span);
     return {};
   }
-  auto index = checker.types.fieldIndex(decl, *type, expr.text, expr.span);
+  auto label = expr.kind == Expression::Kind::Subscript
+                   ? staticSubscriptIndex(syntax, expr)
+                   : std::optional<StringRef>(expr.text);
+  if (!label) {
+    fail("source.index", "fixed arrays require a static numeric index",
+         expr.span);
+    return {};
+  }
+  auto index = checker.types.fieldIndex(decl, *type, *label, expr.span);
   if (!index)
     return {};
   base->second.push_back(*index);

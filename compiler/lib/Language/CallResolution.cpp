@@ -1,6 +1,18 @@
 #include "BodyCheck.h"
 using namespace llvm;
 namespace zkc::language::detail {
+bool Checker::domainExpression(const Declaration &decl,
+                               const SyntaxDeclaration &syntax, uint32_t id) {
+  const auto &expr = syntax.expressions[id];
+  if (expr.kind == Expression::Kind::Name && expr.binding)
+    return syntax.bindings[expr.binding->index].domain;
+  if (expr.kind != Expression::Kind::Call || expr.binding ||
+      expr.text == "index" || expr.text == "unpack")
+    return false;
+  auto target = callable(decl, expr.text, expr.span);
+  return target && output.declarations[target->declaration.index].kind ==
+                       Declaration::Kind::DomainFunction;
+}
 std::optional<CallableReference> Checker::callable(const Declaration &decl,
                                                    StringRef name, Span span) {
   auto parts = name.split("::");

@@ -4,7 +4,7 @@ use crate::{Policy, Result, Value, ark, exhausted, refused};
 use crate::{SetupRegistry, resource::Resources};
 use std::collections::HashSet;
 use zkc_runtime::interactive::{
-    AttributeRule, Frame, FrameKind, Invocation, Type, Value as RuntimeValue,
+    AttributeRule, Frame, FrameKind, Invocation, Retained, Type, Value as RuntimeValue,
 };
 
 pub(super) struct Core {
@@ -25,22 +25,31 @@ impl Core {
         }
     }
     pub(super) fn validate(&self, v: &Value) -> Result<()> {
+        self.validate_retained(v, Retained::NONE)
+    }
+    pub(super) fn validate_retained(&self, v: &Value, retained: Retained<'_>) -> Result<()> {
         self.policy.output(v.retained_bytes(), usize::MAX)?;
         if let Some(t) = v.capability() {
             self.resources.validate(t, v.ty())?;
         }
         let metadata = match v {
             Value::Sequence(sequence) => {
-                sequence.validate(&self.policy)?;
-                for element in sequence.elements() {
-                    self.validate(element)?;
+                if sequence
+                    .validation_backing()
+                    .is_some_and(|b| retained.contains(b))
+                {
+                    return Ok(());
                 }
+                sequence.validate(&self.policy)?;
+                sequence.validate_children(retained, &mut |element| {
+                    self.validate_retained(element, retained)
+                })?;
                 return Ok(());
             }
             Value::Variant(variant) => {
                 variant.validate()?;
                 for payload in variant.payload() {
-                    self.validate(payload)?;
+                    self.validate_retained(payload, retained)?;
                 }
                 return Ok(());
             }
@@ -269,9 +278,14 @@ impl Core {
         }
         Ok(())
     }
-    pub(super) fn enter(&mut self, frame: &Frame, args: &[Value]) -> Result<()> {
+    pub(super) fn enter(
+        &mut self,
+        frame: &Frame,
+        args: &[Value],
+        retained: Retained<'_>,
+    ) -> Result<()> {
         for v in args {
-            self.validate(v)?;
+            self.validate_retained(v, retained)?;
         }
         if matches!(frame.kind(), FrameKind::Entry) {
             if !self.entry.domain.matches(frame) {
@@ -384,7 +398,7 @@ impl Core {
             _ => return Err(refused("kernel-attributes")),
         }
         for v in args {
-            self.validate(v)?;
+            self.validate_retained(v, i.retained)?;
         }
         Ok(())
     }
@@ -413,12 +427,14 @@ impl Core {
         // does not need room for a second copy of that child.
         let mut held = HashSet::new();
         for argument in args {
-            argument.retained_parts(&mut |backing| held.insert(backing));
+            argument.retained_parts(&mut |backing| {
+                !i.retained.contains(backing) && held.insert(backing)
+            });
         }
         let mut fresh = 0u128;
         for value in &values {
             let owned = value.retained_parts(&mut |backing| {
-                if !held.insert(backing) {
+                if i.retained.contains(backing) || !held.insert(backing) {
                     return false;
                 }
                 fresh += backing.bytes() as u128;

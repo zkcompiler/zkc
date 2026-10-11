@@ -60,8 +60,9 @@ primitive definitions and an embedded scalar prelude,
 local short-circuit Boolean operators and total Boolean formulas, inferred catalog/natural
 preconditions with explicit contract checking, unified data/service arguments,
 source rejection with `require`, formal polynomial intrinsics, checked
-pointwise `map` of scalar helpers over vectors, finite field-vector reductions,
-local control,
+pointwise `map` of scalar helpers over vectors, general finite reductions,
+statically bound scoped Math/Local callbacks with generic apply/forward and
+component wrappers, local control,
 messages, services, static protocol composition, bounded repetition and conditional completion.
 Independent source comparison checks emitted MLIR against checked definitions;
 [source semantics](spec/language/README.md) owns exact limits.
@@ -80,14 +81,52 @@ Abstract member-generic signatures can be checked and inspected, but components
 implementing them are not supported.
 Resource permission inference, implicit role remapping, natural equation solving
 and inversion of associated types are outside the source profile.
-[Finite reduction binders](spec/language/definitions.md#finite-vector-reductions)
-support named reducers and library-owned `∑`/`∏`, explicit strict zip and
-immutable same-field scalar captures in module-level local functions. Protocols
-call those functions; direct protocol, math-function and component-member binders
-are outside this profile. Nested binders, arbitrary collections,
-effectful/non-ring scalar bodies and aggregate or mutable captures are outside
-this profile. Generated helpers retain lexical identities and counted bounds;
-a separate extraction witness precedes source-to-IR comparison.
+[Scoped computations](spec/language/definitions.md#scoped-computations) use the
+ordinary checked Body and type solver. Projection-aware Copy+Drop captures,
+mutable snapshots, static scoped captures and lexical component resolution close
+to ordinary private helpers with explicit environment inputs. Independent
+capture and specialization checks reject mapping and coverage mutations before
+source-to-MLIR comparison. Compiler and native tests cover fixed modes, effects,
+owner inference, forwarding, aggregate captures and authored evaluation order.
+Runtime function values, escaping computations, outer writes and captured
+services are unsupported.
+[Finite domains](spec/language/definitions.md#finite-domains) support registered
+constructors, composed factories, component selection, static helper arguments,
+callback captures and nested local/protocol control. Joint closure retains
+immutable operand aliases and independent witnesses check closed recipes and
+capture layouts. Source checking and native tests cover forwarding, zero trips,
+participant availability and specialization mutations. Registered finite folds
+and collects now reach retained finite IR through independently checked adapters.
+Native source tests cover ordered and Unit state, mixed state dependencies,
+filtered stops, strict zip admission, packed record sequences, repeated calls,
+dependent inner ranges and mutable capture snapshots. Fixed source arrays now
+adapt through independently checked sequence construction, including records,
+empty arrays and Unit items. Source item-provenance checks
+now cover generic restricted forwarding, named argument order, nested captures
+and invariant local-region inputs, including independent witness revalidation.
+Retained witnesses also check formal callback slots and authored invocation
+identities through nested regions. Total index literals, static natural index construction and comparisons now
+support mathematical ranges and filters through ordinary realization. Total
+access now uses exact item/container bounds, declared Math input conditions and
+callee-first closure requirements. Native checks independently discharge each
+call and finite callback, including equal-extent captures. Closed source checks
+cover all retained zip/matrix-view formation and exact fixed collection sizes;
+sequence constructor evidence preserves fixed-array lengths across adapters.
+Fixed field-array output follows the installed BLS12-381.Fr contracts; other
+field backends may lack that realization. The [shared libraries](../libraries/README.md#finite-computations)
+now expose ordered and total folds, collection, explicit combiner components,
+field/group accumulation, filters and materialized vector reducers. Ordinary
+collection arguments share one checked conversion at scoped-domain parameters;
+matrices require explicit views. Source/native tests exercise records, group
+commitments, nonassociative order, nested domains, skipped inverse failures and
+reducer failure order. [Finite binders](spec/language/definitions.md#finite-reduction-binders)
+now use that same path: Local and total Math targets, filters, independent products,
+dependent nesting, aggregate captures and direct protocol/component use. One
+lexical binding is selected before body/result inference. Shared source/domain/
+scoped witnesses replace the old ring-only extraction checker. Library-owned indexing now uses the same typed callable selection and retained
+binding checks. Standard vector, matrix, group, sequence, index and field-array
+modules expose total access; checked Local access requires explicit rebinding.
+Static source-array projections retain their existing capture paths.
 The staged parser resolves
 notation environments after imports and before bodies. Callable notation uses
 ordinary signature constraints and authored evaluation order, with descriptor
@@ -122,15 +161,18 @@ alone add no runtime guard, satisfaction fact or security theorem.
 | Capability | Support and boundary |
 |---|---|
 | Scalar, tensor and polynomial mathematics | Total expressions and checked realization recipes; [structured mathematics](compiler/mathematics.md). Kernel installation alone does not supply a mathematical recipe. |
+| Group identity | Total `intrinsic<G>("curve.identity")`, Algebra identity and independently checked native recipe. Dalek Ristretto255; arkworks BLS12-381 G1 and BN254 G1/G2/GT, including multiplicative-one GT. Empty MSM identity is checked for the four installed dense group families; [contract](spec/domains/values.md#group-identity). No native proof claim. |
 | Shared expression evaluation | Captured [Ring and Bundle terms](spec/language/definitions.md#asset-domains-and-projections), derived static dimensions, retained Entry assets and independent Host preflight. [Checked structural sharing](spec/domains/ring-expressions.md#structural-sharing) preserves ordered substitution and read obligations. The [generic Sumcheck library](../libraries/README.md#expression-sumcheck) derives its width and degree from its Ring parameter; it remains a public-table client without a PCS or native security theorem. |
 | Source clients of imported AIR | The [imported AIR client](../examples/projects/imported-air/README.md) checks actual trace, configuration and public inputs. The [AIR STARK client](../examples/projects/air-stark/README.md) adds base-field trace commitments, scoped extension-field quotient chunks, OOD/DEEP equations and FRI through ordinary source libraries and separate proof Hosts. The single-table profile covers one present table's assertions; the machine profile adds whole-Bundle Boolean multiset interactions. Security reductions for both remain separate work. |
 | Pointwise vector maps | Source `map` applies one static scalar `math fn` over installed field vectors through [checked bulk vector operations](spec/ir/protocols.md#checked-pointwise-maps): shapes first and O(formula) code. The matcher reads the generated body independently but shares the realizer's formula derivation. Shape mismatches are backend failures (`rejected:require`); field constants, addition, subtraction and multiplication are limited to Ring depth 1,024. The [KoalaBear/Ext8 comparison](../common/tests/kernels/test_pointwise_polynomials.py) checks maps, Ring rows and coefficients, and coset kernels against integer arithmetic, including the off-domain interpolation distinction. [Lean map laws](../lean/Zkc/Algebra/RingExpression/Pointwise.lean) cover values, refusals and realization for a list model, without native correspondence. There is no dedicated row kernel, backend ABI or first-class function value. |
-| Finite vector reductions | [Source binders](spec/language/definitions.md#finite-vector-reductions) use the same maps and ordinary reducer calls. Native `vector.product` has empty identity one on BLS12-381 Fr, BN254 Fr, Ristretto scalar, KoalaBear and KoalaBear Ext8, with independent C++/Rust admission and normal resource charges. Default-false [fusion](spec/ir/protocols.md#optional-vector-reduction-fusion) handles adjacent single-use multiply-map/native-sum with every original row guard retained. Its relation is values and ordered shape refusals under sufficient resources, not equal exhaustion or a memory bound. Independent [Lean map/reduction laws](../lean/docs/spec/core/ring-expressions.md) do not establish source extraction or native runtime correspondence. |
+| Finite vector reductions | [Source binders](spec/language/definitions.md#finite-reduction-binders) use general scoped consumers and finite IR. Arbitrary vector reducers collect first and call once. Native `vector.product` has empty identity one on BLS12-381 Fr, BN254 Fr, Ristretto scalar, KoalaBear and KoalaBear Ext8, with independent C++/Rust admission and normal resource charges. Default-false [fusion](spec/ir/protocols.md#optional-vector-reduction-fusion) handles adjacent single-use multiply-map/native-sum with every original row guard retained. Its relation is values and ordered shape refusals under sufficient resources, not equal exhaustion or a memory bound. Independent [Lean map/reduction laws](../lean/docs/spec/core/ring-expressions.md) do not establish source extraction or native runtime correspondence. |
+| General finite IR | [Typed domains and total/Local fold and collect](spec/ir/finite.md) retain static helpers, complete entry admission, exact bound provenance and state dependency closure. Checked loop fallback and native sum/product/dot/MSM, elementwise fields and selected matrix contractions use an independent candidate reader. [Handwritten controls](../compiler/test/fixtures/finite/README.md) cover mutations, failures and 2^17 field workloads. Full fixed-array/matrix fallback additionally requires the native checked-access contracts; the source frontend now uses checked adapters into this IR. No Lean-to-native bridge is claimed. |
 | Calls, roles and control | Static application, role projection, structured local control, nested repetition and [conditional completion](compiler/control.md). General dynamic protocol composition remains open. |
-| Structured values | Products, alternatives, extents, checked indexing and [nested immutable data](compiler/mathematics.md), including independently shaped matrices; affine sequence elements are excluded. |
+| Structured values | Products, alternatives, extents, checked indexing and [nested immutable data](compiler/mathematics.md), including independently shaped matrices; source sequence elements include contextually packed records, tuples, source arrays and empty products, with explicit packing/unpacking and source comparison; affine and non-Drop elements are excluded. Persistent sequence storage and retained validation support default-budget Local collection of 16,384 indices and 8,192 two-index records in maintained controls. Whole-value encoding has a separate peak-storage limit; a collection that executes locally can exceed it when exported. |
 | Affine resources and services | Exact-origin analysis, state successors, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |
 | FRI source library | [Binary FRI](../examples/projects/fri/README.md) over natural-order two-adic cosets, with commitment/fold/query/terminal checks and independent-reference tests. The AIR library consumes the authenticated positions and values. Security theorems remain separate obligations. |
 | General numerical composition | Installed field/group/vector/matrix, polynomial, pairing and oracle kernels with [composed clients](compiler/mathematics.md) and [changing numeric state](compiler/mathematics.md). Complete Groth16 and range-proof applications remain separate work. |
+| Checked element access | `matrix.get` preserves BLS12-381 Fr, BN254 Fr, Ristretto255 scalar, KoalaBear and KoalaBear Ext8; missing in-range sparse cells yield zero. `field_array.get` accepts a dynamic index over native BLS12-381 Fr arrays; static `field_array.at` remains available. Both check bounds, including empty shapes and huge indices. The libraries also expose total `at` access under checked input conditions; finite domain indices and matrix views can discharge these bounds. |
 | Relations | Bounded R1CS/AIR data import and Assets, exact [relation bindings](compiler/relations.md), a [native R1CS reduction adapter](compiler/relations.md), and an isolated [Plonky3 AIR adapter](../compiler/adapters/plonky3/README.md) checked differentially against its pinned upstream. Import does not prove upstream source adequacy. |
 | Multi-table relations | [Relation bundles](spec/domains/relation-bundles.md) have independent C++ and Rust admission and evaluation of deterministic data and challenge-dependent staged predicates. Captured Bundles retain an explicit source relation ABI, table/public/channel counts, polynomial facts, interaction descriptors and simultaneous record substitution. The external [accumulator-machine adapter](../compiler/adapters/accumulator-machine/README.md) supplies a CPU/program/memory relation and independent staged LogUp/grand-product references. The [source machine proof](../examples/projects/accumulator-machine/README.md) commits base, auxiliary and quotient columns, checks OOD identities and composes one FRI instance. Its selected profile has three tables with independent two-adic heights, optional presence and global all-row Boolean multiset interactions. Absent fixed-height and configured-height tables still face active polynomial height checks, which can refuse valid absent tables. Arbitrary table counts and other interaction profiles remain library work; relation adequacy and cryptographic soundness are not established by these executions. |
 | OpenVM relation comparison | The optional [OpenVM adapter](../compiler/adapters/openvm/README.md) captures five upstream AIRs for a KoalaBear RV32 branch slice. Upstream recorder/DAG/debug checks, the adapter evaluator and both native Bundle evaluators agree on selected traces and mutations. Its memory-bus test partner permits inconsistent reads, so these checks establish neither execution nor termination under VM semantics, nor authentication of initial memory. Deployed BabyBear, persistent memory, full ISA and OpenVM proof compatibility are outside this selection. Its field-balance relation is separate from the Boolean-multiset machine proof profile. |

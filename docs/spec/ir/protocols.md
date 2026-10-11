@@ -61,8 +61,8 @@ exact types, degree checks and realization.
 
 
 The scalar total vocabulary is field addition, multiplication and equality; group
-addition, scalar action and equality; ordered bilinear pairing into its declared
-target group; and the following closed subset of MLIR
+identity, addition, scalar action and equality; ordered bilinear pairing into its
+declared target group; and the following closed subset of MLIR
 `arith`. Domains are installed logical identities. Scalar action uses the
 group's associated scalar field, including zero and group identity.
 

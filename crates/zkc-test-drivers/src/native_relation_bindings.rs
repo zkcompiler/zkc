@@ -141,7 +141,7 @@ fn reference(family: &str, values: &[Value]) -> bool {
         let Value::Vector(z) = &values[2] else {
             panic!("assignment")
         };
-        if matrices.elements().len() != 3
+        if matrices.len() != 3
             || z.len() <= public.len()
             || z[0] != Scalar::from(1)
             || z[1..=public.len()] != **public
@@ -149,7 +149,7 @@ fn reference(family: &str, values: &[Value]) -> bool {
             return false;
         }
         let mut products = Vec::new();
-        for matrix in matrices.elements() {
+        for matrix in matrices.iter() {
             let Value::Matrix(matrix) = matrix else {
                 panic!("matrix")
             };
@@ -176,7 +176,6 @@ fn reference(family: &str, values: &[Value]) -> bool {
             panic!("trace")
         };
         let rows: Vec<_> = trace
-            .elements()
             .iter()
             .map(|row| {
                 let Value::Vector(row) = row else {

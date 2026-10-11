@@ -4,6 +4,15 @@ use Type::*;
 
 pub(super) const CONTRACTS: &[Contract] = &[
     Contract::selectable(
+        "matrix.get",
+        (&[Matrix, Index, Index], &[Field], AttributeRule::None),
+    )
+    .implemented_by(&[
+        "arkworks/matrix.get",
+        "dalek/matrix.get",
+        "plonky3/matrix.get",
+    ]),
+    Contract::selectable(
         "matrix.mul_vector",
         (&[Matrix, Vector], &[Vector], AttributeRule::None),
     )

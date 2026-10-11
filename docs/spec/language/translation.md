@@ -14,7 +14,53 @@ and owners enter the checked graph. Type and resource uses are checked in source
 order without guessing owners. Checks that depend on component sets run after
 selection. Closing an Entry substitutes already checked bodies;
 it never reparses templates. Closed instances are memoized by declaration, mode
-and exact static type identity. Only closed definitions enter original MLIR.
+and exact static type identity, including selected scoped helper identities,
+closed domain shapes and the validated input alias layout.
+Only closed definitions enter original MLIR.
+
+[Scoped computations](definitions.md#scoped-computations) retain the same checked
+`Body` representation as named helpers. Closure introduces private Math or Local
+helpers and explicit data inputs for capture snapshots. Authored physical inputs
+remain in the ABI. Logical references and hidden captures may reuse the same
+port when caller SSA identities establish an immutable Copy/Drop alias;
+remaining hidden inputs follow the authored inputs. Independent closure checking
+validates this mapping at each call. Forwarding and nested control regions receive
+the corresponding environment operands. Loop indices, carried state and match
+payloads remain fresh inputs. Loop yields forward every physical invariant port,
+even when logical uses share an alias. The selected code and
+its lexical static context determine the instance; runtime captures and caller
+participants do not. A scoped parameter has no runtime value or MLIR function
+type, and every scoped invocation becomes an ordinary helper call before emission.
+
+Domain closure uses the same capture layout. Factory graphs remain static while
+their data operands become ordinary helper inputs. Scoped computations can capture
+domains; local control forwards their environments, and protocol repetition
+captures reachable recipes with explicit data operands and participant
+availability. Independent domain and specialization witnesses check the selected
+constructor graph, operand substitutions and region layouts before emission.
+
+Closed finite operations emit private `data.domain` recipes and callback adapters
+with the finite IR's state, item, domain and capture ports. Ordinary scoped helpers
+retain their source calling convention. The adapter unpacks sequence products,
+calls that helper, and packs collected products where required. Exact SSA aliases
+reuse domain or capture ports; equal types do not justify reuse. Local definitions
+emit preparation callables and ordinary `local.apply` sites; Math definitions
+emit Algebra finite expressions. An independent reader checks constructor order,
+callback targets, operand mappings, packing and complete auxiliary-definition
+coverage against the closed source operation. Fixed source-array operands are
+converted once to immutable sequences by private total helpers, using the
+ordinary element layout and preserving order and zero-width Unit elements.
+The source ABI remains flattened. Local callers use unconditional realizations
+of these helpers; mathematical callers use ordinary calls. The independent
+reader checks every packing and append operation and the conversion occurrence.
+
+Logical input conditions are flattened through the same product layout as the
+helper signature and emitted as `data.preconditions`. Finite adapters remap them
+to their state/item/domain/capture ports. The source comparator reads each
+condition and selector independently; native finite analysis then discharges
+conditions at actual calls and consumers. Closure specialization independently
+recomputes residual requirements from the checked candidate body. These checks
+preserve the unconditional contract of `local.realize`.
 
 Math helpers become private `func.func` definitions. A selected formula relation
 adds a non-callable `relation.declare` and a private Boolean `func.func`; its exact
@@ -32,14 +78,13 @@ written directly inside `fn` remains an ordered primitive. A `map` emits one
 ordered `local.apply`; comparison checks the helper, mask, signature and site and
 accounts for every declaration.
 
-Finite reduction binders emit the same map declaration for a private generated
-scalar helper, followed by the selected ordinary reducer call. Row inputs and
-ordered scalar capture snapshots are explicit operands. Generated helper
-identity includes its enclosing declaration and binder occurrence; specialization
-retains its original lexical and notation selections. The
-[extraction witness](definitions.md#finite-vector-reductions) checks this graph
-against retained authored syntax before emission. No callback interpreter or
-general binder IR is introduced.
+Finite binders use ordinary scoped consumer calls, whose closure emits typed
+finite domains and fold/collect operations through the shared adapters. Lambda
+captures and domain data become explicit native inputs; structural products
+remain domain nodes. Their [source witnesses](definitions.md#finite-reduction-binders)
+check lexical selection, capture layout and domain recipes before emission.
+The existing finite lowering owns native contraction selection and checked loop
+fallback. Source notation introduces no runtime callback interpreter.
 
 Protocols become `protocol.func`, with explicit `protocol.local_call` for owned calls.
 Total operations use their admitted dialect identities; ordered operations use
@@ -112,6 +157,18 @@ keys retain their meanings; cross-build byte equality is not promised. Producers
 readers and fixtures use one current version-0 schema, without legacy readers.
 
 ## Independent source comparison
+
+Scoped extraction and closure have separate executable checks before emission
+and before comparison. Capture checking reconstructs places from retained source
+syntax rather than trusting the producer's capture list. Specialization checking
+walks the checked source and actual closed candidate under explicit substitutions;
+it never calls specialization or compares two generated expected bodies. Equal
+typed capture swaps, altered projection paths, incorrect forwarding environments,
+changed lexical helper selections and missing/duplicate source occurrences refuse.
+The relation checks every actual operation and recomputes Math dependencies and
+formation obligations. These checks complement ordinary definition checking;
+they are not a complete independent parser/type checker or a formal correctness
+proof.
 
 Before simplification, the compiler reparses exact emitted bytes, verifies the
 whole native module and independently compares actual SSA with checked source.

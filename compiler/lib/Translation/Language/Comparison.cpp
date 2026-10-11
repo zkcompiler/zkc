@@ -1,3 +1,5 @@
+#include "DataPreconditions.h"
+#include "Finite.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
@@ -21,7 +23,7 @@ using namespace llvm;
 namespace zkc::language {
 namespace {
 using Values = SmallVector<mlir::Value>;
-bool attributes(mlir::Operation &op, std::initializer_list<StringRef> names) {
+bool attributes(mlir::Operation &op, ArrayRef<StringRef> names) {
   return op.getAttrs().size() == names.size() &&
          llvm::all_of(names, [&](auto name) { return bool(op.getAttr(name)); });
 }
@@ -53,6 +55,8 @@ class Comparator {
   Layouts layouts;
   std::map<std::string, mlir::Operation *> realizations, maps;
   std::set<mlir::Operation *> usedRealizations, usedMaps;
+  std::map<std::string, mlir::Operation *> finiteDefinitions;
+  std::set<mlir::Operation *> usedFiniteDefinitions;
   Error failure = Error::success();
   Correspondence report;
   uint64_t remaining;
@@ -213,8 +217,8 @@ class Comparator {
     usedBindings.insert(found->first);
     std::vector<std::string> args;
     if (expected.bindingArguments) {
-      auto roots =
-          take(kernelArguments(expected.contract, *expected.bindingArguments));
+      auto roots = take(layouts.kernelArguments(expected.contract,
+                                                *expected.bindingArguments));
       if (!roots)
         return {};
       args = std::move(*roots);
@@ -445,8 +449,17 @@ class Comparator {
             return false;
       } else if (auto *math = std::get_if<MathValue>(&op.action)) {
         auto operands = flatten(math->operands);
-        auto *actual =
-            next(block, cursor, op.span, "", operands, leaves.size());
+        std::optional<PackedLayout> packed;
+        if (math->identity == MathematicalIdentity::ContainerAt &&
+            source.values[math->operands.front().index].type.domain ==
+                "sequence") {
+          packed = take(
+              layouts.packed(source.values[op.results.front().index].type));
+          if (!packed)
+            return false;
+        }
+        auto *actual = next(block, cursor, op.span, "", operands,
+                            packed ? 1 : leaves.size());
         if (!actual)
           return false;
         auto interface = mlir::dyn_cast<MathematicalOpInterface>(actual);
@@ -458,7 +471,16 @@ class Comparator {
         for (unsigned i = 0; i < dependencies.size(); ++i)
           if (dependencies[i] != i)
             return fail("mathematical dependency order differs");
-        if (math->identity == MathematicalIdentity::FieldConstant) {
+        if (math->identity == MathematicalIdentity::IndexConstant) {
+          auto literal =
+              math->literal.empty()
+                  ? std::to_string(
+                        math->staticArguments.front().dimension.closedValue())
+                  : math->literal;
+          if (!attributes(*actual, {"value"}) ||
+              !string(*actual, "value", literal))
+            return fail("index literal differs");
+        } else if (math->identity == MathematicalIdentity::FieldConstant) {
           if (!attributes(*actual, {"value"}) ||
               !string(*actual, "value", math->literal))
             return fail("field literal differs");
@@ -493,13 +515,78 @@ class Comparator {
         } else if (!attributes(*actual, {}))
           return fail("extra mathematical attributes");
         result = Values(actual->getResults());
+        if (packed &&
+            !types(actual->getResultTypes(), {packed->carrier.spelling()}))
+          return fail("total sequence result carrier differs");
+        if (packed && packed->product) {
+          auto carrier = result.front();
+          result.clear();
+          for (unsigned i = 0; i < leaves.size(); ++i) {
+            auto *project =
+                next(block, cursor, op.span, "data.get", carrier, 1);
+            if (!project || !attributes(*project, {"index"}) ||
+                !types(project->getResultTypes(), {leaves[i]}))
+              return fail("total sequence projection differs");
+            auto index = project->getAttrOfType<mlir::IntegerAttr>("index");
+            if (!index || !index.getType().isInteger(64) || index.getInt() != i)
+              return fail("total sequence projection index differs");
+            result.push_back(project->getResult(0));
+          }
+        }
       } else if (auto *local = std::get_if<LocalPrimitive>(&op.action)) {
+        auto operands = flatten(local->operands);
+        auto outputs = leaves;
+        std::optional<PackedLayout> packed;
+        if (isSequenceKernel(local->contract)) {
+          if (!local->bindingArguments || local->bindingArguments->size() != 1)
+            return fail("sequence binding requires its element type");
+          packed = take(layouts.packed(local->bindingArguments->front()));
+          if (!packed)
+            return false;
+          if (local->contract == "sequence.append" && packed->product) {
+            const auto &fields = values[local->operands[1].index];
+            auto *actual =
+                next(block, cursor, op.span, "local.variant_inject", fields, 1);
+            if (!actual)
+              return false;
+            if (!attributes(*actual, {"alternative", "site"}) ||
+                !string(*actual, "alternative", packed->alternative) ||
+                !string(*actual, "site", site + "_pack") ||
+                !types(actual->getResultTypes(), {packed->carrier.spelling()}))
+              return fail("sequence element packing differs");
+            operands = values[local->operands[0].index];
+            operands.push_back(actual->getResult(0));
+          }
+          if (local->contract == "sequence.at")
+            outputs = {packed->carrier.spelling()};
+        }
         auto checked =
-            primitive(block, cursor, *local, flatten(local->operands), leaves,
-                      op.span, site);
+            primitive(block, cursor, *local, operands, outputs, op.span, site);
         if (!checked)
           return false;
         result = std::move(*checked);
+        if (packed && packed->product && local->contract == "sequence.at") {
+          auto *actual = next(block, cursor, op.span, "local.match", result,
+                              leaves.size(), 1);
+          if (!actual)
+            return false;
+          if (!attributes(*actual, {"alternatives", "site"}) ||
+              !strings(actual->getAttr("alternatives"),
+                       {packed->alternative}) ||
+              !string(*actual, "site", site + "_unpack") ||
+              !types(actual->getResultTypes(), leaves) ||
+              !llvm::hasSingleElement(actual->getRegion(0)))
+            return fail("sequence element unpacking differs");
+          auto &arm = actual->getRegion(0).front();
+          if (!types(arm.getArgumentTypes(), packed->flat->leaves))
+            return false;
+          auto armCursor = arm.begin();
+          auto *yield = next(arm, armCursor, op.span, "local.yield",
+                             arm.getArguments(), 0);
+          if (!yield || !attributes(*yield, {}) || armCursor != arm.end())
+            return fail("sequence payload result mapping differs");
+          result = Values(actual->getResults());
+        }
       } else if (auto *call = std::get_if<HelperCall>(&op.action)) {
         auto &target = project.declarations()[call->callee.index];
         bool local = target.kind == Declaration::Kind::Local ||
@@ -546,6 +633,22 @@ class Comparator {
                        !string(*actual, "role", nativeRoleName(*call->owner)))))
           return fail("call target, mode, owner or site differs");
         result = Values(actual->getResults());
+      } else if (auto *finite = std::get_if<FiniteComputation>(&op.action)) {
+        if (cursor == block.end())
+          return fail("omitted finite computation");
+        auto first = cursor;
+        auto compared = take(compareFinite(
+            project, source, *finite,
+            source.values[op.results.front().index].type, values, block, cursor,
+            finiteDefinitions, usedFiniteDefinitions, layouts,
+            "finite_" + decl.symbol + "_" + site, site, limits,
+            report.operations, remaining));
+        if (!compared)
+          return false;
+        for (auto emitted = first; emitted != cursor; ++emitted)
+          if (!record(*emitted, op.span))
+            return false;
+        result = std::move(*compared);
       } else if (auto *bulk = std::get_if<BulkApplication>(&op.action)) {
         auto &target = project.declarations()[bulk->callee.index];
         if (source.mode != Body::Mode::Local ||
@@ -884,6 +987,13 @@ public:
     std::set<std::string> realizedHelpers;
     std::set<std::pair<std::string, std::vector<bool>>> mappedHelpers;
     for (auto &op : native.getBody().front()) {
+      auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
+      if (name && name.getValue().starts_with("finite_")) {
+        if (!finiteDefinitions.emplace(name.getValue().str(), &op).second)
+          return error("source.correspondence",
+                       "duplicate finite auxiliary symbol");
+        continue;
+      }
       if (auto declaration = mlir::dyn_cast<relation::DeclareOp>(op)) {
         if (!relations.emplace(declaration.getSymName().str(), declaration)
                  .second)
@@ -945,7 +1055,7 @@ public:
           !llvm::hasSingleElement(function.getRegion(0)))
         return error("source.correspondence",
                      "definition identity or structure differs");
-      auto names =
+      SmallVector<StringRef> names =
           protocol
               ? std::initializer_list<StringRef>{"sym_name", "function_type",
                                                  "roles", "input_roles",
@@ -955,6 +1065,14 @@ public:
                                                  "logical_origin"}
               : std::initializer_list<StringRef>{"sym_name", "function_type",
                                                  "sym_visibility"};
+      auto conditions = take(flattenDataPreconditions(decl, layouts));
+      if (!conditions)
+        return std::move(failure);
+      if (!conditions->empty())
+        names.push_back("data.preconditions");
+      if (!compareDataPreconditions(function, *conditions))
+        return error("source.correspondence",
+                     "helper data preconditions differ");
       if (!attributes(function, names) ||
           (!protocol && !local &&
            !string(function, "sym_visibility", "private")))
@@ -1116,7 +1234,8 @@ public:
       return error("source.correspondence", "extra relation declaration");
     if (index != functions.size() || usedBindings.size() != bindings.size() ||
         usedRealizations.size() != realizations.size() ||
-        usedMaps.size() != maps.size())
+        usedMaps.size() != maps.size() ||
+        usedFiniteDefinitions.size() != finiteDefinitions.size())
       return error("source.correspondence",
                    "extra definition or unused binding");
     llvm::sort(report.locations, [](auto &a, auto &b) {
@@ -1131,7 +1250,9 @@ Expected<Correspondence> compareOriginal(const ClosedEntry &project,
                                          const Limits &limits) {
   if (auto e = checkLimits(limits))
     return e;
-  if (auto e = checkReductionElaboration(project.project(), limits))
+  if (auto e = checkScopedElaboration(project.project(), limits))
+    return e;
+  if (auto e = checkScopedSpecialization(project, limits))
     return e;
   if (project.project().installationIdentity() != installedCatalogIdentity())
     return error("source.environment",

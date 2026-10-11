@@ -2,6 +2,8 @@
 
 | Project | Library and Entry | Execution |
 |---|---|---|
+| [Finite computations](finite-computations/README.md) | Shared domain, Local and Math libraries | Strict dot product, records and filters, bounded reads and nested matrix traversal |
+| [Scoped computations](scoped-computations/README.md) | Generic user apply/forward functions and a component wrapper | Nested callbacks with record projections, vector lookup and capture-selected ownership |
 | [Schnorr](schnorr/README.md) | Generic group protocol, discrete-log relation and concrete Entry | Interactive exchange or independent transcript-derived proofs |
 | [Sumcheck](sumcheck/README.md) | Generic public-table protocol and bounded-round Entry | Actual receives, repeated state and direct terminal evaluation |
 | [Expression Sumcheck](expression-sumcheck/README.md) | Generic Sumcheck over a captured ring asset with KoalaBear/Ext8 Entries | Exact round coefficients, extension-field challenges and public-table terminal evaluation |

@@ -378,6 +378,11 @@ fn dense<S: Family>(
             )])
         }
         "matrix.bilinear" => scalar(crate::matrix::bilinear(S::matrix(arg(0)?)?, v(1)?, v(2)?)?),
+        "matrix.get" => scalar(crate::matrix::get(
+            S::matrix(arg(0)?)?,
+            index(1)?,
+            index(2)?,
+        )?),
         "matrix.dimension" => {
             let matrix = S::matrix(arg(0)?)?;
             let dimension = match natural(i.attributes, 0)? {
@@ -1007,6 +1012,17 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             "arkworks/matrix.bilinear",
             "dalek/matrix.bilinear",
             "plonky3/matrix.bilinear",
+        ]),
+        field::operation(
+            "matrix.get",
+            &[Matrix, Index, Index],
+            &[Field],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/matrix.get",
+            "dalek/matrix.get",
+            "plonky3/matrix.get",
         ]),
         field::operation(
             "matrix.dimension",

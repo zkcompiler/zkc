@@ -19,6 +19,25 @@ pub struct Backing {
     address: usize,
     bytes: usize,
 }
+
+/// A short-lived view of allocations retained by one Runner and admitted by
+/// that Runner's backend. Only the runtime can mint a nonempty view. A backend
+/// may reuse validation for immutable, intrinsically typed allocations whose
+/// validity depends only on its fixed policy and setup registry. This is never
+/// evidence for capability validity or a different backend's authority.
+#[derive(Clone, Copy, Default)]
+pub struct Retained<'a> {
+    ledger: Option<&'a Ledger>,
+}
+impl Retained<'_> {
+    /// External calls and decoders have no retained-validation evidence.
+    pub const NONE: Self = Self { ledger: None };
+
+    pub fn contains(self, backing: Backing) -> bool {
+        self.ledger
+            .is_some_and(|ledger| ledger.entries.contains_key(&backing))
+    }
+}
 impl Backing {
     /// Identify the allocation behind `allocation`. Clones of one `Arc` share
     /// an identity; separately created allocations never do while both are
@@ -66,6 +85,9 @@ pub(super) struct Ledger {
     entries: HashMap<Backing, Entry>,
 }
 impl Ledger {
+    pub fn view(&self) -> Retained<'_> {
+        Retained { ledger: Some(self) }
+    }
     /// Charges for retaining `values` without changing the ledger. Shared
     /// allocations already live, or repeated in `values`, add nothing.
     pub fn plan<V: Value>(&self, values: &[V], retention: Retention) -> Option<Charge> {
@@ -91,7 +113,10 @@ impl Ledger {
         Some(Charge { live, fresh })
     }
 
-    /// Record one binding of each value. The caller has checked `plan`.
+    /// Record one binding of each value. The caller has checked `plan` and
+    /// validated every value with this Runner's backend. Nested allocation
+    /// entries and handoff pins also certify that immutable contents passed
+    /// validation; they must remain backed by live values until released.
     pub fn retain<V: Value>(&mut self, values: &[V]) {
         for value in values {
             value.retained_parts(&mut |backing| {
@@ -124,6 +149,21 @@ impl Ledger {
     /// Drop one binding of each value and return the bytes no longer retained:
     /// shared allocations whose last reference went, plus owned storage.
     pub fn release<'a, V: Value + 'a>(&mut self, values: impl Iterator<Item = &'a V>) -> usize {
+        self.release_parts(values, true)
+    }
+
+    /// Release an internal handoff reference. Such a reference keeps immutable
+    /// backing alive across a region exit, but is not another value binding and
+    /// does not own an inline-storage charge.
+    pub fn unpin<V: Value>(&mut self, values: &[V]) -> usize {
+        self.release_parts(values.iter(), false)
+    }
+
+    fn release_parts<'a, V: Value + 'a>(
+        &mut self,
+        values: impl Iterator<Item = &'a V>,
+        owned: bool,
+    ) -> usize {
         let mut bytes = 0usize;
         for value in values {
             let inline = value.retained_parts(&mut |backing| {
@@ -139,7 +179,9 @@ impl Ledger {
                 bytes = bytes.saturating_add(backing.bytes);
                 true
             });
-            bytes = bytes.saturating_add(inline);
+            if owned {
+                bytes = bytes.saturating_add(inline);
+            }
         }
         bytes
     }

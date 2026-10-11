@@ -1,0 +1,78 @@
+module zkc::finite_math;
+use zkc::sequence::{Sequence};
+use zkc::accumulation::{Combiner, FieldSum, FieldProduct, GroupSum};
+
+pub math fn fold<I: Type + Copy + Drop, S: Type + Copy + Drop>(
+  rows: scoped domain<I>, initial: S,
+  step: scoped math fn(S, I) -> S on(rows)
+) -> S = finite("math.fold");
+
+pub math fn fold_where<I: Type + Copy + Drop, S: Type + Copy + Drop>(
+  rows: scoped domain<I>, initial: S,
+  keep: scoped math fn(I) -> bool on(rows),
+  step: scoped math fn(S, I) -> S on(rows)
+) -> S = finite("math.fold_where");
+
+pub math fn collect<I: Type + Copy + Drop, T: Type + Copy + Drop>(
+  rows: scoped domain<I>, body: scoped math fn(I) -> T on(rows)
+) -> Sequence<T> = finite("math.collect.sequence");
+
+pub math fn collect_where<I: Type + Copy + Drop, T: Type + Copy + Drop>(
+  rows: scoped domain<I>, keep: scoped math fn(I) -> bool on(rows),
+  body: scoped math fn(I) -> T on(rows)
+) -> Sequence<T> = finite("math.collect.sequence_where");
+
+pub math fn accumulate<I: Type + Copy + Drop, T: Type + Copy + Drop, C: Combiner<T>>(
+  rows: scoped domain<I>, body: scoped math fn(I) -> T on(rows)
+) -> T {
+  return fold(rows, C::identity(), fun state item => C::combine(state, body(item)));
+}
+
+pub math fn accumulate_where<I: Type + Copy + Drop, T: Type + Copy + Drop, C: Combiner<T>>(
+  rows: scoped domain<I>, keep: scoped math fn(I) -> bool on(rows),
+  body: scoped math fn(I) -> T on(rows)
+) -> T {
+  return fold_where(rows, C::identity(), keep, fun state item => C::combine(state, body(item)));
+}
+
+pub math fn sum<I: Type + Copy + Drop, F: Field>(
+  rows: scoped domain<I>, body: scoped math fn(I) -> F on(rows)
+) -> F {
+  return accumulate<I, F, FieldSum<F>>(rows, body);
+}
+
+pub math fn sum_where<I: Type + Copy + Drop, F: Field>(
+  rows: scoped domain<I>, keep: scoped math fn(I) -> bool on(rows),
+  body: scoped math fn(I) -> F on(rows)
+) -> F {
+  return accumulate_where<I, F, FieldSum<F>>(rows, keep, body);
+}
+
+pub math fn product<I: Type + Copy + Drop, F: Field>(
+  rows: scoped domain<I>, body: scoped math fn(I) -> F on(rows)
+) -> F {
+  return accumulate<I, F, FieldProduct<F>>(rows, body);
+}
+
+pub math fn product_where<I: Type + Copy + Drop, F: Field>(
+  rows: scoped domain<I>, keep: scoped math fn(I) -> bool on(rows),
+  body: scoped math fn(I) -> F on(rows)
+) -> F {
+  return accumulate_where<I, F, FieldProduct<F>>(rows, keep, body);
+}
+
+pub math fn group_sum<I: Type + Copy + Drop, G: Group>(
+  rows: scoped domain<I>, body: scoped math fn(I) -> G on(rows)
+) -> G where zkc::curve::ScalarAction(G) {
+  return accumulate<I, G, GroupSum<G>>(rows, body);
+}
+
+pub math fn group_sum_where<I: Type + Copy + Drop, G: Group>(
+  rows: scoped domain<I>, keep: scoped math fn(I) -> bool on(rows),
+  body: scoped math fn(I) -> G on(rows)
+) -> G where zkc::curve::ScalarAction(G) {
+  return accumulate_where<I, G, GroupSum<G>>(rows, keep, body);
+}
+
+pub reduction ∑ = sum, sum_where;
+pub reduction ∏ = product, product_where;

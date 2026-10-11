@@ -13,6 +13,13 @@ struct NotationDescriptorRecord {
   Span span;
   bool isPublic = false, fixed = false, explicitSyntax = false;
 };
+struct NotationTargetRecord {
+  DeclarationId target;
+  std::optional<std::string> component;
+  std::vector<std::optional<std::string>> arguments;
+  Span span;
+  std::vector<Span> authoredArguments;
+};
 struct NotationBindingRecord {
   uint32_t descriptor, scope;
   DeclarationId target;
@@ -23,13 +30,14 @@ struct NotationBindingRecord {
   std::vector<std::string> holes;
   std::string identity;
   bool isPublic = false, local = false;
+  std::optional<NotationTargetRecord> filtered;
 };
 struct NotationImportRecord {
   ModuleId module;
   Span span;
   std::optional<std::string> alias;
   std::vector<std::string> names, operators, notations, reductions;
-  bool isPublic = false;
+  bool isPublic = false, indexing = false;
 };
 struct NotationScopeRecord {
   Span span;
@@ -45,6 +53,9 @@ struct NotationScopeRecord {
 struct NotationOperandRecord {
   uint32_t expression;
   Span span;
+  // Diagnostic rendering of generated binder lambdas and structural products.
+  // Source slices remain spans so output limits apply before concatenation.
+  std::vector<std::variant<Span, std::string>> rendering = {};
 };
 struct NotationEmissionRecord {
   uint32_t binding, region, operation;

@@ -1,0 +1,33 @@
+module example;
+use zkc::vector::{Vector, indexing []};
+use zkc::matrix::{Matrix};
+use zkc::finite as finite;
+use zkc::finite_math as total;
+use zkc::finite_domain as domains;
+
+domain F = field("koala-bear");
+struct Row { pub value: F, pub enabled: bool }
+
+math fn energy(xs: Vector<F>) -> F {
+  return total::sum(zkc::vector::indices(xs), fun i =>
+    xs[i] * xs[i]);
+}
+
+math fn matrix_sum(matrix: Matrix<F>) -> F {
+  return total::sum(zkc::matrix::row_indices(matrix), fun i =>
+    total::sum(zkc::matrix::row_values(matrix, i), fun value => value));
+}
+
+fn selected(xs: Vector<F>) -> F {
+  let rows = finite::collect(xs, fun value => Row{value: value, enabled: !(value == 0)});
+  return finite::sum_where(rows, fun record => record.enabled, fun record => record.value);
+}
+
+protocol Compute roles(P)(xs: Vector<F> @P, ys: Vector<F> @P,
+                           matrix: Matrix<F> @P)
+  -> (dot: F @P, square_sum: F @P, selected_sum: F @P, matrix_total: F @P) {
+  let dot @P = finite::sum(domains::zip(xs, ys), fun (x, y) => x * y);
+  return (dot = dot, square_sum = energy(xs), selected_sum = selected(xs),
+          matrix_total = matrix_sum(matrix));
+}
+run Demo = Compute;

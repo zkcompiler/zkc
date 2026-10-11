@@ -241,6 +241,14 @@ bool TypeInference::allows(Variable id, Type::Kind kind) {
 std::optional<Type> TypeInference::get(Variable id, Span span) {
   return get(id, span, 1);
 }
+std::optional<TypeInference::Structure> TypeInference::structure(Variable id,
+                                                                 Span span) {
+  const auto &node = nodes[root(id)];
+  if (!types.charge(node.arguments.size() + 1, span) || !node.head ||
+      !types.chargeType(*node.head, span))
+    return {};
+  return Structure{*node.head, node.arguments};
+}
 std::optional<Type> TypeInference::get(Variable id, Span span, unsigned depth) {
   if (types.diagnostic || depth > types.work.limits.typeDepth ||
       !types.charge(1, span)) {

@@ -77,6 +77,9 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
                  toString(result.takeError()), s.span);
       return {};
     }
+    if (s.kind == S::Builtin && s.name == "sequence" &&
+        !types.permissions(*result, s.span, &context))
+      return {};
     return std::move(*result);
   }
   if (s.kind == S::Natural) {

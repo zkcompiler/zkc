@@ -1,3 +1,9 @@
+#include "BodyMapping.h"
+#include "BodySummary.h"
+#include "ClosureInputs.h"
+#include "DataRequirements.h"
+#include "DomainClosure.h"
+#include "FiniteContracts.h"
 #include "Semantics.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/Services.h"
@@ -10,7 +16,8 @@ namespace {
 // bodies.
 bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
   if (!types.charge(body.operations.size() + body.values.size() +
-                        body.results.size() + body.stopReason.size() + 1,
+                        body.results.size() + body.expressionValues.size() +
+                        body.stopReason.size() + 1,
                     span))
     return false;
   for (const auto &value : body.values)
@@ -20,6 +27,37 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
   for (const auto &requirement : body.formationRequirements)
     if (!types.charge(requirement.size() + 1, span))
       return false;
+  for (const auto &binding : body.scopedBindings) {
+    if (!types.charge(binding.captures.size() + binding.scopedCaptures.size() +
+                          binding.domainCaptures.size() + 1,
+                      binding.span) ||
+        !types.chargeType(binding.signature.result, binding.span))
+      return false;
+    for (const auto &input : binding.signature.inputs)
+      if (!types.chargeType(input, binding.span))
+        return false;
+    // The immutable nested Body is charged when its helper is instantiated.
+    // Captured-place metadata is copied here with the containing binding.
+    if (binding.computation)
+      for (const auto &capture : binding.computation->captures)
+        if (!types.charge(capture.path.size() + 1, capture.firstUse) ||
+            !types.chargeType(capture.type, capture.firstUse))
+          return false;
+  }
+  for (const auto &domain : body.domainBindings) {
+    if (!types.charge(domain.operands.size() + domain.children.size() +
+                          domain.arguments.size() +
+                          domain.argumentOrder.size() + 1,
+                      domain.span) ||
+        !types.chargeType(domain.item, domain.span))
+      return false;
+    for (const auto &argument : domain.arguments)
+      if (!types.chargeType(argument, domain.span))
+        return false;
+    if (domain.factory && domain.factory->component &&
+        !types.chargeType(*domain.factory->component, domain.span))
+      return false;
+  }
   for (const auto &service : body.services)
     if (!types.charge(service.name.size() + service.contract.size() + 1,
                       service.span) ||
@@ -30,7 +68,10 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
       return false;
     if (op.binding) {
       const auto &binding = *op.binding;
-      if (!types.charge(binding.operands.size() + binding.symbol.size() + 1,
+      if (!types.charge(binding.operands.size() + binding.symbol.size() +
+                            binding.argumentOrder.size() +
+                            binding.scopedArguments.size() +
+                            binding.domainArguments.size() + 1,
                         op.span))
         return false;
       if (binding.notation &&
@@ -77,6 +118,17 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
         for (const auto &arg : *primitive->bindingArguments)
           if (!types.chargeType(arg, op.span))
             return false;
+    } else if (const auto *call = std::get_if<HelperCall>(&op.action)) {
+      if (!types.charge(call->operands.size() + call->arguments.size() +
+                            call->scopedArguments.size() +
+                            call->domainArguments.size() + 1,
+                        op.span))
+        return false;
+      for (const auto &argument : call->arguments)
+        if (!types.chargeType(argument, op.span))
+          return false;
+      if (call->component && !types.chargeType(*call->component, op.span))
+        return false;
     } else if (const auto *bulk = std::get_if<BulkApplication>(&op.action)) {
       if (!types.charge(bulk->operands.size() + bulk->mapped.size() + 1,
                         op.span))
@@ -91,7 +143,8 @@ bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
           !chargeBodySnapshot(types, *repeat->region, op.span))
         return false;
     } else if (const auto *control = std::get_if<LocalControl>(&op.action)) {
-      if (!types.charge(control->operands.size() + control->regions.size(),
+      if (!types.charge(control->operands.size() + control->regions.size() +
+                            control->domainArguments.size(),
                         op.span))
         return false;
       for (const auto &alternative : control->alternatives)
@@ -116,11 +169,19 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
     std::set<std::string> active;
     std::map<std::string, std::string> symbolKeys;
     uint64_t count = 0;
-    std::function<std::optional<DeclarationId>(DeclarationId, ArrayRef<Type>,
-                                               unsigned)>
+    struct Environment {
+      DeclarationId helper;
+      std::vector<ValueId> captures;
+    };
+    std::map<std::pair<unsigned, unsigned>, DeclarationId> scopedTemplates;
+    std::vector<DeclarationId> generatedTemplates;
+    std::function<std::optional<DeclarationId>(
+        DeclarationId, ArrayRef<Type>, unsigned, ArrayRef<DeclarationId>,
+        ArrayRef<std::shared_ptr<const DomainShape>>, const ClosureLayout &)>
         instantiate;
     std::function<bool(Body &, const Substitution &, Body::Mode, unsigned,
-                       unsigned &)>
+                       unsigned &, const std::vector<Environment> &,
+                       ArrayRef<DomainEnvironment>)>
         closeBody;
     auto closeType = [&](Type &type, const Substitution &bindings, Span span) {
       auto result = types.substitute(type, bindings, span);
@@ -142,8 +203,11 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                         port.span);
     };
     closeBody = [&](Body &body, const Substitution &bindings, Body::Mode mode,
-                    unsigned depth, unsigned &height) {
+                    unsigned depth, unsigned &height,
+                    const std::vector<Environment> &environment,
+                    ArrayRef<DomainEnvironment> domains) {
       body.mode = mode;
+      ValueOrigins bodyOrigins(types, body);
       for (auto &service : body.services)
         if (!closeService(service, bindings))
           return false;
@@ -158,7 +222,195 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         if (mode == Body::Mode::Local)
           value.components.clear();
       }
+      std::vector<std::optional<DomainEnvironment>> resolvedDomains(
+          body.domainBindings.size());
+      auto resolveDomain =
+          [&](unsigned index) -> std::optional<DomainEnvironment> {
+        if (index >= resolvedDomains.size()) {
+          types.fail("source.finite-domain", "domain edge outside body", {});
+          return {};
+        }
+        if (!resolvedDomains[index])
+          resolvedDomains[index] = closeDomain(types, declarations, body, index,
+                                               bindings, domains, &bodyOrigins);
+        return resolvedDomains[index];
+      };
+      std::vector<std::optional<Environment>> resolved(
+          body.scopedBindings.size());
+      std::function<std::optional<Environment>(unsigned, unsigned)>
+          resolveScoped =
+              [&](unsigned index,
+                  unsigned nestedDepth) -> std::optional<Environment> {
+        if (index >= body.scopedBindings.size() ||
+            nestedDepth > work.limits.callDepth) {
+          types.fail("source.limit", "scoped environment expansion limit",
+                     body.values.empty() ? Span{} : body.values.front().span);
+          return {};
+        }
+        if (resolved[index])
+          return resolved[index];
+        const auto &binding = body.scopedBindings[index];
+        if (!types.charge(binding.captures.size() +
+                              binding.scopedCaptures.size() + 1,
+                          binding.span))
+          return {};
+        if (binding.parameter) {
+          if (*binding.parameter >= environment.size()) {
+            types.fail("source.scoped", "unbound scoped formal", binding.span);
+            return {};
+          }
+          return resolved[index] = environment[*binding.parameter];
+        }
+        const auto &computation = *binding.computation;
+        std::vector<DeclarationId> selected;
+        std::vector<ValueId> hiddenCaptures;
+        for (auto capture : binding.scopedCaptures) {
+          auto value = resolveScoped(capture, nestedDepth + 1);
+          if (!value)
+            return {};
+          selected.push_back(value->helper);
+          hiddenCaptures.insert(hiddenCaptures.end(), value->captures.begin(),
+                                value->captures.end());
+        }
+        std::vector<std::shared_ptr<const DomainShape>> selectedDomains;
+        for (auto capture : binding.domainCaptures) {
+          auto domain = resolveDomain(capture);
+          if (!domain)
+            return {};
+          selectedDomains.push_back(domain->shape);
+          hiddenCaptures.insert(hiddenCaptures.end(), domain->operands.begin(),
+                                domain->operands.end());
+        }
+        auto identity = std::make_pair(computation.lexicalOwner.index,
+                                       computation.expression);
+        auto found = scopedTemplates.find(identity);
+        DeclarationId source;
+        if (found == scopedTemplates.end()) {
+          Declaration helper = declarations[computation.lexicalOwner.index];
+          helper.id = {uint32_t(declarations.size())};
+          source = helper.id;
+          helper.parent = computation.lexicalOwner;
+          helper.kind =
+              computation.signature.mode == ScopedSignature::Mode::Math
+                  ? Declaration::Kind::Math
+                  : Declaration::Kind::Local;
+          helper.name =
+              "scoped<" + std::to_string(computation.expression) + ">";
+          helper.qualifiedName += "::" + helper.name;
+          helper.symbol = "zks_" + digest(helper.qualifiedName);
+          helper.isPublic = false;
+          helper.anonymous = true;
+          helper.abstract = false;
+          helper.primitive.reset();
+          helper.specifications.clear();
+          helper.specificationBlock.reset();
+          helper.relation.reset();
+          helper.target.reset();
+          helper.completes = false;
+          helper.scopedOrigin =
+              std::make_pair(computation.lexicalOwner, computation.expression);
+          helper.roles.clear();
+          helper.services.clear();
+          helper.members.clear();
+          helper.inputs.clear();
+          helper.outputs.clear();
+          helper.inputOrder.clear();
+          helper.scopedInputs.clear();
+          helper.domainInputs.clear();
+          helper.domainArguments.clear();
+          helper.domainResult.reset();
+          helper.domainDefinition.reset();
+          helper.finiteDefinition.reset();
+          helper.dataPreconditions.clear();
+          helper.body = computation.body;
+          helper.effectAllowance = computation.signature.allowance;
+          for (unsigned i = 0; i < helper.body->inputs; ++i)
+            helper.inputs.push_back({"input" + std::to_string(i),
+                                     helper.body->values[i].type,
+                                     {},
+                                     binding.span});
+          helper.outputs.push_back(
+              {"result", computation.signature.result, {}, binding.span});
+          for (const auto &capture : helper.body->scopedBindings)
+            if (capture.parameter)
+              helper.scopedInputs.push_back(
+                  {"body" + std::to_string(*capture.parameter),
+                   capture.signature, capture.span});
+          for (const auto &capture : helper.body->domainBindings)
+            if (capture.parameter)
+              helper.domainInputs.push_back(
+                  {"domain" + std::to_string(*capture.parameter), capture.item,
+                   capture.span});
+          declarations.push_back(std::move(helper));
+          generatedTemplates.push_back(source);
+          scopedTemplates.emplace(identity, source);
+        } else
+          source = found->second;
+        std::vector<Type> arguments;
+        for (const auto &parameter : declarations[source.index].parameters) {
+          auto argument = types.substitute(parameterType(parameter), bindings,
+                                           binding.span);
+          if (!argument)
+            return {};
+          arguments.push_back(*argument);
+        }
+        std::vector<std::optional<ValueId>> authored(
+            computation.signature.inputs.size());
+        for (auto capture : binding.captures)
+          authored.push_back(capture);
+        auto inputs = closeInputs(types, body, authored, hiddenCaptures,
+                                  binding.span, &bodyOrigins);
+        if (!inputs)
+          return {};
+        auto helper = instantiate(source, arguments, depth + 1, selected,
+                                  selectedDomains, inputs->layout);
+        if (!helper)
+          return {};
+        height = std::max(height, heights.at(helper->index) + 1);
+        std::vector<ValueId> operands;
+        for (auto value : ArrayRef(inputs->operands)
+                              .drop_front(computation.signature.inputs.size()))
+          operands.push_back(*value);
+        return resolved[index] = Environment{*helper, std::move(operands)};
+      };
+      // Even unused callback bodies are closed and checked. Creating a static
+      // helper here does not execute the callback or move its capture
+      // snapshots.
+      for (unsigned i = 0; i < body.scopedBindings.size(); ++i)
+        if (!resolveScoped(i, 1))
+          return false;
       for (auto &op : body.operations) {
+        if (auto *invoke = std::get_if<ScopedInvoke>(&op.action)) {
+          auto selected = resolveScoped(invoke->binding, 1);
+          if (!selected)
+            return false;
+          auto operands = invoke->operands;
+          operands.insert(operands.end(), selected->captures.begin(),
+                          selected->captures.end());
+          op.action =
+              HelperCall{selected->helper, std::move(operands), {}, {}, {}, {}};
+          continue;
+        }
+        if (const auto *finite = std::get_if<FiniteApplication>(&op.action)) {
+          auto domain = resolveDomain(finite->domain);
+          auto step = resolveScoped(finite->body, 1);
+          if (!domain || !step)
+            return false;
+          std::optional<FiniteCallback> predicate;
+          if (finite->predicate) {
+            auto selected = resolveScoped(*finite->predicate, 1);
+            if (!selected)
+              return false;
+            predicate = FiniteCallback{selected->helper, selected->captures};
+          }
+          op.action = FiniteComputation{finite->kind,
+                                        domain->shape,
+                                        domain->operands,
+                                        finite->operands,
+                                        {step->helper, step->captures},
+                                        std::move(predicate)};
+          continue;
+        }
         if (!types.charge(1, op.span))
           return false;
         if (op.binding) {
@@ -257,8 +509,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             application->arguments = declarations[target.index].staticArguments;
             target = *origin;
           }
-          auto instance =
-              instantiate(target, application->arguments, depth + 1);
+          auto instance = instantiate(target, application->arguments, depth + 1,
+                                      {}, {}, {});
           if (!instance)
             return false;
           height = std::max(height, heights.at(instance->index) + 1);
@@ -292,7 +544,44 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             target = *found;
             call->arguments = call->component->arguments;
           }
-          auto instance = instantiate(target, call->arguments, depth + 1);
+          std::vector<DeclarationId> selected;
+          std::vector<ValueId> hiddenCaptures;
+          for (auto argument : call->scopedArguments) {
+            auto value = resolveScoped(argument, 1);
+            if (!value)
+              return false;
+            selected.push_back(value->helper);
+            hiddenCaptures.insert(hiddenCaptures.end(), value->captures.begin(),
+                                  value->captures.end());
+          }
+          std::vector<std::shared_ptr<const DomainShape>> selectedDomains;
+          for (auto argument : call->domainArguments) {
+            auto domain = resolveDomain(argument);
+            if (!domain)
+              return false;
+            selectedDomains.push_back(domain->shape);
+            hiddenCaptures.insert(hiddenCaptures.end(),
+                                  domain->operands.begin(),
+                                  domain->operands.end());
+          }
+          ClosureLayout layout;
+          if (!selected.empty() || !selectedDomains.empty()) {
+            std::vector<std::optional<ValueId>> authored;
+            for (auto operand : call->operands)
+              authored.push_back(operand);
+            auto inputs = closeInputs(types, body, authored, hiddenCaptures,
+                                      op.span, &bodyOrigins);
+            if (!inputs)
+              return false;
+            layout = std::move(inputs->layout);
+            call->operands.clear();
+            for (auto operand : inputs->operands)
+              call->operands.push_back(*operand);
+          }
+          auto instance = instantiate(target, call->arguments, depth + 1,
+                                      selected, selectedDomains, layout);
+          call->scopedArguments.clear();
+          call->domainArguments.clear();
           if (!instance)
             return false;
           height = std::max(height, heights.at(instance->index) + 1);
@@ -306,7 +595,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
             bulk->arguments = declarations[target.index].staticArguments;
             target = *origin;
           }
-          auto instance = instantiate(target, bulk->arguments, depth + 1);
+          auto instance =
+              instantiate(target, bulk->arguments, depth + 1, {}, {}, {});
           if (!instance)
             return false;
           height = std::max(height, heights.at(instance->index) + 1);
@@ -356,25 +646,161 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                               "selected repeat maximum exceeds installed limit",
                               op.span);
           repeat->maximum = maximum.dimension;
+          std::vector<std::optional<ValueId>> authored(1 +
+                                                       repeat->carried.size());
+          for (auto capture : repeat->captures)
+            authored.push_back(capture);
+          auto inputs =
+              closeInputs(types, body, authored, {}, op.span, &bodyOrigins);
+          if (!inputs || repeat->region->inputs != authored.size())
+            return types.diagnostic
+                       ? false
+                       : types.fail("source.closure-inputs",
+                                    "protocol region input coverage differs",
+                                    op.span);
+          repeat->regionLayout = inputs->layout;
           auto copy = std::make_shared<Body>(*repeat->region);
-          if (!closeBody(*copy, bindings, Body::Mode::Protocol, depth, height))
+          mapBodyValues(*copy, [&](ValueId value) {
+            return ValueId{value.index < inputs->layout.inputs.size()
+                               ? inputs->layout.inputs[value.index]
+                               : value.index};
+          });
+          if (!closeBody(*copy, bindings, Body::Mode::Protocol, depth, height,
+                         {}, {}))
             return false;
           repeat->region = std::move(copy);
         } else if (auto *control = std::get_if<LocalControl>(&op.action)) {
-          for (auto &region : control->regions) {
-            auto copy = std::make_shared<Body>(*region);
-            if (!closeBody(*copy, bindings, Body::Mode::Local, depth, height))
+          std::vector<ValueId> captures;
+          for (const auto &entry : environment)
+            captures.insert(captures.end(), entry.captures.begin(),
+                            entry.captures.end());
+          std::vector<DomainEnvironment> selectedDomains;
+          for (auto argument : control->domainArguments) {
+            auto domain = resolveDomain(argument);
+            if (!domain)
               return false;
+            captures.insert(captures.end(), domain->operands.begin(),
+                            domain->operands.end());
+            control->domainShapes.push_back(domain->shape);
+            selectedDomains.push_back(std::move(*domain));
+          }
+          const bool loop = control->kind == LocalControl::Kind::For;
+          const unsigned header = loop ? 2 : 1;
+          if (control->operands.size() < header)
+            return types.fail("source.closure-inputs",
+                              "control operand coverage differs", op.span);
+          const unsigned forwarded = control->operands.size() - header;
+          std::optional<std::vector<ValueId>> extraOperands;
+          for (auto &region : control->regions) {
+            if (region->inputs < forwarded ||
+                (loop && (region->inputs != forwarded + 1 ||
+                          control->carried > forwarded)))
+              return types.fail("source.closure-inputs",
+                                "control input coverage differs", op.span);
+            const unsigned prefix = region->inputs - forwarded;
+            std::vector<std::optional<ValueId>> authored(prefix);
+            for (unsigned i = 0; i < forwarded; ++i)
+              authored.push_back(
+                  loop && i < control->carried
+                      ? std::nullopt
+                      : std::optional<ValueId>(control->operands[header + i]));
+            auto selected = closeInputs(types, body, authored, captures,
+                                        op.span, &bodyOrigins);
+            if (!selected)
+              return false;
+            std::vector<ValueId> extras;
+            std::vector<Value> hidden;
+            for (auto input :
+                 ArrayRef(selected->operands).drop_front(region->inputs)) {
+              if (!input)
+                return types.fail("source.closure-inputs",
+                                  "unbound control capture", op.span);
+              extras.push_back(*input);
+              hidden.push_back(body.values[input->index]);
+            }
+            if (extraOperands &&
+                (extraOperands->size() != extras.size() ||
+                 !std::equal(extraOperands->begin(), extraOperands->end(),
+                             extras.begin(), [](ValueId a, ValueId b) {
+                               return a.index == b.index;
+                             })))
+              return types.fail("source.closure-inputs",
+                                "control arms disagree on captures", op.span);
+            extraOperands = std::move(extras);
+            auto copy = std::make_shared<Body>(*region);
+            auto inputs = appendBodyInputs(*copy, hidden);
+            mapBodyValues(*copy, [&](ValueId value) {
+              return ValueId{value.index < selected->layout.inputs.size()
+                                 ? selected->layout.inputs[value.index]
+                                 : value.index};
+            });
+            // MLIR's region interface forwards each physical invariant port.
+            // Its yield suffix is distinct from logical uses inside the body.
+            if (loop && !copy->stopped) {
+              unsigned invariants = forwarded - control->carried;
+              if (copy->results.size() < invariants)
+                return types.fail("source.closure-inputs",
+                                  "loop invariant results differ", op.span);
+              for (unsigned i = 0; i < invariants; ++i) {
+                if (region->results[region->results.size() - invariants + i]
+                        .index != region->inputs - invariants + i)
+                  return types.fail("source.closure-inputs",
+                                    "source loop invariant yield differs",
+                                    op.span);
+                copy->results[copy->results.size() - invariants + i] = {
+                    region->inputs - invariants + i};
+              }
+              copy->results.insert(copy->results.end(), inputs.begin(),
+                                   inputs.end());
+            }
+            auto nested = environment;
+            auto nestedDomains = selectedDomains;
+            unsigned offset = 0;
+            for (auto &entry : nested)
+              for (auto &operand : entry.captures)
+                operand = {selected->layout.captures[offset++]};
+            for (auto &domain : nestedDomains)
+              for (auto &operand : domain.operands)
+                operand = {selected->layout.captures[offset++]};
+            if (!closeBody(*copy, bindings, Body::Mode::Local, depth, height,
+                           nested, nestedDomains))
+              return false;
+            control->regionLayouts.push_back(std::move(selected->layout));
             region = std::move(copy);
           }
+          if (extraOperands)
+            control->operands.insert(control->operands.end(),
+                                     extraOperands->begin(),
+                                     extraOperands->end());
+          control->domainArguments.clear();
         }
+      }
+      body.scopedBindings.clear();
+      body.domainBindings.clear();
+      if (mode == Body::Mode::Math) {
+        std::vector<Dependencies> inputs;
+        for (unsigned i = 0; i < body.inputs; ++i)
+          inputs.push_back({{i}, false});
+        auto summary = summarizeBody(types, declarations, body, {}, inputs, {});
+        if (!summary || summary->parameterized)
+          return false;
+        body.formationRequirements.clear();
+        for (unsigned i = 0; i < body.values.size(); ++i)
+          body.values[i].components = summary->values[i].inputs;
+        for (const auto &requirement : summary->formation)
+          body.formationRequirements.push_back(requirement.inputs);
+        body.parameterizedSummary = false;
       }
       if (mode == Body::Mode::Local)
         body.formationRequirements.clear();
+      body.parameterizedSummary = false;
       return true;
     };
-    instantiate = [&](DeclarationId origin, ArrayRef<Type> args,
-                      unsigned depth) -> std::optional<DeclarationId> {
+    instantiate = [&](DeclarationId origin, ArrayRef<Type> args, unsigned depth,
+                      ArrayRef<DeclarationId> scoped,
+                      ArrayRef<std::shared_ptr<const DomainShape>> domains,
+                      const ClosureLayout &providedLayout)
+        -> std::optional<DeclarationId> {
       const auto &source = declarations[origin.index];
       if (depth > work.limits.callDepth) {
         types.fail("source.limit", "closed call depth limit exceeded",
@@ -394,14 +820,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       if (!types.checkArguments(source, args, source.span))
         return {};
       std::string key;
-      if (source.generatedReduction) {
-        detail::frame(key, "generated-reduction");
-        detail::frame(key,
-                      declarations[source.generatedReduction->enclosing.index]
-                          .qualifiedName);
-        detail::frame(key, std::to_string(source.generatedReduction->ordinal));
-      } else
-        detail::frame(key, source.qualifiedName);
+      detail::frame(key, source.qualifiedName);
       for (auto &arg : args) {
         if (types.symbolic(arg)) {
           types.fail("source.generic",
@@ -413,6 +832,52 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           return {};
         detail::frame(key, typeIdentity(arg));
       }
+      if (scoped.size() != source.scopedInputs.size()) {
+        types.fail("source.scoped", "specialization scoped arity differs",
+                   source.span);
+        return {};
+      }
+      for (auto selected : scoped) {
+        frame(key, declarations[selected.index].symbol);
+        if (!types.charge(1, source.span))
+          return {};
+      }
+      if (domains.size() != source.domainInputs.size()) {
+        types.fail("source.finite-domain",
+                   "specialization domain arity differs", source.span);
+        return {};
+      }
+      frame(key, "domains");
+      for (const auto &domain : domains) {
+        if (!domain || !types.charge(domain->identity.size() + 1, source.span))
+          return {};
+        frame(key, domain->identity);
+      }
+      auto layout = providedLayout;
+      if (layout.inputs.empty() && source.inputs.size())
+        for (unsigned i = 0; i < source.inputs.size(); ++i)
+          layout.inputs.push_back(i);
+      if (layout.inputs.size() != source.inputs.size()) {
+        types.fail("source.closure-inputs",
+                   "authored closure input arity differs", source.span);
+        return {};
+      }
+      frame(key, "input-aliases");
+      for (unsigned i = 0; i < layout.inputs.size(); ++i) {
+        if (layout.inputs[i] > i ||
+            layout.inputs[layout.inputs[i]] != layout.inputs[i]) {
+          types.fail("source.closure-inputs",
+                     "invalid authored alias partition", source.span);
+          return {};
+        }
+        frame(key, std::to_string(layout.inputs[i]));
+      }
+      frame(key, "capture-inputs");
+      for (auto port : layout.captures)
+        frame(key, std::to_string(port));
+      if (!types.charge(layout.inputs.size() + layout.captures.size() + 1,
+                        source.span))
+        return {};
       auto known = instances.find(key);
       if (known != instances.end()) {
         if (depth - 1 + heights.at(known->second.index) >
@@ -483,10 +948,19 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       result.origin = origin;
       result.members.clear();
       result.staticArguments.assign(args.begin(), args.end());
+      result.scopedArguments.assign(scoped.begin(), scoped.end());
+      result.closureLayout = layout;
+      result.domainArguments.assign(domains.begin(), domains.end());
       // Native participant carriers bound identifiers to 128 bytes. Reuse the
       // instance key for long declaration paths instead of narrowing source
       // names.
-      if (!args.empty() || result.symbol.size() > 128)
+      if (!args.empty() || !scoped.empty() || !domains.empty() ||
+          !layout.captures.empty() ||
+          llvm::any_of(llvm::enumerate(layout.inputs),
+                       [](const auto &input) {
+                         return input.index() != input.value();
+                       }) ||
+          result.symbol.size() > 128)
         result.symbol = "zkl_" + detail::digest(key);
       if (result.symbol.size() > work.limits.symbolBytes) {
         types.fail("source.limit", "specialized symbol exceeds byte limit",
@@ -501,9 +975,12 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       }
       declarations.push_back(result);
       auto bindings = types.substitution(result, args);
-      if (result.parent && declarations[result.parent->index].kind ==
-                               Declaration::Kind::Component) {
-        auto &parent = declarations[result.parent->index];
+      auto lexicalParent = result.parent;
+      while (lexicalParent && declarations[lexicalParent->index].kind !=
+                                  Declaration::Kind::Component)
+        lexicalParent = declarations[lexicalParent->index].parent;
+      if (lexicalParent) {
+        auto &parent = declarations[lexicalParent->index];
         Type self(Type::Kind::Component, parent.qualifiedName);
         self.arguments.assign(args.begin(),
                               args.begin() + parent.parameters.size());
@@ -525,7 +1002,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         for (auto &argument : subject.arguments)
           if (!closeType(argument, bindings, subject.span))
             return false;
-        auto selected = instantiate(subject.relation, subject.arguments, 1);
+        auto selected =
+            instantiate(subject.relation, subject.arguments, 1, {}, {}, {});
         if (!selected)
           return false;
         subject.relation = *selected;
@@ -552,15 +1030,118 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       if (result.body) {
         assert(result.body->mode == mode && "declaration body mode changed");
         auto body = std::make_shared<Body>(*result.body);
-        if (!closeBody(*body, bindings, mode, depth, height))
+        std::vector<Value> hidden;
+        std::vector<Environment> environment;
+        unsigned offset = 0;
+        for (unsigned i = 0; i < scoped.size(); ++i) {
+          const auto &helper = declarations[scoped[i].index];
+          Environment selected{scoped[i], {}};
+          for (unsigned j = result.scopedInputs[i].signature.inputs.size();
+               j < helper.inputs.size(); ++j) {
+            if (offset >= layout.captures.size()) {
+              types.fail("source.closure-inputs",
+                         "missing hidden input mapping", result.span);
+              return {};
+            }
+            auto position = layout.captures[offset++];
+            auto port = helper.inputs[j];
+            if (position > result.inputs.size()) {
+              types.fail("source.closure-inputs",
+                         "noncontiguous hidden input mapping", result.span);
+              return {};
+            }
+            if (position == result.inputs.size()) {
+              port.name = "capture" + std::to_string(hidden.size());
+              result.inputs.push_back(port);
+              hidden.push_back({port.type, {}, port.span});
+            } else if (result.inputs[position].type != port.type) {
+              types.fail("source.closure-inputs", "aliased input types differ",
+                         result.span);
+              return {};
+            }
+            selected.captures.push_back({position});
+          }
+          environment.push_back(std::move(selected));
+        }
+        std::vector<DomainEnvironment> domainEnvironment;
+        for (unsigned i = 0; i < domains.size(); ++i) {
+          const auto &domain = domains[i];
+          auto item = types.substitute(result.domainInputs[i].item, bindings,
+                                       result.span);
+          if (!item || domain->result >= domain->nodes.size() ||
+              *item != domain->nodes[domain->result].item) {
+            if (!types.diagnostic)
+              types.fail("source.finite-domain",
+                         "closed domain item type differs", result.span);
+            return {};
+          }
+          DomainEnvironment selected{domain, {}};
+          for (const auto &type : domain->inputs) {
+            if (offset >= layout.captures.size()) {
+              types.fail("source.closure-inputs",
+                         "missing domain input mapping", result.span);
+              return {};
+            }
+            auto position = layout.captures[offset++];
+            if (position > result.inputs.size()) {
+              types.fail("source.closure-inputs",
+                         "noncontiguous domain input mapping", result.span);
+              return {};
+            }
+            if (position == result.inputs.size()) {
+              result.inputs.push_back(
+                  {"capture" + std::to_string(hidden.size()),
+                   type,
+                   {},
+                   result.span});
+              hidden.push_back({type, {}, result.span});
+            } else if (result.inputs[position].type != type) {
+              types.fail("source.closure-inputs",
+                         "aliased domain input types differ", result.span);
+              return {};
+            }
+            selected.operands.push_back({position});
+          }
+          domainEnvironment.push_back(std::move(selected));
+        }
+        if (offset != layout.captures.size() ||
+            !types.charge(hidden.size() + 1, result.span))
+          return {};
+        appendBodyInputs(*body, hidden);
+        mapBodyValues(*body, [&](ValueId value) {
+          return ValueId{value.index < layout.inputs.size()
+                             ? layout.inputs[value.index]
+                             : value.index};
+        });
+        if (!closeBody(*body, bindings, mode, depth, height, environment,
+                       domainEnvironment))
           return {};
         if (result.kind == Declaration::Kind::Math ||
             result.kind == Declaration::Kind::Relation)
           for (const auto &value : body->values)
             if (!types.mathematicalData(value.type, value.span))
               return {};
+        auto assumptions = mapDataPreconditions(types, result.dataPreconditions,
+                                                layout.inputs);
+        if (!assumptions)
+          return {};
+        result.dataPreconditions = std::move(*assumptions);
+        auto requirements = deriveDataPreconditions(
+            types, declarations, result, *body,
+            result.scopedOrigin || !result.scopedInputs.empty() ||
+                !result.domainInputs.empty());
+        if (!requirements)
+          return {};
+        result.dataPreconditions = std::move(*requirements);
         result.body = std::move(body);
       }
+      result.scopedInputs.clear();
+      result.domainInputs.clear();
+      result.inputOrder.clear();
+      for (unsigned i = 0; i < result.inputs.size(); ++i)
+        result.inputOrder.push_back({Declaration::InputSlot::Kind::Data, i});
+      for (unsigned i = 0; i < result.services.size(); ++i)
+        result.inputOrder.push_back({Declaration::InputSlot::Kind::Service, i});
       result.parameters.clear();
       result.bounds.clear();
       result.permissionBounds.clear();
@@ -576,7 +1157,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
     if (!target)
       return types.fail("source.entry", "Entry has no checked target",
                         declarations[selected.index].span);
-    auto instance = instantiate(*target, args, 1);
+    auto instance = instantiate(*target, args, 1, {}, {}, {});
     if (!instance)
       return false;
     if (!types.checkProofEntry(declarations[selected.index],
@@ -592,7 +1173,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
                   port.type.domain == "verifier_key");
       bool initialized = llvm::any_of(
           declarations[selected.index].setups, [&](const SetupSlot &slot) {
-            return llvm::any_of(slot.inputs, [&](const EntryInput &input) {
+            return llvm::any_of(slot.inputs, [&](const InputSelector &input) {
               return input.port == i && input.path.empty();
             });
           });
@@ -603,6 +1184,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         return false;
     }
     declarations[selected.index].target = *instance;
+    for (auto id : generatedTemplates)
+      declarations[id.index].body.reset();
     for (unsigned i = 0; i < templates; ++i)
       declarations[i].body.reset();
     return true;

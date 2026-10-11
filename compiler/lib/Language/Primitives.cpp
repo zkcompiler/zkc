@@ -52,7 +52,7 @@ nativeRoots(Semantics &types, const Declaration &decl, StringRef identity) {
       return types.fail("source.limit", "primitive scheme depth exceeded",
                         decl.span);
     if (!types.chargeType(value, decl.span) || id >= terms.size() ||
-        !matchesStaticSort(value, scope.sorts[id]))
+        !matchesKernelStaticSort(identity, value, scope.sorts[id]))
       return false;
     if (terms[id] && *terms[id] != value)
       return false;
@@ -146,12 +146,17 @@ mathematicalRoots(Semantics &types, const Declaration &decl,
                decl.span);
     return {};
   };
-  if (intrinsic.domain == MathematicalIntrinsic::Domain::Boolean)
+  if (intrinsic.domain == MathematicalIntrinsic::Domain::Boolean ||
+      intrinsic.domain == MathematicalIntrinsic::Domain::Index)
     return std::vector<Type>{};
+  if (intrinsic.identity == I::GroupIdentity)
+    return std::vector<Type>{decl.outputs.front().type};
   if (decl.inputs.empty())
     return refuse();
   const auto &input = decl.inputs.front().type;
   const auto &output = decl.outputs.front().type;
+  if (intrinsic.domain == MathematicalIntrinsic::Domain::Collection)
+    return std::vector<Type>{input};
   if (intrinsic.scalar)
     return std::vector<Type>{input};
   const Type *anchor = &input;

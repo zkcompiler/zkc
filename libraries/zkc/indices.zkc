@@ -1,0 +1,17 @@
+module zkc::indices;
+
+pub type Indices = builtin("indices");
+pub fn empty() -> Indices = primitive("indices.empty");
+pub fn append(values: Indices, value: index) -> Indices = primitive("indices.append");
+pub fn length(values: Indices) -> index = primitive("indices.length");
+pub fn get(values: Indices, position: index) -> index = primitive("indices.at");
+pub math fn at(values: Indices, position: index) -> index where in_bounds(position, values)
+  = primitive("container.at");
+pub domain fn elements(values: Indices) -> scoped domain<index> = domain("elements");
+pub domain fn indices(values: Indices) -> scoped domain<index> = domain("indices");
+pub fn collect<I: Type + Copy + Drop>(
+  rows: scoped domain<I>, body: scoped fn(I) -> index !{stop} on(rows)
+) -> Indices !{stop} = finite("local.collect.indices");
+
+// Bounds follow the selected total accessor; checked access can be rebound locally.
+pub indexing values[position] = at(values, position);

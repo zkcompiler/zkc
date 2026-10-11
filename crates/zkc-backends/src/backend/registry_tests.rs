@@ -606,7 +606,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         ),
         Type::Sequence,
         I::None,
-        256 + sequence_type.descriptor_bytes() + 512 + 512,
+        256 + sequence_type.descriptor_bytes() + 256 + 512 + 512,
     );
     check(
         Value::pack_variant(descriptor, 0, vec![fixed]).unwrap(),
@@ -1010,6 +1010,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "curve.equal",
         "curve.generator",
         "curve.get",
+        "curve.identity",
         "curve.length",
         "curve.msm",
         "curve.neg",
@@ -1030,6 +1031,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "field.sub",
         "matrix.bilinear",
         "matrix.dimension",
+        "matrix.get",
         "matrix.identity_check",
         "matrix.mul_vector",
         "matrix.shape_check",

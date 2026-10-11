@@ -7,7 +7,8 @@ from entry import Entry
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULES = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
-           for name in ('vector', 'matrix', 'boolean', 'polynomial', 'symbolic')]
+           for name in ('vector', 'matrix', 'boolean', 'polynomial', 'symbolic', 'field_array',
+                        'accumulation', 'curve', 'finite', 'sequence')]
 
 
 def scalar(n):
@@ -129,6 +130,8 @@ def test_formal_contract_and_execution_modes_refuse(toolchain, journal, director
     for name, definition, code in [
         ('index-bound', 'math fn bad(a:F)->F {return zkc::symbolic::get<F,1,1>(zkc::symbolic::pack([a]));}', 'source.bound'),
         ('ordered-math', 'math fn bad(a:F)->F {return zkc::vector::sum(zkc::vector::fill(a,1));}', 'source.mode'),
+        ('checked-matrix', 'math fn bad(m:zkc::matrix::Matrix<F>,r:index,c:index)->F {return zkc::matrix::get(m,r,c);}', 'source.mode'),
+        ('checked-array', 'math fn bad(a:zkc::field_array::Array<F,2>,i:index)->F {return zkc::field_array::get(a,i);}', 'source.mode'),
     ]:
         path = directory / f'{name}.zkc'
         path.write_text(prefix + definition)

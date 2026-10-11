@@ -25,7 +25,7 @@ bool Semantics::relationData(const Declaration &scope, const Type &type,
     return true; // Closed instantiation rechecks the selected representation.
   using K = Type::Kind;
   if (isNativeData(type)) {
-    auto native = builtinLayout(type);
+    auto native = nativeLayout(type);
     if (!native)
       return accept(native.takeError(), span);
     protocol::TypeParseBudget budget;

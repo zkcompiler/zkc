@@ -1,0 +1,16 @@
+module zkc::sequence;
+
+pub type Sequence<T: Type + Copy + Drop> = builtin("sequence", T);
+
+pub fn empty<T: Type + Copy + Drop>() -> Sequence<T> = primitive("sequence.empty");
+pub fn append<T: Type + Copy + Drop>(values: Sequence<T>, value: T) -> Sequence<T> = primitive("sequence.append");
+pub fn length<T: Type + Copy + Drop>(values: Sequence<T>) -> index = primitive("sequence.length");
+pub fn get<T: Type + Copy + Drop>(values: Sequence<T>, position: index) -> T = primitive("sequence.at");
+
+pub domain fn elements<T: Type + Copy + Drop>(values: Sequence<T>) -> scoped domain<T> = domain("elements");
+pub domain fn indices<T: Type + Copy + Drop>(values: Sequence<T>) -> scoped domain<index> = domain("indices");
+pub math fn at<T: Type + Copy + Drop>(values: Sequence<T>, position: index) -> T where in_bounds(position, values)
+  = primitive("container.at");
+
+// Bounds follow the selected total accessor; checked access can be rebound locally.
+pub indexing values[position] = at(values, position);

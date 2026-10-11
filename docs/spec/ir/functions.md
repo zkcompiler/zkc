@@ -91,6 +91,12 @@ followed by `_BYTE_LENGTH_COMPONENT` for each path component and leaf site.
 Functions without applications retain their sites. Generated names and debug
 locations are not evidence of source correspondence.
 
+Staged expansion records paths relative to each declaration. When preparation
+introduces a new call to a previously expanded helper, expansion prefixes those
+recorded paths with the new invocation path and adds its depth. Nested regions
+retain that invocation prefix exactly once. The independent reader checks the
+composed paths, depths and unique occurrence records.
+
 `.zkc` function origins identify qualified definitions with empty native static
 bindings; the checked closure and emitted symbol retain the actual static
 selection. Native proof construction resolves actual prepared occurrences under

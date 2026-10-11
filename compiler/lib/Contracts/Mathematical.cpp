@@ -5,10 +5,16 @@ llvm::ArrayRef<MathematicalIntrinsic> mathematicalIntrinsics() {
   using I = MathematicalIdentity;
   using D = MathematicalIntrinsic::Domain;
   static const MathematicalIntrinsic values[] = {
+      {"container.at", I::ContainerAt, D::Collection},
+      {"matrix.at", I::MatrixAt, D::Collection},
+      {"index.constant", I::IndexConstant, D::Index, 1},
+      {"index.equal", I::IndexEqual, D::Index, 0, false, true},
+      {"index.less", I::IndexLess, D::Index, 0, false, true},
       {"field.add", I::FieldAdd, D::Field, 0, false, true},
       {"field.sub", I::FieldSubtract, D::Field, 0, false, true},
       {"field.mul", I::FieldMultiply, D::Field, 0, false, true},
       {"field.equal", I::FieldEqual, D::Field, 0, false, true},
+      {"curve.identity", I::GroupIdentity, D::Group, 0, false, true},
       {"curve.add", I::GroupAdd, D::Group, 0, false, true},
       {"curve.scale", I::GroupScale, D::Group, 0, false, true},
       {"curve.equal", I::GroupEqual, D::Group, 0, false, true},

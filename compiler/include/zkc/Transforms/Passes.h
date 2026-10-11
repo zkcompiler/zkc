@@ -24,7 +24,7 @@ std::unique_ptr<mlir::Pass>
 createProjectProtocolPass(bool simplify = true,
                           bool fuseVectorReductions = false);
 /// Lower participant mathematics to execution recipes in the exec profile.
-std::unique_ptr<mlir::Pass> createLowerMathPass();
+std::unique_ptr<mlir::Pass> createLowerMathPass(bool optimizeFinite = true);
 /// Distribute prefix fixing through shared sums/products and MLE leaves.
 std::unique_ptr<mlir::Pass> createFixPolynomialFactorsPass();
 /// Eliminate formal polynomial SSA while retaining concrete participant types.

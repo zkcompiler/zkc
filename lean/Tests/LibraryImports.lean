@@ -274,6 +274,10 @@ import Zkc.Semantics.Disclosure
 import Zkc.Semantics.EventInvariant
 import Zkc.Semantics.Execution
 import Zkc.Semantics.ExecutionPath
+import Zkc.Semantics.FiniteComputation.Algebra
+import Zkc.Semantics.FiniteComputation.Domain
+import Zkc.Semantics.FiniteComputation.Fold
+import Zkc.Semantics.FiniteComputation.Realization
 import Zkc.Semantics.Interaction
 import Zkc.Semantics.Interpretation
 import Zkc.Semantics.InterpretationAdmission
@@ -387,6 +391,8 @@ import Tests.FactorMerge
 import Tests.FactorOptimization
 import Tests.FamilyBoundaries
 import Tests.FamilyRepresentation
+import Tests.FiniteComputation
+import Tests.FiniteComputationAudit
 import Tests.FoundationAudit
 import Tests.FrontendIdentity
 import Tests.GenericReference

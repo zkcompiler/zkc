@@ -61,7 +61,7 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
   if (fixPolynomials)
     pipeline.addPass(protocol::createFixPolynomialFactorsPass());
   pipeline.addPass(protocol::createEliminatePolynomialsPass());
-  pipeline.addPass(protocol::createLowerMathPass());
+  pipeline.addPass(protocol::createLowerMathPass(simplify));
   pipeline.addPass(protocol::createSelectPhysicalPass({}, false, releaseStorage,
                                                       &statistics));
   return pipeline.run(module);
@@ -97,7 +97,7 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   if (options.polynomialRequirements)
     original = cast<ModuleOp>(result->module->getOperation()->clone());
   auto preparation = mathematical::PreparedProtocol::prepare(
-      *result->module, options.fuseVectorReductions);
+      *result->module, options.fuseVectorReductions, options.simplify);
   if (!preparation || diagnostics.hasErrors())
     return diagnostics.failure();
   auto prepared = preparation->snapshot();

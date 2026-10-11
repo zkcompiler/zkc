@@ -32,7 +32,8 @@ verifyCalculationRecipes(protocol_ir::ProtocolModuleOp original,
                          protocol_ir::ProtocolModuleOp candidate,
                          llvm::ArrayRef<local::FuncOp> functions);
 mlir::LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
-                                      llvm::ArrayRef<local::FuncOp> functions);
+                                      llvm::ArrayRef<local::FuncOp> functions,
+                                      bool optimizeFinite = true);
 // Internal rewrite entry used by preparation and participant simplification.
 // The caller has already admitted the complete unit.
 mlir::LogicalResult simplifyCalculations(mlir::Operation *body);

@@ -89,11 +89,21 @@ minimum of the per-value ceiling and the remaining live, total and logical
 budgets; it bounds storage the kernel newly allocates, not storage its result
 shares with its operands.
 
-A capability-free immutable value that is bound under the same physical type
-reuses its successful backend validation for aliases. Values carrying
-capabilities and newly allocated values, including received payloads, are
-validated in full. Backends still perform their own frame-entry and operand
-checks.
+A capability-free immutable value bound under the same physical type reuses its
+successful backend validation for aliases. A borrowed runtime-owned `Retained`
+view also lets the backend reuse validation of intrinsically typed immutable
+sequence subtrees. Only allocations still held by this Runner are present;
+entries disappear with their final reference. Numeric storage whose validity
+depends on its physical type does not use subtree reuse. Capabilities are always
+checked against current custody. Backend
+policy, setup authorization, frame custody and capability checks remain required.
+External calls and codecs receive no retained-validation evidence.
+
+Local and participant return/yield handoffs keep shared backing in the ledger between region
+exit and caller binding. These internal references add no value binding or
+inline charge. They are released after transfer and on every failed transfer,
+loop step or frame leave. This preserves storage accounting while avoiding a
+repeated walk of a carried immutable subtree.
 
 For example, a prover that commits 65,536 extension-field rows once and opens
 64 rows from a repeated phase capturing the opening state retains the vector

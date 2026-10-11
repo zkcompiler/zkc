@@ -207,7 +207,7 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
         vector.empty vector.append vector.splat vector.powers vector.add vector.sub vector.mul vector.concat
         vector.kronecker vector.scale vector.sum vector.product vector.dot vector.split vector.at vector.length_check
         vector.gather vector.matvec vector.from_point vector.to_point vector.from_table vector.to_table
-        matrix.mul_vector matrix.transpose_mul_vector matrix.bilinear matrix.identity_check matrix.shape_check matrix.dimension
+        matrix.mul_vector matrix.transpose_mul_vector matrix.bilinear matrix.identity_check matrix.shape_check matrix.dimension matrix.get
         poly.coefficient_count poly.coset_evaluate poly.coset_interpolate poly.domain_point poly.domain_root
         poly.domain_points poly.even_odd_fold poly.divide_opening poly.opening_quotient poly.equality_weights
         poly.from_coefficients poly.coefficients poly.degree_check poly.univariate_evaluate poly.univariate_boundary
@@ -215,7 +215,7 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
         poly.table_arity poly.product_sum poly.product_round poly.boundary poly.round_evaluate poly.fold poly.evaluate
         poly.empty_point poly.append_point
         curve.neg curve.nonidentity curve.msm curve.scale_each curve.vector_add curve.concat curve.vector_scale
-        curve.split curve.generator curve.add curve.scale curve.equal curve.empty curve.append curve.at
+        curve.split curve.generator curve.identity curve.add curve.scale curve.equal curve.empty curve.append curve.at
         curve.get curve.length curve.commit curve.response
         pcs.commit pcs.open pcs.check pcs.equal
         transcript.native.indexed.observe.data

@@ -83,6 +83,15 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     let (inputs, outputs, attributes) = match binding.contract.as_str() {
         "field_array.from_vector" => (vec![vector], vec![array], AttributeRule::None),
         "field_array.at" => (vec![array], vec![scalar], AttributeRule::Unsigned64),
+        "field_array.get" => (
+            vec![
+                array,
+                PhysicalType::default_for(LogicalType::new(Type::Index, Identity::None).ok()?)
+                    .ok()?,
+            ],
+            vec![scalar],
+            AttributeRule::None,
+        ),
         _ => return None,
     };
     Some(KernelSignature {
@@ -123,6 +132,17 @@ pub(crate) fn apply(
                     .ok_or_else(|| refused("field-array-index"))?,
             )
         }
+        ("field_array.get", [Value::FieldArray(array), Value::Index(index)]) => {
+            array.validate()?;
+            let index = usize::try_from(*index).map_err(|_| refused("field-array-index"))?;
+            policy.output(512, invocation.max_output_bytes)?;
+            Value::Field(
+                *array
+                    .elements()
+                    .get(index)
+                    .ok_or_else(|| refused("field-array-index"))?,
+            )
+        }
         _ => return Err(refused("kernel-operands")),
     };
     Ok(vec![value])
@@ -133,4 +153,5 @@ pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
         "field_array.from_vector",
     ),
     ("arkworks/field_array.at", "field_array.at"),
+    ("arkworks/field_array.get", "field_array.get"),
 ];

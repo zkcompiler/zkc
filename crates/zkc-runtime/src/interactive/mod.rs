@@ -29,7 +29,7 @@ mod program;
 mod retention;
 pub use native_proof::{NativeProofEntry, NativeProofError, NativeTranscriptEvent};
 pub use program::{AssetReference, ProgramAction, ProgramCut, ProgramRole, ProgramState};
-pub use retention::Backing;
+pub use retention::{Backing, Retained};
 mod runner;
 mod transport;
 

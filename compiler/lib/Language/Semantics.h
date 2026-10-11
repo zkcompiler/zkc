@@ -1,6 +1,7 @@
 #ifndef ZKC_LANGUAGE_SEMANTICS_H
 #define ZKC_LANGUAGE_SEMANTICS_H
 #include "State.h"
+#include "zkc/Contracts/Bindings.h"
 #include <functional>
 namespace zkc::language::detail {
 Type parameterType(const Parameter &);
@@ -35,6 +36,7 @@ public:
   const Parameter *parameter(llvm::StringRef) const;
   const Declaration *typeDeclaration(const Type &) const;
   bool symbolic(const Type &) const;
+  llvm::Expected<protocol::BoundType> nativeLayout(const Type &);
   Substitution substitution(const Declaration &, llvm::ArrayRef<Type>) const;
   std::optional<Type> substitute(const Type &, const Substitution &, Span,
                                  unsigned = 1);

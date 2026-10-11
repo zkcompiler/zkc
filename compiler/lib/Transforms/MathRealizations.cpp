@@ -74,9 +74,9 @@ LogicalResult verifyMathRealizationsPreserved(ModuleOp original,
         for (auto &block : region)
           if (!all_of(block.getArgumentTypes(), data))
             return WalkResult::interrupt();
-      if (isa<local::FuncOp, local::ReturnOp, local::LocalIfOp,
-              local::LocalMatchOp, local::VariantInjectOp, local::LocalYieldOp,
-              local::BoolConstantOp>(nested))
+      if (isa<local::FuncOp, local::ReturnOp, local::LocalForOp,
+              local::LocalIfOp, local::LocalMatchOp, local::VariantInjectOp,
+              local::LocalYieldOp, local::BoolConstantOp>(nested))
         return WalkResult::advance();
       auto ref = nested->getAttrOfType<FlatSymbolRefAttr>("binding");
       auto binding =
@@ -97,7 +97,7 @@ LogicalResult verifyMathRealizationsPreserved(ModuleOp original,
   return success();
 }
 
-LogicalResult expandMathRealizations(ModuleOp module) {
+LogicalResult expandMathRealizations(ModuleOp module, bool optimizeFinite) {
   if (failed(verify(module)) || !hasSingleElement(*module.getBody()))
     return failure();
   auto original =
@@ -167,7 +167,7 @@ LogicalResult expandMathRealizations(ModuleOp module) {
       op.setAttr("site", builder.getStringAttr("value_" +
                                                std::to_string(occurrence++)));
   }
-  if (failed(lowerCalculations(unit, functions)) ||
+  if (failed(lowerCalculations(unit, functions, optimizeFinite)) ||
       failed(verifyMathRealizationsPreserved(module, *candidate)))
     return diagnostics::emit(
         module.emitError(), "local-realization-lowering",

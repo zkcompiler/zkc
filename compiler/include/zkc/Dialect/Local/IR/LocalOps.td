@@ -219,6 +219,18 @@ def Local_RealizeOp : Op<LocalDialect, "realize",
 
 // Source-local application is expanded under canonical-expanded-locals/1.
 // Its callee is a local.func or a preparation-callable declaration.
+class LocalFiniteDeclaration<string name> : Op<LocalDialect, name,
+    [Symbol, DeclareOpInterfaceMethods<SymbolUserOpInterface>,
+     PreparationCallableOpInterface]> {
+  let arguments = (ins SymbolNameAttr:$sym_name,
+    TypeAttrOf<FunctionType>:$function_type, FlatSymbolRefAttr:$domain,
+    OptionalAttr<FlatSymbolRefAttr>:$step, OptionalAttr<FlatSymbolRefAttr>:$body,
+    OptionalAttr<FlatSymbolRefAttr>:$predicate);
+  let hasVerifier = 1;
+}
+def Local_FiniteFoldOp : LocalFiniteDeclaration<"finite_fold">;
+def Local_FiniteCollectOp : LocalFiniteDeclaration<"finite_collect">;
+
 def Local_ApplyOp : ExecutableCallOp<"apply"> { let hasVerifier = 1; }
 
 // One ordered invocation in an endpoint; it retains stop and resource effects.

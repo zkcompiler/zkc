@@ -1,4 +1,5 @@
 #include "BodyCheck.h"
+#include "FiniteContracts.h"
 #include "zkc/Contracts/Kernels.h"
 #include <algorithm>
 #include <numeric>
@@ -150,8 +151,15 @@ std::optional<Components> BodyChecker::combine(ArrayRef<ValueId> args,
     fail("source.roles", "operation has no common participant", span);
     return {};
   }
-  if (math() && !result.empty())
-    body.formationRequirements.push_back(result);
+  if (math() && !result.empty()) {
+    uint64_t levels = 1;
+    for (auto count = formationRequirements.size(); count > 1; count >>= 1)
+      ++levels;
+    if (!checker.types.charge((result.size() + 1) * levels, span))
+      return {};
+    if (formationRequirements.insert(result).second)
+      body.formationRequirements.push_back(result);
+  }
   return Components(std::move(result));
 }
 bool BodyChecker::restricted(const Type &type) {
@@ -180,6 +188,18 @@ bool BodyChecker::statements(const SyntaxBody &source) {
       ++statement;
       continue;
     }
+    if (s.kind == Statement::Kind::Let && s.pattern.binding &&
+        syntax.bindings[s.pattern.binding->index].domain) {
+      TypeScope types(*this, s.expression, {}, true);
+      if (!types)
+        return false;
+      auto value = domainArgument(s.expression, 1);
+      if (!value || !inference.commit())
+        return false;
+      domains.emplace(*s.pattern.binding, *value);
+      ++statement;
+      continue;
+    }
     if (expr.kind == Expression::Kind::FinishIf) {
       auto results = complete(s);
       if (!results || !inference.commit() || !bindResults(s, *results))
@@ -187,7 +207,7 @@ bool BodyChecker::statements(const SyntaxBody &source) {
       ++statement;
       continue;
     }
-    if (expr.kind == Expression::Kind::Call) {
+    if (expr.kind == Expression::Kind::Call && !expr.binding) {
       auto target = checker.resolve(decl, expr.text, expr.span, false);
       if (checker.types.diagnostic)
         return false;
@@ -489,6 +509,13 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   bodyHeights[id.index] = 1;
   if (decl.kind == Declaration::Kind::Protocol && !specifications(decl))
     return false;
+  if (decl.kind == Declaration::Kind::DomainFunction) {
+    if (!resolveBindings(*this, decl, *sources[id.index]) ||
+        !domainBody(decl, depth))
+      return false;
+    bodyState[id.index] = 2;
+    return true;
+  }
   Body result;
   result.mode = (decl.kind == Declaration::Kind::Math ||
                  decl.kind == Declaration::Kind::Relation)
@@ -498,7 +525,17 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   if (!resolveBindings(*this, decl, *sources[id.index]))
     return false;
   if (sources[id.index]->primitive) {
-    if (!primitiveBody(decl, result))
+    if (!primitiveBody(decl, result) ||
+        !checkFiniteContracts(types, output.declarations, decl, result))
+      return false;
+    decl.body = std::make_shared<Body>(std::move(result));
+    bodyState[id.index] = 2;
+    inferredContracts.erase(&decl);
+    return true;
+  }
+  if (sources[id.index]->finiteDefinition) {
+    if (!finiteBody(decl, result) ||
+        !checkFiniteContracts(types, output.declarations, decl, result))
       return false;
     decl.body = std::make_shared<Body>(std::move(result));
     bodyState[id.index] = 2;
@@ -530,8 +567,19 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     if (!check.addService(sources[id.index]->serviceBindings[i],
                           decl.services[i]))
       return false;
+  for (unsigned i = 0; i < decl.domainInputs.size(); ++i)
+    if (!check.addDomain(sources[id.index]->domainBindings[i],
+                         decl.domainInputs[i], i))
+      return false;
+  for (unsigned i = 0; i < decl.scopedInputs.size(); ++i)
+    if (!check.addScoped(sources[id.index]->scopedBindings[i],
+                         decl.scopedInputs[i].signature,
+                         decl.scopedInputs[i].span))
+      return false;
   if (!check.run(sources[id.index]->bodies.front(), decl.outputs,
                  result.mode == Body::Mode::Protocol))
+    return false;
+  if (!checkFiniteContracts(types, output.declarations, decl, result))
     return false;
   for (auto &p : decl.outputs) {
     auto caps = types.permissions(p.type, p.span, &decl);

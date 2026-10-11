@@ -92,38 +92,78 @@ callable family. A type mismatch does not fall back to an outer binding.
 Return types and effects cannot choose between targets accepting the same fixed
 input types; use a named call or an explicit local binding to resolve ambiguity.
 
-## Reduce finite vectors
+## Reduce finite domains
 
 ```zkc
 use zkc::vector as vec;
+use zkc::finite_domain::{zip};
+use zkc::finite::{product};
 fn weighted<F: Field>(xs: vec::Vector<F>, ys: vec::Vector<F>, α: F) -> F {
-  return ∑ [(x, y) in zip(xs, ys)] { x * y + α };
+  return ∑ (x, y) ∈ zip(xs, ys), (x * y + α);
 }
 fn shifted_product<F: Field>(xs: vec::Vector<F>, α: F) -> F {
-  return reduce vec::product [x in xs] { x + α };
+  return product(xs, fun x => x + α);
 }
 ```
 
-The vector library declares `pub reduction ∑ = sum;` and
-`pub reduction ∏ = product;`. Named `reduce vec::sum [...] { ... }` and
-`reduce vec::product [...] { ... }` remain available without symbol imports.
-For selective imports, write
-`use zkc::vector::{Vector, reduction ∑, reduction ∏};`. A body declaration
-prefix can select a different reducer with `reduction ∑ = my_sum;`; it follows
-ordinary callable resolution and local replacement rules.
+The vector module reexports `finite`'s paired `∑` and `∏` bindings. Named calls
+use the same checking and lowering. Selective imports can request
+`reduction ∑` and `reduction ∏`. Other collections, records, tuple items and
+nested finite domains use the same scoped callback path, including directly in
+protocols. `in` is an ASCII alternative to `∈`.
 
-Collections evaluate once in written order; captures such as `α` are then read
-once in first textual-use order. Row names exist only inside the scalar body
-and may shadow outer names. Explicit `zip` is strict: every vector must have
-the same length, including a row written `_` or unused by the body. Matched
-empty rows give zero for library sum and one for library product.
+```zkc
+let selected = ∑ x ∈ xs with enabled, checked_term(x);
+let independent = ∑ (x ∈ xs) (y ∈ ys), x * y;
+let dependent = ∑ i ∈ rows, (∑ j ∈ columns(i), term(i, j));
+```
 
-This profile accepts field vectors and pure field-ring scalar bodies in local
-functions, with immutable whole-scalar captures of the same field. Nested
-binders, arbitrary collections, mutable or aggregate captures, and effectful
-scalar bodies are unsupported. A custom defined local reducer can stop and
-retains its ordinary behavior. See the [finite reduction contract](../spec/language/definitions.md#finite-vector-reductions)
-for the precise body and helper limits.
+Independent groups form a Cartesian product. `zip` checks equal extents and
+never truncates, even for ignored rows. False predicates skip their bodies.
+Domains evaluate once before capture snapshots; empty library sums return zero
+and products return one. Bodies can use checked Local computations and immutable
+aggregate captures. Use a binding from `finite_math` for a total mathematical
+function, with the required formation and access conditions.
+
+The body binds more tightly than addition: `∑ x ∈ xs, x + c` adds `c` to the
+completed sum. Write `(x + c)` or `{ x + c }` to add it for every item. A local
+`reduction ∑ = my_sum, my_filtered_sum;` chooses one pair explicitly. Importing
+both Local and Math families requires a local choice or selective imports;
+the compiler does not infer that choice from the body's effects.
+
+An arbitrary vector reducer uses `vec::reduce(rows, fun x => term(x),
+fun terms => custom(terms))`. It receives the collected vector once, including
+empty input, and keeps its own failure behavior. See the
+[source contract](../spec/language/definitions.md#finite-reduction-binders) for
+selection, bounds and retained checks.
+
+## Index collections
+
+```zkc
+use zkc::vector::{Vector, indices, indexing []};
+use zkc::finite_math::{sum};
+math fn energy<F: Field>(xs: Vector<F>) -> F {
+  return sum(indices(xs), fun i => xs[i] * xs[i]);
+}
+fn checked_pick<F: Field>(xs: Vector<F>, i: index) -> F {
+  indexing values[position] = zkc::vector::get(values, position);
+  return xs[i];
+}
+```
+
+The vector library declares `pub indexing values[position] = at(values, position);`.
+The total accessor uses bounds established by `indices(xs)` above. Matrices expose
+`matrix[row, column]`; matrix coordinates establish both bounds. Sequence, group,
+index and field-array collections expose the same one-index form through their
+own modules. Named `at` calls retain exactly the same conditions.
+
+The Local example explicitly selects checked `get`. An unavailable bound does
+not change which accessor the compiler selects. A binding in a body declaration prefix replaces the
+inherited indexing family of the same arity, so keep each intended collection
+binding in that prefix when several are needed. Access follows the named target's
+ownership and effect rules. Fixed source arrays still use literal projections
+such as `pair[0]`, without importing indexing. For indexed record fields, write
+`let record = rows[i];` before using `record.field`.
 
 ## Inspect notation and locations
 

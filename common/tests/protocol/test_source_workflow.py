@@ -45,6 +45,8 @@ run Job=Run;
 ''')
     project = write(directory, 'zkc.toml', {'format': 'zkc.project/0', 'modules': {
         'main': source.name, 'formula': library.name,
+        **{f'zkc::{name}': str(ROOT / f'libraries/zkc/{name}.zkc')
+           for name in ('accumulation', 'curve', 'finite', 'sequence')},
         'zkc::vector': str(ROOT / 'libraries/zkc/vector.zkc')}, 'assets': {}})
     command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}', f'--project={project}']
     checked = journal.json([*command, '--declarations'])

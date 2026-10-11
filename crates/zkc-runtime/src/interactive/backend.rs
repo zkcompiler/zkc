@@ -1,5 +1,7 @@
 use super::model::LogicalOrigin;
-use super::{Backing, BoundSignature, OperationBinding, Origin, PhysicalType, ResolvedBinding};
+use super::{
+    Backing, BoundSignature, OperationBinding, Origin, PhysicalType, ResolvedBinding, Retained,
+};
 use std::{fmt, sync::Arc};
 
 /// Trusted adapter value, preferably an enum of typed immutable/Arc-backed values.
@@ -157,6 +159,9 @@ pub struct Invocation<'a> {
     /// its operands is already retained. It is not a reservation of external
     /// PCS scratch. The Runner still checks the full charge of each result.
     pub max_output_bytes: usize,
+    /// Evidence about still-live immutable allocations, bound to this backend's
+    /// Runner. Replacing an operand never gives the replacement this evidence.
+    pub retained: Retained<'a>,
 }
 impl Invocation<'_> {
     /// Unambiguous bytes for local service domain separation. No hash or crypto.
@@ -247,6 +252,15 @@ pub trait Backend {
     /// Canonical representation, variant/type consistency and per-value bounds.
     /// This is read-only and must not consume randomness/capabilities.
     fn validate_value(&self, value: &Self::Value) -> Result<(), BackendError>;
+    /// Validate a value while reusing admitted immutable subtrees. The default
+    /// performs the complete check. Capabilities always require fresh checks.
+    fn validate_value_retained(
+        &self,
+        value: &Self::Value,
+        _retained: Retained<'_>,
+    ) -> Result<(), BackendError> {
+        self.validate_value(value)
+    }
     fn enter_frame(&mut self, frame: &Frame, arguments: &[Self::Value])
     -> Result<(), BackendError>;
     fn leave_frame(
@@ -255,6 +269,27 @@ pub trait Backend {
         exit: FrameExit,
         outputs: &[Self::Value],
     ) -> Result<(), BackendError>;
+    /// Enter with the same custody checks as `enter_frame`, optionally reusing
+    /// validation of immutable argument subtrees retained by this Runner.
+    fn enter_frame_retained(
+        &mut self,
+        frame: &Frame,
+        arguments: &[Self::Value],
+        _retained: Retained<'_>,
+    ) -> Result<(), BackendError> {
+        self.enter_frame(frame, arguments)
+    }
+    /// Leave with the same cleanup as `leave_frame`. A retained view can only
+    /// discharge immutable value validation, never resource cleanup.
+    fn leave_frame_retained(
+        &mut self,
+        frame: &Frame,
+        exit: FrameExit,
+        outputs: &[Self::Value],
+        _retained: Retained<'_>,
+    ) -> Result<(), BackendError> {
+        self.leave_frame(frame, exit, outputs)
+    }
     /// Upper bound on operand bytes read by this installed kernel body,
     /// for kernels that access only part of their operands, such as one opening
     /// of a committed table. The Runner charges it as logical work before
@@ -328,6 +363,7 @@ mod domain_tests {
                     logical_origin: origin,
                     attributes: &[],
                     max_output_bytes: 4096,
+                    retained: Retained::NONE,
                 }
                 .domain_bytes()
             };
@@ -362,6 +398,7 @@ mod domain_tests {
             logical_origin: &origin,
             attributes: &[],
             max_output_bytes: 1,
+            retained: Retained::NONE,
         }
         .domain_bytes();
         let expected = br#"["zkc.local-domain/0",["zkc.origin/0","s","main","root",[]],"P","round",["Add",[["F","bls12-381.fr"]]],"op",["field.add",["bls12-381.fr"]],[]]"#;

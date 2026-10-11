@@ -85,13 +85,13 @@ Semantics::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
              span);
       return {};
     }
-    bool formed = matchesStaticSort(*value, sort);
+    bool formed = matchesKernelStaticSort(contract, *value, sort);
     if (!formed) {
       fail("source.kernel", "installed static argument sort differs", span);
       return {};
     }
     if (sort == "Type") {
-      auto caps = permissions(*value, span);
+      auto caps = permissions(*value, span, context);
       if (!caps || !caps->copy || !caps->drop) {
         if (!diagnostic)
           fail("source.kernel", "native Type roots require Copy and Drop",
@@ -138,7 +138,9 @@ Semantics::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
   std::optional<protocol::BoundOperation> closedSignature;
   if (llvm::none_of(arguments,
                     [&](const auto &type) { return symbolic(type); })) {
-    auto args = kernelArguments(contract, arguments);
+    auto args = kernelArguments(contract, arguments, [&](const Type &type) {
+      return nativeLayout(type);
+    });
     if (!args) {
       fail("source.kernel", toString(args.takeError()), span);
       return {};
@@ -158,9 +160,9 @@ Semantics::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
                             : form(port.constructor, port.arguments);
       if (!type)
         return false;
-      // A Type root cannot smuggle a source record or custody token into a
-      // native one-value port, even when its representation has one leaf.
-      if (port.term && !isNativeData(*type))
+      // Only sequence ports have a contextual adapter. Other Type roots cannot
+      // erase a source record's identity, even when it has one ordinary leaf.
+      if (port.term && !isNativeData(*type) && !isSequenceKernel(contract))
         return fail("source.kernel", "native Type root requires native data",
                     span);
       dest.push_back(std::move(*type));
@@ -185,7 +187,7 @@ Semantics::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
     }
     auto data = [&](ArrayRef<Type> ports) {
       return llvm::all_of(ports, [&](const Type &type) {
-        auto caps = permissions(type, span);
+        auto caps = permissions(type, span, context);
         return caps && caps->copy && caps->drop;
       });
     };
@@ -202,7 +204,7 @@ Semantics::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
       if (source.size() != installed.size())
         return fail("source.kernel", "closed kernel port count differs", span);
       for (unsigned i = 0; i < source.size(); ++i) {
-        auto native = builtinLayout(source[i]);
+        auto native = nativeLayout(source[i]);
         if (!native) {
           fail("source.kernel", toString(native.takeError()), span);
           return false;

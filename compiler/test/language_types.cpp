@@ -742,14 +742,16 @@ void sourceNotation() {
   original(
       "module m;math fn pick(x:[bool;2])->bool{return x[1];}protocol Run "
       "roles(P)(x:[bool;2]@P)->(r:bool@P){return(r=pick(x));}run Demo=Run;");
-  for (StringRef bad : {"x[01]", "x.1", "x[value]"})
+  for (StringRef bad : {"x[01]", "x.1"})
     refuses(
         ("module m;math fn pick(x:[bool;2])->bool{return " + bad + ";}").str(),
         "source.index");
+  refuses("module m;math fn pick(x:[bool;2])->bool{return x[value];}",
+          "source.name");
   refuses(
       "module m;struct Rec{pub member:bool}math fn pick(x:Rec)->bool{return "
       "x[member];}",
-      "source.index");
+      "source.name");
   refuses("module m;math fn pick(x:(bool,bool))->bool{return x[0];}",
           "source.index");
   refuses("module m;type Bad<N:nat*2>=[bool;N];", "source.syntax");
@@ -1069,9 +1071,8 @@ void nativeData() {
           "source.builtin");
   refuses(prefix + "type Bad=builtin(\"resource_unit\");" + unit,
           "source.builtin");
-  refuses(prefix + "struct Secret{x:Fr}type Bad=builtin(\"sequence\",Secret);" +
-              unit,
-          "source.builtin");
+  check(prefix +
+        "struct Secret{x:Fr}type Values=builtin(\"sequence\",Secret);" + unit);
   refuses(library + R"(
     fn bad<F:Field>(x:F)->F{return kernel<F>("field.inverse",x);}
     math fn caller<F:Field>(x:F)->F{return bad(x);}
@@ -1120,7 +1121,7 @@ void nativeData() {
     struct Secret{pub value:Fr}
     fn bad(x:Secret)->index{return kernel<Secret>("sequence.length",x);}
   )" + unit,
-          "source.kernel");
+          "source.type");
   // Full constructor and argument identities distinguish static instances.
   auto fr = Type(Type::Kind::Field, "bls12-381.fr");
   auto other = Type(Type::Kind::Field, "koala-bear");

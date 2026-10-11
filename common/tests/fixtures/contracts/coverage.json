@@ -33,6 +33,7 @@
       "matrix.mul_vector",
       "matrix.transpose_mul_vector",
       "matrix.bilinear",
+      "matrix.get",
       "matrix.shape_check",
       "matrix.identity_check",
       "vector.constant",
@@ -99,6 +100,7 @@
       "curve.split",
       "curve.concat",
       "curve.generator",
+      "curve.identity",
       "curve.add",
       "curve.scale",
       "curve.equal",
@@ -179,6 +181,7 @@
     ],
     "array": [
       "field_array.from_vector",
+      "field_array.get",
       "field_array.at"
     ],
     "native_data_observation": [

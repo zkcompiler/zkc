@@ -58,7 +58,9 @@ class AlgorithmCorrespondence {
                       bool encode, SmallVectorImpl<Value> &returned,
                       bool &stopped, unsigned depth,
                       ArrayRef<unsigned> yieldIndices = {},
-                      bool filterYield = false) {
+                      bool filterYield = false,
+                      const protocol::Assignments &invocation = {},
+                      unsigned invocationDepth = 0) {
     if (depth > 64)
       return diagnostics::emit(source.getParentOp()->emitOpError(),
                                "algorithm-correspondence-limit");
@@ -70,9 +72,12 @@ class AlgorithmCorrespondence {
       --expected.work;
       auto saved =
           detail::occurrence(input, declarationName, attr(&op, "site"));
-      auto currentPath = saved ? saved->path : path;
+      auto currentPath = saved ? invocation : path;
+      if (saved)
+        currentPath.insert(currentPath.end(), saved->path.begin(),
+                           saved->path.end());
       auto originalSite = saved ? saved->originalSite : attr(&op, "site").str();
-      unsigned currentDepth = saved ? saved->depth : depth;
+      unsigned currentDepth = saved ? invocationDepth + saved->depth : depth;
       if (currentPath.size() > 64 || currentDepth > 64)
         return refuse(&op, "expanded occurrence depth");
       if (auto ret = dyn_cast<local::ReturnOp>(op)) {
@@ -86,7 +91,9 @@ class AlgorithmCorrespondence {
       }
       if (auto call = dyn_cast<local::ApplyOp>(op);
           call && !(phase == AlgorithmExpansionPhase::RetainMaps &&
-                    symbols.lookup<algebra::MapRealizeOp>(call.getCallee()))) {
+                    isa_and_nonnull<algebra::MapRealizeOp, local::FiniteFoldOp,
+                                    local::FiniteCollectOp>(
+                        symbols.lookup(call.getCallee())))) {
         auto callee = symbols.lookup<local::FuncOp>(call.getCallee());
         if (!callee || !callee.getBody().hasOneBlock())
           return refuse(&op, "missing local body");
@@ -105,7 +112,8 @@ class AlgorithmCorrespondence {
         definitionName = definition(callee).str();
         SmallVector<Value> results;
         if (failed(block(callee.getBody().front(), target, cursor, inner,
-                         nested, true, results, stopped, currentDepth + 1)))
+                         nested, true, results, stopped, currentDepth + 1, {},
+                         false, nested, currentDepth + 1)))
           return failure();
         declarationName = std::move(oldDeclaration);
         definitionName = std::move(oldDefinition);
@@ -118,15 +126,17 @@ class AlgorithmCorrespondence {
       if (cursor == target.end())
         return refuse(&op, "missing expanded operation");
       Operation &actual = *cursor++;
+      bool removedResults = isa<local::LocalIfOp, local::LocalMatchOp>(op) &&
+                            actual.getNumResults() == 0;
       if (op.getName() != actual.getName() ||
           op.getNumRegions() != actual.getNumRegions() ||
-          op.getResultTypes() != actual.getResultTypes())
+          (!removedResults && op.getResultTypes() != actual.getResultTypes()))
         return refuse(&actual, "operation identity");
       NamedAttrList attributes(op.getAttrs());
       if (isa<local::ApplyOp>(op) &&
           (currentDepth >= 64 || currentPath.size() >= 64))
         return refuse(&op, "retained map call depth");
-      if (encode && !saved && op.hasAttr("site")) {
+      if (encode && (!saved || !invocation.empty()) && op.hasAttr("site")) {
         auto site =
             algorithmSite(currentPath, originalSite, expected.checkOriginBytes);
         if (!site)
@@ -146,6 +156,8 @@ class AlgorithmCorrespondence {
                             : detail::AlgorithmOccurrence{
                                   definitionName, declarationName, originalSite,
                                   currentPath, currentDepth};
+        record.path = currentPath;
+        record.depth = currentDepth;
         if (!expected.occurrences
                  .emplace(detail::OccurrenceKey{functionName,
                                                 attr(&actual, "site").str()},
@@ -203,6 +215,7 @@ class AlgorithmCorrespondence {
       }
       if (!llvm::equal(operands, actual.getOperands()))
         return refuse(&actual, "operand correspondence");
+      bool allStopped = !op.getRegions().empty();
       for (auto [a, b] : zip(op.getRegions(), actual.getRegions())) {
         if (!a.hasOneBlock() || !b.hasOneBlock())
           return refuse(&actual, "region shape");
@@ -238,9 +251,21 @@ class AlgorithmCorrespondence {
         bool terminated = false;
         if (failed(block(before, after, position, inner, currentPath, encode,
                          ignored, terminated, currentDepth + 1, yields,
-                         isa<local::LocalForOp>(op))) ||
+                         isa<local::LocalForOp>(op), invocation,
+                         invocationDepth)) ||
             position != after.end())
           return refuse(&actual, "region body correspondence");
+        allStopped &= terminated;
+      }
+      if (isa<local::LocalIfOp, local::LocalMatchOp>(op) && allStopped) {
+        if (actual.getNumResults() || cursor == target.end())
+          return refuse(&actual, "terminal control results");
+        auto unreachable = dyn_cast<local::StopOp>(*cursor++);
+        if (!unreachable || unreachable.getReason() != "abort" ||
+            !unreachable.getSite().starts_with("unreachable_"))
+          return refuse(&actual, "missing unreachable terminator");
+        stopped = true;
+        return success();
       }
       if (failed(bind(op.getResults(), actual.getResults(), values)))
         return refuse(&actual, "result correspondence");
