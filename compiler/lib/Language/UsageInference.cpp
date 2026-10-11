@@ -68,8 +68,22 @@ bool Checker::inferUsage(Declaration &decl, Body::Mode mode, unsigned depth) {
       return false;
   if (!plan.usage.solve(require))
     return false;
-  for (auto &bound : inferred)
-    decl.permissionBounds.push_back(std::move(bound));
+  for (auto &bound : inferred) {
+    auto found = decl.permissionBounds.end();
+    for (auto at = decl.permissionBounds.begin();
+         at != decl.permissionBounds.end(); ++at) {
+      if (!types.chargeType(at->type, bound.span))
+        return false;
+      if (at->inferred && at->type == bound.type) {
+        found = at;
+        break;
+      }
+    }
+    if (found == decl.permissionBounds.end())
+      decl.permissionBounds.push_back(std::move(bound));
+    else if (bound.permissions.copy && !found->permissions.copy)
+      *found = std::move(bound);
+  }
   return true;
 }
 } // namespace zkc::language::detail

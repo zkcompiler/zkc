@@ -199,5 +199,56 @@ run Demo=Run;
     }
     take(check("struct Share{pub value:bool}struct Wire{pub value:bool}"));
   });
+  cases.run("boundary closure is independent of declaration order", [] {
+    std::string source = R"(
+protocol Forward<T:Type> roles(P,V)(x:T@P)->(r:T@V) where () {let r=Relay(x);return r;}
+)" + relay;
+    const auto project = take(check(source));
+    require(declaration(project, "Forward").admissions.size() == 2,
+            "later explicit-contract callee lost its boundaries");
+    compile(source + "run Demo=Forward<bool>;");
+    refuses(
+        check(source + "struct Secret{value:bool}run Demo=Forward<Secret>;"),
+        "source.ingress");
+  });
+  cases.run("recursive calls refuse before propagating boundary conditions",
+            [] {
+              refuses(check(R"(
+protocol R<T:Type+Copy> roles(P,V)(x:T@P)->(r:T@V) where () {
+ let y=send P->V(x);let _=R<(T,T)>((x,x));return y;
+}
+)"),
+                      "source.cycle");
+              refuses(check(R"(
+protocol R<T:Type> roles(P,V)(x:T@P)->(r:T@V) where () {let y=S(x);return y;}
+protocol S<T:Type> roles(P,V)(x:T@P)->(r:T@V) where () {let y=send P->V(x);let z=R(x);return z;}
+)"),
+                      "source.cycle");
+            });
+  cases.run("repeated message sites retain one semantic boundary condition",
+            [] {
+              std::string source =
+                  "protocol Many<T:Type+Copy> roles(P,V)(x:T@P)->() where () {";
+              for (unsigned i = 0; i < 200; ++i)
+                source += "let message" + std::to_string(i) + "=send P->V(x);";
+              source += "return ();}";
+              auto project = take(check(source));
+              require(declaration(project, "Many").admissions.size() == 2,
+                      "repeated sites duplicated the checked contract");
+            });
+  cases.run(
+      "opaque reusable associated data supports shared signatures and calls",
+      [] {
+        const std::string source = R"(
+interface Family{type Item:Copy;}
+module Box:Family{type Item:Type=bool;}
+protocol Shared<C:Family> roles(P,V)(x:C::Item@(P,V))->(r:C::Item@(P,V)) where () {return x;}
+protocol Forward roles(P,V)(x:Box::Item@(P,V))->(r:Box::Item@(P,V)){let r=Shared<Box>(x);return r;}
+)";
+        take(check(source));
+        refuses(
+            closeEntry(take(check(source + "run Demo=Forward;")), "m::Demo"),
+            "source.ingress");
+      });
   return cases.result();
 }

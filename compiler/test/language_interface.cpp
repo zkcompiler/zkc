@@ -981,5 +981,30 @@ run Demo=Run;)zkc");
       }
     }
   });
+  cases.run("managed transcript leaves are not source builtin data", [] {
+    const std::string type =
+        "!local.capability<\"transcript:merlin3.bls12-381.fr64be/0\">";
+    auto source =
+        compile("module sample;protocol Pass "
+                "roles(P)(x:bool@P)->(r:bool@P){return x;}run Demo=Pass;");
+    auto native = source.bytes().str();
+    for (size_t at = 0; (at = native.find("i1", at)) != std::string::npos;
+         at += type.size())
+      native.replace(at, 2, type);
+    auto value = take(json::parse(source.interfaceJson()));
+    (*value.getAsObject())["original"] =
+        toHex(SHA256::hash(arrayRefFromStringRef(native)), true);
+    for (StringRef ports : {"inputs", "outputs"}) {
+      auto &port = *protocol(value).getArray(ports)->front().getAsObject();
+      port["type"] = "Transcript";
+      auto &schema = *port.getObject("schema");
+      schema["type"] = "Transcript";
+      schema["kind"] = "builtin";
+      schema["constructible"] = false;
+      schema["permissions"] = json::Array{};
+      schema["leaves"] = json::Array{"transcript:merlin3.bls12-381.fr64be/0"};
+    }
+    refuses(readInterface(native, zkc::printJson(value)), "source.interface");
+  });
   return cases.result();
 }

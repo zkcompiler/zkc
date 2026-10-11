@@ -776,8 +776,9 @@ installed native type declarations:
 Boundary admission is derived rather than expressed as a generic usage bound.
 An open generic message retains its constructor and codec obligations. Generic calls substitute and propagate
 these conditions; concrete application and Entry closure must discharge them.
-Known invalid types fail immediately, including in unused definitions. Diagnostics
-retain the message or placement origin and call sites. No condition selects a
+Known invalid types fail immediately, including in unused definitions. Repeated
+conditions are stored once, retaining a representative message or placement
+origin and call chain for diagnostics. No condition selects a
 codec, inserts communication or supplies a private constructor.
 
 Entry inputs undergo these checks after generic selection. Internal protocol

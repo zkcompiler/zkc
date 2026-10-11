@@ -1,5 +1,6 @@
 #include "../lib/Language/UsagePlan.h"
 #include "support/NativeCases.h"
+#include <random>
 using namespace zkc::language;
 using namespace zkc::test;
 namespace source = zkc::language::detail;
@@ -182,6 +183,62 @@ int main() {
       e.plan.use(value, {}, Plan::always, {});
     e.solve();
     require(e.needs(Usage::Copy), "repetition lost Copy");
+  });
+  cases.run("disjoint aggregate uses fit a linear work budget", [] {
+    for (bool concrete : {false, true}) {
+      Environment e;
+      e.limits.work = 100000;
+      Type array(Type::Kind::Array);
+      array.arguments = {concrete ? Type{} : e.parameter};
+      array.dimension = Natural::constant(1024);
+      auto value = e.plan.own(array, {}, Plan::always);
+      for (unsigned i = 0; i < 1024; ++i)
+        require(e.plan.use(value, {i}, Plan::always, {}), "field use");
+      require(e.plan.finish(value, Plan::always, {}, false), "finish");
+      e.solve();
+      require(e.requirements.empty(), "disjoint array elements gained usage");
+    }
+  });
+  cases.run("guard operations agree with finite truth tables", [] {
+    Environment e;
+    std::vector<std::pair<Plan::Guard, uint64_t>> expressions{
+        {Plan::never, 0}, {Plan::always, ~uint64_t(0)}};
+    std::vector<unsigned> branches;
+    for (unsigned variable = 0; variable < 6; ++variable) {
+      auto branch = e.plan.branch(2);
+      branches.push_back(branch);
+      uint64_t truth = 0;
+      for (unsigned assignment = 0; assignment < 64; ++assignment)
+        if (assignment & (1u << variable))
+          truth |= uint64_t(1) << assignment;
+      expressions.emplace_back(e.plan.arm(branch, 1, {}), truth);
+    }
+    std::vector<Plan::Guard> assignments;
+    for (unsigned assignment = 0; assignment < 64; ++assignment) {
+      auto guard = Plan::always;
+      for (unsigned variable = 0; variable < 6; ++variable)
+        guard = e.plan.intersect(
+            guard,
+            e.plan.arm(branches[variable], (assignment >> variable) & 1, {}),
+            {});
+      assignments.push_back(guard);
+    }
+    std::minstd_rand random(7);
+    for (unsigned i = 0; i < 256; ++i) {
+      auto [left, a] = expressions[random() % expressions.size()];
+      auto [right, b] = expressions[random() % expressions.size()];
+      bool disjunction = random() % 2;
+      auto guard = disjunction ? e.plan.unite(left, right, {})
+                               : e.plan.intersect(left, right, {});
+      uint64_t truth = disjunction ? a | b : a & b;
+      for (unsigned assignment = 0; assignment < 64; ++assignment)
+        require((e.plan.intersect(guard, assignments[assignment], {}) ==
+                 assignments[assignment]) ==
+                    bool(truth & (uint64_t(1) << assignment)),
+                "guard changed its truth table");
+      expressions.emplace_back(guard, truth);
+    }
+    require(!e.semantics.diagnostic, "truth-table control exhausted work");
   });
   return cases.result();
 }

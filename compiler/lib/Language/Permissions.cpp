@@ -301,8 +301,10 @@ bool Semantics::mathematicalData(const Type &type, Span span,
   if (depth > work.limits.typeDepth || !charge(1, span))
     return diagnostic ? false
                       : fail("source.limit", "mathematical type depth", span);
-  if (!requireUsage(type, Usage::Copy, span, scope, "source.mode",
-                    "mathematical values require Copy"))
+  // Copy is structural: one demand covers the complete value. The recursive
+  // walk below independently checks mathematical vocabulary and representation.
+  if (depth == 1 && !requireUsage(type, Usage::Copy, span, scope, "source.mode",
+                                  "mathematical values require Copy"))
     return false;
   using K = Type::Kind;
   if (type.kind == K::Builtin) {

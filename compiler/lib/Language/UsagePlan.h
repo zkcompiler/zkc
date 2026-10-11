@@ -79,8 +79,10 @@ private:
   std::vector<Origin> origins;
   std::vector<Exit> exits;
   uint64_t order = 0;
+  using Coverage =
+      std::map<std::vector<unsigned>, std::vector<std::pair<uint64_t, Guard>>>;
   bool finishPlace(const Exit &, const Type &, std::vector<unsigned>,
-                   const Requirement &, unsigned);
+                   std::optional<Coverage> &, const Requirement &, unsigned);
 };
 } // namespace zkc::language::detail
 #endif

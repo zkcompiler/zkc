@@ -825,3 +825,22 @@ fn readable_input_groups_share_the_checked_interface_and_require_opt_in_resoluti
     }
 }
 mod unicode;
+
+#[test]
+fn managed_transcript_leaves_are_not_source_builtin_data() {
+    let mut value = document();
+    value["job"] = json!({"kind":"run"});
+    value["relations"] = json!([]);
+    let mut data = schema(
+        "builtin",
+        "Transcript",
+        json!(["transcript:merlin3.bls12-381.fr64be/0"]),
+    );
+    data["constructible"] = json!(false);
+    data["permissions"] = json!([]);
+    value["protocols"] = json!([{"symbol":"sample_Protocol", "roles":["P"],
+        "inputs":[port("x",0,json!([0]),json!(["P"]),data.clone())],
+        "outputs":[port("r",0,json!([0]),json!(["P"]),data)],
+        "services":[],"clauses":[]}]);
+    assert_eq!(read(&value).unwrap_err(), InterfaceError::Schema);
+}

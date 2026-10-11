@@ -381,5 +381,12 @@ protocol Run<T:Type+Copy+Drop>roles(P)(go:bool@P,x:T@P)->(a:bool@P,b:T@P)complet
                   "stop \"reject\";}"),
             "source.move");
   });
+  cases.run("body usage strengthens one inferred formation condition", [&] {
+    contract(R"(
+struct Box<T:Type+Drop>{pub value:T}
+fn duplicate<T:Type>(x:Box<T>)->(Box<T>,Box<T>){return(x,x);}
+)",
+             "duplicate", true, true);
+  });
   return cases.result();
 }

@@ -325,14 +325,14 @@ class Reader {
             : value.kind == K::Builtin &&
                   (leafKind == "vector" || leafKind == "matrix" ||
                    leafKind == "groups" || leafKind == "indices" ||
-                   leafKind == "transcript" || leafKind == "bytes" ||
-                   leafKind == "shake128_state" || leafKind == "polynomial" ||
-                   leafKind == "table" || leafKind == "point" ||
-                   leafKind == "round" || leafKind == "sequence" ||
-                   leafKind == "field_array" || leafKind == "commitment" ||
-                   leafKind == "commitments" || leafKind == "proof" ||
-                   leafKind == "prover_key" || leafKind == "verifier_key" ||
-                   leafKind == "opening_state" || leafKind == "opening_states");
+                   leafKind == "bytes" || leafKind == "shake128_state" ||
+                   leafKind == "polynomial" || leafKind == "table" ||
+                   leafKind == "point" || leafKind == "round" ||
+                   leafKind == "sequence" || leafKind == "field_array" ||
+                   leafKind == "commitment" || leafKind == "commitments" ||
+                   leafKind == "proof" || leafKind == "prover_key" ||
+                   leafKind == "verifier_key" || leafKind == "opening_state" ||
+                   leafKind == "opening_states");
     return matched || fail("logical kind differs from native leaf kind");
   }
   std::shared_ptr<const InterfaceSchema>
