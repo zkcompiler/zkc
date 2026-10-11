@@ -109,7 +109,8 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
     if (!p)
       return {};
     result = p->first;
-  } else if (expr.kind == K::Projection) {
+  } else if (expr.kind == K::Projection ||
+             (expr.kind == K::Subscript && !inference->callees.count(id))) {
     auto p = place(id, depth);
     if (!p)
       return {};

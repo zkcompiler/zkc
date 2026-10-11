@@ -368,7 +368,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     checker.scopedCalls.push_back(
         std::make_shared<ScopedCallSource>(std::move(source)));
   }
-  if (expr.kind == Expression::Kind::NotationCall &&
+  if ((expr.kind == Expression::Kind::NotationCall ||
+       expr.kind == Expression::Kind::Subscript) &&
       (!expr.notation || !inference->operators.count(id))) {
     fail("source.binding-witness", "notation call has no selected binding",
          expr.span);
@@ -376,7 +377,9 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   }
   if (auto found = inference->operators.find(id);
       found != inference->operators.end()) {
-    if (expr.kind != Expression::Kind::NotationCall || !expr.notation) {
+    if ((expr.kind != Expression::Kind::NotationCall &&
+         expr.kind != Expression::Kind::Subscript) ||
+        !expr.notation) {
       fail("source.binding-witness",
            "notation binding has no source descriptor", expr.span);
       return {};
@@ -407,6 +410,12 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
                               *visible, *expr.notation, evidence, inputTypes,
                               *inferred, expr.span))
       return {};
+    // Retain the independently enumerated definition-site family for ordinary
+    // notation inside callbacks as well as domain/scoped calls.
+    auto &families = checker.notationFamilies[decl.id.index];
+    if (!families)
+      families = std::make_shared<NotationFamilies>();
+    families->try_emplace(id, std::move(*visible));
   }
   auto emitCall = [&](decltype(Operation::action) action,
                       Components available) -> std::optional<ValueId> {

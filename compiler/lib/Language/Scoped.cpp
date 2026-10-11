@@ -214,6 +214,9 @@ bool Checker::retainScopedSources() {
     output.scopedInvocations.push_back(std::move(source));
   }
   for (auto &source : scopedSources) {
+    if (auto families = notationFamilies.find(source->owner.index);
+        families != notationFamilies.end())
+      source->notationFamilies = families->second;
     source->syntax = retainSyntax(source->owner);
     if (!source->syntax)
       return false;

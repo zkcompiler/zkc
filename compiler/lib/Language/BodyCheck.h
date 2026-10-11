@@ -124,7 +124,7 @@ private:
   std::optional<ValueId> block(const Expression &, std::optional<Type>,
                                bool allowUntypedStop);
   std::optional<std::pair<BindingId, std::vector<unsigned>>>
-  sourcePlace(uint32_t, unsigned = 1);
+  sourcePlace(uint32_t, unsigned = 1, bool optional = false);
   std::optional<RegionInputs> regionInputs(const Expression &);
   std::optional<std::set<BindingId>> regionStates(const RegionInputs &, Span);
   std::optional<ValueId> capturePlace(const FreePlace &, Span);

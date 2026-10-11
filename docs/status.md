@@ -123,8 +123,10 @@ reducer failure order. [Finite binders](spec/language/definitions.md#finite-redu
 now use that same path: Local and total Math targets, filters, independent products,
 dependent nesting, aggregate captures and direct protocol/component use. One
 lexical binding is selected before body/result inference. Shared source/domain/
-scoped witnesses replace the old ring-only extraction checker. Dynamic indexing
-notation remains a separate pending surface integration.
+scoped witnesses replace the old ring-only extraction checker. Library-owned indexing now uses the same typed callable selection and retained
+binding checks. Standard vector, matrix, group, sequence, index and field-array
+modules expose total access; checked Local access requires explicit rebinding.
+Static source-array projections retain their existing capture paths.
 The staged parser resolves
 notation environments after imports and before bodies. Callable notation uses
 ordinary signature constraints and authored evaluation order, with descriptor

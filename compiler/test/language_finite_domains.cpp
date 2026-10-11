@@ -48,6 +48,103 @@ fn sum<I:Type+Copy+Drop>(rows:scoped domain<I>,term:scoped fn(I)->Fr !{stop} on(
 fn fold_where<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,keep:scoped fn(I)->bool !{stop} on(rows),step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold_where");
 fn sum_where<I:Type+Copy+Drop>(rows:scoped domain<I>,keep:scoped fn(I)->bool !{stop} on(rows),term:scoped fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold_where(rows,0,keep,fun state item=>state+term(item));}
 )";
+  cases.run(
+      "indexed callbacks capture static elements and dynamic containers", [&] {
+        auto project = take(check(notationPrelude + R"(
+fn at<F:Field>(xs:Vector<F>,i:index)->F=primitive("vector.get");
+indexing xs[i]=at(xs,i);
+struct State{pub xs:Vector<Fr>,pub fixed:[Fr;2]}
+fn work(state:State)->Fr{return sum(indices(state.xs),fun i=>state.xs[i]+state.fixed[0]);}
+protocol Demo roles(P)(state:State@P)->(r:Fr@P){return work(state);}run Run=Demo;
+)"));
+        take(closeEntry(project, "m::Run"));
+        const auto &work = declarationNamed(project, "m::work");
+        bool fixed = false, container = false;
+        for (const auto &binding : work.body->scopedBindings)
+          for (auto capture : binding.captures)
+            for (const auto &operation : work.body->operations)
+              if (operation.results.size() == 1 &&
+                  operation.results[0].index == capture.index)
+                if (const auto *projection =
+                        std::get_if<Projection>(&operation.action)) {
+                  fixed |= projection->path == std::vector<unsigned>{1, 0};
+                  container |= projection->path == std::vector<unsigned>{0};
+                }
+        require(fixed && container, "indexed capture paths changed");
+      });
+  cases.run("scoped call statements retain their authored occurrence", [&] {
+    take(check(notationPrelude + R"(
+fn note(value:Fr)->(){return ();}
+fn at<F:Field>(xs:Vector<F>,i:index)->F=primitive("vector.get");
+indexing xs[i]=at(xs,i);
+fn work(xs:Vector<Fr>)->Fr{return sum(indices(xs),fun i=>{note(0);let ignored=xs[i];0});}
+)"));
+  });
+  for (unsigned mutation = 0; mutation < 11; ++mutation)
+    cases.run(
+        "indexed scoped source mutation " + std::to_string(mutation), [&] {
+          auto source = notationPrelude + R"(
+fn at<F:Field>(xs:Vector<F>,i:index)->F=primitive("vector.get");
+indexing xs[i]=at(xs,i);
+)" +
+                        std::string(mutation == 8 ? R"(
+fn work(xs:Vector<Fr>)->Fr{return sum(indices(xs),fun i=>{let value=xs[i];value});}
+)"
+                                                  : R"(
+fn work(xs:Vector<Fr>)->Fr{return sum(indices(xs),fun i=>xs[i]);}
+)");
+          auto project = take(check(source));
+          auto &outer =
+              const_cast<Body &>(*declarationNamed(project, "m::work").body);
+          bool changed = false;
+          for (auto &scoped : outer.scopedBindings)
+            if (scoped.computation) {
+              auto &body = const_cast<Body &>(*scoped.computation->body);
+              std::optional<Operation> extra;
+              for (auto &operation : body.operations)
+                if (operation.binding && operation.binding->notation) {
+                  if (mutation == 0)
+                    operation.binding->notation->arity = 3;
+                  else if (mutation == 1)
+                    operation.binding->family[0] = "forged";
+                  else if (mutation == 2)
+                    operation.binding.reset();
+                  else if (mutation == 3) {
+                    operation.binding->family[0] = "forged";
+                    ++operation.span.begin;
+                  } else if (mutation == 4)
+                    ++operation.span.module.index;
+                  else if (mutation == 5 || mutation == 8) {
+                    auto result = operation.results.front();
+                    for (auto it = body.expressionValues.begin();
+                         it != body.expressionValues.end();)
+                      if (it->second.index == result.index)
+                        it = body.expressionValues.erase(it);
+                      else
+                        ++it;
+                  } else if (mutation == 6)
+                    body.results.front() = ValueId{0};
+                  else if (mutation == 7)
+                    operation.binding->notation.reset();
+                  else {
+                    extra = operation;
+                    if (mutation == 9)
+                      extra->binding->family[0] = "forged";
+                  }
+                  changed = true;
+                }
+              if (extra) {
+                auto result = body.values[extra->results.front().index];
+                extra->results.front() = ValueId{unsigned(body.values.size())};
+                body.values.push_back(std::move(result));
+                body.operations.push_back(std::move(*extra));
+              }
+            }
+          require(changed, "missing indexed callback");
+          auto error = checkScopedElaboration(project);
+          require(bool(error), "forged indexed binding accepted");
+          consumeError(std::move(error));
+        });
   cases.run("finite notation uses ordinary scoped calls", [&] {
     auto project = take(check(notationPrelude + R"(
 reduction ∑=sum,sum_where;

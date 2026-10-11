@@ -197,7 +197,7 @@ bool Checker::retainNotations() {
       record.imports.push_back({modules.at(import.module), import.span,
                                 import.alias, import.names, import.operators,
                                 import.notations, import.reductions,
-                                import.isPublic});
+                                import.isPublic, import.indexing});
     }
     for (auto original : visibleOperators[module.id.index]) {
       if (!types.charge(1, record.span))
@@ -284,10 +284,57 @@ bool Checker::retainNotations() {
           record.descriptors.push_back(descriptor);
       }
     }
+    std::set<Site> indexedCalls;
+    std::set<const Body *> indexedBodies;
+    std::function<bool(const Body &, unsigned)> findIndexed =
+        [&](const Body &body, unsigned depth) {
+          if (!indexedBodies.insert(&body).second)
+            return true;
+          if (depth > work.limits.expressionDepth ||
+              !types.charge(body.operations.size() +
+                                body.scopedBindings.size() + 1,
+                            declaration.span))
+            return types.diagnostic
+                       ? false
+                       : types.fail("source.limit", "index occurrence depth",
+                                    declaration.span);
+          for (const auto &operation : body.operations) {
+            if (operation.binding && operation.binding->notation &&
+                operation.binding->notation->position ==
+                    NotationDescriptor::Position::Index)
+              indexedCalls.insert(site(operation.span));
+            if (const auto *control =
+                    std::get_if<LocalControl>(&operation.action)) {
+              for (const auto &nested : control->regions)
+                if (!findIndexed(*nested, depth + 1))
+                  return false;
+            } else if (const auto *repeat =
+                           std::get_if<ProtocolRepeat>(&operation.action)) {
+              if (!findIndexed(*repeat->region, depth + 1))
+                return false;
+            }
+          }
+          for (const auto &scoped : body.scopedBindings)
+            if (scoped.computation &&
+                scoped.computation->lexicalOwner.index ==
+                    declaration.id.index &&
+                scoped.computation->body &&
+                !findIndexed(*scoped.computation->body, depth + 1))
+              return false;
+          return true;
+        };
+    bool hasSubscripts =
+        llvm::any_of(source.expressions, [](const Expression &expr) {
+          return expr.kind == Expression::Kind::Subscript;
+        });
+    if (hasSubscripts && declaration.body && !findIndexed(*declaration.body, 1))
+      return false;
     std::map<Site, uint32_t> occurrences;
     for (unsigned i = 0; i < source.expressions.size(); ++i) {
       const auto &expression = source.expressions[i];
-      if (expression.kind != Expression::Kind::NotationCall)
+      if (expression.kind != Expression::Kind::NotationCall &&
+          !(expression.kind == Expression::Kind::Subscript &&
+            indexedCalls.count(site(expression.span))))
         continue;
       if (!expression.notation || !expression.scope)
         return types.fail("source.binding-witness",
@@ -390,7 +437,8 @@ bool Checker::retainNotations() {
       if (depth > work.limits.expressionDepth)
         return types.fail("source.limit", "notation region depth exceeded",
                           declaration.span);
-      if (!types.charge(body.operations.size() + 1, declaration.span))
+      if (!types.charge(body.operations.size() + body.scopedBindings.size() + 1,
+                        declaration.span))
         return false;
       auto region = nextRegion++;
       for (unsigned index = 0; index < body.operations.size(); ++index) {

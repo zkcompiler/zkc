@@ -75,6 +75,113 @@ const Declaration &declaration(const CheckedProject &project, StringRef name) {
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  cases.run(
+      "indexing uses typed library calls and keeps static array projections",
+      [&] {
+        take(checked(R"(
+      domain F=field("koala-bear");
+      type Vector<T:Field>=builtin("vector",T);
+      math fn at<T:Field>(xs:Vector<T>,i:index)->T where in_bounds(i,xs)=primitive("container.at");
+      indexing xs[i]=at(xs,i);
+      math fn read(xs:Vector<F>,i:index)->F where in_bounds(i,xs){return xs[i];}
+      math fn first(xs:[F;2])->F{return xs[0];}
+      math fn generic<T:Field,N:nat>(xs:[T;N])->T where 1<=N{return xs[0];}
+    )"));
+        hasShape("", "a[b,c]+a[b][c]", "+([](a,b,c),[]([](a,b),c))");
+      });
+  cases.run(
+      "indexing is general typed notation with arity and explicit rebinding",
+      [&] {
+        take(checked(R"(
+      math fn choose(xs:bool,i:bool)->bool{return xs&&i;}
+      math fn choose3(xs:bool,i:bool,j:bool)->bool{return xs&&i&&j;}
+      indexing xs[i]=choose(xs,i);
+      indexing xs[i,j]=choose3(xs,i,j);
+      math fn f(x:bool,y:bool,z:bool)->bool {
+        let a=x[y]; let b=x[y,z];
+        return a[b];
+      }
+    )"));
+        refuses(checked(R"(
+      math fn choose(xs:bool,i:bool)->bool{return xs;}
+      indexing xs[i]=choose(i,xs);
+    )"),
+                "source.notation");
+        refuses(checked(R"(
+      math fn choose(xs:bool,i:bool)->bool{return xs;}
+      math fn other(xs:bool,i:bool)->bool{return i;}
+      indexing xs[i]=choose(xs,i); indexing xs[i]=other(xs,i);
+      math fn f(x:bool,y:bool)->bool{return x[y];}
+    )"),
+                "source.operator");
+      });
+  cases.run("indexing import selectors preserve static array syntax", [&] {
+    take(checked({{"a",
+                   R"(module a;
+        pub math fn choose(xs:bool,i:bool)->bool{return xs&&i;}
+        pub indexing xs[i]=choose(xs,i);
+      )",
+                   {}},
+                  {"m",
+                   R"(module m;use a::{indexing []};
+        math fn f(x:bool,y:bool)->bool{return x[y];}
+        math fn first(xs:[bool;2])->bool{return xs[0];}
+      )",
+                   {}}}));
+  });
+  cases.run("indexing remains a contextual declaration word", [&] {
+    take(checked(
+        {{"a", "module a; pub math fn indexing(x:bool)->bool{return x;}", {}},
+         {"m",
+          "module m; use a::{indexing}; math fn "
+          "f(x:bool)->bool{indexing(x);return x;}",
+          {}}}));
+  });
+  cases.run(
+      "indexing bounds and result types cannot select alternate meanings", [&] {
+        const std::string prefix = R"(
+      domain F=field("koala-bear"); type Vector<T:Field>=builtin("vector",T);
+      math fn at<T:Field>(xs:Vector<T>,i:index)->T where in_bounds(i,xs)=primitive("container.at");
+      fn get<T:Field>(xs:Vector<T>,i:index)->T=primitive("vector.get");
+      indexing xs[i]=at(xs,i);
+    )";
+        refuses(checked(prefix +
+                        "math fn f(xs:Vector<F>,i:index)->F{return xs[i];}"),
+                "source.data-bound");
+        refuses(checked(prefix + "indexing xs[i]=get(xs,i); fn "
+                                 "f(xs:Vector<F>,i:index)->F{return xs[i];}"),
+                "source.operator");
+        refuses(checked(R"(
+      math fn first(xs:bool,i:bool)->bool{return xs;}
+      math fn second(xs:bool,i:bool)->(bool,bool){return(xs,i);}
+      indexing xs[i]=first(xs,i); indexing xs[i]=second(xs,i);
+      math fn f(x:bool,y:bool)->bool{return x[y];}
+    )"),
+                "source.operator");
+      });
+  cases.run("static arrays do not consume library notation hole limits", [&] {
+    Limits limits;
+    limits.notationHoles = 0;
+    take(checked("math fn first(xs:[bool;2])->bool{return xs[0];}", limits));
+  });
+  cases.run(
+      "indexed temporary projections require an explicit local name", [&] {
+        const std::string prefix = R"(
+      type Sequence<T:Type+Copy+Drop>=builtin("sequence",T);
+      struct Row{pub value:bool}
+      math fn at<T:Type+Copy+Drop>(xs:Sequence<T>,i:index)->T where in_bounds(i,xs)=primitive("container.at");
+      indexing xs[i]=at(xs,i);
+    )";
+        refuses(checked(prefix + "math fn f(xs:Sequence<Row>,i:index)->bool "
+                                 "where in_bounds(i,xs){return xs[i].value;}"),
+                "source.place");
+        refuses(checked(prefix +
+                        "math fn f(xs:Sequence<[bool;2]>,i:index)->bool "
+                        "where in_bounds(i,xs){return xs[i][0];}"),
+                "source.place");
+        refuses(checked("math fn f(xs:[bool;2])->bool{return xs[2];}"),
+                "source.index");
+      });
   cases.run("fixed ASCII expression structure", [&] {
     hasShape("", "a+b*c-a", "-(+(a,*(b,c)),a)");
     hasShape("", "!a&&b||c", "||(&&(!(a),b),c)");

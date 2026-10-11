@@ -1,7 +1,7 @@
 # Mathematical notation
 
 This native contract defines callable operators, paired-delimiter calls and
-general finite reduction bindings.
+general finite reduction bindings and library indexing.
 The [lexical profile](lexical.md#mathematical-tokens) admits their tokens;
 [definition checking](definitions.md#library-defined-operators) owns callable
 selection and native checks. [Status](../../status.md#source-and-application-boundary)
@@ -14,6 +14,7 @@ records implementation coverage.
 [pub] operator FIXITY(PRECEDENCE) SYMBOL = CALLABLE;
 [pub] notation OPENER HOLE ("," HOLE)* CLOSER = CALLABLE(HOLE, ...);
 [pub] reduction SYMBOL = CALLABLE ["," FILTERED_CALLABLE];
+[pub] indexing RECEIVER[INDEX ("," INDEX)*] = CALLABLE(RECEIVER, INDEX, ...);
 ```
 
 `FIXITY` is `infixl`, `infixr`, `infix`, `prefix` or `postfix`. The first three
@@ -189,6 +190,39 @@ imports. Component dictionaries remain explicit.
 Reduction bindings follow the same module, reexport and declaration-prefix
 rules. `reduction ∑ = my_sum;` in a block replaces that descriptor's inherited
 family; an unsuitable target never selects the outer library sum instead.
+
+## Indexing
+
+`indexing values[position] = at(values, position);` binds `values[position]`
+to an ordinary callable. Multiple indices, as in `matrix[row, column]`, are
+separate operands. Receiver and indices evaluate once from left to right;
+the declaration must forward every hole once in that order. The descriptor has
+fixed suffix binding power 100, and its key includes operand count. Different
+index counts can coexist. Ordinary operand types choose among targets of the
+same count; result types, effects and bounds cannot resolve an overlap.
+
+`use module::{indexing []};` imports all exported indexing arities. Module aliases
+and `pub use` follow the ordinary notation rules. Body-local indexing declarations
+replace the inherited family for the matching arity. Standard collection modules
+bind their total `at` accessors, whose conditions must be established in a total
+context. A Local function can explicitly bind its checked `get` accessor instead.
+Selecting `at` never falls back to `get` when bounds are unavailable.
+
+Fixed source arrays `[T; N]` retain numeric literal projection without an import.
+A library binding does not replace that projection. Generic array lengths require
+the existing static bound. Dynamic source-array indices, symbolic static indices
+and assignment through indexing are not supported. Library `field_array` is a
+separate native container and uses the ordinary library indexing path.
+
+A subscript retains its original syntax through checking. The receiver's known
+type constructor distinguishes fixed array projection from library access;
+unresolved library receiver constructors need a type annotation or named call.
+Without a visible indexing family, existing deferred static projection inference
+is preserved. Dynamic access captures the receiver container and evaluates the
+index inside a callback; static array access captures the projected element.
+Inspection records emitted library accesses as indexing occurrences and omits
+static projections. Dot projection still requires a named place: bind an indexed
+record to a local name before projecting its fields.
 
 ## Staging and retained evidence
 

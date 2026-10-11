@@ -137,6 +137,34 @@ empty input, and keeps its own failure behavior. See the
 [source contract](../spec/language/definitions.md#finite-reduction-binders) for
 selection, bounds and retained checks.
 
+## Index collections
+
+```zkc
+use zkc::vector::{Vector, indices, indexing []};
+use zkc::finite_math::{sum};
+math fn energy<F: Field>(xs: Vector<F>) -> F {
+  return sum(indices(xs), fun i => xs[i] * xs[i]);
+}
+fn checked_pick<F: Field>(xs: Vector<F>, i: index) -> F {
+  indexing values[position] = zkc::vector::get(values, position);
+  return xs[i];
+}
+```
+
+The vector library declares `pub indexing values[position] = at(values, position);`.
+The total accessor uses bounds established by `indices(xs)` above. Matrices expose
+`matrix[row, column]`; matrix coordinates establish both bounds. Sequence, group,
+index and field-array collections expose the same one-index form through their
+own modules. Named `at` calls retain exactly the same conditions.
+
+The Local example explicitly selects checked `get`. An unavailable bound does
+not change which accessor the compiler selects. A binding in a body declaration prefix replaces the
+inherited indexing family of the same arity, so keep each intended collection
+binding in that prefix when several are needed. Access follows the named target's
+ownership and effect rules. Fixed source arrays still use literal projections
+such as `pair[0]`, without importing indexing. For indexed record fields, write
+`let record = rows[i];` before using `record.field`.
+
 ## Inspect notation and locations
 
 The source inspection view is `zkc check --notations`, separate from

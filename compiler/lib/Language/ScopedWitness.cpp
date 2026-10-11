@@ -40,7 +40,8 @@ class CaptureCheck {
         return Place{*expr.binding, {}, expr.span};
       return {};
     }
-    if (expr.kind != Expression::Kind::Projection)
+    if (expr.kind != Expression::Kind::Projection &&
+        expr.kind != Expression::Kind::Subscript)
       return {};
     auto result = place(expr.children.front(), depth + 1);
     if (!result)
@@ -50,7 +51,17 @@ class CaptureCheck {
                             result->path, expr.span);
     if (!type)
       return {};
-    auto index = types.fieldIndex(owner, *type, expr.text, expr.span);
+    if (expr.kind == Expression::Kind::Subscript &&
+        type->kind != Type::Kind::Array)
+      return {};
+    auto label = expr.kind == Expression::Kind::Subscript
+                     ? staticSubscriptIndex(syntax, expr)
+                     : std::optional<StringRef>(expr.text);
+    if (!label) {
+      refuse(expr.span);
+      return {};
+    }
+    auto index = types.fieldIndex(owner, *type, *label, expr.span);
     if (!index)
       return {};
     result->path.push_back(*index);
@@ -305,7 +316,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
         call->scopedArguments.size() != callee.scopedInputs.size() ||
         call->domainArguments.size() != callee.domainInputs.size())
       return refuse();
-    if (expr.kind == Expression::Kind::NotationCall) {
+    if (expr.kind == Expression::Kind::NotationCall ||
+        expr.kind == Expression::Kind::Subscript) {
       if (!expr.notation ||
           expr.notation->position != NotationDescriptor::Position::Reduction ||
           expr.filteredReduction != binding.filteredReduction ||

@@ -61,6 +61,7 @@ public:
   std::vector<std::shared_ptr<ScopedSource>> scopedSources;
   std::vector<std::shared_ptr<ScopedCallSource>> scopedCalls;
   std::vector<std::shared_ptr<ScopedInvocationSource>> scopedInvocations;
+  std::map<unsigned, std::shared_ptr<NotationFamilies>> notationFamilies;
   bool retainScopedSources();
   std::shared_ptr<const SyntaxDeclaration> retainSyntax(DeclarationId);
 

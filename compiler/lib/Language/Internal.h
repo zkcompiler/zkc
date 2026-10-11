@@ -65,6 +65,7 @@ struct OperatorBinding {
   std::shared_ptr<const NotationDescriptor> notation;
   std::optional<BoundNotationTarget> filtered = {};
 };
+using NotationFamilies = std::map<uint32_t, std::vector<OperatorBinding>>;
 struct SyntaxSelector {
   bool output = false;
   std::string port;
@@ -145,6 +146,7 @@ struct Expression {
     Array,
     Record,
     Projection,
+    Subscript,
     If,
     Match,
     For,
@@ -311,13 +313,24 @@ struct SyntaxDeclaration {
   bool entryBlock = false;
   EntryKind entryKind = EntryKind::Run;
 };
+/// Static source arrays project a literal element. Receiver typing belongs to
+/// each caller; this predicate only reads retained authored syntax.
+inline std::optional<llvm::StringRef>
+staticSubscriptIndex(const SyntaxDeclaration &syntax, const Expression &expr) {
+  if (expr.kind != Expression::Kind::Subscript || expr.children.size() != 2)
+    return {};
+  const auto &index = syntax.expressions.at(expr.children[1]);
+  if (index.kind != Expression::Kind::Decimal)
+    return {};
+  return index.text;
+}
 struct Import {
   std::string module;
   std::vector<std::string> names;
   Span span;
   std::optional<std::string> alias;
   std::vector<std::string> operators, notations, reductions;
-  bool isPublic = false;
+  bool isPublic = false, indexing = false;
 };
 std::string operatorBindingKey(const OperatorBinding &,
                                llvm::ArrayRef<Declaration>);

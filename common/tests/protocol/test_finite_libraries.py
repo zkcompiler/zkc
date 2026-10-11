@@ -49,7 +49,8 @@ protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P,enabled:bool@P)->(result:(F,
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
-def test_total_finite_libraries_and_matrix_views(toolchain, journal, directory, flags):
+@pytest.mark.parametrize('indexed', [False, True])
+def test_total_finite_libraries_and_matrix_views(toolchain, journal, directory, flags, indexed):
     source = '''module sample;
 use zkc::vector::{Vector};
 use zkc::matrix::{Matrix};
@@ -63,6 +64,9 @@ math fn analytic(xs:Vector<F>,matrix:Matrix<F>)->(F,F,F){
 }
 protocol Run roles(P)(xs:Vector<F>@P,matrix:Matrix<F>@P)->(result:(F,F,F)@P){return analytic(xs,matrix);}run Demo=Run;
 '''
+    if indexed:
+        source = source.replace('::{Vector}', '::{Vector,indexing []}').replace('::{Matrix}', '::{Matrix,indexing []}')
+        source = source.replace('zkc::vector::at(xs,i)', 'xs[i]').replace('zkc::matrix::at(matrix,i,j)', 'matrix[i,j]')
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     matrix = {'rows': '2', 'columns': '3', 'entries': [['0', '0', '2'], ['1', '2', '7']]}
     assert entry.run('values', {'xs': ['2', '3'], 'matrix': matrix})['result'] == ['13', '9', '9']
@@ -314,3 +318,56 @@ math fn work(xs:vector::Vector<F>)->F {
     journal.run([toolchain.compiler, 'language-check', '--source-format=zkc',
                  f'--module=sample={source}', *MODULES],
                 refuses=None if explicit else 'source.notation-ambiguous')
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_indexing_rebinding_and_direct_protocol(toolchain, journal, directory, flags):
+    source = '''module sample;
+use zkc::vector::{Vector,indexing []};
+use zkc::finite_math as finite;
+domain F=field("koala-bear");
+fn selected(xs:Vector<F>,i:index)->F{
+ indexing values[position]=zkc::vector::get(values,position);
+ return xs[i];
+}
+protocol Run roles(P)(xs:Vector<F>@P,i:index@P)->(result:(F,F)@P){
+ let total@P=finite::sum(zkc::vector::indices(xs),fun j=>xs[j]);
+ let picked@P=selected(xs,i);
+ return(total,picked);
+}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
+    assert entry.run('values', {'xs': ['2', '3'], 'i': '1'})['result'] == ['5', '3']
+    entry.run('bounds', {'xs': [], 'i': '0'}, refuses='entry-run-incomplete')
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_indexing_across_collection_representations(toolchain, journal, directory, flags):
+    source = '''module sample;
+use zkc::field_array::{Array,indexing []};
+use zkc::sequence::{Sequence,indexing []};
+use zkc::curve::{Groups,indexing []};
+use zkc::indices::{Indices,indexing []};
+use zkc::finite as finite;
+use zkc::finite_math as total;
+domain G=group("bls12-381.g1");
+struct Row{pub value:G::Scalar}
+math fn combined(xs:Array<G::Scalar,2>,rows:Sequence<Row>,points:Groups<G>,values:Indices)->(G::Scalar,G::Scalar,G,bool){
+ let array_sum=total::sum(zkc::field_array::indices(xs),fun i=>xs[i]);
+ let record_sum=total::sum(zkc::sequence::indices(rows),fun i=>{let row=rows[i];row.value});
+ let group_sum=total::group_sum(zkc::curve::indices(points),fun i=>points[i]);
+ let same=total::fold(zkc::indices::indices(values),true,fun state i=>state&&(values[i]==7));
+ return(array_sum,record_sum,group_sum,same);
+}
+fn work(xs:Array<G::Scalar,2>)->(G::Scalar,G::Scalar,bool,bool){
+ let generator=kernel<G>("curve.generator");
+ let rows=finite::collect(xs,fun value=>Row{value:value});
+ let points=zkc::curve::collect(xs,fun value=>generator);
+ let values=zkc::indices::collect(xs,fun value=>7);
+ let results=combined(xs,rows,points,values);
+ return(results.0,results.1,results.2==generator+generator,results.3);
+}
+protocol Run roles(P)(xs:Array<G::Scalar,2>@P)->(result:(G::Scalar,G::Scalar,bool,bool)@P){return work(xs);}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
+    assert entry.run('values', {'xs': ['2', '3']})['result'] == ['5', '5', True, True]

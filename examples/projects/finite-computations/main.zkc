@@ -1,5 +1,5 @@
 module example;
-use zkc::vector::{Vector};
+use zkc::vector::{Vector, indexing []};
 use zkc::matrix::{Matrix};
 use zkc::finite as finite;
 use zkc::finite_math as total;
@@ -10,7 +10,7 @@ struct Row { pub value: F, pub enabled: bool }
 
 math fn energy(xs: Vector<F>) -> F {
   return total::sum(zkc::vector::indices(xs), fun i =>
-    zkc::vector::at(xs, i) * zkc::vector::at(xs, i));
+    xs[i] * xs[i]);
 }
 
 math fn matrix_sum(matrix: Matrix<F>) -> F {

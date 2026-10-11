@@ -53,3 +53,6 @@ pub fn reduce<I: Type + Copy + Drop, F: Field, R: Type>(
 ) -> R !{stop} {
   return reducer(collect(rows, body));
 }
+
+// Bounds follow the selected total accessor; checked access can be rebound locally.
+pub indexing values[position] = at(values, position);

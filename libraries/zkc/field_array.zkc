@@ -12,3 +12,6 @@ pub math fn at<F: Field, N: nat>(values: Array<F, N>, position: index) -> F wher
 pub math fn collect<I: Type + Copy + Drop, F: Field, N: nat>(
   rows: scoped domain<I>, body: scoped math fn(I) -> F on(rows)
 ) -> Array<F, N> = finite("math.collect.field_array");
+
+// Bounds follow the selected total accessor; checked access can be rebound locally.
+pub indexing values[position] = at(values, position);

@@ -19,6 +19,10 @@ bool BodyChecker::mathematicalExpression(uint32_t id, unsigned depth) {
   };
   using K = Expression::Kind;
   switch (expr.kind) {
+  case K::Subscript:
+    if (!inference->callees.count(id))
+      break;
+    [[fallthrough]];
   case K::NotationCall:
   case K::Call: {
     if (expr.binding) {

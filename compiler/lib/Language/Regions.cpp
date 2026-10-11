@@ -21,7 +21,7 @@ BodyChecker::regionInputs(const Expression &control) {
     (void)state;
     environment.domains.insert(id);
   }
-  environment.place = [&](uint32_t id) { return sourcePlace(id); };
+  environment.place = [&](uint32_t id) { return sourcePlace(id, 1, true); };
   return queryFreePlaces(checker.types, syntax, control, environment);
 }
 std::optional<std::set<BindingId>>

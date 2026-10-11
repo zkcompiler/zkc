@@ -803,10 +803,80 @@ class ExpressionInference {
                   expr.span);
       break;
     }
+    case K::Subscript:
     case K::NotationCall: {
+      if (expr.kind == K::Subscript) {
+        auto receiver = child(0);
+        auto structure = types.structure(receiver, expr.span);
+        if (!structure) {
+          if (!operators->propagate(expr.span))
+            break;
+          structure = types.structure(receiver, expr.span);
+        }
+        if (!structure) {
+          auto visible = checker.operatorCandidates(decl, syntax, id);
+          if (!visible)
+            break;
+          if (visible->empty() && staticSubscriptIndex(syntax, expr)) {
+            // Preserve static projection constraints through ordinary overload
+            // search. This adds equations only, never choices during rollback.
+            constrain(child(1), Type(T::Index), expr.span);
+            types.defer([this, receiver, result, id] {
+              const auto &expr = syntax.expressions[id];
+              auto type = types.get(receiver, expr.span);
+              if (!type)
+                return false;
+              if (type->kind != T::Array) {
+                fail("source.index",
+                     "indexing requires a visible indexing [] binding for this "
+                     "receiver",
+                     expr.span);
+                return true;
+              }
+              auto field = checker.types.projectionType(
+                  *type, *staticSubscriptIndex(syntax, expr), expr.span);
+              if (field)
+                constrain(result.type, *field, expr.span);
+              return field.has_value() || checker.types.diagnostic.has_value();
+            });
+          } else if (visible->empty())
+            fail("source.index",
+                 "indexing requires a visible indexing [] binding for this "
+                 "receiver",
+                 expr.span);
+          else if (!checker.types.diagnostic)
+            fail("source.inference",
+                 "indexing needs a known receiver type constructor; add a type "
+                 "annotation",
+                 expr.span);
+          break;
+        }
+        if (structure->head.kind == T::Array) {
+          if (!staticSubscriptIndex(syntax, expr)) {
+            fail("source.index", "fixed arrays require a static numeric index",
+                 expr.span);
+            break;
+          }
+          constrain(child(1), Type(T::Index), expr.span);
+          types.equal(result.type, structure->arguments.front(), expr.span);
+          break;
+        }
+      }
+      if (expr.kind == K::Subscript &&
+          expr.children.size() > checker.work.limits.notationHoles) {
+        fail("source.limit", "notation hole limit exceeded", expr.span);
+        break;
+      }
       auto visible = checker.operatorCandidates(decl, syntax, id);
       if (!visible)
         break;
+      if (expr.kind == K::Subscript && visible->empty()) {
+        fail(
+            "source.index",
+            "indexing requires a visible indexing [] binding for this receiver",
+            expr.span);
+        break;
+      }
       if (expr.notation->position == NotationDescriptor::Position::Reduction) {
         if (visible->size() != 1) {
           fail("source.notation-ambiguous",

@@ -88,6 +88,7 @@ A selected import such as
 `use zkc::vector::{Vector, operator +};` also imports the selected public operator
 family, including all exported fixities for the token. `notation ⟪` selects a
 public delimiter shape; `reduction ∑` selects a public reduction binding.
+`indexing []` selects all exported indexing arities.
 A qualified reference alone activates no notation.
 `pub use` reexports the selected names, aliases and bindings with their original identities; ordinary
 imports remain private. Duplicate imports of the same identity are harmless.
@@ -1185,6 +1186,13 @@ selection, hidden operands, forwarding, control regions, owners, effects and
 every operation, including dead work. Missing or duplicate occurrence evidence
 refuses. These executable checks do not constitute a theorem about the parser
 or complete elaboration semantics.
+
+Within scoped bodies, ordinary notation calls are rechecked against retained
+definition-site families and authored operands. Every retained notation
+occurrence must have exactly one matching call, including its source span and
+binding evidence; removing the expression mapping or binding refuses. The
+callback result must agree with its authored tail expression. Resolved syntax
+and the retained lexical families remain trusted inputs to this check.
 
 Declaration inspection reports `scoped_inputs` separately from `inputs`, with
 name, mode, input/result types and effect allowance. `input_order` retains

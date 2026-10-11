@@ -124,20 +124,28 @@ bool Checker::imports() {
                                               import.notations.end());
       std::set<std::string> selectedReductions(import.reductions.begin(),
                                                import.reductions.end());
+      bool selectedIndexing = import.indexing;
       for (auto site : exportedOperators[target]) {
         if (!types.charge(1, import.span))
           return false;
         const auto &binding = syntax[site.first].operators[site.second];
         const auto &symbol = binding.symbol;
-        bool delimited = !binding.holes.empty();
+        bool indexing =
+            binding.notation &&
+            binding.notation->position == NotationDescriptor::Position::Index;
+        bool delimited = !indexing && !binding.holes.empty();
         bool reduction =
             binding.notation && binding.notation->position ==
                                     NotationDescriptor::Position::Reduction;
-        if (!import.alias && !is_contained(reduction   ? import.reductions
-                                           : delimited ? import.notations
-                                                       : import.operators,
-                                           symbol))
+        if (!import.alias &&
+            !(indexing ? import.indexing
+                       : is_contained(reduction   ? import.reductions
+                                      : delimited ? import.notations
+                                                  : import.operators,
+                                      symbol)))
           continue;
+        if (indexing)
+          selectedIndexing = false;
         (reduction   ? selectedReductions
          : delimited ? selectedNotations
                      : selectedOperators)
@@ -146,6 +154,9 @@ bool Checker::imports() {
         if (import.isPublic)
           exportedOperators[id].push_back(site);
       }
+      if (selectedIndexing)
+        return types.fail("source.import", "module does not export indexing []",
+                          import.span);
       if (!selectedReductions.empty())
         return types.fail("source.import",
                           "module does not export reduction " +

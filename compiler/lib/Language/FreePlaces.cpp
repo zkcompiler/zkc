@@ -51,9 +51,11 @@ queryFreePlaces(Semantics &types, const SyntaxDeclaration &syntax,
                               : types.fail("source.limit",
                                            "region summary depth", expr.span);
     if (expr.kind == Expression::Kind::Name ||
-        expr.kind == Expression::Kind::Projection) {
+        expr.kind == Expression::Kind::Projection ||
+        expr.kind == Expression::Kind::Subscript) {
       auto root = id;
-      while (syntax.expressions[root].kind == Expression::Kind::Projection) {
+      while (syntax.expressions[root].kind == Expression::Kind::Projection ||
+             syntax.expressions[root].kind == Expression::Kind::Subscript) {
         if (!types.charge(1, expr.span))
           return false;
         root = syntax.expressions[root].children.front();
@@ -74,14 +76,15 @@ queryFreePlaces(Semantics &types, const SyntaxDeclaration &syntax,
         }
         if (environment.data.count(*name.binding)) {
           auto place = environment.place(id);
-          if (!place)
+          if (!place && types.diagnostic)
             return false;
-          if (!flow.assigned.count(place->first)) {
+          if (place && !flow.assigned.count(place->first)) {
             FreePlace capture{place->first, place->second};
             result.places.insert(capture);
             result.occurrences.try_emplace(capture, expr.span);
           }
-          return true;
+          if (place)
+            return true;
         }
       }
     }

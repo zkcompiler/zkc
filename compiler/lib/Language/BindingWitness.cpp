@@ -33,10 +33,11 @@ bool checkNotationArity(Semantics &types, const NotationDescriptor &notation,
   case Position::Infix:
     valid = notation.arity == 2;
     break;
+  case Position::Index:
   case Position::Delimited:
     if (notation.arity > types.work.limits.notationHoles)
       return types.fail("source.limit", "notation hole limit exceeded", span);
-    valid = notation.arity > 0;
+    valid = notation.arity >= (notation.position == Position::Index ? 2u : 1u);
     break;
   }
   return (valid && (!filtered || notation.position == Position::Reduction) &&
@@ -234,7 +235,9 @@ bool checkNotationOccurrence(Semantics &types, const Expression &expr,
                       "notation occurrence differs from its lexical syntax",
                       expr.span);
   };
-  if (expr.kind != Expression::Kind::NotationCall || !expr.notation)
+  if ((expr.kind != Expression::Kind::NotationCall &&
+       expr.kind != Expression::Kind::Subscript) ||
+      !expr.notation)
     return refuse();
   if (!types.charge(expr.notation->symbol.size() +
                         expr.notation->closing.size() + 1,

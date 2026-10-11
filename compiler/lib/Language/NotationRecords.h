@@ -37,7 +37,7 @@ struct NotationImportRecord {
   Span span;
   std::optional<std::string> alias;
   std::vector<std::string> names, operators, notations, reductions;
-  bool isPublic = false;
+  bool isPublic = false, indexing = false;
 };
 struct NotationScopeRecord {
   Span span;

@@ -160,6 +160,11 @@ public:
               value = text().str();
               advance();
               import.operators.push_back(std::move(value));
+            } else if (at("indexing") && look(1) == "[") {
+              advance();
+              if (!expect("[") || !expect("]"))
+                break;
+              import.indexing = true;
             } else if (at("reduction") && operatorSymbol(look(1))) {
               advance();
               import.reductions.push_back(text().str());
@@ -279,6 +284,7 @@ private:
     return (look(offset) == "operator" &&
             ((operatorSymbol(look(offset + 1)) && look(offset + 2) == "=") ||
              (fixity(look(offset + 1)) && look(offset + 2) == "("))) ||
+           (look(offset) == "indexing" && look(offset + 2) == "[") ||
            (look(offset) == "notation" && delimiter(look(offset + 1))) ||
            (look(offset) == "reduction" && operatorSymbol(look(offset + 1)) &&
             look(offset + 2) == "=");
@@ -299,7 +305,34 @@ private:
     result.span = current().span;
     result.isPublic = take("pub");
     auto descriptor = std::make_shared<NotationDescriptor>();
-    if (take("reduction")) {
+    if (take("indexing")) {
+      descriptor->position = Position::Index;
+      descriptor->precedence = 100;
+      descriptor->symbol = "[]";
+      descriptor->closing = "]";
+      result.explicitNotation = true;
+      std::string receiver;
+      if (!name(receiver) || !expect("["))
+        return {};
+      result.holes.push_back(std::move(receiver));
+      do {
+        if (result.holes.size() >= work.limits.notationHoles) {
+          fail("source.limit", "notation hole limit exceeded");
+          return {};
+        }
+        std::string hole;
+        if (!name(hole))
+          return {};
+        if (llvm::is_contained(result.holes, hole)) {
+          fail("source.notation", "notation holes must be distinct");
+          return {};
+        }
+        result.holes.push_back(std::move(hole));
+      } while (take(","));
+      if (!expect("]"))
+        return {};
+      descriptor->arity = result.holes.size();
+    } else if (take("reduction")) {
       if (!operatorSymbol(text()) || at("∈") ||
           static_cast<unsigned char>(text().front()) < 128) {
         fail("source.reduction", "expected an admitted reduction symbol");
@@ -416,7 +449,8 @@ private:
       companion.span.end = previousEnd;
       result.filtered = std::move(companion);
     }
-    if (descriptor->position == Position::Delimited) {
+    if (descriptor->position == Position::Delimited ||
+        descriptor->position == Position::Index) {
       if (!expect("("))
         return {};
       for (unsigned i = 0; i < result.holes.size(); ++i) {
@@ -1958,16 +1992,42 @@ private:
                                   Span span, unsigned depth, unsigned minimum,
                                   bool records) {
     while (!diagnostic) {
-      if (minimum <= 100 && (take(".") || take("["))) {
-        bool bracket = source.text[previousEnd - 1] == '[';
+      if (minimum <= 100 && take("[")) {
+        Expression subscript;
+        subscript.kind = Expression::Kind::Subscript;
+        subscript.bracket = true;
+        subscript.children = {left};
+        subscript.span = span;
+        do {
+          auto index = expression(decl, depth + 1);
+          if (!index)
+            return {};
+          subscript.children.push_back(*index);
+        } while (take(","));
+        if (!expect("]"))
+          return {};
+        auto descriptor = std::make_shared<NotationDescriptor>();
+        descriptor->position = Position::Index;
+        descriptor->symbol = "[]";
+        descriptor->closing = "]";
+        descriptor->precedence = 100;
+        descriptor->arity = subscript.children.size();
+        subscript.notation = std::move(descriptor);
+        subscript.span.end = previousEnd;
+        auto next = appendExpression(decl, std::move(subscript));
+        if (!next)
+          return {};
+        left = *next;
+        continue;
+      }
+      if (minimum <= 100 && take(".")) {
         Expression projection;
         projection.kind = Expression::Kind::Projection;
-        projection.bracket = bracket;
         projection.children = {left};
         projection.span = span;
         // `index` is reserved, so `.index` can only name the managed method,
         // whose static arguments precede its call.
-        bool method = !bracket && at("index");
+        bool method = at("index");
         if (method) {
           projection.text = "index";
           advance();
@@ -1990,9 +2050,7 @@ private:
           advance();
         } else if (!name(projection.text))
           return {};
-        if (bracket && !expect("]"))
-          return {};
-        if (!bracket && take("(")) {
+        if (take("(")) {
           projection.kind = Expression::Kind::MethodCall;
           if (!at(")"))
             do {

@@ -6,7 +6,8 @@
 using namespace llvm;
 namespace zkc::language::detail {
 StringRef operatorSymbol(const Expression &expression) {
-  return expression.kind == Expression::Kind::NotationCall &&
+  return (expression.kind == Expression::Kind::NotationCall ||
+          expression.kind == Expression::Kind::Subscript) &&
                  expression.notation
              ? StringRef(expression.notation->symbol)
              : StringRef{};
@@ -65,12 +66,13 @@ Checker::operatorBinding(const Declaration &context,
   case Position::Infix:
     validArity = arity == 2;
     break;
+  case Position::Index:
   case Position::Delimited:
     if (arity > work.limits.notationHoles) {
       types.fail("source.limit", "notation hole limit exceeded", source.span);
       return {};
     }
-    validArity = arity > 0;
+    validArity = arity >= (notation.position == Position::Index ? 2u : 1u);
     break;
   }
   if (!validArity) {

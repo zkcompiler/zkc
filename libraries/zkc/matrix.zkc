@@ -24,3 +24,5 @@ pub domain fn column_coordinates<F: Field>(values: Matrix<F>) -> scoped domain<(
 pub math fn at<F: Field>(values: Matrix<F>, row: index, column: index) -> F
   where in_bounds(row, values, 0), in_bounds(column, values, 1)
   = primitive("matrix.at");
+
+pub indexing values[row, column] = at(values, row, column);

@@ -1,6 +1,7 @@
 #include "BindingWitness.h"
 #include "ScopedWitness.h"
 #include <algorithm>
+#include <tuple>
 using namespace llvm;
 namespace zkc::language::detail {
 namespace {
@@ -13,8 +14,8 @@ struct Origin {
   bool operator!=(const Origin &other) const { return !(*this == other); }
 };
 using Origins = std::vector<std::optional<Origin>>;
-using SpanKey = std::pair<uint32_t, uint32_t>;
-SpanKey key(Span span) { return {span.begin, span.end}; }
+using SpanKey = std::tuple<uint32_t, uint32_t, uint32_t>;
+SpanKey key(Span span) { return {span.module.index, span.begin, span.end}; }
 
 // Independently relate source place reads and authored call operands to the
 // checked SSA graph. Projection provenance is reconstructed from operations,
@@ -26,6 +27,7 @@ class ValueCheck {
   const SyntaxDeclaration &syntax;
   const Declaration &owner;
   std::set<uint32_t> expectedReads, observedReads;
+  std::set<uint32_t> expectedNotations, observedNotations;
   std::map<SpanKey, uint32_t> aliases;
   bool refuse(Span span) {
     return types.fail("source.scoped-witness",
@@ -46,7 +48,8 @@ class ValueCheck {
         return Origin{expr.binding->index, {}};
       return {};
     }
-    if (expr.kind != Expression::Kind::Projection)
+    if (expr.kind != Expression::Kind::Projection &&
+        expr.kind != Expression::Kind::Subscript)
       return {};
     auto root = place(expr.children.front(), depth + 1);
     if (!root)
@@ -54,8 +57,18 @@ class ValueCheck {
     auto type = types.projectedType(
         owner, source.environment.at(BindingId{root->binding}).type, root->path,
         expr.span);
-    auto index = type ? types.fieldIndex(owner, *type, expr.text, expr.span)
-                      : std::nullopt;
+    if (type && expr.kind == Expression::Kind::Subscript &&
+        type->kind != Type::Kind::Array)
+      return {};
+    auto label = expr.kind == Expression::Kind::Subscript
+                     ? staticSubscriptIndex(syntax, expr)
+                     : std::optional<StringRef>(expr.text);
+    if (!label) {
+      refuse(expr.span);
+      return {};
+    }
+    auto index =
+        type ? types.fieldIndex(owner, *type, *label, expr.span) : std::nullopt;
     if (!index)
       return {};
     root->path.push_back(*index);
@@ -65,6 +78,8 @@ class ValueCheck {
     const auto &expr = syntax.expressions.at(id);
     if (!bounded(depth, expr.span))
       return false;
+    if (source.notationFamilies && source.notationFamilies->count(id))
+      expectedNotations.insert(id);
     if (place(id, depth)) {
       expectedReads.insert(id);
       return true;
@@ -102,7 +117,10 @@ class ValueCheck {
       return refuse({});
     origins.resize(body.values.size());
     std::vector<const Operation *> producers(body.values.size());
+    std::set<const Operation *> checkedCalls;
     for (const auto &op : body.operations) {
+      if (std::holds_alternative<HelperCall>(op.action) && !op.binding)
+        return refuse(op.span);
       for (auto value : op.results) {
         if (value.index < body.inputs || value.index >= producers.size() ||
             producers[value.index])
@@ -161,9 +179,15 @@ class ValueCheck {
       if (types.diagnostic)
         return false;
       const auto *op = producers[actual.index];
+      if (expectedNotations.count(id)) {
+        if (!op || !op->binding || key(op->span) != key(expr.span) ||
+            !observedNotations.insert(id).second)
+          return refuse(expr.span);
+      }
       if (!op || key(op->span) != key(expr.span))
         continue;
       if (op->binding) {
+        checkedCalls.insert(op);
         const auto &binding = *op->binding;
         if (binding.target.declaration.index >= storage.declarations.size())
           return refuse(expr.span);
@@ -204,6 +228,43 @@ class ValueCheck {
         }
         if (!checkCallAction(types, storage.declarations, body, *op))
           return false;
+        if (expr.kind == Expression::Kind::NotationCall ||
+            expr.kind == Expression::Kind::Subscript || binding.notation) {
+          if (!expr.notation || !binding.notation || !source.notationFamilies ||
+              !source.notationFamilies->count(id) || !expr.scope ||
+              *expr.scope >= syntax.bodies.size() ||
+              !syntax.bodies[*expr.scope].notationEnvironment ||
+              !checkNotationOccurrence(
+                  types, expr, *syntax.bodies[*expr.scope].notationEnvironment))
+            return types.diagnostic ? false : refuse(expr.span);
+          // Scoped/domain binders carry their own complete argument categories
+          // and are rechecked by ScopedWitness. Here ordinary data calls retain
+          // the same independent family and operand check.
+          if (expr.notation->position !=
+              NotationDescriptor::Position::Reduction) {
+            std::vector<Type> inputs;
+            std::vector<unsigned> order;
+            std::vector<ValueId> authored;
+            for (unsigned i = 0; i < binding.operands.size(); ++i) {
+              auto operand = binding.operands[i];
+              if (operand.index >= body.values.size())
+                return refuse(expr.span);
+              inputs.push_back(body.values[operand.index].type);
+              order.push_back(i);
+              auto expected = value(expr.children[i]);
+              if (!expected)
+                return refuse(expr.span);
+              authored.push_back(*expected);
+            }
+            if (!checkOperatorOperands(types, *expr.notation, binding, order,
+                                       authored, expr.span) ||
+                !checkOperatorWitness(
+                    types, storage.declarations,
+                    source.notationFamilies->at(id), *expr.notation, binding,
+                    inputs, body.values[actual.index].type, expr.span))
+              return false;
+          }
+        }
       } else if (const auto *invoke = std::get_if<ScopedInvoke>(&op->action)) {
         if (!arguments(invoke->operands, expr))
           return false;
@@ -225,6 +286,8 @@ class ValueCheck {
       }
     }
     for (const auto &op : body.operations) {
+      if (op.binding && !checkedCalls.count(&op))
+        return refuse(op.span);
       if (const auto *control = std::get_if<LocalControl>(&op.action)) {
         unsigned head = control->kind == LocalControl::Kind::For ? 2 : 1;
         if (control->operands.size() < head)
@@ -280,9 +343,22 @@ public:
       const auto &capture = computation.captures[i];
       inputs[count + i] = Origin{capture.binding, capture.path};
     }
+    const auto &authored = syntax.expressions.at(source.expression);
+    const auto &region = syntax.bodies.at(authored.regions.front());
+    const auto &checked = *computation.body;
+    if (!checked.stopped && !region.results.empty()) {
+      auto result =
+          checked.expressionValues.find(region.results.front().second);
+      if (region.results.size() != 1 || checked.results.size() != 1 ||
+          result == checked.expressionValues.end() ||
+          checked.results.front().index != result->second.index)
+        return refuse(binding.span);
+    }
     return collect(source.expression, 1) &&
            body(*computation.body, std::move(inputs), 1) &&
-           (observedReads == expectedReads || refuse(binding.span));
+           ((observedReads == expectedReads &&
+             observedNotations == expectedNotations) ||
+            refuse(binding.span));
   }
 };
 } // namespace

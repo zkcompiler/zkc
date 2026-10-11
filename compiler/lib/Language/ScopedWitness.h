@@ -15,6 +15,7 @@ struct ScopedSource {
   std::map<BindingId, Place> environment;
   std::map<BindingId, unsigned> scoped, domains;
   ScopedSignature signature;
+  std::shared_ptr<const NotationFamilies> notationFamilies;
 };
 struct ScopedInvocationSource {
   DeclarationId owner;

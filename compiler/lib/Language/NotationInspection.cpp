@@ -10,6 +10,8 @@ namespace zkc::language {
 namespace {
 StringRef position(NotationDescriptor::Position position) {
   switch (position) {
+  case NotationDescriptor::Position::Index:
+    return "index";
   case NotationDescriptor::Position::Reduction:
     return "reduction";
   case NotationDescriptor::Position::Prefix:
@@ -328,6 +330,7 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
                 strings("operators", import.operators);
                 strings("notations", import.notations);
                 strings("reductions", import.reductions);
+                json.attribute("indexing", import.indexing);
               });
             }
           });

@@ -84,7 +84,15 @@ compiler does not infer an incremental implementation for a user reducer.
 `finite_math` uses the same domain and capture infrastructure with total Math
 callbacks. `vector::at`, `sequence::at`, `curve::at`, `indices::at` and
 `matrix::at` require proven bounds. Their checked `get` counterparts retain
-ordinary Local failure behavior. The [finite computation example](../examples/projects/finite-computations/README.md)
+ordinary Local failure behavior where provided.
+
+The vector, matrix, curve, sequence, indices and field-array modules export
+library-owned indexing bindings to their total `at` functions. Import
+`indexing []` to write `values[position]` or `matrix[row, column]`; the same
+bound requirements apply as for the named call. A body-local declaration such
+as `indexing values[position] = zkc::vector::get(values, position);` selects
+checked Local access explicitly. See the [notation guide](../docs/language/notation.md#index-collections).
+The [finite computation example](../examples/projects/finite-computations/README.md)
 combines named functions, records, matrix views and total mathematical helpers.
 
 ### Native mathematics and containers
