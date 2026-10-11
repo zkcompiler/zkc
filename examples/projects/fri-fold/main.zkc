@@ -1,0 +1,63 @@
+module fri_fold;
+use fri::{fold_value};
+use zkc::vector::{Vector};
+use zkc::vector as vec;
+use zkc::sequence::{Sequence};
+use zkc::sequence as seq;
+use zkc::finite as finite;
+use zkc::finite_math as total;
+
+domain F = field("koala-bear");
+
+struct Pair<E: Field> {
+  pub low: E,
+  pub high: E,
+  pub inverse_x: E,
+  pub next: E
+}
+struct Batch<E: Field> {
+  pub pairs: Sequence<Pair<E>>,
+  pub beta: E,
+  pub inverse_two: E
+}
+
+math fn pair_rows<E: Field>(batch: Batch<E>) -> Sequence<Pair<E>> {
+  return batch.pairs;
+}
+
+math fn inspect<E: Field>(batch: Batch<E>) -> (Sequence<E>, Sequence<E>) {
+  let view = pair_rows(batch);
+  let folded = total::collect(seq::indices(batch.pairs), fn(i) => {
+    let row = seq::at(view, i);
+    fold_value(row.low, row.high, batch.beta, batch.inverse_two, row.inverse_x)
+  });
+  // Original indices read both the forwarded projection and the collected values.
+  let residuals = total::collect(seq::indices(batch.pairs), fn(i) => {
+    let row = seq::at(view, i);
+    seq::at(folded, i) - row.next
+  });
+  return (folded, residuals);
+}
+
+// Keep record packing internal; the Host accepts four ordinary field vectors.
+fn from_columns<E: Field>(low: Vector<E>, high: Vector<E>, inverse_x: Vector<E>,
+                          next: Vector<E>, beta: E, inverse_two: E) -> Batch<E> {
+  let count = vec::length(low);
+  require vec::length(high) == count;
+  require vec::length(inverse_x) == count;
+  require vec::length(next) == count;
+  let pairs = finite::collect(vec::indices(low), fn(i) => Pair<E> {
+    low: vec::get(low, i), high: vec::get(high, i),
+    inverse_x: vec::get(inverse_x, i), next: vec::get(next, i)
+  });
+  return Batch<E> { pairs, beta, inverse_two };
+}
+
+pub protocol Inspect roles(P)(low: Vector<F> @P, high: Vector<F> @P,
+    inverse_x: Vector<F> @P, next: Vector<F> @P, beta: F @P, inverse_two: F @P)
+    -> (folded: Sequence<F> @P, residuals: Sequence<F> @P) {
+  let batch @P = from_columns(low, high, inverse_x, next, beta, inverse_two);
+  let (folded, residuals) @P = inspect(batch);
+  return (folded = folded, residuals = residuals);
+}
+run Demo = Inspect;

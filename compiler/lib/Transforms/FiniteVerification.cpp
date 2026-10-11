@@ -1,6 +1,7 @@
 #include "FiniteVerification.h"
 #include "CollectionInterpretation.h"
 #include "MathematicalComparison.h"
+#include "RealizationSubject.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/ComputationMeaning.h"
@@ -39,7 +40,9 @@ class Reader {
       return nullptr;
     }
     if (!remaining) {
-      result = {VerificationStatus::RequiredCapacity, "finite reader work"};
+      result = {VerificationStatus::RequiredCapacity, "finite reader work",
+                CapacityCause{WorkOwner::RequiredFiniteReader, 1, remaining},
+                mathematical::realizationSubject(c.operation)};
       fail();
       return nullptr;
     }
@@ -381,17 +384,22 @@ public:
       // normalization cannot spend the ordered reader's admission budget.
       uint64_t comparisonWork = std::min(remaining, limits.comparison);
       mathematical::ComparisonCapacity capacity;
+      std::optional<CapacityCause> debit;
       if (auto compared = mathematical::compareFinitePayload(
               c, entry, cardinalities.lookup(rootDomain), cursor, symbols,
               bindings, comparisonWork,
-              inlineMode ? nullptr : &begin->getBlock()->back(), &capacity);
+              inlineMode ? nullptr : &begin->getBlock()->back(), &capacity,
+              &debit);
           succeeded(compared)) {
         finish(ValueRange{*compared});
         return valid;
       }
       if (capacity != mathematical::ComparisonCapacity::None) {
         result = {VerificationStatus::OptionalCapacity,
-                  mathematical::comparisonCapacityName(capacity)};
+                  mathematical::comparisonCapacityName(capacity),
+                  debit.value_or(
+                      CapacityCause{WorkOwner::OptionalComparison, {}, {}}),
+                  mathematical::realizationSubject(c.operation)};
         return false;
       }
     }

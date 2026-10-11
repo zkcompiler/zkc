@@ -71,10 +71,11 @@ fn compression<F: Field>(challenges: Vector<F>, channel: index) -> F {
 
 // m*(gamma - fp) + 1 - m is gamma - fp on an active Boolean row and one on an
 // inactive row, so an inactive row's tuple can never make it zero.
-math fn gated<F: Field>(count: F, gamma: F, compressed: F) -> F {
+pub math fn gated_denominator<F: Field>(count: F, gamma: F, compressed: F) -> F {
   return count * (gamma - compressed) + 1 - count;
 }
-math fn inverts<F: Field>(count: F, reciprocal: F, gamma: F, compressed: F) -> F {
+pub math fn reciprocal_residual<F: Field>(count: F, reciprocal: F, gamma: F,
+                                        compressed: F) -> F {
   return count * (reciprocal * (gamma - compressed) - 1);
 }
 math fn difference<F: Field>(current: F, other: F) -> F { return current - other; }
@@ -84,7 +85,7 @@ math fn sum_step<F: Field>(current: F, previous: F, term: F) -> F {
 math fn product_step<F: Field>(current: F, previous: F, factor: F) -> F {
   return current - previous * factor;
 }
-math fn boolean<F: Field>(count: F) -> F { return count * (count - 1); }
+pub math fn boolean_residual<F: Field>(count: F) -> F { return count * (count - 1); }
 
 fn shaped<F: Field>(records: Interactions, values: Vector<F>, rows: index,
     challenges: Vector<F>) -> bool {
@@ -106,7 +107,7 @@ pub fn range_constraints<F: Field>(records: Interactions, values: Vector<F>, row
   let mut result = empty<F>();
   for interaction in 0..records.count {
     let counts = multiplicity(values, records, rows, interaction);
-    result = concat(result, map boolean<F>(each counts));
+    result = concat(result, map boolean_residual<F>(each counts));
   }
   return result;
 }
@@ -221,7 +222,8 @@ pub module LogUp<F: Field>: Reduction<F> {
       let fingerprints = fingerprint(values, records, height, interaction,
         compression(challenges, channel));
       let gamma = shift_challenge(challenges, channel);
-      denominators = concat(denominators, map gated<F>(each counts, gamma, each fingerprints));
+      denominators = concat(denominators,
+        map gated_denominator<F>(each counts, gamma, each fingerprints));
     }
     // An active record whose shift equals its fingerprint has no inverse.
     // This is a completeness failure of the honest prover, not a rejection.
@@ -256,7 +258,8 @@ pub module LogUp<F: Field>: Reduction<F> {
         compression(challenges, channel));
       let inverses = slice(openings, interaction * rows, rows);
       let gamma = shift_challenge(challenges, channel);
-      result = concat(result, map inverts<F>(each counts, each inverses, gamma, each fingerprints));
+      result = concat(result,
+        map reciprocal_residual<F>(each counts, each inverses, gamma, each fingerprints));
     }
     for sum in 0..index_length(sums) {
       let term = channel_term(records, values, openings, rows, index_get(sums, sum));
@@ -321,7 +324,7 @@ fn row_factor<F: Field>(records: Interactions, values: Vector<F>, rows: index,
       let fingerprints = fingerprint(values, records, rows, interaction,
         compression(challenges, channel));
       let gamma = shift_challenge(challenges, channel);
-      row = multiply(row, map gated<F>(each counts, gamma, each fingerprints));
+      row = multiply(row, map gated_denominator<F>(each counts, gamma, each fingerprints));
     }
   }
   return row;

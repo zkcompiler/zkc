@@ -1,5 +1,6 @@
 #include "AlgorithmSupport.h"
 #include "CheckedCandidate.h"
+#include "RealizationTrace.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
@@ -108,6 +109,7 @@ class Expander {
   detail::AlgorithmExpansionRecord output;
   std::map<std::string, Operation *> maps;
   std::vector<AlgorithmOrigin> origins;
+  mathematical::RealizationScope &scope;
 
   std::string definition(zkc::local::FuncOp function) {
     if (auto origin = function->getAttrOfType<ArrayAttr>("logical_origin"))
@@ -127,8 +129,12 @@ class Expander {
     for (auto &op : block) {
       // Bound traversal as well as output: empty helpers can also form an
       // exponentially large DAG. Admission separately bounds depth/cycles.
-      if (!output.work)
+      if (!output.work) {
+        scope.failure(mathematical::RequiredFailure{
+            "algorithm expansion work",
+            CapacityCause{WorkOwner::AlgorithmExpansion, 1, output.work}});
         return diagnostics::emit(op.emitOpError(), "algorithm-expansion-limit");
+      }
       --output.work;
       auto saved =
           detail::occurrence(input, function.getSymName(), attr(&op, "site"));
@@ -179,8 +185,13 @@ class Expander {
         if (encode && (!saved || !invocation.empty())) {
           auto encoded =
               algorithmSite(currentPath, original, output.originBytes);
-          if (!encoded)
+          if (!encoded) {
+            scope.failure(mathematical::RequiredFailure{
+                "algorithm origin encoding",
+                CapacityCause{
+                    WorkOwner::AlgorithmOriginBytes, {}, output.originBytes}});
             return diagnostics::emit(op.emitOpError(), encoded.takeError());
+          }
           site = std::move(*encoded);
         }
         auto *copy = builder.cloneWithoutRegions(op, mapping);
@@ -259,9 +270,10 @@ class Expander {
 
 public:
   Expander(ModuleOp original, AlgorithmExpansionPhase phase,
-           const detail::AlgorithmExpansionRecord &input)
+           const detail::AlgorithmExpansionRecord &input,
+           mathematical::RealizationScope &scope)
       : builder(original.getContext()), phase(phase), input(input),
-        output(input) {
+        output(input), scope(scope) {
     output.occurrences.clear();
     auto root =
         cast<zkc::protocol_ir::ProtocolModuleOp>(&original.getBody()->front());
@@ -320,11 +332,15 @@ struct AlgorithmExpansionPass
   }
 };
 } // namespace
-static LogicalResult expandAlgorithmsImpl(ModuleOp module,
-                                          AlgorithmExpansionPhase phase,
-                                          AlgorithmExpansionState &state,
-                                          std::vector<AlgorithmOrigin> *origins,
-                                          bool allowUnrecordedNoop) {
+static LogicalResult expandAlgorithmsImpl(
+    ModuleOp module, AlgorithmExpansionPhase phase,
+    AlgorithmExpansionState &state, std::vector<AlgorithmOrigin> *origins,
+    bool allowUnrecordedNoop, mathematical::RealizationTrace *trace) {
+  mathematical::RealizationScope scope(
+      trace,
+      phase == AlgorithmExpansionPhase::RetainMaps ? "retain-algorithms"
+                                                   : "finish-algorithms",
+      module);
   const auto &input = detail::AlgorithmStateAccess::get(state);
   if (input.finished ||
       (phase == AlgorithmExpansionPhase::RetainMaps && input.retained))
@@ -351,13 +367,21 @@ static LogicalResult expandAlgorithmsImpl(ModuleOp module,
       bool calls = false;
       unit.walk([&](local::ApplyOp) { calls = true; });
       if (allowUnrecordedNoop && !calls && !origins && !input.retained &&
-          phase == AlgorithmExpansionPhase::Finish)
+          phase == AlgorithmExpansionPhase::Finish) {
+        scope.complete(mathematical::CompletionKind::Unchanged);
         return success();
+      }
+      scope.propose();
       mathematical::CheckedCandidate candidate(module);
-      Expander expansion(module, phase, input);
+      Expander expansion(module, phase, input, scope);
       if (failed(expansion.run(*candidate)) || failed(verify(*candidate)))
         return failure();
       auto output = expansion.takeRecord();
+      scope.failure(mathematical::VerificationDecision{
+          mathematical::VerificationObservation::Refused,
+          "algorithm expansion correspondence",
+          {},
+          {}});
       if (failed(candidate.publish([&](ModuleOp before, ModuleOp after) {
             return detail::checkAlgorithmExpansion(before, after, phase, input,
                                                    output, true);
@@ -366,6 +390,7 @@ static LogicalResult expandAlgorithmsImpl(ModuleOp module,
       detail::AlgorithmStateAccess::set(state, std::move(output));
       if (origins)
         *origins = expansion.takeOrigins();
+      scope.publish();
       return success();
     }
   }
@@ -373,16 +398,18 @@ static LogicalResult expandAlgorithmsImpl(ModuleOp module,
 }
 
 LogicalResult expandAlgorithms(ModuleOp module,
-                               std::vector<AlgorithmOrigin> *origins) {
+                               std::vector<AlgorithmOrigin> *origins,
+                               mathematical::RealizationTrace *trace) {
   AlgorithmExpansionState state;
   // Preserve legacy call-free admission without exposing an unfinished state.
   return expandAlgorithmsImpl(module, AlgorithmExpansionPhase::Finish, state,
-                              origins, true);
+                              origins, true, trace);
 }
 LogicalResult expandAlgorithms(ModuleOp module, AlgorithmExpansionPhase phase,
                                AlgorithmExpansionState &state,
-                               std::vector<AlgorithmOrigin> *origins) {
-  return expandAlgorithmsImpl(module, phase, state, origins, false);
+                               std::vector<AlgorithmOrigin> *origins,
+                               mathematical::RealizationTrace *trace) {
+  return expandAlgorithmsImpl(module, phase, state, origins, false, trace);
 }
 
 std::unique_ptr<Pass> createExpandAlgorithmsPass() {

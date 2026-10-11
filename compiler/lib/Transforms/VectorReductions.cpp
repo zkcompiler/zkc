@@ -3,6 +3,7 @@
 #include "CheckedCandidate.h"
 #include "ComputationSelection.h"
 #include "MathematicalSupport.h"
+#include "RealizationTrace.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
@@ -73,7 +74,11 @@ public:
 
 // Exact native contract recognition, never a source reducer spelling. The
 // typed operation and its resolved logical binding must both agree.
-algebra::MapRealizeOp reductionMap(local::ApplyOp call, SymbolTable &symbols) {
+algebra::MapRealizeOp reductionMap(local::ApplyOp call, SymbolTable &symbols,
+                                   OptimizationOutcome *outcome = nullptr) {
+  if (outcome)
+    *outcome = {OptimizationStatus::Unsupported,
+                OptimizationReason::CallEligibility};
   if (!call || call->getNumResults() != 1 || !call->getResult(0).hasOneUse())
     return {};
   auto map = symbols.lookup<algebra::MapRealizeOp>(call.getCallee());
@@ -92,8 +97,14 @@ algebra::MapRealizeOp reductionMap(local::ApplyOp call, SymbolTable &symbols) {
       binding.getArguments() !=
           arguments(call.getContext(), "vector.sum", field.getDomain()) ||
       sum->getAttrOfType<ArrayAttr>("parameters") !=
-          ArrayAttr::get(call.getContext(), {}))
+          ArrayAttr::get(call.getContext(), {})) {
+    if (outcome && binding && !binding.getImplementation().empty())
+      *outcome = {OptimizationStatus::ReplacementRestricted,
+                  OptimizationReason::ImplementationRestriction};
     return {};
+  }
+  if (outcome)
+    *outcome = OptimizationOutcome::success();
   return map;
 }
 
@@ -104,18 +115,43 @@ class Rewriter {
   llvm::StringSet<> emitted;
   OpBuilder builder;
   Record &record;
+  RealizationScope &scope;
+  bool &changed;
 
 public:
-  Rewriter(protocol_ir::ProtocolModuleOp root, Record &record)
+  Rewriter(protocol_ir::ProtocolModuleOp root, Record &record,
+           RealizationScope &scope, bool &changed)
       : root(root), symbols(root), names(root), builder(root.getContext()),
-        record(record) {}
-  LogicalResult run(const Reductions &reductions) {
+        record(record), scope(scope), changed(changed) {}
+  LogicalResult
+  run(const Reductions &reductions,
+      const std::map<std::string, OptimizationOutcome> &decisions) {
     SmallVector<local::ApplyOp> calls;
     root.walk([&](local::ApplyOp call) { calls.push_back(call); });
     for (auto call : calls) {
-      auto map = reductionMap(call, symbols);
-      if (!map || !reductions.count(call.getCallee().str()))
+      OptimizationOutcome outcome;
+      auto map = reductionMap(call, symbols, &outcome);
+      if (!map || !reductions.count(call.getCallee().str())) {
+        // Map-product and missing-recipe decisions were recorded at the
+        // declaration. This occurrence additionally records actual eligibility.
+        if (map) {
+          auto found = decisions.find(call.getCallee().str());
+          outcome = found == decisions.end()
+                        ? OptimizationOutcome{OptimizationStatus::Unsupported,
+                                              OptimizationReason::Equation}
+                        : found->second;
+        }
+        scope.selection(realizationSubject(call, record),
+                        DecisionFamily::VectorReduction,
+                        RealizationChoice::Ordered, outcome);
         continue;
+      }
+      scope.selection(
+          realizationSubject(call, record), DecisionFamily::VectorReduction,
+          RealizationChoice::MapSum, OptimizationOutcome::success());
+      if (!changed)
+        scope.propose();
+      changed = true;
       auto function = call->getParentOfType<local::FuncOp>();
       auto saved = protocol::detail::occurrence(record, function.getSymName(),
                                                 protocol::attr(call, "site"));
@@ -137,6 +173,9 @@ public:
       auto emit = [&](StringRef contract, ValueRange inputs, Type output,
                       bool guard) -> Operation * {
         if (!record.work) {
+          scope.failure(RequiredFailure{
+              "fusion emission work",
+              CapacityCause{WorkOwner::AlgorithmExpansion, 1, record.work}});
           diagnostics::emit(call.emitOpError(), "algorithm-expansion-limit");
           return nullptr;
         }
@@ -155,6 +194,10 @@ public:
           auto encoded = protocol::algorithmSite(
               origin.path, origin.originalSite, record.originBytes);
           if (!encoded) {
+            scope.failure(RequiredFailure{
+                "fusion origin encoding",
+                CapacityCause{
+                    WorkOwner::AlgorithmOriginBytes, {}, record.originBytes}});
             diagnostics::emit(call.emitOpError(), encoded.takeError());
             return nullptr;
           }
@@ -463,35 +506,60 @@ LogicalResult verifyVectorReductionsPreserved(
   return check(original, candidate, StateAccess::get(originalState), output);
 }
 LogicalResult fuseVectorReductions(ModuleOp module,
-                                   protocol::AlgorithmExpansionState &state) {
-  return fuseVectorReductions(module, state, mathematicalRecipes().reductions);
+                                   protocol::AlgorithmExpansionState &state,
+                                   RealizationTrace *trace) {
+  return fuseVectorReductions(module, state, mathematicalRecipes().reductions,
+                              trace);
 }
 LogicalResult fuseVectorReductions(ModuleOp module,
                                    protocol::AlgorithmExpansionState &state,
-                                   ArrayRef<ReductionRecipe> reductionRecipes) {
+                                   ArrayRef<ReductionRecipe> reductionRecipes,
+                                   RealizationTrace *trace) {
+  RealizationScope scope(trace, "vector-reductions", module, {true, true});
   const auto &input = StateAccess::get(state);
   if (!input.retained || input.finished || !unit(module))
     return refuse(module, "expected retained preparation");
   if (failed(verify(module)))
     return failure();
   // Read every original formula, not just live or eligible applications.
-  auto products = describeMapProducts(module);
+  auto products = describeMapProducts(module, trace);
   if (failed(products))
     return failure();
   const MathematicalRecipes recipes{mathematicalRecipes().lanes,
                                     reductionRecipes};
   Reductions reductions;
-  for (const auto &[name, product] : *products)
-    if (auto selected = selectMapSum(product, recipes))
+  std::map<std::string, OptimizationOutcome> decisions;
+  SymbolTable subjects(unit(module));
+  for (const auto &[name, product] : *products) {
+    OptimizationOutcome outcome;
+    auto selected = selectMapSum(product, recipes, &outcome);
+    decisions.emplace(name, outcome);
+    scope.selection(subjects.lookup(name), DecisionFamily::VectorReduction,
+                    selected ? RealizationChoice::MapSum
+                             : RealizationChoice::Ordered,
+                    outcome);
+    if (selected)
       reductions.emplace(name, std::move(*selected));
+  }
   mathematical::CheckedCandidate candidate(module);
   Record output = input;
-  if (failed(Rewriter(unit(*candidate), output).run(reductions)) ||
-      failed(candidate.publish([&](ModuleOp before, ModuleOp after) {
+  bool changed = false;
+  if (failed(Rewriter(unit(*candidate), output, scope, changed)
+                 .run(reductions, decisions)))
+    return failure();
+  scope.failure(VerificationDecision{VerificationObservation::Refused,
+                                     "vector reduction correspondence",
+                                     {},
+                                     {}});
+  if (failed(candidate.publish([&](ModuleOp before, ModuleOp after) {
         return check(before, after, input, output);
       })))
     return failure();
   StateAccess::set(state, std::move(output));
+  if (changed)
+    scope.publish();
+  else
+    scope.complete(CompletionKind::Unchanged);
   return success();
 }
 } // namespace zkc::mathematical

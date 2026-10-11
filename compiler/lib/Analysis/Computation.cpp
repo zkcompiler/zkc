@@ -50,14 +50,19 @@ struct AccessAnalysis {
   ComputationWork &work;
   MathematicalFactAnalysis &factAnalysis;
   facts::Work &evidence;
+  ComputationDiagnostic &diagnostic;
+  const std::optional<CapacityCause> &evidenceDebit;
   mutable bool complete = true;
   SmallVector<Value> inputs;
   llvm::DenseMap<Value, unsigned> inputPositions, itemPositions;
   bool extentIteration;
 
   AccessAnalysis(ComputationView &view, bool aligned, ComputationWork &work,
-                 MathematicalFactAnalysis &factAnalysis, facts::Work &evidence)
+                 MathematicalFactAnalysis &factAnalysis, facts::Work &evidence,
+                 ComputationDiagnostic &diagnostic,
+                 const std::optional<CapacityCause> &evidenceDebit)
       : view(view), work(work), factAnalysis(factAnalysis), evidence(evidence),
+        diagnostic(diagnostic), evidenceDebit(evidenceDebit),
         inputs(view.computation.signature.getNumInputs()),
         extentIteration(
             aligned && llvm::all_of(view.items, [&](const auto &item) {
@@ -101,7 +106,12 @@ struct AccessAnalysis {
 
 private:
   bool charge(uint64_t count = 1) const {
-    complete &= consumeComputationWork(work.structural, count);
+    OptimizationOutcome outcome;
+    bool accepted = consumeComputationWork(work.structural, count,
+                                           WorkOwner::Structural, &outcome);
+    if (!accepted && complete)
+      diagnostic = {outcome, view.occurrence, {}};
+    complete &= accepted;
     return complete;
   }
   void addAccess(Access access) {
@@ -119,7 +129,8 @@ private:
   // A flat zip admits equal cardinalities before traversal. Only helper
   // premises and source-domain identity are shared with the independent reader;
   // facts known solely on a total operation's actual operands are insufficient.
-  bool equalIterationExtent(unsigned input, unsigned axis) const {
+  bool equalIterationExtent(Value access, unsigned input, unsigned axis) const {
+    std::optional<ComputationDiagnostic> decline;
     for (const auto &item : view.items) {
       if (!charge())
         return false;
@@ -130,12 +141,38 @@ private:
       if (!domain)
         continue;
       auto factorAxis = extentAxis(factor);
-      if ((*domain == input && factorAxis == axis) ||
-          factAnalysis.equalExtent(inputs[*domain], factorAxis, inputs[input],
-                                   axis, evidence) == facts::Status::Proven)
+      if (*domain == input && factorAxis == axis)
         return true;
+      auto status = factAnalysis.equalExtent(inputs[*domain], factorAxis,
+                                             inputs[input], axis, evidence);
+      if (status == facts::Status::Proven)
+        return true;
+      auto outcome = evidenceOutcome(status, OptimizationReason::EqualExtent);
+      outcome.input = *domain;
+      outcome.otherInput = input;
+      outcome.axis = factorAxis;
+      outcome.otherAxis = axis;
+      // A later successful probe discharges this access. Preserve an actual
+      // failed query only when no probe proves the required equality.
+      if (!decline || status == facts::Status::Capacity)
+        decline =
+            ComputationDiagnostic{outcome, access.getDefiningOp(), access};
+    }
+    if (decline) {
+      decline->occurrencePath = view.occurrencePath;
+      view.accessDeclines.push_back(*decline);
     }
     return false;
+  }
+  OptimizationOutcome evidenceOutcome(facts::Status status,
+                                      OptimizationReason reason) const {
+    OptimizationOutcome result{OptimizationStatus::MissingEvidence, reason};
+    if (status == facts::Status::Capacity) {
+      result.status = OptimizationStatus::Capacity;
+      result.capacity =
+          evidenceDebit.value_or(CapacityCause{WorkOwner::Evidence, {}, {}});
+    }
+    return result;
   }
   std::optional<Access> readAccess(Value value) const {
     if (auto position = item(value)) {
@@ -207,7 +244,7 @@ private:
     auto position = item(op->getOperand(varying));
     if (!extentIteration || !position ||
         !isa<data::DomainIndicesOp>(factor(*position)) ||
-        !equalIterationExtent(*container, axis))
+        !equalIterationExtent(value, *container, axis))
       return std::nullopt;
     Access result{AccessKind::Indexed,
                   *container,
@@ -225,10 +262,19 @@ private:
       result.selectedIndex = input(op->getOperand(selected));
       // Indexed access runs only on nonempty iterations. A bound is required
       // before introducing eager selected-row/column admission.
-      if (!result.selectedIndex ||
-          factAnalysis.bound(op->getOperand(selected), op->getOperand(0),
-                             1 - axis, evidence) != facts::Status::Proven)
+      if (!result.selectedIndex)
         return std::nullopt;
+      auto status = factAnalysis.bound(op->getOperand(selected),
+                                       op->getOperand(0), 1 - axis, evidence);
+      if (status != facts::Status::Proven) {
+        auto outcome = evidenceOutcome(status, OptimizationReason::StrictBound);
+        outcome.input = *container;
+        outcome.otherInput = result.selectedIndex;
+        outcome.axis = 1 - axis;
+        view.accessDeclines.push_back(
+            {outcome, op, value, view.occurrencePath});
+        return std::nullopt;
+      }
     }
     return result;
   }
@@ -255,24 +301,54 @@ std::optional<IterationKind> iterationKind(Operation *op) {
 class ComputationAnalysis {
   ComputationWork &work;
   MathematicalFactAnalysis factAnalysis;
+  std::optional<CapacityCause> evidenceDebit;
   facts::Work evidence;
+  ComputationDiagnostic &diagnostic;
+  Operation *subject = nullptr;
+  bool charge(uint64_t amount = 1) {
+    OptimizationOutcome outcome;
+    if (consumeComputationWork(work.structural, amount, WorkOwner::Structural,
+                               &outcome))
+      return true;
+    diagnostic = {outcome, subject, {}};
+    return false;
+  }
   llvm::DenseSet<Operation *> active;
   SymbolTableCollection symbols;
 
 public:
-  ComputationAnalysis(ComputationWork &work, Operation *subject)
+  ComputationAnalysis(ComputationWork &work, Operation *subject,
+                      ComputationDiagnostic &diagnostic)
       : work(work), factAnalysis(MathematicalFactAnalysis::rootFor(subject)),
-        evidence(work.evidence) {}
+        evidence([&](uint64_t amount) {
+          uint64_t available = work.evidence;
+          if (consumeComputationWork(work.evidence, amount))
+            return true;
+          evidenceDebit = CapacityCause{WorkOwner::Evidence, amount, available};
+          return false;
+        }),
+        diagnostic(diagnostic) {}
   std::optional<ComputationView>
   read(Computation c, Operation *occurrence,
        ArrayRef<Operation *> parentPath = {},
        const llvm::DenseMap<Value, Value> &enclosing =
            llvm::DenseMap<Value, Value>()) {
-    if (!c.helper || active.size() >= 64 || c.helper->getNumRegions() != 1 ||
+    Operation *previousSubject = subject;
+    subject = occurrence;
+    auto restore = llvm::scope_exit([&] { subject = previousSubject; });
+    diagnostic = {
+        {OptimizationStatus::Unsupported, OptimizationReason::Structure},
+        occurrence,
+        {}};
+    if (active.size() >= 64) {
+      diagnostic.outcome =
+          OptimizationOutcome::exhausted(WorkOwner::Structural);
+      diagnostic.outcome.reason = OptimizationReason::Depth;
+      return std::nullopt;
+    }
+    if (!c.helper || c.helper->getNumRegions() != 1 ||
         !c.helper->getRegion(0).hasOneBlock() ||
-        !consumeComputationWork(
-            work.structural,
-            1 + c.signature.getNumInputs() + c.signature.getNumResults() +
+        !charge(1 + c.signature.getNumInputs() + c.signature.getNumResults() +
                 c.helper->getRegion(0).front().getNumArguments()))
       return std::nullopt;
     auto callback =
@@ -288,7 +364,7 @@ public:
     result.occurrencePath.push_back(occurrence);
     llvm::DenseMap<Value, unsigned> iterations;
     for (auto &op : c.domain.getBody().front().without_terminator()) {
-      if (!consumeComputationWork(work.structural, 1 + op.getNumOperands()))
+      if (!charge(1 + op.getNumOperands()))
         return std::nullopt;
       auto kind = iterationKind(&op);
       if (!kind || op.getNumResults() != 1)
@@ -316,7 +392,7 @@ public:
     };
     SmallVector<PendingAxis> pending{{result.root, {}}};
     while (!pending.empty()) {
-      if (!consumeComputationWork(work.structural))
+      if (!charge())
         return std::nullopt;
       auto pendingAxis = pending.pop_back_val();
       unsigned position = pendingAxis.iteration;
@@ -325,8 +401,7 @@ public:
           iteration.kind == IterationKind::Product) {
         aligned &= iteration.kind != IterationKind::Product;
         for (unsigned child = iteration.children.size(); child; --child) {
-          if (!consumeComputationWork(work.structural,
-                                      1 + pendingAxis.path.size()))
+          if (!charge(1 + pendingAxis.path.size()))
             return std::nullopt;
           auto path = pendingAxis.path;
           path.push_back(child - 1);
@@ -337,8 +412,7 @@ public:
                              .getItemTypes()
                              .size();
         for (unsigned i = 0; i < count; ++i) {
-          if (!consumeComputationWork(work.structural,
-                                      1 + pendingAxis.path.size()) ||
+          if (!charge(1 + pendingAxis.path.size()) ||
               result.items.size() >= callback->formals.items.size())
             return std::nullopt;
           Axis axis;
@@ -402,11 +476,20 @@ public:
       // A helper is active only while its own callback is being traversed.
       // A predicate may invoke an acyclic fold that shares this step helper.
       Operation *callback = block.getParentOp();
-      if (active.size() >= 64 || !active.insert(callback).second)
+      if (active.size() >= 64) {
+        diagnostic.outcome =
+            OptimizationOutcome::exhausted(WorkOwner::Structural);
+        diagnostic.outcome.reason = OptimizationReason::Depth;
         return false;
+      }
+      if (!active.insert(callback).second) {
+        diagnostic.outcome = {OptimizationStatus::Unsupported,
+                              OptimizationReason::Cycle};
+        return false;
+      }
       auto release = llvm::scope_exit([&] { active.erase(callback); });
       for (auto &op : block.without_terminator()) {
-        if (!consumeComputationWork(work.structural, 1 + op.getNumOperands()))
+        if (!charge(1 + op.getNumOperands()))
           return false;
         payload.push_back(&op);
         Operation *definition = &op;
@@ -425,12 +508,15 @@ public:
         if (!nested)
           return false;
         result.nested.push_back(std::move(*nested));
+        diagnostic = {
+            {OptimizationStatus::Unsupported, OptimizationReason::Structure},
+            occurrence,
+            {}};
       }
       return true;
     };
     if (c.predicate) {
-      if (!consumeComputationWork(work.structural,
-                                  1 + callback->signature.getNumInputs()))
+      if (!charge(1 + callback->signature.getNumInputs()))
         return std::nullopt;
       auto predicate = readCallback(c, CallbackRole::Predicate);
       if (failed(predicate))
@@ -472,7 +558,8 @@ public:
                                      : std::nullopt});
     if (result.results.size() == 1)
       result.result = result.results.front();
-    AccessAnalysis accesses(result, aligned, work, factAnalysis, evidence);
+    AccessAnalysis accesses(result, aligned, work, factAnalysis, evidence,
+                            diagnostic, evidenceDebit);
     if (!accesses.complete)
       return std::nullopt;
     return result;
@@ -485,8 +572,16 @@ std::optional<ComputationView> analyzeComputation(Computation c,
   work.structural = budget;
   return analyzeComputation(c, work);
 }
-std::optional<ComputationView> analyzeComputation(Computation c,
-                                                  ComputationWork &work) {
-  return ComputationAnalysis(work, c.operation).read(c, c.operation);
+std::optional<ComputationView>
+analyzeComputation(Computation c, ComputationWork &work,
+                   ComputationDiagnostic *diagnostic) {
+  ComputationDiagnostic observed;
+  auto result =
+      ComputationAnalysis(work, c.operation, observed).read(c, c.operation);
+  if (result)
+    observed = {OptimizationOutcome::success(), c.operation, {}};
+  if (diagnostic)
+    *diagnostic = observed;
+  return result;
 }
 } // namespace zkc::finite

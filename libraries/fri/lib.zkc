@@ -73,13 +73,20 @@ fn terminal<F: Field>(coefficients: Vector<F>, shift: F, size: index,
   let point = kernel<F>("poly.domain_point", shift, size, position);
   return kernel<F>("poly.univariate_evaluate", polynomial, point);
 }
+// Scalar FRI arithmetic with caller-prepared inverses of two and the point x.
+// This total function does not establish domain membership or authenticate values.
+pub math fn fold_value<F: Field>(low: F, high: F, beta: F,
+                                inverse_two: F, inverse_x: F) -> F {
+  return (low + high) * inverse_two + beta * (low - high) * inverse_two * inverse_x;
+}
+
 // Natural domain order pairs x with -x in the two contiguous halves.
 fn folded_value<F: Field>(low: F, high: F, shift: F, size: index,
                          position: index, beta: F) -> F {
   let x = kernel<F>("poly.domain_point", shift, size, position);
   let inverse_two = kernel<F>("field.inverse", 1 + 1);
   let inverse_x = kernel<F>("field.inverse", x);
-  return (low + high) * inverse_two + beta * (low - high) * inverse_two * inverse_x;
+  return fold_value(low, high, beta, inverse_two, inverse_x);
 }
 fn chain<F: Field>(round: index, selected: F, expected: F) -> bool {
   return if zero_index(round) { true } else { equal(selected, expected) };

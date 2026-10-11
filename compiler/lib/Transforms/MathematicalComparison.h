@@ -1,6 +1,8 @@
 #ifndef ZKC_TRANSFORMS_MATHEMATICALCOMPARISON_H
 #define ZKC_TRANSFORMS_MATHEMATICALCOMPARISON_H
 
+#include "zkc/Support/OptimizationOutcome.h"
+
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/ValueRange.h"
 #include "zkc/Analysis/Finite.h"
@@ -61,7 +63,8 @@ mlir::FailureOr<mlir::Value> compareFinitePayload(
     const finite::Computation &source, mlir::ValueRange inputs,
     mlir::Value rows, mlir::Operation *&cursor, mlir::SymbolTable &symbols,
     llvm::DenseSet<mlir::Operation *> &bindings, uint64_t &remaining,
-    mlir::Operation *end = nullptr, ComparisonCapacity *capacity = nullptr);
+    mlir::Operation *end = nullptr, ComparisonCapacity *capacity = nullptr,
+    std::optional<CapacityCause> *debit = nullptr);
 
 /// Cheap candidate-side gate for the optional finite semantic comparison.
 /// Ordered recipes begin with index constants or empty containers and must

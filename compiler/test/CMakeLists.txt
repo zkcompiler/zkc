@@ -18,6 +18,10 @@ add_zkc_test(mathematical_fact_analysis IR mathematical-fact-analysis)
 mlir_target_link_libraries(zkc-mathematical_fact_analysis-test PRIVATE
   MLIRParser MLIRPass)
 add_zkc_test(language_mathematical_facts Language language-mathematical-facts)
+add_zkc_test(language_compositional_forwarding Compiler language-compositional-forwarding)
+mlir_target_link_libraries(zkc-language_compositional_forwarding-test PRIVATE MLIRParser)
+add_zkc_test(language_finite_occurrence Compiler language-finite-occurrence)
+mlir_target_link_libraries(zkc-language_finite_occurrence-test PRIVATE MLIRParser)
 add_zkc_test(language_finite_cardinality Language language-finite-cardinality)
 add_zkc_test(mathematical_fact_lifetime IR mathematical-fact-lifetime)
 mlir_target_link_libraries(zkc-mathematical_fact_lifetime-test PRIVATE
@@ -41,6 +45,11 @@ target_compile_definitions(zkc-computation_equations-test PRIVATE
   ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
 mlir_target_link_libraries(zkc-computation_equations-test PRIVATE MLIRParser)
 
+add_zkc_test(computation_outcomes Transforms computation-outcomes)
+target_compile_definitions(zkc-computation_outcomes-test PRIVATE
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-computation_outcomes-test PRIVATE MLIRParser)
+
 add_zkc_test(mathematical_recipes Transforms mathematical-recipes)
 target_compile_definitions(zkc-mathematical_recipes-test PRIVATE
   ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
@@ -60,6 +69,12 @@ target_compile_definitions(zkc-mathematical_stages-test PRIVATE
   ZKC_MATH_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical"
   ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
 mlir_target_link_libraries(zkc-mathematical_stages-test PRIVATE MLIRParser)
+
+add_zkc_test(mathematical_decisions Transforms mathematical-decisions)
+target_compile_definitions(zkc-mathematical_decisions-test PRIVATE
+  ZKC_MATH_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical"
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-mathematical_decisions-test PRIVATE MLIRParser MLIRPass)
 
 add_zkc_test(finite_computation Transforms finite-computation)
 target_compile_definitions(zkc-finite_computation-test PRIVATE

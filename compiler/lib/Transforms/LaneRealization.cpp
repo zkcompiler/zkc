@@ -14,13 +14,16 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
              Type vector, Value length, uint64_t *remaining,
              const MathematicalRecipes &recipes, LaneEmitter emit) {
   auto unsupported = [] {
-    return LaneRealizationResult{LaneRealizationStatus::Unsupported,
-                                 {},
-                                 "mathematical-lane-unsupported"};
-  };
-  auto capacity = [](StringRef reason) {
     return LaneRealizationResult{
-        LaneRealizationStatus::Capacity, {}, reason.str()};
+        LaneRealizationStatus::Unsupported,
+        {},
+        "mathematical-lane-unsupported",
+        {OptimizationStatus::Unsupported, OptimizationReason::LaneFormula}};
+  };
+  auto decline = OptimizationOutcome::exhausted(WorkOwner::Lanes);
+  auto capacity = [&](StringRef reason) {
+    return LaneRealizationResult{
+        LaneRealizationStatus::Capacity, {}, reason.str(), decline};
   };
   auto invalid = [](StringRef reason) {
     return zkc::error("mathematical-lane-realization", reason);
@@ -34,6 +37,8 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
       return true;
     uint64_t cost = 8 * slots;
     if (cost > *remaining) {
+      decline =
+          OptimizationOutcome::exhausted(WorkOwner::Lanes, cost, *remaining);
       *remaining = 0;
       return false;
     }

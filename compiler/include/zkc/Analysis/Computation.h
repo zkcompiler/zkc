@@ -105,6 +105,13 @@ struct ResultReference {
   /// Filtering provides no exact cardinality fact.
   std::optional<unsigned> cardinality;
 };
+/// Diagnostic references have the same borrowed lifetime as a view.
+struct ComputationDiagnostic {
+  OptimizationOutcome outcome;
+  mlir::Operation *subject = nullptr;
+  mlir::Value access;
+  llvm::SmallVector<mlir::Operation *> occurrencePath = {};
+};
 struct ComputationView {
   Computation computation;
   /// The actual nested call, or the total operation/declaration at the root.
@@ -131,6 +138,8 @@ struct ComputationView {
   /// Complete supported access inventory, independent of equation selection.
   /// Unsupported operations remain in payload and gain no access fact.
   llvm::SmallVector<Access> accesses;
+  /// Sparse unavailable evidence; a successful view need not have all accesses.
+  llvm::SmallVector<ComputationDiagnostic> accessDeclines;
   std::vector<ComputationView> nested;
   llvm::SmallVector<mlir::Value> results;
   llvm::SmallVector<ResultReference> resultMappings;
@@ -142,7 +151,8 @@ struct ComputationView {
 /// A bounded structural walk refuses cycles/budget exhaustion without mutation.
 std::optional<ComputationView> analyzeComputation(Computation computation,
                                                   unsigned budget = 100000);
-std::optional<ComputationView> analyzeComputation(Computation computation,
-                                                  ComputationWork &work);
+std::optional<ComputationView>
+analyzeComputation(Computation computation, ComputationWork &work,
+                   ComputationDiagnostic *diagnostic = nullptr);
 } // namespace zkc::finite
 #endif

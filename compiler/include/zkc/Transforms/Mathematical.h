@@ -22,7 +22,8 @@ struct ApplicationStart {
 mlir::OwningOpRef<mlir::ModuleOp>
 prepareProtocol(mlir::ModuleOp source, bool simplify = true,
                 MathematicalSelectionPolicy policy = {},
-                llvm::ArrayRef<ApplicationStart> starts = {});
+                llvm::ArrayRef<ApplicationStart> starts = {},
+                RealizationTrace *trace = nullptr);
 
 /// Checked Local algorithm-selection window on an immutable protocol source.
 /// Returns an owned candidate only after admission and independent checks of
@@ -59,10 +60,9 @@ mlir::LogicalResult expandPolynomialRecipes(mlir::ModuleOp module);
 
 /// Realize admitted data-signature math helpers through the common polynomial
 /// and calculation lowerers. Calls remain ordered and expand with local.apply.
-mlir::LogicalResult
-expandMathRealizations(mlir::ModuleOp module,
-                       MathematicalSelectionPolicy policy = {},
-                       RealizationWork *work = nullptr);
+mlir::LogicalResult expandMathRealizations(
+    mlir::ModuleOp module, MathematicalSelectionPolicy policy = {},
+    RealizationWork *work = nullptr, RealizationTrace *trace = nullptr);
 /// Structural containment check, not an independent proof of the math lowerers.
 /// Checks retained declarations, data-only recipes and binding accounting.
 mlir::LogicalResult verifyMathRealizationsPreserved(mlir::ModuleOp original,
@@ -75,7 +75,8 @@ mlir::LogicalResult verifyMathRealizationsPreserved(mlir::ModuleOp original,
 /// then applies the live formula with O(formula) checked vector operations.
 /// Calls remain ordered local.apply occurrences.
 mlir::LogicalResult expandMapRealizations(mlir::ModuleOp module,
-                                          RealizationWork *work = nullptr);
+                                          RealizationWork *work = nullptr,
+                                          RealizationTrace *trace = nullptr);
 /// Independently interpret the retained scalar formula and actual candidate
 /// payload under admitted ring laws. Check ordered shape guards, return use,
 /// bindings and unchanged declarations separately from payload equivalence. It
