@@ -105,6 +105,10 @@ belongs in the pull request body, which is what survives the squash.
   module whose entry point is `def run : IO Unit` has the same choice:
   `Tests.Checks` records a condition that does not hold and carries on, while
   a shape error stays fatal because there is no value to go on with.
+  Follow the [test maintenance guidance](../common/tests/README.md#maintaining-meaningful-tests):
+  identify the obligation and its owner, reuse preparation, and explain which
+  retained check covers any deleted regression test. Test count and runtime are
+  not substitutes for meaningful coverage and isolated failures.
 - **Semantics.** Update the owning specification: `docs/spec/` for native and
   shared contracts, `lean/docs/spec/` for independent formal models. Keep
   intended contracts and implementation coverage distinct; do not weaken a

@@ -85,6 +85,39 @@ representative controls and states their evidence limits.
 - `fixtures/` contains independently retained reference vectors; its README
   identifies their owners.
 
+## Maintaining meaningful tests
+
+A test should name the behavior it protects, the input that exercises it, and
+an expectation that can distinguish a defect from success. Prefer observable
+results, stable diagnostic identifiers and relevant report fields. Formatting
+conventions, comments and file existence do not need a separate test when a
+formatter, build, loader or actual consumer already enforces them.
+
+Before adding or removing a case, identify its owner:
+
+- Compiler tests own parsing, admission, lowering and correspondence refusals.
+  Runtime unit tests own backend semantics and resource accounting.
+- Integration tests own the boundary between producers and independent consumers.
+  The same feature in C++ and Rust may protect different obligations; retain
+  independent implementations, reference calculations and adversarial controls.
+- Harness tests own discovery, command forwarding, isolation and failure reporting.
+  Test their behavior with representative failures instead of matching script text.
+
+Share preparation and plumbing through `support/` or pytest fixtures, not imports
+from another test module. Share only immutable artifacts beyond a case's lifetime;
+witnesses, mutations, proofs, subprocesses and command journals remain isolated.
+Keep sequential protocol steps together when later checks depend on earlier ones.
+Use parameterized pytest cases, C++ `Cases`, or Python `case(...)` for independent
+inputs so each failure is named and does not hide unrelated results. A parameter
+axis should protect a distinct behavior or a known interaction, rather than add a
+Cartesian product by habit.
+
+When deleting a test, name the remaining check that protects the same obligation,
+or explain why the obligation is obsolete. Fewer tests or shorter runs alone do
+not establish an improvement. When extracting shared helpers, retain independent
+expected values; reusing a production encoder to construct its own expected output
+can hide a defect in both paths.
+
 ## Tools and reports
 
 `ZKC_COMPILER_BIN` selects the directory containing `zkc-compile` and `zkc-opt`;
@@ -129,10 +162,13 @@ workspace command still runs all groups. Feature-gated controls stay gated.
 
 CTest owns compiler admission checks. The relation-composition integration case
 uses fresh carrier preparation from `compiler/test/support/relation_composition_cases.py`
-and then runs the independent Rust consumer. Application expansion, role mapping,
-and occurrence checks run in the CTest entry point without repeating in that
-integration case. Other generator families retain their existing ownership until
-they have been separated and validated individually.
+and then runs the independent Rust consumer. The CTest entry point separately
+reports application boundaries, composition correspondence, R1CS correspondence,
+relation admission and execution-carrier preparation. Each group prepares its own
+inputs. Compiler-only mutation/refusal controls stay outside integration preparation;
+the independent integer oracle and C++/Rust execution checks remain. Other generator
+families retain their existing ownership until they have been separated and
+validated individually.
 
 ## Optional formal checks
 

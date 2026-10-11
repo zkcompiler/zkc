@@ -73,20 +73,3 @@ def test_documentation_scope_includes_component_guides(monkeypatch):
     monkeypatch.setattr(runner, "run", lambda arguments: calls.append(arguments))
     runner.execute("docs", SimpleNamespace())
     assert calls == [[sys.executable, "common/tests/check_docs.py", "--all"]]
-
-
-def test_native_generator_and_client_pairs_remain_available():
-    from harness import load
-    import tomllib
-
-    integration = load("native_integration", "common/tests/protocol/test_native_mathematical.py")
-    manifest = ROOT / "crates/zkc-test-drivers/Cargo.toml"
-    config = tomllib.loads(manifest.read_text())
-    drivers = {entry["name"]: manifest.parent / entry["path"] for entry in config["bin"]}
-    missing = []
-    for generator, example in integration.NATIVE_CASES:
-        if not (ROOT / f"compiler/test/{generator}.py").is_file():
-            missing.append(f"compiler generator {generator}")
-        if example not in drivers or not drivers[example].is_file():
-            missing.append(f"Rust driver {example}")
-    assert not missing, "native integration coverage lost its inputs: " + ", ".join(missing)

@@ -56,25 +56,25 @@ def check_transcript_schedule(package):
 
 
 @pytest.mark.parametrize('entry', ['ProofLogUp', 'ProofProduct'])
-def test_machine_proofs_produce_and_verify(compiled_projects, toolchain, journal, directory, entry):
+@pytest.mark.parametrize('run', ['store-load', 'arithmetic-only', 'store-load-initial-seven'])
+def test_machine_proofs_produce_and_verify(compiled_projects, toolchain, journal, directory, entry, run):
     package, pin = compile_entry(toolchain, journal, directory, entry, compiled_projects=compiled_projects)
     check_transcript_schedule(package)
-    for run in ['store-load', 'arithmetic-only', 'store-load-initial-seven']:
-        prove_and_verify(toolchain, journal, directory, package, pin, run, requests(run))
+    prove_and_verify(toolchain, journal, directory, package, pin, run, requests(run))
 
 
 @pytest.mark.parametrize('entry', ['ProofLogUp', 'ProofProduct'])
-def test_machine_supports_distinct_heights_and_idle_memory(compiled_projects, toolchain, journal, directory, entry):
+@pytest.mark.parametrize('present', [False, True], ids=['without-memory', 'idle-memory'])
+def test_machine_supports_distinct_heights_and_idle_memory(compiled_projects, toolchain, journal, directory, entry, present):
     package, pin = compile_entry(toolchain, journal, directory, entry, compiled_projects=compiled_projects)
     document = json.loads((FIXTURES / 'arithmetic-only/run.json').read_text())
     # Execution stops after row 3; the configured program retains four unused
     # instructions, and the optional memory table can be present but idle.
     document[1] += [['add-immediate', '123']] * 4
-    for present in [False, True]:
-        pair = prepare.run_inputs(document, memory_clocks=16, memory_present=present)
-        assert (pair[0]['cpu_height'], pair[0]['program_height'],
-                pair[0]['memory_height']) == ('4', '8', '32')
-        prove_and_verify(toolchain, journal, directory, package, pin, f'idle-{present}', pair)
+    pair = prepare.run_inputs(document, memory_clocks=16, memory_present=present)
+    assert (pair[0]['cpu_height'], pair[0]['program_height'],
+            pair[0]['memory_height']) == ('4', '8', '32')
+    prove_and_verify(toolchain, journal, directory, package, pin, f'idle-{present}', pair)
 
 
 @pytest.mark.parametrize('entry,flags', [('ProofLogUp', ['--no-simplify']),

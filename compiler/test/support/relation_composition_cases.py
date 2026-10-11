@@ -261,57 +261,69 @@ def check_application_boundaries(commands):
     commands.verified(with_statement, "protocol-application")
 
 
-def prepare(commands, output):
-    service = '!protocol.service_ref<"random.bls12-381.fr/0">'
-    service_source = module(f""""protocol.func"() ({{^bb0(%s:{service}):
-    %v="protocol.query"(%s) {{method="draw",owner="A",site="draw"}} : ({service})->{F}
-    "protocol.return"(%v) : ({F})->()}})
-    {{sym_name="draw",function_type=({service})->{F},roles=["A"],input_roles=[["A"]],output_roles=[["A"]]}} : ()->()
-    "protocol.func"() ({{^bb0(%s:{service}):
-    %a=protocol.apply @draw(%s) {{roles=["Checker"],site="first"}} : ({service})->{F}
-    %b=protocol.apply @draw(%s) {{roles=["Checker"],site="second"}} : ({service})->{F}
-    "protocol.return"(%a,%b) : ({F},{F})->()}})
-    {{sym_name="main",function_type=({service})->({F},{F}),roles=["Checker"],input_roles=[["Checker"]],output_roles=[["Checker"],["Checker"]]}} : ()->()""")
-    (output / "service_alias.bundle").write_text(
-        commands.source("protocol-bundle", service_source, "--entry=main")
+def checked_bundle(commands, output, text, requirement, entry="main", refuses=None, flags=()):
+    requirement_path = output / "requirements.json"
+    requirement_path.write_text(json.dumps(requirement))
+    return commands.source(
+        "protocol-checked-bundle",
+        text,
+        f"--entry={entry}",
+        f"--requirements={requirement_path}",
+        *flags,
+        refuses=refuses,
     )
+
+
+def write_bundle(output, name, text):
+    result = json.loads(text)
+    (output / f"{name}.checked.json").write_text(text)
+    (output / f"{name}.bundle").write_text(result["bundle"])
+    return result["correspondence"]
+
+
+def sumcheck_requirements():
     fixtures = Path(__file__).parents[1] / "fixtures/mathematical"
-    source = composed_sumcheck()
-    req = json.loads((fixtures / "sumcheck.requirements.json").read_text())
-    req["requirements"][0]["composition"] = {
+    requirement = json.loads((fixtures / "sumcheck.requirements.json").read_text())
+    requirement["requirements"][0]["composition"] = {
         "entry": "main",
         "reduction_site": "reduce",
         "terminal_site": "decide",
     }
+    return requirement
+
+
+def relation(columns, outputs, inputs, rows):
+    return [
+        "zkc.relation.r1cs/0",
+        "bls12-381.fr",
+        str(columns),
+        str(outputs),
+        str(inputs),
+        [
+            [[[str(col), str(coef % P)] for col, coef in form] for form in row]
+            for row in rows
+        ],
+    ]
+
+
+def relation_assets():
+    multiply = [[(2, 1)], [(3, 1)], [(1, 1)]]
+    return {
+        "multiply": relation(4, 1, 1, [multiply]),
+        "three": relation(
+            5, 1, 1, [multiply, [[(3, 1)], [(3, 1)], [(4, 1)]], [[], [], []]]
+        ),
+        "eight": relation(4, 1, 1, [multiply] * 8),
+        "empty": relation(1, 0, 0, []),
+        "cancel": relation(3, 0, 0, [[[(1, 1)], [(0, 1)], []], [[(2, 1)], [(0, 1)], []]]),
+    }
+
+
+def check_composition_correspondence(commands, output):
+    """Reject altered SSA wiring and declarations after structural admission."""
+    source = composed_sumcheck()
+    req = sumcheck_requirements()
     requirement_path = output / "requirements.json"
-
-
-    def checked(text, requirement, entry="main", refuses=None, flags=()):
-        requirement_path.write_text(json.dumps(requirement))
-        return commands.source(
-            "protocol-checked-bundle",
-            text,
-            f"--entry={entry}",
-            f"--requirements={requirement_path}",
-            *flags,
-            refuses=refuses,
-        )
-
-
-    def artifact(name, text):
-        result = json.loads(text)
-        (output / f"{name}.checked.json").write_text(text)
-        (output / f"{name}.bundle").write_text(result["bundle"])
-        return result["correspondence"]
-
-
-    artifact("tables", checked(source, req))
-    component_report = artifact("tables_reduction", checked(source, req, entry="reduction"))
-    assert set(component_report["bundles_sha256"]) == {"main", "reduction", "terminal"}
-    assert (
-        component_report["bundles_sha256"]["main"]
-        == hashlib.sha256((output / "tables.bundle").read_bytes()).hexdigest()
-    )
     for before, after in [
         ("%r#0,%r#1", "%r#1,%r#0"),
         ("%r#2,%r#3", "%r#3,%r#2"),
@@ -319,10 +331,10 @@ def prepare(commands, output):
     ]:
         bad = source.replace(before, after)
         commands.verified(bad)
-        checked(bad, req, refuses="polynomial-composition")
+        checked_bundle(commands, output, bad, req, refuses="polynomial-composition")
     wrong_req = copy.deepcopy(req)
     wrong_req["requirements"][0]["composition"]["terminal_site"] = "missing"
-    checked(source, wrong_req, refuses="polynomial-composition")
+    checked_bundle(commands, output, source, wrong_req, refuses="polynomial-composition")
     source_path, candidate_path = output / "source.mlir", output / "candidate.mlir"
     source_path.write_text(source)
     candidate = commands.verified(source, None, "--zkc-project-protocol=simplify=false")
@@ -399,31 +411,164 @@ def prepare(commands, output):
     )
 
 
-    def relation(columns, outputs, inputs, rows):
-        return [
-            "zkc.relation.r1cs/0",
-            "bls12-381.fr",
-            str(columns),
-            str(outputs),
-            str(inputs),
-            [
-                [[[str(col), str(coef % P)] for col, coef in form] for form in row]
-                for row in rows
-            ],
-        ]
+def check_r1cs_correspondence(commands, output):
+    """Bind the generated protocol and its projection to the external R1CS."""
+    asset = relation_assets()["multiply"]
+    text = commands.source("relation-protocol", json.dumps(asset))
+    requirements = json.loads(commands.source("relation-requirements", json.dumps(asset)))
+    report = json.loads(checked_bundle(commands, output, text, requirements))["correspondence"]
+    source_path, candidate_path = output / "source.mlir", output / "candidate.mlir"
+    requirement_path = output / "requirements.json"
+    # Family contract pins all generated source, including weight origin,
+    # zero claim, public layout and recipe coefficients to the external R1CS.
+    for before, after in [
+        ('site = "weight_draw0"', 'site = "different_draw"'),
+        ("index = 2 : i64", "index = 1 : i64"),
+        ('value = "0"', 'value = "1"'),
+    ]:
+        bad = text.replace(before, after, 1)
+        commands.verified(bad)
+        checked_bundle(commands, output, bad, requirements, refuses="r1cs-source-correspondence")
+    changed = copy.deepcopy(requirements)
+    changed["requirements"][0]["relation"][3:5] = ["0", "2"]
+    checked_bundle(commands, output, text, changed, refuses="r1cs-source-correspondence")
+    commands.source(
+        "protocol-checked-bundle",
+        text,
+        "--entry=main",
+        refuses="checked-bundle-requirement-missing",
+    )
+    checked_bundle(
+        commands, output, text,
+        requirements,
+        entry="evaluate",
+        refuses="polynomial-correspondence-entry",
+    )
+    original_projected = commands.verified(
+        text, None, "--zkc-project-protocol=simplify=false"
+    )
+    identity = report["requirements"][0]["relation_identity"]
+    changed_identity = original_projected.replace(identity, "f" * 64)
+    assert changed_identity != original_projected
+    commands.verified(changed_identity)
+    source_path.write_text(text)
+    candidate_path.write_text(changed_identity)
+    requirement_path.write_text(json.dumps(requirements))
+    commands.run(
+        [
+            compiler,
+            "protocol-check-reductions",
+            source_path,
+            requirement_path,
+            candidate_path,
+        ],
+        refuses="polynomial-correspondence-declaration",
+    )
+    # Statement port changes are structurally legal and cannot be inferred
+    # from an unchanged participant body.
+    changed_statement = original_projected.replace(
+        "inputs = [0, 1]", "inputs = [1, 0]", 1
+    )
+    assert changed_statement != original_projected
+    commands.verified(changed_statement)
+    candidate_path.write_text(changed_statement)
+    commands.run(
+        [
+            compiler,
+            "protocol-check-reductions",
+            source_path,
+            requirement_path,
+            candidate_path,
+        ],
+        refuses="polynomial-correspondence-interface",
+    )
 
 
+def check_relation_admission(commands, output):
+    """Exercise binary ingestion, canonical rows, field selection, and bounds."""
     multiply = [[(2, 1)], [(3, 1)], [(1, 1)]]
-    assets = {
-        "multiply": relation(4, 1, 1, [multiply]),
-        "three": relation(
-            5, 1, 1, [multiply, [[(3, 1)], [(3, 1)], [(4, 1)]], [[], [], []]]
-        ),
-        "eight": relation(4, 1, 1, [multiply] * 8),
-        "empty": relation(1, 0, 0, []),
-        "cancel": relation(3, 0, 0, [[[(1, 1)], [(0, 1)], []], [[(2, 1)], [(0, 1)], []]]),
-    }
+    assets = relation_assets()
+    duplicate = relation(4, 1, 1, [[[(2, 3), (2, -2)], [(3, 1)], [(1, 1)]]])
+    commands.source(
+        "relation-protocol", json.dumps(duplicate), refuses="relation-noncanonical"
+    )
 
+    # Binary ingestion uses the exact modulus and the same public layout.
+    asset = assets["multiply"]
+    header = (
+        struct.pack("<I", 32)
+        + P.to_bytes(32, "little")
+        + struct.pack("<IIIIQI", 4, 1, 1, 1, 4, 1)
+    )
+    constraints = b"".join(
+        struct.pack("<I", len(form))
+        + b"".join(
+            struct.pack("<I", int(i)) + int(k).to_bytes(32, "little") for i, k in form
+        )
+        for form in asset[5][0]
+    )
+    binary = (
+        b"r1cs"
+        + struct.pack("<II", 1, 3)
+        + struct.pack("<IQ", 1, len(header))
+        + header
+        + struct.pack("<IQ", 2, len(constraints))
+        + constraints
+    )
+    binary += struct.pack("<IQ", 3, 32) + struct.pack("<QQQQ", 0, 1, 2, 3)
+    binary_path = output / "multiply.r1cs"
+    binary_path.write_bytes(binary)
+    assert (
+        commands.run([compiler, "relation-protocol", binary_path])
+        == commands.source("relation-protocol", json.dumps(asset))
+    )
+    for asset, refusal in [
+        (relation(4, 1, 1, [multiply] * 9), "native-r1cs-limit"),
+        (relation(129, 1, 1, [multiply]), "native-r1cs-limit"),
+    ]:
+        commands.source("relation-protocol", json.dumps(asset), refuses=refusal)
+    inside = relation(128, 0, 0, [[[(i, 1) for i in range(128)], [], []] for _ in range(8)])
+    commands.source("relation-protocol", json.dumps(inside))
+    outside = copy.deepcopy(inside)
+    outside[5][0][1] = [["0", "1"]]
+    commands.source("relation-protocol", json.dumps(outside), refuses="native-r1cs-limit")
+    other = copy.deepcopy(assets["multiply"])
+    other[1] = "bn254.fr"
+    commands.source("relation-protocol", json.dumps(other), refuses="native-r1cs-field")
+
+
+def prepare(commands, output):
+    """Build fresh carriers and independent integer expectations for execution.
+
+    Compiler-only mutation and admission controls have separate entry points;
+    consumers need no successful run of those controls or earlier CTest output.
+    """
+    service = '!protocol.service_ref<"random.bls12-381.fr/0">'
+    service_source = module(f""""protocol.func"() ({{^bb0(%s:{service}):
+    %v="protocol.query"(%s) {{method="draw",owner="A",site="draw"}} : ({service})->{F}
+    "protocol.return"(%v) : ({F})->()}})
+    {{sym_name="draw",function_type=({service})->{F},roles=["A"],input_roles=[["A"]],output_roles=[["A"]]}} : ()->()
+    "protocol.func"() ({{^bb0(%s:{service}):
+    %a=protocol.apply @draw(%s) {{roles=["Checker"],site="first"}} : ({service})->{F}
+    %b=protocol.apply @draw(%s) {{roles=["Checker"],site="second"}} : ({service})->{F}
+    "protocol.return"(%a,%b) : ({F},{F})->()}})
+    {{sym_name="main",function_type=({service})->({F},{F}),roles=["Checker"],input_roles=[["Checker"]],output_roles=[["Checker"],["Checker"]]}} : ()->()""")
+    (output / "service_alias.bundle").write_text(
+        commands.source("protocol-bundle", service_source, "--entry=main")
+    )
+    source = composed_sumcheck()
+    req = sumcheck_requirements()
+    write_bundle(output, "tables", checked_bundle(commands, output, source, req))
+    component_report = write_bundle(
+        output, "tables_reduction",
+        checked_bundle(commands, output, source, req, entry="reduction"),
+    )
+    assert set(component_report["bundles_sha256"]) == {"main", "reduction", "terminal"}
+    assert (
+        component_report["bundles_sha256"]["main"]
+        == hashlib.sha256((output / "tables.bundle").read_bytes()).hexdigest()
+    )
+    assets = relation_assets()
 
     def products(asset, z):
         return [
@@ -458,7 +603,7 @@ def prepare(commands, output):
             commands.source("relation-requirements", json.dumps(asset))
         )
         (output / f"{name}.mlir").write_text(text)
-        report = artifact(name, checked(text, requirements))
+        report = write_bundle(output, name, checked_bundle(commands, output, text, requirements))
         arity = report["requirements"][0]["arity"]
         assert [r["degree"] for r in report["requirements"][0]["rounds"]] == [3] * arity
         assert report["requirements"][0]["family"] == "r1cs-sum-to-point/0"
@@ -472,70 +617,10 @@ def prepare(commands, output):
                 ("release", ("--release-storage",)),
                 ("factored", ("--fix-polynomial-factors",)),
             ]:
-                artifact(f"{name}_{suffix}", checked(text, requirements, flags=flags))
-            # Family contract pins all generated source, including weight origin,
-            # zero claim, public layout and recipe coefficients to the external R1CS.
-            for before, after in [
-                ('site = "weight_draw0"', 'site = "different_draw"'),
-                ("index = 2 : i64", "index = 1 : i64"),
-                ('value = "0"', 'value = "1"'),
-            ]:
-                bad = text.replace(before, after, 1)
-                commands.verified(bad)
-                checked(bad, requirements, refuses="r1cs-source-correspondence")
-            changed = copy.deepcopy(requirements)
-            changed["requirements"][0]["relation"][3:5] = ["0", "2"]
-            checked(text, changed, refuses="r1cs-source-correspondence")
-            commands.source(
-                "protocol-checked-bundle",
-                text,
-                "--entry=main",
-                refuses="checked-bundle-requirement-missing",
-            )
-            checked(
-                text,
-                requirements,
-                entry="evaluate",
-                refuses="polynomial-correspondence-entry",
-            )
-            original_projected = commands.verified(
-                text, None, "--zkc-project-protocol=simplify=false"
-            )
-            identity = report["requirements"][0]["relation_identity"]
-            changed_identity = original_projected.replace(identity, "f" * 64)
-            assert changed_identity != original_projected
-            commands.verified(changed_identity)
-            source_path.write_text(text)
-            candidate_path.write_text(changed_identity)
-            requirement_path.write_text(json.dumps(requirements))
-            commands.run(
-                [
-                    compiler,
-                    "protocol-check-reductions",
-                    source_path,
-                    requirement_path,
-                    candidate_path,
-                ],
-                refuses="polynomial-correspondence-declaration",
-            )
-            # Statement port changes are structurally legal and cannot be inferred
-            # from an unchanged participant body.
-            changed_statement = original_projected.replace(
-                "inputs = [0, 1]", "inputs = [1, 0]", 1
-            )
-            assert changed_statement != original_projected
-            commands.verified(changed_statement)
-            candidate_path.write_text(changed_statement)
-            commands.run(
-                [
-                    compiler,
-                    "protocol-check-reductions",
-                    source_path,
-                    requirement_path,
-                    candidate_path,
-                ],
-                refuses="polynomial-correspondence-interface",
-            )
+                write_bundle(
+                    output, f"{name}_{suffix}",
+                    checked_bundle(commands, output, text, requirements, flags=flags),
+                )
 
         assignments = (
             [[1, 6, 2, 3], [1, 7, 2, 3], [0, 0, 0, 0]]
@@ -636,57 +721,7 @@ def prepare(commands, output):
         r["bundle"] == "cancel" and r["values"] == ["1", str(P - 1)] and not r["accepted"]
         for r in runs
     )
-
-    duplicate = relation(4, 1, 1, [[[(2, 3), (2, -2)], [(3, 1)], [(1, 1)]]])
-    commands.source(
-        "relation-protocol", json.dumps(duplicate), refuses="relation-noncanonical"
-    )
-
-    # Binary ingestion uses the exact modulus and the same public layout.
-    asset = assets["multiply"]
-    header = (
-        struct.pack("<I", 32)
-        + P.to_bytes(32, "little")
-        + struct.pack("<IIIIQI", 4, 1, 1, 1, 4, 1)
-    )
-    constraints = b"".join(
-        struct.pack("<I", len(form))
-        + b"".join(
-            struct.pack("<I", int(i)) + int(k).to_bytes(32, "little") for i, k in form
-        )
-        for form in asset[5][0]
-    )
-    binary = (
-        b"r1cs"
-        + struct.pack("<II", 1, 3)
-        + struct.pack("<IQ", 1, len(header))
-        + header
-        + struct.pack("<IQ", 2, len(constraints))
-        + constraints
-    )
-    binary += struct.pack("<IQ", 3, 32) + struct.pack("<QQQQ", 0, 1, 2, 3)
-    binary_path = output / "multiply.r1cs"
-    binary_path.write_bytes(binary)
-    assert (
-        commands.run([compiler, "relation-protocol", binary_path])
-        == (output / "multiply.mlir").read_text()
-    )
-    for asset, refusal in [
-        (relation(4, 1, 1, [multiply] * 9), "native-r1cs-limit"),
-        (relation(129, 1, 1, [multiply]), "native-r1cs-limit"),
-    ]:
-        commands.source("relation-protocol", json.dumps(asset), refuses=refusal)
-    inside = relation(128, 0, 0, [[[(i, 1) for i in range(128)], [], []] for _ in range(8)])
-    commands.source("relation-protocol", json.dumps(inside))
-    outside = copy.deepcopy(inside)
-    outside[5][0][1] = [["0", "1"]]
-    commands.source("relation-protocol", json.dumps(outside), refuses="native-r1cs-limit")
-    other = copy.deepcopy(assets["multiply"])
-    other[1] = "bn254.fr"
-    commands.source("relation-protocol", json.dumps(other), refuses="native-r1cs-field")
     (output / "execution.json").write_text(
         json.dumps({"runs": runs, "exact": exact}, indent=2)
     )
-    print(
-        f"composition admission, checked SSA wiring, {len(exact)} exact cases and {len(runs)} Sumcheck runs generated"
-    )
+    print(f"{len(exact)} exact cases and {len(runs)} Sumcheck runs generated")
