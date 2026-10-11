@@ -79,7 +79,7 @@ private:
   std::map<unsigned, std::shared_ptr<const SyntaxDeclaration>> retainedSyntax;
   std::map<std::string, DeclarationId> modules;
   std::vector<DeclarationId> moduleIds;
-  struct ModuleBinding {
+  struct ScopeBinding {
     DeclarationId target;
     Span span;
     bool isPublic;
@@ -87,7 +87,7 @@ private:
   bool checkingVisibility = false;
   std::function<bool(DeclarationId, llvm::StringRef)> loadBinding;
   std::map<std::string, DeclarationId> qualified;
-  std::vector<std::map<std::string, ModuleBinding>> visible;
+  std::vector<std::map<std::string, ScopeBinding>> visible;
   using OperatorSite = std::pair<unsigned, unsigned>;
   std::vector<std::vector<OperatorSite>> visibleOperators, exportedOperators;
   std::map<OperatorSite, OperatorBinding> moduleOperators;

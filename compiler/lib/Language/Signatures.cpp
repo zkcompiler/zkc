@@ -197,12 +197,18 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   for (auto &p : decl.parameters) {
     if (!types.charge(1, decl.span))
       return false;
-    if (p.name == decl.name || (decl.kind == Declaration::Kind::Module &&
-                                visible[decl.id.index].count(p.name)))
-      return types.fail(
-          "source.shadow",
-          "declaration or import shadows an inherited static parameter",
-          decl.span);
+    if (p.name == decl.name)
+      return types.fail("source.shadow",
+                        "member shadows an inherited static parameter",
+                        decl.span);
+    if (decl.kind == Declaration::Kind::Module) {
+      auto binding = visible[decl.id.index].find(p.name);
+      if (binding != visible[decl.id.index].end())
+        return types.fail(
+            "source.shadow",
+            "declaration or import shadows an inherited static parameter",
+            binding->second.span);
+    }
   }
   formingParameters.insert(id.index);
   for (auto &src : source.parameters) {

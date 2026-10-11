@@ -271,7 +271,7 @@ bool Checker::collect() {
     }
     if (parent && !decl.anonymous)
       visible[parent->index].emplace(
-          decl.name, ModuleBinding{id, decl.span, decl.isPublic});
+          decl.name, ScopeBinding{id, decl.span, decl.isPublic});
     output.declarations.push_back(std::move(decl));
     if (parent)
       output.declarations[parent->index].members.push_back(id);

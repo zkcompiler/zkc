@@ -110,7 +110,7 @@ bool Checker::imports() {
       if (!types.charge(1, import.span))
         return false;
       auto [position, inserted] = visible[id].emplace(
-          name.str(), ModuleBinding{target, import.span, import.isPublic});
+          name.str(), ScopeBinding{target, import.span, import.isPublic});
       if (!inserted && position->second.target.index != target.index)
         return types.fail("source.duplicate",
                           "import conflicts with visible name: " + name,

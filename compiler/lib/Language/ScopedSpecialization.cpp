@@ -1025,8 +1025,7 @@ public:
       return failure("source.scoped-specialization",
                      "selected construction differs", authored.span);
     if (proof && proof->selectedConstruction) {
-      if (!closedProof || !closedProof->selectedConstruction ||
-          proof->selectedConstruction->index >= source.size() ||
+      if (proof->selectedConstruction->index >= source.size() ||
           !instance(*closedProof->selectedConstruction,
                     source[proof->selectedConstruction->index], nullptr,
                     proof->constructionArguments, {}, 1))
