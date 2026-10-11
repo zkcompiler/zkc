@@ -10,6 +10,33 @@ logical signatures, requirements, static parameter schemas, type permissions and
 installed facets. Language and IR adapters consume those records. Semantic
 validators and backend implementations retain their separate obligations.
 
+## Mathematical meaning and realization
+
+The mathematical declarations own stable identities, source intrinsic spellings
+and the closed scalar/access laws consumed by the compiler. Generated typed
+queries are shared by Language, IR and analysis. Exact nominal signatures
+establish applicability: a group action uses that group's associated scalar
+field, and checked index arithmetic acquires no field reassociation law.
+
+`mathematicalMeaning` describes an identity without choosing an executable
+operation. `admitMathematicalMeaning` checks a complete logical application,
+including static arguments, ports and parameters. It can describe an explicitly
+pinned operation without resolving its physical provider. Ordinary binding
+admission still validates that provider, and `admitComputationContract` separately
+requires eligibility for mathematical replacement.
+
+Private [realization recipes](../../compiler/lib/Transforms/MathematicalRecipes.td)
+associate these meanings with lane and reduction algorithms. Generation checks
+endpoint signatures, domain mappings and operand order. For example, scalar
+group action takes `(point, scalar)`, while MSM takes `(scalars, points)`.
+Analysis keeps semantic operand roles; selection applies this permutation.
+Removing a recipe leaves the meaning available and optional selection falls
+back to ordered evaluation. Physical implementation choice remains a later step.
+
+The independent correspondence reader consumes the original and proposed IR
+and their admitted meanings. It does not use a recipe selection as evidence.
+Generated declarations and signature checks do not establish kernel correctness.
+
 ## Signatures, effects and observations
 
 The `zkc.contract-declarations/0` inventory distinguishes constructor-application

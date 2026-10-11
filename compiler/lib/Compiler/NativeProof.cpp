@@ -637,8 +637,7 @@ class Emitter {
                  {builder.getStringAttr(std::to_string(*event.bound))})
               ->getResult(0));
     {
-      auto indices = RankedTensorType::get({ShapedType::kDynamic},
-                                           builder.getIntegerType(64, false));
+      auto indices = algebra::IndicesType::get(builder.getContext());
       auto empty = binding("indices.empty", {});
       Value coordinates =
           kernel("indices.empty", empty, {}, {indices}, "coordinates")

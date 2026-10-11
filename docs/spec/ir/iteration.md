@@ -7,22 +7,42 @@ iteration. It does not infer equality between role components.
 
 ## Canonical data
 
-The mathematical homogeneous containers have no encoding attribute:
+Logical collections have dedicated nominal MLIR types:
 
 | MLIR type | Logical executable identity |
 |---|---|
 | `ui64` | `index` |
-| `tensor<?xui64>` | `indices` |
-| `tensor<?x!algebra.field<F>>` | `vector:F` |
-| `tensor<?x?x!algebra.field<F>>` | `matrix:F` |
-| `tensor<?x!algebra.group<G>>` | `groups:G` |
-| `tensor<Nx!algebra.field<F>>` | `field_array<F,N>`, including `N = 0` |
+| `!algebra.indices` | `indices` |
+| `!algebra.field_vector<"F">` | `vector:F` |
+| `!algebra.field_matrix<"F">` | `matrix:F` |
+| `!algebra.group_vector<"G">` | `groups:G` |
+| `!algebra.field_array<"F", N>` | `field_array<F,N>`, including `N = 0` |
+| `!algebra.fixed_vector<T, N>` | `fixed_vector<T,N>`, with `T` encoded recursively |
+| `!data.sequence<T>` | `sequence<T>`, with `T` encoded recursively |
 
-Storage layouts are physical choices. Matrix shape includes both dimensions
-even when either is zero. Static arrays and
-dynamic vectors have distinct complete identities; no implicit shape cast or
-codec substitution equates them. Empty arrays are data, but cannot construct an
-MLE or a coefficient polynomial. Those constructors still require positive sizes.
+Storage layouts are physical choices. Matrices have row then column axes,
+including when either extent is zero; sparse storage does not change rank.
+Vectors, matrices and indices have runtime extents. Field arrays and fixed
+vectors retain their length in type identity. Learning a vector's length or a
+matrix's dimensions cannot change its nominal family, logical encoding or codec
+permission. There is no builtin tensor compatibility alias for these types.
+Empty field arrays are data, but cannot construct an MLE or a coefficient
+polynomial. Those constructors still require positive sizes.
+
+`CollectionTypeInterface` describes only collection kind, element type, rank
+and type-guaranteed extents. Field vectors/arrays derive their field element
+from the domain; group vectors derive their group element; indices use `ui64`.
+Matrices have rank two and the other collection families have rank one. Nested
+elements do not flatten rank: a sequence of matrices is a rank-one sequence.
+An unknown extent is distinct from zero. An out-of-range extent query returns no
+extent; callers must check rank before interpreting an axis. Only field arrays
+and fixed vectors provide intrinsic exact extents.
+
+Interface membership does not authorize finite iteration, mathematical
+operations, Copy/Drop, wire encoding or physical implementation. Each operation
+retains its admitted family set, and Contracts/profile checks retain permission
+authority. Source `[T; N]` remains a structural array with its existing flattened
+ABI; it is distinct from both nominal field arrays and fixed vectors.
 
 Products and sums reuse `!local.variant` and its canonical nominal descriptor.
 One alternative is a product; multiple alternatives form a sum. Payload identity
@@ -47,13 +67,15 @@ The operations are:
 - `data.make`: inject exactly the selected alternative's typed payload.
 - `data.get`: extract an in-range field from a **single-alternative** product.
 - `data.is`: test one declared alternative without extracting its payload.
-- `data.dim`: observe an in-range tensor axis, including a zero extent.
+- `data.dim`: observe an in-range axis of a field vector, group vector, indices,
+  field matrix or field array, including a zero extent. Sequences and fixed
+  vectors do not gain admission through the collection interface.
 
 Sum elimination uses ordered `local.match`. Dynamic indexing, equal-length zip,
 shape conversion and inverse remain checked local work unless a separate total
-contract establishes their preconditions. No generic tensor operation gains
-admission just because MLIR accepts its types. Preparation omits upstream tensor
-canonicalization patterns that could change container identity.
+contract establishes their preconditions. Structural similarity and generic
+tensor operations confer no mathematical admission. Shape evidence supplies
+bounds under the admitted rules without changing logical collection identity.
 
 Finite products cover heterogeneous and optional data, including matrices with
 independent runtime dimensions. Runtime-length collections of such values use

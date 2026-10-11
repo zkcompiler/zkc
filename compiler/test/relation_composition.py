@@ -51,9 +51,9 @@ commands.verified(module(chain), "protocol-application")
 # Count expanded operand storage before cloning wide, otherwise cheap bodies.
 wide = empty_function(
     "wide",
-    f'%zero = "algebra.constant"() {{value="0"}} : () -> {F}\n%a = tensor.from_elements '
+    f'%zero = "algebra.constant"() {{value="0"}} : () -> {F}\n%a = "algebra.array_from_elements"('
     + ",".join(["%zero"] * 4096)
-    + f" : tensor<4096x{F}>",
+    + ") : (" + ",".join([F] * 4096) + ') -> !algebra.field_array<"bls12-381.fr", 4096>',
 )
 commands.verified(
     module(

@@ -1,5 +1,5 @@
 !f = !algebra.field<"bls12-381.fr">
-!v = tensor<?x!f>
+!v = !algebra.field_vector<"bls12-381.fr">
 !rng = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="split",contract="vector.split",arguments=["bls12-381.fr"],implementation=""} : ()->()

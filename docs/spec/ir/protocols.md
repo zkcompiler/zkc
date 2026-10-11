@@ -186,7 +186,9 @@ The protocol profile also declares a checked [pointwise map](../domains/vectors.
 of a total helper:
 
 ```mlir
-algebra.map_realize @rows = @scalar_helper [true, false] : (tensor<?xF>, F) -> tensor<?xF>
+!F = !algebra.field<"F">
+!V = !algebra.field_vector<"F">
+algebra.map_realize @rows = @scalar_helper [true, false] : (!V, !F) -> !V
 ```
 
 Algebra owns this declaration and its validation. The helper is private, defined
@@ -362,7 +364,7 @@ The initial type-use policy is closed:
 
 All type instances require their exact logical declarations. Sharing, totality,
 wire permission, affine custody and installed representation are separate checks.
-[Structured values and iteration](iteration.md) owns canonical tensor
+[Structured values and iteration](iteration.md) owns nominal collection
 mapping, aggregate policy and loop invariants. Unknown families are refused.
 Affine uses retain existing consumption/return and cleanup rules. Unreturned
 logical resource units retire with their frame; completed cryptographic transitions
@@ -415,8 +417,8 @@ The complete canonical logical type is part of declaration consistency:
 element domain, rank, static extent, sequence element and nominal alternative
 names and ordered payloads. Dynamic dimensions are value properties; a declaration
 does not equate matrix dimensions or prove bounds for indexing. Such conditions
-need explicit executable checks or separately justified contracts. Static rank-two
-MLIR tensors have no canonical logical matrix encoding in this profile.
+need explicit executable checks or separately justified contracts. Builtin MLIR
+tensors have no logical collection encoding or compatibility alias in this profile.
 
 A purpose applies to its entire input, including nested leaves. Mixed purposes
 use separate entry ports. No per-member selector, computed operand or flattening

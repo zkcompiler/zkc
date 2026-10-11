@@ -7,6 +7,7 @@
 #include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Interfaces/Collection.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
@@ -440,15 +441,12 @@ bool candidateContract(StringRef contract) {
          contract == "matrix.column_dot" || contract == "matrix.bilinear";
 }
 algebra::FieldType scalarField(Type type) {
-  if (auto tensor = dyn_cast<RankedTensorType>(type))
-    type = tensor.getElementType();
+  if (isa<algebra::FieldVectorType, algebra::FieldMatrixType,
+          algebra::FieldArrayType>(type))
+    type = cast<CollectionTypeInterface>(type).getElementType();
   return dyn_cast<algebra::FieldType>(type);
 }
-bool vectorType(Type type) {
-  auto tensor = dyn_cast<RankedTensorType>(type);
-  return tensor && tensor.getRank() == 1 && tensor.isDynamicDim(0) &&
-         isa<algebra::FieldType>(tensor.getElementType());
-}
+bool vectorType(Type type) { return isa<algebra::FieldVectorType>(type); }
 
 // Index terms distinguish each product coordinate from a captured selector.
 // SSA identities are invocation-local; source captures are assigned to actual
@@ -963,9 +961,10 @@ public:
                   aggregate(field.getDomain(), ring::Kind::Add, expected.term)};
       return consume(expected, field, cursor, bindings, end);
     }
-    return consume(expected,
-                   RankedTensorType::get({ShapedType::kDynamic}, field), cursor,
-                   bindings, end);
+    return consume(
+        expected,
+        algebra::FieldVectorType::get(field.getContext(), field.getDomain()),
+        cursor, bindings, end);
   }
   FailureOr<Value> finite(const finite::Computation &source, ValueRange inputs,
                           Operation *&cursor,
@@ -1224,13 +1223,11 @@ class ModuleComparison {
     if (!isa_and_nonnull<data::DomainElementsOp>(op))
       return false;
     Value container = mapping.lookup(op->getOperand(0));
-    auto tensor = container ? dyn_cast<RankedTensorType>(container.getType())
-                            : RankedTensorType();
-    if (!tensor || tensor.getRank() != 1 || !tensor.isDynamicDim(0))
+    if (!container)
       return false;
-    Kind kind = isa<algebra::GroupType>(tensor.getElementType())   ? Point
-                : isa<algebra::FieldType>(tensor.getElementType()) ? Scalar
-                                                                   : Unknown;
+    Kind kind = isa<algebra::GroupVectorType>(container.getType())   ? Point
+                : isa<algebra::FieldVectorType>(container.getType()) ? Scalar
+                                                                     : Unknown;
     if (kind == Unknown)
       return false;
     containers.insert(container);

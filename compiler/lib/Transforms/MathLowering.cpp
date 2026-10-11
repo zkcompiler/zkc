@@ -1,6 +1,5 @@
 #include "MathematicalSupport.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -14,6 +13,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Interfaces/Collection.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -262,25 +262,24 @@ public:
       return success();
     }
     if (auto dim = dyn_cast<data::DimOp>(op)) {
-      auto tensor = dim.getInput().getType();
+      auto collection = cast<CollectionTypeInterface>(dim.getInput().getType());
       auto axis = dim.getAxisAttr().getInt();
       protocol::BindingApplication application;
       SmallVector<Attribute> parameters;
       ValueRange operands = inputs;
-      if (!tensor.isDynamicDim(axis)) {
+      if (auto extent = collection.getStaticExtent(axis)) {
         application.contract = "index.constant";
-        parameters.push_back(
-            rewriter.getStringAttr(std::to_string(tensor.getDimSize(axis))));
+        parameters.push_back(rewriter.getStringAttr(std::to_string(*extent)));
         operands = {};
-      } else if (auto field =
-                     dyn_cast<algebra::FieldType>(tensor.getElementType())) {
+      } else if (auto field = dyn_cast<algebra::FieldType>(
+                     collection.getElementType())) {
         application.contract =
-            tensor.getRank() == 2 ? "matrix.dimension" : "vector.length";
+            collection.getRank() == 2 ? "matrix.dimension" : "vector.length";
         application.arguments = {field.getDomain().str()};
-        if (tensor.getRank() == 2)
+        if (collection.getRank() == 2)
           parameters.push_back(rewriter.getStringAttr(std::to_string(axis)));
-      } else if (auto group =
-                     dyn_cast<algebra::GroupType>(tensor.getElementType())) {
+      } else if (auto group = dyn_cast<algebra::GroupType>(
+                     collection.getElementType())) {
         application.contract = "curve.length";
         application.arguments = {group.getDomain().str()};
       } else {
@@ -534,7 +533,7 @@ public:
       return success();
     }
     if (isa<algebra::ConstantFieldOp, algebra::ArrayAtOp,
-            tensor::FromElementsOp>(op)) {
+            algebra::ArrayFromElementsOp>(op)) {
       // Formation has established exact finite shapes and canonical literals.
       // Check the complete recipe vocabulary before making any mutation.
       for (StringRef contract :
@@ -577,21 +576,21 @@ public:
         auto field =
             cast<algebra::FieldType>(array.getElementType()).getDomain().str();
         result =
-            emit("field_array.at", {field, std::to_string(array.getDimSize(0))},
+            emit("field_array.at", {field, std::to_string(array.getLength())},
                  inputs, at.getResult().getType(),
                  {std::to_string(at.getIndexAttr().getInt())}, true);
       } else {
-        auto array = cast<RankedTensorType>(op->getResult(0).getType());
+        auto array = cast<algebra::FieldArrayType>(op->getResult(0).getType());
         auto field =
             cast<algebra::FieldType>(array.getElementType()).getDomain().str();
-        auto vector = RankedTensorType::get({ShapedType::kDynamic},
-                                            array.getElementType());
+        auto vector = algebra::FieldVectorType::get(array.getContext(),
+                                                    array.getDomain());
         result = emit("vector.empty", {field}, {}, vector, {}, false);
         for (auto value : inputs)
           result = emit("vector.append", {field}, ValueRange{result, value},
                         vector, {}, false);
         result = emit("field_array.from_vector",
-                      {field, std::to_string(array.getDimSize(0))},
+                      {field, std::to_string(array.getLength())},
                       ValueRange{result}, array, {}, true);
       }
       rewriter.replaceOp(op, result);

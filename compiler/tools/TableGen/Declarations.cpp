@@ -1,5 +1,6 @@
 #include "Declarations.h"
 #include "Contributions.h"
+#include "Mathematical.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/JSON.h"
@@ -405,7 +406,7 @@ void Model::validateOperation(const Record *op) {
 }
 std::string facetKind(const Record *r) {
   for (auto kind : {"History", "Observation", "Sampling", "Diagonal",
-                    "Contraction", "Coset", "DomainValue"})
+                    "Contraction", "Coset", "DomainValue", "Mathematical"})
     if (r->isSubClassOf((Twine("ZKC_") + kind).str()))
       return kind;
   return r->getName().str();
@@ -438,7 +439,9 @@ void Model::validateFacets(const Record *op) {
   for (const auto *r : op->getValueAsListOfDefs("facets")) {
     auto kind = facetKind(r);
     require(kinds.insert(kind).second, op, "duplicate semantic facet");
-    if (kind == "History") {
+    if (kind == "Mathematical") {
+      validateMathematicalFacet(op, r);
+    } else if (kind == "History") {
       history = r;
       require(
           sameType(port(r, "stateInput", false), port(r, "stateOutput", true)),
@@ -488,6 +491,7 @@ void Model::validateFacets(const Record *op) {
         require(sameType(port(r, "valuesInput", false),
                          port(r, "resultOutput", true)),
                 op, "diagonal result type mismatch");
+      validateLinearFacet(op, r);
     } else if (kind == "Coset") {
       port(r, "shiftInput", false, "field");
       port(r, "sizeInput", false,
@@ -584,7 +588,9 @@ void emitFacets(raw_ostream &os, const Record *op) {
   os << "[] { OperationContracts c;\n";
   for (const auto *r : op->getValueAsListOfDefs("facets")) {
     auto kind = facetKind(r);
-    if (kind == "PublicReplay")
+    if (kind == "Mathematical")
+      emitMathematicalFacet(os, op, r);
+    else if (kind == "PublicReplay")
       os << "c.publicReplay = true;\n";
     else if (kind == "AcceptanceGuard")
       os << "c.acceptanceGuard = true;\n";

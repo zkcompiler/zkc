@@ -7,6 +7,7 @@
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Interfaces/Collection.h"
 #include "llvm/ADT/DenseSet.h"
 #include <optional>
 using namespace mlir;
@@ -102,15 +103,13 @@ Value forwarded(Value value, EvidenceWork &work) {
 }
 bool index(Type type) { return type.isUnsignedInteger(64); }
 bool axis(Type type, unsigned axis) {
-  if (auto tensor = dyn_cast<RankedTensorType>(type))
-    return axis < unsigned(tensor.getRank()) &&
-           bool(elementType(type, tensor.getRank() == 2));
-  return axis == 0 && bool(elementType(type));
+  auto collection = dyn_cast<CollectionTypeInterface>(type);
+  return collection && axis < collection.getRank() &&
+         bool(elementType(type, collection.getRank() == 2));
 }
 std::optional<uint64_t> staticExtent(Type type, unsigned axis) {
-  if (auto tensor = dyn_cast<RankedTensorType>(type))
-    if (axis < unsigned(tensor.getRank()) && !tensor.isDynamicDim(axis))
-      return tensor.getDimSize(axis);
+  if (auto collection = dyn_cast<CollectionTypeInterface>(type))
+    return collection.getStaticExtent(axis);
   return std::nullopt;
 }
 // Constructor evidence can preserve a fixed extent across a private helper
@@ -451,10 +450,8 @@ Type elementType(Type container, bool matrix) {
                                                "field_array", "sequence"},
                            bound->kind))
     return {};
-  if (auto sequence = dyn_cast<data::SequenceType>(container))
-    return sequence.getElementType();
-  auto tensor = dyn_cast<RankedTensorType>(container);
-  return tensor ? tensor.getElementType() : Type();
+  auto collection = dyn_cast<CollectionTypeInterface>(container);
+  return collection ? collection.getElementType() : Type();
 }
 bool isComputation(Operation *op) {
   return isa_and_nonnull<local::FiniteFoldOp, local::FiniteCollectOp,
@@ -697,11 +694,10 @@ LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
     }
   }
   if (c.collect)
-    if (auto tensor = dyn_cast<RankedTensorType>(c.signature.getResult(0));
-        tensor && !tensor.isDynamicDim(0)) {
+    if (auto array =
+            dyn_cast<algebra::FieldArrayType>(c.signature.getResult(0))) {
       auto card = extent(domainResult(c.domain), c, work);
-      if (c.predicate || !card.fixed ||
-          *card.fixed != uint64_t(tensor.getDimSize(0)))
+      if (c.predicate || !card.fixed || *card.fixed != array.getLength())
         return refuse(
             op,
             "fixed collection requires proven exact unfiltered cardinality");

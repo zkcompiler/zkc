@@ -1,5 +1,5 @@
 // Candidate search uses immutable trials and checks the chosen witness on live state.
-!words = tensor<?xui64>
+!words = !algebra.indices
 module { "protocol.module"() ({
  "local.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()
  "local.binding"() {sym_name="length",contract="indices.length",arguments=[],implementation=""} : ()->()

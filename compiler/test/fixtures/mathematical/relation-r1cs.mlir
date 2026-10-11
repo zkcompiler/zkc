@@ -1,7 +1,7 @@
 // Direct constraint checking deliberately discloses the witness in the proof.
 !f = !algebra.field<"bls12-381.fr">
-!v = tensor<?x!f>
-!m = tensor<?x?x!f>
+!v = !algebra.field_vector<"bls12-381.fr">
+!m = !algebra.field_matrix<"bls12-381.fr">
 !ms = !data.sequence<!m>
 module { "protocol.module"() ({
 "local.binding"() {sym_name="index_constant",contract="index.constant",arguments=[],implementation=""} : ()->()

@@ -711,6 +711,8 @@ def expected_facets(operation, group, declarations, policy):
         kind = facet["kind"]
         assert kind in policy["declared_fields"] or kind in policy["uncompared_declarations"], (
             operation["name"], "facet has no conformance disposition", facet)
+        if kind == "Mathematical":
+            assert set(facet) == {"kind", "identity"}
         if kind in policy["declared_fields"]:
             result[policy["declared_fields"][kind]] = True
     if group == "native_data_observation":

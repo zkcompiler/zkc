@@ -14,10 +14,12 @@ struct Collection {
 };
 Collection collection(mlir::Type type);
 
-/// An admitted installed scalar/access equation for this exact operation.
-/// Explicit implementations, unknown attributes and mismatched nominal ports
-/// have no replacement facet. No serialized analysis attribute is consulted.
+/// Exact logical meaning, including explicitly constrained implementations.
+/// Unknown attributes and mismatched nominal ports have no semantic facet.
+/// No serialized analysis attribute is consulted.
 const protocol::ComputationContract *semantics(mlir::Operation *operation);
+/// Meaning alone does not authorize rebinding an explicit implementation.
+bool replaceable(mlir::Operation *operation);
 std::optional<std::string> fieldConstant(mlir::Operation *operation);
 
 /// All references below borrow the current, admitted IR. Recompute after IR
@@ -37,11 +39,14 @@ struct Access {
   std::optional<unsigned> columnItem;
 };
 struct Reduction {
-  std::string kernel, combine;
-  /// Native kernel inputs as positions in Computation.signature inputs.
-  /// A row/column contraction appends selectedIndex after these inputs.
+  MathematicalIdentity combine;
+  std::optional<MathematicalIdentity> termIdentity;
+  /// Inputs in scalar term operand order, before any native permutation.
   llvm::SmallVector<unsigned> inputs;
   std::optional<unsigned> selectedIndex;
+  /// Position in inputs/accesses with the matrix role. Other inputs retain
+  /// source order, including the group/scalar order of a module action.
+  std::optional<unsigned> matrixOperand;
   DemandKind demand = DemandKind::Scalar;
   llvm::SmallVector<Access> accesses;
   mlir::Value accumulator, term;
@@ -111,6 +116,9 @@ struct ComputationView {
   llvm::SmallVector<mlir::Value> results;
   mlir::Value result;
   DemandKind demand = DemandKind::Scalar;
+  /// Equation recognition is independent of this occurrence's permission to
+  /// replace physical constraints. Selection must check the latter separately.
+  bool replaceable = true;
   std::optional<Reduction> reduction;
   std::optional<Elementwise> elementwise;
   std::optional<Bilinear> bilinear;

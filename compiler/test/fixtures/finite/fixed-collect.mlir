@@ -1,5 +1,5 @@
 !F = !algebra.field<"bls12-381.fr">
-!A = tensor<2x!F>
+!A = !algebra.field_array<"bls12-381.fr", 2>
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%lo:ui64,%hi:ui64):
    %d = "data.domain_range"(%lo,%hi) : (ui64,ui64)->!data.domain<ui64>

@@ -11,9 +11,8 @@ Type mapField(FunctionType type, ArrayRef<bool> rowwise) {
   if (!type || type.getNumInputs() != rowwise.size() ||
       type.getNumResults() != 1 || !llvm::is_contained(rowwise, true))
     return {};
-  auto vector = dyn_cast<RankedTensorType>(type.getResult(0));
-  if (!vector || vector.getRank() != 1 || !vector.isDynamicDim(0) ||
-      vector.getEncoding())
+  auto vector = dyn_cast<FieldVectorType>(type.getResult(0));
+  if (!vector)
     return {};
   auto field = dyn_cast<FieldType>(vector.getElementType());
   if (!field ||

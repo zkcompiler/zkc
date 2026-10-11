@@ -223,9 +223,16 @@ def ConstantFieldOp : Op<AlgebraDialect, "constant",
   let results = (outs Field:$result);
   let hasVerifier = 1;
 }
+def ArrayFromElementsOp : Op<AlgebraDialect, "array_from_elements",
+    [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let summary = "Pack ordered field elements into an exact nominal field array";
+  let arguments = (ins Variadic<Field>:$elements);
+  let results = (outs FieldArray:$result);
+  let hasVerifier = 1;
+}
 def ArrayAtOp : Op<AlgebraDialect, "array_at",
                   [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
-  let arguments = (ins AnyRankedTensor:$array, I64Attr:$index);
+  let arguments = (ins FieldArray:$array, I64Attr:$index);
   let results = (outs Field:$result);
   let hasVerifier = 1;
 }

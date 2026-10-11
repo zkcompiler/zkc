@@ -137,7 +137,8 @@ class Realizer {
     Value values = one("vector.empty", {}, vector);
     for (Value value : coefficients)
       values = one("vector.append", {values, value}, vector);
-    Type result = RankedTensorType::get({int64_t(coefficients.size())}, field);
+    Type result = algebra::FieldArrayType::get(
+        field.getContext(), field.getDomain(), coefficients.size());
     return emit("field_array.from_vector", values, result, {},
                 coefficients.size())
         .front();
@@ -247,7 +248,7 @@ public:
     auto *context = builder.getContext();
     index = IntegerType::get(context, 64, IntegerType::Unsigned);
     boolean = builder.getI1Type();
-    vector = RankedTensorType::get({ShapedType::kDynamic}, field);
+    vector = algebra::FieldVectorType::get(context, field.getDomain());
     table = poly::MultilinearType::get(context, field.getDomain());
     point = poly::PointType::get(context, field.getDomain());
     auto name = realization.getSymName().str();

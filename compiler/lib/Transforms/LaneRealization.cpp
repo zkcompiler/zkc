@@ -1,4 +1,5 @@
 #include "LaneRealization.h"
+#include "MathematicalRecipes.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Contracts/RingSharing.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
@@ -66,6 +67,8 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
       input(result);
       continue;
     }
+    if (!finite::replaceable(&op))
+      return unsupported();
     if (auto constant = finite::fieldConstant(&op)) {
       meanings[result] = nodes.size();
       nodes.push_back(ring::Node::literal(field.getDomain().str(), *constant));
@@ -79,7 +82,7 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
     auto *contract = finite::semantics(&op);
     if (!contract ||
         contract->law.algebra != protocol::ComputationAlgebra::FieldRing ||
-        !contract->law.total || !contract->lanes)
+        !contract->law.total || !mathematicalRecipes().lane(contract->identity))
       return unsupported();
     if (contract->identity == MathematicalIdentity::FieldSubtract) {
       nodes.push_back(ring::Node::neg(right));
@@ -189,21 +192,27 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
       if (!left.value || !right.value)
         return invalid("missing realized operand");
       const auto *contract = finite::semantics(&op);
-      if (!contract || !contract->lanes)
-        return invalid("missing admitted lane contract");
+      const auto *recipe =
+          contract ? mathematicalRecipes().lane(contract->identity) : nullptr;
+      if (!recipe)
+        return invalid("missing selected lane recipe");
       realized.lanes = left.lanes || right.lanes;
       if (!realized.lanes)
         realized.value =
-            emit(contract->key, {left.value, right.value}, field, {});
-      else if (!contract->lanes->mixed.empty() && left.lanes != right.lanes) {
+            emit(recipe->scalar, {left.value, right.value}, field, {});
+      else if (!recipe->mixed.empty() && left.lanes != right.lanes) {
         Value scalar = left.lanes ? right.value : left.value;
         Value lanes = left.lanes ? left.value : right.value;
         SmallVector<Value> operands{lanes, lanes};
-        operands[contract->lanes->scalarOperand] = scalar;
-        realized.value = emit(contract->lanes->mixed, operands, vector, {});
-      } else
-        realized.value = emit(contract->lanes->rows,
-                              {broadcast(left), broadcast(right)}, vector, {});
+        operands[recipe->scalarOperand] = scalar;
+        realized.value = emit(recipe->mixed, operands, vector, {});
+      } else {
+        LaneInput source[] = {left, right};
+        realized.value = emit(recipe->rows,
+                              {broadcast(source[recipe->first]),
+                               broadcast(source[recipe->second])},
+                              vector, {});
+      }
     }
     if (!realized.value)
       return invalid("emitter returned no value");

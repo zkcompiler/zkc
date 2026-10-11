@@ -111,21 +111,22 @@ void catalogAndCarriers(MLIRContext &ctx) {
                   physical,
               "physical carrier roundtrip");
       if (kind == "vector") {
-        auto tensor = dyn_cast<RankedTensorType>(logical);
-        require(tensor && tensor.getRank() == 1 && tensor.isDynamicDim(0) &&
-                    tensor.getElementType() ==
+        auto vector = dyn_cast<zkc::algebra::FieldVectorType>(logical);
+        require(vector && vector.getDomain() == identity &&
+                    vector.getElementType() ==
                         zkc::algebra::FieldType::get(&ctx, identity),
-                "vector exact dynamic nominal element type");
+                "vector exact nominal domain and element type");
       } else if (kind == "polynomial")
         require(isa<zkc::poly::UnivariateType>(logical),
                 "polynomial has a distinct mathematical carrier");
     }
   for (StringRef identity : {"bls12-381.g1", "ristretto255.group"}) {
     BoundType t{"groups", identity.str(), ""};
-    auto logical = cast<RankedTensorType>(decodeBoundType(&ctx, t));
+    auto logical =
+        cast<zkc::algebra::GroupVectorType>(decodeBoundType(&ctx, t));
     require(logical.getElementType() ==
                 zkc::algebra::GroupType::get(&ctx, identity),
-            "group tensor exact elements");
+            "group vector exact elements");
     require(accept(encodeBoundType(logical, false)) == t,
             "groups source spelling roundtrip");
   }
@@ -222,12 +223,8 @@ void catalogAndCarriers(MLIRContext &ctx) {
 void optionalInterfaces(MLIRContext &ctx) {
   OpBuilder b(&ctx);
   OwningOpRef<ModuleOp> module(ModuleOp::create(b.getUnknownLoc()));
-  auto field = RankedTensorType::get(
-      {ShapedType::kDynamic},
-      zkc::algebra::FieldType::get(&ctx, "ristretto255.scalar"));
-  auto group = RankedTensorType::get(
-      {ShapedType::kDynamic},
-      zkc::algebra::GroupType::get(&ctx, "ristretto255.group"));
+  auto field = zkc::algebra::FieldVectorType::get(&ctx, "ristretto255.scalar");
+  auto group = zkc::algebra::GroupVectorType::get(&ctx, "ristretto255.group");
   auto resultType = zkc::algebra::GroupType::get(&ctx, "ristretto255.group");
   auto function = func::FuncOp::create(
       b.getUnknownLoc(), "unrelated",
@@ -292,9 +289,8 @@ void optionalInterfaces(MLIRContext &ctx) {
   consumer->setOperand(0, producer->getResult(0));
   require(count() == 0, "two operand uses in one consumer are not single-use");
   consumer->setOperand(0, block->getArgument(2));
-  block->getArgument(2).setType(RankedTensorType::get(
-      {ShapedType::kDynamic},
-      zkc::algebra::FieldType::get(&ctx, "bls12-381.fr")));
+  block->getArgument(2).setType(
+      zkc::algebra::FieldVectorType::get(&ctx, "bls12-381.fr"));
   require(count() == 0, "mixed nominal coefficient domains refuse selection");
   block->getArgument(2).setType(field);
   b.setInsertionPoint(consumer);

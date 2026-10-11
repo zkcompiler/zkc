@@ -33,7 +33,7 @@ finite::Computation computation(ModuleOp module) {
 }
 const char *indexed = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
@@ -64,7 +64,7 @@ module { "protocol.module"() ({
 )mlir";
 const char *capturedReduction = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
@@ -83,7 +83,7 @@ module { "protocol.module"() ({
 )mlir";
 const char *indexedCollect = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
@@ -114,11 +114,14 @@ int main() {
     protocol::BindingApplication app{"field.add", {"bls12-381.fr"}, ""};
     auto *facet =
         protocol::admitComputationContract(app, {field, field}, {field});
-    require(facet && facet->law.commutative && facet->reduction && facet->lanes,
-            "field sum/lifting facets missing");
+    require(facet && facet->law.commutative && facet->law.associative,
+            "field ring laws missing");
     require(!protocol::admitComputationContract(app, {field, other}, {field}),
             "different nominal field acquired a law");
     app.implementation = "arkworks/field.add";
+    require(protocol::admitMathematicalMeaning(app, {field, field}, {field}) ==
+                facet,
+            "explicit implementation erased logical meaning");
     require(!protocol::admitComputationContract(app, {field, field}, {field}),
             "explicit implementation was replaced");
     app = {"curve.scale", {"bls12-381.g1"}, ""};
@@ -127,30 +130,32 @@ int main() {
     require(!protocol::admitComputationContract(app, {group, other}, {group}),
             "wrong associated scalar field acquired a law");
     auto *subtract = protocol::computationContract("field.sub");
-    require(subtract && !subtract->law.commutative && !subtract->reduction,
+    require(subtract && !subtract->law.commutative &&
+                !subtract->law.associative,
             "subtraction acquired commutative reduction laws");
     auto *scale = protocol::computationContract("curve.scale");
-    require(scale && !scale->law.commutative && scale->lanes &&
-                scale->lanes->first == 1 && scale->lanes->second == 0 &&
+    require(scale && !scale->law.commutative && scale->law.scalarAction &&
+                scale->law.groupOperand == 0 && scale->law.scalarOperand == 1 &&
                 scale->law.algebra == protocol::ComputationAlgebra::GroupModule,
             "group scalar action lost its ordered module operands");
     require(!protocol::computationContract("user.field.add"),
             "unknown contract acquired installed authority");
   });
-  for (auto [name, kernel] : {std::pair{"sum", "vector.sum"},
-                              {"product", "vector.product"},
-                              {"dot", "vector.dot"},
-                              {"msm-direct", "curve.msm"},
-                              {"matrix-row", "matrix.row_dot"},
-                              {"matrix-column", "matrix.column_dot"}})
-    cases.run(name, [&, name = name, kernel = kernel] {
+  for (auto name :
+       {"sum", "product", "dot", "msm-direct", "matrix-row", "matrix-column"})
+    cases.run(name, [&, name = name] {
+      auto identity =
+          StringRef(name) == "product" ? MathematicalIdentity::FieldMultiply
+          : StringRef(name) == "msm-direct" ? MathematicalIdentity::GroupAdd
+                                            : MathematicalIdentity::FieldAdd;
       auto module = parseSourceString<ModuleOp>(fixture(name), &context);
       require(bool(module), "fixture refused");
       auto c = computation(*module);
       auto view = finite::analyzeComputation(c);
       require(bool(view), "computation view missing");
       auto plan = view->reduction;
-      require(plan && plan->kernel == kernel, "kernel not recognized");
+      require(plan && plan->combine == identity,
+              "combiner meaning not recognized");
       auto originalInputs = plan->inputs;
       auto *combine = plan->combiner;
       Value left = combine->getOperand(0), right = combine->getOperand(1);
@@ -158,7 +163,8 @@ int main() {
       view = finite::analyzeComputation(c);
       require(bool(view), "changed computation view missing");
       plan = view->reduction;
-      require(plan && plan->kernel == kernel && plan->inputs == originalInputs,
+      require(plan && plan->combine == identity &&
+                  plan->inputs == originalInputs,
               "symmetric accumulator changed the contraction");
       if (StringRef(name).starts_with("matrix-")) {
         require(plan->selectedIndex == 3 &&
@@ -231,7 +237,8 @@ int main() {
     auto view = finite::analyzeComputation(c);
     require(bool(view), "indexed computation view missing");
     auto plan = view->reduction;
-    require(plan && plan->kernel == "vector.dot" &&
+    require(plan && plan->combine == MathematicalIdentity::FieldAdd &&
+                plan->termIdentity == MathematicalIdentity::FieldMultiply &&
                 plan->inputs == SmallVector<unsigned>({0, 1}) &&
                 plan->accesses.size() == 2 && plan->accesses[0].item == 0 &&
                 plan->accesses[1].item == 0,
@@ -246,7 +253,9 @@ int main() {
     view = finite::analyzeComputation(c);
     require(bool(view), "changed indexed computation view missing");
     plan = view->reduction;
-    require(plan && plan->kernel == "vector.sum", "indexed sum missing");
+    require(plan && plan->combine == MathematicalIdentity::FieldAdd &&
+                !plan->termIdentity,
+            "indexed sum missing");
     OpBuilder builder(combine);
     OperationState state(combine->getLoc(), "algebra.exec.field_multiply");
     state.addOperands(combine->getOperands());
@@ -259,7 +268,8 @@ int main() {
     view = finite::analyzeComputation(c);
     require(bool(view), "changed indexed computation view missing");
     plan = view->reduction;
-    require(plan && plan->kernel == "vector.product",
+    require(plan && plan->combine == MathematicalIdentity::FieldMultiply &&
+                !plan->termIdentity,
             "indexed product missing");
     auto *lookup = body.front().getResult(0).getDefiningOp();
     lookup->setAttr("algebra.commutative", builder.getUnitAttr());
@@ -415,7 +425,9 @@ int main() {
             "shared helper premise is not admitted");
     view = finite::analyzeComputation(c);
     require(
-        view && view->reduction && view->reduction->kernel == "vector.sum" &&
+        view && view->reduction &&
+            view->reduction->combine == MathematicalIdentity::FieldAdd &&
+            !view->reduction->termIdentity &&
             view->reduction->inputs == SmallVector<unsigned>({2}) &&
             view->accesses.size() == 1 && view->accesses[0].input == 2,
         "shared helper premise did not restore captured-container reduction");

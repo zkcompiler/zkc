@@ -1,7 +1,7 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
-!I = tensor<?xui64>
-!M = tensor<?x?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
+!I = !algebra.indices
+!M = !algebra.field_matrix<"bls12-381.fr">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="get",contract="matrix.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "data.domain"() ({ ^entry(%matrix:!M):

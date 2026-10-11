@@ -55,14 +55,12 @@ std::optional<unsigned> argument(Value value, Block &block) {
   return arg.getArgNumber();
 }
 bool nativeVector(Type type, Type field) {
-  auto tensor = dyn_cast<RankedTensorType>(type);
-  return tensor && tensor.getRank() == 1 && tensor.isDynamicDim(0) &&
-         tensor.getElementType() == field;
+  auto vector = dyn_cast<algebra::FieldVectorType>(type);
+  return vector && vector.getElementType() == field;
 }
 bool nativeMatrix(Type type, Type field) {
-  auto tensor = dyn_cast<RankedTensorType>(type);
-  return tensor && tensor.getRank() == 2 && tensor.isDynamicDim(0) &&
-         tensor.isDynamicDim(1) && tensor.getElementType() == field;
+  auto matrix = dyn_cast<algebra::FieldMatrixType>(type);
+  return matrix && matrix.getElementType() == field;
 }
 struct Seed {
   std::optional<unsigned> input;
@@ -95,7 +93,8 @@ std::optional<Selection> select(Operation *declaration) {
       child.computation.predicate || child.computation.states != 1 ||
       !isa<local::FiniteFoldOp>(child.computation.operation) ||
       !isa<local::FuncOp>(child.computation.helper) || !child.reduction ||
-      child.reduction->inputs.size() != 2 || !child.reduction->selectedIndex ||
+      !child.replaceable || child.reduction->inputs.size() != 2 ||
+      !child.reduction->matrixOperand || !child.reduction->selectedIndex ||
       view->result != call->getResult(0))
     return std::nullopt;
   unsigned axis = indices.getAxis();
@@ -114,8 +113,10 @@ std::optional<Selection> select(Operation *declaration) {
       return std::nullopt;
     return *mapped - 1;
   };
-  auto innerMatrix = mapInput(child.reduction->inputs[0]);
-  auto vector = mapInput(child.reduction->inputs[1]);
+  auto innerMatrix =
+      mapInput(child.reduction->inputs[*child.reduction->matrixOperand]);
+  auto vector =
+      mapInput(child.reduction->inputs[1 - *child.reduction->matrixOperand]);
   if (!innerMatrix || *innerMatrix != *matrix || !vector ||
       !nativeVector(selected.outer.signature.getInput(*vector), field) ||
       call->getOperand(*child.reduction->selectedIndex) != body.getArgument(0))
@@ -133,7 +134,8 @@ std::optional<Selection> select(Operation *declaration) {
     selected.seed.input = *input - 1;
   } else {
     auto constant = finite::fieldConstant(seed.getDefiningOp());
-    if (!constant || seed.getType() != field)
+    if (!constant || !finite::replaceable(seed.getDefiningOp()) ||
+        seed.getType() != field)
       return std::nullopt;
     selected.seed.constant = *constant;
   }
@@ -282,7 +284,7 @@ public:
         IntegerType::get(builder.getContext(), 64, IntegerType::Unsigned);
     Type boolean = builder.getI1Type();
     Type output = c.signature.getResult(0);
-    Type field = cast<RankedTensorType>(output).getElementType();
+    Type field = cast<algebra::FieldVectorType>(output).getElementType();
     SmallVector<std::string> fieldArgs{
         cast<algebra::FieldType>(field).getDomain().str()};
     Value matrix = entry->getArgument(selection.matrix);
@@ -430,7 +432,8 @@ std::optional<Source> readSource(Operation *declaration) {
     source.seed.input = *formal - 1;
   } else {
     auto constant = finite::fieldConstant(seed.getDefiningOp());
-    if (!constant || seed.getType() != field)
+    if (!constant || !finite::replaceable(seed.getDefiningOp()) ||
+        seed.getType() != field)
       return std::nullopt;
     source.seed.constant = *constant;
   }
@@ -493,7 +496,7 @@ std::optional<Source> readSource(Operation *declaration) {
       !isa<local::ReturnOp>(step.back()) || step.back().getNumOperands() != 1)
     return std::nullopt;
   Operation *add = step.back().getOperand(0).getDefiningOp();
-  auto *sumLaw = finite::semantics(add);
+  auto *sumLaw = finite::replaceable(add) ? finite::semantics(add) : nullptr;
   if (!sumLaw || sumLaw->identity != MathematicalIdentity::FieldAdd ||
       !sumLaw->law.total || !sumLaw->law.associative ||
       !sumLaw->law.commutative || add->getBlock() != &step)
@@ -506,7 +509,8 @@ std::optional<Source> readSource(Operation *declaration) {
   else
     return std::nullopt;
   Operation *mul = term.getDefiningOp();
-  auto *productLaw = finite::semantics(mul);
+  auto *productLaw =
+      finite::replaceable(mul) ? finite::semantics(mul) : nullptr;
   if (!productLaw ||
       productLaw->identity != MathematicalIdentity::FieldMultiply ||
       !productLaw->law.total || !productLaw->law.commutative ||
@@ -656,7 +660,7 @@ public:
       return false;
     cursor = &entry.front();
     Type output = source->outer.signature.getResult(0);
-    Type field = cast<RankedTensorType>(output).getElementType();
+    Type field = cast<algebra::FieldVectorType>(output).getElementType();
     SmallVector<std::string> fieldArgs{
         cast<algebra::FieldType>(field).getDomain().str()};
     Value size = kernel("matrix.dimension", entry.getArgument(source->matrix),

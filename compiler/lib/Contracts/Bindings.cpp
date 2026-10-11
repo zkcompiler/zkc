@@ -204,17 +204,10 @@ Error checkClosedRequirements(ArrayRef<requirements::Predicate> predicates,
   return Error::success();
 }
 
-Expected<BoundOperation> resolveBinding(const BindingApplication &binding,
-                                        bool physical) {
-  if (physical && binding.implementation.empty())
-    return error("binding-stage");
-  if (!physical && !binding.implementation.empty()) {
-    // A source may constrain future implementation selection without lowering
-    // its logical ports. Validate that exact choice independently here.
-    auto selected = resolveBinding(binding, true);
-    if (!selected)
-      return selected.takeError();
-  }
+namespace {
+Expected<BoundOperation>
+resolveBindingSignature(const BindingApplication &binding, bool physical,
+                        const ImplementationCatalog *catalog) {
   if (resourceUnitContract(binding.contract)) {
     if (binding.arguments.size() != 1 ||
         !resourceUnitDomain(binding.arguments[0]))
@@ -262,8 +255,7 @@ Expected<BoundOperation> resolveBinding(const BindingApplication &binding,
     return e;
   const ImplementationDescriptor *implementation = nullptr;
   if (physical) {
-    implementation = installedImplementations().find(binding.contract,
-                                                     binding.implementation);
+    implementation = catalog->find(binding.contract, binding.implementation);
     if (!implementation)
       return error("binding-implementation");
     if (auto e = checkImplementationArguments(*implementation, signature->scope,
@@ -319,6 +311,30 @@ Expected<BoundOperation> resolveBinding(const BindingApplication &binding,
     if (auto e = applyImplementationRepresentations(*implementation, result))
       return e;
   return result;
+}
+
+} // namespace
+Expected<BoundOperation>
+resolveLogicalBinding(const BindingApplication &binding) {
+  return resolveBindingSignature(binding, false, nullptr);
+}
+Expected<BoundOperation> resolveBinding(const BindingApplication &binding,
+                                        bool physical) {
+  return resolveBinding(binding, physical, installedImplementations());
+}
+Expected<BoundOperation> resolveBinding(const BindingApplication &binding,
+                                        bool physical,
+                                        const ImplementationCatalog &catalog) {
+  if (physical && binding.implementation.empty())
+    return error("binding-stage");
+  if (!physical && !binding.implementation.empty()) {
+    // A source may constrain future implementation selection without lowering
+    // its logical ports. Validate that exact choice independently here.
+    auto selected = resolveBinding(binding, true, catalog);
+    if (!selected)
+      return selected.takeError();
+  }
+  return resolveBindingSignature(binding, physical, &catalog);
 }
 
 Error checkBindingDeclaration(StringRef symbol,

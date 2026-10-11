@@ -1,7 +1,7 @@
 !f = !algebra.field<"bls12-381.fr">
 !t = !poly.multilinear<"bls12-381.fr">
 !p = !poly.point<"bls12-381.fr">
-!a = tensor<4x!f>
+!a = !algebra.field_array<"bls12-381.fr", 4>
 !q = !poly.polynomial<"bls12-381.fr", 1>
 !rng = !protocol.service_ref<"random.bls12-381.fr/0">
 !state = !local.variant<"variant:5b227a6b632e76617269616e742f30222c5b22706f6c792e726573696475616c2e70726f64756374222c227374617465222c22706f696e743a626c7331322d3338312e6672222c227461626c653a626c7331322d3338312e6672222c5b2232222c2233222c2233225d2c5b2231222c2234225d2c5b2235225d2c5b2230222c2236225d5d5d">

@@ -16,8 +16,8 @@ def mathematical_source(family):
     arguments = "%left: !V, %right: !V, %factors: !V, %values: !A, %allowed: i1"
     inputs = "%left, %right, %factors, %values, %allowed"
     types = "!V, !V, !V, !A, i1"
-    return f'''!V = tensor<?x!algebra.field<"{scalar}">>
-!A = tensor<?x{result}>
+    return f'''!V = !algebra.field_vector<"{scalar}">
+!A = !algebra.{"group_vector" if group else "field_vector"}<"{identity}">
 !R = {result}
 module {{ "protocol.module"() ({{
   "local.binding"() {{sym_name="map", contract="{producer}", arguments=["{identity}"], implementation=""}} : () -> ()

@@ -195,6 +195,8 @@ def A : MappingTestOp<"a"> { let contracts = [OpFieldAdd, OpCurveAdd]; }
 ]=] "incompatible mapped contract signatures")
 mapping_case(requirements [=[
 def Changed : MappingTestVariant<OpFieldAdd> {
+  // Exercise mapping compatibility after independent declaration admission.
+  let facets = [];
   let requirements = [ZKC_Holds<CapabilityCommRing, [OpFieldAddF]>];
 }
 def A : MappingTestOp<"a"> { let contracts = [OpFieldAdd, Changed]; }
@@ -214,7 +216,10 @@ def Changed : MappingTestVariant<OpPcsOpen> {
 def A : MappingTestOp<"a"> { let contracts = [OpPcsOpen, Changed]; }
 ]=] "incompatible mapped contract signatures")
 mapping_case(parameter-validator [=[
-def Changed : MappingTestVariant<OpFieldAdd> { let parameters = NaturalParameter; }
+def Changed : MappingTestVariant<OpFieldAdd> {
+  let facets = [];
+  let parameters = NaturalParameter;
+}
 def A : MappingTestOp<"a"> { let contracts = [OpFieldAdd, Changed]; }
 ]=] "incompatible mapped contract signatures")
 mapping_case(authoring-stage [=[

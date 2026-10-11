@@ -18,7 +18,7 @@ LogicalResult refuse(Operation *op, StringRef detail) {
 algebra::FieldType field(Type type) {
   if (auto polynomial = dyn_cast<PolynomialType>(type))
     return algebra::FieldType::get(type.getContext(), polynomial.getDomain());
-  if (auto array = dyn_cast<RankedTensorType>(type))
+  if (auto array = dyn_cast<algebra::FieldArrayType>(type))
     return dyn_cast<algebra::FieldType>(array.getElementType());
   return dyn_cast<algebra::FieldType>(type);
 }
@@ -31,15 +31,15 @@ LogicalResult sameField(Operation *op) {
     if (!actual || (expected && actual != expected))
       return refuse(op, "expected one field for every operand and result");
     expected = actual;
-    if (isa<RankedTensorType>(type) &&
+    if (isa<algebra::FieldArrayType>(type) &&
         (!algebra::isFieldArray(type) ||
-         cast<RankedTensorType>(type).getDimSize(0) == 0))
-      return refuse(op, "expected a positive static rank-one field tensor");
+         cast<algebra::FieldArrayType>(type).getLength() == 0))
+      return refuse(op, "expected a positive-length nominal field array");
   }
   return success();
 }
 uint64_t length(Type type) {
-  return cast<RankedTensorType>(type).getDimSize(0);
+  return cast<algebra::FieldArrayType>(type).getLength();
 }
 LogicalResult binary(Operation *op) {
   if (failed(sameField(op)))

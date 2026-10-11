@@ -19,8 +19,8 @@ namespace {
 // other constructors are unused, but their admission still belongs to the body.
 const char *constructors = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
-!M = tensor<?x?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
+!M = !algebra.field_matrix<"bls12-381.fr">
 module { "protocol.module"() ({
   "data.domain"() ({
   ^entry(%xs: !V, %matrix: !M, %lower: ui64, %upper: ui64, %selector: ui64):

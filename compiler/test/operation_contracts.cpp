@@ -1,4 +1,5 @@
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -19,6 +20,84 @@ void require(bool condition, llvm::StringRef message) {
 }
 } // namespace
 int main() {
+  using I = zkc::MathematicalIdentity;
+  static_assert(unsigned(I::FieldAdd) == 0 &&
+                unsigned(I::FieldConstant) == 20 &&
+                unsigned(I::PolynomialFixTable) == 35);
+  require(zkc::mathematicalIntrinsics().size() == 31 &&
+              zkc::mathematicalIntrinsics()[0].name == "container.at" &&
+              zkc::mathematicalIntrinsics()[30].name == "poly.fix_table" &&
+              zkc::mathematicalIdentityName(I::PolynomialMultiply) ==
+                  "PolynomialMultiply",
+          "mathematical source catalog identities changed");
+  const auto *add = mathematicalMeaning(I::FieldAdd);
+  const auto *multiply = mathematicalMeaning(I::FieldMultiply);
+  const auto *subtract = mathematicalMeaning(I::FieldSubtract);
+  require(add && add->law.associative && add->law.commutative &&
+              add->law.leftIdentity == ScalarIdentity::Zero &&
+              add->law.rightIdentity == ScalarIdentity::Zero &&
+              add->law.annihilator == ScalarIdentity::None && multiply &&
+              multiply->law.leftIdentity == ScalarIdentity::One &&
+              multiply->law.rightIdentity == ScalarIdentity::One &&
+              multiply->law.annihilator == ScalarIdentity::Zero && subtract &&
+              !subtract->law.associative && !subtract->law.commutative &&
+              subtract->law.leftIdentity == ScalarIdentity::None &&
+              subtract->law.rightIdentity == ScalarIdentity::Zero,
+          "zero, one, subtraction or annihilation laws changed");
+  require(!mathematicalMeaning(I::IndexConstant) &&
+              !mathematicalMeaning(I::BooleanAnd) &&
+              !mathematicalMeaning(I::PolynomialMultiply) &&
+              !mathematicalMeaning(static_cast<I>(100000)) &&
+              !computationContract("index.add") &&
+              !computationContract("unknown.field.add"),
+          "unrelated mathematics acquired scalar ring laws");
+  const auto *access = computationContract("vector.get");
+  require(access && access->access == AccessRule::Element &&
+              !access->law.total && !access->law.associative,
+          "checked access acquired totality");
+  // Real absent-provider control: an immutable installation with no descriptor
+  // or preference refuses both default selection and the exact pinned binding.
+  auto absent = ImplementationCatalog::create({}, {});
+  require(bool(absent) && absent->all().empty(),
+          "empty implementation installation refused");
+  for (const auto &binding :
+       {BindingApplication{"field.add", {"bls12-381.fr"}, "arkworks/field.add"},
+        BindingApplication{
+            "curve.scale", {"bls12-381.g1"}, "arkworks/curve.scale"}}) {
+    auto logical = resolveLogicalBinding(binding);
+    require(bool(logical), "exact logical signature refused");
+    const auto *meaning =
+        admitMathematicalMeaning(binding, logical->inputs, logical->outputs);
+    require(meaning, "logical meaning absent with installed provider");
+    auto present = resolveBinding(binding, true);
+    require(bool(present), "physical control lacks installed provider");
+    auto missing = resolveBinding(binding, true, *absent);
+    require(!missing, "absent physical implementation was selected");
+    llvm::consumeError(missing.takeError());
+    auto constrained = resolveBinding(binding, false, *absent);
+    require(!constrained, "logical binding admission ignored an unavailable "
+                          "explicit implementation");
+    llvm::consumeError(constrained.takeError());
+    auto preference = absent->defaultFor(binding);
+    require(!preference, "empty installation acquired a default provider");
+    llvm::consumeError(preference.takeError());
+    require(admitMathematicalMeaning(binding, logical->inputs,
+                                     logical->outputs) == meaning &&
+                !admitComputationContract(binding, logical->inputs,
+                                          logical->outputs),
+            "provider availability changed meaning or pinned replacement "
+            "eligibility");
+    auto unconstrained = binding;
+    unconstrained.implementation.clear();
+    require(
+        admitComputationContract(unconstrained, logical->inputs,
+                                 logical->outputs) == meaning,
+        "unconstrained logical replacement depends on physical availability");
+    auto represented = logical->inputs;
+    represented[0].representation = "physical.control";
+    require(!admitMathematicalMeaning(binding, represented, logical->outputs),
+            "logical meaning silently discarded a physical representation");
+  }
   for (const auto &attributes :
        {std::vector<std::string>{"0"}, std::vector<std::string>{"1"}}) {
     auto error = checkGenericParameters("field.constant", attributes);

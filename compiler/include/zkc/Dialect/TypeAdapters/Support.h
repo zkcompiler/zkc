@@ -32,32 +32,6 @@ std::optional<BoundType> encodeDomainType(mlir::Type type,
   return std::nullopt;
 }
 
-inline mlir::Type vectorType(mlir::Type element) {
-  return element ? mlir::RankedTensorType::get({mlir::ShapedType::kDynamic},
-                                               element)
-                 : mlir::Type{};
-}
-
-inline mlir::Type vectorElement(mlir::Type type) {
-  auto tensor = mlir::dyn_cast<mlir::RankedTensorType>(type);
-  if (!tensor || tensor.getRank() != 1 || !tensor.isDynamicDim(0) ||
-      tensor.getEncoding())
-    return {};
-  return tensor.getElementType();
-}
-
-template <typename T>
-mlir::Type decodeDomainVector(mlir::MLIRContext *context,
-                              const BoundType &type) {
-  return vectorType(decodeDomainType<T>(context, type));
-}
-
-template <typename T>
-std::optional<BoundType> encodeDomainVector(mlir::Type type,
-                                            llvm::StringRef constructor) {
-  auto element = vectorElement(type);
-  return element ? encodeDomainType<T>(element, constructor) : std::nullopt;
-}
 // Compact single-domain constructors retain their identity slot. Decoding
 // ignores the admitted outer representation, which decodeBoundType wraps later.
 template <typename T> struct DomainAdapter {
@@ -108,6 +82,48 @@ struct TypeNatAdapter {
                      {},
                      {},
                      {TypeArgument::typeArgument(std::move(*element)),
+                      TypeArgument::naturalArgument((native.*Length)())}};
+  }
+};
+
+template <typename T> struct NullaryAdapter {
+  using Native = T;
+  using Parameters = ParameterKinds<>;
+  static mlir::Type decode(mlir::MLIRContext *context, const BoundType &type) {
+    if (!type.identity.empty() || !type.arguments.empty())
+      return {};
+    return loadedType<T>(context);
+  }
+  static std::optional<BoundType> encode(mlir::Type type,
+                                         llvm::StringRef constructor) {
+    if (!mlir::isa<T>(type))
+      return std::nullopt;
+    return BoundType{constructor.str(), {}, {}};
+  }
+};
+
+template <typename T, llvm::StringRef (T::*Domain)() const,
+          uint64_t (T::*Length)() const>
+struct DomainNatAdapter {
+  using Native = T;
+  using Parameters = ParameterKinds<ParameterKind::Domain, ParameterKind::Nat>;
+  static mlir::Type decode(mlir::MLIRContext *context, const BoundType &type) {
+    if (!type.identity.empty() || type.arguments.size() != 2 ||
+        type.arguments[0].kind != TypeArgument::Kind::Domain ||
+        type.arguments[1].kind != TypeArgument::Kind::Nat)
+      return {};
+    return loadedType<T>(context, type.arguments[0].domain,
+                         type.arguments[1].natural);
+  }
+  static std::optional<BoundType> encode(mlir::Type type,
+                                         llvm::StringRef constructor) {
+    auto native = mlir::dyn_cast<T>(type);
+    if (!native)
+      return std::nullopt;
+    return BoundType{constructor.str(),
+                     {},
+                     {},
+                     {TypeArgument::domainArgument((native.*Domain)().str()),
                       TypeArgument::naturalArgument((native.*Length)())}};
   }
 };

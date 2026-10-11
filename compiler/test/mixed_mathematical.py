@@ -58,15 +58,15 @@ for ty in ['!local.capability<"rng:bls12-381.fr">', '!pcs.object<"multilinear.kz
 # Non-scalar wire data passes through the common graph as whole components.
 vector = '''module { "protocol.module"() ({
 "protocol.func"() ({
-^entry(%x: tensor<?x!algebra.field<"bls12-381.fr">>):
-  %part = protocol.restrict_roles %x {roles=["P"]} : tensor<?x!algebra.field<"bls12-381.fr">>
-  %sent = protocol.exchange %part {sender="P", receiver="V", site="vector"} : tensor<?x!algebra.field<"bls12-381.fr">>
-  "protocol.return"(%sent) : (tensor<?x!algebra.field<"bls12-381.fr">>) -> ()
-}) {sym_name="vector", function_type=(tensor<?x!algebra.field<"bls12-381.fr">>) -> tensor<?x!algebra.field<"bls12-381.fr">>, roles=["P","V"], input_roles=[["P","V"]], output_roles=[["P","V"]]} : () -> ()
+^entry(%x: !algebra.field_vector<"bls12-381.fr">):
+  %part = protocol.restrict_roles %x {roles=["P"]} : !algebra.field_vector<"bls12-381.fr">
+  %sent = protocol.exchange %part {sender="P", receiver="V", site="vector"} : !algebra.field_vector<"bls12-381.fr">
+  "protocol.return"(%sent) : (!algebra.field_vector<"bls12-381.fr">) -> ()
+}) {sym_name="vector", function_type=(!algebra.field_vector<"bls12-381.fr">) -> !algebra.field_vector<"bls12-381.fr">, roles=["P","V"], input_roles=[["P","V"]], output_roles=[["P","V"]]} : () -> ()
 }) {profile=#protocol.profile<protocol>} : () -> () }'''
 vector_physical = commands.verified(vector, None, '--zkc-project-protocol', '--zkc-lower-math', '--zkc-select-physical')
 assert 'vector:bls12-381.fr' in commands.source('protocol-export', vector_physical)
-commands.verified(vector.replace('tensor<?x!algebra.field<"bls12-381.fr">>', '!algebra.fixed_vector<i1, 2>'), 'exactly one owner')
+commands.verified(vector.replace('!algebra.field_vector<"bls12-381.fr">', '!algebra.fixed_vector<i1, 2>'), 'exactly one owner')
 # Generate resource-transition variants for execution by mixed_native.rs.
 draw = source.replace('  local.func @leaf', '  "local.binding"() {sym_name="draw", contract="random.draw", arguments=["bls12-381.fr"], implementation=""} : () -> ()\n  local.func @leaf', 1)
 draw = draw.replace('    local.return %v, %resource :', '    %sample:2 = "crypto.exec.random_draw"(%resource) {binding=@draw, parameters=[], site="draw"} : (!local.capability<"rng:bls12-381.fr">) -> (!algebra.field<"bls12-381.fr">, !local.capability<"rng:bls12-381.fr">)\n    local.return %v, %sample#1 :')
