@@ -157,9 +157,6 @@ jobs:
           persist-credentials: false
       - name: Check the public source tree
         run: bash .github/scripts/public-tree-guard.sh
-      - name: Reserve space for LLVM source builds
-        if: runner.environment == 'github-hosted'
-        run: sudo rm -rf /usr/local/lib/android
       - uses: ./.github/actions/nix
         with:
           require-cache: ${{ github.event_name == 'workflow_dispatch' && inputs.scope == 'cache' }}
@@ -199,9 +196,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Reserve build space
-        if: runner.environment == 'github-hosted'
-        run: sudo rm -rf /usr/local/lib/android
       - uses: ./.github/actions/nix
         with:
           # Weekly native variants reuse the ordinary toolchain snapshot,
