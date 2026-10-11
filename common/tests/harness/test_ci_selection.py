@@ -73,3 +73,18 @@ def test_missing_base_uses_tracked_sources(tmp_path, base, path, expected):
     tracked.write_text("tracked\n")
     git(tmp_path, "add", str(Path(path)))
     assert select(tmp_path, base, tmp_path / "output") == f"existing=value\nnative={str(expected).lower()}\n"
+
+
+def test_renaming_native_input_outside_native_paths_still_selects_checks(tmp_path):
+    git(tmp_path, "init", "--quiet")
+    git(tmp_path, "config", "diff.renames", "true")
+    original = tmp_path / "compiler/lib/Input.cpp"
+    original.parent.mkdir(parents=True)
+    original.write_text("int input() { return 0; }\n")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "--quiet", "-m", "base")
+    base = git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "docs").mkdir()
+    git(tmp_path, "mv", "compiler/lib/Input.cpp", "docs/archive.md")
+    git(tmp_path, "commit", "--quiet", "-m", "move input")
+    assert select(tmp_path, base, tmp_path / "output") == "existing=value\nnative=true\n"

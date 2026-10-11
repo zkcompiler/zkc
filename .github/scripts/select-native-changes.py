@@ -13,8 +13,10 @@ def main():
     if not exists:
         paths = subprocess.check_output(["git", "ls-files", "-z"], text=True).split("\0")
     else:
+        # Treat moves as removal plus addition so moving an input outside a
+        # native directory cannot hide the source-side invalidation.
         paths = subprocess.check_output(
-            ["git", "diff", "--name-only", "-z", base, os.environ["HEAD"]], text=True).split("\0")
+            ["git", "diff", "--no-renames", "--name-only", "-z", base, os.environ["HEAD"]], text=True).split("\0")
     selected = any(path in {"docs/getting-started.md", "docs/runtime/bundles.md"} or
                    (not path.endswith(".md") and re.match(
         r"^(compiler/|crates/|libraries/|examples/|common/|nix/|scripts/|Cargo\.|rust-toolchain|pyproject\.toml|uv\.lock|flake\.|justfile|\.clang-format|\.github/)", path))
