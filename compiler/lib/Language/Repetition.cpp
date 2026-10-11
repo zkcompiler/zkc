@@ -40,6 +40,7 @@ bool BodyChecker::repeat(const Expression &expr) {
   auto region = std::make_shared<Body>();
   region->mode = Body::Mode::Protocol;
   BodyChecker nested(checker, decl, syntax, *region, callDepth);
+  nested.usageGuard = usageGuard;
   nested.enclosing = this;
   nested.completionAllowed = completionAllowed;
   nested.activeRoles = *roles;
@@ -74,15 +75,13 @@ bool BodyChecker::repeat(const Expression &expr) {
     if (states.count(p.binding))
       continue;
     auto type = projected(bindings.at(p.binding).type, p.path, expr.span);
-    auto caps = type ? checker.types.permissions(*type, expr.span, &decl)
-                     : std::nullopt;
-    if (!caps)
+    if (!type)
       return false;
-    if (!caps->copy)
-      return fail("source.permission",
-                  "loop invariants require Copy; declare mutable state and "
-                  "supply its successor",
-                  expr.span);
+    if (!checker.types.requireUsage(*type, Usage::Copy, expr.span, &decl,
+                                    "source.permission",
+                                    "loop invariants require Copy; declare "
+                                    "mutable state and supply its successor"))
+      return false;
     const auto &original = bindings.at(p.binding).roles;
     std::vector<unsigned> selected;
     std::set_intersection(original.begin(), original.end(), roles->begin(),
@@ -103,11 +102,9 @@ bool BodyChecker::repeat(const Expression &expr) {
   }
   auto captureDomainOperand = [&](ValueId operand) -> std::optional<ValueId> {
     const auto value = body.values[operand.index];
-    auto permissions = checker.types.permissions(value.type, expr.span, &decl);
-    if (!permissions || !permissions->copy || !permissions->drop) {
-      if (!checker.types.diagnostic)
-        fail("source.permission", "domain invariants require Copy and Drop",
-             expr.span);
+    if (!checker.types.requireUsage(value.type, Usage::Copy, expr.span, &decl,
+                                    "source.permission",
+                                    "domain invariants require Copy")) {
       return {};
     }
     std::vector<unsigned> selected;

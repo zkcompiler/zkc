@@ -475,16 +475,30 @@ bool Semantics::checkArguments(const Declaration &target, ArrayRef<Type> args,
     return false;
   auto subst = substitution(target, args);
   subst.insert(extra.begin(), extra.end());
+  auto satisfies = [&](const Type &type, Permissions required,
+                       StringRef message) {
+    if (required.copy && !requireUsage(type, Usage::Copy, span, context,
+                                       "source.permission", message))
+      return false;
+    if (required.drop && !required.copy &&
+        !requireUsage(type, Usage::Drop, span, context, "source.permission",
+                      message))
+      return false;
+    auto properties = permissions(type, span, context);
+    if (!properties)
+      return false;
+    if ((required.share && !properties->share) ||
+        (required.wire && !properties->wire))
+      return fail("source.permission", message, span);
+    return true;
+  };
   for (unsigned i = 0; i < args.size(); ++i) {
     const auto &p = target.parameters[i];
     const auto &a = args[i];
     if (valueType(a)) {
-      auto caps = permissions(a, span, context);
-      if (!caps)
+      if (!satisfies(a, p.permissions,
+                     "static argument lacks required permission"))
         return false;
-      if (!caps->includes(p.permissions))
-        return fail("source.permission",
-                    "static argument lacks required permission", span);
     }
   }
   for (const auto &bound : target.capabilityBounds) {
@@ -507,12 +521,12 @@ bool Semantics::checkArguments(const Declaration &target, ArrayRef<Type> args,
     auto actual = substitute(requirement, subst, span);
     if (!actual)
       return false;
-    auto caps = permissions(*actual, span, context);
-    if (!caps)
+    if (!satisfies(*actual, bound.permissions,
+                   "type lacks required usage property")) {
+      if (diagnostic)
+        diagnostic->related.push_back(bound.span);
       return false;
-    if (!caps->includes(bound.permissions))
-      return fail("source.permission",
-                  "associated type lacks required permission", span);
+    }
   }
   for (auto &bound : target.bounds) {
     Type lhs(Type::Kind::Natural), rhs(Type::Kind::Natural);

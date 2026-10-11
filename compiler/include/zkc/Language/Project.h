@@ -507,6 +507,7 @@ struct PermissionBound {
   Type type;
   Permissions permissions;
   Span span;
+  bool inferred = false;
 };
 /// A catalog proposition, independent of runtime custody permissions.
 struct CapabilityBound {

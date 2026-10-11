@@ -240,8 +240,9 @@ void control() {
         {"fn f(x:Fr,go:bool)->(){if go{let _=x;}+x;return ();}",
          "source.notation-visibility"}})
     refuses(source, code);
-  refuses("fn f<T:Type>(x:T,n:index)->T{for _ in 0..n{let y=x;}return x;}",
-          "source.permission");
+  refuses(
+      "fn f<T:Type>(x:T,n:index)->T where (){for _ in 0..n{let y=x;}return x;}",
+      "source.permission");
   refuses("fn f(t:Ticket)->(){if true{consume t;}return ();}", "source.drop");
   refuses("fn f(t:Ticket,go:bool)->(){let mut s=t;consume s;if "
           "go{s=Ticket{};}return ();}",

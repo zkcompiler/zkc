@@ -31,6 +31,7 @@ Error Checker::run() {
     if (!decl.abstract && !sources[decl.id.index]->explicitRequirements &&
         (decl.kind == Declaration::Kind::Math ||
          decl.kind == Declaration::Kind::Local ||
+         decl.kind == Declaration::Kind::DomainFunction ||
          decl.kind == Declaration::Kind::Protocol))
       inferredContracts.insert(&decl);
   types.inferCapability = [this](const Declaration *scope,
@@ -52,6 +53,11 @@ Error Checker::run() {
     output.declarations[scope.id.index].bounds.push_back(
         std::move(requirement));
     return true;
+  };
+  types.collectUsage = [this](const Declaration &scope, const Type &type,
+                              Usage usage, Span span, StringRef code,
+                              StringRef message) {
+    return collectUsage(scope, type, usage, span, code, message);
   };
   signatureState.resize(output.declarations.size());
   for (unsigned i = 0; i < output.declarations.size(); ++i)
@@ -91,7 +97,7 @@ Error Checker::run() {
         return types.takeError();
     }
   for (const auto &decl : output.declarations)
-    if (decl.kind == Declaration::Kind::Math)
+    if (decl.kind == Declaration::Kind::Math && decl.abstract)
       for (auto *ports : {&decl.inputs, &decl.outputs})
         for (const auto &port : *ports) {
           auto caps = types.permissions(port.type, port.span, &decl);
@@ -120,6 +126,7 @@ Error Checker::run() {
   inferredContracts.clear();
   types.inferCapability = {};
   types.inferNatural = {};
+  types.collectUsage = {};
   if (!retainNotations() || !retainScopedSources())
     return types.takeError();
   return checkScopedSources(output, work);

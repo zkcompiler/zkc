@@ -95,7 +95,7 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
         json::Object{{"kind", "permission"},
                      {"type", type(bound.type)},
                      {"permissions", permissions(bound.permissions)},
-                     {"inferred", false}});
+                     {"inferred", bound.inferred}});
   auto selector = [&](const InputSelector &input, unsigned axis) {
     json::Array path;
     for (auto index : input.path)

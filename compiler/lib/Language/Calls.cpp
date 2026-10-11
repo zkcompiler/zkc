@@ -299,7 +299,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   }
   CallBinding evidence{target, staticArgs, args, {}, {}, {}, {}};
   if (!scopedArgs.empty() || !domainArgs.empty()) {
-    evidence.scopedSource = checker.scopedCalls.size();
+    evidence.scopedSource = witnesses.calls.size();
     evidence.argumentOrder = binding;
     evidence.scopedArguments = scopedArgs;
     evidence.domainArguments = domainArgs;
@@ -357,7 +357,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
               Declaration::InputSlot::Kind::Domain &&
           !retainDomain(expr.children[i], 1))
         return {};
-    checker.scopedCalls.push_back(
+    witnesses.calls.push_back(
         std::make_shared<ScopedCallSource>(std::move(source)));
   }
   if ((expr.kind == Expression::Kind::NotationCall ||
@@ -385,7 +385,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     if (!visible)
       return {};
     if (evidence.scopedSource)
-      checker.scopedCalls[*evidence.scopedSource]->notationFamily = *visible;
+      witnesses.calls[*evidence.scopedSource]->notationFamily = *visible;
     if (!checkOperatorOperands(checker.types, *expr.notation, evidence, binding,
                                authoredOperands, expr.span))
       return {};
@@ -404,7 +404,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
       return {};
     // Retain the independently enumerated definition-site family for ordinary
     // notation inside callbacks as well as domain/scoped calls.
-    auto &families = checker.notationFamilies[decl.id.index];
+    auto &families = witnesses.notations[decl.id.index];
     if (!families)
       families = std::make_shared<NotationFamilies>();
     families->try_emplace(id, std::move(*visible));

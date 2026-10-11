@@ -52,8 +52,8 @@ BodyChecker::scopedArgument(uint32_t id, const ScopedSignature &signature,
     source->environment.emplace(
         name, ScopedSource::Place{state.type, state.value, state.pieces});
   }
-  unsigned sourceIndex = checker.scopedSources.size();
-  checker.scopedSources.push_back(std::move(source));
+  unsigned sourceIndex = witnesses.sources.size();
+  witnesses.sources.push_back(std::move(source));
   auto inputs = regionInputs(expr);
   if (!inputs)
     return {};
@@ -73,6 +73,7 @@ BodyChecker::scopedArgument(uint32_t id, const ScopedSignature &signature,
                       ? Body::Mode::Math
                       : Body::Mode::Local;
   BodyChecker nested(checker, decl, syntax, *checked, callDepth + 1);
+  nested.usageGuard = usageGuard;
   nested.inference = inference;
   nested.retainExpressionValues = true;
   ScopedBinding binding{signature, {},        computation, {},
@@ -99,13 +100,11 @@ BodyChecker::scopedArgument(uint32_t id, const ScopedSignature &signature,
     auto span = inputs->occurrences.at(capture);
     auto type =
         projected(bindings.at(capture.binding).type, capture.path, span);
-    auto permissions =
-        type ? checker.types.permissions(*type, span, &decl) : std::nullopt;
-    if (!permissions)
+    if (!type)
       return {};
-    if (!permissions->copy || !permissions->drop) {
-      fail("source.scoped-capture", "invariant captures require Copy and Drop",
-           span);
+    if (!checker.types.requireUsage(*type, Usage::Copy, span, &decl,
+                                    "source.scoped-capture",
+                                    "invariant captures require Copy")) {
       return {};
     }
     if (nested.math() && !nested.data(*type, span))
@@ -198,8 +197,8 @@ std::optional<ValueId> BodyChecker::invokeScoped(uint32_t id, unsigned depth) {
     return {};
   if (!checker.types.charge(1, expr.span))
     return {};
-  auto source = uint32_t(checker.scopedInvocations.size());
-  checker.scopedInvocations.push_back(std::make_shared<ScopedInvocationSource>(
+  auto source = uint32_t(witnesses.invocations.size());
+  witnesses.invocations.push_back(std::make_shared<ScopedInvocationSource>(
       ScopedInvocationSource{decl.id, id, {}}));
   return emit(ScopedInvoke{found->second, std::move(operands), source},
               signature.result, ordered ? Components{} : *dependencies,
@@ -217,22 +216,22 @@ bool Checker::retainScopedSources() {
     output.signatureSources.emplace(decl.id.index, std::move(syntax));
   }
 
-  for (auto &source : scopedInvocations) {
+  for (auto &source : witnesses.invocations) {
     source->syntax = retainSyntax(source->owner);
     if (!source->syntax)
       return false;
     output.scopedInvocations.push_back(std::move(source));
   }
-  for (auto &source : scopedSources) {
-    if (auto families = notationFamilies.find(source->owner.index);
-        families != notationFamilies.end())
+  for (auto &source : witnesses.sources) {
+    if (auto families = witnesses.notations.find(source->owner.index);
+        families != witnesses.notations.end())
       source->notationFamilies = families->second;
     source->syntax = retainSyntax(source->owner);
     if (!source->syntax)
       return false;
     output.scopedSources.push_back(std::move(source));
   }
-  for (auto &source : scopedCalls) {
+  for (auto &source : witnesses.calls) {
     source->syntax = retainSyntax(source->owner);
     if (!source->syntax)
       return false;

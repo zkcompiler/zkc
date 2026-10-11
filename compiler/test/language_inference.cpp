@@ -274,9 +274,11 @@ int main() {
       refuses(check(source + "run Demo=Parent<0>;"), "source.bound");
     }
   });
-  cases.run("resource contracts remain explicit", [] {
-    refuses(check("fn twice<T:Type>(x:T){return (x,x);}"), "source.move");
-    refuses(check("fn discard<T:Type>(x:T){return ();}"), "source.drop");
+  cases.run("written usage contracts remain complete", [] {
+    refuses(check("fn twice<T:Type>(x:T) where () {return (x,x);}"),
+            "source.move");
+    refuses(check("fn discard<T:Type>(x:T) where () {return ();}"),
+            "source.drop");
     take(check("fn twice<T:Type+Copy>(x:T){return (x,x);}"));
     take(check("fn discard<T:Type+Drop>(x:T){return ();}"));
     refuses(check(R"(

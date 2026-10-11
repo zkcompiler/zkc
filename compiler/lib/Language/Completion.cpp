@@ -72,13 +72,12 @@ BodyChecker::complete(const Statement &statement) {
     return {};
   std::vector<Value> results;
   for (unsigned i = 0; i < outputs.size(); ++i) {
-    auto caps = checker.types.permissions(outputs[i]->type, expr.span, &decl);
-    if (!caps)
-      return {};
     auto available = components(operation.values[i]);
-    if (available.owners.empty() && available.roles != *role && !caps->drop) {
-      fail("source.permission",
-           "completion cannot discard components without Drop", expr.span);
+    if (available.owners.empty() && available.roles != *role &&
+        !checker.types.requireUsage(
+            outputs[i]->type, Usage::Drop, expr.span, &decl,
+            "source.permission",
+            "completion cannot discard components without Drop")) {
       return {};
     }
     results.push_back({outputs[i]->type, *role, expr.span});

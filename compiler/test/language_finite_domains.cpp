@@ -1285,7 +1285,7 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
        "source.finite-domain"},
       {R"(domain fn bad<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(B,A)>=domain("zip");)",
        "source.finite-domain"},
-      {R"(domain fn bad<T:Type>(a:domain<T>)->domain<T>{return a;})",
+      {R"(domain fn bad<T:Type>(a:domain<T>)->domain<T> where (){return a;})",
        "source.finite-domain"},
       {R"(domain fn bad(lo:index,hi:index)->domain<index>{let mut rows=range(lo,hi);return rows;})",
        "source.finite-domain"},

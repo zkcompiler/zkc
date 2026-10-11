@@ -7,6 +7,7 @@ namespace zkc::language::detail {
 Type parameterType(const Parameter &);
 bool valueType(const Type &);
 using Substitution = std::map<std::string, Type>;
+enum class Usage { Copy, Drop };
 
 /// Semantic queries over declaration metadata. The vector object outlives this
 /// view; queries never retain element pointers across specialization. Source
@@ -27,6 +28,11 @@ public:
   std::function<bool(const Declaration *, const CapabilityBound &)>
       inferCapability;
   std::function<bool(const Declaration &, const NaturalBound &)> inferNatural;
+  /// Demand collection is separate from pure permission queries. The source
+  /// checker installs this only while building an unpublished usage plan.
+  std::function<bool(const Declaration &, const Type &, Usage, Span,
+                     llvm::StringRef, llvm::StringRef)>
+      collectUsage;
   struct CallSignature {
     std::vector<Type> inputs, outputs;
     Type resultType() const;
@@ -52,6 +58,15 @@ public:
   std::optional<Permissions> permissions(const Type &, Span,
                                          const Declaration *scope = nullptr,
                                          unsigned = 1);
+  bool requireUsage(const Type &, Usage, Span, const Declaration *,
+                    llvm::StringRef code, llvm::StringRef message);
+  /// Reduce a demanded property to unknown generic leaves. Authored resource
+  /// restrictions and native properties cannot be strengthened by inference.
+  std::optional<std::vector<Type>> usageRequirements(const Type &, Usage, Span,
+                                                     const Declaration &,
+                                                     llvm::StringRef code,
+                                                     llvm::StringRef message,
+                                                     unsigned = 1);
   std::optional<std::vector<TypeField>> fields(const Type &, Span,
                                                unsigned = 1);
   /// Signature-only product shape. An abstract representation or open array

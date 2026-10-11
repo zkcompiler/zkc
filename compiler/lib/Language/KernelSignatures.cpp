@@ -94,11 +94,8 @@ Semantics::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
       return {};
     }
     if (sort == "Type") {
-      auto caps = permissions(*value, span, context);
-      if (!caps || !caps->copy || !caps->drop) {
-        if (!diagnostic)
-          fail("source.kernel", "native Type roots require Copy and Drop",
-               span);
+      if (!requireUsage(*value, Usage::Copy, span, context, "source.kernel",
+                        "native Type roots require Copy")) {
         return {};
       }
     }
@@ -190,8 +187,8 @@ Semantics::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
     }
     auto data = [&](ArrayRef<Type> ports) {
       return llvm::all_of(ports, [&](const Type &type) {
-        auto caps = permissions(type, span, context);
-        return caps && caps->copy && caps->drop;
+        return requireUsage(type, Usage::Copy, span, context, "source.kernel",
+                            "Type-root operations require Copy data");
       });
     };
     if (!data(result.inputs) || !data(result.outputs)) {

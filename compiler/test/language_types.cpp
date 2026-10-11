@@ -224,7 +224,7 @@ run Demo=Run;
 void typing() {
   for (
       auto &[source, code] : std::vector<std::pair<std::string, std::string>>{
-          {"math fn bad<T:Type>(x:T)->T{return x;}", "source.mode"},
+          {"math fn bad<T:Type>(x:T)->T where (){return x;}", "source.mode"},
           {"#[affine] struct Bad<T:Type> {pub value:T}", "source.permission"},
           {"type Recursive=Recursive;", "source.cycle"},
           {"struct Recursive {pub next:Recursive}", "source.cycle"},
@@ -390,7 +390,7 @@ fn direct<T:Type,C:Sink<T>>(x:T)->() where Copy(T),Drop(T){return C::put(x);}
   refuses(prefix + R"(
 interface Src{type Out;}
 interface Sink<X:Type+Copy+Drop>{fn put(x:X)->() effects(stop, opaque);}
-fn pipe<A:Src,B:Sink<A::Out>>(x:A::Out)->(){return B::put(x);}
+fn pipe<A:Src,B:Sink<A::Out>>(x:A::Out)->() where (){return B::put(x);}
 )",
           "source.permission");
   check(prefix + R"(

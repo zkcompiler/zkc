@@ -98,12 +98,47 @@ BodyChecker::project(ValueId value, ArrayRef<unsigned> path, Span span) {
 std::optional<ValueId> BodyChecker::fresh(ValueId value, Span span) {
   return project(value, {}, span);
 }
+std::optional<ValueId>
+BodyChecker::transport(ValueId value, ArrayRef<unsigned> path, Span span) {
+  if (!plan)
+    return project(value, path, span);
+  auto type = projected(body.values[value.index].type, path, span);
+  auto result =
+      type ? emit(Projection{value,
+                             std::vector<unsigned>(path.begin(), path.end())},
+                  *type, components(value), span)
+           : std::nullopt;
+  if (result)
+    usageValues[result->index] =
+        plan->usage.project(usageValues[value.index], path, span);
+  return result;
+}
+std::optional<ValueId> BodyChecker::transport(ArrayRef<ValueId> values,
+                                              Span span) {
+  if (!plan)
+    return pack(values, span);
+  if (values.size() == 1)
+    return values.front();
+  Type type(values.empty() ? Type::Kind::Unit : Type::Kind::Tuple);
+  std::vector<UsagePlan::Value> fields;
+  for (auto value : values) {
+    type.arguments.push_back(body.values[value.index].type);
+    fields.push_back(usageValues[value.index]);
+  }
+  auto roles = combine(values, span);
+  auto result =
+      roles ? emit(Construct{std::vector<ValueId>(values.begin(), values.end()),
+                             {}},
+                   type, *roles, span)
+            : std::nullopt;
+  if (result && !values.empty())
+    usageValues[result->index] = plan->usage.product(fields, span);
+  return result;
+}
 bool BodyChecker::discard(ValueId value, Span span) {
-  auto caps =
-      checker.types.permissions(body.values[value.index].type, span, &decl);
-  return caps &&
-         (caps->drop ||
-          fail("source.drop", "discarding a value requires Drop", span)) &&
+  return checker.types.requireUsage(body.values[value.index].type, Usage::Drop,
+                                    span, &decl, "source.drop",
+                                    "discarding a value requires Drop") &&
          use(value, span);
 }
 std::optional<ValueId>
@@ -118,12 +153,11 @@ BodyChecker::restrictRoles(ValueId value, ArrayRef<unsigned> roles, Span span) {
   }
   if (ArrayRef<unsigned>(before.components) == roles)
     return value;
-  auto caps = checker.types.permissions(before.type, span, &decl);
-  if (!caps || !checker.types.executableType(before.type, span))
+  if (!checker.types.executableType(before.type, span))
     return {};
-  if (!caps->drop) {
-    fail("source.permission",
-         "restriction cannot discard a component without Drop", span);
+  if (!checker.types.requireUsage(
+          before.type, Usage::Drop, span, &decl, "source.permission",
+          "restriction cannot discard a component without Drop")) {
     return {};
   }
   if (!use(value, span))

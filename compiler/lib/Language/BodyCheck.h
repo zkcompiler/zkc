@@ -21,6 +21,10 @@ private:
   Declaration &decl;
   const SyntaxDeclaration &syntax;
   Body &body;
+  BodyPlan *plan;
+  BodyWitnesses &witnesses;
+  UsagePlan::Guard usageGuard = UsagePlan::always;
+  std::vector<UsagePlan::Value> usageValues;
   unsigned callDepth;
   uint32_t statement = 0;
   bool retainExpressionValues = false;
@@ -111,7 +115,7 @@ private:
   bool active(llvm::ArrayRef<unsigned>, Span);
   bool use(ValueId, Span, llvm::ArrayRef<unsigned> = {});
   bool finish(Span);
-  bool finishValue(ValueId, Span);
+  bool finishValue(ValueId, Span, bool prefixOnly = true);
   bool finishOwner(unsigned, Span);
   bool available(ValueId, llvm::ArrayRef<unsigned> = {});
   std::optional<ValueId> input(const Type &, std::vector<unsigned>, Span);
@@ -122,6 +126,8 @@ private:
   std::optional<ValueId> restrictRoles(ValueId, llvm::ArrayRef<unsigned>, Span);
   std::optional<ValueId> fresh(ValueId, Span);
   std::optional<ValueId> pack(llvm::ArrayRef<ValueId>, Span);
+  std::optional<ValueId> transport(ValueId, llvm::ArrayRef<unsigned>, Span);
+  std::optional<ValueId> transport(llvm::ArrayRef<ValueId>, Span);
   std::optional<ValueId> project(ValueId, llvm::ArrayRef<unsigned>, Span);
   bool statements(const SyntaxBody &);
   bool statementBody(const Statement &);

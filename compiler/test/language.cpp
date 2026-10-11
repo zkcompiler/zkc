@@ -670,7 +670,7 @@ protocol Reuse roles(P,V)(go:bool@V,x:Fr@(P,V), coins:Random<Fr>@V)->(result:Fr@
       replace(read("completion_affine.zkc"), "module sample;", "module m;");
   sourceRefuses(replace(affine, "state = next;", "state = state;"),
                 "source.move");
-  sourceRefuses(replace(replace(affine, "state = next;", ""),
+  sourceRefuses(replace(replace(affine, "state = next;", "state = state;"),
                         "let next = finish_if", "let () = finish_if"),
                 "source.binding");
   must(compileEntry(original(R"(module m;domain Fr=field("bls12-381.fr");

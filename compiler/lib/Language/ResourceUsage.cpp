@@ -9,6 +9,8 @@ bool prefix(ArrayRef<unsigned> a, ArrayRef<unsigned> b) {
 }
 } // namespace
 bool BodyChecker::use(ValueId value, Span span, ArrayRef<unsigned> path) {
+  if (plan)
+    return plan->usage.use(usageValues[value.index], path, usageGuard, span);
   if (!checker.types.charge(path.size() + 1, span))
     return false;
   auto type = projected(body.values[value.index].type, path, span);
@@ -38,7 +40,7 @@ bool BodyChecker::finish(Span span) {
   if (body.stopped)
     return true;
   for (unsigned i = 0; i < body.values.size(); ++i)
-    if (!finishValue(ValueId{i}, span))
+    if (!finishValue(ValueId{i}, span, false))
       return false;
   return true;
 }
@@ -53,7 +55,10 @@ bool BodyChecker::finishOwner(unsigned owner, Span span) {
     }
   return true;
 }
-bool BodyChecker::finishValue(ValueId value, Span span) {
+bool BodyChecker::finishValue(ValueId value, Span span, bool prefixOnly) {
+  if (plan)
+    return plan->usage.finish(usageValues[value.index], usageGuard, span,
+                              prefixOnly);
   auto &state = uses[value.index];
   std::function<bool(const Type &, std::vector<unsigned>, unsigned)> check =
       [&](const Type &t, std::vector<unsigned> path, unsigned depth) {
@@ -96,6 +101,8 @@ bool BodyChecker::finishValue(ValueId value, Span span) {
   return check(body.values[value.index].type, {}, 1);
 }
 bool BodyChecker::available(ValueId value, ArrayRef<unsigned> path) {
+  if (plan)
+    return true;
   for (const auto &moved : uses[value.index].moved) {
     if (!checker.types.charge(moved.size() + path.size() + 1,
                               body.values[value.index].span) ||

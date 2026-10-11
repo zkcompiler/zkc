@@ -79,9 +79,9 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
         !types.chargeType(type, decl.span))
       return false;
   }
-  auto itemPermissions = types.permissions(item, decl.span, &decl);
-  if (!itemPermissions || !itemPermissions->copy || !itemPermissions->drop)
-    return refuse("domain items require Copy and Drop");
+  if (!types.requireUsage(item, Usage::Copy, decl.span, &decl, "source.finite",
+                          "domain items require Copy"))
+    return false;
   std::vector<ValueId> operands;
   if (fold) {
     operands.push_back({0});
@@ -98,8 +98,9 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
     body.scopedBindings.push_back(
         {parameter.signature, i, {}, {}, {}, parameter.span, {}});
   }
-  if (!types.accept(work.count(work.operations, work.limits.operations,
-                               "operation count", decl.span)))
+  if (!types.accept(work.count(
+          bodyPlan(decl.id) ? bodyPlan(decl.id)->operations : work.operations,
+          work.limits.operations, "operation count", decl.span)))
     return false;
   ValueId result{unsigned(body.values.size())};
   body.values.push_back({output, {}, decl.span});

@@ -201,11 +201,6 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
       auto child = permissions(element, span, scope, depth + 1);
       if (!child)
         return {};
-      if (!child->copy || !child->drop) {
-        fail("source.sequence", "sequence element requires Copy and Drop",
-             span);
-        return {};
-      }
       if (!executableType(element, span, depth + 1))
         return {};
       return child;
@@ -333,11 +328,9 @@ bool Semantics::mathematicalData(const Type &type, Span span,
   if (depth > work.limits.typeDepth || !charge(1, span))
     return diagnostic ? false
                       : fail("source.limit", "mathematical type depth", span);
-  auto caps = permissions(type, span, scope, depth);
-  if (!caps || !caps->copy || !caps->drop)
-    return diagnostic ? false
-                      : fail("source.mode",
-                             "mathematical values require Copy and Drop", span);
+  if (!requireUsage(type, Usage::Copy, span, scope, "source.mode",
+                    "mathematical values require Copy"))
+    return false;
   using K = Type::Kind;
   if (type.kind == K::Builtin) {
     auto policy = protocol::nativeTypeConstructorPolicy(type.domain);

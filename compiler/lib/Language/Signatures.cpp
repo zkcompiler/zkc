@@ -436,27 +436,23 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       if (!valueType(*item))
         return types.fail("source.finite-domain", "domain item must be data",
                           src.span);
-      auto permissions = types.permissions(*item, src.span, &decl);
-      if (!permissions)
+      if (!types.requireUsage(*item, Usage::Copy, src.span, &decl,
+                              "source.finite-domain",
+                              "domain items require Copy"))
         return false;
-      if (!permissions->copy || !permissions->drop)
-        return types.fail("source.finite-domain",
-                          "domain items require Copy and Drop", src.span);
       decl.domainInputs.push_back({src.name, *item, src.span});
     }
     if (source.domainResult) {
       decl.domainResult = type(decl, *source.domainResult, depth + 1);
       if (!decl.domainResult)
         return false;
-      auto permissions =
-          types.permissions(*decl.domainResult, decl.span, &decl);
-      if (!permissions)
-        return false;
-      if (!valueType(*decl.domainResult) || !permissions->copy ||
-          !permissions->drop)
-        return types.fail("source.finite-domain",
-                          "domain result items require Copy and Drop",
+      if (!valueType(*decl.domainResult))
+        return types.fail("source.finite-domain", "domain result must be data",
                           decl.span);
+      if (!types.requireUsage(*decl.domainResult, Usage::Copy, decl.span, &decl,
+                              "source.finite-domain",
+                              "domain result items require Copy"))
+        return false;
     }
     for (const auto &src : source.scopedInputs) {
       if (!bindingName(decl, src.name, src.span) ||

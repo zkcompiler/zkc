@@ -18,6 +18,7 @@ add_zkc_test(mathematical_fact_analysis IR mathematical-fact-analysis)
 mlir_target_link_libraries(zkc-mathematical_fact_analysis-test PRIVATE
   MLIRParser MLIRPass)
 add_zkc_test(language_mathematical_facts Language language-mathematical-facts)
+add_zkc_test(language_usage_plan Language language-usage-plan)
 add_zkc_test(language_finite_cardinality Language language-finite-cardinality)
 add_zkc_test(mathematical_fact_lifetime IR mathematical-fact-lifetime)
 mlir_target_link_libraries(zkc-mathematical_fact_lifetime-test PRIVATE
