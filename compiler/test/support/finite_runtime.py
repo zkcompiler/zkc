@@ -124,6 +124,9 @@ for optimized in [False, True]:
     mode = 'bulk' if optimized else 'loop'
     check(f'sum {mode}', lambda: completed(execute('sum', optimized, [vector([2, 3, 5]), field(7)]), [field(17)]))
     check(f'empty fold {mode}', lambda: completed(execute('sum', optimized, [vector([]), field(7)]), [field(7)]))
+    check(f'unit state empty {mode}', lambda: completed(execute('unit-state', optimized, [vector([]), boolean(True)]), [boolean(True)]))
+    check(f'unit state filtered {mode}', lambda: completed(execute('unit-state', optimized, [vector([2, 3]), boolean(False)]), [boolean(False)]))
+    check(f'unit state stop retained {mode}', lambda: stopped(execute('unit-state', optimized, [vector([2]), boolean(True)]), 'abort'))
     check(f'dot {mode}', lambda: completed(execute('dot', optimized, [vector([2, 3]), vector([5, 7]), vector([0, 0]), field(11)]), [field(42)]))
     check(f'collect {mode}', lambda: completed(execute('collect', optimized, [vector([2, 3, 5])]), [vector([4, 9, 25])]))
     check(f'zero trips total state {mode}', lambda: completed(execute('total-state', optimized, [vector([]), field(7), field(11)]), [field(7), field(11)]))

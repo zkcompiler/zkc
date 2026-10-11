@@ -28,7 +28,7 @@ complete container or matrix fallback support.
 The fixtures cover strict zip (including ignored, empty, filtered and dead-domain
 factors), product versus dependent nesting, predicate/body/eager stop order,
 materialization before ordinary reducers, mixed state/item/capture types, affine
-successors, branch/match fallback, coordinates including sparse zeros, fixed-size
+successors, Unit state with retained stops, branch/match fallback, coordinates including sparse zeros, fixed-size
 collection, bounded total lookups and helper-body correspondence. Total zip uses
 verified equality and argument substitution. Native recognition is checked for
 sum, product, dot, MSM, elementwise fields and selected matrix contractions.

@@ -443,8 +443,7 @@ LogicalResult describe(Operation *op, Computation &c, Operation *symbolRoot) {
     return refuse(op, "domain result signature");
   c.arguments = dt.getNumInputs();
   c.states = c.collect ? 0 : c.signature.getNumResults();
-  if ((!c.collect && !c.states) ||
-      (c.collect && c.signature.getNumResults() != 1) ||
+  if ((c.collect && c.signature.getNumResults() != 1) ||
       c.signature.getNumInputs() < c.arguments + c.states)
     return refuse(op, "finite operand partitions");
   c.captures = c.signature.getNumInputs() - c.arguments - c.states;

@@ -144,6 +144,7 @@ int main(int argc, char **argv) {
   for (StringRef name : {"dot",
                          "collect",
                          "total-state",
+                         "unit-state",
                          "affine",
                          "filter",
                          "predicate-stop",
@@ -195,6 +196,35 @@ int main(int argc, char **argv) {
     auto dependencies = mathematical::operandDependencies(fold, 0);
     require(succeeded(dependencies) && dependencies->size() == 3,
             "whole operation cloning was narrowed");
+  });
+  cases.run("empty native state retains total formation", [&] {
+    auto text = replace(fixture("total-state"),
+                        "@step(%a:!F,%b:!F,%i:ui64,%xs:!V) -> (!F,!F)",
+                        "@step(%i:ui64,%xs:!V)");
+    text =
+        replace(text, "#data.index_bound<2,3,0>", "#data.index_bound<0,1,0>");
+    text = replace(text, "func.return %b,%v : !F,!F", "func.return");
+    text = replace(
+        text,
+        "%r:2 = \"algebra.finite_fold\"(%xs,%a,%b) {domain=@items,step=@step} "
+        ": (!V,!F,!F)->(!F,!F)",
+        "\"algebra.finite_fold\"(%xs) {domain=@items,step=@step} : (!V)->()");
+    text = replace(text, "\"protocol.return\"(%r#0,%r#1)",
+                   "\"protocol.return\"(%a,%b)");
+    auto module = parseSourceString<ModuleOp>(text, &context);
+    require(bool(module), "Unit state total fold refused");
+    Operation *fold = nullptr;
+    module->walk([&](algebra::FiniteFoldOp op) { fold = op; });
+    finite::Summary summary;
+    require(succeeded(finite::summarize(fold, summary)) &&
+                summary.results.empty() &&
+                llvm::any_of(summary.formation,
+                             [](const auto &bits) { return bits.test(0); }),
+            "Unit state erased formation obligations");
+    pipeline(*module);
+    refusesIR(
+        replace(text, "#data.index_bound<0,1,0>", "#data.index_bound<1,0,0>"),
+        context, "finite-bound");
   });
   cases.run("affine state swapping refused", [&] {
     refusesIR(

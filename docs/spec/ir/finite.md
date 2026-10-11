@@ -51,8 +51,12 @@ before traversal; bulk recognition preserves the original domain checks.
 
 ## Helper and operand ABI
 
-Let `S...` be a nonempty state list, `C...` invariant captures, `B` a collected
+Let `S...` be a state list, `C...` invariant captures, `B` a collected
 item type, and `R` an explicitly selected native collection of `B`.
+The state list may be empty, as when a source Unit state has no native leaves.
+An ordered fold with no results still performs admission, predicates and steps;
+its stops remain observable. Total folds retain all formation obligations even
+when they have no result dependencies.
 
 | Computation | Inputs and outputs | Helper attribute |
 |---|---|---|

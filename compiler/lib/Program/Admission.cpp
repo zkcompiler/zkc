@@ -782,8 +782,7 @@ public:
       if (realization.domainArguments > realization.inputs.size())
         return error("local-realization-signature");
       if (realization.kind == LocalRealization::Kind::FiniteFold) {
-        if (realization.outputs.empty() ||
-            realization.outputs.size() >
+        if (realization.outputs.size() >
                 realization.inputs.size() - realization.domainArguments ||
             !llvm::equal(realization.outputs,
                          ArrayRef<std::string>(realization.inputs)
