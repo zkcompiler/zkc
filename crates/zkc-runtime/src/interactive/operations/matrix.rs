@@ -4,6 +4,24 @@ use Type::*;
 
 pub(super) const CONTRACTS: &[Contract] = &[
     Contract::selectable(
+        "matrix.row_dot",
+        (&[Matrix, Vector, Index], &[Field], AttributeRule::None),
+    )
+    .implemented_by(&[
+        "arkworks/matrix.row_dot",
+        "dalek/matrix.row_dot",
+        "plonky3/matrix.row_dot",
+    ]),
+    Contract::selectable(
+        "matrix.column_dot",
+        (&[Matrix, Vector, Index], &[Field], AttributeRule::None),
+    )
+    .implemented_by(&[
+        "arkworks/matrix.column_dot",
+        "dalek/matrix.column_dot",
+        "plonky3/matrix.column_dot",
+    ]),
+    Contract::selectable(
         "matrix.get",
         (&[Matrix, Index, Index], &[Field], AttributeRule::None),
     )

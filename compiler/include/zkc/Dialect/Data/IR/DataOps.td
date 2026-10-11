@@ -13,7 +13,11 @@ def Data_DomainOp : Op<DataDialect, "domain", [Symbol, IsolatedFromAbove, Single
   let regions = (region AnyRegion:$body);
   let hasRegionVerifier = 1;
 }
-class DomainConstructor<string name> : Op<DataDialect, name, [Pure]> {
+// Every constructor contributes an ordered admission obligation, even when its
+// descriptor is unused. Leave effects unknown and provide no speculation
+// interface: NoMemoryEffect would allow generic DCE/CSE to discard admission.
+// This is a conservative transformation contract, not a heap allocation effect.
+class DomainConstructor<string name> : Op<DataDialect, name> {
   let results = (outs Domain:$output);
   let hasVerifier = 1;
 }

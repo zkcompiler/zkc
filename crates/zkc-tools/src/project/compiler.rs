@@ -268,6 +268,9 @@ impl Compiler {
         if options.release_storage {
             flags.push("--release-storage");
         }
+        if !options.finite_bulk {
+            flags.push("--no-finite-bulk");
+        }
         if options.fuse_vector_reductions {
             flags.push("--fuse-vector-reductions");
         }

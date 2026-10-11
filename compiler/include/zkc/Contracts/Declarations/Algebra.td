@@ -200,6 +200,22 @@ def OpMatrixGet : ZKC_Operation<"matrix.get", [OpMatrixGetF],
 def ExportMatrixGet : ZKC_OperationExport<"zkc::algebra", "matrix_get",
     OpMatrixGet, ["matrix", "row", "column"]>;
 
+def OpMatrixRowDotF : ZKC_Root<"F", FieldDomain>;
+def OpMatrixRowDot : ZKC_Operation<"matrix.row_dot", [OpMatrixRowDotF],
+    [ZKC_Apply<TypeMatrix, [OpMatrixRowDotF]>, ZKC_Apply<TypeVector, [OpMatrixRowDotF]>,
+     ZKC_Apply<TypeIndex, []>], [ZKC_Apply<TypeField, [OpMatrixRowDotF]>],
+    [ZKC_Holds<CapabilityField, [OpMatrixRowDotF]>]>;
+def ExportMatrixRowDot : ZKC_OperationExport<"zkc::algebra", "matrix_row_dot",
+    OpMatrixRowDot, ["matrix", "vector", "row"]>;
+
+def OpMatrixColumnDotF : ZKC_Root<"F", FieldDomain>;
+def OpMatrixColumnDot : ZKC_Operation<"matrix.column_dot", [OpMatrixColumnDotF],
+    [ZKC_Apply<TypeMatrix, [OpMatrixColumnDotF]>, ZKC_Apply<TypeVector, [OpMatrixColumnDotF]>,
+     ZKC_Apply<TypeIndex, []>], [ZKC_Apply<TypeField, [OpMatrixColumnDotF]>],
+    [ZKC_Holds<CapabilityField, [OpMatrixColumnDotF]>]>;
+def ExportMatrixColumnDot : ZKC_OperationExport<"zkc::algebra", "matrix_column_dot",
+    OpMatrixColumnDot, ["matrix", "vector", "column"]>;
+
 def OpMatrixShapeCheckF : ZKC_Root<"F", FieldDomain>;
 def OpMatrixShapeCheck : ZKC_Operation<"matrix.shape_check", [OpMatrixShapeCheckF],
     [ZKC_Apply<TypeMatrix, [OpMatrixShapeCheckF]>],

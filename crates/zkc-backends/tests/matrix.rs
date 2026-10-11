@@ -480,6 +480,21 @@ fn exact_nonzero_cap_and_dimension_cap_are_independent_of_dense_vector_policy() 
         .collect::<Vec<_>>();
     let m = matrix(2, 1024, 1024, &entries);
     assert!(b.encode_native_value(&m).is_err());
+    for contract in ["matrix.row_dot", "matrix.column_dot"] {
+        let mut controlled = Controlled::new(backend(Policy::default()));
+        controlled.output_limit = Some(512);
+        assert_value(
+            &one(
+                controlled,
+                binding(2, contract),
+                &[],
+                vec![m.clone(), vector(2, &[1; 1024]), Value::Index(1023)],
+            )
+            .0
+            .unwrap()[0],
+            &scalar(2, 1024),
+        );
+    }
     assert_value(
         &call(2, "matrix.mul_vector", &[], vec![m, vector(2, &[1; 1024])]),
         &vector(2, &[1024; 1024]),

@@ -3,6 +3,7 @@
 
 #include "mlir/Pass/Pass.h"
 #include "zkc/Contracts/Binding.h"
+#include "zkc/Transforms/MathematicalSelection.h"
 #include "llvm/ADT/StringRef.h"
 #include <memory>
 
@@ -17,14 +18,15 @@ namespace protocol {
 /// refusals under sufficient resources, not exhaustion or backend failures.
 std::unique_ptr<mlir::Pass>
 createPrepareProtocolPass(bool simplify = true,
-                          bool fuseVectorReductions = false);
+                          MathematicalSelectionPolicy policy = {});
 /// Project the protocol profile into participant programs, retaining
 /// mathematics.
 std::unique_ptr<mlir::Pass>
 createProjectProtocolPass(bool simplify = true,
-                          bool fuseVectorReductions = false);
+                          MathematicalSelectionPolicy policy = {});
 /// Lower participant mathematics to execution recipes in the exec profile.
-std::unique_ptr<mlir::Pass> createLowerMathPass(bool optimizeFinite = true);
+std::unique_ptr<mlir::Pass>
+createLowerMathPass(MathematicalSelectionPolicy policy = {});
 /// Distribute prefix fixing through shared sums/products and MLE leaves.
 std::unique_ptr<mlir::Pass> createFixPolynomialFactorsPass();
 /// Eliminate formal polynomial SSA while retaining concrete participant types.

@@ -65,7 +65,7 @@ def compile_fixture(name, optimized):
         path = args.output / f'{name}-{"bulk" if optimized else "loop"}.bundle'
         command = [args.compiler, 'protocol-bundle', fixtures / f'{name}.mlir']
         if not optimized:
-            command.append('--no-simplify')
+            command.append('--no-finite-bulk')
         result = subprocess.run(command, capture_output=True, text=True)
         (args.output / f"{name}-{optimized}-compile.json").write_text(json.dumps(
             dict(command=[str(v) for v in command], returncode=result.returncode, stderr=result.stderr), indent=2))

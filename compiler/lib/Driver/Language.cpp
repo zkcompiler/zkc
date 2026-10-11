@@ -132,7 +132,7 @@ int runLanguageCompiler(int argc, char **argv) {
       flag = true;
     } else if (command == "language-check" &&
                (arg == "--no-simplify" || arg == "--release-storage" ||
-                arg == "--fuse-vector-reductions"))
+                arg == "--fuse-vector-reductions" || arg == "--no-finite-bulk"))
       return refuse(
           error("source.options",
                 "checking accepts no executable optimization options"));
@@ -140,8 +140,10 @@ int runLanguageCompiler(int argc, char **argv) {
       options.simplify = false;
     else if (arg == "--release-storage")
       options.releaseStorage = true;
+    else if (arg == "--no-finite-bulk")
+      options.mathematicalSelection.finiteBulk = false;
     else if (arg == "--fuse-vector-reductions")
-      options.fuseVectorReductions = true;
+      options.mathematicalSelection.vectorReductionFusion = true;
     else
       return refuse(error("source.options", "unknown language option: " + arg));
   }

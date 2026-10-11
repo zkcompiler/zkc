@@ -161,11 +161,12 @@ LogicalResult BoundedAtOp::verify() {
   return success();
 }
 LogicalResult BoundedMatrixAtOp::verify() {
+  uint64_t remaining = 65536;
   if (!(*this)->getAttrs().empty() ||
       finite::elementType(getInput().getType(), true) !=
           getOutput().getType() ||
-      !finite::provesBound(getRow(), getInput(), 0) ||
-      !finite::provesBound(getColumn(), getInput(), 1))
+      !finite::provesBound(getRow(), getInput(), 0, remaining) ||
+      !finite::provesBound(getColumn(), getInput(), 1, remaining))
     return diagnostics::emit(
         emitOpError(), "finite-bound",
         "matrix lookup requires both exact coordinate bounds");

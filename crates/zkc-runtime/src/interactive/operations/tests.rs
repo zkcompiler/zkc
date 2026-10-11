@@ -1,6 +1,72 @@
 use super::*;
 
 #[test]
+fn selected_matrix_contractions_preserve_field_and_explicit_provider() {
+    for name in ["matrix.row_dot", "matrix.column_dot"] {
+        for (field, provider) in [
+            ("bls12-381.fr", "arkworks"),
+            ("bn254.fr", "arkworks"),
+            ("ristretto255.scalar", "dalek"),
+            ("koala-bear", "plonky3"),
+            ("koala-bear.ext8-binomial3", "plonky3"),
+        ] {
+            let binding = OperationBinding {
+                contract: name.into(),
+                arguments: vec![field.into()],
+                implementation: format!("{provider}/{name}"),
+            };
+            let identity = Identity::parse(field).unwrap();
+            let signature = logical_signature(&binding).unwrap();
+            assert_eq!(
+                signature.inputs,
+                [
+                    LogicalType::new(Type::Matrix, identity).unwrap(),
+                    LogicalType::new(Type::Vector, identity).unwrap(),
+                    LogicalType::parse("index").unwrap(),
+                ]
+            );
+            assert_eq!(
+                signature.outputs,
+                [LogicalType::new(Type::Field, identity).unwrap()]
+            );
+            assert_eq!(signature.attributes, AttributeRule::None);
+            assert!(binding.signature().is_ok());
+            for arguments in [
+                vec![],
+                vec![field.into(), "0".into()],
+                vec!["bls12-381.g1".into()],
+            ] {
+                assert_eq!(
+                    OperationBinding {
+                        arguments,
+                        ..binding.clone()
+                    }
+                    .signature()
+                    .unwrap_err()
+                    .code,
+                    ErrorCode::Signature
+                );
+            }
+            for other in ["arkworks", "dalek", "plonky3", "missing"] {
+                let selected = OperationBinding {
+                    implementation: format!("{other}/{name}"),
+                    ..binding.clone()
+                };
+                assert_eq!(selected.signature().is_ok(), other == provider);
+            }
+            let wrong_operation = OperationBinding {
+                implementation: format!("{provider}/matrix.bilinear"),
+                ..binding
+            };
+            assert_eq!(
+                wrong_operation.signature().unwrap_err().code,
+                ErrorCode::Signature
+            );
+        }
+    }
+}
+
+#[test]
 fn vector_product_has_one_vector_and_same_field_scalar_result() {
     for (field, provider) in [
         ("bls12-381.fr", "arkworks"),
@@ -207,7 +273,7 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
         vector.empty vector.append vector.splat vector.powers vector.add vector.sub vector.mul vector.concat
         vector.kronecker vector.scale vector.sum vector.product vector.dot vector.split vector.at vector.length_check
         vector.gather vector.matvec vector.from_point vector.to_point vector.from_table vector.to_table
-        matrix.mul_vector matrix.transpose_mul_vector matrix.bilinear matrix.identity_check matrix.shape_check matrix.dimension matrix.get
+        matrix.mul_vector matrix.transpose_mul_vector matrix.bilinear matrix.identity_check matrix.shape_check matrix.dimension matrix.get matrix.row_dot matrix.column_dot
         poly.coefficient_count poly.coset_evaluate poly.coset_interpolate poly.domain_point poly.domain_root
         poly.domain_points poly.even_odd_fold poly.divide_opening poly.opening_quotient poly.equality_weights
         poly.from_coefficients poly.coefficients poly.degree_check poly.univariate_evaluate poly.univariate_boundary
@@ -367,7 +433,9 @@ fn independent_history_classification_matches_installed_inventory() {
     let mut seen = std::collections::BTreeSet::new();
     // Native-only contracts have no portable Lean source interpretation. Keep
     // the shared portable inventory unchanged and enumerate this extension.
-    let native = "transcript.native.indexed.challenge 1
+    let native = "matrix.row_dot 0
+matrix.column_dot 0
+transcript.native.indexed.challenge 1
 transcript.native.indexed.index 1
 transcript.native.indexed.observe.data 1
 ring.point 0

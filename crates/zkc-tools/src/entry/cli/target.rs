@@ -31,6 +31,7 @@ impl Target {
                             | "--no-simplify"
                             | "--release-storage"
                             | "--fuse-vector-reductions"
+                            | "--no-finite-bulk"
                     )
                 }))
         {

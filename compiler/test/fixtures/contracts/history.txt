@@ -77,10 +77,12 @@ indices.at 0
 indices.empty 0
 indices.length 0
 matrix.bilinear 0
+matrix.column_dot 0
 matrix.dimension 0
 matrix.get 0
 matrix.identity_check 0
 matrix.mul_vector 0
+matrix.row_dot 0
 matrix.shape_check 0
 matrix.transpose_mul_vector 0
 opening_states.append 0

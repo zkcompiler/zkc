@@ -18,6 +18,7 @@ const ASSETS_BYTES: usize = zkc_backends::ring::REGISTRY_BYTE_LIMIT;
 pub struct CompileOptions {
     pub simplify: bool,
     pub release_storage: bool,
+    pub finite_bulk: bool,
     pub fuse_vector_reductions: bool,
 }
 
@@ -208,7 +209,7 @@ mod tests {
     fn frame() -> String {
         json!({"format":"zkc.entry/0","original":"module\n{}",
             "interface":"{\"job\":{\"kind\":\"run\"}}", "artifact":"[]",
-            "options":{"simplify":true,"release_storage":false,"fuse_vector_reductions":false},"assets":[]})
+            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false},"assets":[]})
         .to_string()
     }
     fn capture(bytes: &[u8]) -> Result<Package, PackageError> {
@@ -235,6 +236,7 @@ mod tests {
             CompileOptions {
                 simplify: true,
                 release_storage: false,
+                finite_bulk: true,
                 fuse_vector_reductions: false,
             }
         );
@@ -285,6 +287,12 @@ mod tests {
             original.replace(
                 "\"fuse_vector_reductions\":false",
                 "\"fuse_vector_reductions\":false,\"fuse_vector_reductions\":false",
+            ),
+            original.replace("\"finite_bulk\":true,", ""),
+            original.replace("\"finite_bulk\":true", "\"finite_bulk\":\"true\""),
+            original.replace(
+                "\"finite_bulk\":true",
+                "\"finite_bulk\":true,\"finite_bulk\":false",
             ),
             original.clone() + "{}",
         ] {
@@ -365,7 +373,7 @@ mod tests {
             Err(PackageError::Format)
         ));
         let value = frame().replace(
-            r#"{"fuse_vector_reductions":false,"release_storage":false,"simplify":true}"#,
+            r#"{"finite_bulk":true,"fuse_vector_reductions":false,"release_storage":false,"simplify":true}"#,
             "[true,false]",
         );
         assert_ne!(value, frame());
