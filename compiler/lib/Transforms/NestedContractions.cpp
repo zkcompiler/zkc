@@ -1,4 +1,5 @@
 #include "zkc/Transforms/NestedContractions.h"
+#include "AlgorithmSupport.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/SymbolTable.h"
@@ -9,6 +10,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/detail/Builders.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringSet.h"
 #include <map>
@@ -17,6 +19,33 @@ using namespace mlir;
 using namespace llvm;
 namespace zkc::nested {
 namespace {
+using Record = protocol::detail::AlgorithmExpansionRecord;
+using Occurrence = protocol::detail::AlgorithmOccurrence;
+using StateAccess = protocol::detail::AlgorithmStateAccess;
+
+// Naming only: source/candidate admission readers separately count the inner
+// finite recipe's primitive sites. Keep its leaf identity and prior call path
+// in the existing expansion record, rather than treating an encoded call site
+// as a new authored leaf.
+Occurrence innerOrigin(local::ApplyOp call, Operation *inner,
+                       const Record &record) {
+  auto function = call->getParentOfType<local::FuncOp>();
+  auto saved = protocol::detail::occurrence(record, function.getSymName(),
+                                            protocol::attr(call, "site"));
+  Occurrence result;
+  if (saved) {
+    result.path = saved->path;
+    result.depth = saved->depth;
+  }
+  result.definition = SymbolTable::getSymbolName(inner).str();
+  result.declaration = result.definition;
+  result.path.emplace_back(saved ? saved->originalSite
+                                 : protocol::attr(call, "site").str(),
+                           result.definition);
+  ++result.depth;
+  return result;
+}
+
 // Common trust points are type admission, installed scalar-law facets and the
 // finite ABI. Selection below is never called by the source/candidate reader.
 std::optional<unsigned> argument(Value value, Block &block) {
@@ -153,6 +182,11 @@ class Emitter {
   Location location;
   llvm::StringSet<> names;
   unsigned serial = 0, occurrence = 0;
+  Record &record;
+  std::string functionName;
+  std::optional<Occurrence> admissionOrigin;
+  unsigned admissionOccurrence = 0;
+  bool valid = true;
   std::map<std::pair<std::string, std::vector<std::string>>, std::string>
       bindings;
   std::string site() { return "nested_" + std::to_string(occurrence++); }
@@ -184,7 +218,28 @@ class Emitter {
     if (output)
       state.addTypes(output);
     state.addAttribute("binding", binding(contract, args));
-    state.addAttribute("site", builder.getStringAttr(site()));
+    std::string emittedSite = site();
+    if (admissionOrigin) {
+      admissionOrigin->originalSite =
+          "finite_" + std::to_string(admissionOccurrence++);
+      if (contract == "control.require") {
+        auto encoded = protocol::algorithmSite(admissionOrigin->path,
+                                               admissionOrigin->originalSite,
+                                               record.originBytes);
+        if (!encoded) {
+          diagnostics::emit(mlir::emitError(location), encoded.takeError());
+          valid = false;
+        } else {
+          emittedSite = std::move(*encoded);
+          valid &= record.occurrences
+                       .emplace(protocol::detail::OccurrenceKey{functionName,
+                                                                emittedSite},
+                                *admissionOrigin)
+                       .second;
+        }
+      }
+    }
+    state.addAttribute("site", builder.getStringAttr(emittedSite));
     SmallVector<Attribute> parameters;
     for (const auto &param : params)
       parameters.push_back(builder.getStringAttr(param));
@@ -194,17 +249,24 @@ class Emitter {
   }
 
 public:
-  explicit Emitter(protocol_ir::ProtocolModuleOp unit)
-      : unit(unit), builder(unit.getContext()), location(unit.getLoc()) {
+  Emitter(protocol_ir::ProtocolModuleOp unit, Record &record)
+      : unit(unit), builder(unit.getContext()), location(unit.getLoc()),
+        record(record) {
     for (auto &op : unit.getBody().front())
       if (auto name = SymbolTable::getSymbolName(&op))
         names.insert(name.getValue());
   }
-  void run(const Selection &selection) {
+  LogicalResult run(const Selection &selection) {
     auto c = selection.outer;
     location = c.operation->getLoc();
     occurrence = 0;
     auto name = SymbolTable::getSymbolName(c.operation);
+    functionName = name.str();
+    auto origin =
+        innerOrigin(selection.call, selection.inner.operation, record);
+    if (origin.path.size() > 64 || origin.depth > 64)
+      return diagnostics::emit(selection.call->emitOpError(),
+                               "interactive-call-depth");
     // Insert at the old declaration, then erase it before any symbol lookup.
     // Finite declarations have no SSA results, so callers retain the same name.
     builder.setInsertionPoint(c.operation);
@@ -265,6 +327,9 @@ public:
       // outer indices domain. Native shape rejection is interpreted through
       // these explicit require guards, before calling the bulk primitive.
       llvm::DenseMap<Value, Value> sizes;
+      admissionOrigin = origin;
+      admissionOccurrence = 0;
+      location = selection.inner.operation->getLoc();
       for (auto &op : domain.without_terminator()) {
         Value extent;
         if (isa<data::DomainElementsOp>(op))
@@ -289,6 +354,8 @@ public:
         }
         sizes[op.getResult(0)] = extent;
       }
+      admissionOrigin.reset();
+      location = c.operation->getLoc();
       Value seed = selection.seed.input
                        ? block->getArgument(*selection.seed.input)
                        : emit("field.constant", {}, field, fieldArgs,
@@ -307,12 +374,13 @@ public:
     builder.setInsertionPointAfter(branch);
     local::ReturnOp::create(builder, location, branch->getResults());
     c.operation->erase();
+    return success(valid);
   }
 };
 
 // Independent source reader. It reconstructs the returned scalar term and its
 // input map from the actual callback SSA and actual descriptor constructors.
-// It deliberately does not use analyzeComputation/recognizeReduction/select.
+// It deliberately does not use the computation analysis or selector.
 struct Source {
   finite::Computation outer, inner;
   local::ApplyOp call;
@@ -475,6 +543,12 @@ class CandidateReader {
   bool valid = true;
   uint64_t remaining = 100000;
   Type index, boolean;
+  const Record &input;
+  Record &expected;
+  std::string functionName;
+  std::optional<Occurrence> admissionOrigin;
+  std::optional<Location> admissionLocation;
+  unsigned admissionOccurrence = 0;
   Value kernel(StringRef contract, ValueRange inputs, Type output,
                ArrayRef<std::string> arguments = {},
                ArrayRef<std::string> parameters = {}) {
@@ -511,6 +585,31 @@ class CandidateReader {
     for (auto [attr, value] : zip(params, parameters))
       if (attr != StringAttr::get(operation->getContext(), value))
         valid = false;
+    if (admissionOrigin) {
+      admissionOrigin->originalSite =
+          "finite_" + std::to_string(admissionOccurrence++);
+      if (contract == "control.require") {
+        auto encoded = protocol::algorithmSite(admissionOrigin->path,
+                                               admissionOrigin->originalSite,
+                                               expected.checkOriginBytes);
+        auto measured = protocol::algorithmSite(admissionOrigin->path,
+                                                admissionOrigin->originalSite,
+                                                expected.originBytes);
+        if (!encoded || !measured) {
+          consumeError(encoded.takeError());
+          consumeError(measured.takeError());
+          valid = false;
+        } else {
+          valid &= protocol::attr(operation, "site") == *encoded &&
+                   operation->getLoc() == *admissionLocation &&
+                   expected.occurrences
+                       .emplace(protocol::detail::OccurrenceKey{functionName,
+                                                                *encoded},
+                                *admissionOrigin)
+                       .second;
+        }
+      }
+    }
     bindings.insert(binding);
     return valid && output ? operation->getResult(0) : Value();
   }
@@ -526,10 +625,11 @@ class CandidateReader {
 
 public:
   CandidateReader(SymbolTable &symbols, llvm::DenseSet<Operation *> &bindings,
-                  MLIRContext *context)
+                  MLIRContext *context, const Record &input, Record &expected)
       : symbols(symbols), bindings(bindings),
         index(IntegerType::get(context, 64, IntegerType::Unsigned)),
-        boolean(IntegerType::get(context, 1)) {}
+        boolean(IntegerType::get(context, 1)), input(input),
+        expected(expected) {}
   bool check(Operation *original, local::FuncOp candidate) {
     auto source = readSource(original);
     if (!source || !candidate || !candidate.getBody().hasOneBlock() ||
@@ -537,15 +637,19 @@ public:
       return false;
     Builder builder(candidate.getContext());
     auto name = SymbolTable::getSymbolName(original);
-    NamedAttrList expected;
-    expected.set("sym_name", name);
-    expected.set("function_type", TypeAttr::get(source->outer.signature));
+    functionName = name.str();
+    auto origin = innerOrigin(source->call, source->inner.operation, input);
+    if (origin.path.size() > 64 || origin.depth > 64)
+      return false;
+    NamedAttrList attributes;
+    attributes.set("sym_name", name);
+    attributes.set("function_type", TypeAttr::get(source->outer.signature));
     if (auto visibility = original->getAttr("sym_visibility"))
-      expected.set("sym_visibility", visibility);
-    expected.set("logical_origin",
-                 builder.getArrayAttr({name, builder.getArrayAttr({})}));
+      attributes.set("sym_visibility", visibility);
+    attributes.set("logical_origin",
+                   builder.getArrayAttr({name, builder.getArrayAttr({})}));
     if (candidate->getAttrDictionary() !=
-        expected.getDictionary(builder.getContext()))
+        attributes.getDictionary(builder.getContext()))
       return false;
     auto &entry = candidate.getBody().front();
     if (entry.empty())
@@ -596,6 +700,9 @@ public:
       // Ordered domain admission is a separate obligation from the field law.
       // It stays inside the nonempty branch, even when the inner extent is
       // zero.
+      admissionOrigin = origin;
+      admissionLocation = source->inner.operation->getLoc();
+      admissionOccurrence = 0;
       for (auto &operation : domain.without_terminator()) {
         if (!valid)
           return false;
@@ -623,6 +730,7 @@ public:
         }
         extents[operation.getResult(0)] = extent;
       }
+      admissionOrigin.reset();
       if (!valid)
         return false;
       Value seed = source->seed.input
@@ -646,9 +754,9 @@ public:
     return valid;
   }
 };
-} // namespace
-
-LogicalResult verifyFiniteCollections(ModuleOp source, ModuleOp candidate) {
+LogicalResult checkFiniteCollections(ModuleOp source, ModuleOp candidate,
+                                     const Record &input, Record &expected,
+                                     Record *output = nullptr) {
   auto refuse = [&](StringRef detail) {
     return diagnostics::emit(candidate.emitError(),
                              "nested-contraction-correspondence", detail);
@@ -680,7 +788,8 @@ LogicalResult verifyFiniteCollections(ModuleOp source, ModuleOp candidate) {
             &operation, replacement, OperationEquivalence::IgnoreLocations))
       continue;
     if (!isa<local::FiniteCollectOp>(operation) ||
-        !CandidateReader(symbols, bindings, candidate.getContext())
+        !CandidateReader(symbols, bindings, candidate.getContext(), input,
+                         expected)
              .check(&operation, dyn_cast<local::FuncOp>(replacement)))
       return refuse("collection or unchanged context differs");
   }
@@ -693,11 +802,22 @@ LogicalResult verifyFiniteCollections(ModuleOp source, ModuleOp candidate) {
     } else if (!bindings.contains(&operation))
       return refuse("unexpected definition or unused binding");
   }
+  if (output) {
+    if (expected.occurrences != output->occurrences ||
+        expected.originBytes != output->originBytes ||
+        expected.work != output->work ||
+        expected.retained != output->retained ||
+        expected.finished != output->finished)
+      return refuse("occurrence records or cumulative limits differ");
+    output->checkOriginBytes = expected.checkOriginBytes;
+  }
   return success();
 }
 
-LogicalResult rewriteFiniteCollections(ModuleOp module,
-                                       MathematicalSelectionPolicy policy) {
+LogicalResult
+rewriteFiniteCollectionsImpl(ModuleOp module,
+                             protocol::AlgorithmExpansionState &state,
+                             MathematicalSelectionPolicy policy) {
   if (failed(mlir::verify(module)))
     return failure();
   if (!policy.finiteBulk)
@@ -711,7 +831,9 @@ LogicalResult rewriteFiniteCollections(ModuleOp module,
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
   auto candidateUnit =
       cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
-  Emitter emitter(candidateUnit);
+  const auto &input = StateAccess::get(state);
+  auto output = input;
+  Emitter emitter(candidateUnit, output);
   // Selections borrow only the still-live candidate helper closure. Each outer
   // declaration is replaced immediately; no selection outlives publication.
   SmallVector<Operation *> declarations;
@@ -721,14 +843,56 @@ LogicalResult rewriteFiniteCollections(ModuleOp module,
   bool changed = false;
   for (Operation *declaration : declarations)
     if (auto selection = select(declaration)) {
-      emitter.run(*selection);
+      if (failed(emitter.run(*selection)))
+        return failure();
       changed = true;
     }
   if (!changed)
     return success();
-  if (failed(verifyFiniteCollections(module, *candidate)))
+  auto expected = input;
+  if (failed(
+          checkFiniteCollections(module, *candidate, input, expected, &output)))
     return failure();
   module.getBodyRegion().takeBody(candidate->getBodyRegion());
+  StateAccess::set(state, std::move(output));
   return success();
+}
+} // namespace
+
+LogicalResult verifyFiniteCollections(ModuleOp source, ModuleOp candidate) {
+  Record input, expected;
+  return checkFiniteCollections(source, candidate, input, expected);
+}
+
+LogicalResult verifyFiniteCollections(
+    ModuleOp source, ModuleOp candidate,
+    const protocol::AlgorithmExpansionState &sourceState,
+    const protocol::AlgorithmExpansionState &candidateState) {
+  const auto &input = StateAccess::get(sourceState);
+  const auto &candidateRecord = StateAccess::get(candidateState);
+  if (!input.retained || input.finished || !candidateRecord.retained ||
+      candidateRecord.finished)
+    return diagnostics::emit(candidate.emitError(),
+                             "nested-contraction-correspondence",
+                             "expected retained, unfinished preparation");
+  auto expected = input, output = candidateRecord;
+  return checkFiniteCollections(source, candidate, input, expected, &output);
+}
+
+LogicalResult rewriteFiniteCollections(ModuleOp module,
+                                       protocol::AlgorithmExpansionState &state,
+                                       MathematicalSelectionPolicy policy) {
+  const auto &input = StateAccess::get(state);
+  if (!input.retained || input.finished)
+    return diagnostics::emit(module.emitError(),
+                             "nested-contraction-correspondence",
+                             "expected retained, unfinished preparation");
+  return rewriteFiniteCollectionsImpl(module, state, policy);
+}
+
+LogicalResult rewriteFiniteCollections(ModuleOp module,
+                                       MathematicalSelectionPolicy policy) {
+  protocol::AlgorithmExpansionState state;
+  return rewriteFiniteCollectionsImpl(module, state, policy);
 }
 } // namespace zkc::nested

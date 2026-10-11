@@ -45,11 +45,26 @@ matrix primitive. The selected native outcome interpretation maps those guards
 to the original finite admission rejection (`rejected:require`); a native
 `matrix-shape` backend failure is not substituted for that logical stop.
 
+Each synthesized admission guard retains the inner finite declaration's
+diagnostic location and its ordinary finite realization leaf site (`finite_N`
+in admission emission order). The existing local expansion record associates
+that leaf with the inner declaration and the original nested call path, relative
+to the outer collection. Previously expanded helper paths remain full paths;
+an encoded site is not reinterpreted as an authored leaf. Canonical local site
+encoding, its 128-byte hashing threshold, and cumulative origin budgets are
+shared with ordinary [local expansion](protocols.md#executable-local-calls-and-type-use).
+Final expansion prefixes later caller paths and retains the inner location.
+This is source provenance for diagnostics, not a cryptographic identity or a
+promise to preserve the generated control structure and every executable site.
+
 The preparation service retains an immutable source until an owned candidate
 has been admitted and independently checked. Its checker reads actual domain
 constructors, helper SSA, captures, scalar-law applications, seed and result,
 and actual candidate operands, branch captures and ordered guards. It does not
-consult the selector's recognition result. The checker also preserves every
+consult the selector's recognition result. It reconstructs guard leaf identities,
+locations and occurrence records from the retained source and checks them
+against the candidate, including full paths when names are hashed. The checker
+also preserves every
 surrounding definition and its order, permits only used new primitive bindings,
 and replaces only the outer finite declaration with a same-name Local function.
 Ordinary finite realization consumes this accepted subject as its own source,

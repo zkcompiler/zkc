@@ -124,6 +124,42 @@ int main(int argc, char **argv) {
     require(first == second, "realization differs between runs");
   });
 
+  cases.run("composed helpers preserve multiple and empty result lists", [&] {
+    auto text = edit(fixture, " func.func private @formula", R"mlir(
+ func.func private @pair(%a:!F,%b:!F)->(!F,!F) {
+   %sq = func.call @square(%a) : (!F)->!F
+   func.return %sq,%b : !F,!F
+ }
+ func.func private @observe(%a:!F) {
+   %unused = "algebra.field_add"(%a,%a) : (!F,!F)->!F
+   func.return
+ }
+ func.func private @formula)mlir");
+    text = edit(text, "   %sq = func.call @square(%a) : (!F)->!F\n   %d",
+                "   func.call @observe(%a) : (!F)->()\n"
+                "   %pair:2 = func.call @pair(%a,%b) : (!F,!F)->(!F,!F)\n"
+                "   %d");
+    text = edit(text, "(%sq,%b)", "(%pair#0,%pair#1)");
+    auto before = parseSourceString<ModuleOp>(text, &context);
+    require(bool(before), "composed helper fixture refused");
+    auto after = copy(*before);
+    require(succeeded(mathematical::expandMapRealizations(*after)),
+            "composed helper realization failed");
+    require(succeeded(
+                mathematical::verifyMapRealizationsPreserved(*before, *after)),
+            "independent reader refused composed helpers");
+    auto sub = nth(*after, "mapped", "vector.sub");
+    Value left = sub->getOperand(0);
+    sub->setOperand(0, sub->getOperand(1));
+    sub->setOperand(1, left);
+    require(named("algebra-map-correspondence",
+                  [&] {
+                    return failed(mathematical::verifyMapRealizationsPreserved(
+                        *before, *after));
+                  }),
+            "multiple helper results lost their positions");
+  });
+
   // Most edits reach the map matcher; `code` names an earlier owner that
   // already refuses the candidate during its verification.
   auto mutation = [&](StringRef label, function_ref<void(ModuleOp)> change,
@@ -405,6 +441,25 @@ module { "protocol.module"() ({
   // Each helper is shallow; their composition is not.
   depth("expanded helper calls beyond the Ring depth limit",
         chain(600, "algebra.field_add", false, 2), false);
+  for (bool unused : {false, true})
+    cases.run(unused ? "many maps near the shared helper operation limit"
+                     : "many maps with deep live formulas", [&] {
+      auto text = chain(1023, "algebra.field_add", false);
+      if (unused)
+        text = edit(text, "func.return %v1022", "func.return %v0");
+      std::string declarations;
+      // Live output also faces the 400,000-node Local artifact bound. With
+      // unused source arithmetic, 97 maps charge 99,716 helper operations
+      // while their compact candidates remain inside that separate bound.
+      for (unsigned i = 1; i < (unused ? 97u : 24u); ++i)
+        declarations += " algebra.map_realize @mapped" + std::to_string(i) +
+                        " = @outer [true] : (!V)->!V\n";
+      text = edit(text, " local.func @work", declarations + " local.func @work");
+      auto module = parseSourceString<ModuleOp>(text, &context);
+      require(bool(module), "many-map fixture refused");
+      require(succeeded(mathematical::expandMapRealizations(*module)),
+              "correspondence budget refused a large admitted map family");
+    });
   // Admission charges the root helper before cloning it, operations no
   // result reaches included, and then charges only the callees it expands.
   // One work unit admits the map; every charged operation costs one more than

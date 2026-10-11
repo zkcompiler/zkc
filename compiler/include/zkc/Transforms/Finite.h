@@ -8,6 +8,8 @@ namespace zkc::finite {
 using HelperReader =
     llvm::function_ref<mlir::FailureOr<llvm::SmallVector<mlir::Value>>(
         mlir::Operation *, mlir::ValueRange, mlir::Operation *&)>;
+/// Realize an admitted total computation after preparation assigns its unique
+/// nonempty occurrence site. Refuses a missing site before editing the module.
 mlir::FailureOr<llvm::SmallVector<mlir::Value>>
 realizeExpression(mlir::Operation *, mlir::ValueRange, mlir::OpBuilder &,
                   MathematicalSelectionPolicy policy = {});

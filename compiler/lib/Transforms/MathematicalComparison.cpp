@@ -54,8 +54,11 @@ class Terms {
   struct CountLess {
     bool operator()(const std::pair<Term, APInt> &left,
                     const std::pair<Term, APInt> &right) const {
-      return left.first != right.first ? left.first < right.first
-                                       : left.second.ult(right.second);
+      if (left.first != right.first)
+        return left.first < right.first;
+      if (left.second.getBitWidth() != right.second.getBitWidth())
+        return left.second.getBitWidth() < right.second.getBitWidth();
+      return left.second.ult(right.second);
     }
   };
   std::vector<OperandSet> sets;
@@ -97,7 +100,10 @@ class Terms {
       forms.push_back({kind, value});
     return found->second;
   }
-  Term leaf(Term operand, const APInt &count) {
+  Term leaf(Term operand, APInt count) {
+    // Store only significant words. Small formulas should not pay for the
+    // worst-case multiplicity of a depth-limit doubling DAG at every leaf.
+    count = count.zextOrTrunc(std::max(1u, count.getActiveBits()));
     if (!charge(count.getNumWords()))
       return invalidTerm;
     auto key = std::make_pair(operand, count);
@@ -131,11 +137,12 @@ class Terms {
     auto a = sets[left], b = sets[right];
     Term result;
     if (!a.height && !b.height && a.first == b.first) {
-      if (!charge(a.count.getNumWords()))
+      unsigned width =
+          std::max(a.count.getBitWidth(), b.count.getBitWidth()) + 1;
+      if (!charge((width + 63) / 64))
         return invalidTerm;
-      bool overflow;
-      auto count = a.count.uadd_ov(b.count, overflow);
-      if (overflow) {
+      auto count = a.count.zext(width) + b.count.zext(width);
+      if (count.getActiveBits() > countBits) {
         valid = false;
         return invalidTerm;
       }
@@ -172,7 +179,7 @@ class Terms {
   }
   Term operands(Term value, ring::Kind kind) {
     return forms[value].kind == kind ? forms[value].value
-                                     : leaf(value, APInt(countBits, 1));
+                                     : leaf(value, APInt(1, 1));
   }
 
 public:
@@ -480,7 +487,8 @@ class Comparison {
   std::set<std::tuple<unsigned, unsigned, unsigned>> selectedBounds;
   llvm::DenseMap<Value, Meaning> candidate;
   Value rows;
-  unsigned helperDepth = 0;
+  llvm::DenseMap<Block *, std::map<std::vector<uint64_t>, SmallVector<Meaning>>>
+      helpers;
 
   unsigned identity(Value value) {
     auto [found, inserted] = identities.try_emplace(value, identities.size());
@@ -539,16 +547,28 @@ class Comparison {
             {},
             left.kind == Meaning::Lane ? left.axis : right.axis};
   }
-  Meaning readSource(Block &block, ArrayRef<Meaning> inputs) {
-    if (++helperDepth > 64 || inputs.size() != block.getNumArguments() ||
-        block.empty() || !isa<func::ReturnOp, local::ReturnOp>(block.back()) ||
-        block.back().getNumOperands() != 1 || !block.back().getAttrs().empty())
+  std::optional<SmallVector<Meaning>>
+  readSource(Block &block, ArrayRef<Meaning> inputs, unsigned depth = 0) {
+    if (!terms.charge(inputs.size() + 1) || depth > 64 ||
+        inputs.size() != block.getNumArguments() || block.empty() ||
+        !isa<func::ReturnOp, local::ReturnOp>(block.back()) ||
+        !block.back().getAttrs().empty())
       return {};
+    std::vector<uint64_t> key;
+    for (const Meaning &value : inputs) {
+      key.insert(key.end(),
+                 {uint64_t(value.kind), value.term,
+                  value.container ? identity(value.container) + 1u : 0u,
+                  value.index.varying, value.index.identity, value.axis});
+    }
+    auto &memo = helpers[&block];
+    if (auto found = memo.find(key); found != memo.end())
+      return found->second;
     llvm::DenseMap<Value, Meaning> values;
     for (auto [argument, meaning] : zip(block.getArguments(), inputs))
       values[argument] = meaning;
     for (Operation &op : block.without_terminator()) {
-      if (!terms.charge() || op.getNumResults() != 1 || op.getNumRegions())
+      if (!terms.charge() || op.getNumRegions())
         return {};
       Meaning result;
       // Calls are interpreted from actual retained bodies, with exact operand
@@ -568,8 +588,16 @@ class Comparison {
             return {};
           arguments.push_back(found->second);
         }
-        result = readSource(helper->getRegion(0).front(), arguments);
+        auto returned =
+            readSource(helper->getRegion(0).front(), arguments, depth + 1);
+        if (!returned || returned->size() != op.getNumResults())
+          return {};
+        for (auto [value, meaning] : zip(op.getResults(), *returned))
+          values[value] = meaning;
+        continue;
       } else {
+        if (op.getNumResults() != 1)
+          return {};
         StringRef contract;
         SmallVector<StringRef> parameters;
         if (algebra::isRingOperation(op)) {
@@ -654,8 +682,17 @@ class Comparison {
         return {};
       values[op.getResult(0)] = result;
     }
-    --helperDepth;
-    return values.lookup(block.back().getOperand(0));
+    SmallVector<Meaning> result;
+    for (Value value : block.back().getOperands()) {
+      auto found = values.find(value);
+      if (found == values.end() || found->second.kind == Meaning::Unknown)
+        return {};
+      result.push_back(found->second);
+    }
+    // Cache only fully interpreted bodies, including every unused operation.
+    // Re-find the block: recursive reads can reallocate the outer DenseMap.
+    helpers[&block].emplace(std::move(key), result);
+    return result;
   }
   Value assigned(Value source, const llvm::DenseMap<Value, Value> &mapping) {
     return mapping.lookup(source);
@@ -678,7 +715,10 @@ class Comparison {
       return true;
     }
     if (isa<data::DomainProductOp>(op)) {
-      // The supported contraction fragment has one coordinate per factor.
+      // Only a root product gives its factors independent coordinates. Under
+      // a zip its flattened position is aligned with the other operands.
+      if (depth != 0)
+        return false;
       for (Value operand : op->getOperands()) {
         unsigned selected = dimensions.size();
         dimensions.emplace_back();
@@ -790,7 +830,9 @@ class Comparison {
             selector = op.getOperand(2);
       bool row = contract == "matrix.row_dot";
       if (!extentIs(matrix, row ? 1 : 0, 0) || !candidate.contains(matrix) ||
-          !candidate.contains(selector))
+          !candidate.contains(selector) ||
+          !selectedBounds.count(std::make_tuple(identity(matrix), row ? 0u : 1u,
+                                                identity(selector))))
         return {};
       Index fixed{false, identity(selector)}, varying{true, 0};
       auto cell = access(matrix, row ? ArrayRef<Index>{fixed, varying}
@@ -814,26 +856,29 @@ class Comparison {
   }
   FailureOr<Value> consume(Meaning expected, Type resultType,
                            Operation *&cursor,
-                           llvm::DenseSet<Operation *> &bindings) {
+                           llvm::DenseSet<Operation *> &bindings,
+                           Operation *end) {
     if (expected.term == invalidTerm || expected.kind == Meaning::Unknown)
       return failure();
     Value result;
+    // A closed body names its output. Read and admit all its instructions,
+    // but compare only that output; normalizing every intermediate prefix is
+    // unnecessary and can exhaust the shared budget on otherwise valid maps.
+    auto output = [&](Value value) {
+      return !end ||
+             (end->getNumOperands() == 1 && end->getOperand(0) == value);
+    };
     // An identity formula need not emit any payload instruction.
     for (auto &entry : candidate) {
       Meaning value = entry.second;
       if (expected.kind == Meaning::Lane && vectorType(entry.first.getType()))
         value = lane(entry.first, 0);
-      if (entry.first.getType() == resultType && value.kind == expected.kind &&
-          terms.equal(value.term, expected.term))
+      if (output(entry.first) && entry.first.getType() == resultType &&
+          value.kind == expected.kind && terms.equal(value.term, expected.term))
         result = entry.first;
     }
     Operation *at = cursor;
-    while (at) {
-      // A matching prefix defines the payload boundary. Only genuinely unused
-      // pure instructions may follow it; used instructions belong to the
-      // caller's suffix and must retain their original correspondence.
-      if (result && !at->use_empty())
-        break;
+    while (at && at != end && (end || !result)) {
       auto reference = at->getAttrOfType<FlatSymbolRefAttr>("binding");
       auto declaration =
           reference
@@ -852,12 +897,13 @@ class Comparison {
         return failure();
       candidate[at->getResult(0)] = value;
       usedBindings.insert(bound->binding);
-      if (at->getResult(0).getType() == resultType &&
+      if (output(at->getResult(0)) &&
+          at->getResult(0).getType() == resultType &&
           value.kind == expected.kind && terms.equal(value.term, expected.term))
         result = at->getResult(0);
       at = at->getNextNode();
     }
-    if (!result || !terms.admit())
+    if (!result || (end && at != end) || !terms.admit())
       return failure();
     cursor = at;
     bindings.insert(usedBindings.begin(), usedBindings.end());
@@ -869,7 +915,7 @@ public:
       : terms(remaining), symbols(symbols), rows(rows) {}
   FailureOr<Value> map(Block &source, ArrayRef<bool> rowwise, ValueRange inputs,
                        Operation *&cursor,
-                       llvm::DenseSet<Operation *> &bindings,
+                       llvm::DenseSet<Operation *> &bindings, Operation *end,
                        bool sum = false) {
     if (!rows || !rows.getType().isUnsignedInteger(64) ||
         rowwise.size() != inputs.size() ||
@@ -895,7 +941,10 @@ public:
     }
     if (dimensions[0].equal.empty())
       return failure();
-    Meaning expected = readSource(source, arguments);
+    auto returned = readSource(source, arguments);
+    if (!returned || returned->size() != 1)
+      return failure();
+    Meaning expected = returned->front();
     if (expected.kind != Meaning::Scalar && expected.kind != Meaning::Lane)
       return failure();
     expected.kind = Meaning::Lane;
@@ -905,15 +954,16 @@ public:
     if (sum) {
       expected = {Meaning::Scalar,
                   aggregate(field.getDomain(), ring::Kind::Add, expected.term)};
-      return consume(expected, field, cursor, bindings);
+      return consume(expected, field, cursor, bindings, end);
     }
     return consume(expected,
                    RankedTensorType::get({ShapedType::kDynamic}, field), cursor,
-                   bindings);
+                   bindings, end);
   }
   FailureOr<Value> finite(const finite::Computation &source, ValueRange inputs,
                           Operation *&cursor,
-                          llvm::DenseSet<Operation *> &bindings) {
+                          llvm::DenseSet<Operation *> &bindings,
+                          Operation *end) {
     if (source.predicate || !source.helper ||
         source.signature.getNumResults() != 1 ||
         inputs.size() != source.signature.getNumInputs() ||
@@ -953,8 +1003,10 @@ public:
       arguments.push_back(input(value));
     for (Value value : inputs.drop_front(source.arguments + source.states))
       arguments.push_back(input(value));
-    Meaning expected =
-        readSource(source.helper->getRegion(0).front(), arguments);
+    auto returned = readSource(source.helper->getRegion(0).front(), arguments);
+    if (!returned || returned->size() != 1)
+      return failure();
+    Meaning expected = returned->front();
     if (expected.kind != Meaning::Scalar && expected.kind != Meaning::Lane)
       return failure();
     if (source.collect) {
@@ -971,7 +1023,7 @@ public:
           Meaning::Scalar,
           terms.binary(combine, scalar(inputs[source.arguments]).term, folded)};
     }
-    return consume(expected, resultType, cursor, bindings);
+    return consume(expected, resultType, cursor, bindings, end);
   }
 };
 // The one supported group rule is the installed module sum of scalar actions.
@@ -1187,7 +1239,8 @@ public:
   }
   FailureOr<Value> check(const finite::Computation &computation,
                          ValueRange inputs, Operation *&cursor,
-                         llvm::DenseSet<Operation *> &bindings) {
+                         llvm::DenseSet<Operation *> &bindings,
+                         Operation *end) {
     if (computation.collect || computation.predicate ||
         computation.states != 1 || computation.signature.getNumResults() != 1 ||
         !isa<algebra::GroupType>(computation.signature.getResult(0)) ||
@@ -1273,7 +1326,7 @@ public:
         output = at->getResult(0);
       at = at->getNextNode();
     }
-    if (!output || !fieldTerms.admit())
+    if (!output || (end && at != end) || !fieldTerms.admit())
       return failure();
     cursor = at;
     bindings.insert(used.begin(), used.end());
@@ -1286,28 +1339,40 @@ FailureOr<Value> compareLaneFormula(Block &source, ArrayRef<bool> rowwise,
                                     ValueRange inputs, Value rows,
                                     Operation *&cursor, SymbolTable &symbols,
                                     llvm::DenseSet<Operation *> &bindings,
-                                    uint64_t &remaining) {
+                                    uint64_t &remaining, Operation *end) {
   return Comparison(symbols, rows, remaining)
-      .map(source, rowwise, inputs, cursor, bindings);
+      .map(source, rowwise, inputs, cursor, bindings, end);
 }
 FailureOr<Value> compareLaneSum(Block &source, ArrayRef<bool> rowwise,
                                 ValueRange inputs, Value rows,
                                 Operation *&cursor, SymbolTable &symbols,
                                 llvm::DenseSet<Operation *> &bindings,
-                                uint64_t &remaining) {
+                                uint64_t &remaining, Operation *end) {
   return Comparison(symbols, rows, remaining)
-      .map(source, rowwise, inputs, cursor, bindings, true);
+      .map(source, rowwise, inputs, cursor, bindings, end, true);
 }
 FailureOr<Value> compareFinitePayload(const finite::Computation &source,
                                       ValueRange inputs, Value rows,
                                       Operation *&cursor, SymbolTable &symbols,
                                       llvm::DenseSet<Operation *> &bindings,
-                                      uint64_t &remaining) {
+                                      uint64_t &remaining, Operation *end) {
   if (source.signature.getNumResults() == 1 &&
       isa<algebra::GroupType>(source.signature.getResult(0)))
     return ModuleComparison(symbols, remaining)
-        .check(source, inputs, cursor, bindings);
+        .check(source, inputs, cursor, bindings, end);
   return Comparison(symbols, rows, remaining)
-      .finite(source, inputs, cursor, bindings);
+      .finite(source, inputs, cursor, bindings, end);
+}
+bool hasFinitePayloadContract(Operation *cursor, SymbolTable &symbols) {
+  if (!cursor)
+    return false;
+  auto reference = cursor->getAttrOfType<FlatSymbolRefAttr>("binding");
+  auto binding =
+      reference
+          ? symbols.lookup<local::OperationBindingOp>(reference.getValue())
+          : local::OperationBindingOp();
+  return binding && (candidateContract(binding.getContract()) ||
+                     binding.getContract() == "curve.msm" ||
+                     binding.getContract() == "curve.add");
 }
 } // namespace zkc::mathematical

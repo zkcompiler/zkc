@@ -822,7 +822,8 @@ rewriteLocalAlgorithms(ModuleOp source, MathematicalSelectionPolicy policy) {
       (failed(protocol::expandAlgorithms(
            *candidate, protocol::AlgorithmExpansionPhase::RetainMaps,
            expansion)) ||
-       failed(nested::rewriteFiniteCollections(*candidate, policy)) ||
+       failed(
+           nested::rewriteFiniteCollections(*candidate, expansion, policy)) ||
        failed(finite::realizeLocals(*candidate, policy)) ||
        (policy.vectorReductionFusion &&
         failed(mathematical::fuseVectorReductions(*candidate, expansion)))))

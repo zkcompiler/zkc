@@ -1,3 +1,4 @@
+#include "../lib/Transforms/AlgorithmSupport.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
@@ -9,6 +10,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/NestedContractions.h"
 #include <fstream>
@@ -18,6 +20,9 @@ using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
 namespace {
+using State = protocol::AlgorithmExpansionState;
+using Access = protocol::detail::AlgorithmStateAccess;
+
 std::string fixture() {
   std::ifstream input(std::string(ZKC_FINITE_FIXTURES) + "/nested-matrix.mlir");
   require(bool(input), "missing nested matrix fixture");
@@ -57,6 +62,17 @@ local::FuncOp outer(ModuleOp module) {
   auto function = dyn_cast_or_null<local::FuncOp>(lookup(module, "all_rows"));
   require(bool(function), "collection was not replaced");
   return function;
+}
+void refusesLifecycle(MLIRContext &context,
+                      llvm::function_ref<LogicalResult()> action) {
+  bool named = false;
+  ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {
+    for (const auto &refusal : diagnostics::refusals(diagnostic))
+      named |= refusal.code == "nested-contraction-correspondence";
+    return success();
+  });
+  require(failed(action()), "invalid nested preparation state accepted");
+  require(named, "missing nested lifecycle refusal identifier");
 }
 void checkStructure(ModuleOp source, ModuleOp candidate, bool columns) {
   auto function = outer(candidate);
@@ -263,6 +279,14 @@ int main() {
     outer(candidate).walk([&](local::RequireOp op) { last = op; });
     last->erase();
   });
+  mutation("changed inner guard identity", [&](ModuleOp candidate) {
+    kernel(outer(candidate), "control.require")
+        ->setAttr("site", StringAttr::get(&context, "changed_guard"));
+  });
+  mutation("changed inner guard location", [&](ModuleOp candidate) {
+    kernel(outer(candidate), "control.require")
+        ->setLoc(FileLineColLoc::get(&context, "wrong-fold.zkc", 9, 2));
+  });
   mutation("inner admission moved before empty outer branch",
            [&](ModuleOp candidate) {
              auto *op = kernel(outer(candidate), "matrix.mul_vector");
@@ -369,5 +393,219 @@ int main() {
                 OperationEquivalence::IgnoreLocations),
             "unsupported callback was replaced");
   });
+  auto retained = clone(*source);
+  State initialState, retainedState;
+  require(succeeded(protocol::expandAlgorithms(
+              *retained, protocol::AlgorithmExpansionPhase::RetainMaps,
+              retainedState)),
+          "lifecycle source retention failed");
+  auto finished = clone(*retained);
+  State finishedState = retainedState;
+  require(succeeded(finite::realizeLocals(*finished)) &&
+              succeeded(protocol::expandAlgorithms(
+                  *finished, protocol::AlgorithmExpansionPhase::Finish,
+                  finishedState)),
+          "lifecycle source completion failed");
+  for (bool afterFinish : {false, true}) {
+    StringRef lifecycle = afterFinish ? "finished" : "missing retain";
+    const State &invalidState = afterFinish ? finishedState : initialState;
+    for (bool enabled : {false, true})
+      cases.run(
+          llvm::Twine("rewrite refuses ") + lifecycle +
+              (enabled ? " with enabled policy" : " with disabled policy"),
+          [&] {
+            auto original = clone(afterFinish ? *finished : *source);
+            auto candidate = clone(*original);
+            State state = invalidState;
+            refusesLifecycle(context, [&] {
+              return nested::rewriteFiniteCollections(*candidate, state,
+                                                      {enabled, false});
+            });
+            require(OperationEquivalence::isEquivalentTo(
+                        original->getOperation(), candidate->getOperation(),
+                        OperationEquivalence::Flags{}) &&
+                        &Access::get(state) == &Access::get(invalidState),
+                    "invalid lifecycle rewrite changed IR or state");
+          });
+    for (StringRef invalid : {"source", "candidate", "both"})
+      cases.run(llvm::Twine("verifier refuses ") + lifecycle + " in " + invalid,
+                [&] {
+                  auto original = clone(*retained);
+                  auto candidate = clone(*retained);
+                  const State &beforeSourceState =
+                      invalid == "candidate" ? retainedState : invalidState;
+                  const State &beforeCandidateState =
+                      invalid == "source" ? retainedState : invalidState;
+                  State sourceState = beforeSourceState;
+                  State candidateState = beforeCandidateState;
+                  refusesLifecycle(context, [&] {
+                    return nested::verifyFiniteCollections(
+                        *original, *candidate, sourceState, candidateState);
+                  });
+                  for (ModuleOp module : {*original, *candidate})
+                    require(OperationEquivalence::isEquivalentTo(
+                                retained->getOperation(), module.getOperation(),
+                                OperationEquivalence::Flags{}),
+                            "invalid lifecycle verifier changed IR");
+                  require(&Access::get(sourceState) ==
+                                  &Access::get(beforeSourceState) &&
+                              &Access::get(candidateState) ==
+                                  &Access::get(beforeCandidateState),
+                          "invalid lifecycle verifier changed expansion state");
+                });
+  }
+  cases.run("disabled staged family preserves retained state", [&] {
+    auto candidate = clone(*retained);
+    State state = retainedState;
+    require(succeeded(nested::rewriteFiniteCollections(*candidate, state,
+                                                       {false, false})) &&
+                succeeded(nested::verifyFiniteCollections(
+                    *retained, *candidate, retainedState, state)),
+            "disabled staged rewrite or identity correspondence failed");
+    require(OperationEquivalence::isEquivalentTo(
+                retained->getOperation(), candidate->getOperation(),
+                OperationEquivalence::Flags{}) &&
+                &Access::get(state) == &Access::get(retainedState),
+            "disabled staged rewrite changed IR or state");
+  });
+  cases.run("nested origin budget refusal is transactional", [&] {
+    auto original = clone(*retained);
+    State state = retainedState;
+    auto record = Access::get(state);
+    record.originBytes = 0;
+    Access::set(state, record);
+    const auto *beforeRecord = &Access::get(state);
+    auto candidate = clone(*original);
+    bool named = false;
+    ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {
+      for (const auto &refusal : diagnostics::refusals(diagnostic))
+        named |= refusal.code == "algorithm-origin-limit";
+      return success();
+    });
+    require(failed(nested::rewriteFiniteCollections(*candidate, state)) &&
+                named,
+            "nested guard naming did not honor the cumulative origin limit");
+    require(OperationEquivalence::isEquivalentTo(
+                original->getOperation(), candidate->getOperation(),
+                OperationEquivalence::Flags{}) &&
+                &Access::get(state) == beforeRecord,
+            "failed nested rewrite published candidate IR or origins");
+  });
+  for (bool hashed : {false, true})
+    cases.run(
+        hashed ? "hashed nested guard provenance through Finish"
+               : "nested guard provenance through Finish",
+        [&] {
+          auto original = clone(*source);
+          auto innerLocation =
+              FileLineColLoc::get(&context, "inner-fold.zkc", 17, 3);
+          lookup(*original, "inner")->setLoc(innerLocation);
+          lookup(*original, "all_rows")
+              ->setLoc(FileLineColLoc::get(&context, "outer-fold.zkc", 41, 5));
+          std::string innerSite = hashed ? std::string(120, 'i') : "inner";
+          auto body = cast<local::FuncOp>(lookup(*original, "body"));
+          body.getBody().front().front().setAttr(
+              "site", StringAttr::get(&context, innerSite));
+          State beforeState;
+          require(succeeded(protocol::expandAlgorithms(
+                      *original, protocol::AlgorithmExpansionPhase::RetainMaps,
+                      beforeState)),
+                  "retained nested source failed");
+          auto candidate = clone(*original);
+          State state = beforeState;
+          require(
+              succeeded(nested::rewriteFiniteCollections(*candidate, state)),
+              "nested provenance rewrite failed");
+          require(succeeded(nested::verifyFiniteCollections(
+                      *original, *candidate, beforeState, state)),
+                  "nested provenance correspondence failed");
+
+          // Compare leaves and locations against ordinary realization of the
+          // actual retained inner declaration, independently of the nested
+          // emitter.
+          auto ordinary = clone(*original);
+          require(succeeded(finite::realizeLocals(*ordinary, {false, false})),
+                  "ordered finite origin reference failed");
+          SmallVector<Operation *> referenceGuards, guards;
+          lookup(*ordinary, "inner")->walk([&](local::RequireOp op) {
+            referenceGuards.push_back(op);
+          });
+          outer(*candidate).walk([&](local::RequireOp op) {
+            guards.push_back(op);
+          });
+          require(guards.size() == 3 && guards.size() == referenceGuards.size(),
+                  "unexpected inner guard inventory");
+          auto record = Access::get(state);
+          for (auto [guard, reference] : llvm::zip(guards, referenceGuards)) {
+            auto site = protocol::attr(guard, "site");
+            auto origin =
+                protocol::detail::occurrence(record, "all_rows", site);
+            require(origin && origin->definition == "inner" &&
+                        origin->declaration == "inner" &&
+                        origin->originalSite ==
+                            protocol::attr(reference, "site") &&
+                        origin->path ==
+                            protocol::Assignments{{innerSite, "inner"}} &&
+                        guard->getLoc() == reference->getLoc() &&
+                        guard->getLoc() == innerLocation,
+                    "nested guard lost the actual inner admission origin");
+            require(site.starts_with("lc_h_") == hashed,
+                    "unexpected guard name encoding");
+          }
+          for (StringRef mutation : {"leaf", "path", "definition", "missing"}) {
+            auto changed = record;
+            auto key = protocol::detail::OccurrenceKey{
+                "all_rows", protocol::attr(guards.front(), "site").str()};
+            if (mutation == "missing")
+              changed.occurrences.erase(key);
+            else {
+              auto &origin = changed.occurrences.at(key);
+              if (mutation == "leaf")
+                origin.originalSite = "finite_999";
+              else if (mutation == "path")
+                origin.path.front().first = "wrong_call";
+              else
+                origin.definition = "all_rows";
+            }
+            State changedState;
+            Access::set(changedState, std::move(changed));
+            require(failed(nested::verifyFiniteCollections(
+                        *original, *candidate, beforeState, changedState)),
+                    "changed nested guard record accepted: " + mutation);
+          }
+          require(succeeded(finite::realizeLocals(*candidate)),
+                  "remaining finite realization failed");
+          auto beforeFinish = clone(*candidate);
+          State finishInput = state;
+          std::vector<protocol::AlgorithmOrigin> origins;
+          require(succeeded(protocol::expandAlgorithms(
+                      *candidate, protocol::AlgorithmExpansionPhase::Finish,
+                      state, &origins)),
+                  "Finish lost nested guard records");
+          auto *workGuard =
+              kernel(lookup(*candidate, "work"), "control.require");
+          require(
+              workGuard->getLoc() == innerLocation &&
+                  llvm::any_of(origins,
+                               [&](const auto &origin) {
+                                 return origin.function == "work" &&
+                                        origin.site ==
+                                            protocol::attr(workGuard, "site") &&
+                                        origin.definition == "inner" &&
+                                        origin.originalSite == "finite_2" &&
+                                        origin.path ==
+                                            protocol::Assignments{
+                                                {"collect", "all_rows"},
+                                                {innerSite, "inner"}};
+                               }),
+              "Finish replaced the original guard path with an encoded leaf");
+          workGuard->setAttr("site",
+                             StringAttr::get(&context, "changed_finish"));
+          require(failed(protocol::verifyStagedAlgorithmExpansionPreserved(
+                      *beforeFinish, *candidate,
+                      protocol::AlgorithmExpansionPhase::Finish, finishInput,
+                      state)),
+                  "Finish accepted a changed nested guard site");
+        });
   return cases.result();
 }

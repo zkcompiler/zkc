@@ -6,13 +6,10 @@ namespace zkc::mathematical {
 ComputationSelection selectComputation(finite::Computation computation,
                                        MathematicalSelectionPolicy policy) {
   ComputationSelection selection;
-  if (!policy.finiteBulk)
-    return selection;
   selection.view = finite::analyzeComputation(computation);
-  if (!selection.view)
+  if (!selection.view || !policy.finiteBulk)
     return selection;
-  selection.bilinear = finite::recognizeBilinear(computation);
-  if (selection.bilinear)
+  if (selection.view->bilinear)
     selection.kind = RealizationKind::Bilinear;
   else if (selection.view->reduction)
     selection.kind = RealizationKind::Reduction;
@@ -28,11 +25,11 @@ std::optional<finite::Elementwise> selectLaneFormula(Block &formula,
   Type field = formula.back().getOperand(0).getType();
   if (!isa<algebra::FieldType>(field))
     return std::nullopt;
-  llvm::DenseMap<Value, finite::FormulaMode> modes;
+  SmallVector<Value> lanes;
   for (auto [i, argument] : enumerate(formula.getArguments()))
-    modes[argument] =
-        rowwise[i] ? finite::FormulaMode::Rows : finite::FormulaMode::Scalar;
-  return finite::recognizeFormula(formula, field, std::move(modes));
+    if (rowwise[i])
+      lanes.push_back(argument);
+  return finite::analyzeLaneFormula(formula, field, lanes);
 }
 std::optional<std::pair<unsigned, unsigned>>
 selectMapProduct(Block &formula, ArrayRef<bool> rowwise) {

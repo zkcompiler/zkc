@@ -5,7 +5,6 @@
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
-#include <functional>
 
 using namespace mlir;
 using namespace llvm;
@@ -117,28 +116,7 @@ std::optional<std::string> fieldConstant(Operation *op) {
       .getValue()
       .str();
 }
-void domainLeaves(Value descriptor, SmallVectorImpl<Operation *> &out) {
-  SmallVector<Value> pending{descriptor};
-  while (!pending.empty()) {
-    auto *op = pending.pop_back_val().getDefiningOp();
-    if (isa_and_nonnull<data::DomainZipOp>(op))
-      for (Value value : llvm::reverse(op->getOperands()))
-        pending.push_back(value);
-    else
-      out.push_back(op);
-  }
-}
 namespace {
-Block *helperBody(Computation c) {
-  if (!c.helper || c.helper->getNumRegions() != 1 ||
-      !c.helper->getRegion(0).hasOneBlock())
-    return nullptr;
-  auto &body = c.helper->getRegion(0).front();
-  if (body.empty() || !isa<func::ReturnOp, local::ReturnOp>(body.back()) ||
-      body.back().getNumOperands() != 1)
-    return nullptr;
-  return &body;
-}
 Value domainResult(Computation c) {
   return c.domain.getBody().front().back().getOperand(0);
 }
@@ -153,86 +131,74 @@ std::optional<unsigned> domainInput(Computation c, Value value) {
     return std::nullopt;
   return arg.getArgNumber();
 }
-std::optional<unsigned> helperInput(Computation c, Value value) {
-  auto arg = dyn_cast<BlockArgument>(value);
-  auto *body = helperBody(c);
-  unsigned base = c.states + itemCount(c);
-  if (!arg || arg.getOwner() != body || arg.getArgNumber() < base)
-    return std::nullopt;
-  unsigned input = arg.getArgNumber() - base;
-  input += input < c.arguments ? 0 : c.states;
-  return input < c.signature.getNumInputs() ? std::optional<unsigned>(input)
-                                            : std::nullopt;
-}
-Value helperArgument(Computation c, unsigned input) {
-  auto *body = helperBody(c);
-  unsigned position = c.states + itemCount(c) + input;
-  if (input >= c.arguments + c.states)
-    position -= c.states;
-  return body && position < body->getNumArguments()
-             ? body->getArgument(position)
-             : Value();
-}
-std::optional<unsigned> itemArgument(Computation c, Value value) {
-  auto arg = dyn_cast<BlockArgument>(value);
-  if (!arg || arg.getOwner() != helperBody(c) ||
-      arg.getArgNumber() < c.states ||
-      arg.getArgNumber() >= c.states + itemCount(c))
-    return std::nullopt;
-  return arg.getArgNumber() - c.states;
-}
 
-// Neutral field expressions are read directly from SSA. This bounded walk
-// does not manufacture a normalized expression graph or discard the original
-// instruction inventory (checked separately below).
-Value transparent(Value value) {
-  for (unsigned remaining = 64; remaining; --remaining) {
-    auto *op = value.getDefiningOp();
-    auto *facet = semantics(op);
-    if (!facet || op->getNumOperands() != 2 ||
-        facet->law.algebra != protocol::ComputationAlgebra::FieldRing)
-      break;
-    auto left = fieldConstant(op->getOperand(0).getDefiningOp());
-    auto right = fieldConstant(op->getOperand(1).getDefiningOp());
-    using I = MathematicalIdentity;
-    if ((facet->identity == I::FieldAdd ||
-         facet->identity == I::FieldSubtract) &&
-        right == "0")
-      value = op->getOperand(0);
-    else if (facet->identity == I::FieldAdd && left == "0")
-      value = op->getOperand(1);
-    else if (facet->identity == I::FieldMultiply && right == "1")
-      value = op->getOperand(0);
-    else if (facet->identity == I::FieldMultiply && left == "1")
-      value = op->getOperand(1);
-    else
-      break;
+// Admit each payload instruction once, including dead work. The temporary
+// inventory is shared by the concrete equations, never exported as an AST.
+struct PayloadAnalysis {
+  ArrayRef<Operation *> operations;
+  llvm::DenseMap<Operation *, const protocol::ComputationContract *> contracts;
+  bool supported = true;
+
+  PayloadAnalysis(ArrayRef<Operation *> operations, ValueRange results,
+                  bool ordered)
+      : operations(operations) {
+    llvm::DenseSet<Value> live;
+    live.insert(results.begin(), results.end());
+    for (Operation *op : llvm::reverse(operations)) {
+      auto *facet = semantics(op);
+      contracts[op] = facet;
+      if (!facet) {
+        supported = false;
+        continue;
+      }
+      bool used = live.contains(op->getResult(0));
+      if ((ordered && !used) || (!facet->access && !facet->law.total))
+        supported = false;
+      if (used)
+        live.insert(op->getOperands().begin(), op->getOperands().end());
+    }
   }
-  return value;
-}
-struct Combine {
-  Operation *operation;
-  Value term;
-  const protocol::ComputationContract *facet;
+  const protocol::ComputationContract *contract(Value value) const {
+    return contracts.lookup(value.getDefiningOp());
+  }
+  std::optional<StringRef> constant(Value value) const {
+    auto *facet = contract(value);
+    if (!facet || facet->identity != MathematicalIdentity::FieldConstant)
+      return std::nullopt;
+    auto *op = value.getDefiningOp();
+    if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op))
+      return constant.getValue();
+    return cast<StringAttr>(op->getAttrOfType<ArrayAttr>("parameters")[0])
+        .getValue();
+  }
+  // Neutral expressions are followed directly in the admitted SSA. No
+  // normalized graph is manufactured and the inventory remains intact.
+  Value transparent(Value value) const {
+    for (unsigned remaining = 64; remaining; --remaining) {
+      auto *op = value.getDefiningOp();
+      auto *facet = contract(value);
+      if (!facet || op->getNumOperands() != 2 ||
+          facet->law.algebra != protocol::ComputationAlgebra::FieldRing)
+        break;
+      auto left = constant(op->getOperand(0));
+      auto right = constant(op->getOperand(1));
+      using I = MathematicalIdentity;
+      if ((facet->identity == I::FieldAdd ||
+           facet->identity == I::FieldSubtract) &&
+          right == "0")
+        value = op->getOperand(0);
+      else if (facet->identity == I::FieldAdd && left == "0")
+        value = op->getOperand(1);
+      else if (facet->identity == I::FieldMultiply && right == "1")
+        value = op->getOperand(0);
+      else if (facet->identity == I::FieldMultiply && left == "1")
+        value = op->getOperand(1);
+      else
+        break;
+    }
+    return value;
+  }
 };
-std::optional<Combine> combine(Computation c) {
-  auto *body = helperBody(c);
-  if (!body || c.collect || c.states != 1 || c.predicate)
-    return std::nullopt;
-  auto *op = transparent(body->back().getOperand(0)).getDefiningOp();
-  auto *facet = semantics(op);
-  if (!facet || !facet->reduction || !facet->law.associative ||
-      op->getNumOperands() != 2)
-    return std::nullopt;
-  Value accumulator = body->getArgument(0);
-  Value left = transparent(op->getOperand(0));
-  Value right = transparent(op->getOperand(1));
-  if (left == accumulator && right != accumulator)
-    return Combine{op, right, facet};
-  if (facet->law.commutative && right == accumulator && left != accumulator)
-    return Combine{op, left, facet};
-  return std::nullopt;
-}
 unsigned extentAxis(Operation *factor) {
   if (auto indices = dyn_cast<data::DomainIndicesOp>(factor))
     return indices.getAxis();
@@ -243,153 +209,222 @@ bool hasExtent(Operation *factor) {
                          data::DomainMatrixRowOp, data::DomainMatrixColumnOp>(
       factor);
 }
-// The caller passes only a flat zip. All its factors are admitted with equal
-// cardinality before traversal; this grants extent equality, not value
-// identity.
-bool equalIterationExtent(Computation c, ArrayRef<Operation *> factors,
-                          unsigned input, unsigned axis) {
-  for (auto *factor : factors) {
-    if (!hasExtent(factor))
-      continue;
-    auto domain = domainInput(c, factor->getOperand(0));
-    if (!domain)
-      continue;
-    auto factorAxis = extentAxis(factor);
-    if ((*domain == input && factorAxis == axis) ||
-        provesEqualExtent(helperArgument(c, *domain), factorAxis,
-                          helperArgument(c, input), axis))
-      return true;
-    if (c.total &&
-        provesEqualExtent(c.operation->getOperand(*domain), factorAxis,
-                          c.operation->getOperand(input), axis))
-      return true;
+struct ComputationFacts {
+  ComputationView &view;
+  PayloadAnalysis payload;
+  SmallVector<Value> inputs;
+  llvm::DenseMap<Value, unsigned> inputPositions, itemPositions,
+      accessPositions;
+  bool aligned, extentIteration, completeAccesses = true;
+
+  ComputationFacts(ComputationView &view, bool aligned)
+      : view(view), payload(view.payload, view.results,
+                            !isa<func::FuncOp>(view.computation.helper)),
+        inputs(view.computation.signature.getNumInputs()), aligned(aligned),
+        extentIteration(
+            aligned && llvm::all_of(view.items, [&](const auto &item) {
+              return hasExtent(view.iteration[item.iteration].operation);
+            })) {
+    for (const auto &capture : view.captures) {
+      inputs[capture.input] = capture.formal;
+      inputPositions[capture.formal] = capture.input;
+    }
+    for (auto [i, item] : enumerate(view.items))
+      itemPositions[item.formal] = i;
+    for (const auto &item : view.items)
+      if (auto access = readAccess(item.formal))
+        addAccess(*access);
+    for (Operation *op : view.payload) {
+      auto *facet = payload.contracts.lookup(op);
+      if (!facet || !facet->access)
+        continue;
+      if (auto access = readAccess(op->getResult(0)))
+        addAccess(*access);
+      else
+        completeAccesses = false;
+    }
   }
-  return false;
-}
-std::optional<Access> access(Computation c, ArrayRef<Operation *> factors,
-                             Value value) {
-  value = transparent(value);
-  if (auto item = itemArgument(c, value)) {
-    if (*item >= factors.size())
+  Operation *factor(unsigned item) const {
+    return view.iteration[view.items[item].iteration].operation;
+  }
+  std::optional<unsigned> input(Value value) const {
+    auto found = inputPositions.find(value);
+    return found == inputPositions.end()
+               ? std::nullopt
+               : std::optional<unsigned>(found->second);
+  }
+  std::optional<unsigned> item(Value value) const {
+    auto found = itemPositions.find(value);
+    return found == itemPositions.end()
+               ? std::nullopt
+               : std::optional<unsigned>(found->second);
+  }
+  const Access *access(Value value) const {
+    auto found = accessPositions.find(payload.transparent(value));
+    return found == accessPositions.end() ? nullptr
+                                          : &view.accesses[found->second];
+  }
+
+private:
+  void addAccess(const Access &access) {
+    accessPositions[access.value] = view.accesses.size();
+    view.accesses.push_back(access);
+  }
+  // A flat zip admits equal cardinalities before traversal. Only helper
+  // premises and source-domain identity are shared with the independent reader;
+  // facts known solely on a total operation's actual operands are insufficient.
+  bool equalIterationExtent(unsigned input, unsigned axis) const {
+    for (const auto &item : view.items) {
+      auto *factor = view.iteration[item.iteration].operation;
+      if (!hasExtent(factor))
+        continue;
+      auto domain = domainInput(view.computation, factor->getOperand(0));
+      if (!domain)
+        continue;
+      auto factorAxis = extentAxis(factor);
+      if ((*domain == input && factorAxis == axis) ||
+          provesEqualExtent(inputs[*domain], factorAxis, inputs[input], axis))
+        return true;
+    }
+    return false;
+  }
+  std::optional<Access> readAccess(Value value) const {
+    auto c = view.computation;
+    if (auto position = item(value)) {
+      auto *leaf = factor(*position);
+      if (!isa<data::DomainElementsOp, data::DomainMatrixRowOp,
+               data::DomainMatrixColumnOp>(leaf))
+        return std::nullopt;
+      auto input = domainInput(c, leaf->getOperand(0));
+      if (!input)
+        return std::nullopt;
+      Access result{AccessKind::Element, *input, *position,
+                    std::nullopt,        value,  leaf,
+                    std::nullopt};
+      if (isa<data::DomainMatrixRowOp, data::DomainMatrixColumnOp>(leaf)) {
+        result.kind = isa<data::DomainMatrixRowOp>(leaf)
+                          ? AccessKind::MatrixRow
+                          : AccessKind::MatrixColumn;
+        result.selectedIndex = domainInput(c, leaf->getOperand(1));
+        if (!result.selectedIndex)
+          return std::nullopt;
+      }
+      return result;
+    }
+    auto *op = value.getDefiningOp();
+    auto *facet = payload.contract(value);
+    if (!facet || !facet->access)
       return std::nullopt;
-    auto *factor = factors[*item];
-    if (!isa<data::DomainElementsOp, data::DomainMatrixRowOp,
-             data::DomainMatrixColumnOp>(factor))
+    auto container = input(op->getOperand(0));
+    if (!container)
       return std::nullopt;
-    auto input = domainInput(c, factor->getOperand(0));
-    if (!input)
+    unsigned varying = 1, selected = 0, axis = 0;
+    if (*facet->access == protocol::AccessRule::MatrixCell) {
+      auto row = item(op->getOperand(1)), column = item(op->getOperand(2));
+      if (row && column) {
+        // Two enumerated coordinates retain their exact axes.
+        // The bilinear equation below additionally requires a root product.
+        for (auto [position, axis] :
+             {std::pair{*row, 0u}, std::pair{*column, 1u}}) {
+          auto indices = dyn_cast<data::DomainIndicesOp>(factor(position));
+          if (!indices || indices.getAxis() != axis ||
+              domainInput(c, indices.getInput()) != container)
+            return std::nullopt;
+        }
+        return Access{AccessKind::MatrixCell,
+                      *container,
+                      *row,
+                      std::nullopt,
+                      value,
+                      op,
+                      *column};
+      }
+      if (column) {
+        varying = 2;
+        selected = 1;
+        axis = 1;
+      } else
+        selected = 2;
+    }
+    auto position = item(op->getOperand(varying));
+    if (!extentIteration || !position ||
+        !isa<data::DomainIndicesOp>(factor(*position)) ||
+        !equalIterationExtent(*container, axis))
       return std::nullopt;
-    Access result{AccessKind::Element, *input, *item,
-                  std::nullopt,        value,  factor};
-    if (isa<data::DomainMatrixRowOp, data::DomainMatrixColumnOp>(factor)) {
-      result.kind = isa<data::DomainMatrixRowOp>(factor)
-                        ? AccessKind::MatrixRow
-                        : AccessKind::MatrixColumn;
-      result.selectedIndex = domainInput(c, factor->getOperand(1));
-      if (!result.selectedIndex)
+    Access result{AccessKind::Indexed, *container, *position,
+                  std::nullopt,        value,      op,
+                  std::nullopt};
+    if (selected) {
+      result.kind =
+          varying == 2 ? AccessKind::MatrixRow : AccessKind::MatrixColumn;
+      result.selectedIndex = input(op->getOperand(selected));
+      // Indexed access runs only on nonempty iterations. A bound is required
+      // before introducing eager selected-row/column admission.
+      if (!result.selectedIndex ||
+          !provesBound(op->getOperand(selected), op->getOperand(0), 1 - axis))
         return std::nullopt;
     }
     return result;
   }
-  auto *op = value.getDefiningOp();
-  auto *facet = semantics(op);
-  if (!facet || !facet->access)
+};
+struct Combine {
+  Operation *operation;
+  Value term;
+  const protocol::ComputationContract *facet;
+};
+std::optional<Combine> combine(const ComputationFacts &facts) {
+  const auto &view = facts.view;
+  auto c = view.computation;
+  if (!view.result || c.collect || view.seeds.size() != 1 || c.predicate)
     return std::nullopt;
-  auto input = helperInput(c, op->getOperand(0));
-  if (!input)
+  Value result = facts.payload.transparent(view.result);
+  auto *facet = facts.payload.contract(result);
+  auto *op = result.getDefiningOp();
+  if (!facet || !facet->reduction || !facet->law.associative ||
+      op->getNumOperands() != 2)
     return std::nullopt;
-  unsigned varying = 1, selected = 0, axis = 0;
-  if (*facet->access == protocol::AccessRule::MatrixCell) {
-    // Matrix row: column index varies. Matrix column: row index varies.
-    if (itemArgument(c, op->getOperand(2))) {
-      varying = 2;
-      selected = 1;
-      axis = 1;
-    } else
-      selected = 2;
-  }
-  auto item = itemArgument(c, op->getOperand(varying));
-  if (!item || *item >= factors.size() ||
-      !isa<data::DomainIndicesOp>(factors[*item]) ||
-      !equalIterationExtent(c, factors, *input, axis))
-    return std::nullopt;
-  Access result{AccessKind::Indexed, *input, *item, std::nullopt, value, op};
-  if (selected) {
-    result.kind =
-        varying == 2 ? AccessKind::MatrixRow : AccessKind::MatrixColumn;
-    result.selectedIndex = helperInput(c, op->getOperand(selected));
-    // Unlike a view constructor, an indexed access executes only on nonempty
-    // iterations. Require a bound before introducing eager row admission.
-    if (!result.selectedIndex ||
-        !provesBound(op->getOperand(selected), op->getOperand(0), 1 - axis))
-      return std::nullopt;
-  }
-  return result;
+  Value accumulator = view.seeds.front().formal;
+  Value left = facts.payload.transparent(op->getOperand(0));
+  Value right = facts.payload.transparent(op->getOperand(1));
+  if (left == accumulator && right != accumulator)
+    return Combine{op, right, facet};
+  if (facet->law.commutative && right == accumulator && left != accumulator)
+    return Combine{op, left, facet};
+  return std::nullopt;
 }
-bool supportedInventory(Computation c, ArrayRef<Operation *> factors,
-                        bool bilinear = false) {
-  auto *body = helperBody(c);
-  if (!body || body->getOperations().size() > 100000)
-    return false;
-  llvm::DenseSet<Value> live;
-  live.insert(body->back().getOperand(0));
-  for (auto &op : llvm::reverse(body->without_terminator())) {
-    auto *facet = semantics(&op);
-    if (!facet)
-      return false;
-    bool used = live.contains(op.getResult(0));
-    // Ordered helper instructions, including unused successful arithmetic,
-    // are not discarded by optional reduction recognition.
-    if (!used && !isa<func::FuncOp>(c.helper))
-      return false;
-    if (facet->access) {
-      if (bilinear) {
-        if (!used)
-          return false;
-      } else if (!access(c, factors, op.getResult(0)))
-        return false;
-    } else if (!facet->law.total)
-      return false;
-    if (used)
-      live.insert(op.getOperands().begin(), op.getOperands().end());
-  }
-  return true;
-}
-} // namespace
-
-std::optional<Reduction> recognizeReduction(Computation c) {
-  auto combined = combine(c);
-  if (!combined)
+std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
+                                          const Combine &combined) {
+  if (!facts.extentIteration || !facts.payload.supported ||
+      !facts.completeAccesses ||
+      llvm::any_of(facts.view.accesses, [](const Access &access) {
+        return access.kind == AccessKind::MatrixCell;
+      }))
     return std::nullopt;
-  SmallVector<Operation *> factors;
-  domainLeaves(domainResult(c), factors);
-  if (!llvm::all_of(factors, hasExtent) || factors.size() != itemCount(c))
-    return std::nullopt;
-  const auto &rule = *combined->facet->reduction;
+  auto c = facts.view.computation;
+  const auto &rule = *combined.facet->reduction;
   Reduction result;
-  result.combine = combined->facet->key.str();
-  result.accumulator = helperBody(c)->getArgument(0);
-  result.term = combined->term;
-  result.combiner = combined->operation;
-  if (auto direct = access(c, factors, combined->term);
+  result.combine = combined.facet->key.str();
+  result.accumulator = facts.view.seeds.front().formal;
+  result.term = combined.term;
+  result.combiner = combined.operation;
+  if (auto *direct = facts.access(combined.term);
       direct && !rule.direct.empty()) {
     result.kernel = rule.direct.str();
     result.accesses.push_back(*direct);
   } else {
-    auto *term = transparent(combined->term).getDefiningOp();
-    auto *facet = semantics(term);
+    Value term = facts.payload.transparent(combined.term);
+    auto *facet = facts.payload.contract(term);
+    auto *op = term.getDefiningOp();
     if (!facet || !rule.term || facet->identity != *rule.term ||
-        term->getNumOperands() != 2)
+        op->getNumOperands() != 2)
       return std::nullopt;
-    auto first = access(c, factors, term->getOperand(rule.first));
-    auto second = access(c, factors, term->getOperand(rule.second));
+    auto *first = facts.access(op->getOperand(rule.first));
+    auto *second = facts.access(op->getOperand(rule.second));
     if (!first || !second)
       return std::nullopt;
     result.kernel = rule.contraction.str();
     result.accesses = {*first, *second};
   }
-  if (!supportedInventory(c, factors))
-    return std::nullopt;
   for (unsigned i = 0; i < result.accesses.size(); ++i) {
     const auto &at = result.accesses[i];
     bool matrix =
@@ -414,118 +449,104 @@ std::optional<Reduction> recognizeReduction(Computation c) {
       std::swap(result.accesses[0], result.accesses[1]);
     break;
   }
-  for (const auto &at : result.accesses) {
+  for (const auto &at : result.accesses)
     result.inputs.push_back(at.input);
-  }
   return result;
 }
 
 std::optional<Elementwise>
-recognizeFormula(Block &body, Type field,
-                 llvm::DenseMap<Value, FormulaMode> modes,
-                 const llvm::DenseMap<Value, Value> &indices) {
-  if (!isa<algebra::FieldType>(field) || body.empty() ||
+analyzeLanes(Block &body, Type field, ValueRange laneArguments,
+             const llvm::DenseMap<Value, Value> &lookups,
+             const PayloadAnalysis &payload) {
+  if (!isa<algebra::FieldType>(field) || body.empty() || !payload.supported ||
       !isa<func::ReturnOp, local::ReturnOp>(body.back()) ||
       body.back().getNumOperands() != 1 ||
       body.back().getOperand(0).getType() != field)
     return std::nullopt;
-  if (isa<local::FuncOp>(body.getParentOp())) {
-    llvm::DenseSet<Value> live{body.back().getOperand(0)};
-    for (auto &op : llvm::reverse(body.without_terminator())) {
-      if (op.getNumResults() != 1 || !live.contains(op.getResult(0)))
-        return std::nullopt;
-      live.insert(op.getOperands().begin(), op.getOperands().end());
-    }
+  llvm::DenseSet<Value> scalars, lanes;
+  for (Value argument : body.getArguments())
+    if (argument.getType() == field)
+      scalars.insert(argument);
+  for (Value value : laneArguments) {
+    auto argument = dyn_cast<BlockArgument>(value);
+    if (!argument || argument.getOwner() != &body || value.getType() != field)
+      return std::nullopt;
+    scalars.erase(value);
+    lanes.insert(value);
   }
-  Elementwise plan;
-  plan.modes = std::move(modes);
-  auto mode = [&](Value value) {
-    auto found = plan.modes.find(value);
-    return found == plan.modes.end() ? FormulaMode::Unused : found->second;
-  };
-  for (auto &op : body.without_terminator()) {
-    auto *facet = semantics(&op);
-    if (!facet || op.getResult(0).getType() != field)
+  Elementwise result;
+  for (Operation *op : payload.operations) {
+    auto *facet = payload.contracts.lookup(op);
+    Value value = op->getResult(0);
+    if (value.getType() != field)
       return std::nullopt;
     if (facet->identity == MathematicalIdentity::FieldConstant) {
-      plan.modes[op.getResult(0)] = FormulaMode::Scalar;
+      scalars.insert(value);
       continue;
     }
-    if (op.getNumOperands() != 2)
-      return std::nullopt;
-    auto left = mode(op.getOperand(0)), right = mode(op.getOperand(1));
-    if (facet->access == protocol::AccessRule::Element &&
-        left == FormulaMode::Container && right == FormulaMode::Index &&
-        indices.lookup(op.getOperand(1)) == op.getOperand(0)) {
-      plan.modes[op.getResult(0)] = FormulaMode::Rows;
-      plan.lookups[op.getResult(0)] = op.getOperand(0);
+    if (auto found = lookups.find(value); found != lookups.end()) {
+      lanes.insert(value);
+      result.lookups[value] = found->second;
       continue;
     }
-    if (!facet->lanes ||
-        facet->law.algebra != protocol::ComputationAlgebra::FieldRing ||
-        (left != FormulaMode::Scalar && left != FormulaMode::Rows) ||
-        (right != FormulaMode::Scalar && right != FormulaMode::Rows))
+    if (op->getNumOperands() != 2 || !facet->lanes ||
+        facet->law.algebra != protocol::ComputationAlgebra::FieldRing)
       return std::nullopt;
-    plan.modes[op.getResult(0)] =
-        left == FormulaMode::Rows || right == FormulaMode::Rows
-            ? FormulaMode::Rows
-            : FormulaMode::Scalar;
+    Value left = op->getOperand(0), right = op->getOperand(1);
+    if ((!scalars.contains(left) && !lanes.contains(left)) ||
+        (!scalars.contains(right) && !lanes.contains(right)))
+      return std::nullopt;
+    (lanes.contains(left) || lanes.contains(right) ? lanes : scalars)
+        .insert(value);
   }
-  auto result = mode(body.back().getOperand(0));
-  if (result != FormulaMode::Rows && result != FormulaMode::Scalar)
+  Value returned = body.back().getOperand(0);
+  if (!lanes.contains(returned) && !scalars.contains(returned))
     return std::nullopt;
-  return plan;
+  return result;
 }
-std::optional<Elementwise> recognizeElementwise(Computation c) {
-  if (!c.collect || c.predicate || !helperBody(c) ||
+std::optional<Elementwise> analyzeElementwise(const ComputationFacts &facts) {
+  const auto &view = facts.view;
+  auto c = view.computation;
+  if (!c.collect || c.predicate || !facts.aligned || !view.result ||
       collection(c.signature.getResult(0)).family != "vector")
     return std::nullopt;
   Type field = elementType(c.signature.getResult(0));
-  SmallVector<Operation *> factors;
-  domainLeaves(domainResult(c), factors);
-  auto &body = *helperBody(c);
-  llvm::DenseMap<Value, FormulaMode> modes;
-  llvm::DenseMap<Value, Value> indices;
-  for (auto [i, factor] : enumerate(factors)) {
-    if (!isa_and_nonnull<data::DomainElementsOp, data::DomainIndicesOp>(
-            factor) ||
+  SmallVector<Value> lanes;
+  for (auto [i, item] : enumerate(view.items)) {
+    auto *factor = facts.factor(i);
+    if (!isa<data::DomainElementsOp, data::DomainIndicesOp>(factor) ||
         collection(factor->getOperand(0).getType()).family != "vector")
       return std::nullopt;
-    Value item = body.getArgument(i);
-    if (isa<data::DomainIndicesOp>(factor)) {
-      auto input = domainInput(c, factor->getOperand(0));
-      if (!input)
-        return std::nullopt;
-      modes[item] = FormulaMode::Index;
-      indices[item] = helperArgument(c, *input);
-    } else {
-      if (item.getType() != field)
-        return std::nullopt;
-      modes[item] = FormulaMode::Rows;
-    }
+    if (isa<data::DomainElementsOp>(factor))
+      lanes.push_back(item.formal);
   }
-  for (auto argument : body.getArguments().drop_front(factors.size()))
-    modes[argument] = argument.getType() == field ? FormulaMode::Scalar
-                      : collection(argument.getType()).family == "vector"
-                          ? FormulaMode::Container
-                          : FormulaMode::Unused;
-  return recognizeFormula(body, field, std::move(modes), indices);
+  llvm::DenseMap<Value, Value> lookups;
+  for (const auto &access : view.accesses)
+    if (access.kind == AccessKind::Indexed &&
+        domainInput(c, facts.factor(access.item)->getOperand(0)) ==
+            access.input)
+      lookups[access.value] = facts.inputs[access.input];
+  return analyzeLanes(c.helper->getRegion(0).front(), field, lanes, lookups,
+                      facts.payload);
 }
-
-std::optional<Bilinear> recognizeBilinear(Computation c) {
-  auto combined = combine(c);
-  if (!combined || combined->facet->identity != MathematicalIdentity::FieldAdd)
-    return std::nullopt;
-  auto product = domainResult(c).getDefiningOp<data::DomainProductOp>();
-  if (!product || product.getNumOperands() != 2)
+std::optional<Bilinear> analyzeBilinear(const ComputationFacts &facts,
+                                        const Combine &combined) {
+  const auto &view = facts.view;
+  const auto &product = view.iteration[view.root];
+  if (combined.facet->identity != MathematicalIdentity::FieldAdd ||
+      !facts.payload.supported || !facts.completeAccesses ||
+      product.kind != IterationKind::Product || product.children.size() != 2 ||
+      view.items.size() != 4)
     return std::nullopt;
   Value matrix, left, right;
   for (unsigned axis = 0; axis < 2; ++axis) {
-    auto zip = product.getOperand(axis).getDefiningOp<data::DomainZipOp>();
-    if (!zip || zip.getNumOperands() != 2)
+    const auto &zip = view.iteration[product.children[axis]];
+    if (zip.kind != IterationKind::Zip || zip.children.size() != 2)
       return std::nullopt;
-    auto indices = zip.getOperand(0).getDefiningOp<data::DomainIndicesOp>();
-    auto elements = zip.getOperand(1).getDefiningOp<data::DomainElementsOp>();
+    auto indices = dyn_cast<data::DomainIndicesOp>(
+        view.iteration[zip.children[0]].operation);
+    auto elements = dyn_cast<data::DomainElementsOp>(
+        view.iteration[zip.children[1]].operation);
     if (!indices || !elements || indices.getAxis() != axis ||
         collection(indices.getInput().getType()).family != "matrix" ||
         collection(elements.getInput().getType()).family != "vector")
@@ -535,45 +556,39 @@ std::optional<Bilinear> recognizeBilinear(Computation c) {
     matrix = indices.getInput();
     (axis ? right : left) = elements.getInput();
   }
-  auto &body = *helperBody(c);
-  SmallVector<Value> terms, pending{combined->term};
+  SmallVector<Value> terms, pending{combined.term};
   unsigned remaining = 100000;
   while (!pending.empty() && remaining--) {
-    Value value = transparent(pending.pop_back_val());
-    auto *definition = value.getDefiningOp();
-    auto *facet = semantics(definition);
+    Value value = facts.payload.transparent(pending.pop_back_val());
+    auto *facet = facts.payload.contract(value);
     if (facet && facet->identity == MathematicalIdentity::FieldMultiply)
-      append_range(pending, definition->getOperands());
+      append_range(pending, value.getDefiningOp()->getOperands());
     else
       terms.push_back(value);
     if (terms.size() > 3)
       return std::nullopt;
   }
-  if (!pending.empty() || terms.size() != 3 ||
-      !is_contained(terms, body.getArgument(2)) ||
-      !is_contained(terms, body.getArgument(4)))
+  Value leftItem = view.items[1].formal, rightItem = view.items[3].formal;
+  if (!pending.empty() || terms.size() != 3 || !is_contained(terms, leftItem) ||
+      !is_contained(terms, rightItem))
     return std::nullopt;
   Value cell;
   for (Value term : terms)
-    if (term != body.getArgument(2) && term != body.getArgument(4))
+    if (term != leftItem && term != rightItem)
       cell = term;
-  auto *lookup = cell ? cell.getDefiningOp() : nullptr;
-  auto *facet = semantics(lookup);
-  auto input = domainInput(c, matrix);
-  if (!facet || facet->access != protocol::AccessRule::MatrixCell || !input ||
-      lookup->getOperand(0) != helperArgument(c, *input) ||
-      lookup->getOperand(1) != body.getArgument(1) ||
-      lookup->getOperand(2) != body.getArgument(3) ||
-      !supportedInventory(c, {}, true))
+  const auto *access = cell ? facts.access(cell) : nullptr;
+  if (!access || access->kind != AccessKind::MatrixCell || access->item != 0 ||
+      access->columnItem != 2 ||
+      domainInput(view.computation, matrix) != access->input)
     return std::nullopt;
-  // No other live indexed access may be erased under the product identity.
-  for (auto &op : body.without_terminator())
-    if (semantics(&op)->access && &op != lookup)
+  // No other indexed access, including dead access, may disappear under the
+  // product identity. Enumerated element arguments remain in the shared view.
+  for (Operation *op : view.payload)
+    if (facts.payload.contracts.lookup(op)->access && op != access->operation)
       return std::nullopt;
   return Bilinear{matrix, left, right};
 }
 
-namespace {
 std::optional<IterationKind> iterationKind(Operation *op) {
   if (isa<data::DomainElementsOp>(op))
     return IterationKind::Elements;
@@ -600,8 +615,8 @@ class ComputationAnalysis {
 public:
   explicit ComputationAnalysis(unsigned budget) : remaining(budget) {}
   std::optional<ComputationView> read(Computation c, Operation *occurrence) {
-    if (!remaining || active.size() >= 64 || !active.insert(c.helper).second ||
-        !c.helper || c.helper->getNumRegions() != 1 ||
+    if (!remaining || !c.helper || active.size() >= 64 ||
+        !active.insert(c.helper).second || c.helper->getNumRegions() != 1 ||
         !c.helper->getRegion(0).hasOneBlock())
       return std::nullopt;
     --remaining;
@@ -633,9 +648,36 @@ public:
       result.admission.push_back(&op);
     }
     auto root = iterations.find(domainResult(c));
-    if (root == iterations.end())
+    if (root == iterations.end() ||
+        body.getNumArguments() != c.signature.getNumInputs() + itemCount(c))
       return std::nullopt;
     result.root = root->second;
+    bool aligned = true;
+    SmallVector<unsigned> pending{result.root};
+    while (!pending.empty()) {
+      if (!remaining)
+        return std::nullopt;
+      --remaining;
+      unsigned position = pending.pop_back_val();
+      const auto &iteration = result.iteration[position];
+      if (iteration.kind == IterationKind::Zip ||
+          iteration.kind == IterationKind::Product) {
+        aligned &= iteration.kind != IterationKind::Product;
+        append_range(pending, llvm::reverse(iteration.children));
+      } else {
+        unsigned count = cast<data::DomainType>(iteration.descriptor.getType())
+                             .getItemTypes()
+                             .size();
+        for (unsigned i = 0; i < count; ++i) {
+          if (result.items.size() >= itemCount(c))
+            return std::nullopt;
+          result.items.push_back(
+              {position, body.getArgument(c.states + result.items.size())});
+        }
+      }
+    }
+    if (result.items.size() != itemCount(c))
+      return std::nullopt;
     auto actual = [&](unsigned input) -> Value {
       return occurrence && input < occurrence->getNumOperands()
                  ? occurrence->getOperand(input)
@@ -644,13 +686,11 @@ public:
     for (unsigned i = 0; i < c.states; ++i)
       result.seeds.push_back(
           {c.arguments + i, body.getArgument(i), actual(c.arguments + i)});
-    unsigned base = c.states + itemCount(c);
+    unsigned base = c.states + result.items.size();
     for (unsigned input = 0; input < c.signature.getNumInputs(); ++input) {
       if (input >= c.arguments && input < c.arguments + c.states)
         continue;
       unsigned formal = base + input - (input >= c.arguments ? c.states : 0);
-      if (formal >= body.getNumArguments())
-        return std::nullopt;
       result.captures.push_back(
           {input, body.getArgument(formal), actual(input)});
     }
@@ -679,29 +719,40 @@ public:
     append_range(result.results, body.back().getOperands());
     if (result.results.size() == 1)
       result.result = result.results.front();
-    result.reduction = recognizeReduction(c);
-    result.elementwise = recognizeElementwise(c);
-    if (result.reduction) {
-      result.demand = result.reduction->demand;
-      result.accesses = result.reduction->accesses;
-    } else if (helperBody(c)) {
-      SmallVector<Operation *> factors;
-      domainLeaves(domainResult(c), factors);
-      if (llvm::all_of(factors, hasExtent) && factors.size() == itemCount(c)) {
-        for (unsigned i = 0; i < itemCount(c); ++i)
-          if (auto item = access(c, factors, body.getArgument(c.states + i)))
-            result.accesses.push_back(*item);
-        for (auto &op : body.without_terminator())
-          if (op.getNumResults() == 1)
-            if (auto item = access(c, factors, op.getResult(0)))
-              result.accesses.push_back(*item);
-      }
+    ComputationFacts facts(result, aligned);
+    if (auto combined = combine(facts)) {
+      result.reduction = analyzeReduction(facts, *combined);
+      result.bilinear = analyzeBilinear(facts, *combined);
     }
+    result.elementwise = analyzeElementwise(facts);
+    if (result.reduction)
+      result.demand = result.reduction->demand;
     active.erase(c.helper);
     return result;
   }
 };
 } // namespace
+std::optional<Elementwise>
+analyzeLaneFormula(Block &body, Type field, ValueRange laneArguments,
+                   const llvm::DenseMap<Value, Value> &indices) {
+  if (body.empty())
+    return std::nullopt;
+  SmallVector<Operation *> operations;
+  for (auto &op : body.without_terminator())
+    operations.push_back(&op);
+  PayloadAnalysis payload(operations, body.back().getOperands(),
+                          isa<local::FuncOp>(body.getParentOp()));
+  llvm::DenseMap<Value, Value> lookups;
+  for (Operation *op : operations) {
+    auto *facet = payload.contracts.lookup(op);
+    if (facet && facet->access == protocol::AccessRule::Element &&
+        op->getNumOperands() == 2 &&
+        indices.lookup(op->getOperand(1)) == op->getOperand(0) &&
+        collection(op->getOperand(0).getType()).family == "vector")
+      lookups[op->getResult(0)] = op->getOperand(0);
+  }
+  return analyzeLanes(body, field, laneArguments, lookups, payload);
+}
 std::optional<ComputationView> analyzeComputation(Computation c,
                                                   unsigned budget) {
   return ComputationAnalysis(budget).read(c, c.operation);

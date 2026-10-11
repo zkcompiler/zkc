@@ -101,9 +101,11 @@ static application admission refuses a callee that contains a statement.
   indices. `decision_dependencies` lists the selected decision's anchors.
 - `statement_inputs`, `bound_non_statement_inputs`, and
   `prover_unavailable_bound_inputs`, each in increasing port order.
+- `finite_bulk` and `fuse_vector_reductions`: Boolean choices from the supplied
+  `MathematicalSelectionPolicy`, defaulting to true and false respectively.
 - `source_ir_sha256`, `prepared_ir_sha256`, and `requirement_sha256`.
-  The prepared identity uses the source analysis view with default preparation;
-  it does not identify a separately fused compilation candidate.
+  The prepared identity hashes the unsimplified subject prepared using those
+  exact selection choices, including when a choice has no eligible operation.
 
 IR identities hash the default MLIR printing of the admitted original module
 and unsimplified prepared module; locations are omitted. The requirement hash
@@ -117,11 +119,14 @@ cross-version canonical encoding.
 
 `analyzePublicCoin` leaves its original module unchanged and owns all returned
 report data after its prepared copy is destroyed. `checkPublicCoin` recomputes
-the whole report from the original and the independent requirement, then
-compares JSON values exactly after checking integer tokens, Unicode escapes and
+the whole report from the original, independent requirement and independently
+supplied selection policy, then compares JSON values exactly after checking
+integer tokens, Unicode escapes and
 key uniqueness. Whitespace and object-key order are immaterial; floating-point
 spellings are not accepted. No supplied report fact is trusted; additional keys
-are refused too. Neither API checks an arbitrary transformed program.
+are refused too. A supplied report cannot select its own policy. Both policy
+fields are required even when different policies yield identical prepared IR.
+Neither API checks an arbitrary transformed program.
 
 ## Checked compilation
 
@@ -138,9 +143,11 @@ returns no partial executable on failure.
 
 `fuse_vector_reductions` defaults to false and records the selected
 [local preparation rewrite](protocols.md#optional-vector-reduction-fusion).
-The standalone public-coin view remains an analysis of its own unsimplified
-prepared subject. The compiled report lists `zkc-prepare-protocol` before
-projection in `post_analysis_passes`, because optional fusion occurs there.
+Analysis and checked compilation use the same selection policy. The inner
+view's policy fields equal the wrapper's fields, and `prepared_ir_sha256`
+identifies the compilation's unsimplified prepared subject before projection.
+The compiled report lists `zkc-prepare-protocol` before projection in
+`post_analysis_passes`; analysis independently prepares its owned copy too.
 It is independent of participant simplification and storage release. Polynomial
 correspondence compilation and `checkPolynomialReductions` forward the same
 mathematical selection policy and record `fuse_vector_reductions` and
@@ -155,6 +162,11 @@ zkc-compile protocol-public-coin source.mlir requirement.json
 zkc-compile protocol-check-public-coin source.mlir requirement.json view.json
 zkc-compile protocol-checked-bundle source.mlir --public-coin=requirement.json
 ```
+
+All three commands accept `--no-finite-bulk` and `--fuse-vector-reductions`.
+Standalone analysis and checking accept each option at most once, after their
+positional arguments. When checking a view from a nondefault compilation,
+supply the same choices independently on the checking command.
 
 Successful report checking prints `{"format":"zkc.public-coin-checked/0"}`.
 Checked compilation with a public-coin requirement emits
@@ -187,7 +199,7 @@ authored path, and `public-coin-dependence` an unavailable dependence contract.
 Conditional entry completion (`protocol.finish_if`) lacks a total-verifier
 dependence contract and is refused as `public-coin-dependence`.
 `public-coin-report` rejects a malformed or mismatched candidate report;
-`public-coin-options` rejects standalone CLI arity.
+`public-coin-options` rejects standalone CLI arity and unknown or repeated options.
 `checked-bundle-requirement-missing` rejects checked compilation without either
 independent requirement.
 

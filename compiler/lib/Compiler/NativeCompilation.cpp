@@ -84,7 +84,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   std::optional<json::Value> publicCoin;
   if (options.publicCoinRequirement) {
     auto checked =
-        analyzePublicCoin(*result->module, *options.publicCoinRequirement);
+        analyzePublicCoin(*result->module, *options.publicCoinRequirement,
+                          options.mathematicalSelection);
     if (!checked)
       return diagnostics.failure(checked.takeError());
     if (checked->getAsObject()->getString("entry") != options.entry)

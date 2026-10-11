@@ -148,6 +148,57 @@ int main() {
                 *retained, *fused, retainedState, fusedState)),
             "independent fusion checker refused");
   });
+  for (bool scalar : {false, true})
+    cases.run(
+        scalar ? "fusion preserves trailing unused scalar arithmetic"
+               : "fusion preserves trailing unused vector arithmetic",
+        [&] {
+          auto text =
+              edit(fixture, " func.func private @formula",
+                   std::string(
+                       " \"local.binding\"() {sym_name=\"tail\",contract=\"") +
+                       (scalar ? "field.add" : "vector.add") +
+                       "\",arguments=[\"koala-bear\"],implementation=\"\"} : "
+                       "()->()\n"
+                       " func.func private @formula");
+          text = edit(
+              text,
+              "   %r = local.apply @reduce(%v) {site=\"reduce\"} : "
+              "(!V)->!F\n",
+              std::string("   %r = local.apply @reduce(%v) "
+                          "{site=\"reduce\"} : (!V)->!F\n") +
+                  (scalar ? "   %unused = \"algebra.exec.field_add\"(%s,%s)"
+                          : "   %unused = \"algebra.exec.vector_add\"(%a,%b)") +
+                  " {binding=@tail,parameters=[],site=\"tail\"} : " +
+                  (scalar ? "(!F,!F)->!F\n" : "(!V,!V)->!V\n"));
+          auto original = parse(text);
+          State originalState;
+          retain(*original, originalState);
+          auto candidate = copy(*original);
+          State candidateState = originalState;
+          require(succeeded(mathematical::fuseVectorReductions(*candidate,
+                                                               candidateState)),
+                  "unused suffix prevented fusion");
+          require(count(*candidate, "algebra.exec.vector_dot") == 1 &&
+                      nth(*candidate, scalar ? "field.add" : "vector.add")
+                          ->use_empty(),
+                  "fusion changed the unused suffix");
+          require(succeeded(mathematical::verifyVectorReductionsPreserved(
+                      *original, *candidate, originalState, candidateState)),
+                  "suffix preservation check refused");
+          auto *tail = nth(*candidate, scalar ? "field.add" : "vector.add");
+          tail->setOperand(1, scalar
+                                  ? nth(*candidate, "vector.dot")->getResult(0)
+                                  : tail->getOperand(0));
+          require(named("vector-reduction-correspondence",
+                        [&] {
+                          return failed(
+                              mathematical::verifyVectorReductionsPreserved(
+                                  *original, *candidate, originalState,
+                                  candidateState));
+                        }),
+                  "unused suffix mutation escaped the caller's check");
+        });
   auto mutation = [&](StringRef label,
                       llvm::function_ref<void(ModuleOp)> change) {
     cases.run(label, [&] {

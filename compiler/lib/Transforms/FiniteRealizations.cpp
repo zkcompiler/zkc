@@ -127,9 +127,10 @@ class Realizer {
     validateBound(result);
     return result;
   }
-  void admit() {
+  void admit(ArrayRef<Operation *> admission) {
     // Visit all constructors in descriptor order, including dead intermediates.
-    for (auto &op : computation.domain.getBody().front().without_terminator()) {
+    for (Operation *constructor : admission) {
+      auto &op = *constructor;
       Value size;
       if (isa<data::DomainElementsOp, data::DomainIndicesOp>(op)) {
         unsigned axis =
@@ -225,20 +226,16 @@ class Realizer {
     return {emit(col.family + suffix.str(), {container, position}, col.element,
                  col.arguments)};
   }
-  Value elementwise(const Elementwise &plan, ValueRange entry) {
+  Value elementwise(const ComputationView &view, ValueRange entry) {
     auto &body = computation.helper->getRegion(0).front();
-    Value root = computation.domain.getBody().front().back().getOperand(0);
-    SmallVector<Operation *> factors;
-    domainLeaves(root, factors);
+    Value root = view.iteration[view.root].descriptor;
     llvm::DenseMap<Value, mathematical::LaneInput> inputs;
-    for (auto [i, factor] : enumerate(factors))
-      if (isa<data::DomainElementsOp>(factor))
-        inputs[body.getArgument(i)] = {values.lookup(factor->getOperand(0)),
-                                       true};
-    for (auto [formal, actual] :
-         zip(body.getArguments().drop_front(factors.size()), entry))
-      inputs[formal] = {actual, false};
-    for (auto [lookup, container] : plan.lookups)
+    for (const auto &access : view.accesses)
+      if (access.kind == AccessKind::Element)
+        inputs[access.value] = {entry[access.input], true};
+    for (const auto &capture : view.captures)
+      inputs[capture.formal] = {entry[capture.input], false};
+    for (auto [lookup, container] : view.elementwise->lookups)
       inputs[lookup] = {inputs.lookup(container).value, true};
     auto vector = computation.signature.getResult(0);
     SmallVector<std::string> args{
@@ -317,6 +314,16 @@ public:
                     StringRef expressionName = {}) {
     if (failed(describe(declaration, computation)))
       return failure();
+    auto selection =
+        mathematical::selectComputation(computation, {optimize, false});
+    const ComputationView *view = selection.view ? &*selection.view : nullptr;
+    SmallVector<Operation *> fallbackAdmission;
+    if (!view)
+      for (auto &op : computation.domain.getBody().front().without_terminator())
+        fallbackAdmission.push_back(&op);
+    ArrayRef<Operation *> admission =
+        view ? ArrayRef<Operation *>(view->admission)
+             : ArrayRef<Operation *>(fallbackAdmission);
     values.clear();
     sizes.clear();
     lowers.clear();
@@ -339,11 +346,24 @@ public:
          zip(computation.domain.getBody().front().getArguments(),
              entry->getArguments()))
       values[formal] = actual;
-    admit();
-    auto selection =
-        mathematical::selectComputation(computation, {optimize, false});
+    admit(admission);
+    SmallVector<Value> initial, environment;
+    if (view) {
+      for (const auto &seed : view->seeds)
+        initial.push_back(entry->getArgument(seed.input));
+      for (const auto &capture : view->captures)
+        environment.push_back(entry->getArgument(capture.input));
+    } else {
+      append_range(initial, entry->getArguments().slice(computation.arguments,
+                                                        computation.states));
+      append_range(environment,
+                   entry->getArguments().take_front(computation.arguments));
+      append_range(environment,
+                   entry->getArguments().drop_front(computation.arguments +
+                                                    computation.states));
+    }
     if (selection.kind == mathematical::RealizationKind::Bilinear) {
-      const auto &plan = selection.bilinear;
+      const auto &plan = view->bilinear;
       auto type = computation.signature.getResult(0);
       auto col = collection(values.lookup(plan->matrix).getType());
       Value result =
@@ -352,8 +372,7 @@ public:
                 values.lookup(plan->right)},
                type, col.arguments);
       result =
-          emit("field.add", {entry->getArgument(computation.arguments), result},
-               type, col.arguments);
+          emit("field.add", {initial.front(), result}, type, col.arguments);
       local::ReturnOp::create(builder, loc, result);
       if (!computation.total)
         declaration->erase();
@@ -371,17 +390,15 @@ public:
           inputs[reduction->kernel == "curve.msm" ? 1 : 0].getType());
       Value reduced =
           emit(reduction->kernel, inputs, resultType, col.arguments);
-      Value initial = entry->getArgument(computation.arguments);
-      Value result = emit(reduction->combine, {initial, reduced}, resultType,
-                          col.arguments);
+      Value result = emit(reduction->combine, {initial.front(), reduced},
+                          resultType, col.arguments);
       local::ReturnOp::create(builder, loc, result);
       if (!computation.total)
         declaration->erase();
       return success();
     }
     if (selection.kind == mathematical::RealizationKind::Elementwise) {
-      const auto &plan = selection.view->elementwise;
-      Value result = elementwise(*plan, entry->getArguments());
+      Value result = elementwise(*view, entry->getArguments());
       if (!result)
         return failure();
       local::ReturnOp::create(builder, loc, result);
@@ -389,11 +406,6 @@ public:
         declaration->erase();
       return success();
     }
-    SmallVector<Value> initial, environment;
-    append_range(environment,
-                 entry->getArguments().take_front(computation.arguments));
-    append_range(environment, entry->getArguments().drop_front(
-                                  computation.arguments + computation.states));
     if (computation.collect) {
       auto result = computation.signature.getResult(0);
       auto col = collection(result);
@@ -405,17 +417,17 @@ public:
       col = collection(storage);
       initial.push_back(
           emit(col.family + ".empty", {}, storage, col.arguments));
-    } else
-      append_range(initial, entry->getArguments().slice(computation.arguments,
-                                                        computation.states));
-    Value root = computation.domain.getBody().front().back().getOperand(0);
+    }
+    Value root =
+        view ? view->iteration[view->root].descriptor
+             : computation.domain.getBody().front().back().getOperand(0);
     Value zero = number(0), upper = sizes.lookup(root);
     // Capture only Copy/Drop values; each affine state is in the carried
     // prefix.
     SmallVector<Value> captures(environment);
-    for (auto &op : computation.domain.getBody().front().without_terminator()) {
-      captures.push_back(sizes.lookup(op.getResult(0)));
-      if (auto v = lowers.lookup(op.getResult(0)))
+    for (Operation *op : admission) {
+      captures.push_back(sizes.lookup(op->getResult(0)));
+      if (auto v = lowers.lookup(op->getResult(0)))
         captures.push_back(v);
     }
     SmallVector<Value> unique;
@@ -507,7 +519,8 @@ FailureOr<SmallVector<Value>>
 realizeExpression(Operation *op, ValueRange inputs, OpBuilder &builder,
                   MathematicalSelectionPolicy policy) {
   auto unit = op->getParentOfType<protocol_ir::ProtocolModuleOp>();
-  if (!unit)
+  auto site = op->getAttrOfType<StringAttr>("site");
+  if (!unit || !site || site.getValue().empty())
     return failure();
   SymbolTable symbols(unit);
   unsigned next = 0;

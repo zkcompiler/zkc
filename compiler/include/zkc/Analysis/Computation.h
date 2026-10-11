@@ -19,13 +19,11 @@ Collection collection(mlir::Type type);
 /// have no replacement facet. No serialized analysis attribute is consulted.
 const protocol::ComputationContract *semantics(mlir::Operation *operation);
 std::optional<std::string> fieldConstant(mlir::Operation *operation);
-void domainLeaves(mlir::Value descriptor,
-                  llvm::SmallVectorImpl<mlir::Operation *> &out);
 
 /// All references below borrow the current, admitted IR. Recompute after IR
 /// changes or cloning. These views describe existing values, never expressions.
 enum class DemandKind { Scalar, MatrixRow, MatrixColumn, Collection };
-enum class AccessKind { Element, Indexed, MatrixRow, MatrixColumn };
+enum class AccessKind { Element, Indexed, MatrixRow, MatrixColumn, MatrixCell };
 struct Access {
   AccessKind kind = AccessKind::Element;
   /// Position in Computation.signature inputs, including captured containers.
@@ -35,6 +33,8 @@ struct Access {
   std::optional<unsigned> selectedIndex;
   mlir::Value value;
   mlir::Operation *operation = nullptr;
+  /// Column item for a cell with two enumerated coordinates; item is its row.
+  std::optional<unsigned> columnItem;
 };
 struct Reduction {
   std::string kernel, combine;
@@ -51,23 +51,19 @@ struct Bilinear {
   mlir::Value matrix, left, right;
 };
 
-// Shared classification of actual scalar and row SSA values.
-enum class FormulaMode { Scalar, Rows, Index, Container, Unused };
 struct Elementwise {
-  llvm::DenseMap<mlir::Value, FormulaMode> modes;
+  /// Scalar indexed reads that the lane emitter replaces by their container.
   llvm::DenseMap<mlir::Value, mlir::Value> lookups;
 };
 /// Common lane classification for an existing scalar SSA block. Every
 /// instruction is inspected, including unused instructions. indices maps an
-/// enumerated index to the exact captured container it traverses.
+/// enumerated index to the exact captured container it traverses. Other exact
+/// field arguments are uniform; the returned view retains only emitter inputs.
 std::optional<Elementwise>
-recognizeFormula(mlir::Block &body, mlir::Type field,
-                 llvm::DenseMap<mlir::Value, FormulaMode> modes,
-                 const llvm::DenseMap<mlir::Value, mlir::Value> &indices =
-                     llvm::DenseMap<mlir::Value, mlir::Value>());
-std::optional<Elementwise> recognizeElementwise(Computation computation);
-std::optional<Reduction> recognizeReduction(Computation computation);
-std::optional<Bilinear> recognizeBilinear(Computation computation);
+analyzeLaneFormula(mlir::Block &body, mlir::Type field,
+                   mlir::ValueRange laneArguments,
+                   const llvm::DenseMap<mlir::Value, mlir::Value> &indices =
+                       llvm::DenseMap<mlir::Value, mlir::Value>());
 
 enum class IterationKind {
   Elements,
@@ -85,6 +81,10 @@ struct Iteration {
   IterationKind kind;
   llvm::SmallVector<unsigned> children;
 };
+struct IterationItem {
+  unsigned iteration = 0;
+  mlir::Value formal;
+};
 struct InputReference {
   unsigned input = 0;
   mlir::Value formal;
@@ -99,9 +99,13 @@ struct ComputationView {
   /// constructors are retained; nested admission belongs to each nested view.
   llvm::SmallVector<Iteration> iteration;
   unsigned root = 0;
+  /// Helper item order, retaining each leaf's constructor provenance.
+  llvm::SmallVector<IterationItem> items;
   llvm::SmallVector<mlir::Operation *> admission;
   llvm::SmallVector<InputReference> seeds, captures;
   llvm::SmallVector<mlir::Operation *> payload;
+  /// Complete supported access inventory, independent of equation selection.
+  /// Unsupported operations remain in payload and gain no access fact.
   llvm::SmallVector<Access> accesses;
   std::vector<ComputationView> nested;
   llvm::SmallVector<mlir::Value> results;
@@ -109,6 +113,7 @@ struct ComputationView {
   DemandKind demand = DemandKind::Scalar;
   std::optional<Reduction> reduction;
   std::optional<Elementwise> elementwise;
+  std::optional<Bilinear> bilinear;
 };
 /// Read-only, invocation-scoped structural analysis. The caller must already
 /// have admitted the complete helper closure. Unknown payloads remain opaque

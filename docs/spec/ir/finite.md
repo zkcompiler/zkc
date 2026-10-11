@@ -166,6 +166,13 @@ facets state exact field/group and representation premises; source annotations
 or matching function names do not grant these laws. Explicit implementation
 bindings retain their selected execution path.
 
+The analysis retains all constructors in admission order separately from the
+items of the returned descriptor, and retains every helper instruction even
+when no bulk equation applies. Reduction, elementwise and bilinear selection
+consume this common view. Extent premises for optional selection come from
+the source domain and admitted helper preconditions; occurrence-only evidence
+that the independent reader cannot reconstruct retains the ordered realization.
+
 The independent reader reconstructs the source domain and payload and reads
 actual candidate operands separately. It does not use the selector's classified
 access map or emitter caches. The supported field-ring fragment admits
@@ -183,6 +190,10 @@ inside a nonempty-outer branch. The empty branch returns an empty vector without
 performing the inner fold's shape checks. A uniform nonzero seed is added to
 each result. Both forms retain the corresponding source admission and field
 interpretation.
+This nested strategy covers the explicit outer matrix-index collection and
+inner dot fold described in the [nested matrix collection contract](nested-matrix-collections.md).
+Its conditional emitter and independent structural reader implement that
+bounded equation, not an equivalence rule for arbitrary nested Local loops.
 Bulk and loop realizations can consume different resources. Their value and
 non-resource failure contract assumes sufficient resources; it does not require
 identical exhaustion. Capacity checks must measure representative inputs, including

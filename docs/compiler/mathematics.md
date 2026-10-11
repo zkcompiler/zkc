@@ -77,9 +77,22 @@ iteration and admission order, accesses, captures, seeds, nested calls and resul
 demand. These views borrow the current IR and must be recomputed after changes.
 They are neither serialized evidence nor a second mathematical language.
 
+One structural analysis records constructor provenance for each helper item and
+the complete payload, including unused instructions. Concrete reduction,
+elementwise and bilinear equations consume these facts and a shared admission
+of the payload's installed contracts. Bilinear selection is part of the same
+view. Finite realization uses its admission order and seed/capture mappings;
+if bounded analysis cannot produce a view, the ordered realization derives the
+same mappings directly from the finite ABI. Selection never uses an extent fact
+known only on a total operation's actual operands: the source domain or helper
+premises must also make it available to the independent reader.
+
 Transforms select among admitted realizations and the ordered fallback. Map and
 finite field formulas share lane emission, including scalar subexpression
-sharing and cached broadcasts. A separate reader reconstructs meanings from
+sharing and cached broadcasts. Their common lane analysis takes explicit lane
+arguments and treats other arguments of the exact field type as uniform. It
+retains only indexed-read mappings used by the emitter, with no public scalar
+mode inventory. A separate reader reconstructs meanings from
 actual source and candidate operations without the selector's classifications.
 Closed Ring laws justify its bounded comparison; ordered guards, helper
 expansion and unchanged context have their own checks.
@@ -91,6 +104,14 @@ The nested rule keeps inner shape admission inside the nonempty outer branch,
 so an empty outer collection still skips the inner fold. Uniform nonzero seeds
 are broadcast and added after the contraction. Other nested or effectful
 callbacks retain ordered execution.
+
+This nested strategy is a bounded rule for an outer matrix-index collection
+and an inner scalar dot fold with direct capture mappings and a uniform seed.
+It consumes the compositional view, but its conditional matvec emitter and
+independent structural reader remain specific to that rule. It does not recover
+contractions from arbitrary authored loops or provide general nested-program
+equivalence. The [nested collection contract](../spec/ir/nested-matrix-collections.md)
+states its precise admission and zero-trip obligations.
 
 ## Finite vector reductions
 

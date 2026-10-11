@@ -60,9 +60,12 @@ int main() {
                     expansion)),
                 "transparent helper expansion failed");
         OwningOpRef<ModuleOp> before(cast<ModuleOp>((*prepared)->clone()));
-        require(succeeded(nested::rewriteFiniteCollections(*prepared)),
-                "nested source rewrite failed");
-        require(succeeded(nested::verifyFiniteCollections(*before, *prepared)),
+        auto beforeExpansion = expansion;
+        require(
+            succeeded(nested::rewriteFiniteCollections(*prepared, expansion)),
+            "nested source rewrite failed");
+        require(succeeded(nested::verifyFiniteCollections(
+                    *before, *prepared, beforeExpansion, expansion)),
                 "nested source comparison failed");
         unsigned matvecs = 0, loops = 0;
         prepared->walk([&](Operation *op) {
@@ -95,7 +98,7 @@ int main() {
                 expansion)),
             "helper expansion failed");
     OwningOpRef<ModuleOp> before(cast<ModuleOp>((*prepared)->clone()));
-    require(succeeded(nested::rewriteFiniteCollections(*prepared)),
+    require(succeeded(nested::rewriteFiniteCollections(*prepared, expansion)),
             "effectful fallback failed");
     require(OperationEquivalence::isEquivalentTo(
                 before->getOperation(), prepared->getOperation(),

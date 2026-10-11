@@ -63,9 +63,10 @@ int zkc::runCompiler(int argc, char **argv,
            "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
            "  protocol-check-reductions SOURCE.mlir REQUIREMENTS.json "
            "CANDIDATE.mlir [--fuse-vector-reductions] [--no-finite-bulk]\n"
-           "  protocol-public-coin SOURCE.mlir REQUIREMENT.json\n"
+           "  protocol-public-coin SOURCE.mlir REQUIREMENT.json "
+           "[--fuse-vector-reductions] [--no-finite-bulk]\n"
            "  protocol-check-public-coin SOURCE.mlir REQUIREMENT.json "
-           "REPORT.json\n"
+           "REPORT.json [--fuse-vector-reductions] [--no-finite-bulk]\n"
            "  protocol-proof FILE.mlir POLICY [--no-simplify] "
            "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
            "  protocol-construct-proof FILE.mlir POLICY "
@@ -182,8 +183,22 @@ int zkc::runCompiler(int argc, char **argv,
   }
   if (mode == "protocol-public-coin" || mode == "protocol-check-public-coin") {
     bool check = mode == "protocol-check-public-coin";
-    if (argc != (check ? 5 : 4))
+    int required = check ? 5 : 4;
+    if (argc < required)
       return fail(error("public-coin-options"));
+    MathematicalSelectionPolicy mathematicalSelection;
+    std::set<std::string> seen;
+    for (int i = required; i < argc; ++i) {
+      StringRef option(argv[i]);
+      if (!seen.insert(option.str()).second)
+        return fail(error("public-coin-options"));
+      if (option == "--fuse-vector-reductions")
+        mathematicalSelection.vectorReductionFusion = true;
+      else if (option == "--no-finite-bulk")
+        mathematicalSelection.finiteBulk = false;
+      else
+        return fail(error("public-coin-options"));
+    }
     auto source = readInput(argv[2], 16 * 1024 * 1024);
     if (!source)
       return fail(source.takeError());
@@ -201,11 +216,13 @@ int zkc::runCompiler(int argc, char **argv,
       auto report = readInput(argv[4], 8 * 1024 * 1024);
       if (!report)
         return fail(report.takeError());
-      if (auto error = checkPublicCoin(*original, *requirement, *report))
+      if (auto error = checkPublicCoin(*original, *requirement, *report,
+                                       mathematicalSelection))
         return fail(std::move(error));
       outs() << "{\"format\":\"zkc.public-coin-checked/0\"}\n";
     } else {
-      auto report = analyzePublicCoin(*original, *requirement);
+      auto report =
+          analyzePublicCoin(*original, *requirement, mathematicalSelection);
       if (!report)
         return fail(report.takeError());
       outs() << *report << '\n';

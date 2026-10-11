@@ -8,7 +8,6 @@ enum class RealizationKind { Ordered, Bilinear, Reduction, Elementwise };
 struct ComputationSelection {
   RealizationKind kind = RealizationKind::Ordered;
   std::optional<finite::ComputationView> view;
-  std::optional<finite::Bilinear> bilinear;
 };
 /// Choose among installed logical algorithms; analysis supplies legal
 /// structure and domain laws. Physical implementation selection remains later.

@@ -281,7 +281,7 @@ public:
       return failure();
     auto result =
         compareLaneFormula(formula, rowwise, entry.getArguments(), rows, cursor,
-                           symbols, bindings, remaining);
+                           symbols, bindings, remaining, &entry.back());
     if (failed(result) || !valid || !cursor || !isa<local::ReturnOp>(cursor) ||
         cursor->getNextNode() || !cursor->getAttrs().empty() ||
         !llvm::equal(cursor->getOperands(), ValueRange{*result}))
@@ -316,10 +316,9 @@ LogicalResult verifyMapRealizationsPreserved(ModuleOp original,
       (*before)->getAttrDictionary() != (*after)->getAttrDictionary())
     return refuse("module shape or profile");
   SymbolTable symbols(*after);
-  SymbolTableCollection originalSymbols;
+  SymbolTable originalSymbols(*before);
   llvm::DenseSet<Operation *> retained, bindings;
-  uint64_t remaining = 1000000, indices = 1000000;
-  unsigned helpers = realizedHelperOperationLimit;
+  uint64_t remaining = 1000000;
   for (Operation &op : before->getBody().front()) {
     auto name = SymbolTable::getSymbolName(&op);
     if (!name)
@@ -329,14 +328,14 @@ LogicalResult verifyMapRealizationsPreserved(ModuleOp original,
       return refuse("missing declaration");
     retained.insert(replacement);
     if (auto map = dyn_cast<algebra::MapRealizeOp>(op)) {
-      // The reference formula is derived again from the retained original.
+      // Interpret the original helper closure directly. Sharing the producer's
+      // inlined scratch body would also share capture-substitution mistakes.
       auto function = dyn_cast<local::FuncOp>(replacement);
-      auto formula =
-          scalarFormula(map, *before, originalSymbols, helpers, indices);
-      if (!function || failed(formula))
+      auto helper = originalSymbols.lookup<func::FuncOp>(map.getHelper());
+      if (!function || !helper || !helper.getBody().hasOneBlock())
         return refuse("realization declaration or formula");
       if (failed(MapCorrespondence(symbols, bindings, remaining)
-                     .check(map, function, (*formula)->front())))
+                     .check(map, function, helper.getBody().front())))
         return refuse(remaining ? "realization body" : "work limit");
     } else if (!OperationEquivalence::isEquivalentTo(
                    &op, replacement, OperationEquivalence::IgnoreLocations))
@@ -409,16 +408,14 @@ FailureOr<Value> compareMapSum(algebra::MapRealizeOp map, ValueRange inputs,
                                llvm::DenseSet<Operation *> &bindings,
                                uint64_t &remaining) {
   auto unit = map->getParentOfType<protocol_ir::ProtocolModuleOp>();
-  SymbolTableCollection symbols;
-  unsigned helpers =
-      std::min<uint64_t>(realizedHelperOperationLimit, remaining);
-  uint64_t indices = std::min<uint64_t>(1000000, remaining);
-  auto formula =
-      scalarFormula(map, unit, symbols, helpers, indices, &remaining);
-  if (failed(formula))
+  auto helper =
+      unit ? dyn_cast_or_null<func::FuncOp>(
+                 SymbolTable::lookupSymbolIn(unit, map.getHelperAttr()))
+           : func::FuncOp();
+  if (!helper || !helper.getBody().hasOneBlock())
     return failure();
-  return compareLaneSum((*formula)->front(), map.getRowwise(), inputs, rows,
-                        cursor, candidateSymbols, bindings, remaining);
+  return compareLaneSum(helper.getBody().front(), map.getRowwise(), inputs,
+                        rows, cursor, candidateSymbols, bindings, remaining);
 }
 
 Error checkMapFormulas(ModuleOp original, uint64_t &remaining) {

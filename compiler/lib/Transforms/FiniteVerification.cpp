@@ -341,12 +341,24 @@ public:
     if (!valid)
       return false;
     Value rootDomain = c.domain.getBody().front().back().getOperand(0);
-    if (auto result = mathematical::compareFinitePayload(
-            c, entry, cardinalities.lookup(rootDomain), cursor, symbols,
-            bindings, remaining);
-        succeeded(result)) {
-      finish(ValueRange{*result});
-      return valid;
+    if (mathematical::hasFinitePayloadContract(cursor, symbols) ||
+        // An identity collect can return an existing vector without emitting
+        // payload. Its ordered alternative starts with an empty container.
+        (c.collect && cursor &&
+         isa<RankedTensorType>(c.signature.getResult(0)) &&
+         cursor->getName().getStringRef() !=
+             protocol::boundOperationName("vector.empty"))) {
+      // Semantic comparison is optional. Its bounded interpretation and
+      // normalization cannot spend the ordered reader's admission budget.
+      uint64_t comparisonWork = remaining;
+      if (auto result = mathematical::compareFinitePayload(
+              c, entry, cardinalities.lookup(rootDomain), cursor, symbols,
+              bindings, comparisonWork,
+              inlineMode ? nullptr : &begin->getBlock()->back());
+          succeeded(result)) {
+        finish(ValueRange{*result});
+        return valid;
+      }
     }
     SmallVector<Value> state, env;
     append_range(env, entry.take_front(c.arguments));

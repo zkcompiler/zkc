@@ -49,7 +49,8 @@ the verifier actually observes in the same program.
 ## Implementation boundaries
 
 `ZkcCompiler` owns the analysis because it invokes the existing preparation
-workflow. `createPrepareProtocolPass(false)` exposes unsimplified expansion;
+workflow. `createPrepareProtocolPass(false, policy)` exposes unsimplified expansion
+under the caller's shared mathematical selection policy;
 projection and default preparation retain their existing behavior. An owned
 clone, ordinary admission, shared role availability and registered operand
 contracts supply the analysis inputs. Reports use numeric dependency anchors
@@ -58,8 +59,11 @@ and prefix lengths to avoid copying each growing transcript.
 The independent requirement pins entry ports and ordered query/delivery sites.
 The implementation discovers the actual edges. It refuses hidden V-local calls,
 unmatched or changed coins and omitted verifier dependencies. Report checking
-recomputes everything. Checked compilation binds the result to the source text
-and exact emitted bundle, while preserving the narrower structural claim.
+recomputes everything, including preparation under an independently supplied
+policy. The view records `finite_bulk` and `fuse_vector_reductions`; its prepared
+hash names that exact unsimplified subject. Checked compilation forwards its
+policy to analysis and binds the result to the source text and exact emitted
+bundle, while preserving the narrower structural claim.
 
 ## Adopted construction boundary
 

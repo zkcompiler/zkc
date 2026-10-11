@@ -1,7 +1,9 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Analysis/Computation.h"
+#include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/IR.h"
 #include <fstream>
 #include <sstream>
@@ -60,6 +62,44 @@ module { "protocol.module"() ({
  }) {sym_name="main",function_type=(!V,!V,!F)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir";
+const char *capturedReduction = R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+!V = tensor<?x!F>
+module { "protocol.module"() ({
+ "data.domain"() ({ ^entry(%xs:!V):
+   %d = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
+   "data.domain_yield"(%d) : (!data.domain<ui64>)->()
+ }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<ui64>} : ()->()
+ func.func private @step(%s:!F,%i:ui64,%xs:!V,%ys:!V)->!F attributes {data.preconditions=[#data.index_bound<1,3,0>]} {
+   %x = "data.bounded_at"(%ys,%i) : (!V,ui64)->!F
+   %r = algebra.field_add %s,%x : (!F,!F)->!F
+   func.return %r : !F
+ }
+ "protocol.func"() ({ ^entry(%xs:!V,%seed:!F):
+   %r = "algebra.finite_fold"(%xs,%seed,%xs) {domain=@items,step=@step} : (!V,!F,!V)->!F
+   "protocol.return"(%r) : (!F)->()
+ }) {sym_name="main",function_type=(!V,!F)->!F,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+const char *indexedCollect = R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+!V = tensor<?x!F>
+module { "protocol.module"() ({
+ "data.domain"() ({ ^entry(%xs:!V):
+   %d = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
+   "data.domain_yield"(%d) : (!data.domain<ui64>)->()
+ }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<ui64>} : ()->()
+ func.func private @body(%i:ui64,%xs:!V,%factor:!F)->!F attributes {data.preconditions=[#data.index_bound<0,1,0>]} {
+   %x = "data.bounded_at"(%xs,%i) : (!V,ui64)->!F
+   %r = algebra.field_subtract %factor,%x : (!F,!F)->!F
+   func.return %r : !F
+ }
+ "protocol.func"() ({ ^entry(%xs:!V,%factor:!F):
+   %r = "algebra.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
+   "protocol.return"(%r) : (!V)->()
+ }) {sym_name="main",function_type=(!V,!F)->!V,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
 } // namespace
 int main() {
   DialectRegistry registry;
@@ -107,13 +147,17 @@ int main() {
       auto module = parseSourceString<ModuleOp>(fixture(name), &context);
       require(bool(module), "fixture refused");
       auto c = computation(*module);
-      auto plan = finite::recognizeReduction(c);
+      auto view = finite::analyzeComputation(c);
+      require(bool(view), "computation view missing");
+      auto plan = view->reduction;
       require(plan && plan->kernel == kernel, "kernel not recognized");
       auto originalInputs = plan->inputs;
       auto *combine = plan->combiner;
       Value left = combine->getOperand(0), right = combine->getOperand(1);
       combine->setOperands({right, left});
-      plan = finite::recognizeReduction(c);
+      view = finite::analyzeComputation(c);
+      require(bool(view), "changed computation view missing");
+      plan = view->reduction;
       require(plan && plan->kernel == kernel && plan->inputs == originalInputs,
               "symmetric accumulator changed the contraction");
       if (StringRef(name).starts_with("matrix-")) {
@@ -125,7 +169,6 @@ int main() {
                                      : finite::DemandKind::MatrixColumn),
                 "matrix orientation lost");
       }
-      auto view = finite::analyzeComputation(c);
       require(view && view->seeds.size() == 1 &&
                   view->captures.size() == c.arguments + c.captures &&
                   view->reduction && !view->admission.empty(),
@@ -134,14 +177,22 @@ int main() {
       // A recognized ordered helper cannot lose even unused successful work.
       OpBuilder builder(combine);
       builder.clone(*combine);
-      require(!finite::recognizeReduction(c),
+      view = finite::analyzeComputation(c);
+      require(view && !view->reduction && view->payload.back() == combine &&
+                  view->payload.size() >= 2,
               "unused ordered operation erased");
     });
   cases.run("bilinear multiplication order and symmetric combine", [&] {
     auto module = parseSourceString<ModuleOp>(fixture("bilinear"), &context);
     require(bool(module), "bilinear fixture refused");
     auto c = computation(*module);
-    require(bool(finite::recognizeBilinear(c)), "bilinear contraction missing");
+    auto view = finite::analyzeComputation(c);
+    require(view && view->bilinear && view->items.size() == 4 &&
+                view->accesses.size() == 3 &&
+                view->accesses.back().kind == finite::AccessKind::MatrixCell &&
+                view->accesses.back().item == 0 &&
+                view->accesses.back().columnItem == 2,
+            "bilinear contraction or coordinate facts missing");
     auto &body = c.helper->getRegion(0).front();
     for (auto &op : body.without_terminator()) {
       auto *facet = finite::semantics(&op);
@@ -150,31 +201,36 @@ int main() {
       Value left = op.getOperand(0), right = op.getOperand(1);
       op.setOperands({right, left});
     }
-    require(bool(finite::recognizeBilinear(c)),
-            "bilinear operand variation refused");
+    view = finite::analyzeComputation(c);
+    require(view && view->bilinear, "bilinear operand variation refused");
     // Matrix coordinates are ordered even though scalar products commute.
     auto &lookup = body.front();
     Value row = lookup.getOperand(1), column = lookup.getOperand(2);
     lookup.setOperands({lookup.getOperand(0), column, row});
-    require(!finite::recognizeBilinear(c),
+    view = finite::analyzeComputation(c);
+    require(view && !view->bilinear && view->accesses.size() == 2,
             "transposed access acquired the same contraction");
   });
   cases.run("ordered collect keeps unused instructions", [&] {
     auto module = parseSourceString<ModuleOp>(fixture("collect"), &context);
     require(bool(module), "collect fixture refused");
     auto c = computation(*module);
-    require(bool(finite::recognizeElementwise(c)), "collect formula missing");
+    auto view = finite::analyzeComputation(c);
+    require(view && view->elementwise, "collect formula missing");
     auto &body = c.helper->getRegion(0).front();
     OpBuilder builder(&body.back());
     builder.clone(body.front());
-    require(!finite::recognizeElementwise(c),
+    view = finite::analyzeComputation(c);
+    require(view && !view->elementwise && view->payload.size() == 2,
             "unused ordered lane operation erased");
   });
   cases.run("indexed dot and indexed unary reductions", [&] {
     auto module = parseSourceString<ModuleOp>(indexed, &context);
     require(bool(module), "indexed fixture refused");
     auto c = computation(*module);
-    auto plan = finite::recognizeReduction(c);
+    auto view = finite::analyzeComputation(c);
+    require(bool(view), "indexed computation view missing");
+    auto plan = view->reduction;
     require(plan && plan->kernel == "vector.dot" &&
                 plan->inputs == SmallVector<unsigned>({0, 1}) &&
                 plan->accesses.size() == 2 && plan->accesses[0].item == 0 &&
@@ -187,7 +243,9 @@ int main() {
     combine->setOperand(0, product->getOperand(0));
     product->erase();
     second->erase();
-    plan = finite::recognizeReduction(c);
+    view = finite::analyzeComputation(c);
+    require(bool(view), "changed indexed computation view missing");
+    plan = view->reduction;
     require(plan && plan->kernel == "vector.sum", "indexed sum missing");
     OpBuilder builder(combine);
     OperationState state(combine->getLoc(), "algebra.exec.field_multiply");
@@ -198,12 +256,16 @@ int main() {
     auto *multiply = builder.create(state);
     body.back().setOperand(0, multiply->getResult(0));
     combine->erase();
-    plan = finite::recognizeReduction(c);
+    view = finite::analyzeComputation(c);
+    require(bool(view), "changed indexed computation view missing");
+    plan = view->reduction;
     require(plan && plan->kernel == "vector.product",
             "indexed product missing");
     auto *lookup = body.front().getResult(0).getDefiningOp();
     lookup->setAttr("algebra.commutative", builder.getUnitAttr());
-    require(!finite::recognizeReduction(c), "user metadata acquired authority");
+    view = finite::analyzeComputation(c);
+    require(view && !view->reduction && view->accesses.empty(),
+            "user metadata acquired authority");
   });
   cases.run("indexed access must traverse the complete container", [&] {
     auto module = parseSourceString<ModuleOp>(indexed, &context);
@@ -218,7 +280,8 @@ int main() {
     lookup.setOperand(1, index);
     require(finite::semantics(&lookup),
             "fixed-index control has invalid ports");
-    require(!finite::recognizeReduction(c),
+    auto view = finite::analyzeComputation(c);
+    require(view && !view->reduction && view->accesses.size() == 1,
             "fixed access became a complete-vector reduction");
   });
   cases.run("pure neutral and unused expressions", [&] {
@@ -242,16 +305,18 @@ int main() {
     body.back().setOperand(0, neutral);
     algebra::FieldMultiplyOp::create(builder, body.back().getLoc(), field,
                                      body.getArgument(0), body.getArgument(1));
-    require(bool(finite::recognizeReduction(inner)),
-            "pure neutral/unused form refused");
+    auto view = finite::analyzeComputation(inner);
+    require(view && view->reduction, "pure neutral/unused form refused");
   });
   cases.run("common lane formula and noncommutative subtraction", [&] {
     auto module =
         parseSourceString<ModuleOp>(fixture("total-collect"), &context);
     require(bool(module), "collect fixture refused");
     auto c = computation(*module);
-    auto plan = finite::recognizeElementwise(c);
-    require(bool(plan), "elementwise formula not recognized");
+    auto view = finite::analyzeComputation(c);
+    require(view && view->elementwise && view->accesses.size() == 1 &&
+                view->captures.size() == 2,
+            "elementwise inputs or formula not recognized");
     auto &body = c.helper->getRegion(0).front();
     OpBuilder builder(&body.back());
     auto value = body.back().getOperand(0);
@@ -259,9 +324,101 @@ int main() {
         builder, body.back().getLoc(), value.getType(), body.getArgument(2),
         value);
     body.back().setOperand(0, difference);
-    plan = finite::recognizeElementwise(c);
-    require(plan && plan->modes.lookup(difference) == finite::FormulaMode::Rows,
-            "ordered subtraction lane mode lost");
+    view = finite::analyzeComputation(c);
+    require(view && view->elementwise && view->result == difference &&
+                view->elementwise->lookups.empty(),
+            "ordered subtraction lane formula lost");
+  });
+  cases.run("dead domain admission is independent of accessed items", [&] {
+    auto module = parseSourceString<ModuleOp>(fixture("dead-domain"), &context);
+    require(bool(module), "dead-domain fixture refused");
+    auto c = computation(*module);
+    auto view = finite::analyzeComputation(c);
+    require(
+        view && view->root == 0 && view->items.size() == 1 &&
+            view->admission.size() == 4 && view->accesses.size() == 1 &&
+            view->captures.size() == 3 && view->reduction &&
+            view->reduction->inputs == SmallVector<unsigned>({0}),
+        "unused constructors changed traversal or disappeared from admission");
+    for (auto [operation, recorded] : llvm::zip(
+             c.domain.getBody().front().without_terminator(), view->admission))
+      require(&operation == recorded, "constructor admission order changed");
+    require(view->seeds[0].input == 3 && !view->seeds[0].actual &&
+                view->seeds[0].formal ==
+                    c.helper->getRegion(0).front().getArgument(0),
+            "declaration seed acquired a fabricated call occurrence");
+  });
+  cases.run("multiple states retain exact seed and result mappings", [&] {
+    auto module = parseSourceString<ModuleOp>(fixture("total-state"), &context);
+    require(bool(module), "multiple-state fixture refused");
+    auto c = computation(*module);
+    auto view = finite::analyzeComputation(c);
+    require(view && view->seeds.size() == 2 && view->captures.size() == 1 &&
+                view->results.size() == 2 && !view->result &&
+                !view->reduction && view->accesses.size() == 1 &&
+                view->accesses[0].input == 0,
+            "ordered multi-state facts lost");
+    for (unsigned i = 0; i < 2; ++i)
+      require(view->seeds[i].input == i + 1 &&
+                  view->seeds[i].formal ==
+                      c.helper->getRegion(0).front().getArgument(i) &&
+                  view->seeds[i].actual == c.operation->getOperand(i + 1),
+              "state input/formal/actual partition changed");
+    require(view->results[0] == view->seeds[1].formal &&
+                view->results[1] == view->accesses[0].value,
+            "state transition result identity changed");
+  });
+  cases.run("shared indexed lane facts and exact lookup identity", [&] {
+    auto module = parseSourceString<ModuleOp>(indexedCollect, &context);
+    require(bool(module), "indexed collect refused");
+    auto c = computation(*module);
+    auto view = finite::analyzeComputation(c);
+    auto &body = c.helper->getRegion(0).front();
+    Value lookup = body.front().getResult(0);
+    require(view && view->elementwise && view->accesses.size() == 1 &&
+                view->accesses[0].kind == finite::AccessKind::Indexed &&
+                view->accesses[0].value == lookup &&
+                view->elementwise->lookups.lookup(lookup) ==
+                    view->captures[0].formal &&
+                view->captures[1].actual == c.operation->getOperand(1),
+            "lane selection lost analyzed access or uniform capture");
+    llvm::DenseMap<Value, Value> indices{
+        {body.getArgument(0), body.getArgument(1)}};
+    auto lanes =
+        finite::analyzeLaneFormula(body, view->result.getType(), {}, indices);
+    require(lanes && lanes->lookups.lookup(lookup) == body.getArgument(1),
+            "shared formula API disagrees with computation access");
+    indices[body.getArgument(0)] = body.getArgument(2);
+    require(
+        !finite::analyzeLaneFormula(body, view->result.getType(), {}, indices),
+        "unrelated index/container mapping granted a lane lookup");
+    body.front().setAttr("data.in_bounds", UnitAttr::get(&context));
+    view = finite::analyzeComputation(c);
+    require(view && !view->elementwise && view->accesses.empty(),
+            "forged lookup metadata acquired a lane realization");
+  });
+  cases.run("reduction extent premises must be shared with the reader", [&] {
+    auto module = parseSourceString<ModuleOp>(capturedReduction, &context);
+    require(bool(module), "captured reduction refused");
+    auto c = computation(*module);
+    require(finite::provesEqualExtent(c.operation->getOperand(0), 0,
+                                      c.operation->getOperand(2), 0),
+            "control lacks occurrence-only extent evidence");
+    auto view = finite::analyzeComputation(c);
+    require(view && !view->reduction && view->accesses.empty(),
+            "occurrence-only extent fact escaped into reduction selection");
+    auto premises = c.helper->getAttrOfType<ArrayAttr>("data.preconditions");
+    SmallVector<Attribute> shared(premises.begin(), premises.end());
+    shared.push_back(data::EqualExtentAttr::get(&context, 2, 0, 3, 0));
+    c.helper->setAttr("data.preconditions", ArrayAttr::get(&context, shared));
+    require(succeeded(mlir::verify(*module)),
+            "shared helper premise is not admitted");
+    view = finite::analyzeComputation(c);
+    require(
+        view && view->reduction && view->reduction->kernel == "vector.sum" &&
+            view->reduction->inputs == SmallVector<unsigned>({2}) &&
+            view->accesses.size() == 1 && view->accesses[0].input == 2,
+        "shared helper premise did not restore captured-container reduction");
   });
   return cases.result();
 }
