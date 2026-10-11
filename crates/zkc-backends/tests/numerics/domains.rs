@@ -1,0 +1,13 @@
+#[path = "domains/arithmetic.rs"]
+mod arithmetic;
+#[path = "domains/bindings.rs"]
+mod bindings;
+#[path = "domains/codec.rs"]
+mod codec;
+#[path = "domains/diagonal.rs"]
+mod diagonal;
+#[path = "domains/local_vocabulary.rs"]
+mod local_vocabulary;
+#[path = "domains/resources.rs"]
+mod resources;
+use crate::support;

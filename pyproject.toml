@@ -35,6 +35,10 @@ python-preference = "only-system"
 testpaths = ["common/tests"]
 pythonpath = ["common/tests", "common/tests/support", "compiler/test/support", "scripts"]
 addopts = "--strict-markers --strict-config"
+markers = [
+    "core: representative source compilation and Host execution using product tools only",
+    "resource: resource-boundary checks run with bounded concurrency",
+]
 # A hung tool is a failure with a stack, not a suite that never returns.
 timeout = 900
 

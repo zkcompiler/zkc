@@ -6,6 +6,7 @@ results therefore exercise a separate boundary from their structural agreement.
 
 import pytest
 
+from outcomes import explicit_stop, stopped
 from entry import Entry
 
 
@@ -76,7 +77,7 @@ run Demo=Run;
     report = entry.run_roles('reject', {
         'P': {'inputs': {'n': 1, 'go': False}}, 'V': {'inputs': {'n': 1}},
     }, refuses='entry-run-incomplete')
-    assert 'reject' in str(report)
+    assert explicit_stop(report) == 'reject'
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
@@ -141,7 +142,7 @@ run Demo=Run;
     entry = Entry(toolchain, journal, directory, source, flags)
     for go in (False, True):
         report = entry.run(str(go), {'go': go}, refuses='entry-run-incomplete')
-        assert ('reject' if go else 'abort') in str(report)
+        assert explicit_stop(report) == ('reject' if go else 'abort')
 
 
 def test_stopping_loop_retains_zero_trip_state(toolchain, journal, directory):
@@ -165,7 +166,7 @@ run Demo=Run;
     for go in (False, True):
         assert entry.run(f'empty-{go}', {'n': 0, 'go': go}) == {'result': '0'}
         report = entry.run(f'stop-{go}', {'n': 2, 'go': go}, refuses='entry-run-incomplete')
-        assert ('reject' if go else 'abort') in str(report)
+        assert explicit_stop(report) == ('reject' if go else 'abort')
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
@@ -199,7 +200,7 @@ run Demo=Run;
             inputs = {'x': 7, 'go': go, 'halt': halt}
             if halt:
                 report = entry.run(f'{go}-{halt}', inputs, refuses='entry-run-incomplete')
-                assert ('reject' if go else 'abort') in str(report)
+                assert explicit_stop(report) == ('reject' if go else 'abort')
             else:
                 assert entry.run(f'{go}-{halt}', inputs) == {'result': '14'}
 
@@ -253,10 +254,10 @@ run Demo=Run;
     assert entry.run_roles('pass', roles(1, True))['V'] == {'r': True}
     report = entry.run_roles('stop', roles(1, False), refuses='entry-run-incomplete')
     native_owner = f'role{("P", "V").index(owner):08x}'
-    stopped = next(role for role in report['execution']['roles'] if role['role'] == native_owner)
-    assert stopped['before'][1]['cause'] == ['explicit', {'omitted_bytes': 0, 'text': 'reject'}]
-    assert 'loop-count-disagreement' not in str(report)
-    assert 'provenance' not in str(report)
+    participant = next(role for role in report['execution']['roles'] if role['role'] == native_owner)
+    assert participant['before'][1]['cause'] == ['explicit', {'omitted_bytes': 0, 'text': 'reject'}]
+    assert report['execution']['failure'] is None
+    assert report['execution']['diagnostics'] == []
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
@@ -278,10 +279,10 @@ run Demo=Run;
     ]
     # The first draw consumed the available budget. Reaching the second draw
     # would report exhaustion, so the source stop must precede it.
-    assert 'exhausted' not in str(report)
+    assert explicit_stop(report) == 'reject'
     report = entry.run_roles('second-draw-exhausts', {'P': {'inputs': {'go': True}, 'services': {'coins': 1}}},
                              refuses='entry-run-incomplete')
-    assert 'exhausted' in str(report)
+    assert stopped(report) == 'exhausted:resource-budget'
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])

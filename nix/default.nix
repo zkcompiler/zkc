@@ -1,4 +1,8 @@
-{ inputs, system }:
+{
+  inputs,
+  system,
+  compilerCache ? null,
+}:
 let
   pkgs = import inputs.nixpkgs {
     inherit system;
@@ -6,7 +10,13 @@ let
     overlays = [ inputs.rust-overlay.overlays.default ];
   };
   inherit (pkgs) lib;
-  llvm = pkgs.llvmPackages_23;
+  llvmPackages = pkgs.llvmPackages_23;
+  # Keep Clang's libstdc++ ABI while using the matching wrapped LLD. The
+  # wrapper retains Nix runtime-library paths for tools and SDK consumers.
+  llvm = llvmPackages // {
+    clang = llvmPackages.clang.override { bintools = llvmPackages.bintools; };
+    stdenv = pkgs.overrideCC llvmPackages.stdenv llvm.clang;
+  };
   utf8proc = pkgs.callPackage ./utf8proc.nix { stdenv = llvm.stdenv; };
   rust = pkgs.rust-bin.fromRustupToolchainFile ../rust-toolchain.toml;
   rustDev = rust.override {
@@ -30,12 +40,22 @@ let
   pythonTools = pythonSet.mkVirtualEnv "zkc-python-tools" workspace.deps.all;
   environment = import ./environment.nix { inherit pkgs llvm python; };
   sources = import ./sources.nix { inherit lib; };
-  compiler = pkgs.callPackage ./compiler.nix {
-    inherit llvm utf8proc;
-    source = sources.compiler;
-    stdenv = llvm.stdenv;
-    python3 = python;
-  };
+  compilationCache = import ./compilation-cache.nix (
+    {
+      inherit pkgs;
+      stdenv = llvm.stdenv;
+      enabled = compilerCache != null;
+    }
+    // (if compilerCache == null then { } else compilerCache)
+  );
+  compiler = compilationCache.wrap "compiler" (
+    pkgs.callPackage ./compiler.nix {
+      inherit llvm utf8proc;
+      source = sources.compiler;
+      stdenv = compilationCache.stdenv;
+      python3 = python;
+    }
+  );
   compilerChecks = compiler.override {
     withTests = true;
     source = sources.compilerTests;
@@ -86,25 +106,12 @@ let
       base = domainCompiler shared false;
       domain = domainCompiler shared true;
     };
-  tools = pkgs.callPackage ./rust.nix {
-    rustPlatform = pkgs.makeRustPlatform {
-      cargo = rust;
-      rustc = rust;
-    };
+  craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rust;
+  rustBuild = pkgs.callPackage ./rust.nix {
+    inherit craneLib;
     source = sources.rust;
   };
-  testDrivers = tools.overrideAttrs {
-    pname = "zkc-test-drivers";
-    cargoBuildFlags = [
-      "-p"
-      "zkc-test-drivers"
-      "--bins"
-    ];
-    meta = {
-      description = "Native integration test drivers";
-      platforms = [ system ];
-    };
-  };
+  inherit (rustBuild) tools testDrivers;
   testSupport = pkgs.symlinkJoin {
     name = "zkc-test-tools";
     paths = [
@@ -159,6 +166,25 @@ in
       arklib
       llzk
       ;
+    # Snapshot stable dependencies once per dependency graph, not per commit.
+    ci-native-dependencies = pkgs.linkFarmFromDrvs "zkc-native-ci-dependencies" (
+      compiler.nativeBuildInputs
+      ++ compiler.buildInputs
+      ++ compiler.propagatedBuildInputs
+      ++ [
+        llvm.stdenv.cc
+        tools.dependencies
+        testDrivers.dependencies
+        pythonTools
+        pkgs.ccache
+        pkgs.zstd
+      ]
+    );
+    ci-rust-dependencies = pkgs.linkFarmFromDrvs "zkc-rust-ci-dependencies" [
+      rust
+      rustBuild.testDependencies
+      python
+    ];
     lake-sources = lakeSources;
     default = zkc;
     test-drivers = testDrivers;
@@ -207,24 +233,40 @@ in
       python3 = python;
       source = sources.repository;
     };
-    compiler-consumer = pkgs.callPackage ./checks/compiler-consumer.nix {
-      inherit compiler llvm;
-      source = sources.consumer;
-      stdenv = llvm.stdenv;
+    compiler-consumer = compilationCache.wrap "consumer" (
+      pkgs.callPackage ./checks/compiler-consumer.nix {
+        inherit compiler llvm utf8proc;
+        source = sources.consumer;
+        stdenv = compilationCache.stdenv;
+      }
+    );
+    core = pkgs.callPackage ./checks/core.nix {
+      inherit
+        compiler
+        tools
+        pythonTools
+        environment
+        ;
+      inherit (pkgs) uv;
+      source = sources.integration;
+      python3 = python;
     };
     project = pkgs.callPackage ./checks/project.nix {
       inherit
         pythonTools
         environment
-        tools
+        craneLib
         testSupport
         ;
+      inherit (rustBuild) cargoVendorDir;
       compiler = compilerChecks;
       source = sources.integration;
       python3 = python;
     };
     rust = pkgs.callPackage ./checks/rust.nix {
-      inherit tools environment;
+      inherit craneLib environment;
+      inherit (rustBuild) cargoVendorDir testProfile;
+      cargoArtifacts = rustBuild.testDependencies;
       source = sources.rustTests;
       python3 = python;
     };
@@ -253,6 +295,18 @@ in
     ];
     UV_PYTHON = python.interpreter;
     UV_PYTHON_DOWNLOADS = "never";
+  };
+  # Rust editing and tests do not need to realize LLVM/MLIR.
+  devShells.rust = pkgs.mkShell {
+    packages = [
+      rustDev
+      python
+      pkgs.uv
+      pkgs.just
+    ];
+    UV_PYTHON = python.interpreter;
+    UV_PYTHON_DOWNLOADS = "never";
+    shellHook = environment.development;
   };
   devShells.lean = pkgs.mkShellNoCC {
     packages = [

@@ -8,21 +8,30 @@
 #include <stdexcept>
 
 namespace zkc::test {
-inline void require(bool condition, const llvm::Twine &message) {
+// Compiler builtins preserve the assertion's caller location under C++17.
+inline void require(bool condition, const llvm::Twine &message,
+                    const char *file = __builtin_FILE(),
+                    unsigned line = __builtin_LINE()) {
   if (!condition)
-    throw std::runtime_error(message.str());
+    throw std::runtime_error(
+        (llvm::Twine(file) + ":" + llvm::Twine(line) + ": " + message).str());
 }
-template <typename T> T take(llvm::Expected<T> result) {
+template <typename T>
+T take(llvm::Expected<T> result, const char *file = __builtin_FILE(),
+       unsigned line = __builtin_LINE()) {
   if (!result)
-    throw std::runtime_error(llvm::toString(result.takeError()));
+    require(false, llvm::toString(result.takeError()), file, line);
   return std::move(*result);
 }
 template <typename T>
-void refuses(llvm::Expected<T> result, llvm::StringRef code) {
+void refuses(llvm::Expected<T> result, llvm::StringRef code,
+             const char *file = __builtin_FILE(),
+             unsigned line = __builtin_LINE()) {
   if (result)
-    throw std::runtime_error("expected refusal: " + code.str());
+    require(false, llvm::Twine("expected refusal: ") + code, file, line);
   auto message = llvm::toString(result.takeError());
-  require(namesIdentifier(message, code), "unexpected refusal: " + message);
+  require(namesIdentifier(message, code), "unexpected refusal: " + message,
+          file, line);
 }
 /// A failed prerequisite ends its own case; independent cases still execute.
 class Cases {

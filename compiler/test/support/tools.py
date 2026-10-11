@@ -80,7 +80,7 @@ def locate(name, directory, variable):
     return (
         f"{name} is not in {directory}\n"
         f"  {variable} names it or this build writes there, and it is neither\n"
-        f"  build it with: just build-compiler\n"
+        f"  build it with: just build-compiler release zkc-tests\n"
         f"  present there: {', '.join(present(directory)) or 'nothing'}"
     )
 

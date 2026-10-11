@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from outcomes import stopped
 from entry import Entry
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -94,10 +95,10 @@ run Demo=Run;
     assert result['logic'] == [False, True, False, True]
     report = entry.run('odd-table', inputs | {'v': vector([2, 3, 4])},
                        refuses='entry-run-incomplete')
-    assert 'split' in str(report)
+    assert stopped(report) == 'refused:split-length'
     report = entry.run('empty-table', inputs | {'v': vector([])},
                        refuses='entry-run-incomplete')
-    assert 'split' in str(report)
+    assert stopped(report) == 'refused:split-length'
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])

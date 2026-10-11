@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from test_machine_relations import machine, reductions
+from machine_reference import machine, reductions
 from ring_arena import decode, ZERO
 
 ROOT = Path(__file__).resolve().parents[3]

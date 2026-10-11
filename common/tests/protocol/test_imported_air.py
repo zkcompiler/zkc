@@ -7,6 +7,7 @@ committed fixtures and never build the optional adapter; its fixture check
 regenerates the same files from the pinned upstream AIR.
 """
 
+from outcomes import stopped
 from input_files import input_files
 import json
 from hashlib import sha256
@@ -95,12 +96,6 @@ class Client:
         return json.loads(output.read_text())['roles']['Evaluator']
 
 
-def stopped(report):
-    """The backend cause that stopped the only participant."""
-    (role,) = report['execution']['roles']
-    state, detail = role['after']
-    assert state == 'stopped' and detail['cause'][0] == 'backend'
-    return detail['cause'][1]['text']
 
 
 def test_source_binds_the_exported_arena(toolchain, journal, directory):

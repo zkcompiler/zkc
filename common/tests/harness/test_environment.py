@@ -113,7 +113,7 @@ def test_just_forwards_profile_and_native_environment_without_reinterpreting(mon
                    f"-DCMAKE_CXX_COMPILER={native_config['CXX']}",
                    f"-DMLIR_DIR={native_config['MLIR_DIR']}",
                    f"-DCMAKE_MAKE_PROGRAM={native_config['NINJA']}"]),
-        ("cmake", ["--build", "--preset", "dev"]),
+        ("cmake", ["--build", "--preset", "dev", "--target", "zkc-tests"]),
         ("ctest", ["--preset", "dev", "--output-junit", str(reports[0] / "ctest.xml")]),
     ]
     assert all(c["cwd"] == str(ROOT / "compiler") and c["jobs"] == "3" for c in commands)
@@ -136,7 +136,7 @@ def test_pytest_scope_preserves_selection_and_report_argument(scope, selection, 
     command = json.loads(record.read_text())
     reports = list((tmp_path / "report space/runs").glob(f"{scope}-*"))
     assert len(reports) == 1
-    assert command["arguments"] == ["run", "--no-sync", "--locked", "pytest", *selection,
+    assert command["arguments"] == ["run", "--no-sync", "--locked", "pytest", "-o", "testpaths=" + " ".join(selection),
                                      "-n", "2", f"--junit-xml={reports[0] / (scope + '.xml')}"]
     assert json.loads((reports[0] / "run.json").read_text())["status"] == "pass"
     assert command["cwd"] == str(ROOT)
@@ -156,6 +156,18 @@ def test_just_output_argument_is_forwarded_literally(recipe, arguments, monkeypa
     command = json.loads(record.read_text())
     expected = arguments + [output] + (["--profile", "release"] if recipe == "test-install" else [])
     assert command["arguments"] == expected
+
+
+@pytest.mark.parametrize("arguments", [[], ["-p", "zkc-backends", "test name; $(invalid)"]])
+def test_just_rust_recipe_selects_scope_and_forwards_arguments(arguments, monkeypatch, tmp_path):
+    fake_command(tmp_path, "python3")
+    record = tmp_path / "commands.jsonl"
+    monkeypatch.setenv("COMMAND_RECORD", str(record))
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    subprocess.run(["just", "--justfile", str(ROOT / "justfile"), "test-rust", *arguments],
+                   cwd=tmp_path, check=True, capture_output=True, text=True)
+    command = json.loads(record.read_text())
+    assert command["arguments"] == ["common/tests/run.py", "rust", "--", *arguments]
 
 
 def test_cleanup_refuses_the_checkout(monkeypatch, tmp_path):

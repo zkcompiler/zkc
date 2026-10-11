@@ -1,12 +1,8 @@
-//! What every backend test in this crate needs before it can judge anything.
+//! Fresh backend builders and runner polling shared by integration suites.
 //!
-//! This crate's tests arrive through two module roots — `tests/common/mod.rs`
-//! for the eleven that drive BLS declarations, `tests/domains/support.rs` for
-//! the thirteen that run one suite over several carriers — and no test target
-//! includes both. They had grown their own copies of the same three things: a
-//! byte-identical `domain`, a backend constructor differing only in which
-//! argument it let the caller vary, and the runner's poll loop. Those live
-//! here, and each root keeps what is actually its own.
+//! Each integration binary declares this module once. The common BLS helpers
+//! and the multi-carrier helpers reuse it while keeping their own vocabulary.
+//! Every builder creates a fresh backend; cases do not share runtime state.
 #![allow(dead_code)]
 
 use zkc_arkworks::VerifierKey;
@@ -25,11 +21,8 @@ pub fn entry(n: Option<usize>) -> EntryPolicy {
 
 /// A backend, with the three things a test ever varies given in one place.
 ///
-/// Sixty call sites constructed this directly and forty-two of them wanted the
-/// same thing: the default policy, no arity, no verifier key. The remainder
-/// varied exactly one of those, so they vary one here. A test *about* an entry
-/// policy or a public-input mode still builds its own subject and passes it to
-/// `NativeBackend::new`, because there the argument is what is being judged.
+/// Defaults use no homogeneous arity and no verifier key. Tests of the entry
+/// policy itself still construct their subject with `NativeBackend::new`.
 pub struct Fixture {
     policy: Policy,
     arity: Option<usize>,

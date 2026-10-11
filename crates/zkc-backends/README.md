@@ -104,7 +104,9 @@ framing and reduction. Authored `external.*` primitives remain separate; see
 
 ## Validation
 
-Run `cargo test -p zkc-backends --all-features`. Tests cover native framing,
+Run `cargo test -p zkc-backends --all-features`. Integration cases are grouped into
+`numerics`, `collections`, `execution`, `resources`, `wire`, and `conformance`
+binaries; `cargo test -p zkc-backends --test numerics bn254::` selects one family. Tests cover native framing,
 malformed values, setup authorization, capabilities, capacity, alternative
 implementations and independent mathematical/cryptographic references.
 `test-utils` exposes deterministic test entropy explicitly. These tests are

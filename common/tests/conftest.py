@@ -45,3 +45,10 @@ def journal(directory):
     yield kept
     failed = [one["name"] for one in kept.failures]
     assert not failed, f"checks recorded as failures: {failed}"
+
+
+@pytest.fixture(scope="session")
+def compiled_projects(records, testrun_uid, toolchain):
+    """Fresh package preparations shared by this invocation's workers only."""
+    from compiled_projects import CompiledProjects
+    return CompiledProjects(records / "preparations" / testrun_uid, toolchain)

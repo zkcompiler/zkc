@@ -13,8 +13,8 @@ setup:
     python3 scripts/develop.py setup
 
 # Report the selected toolchain and configuration.
-doctor:
-    python3 scripts/doctor.py
+doctor *args:
+    python3 scripts/doctor.py "$@"
 
 # Build the compiler and native execution toolkit incrementally.
 build: (build-compiler "release") build-rust
@@ -24,8 +24,8 @@ configure profile="release":
     python3 scripts/develop.py configure --profile "$1"
 
 # Build the compiler with a release, dev, sanitize or shared profile.
-build-compiler profile="release":
-    python3 scripts/develop.py compiler --profile "$1"
+build-compiler profile="release" *targets:
+    python3 scripts/develop.py compiler --profile "$1" {{ if targets == "" { "" } else { "--target" } }} "${@:2}"
 
 # Build the product CLI with its default features.
 build-rust:
@@ -47,27 +47,31 @@ clean-reports:
     python3 scripts/develop.py clean-reports
 
 # Build and test the selected compiler profile.
-test-compiler profile="release": (build-compiler profile)
-    python3 common/tests/run.py compiler --profile "$1"
+test-compiler profile="release" *args: (build-compiler profile "zkc-tests")
+    python3 common/tests/run.py compiler --profile "$1" -- "${@:2}"
 
 # Build and run the native C++ sanitizer tests.
 test-sanitize: (test-compiler "sanitize")
 
 # Run native compiler/Runner/Host integration checks.
-test-integration: build build-test-drivers
-    python3 common/tests/run.py integration
+test-integration *args: (build-compiler "release" "zkc-tests") build-rust build-test-drivers
+    python3 common/tests/run.py integration -- "$@"
+
+# Run representative compiler and Host semantics using product tools only.
+test-core: build
+    python3 common/tests/run.py integration -- -m core
 
 # Test command wiring and reporting without compiled project tools.
-test-harness:
-    python3 common/tests/run.py harness
+test-harness *args:
+    python3 common/tests/run.py harness -- "$@"
 
 # Check SDK discovery with small CMake/C++ fixtures.
-test-sdk:
-    python3 common/tests/run.py sdk
+test-sdk *args:
+    python3 common/tests/run.py sdk -- "$@"
 
 # Run the Rust workspace tests.
-test-rust:
-    python3 common/tests/run.py rust
+test-rust *args:
+    python3 common/tests/run.py rust -- "$@"
 
 # Run optional formal controls and independent Lean consumers.
 test-lean: (build-lean "main")

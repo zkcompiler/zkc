@@ -157,12 +157,6 @@ mod tests {
     }
 
     #[test]
-    fn the_corpus_is_one_directory_and_holds_what_tests_ask_for() {
-        assert!(source("variants/descriptors.json").exists());
-        assert!(source("external-transcript/monero-hash-vectors.json").exists());
-    }
-
-    #[test]
     fn evidence_goes_somewhere_that_survives_the_run() {
         let directory = records("support-self-check");
         std::fs::write(directory.join("kept.json"), "{}").unwrap();

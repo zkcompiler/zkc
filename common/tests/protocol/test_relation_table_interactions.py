@@ -12,6 +12,8 @@ covers the interaction forms the machine does not use. Agreement on these
 carriers is evidence about the kernels, not a reduction or a proof.
 """
 from hashlib import sha256
+from octic_reference import sample_points as points
+from outcomes import stopped
 from input_files import input_files
 import json
 from pathlib import Path
@@ -121,15 +123,6 @@ def unframe(text, extension=False):
     return [[int(w) for w in v] for v in text] if extension else [int(v) for v in text]
 
 
-def points(seed, n):
-    state, result = seed, []
-    for _ in range(n):
-        value = []
-        for _ in range(8):
-            state = (state * 6364136223846793005 + 1442695040888963407) % 2**64
-            value.append((state >> 33) % P)
-        result.append(value)
-    return result
 
 
 def base(n):
@@ -175,11 +168,6 @@ class Client:
         self.pin = sha256(text.encode()).hexdigest()
 
 
-def stopped(report):
-    (role,) = report['execution']['roles']
-    state, detail = role['after']
-    assert state == 'stopped' and detail['cause'][0] == 'backend'
-    return detail['cause'][1]['text']
 
 
 def inputs(height=16, interaction=0, subgroup=(), subgroup_rows=0, ood=(), ood_rows=0,

@@ -26,6 +26,7 @@ def test_example_project_declarations_match_explicit_inputs(toolchain, journal, 
     assert checked['scope'] == 'definitions'
 
 
+@pytest.mark.core
 def test_mapped_library_inference_and_admission_scopes(toolchain, journal, directory):
     library = directory / 'formula.zkc'
     library.write_text('''module formula;

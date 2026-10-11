@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "23 18 * * 1"
   workflow_dispatch:
     inputs:
       scope:
@@ -26,7 +28,7 @@ defaults:
 jobs:
   quick:
     name: Quick source and harness checks
-    if: github.event_name != 'workflow_dispatch' || inputs.scope == 'quick' || inputs.scope == 'all'
+    if: github.event_name != 'workflow_dispatch' || inputs.scope == 'quick' || inputs.scope == 'all' || inputs.scope == 'main' || inputs.scope == 'cache'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -48,56 +50,146 @@ jobs:
           path: build/reports/
           retention-days: 14
 
-  native:
-    name: Native build and execution
-    if: github.event_name != 'workflow_dispatch'
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-24.04' || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
-    timeout-minutes: 180
+  changes:
+    name: Select native changes
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      native: ${{ steps.changes.outputs.native }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: Select native changes
-        id: changes
+      - id: changes
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.sha }}
         run: python3 .github/scripts/select-native-changes.py
-      - name: Reserve build space
-        if: steps.changes.outputs.native == 'true' && runner.environment == 'github-hosted'
-        run: |
-          # Leave room for downloaded toolchains and concurrent native builds.
-          available_kib=$(df --output=avail -k / | tail -n 1)
-          if (( available_kib < 20 * 1024 * 1024 )); then
-            sudo rm -rf /usr/local/lib/android
-          fi
-          df -h /
+
+  native-packages:
+    name: Compiler, SDK and core execution
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-24.04' || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/nix
-        if: steps.changes.outputs.native == 'true'
-      - name: Check Rust, installed application, SDK and C++ formatting
-        if: steps.changes.outputs.native == 'true'
+        with:
+          cache-scope: native-dependencies
+          cache-key-target: .#ci-native-dependencies
+          dependencies-only: "true"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: compilation-cache
+        with:
+          path: build/compilation-cache
+          key: cpp-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.lock', 'nix/compilation-cache.nix') }}-${{ github.sha }}
+          restore-keys: |
+            cpp-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.lock', 'nix/compilation-cache.nix') }}-
+      - name: Check installed tools, SDK and core semantics
         run: |
           mkdir -p build/reports
-          nix build -L --keep-going --no-link \
-            .#checks.x86_64-linux.rust \
+          python3 .github/scripts/build-nix.py --compiler-cache build/compilation-cache \
             .#checks.x86_64-linux.application \
             .#checks.x86_64-linux.compiler-consumer \
+            .#checks.x86_64-linux.core \
             .#checks.x86_64-linux.sdk \
             .#checks.x86_64-linux.sources \
             .#checks.x86_64-linux.format \
             2>&1 | tee build/reports/native-checks.log
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.compilation-cache.outputs.cache-hit != 'true'
+        with:
+          path: build/compilation-cache
+          key: ${{ steps.compilation-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always() && steps.changes.outputs.native == 'true'
+        if: always()
         with:
           name: native-checks-${{ github.run_id }}
           path: build/reports/
           retention-days: 14
 
+  rust:
+    name: Rust tests and lint
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-24.04' || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/nix
+        with:
+          cache-key-target: .#ci-rust-dependencies
+          dependencies-only: "true"
+      - name: Identify the exact Rust check
+        id: rust-check-identity
+        run: |
+          derivation=$(nix eval --raw .#checks.x86_64-linux.rust.drvPath)
+          echo "identity=${derivation##*/}" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: rust-check-cache
+        with:
+          path: build/rust-check-cache
+          key: rust-check-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-check-identity.outputs.identity }}
+      - name: Restore the completed Rust check
+        if: steps.rust-check-cache.outputs.cache-hit == 'true'
+        run: |
+          if ! gzip -dc build/rust-check-cache/result.nar.gz | nix-store --import; then
+            echo "::warning::Rust check cache could not be imported; rebuilding the check."
+          fi
+      - name: Check the Rust workspace with cached dependencies
+        run: |
+          mkdir -p build/reports
+          python3 .github/scripts/build-nix.py .#checks.x86_64-linux.rust \
+            2>&1 | tee build/reports/rust-checks.log
+      - name: Export only the completed Rust check result
+        if: steps.rust-check-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p build/rust-check-cache
+          output=$(nix eval --raw .#checks.x86_64-linux.rust.outPath)
+          nix-store --export "$output" | gzip -1 > build/rust-check-cache/result.nar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: rust-checks-${{ github.run_id }}
+          path: build/reports/
+          retention-days: 14
+
+  native:
+    # Preserve the existing required-check name across the job split.
+    name: Native build and execution
+    needs: [changes, native-packages, rust]
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every selected native check
+        env:
+          SELECTION_RESULT: ${{ needs.changes.result }}
+          SELECTED: ${{ needs.changes.outputs.native }}
+          PACKAGES_RESULT: ${{ needs.native-packages.result }}
+          RUST_RESULT: ${{ needs.rust.result }}
+        run: |
+          test "$SELECTION_RESULT" = success
+          if [ "$SELECTED" = true ]; then
+            test "$PACKAGES_RESULT" = success
+            test "$RUST_RESULT" = success
+          else
+            test "$SELECTED" = false
+            test "$PACKAGES_RESULT" = skipped
+            test "$RUST_RESULT" = skipped
+          fi
 
   main:
     name: Full main packages and checks
-    if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'main' || inputs.scope == 'cache')
+    needs: [changes, native]
+    if: ${{ !cancelled() && ((github.event_name == 'push' && needs.changes.outputs.native == 'true' && needs.native.result == 'success') || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'main' || inputs.scope == 'cache'))) }}
     runs-on: ${{ vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: ${{ inputs.scope == 'cache' && 360 || 180 }}
     steps:
@@ -106,27 +198,47 @@ jobs:
           persist-credentials: false
       - name: Check the public source tree
         run: bash .github/scripts/public-tree-guard.sh
-      - name: Reserve space for LLVM source builds
-        if: runner.environment == 'github-hosted'
-        run: sudo rm -rf /usr/local/lib/android
       - uses: ./.github/actions/nix
+        if: inputs.scope != 'main' && inputs.scope != 'cache'
+        with:
+          cache-scope: native-dependencies
+          cache-key-target: .#ci-native-dependencies
+          dependencies-only: "true"
+      - uses: ./.github/actions/nix
+        if: inputs.scope == 'main' || inputs.scope == 'cache'
+        with:
+          cache-scope: main
+          require-cache: ${{ inputs.scope == 'cache' }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: inputs.scope != 'main' && inputs.scope != 'cache'
+        id: compilation-cache
+        with:
+          path: build/compilation-cache
+          key: cpp-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.lock', 'nix/compilation-cache.nix') }}-${{ github.sha }}
+          restore-keys: |
+            cpp-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.lock', 'nix/compilation-cache.nix') }}-
       - name: Require restoration on a fresh project store
         if: github.event_name == 'workflow_dispatch' && inputs.scope == 'cache'
         run: bash .github/scripts/check-nix-cache.sh
       - name: Record selected tools and lock
         run: |
           mkdir -p build/reports/environment
-          nix develop --profile build/nix-dev --command python3 scripts/doctor.py --json \
+          nix develop --command python3 scripts/doctor.py --json \
             | tee build/reports/environment/tools.json
           cp flake.lock build/reports/environment/
           nix config show sandbox > build/reports/environment/sandbox.txt
           test "$(cat build/reports/environment/sandbox.txt)" = true
       - name: Check all main packages in the sandbox
-        run: nix flake check -L --keep-going 2>&1 | tee build/reports/nix-check.log
-      - name: Retain successful check records
+        env:
+          VALIDATION_SCOPE: ${{ inputs.scope }}
         run: |
-          nix build .#checks.x86_64-linux.project --out-link build/nix-project
-          cp -RL build/nix-project/reports build/reports/packaged
+          nix flake check --no-build
+          python3 .github/scripts/check-nix-inputs.py
+          cache_options=()
+          if [ "$VALIDATION_SCOPE" != cache ] && [ "$VALIDATION_SCOPE" != main ]; then
+            cache_options+=(--compiler-cache build/compilation-cache)
+          fi
+          python3 .github/scripts/build-nix.py --all-checks "${cache_options[@]}" 2>&1 | tee build/reports/nix-check.log
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -136,21 +248,23 @@ jobs:
 
   optional:
     name: Optional (${{ matrix.package }})
-    if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'optional')
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'optional'))
     runs-on: ${{ vars.ZKC_OPTIONAL_RUNNER || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
-        package: [lean-checks, lean-toolchain-checks, arklib, llzk, compiler-sanitize]
+        package: ${{ fromJSON(github.event_name == 'schedule' && '["compiler-sanitize", "compiler-domain-checks", "compiler-domain-shared-checks"]' || '["lean-checks", "lean-toolchain-checks", "arklib", "llzk", "compiler-sanitize", "compiler-domain-checks", "compiler-domain-shared-checks"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Reserve build space
-        if: runner.environment == 'github-hosted'
-        run: sudo rm -rf /usr/local/lib/android
       - uses: ./.github/actions/nix
+        with:
+          # Weekly native variants reuse the ordinary toolchain snapshot,
+          # without evicting daily caches with three large, rarely reused stores.
+          cache-scope: ${{ startsWith(matrix.package, 'compiler-') && 'native-dependencies' || format('optional-{0}', matrix.package) }}
+          cache-save: ${{ !startsWith(matrix.package, 'compiler-') }}
       - name: Build and test the selected integration
         env:
           PACKAGE: ${{ matrix.package }}
@@ -158,6 +272,7 @@ jobs:
           mkdir -p build/reports
           nix build -L ".#$PACKAGE" --out-link "build/nix-$PACKAGE" \
             2>&1 | tee "build/reports/$PACKAGE.log"
+          python3 .github/scripts/retain-nix-cache.py "$(nix eval --raw ".#$PACKAGE.drvPath")"
           if [ -d "build/nix-$PACKAGE/reports" ]; then
             cp -RL "build/nix-$PACKAGE/reports" "build/reports/$PACKAGE"
           fi

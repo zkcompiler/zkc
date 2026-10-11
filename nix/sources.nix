@@ -66,7 +66,7 @@ let
       exclude = [ "common/tests/consumer/test_discovery.py" ];
     };
     rust.paths = rust;
-    rustTests.paths = rust ++ runner ++ rustFixtures ++ projects;
+    rustTests.paths = rust ++ runner ++ rustFixtures;
     application.paths = [
       "common/tests/check_install.py"
       "common/tests/support/project.py"

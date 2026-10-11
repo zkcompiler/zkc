@@ -10,7 +10,7 @@ import re
 
 import pytest
 
-from test_machine_stark import (EXAMPLE, FIXTURES, alter_vector, assert_refused,
+from machine_proofs import (EXAMPLE, FIXTURES, alter_vector, assert_refused,
                                compile_entry, prepare, prove_and_verify, requests)
 
 TRUNCATE = ('air_polynomial',

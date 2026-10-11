@@ -1,12 +1,42 @@
 name: Nix environment
-description: Install upstream Nix and optionally enable the GitHub Actions binary cache
+description: Install upstream Nix and optionally restore the GitHub Actions Nix store cache
 inputs:
+  cores:
+    description: Parallel workers within one Nix build
+    default: "4"
+  max-jobs:
+    description: Concurrent Nix builds on this runner
+    default: "1"
   cache:
     description: Read and write build outputs in the GitHub Actions cache
     default: "true"
+  cache-scope:
+    description: Separate store snapshots for jobs with different build graphs
+    default: "${{ github.job }}"
+  cache-key-target:
+    description: Optional flake target whose derivation identifies this snapshot
+    default: ""
+  dependencies-only:
+    description: Retain only cache-key-target and its dependencies in the snapshot
+    default: "false"
+  cache-save:
+    description: Save a new snapshot after a successful job
+    default: "true"
+  require-cache:
+    description: Require an empty project store before restoring cached results
+    default: "false"
 runs:
   using: composite
   steps:
+    - name: Reserve build and snapshot space
+      if: inputs.cache == 'true' && runner.environment == 'github-hosted'
+      shell: bash
+      run: |
+        available_kib=$(df --output=avail -k / | tail -n 1)
+        if (( available_kib < 20 * 1024 * 1024 )); then
+          sudo rm -rf /usr/local/lib/android
+        fi
+        df -h /
     - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
       with:
         install_url: https://releases.nixos.org/nix/nix-2.35.2/install
@@ -15,51 +45,65 @@ runs:
           experimental-features = nix-command flakes
           sandbox = true
           sandbox-fallback = false
-          max-jobs = 2
-          cores = 2
+          max-jobs = ${{ inputs.max-jobs }}
+          cores = ${{ inputs.cores }}
     - name: Report Nix version and verify settings
+      env:
+        NIX_EXPECTED_CORES: ${{ inputs.cores }}
+        NIX_EXPECTED_JOBS: ${{ inputs.max-jobs }}
       shell: bash
       run: |
         # Existing installations may use a newer release. Check the settings
         # and actual build isolation below, not an arbitrary version equality.
         nix --version
-        for setting in 'sandbox true' 'sandbox-fallback false' 'max-jobs 2' 'cores 2'; do
+        for setting in 'sandbox true' 'sandbox-fallback false' "max-jobs $NIX_EXPECTED_JOBS" "cores $NIX_EXPECTED_CORES"; do
           read -r name expected <<< "$setting"
           if [ "$(nix config show "$name")" != "$expected" ]; then
             echo "::error::The runner must configure Nix $name = $expected. The installer does not reconfigure an existing installation."
             exit 1
           fi
         done
-    - name: Prefer the signed upstream cache
+    - name: Require an empty project store before restoration
+      if: inputs.require-cache == 'true'
       shell: bash
-      run: |
-        # The GitHub cache daemon sets priority=1. Prefer upstream packages
-        # while retaining GitHub storage for project outputs missing upstream.
-        nix_config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/nix"
-        mkdir -p "$nix_config_dir"
-        touch "$nix_config_dir/nix.conf"
-        upstream='extra-substituters = https://cache.nixos.org?priority=0'
-        if ! grep -Fxq "$upstream" "$nix_config_dir/nix.conf"; then
-          printf '%s\n' "$upstream" >> "$nix_config_dir/nix.conf"
-        fi
-    - name: Fetch the pinned cache daemon
-      if: inputs.cache == 'true'
-      shell: bash
-      run: |
-        curl --fail --location --retry 3 \
-          https://install.determinate.systems/magic-nix-cache-closure/rev/5a7f052c8f0c6511bbef3570eeed4d39242171ef/X64-Linux \
-          --output "$RUNNER_TEMP/zkc-magic-nix-cache.xz"
-        echo "8a854c5cd4d8519b3893e2cf1f0c3429ed57dd83b7f6d8defc048fa75750d410  $RUNNER_TEMP/zkc-magic-nix-cache.xz" | sha256sum --check
-    - uses: DeterminateSystems/magic-nix-cache-action@84c0677f58dcedf3b91f8223ce36a9ea5b3c84b7
+      run: bash .github/scripts/check-nix-cache.sh --assert-empty
+    - name: Select the cache identity
+      id: cache-identity
       if: inputs.cache == 'true'
       env:
-        OTEL_SDK_DISABLED: "true"
+        CACHE_KEY_TARGET: ${{ inputs.cache-key-target }}
+      shell: bash
+      run: |
+        identity=$GITHUB_SHA
+        if [ -n "$CACHE_KEY_TARGET" ]; then
+          derivation=$(nix eval --raw "$CACHE_KEY_TARGET.drvPath")
+          identity=${derivation##*/}
+        fi
+        echo "identity=$identity" >> "$GITHUB_OUTPUT"
+    - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
+      if: inputs.cache == 'true'
       with:
-        source-binary: ${{ runner.temp }}/zkc-magic-nix-cache.xz
-        use-gha-cache: enabled
-        use-flakehub: disabled
-        diff-store: false
-        diagnostic-endpoint: ""
+        primary-key: nix-v2-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock') }}-${{ steps.cache-identity.outputs.identity }}
+        restore-prefixes-first-match: |
+          nix-v2-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock') }}-
+        save: ${{ inputs.cache-save }}
+        # Successful build graphs receive temporary GC roots. Remove stale
+        # results before snapshotting, including results from earlier commits.
+        gc-max-store-size-linux: 0
+    - name: Enable retention of successful build graphs
+      if: inputs.cache == 'true' && inputs.cache-save == 'true' && inputs.dependencies-only != 'true'
+      shell: bash
+      run: echo "ZKC_NIX_CACHE_ROOTS=$RUNNER_TEMP/zkc-nix-cache-roots" >> "$GITHUB_ENV"
+    - name: Retain the stable dependency graph
+      if: inputs.cache == 'true' && inputs.dependencies-only == 'true'
+      env:
+        CACHE_KEY_TARGET: ${{ inputs.cache-key-target }}
+        ZKC_NIX_CACHE_ROOTS: ${{ runner.temp }}/zkc-nix-cache-roots
+      shell: bash
+      run: |
+        test -n "$CACHE_KEY_TARGET"
+        nix build "$CACHE_KEY_TARGET" --no-link
+        python3 .github/scripts/retain-nix-cache.py "$(nix eval --raw "$CACHE_KEY_TARGET.drvPath")"
     - name: Verify effective build isolation
       shell: bash
       run: |

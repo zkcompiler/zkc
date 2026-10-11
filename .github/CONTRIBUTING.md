@@ -47,8 +47,8 @@ to `main` directly. Branch names are short and topical — `feat/…`, `fix/…`
    integration validation, not for every edit. Run optional suites when their
    integration boundary changes, and describe the checks actually performed.
    Automatic CI checks sources, formatting, documentation and the test harness.
-   Native changes also run Rust tests and installed CLI/SDK package checks.
-   Full compiler/protocol integration and optional suites have manual workflow scopes. Run affected checks locally and record their results; see the
+   Native changes also run Rust tests, installed CLI/SDK package checks and core execution controls.
+   Native pushes to `main` run full compiler/protocol integration. Weekly checks also cover sanitizers and static/shared domain installations; manual workflow scopes retain optional integrations and reproduction checks. Run affected checks locally and record their results; see the
    [maintenance guide](../docs/development/maintenance.md).
 2. Open the pull request and write its title and body as described below.
 3. Respond to review on the branch. What review confirms is fixed in the
@@ -105,6 +105,10 @@ belongs in the pull request body, which is what survives the squash.
   module whose entry point is `def run : IO Unit` has the same choice:
   `Tests.Checks` records a condition that does not hold and carries on, while
   a shape error stays fatal because there is no value to go on with.
+  Follow the [test maintenance guidance](../common/tests/README.md#maintaining-meaningful-tests):
+  identify the obligation and its owner, reuse preparation, and explain which
+  retained check covers any deleted regression test. Test count and runtime are
+  not substitutes for meaningful coverage and isolated failures.
 - **Semantics.** Update the owning specification: `docs/spec/` for native and
   shared contracts, `lean/docs/spec/` for independent formal models. Keep
   intended contracts and implementation coverage distinct; do not weaken a

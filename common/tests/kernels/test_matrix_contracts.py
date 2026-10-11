@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from outcomes import stopped
 from entry import Entry
 from octic_reference import ZERO, add, mul
 
@@ -144,7 +145,7 @@ run Demo=Run;
     for name, port, values in [('bad-columns', 'x', [1, 2]), ('bad-rows', 'y', [1])]:
         report = entry.run(name, inputs | {port: [str(v) for v in values]},
                            refuses='entry-run-incomplete')
-        assert 'matrix-shape' in str(report)
+        assert stopped(report) == 'refused:matrix-shape'
     for name, bad in [
         ('zero', [(0, 1, 0)]), ('duplicate', [(0, 1, 1), (0, 1, 2)]),
         ('unsorted', [(1, 1, 1), (0, 1, 2)]), ('outside', [(0, 3, 1)]),

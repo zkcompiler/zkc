@@ -30,3 +30,15 @@ def power(a, exponent):
 
 def coordinates(value):
     return b''.join(x.to_bytes(4, 'little') for x in value)
+
+
+def sample_points(seed, count):
+    """Deterministic Ext8 coordinates for bounded independent-model controls."""
+    state, result = seed, []
+    for _ in range(count):
+        value = []
+        for _ in range(8):
+            state = (state * 6364136223846793005 + 1442695040888963407) % 2**64
+            value.append((state >> 33) % P)
+        result.append(value)
+    return result

@@ -254,6 +254,7 @@ add_zkc_component(Transforms
 add_zkc_component(Compiler
   lib/Compiler/AssetSharing.cpp
   lib/Compiler/Language.cpp
+  lib/Compiler/BuildIdentity.cpp
   lib/Compiler/LanguagePackage.cpp
   lib/Compiler/LanguageInterface.cpp
   lib/Compiler/LanguageInterfaceReader.cpp

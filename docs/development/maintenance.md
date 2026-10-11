@@ -96,12 +96,7 @@ relax the owned warning/axiom checks to accept it.
 
 ## Upgrade and validate
 
-Update the owning pin and its resolved lock/hash together. A root `Cargo.lock`
-change also requires recalculating `cargoHash` in `nix/rust.nix`, even when it
-only adds an existing dependency to another workspace member. The vendor hash
-covers the lockfile as well as downloaded sources. Verify the package with
-`nix build .#tools .#test-drivers --no-link`; a direct Cargo build does not check
-this boundary.
+Update the owning pin and its resolved lock/hash together. Crane derives Rust vendoring from `Cargo.lock` and caches compiled dependencies using the selected manifests, profile, features and toolchain. There is no separate `cargoHash` to recalculate. Verify this boundary with `nix build .#tools .#test-drivers .#checks.x86_64-linux.rust --no-link`; a direct Cargo build does not check Nix's dependency artifacts. Update the Crane release through its flake input when needed, independently of language dependency upgrades.
 
 Inspect API, schema,
 codec and behavior changes at actual consumers. Reconfigure fresh build trees
@@ -119,14 +114,23 @@ when diagnosing a disagreement.
 The [test guide](../../common/tests/README.md) and CI manifests own current scopes.
 Automatic CI checks source hygiene, docs and the Python harness. Changes to
 native code, libraries or build configuration also run cached Nix checks for
-Rust tests/Clippy, the installed CLI, SDK discovery fixtures, an installed C++ SDK consumer, source boundaries and C++ formatting. Full CTest and protocol integration suites, sanitizers and optional
-formal/external integrations remain explicit workflow scopes.
+Rust tests/Clippy, the installed CLI, SDK discovery fixtures, an installed C++ SDK consumer, representative source-to-execution semantics, source boundaries and C++ formatting. Rust and compiler/package work run in independent jobs; the existing `Native build and execution` gate requires both selected jobs to succeed and accepts skipped jobs only when change selection explicitly excludes native work.
 
-The Rust check runs Clippy and workspace tests directly, without building the release CLI or depending on C++ tools and release test drivers. Source style checks own Cargo formatting. The application and project checks own those execution boundaries. Keep these derivations independent so Rust checks can run alongside the compiler build and reuse their result after unrelated C++ changes.
+Native pushes to `main` additionally run all Nix checks, including full CTest, protocol/kernel integration and input-invalidation controls. The weekly schedule repeats the full native suite plus sanitizer and static/shared domain-installation checks. Manual `main`, `optional`, `fresh` and `cache` scopes remain available; optional formal/external checks stay explicit. A narrow PR check is not evidence that the full suite passed.
+
+Daily CI caches dependencies and project compilation separately. The native and Rust Nix snapshots are keyed by their dependency derivations, so ordinary C++ and Rust source edits do not upload another multi-gigabyte store. Only the stable dependency graphs receive GC roots in these snapshots. The native snapshot also supplies full main and weekly native checks. Optional formal/external packages keep separate scopes; the manual `main` scope builds and seeds a complete canonical snapshot. Run `cache` on the same revision afterwards to verify restoration without rebuilding project outputs.
+
+C++ jobs restore a bounded compilation cache and copy it into the Nix store as an explicit input to `nix/ci.nix`. Each build unpacks it into its sandbox, validates compilation inputs through ccache, relinks the current libraries, and reruns the selected checks. The product and installed SDK consumer have separate caches, each limited to 128 MB before archive overhead. Stable unpack and SDK include paths allow reuse after a source edit; compiler contents, options and included headers still invalidate affected objects. The sole ignored option is Nix's changing `-frandom-seed`, which the pinned Clang ignores; `nix/compilation-cache.nix` requires that exact audited compiler version. Canonical flake packages remain available without compilation-cache inputs.
+
+Successful PR jobs refresh their own cache; successful pushes to `main` publish the seeds that later PRs can restore. GitHub's PR cache isolation, quota and eviction rules still apply. A first build, dependency upgrade, compiler-flag change or broad header change can miss the cache and cost slightly more than an uncached compilation. Cache statistics and selected outputs are retained in the job artifact. Rust keeps Crane's separate release and all-feature test dependency graphs. CI test builds and their dependency artifacts use `line-tables-only` debug information; local development retains its ordinary debug profile. A separate small archive stores only the completed Rust check output, keyed by its exact derivation, so unchanged Rust checks can be reused on C++-only PRs. There is no prefix fallback for that result cache: source, test and configuration changes require a new check. CI does not transfer the much larger mutable Cargo workspace target directory.
+
+To exercise the same C++ path locally, run `python3 .github/scripts/build-nix.py --compiler-cache build/compilation-cache .#checks.x86_64-linux.application .#checks.x86_64-linux.compiler-consumer .#checks.x86_64-linux.core`. An empty directory supplies a cold cache. Removing it is sufficient to start cold again; correctness must not depend on its presence. `--impure` in this helper only permits evaluating the checkout and explicit seed paths; it does not disable build sandboxing.
+
+The Rust check runs Clippy and workspace tests directly, without building the release CLI or depending on C++ tools and release test drivers. Source style checks own Cargo formatting. The application and project checks own those execution boundaries. Keep these derivations independent so Rust checks can run alongside the compiler build and reuse compiled dependencies after project source changes.
 
 The installed compiler package builds the CLI and SDK with `BUILD_TESTING=OFF`. `checks.compiler` builds and runs the full CTest suite and exports its test helpers for the project integration check. Sanitizers use that testing configuration; domain installation checks use the installed compiler configuration.
 
-When investigating CI time, compare job and step timings first, then the Nix build log's derivation phases. Separate dependency downloads, project compilation and test execution; a binary cache hit for dependencies does not reuse compilation of changed project sources. Retain the automatic checks when optimizing their dependency graph. Full CTest and protocol integration remain available through the manual `main` scope.
+When investigating CI time, compare job and step timings first, then the Nix build log's derivation phases. Separate dependency downloads, project compilation and test execution; a binary cache hit for dependencies does not reuse compilation of changed project sources. Retain the automatic checks when optimizing their dependency graph. The build wrapper retains selected targets, the exact flake lock, output paths, elapsed time and successful check reports in CI artifacts; build logs retain failures. Compare changes on the same runner and distinguish cold dependencies, reused dependency artifacts and complete output-cache hits.
 
 A direct test driver requires built tools. Report directories are allocated
 independently of shared build trees; concurrent reports do not isolate concurrent

@@ -132,3 +132,4 @@ def test_run_report_records_lifecycle_and_restores_caller(outcome, previous, mon
                                 "interrupted" if isinstance(outcome, KeyboardInterrupt) else "failed")
     assert record["argv"] == ["runner", "outer"]
     assert record["started_utc"] <= record["finished_utc"]
+    assert record["elapsed_seconds"] >= 0

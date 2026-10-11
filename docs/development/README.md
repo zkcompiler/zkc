@@ -25,6 +25,8 @@ just build
 
 Shell entry resolves tools without implicit dependency downloads or builds. Setup prepares locked development dependencies; the initial setup needs network access. [Getting started](../getting-started.md) walks through compiling, proving and verifying a maintained Schnorr Entry, including the input-authority boundary.
 
+For Rust-only work, `nix develop .#rust` supplies Rust, Python and command tools without LLVM/MLIR. The optional `.envrc` supports an already installed nix-direnv integration; enable it with `direnv allow`. It reloads on toolchain/input changes and refuses a stale environment when evaluation fails. Ordinary `nix develop` needs no direnv setup.
+
 Development operations expose their options through `python3 scripts/develop.py OPERATION --help`; validation scopes use `python3 common/tests/run.py SCOPE --help`. Each command rejects options belonging to another operation before execution.
 
 Outside Nix, provide compatible `CC`, `CXX`, `MLIR_DIR` and, when needed,
@@ -42,6 +44,7 @@ See [configuration](configuration.md) for directory and concurrency settings.
 just test-harness
 just test-compiler
 just test-rust
+just test-core
 just test-integration
 just test-docs
 ```
@@ -49,6 +52,8 @@ just test-docs
 Use the [test guide](../../common/tests/README.md#selecting-checks) to choose affected checks. `just test` is broad integration validation and includes resource-boundary cases; run it when changes justify that scope. Direct test drivers use existing outputs; Cargo tests and SDK checks build their own test targets and consumers. Domain installation checks explicitly prepare separate base/domain builds unless `--skip-build` selects existing ones. Record commands, revision, environment and actual results rather than treating documentation links as fresh evidence.
 
 ## Build profiles and installed consumers
+
+`just build-compiler` builds the product tools (`zkc-tools`). `just test-compiler` and `just test-integration` also build the C++ test helpers (`zkc-tests`). Select an individual CMake target with `just build-compiler dev ZkcLanguage`; raw CMake's default target still builds everything.
 
 [CMake presets](../../compiler/CMakePresets.json) provide separate `release`,
 `dev`, `sanitize` and `shared` build directories. Release is the default.
@@ -107,6 +112,5 @@ own manifests and toolchains. LLZK remains separate from the main compiler proce
 | Maintain pins, packages and CI | [Maintenance](maintenance.md) |
 | Write and validate documentation | [Documentation](documentation.md) |
 
-The shell supplies clangd, clang-format and rust-analyzer. Point clangd at the
-selected build's `compile_commands.json`. Use `cargo fmt`, `just fmt-cpp`,
+The shell supplies clangd, clang-format, rust-analyzer and ccache. Configure selects the profile's compilation database through a root `compile_commands.json` symlink used by the tracked `.clangd`; user-owned databases are preserved. `just doctor --profile dev` checks a selected profile. Use `cargo fmt`, `just fmt-cpp`,
 Ruff and `nix fmt` through their owning scopes; keep unrelated formatting separate.

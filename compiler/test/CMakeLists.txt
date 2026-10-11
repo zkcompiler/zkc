@@ -2,8 +2,11 @@
 #
 # A test name is optional. Without one the file is built but registers no test,
 # which is for an executable a Python test here drives as a tool.
+add_custom_target(zkc-tests DEPENDS zkc-tools)
+
 function(add_zkc_test name component)
   add_executable(zkc-${name}-test ${name}.cpp)
+  add_dependencies(zkc-tests zkc-${name}-test)
   target_link_libraries(zkc-${name}-test PRIVATE Zkc${component})
   target_compile_options(zkc-${name}-test PRIVATE -Wall -Wextra -Werror)
   if(ARGC GREATER 2)
@@ -299,3 +302,13 @@ add_zkc_test(nested_contractions_source Compiler nested-contractions-source)
 target_compile_definitions(zkc-nested_contractions_source-test PRIVATE
   ZKC_NESTED_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/language/nested-matrix.zkc")
 mlir_target_link_libraries(zkc-nested_contractions_source-test PRIVATE MLIRParser)
+
+# Enforce discovery against configured targets, including targets registered by
+# helpers. This does not depend on how add_zkc_test calls are formatted.
+file(GLOB zkc_native_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+foreach(source IN LISTS zkc_native_sources)
+  get_filename_component(stem "${source}" NAME_WE)
+  if(NOT TARGET zkc-${stem}-test)
+    message(FATAL_ERROR "Native test source ${source} has no build target")
+  endif()
+endforeach()

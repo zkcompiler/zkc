@@ -82,3 +82,77 @@ def test_operation_help_lists_only_its_options(entrypoint, operation, present, a
     help_text = capsys.readouterr().out
     assert all(option in help_text for option in present)
     assert all(option not in help_text for option in absent)
+
+
+@pytest.mark.parametrize("scope,arguments,expected", [
+    ("compiler", ["-R", "language.*", "--repeat", "until-fail:2"],
+     ["ctest", "--preset", "release", "-R", "language.*", "--repeat", "until-fail:2"]),
+    ("rust", ["-p", "zkc-runtime", "--", "specific_case", "--exact"],
+     ["cargo", "test", "--locked", "--no-fail-fast", "-p", "zkc-runtime", "--", "specific_case", "--exact"]),
+])
+def test_native_selection_is_forwarded_without_adding_a_broader_suite(scope, arguments, expected, monkeypatch, tmp_path):
+    driver = load("driver", "common/tests/run.py")
+    calls = []
+    monkeypatch.setattr(driver, "run", lambda args, **kwargs: calls.append(list(map(str, args))))
+    monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path / "reports"))
+    monkeypatch.setattr(sys, "argv", ["run.py", scope, "--", *arguments])
+    driver.main()
+    actual, = calls
+    assert actual[:len(expected)] == expected
+    assert "--workspace" not in actual
+
+
+def test_pytest_explicit_path_replaces_scope_discovery(monkeypatch, tmp_path):
+    driver = load("driver", "common/tests/run.py")
+    calls = []
+    monkeypatch.setattr(driver, "run", lambda args, **kwargs: calls.append(list(map(str, args))))
+    monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path / "reports"))
+    path = "common/tests/protocol/test_project_workflow.py"
+    monkeypatch.setattr(sys, "argv", ["run.py", "integration", "--", path, "-k", "defaults and not slow"])
+    driver.main()
+    actual, = calls
+    assert path in actual and "defaults and not slow" in actual
+    assert "common/tests/protocol" not in actual
+    assert "testpaths=common/tests/protocol common/tests/kernels" in actual
+
+
+def test_product_build_defaults_and_explicit_targets(monkeypatch):
+    driver = load("driver", "scripts/develop.py")
+    calls = []
+    monkeypatch.setattr(driver, "configure", lambda profile: None)
+    monkeypatch.setattr(driver, "run", lambda args, **kwargs: calls.append(args))
+    for arguments in [[], ["--target", "ZkcLanguage"]]:
+        monkeypatch.setattr(sys, "argv", ["develop.py", "compiler", *arguments])
+        driver.main()
+    assert [args[-1] for args in calls] == ["zkc-tools", "ZkcLanguage"]
+
+
+@pytest.mark.parametrize("existing", ["profile", "file", "external"])
+def test_configure_selects_profile_database_and_preserves_user_owned_files(existing, monkeypatch, tmp_path):
+    driver = load("driver", "scripts/develop.py")
+    root = tmp_path / "checkout"
+    release = root / "build/compiler/compile_commands.json"
+    selected = root / "build/compiler-dev/compile_commands.json"
+    for database in [release, selected]:
+        database.parent.mkdir(parents=True, exist_ok=True)
+        database.write_text("[]")
+    link = root / "compile_commands.json"
+    if existing == "profile":
+        link.symlink_to(release)
+    elif existing == "file":
+        link.write_text("user database")
+    else:
+        external = tmp_path / "external.json"
+        external.write_text("external database")
+        link.symlink_to(external)
+    monkeypatch.setattr(driver, "ROOT", root)
+    monkeypatch.setattr(driver, "compiler_directory", lambda profile: selected.parent)
+    monkeypatch.setattr(driver, "native_configuration", lambda: {})
+    monkeypatch.setattr(driver, "run", lambda *args, **kwargs: None)
+    driver.configure("dev")
+    if existing == "profile":
+        assert link.is_symlink() and link.resolve() == selected
+    elif existing == "file":
+        assert not link.is_symlink() and link.read_text() == "user database"
+    else:
+        assert link.is_symlink() and link.resolve() == external

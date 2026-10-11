@@ -8,6 +8,7 @@ from input_files import input_files
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
 @pytest.mark.parametrize('symbolic', [False, True])
+@pytest.mark.core
 def test_notation_operands_execute_once_in_source_order(
     toolchain, journal, directory, flags, symbolic,
 ):
@@ -61,6 +62,7 @@ run Demo=実行;
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
+@pytest.mark.core
 def test_notation_keeps_stop_and_boolean_short_circuit_behavior(toolchain, journal, directory, flags):
     source = '''module sample;
 fn checked(ok:bool)->bool{require ok;return ok;}
