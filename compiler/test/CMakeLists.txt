@@ -271,3 +271,13 @@ add_test(NAME relation-bundle-polynomial COMMAND zkc-relation_bundle_polynomial-
   "${PROJECT_SOURCE_DIR}/adapters/plonky3/fixtures/recurrence"
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/relation/polynomial-chunks.json")
 set_tests_properties(relation-bundle-polynomial PROPERTIES LABELS native)
+
+# Enforce discovery against configured targets, including targets registered by
+# helpers. This does not depend on how add_zkc_test calls are formatted.
+file(GLOB zkc_native_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+foreach(source IN LISTS zkc_native_sources)
+  get_filename_component(stem "${source}" NAME_WE)
+  if(NOT TARGET zkc-${stem}-test)
+    message(FATAL_ERROR "Native test source ${source} has no build target")
+  endif()
+endforeach()

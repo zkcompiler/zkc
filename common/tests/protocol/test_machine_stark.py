@@ -6,108 +6,66 @@ adversarial evidence, not a proof of cryptographic soundness or upstream VM
 compatibility.
 """
 
-from input_files import input_files
-import importlib.util
-import json
-from pathlib import Path
-
-import pytest
+from machine_proofs import (
+    compile_entry, requests, prove_and_verify, alter_vector, proof_messages,
+    repack, assert_refused, FIXTURES, prepare,
+)
 
 from logical_tree import decode_tree
-
-ROOT = Path(__file__).resolve().parents[3]
-EXAMPLE = ROOT / 'examples/projects/accumulator-machine'
-FIXTURES = ROOT / 'compiler/adapters/accumulator-machine/fixtures'
-_spec = importlib.util.spec_from_file_location('machine_proof_requests', EXAMPLE / 'prepare.py')
-prepare = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(prepare)
+from input_files import input_files
+import json
+import pytest
 
 
-def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None, edits=(), asset=None):
-    path = EXAMPLE / 'main.zkc'
-    if source is not None:
-        path = directory / 'main.zkc'
-        path.write_text(source)
-    package = directory / f'{entry}.zkpkg'
-    if source is None and not edits and asset is None:
-        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                               f'--project={EXAMPLE}/zkc.toml',
-                               f'accumulator_machine::{entry}', f'--output={package}', *flags])
-        return package, report['package_sha256']
-    command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-               f'--module=accumulator_machine={path}',
-               f'--asset=machine=relation-bundle-json={asset or FIXTURES / "bundle.json"}',
-               f'accumulator_machine::{entry}', f'--output={package}', *flags]
-    for module, file in [('air_bundle', 'air/bundle'), ('air_interaction', 'air/interaction'),
-                         ('air_stark', 'air/stark'), ('air_table', 'air/table'),
-                         ('air_polynomial', 'air/polynomial'), ('fri', 'fri/lib')]:
-        module_path = ROOT / 'libraries' / (file + '.zkc')
-        replacements = [(old, new) for owner, old, new in edits if owner == module]
-        if replacements:
-            text = module_path.read_text()
-            for old, new in replacements:
-                assert text.count(old) == 1, (module, old)
-                text = text.replace(old, new)
-            module_path = directory / (module + '.zkc')
-            module_path.write_text(text)
-        command.append(f'--module={module}={module_path}')
-    report = journal.json(command)
-    return package, report['package_sha256']
-
-
-def requests(run, **options):
-    return prepare.run_inputs(json.loads((FIXTURES / run / 'run.json').read_text()), **options)
-
-
-def prove_and_verify(toolchain, journal, directory, package, pin, name, pair):
-    prover = input_files(journal, name + '-prover', public=pair[0], witness=pair[1])
-    verifier = input_files(journal, name + '-verifier', public=pair[0])
-    proof = directory / (name + '.proof')
-    produced = journal.json([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *prover, f'--output={proof}'])
-    checked = journal.json([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'])
-    assert produced['status'] == 'produced'
-    assert checked['status'] == 'accepted'
-    return proof, verifier
+def check_transcript_schedule(package):
+    descriptor = json.loads(json.loads(package.read_text())['artifact'])[2]
+    assert descriptor[0] == 'zkc.native-proof-descriptor/0'
+    policy = descriptor[1]
+    assert policy[7] == [str(i) for i in [0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 13, 14, 15]]
+    events = []
+    for kind, encoded, *bound in descriptor[3]:
+        template = decode_tree(bytes.fromhex(encoded))
+        assert template[0] == 'zkc.native-origin-template/0' and template[3] == []
+        loops = tuple(tuple(s) for s in template[2] if s[0] == 'repeat')
+        events.append((kind, loops, template[4], bound))
+    # Base root; gamma/delta per channel; aux root and claims; alpha; Q root;
+    # OOD samples; input/aux/Q claims; rho/eta; FRI; all original openings.
+    assert [(kind, len(loops)) for kind, loops, _, _ in events] == [
+        ('message', 0), ('query', 1), ('message', 1), ('query', 1), ('message', 1),
+        ('message', 0), ('message', 0), ('query', 0), ('message', 0), ('message', 0),
+        ('query', 1), ('message', 1), ('message', 0), ('message', 0), ('message', 0),
+        ('query', 0), ('message', 0), ('query', 0), ('message', 0),
+        ('message', 1), ('query', 1), ('message', 1), ('message', 0),
+        ('index', 1), ('message', 1)] + [('message', 2)] * 4 + [('message', 1)] * 6
+    draws = [1, 3, 7, 10, 15, 17, 20, 23]
+    assert len(policy[8]) == len(draws)
+    for (query, delivery), i in zip(policy[8], draws, strict=True):
+        assert query.endswith('_' + events[i][2][2])
+        assert delivery.endswith('_' + events[i + 1][2][2])
+        assert events[i][2][5:7] == ['index' if i == 23 else 'draw', 'role00000001']
+    assert events[23][3] == ['64']
+    for i, (kind, _, event, bound) in enumerate(events):
+        if kind == 'message':
+            assert event[4:6] == (['role00000001', 'role00000000'] if i - 1 in draws
+                                  else ['role00000000', 'role00000001'])
+            assert bound == []
+    assert events[1][1] == events[2][1] == events[3][1] == events[4][1]
+    assert len({events[i][1] for i in [1, 10, 19, 23, 25, 29]}) == 6
+    assert all(events[i][1] == events[25][1] for i in range(25, 29))
+    assert all(events[i][1] == events[29][1] for i in range(29, 35))
 
 
 @pytest.mark.parametrize('entry', ['ProofLogUp', 'ProofProduct'])
-def test_machine_proofs_produce_and_verify(toolchain, journal, directory, entry):
-    package, pin = compile_entry(toolchain, journal, directory, entry)
+def test_machine_proofs_produce_and_verify(compiled_projects, toolchain, journal, directory, entry):
+    package, pin = compile_entry(toolchain, journal, directory, entry, compiled_projects=compiled_projects)
     check_transcript_schedule(package)
     for run in ['store-load', 'arithmetic-only', 'store-load-initial-seven']:
         prove_and_verify(toolchain, journal, directory, package, pin, run, requests(run))
 
 
-def alter_vector(values, position, value=None):
-    changed = list(values)
-    changed[position] = str((int(values[position]) + 1) % prepare.machine.P if value is None else value)
-    return changed
-
-
-def proof_messages(proof):
-    offset, result = 40, []
-    while offset < len(proof):
-        length = int.from_bytes(proof[offset:offset + 8], 'little')
-        result.append(proof[offset + 8:offset + 8 + length])
-        offset += 8 + length
-    assert offset == len(proof)
-    return result
-
-
-def repack(proof, messages):
-    return proof[:40] + b''.join(len(m).to_bytes(8, 'little') + m for m in messages)
-
-
-def assert_refused(result):
-    assert result.returncode > 0, result.stderr
-    report = json.loads(result.stdout)
-    assert report['status'] == 'refused', report
-    return report
-
-
 @pytest.mark.parametrize('entry', ['ProofLogUp', 'ProofProduct'])
-def test_machine_supports_distinct_heights_and_idle_memory(toolchain, journal, directory, entry):
-    package, pin = compile_entry(toolchain, journal, directory, entry)
+def test_machine_supports_distinct_heights_and_idle_memory(compiled_projects, toolchain, journal, directory, entry):
+    package, pin = compile_entry(toolchain, journal, directory, entry, compiled_projects=compiled_projects)
     document = json.loads((FIXTURES / 'arithmetic-only/run.json').read_text())
     # Execution stops after row 3; the configured program retains four unused
     # instructions, and the optional memory table can be present but idle.
@@ -121,16 +79,16 @@ def test_machine_supports_distinct_heights_and_idle_memory(toolchain, journal, d
 
 @pytest.mark.parametrize('entry,flags', [('ProofLogUp', ['--no-simplify']),
                                         ('ProofProduct', ['--release-storage'])])
-def test_machine_proof_compiler_policies(toolchain, journal, directory, entry, flags):
-    package, pin = compile_entry(toolchain, journal, directory, entry, flags=flags)
+def test_machine_proof_compiler_policies(compiled_projects, toolchain, journal, directory, entry, flags):
+    package, pin = compile_entry(toolchain, journal, directory, entry, flags=flags, compiled_projects=compiled_projects)
     prove_and_verify(toolchain, journal, directory, package, pin, 'policy', requests('store-load'))
 
 
-def test_machine_interactive_entry_runs_with_multi_megabyte_participants(toolchain, journal, directory):
+def test_machine_interactive_entry_runs_with_multi_megabyte_participants(compiled_projects, toolchain, journal, directory):
     # The embedded participant exceeds the old 1 MiB producer ceiling and
     # fits the Program carrier's shared 4 MiB limit. The outer Run bundle
     # has its own separate limit.
-    package, pin = compile_entry(toolchain, journal, directory, 'Run')
+    package, pin = compile_entry(toolchain, journal, directory, 'Run', compiled_projects=compiled_projects)
     bundle = json.loads(json.loads(package.read_text())['artifact'])
     assert bundle['format'] == 'zkc.run/0' and bundle['roles'] == ['role00000000', 'role00000001']
     assert 1024 * 1024 < len(bundle['candidate'].encode()) <= 4 * 1024 * 1024
@@ -154,8 +112,8 @@ def test_machine_interactive_entry_runs_with_multi_megabyte_participants(toolcha
 
 
 @pytest.mark.parametrize('entry', ['ProofLogUp', 'ProofProduct'])
-def test_machine_rejects_false_relations_and_profiles(toolchain, journal, directory, entry):
-    package, pin = compile_entry(toolchain, journal, directory, entry)
+def test_machine_rejects_false_relations_and_profiles(compiled_projects, toolchain, journal, directory, entry):
+    package, pin = compile_entry(toolchain, journal, directory, entry, compiled_projects=compiled_projects)
     pair = requests('store-load')
     public, private = pair[0], pair[1]
     honest, _ = prove_and_verify(toolchain, journal, directory, package, pin, 'honest', pair)
@@ -203,8 +161,8 @@ def test_machine_rejects_false_relations_and_profiles(toolchain, journal, direct
 
 
 @pytest.mark.parametrize('entry', ['ProofLogUp', 'ProofProduct'])
-def test_machine_authenticates_all_commitment_phases(toolchain, journal, directory, entry):
-    package, pin = compile_entry(toolchain, journal, directory, entry)
+def test_machine_authenticates_all_commitment_phases(compiled_projects, toolchain, journal, directory, entry):
+    package, pin = compile_entry(toolchain, journal, directory, entry, compiled_projects=compiled_projects)
     proof, verifier = prove_and_verify(toolchain, journal, directory, package, pin,
                                       'honest', requests('store-load'))
     original = proof.read_bytes()
@@ -231,44 +189,6 @@ def test_machine_authenticates_all_commitment_phases(toolchain, journal, directo
         path = directory / (name + '.proof')
         path.write_bytes(data)
         journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={path}'], refuses=code)
-
-
-def check_transcript_schedule(package):
-    descriptor = json.loads(json.loads(package.read_text())['artifact'])[2]
-    assert descriptor[0] == 'zkc.native-proof-descriptor/0'
-    policy = descriptor[1]
-    assert policy[7] == [str(i) for i in [0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 13, 14, 15]]
-    events = []
-    for kind, encoded, *bound in descriptor[3]:
-        template = decode_tree(bytes.fromhex(encoded))
-        assert template[0] == 'zkc.native-origin-template/0' and template[3] == []
-        loops = tuple(tuple(s) for s in template[2] if s[0] == 'repeat')
-        events.append((kind, loops, template[4], bound))
-    # Base root; gamma/delta per channel; aux root and claims; alpha; Q root;
-    # OOD samples; input/aux/Q claims; rho/eta; FRI; all original openings.
-    assert [(kind, len(loops)) for kind, loops, _, _ in events] == [
-        ('message', 0), ('query', 1), ('message', 1), ('query', 1), ('message', 1),
-        ('message', 0), ('message', 0), ('query', 0), ('message', 0), ('message', 0),
-        ('query', 1), ('message', 1), ('message', 0), ('message', 0), ('message', 0),
-        ('query', 0), ('message', 0), ('query', 0), ('message', 0),
-        ('message', 1), ('query', 1), ('message', 1), ('message', 0),
-        ('index', 1), ('message', 1)] + [('message', 2)] * 4 + [('message', 1)] * 6
-    draws = [1, 3, 7, 10, 15, 17, 20, 23]
-    assert len(policy[8]) == len(draws)
-    for (query, delivery), i in zip(policy[8], draws, strict=True):
-        assert query.endswith('_' + events[i][2][2])
-        assert delivery.endswith('_' + events[i + 1][2][2])
-        assert events[i][2][5:7] == ['index' if i == 23 else 'draw', 'role00000001']
-    assert events[23][3] == ['64']
-    for i, (kind, _, event, bound) in enumerate(events):
-        if kind == 'message':
-            assert event[4:6] == (['role00000001', 'role00000000'] if i - 1 in draws
-                                  else ['role00000000', 'role00000001'])
-            assert bound == []
-    assert events[1][1] == events[2][1] == events[3][1] == events[4][1]
-    assert len({events[i][1] for i in [1, 10, 19, 23, 25, 29]}) == 6
-    assert all(events[i][1] == events[25][1] for i in range(25, 29))
-    assert all(events[i][1] == events[29][1] for i in range(29, 35))
 
 
 @pytest.mark.parametrize('profile', ['larger-bound', 'local', 'partial-scope', 'field-balance'])

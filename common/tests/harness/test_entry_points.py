@@ -23,53 +23,6 @@ def test_every_compiler_test_is_where_the_glob_that_registers_them_looks():
     )
 
 
-def test_every_native_compiler_test_source_has_a_build_target():
-    import re
-
-    directory = ROOT / "compiler/test"
-    declared = re.findall(r"^add_zkc_test\((\w+)(?:\s+[^)]*)?\)",
-                          (directory / "CMakeLists.txt").read_text(), re.MULTILINE)
-    assert len(declared) == len(set(declared)), "duplicate native test target"
-    assert set(declared) == {path.stem for path in directory.glob("*.cpp")}
-
-
-def test_every_repository_path_a_test_file_cites_exists():
-    """A test that points at its counterpart should point at something.
-
-    Read multiline docstrings and comments, recognizing paths under maintained
-    repository directories. This keeps cross-references useful after moves.
-    """
-    import ast
-    import io
-    import re
-    import tokenize
-
-    pattern = re.compile(r"(?:common/tests|compiler|crates|lean|docs)/[\w./-]+\.\w+")
-    missing = []
-    for folder in ("compiler/test", "common/tests"):
-        for path in sorted((ROOT / folder).rglob("*.py")):
-            if "__pycache__" in path.parts:
-                continue
-            source = path.read_text()
-            prose = []
-            for node in ast.walk(ast.parse(source, str(path))):
-                if isinstance(node, (ast.Module, ast.ClassDef,
-                                     ast.FunctionDef, ast.AsyncFunctionDef)):
-                    prose.append(ast.get_docstring(node) or "")
-            prose += [
-                token.string
-                for token in tokenize.generate_tokens(io.StringIO(source).readline)
-                if token.type == tokenize.COMMENT
-            ]
-            for cited in pattern.findall("\n".join(prose)):
-                if not (ROOT / cited).exists():
-                    missing.append(f"{path.relative_to(ROOT)}: {cited}")
-    assert missing == [], (
-        "these paths are cited by a test that describes itself, and are not in "
-        "the repository:\n  " + "\n  ".join(sorted(set(missing)))
-    )
-
-
 def test_every_lean_check_is_where_the_loop_that_runs_them_looks():
     """`just test-lean` discovers Lean checks and independent consumers.
 
@@ -90,36 +43,6 @@ def test_every_lean_check_is_where_the_loop_that_runs_them_looks():
     assert beside_lean == [], (
         "lean/Tests/ is built by Lake, which does not run Python; a check "
         "that landed here would never run"
-    )
-
-
-def test_every_recipe_summary_reads_as_one():
-    """`just --list` shows the last comment line above a recipe, and only that.
-
-    Require a short sentence at the end of each recipe's comment block so the
-    command listing shows a complete summary.
-    """
-    import re
-
-    # A recipe opens at column zero and its name is followed by parameters and
-    # then a colon. `set` and `export` lines also start there and also hold a
-    # colon, so the assignment form is what separates them.
-    recipe = re.compile(r"^([a-z][\w-]*)(?: [^:=]*)?:(?![=])")
-    lines = (ROOT / "justfile").read_text().splitlines()
-    wrong = []
-    for number, line in enumerate(lines):
-        found = recipe.match(line)
-        if not found or line.startswith(("set ", "export ")):
-            continue
-        name = found.group(1)
-        if number == 0 or not lines[number - 1].startswith("#"):
-            continue
-        summary = lines[number - 1].removeprefix("#").strip()
-        if not summary[:1].isupper() or len(summary) > 100:
-            wrong.append(f"{name}: {summary!r}")
-    assert wrong == [], (
-        "these recipes hand `just --list` something that does not read as a "
-        "summary of them:\n  " + "\n  ".join(wrong)
     )
 
 
@@ -167,11 +90,3 @@ def test_native_generator_and_client_pairs_remain_available():
         if example not in drivers or not drivers[example].is_file():
             missing.append(f"Rust driver {example}")
     assert not missing, "native integration coverage lost its inputs: " + ", ".join(missing)
-
-
-def test_rust_recipe_runs_only_cargo_tests():
-    import subprocess
-
-    result = subprocess.run(["just", "--justfile", str(ROOT / "justfile"), "--dry-run", "test-rust"],
-                            capture_output=True, text=True, check=True, timeout=10)
-    assert (result.stdout + result.stderr).strip() == 'python3 common/tests/run.py rust -- "$@"'

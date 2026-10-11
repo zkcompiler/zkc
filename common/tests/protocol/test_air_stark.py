@@ -4,43 +4,17 @@ The AIR fixture comes from direct upstream execution. Tests exercise the full
 proof path and adversarial obligations, without asserting a soundness bound.
 """
 
+from air_proofs import (
+    scalar, vector, unpack, inputs, compile_entry,
+    request, frames, replace_frame, ROOT, EXAMPLE,
+    TABLE, STARK, FIXTURE, P,
+)
+
 from input_files import input_files
 import json
 import re
-from pathlib import Path
-
 import pytest
-
 from logical_tree import decode_tree
-
-ROOT = Path(__file__).resolve().parents[3]
-EXAMPLE = ROOT / 'examples/projects/air-stark/main.zkc'
-TABLE = ROOT / 'libraries/air/table.zkc'
-STARK = ROOT / 'libraries/air/stark.zkc'
-FIXTURE = ROOT / 'compiler/adapters/plonky3/fixtures/recurrence'
-P = 2130706433
-
-
-def scalar(value):
-    return str(value)
-
-
-def vector(values):
-    return [str(v) for v in values]
-
-
-def unpack(value):
-    return [int(v) for v in value]
-
-
-def inputs():
-    original = json.loads((FIXTURE / 'source-trace-honest.json').read_text())
-    data = original
-    x0, y0, final = unpack(data['public_data'])
-    return ({'configuration': data['configuration'], 'x0': scalar(x0),
-             'y0': scalar(y0), 'final_acc': scalar(final), 'shift': scalar(3),
-             'round_count': 3, 'query_count': 8, 'attempt_count': 8},
-            {'trace': data['trace']})
 
 
 def test_documented_air_stark_requests(journal, directory):
@@ -52,57 +26,71 @@ def test_documented_air_stark_requests(journal, directory):
     assert json.loads((directory / 'witness.json').read_text()) == private
 
 
-def compile_entry(toolchain, journal, directory, *, log_size=5, queries=8,
-                  flags=(), entry='Proof', source=None, table=TABLE, stark=STARK):
-    package = directory / f'{entry}.zkpkg'
-    if source is None and log_size == 5 and queries == 8 and table == TABLE and stark == STARK:
-        report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                               f'--project={EXAMPLE.parent}/zkc.toml',
-                               f'air_stark_example::{entry}', f'--output={package}', *flags])
-        return package, report['package_sha256']
-    source = EXAMPLE.read_text() if source is None else source
-    source = source.replace('TableArgument<0,Recurrence,3,5,8,8>',
-                            f'TableArgument<0,Recurrence,3,{log_size},{queries},8>')
-    path = directory / 'main.zkc'
-    path.write_text(source)
-    command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-               f'--module=air_stark_example={path}',
-               f'--module=air_stark={stark}',
-               f'--module=air_table={table}',
-               f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
-               f'--module=fri={ROOT}/libraries/fri/lib.zkc',
-               f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json',
-               f'air_stark_example::{entry}', f'--output={package}', *flags]
-    report = journal.json(command)
-    return package, report['package_sha256']
+SAMPLER = '''module air_stark_example;
+use air_stark::{Extension, consider, finish};
+use air_polynomial::{Vector};
+fn choose(values: Vector<Extension>, shift: Extension) -> Extension {
+  let mut chosen: Extension = 0;
+  let mut found = false;
+  for i in 0..kernel<Extension>("vector.length", values) {
+    let candidate = kernel<Extension>("vector.get", values, i);
+    let next = consider(8, 32, shift, chosen, found, candidate);
+    chosen = next.0;
+    found = next.1;
+  }
+  return finish(chosen, found);
+}
+protocol Sample roles(V)(values:Vector<Extension>@V, shift:Extension@V)
+ -> (selected:Extension@V) {
+ let selected@V=choose(values,shift);
+ return (selected=selected);
+}
+run Run=Sample;
+'''
 
 
-def request(journal, name, public, private=None):
-    return input_files(journal, name + '.json', public=public, witness=private or {})
+def extension_wire(values, scalar_value=False):
+    rows = [[str(x) for x in v] for v in values]
+    return rows[0] if scalar_value else rows
 
 
-def frames(proof):
-    offset, result = 40, []
-    while offset < len(proof):
-        count = int.from_bytes(proof[offset:offset + 8], 'little')
-        result.append(proof[offset + 8:offset + 8 + count])
-        offset += count + 8
-    assert offset == len(proof)
-    return result
-
-
-def replace_frame(proof, position, value):
-    messages = frames(proof)
-    messages[position] = value
-    return proof[:40] + b''.join(len(m).to_bytes(8, 'little') + m for m in messages)
+POLYNOMIAL_VIEW = '''module air_stark_example;
+use air_polynomial::{Vector, empty, extend_columns, split_quotient};
+use air_table::{quotient_values, claims, opening_claims, identity, deep_word};
+domain E=field("koala-bear.ext8-binomial3");
+domain B=bundle(asset recurrence);
+fn inspect(trace:Vector<E>, configuration:Vector<E>, data:Vector<E>,
+ shift:E, alpha:E, zeta:E, rho:E, eta:E, size:index)
+ -> (Vector<E>,Vector<E>,Vector<E>,Vector<E>,bool,Vector<E>) {
+ let w=extend_columns(trace,4,8,shift,size);
+ let c=extend_columns(configuration,1,8,shift,size);
+ let none=empty<E>();
+ let quotient=quotient_values<E,0,B>(w,c,none,data,8,shift,size,alpha);
+ let chunks=split_quotient(quotient,shift,size,8,2);
+ let opened=claims<E,0,B>(trace,configuration,none,data,8,zeta);
+ let quotient_opened=opening_claims(chunks,2,shift,size,zeta);
+ let valid=identity<E,0,B>(opened,quotient_opened,configuration,none,data,8,zeta,alpha);
+ let reduced=deep_word<E,0,B>(w,chunks,opened,quotient_opened,8,shift,size,zeta,rho,eta);
+ return (quotient,chunks,opened,quotient_opened,valid,reduced);
+}
+protocol Inspect roles(P)(trace:Vector<E>@P, configuration:Vector<E>@P,
+ data:Vector<E>@P, shift:E@P, alpha:E@P, zeta:E@P, rho:E@P, eta:E@P,
+ size:index@P) -> (quotient:Vector<E>@P, chunks:Vector<E>@P,
+ opened:Vector<E>@P, quotient_opened:Vector<E>@P, valid:bool@P, reduced:Vector<E>@P) {
+ let result@P=inspect(trace,configuration,data,shift,alpha,zeta,rho,eta,size);
+ return (quotient=result.0,chunks=result.1,opened=result.2,
+  quotient_opened=result.3,valid=result.4,reduced=result.5);
+}
+run Run=Inspect;
+'''
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
 @pytest.mark.parametrize('profile', [(4, 8), (5, 8), (6, 12)])
-def test_external_air_stark_produces_and_verifies(toolchain, journal, directory, flags, profile):
+def test_external_air_stark_produces_and_verifies(compiled_projects, toolchain, journal, directory, flags, profile):
     log_size, queries = profile
     package, pin = compile_entry(toolchain, journal, directory, log_size=log_size,
-                                queries=queries, flags=flags)
+                                queries=queries, flags=flags, compiled_projects=compiled_projects)
     public, private = inputs()
     public['query_count'] = queries
     producer = request(journal, 'producer', public, private)
@@ -118,8 +106,8 @@ def test_external_air_stark_produces_and_verifies(toolchain, journal, directory,
     assert any('zkc.relation-bundle/0' in text for _, text in captured['assets'])
 
 
-def test_stark_checks_statement_trace_schedule_and_shape(toolchain, journal, directory):
-    package, pin = compile_entry(toolchain, journal, directory)
+def test_stark_checks_statement_trace_schedule_and_shape(compiled_projects, toolchain, journal, directory):
+    package, pin = compile_entry(toolchain, journal, directory, compiled_projects=compiled_projects)
     public, private = inputs()
     honest_proof = directory / 'honest.bin'
     producer = request(journal, 'honest', public, private)
@@ -171,8 +159,8 @@ def test_stark_checks_statement_trace_schedule_and_shape(toolchain, journal, dir
             assert json.loads(replay.stdout)['status'] == 'refused'
 
 
-def test_stark_authenticates_claims_roots_and_late_openings(toolchain, journal, directory):
-    package, pin = compile_entry(toolchain, journal, directory)
+def test_stark_authenticates_claims_roots_and_late_openings(compiled_projects, toolchain, journal, directory):
+    package, pin = compile_entry(toolchain, journal, directory, compiled_projects=compiled_projects)
     public, private = inputs()
     producer = request(journal, 'producer', public, private)
     verifier = request(journal, 'verifier', public)
@@ -299,34 +287,6 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
     assert [frame[2] for frame in stop['origin'][4] if frame[0] == 'loop'] == loops
 
 
-SAMPLER = '''module air_stark_example;
-use air_stark::{Extension, consider, finish};
-use air_polynomial::{Vector};
-fn choose(values: Vector<Extension>, shift: Extension) -> Extension {
-  let mut chosen: Extension = 0;
-  let mut found = false;
-  for i in 0..kernel<Extension>("vector.length", values) {
-    let candidate = kernel<Extension>("vector.get", values, i);
-    let next = consider(8, 32, shift, chosen, found, candidate);
-    chosen = next.0;
-    found = next.1;
-  }
-  return finish(chosen, found);
-}
-protocol Sample roles(V)(values:Vector<Extension>@V, shift:Extension@V)
- -> (selected:Extension@V) {
- let selected@V=choose(values,shift);
- return (selected=selected);
-}
-run Run=Sample;
-'''
-
-
-def extension_wire(values, scalar_value=False):
-    rows = [[str(x) for x in v] for v in values]
-    return rows[0] if scalar_value else rows
-
-
 def test_outside_sampler_excludes_domains_selects_first_and_exhausts(toolchain, journal, directory):
     package, pin = compile_entry(toolchain, journal, directory, source=SAMPLER, entry='Run')
     def base(n):
@@ -353,37 +313,6 @@ def test_outside_sampler_excludes_domains_selects_first_and_exhausts(toolchain, 
             assert role['after'][0] == 'stopped'
             cause = role['after'][1]['cause']
             assert cause[0] == 'explicit' and cause[1]['text'] == 'exhausted'
-
-
-POLYNOMIAL_VIEW = '''module air_stark_example;
-use air_polynomial::{Vector, empty, extend_columns, split_quotient};
-use air_table::{quotient_values, claims, opening_claims, identity, deep_word};
-domain E=field("koala-bear.ext8-binomial3");
-domain B=bundle(asset recurrence);
-fn inspect(trace:Vector<E>, configuration:Vector<E>, data:Vector<E>,
- shift:E, alpha:E, zeta:E, rho:E, eta:E, size:index)
- -> (Vector<E>,Vector<E>,Vector<E>,Vector<E>,bool,Vector<E>) {
- let w=extend_columns(trace,4,8,shift,size);
- let c=extend_columns(configuration,1,8,shift,size);
- let none=empty<E>();
- let quotient=quotient_values<E,0,B>(w,c,none,data,8,shift,size,alpha);
- let chunks=split_quotient(quotient,shift,size,8,2);
- let opened=claims<E,0,B>(trace,configuration,none,data,8,zeta);
- let quotient_opened=opening_claims(chunks,2,shift,size,zeta);
- let valid=identity<E,0,B>(opened,quotient_opened,configuration,none,data,8,zeta,alpha);
- let reduced=deep_word<E,0,B>(w,chunks,opened,quotient_opened,8,shift,size,zeta,rho,eta);
- return (quotient,chunks,opened,quotient_opened,valid,reduced);
-}
-protocol Inspect roles(P)(trace:Vector<E>@P, configuration:Vector<E>@P,
- data:Vector<E>@P, shift:E@P, alpha:E@P, zeta:E@P, rho:E@P, eta:E@P,
- size:index@P) -> (quotient:Vector<E>@P, chunks:Vector<E>@P,
- opened:Vector<E>@P, quotient_opened:Vector<E>@P, valid:bool@P, reduced:Vector<E>@P) {
- let result@P=inspect(trace,configuration,data,shift,alpha,zeta,rho,eta,size);
- return (quotient=result.0,chunks=result.1,opened=result.2,
-  quotient_opened=result.3,valid=result.4,reduced=result.5);
-}
-run Run=Inspect;
-'''
 
 
 @pytest.mark.parametrize('size', [16, 32])

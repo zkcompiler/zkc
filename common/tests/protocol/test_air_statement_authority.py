@@ -1,8 +1,8 @@
 """The verifier's known columns and scalars bind the statement at the OOD point."""
 import pytest
 
-from test_air_stark import P, scalar, vector
-from test_air_stark_adversarial import build, prove, rejected, verify
+from air_proofs import P, scalar, vector
+from air_variants import build, prove, rejected, verify
 
 
 # w_i = configuration_{i+1} + public_column_i + x0 on [2,6).

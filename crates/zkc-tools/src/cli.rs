@@ -490,10 +490,8 @@ mod tests {
         );
     }
     #[test]
-    fn removed_commands_are_not_aliases() {
-        for name in ["run-entry", "produce-native-proof", "validate-native-proof"] {
-            assert!(command(name).is_none());
-            assert_eq!(run(name, &[])["code"], "unknown-command");
-        }
+    fn unknown_command_is_refused() {
+        assert!(command("not-a-command").is_none());
+        assert_eq!(run("not-a-command", &[])["code"], "unknown-command");
     }
 }

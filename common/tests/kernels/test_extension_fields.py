@@ -8,6 +8,7 @@ import random
 
 import pytest
 
+from outcomes import stopped
 from entry import Entry
 from octic_reference import P, ZERO, add, mul, power
 
@@ -72,7 +73,7 @@ def test_octic_kernel_results_and_zero_inverse(toolchain, journal, directory, fl
         assert actual == [wire(kind, result) for kind, result in expected]
     inputs['a'] = wire('field', ZERO)
     report = entry.run('zero-inverse', inputs, refuses='entry-run-incomplete')
-    assert 'zero-inverse' in str(report)
+    assert stopped(report) == 'refused:zero-inverse'
     # Malformed noncanonical coordinates are refused before values reach a kernel.
     inputs['a'] = wire('field', [P] + [0] * 7)
     entry.run('noncanonical-field', inputs, refuses=True)

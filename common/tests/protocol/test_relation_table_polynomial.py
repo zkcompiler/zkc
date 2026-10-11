@@ -6,6 +6,8 @@ hand from the Bundle text; point values are compared with the recurrence's
 constraints, written from its AIR definition and evaluated in the independent
 integer model of `koala-bear.ext8-binomial3`.
 """
+from octic_reference import sample_points as points
+from outcomes import stopped
 from input_files import input_files, decimal_values
 import json
 from hashlib import sha256
@@ -96,15 +98,6 @@ def reference(v):
             sub(acc1, octic.add(acc, m(m(p, x), k))), sub(acc, last), sub(x1, x0)]
 
 
-def points(seed, n):
-    state, result = seed, []
-    for _ in range(n):
-        value = []
-        for _ in range(8):
-            state = (state * 6364136223846793005 + 1442695040888963407) % 2**64
-            value.append((state >> 33) % P)
-        result.append(value)
-    return result
 
 
 class Client:
@@ -139,11 +132,6 @@ class Client:
         self.pin = sha256(text.encode()).hexdigest()
 
 
-def stopped(report):
-    (role,) = report['execution']['roles']
-    state, detail = role['after']
-    assert state == 'stopped' and detail['cause'][0] == 'backend'
-    return detail['cause'][1]['text']
 
 
 def inputs(height=8, slot=0, assertion=0, ood=None, row=None):

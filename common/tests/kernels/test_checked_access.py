@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from outcomes import stopped
 from entry import Entry
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -39,12 +40,12 @@ run Demo=Run;
                               ('huge-column', '0', str(2**64 - 1))]:
         report = entry.run(name, inputs | {'row': row, 'column': column},
                            refuses='entry-run-incomplete')
-        assert 'matrix-index' in str(report)
+        assert stopped(report) == 'refused:matrix-index'
     for rows, columns in [(0, 0), (0, 3), (2, 0)]:
         report = entry.run(f'empty-{rows}-{columns}', {
             'm': {'rows': str(rows), 'columns': str(columns), 'entries': []},
             'row': '0', 'column': '0'}, refuses='entry-run-incomplete')
-        assert 'matrix-index' in str(report)
+        assert stopped(report) == 'refused:matrix-index'
 
 
 @pytest.mark.parametrize('length', [0, 1, 4])
@@ -69,10 +70,10 @@ run Demo=Run;
     for index in (length, 2**32, 2**64 - 1):
         report = entry.run(f'outside-{index}', {'values': values, 'position': str(index)},
                            refuses='entry-run-incomplete')
-        assert 'field-array-index' in str(report)
+        assert stopped(report) == 'refused:field-array-index'
     report = entry.run('wrong-length', {'values': values + ['99'], 'position': '0'},
                        refuses='entry-run-incomplete')
-    assert 'field-array-length' in str(report)
+    assert stopped(report) == 'refused:field-array-length'
 
 
 def test_static_symbolic_array_feeds_ordinary_dynamic_access(toolchain, journal, directory):
@@ -90,4 +91,4 @@ run Demo=Run;
     entry = Entry(toolchain, journal, directory, source, MODULES)
     assert entry.run('valid', {'a': '7', 'b': '11', 'position': '0'})['result'] == ['7', '11']
     report = entry.run('outside', {'a': '7', 'b': '11', 'position': '2'}, refuses='entry-run-incomplete')
-    assert 'field-array-index' in str(report)
+    assert stopped(report) == 'refused:field-array-index'

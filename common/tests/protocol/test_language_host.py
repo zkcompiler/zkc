@@ -566,4 +566,5 @@ proof Proof=Check{{prover P;verifier V;public{{}};accept accepted;construction a
     proof.unlink()
     report = journal.json(proving, refuses='artifact-stopped')
     assert not proof.exists(), 'producer rejection published a partial proof'
-    assert 'Explicit("reject")' in str(report)
+    assert report['execution']['stop']['kind'] == 'Explicit("reject")'
+    assert report['execution']['stop']['role'] == 'role00000000'

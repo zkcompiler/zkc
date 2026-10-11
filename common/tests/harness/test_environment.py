@@ -158,6 +158,18 @@ def test_just_output_argument_is_forwarded_literally(recipe, arguments, monkeypa
     assert command["arguments"] == expected
 
 
+@pytest.mark.parametrize("arguments", [[], ["-p", "zkc-backends", "test name; $(invalid)"]])
+def test_just_rust_recipe_selects_scope_and_forwards_arguments(arguments, monkeypatch, tmp_path):
+    fake_command(tmp_path, "python3")
+    record = tmp_path / "commands.jsonl"
+    monkeypatch.setenv("COMMAND_RECORD", str(record))
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    subprocess.run(["just", "--justfile", str(ROOT / "justfile"), "test-rust", *arguments],
+                   cwd=tmp_path, check=True, capture_output=True, text=True)
+    command = json.loads(record.read_text())
+    assert command["arguments"] == ["common/tests/run.py", "rust", "--", *arguments]
+
+
 def test_cleanup_refuses_the_checkout(monkeypatch, tmp_path):
     developer = load("developer", "scripts/develop.py")
     checkout = tmp_path / "disposable-checkout"

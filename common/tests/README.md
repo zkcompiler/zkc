@@ -105,6 +105,35 @@ must be a positive integer. The driver defaults to one worker outside the Nix
 shell. Tests retain their individual timeouts and do not implicitly filter slow
 cases. The `core` marker selects representative product-only integration controls. The `resource` marker identifies large retained-storage boundary cases; full Nix integration runs the remaining cases first and these cases with one worker. Both groups remain required for the full suite. Local `just test-integration` retains all cases by default; use `-m 'not resource'` only as an explicitly narrower selection.
 
+## Shared preparation and test ownership
+
+Machine and AIR proof cases opt into `compiled_projects`. It builds immutable
+example packages once per input identity in the current pytest run, including
+across xdist workers. Project modules, assets, compiler/runtime binaries, entry,
+and flags are part of that identity. Later invocations start fresh. Failed
+compilations retain their journal but publish no reusable package. Every consumer
+records a reference under `preparations/`; inputs, proof files, Host processes,
+and mutable runtime state remain local to the individual case. Source mutations
+and tests of compilation itself use fresh independent builds.
+
+Shared proof plumbing lives in `support/machine_proofs.py`, `support/air_proofs.py`
+and `support/air_variants.py`. Test modules do not import other test modules.
+Independent arithmetic and external fixtures remain the source of expectations;
+sharing preparation does not replace those oracles.
+
+Rust backend integration cases are grouped into `numerics`, `collections`,
+`execution`, `resources`, `wire`, and `conformance` binaries. Shared builders are
+declared once per binary. Select one case with, for example,
+`cargo test -p zkc-backends --test numerics bn254::`; the ordinary all-feature
+workspace command still runs all groups. Feature-gated controls stay gated.
+
+CTest owns compiler admission checks. The relation-composition integration case
+uses fresh carrier preparation from `compiler/test/support/relation_composition_cases.py`
+and then runs the independent Rust consumer. Application expansion, role mapping,
+and occurrence checks run in the CTest entry point without repeating in that
+integration case. Other generator families retain their existing ownership until
+they have been separated and validated individually.
+
 ## Optional formal checks
 
 Use `nix develop .#lean`, then `just fetch-lean` and `just test-lean` to build and check the independent package. Prepare optional dependencies with `just fetch-lean arklib` or `just fetch-lean clean`, then use `just test-lean-integration` or `just test-lean-clean` to build and check that package. The Clean check requires

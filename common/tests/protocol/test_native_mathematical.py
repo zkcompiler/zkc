@@ -52,9 +52,16 @@ def test_generated_native_execution(toolchain, directory, monkeypatch, generator
     monkeypatch.setenv('PYTHONPATH', os.pathsep.join([
         str(ROOT / 'compiler/test/support'), str(ROOT / 'common/tests/support')]))
     journal = Journal(directory)
-    journal.run([sys.executable, ROOT / f'compiler/test/{generator}.py'])
-    artifacts = list((reports / 'tests/compiler-test').iterdir())
-    assert len(artifacts) == 1, artifacts
+    if generator == 'relation_composition':
+        from commands import Commands
+        from relation_composition_cases import prepare
+        artifacts = [reports / generator]
+        artifacts[0].mkdir(parents=True)
+        prepare(Commands(artifacts[0]), artifacts[0])
+    else:
+        journal.run([sys.executable, ROOT / f'compiler/test/{generator}.py'])
+        artifacts = list((reports / 'tests/compiler-test').iterdir())
+        assert len(artifacts) == 1, artifacts
     journal.run([toolchain.driver(example), artifacts[0]])
     if example == 'language_native':
         check_source_setup_commands(toolchain, journal, artifacts[0])
