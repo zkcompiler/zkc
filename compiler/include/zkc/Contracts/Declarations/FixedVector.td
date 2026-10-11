@@ -1,6 +1,8 @@
 // A single nominal bulk value, distinct from source arrays and dynamic vectors.
 def TypeFixedVector : ZKC_Type<"fixed_vector", [TypeParameter, NatParameter],
-                              PrivateImmutable, 1, 1>;
+                              PrivateImmutable, 1, 1> {
+  let constructible = 1;
+}
 def ExportFixedVector : ZKC_TypeExport<"zkc::algebra", "FixedVector",
                                        TypeFixedVector>;
 

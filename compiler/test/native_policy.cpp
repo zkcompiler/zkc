@@ -50,7 +50,8 @@ int main() {
       require(bool(policy) == (shared || locals.contains(type.kind)),
               "native closed type table changed");
       if (policy) {
-        require(policy->total == total && policy->shared == shared,
+        require(policy->total == total && policy->shared == shared &&
+                    policy->constructible == shared,
                 "native use permission changed");
         require(policy->affine == protocol::affine(type.spelling()),
                 "custody classification changed");

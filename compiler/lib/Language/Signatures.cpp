@@ -57,10 +57,6 @@ bool Checker::requirements(Declaration &decl) {
             p.permissions.copy = p.permissions.drop = true;
           else if (req.permission == "Drop")
             p.permissions.drop = true;
-          else if (req.permission == "Share")
-            p.permissions.share = true;
-          else
-            p.permissions.wire = true;
           matched = true;
           break;
         }
@@ -69,10 +65,7 @@ bool Checker::requirements(Declaration &decl) {
           auto caps = types.permissions(*lhs, req.span, &decl);
           if (!caps)
             return false;
-          bool holds = req.permission == "Copy"    ? caps->copy
-                       : req.permission == "Drop"  ? caps->drop
-                       : req.permission == "Share" ? caps->share
-                                                   : caps->wire;
+          bool holds = req.permission == "Copy" ? caps->copy : caps->drop;
           if (!holds)
             return types.fail("source.permission",
                               "closed permission requirement does not hold",
@@ -93,10 +86,6 @@ bool Checker::requirements(Declaration &decl) {
           caps.copy = caps.drop = true;
         else if (req.permission == "Drop")
           caps.drop = true;
-        else if (req.permission == "Share")
-          caps.share = true;
-        else
-          caps.wire = true;
         decl.permissionBounds.push_back({*lhs, caps, req.span});
       }
     } else {
@@ -319,12 +308,6 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       decl.domain = *def;
     }
   }
-  if (decl.kind == Declaration::Kind::Associated && !decl.abstract &&
-      !isDomainSort(decl.associatedSort) && decl.permissions &&
-      decl.permissions->wire)
-    return types.fail("source.permission",
-                      "private associated Wire requires an admitted validator",
-                      decl.span);
   if (decl.kind == Declaration::Kind::Associated &&
       isDomainSort(decl.associatedSort) && decl.associatedSort != "Field" &&
       decl.associatedSort != "Group" &&

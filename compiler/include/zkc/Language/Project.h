@@ -509,6 +509,15 @@ struct PermissionBound {
   Span span;
   bool inferred = false;
 };
+/// Boundary conditions are derived from use sites, never granted by `where`.
+enum class Boundary { Participants, Construction, Message };
+struct AdmissionObligation {
+  Type type;
+  Boundary boundary;
+  Span span;
+  /// Calls that transported this condition, from the original site outward.
+  std::vector<Span> calls;
+};
 /// A catalog proposition, independent of runtime custody permissions.
 struct CapabilityBound {
   std::string predicate;
@@ -654,6 +663,7 @@ struct Declaration {
   std::vector<NaturalBound> bounds;
   std::vector<DataPrecondition> dataPreconditions;
   std::vector<PermissionBound> permissionBounds;
+  std::vector<AdmissionObligation> admissions;
   std::vector<CapabilityBound> capabilityBounds;
   std::optional<Resource> resource;
   bool sealed = false;

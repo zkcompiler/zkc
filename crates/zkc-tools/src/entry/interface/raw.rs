@@ -129,8 +129,6 @@ pub(in crate::entry) enum Kind {
 pub(in crate::entry) enum Permission {
     Copy,
     Drop,
-    Share,
-    Wire,
 }
 #[derive(Debug, Deserialize)]
 #[serde(remote = "Self")]
@@ -141,6 +139,7 @@ pub(in crate::entry) struct Schema {
     #[serde(rename = "type")]
     pub display_type: String,
     pub custody: bool,
+    pub constructible: bool,
     pub permissions: Vec<Permission>,
     pub fields: Vec<Field>,
     pub alternatives: Vec<Alternative>,

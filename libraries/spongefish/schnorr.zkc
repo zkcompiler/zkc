@@ -34,7 +34,7 @@ pub fn verify<G: Group>(tag: Bytes, session: Bytes, base: G, point: G,
   return true;
 }
 
-pub protocol Schnorr<G: Group + Share> roles(P, V)
+pub protocol Schnorr<G: Group> roles(P, V)
     (tag: Bytes @(P, V), session: Bytes @(P, V), base: G @(P, V), point: G @(P, V),
      scalar: G::Scalar @P, nonces: Random<G::Scalar> @P) -> (accepted: bool @V) {
   let nonce = nonces.draw();

@@ -183,8 +183,8 @@ fn run_bundle(program: &Json) -> String {
     .to_string()
 }
 fn schema(kind: &str, ty: &str, leaves: &[&str]) -> Json {
-    json!({"kind":kind,"identity":sha(ty),"type":ty,"custody":false,
-        "permissions":["Copy","Drop","Share","Wire"],"fields":[],"alternatives":[],"leaves":leaves})
+    json!({"kind":kind,"identity":sha(ty),"type":ty,"custody":false,"constructible":true,
+        "permissions":["Copy","Drop"],"fields":[],"alternatives":[],"leaves":leaves})
 }
 fn port(name: &str, index: u32, native: &[u32], roles: &[&str], schema: Json) -> Json {
     json!({"name":name,"index":index,"native":native,"roles":roles,"type":schema["type"],"schema":schema})

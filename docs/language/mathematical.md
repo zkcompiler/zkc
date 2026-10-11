@@ -157,10 +157,11 @@ arguments. The protocol sends its result. The receiver obtains its actual
 received components. The record becomes two ordered payload leaves, which the
 interface maps back to named fields.
 
-Generic libraries declare the permissions they use. A mathematical parameter
-needs `Copy + Drop`; a protocol message also needs `Share + Wire`. A plain `Type`
-parameter promises none. These permissions are independent. Modules select
-interface implementations statically and can seal an associated representation.
+Generic definitions infer the usage properties their bodies need unless a written
+`where` clause supplies the complete contract. Mathematical parameters need `Copy`,
+which implies `Drop`; a plain `Type` parameter promises neither. Message and
+participant admission are derived separately and checked on concrete types.
+Modules select interface implementations statically and can seal an associated representation.
 Library clients need neither its representation nor a runtime dispatch table.
 
 A file and a nested `module` use the same scope and visibility rules:
@@ -289,10 +290,10 @@ The maintained fixtures cover [arrays](../../compiler/test/fixtures/language/arr
 [static modules](../../compiler/test/fixtures/language/module.zkc),
 [associated domains](../../compiler/test/fixtures/language/associated_domain.zkc),
 and [affine control and stop cleanup](../../compiler/test/fixtures/language/resource_control.zkc).
-Generic associated types can declare explicit bounds such as
-`where Share(G::Scalar), Wire(G::Scalar)`; selecting a group checks those bounds.
-Fixed arrays currently use static numeric indices. Private ingress requires a
-validator that this source profile does not yet expose. Zero-leaf messages refuse;
+Generic associated types can declare usage bounds such as `where Copy(C::Item)`.
+Message codec obligations are retained until concrete selection.
+Fixed arrays currently use static numeric indices. Private values are built by their owning module; receive transparent input and
+validate it explicitly before constructing a private value. Zero-leaf messages refuse;
 empty values and ports still retain their source obligations and interface rows.
 
 The [retained interface](../spec/formats/entry.md) maps logical names and

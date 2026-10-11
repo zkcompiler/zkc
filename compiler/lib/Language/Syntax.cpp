@@ -568,12 +568,8 @@ private:
       p.copy = p.drop = true;
     else if (take("Drop"))
       p.drop = true;
-    else if (take("Share"))
-      p.share = true;
-    else if (take("Wire"))
-      p.wire = true;
     else
-      return fail("source.permission", "expected Copy, Drop, Share, or Wire");
+      return fail("source.permission", "expected Copy or Drop");
     return true;
   }
   bool typeTreeBound(SyntaxType &type) {
@@ -765,7 +761,7 @@ private:
       if (at("in_bounds") || at("equal_extent")) {
         if (!dataRequirement(req))
           return false;
-      } else if (at("Copy") || at("Drop") || at("Share") || at("Wire")) {
+      } else if (at("Copy") || at("Drop")) {
         req.permission = text().str();
         advance();
         if (!expect("(") || !type(req.lhs) || !expect(")"))
@@ -1552,7 +1548,7 @@ private:
       if (take(":")) {
         d.kind = Declaration::Kind::Associated;
         d.permissions.emplace();
-        if (!at("Copy") && !at("Drop") && !at("Share") && !at("Wire")) {
+        if (!at("Copy") && !at("Drop")) {
           if (current().kind != TokenKind::Word) {
             fail("source.type", "expected an associated sort or permission");
             return {};

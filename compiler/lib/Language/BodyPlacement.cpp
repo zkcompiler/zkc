@@ -55,13 +55,9 @@ bool BodyChecker::settle(Placement &plan) {
     auto &value = body.values[id];
     value.components = plan.resolve(formula);
     if (value.components.size() > 1) {
-      auto caps = checker.types.permissions(value.type, value.span, &decl);
-      if (!caps || !caps->share)
-        return checker.types.diagnostic
-                   ? false
-                   : fail("source.permission",
-                          "multiple participant components require Share",
-                          value.span);
+      if (!checker.types.admit(value.type, Boundary::Participants, value.span,
+                               &decl))
+        return false;
     }
   }
   for (auto [index, variable] : plan.calls) {

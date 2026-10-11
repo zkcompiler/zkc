@@ -65,7 +65,7 @@ A named construction associates the protocol specialization with deployment
 choices. It may have ordinary static parameters and requirements:
 
 ```zkc
-construction ExternalWire<G: Group + Share> for Schnorr<G> {
+construction ExternalWire<G: Group> for Schnorr<G> {
   base authored;
   format RawBytes;
 }
@@ -293,7 +293,7 @@ A run block accepts setup associations without proof choices. A proof block
 always requires its complete configuration, even if it also has setup slots.
 
 Explicit setup association admits whole builtin `prover_key` and `verifier_key`
-input ports through checked Host initialization. It does not grant `Wire`,
+input ports through checked Host initialization. It does not grant external construction authority,
 message transmission, nested/private key construction or opening-state ingress.
 Other input constructors keep their existing permission requirements. Current
 source slots require an input association; they do not express receive-only keys

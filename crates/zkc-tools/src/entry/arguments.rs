@@ -12,6 +12,13 @@ pub(super) fn check_ports(interface: &Interface) -> Result<(), String> {
         let port = interface.input(i);
         if port.key.is_none() {
             value::check_import(&port.schema)?;
+            if !port.schema.leaves.iter().all(|leaf| {
+                interface
+                    .logical_type(leaf)
+                    .is_some_and(|ty| ty.is_native_message_data())
+            }) {
+                return Err("entry-input-codec".into());
+            }
         }
     }
     for port in &interface.selected_protocol().outputs {

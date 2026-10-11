@@ -34,7 +34,7 @@ impl From<InputValue> for Value {
 /// Constructor permission is checked once at Entry admission. The validated
 /// schema inherits that permission through all product fields and alternatives.
 pub(super) fn check_import(schema: &Schema) -> Result<()> {
-    if schema.custody || !schema.permissions.contains(&Permission::Wire) {
+    if schema.custody || !schema.constructible {
         return Err("entry-input-constructor".into());
     }
     Ok(())

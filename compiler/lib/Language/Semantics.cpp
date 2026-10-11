@@ -484,12 +484,6 @@ bool Semantics::checkArguments(const Declaration &target, ArrayRef<Type> args,
         !requireUsage(type, Usage::Drop, span, context, "source.permission",
                       message))
       return false;
-    auto properties = permissions(type, span, context);
-    if (!properties)
-      return false;
-    if ((required.share && !properties->share) ||
-        (required.wire && !properties->wire))
-      return fail("source.permission", message, span);
     return true;
   };
   for (unsigned i = 0; i < args.size(); ++i) {
@@ -527,6 +521,15 @@ bool Semantics::checkArguments(const Declaration &target, ArrayRef<Type> args,
         diagnostic->related.push_back(bound.span);
       return false;
     }
+  }
+  for (const auto &obligation : target.admissions) {
+    auto actual = substitute(obligation.type, subst, span);
+    if (!actual || !charge(obligation.calls.size() + 1, span))
+      return false;
+    auto calls = obligation.calls;
+    calls.push_back(span);
+    if (!admit(*actual, obligation.boundary, obligation.span, context, calls))
+      return false;
   }
   for (auto &bound : target.bounds) {
     Type lhs(Type::Kind::Natural), rhs(Type::Kind::Natural);

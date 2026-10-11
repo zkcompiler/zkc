@@ -106,13 +106,8 @@ BodyChecker::emitResults(decltype(Operation::action) action,
         !checker.types.charge(value.components.size() + 1, span))
       return {};
     if (protocol() && !placement && value.components.size() > 1) {
-      auto caps = checker.types.permissions(value.type, span, &decl);
-      if (!caps || !caps->share) {
-        if (!checker.types.diagnostic)
-          fail("source.permission",
-               "multiple participant components require Share", span);
+      if (!checker.types.admit(value.type, Boundary::Participants, span, &decl))
         return {};
-      }
     }
   }
   std::vector<ValueId> ids;
@@ -343,12 +338,10 @@ bool BodyChecker::statementBody(const Statement &s) {
     auto before = body.values[value->index];
     if (!checker.types.executableType(before.type, s.span))
       return false;
-    auto caps = checker.types.permissions(before.type, s.span, &decl);
-    if (!caps)
+    if (!checker.types.admit(before.type, Boundary::Construction, s.span,
+                             &decl) ||
+        !checker.types.admit(before.type, Boundary::Message, s.span, &decl))
       return false;
-    if (!caps->copy || !caps->drop || !caps->share || !caps->wire)
-      return fail("source.permission",
-                  "send requires Copy, Drop, Share and Wire", s.span);
     if (*sender == *receiver)
       return fail("source.send", "sender and receiver must be distinct",
                   s.span);
@@ -556,9 +549,9 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
         !types.mathematicalData(p.type, p.span, &decl))
       return false;
     if (result.mode == Body::Mode::Protocol) {
-      if (p.roles.size() > 1 && (!caps->copy || !caps->drop || !caps->share))
-        return types.fail("source.permission",
-                          "shared input requires Copy, Drop and Share", p.span);
+      if (p.roles.size() > 1 &&
+          !types.admit(p.type, Boundary::Participants, p.span, &decl))
+        return false;
     }
     if (!check.addInput(sources[decl.id.index]->inputBindings[i], p.type,
                         result.mode == Body::Mode::Math
@@ -591,9 +584,8 @@ bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
         !types.mathematicalData(p.type, p.span, &decl))
       return false;
     if (result.mode == Body::Mode::Protocol && p.roles.size() > 1 &&
-        (!caps->copy || !caps->drop || !caps->share))
-      return types.fail("source.permission",
-                        "shared output requires Copy, Drop and Share", p.span);
+        !types.admit(p.type, Boundary::Participants, p.span, &decl))
+      return false;
   }
   return true;
 }

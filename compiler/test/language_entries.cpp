@@ -271,7 +271,7 @@ int main() {
       [] {
         auto selected = take(close(R"(module sample;
       struct Result<T:Type>{pub accepted:T,pub extra:index}
-      protocol Verify<T:Type+Copy+Drop+Share+Wire> roles(P,V)(r:Result<T>@V)->(r:Result<T>@V){return(r=r);}
+      protocol Verify<T:Type+Copy+Drop> roles(P,V)(r:Result<T>@V)->(r:Result<T>@V){return(r=r);}
       proof Demo=Verify<bool>{prover P;verifier V;public{r};accept r.accepted;construction authored;})"));
         require(selected.entry().proof()->acceptance.path ==
                     std::vector<unsigned>{0},

@@ -26,6 +26,18 @@ function(declaration_case name definitions expected_error)
   set(failures "${failures}" PARENT_SCOPE)
 endfunction()
 declaration_case(valid "" "")
+declaration_case(resource-participant-family [=[
+def Bad : ZKC_Type<"token", [], Affine, 0, 1> { let participants = 1; }
+]=] "participant families require Copy data")
+declaration_case(message-without-constructor [=[
+def Bad : ZKC_Type<"opaque", [], PrivateImmutable, 1, 1> { let message = 1; }
+]=] "message frames require native decoder authority")
+declaration_case(mathematics-without-local-data [=[
+def Bad : ZKC_Type<"static", [], PublicValue, 1, 1> {
+  let nativeLocal = 0; let mathematical = 1;
+}
+]=] "mathematical native data requires reusable local data")
+
 declaration_case(managed-history-missing-state [=[
 def Bad : ZKC_Operation<"bad.history", [], [], []> {
   let facets = [ManagedHistory];

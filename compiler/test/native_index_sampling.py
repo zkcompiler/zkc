@@ -51,7 +51,7 @@ with case("a static power-of-two domain emits a constant bound and an index quer
 
 GENERIC = '''module sample;
 domain E = field("koala-bear.ext8-binomial3");
-protocol Pick<F: Field + Share + Wire, N: nat> roles(P, V)(coins: Random<F> @V) -> (v: index @V) REQUIRE {
+protocol Pick<F: Field, N: nat> roles(P, V)(coins: Random<F> @V) -> (v: index @V) REQUIRE {
   let v = coins.index<N>();
   return (v = v);
 }

@@ -94,8 +94,9 @@ whether to reject, continue, or perform a trial on a copied prior state.
 
 `zkc::shake128::State` is an immutable, copyable, discardable local value with
 logical type `shake128_state`, MLIR type `!crypto.shake128_state`, and physical
-representation `native.shake128/0`. It has no Share or Wire permission, ingress
-codec, equality operation, or managed capability. Snapshot size is bounded independently of the absorb history; cloning and
+representation `native.shake128/0`. It has no participant-family or external
+construction admission, ingress codec, equality operation, or managed capability.
+Snapshot size is bounded independently of the absorb history; cloning and
 updating a snapshot never replay earlier absorbed bytes.
 
 | Operation | Inputs | Outputs |

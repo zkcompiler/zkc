@@ -148,8 +148,9 @@ current executable value reference explicitly refuses target decoding with
 ## Byte strings
 
 `bytes` is an immutable byte string, exposed as `zkc::bytes::Bytes`. It has Copy,
-Drop, Share and Wire permissions. The native representation is `native.bytes/0`;
-the canonical MLIR type is `!data.bytes`. Its collection interface exposes
+Drop, participant-family admission and external construction authority. The
+native representation is `native.bytes/0`; the canonical MLIR type is
+`!data.bytes`. Its collection interface exposes
 unsigned byte elements and one runtime extent. This grants neither numeric
 interpretation nor finite-operation admission. Bytes do not imply an integer,
 field or point encoding.

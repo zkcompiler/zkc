@@ -58,8 +58,8 @@ static arguments with positional or named binding, named value/service arguments
 Unicode 17 NFC names, scoped mathematical operators and paired-delimiter calls
 with import activation, explicit fixity and local module bindings, catalog-checked
 primitive definitions and an embedded scalar prelude,
-local short-circuit Boolean operators and total Boolean formulas, inferred catalog/natural
-preconditions with explicit contract checking, unified data/service arguments,
+local short-circuit Boolean operators and total Boolean formulas, inferred usage, catalog
+and natural preconditions with explicit contract checking, derived boundary admission, unified data/service arguments,
 source rejection with `require`, formal polynomial intrinsics, checked
 pointwise `map` of scalar helpers over vectors, general finite reductions,
 statically bound scoped Math/Local callbacks with generic apply/forward and
@@ -81,7 +81,7 @@ admitted validator, member-generic conformance and zero-leaf messages refuse.
 Abstract callable signatures with member generics can be checked and inspected,
 but modules implementing them are not supported. Associated types cannot
 introduce member-specific static parameters.
-Resource permission inference, implicit role remapping, natural equation solving
+Implicit role remapping, natural equation solving
 and inversion of associated types are outside the source profile.
 [Scoped computations](spec/language/definitions.md#scoped-computations) use the
 ordinary checked Body and type solver. Projection-aware Copy+Drop captures,

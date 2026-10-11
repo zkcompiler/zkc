@@ -281,12 +281,11 @@ int main() {
             "source.drop");
     take(check("fn twice<T:Type+Copy>(x:T){return (x,x);}"));
     take(check("fn discard<T:Type+Drop>(x:T){return ();}"));
-    refuses(check(R"(
-      protocol Transfer<T:Type> roles(P,V)(x:T@P)->(y:T@V){
+    take(check(R"(
+      protocol Transfer<T:Type> roles(P,V)(x:T@P)->(y:T@V) where () {
         let y=send P->V(x); return y;
       }
-    )"),
-            "source.permission");
+    )"));
   });
   cases.run("module results and requirements obey interface promises", [] {
     take(check(R"(

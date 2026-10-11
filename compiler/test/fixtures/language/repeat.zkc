@@ -1,6 +1,6 @@
 module sample;
 domain Fr = field("bls12-381.fr");
-protocol Round<F: Field + Share + Wire> roles(P, V)(a: F @P, b: F @V, coins: Random<F> @V) -> (p: F @P, v: F @V) {
+protocol Round<F: Field> roles(P, V)(a: F @P, b: F @V, coins: Random<F> @V) -> (p: F @P, v: F @V) {
   let cv = coins.draw();
   let cp = send V -> P(cv);
   return (p = a + cp, v = b + cv);

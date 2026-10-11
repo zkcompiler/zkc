@@ -8,8 +8,8 @@ math fn scaled<H:Group>(point:H, scalar:H::Scalar)->H {
 fn work<H:Group>(point:H, scalar:H::Scalar)->H {
   return scaled(point, scalar);
 }
-protocol Run<H:Group+Share+Wire> roles(P,V)(point:H@P, scalar:H::Scalar@P)->(result:H@V)
-where Share(H::Scalar), Wire(H::Scalar) {
+protocol Run<H:Group> roles(P,V)(point:H@P, scalar:H::Scalar@P)->(result:H@V)
+{
   let result @P = work(point, scalar);
   let received = send P->V(result);
   return(result=received);

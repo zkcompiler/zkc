@@ -18,7 +18,7 @@ interface TestTranscript<T:Field> {
   fn observe(t:State,v:T)->State effects(stop, opaque);
   fn draw(t:State)->(State,T) effects(stop, opaque);
 }
-protocol Round<T:Field+Share+Wire> roles(P,V)
+protocol Round<T:Field> roles(P,V)
     (public:T@(P,V),rounds:index@(P,V),secret:T@P,challenges:Random<T>@V)->(ok:bool@V){
   let mut accepted@V=true;
   LOOP_START
@@ -30,7 +30,7 @@ protocol Round<T:Field+Share+Wire> roles(P,V)
   LOOP_END
   return accepted;
 }
-construction Derived<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{
+construction Derived<T:Field,H:TestTranscript<T>> for Round<T>{
   transcript H;
   replace challenges;
   on start(t,public){return H::observe(t,public);}
@@ -206,7 +206,7 @@ def test_native_base_supports_ordinary_affine_handlers(toolchain, journal, direc
     text = SOURCE[:SOURCE.index('construction Derived')]
     text = text.replace('LOOP_START', 'for _ in 0..rounds roles(P,V) max 2 {')
     text = text.replace('LOOP_END', '}')
-    text += '''construction Native<T:Field+Share+Wire> for Round<T> {
+    text += '''construction Native<T:Field> for Round<T> {
       base fiat_shamir("merlin3.bls12-381.fr64be/0",challenges);
       HANDLERS
     }

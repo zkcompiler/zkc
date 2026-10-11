@@ -29,7 +29,7 @@ interface TestTranscript<T:Field> {
   fn observe(t:State,v:T)->State effects(stop, opaque);
   fn draw(t:State)->(State,T) effects(stop, opaque);
 }
-protocol Round<T:Field+Share+Wire> roles(P,V)
+protocol Round<T:Field> roles(P,V)
     (public:T@(P,V),secret:T@P,challenges:Random<T>@V)->(ok:bool@V){
   #[site(commitment)] let first=send P->V(secret);
   #[site(challenge)] let c=challenges.draw();
@@ -37,7 +37,7 @@ protocol Round<T:Field+Share+Wire> roles(P,V)
   #[site(response)] let last=send P->V(secret+actual);
   return last==first+c;
 }
-construction Derived<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{
+construction Derived<T:Field,H:TestTranscript<T>> for Round<T>{
   transcript H;
   replace challenges;
   on start(t,public){return H::observe(t,public);}
@@ -346,7 +346,7 @@ int main() {
   });
   cases.run("partial overrides inherit provider and unchanged rules", [&] {
     auto project = take(checked((program + R"(
-      construction Changed<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{
+      construction Changed<T:Field,H:TestTranscript<T>> for Round<T>{
         base Derived<T,H>;
         on message response(t,value){return t;}
       })")
@@ -1025,8 +1025,8 @@ int main() {
     for (unsigned i = 0; i < 24; ++i) {
       auto parent = i ? "Layer" + std::to_string(i - 1) : "Derived";
       source += "construction Layer" + std::to_string(i) +
-                "<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{base " +
-                parent + "<T,H>;}";
+                "<T:Field,H:TestTranscript<T>> for Round<T>{base " + parent +
+                "<T,H>;}";
     }
     auto project = take(checked(source));
     Limits limits;
@@ -1103,7 +1103,7 @@ int main() {
     auto text = replace("protocol Round<T:", "protocol Child<T:");
     const auto declaration = text.find("construction Derived");
     text.insert(declaration, R"(
-      protocol Round<T:Field+Share+Wire> roles(P,V)
+      protocol Round<T:Field> roles(P,V)
           (public:T@(P,V),secret:T@P,challenges:Random<T>@V)->(ok:bool@V){
         #[site(part)] let accepted=Child<T> roles(P,V)(public,secret,challenges);
         return accepted;
@@ -1156,8 +1156,8 @@ int main() {
   });
   cases.run("base cycles refuse", [&] {
     refuses(checked((program + R"(
-      construction A<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{base B<T,H>;}
-      construction B<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{base A<T,H>;}
+      construction A<T:Field,H:TestTranscript<T>> for Round<T>{base B<T,H>;}
+      construction B<T:Field,H:TestTranscript<T>> for Round<T>{base A<T,H>;}
     )")
                         .str()),
             "source.construction");

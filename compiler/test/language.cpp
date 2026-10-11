@@ -622,7 +622,7 @@ protocol Run roles(V)(x:Fr@V, coins:Random<Fr>@V)->(){require @V coins.draw()==x
   must(compileEntry(original(R"(module m;fn yes(x:bool)->bool{return x;}
 protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}run Demo=Run;)")));
   auto emptyMessage = check(R"(module m;
-protocol Relay<T:Type+Copy+Drop+Share+Wire> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}run Demo=Relay<()>;)");
+protocol Relay<T:Type+Copy+Drop> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}run Demo=Relay<()>;)");
   refuses(closeEntry(emptyMessage, "m::Demo"), "source.wire");
   auto distinct = original(R"(module m;domain Fr=field("bls12-381.fr");
 interface Mix {math fn mix(a:Fr,b:Fr)->Fr;}

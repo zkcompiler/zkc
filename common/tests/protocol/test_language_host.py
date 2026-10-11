@@ -126,6 +126,28 @@ def test_named_run_defaults_and_private_result_files(toolchain, journal, directo
     journal.run([*command, '--results=duplicate'], refuses='cli-option')
 
 
+
+@pytest.mark.parametrize('done', [False, True])
+def test_conditional_completion_preserves_logical_result_order(toolchain, journal, directory, done):
+    source = directory / 'completion.zkc'
+    source.write_text("""module sample;
+protocol Complete<T:Type> roles(P)(done:bool@P,value:T@P)->(first:bool@P,second:T@P) completes {
+  let(first,second)=finish_if @P(done)(second=value,first=true);
+  return(first=false,second=second);
+}
+run Demo=Complete<bool>;
+""")
+    package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
+    inputs = write(directory / 'P.json', {'done': done, 'value': False})
+    results = directory / 'results.json'
+    report = journal.json([toolchain.runtime, '--json', 'run',
+                           f'--package={package}', f'--sha256={pin}',
+                           '--session=completion_order', f'--input=P={inputs}',
+                           f'--results={results}'])
+    assert report['status'] == 'executed'
+    assert json.loads(results.read_text())['roles']['P'] == {'first': done, 'second': False}
+
+
 def test_aggregate_file_roundtrip_and_schema_refusals(toolchain, journal, directory):
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', FIXTURES / 'host_values.zkc')
     payload = {'choice': {'case': 'Data', 'fields': {

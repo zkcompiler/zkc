@@ -120,7 +120,7 @@ mod tests {
             json!({
                 "name":name,"purpose":purpose,"native":[0],
                 "schema":{"kind":kind,"identity":"0".repeat(64),"type":logical,
-                    "custody":false,"permissions":["Copy","Drop","Share","Wire"],
+                    "custody":false,"constructible":true,"permissions":["Copy","Drop"],
                     "fields":[],"alternatives":[],"leaves":[logical]},
             })
         };

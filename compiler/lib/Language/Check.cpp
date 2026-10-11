@@ -59,6 +59,28 @@ Error Checker::run() {
                               StringRef message) {
     return collectUsage(scope, type, usage, span, code, message);
   };
+  types.recordAdmission = [this](const Declaration &scope,
+                                 AdmissionObligation obligation) {
+    if (!types.chargeType(obligation.type, obligation.span) ||
+        !types.charge(obligation.calls.size() + 1, obligation.span))
+      return false;
+    auto &admissions = output.declarations[scope.id.index].admissions;
+    for (auto &existing : admissions) {
+      if (!types.chargeType(existing.type, obligation.span))
+        return false;
+      if (existing.type == obligation.type &&
+          existing.boundary == obligation.boundary &&
+          existing.span.source.index == obligation.span.source.index &&
+          existing.span.begin == obligation.span.begin &&
+          existing.span.end == obligation.span.end) {
+        if (obligation.calls.size() < existing.calls.size())
+          existing.calls = std::move(obligation.calls);
+        return true;
+      }
+    }
+    admissions.push_back(std::move(obligation));
+    return true;
+  };
   signatureState.resize(output.declarations.size());
   for (unsigned i = 0; i < output.declarations.size(); ++i)
     if (!sources[i]->constructionHandler && !signature(DeclarationId{i}))
@@ -127,6 +149,7 @@ Error Checker::run() {
   types.inferCapability = {};
   types.inferNatural = {};
   types.collectUsage = {};
+  types.recordAdmission = {};
   if (!retainNotations() || !retainScopedSources())
     return types.takeError();
   return checkScopedSources(output, work);

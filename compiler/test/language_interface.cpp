@@ -27,15 +27,15 @@ module {
 }
 )mlir";
 json::Value scalar() {
-  return json::Object{
-      {"type", "bool"},
-      {"kind", "boolean"},
-      {"identity", std::string(64, '1')},
-      {"custody", false},
-      {"permissions", json::Array{"Copy", "Drop", "Share", "Wire"}},
-      {"leaves", json::Array{"bool"}},
-      {"fields", json::Array{}},
-      {"alternatives", json::Array{}}};
+  return json::Object{{"type", "bool"},
+                      {"kind", "boolean"},
+                      {"identity", std::string(64, '1')},
+                      {"custody", false},
+                      {"constructible", true},
+                      {"permissions", json::Array{"Copy", "Drop"}},
+                      {"leaves", json::Array{"bool"}},
+                      {"fields", json::Array{}},
+                      {"alternatives", json::Array{}}};
 }
 json::Value pair() {
   return json::Object{
@@ -43,7 +43,8 @@ json::Value pair() {
       {"kind", "record"},
       {"identity", std::string(64, '2')},
       {"custody", false},
-      {"permissions", json::Array{"Copy", "Drop", "Share", "Wire"}},
+      {"constructible", true},
+      {"permissions", json::Array{"Copy", "Drop"}},
       {"leaves", json::Array{"bool", "bool"}},
       {"fields",
        json::Array{
@@ -412,12 +413,14 @@ int main() {
         auto sealed = scalar();
         auto &representation = *sealed.getAsObject();
         representation["kind"] = "associated";
+        representation["constructible"] = false;
         representation["identity"] = std::string(64, '3');
         representation["type"] = "sample::C::State";
         representation["fields"] = json::Array{json::Object{
             {"name", "value"}, {"offset", 0}, {"schema", scalar()}}};
         auto &right = *(*shape(value).getArray("fields"))[1].getAsObject();
         right["schema"] = std::move(sealed);
+        shape(value)["constructible"] = false;
         auto clauses = std::move(*protocol(value).getArray("clauses"));
         protocol(value)["clauses"] = json::Array{};
         take(readInterface(native, zkc::printJson(value)));
@@ -644,7 +647,7 @@ run Demo=Run;)zkc");
       operator[]("permissions") = json::Array{};
     });
     mutate(
-        [](auto &v) { shape(v)["permissions"] = json::Array{"Wire", "Wire"}; });
+        [](auto &v) { shape(v)["permissions"] = json::Array{"Drop", "Drop"}; });
     mutate([](auto &v) { shape(v)["permissions"] = json::Array{"Invent"}; });
   });
   cases.run("work bytes and recursive layout depth are bounded", [] {
@@ -750,7 +753,8 @@ run Demo=Run;)zkc");
         }
       });
   cases.run(
-      "nominal Share survives affine children at single-role outputs", [] {
+      "restricted children restrict their aggregate at single-role outputs",
+      [] {
         auto source = compile(R"zkc(module sample;
 #[linear] struct Ticket {}
 struct Wrapper {ticket:Ticket}
@@ -759,9 +763,9 @@ protocol Run roles(P)()->(result:Wrapper@P) {let value @P =make(); return(result
 run Demo=Run;)zkc");
         auto view = take(readInterface(source.bytes(), source.interfaceJson()));
         require(
-            view.selectedProtocol().outputs[0].schema->permissions.share &&
+            !view.selectedProtocol().outputs[0].schema->constructible &&
                 !view.selectedProtocol().outputs[0].schema->permissions.copy,
-            "independent nominal permissions were collapsed");
+            "restricted child properties were lost");
       });
   cases.run("field names are identifiers or contiguous positional indices", [] {
     for (StringRef name : {"a.b", "x::y", "01", "1", "0"})
@@ -777,9 +781,8 @@ run Demo=Run;)zkc");
     take(readInterface(original, zkc::printJson(v)));
   });
   cases.run("permission order is canonical", [] {
-    mutate([](auto &v) {
-      shape(v)["permissions"] = json::Array{"Drop", "Copy", "Share", "Wire"};
-    });
+    mutate(
+        [](auto &v) { shape(v)["permissions"] = json::Array{"Drop", "Copy"}; });
   });
   cases.run("zero-leaf shared ports still require source permissions", [] {
     auto source = compile(R"zkc(module sample;
@@ -854,7 +857,7 @@ run Demo=Run;)zkc");
                   "protocol Run roles(P,V)(x:D@(V,P))->(result:D@(V,P)) "
                   "{return(result=x);}run Demo=Run;");
       auto view = take(readInterface(source.bytes(), source.interfaceJson()));
-      require(view.selectedProtocol().inputs[0].schema->permissions.wire &&
+      require(view.selectedProtocol().inputs[0].schema->constructible &&
                   view.selectedProtocol().inputs[0].roles ==
                       std::vector<unsigned>({0, 1}),
               "installed scalar permissions or role order differ");
@@ -931,8 +934,8 @@ run Demo=Run;)zkc");
       bool rows = head == "commitments" || head == "opening_states";
       StringRef domain = rows ? "rows.merkle-keccak256.koala-bear/0"
                               : "multilinear.kzg.bls12-381/0";
-      bool wire = head == "commitment" || head == "proof";
-      bool shared = wire || head == "commitments";
+      bool shared =
+          head == "commitment" || head == "proof" || head == "commitments";
       auto type = ((rows ? "!oracle.object<\"" : "!pcs.object<\"") + domain +
                    "\", \"" + head + "\">")
                       .str();
@@ -964,10 +967,7 @@ run Demo=Run;)zkc");
       schema["kind"] = "builtin";
       schema["leaves"] = json::Array{(head + ":" + domain).str()};
       schema["permissions"] = json::Array{"Copy", "Drop"};
-      if (shared)
-        schema.getArray("permissions")->push_back("Share");
-      if (wire)
-        schema.getArray("permissions")->push_back("Wire");
+      schema["constructible"] = shared;
       if (!rows) {
         json::Array selectors{
             json::Object{{"port", 0}, {"path", json::Array{}}}};
@@ -975,13 +975,8 @@ run Demo=Run;)zkc");
             json::Object{{"name", "pcs"}, {"inputs", std::move(selectors)}}};
       }
       take(readInterface(mlir, zkc::printJson(value)));
-      if (!wire) {
-        schema.getArray("permissions")->push_back("Wire");
-        refuses(readInterface(mlir, zkc::printJson(value)), "source.interface");
-        schema.getArray("permissions")->pop_back();
-      }
       if (!shared) {
-        schema.getArray("permissions")->push_back("Share");
+        schema["constructible"] = true;
         refuses(readInterface(mlir, zkc::printJson(value)), "source.interface");
       }
     }

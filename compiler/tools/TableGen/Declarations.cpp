@@ -151,6 +151,13 @@ void Model::validate() {
                 ? !t->getValueAsBit("copy")
                 : t->getValueAsBit("copy") && t->getValueAsBit("drop"),
             t, "incoherent type permissions");
+    require(!t->getValueAsBit("participants") || t->getValueAsBit("copy"), t,
+            "participant families require Copy data");
+    require(!t->getValueAsBit("message") || t->getValueAsBit("constructible"),
+            t, "message frames require native decoder authority");
+    require(!t->getValueAsBit("mathematical") ||
+                (t->getValueAsBit("nativeLocal") && t->getValueAsBit("copy")),
+            t, "mathematical native data requires reusable local data");
     const bool atomic = ps.empty() || (ps.size() == 1 &&
                                        parameter(ps.front()).first == "Domain");
     require(atomic || custody != "PublicValue", t,
@@ -685,7 +692,11 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
       emitParameter(p);
       os << ",";
     }
-    os << "}, " << boolean(type->getValueAsBit("commonGeneric")) << "},\n";
+    os << "}, " << boolean(type->getValueAsBit("commonGeneric"));
+    for (auto fact : {"nativeLocal", "mathematical", "participants",
+                      "constructible", "message"})
+      os << ", " << boolean(type->getValueAsBit(fact));
+    os << "},\n";
   }
   os << "}; return values; }\n"
         "const TypeDeclaration *typeDeclaration(llvm::StringRef name) {\n"
@@ -903,7 +914,12 @@ json::Object inventory(const Model &m) {
                      {"copy", t->getValueAsBit("copy")},
                      {"drop", t->getValueAsBit("drop")},
                      {"custody", name(t->getValueAsDef("custody"))},
-                     {"commonGeneric", t->getValueAsBit("commonGeneric")}});
+                     {"commonGeneric", t->getValueAsBit("commonGeneric")},
+                     {"nativeLocal", t->getValueAsBit("nativeLocal")},
+                     {"mathematical", t->getValueAsBit("mathematical")},
+                     {"participants", t->getValueAsBit("participants")},
+                     {"constructible", t->getValueAsBit("constructible")},
+                     {"message", t->getValueAsBit("message")}});
   for (const auto *c : m.capabilities)
     capabilities.push_back(
         json::Object{{"name", name(c)}, {"parameters", parametersJSON(c)}});

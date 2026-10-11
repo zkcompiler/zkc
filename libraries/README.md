@@ -162,9 +162,9 @@ zero-based position is out of bounds. These are ordinary ordered `fn` primitives
 Products are packed only at the sequence element boundary; functions taking or
 returning records still use the ordinary source ABI. Generic helpers retain the
 written Copy/Drop requirements. Private fields and restricted constructors retain
-their module authority, and sequence formation grants no Wire permission.
+their module authority, and sequence formation grants no external construction authority.
 Native JSON/wire codecs retain the packed variant's nominal descriptor and ordered
-payload; decoding does not construct private source values through a Wire boundary.
+payload; decoding does not construct private source values.
 
 `zkc::symbolic::Polynomial<F, N>` is a formal expression with `N` variables.
 `zkc::polynomial::Polynomial<F>` is runtime univariate coefficient data. Use
@@ -232,8 +232,8 @@ random services for the nonce at P and challenge at V. V returns whether
 statement with its witness; the declaration does not insert a verifier check.
 
 Honest execution requires both roles to agree on the base and point.
-The group requires `Group`, `Share` and `Wire`; its scalar requires `Share` and
-`Wire`. Correct use requires suitable group parameters and nonce/challenge
+The group requires `Group`; concrete selection checks the group and scalar codecs.
+Correct use requires suitable group parameters and nonce/challenge
 sampling. The example selects BLS12-381 G1. Tests of that execution do not
 establish security of every group or transcript choice.
 
@@ -247,8 +247,7 @@ table length. Acceptance requires one final element, so a table of length
 fixes the table's most significant coordinate.
 
 V retains and folds its public table for the terminal check. This library does
-not hide the polynomial or use a commitment. The field requires `Field`, `Share`
-and `Wire` with the selected vector kernels installed. The example uses
+not hide the polynomial or use a commitment. The field requires `Field` with the selected vector kernels and codecs installed. The example uses
 BLS12-381 Fr. Vector folding and Boolean formulas use the shared modules; `sums` and
 `terminal` are private protocol helpers.
 

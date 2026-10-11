@@ -59,7 +59,7 @@ int main() {
     compile(R"(
       struct Box<T:Type> {pub value:T}
       fn f(x:Box<T=bool>){return x.value;}
-      protocol Run<T:Type+Copy+Drop+Share> roles(P)(x:T@P)->(r:T@P){return x;}
+      protocol Run<T:Type+Copy+Drop> roles(P)(x:T@P)->(r:T@P){return x;}
       run Demo=Run<T=Box<T=bool>>;
     )");
     take(check(R"(

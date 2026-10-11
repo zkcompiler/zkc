@@ -153,8 +153,8 @@ helpers and native flattening. Separate protocol result ports keep separate sets
 Dependencies are determined before optimization: `x-x` and `x*0` retain x's source
 dependency.
 
-Narrowing availability requires `Drop`; multi-role values require `Share` in
-addition to each operation's own permissions. `let mut x = shared;` fixes both
+Narrowing availability requires `Drop`; multi-role values require derived
+participant-family admission in addition to each operation's usage conditions. `let mut x = shared;` fixes both
 components; assigning a P-only value cannot narrow x. Use separate bindings such
 as `let mut xp @P = shared;` and `let mut xv @V = shared;` for independent state.
 No rule inserts communication or replicates an ordinary call. Inside a restricted
@@ -167,9 +167,10 @@ Expressions evaluate in written order, then operands are placed in declared port
 order. Missing, repeated and unknown outputs refuse.
 
 Send occupies a whole binding RHS. It requires distinct declared roles, sender
-availability, and `Copy + Drop + Share + Wire`. Its result denotes the actual
-received value and is available only at the receiver. The original payload retains
-its roles. Each native payload leaf emits `protocol.exchange` followed immediately
+availability, source construction authority and a concrete native message codec.
+Its result denotes the actual received value and is available only at the receiver.
+Sending reads the original payload under its usage contract; reusable data retains
+its original roles. Open generic types retain boundary obligations until selection. Each native payload leaf emits `protocol.exchange` followed immediately
 by receiver-only `protocol.restrict_roles`. Zero-leaf messages refuse because erasing
 a message would erase an interaction. These operations assume neither honest
 delivery nor equality of participant components.

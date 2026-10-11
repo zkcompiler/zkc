@@ -206,15 +206,10 @@ fn ports<'a>(
             require(previous.is_none_or(|p| p < index), E::Schema)?;
             previous = Some(index);
         }
-        if port.roles.len() > 1 {
-            require(
-                [Permission::Copy, Permission::Drop, Permission::Share]
-                    .iter()
-                    .all(|p| port.schema.permissions.contains(p)),
-                E::Schema,
-            )?;
-        }
         schema_port(&port.schema, &port.native, &mut flat, schemas)?;
+        if port.roles.len() > 1 {
+            schemas.participants(&port.schema)?;
+        }
     }
     Ok(flat)
 }

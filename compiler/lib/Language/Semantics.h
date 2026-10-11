@@ -33,6 +33,14 @@ public:
   std::function<bool(const Declaration &, const Type &, Usage, Span,
                      llvm::StringRef, llvm::StringRef)>
       collectUsage;
+  std::function<bool(const Declaration &, AdmissionObligation)> recordAdmission;
+  enum class Admission { Accepted, Deferred, Rejected };
+  /// Pure source authority/profile query. Deferred means an open type needs
+  /// specialization; it never authorizes a boundary.
+  std::optional<Admission> admission(const Type &, Boundary, Span,
+                                     unsigned = 1);
+  bool admit(const Type &, Boundary, Span, const Declaration * = nullptr,
+             llvm::ArrayRef<Span> calls = {});
   struct CallSignature {
     std::vector<Type> inputs, outputs;
     Type resultType() const;

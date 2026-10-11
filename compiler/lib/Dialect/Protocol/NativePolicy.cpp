@@ -20,7 +20,7 @@ LogicalResult refuse(Operation *op, StringRef detail) {
 } // namespace
 std::optional<NativeTypePolicy> nativeTypePolicy(Type type) {
   if (isa<poly::PolynomialType>(type))
-    return NativeTypePolicy{true, false, false, false, false};
+    return NativeTypePolicy{true, false, false, false, false, false};
   auto logical = protocol::encodeBoundType(type, false);
   if (!logical) {
     consumeError(logical.takeError());
@@ -30,7 +30,7 @@ std::optional<NativeTypePolicy> nativeTypePolicy(Type type) {
 }
 std::optional<NativeTypePolicy> NativeTypePolicies::get(Type type) {
   if (isa<poly::PolynomialType>(type))
-    return NativeTypePolicy{true, false, false, false, false};
+    return NativeTypePolicy{true, false, false, false, false, false};
   if (auto found = cache.find(type); found != cache.end())
     return found->second;
   if (limited)

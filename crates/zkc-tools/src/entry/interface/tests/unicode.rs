@@ -375,7 +375,7 @@ fn unicode_setup_authority_and_material_translate_together() {
 fn unicode_setup_material_reaches_native_admission_and_results() {
     let logical = "verifier_key:multilinear.kzg.bls12-381/0";
     let mut ty = schema("builtin", logical, json!([logical]));
-    ty["permissions"] = json!(["Copy", "Drop"]);
+    ty["constructible"] = json!(false);
     let (mut doc, artifact) = run_fixture(&ty, &["受信者"], &["role00000000"]);
     doc["setups"] = json!([{"name":"鍵₂","inputs":[{"port":0,"path":[]}]}]);
     let capacity = crate::execution::Capacity::default();
@@ -444,7 +444,7 @@ fn unicode_setup_material_reaches_native_admission_and_results() {
 fn distinct_setup_slots_preserve_authority_and_reject_swapped_material() {
     let logical = "verifier_key:multilinear.kzg.bls12-381/0";
     let mut ty = schema("builtin", logical, json!([logical]));
-    ty["permissions"] = json!(["Copy", "Drop"]);
+    ty["constructible"] = json!(false);
     let (mut doc, artifact) = run_fixture(&ty, &["受信者"], &["role00000000"]);
     for (direction, name) in [("inputs", "入力₂"), ("outputs", "結果₂")] {
         doc["protocols"][0][direction]
@@ -737,7 +737,7 @@ fn unicode_setup_material_is_injected_into_both_independent_proof_requests() {
         .unwrap()
         .push(json!(["2", vk]));
     let mut key_schema = schema("builtin", vk, json!([vk]));
-    key_schema["permissions"] = json!(["Copy", "Drop"]);
+    key_schema["constructible"] = json!(false);
     doc["protocols"][0]["inputs"]
         .as_array_mut()
         .unwrap()

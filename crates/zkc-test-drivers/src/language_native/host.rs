@@ -219,30 +219,25 @@ pub(super) fn run(directory: &Path) {
     }
     // Source constructor authority remains required even for native values.
     let private = alter(&publication, |_, interface| {
-        fn remove_wire(value: &mut Json) {
+        fn restrict_construction(value: &mut Json) {
             match value {
                 Json::Object(fields) => {
                     if fields.get("kind").and_then(Json::as_str) == Some("record") {
-                        fields
-                            .get_mut("permissions")
-                            .unwrap()
-                            .as_array_mut()
-                            .unwrap()
-                            .retain(|p| p != "Wire");
+                        fields.insert("constructible".into(), Json::Bool(false));
                     }
                     for value in fields.values_mut() {
-                        remove_wire(value);
+                        restrict_construction(value);
                     }
                 }
                 Json::Array(values) => {
                     for value in values {
-                        remove_wire(value);
+                        restrict_construction(value);
                     }
                 }
                 _ => {}
             }
         }
-        remove_wire(interface);
+        restrict_construction(interface);
     });
     match RunEntry::admit(private, HostLimits::default(), SetupAuthority::default()) {
         Err(code) => assert_eq!(code.code(), "entry-input-constructor"),

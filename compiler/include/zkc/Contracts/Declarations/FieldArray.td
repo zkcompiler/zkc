@@ -1,6 +1,11 @@
 // Public finite data. Shape remains part of the logical type through lowering.
 def TypeFieldArray : ZKC_Type<"field_array", [FieldDomain, NatParameter],
-                             PrivateImmutable, 1, 1>;
+                             PrivateImmutable, 1, 1> {
+  let mathematical = 1;
+  let participants = 1;
+  let constructible = 1;
+  let message = 1;
+}
 // This custody means no common codec. Native exchange has a separate closed
 // rule over the complete field/length/representation; it is not confidentiality.
 def ArrayField : ZKC_Root<"F", FieldDomain>;

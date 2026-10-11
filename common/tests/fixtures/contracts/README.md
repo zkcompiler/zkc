@@ -32,14 +32,14 @@ the test preserves that distinction. Drift controls perturb a value passed to
 the real C++ checker and a real backend AttributeRule while preserving ports.
 The latter must refuse with the runtime's Backend admission category.
 
-Share witnesses compare actual C++ `nativeTypePolicy` against actual Rust Entry
+Participant admission witnesses compare actual C++ `nativeTypePolicy` against actual Rust Entry
 `Package::capture` / `BoundInterface::read` admission. The test constructs input
 metadata, nested records/sequences/variant arms, setup selectors, nominal custody
 and role placement. It supplies no shared normative permission or custody enum.
-Native formation, Share and Entry schema availability are separate observations:
-fixed vectors can have Copy while lacking Share, and a bare fixed vector is not
+Native formation, participant admission and Entry schema availability are separate observations:
+fixed vectors can have Copy while lacking participant admission, and a bare fixed vector is not
 an Entry builtin schema. Custody permits single-role metadata without conferring
-Copy or multi-role placement. A deliberate native Share drift must disagree with
+Copy or multi-role placement. A deliberate native participant-policy drift must disagree with
 the unchanged Entry reader.
 
 The Rust example lives in zkc-tools solely to access the existing Entry admission

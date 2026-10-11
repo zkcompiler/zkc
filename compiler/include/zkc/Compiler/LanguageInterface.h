@@ -18,6 +18,7 @@ struct InterfaceSchema {
   std::string identity, type;
   Permissions permissions;
   bool custody = false;
+  bool constructible = false;
   std::vector<std::string> leaves;
   std::vector<InterfaceField> fields;
   std::vector<InterfaceAlternative> alternatives;

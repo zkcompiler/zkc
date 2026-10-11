@@ -89,15 +89,12 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
       out.attribute("identity", found->second);
       out.attribute("type", display);
       out.attribute("custody", layout.custody);
+      out.attribute("constructible", layout.constructible);
       out.attributeArray("permissions", [&] {
         if (layout.permissions.copy)
           out.value("Copy");
         if (layout.permissions.drop)
           out.value("Drop");
-        if (layout.permissions.share)
-          out.value("Share");
-        if (layout.permissions.wire)
-          out.value("Wire");
       });
       auto fields = [&](ArrayRef<LayoutField> fields) {
         for (auto &field : fields) {

@@ -24,8 +24,8 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
   hash.frame(typeKindName(layout.type.kind));
   hash.frame(toHex(SHA256::hash(arrayRefFromStringRef(key)), true));
   hash.frame(layout.custody ? "1" : "0");
-  for (bool allowed : {layout.permissions.copy, layout.permissions.drop,
-                       layout.permissions.share, layout.permissions.wire})
+  hash.frame(layout.constructible ? "1" : "0");
+  for (bool allowed : {layout.permissions.copy, layout.permissions.drop})
     hash.frame(allowed ? "1" : "0");
   hash.frame(std::to_string(layout.leaves.size()));
   for (const auto &leaf : layout.leaves) {
@@ -267,7 +267,8 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     return error("source.layout", "associated type requires one module");
   auto result = std::make_shared<Layout>();
   result->type = type;
-  result->permissions = {true, true, true, true};
+  result->permissions = {true, true};
+  result->constructible = true;
   auto *decl = state->types->typeDeclaration(type);
   if ((type.kind == K::Record &&
        (!decl || decl->kind != Declaration::Kind::Record)) ||
@@ -446,6 +447,11 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   if (!permissions)
     return state->types->takeError();
   result->permissions = *permissions;
+  auto construction = state->types->admission(type, Boundary::Construction, {});
+  if (!construction)
+    return state->types->takeError();
+  result->constructible =
+      *construction == detail::Semantics::Admission::Accepted;
   std::shared_ptr<const Layout> immutable = result;
   cache.emplace(std::move(key), immutable);
   return immutable;

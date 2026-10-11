@@ -1,5 +1,8 @@
 // Runtime length is a value property; element identity is static.
-def TypeSequence : ZKC_Type<"sequence", [TypeParameter], PrivateImmutable, 1, 1>;
+def TypeSequence : ZKC_Type<"sequence", [TypeParameter], PrivateImmutable, 1, 1> {
+  let constructible = 1;
+  let message = 1;
+}
 def SequenceElement : ZKC_Root<"T", TypeParameter>;
 def SequenceValue : ZKC_Apply<TypeSequence, [SequenceElement]>;
 class SequenceOperation<string name, list<ZKC_Term> inputs, list<ZKC_Term> outputs>

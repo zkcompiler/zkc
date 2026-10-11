@@ -13,7 +13,7 @@ fn terminal<F: Field>(values: Vector<F>, claim: F) {
 
 // Multilinear public-table Sumcheck. V evaluates the public table directly at
 // the delivered point; there is no commitment or hidden evaluation callback.
-pub protocol Sumcheck<F: Field+Share+Wire, Max: nat> roles(P, V)
+pub protocol Sumcheck<F: Field, Max: nat> roles(P, V)
     (values: Vector<F> @(P,V), claim: F @V, rounds: index @(P,V),
      challenges: Random<F> @V) -> (accepted: bool @V) {
   let mut tableP @P = values;

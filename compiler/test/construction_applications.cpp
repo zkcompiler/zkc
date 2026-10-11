@@ -25,26 +25,26 @@ module Provider:TestTranscript<F>{
   fn observe(t:State,value:F)->State{return t;}
   fn draw(t:State)->(State,F){return (t,1);}
 }
-protocol Leaf<T:Field+Share+Wire> roles(A,B)
+protocol Leaf<T:Field> roles(A,B)
   (public:T@(A,B),secret:T@A,random:Random<T>@B)->(ok:bool@B){
   #[site(msg)] let message=send A->B(secret);
   #[site(query)] let challenge=random.draw();
   #[site(delivery)] let actual=send B->A(challenge);
   return message==public+challenge;
 }
-protocol Outer<T:Field+Share+Wire> roles(P,V)
+protocol Outer<T:Field> roles(P,V)
   (x:T@(P,V),w:T@P,random:Random<T>@V)->(ok:bool@V){
   #[site(step)] let ok=Leaf<T> roles(P,V)(x,w,random);
   return ok;
 }
-construction Child<T:Field+Share+Wire,H:TestTranscript<T>> for Leaf<T>{
+construction Child<T:Field,H:TestTranscript<T>> for Leaf<T>{
   transcript H;
   replace random;
   on start(t,public){return H::observe(t,public);}
   on message {msg,delivery}(t,value){return H::observe(t,value);}
   on query query(t){return H::draw(t);}
 }
-construction Parent<T:Field+Share+Wire,H:TestTranscript<T>> for Outer<T>{
+construction Parent<T:Field,H:TestTranscript<T>> for Outer<T>{
   transcript H;
   replace random;
   on start(t){return t;}
@@ -115,11 +115,11 @@ int main() {
     auto text = changedSource(source, "construction Parent<F,Provider>;",
                               "construction Changed<F,Provider>;");
     text += R"zkc(
-      construction Other<T:Field+Share+Wire,H:TestTranscript<T>> for Leaf<T>{
+      construction Other<T:Field,H:TestTranscript<T>> for Leaf<T>{
         base Child<T,H>;
         on message msg(t,value){return t;}
       }
-      construction Changed<T:Field+Share+Wire,H:TestTranscript<T>> for Outer<T>{
+      construction Changed<T:Field,H:TestTranscript<T>> for Outer<T>{
         base Parent<T,H>;
         apply Other<T,H> at step;
       })zkc";
@@ -146,12 +146,12 @@ int main() {
   });
   cases.run("nested delegation follows the actual expanded call path", [&] {
     auto text = source.str() + R"zkc(
-      protocol Top<T:Field+Share+Wire> roles(P,V)
+      protocol Top<T:Field> roles(P,V)
         (x:T@(P,V),w:T@P,random:Random<T>@V)->(ok:bool@V){
         #[site(outer)] let ok=Outer<T> roles(P,V)(x,w,random);
         return ok;
       }
-      construction Grand<T:Field+Share+Wire,H:TestTranscript<T>> for Top<T>{
+      construction Grand<T:Field,H:TestTranscript<T>> for Top<T>{
         transcript H; replace random;
         on start(t){return t;}
         apply Parent<T,H> at outer;
@@ -227,7 +227,7 @@ int main() {
         "let ignored=Shadow<T> roles(P,V)(x,w,random); #[site(step)] "
         "let ok=Leaf<T> roles(P,V)(x,w,random);");
     text += R"zkc(
-      protocol Shadow<T:Field+Share+Wire> roles(P,V)
+      protocol Shadow<T:Field> roles(P,V)
         (x:T@(P,V),w:T@P,random:Random<T>@V)->(ok:bool@V){
         #[site(step)] let ok=Leaf<T> roles(P,V)(x,w,random);
         return ok;
@@ -261,7 +261,7 @@ int main() {
   });
   cases.run("parent cannot override an inherited child's leaf", [&] {
     auto text = source.str() + R"zkc(
-      construction Changed<T:Field+Share+Wire,H:TestTranscript<T>> for Outer<T>{
+      construction Changed<T:Field,H:TestTranscript<T>> for Outer<T>{
         base Parent<T,H>;
         on message step.msg(t,value){return t;}
       })zkc";

@@ -1,12 +1,12 @@
 module sample;
 domain Fr = field("bls12-381.fr");
 
-protocol Step<F: Field + Share> roles(A, B)(x: F @(A,B), y: F @(A,B))
+protocol Step<F: Field> roles(A, B)(x: F @(A,B), y: F @(A,B))
     -> (a: F @A, b: F @B) {
   return (a = x + y, b = x * y);
 }
 protocol Observe roles(P, V)() -> () { return (); }
-protocol Segment<F: Field + Share> roles(P, V)(x: F @(P,V), y: F @(P,V))
+protocol Segment<F: Field> roles(P, V)(x: F @(P,V), y: F @(P,V))
     -> (p: F @P, v: F @V) {
   let (atV, atP) = Step<F> roles(V,P)(x, y);
   let () = Observe();

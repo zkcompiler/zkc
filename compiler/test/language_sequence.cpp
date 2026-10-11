@@ -324,10 +324,10 @@ void refusals() {
           "source.builtin");
   refuses(prefix + sequence + R"(
 struct Secret{value:Fr}
-protocol Relay<T:Type+Copy+Drop+Share+Wire> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}
+protocol Relay<T:Type+Copy+Drop> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}
 run Demo=Relay<Sequence<Secret>>;
 )",
-          "source.permission");
+          "source.ingress");
   closureRefuses(prefix + sequence + R"(
 struct Secret{value:Fr}
 protocol Run roles(P)(xs:Sequence<Secret>@P)->(){return();}run Demo=Run;

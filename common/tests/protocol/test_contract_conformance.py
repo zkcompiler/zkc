@@ -1155,13 +1155,14 @@ def test_backend_attribute_drift_refuses_installation(physical_drivers, director
 
 def entry_schema(kind, spelling, permissions):
     return {"kind": kind, "identity": sha256(spelling.encode()).hexdigest(), "type": spelling,
-            "custody": False, "permissions": permissions, "leaves": [spelling], "fields": [], "alternatives": []}
+            "custody": False, "constructible": False, "permissions": permissions, "leaves": [spelling], "fields": [], "alternatives": []}
 
 
 def entry_record(child, *, custody=False, permissions=None, name="Record"):
     identity = sha256(name.encode()).hexdigest()
     prefix = ["resource_unit:zkl_resource_" + identity] if custody else []
     return {"kind": "record", "identity": identity, "type": name, "custody": custody,
+            "constructible": not custody and child["constructible"],
             "permissions": child["permissions"] if permissions is None else permissions,
             "leaves": prefix + child["leaves"],
             "fields": [{"name": "value", "offset": len(prefix), "schema": child}], "alternatives": []}
@@ -1211,7 +1212,7 @@ def test_native_share_against_actual_entry_inputs(drivers, directory):
             failures.append({"type": spelling, "native_policy": facts, "expected_share": shared, "expected_copy": copy})
         for nested in (False, True):
             for multi in (False, True):
-                schema = entry_schema(kind, spelling, ["Copy", "Drop", "Share"] if multi else [])
+                schema = entry_schema(kind, spelling, ["Copy", "Drop"] if multi else [])
                 if nested:
                     schema = entry_record(entry_record(schema, name="Inner"), name="Outer")
                 requests.append(entry_request(schema, ["P", "V"] if multi else ["P"], setup=setup))
@@ -1227,19 +1228,19 @@ def test_native_share_against_actual_entry_inputs(drivers, directory):
 
 
 def entry_custody_witnesses():
-    scalar = entry_schema("field", "field:koala-bear", ["Copy", "Drop", "Share"])
-    custody = entry_record(scalar, custody=True, permissions=["Drop", "Share"], name="Ticket")
+    scalar = entry_schema("field", "field:koala-bear", ["Copy", "Drop"])
+    custody = entry_record(scalar, custody=True, permissions=["Drop"], name="Ticket")
     token = custody["leaves"][0]
     copied = deepcopy(custody)
-    copied["permissions"] = ["Copy", "Drop", "Share"]
+    copied["permissions"] = ["Copy", "Drop"]
     forged = deepcopy(custody)
     forged["leaves"][0] = "resource_unit:Other"
     offset = deepcopy(custody)
     offset["fields"][0]["offset"] = 0
     wrong_kind = deepcopy(custody)
     wrong_kind["kind"] = "tuple"
-    restricted_child = entry_record(entry_schema("field", "field:koala-bear", ["Copy", "Drop"]),
-                                    permissions=["Copy", "Drop", "Share"])
+    restricted_child = entry_record(entry_schema("field", "field:koala-bear", ["Drop"]),
+                                    permissions=["Copy", "Drop"])
     cases = [("custody-local", custody, ["P"], True),
              ("nested-custody-local", entry_record(custody, name="Outer"), ["P"], True),
              ("custody-multi-role", custody, ["P", "V"], False),
@@ -1247,7 +1248,7 @@ def entry_custody_witnesses():
              ("forged-custody", forged, ["P"], False),
              ("custody-offset", offset, ["P"], False),
              ("custody-kind", wrong_kind, ["P"], False),
-             ("nested-missing-share", restricted_child, ["P", "V"], False)]
+             ("nested-missing-copy", restricted_child, ["P", "V"], False)]
     return token, cases
 
 
@@ -1266,7 +1267,7 @@ def test_entry_custody_and_nested_permission_refusals(drivers, directory):
 def test_share_policy_drift_is_observed(drivers, directory):
     facts = query({"cpp": drivers["cpp"]}, [{"native_policy": "field:koala-bear"}], directory / "policy",
                   arguments={"cpp": ["--divergent-field-share"]})["cpp"][0]
-    schema = entry_schema("field", "field:koala-bear", ["Copy", "Drop", "Share"])
+    schema = entry_schema("field", "field:koala-bear", ["Copy", "Drop"])
     entry = query({"rust": drivers["rust"]}, [entry_request(schema, ["P", "V"])], directory / "entry")["rust"][0]
     assert facts["accepted"] and entry["accepted"] and entry["admitted"]
     assert facts["share"] is False, "the native policy drift must disagree with real Entry admission"
@@ -1286,7 +1287,7 @@ def variant_share_witnesses():
         spelling = "variant:" + json.dumps(["zkc.variant/0", nodes], separators=(",", ":")).encode().hex()
         spellings.append(spelling)
         for multi in (False, True):
-            permissions = ["Copy", "Drop", "Share"] if multi else ["Copy", "Drop"]
+            permissions = ["Copy", "Drop"]
             schema = entry_schema("variant", "test::Choice", permissions)
             schema["leaves"] = [spelling]
             schema["alternatives"] = [

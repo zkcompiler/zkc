@@ -114,8 +114,7 @@ pub protocol LowDegree<C: Commitment, LogSize: nat, TerminalLog: nat,
      coins: Random<C::ValueField> @V)
     -> (accepted: bool @V, positionsP: Positions @P,
         positionsV: Positions @V, valuesV: Vector<C::ValueField> @V)
-    where Share(C::ValueField), Wire(C::ValueField),
-      zkc::algebra::TwoAdicField(C::ValueField),
+    where zkc::algebra::TwoAdicField(C::ValueField),
       zkc::algebra::CharacteristicNotTwo(C::ValueField),
       zkc::random::IndexRandomness(C::ValueField),
       zkc::oracle::VectorCommitment(C),
