@@ -86,7 +86,9 @@ class AlgorithmCorrespondence {
       }
       if (auto call = dyn_cast<local::ApplyOp>(op);
           call && !(phase == AlgorithmExpansionPhase::RetainMaps &&
-                    symbols.lookup<algebra::MapRealizeOp>(call.getCallee()))) {
+                    isa_and_nonnull<algebra::MapRealizeOp, local::FiniteFoldOp,
+                                    local::FiniteCollectOp>(
+                        symbols.lookup(call.getCallee())))) {
         auto callee = symbols.lookup<local::FuncOp>(call.getCallee());
         if (!callee || !callee.getBody().hasOneBlock())
           return refuse(&op, "missing local body");
@@ -118,9 +120,11 @@ class AlgorithmCorrespondence {
       if (cursor == target.end())
         return refuse(&op, "missing expanded operation");
       Operation &actual = *cursor++;
+      bool removedResults = isa<local::LocalIfOp, local::LocalMatchOp>(op) &&
+                            actual.getNumResults() == 0;
       if (op.getName() != actual.getName() ||
           op.getNumRegions() != actual.getNumRegions() ||
-          op.getResultTypes() != actual.getResultTypes())
+          (!removedResults && op.getResultTypes() != actual.getResultTypes()))
         return refuse(&actual, "operation identity");
       NamedAttrList attributes(op.getAttrs());
       if (isa<local::ApplyOp>(op) &&
@@ -203,6 +207,7 @@ class AlgorithmCorrespondence {
       }
       if (!llvm::equal(operands, actual.getOperands()))
         return refuse(&actual, "operand correspondence");
+      bool allStopped = !op.getRegions().empty();
       for (auto [a, b] : zip(op.getRegions(), actual.getRegions())) {
         if (!a.hasOneBlock() || !b.hasOneBlock())
           return refuse(&actual, "region shape");
@@ -241,6 +246,17 @@ class AlgorithmCorrespondence {
                          isa<local::LocalForOp>(op))) ||
             position != after.end())
           return refuse(&actual, "region body correspondence");
+        allStopped &= terminated;
+      }
+      if (isa<local::LocalIfOp, local::LocalMatchOp>(op) && allStopped) {
+        if (actual.getNumResults() || cursor == target.end())
+          return refuse(&actual, "terminal control results");
+        auto unreachable = dyn_cast<local::StopOp>(*cursor++);
+        if (!unreachable || unreachable.getReason() != "abort" ||
+            !unreachable.getSite().starts_with("unreachable_"))
+          return refuse(&actual, "missing unreachable terminator");
+        stopped = true;
+        return success();
       }
       if (failed(bind(op.getResults(), actual.getResults(), values)))
         return refuse(&actual, "result correspondence");

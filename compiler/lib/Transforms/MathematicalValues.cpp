@@ -1,5 +1,6 @@
 #include "MathematicalValues.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
@@ -383,6 +384,14 @@ ValueCorrespondence::Term ValueCorrespondence::value(Environment env,
       result = inputs[0];
     } else {
       auto attributes = op->getAttrDictionary();
+      if (finite::isComputation(op)) {
+        auto closure = finite::closureKey(op);
+        if (failed(closure))
+          return 0;
+        NamedAttrList complete(attributes);
+        complete.set("finite.closure", *closure);
+        attributes = complete.getDictionary(op->getContext());
+      }
       if (auto restriction = dyn_cast<protocol_ir::RestrictRolesOp>(op)) {
         SmallVector<Attribute> owners;
         for (auto role : restriction.getRoles()) {

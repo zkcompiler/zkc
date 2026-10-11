@@ -5,5 +5,6 @@ def DataDialect : ZKCDialect {
   let name = "data";
   let cppNamespace = "::zkc::data";
   let useDefaultTypePrinterParser = 1;
+  let useDefaultAttributePrinterParser = 1;
 }
 #endif

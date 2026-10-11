@@ -42,6 +42,7 @@ public:
                   unsigned depth = 64)
       : symbols(symbols), types(types), remaining(work), depthLimit(depth) {}
   mlir::LogicalResult verify(protocol_ir::RepeatOp repeat);
+  mlir::LogicalResult verifyFinite(mlir::Operation *declaration);
 };
 } // namespace zkc::mathematical
 #endif

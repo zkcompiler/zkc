@@ -12,6 +12,11 @@ function(add_zkc_test name component)
   endif()
 endfunction()
 
+add_zkc_test(finite_computation Transforms finite-computation)
+target_compile_definitions(zkc-finite_computation-test PRIVATE
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-finite_computation-test PRIVATE MLIRParser)
+
 add_zkc_test(math_realization Transforms)
 add_test(NAME math-realization COMMAND zkc-math_realization-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/helper-realization.mlir")

@@ -1,3 +1,4 @@
+#include "FiniteSupport.h"
 #include "MathematicalSupport.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
@@ -14,6 +15,7 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
 #include "zkc/Interfaces/Mathematical.h"
+#include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/ADT/BitVector.h"
@@ -25,18 +27,62 @@ using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
 bool isCalculationContract(StringRef contract) {
-  return is_contained(
-      ArrayRef<StringRef>{
-          "field.constant",   "field.add",       "field.sub",
-          "field.mul",        "field.equal",     "curve.add",
-          "curve.scale",      "curve.equal",     "curve.length",
-          "pairing.apply",    "field_array.at",  "field_array.from_vector",
-          "vector.empty",     "vector.append",   "vector.length",
-          "matrix.dimension", "indices.length",  "index.constant",
-          "index.equal",      "index.less",      "sequence.empty",
-          "sequence.append",  "sequence.length", "bool.and",
-          "bool.or",          "bool.not",        "curve.identity"},
-      contract);
+  return is_contained(ArrayRef<StringRef>{"index.add",
+                                          "index.sub",
+                                          "index.mul",
+                                          "index.div",
+                                          "index.mod",
+                                          "control.require",
+                                          "vector.sum",
+                                          "vector.product",
+                                          "vector.dot",
+                                          "vector.fill",
+                                          "vector.scale",
+                                          "vector.add",
+                                          "vector.sub",
+                                          "vector.mul",
+                                          "curve.msm",
+                                          "curve.empty",
+                                          "curve.append",
+                                          "indices.empty",
+                                          "indices.append",
+                                          "matrix.mul_vector",
+                                          "matrix.transpose_mul_vector",
+                                          "matrix.bilinear",
+                                          "vector.get",
+                                          "curve.get",
+                                          "indices.at",
+                                          "sequence.at",
+                                          "field_array.get",
+                                          "matrix.get",
+                                          "field.constant",
+                                          "field.add",
+                                          "field.sub",
+                                          "field.mul",
+                                          "field.equal",
+                                          "curve.identity",
+                                          "curve.add",
+                                          "curve.scale",
+                                          "curve.equal",
+                                          "curve.length",
+                                          "pairing.apply",
+                                          "field_array.at",
+                                          "field_array.from_vector",
+                                          "vector.empty",
+                                          "vector.append",
+                                          "vector.length",
+                                          "matrix.dimension",
+                                          "indices.length",
+                                          "index.constant",
+                                          "index.equal",
+                                          "index.less",
+                                          "sequence.empty",
+                                          "sequence.append",
+                                          "sequence.length",
+                                          "bool.and",
+                                          "bool.or",
+                                          "bool.not"},
+                      contract);
 }
 namespace {
 // Names are allocated over the entire isolated symbol table, including retained
@@ -168,6 +214,25 @@ public:
     auto site = op->getAttrOfType<StringAttr>("site");
     if (!site)
       return rewriter.notifyMatchFailure(op, "missing generated occurrence");
+    if (isa<data::BoundedAtOp, data::BoundedMatrixAtOp>(op)) {
+      auto col = finite::collection(inputs[0].getType());
+      protocol::BindingApplication application;
+      application.contract =
+          col.family + (col.family == "sequence" || col.family == "indices"
+                            ? ".at"
+                            : ".get");
+      application.arguments = col.arguments;
+      OperationState state(op->getLoc(),
+                           protocol::boundOperationName(application.contract));
+      state.addOperands(inputs);
+      state.addTypes(op->getResultTypes());
+      state.addAttribute("site", site);
+      state.addAttribute("parameters", rewriter.getArrayAttr({}));
+      state.addAttribute("binding",
+                         symbols.get(application, op->getLoc(), rewriter));
+      rewriter.replaceOp(op, rewriter.create(state)->getResults());
+      return success();
+    }
     if (isa<data::SequenceEmptyOp, data::SequenceAppendOp,
             data::SequenceLengthOp>(op)) {
       auto sequence = cast<data::SequenceType>(
@@ -761,7 +826,31 @@ public:
 
 LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
                            const llvm::DenseSet<Operation *> &generated,
-                           BindingSymbols &symbols) {
+                           BindingSymbols &symbols,
+                           bool optimizeFinite = true) {
+  // Finite control introduces regions and recursively referenced expressions.
+  // Expand it before primitive dialect conversion: detached helper construction
+  // must not escape the conversion rewriter's transaction bookkeeping.
+  unsigned finiteWork = 100000;
+  while (true) {
+    Operation *next = nullptr;
+    unit.walk<WalkOrder::PreOrder>([&](Operation *op) {
+      if (!next && finite::isComputation(op) &&
+          generated.contains(op->getParentOfType<local::FuncOp>()))
+        next = op;
+    });
+    if (!next)
+      break;
+    if (!finiteWork--)
+      return diagnostics::emit(next->emitError(), "finite-analysis-limit");
+    OpBuilder builder(next);
+    auto result = finite::realizeExpression(next, next->getOperands(), builder,
+                                            optimizeFinite);
+    if (failed(result))
+      return failure();
+    next->replaceAllUsesWith(*result);
+    next->erase();
+  }
   ConversionTarget target(*unit.getContext());
   target.markUnknownOpDynamicallyLegal([&](Operation *op) {
     return !generated.contains(op->getParentOfType<local::FuncOp>()) ||
@@ -782,6 +871,13 @@ LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
 
 struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerMathPass)
+  LowerMathPass() = default;
+  explicit LowerMathPass(bool optimize) { optimizeFinite = optimize; }
+  LowerMathPass(const LowerMathPass &other) : PassWrapper(other) {}
+  Option<bool> optimizeFinite{
+      *this, "optimize-finite",
+      llvm::cl::desc("Recognize checked native finite realizations"),
+      llvm::cl::init(true)};
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<local::LocalDialect, algebra::AlgebraDialect>();
   }
@@ -819,8 +915,11 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
         generated.insert(outlinedSymbols.lookup(reference.getValue()));
       }
     }
-    if (failed(lowerRecipes(unit, generated, symbols)))
+    if (failed(lowerRecipes(unit, generated, symbols, optimizeFinite)))
       return signalPassFailure();
+    for (auto &declaration : make_early_inc_range(unit.getBody().front()))
+      if (isa<data::DomainOp, func::FuncOp>(declaration))
+        declaration.erase();
     unit.setProfile(protocol_ir::Profile::Exec);
     if (failed(verify(*candidate)) ||
         failed(verifyProjectionPreserved(source, *candidate)))
@@ -831,7 +930,8 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
 };
 } // namespace
 LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
-                                ArrayRef<local::FuncOp> functions) {
+                                ArrayRef<local::FuncOp> functions,
+                                bool optimizeFinite) {
   BindingSymbols symbols(unit);
   llvm::DenseSet<Operation *> selected;
   for (auto function : functions)
@@ -841,11 +941,12 @@ LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
   // candidate is not an executable module until conversion finishes.
   OwningOpRef<protocol_ir::ProtocolModuleOp> original(
       cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
-  if (failed(lowerRecipes(unit, selected, symbols)))
+  if (failed(lowerRecipes(unit, selected, symbols, optimizeFinite)))
     return failure();
   return verifyCalculationRecipes(*original, unit, functions);
 }
 } // namespace zkc::mathematical
-std::unique_ptr<mlir::Pass> zkc::protocol::createLowerMathPass() {
-  return std::make_unique<mathematical::LowerMathPass>();
+std::unique_ptr<mlir::Pass>
+zkc::protocol::createLowerMathPass(bool optimizeFinite) {
+  return std::make_unique<mathematical::LowerMathPass>(optimizeFinite);
 }

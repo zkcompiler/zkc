@@ -31,7 +31,7 @@ HEADER_ROOTS = {
         "LanguagePackage", "LanguageInspection", "NativeProof", "Run",
         "PolynomialReduction", "PublicCoin", "Passes", "Pipelines")],
     "ZkcDriver": ["Driver"],
-    "ZkcIR": ["Dialect", "Interfaces"],
+    "ZkcIR": ["Dialect", "Interfaces", "Analysis"],
     "ZkcTranslation": ["Translation"],
 }
 
@@ -172,6 +172,7 @@ def main():
         ROOT / "lib/Conversion/Bindings.h", ROOT / "lib/Target/PhysicalPlan.h",
         ROOT / "lib/Transforms/MathematicalSupport.h",
         ROOT / "lib/Transforms/AlgorithmSupport.h",
+        ROOT / "lib/Transforms/FiniteSupport.h",
         ROOT / "lib/Transforms/MathematicalValues.h",
         ROOT / "lib/Transforms/PreparedProtocol.h",
         ROOT / "lib/Transforms/ProtocolApplications.h"

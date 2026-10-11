@@ -1,3 +1,4 @@
+#include "FiniteSupport.h"
 #include "MathematicalSupport.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
@@ -7,6 +8,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 
@@ -68,6 +70,50 @@ class LoweringVerifier {
     return true;
   }
 
+  FailureOr<SmallVector<Value>>
+  finiteRecipe(Operation *source, Operation *&cursor, ValueRange inputs) {
+    return finite::verifyExpression(
+        source, inputs, cursor,
+        [&](Operation *helper, ValueRange args,
+            Operation *&at) -> FailureOr<SmallVector<Value>> {
+          OwningOpRef<func::FuncOp> scratch(
+              cast<func::FuncOp>(helper->clone()));
+          SymbolTableCollection tables;
+          unsigned operations = 100000;
+          uint64_t indices = 1000000, polynomial = 100000;
+          auto unit = helper->getParentOfType<protocol_ir::ProtocolModuleOp>();
+          if (failed(
+                  inlineHelpers(*scratch, operations, indices, tables, unit)) ||
+              failed(poly::eliminatePolynomials(scratch->front(), polynomial)))
+            return failure();
+          auto &body = scratch->front();
+          llvm::DenseMap<Value, Value> values;
+          for (auto [a, b] : zip(body.getArguments(), args))
+            values[a] = b;
+          for (auto &op : body.without_terminator()) {
+            SmallVector<Value> operands;
+            for (Value v : op.getOperands())
+              operands.push_back(values.lookup(v));
+            if (finite::isComputation(&op)) {
+              auto results = finiteRecipe(&op, at, operands);
+              if (failed(results))
+                return failure();
+              for (auto [a, b] : zip(op.getResults(), *results))
+                values[a] = b;
+            } else {
+              auto value = recipe(&op, at, operands);
+              if (!value || op.getNumResults() != 1)
+                return failure();
+              values[op.getResult(0)] = value;
+            }
+          }
+          SmallVector<Value> results;
+          for (Value v : body.back().getOperands())
+            results.push_back(values.lookup(v));
+          return results;
+        },
+        before);
+  }
   Value recipe(Operation *source, Operation *&cursor, ValueRange inputs) {
     auto take = [&](StringRef contract, ValueRange operands,
                     ArrayRef<StringRef> arguments = {},
@@ -78,6 +124,17 @@ class LoweringVerifier {
       cursor = cursor->getNextNode();
       return value;
     };
+    if (isa<data::BoundedAtOp, data::BoundedMatrixAtOp>(source)) {
+      auto col = finite::collection(inputs[0].getType());
+      SmallVector<StringRef> args;
+      for (auto &arg : col.arguments)
+        args.push_back(arg);
+      return take(col.family +
+                      (col.family == "sequence" || col.family == "indices"
+                           ? ".at"
+                           : ".get"),
+                  inputs, args);
+    }
     if (isa<data::SequenceEmptyOp, data::SequenceAppendOp,
             data::SequenceLengthOp>(source)) {
       auto sequence = cast<data::SequenceType>(
@@ -411,8 +468,9 @@ class LoweringVerifier {
         };
         auto *instruction = &function.getBody().front().front();
         for (auto *op : needed) {
-          if (op->getNumResults() != 1)
-            return refuse(call, "recipe requires one result");
+          if (op->getNumResults() != 1 && !finite::isComputation(op))
+            return refuse(call,
+                          "recipe requires one result or a finite state list");
           auto dependencies = operandDependencies(op, 0);
           if (failed(dependencies) ||
               dependencies->size() != op->getNumOperands())
@@ -427,6 +485,18 @@ class LoweringVerifier {
             if (!value)
               return refuse(call, "calculation lost a mathematical dependency");
             inputs.push_back(value);
+          }
+          if (finite::isComputation(op)) {
+            auto results = finiteRecipe(op, instruction, inputs);
+            if (failed(results) || results->size() != op->getNumResults())
+              return refuse(call, "finite recipe result arity");
+            for (auto [a, b] : zip(op->getResults(), *results)) {
+              if (!b || a.getType() != b.getType())
+                return refuse(call, "finite recipe result type");
+              localValues[a] = b;
+            }
+            realized.insert(op);
+            continue;
           }
           auto value = recipe(op, instruction, inputs);
           if (!value || op->getNumResults() != 1 ||
@@ -447,7 +517,8 @@ class LoweringVerifier {
                         "calculation contains extra work or unused captures");
         llvm::DenseMap<Value, Value> results;
         for (auto *op : needed)
-          results[localValues.lookup(op->getResult(0))] = op->getResult(0);
+          for (Value result : op->getResults())
+            results[localValues.lookup(result)] = result;
         llvm::DenseSet<Value> exported;
         for (auto [value, output] :
              zip(returned.getInputs(), call.getResults())) {
@@ -518,6 +589,14 @@ public:
               returned.getInputs() != ValueRange(inputs))
             return refuse(target, "realized calculation changed its return");
           cursor = nullptr;
+          continue;
+        }
+        if (finite::isComputation(&op)) {
+          auto results = finiteRecipe(&op, cursor, inputs);
+          if (failed(results) || results->size() != op.getNumResults())
+            return refuse(target, "finite multi-result recipe changed");
+          for (auto [a, b] : zip(op.getResults(), *results))
+            values[a] = b;
           continue;
         }
         if (!isTotal(&op) || op.getNumResults() != 1)

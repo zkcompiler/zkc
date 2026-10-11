@@ -3,6 +3,7 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "llvm/ADT/TypeSwitch.h"
@@ -12,7 +13,13 @@ using namespace mlir;
 #include "zkc/Dialect/Data/IR/dataOps.cpp.inc"
 #define GET_TYPEDEF_CLASSES
 #include "zkc/Dialect/Data/IR/dataTypes.cpp.inc"
+#define GET_ATTRDEF_CLASSES
+#include "zkc/Dialect/Data/IR/dataAttrs.cpp.inc"
 void zkc::data::DataDialect::initialize() {
+  addAttributes<
+#define GET_ATTRDEF_LIST
+#include "zkc/Dialect/Data/IR/dataAttrs.cpp.inc"
+      >();
   addTypes<
 #define GET_TYPEDEF_LIST
 #include "zkc/Dialect/Data/IR/dataTypes.cpp.inc"

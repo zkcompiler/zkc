@@ -247,6 +247,17 @@ def VectorEqualOp : KernelOp<AlgebraDialect, "exec.vector_equal", [OpVectorEqual
 // preparation by an ordinary local.func with the same signature. It is a
 // checked bulk operation: shapes are compared before arithmetic, so it has no
 // totality or purity contract. Algebra owns its formula vocabulary.
+class AlgebraFiniteOp<string name> : Op<AlgebraDialect, name,
+    [Pure, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$domain,
+    OptionalAttr<FlatSymbolRefAttr>:$step, OptionalAttr<FlatSymbolRefAttr>:$body,
+    OptionalAttr<FlatSymbolRefAttr>:$predicate);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+}
+def FiniteFoldOp : AlgebraFiniteOp<"finite_fold">;
+def FiniteCollectOp : AlgebraFiniteOp<"finite_collect">;
+
 def MapRealizeOp : Op<AlgebraDialect, "map_realize",
     [Symbol, DeclareOpInterfaceMethods<SymbolUserOpInterface>,
      PreparationCallableOpInterface]> {

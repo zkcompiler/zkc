@@ -11,6 +11,9 @@ namespace zkc::protocol {
 struct LocalRealization {
   std::string name;
   std::vector<std::string> inputs, outputs;
+  enum class Kind { Total, FiniteFold, FiniteCollect };
+  Kind kind = Kind::Total;
+  unsigned domainArguments = 0;
 };
 /// Internal logical native locals, without any protocol or entry declarations.
 /// Realization signatures are permitted only for local.apply checking.

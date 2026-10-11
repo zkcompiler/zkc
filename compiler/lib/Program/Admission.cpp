@@ -779,12 +779,28 @@ public:
     for (const auto &realization : realizations) {
       if (!name(realization.name) || !symbols.insert(realization.name).second)
         return error("local-realization-symbol");
+      if (realization.domainArguments > realization.inputs.size())
+        return error("local-realization-signature");
+      if (realization.kind == LocalRealization::Kind::FiniteFold) {
+        if (realization.outputs.empty() ||
+            realization.outputs.size() >
+                realization.inputs.size() - realization.domainArguments ||
+            !llvm::equal(realization.outputs,
+                         ArrayRef<std::string>(realization.inputs)
+                             .slice(realization.domainArguments,
+                                    realization.outputs.size())))
+          return error("local-realization-signature");
+      } else if (realization.kind == LocalRealization::Kind::FiniteCollect &&
+                 realization.outputs.size() != 1) {
+        return error("local-realization-signature");
+      }
       Definition d;
       d.realization = true;
       for (bool input : {true, false}) {
         const auto &ports = input ? realization.inputs : realization.outputs;
         if (ports.size() > 1024)
           return error("interactive-ports");
+        unsigned position = 0;
         for (const auto &port : ports) {
           auto type = parseBoundType(port, false);
           if (!type)
@@ -792,7 +808,15 @@ public:
           auto policy = nativeTypePolicy(*type, typeWork, limited);
           if (limited)
             return error("local-realization-limit");
-          if (!policy || !policy->total || policy->affine)
+          bool state = realization.kind == LocalRealization::Kind::FiniteFold &&
+                       (!input || (position >= realization.domainArguments &&
+                                   position < realization.domainArguments +
+                                                  realization.outputs.size()));
+          ++position;
+          if (!policy ||
+              (realization.kind == LocalRealization::Kind::Total &&
+               !policy->total) ||
+              (policy->affine && !state))
             return error("local-realization-signature");
           (input ? d.inputs : d.outputs).push_back({port});
         }

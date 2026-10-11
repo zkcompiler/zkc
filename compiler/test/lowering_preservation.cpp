@@ -195,10 +195,10 @@ int main() {
       },
       false);
   mutation(
-      "extra generated function attribute",
+      "invalid generated function visibility",
       [&](ModuleOp module) {
         callee(calculations(module)[1])
-            ->setAttr("sym_visibility", StringAttr::get(&context, "private"));
+            ->setAttr("sym_visibility", StringAttr::get(&context, "public"));
       },
       false, "interactive-local-visibility");
   mutation("wrong capture AND(a,b) becomes AND(a,a)", [&](ModuleOp module) {
