@@ -73,8 +73,7 @@ let
       "libraries/schnorr/lib.zkc"
       "examples/projects/schnorr"
       "examples/projects/mathematics/main.zkc"
-      "libraries/zkc/vector.zkc"
-      "libraries/zkc/symbolic.zkc"
+      "libraries/zkc"
     ];
     format.paths = [
       "scripts/format.py"

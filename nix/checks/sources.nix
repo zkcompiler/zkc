@@ -26,6 +26,8 @@ runCommandNoCC "zkc-source-boundaries" { } ''
   test -f ${sources.leanChecks}/common/tests/fixtures/clean/air-control.json
   test ! -e ${sources.arklib}/lean/integrations/clean
   test -f ${sources.arklib}/lean/checks/check_clients.py
+  test -f ${sources.application}/libraries/zkc/finite.zkc
+  test -f ${sources.application}/libraries/zkc/sequence.zkc
   test ! -e ${sources.application}/crates
   mkdir -p "$out"
 ''
