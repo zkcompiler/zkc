@@ -3,7 +3,7 @@ use p::{Outputs};
 struct Empty {}
 enum Cases { Self(), self(), crate(), async(), a_b(), a__b() }
 struct Names { pub async: bool, pub self: bool, pub Foo: bool, pub foo: bool, pub _: bool }
-interface Boxed { type State:Copy+Drop; fn make(x:bool)->State; }
+interface Boxed { type State:Copy+Drop; fn make(x:bool)->State effects(stop, opaque); }
 component Box:Boxed { type State:Copy+Drop=bool; fn make(x:bool)->State{return State(x);} }
 protocol Shapes roles(P)(empty:Empty@P, choice:Cases@P, names:Names@P,
   zero:[bool;0]@P, collision:p::Outputs@P)

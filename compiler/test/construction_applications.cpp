@@ -16,9 +16,9 @@ constexpr StringLiteral source = R"zkc(module m;
 domain F=field("bls12-381.fr");
 interface TestTranscript<T:Field>{
   type State:Copy+Drop;
-  fn initialize()->State;
-  fn observe(t:State,value:T)->State;
-  fn draw(t:State)->(State,T);
+  fn initialize()->State effects(stop, opaque);
+  fn observe(t:State,value:T)->State effects(stop, opaque);
+  fn draw(t:State)->(State,T) effects(stop, opaque);
 }
 component Provider:TestTranscript<F>{
   type State:Copy+Drop=index;

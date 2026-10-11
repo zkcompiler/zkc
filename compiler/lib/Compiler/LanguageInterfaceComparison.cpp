@@ -235,8 +235,7 @@ class Comparison {
           return false;
     }
     for (const auto &decl : entry.project().declarations())
-      if (decl.anonymous && decl.relation && !decl.generatedReduction &&
-          !anonymous.count(decl.id.index))
+      if (decl.anonymous && decl.relation && !anonymous.count(decl.id.index))
         return fail("source omitted an inline predicate binding");
     auto sources = entry.project().sources();
     for (unsigned module = 0; module < sources.size(); ++module) {

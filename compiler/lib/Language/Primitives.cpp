@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "Effects.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/STLExtras.h"
@@ -52,7 +53,7 @@ nativeRoots(Semantics &types, const Declaration &decl, StringRef identity) {
       return types.fail("source.limit", "primitive scheme depth exceeded",
                         decl.span);
     if (!types.chargeType(value, decl.span) || id >= terms.size() ||
-        !matchesStaticSort(value, scope.sorts[id]))
+        !matchesKernelStaticSort(identity, value, scope.sorts[id]))
       return false;
     if (terms[id] && *terms[id] != value)
       return false;
@@ -146,12 +147,17 @@ mathematicalRoots(Semantics &types, const Declaration &decl,
                decl.span);
     return {};
   };
-  if (intrinsic.domain == MathematicalIntrinsic::Domain::Boolean)
+  if (intrinsic.domain == MathematicalIntrinsic::Domain::Boolean ||
+      intrinsic.domain == MathematicalIntrinsic::Domain::Index)
     return std::vector<Type>{};
+  if (intrinsic.identity == I::GroupIdentity)
+    return std::vector<Type>{decl.outputs.front().type};
   if (decl.inputs.empty())
     return refuse();
   const auto &input = decl.inputs.front().type;
   const auto &output = decl.outputs.front().type;
+  if (intrinsic.domain == MathematicalIntrinsic::Domain::Collection)
+    return std::vector<Type>{input};
   if (intrinsic.scalar)
     return std::vector<Type>{input};
   const Type *anchor = &input;
@@ -270,14 +276,18 @@ bool Checker::primitiveBody(Declaration &decl, Body &body) {
     LocalPrimitive primitive{identity, operands, {}};
     primitive.bindingArguments = *arguments;
     action = std::move(primitive);
-    body.mayStop = identity != "index.equal";
   }
-  if (decl.effectAllowance && body.mayStop && !decl.effectAllowance->mayStop)
+  body.operations.push_back({std::move(action), {result}, decl.span, 0});
+  body.results = {result};
+  auto effects = inferEffects(types, output.declarations, body);
+  if (!effects)
+    return false;
+  body.effects = std::move(*effects);
+  if (decl.effectAllowance &&
+      !effectsWithin(types, body.effects, *decl.effectAllowance, decl.span))
     return types.fail("source.effect",
                       "primitive exceeds its written effect allowance",
                       decl.span);
-  body.operations.push_back({std::move(action), {result}, decl.span, 0});
-  body.results = {result};
   decl.primitive = PrimitiveDefinition{identity, std::move(*arguments)};
   return true;
 }

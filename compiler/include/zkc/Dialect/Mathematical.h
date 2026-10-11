@@ -30,6 +30,8 @@ mlir::LogicalResult analyze(zkc::protocol_ir::MathematicalOp program,
                             Availability &result,
                             mlir::SymbolTableCollection &tables);
 mlir::LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module);
+// Complete private helper formation, also for retained participant closures.
+mlir::LogicalResult verifyHelpers(protocol_ir::ProtocolModuleOp module);
 mlir::LogicalResult
 verifyParticipantModule(protocol_ir::ProtocolModuleOp module);
 mlir::LogicalResult

@@ -11,7 +11,7 @@ Examples are informative. [Status](../status.md) records implemented coverage.
 |---|---|
 | Source language | [Definitions, types, bodies, Entries and translation](language/README.md) |
 | Protocol IR | [Profiles](ir/protocols.md), [mathematics](ir/mathematics.md), [polynomial recipes](ir/polynomials.md) |
-| Composition and control | [Applications](ir/composition.md), [iteration](ir/iteration.md), [functions](ir/functions.md), [control](ir/control.md), [completion](ir/completion.md) |
+| Composition and control | [Applications](ir/composition.md), [iteration](ir/iteration.md), [finite computations](ir/finite.md), [functions](ir/functions.md), [control](ir/control.md), [completion](ir/completion.md) |
 | Data | [Variants](ir/variants.md), [nested data](ir/data.md) |
 | Construction and analysis | [Transcripts](ir/construction.md), [public-coin views](ir/public-coin.md), [compiler limits](ir/limits.md) |
 | Serialized artifacts | [Program](formats/program.md), [Entry package and interface](formats/entry.md), [proof deployment and transport](formats/proof.md), [message frames and setups](formats/messages.md) |

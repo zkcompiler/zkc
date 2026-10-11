@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "Effects.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -7,6 +8,8 @@ using namespace llvm;
 namespace zkc::language::detail {
 bool Checker::requirements(Declaration &decl) {
   for (auto &req : sources[decl.id.index]->requirements) {
+    if (req.data)
+      continue;
     if (!req.capability.empty()) {
       if (decl.kind == Declaration::Kind::Associated)
         return types.fail("source.unsupported",
@@ -120,6 +123,10 @@ bool Checker::chargeStaticSignature(const Declaration &decl) {
       if (!types.chargeType(argument, decl.span))
         return false;
   }
+  for (const auto &bound : decl.dataPreconditions)
+    if (!types.charge(bound.left.path.size() + bound.right.path.size() + 1,
+                      bound.span))
+      return false;
   for (const auto &bound : decl.capabilityBounds) {
     if (!types.charge(bound.predicate.size() + 1, bound.span))
       return false;
@@ -340,6 +347,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                       decl.span);
   if (decl.kind == Declaration::Kind::Math ||
       decl.kind == Declaration::Kind::Local ||
+      decl.kind == Declaration::Kind::DomainFunction ||
       decl.kind == Declaration::Kind::Protocol ||
       decl.kind == Declaration::Kind::Relation) {
     // Construction handlers receive their ports from the selected protocol
@@ -390,6 +398,159 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         (input ? decl.inputs : decl.outputs).push_back(std::move(p));
       }
     }
+    for (const auto &src : source.domainInputs) {
+      if (!bindingName(decl, src.name, src.span) ||
+          llvm::any_of(decl.inputs,
+                       [&](const auto &p) { return p.name == src.name; }) ||
+          llvm::any_of(decl.domainInputs,
+                       [&](const auto &p) { return p.name == src.name; }))
+        return types.diagnostic
+                   ? false
+                   : types.fail("source.duplicate", "duplicate domain input",
+                                src.span);
+      auto item = type(decl, *src.domain, depth + 1);
+      if (!item)
+        return false;
+      if (!valueType(*item))
+        return types.fail("source.finite-domain", "domain item must be data",
+                          src.span);
+      auto permissions = types.permissions(*item, src.span, &decl);
+      if (!permissions)
+        return false;
+      if (!permissions->copy || !permissions->drop)
+        return types.fail("source.finite-domain",
+                          "domain items require Copy and Drop", src.span);
+      decl.domainInputs.push_back({src.name, *item, src.span});
+    }
+    if (source.domainResult) {
+      decl.domainResult = type(decl, *source.domainResult, depth + 1);
+      if (!decl.domainResult)
+        return false;
+      auto permissions =
+          types.permissions(*decl.domainResult, decl.span, &decl);
+      if (!permissions)
+        return false;
+      if (!valueType(*decl.domainResult) || !permissions->copy ||
+          !permissions->drop)
+        return types.fail("source.finite-domain",
+                          "domain result items require Copy and Drop",
+                          decl.span);
+    }
+    for (const auto &src : source.scopedInputs) {
+      if (!bindingName(decl, src.name, src.span) ||
+          llvm::any_of(decl.inputs,
+                       [&](const auto &p) { return p.name == src.name; }) ||
+          llvm::any_of(decl.scopedInputs,
+                       [&](const auto &p) { return p.name == src.name; }) ||
+          llvm::any_of(decl.domainInputs,
+                       [&](const auto &p) { return p.name == src.name; }))
+        return types.diagnostic
+                   ? false
+                   : types.fail("source.duplicate", "duplicate scoped input",
+                                src.span);
+      const auto &written = *src.scoped;
+      ScopedSignature signature{written.mode, {}, {}, written.allowance};
+      if (signature.mode == ScopedSignature::Mode::Math &&
+          (signature.allowance.mayStop || signature.allowance.opaque))
+        return types.fail("source.effect",
+                          "Math scoped signatures cannot allow ordered effects",
+                          src.span);
+      for (const auto &input : written.inputs) {
+        auto value = type(decl, input, depth + 1);
+        if (!value)
+          return false;
+        if (!valueType(*value))
+          return types.fail("source.type", "scoped inputs must be data",
+                            src.span);
+        signature.inputs.push_back(*value);
+      }
+      auto result = type(decl, written.result, depth + 1);
+      if (!result)
+        return false;
+      if (!valueType(*result))
+        return types.fail("source.type", "scoped result must be data",
+                          src.span);
+      signature.result = *result;
+      std::map<unsigned, unsigned> itemOrigins;
+      std::map<std::string, unsigned> labels;
+      for (unsigned i = 0; i < written.inputLabels.size(); ++i) {
+        const auto &label = written.inputLabels[i];
+        if (!types.charge(label.size() + decl.parameters.size() + 1, src.span))
+          return false;
+        if (label.empty())
+          continue;
+        if (!bindingName(decl, label, src.span))
+          return false;
+        if (!labels.emplace(label, i).second)
+          return types.fail("source.duplicate",
+                            "duplicate callback input label", src.span);
+      }
+      for (const auto &condition : written.itemOrigins) {
+        if (!types.charge(decl.domainInputs.size() + 1, condition.span))
+          return false;
+        auto input = labels.find(condition.input);
+        auto domain = llvm::find_if(decl.domainInputs, [&](const auto &formal) {
+          return formal.name == condition.domain;
+        });
+        if (input == labels.end() || domain == decl.domainInputs.end())
+          return types.fail("source.finite-domain",
+                            "item_from requires a named callback input and an "
+                            "enclosing domain formal",
+                            condition.span);
+        if (signature.inputs[input->second] != domain->item)
+          return types.fail(
+              "source.finite-domain",
+              "item_from input type differs from domain item type",
+              condition.span);
+        if (!itemOrigins
+                 .emplace(input->second,
+                          unsigned(domain - decl.domainInputs.begin()))
+                 .second)
+          return types.fail("source.finite-domain",
+                            "callback input has more than one item_from clause",
+                            condition.span);
+      }
+      if (signature.mode == ScopedSignature::Mode::Math) {
+        for (const auto &input : signature.inputs)
+          if (!types.mathematicalData(input, src.span, &decl))
+            return false;
+        if (!types.mathematicalData(signature.result, src.span, &decl))
+          return false;
+      } else {
+        for (const auto &input : signature.inputs)
+          if (!types.executableType(input, src.span))
+            return false;
+        if (!types.executableType(signature.result, src.span))
+          return false;
+      }
+      decl.scopedInputs.push_back({src.name, std::move(signature), src.span,
+                                   written.inputLabels,
+                                   std::move(itemOrigins)});
+    }
+    if (decl.kind == Declaration::Kind::Local && decl.abstract &&
+        !decl.effectAllowance)
+      return types.fail(
+          "source.effect",
+          "abstract Local outputs require an explicit effects(...) contract",
+          decl.span);
+    for (const auto &name : source.effectDependencies) {
+      if (!types.charge(decl.scopedInputs.size() + 1, decl.span))
+        return false;
+      auto found = llvm::find_if(decl.scopedInputs, [&](const auto &input) {
+        return input.name == name;
+      });
+      if (found == decl.scopedInputs.end())
+        return types.fail("source.effect",
+                          "output effect must name an own callback input",
+                          decl.span);
+      auto ceiling = found->signature.allowance;
+      if (ceiling.mayStop || ceiling.opaque)
+        decl.effectAllowance->dependencies.emplace(
+            unsigned(found - decl.scopedInputs.begin()), ceiling);
+    }
+    if (decl.effectAllowance &&
+        !joinEffects(types, *decl.effectAllowance, EffectSummary{}, decl.span))
+      return false;
     for (const auto &src : source.services) {
       if (decl.kind != Declaration::Kind::Protocol ||
           src.type.kind != SyntaxType::Kind::Name ||
@@ -417,11 +578,21 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       decl.services.push_back({src.name, *field, owner->front(), src.span, {}});
     }
     if (decl.kind == Declaration::Kind::Math && decl.effectAllowance &&
-        (decl.effectAllowance->mayStop || decl.effectAllowance->opaque))
+        (decl.effectAllowance->fixed.mayStop ||
+         decl.effectAllowance->fixed.opaque ||
+         !decl.effectAllowance->dependencies.empty()))
       return types.fail("source.effect",
                         "math callable cannot allow ordered effects",
                         decl.span);
+    if (decl.kind == Declaration::Kind::DomainFunction &&
+        (!decl.scopedInputs.empty() || decl.effectAllowance))
+      return types.fail("source.finite-domain",
+                        "domain factories compose typed constructors without "
+                        "scoped callbacks or an effect allowance",
+                        decl.span);
   }
+  if (!dataRequirements(decl))
+    return false;
   if (decl.kind == Declaration::Kind::Relation && !relation(decl))
     return false;
   signatureState[id.index] = 2;

@@ -88,6 +88,7 @@ A selected import such as
 `use zkc::vector::{Vector, operator +};` also imports the selected public operator
 family, including all exported fixities for the token. `notation ⟪` selects a
 public delimiter shape; `reduction ∑` selects a public reduction binding.
+`indexing []` selects all exported indexing arities.
 A qualified reference alone activates no notation.
 `pub use` reexports the selected names, aliases and bindings with their original identities; ordinary
 imports remain private. Duplicate imports of the same identity are harmless.
@@ -126,8 +127,11 @@ closure roots, even when execution never calls them. An
 unselected Entry's target-admission failure does not invalidate another Entry;
 source errors in any definition still reject analysis.
 
-An instance key contains the qualified declaration name and canonical static
-arguments, with each component length framed. A declaration fixes its body mode.
+An instance key contains the qualified declaration name, canonical static
+arguments and selected scoped helper identities, with each component length
+framed. Scoped helper identities retain their lexical body and component
+substitution. Runtime capture values and caller participants are operands, not
+instance-key components. A declaration fixes its body mode.
 Declaration symbols use the [UTF-8 segment encoding](translation.md#source-and-native-names)
 for ASCII and Unicode names alike. Concrete instances retain that symbol when
 it fits the native 128-byte identifier limit. Longer paths and specializations use `zkl_`
@@ -151,8 +155,11 @@ ports, services, requirements, body effects (or abstract allowance), and capture
 module byte span and source `origin`. `definition` is `body`, `abstract` or
 `primitive`; primitive definitions also report the installed `primitive` identity.
 Natural/capability bounds retain their inferred flags; explicit
-or inherited effect allowances remain separate; abstract declarations always
-include their effective allowance, including the default. Type and natural
+effect allowances remain separate; abstract Local declarations always include
+their explicit allowance. Effect objects report fixed `stop` and `opaque` flags
+and a `dependencies` array whose entries identify zero-based `callback` slots
+and their label-specific `stop` and `opaque` bounds. Fixed callback acceptance
+ceilings remain separate in each `scoped_inputs` item. Type and natural
 strings are descriptive mathematical spellings,
 not a serialization accepted by the checker. The view never supplies linking
 or admission authority. Its unembedded JSON array is bounded by `interfaceBytes`;
@@ -320,8 +327,13 @@ Fixed arrays have bounded closed lengths after selection. `[a, b]` constructs an
 array; `a[0]` uses a numeric static index. A symbolic length needs a corresponding
 bound for that index, inferred or written under the contract rules above.
 Dynamic array indexing is outside this profile.
-Runtime loops and `index<N>()` in local code can use a closed natural as an index
-value. Indices are not field elements.
+Runtime loops can use a closed natural as an index value. Index literals and
+`index<N>()` are also available in Math and protocol expressions; they denote
+unsigned 64-bit values. `intrinsic("index.equal", a, b)` and
+`intrinsic("index.less", a, b)` are total mathematical comparisons. The prelude's
+index equality uses that mathematical identity and keeps its direct native
+operation in Local code. Index addition, subtraction and multiplication retain
+their checked Local semantics. Indices are not field elements.
 
 ## Native data and library kernels
 
@@ -349,9 +361,34 @@ policy owns mathematical and shared-data eligibility. Copy and Drop alone do not
 admit runtime polynomial data into `math fn`, including through an aggregate or
 a generic helper instantiated for ordered execution.
 
-A `sequence` element is a scalar or another admitted native data type. Source
-records, variants, products and private representations require their own
-layout-preserving packing contract; they cannot be passed as native Type roots.
+A `sequence` element must be executable source data with `Copy` and `Drop`.
+These bounds are checked at generic definition checking as well as closure.
+Its carrier is `sequence<Pack(T)>`. `Pack(T)` retains an existing single native
+carrier for scalars, containers and source variants. A source record, tuple,
+array, unit or concrete associated product uses a canonical single-alternative
+native variant. Its nominal identity is `["zkc.language.pack",
+encodeNominalIdentity(typeIdentity(T))]`, and its sole alternative has native
+label `case00000000` and the ordinary flattened leaves in declaration/index order.
+Empty products have an empty payload. Full source identity distinguishes nominal
+records and their static instantiations; normalized export aliases agree.
+Native descriptor depth, payload and byte bounds still apply.
+
+This is contextual packing: ordinary source ports, calls, projections and
+returns keep their flattened ABI. No native generic fixed-array type is implied.
+The four installed `sequence.empty`, `sequence.append`, `sequence.length` and
+`sequence.at` kernel/primitive contracts accept these logical element types and
+bind the exact concrete `Pack(T)` identity. Append packs its element; lookup
+unpacks to the ordinary ABI. Other native Type roots retain their existing
+admission rules. Local packing uses variant injection and a single-arm match
+whose yield preserves every payload position. Mathematical adapters use
+`data.make` and ordered `data.get` projections. Independent source comparison
+checks the actual operations, fields, binding identities and result mappings.
+
+Packing conveys no field access or constructor authority. Sequence permissions
+are the logical element permissions, so neither an otherwise serializable
+private representation nor explicit nominal permission restrictions gain Wire.
+Affine/non-Drop values, formal data and managed services cannot be elements.
+Existing source variant construction and match semantics are unchanged.
 Managed services are separate from these data types. Container permissions retain
 element permissions, and concrete external boundaries require native message
 admission. A symbolic message shape still needs an admitted codec at closure.
@@ -451,89 +488,72 @@ its helper. Invalid value-argument binding uses `source.call`; invalid static
 binding uses `source.generic`, as for ordinary calls. Other map-specific source
 refusals use `source.map`; a map outside local code uses `source.mode`.
 
-## Finite vector reductions
+## Finite reduction binders
 
 ```zkc
 use zkc::vector as vec;
+use zkc::finite_domain::{zip};
+use zkc::finite::{sum};
 fn weighted<F: Field>(xs: vec::Vector<F>, ys: vec::Vector<F>, α: F) -> F {
-  return reduce vec::sum [(x, y) in zip(xs, ys)] { x * y + α };
+  return ∑ (x, y) in zip(xs, ys), (x * y + α);
 }
 ```
 
-A finite reduction applies a checked pointwise map to the written collections,
-then calls the selected reducer on that vector. The single-row form is
-`reduce reducer [x in xs] { body }`. Multiple rows require the explicit strict
-`zip` form above. [Reduction notation](notation.md#finite-reduction-syntax)
-gives the equivalent library-bound `∑` and `∏` spellings.
+A binder is an ordinary statically selected finite consumer call. The example
+has the same computation as `sum(zip(xs, ys), fn((x, y)) => x * y + α)`.
+The [notation contract](notation.md#finite-reduction-syntax) fixes its parsing,
+selection and optional predicate. Names, tuple patterns, `_`, lexical captures,
+component dispatch and nested computations use the ordinary scoped-function
+machinery. There is no separate ring-body checker or generated-map subsystem.
+Binders work directly in protocols, local functions and component members;
+mathematical functions use a binding to a total mathematical consumer.
 
-All collections have the installed dynamic `Vector<F>` type for one field `F`.
-The reducer is a statically resolved, defined local callable with exactly one
-`Vector<F>` input, one `F` result and no service inputs. Reduction notation
-bindings require a written result type, as other callable notation does. Named and
-symbolic forms use ordinary callable resolution, static argument inference and
-definition-site identity. A custom reducer may stop; it is an ordinary call,
-with no inferred sum/product law. Component dispatch and function values are
-outside this reducer profile.
+The first argument is a [finite domain](#finite-domains), including ordinary
+collection conversion. A pair of independent groups, `(x ∈ xs) (y ∈ ys)`,
+constructs a lexicographic product. Use explicit `zip(xs, ys)` for strict
+pairwise traversal and nested binders for dependent domains. Independent groups
+do not put earlier names in scope in later domains. An outer value whose name
+matches an earlier binder cannot be read from a later domain: rename the outer
+value or write nested binders to make the intended dependency clear.
 
-Evaluation has this order:
+Evaluation follows the selected ordinary call:
 
-1. Evaluate every collection once, left to right, in the enclosing scope.
-   Repeated collection expressions remain separate evaluations. Row bindings
-   are not in scope in any collection.
-2. Read each captured outer binding once after all collections, in the order
-   of its first textual use in the body. Captures are whole immutable scalar
-   bindings of field `F`, with the ordinary copy/drop permissions. Projection
-   from an aggregate must be assigned to an outer scalar `let` first; mutable
-   bindings, services, vectors and other aggregate captures refuse.
-3. Check every row length in written order against the first row, including
-   `_` and named rows the scalar result does not use. Only then realize the
-   scalar formula over the rows and call the reducer. Unequal lengths fail
-   through the map's ordered `control.require` guards (`rejected:require` in
-   native execution); strict zip never truncates.
+1. Evaluate domain data once in written order, in the enclosing scope.
+2. Snapshot predicate and body captures in argument order and first-use order
+   within each callback. Captures follow the shared free-place and permission
+   rules, including immutable aggregate projections.
+3. Admit every domain constructor, including ignored strict-zip inputs, before
+   entering callbacks. Visit items in the domain's order. Evaluate the predicate
+   first; false skips that item's body. Nested domains are admitted when reached.
 
-Named rows are distinct lexical bindings local to the scalar body; `_` introduces
-no name. Rows can shadow outer immutable bindings under the ordinary binding
-rules, without changing collection resolution or capturing those outer values.
-Shadowing a mutable binding remains forbidden. Body-local immutable lets follow
-normal shadowing. Extraction uses resolved binding identities and original
-definition scopes; generated
-names neither capture source bindings nor become source-callable declarations.
+The target's mode and callback contracts determine whether a body can stop or
+perform local work. No effects or expected result choose another binding. Total
+consumers require established domain formation and access conditions. Local
+consumers retain checked failure behavior. Empty sums and products use the
+library's zero and one identities; a custom consumer keeps its own semantics.
+An arbitrary `Vector<F> -> F` reducer uses `vector::reduce(rows, term, reducer)`,
+which collects first and calls the reducer exactly once, including on empty input.
+It is not implicitly interpreted as an associative combiner.
 
-The body returns one scalar of `F`. It admits immutable scalar lets, scalar
-aliases, field constants, addition, subtraction and multiplication, and concrete
-static mathematical helpers whose entire reachable bodies satisfy the same
-field-ring rule. Admission checks every operation, including dead operations;
-field-typed results or custom symbols alone do not establish this rule. Deferred
-call and notation inference inside the body uses Math mode, with the generated
-helper edge included in depth accounting. Local calls, effects, mutation,
-services, nonfield values, component dispatch and nested reductions refuse.
-The initial binder occurs only in module-level local functions, not directly
-in protocols, math functions or component members. Protocols can call a local
-wrapper. Existing named `map` retains its later IR formula admission; the binder
-adds this earlier source-body check.
+Retained evidence uses the shared scoped extraction, domain and call witnesses.
+They compare lexical captures, callback arguments, structural product recipes,
+definition-site target selection and actual checked operations before closure
+and source-to-IR comparison. Limits count generated scoped work. The parser's
+construction of the lambda patterns and product syntax, lexical resolution and
+inference remain trusted frontend steps; these checks are not a proof of source
+elaboration or native execution correctness.
 
-For the library sum, matched empty rows return zero; for the library product,
-they return one. A custom reducer instead receives the empty mapped vector and
-retains its own behavior. Empty selected rows do not bypass other row checks,
-collection evaluation or scalar capture snapshots.
+## Group identity
 
-Each binder owns a private generated mathematical helper with positional row
-inputs followed by captures in their snapshot order. Helpers remain in a
-checker-owned pending collection until authored bodies, signatures and Entries
-are checked and their live inference references have expired. Finalization
-inherits the completed enclosing static parameters and requirements. Generated
-helpers have distinct semantic identities, consume declaration/instance/work
-limits, and add a call-depth edge even for a constant body. Closure rechecks
-the retained limits and does not reparse or resolve the extracted expressions.
-
-A separate extraction witness checker reconstructs row bindings, free captures
-and their order from retained authored syntax and resolved identities. It checks
-the scalar body, positional inputs, map mask, field, reducer, sites and lexical
-selection against the actual checked graph before source-to-IR comparison.
-The checker retains collection result identities; it trusts the enclosing
-source checker to emit their producing operations in authored order. It does
-not independently reconstruct those collection computations. Parser, resolver,
-inference and native runtime adequacy remain outside this extraction check.
+In a `math fn`, `intrinsic<G>("curve.identity")` is the total identity of `G`.
+It takes exactly one static group argument, no value arguments and no attributes,
+and requires `zkc::curve::ScalarAction(G)`. A generic `Group` sort alone does not
+discharge this capability. A mathematical primitive declaration can infer its
+static group from its result: `math fn zero<G: Group>() -> G where
+zkc::curve::ScalarAction(G) = primitive("curve.identity");`.
+Calling that helper from ordinary `fn` code realizes the same nullary native
+operation with its usual possible resource exhaustion. The shared
+`zkc::curve::identity<G>()` wrapper uses this primitive declaration.
 
 ## Boolean formulas
 
@@ -781,7 +801,7 @@ two for infix, one for prefix/postfix, and one per delimiter hole. Only reserved
 `==` requires a Boolean result. Protocols and implicit services are not targets.
 Public bindings require public targets. Unused bindings are checked too.
 Reduction descriptors have one mapped-vector operand and the additional
-[finite reduction target rules](#finite-vector-reductions).
+[finite reduction target rules](#finite-reduction-binders).
 
 A block can begin with `operator + = A::add;`, where `A` is an explicit component
 parameter, or with other callable bindings. Targets accept partial static
@@ -842,7 +862,8 @@ addition/subtraction/multiplication/equality. Group scaling is `point * scalar`.
 Total scalar calls emit mathematical or local primitive operations directly.
 Index arithmetic retains possible failure; index equality is total. Ordered
 vector operations retain shape checks and stop behavior. Calls to ordered
-primitives in protocols keep the participant-owned helper boundary. Formal
+primitives in protocols keep the participant-owned helper boundary. The stopping
+bound is a source contract, not inferred from a backend implementation. Formal
 intrinsics called from local code retain the existing realization boundary.
 Retained helper calls, including mapped primitives, count toward the call-depth
 limit; directly emitted primitive operations add no helper edge.
@@ -858,19 +879,42 @@ A component selects one interface and defines every member exactly once. Associa
 runtime types default to no permissions; their promised permissions must be supported
 by their representation. Associated `Field` and `Group` declarations expose their
 selected domain. Conformance checks callable modes, types, permissions, natural
-preconditions and effect allowances. An implementation cannot require more than
-its interface allows. Interfaces and components may have static parameters;
+preconditions, callback acceptance contracts and implementation effects. An
+implementation cannot require more than its interface allows. Interfaces and
+components may have static parameters;
 abstract signatures may declare member-specific generic parameters.
 `Component::method<F, ...>(value)` supplies the component parameters directly;
 `C::method(value)` through a bound component uses the parameters already in `C`.
 Records and variants are module declarations. An abstract call or type projection
 requires a bound component; a free interface name cannot select an implementation.
 
-Defined local functions infer `stop` and `opaque` effects from their bodies.
-An optional `!{stop, opaque}` is an upper bound, and `!{}` forbids both. Abstract
-local signatures default to allowing both; math signatures allow neither. An empty
-effect allowance never turns ordered code into a total mathematical function.
-Opaque runtime intrinsics are not exposed by this profile.
+Defined Local functions infer a symbolic union of fixed `stop` and `opaque`
+effects and dependencies on invoked callback inputs. An optional `effects(...)`
+clause is an absolute upper bound. It follows the result and precedes `where`.
+`effects()` forbids both tracked effects; `effects(stop, opaque)` allows both.
+An output clause may name its own callback inputs, as in `effects(body)` or
+`effects(first, second, stop)`. These names resolve to signature slots and denote
+unions, not invocations. Duplicate entries, data names and unknown names are
+rejected. `effects` remains a contextual word, usable as an ordinary identifier.
+The former punctuation spelling is rejected.
+
+A truly abstract Local output requires an explicit clause. A registered
+`primitive(...)` or `finite(...)` definition instead obtains its effects from
+its checked implementation contract. Math signatures allow neither tracked
+effect. An empty Local effect allowance never establishes Math formation or
+freedom from arbitrary host failures. Opaque runtime intrinsics are not exposed
+by this profile.
+
+Containment holds for every admissible assignment of effects to callback slots.
+For each tracked label, a fixed effect on the left requires a fixed allowance
+on the right; a dependency requires the same slot on the right unless that
+label is allowed unconditionally. Labels excluded by a callback ceiling do not
+contribute. Comparing maximum effect sets is insufficient: `effects(first)`
+does not permit invoking `second`, even when their ceilings match. Component
+input contracts remain equal after substitution, including callback mode, types,
+ceilings and domain contracts. The implementation body must be pointwise within
+both its own written output bound and the interface output contract. A wider
+written bound on a defined member does not discard its more precise body summary.
 
 Bodies use lexical `let` and `let mut` bindings, whole-name assignment, nested
 block expressions and a final `return`. [Body semantics](protocols.md#bindings-and-local-control)
@@ -883,6 +927,392 @@ check canonical spelling and characteristic bounds without modular reduction.
 For an abstract field, only the universally valid literals `0` and `1` are admitted.
 Boolean literals need no domain. Record construction supplies every field exactly
 once. Variant construction uses `Choice::Some<Fr>(x)` in local code.
+
+## Finite domains
+
+A finite domain is a static description of an enumeration. Its ordinary data
+operands remain checked values; the domain itself is not a runtime `Type`, an
+Entry port, or a value that can be returned by an ordinary function.
+
+```zkc
+domain fn elements<F: Field>(xs: Vector<F>) -> domain<F>
+  = domain("elements");
+domain fn indices<F: Field>(xs: Vector<F>) -> domain<index>
+  = domain("indices");
+domain fn range(lower: index, upper: index) -> domain<index>
+  = domain("range");
+
+domain fn positions<F: Field>(xs: Vector<F>) -> domain<index> {
+  let rows = indices(xs);
+  return rows;
+}
+```
+
+Registered domain definitions validate their complete signatures. Constructors
+cover container elements and indices, half-open ranges, strict zip, independent
+product, explicit matrix rows/columns/coordinate order, and fixed source arrays.
+The [finite IR contract](../ir/finite.md#domain-declarations) defines enumeration
+and admission. Defined factories compose domain calls and immutable aliases;
+ordinary computations producing their data operands stay at the call site.
+Interface and component members use the same resolved factory identities.
+
+At an expected scoped-domain input, an ordinary collection expression has one
+implicit element traversal: native vectors, group vectors, immutable sequences,
+index collections and fixed field arrays use `elements`; fixed source arrays
+use `source_array`. The expression is evaluated once at its written argument
+position. The conversion changes neither its representation nor the surrounding
+call's mode. It records the source expression and exact operand for independent
+checking. Domain factories may use the same conversion on their data inputs.
+A matrix requires an explicit view; a scalar or unknown representation cannot
+be converted by guessing a domain from the callback's result type.
+
+Math and Local functions may accept `rows: domain<I>`, forward it, or
+capture it in scoped computations and local control. A domain factory accepts
+ordinary data and domain parameters. Protocol signatures cannot expose domain
+parameters, but protocol bodies can construct domains and use them in calls or
+nested protocol repetitions. Each captured data operand must be available to its
+executing participant; a domain does not introduce communication.
+
+Domain data expressions execute at their written argument positions, alongside
+ordinary arguments and callback snapshots. Aliasing a domain does not reevaluate
+these expressions. A selected factory retains its complete constructor recipe,
+including unused intermediates, for admission at a finite consumer. Merely
+forwarding a domain through an ordinary helper does not admit its constructors.
+Unrelated domain bindings are not admitted with a consumed domain. A nested
+consumer admits its domain only when that computation is reached.
+
+Closure retains constructor order, exact item types and the identities of data
+operands. Shapes and static selections determine specialization; runtime contents
+do not. Shared immutable operands can reuse capture ports. Equal types alone do
+not identify two containers, and a mutable successor remains distinct from its
+earlier snapshot. The independent domain witness checks a supplied closed shape
+against the checked factory recipe and caller operand mapping, without trusting
+its cached identity. This is a checked-recipe witness, not a source-elaboration
+correctness theorem.
+
+## Finite computations
+
+Registered finite definitions connect ordinary typed functions to the retained
+[finite computation IR](../ir/finite.md). They use the same domain arguments,
+scoped functions, effects and capture rules as authored helpers:
+
+```zkc
+fn fold<I: Type + Copy + Drop, S: Type>(
+  rows: domain<I>, initial: S,
+  step: fn(S, item: I) -> S effects(stop) where item_from(item, rows)
+) -> S effects(stop) = finite("local.fold");
+
+fn collect<I: Type + Copy + Drop, B: Type + Copy + Drop>(
+  rows: domain<I>, body: fn(item: I) -> B effects(stop) where item_from(item, rows)
+) -> Sequence<B> effects(stop) = finite("local.collect.sequence");
+```
+
+The complete signature is checked against the selected identity. Fold state
+and domain item types are independent; Unit is a valid state. Fold requires
+exactly the origin map `{1 -> 0}`: its second callback input receives the whole
+item from its sole domain formal. Collect and predicates require `{0 -> 0}`.
+The general callback contract supports arbitrary positions; a registered finite
+definition must still obey its fixed state/item ABI.
+`local.fold_where` adds a predicate before the step parameter. Its predicate
+has signature `fn(item: I) -> bool effects(stop) where item_from(item, rows)`; false skips the step.
+The corresponding collect identities are `local.collect.vector`, `.groups`,
+`.sequence`, `.indices` and `.field_array`; each admits the matching native
+result type. Appending `_where` adds a predicate before the body, except for
+fixed field arrays, whose result length cannot follow from a general filter.
+`math.` identities require Math functions and total Math callbacks.
+
+Eager argument computations and capture snapshots execute in written order,
+including named arguments. Domain admission follows those computations. A fold
+then calls its step in enumeration order; an empty fold returns its initial
+state after admission. A collect preserves body-result order. Stops propagate
+through the ordinary Local path. No associativity law is assumed for a fold.
+Nested finite calls admit their own domains only on reached body invocations.
+Fixed source arrays use the same finite consumer through a checked immutable
+sequence conversion; this preserves their ordinary flattened source ABI and
+array element order, including empty arrays and Unit elements.
+The [status page](../../status.md) records source integration coverage.
+
+Callback origin contracts are canonical partial maps from explicit input
+positions to enclosing domain formal positions. For forwarding, substitute the
+actual domain arguments first: every restriction of the supplied callback must
+appear in the receiving consumer's guarantees at the same input position and
+with the same domain identity. Thus the supplied restriction map must be a
+subset of the receiving guarantee map. An unrestricted callback can flow to a
+restricted consumer; the reverse and partially guaranteed multi-input contracts
+refuse. Generic definitions are checked with distinct abstract domain identities,
+independently of eventual callers. Equal types or equal domain contents do not
+identify origins. A wrapper cannot promise items from `a` and forward its
+callback to a fold over `b`.
+
+Literal bodies receive a whole-item fact at every constrained input position.
+Multiple independent origins do not imply a shared iteration or correlation;
+correlated coordinates require one whole item from a zip/product domain. Immutable aliases,
+capture snapshots and invariant region inputs preserve it. Invoking a restricted
+callback requires its whole item, so constructing an equal-looking tuple or
+performing arithmetic does not establish provenance. Control results and loop
+state successors are fresh; a loop may capture an item as an invariant and call
+the callback on that captured item. Domain aliases retain identity; separate
+factory applications do not imply domain equality.
+
+These contracts are checked over the completed typed body and its static call
+environments. Named arguments can therefore place the callback before the domain
+without delaying its capture snapshots. The retained source witness reruns the
+same semantic validation from the actual graph. `source.scoped-domain` reports
+an invocation or forwarding contract that cannot be established. This check
+alone grants no total indexing bound.
+
+### Total access and data preconditions
+
+A total access needs a bound on the exact immutable container and index. Math
+functions can declare input conditions separately from static type/natural
+requirements:
+
+```zkc
+math fn at<F: Field>(xs: Vector<F>, i: index) -> F
+  where in_bounds(i, xs) {
+  return intrinsic<Vector<F>>("container.at", xs, i);
+}
+
+math fn read_other<F: Field>(xs: Vector<F>, ys: Vector<F>, i: index) -> F
+  where in_bounds(i, xs), equal_extent(xs, ys) {
+  return at(ys, i);
+}
+```
+
+Selectors name input ports and immutable product fields, such as `record.values`
+or `pair.0`. `in_bounds(i, xs, axis)` defaults to axis zero;
+`equal_extent(xs, ys, left_axis, right_axis)` defaults both axes to zero.
+A vector-like container has axis zero; a matrix has row axis zero and column
+axis one. These conditions are supported on native collection carriers,
+including packed sequences and fixed field arrays. A flattened source array is
+not a single carrier and cannot be used in a declared data condition. Implementations may use a subset of their interface member's conditions,
+with logical selectors and axes matched by input position; condition order is
+irrelevant. Additional conditions require an explicit interface contract.
+Declaration inspection includes these conditions in `requirements`.
+
+`container.at` takes the complete container type as its static argument and
+returns its logical element. `matrix.at<Matrix<F>>(m, row, column)` requires
+both coordinate bounds. The corresponding intrinsics are written
+`intrinsic<Container>("container.at", xs, i)` and
+`intrinsic<Matrix<F>>("matrix.at", m, row, column)`. Packed sequence records and
+tuples are unpacked using their ordinary source layout.
+
+An item from `indices(xs)` establishes its bound to `xs`; matrix coordinates
+establish both axis bounds. Zip/product item projections and invariant captures
+preserve those facts. Equal extents transfer bounds between containers without
+equating their elements. A range item, shifted index, reconstructed value or
+mutable successor supplies no implicit container bound. Constant indices can
+use known fixed extents. Invalid accesses are rejected even when their results
+are unused.
+
+An ordinary Math call discharges its callee's conditions. Local and protocol code
+can realize an unconditional whole Math computation; they cannot assume input
+conditions or treat a runtime check as a Math proof. At closure, extracted helpers
+receive explicit conditions on their ordinary inputs. The enclosing finite
+computation discharges callback conditions from its domain, captures and input
+conditions. Ordinary Math functions must discharge all requirements using their
+declared conditions. Specialized scoped/domain combinators can carry residual
+conditions for their selected static environments; a caller does not silently
+strengthen an ordinary function's contract. Closed descriptor formation also checks every retained zip and
+matrix view, including unused factory intermediates and empty enumerations.
+A fixed-size collect requires an exact unfiltered cardinality. Failure to derive
+these facts is `source.data-bound`; installed backend support remains a separate
+requirement.
+
+## Scoped computations
+
+Named Math and Local functions, including interface/component members, may take
+statically bound, nonescaping computations as a separate input category:
+
+```zkc
+math fn apply_math<A: Type + Copy + Drop, B: Type + Copy + Drop>(
+  value: A, body: math fn(A) -> B
+) -> B {
+  return body(value);
+}
+
+fn apply<A: Type, B: Type>(value: A, body: fn(A) -> B) -> B effects(body) {
+  return body(value);
+}
+
+fn forward<A: Type, B: Type>(value: A, body: fn(A) -> B) -> B effects(body) {
+  return apply(value, body);
+}
+```
+
+Computation parameters, written `fn(...) -> ... effects(...)` or `math fn(...) -> ...`,
+are static, nonescaping inputs. Their signatures are not runtime `Type` values.
+A computation argument is a literal or an in-scope
+computation parameter. It cannot be bound by `let`, put in a product or variant,
+returned, sent, used as a data argument, or selected by runtime control.
+Protocol signatures and Entry ports cannot expose it. A protocol body may call
+a named function with a literal scoped argument. Invocation and forwarding
+select a statically known body; there is no dynamic dispatch or closure ABI.
+
+A callback signature accepts optional labels on its data inputs:
+`fn(state: S, item: I) -> S effects(stop) where item_from(item, rows)`.
+The order is inputs, result, optional effects, then optional callback-local
+`where`. Named and unnamed input types can mix;
+only inputs selected by a condition require a label. Labels are unique within a
+callback and obey ordinary binding-name/shadowing rules. Different callbacks
+may reuse labels. Labels do not bind values or types, and literal binders and
+positional invocations need not use them.
+
+Callback-local `where` accepts only `item_from(input, domain)` clauses separated
+by commas, or `where ()`. The first selector names this callback's input; the
+second names an enclosing domain formal, independently of textual parameter
+order. Input and domain item types must match. Unknown/category-invalid selectors,
+projections, numeric selectors, duplicate clauses and multiple domains for one
+input refuse. There is no implicit last-input selection, arbitrary predicate,
+result condition or alternative parenthesized nonempty clause list.
+
+`item_from` is contextual, not reserved. After a clause comma, a two-token
+`name :` prefix begins the next enclosing parameter; `item_from (` begins another
+condition. A parameter named `item_from` therefore remains valid. A malformed
+condition stays a callback-clause error. The callback clause never sets the
+outer declaration's explicit requirements flag: open catalog/natural inference
+continues, while an outer `where ()` still closes the outer contract. Outer
+`where item_from(...)` is rejected with a diagnostic directing it to the callback.
+Anonymous literals inherit conditions; they cannot author their own clause.
+
+Conditions require compiler-tracked whole original items from exact domains,
+not value membership or equality. Each invoker proves the conditions and a
+literal body assumes them. A canonical position-to-domain map excludes source
+labels, clause order and spans from semantic compatibility and specialization
+identity. Interface/component conformance requires exact normalized map equality
+after type substitution; it does not apply forwarding subtyping. Source-bearing
+artifacts may still change when labels change. Parsing, normalization, map
+substitution and independent witness reconstruction charge the shared work budget.
+
+The literal syntax is `fn(x) => expression` or `fn(x) => { statements; result }`.
+The same `fn` keyword introduces named declarations; an anonymous literal omits
+the name and starts its parenthesized input list immediately. Inputs are
+comma-separated, with an optional trailing comma. `fn() => expression` takes no
+inputs; `fn(()) => expression` takes one Unit input.
+`fn(x, y) => expression` binds two inputs. `fn((x, y)) => expression` destructures
+one tuple input; it does not curry the function. Ordinary binding patterns,
+including `_`, apply. Input and result types are inferred contextually using
+the ordinary expression solver and the receiving scoped signature. Generic
+functions and their literal computations are checked even when unused. Their
+explicit generic permissions and bounds remain necessary; call sites do not
+repair malformed definitions.
+
+A signature fixes the body's mode. `math fn(A) -> B` is total Math;
+`fn(A) -> B` is ordered Local. An omitted Local callback ceiling allows both
+tracked effects. An explicit `effects()` accepts only nonstopping, nonopaque
+callbacks; `effects(stop)` excludes opaque effects. The written callback ceiling
+contains fixed labels only, never sibling or enclosing callback names. In callback
+headers, `effects(...)` precedes `where item_from(...)`.
+
+Invoking a callback contributes its bounded symbolic dependency, not its full
+ceiling. Calls substitute actual callback summaries into the callee summary.
+Defined helpers retain body precision below their written upper bound; abstract
+calls use the published contract. Forwarding preserves slot identity, including
+captured outer callbacks in nested literals. An unrestricted callback cannot be
+forwarded to an empty-effect receiver. An unused callback contributes no
+invocation effect, but eager arguments, domain operands and capture evaluation
+retain their effects. Local finite admission still contributes `stop`, including
+empty traversals, and registered Local finite callbacks exclude `opaque`.
+
+A Local computation cannot be invoked in Math. Component members retain lexical
+member resolution, notation and `self`, including through nested lambdas.
+Open bodies have one canonical symbolic effect summary. Specialization produces
+a closed summary from the selected helpers; independent extraction and closure
+checks reconstruct effects from operations and validate retained identities.
+Immutable authored signatures independently anchor callback ceilings, item-origin
+selectors and output contracts, including abstract declarations.
+Origin maps belong to the declaration's callback parameters, whose domain slots
+they reference; body signatures carry only types, mode and effects. Independent
+checking also compares a component's callback contracts with its interface after
+substituting the component's types.
+Dependency normalization, substitution and witness traversal use the shared
+work budget.
+
+Local literals use ordinary blocks, `if`, `match`, loops, mutable local state,
+stopping and short-circuit Boolean semantics. A Local literal authored in a
+protocol still short circuits. A Math literal authored in a Local function
+remains total; dead intermediates must satisfy typing and formation rules.
+Control syntax never changes a literal's selected mode.
+
+Free data places are captured by lexical binding identity and projection path.
+Whole aggregate captures subsume their descendant projections; sibling
+projections remain distinct even when their types match. Captures are ordered
+by their first authored use. Every captured type requires both `Copy` and `Drop`.
+Immutable records, tuples, arrays, vectors and matrices follow these same rules;
+there is no scalar-only capture restriction. A mutable Copy binding is captured
+as its current immutable value. Captures are evaluated once, when the literal's
+argument position is reached. Named arguments reorder parameter binding but
+preserve written evaluation order. Repeated invocation reuses these snapshots;
+a nested literal takes its own snapshots when its enclosing code reaches it.
+
+A literal cannot write an outer binding or capture a managed service. Its own
+explicit inputs and locally carried state follow the ordinary affine rules and
+need not be Copy. A static scoped capture may refer to an enclosing scoped
+parameter; its selected body and runtime environment are forwarded explicitly.
+No runtime function value is stored in that environment.
+
+For a direct protocol call to a Local accepting function, eager data arguments
+and every runtime capture constrain one common owner. P-only captures can select
+P when a data argument is shared with V. Incompatible captures or an unresolved
+owner refuse. A constant Math callback's result does not choose the owner of an
+eager Local argument: `apply_math(local_identity(shared), fn(_) => 0)` still
+requires an independently determined owner for `local_identity(shared)`.
+
+The shared summary query uses the checked `Body`. It separates result
+dependencies, formation obligations (including dead intermediates), and effects.
+An unresolved scoped formal is marked as parameterized; it is never treated as
+a concrete constant. Math summaries compose under the selected bodies and
+capture mappings. Equal formation dependency sets may be deduplicated; this
+does not omit operation coverage. Local placement uses all eager operands and
+captures independently of mathematical result dependencies.
+
+Closure materializes ordinary private helpers with explicit capture inputs and
+specializes accepting functions with the selected helpers. Their hidden data
+inputs follow ordinary data inputs; forwarding passes the matching environment
+in that order. The key includes the lexical body, closed static/component
+context, signature/layout and recursively selected scoped captures. Runtime
+values and caller roles do not prevent code reuse. Scoped invocations are gone
+before MLIR emission. Expansion, flattened environments, summary work and helper
+instances count against the ordinary work, operation, depth and instance bounds.
+Cycles and excessive completed-instance call heights refuse.
+
+Independent origin checking reconstructs normalized contracts from retained
+source labels and clauses, checks exact input/domain types and coverage, and
+rejects changed slots, domain positions or missing requirements even if body
+signatures were changed to agree. These source selectors are compile-time
+evidence, not trusted runtime attributes.
+
+Independent capture checking walks retained resolved syntax to reconstruct
+free places and compares actual capture slots, snapshot projections, types,
+roles, lexical identity and occurrence coverage. A separate specialization
+checker relates checked bodies to the actual candidate under explicit static,
+scoped and SSA substitutions; it does not call the specializer. It checks helper
+selection, hidden operands, forwarding, control regions, owners, effects and
+every operation, including dead work. Missing or duplicate occurrence evidence
+refuses. These executable checks do not constitute a theorem about the parser
+or complete elaboration semantics.
+
+Within scoped bodies, ordinary notation calls are rechecked against retained
+definition-site families and authored operands. Every retained notation
+occurrence must have exactly one matching call, including its source span and
+binding evidence; removing the expression mapping or binding refuses. The
+callback result must agree with its authored tail expression. Resolved syntax
+and the retained lexical families remain trusted inputs to this check.
+
+Declaration inspection reports `scoped_inputs` separately from `inputs`, with
+name, mode, input/result types and effect allowance. Each callback also has
+`input_labels`, an array parallel to `inputs` with a string or null per input,
+and `item_origins`, an array of exact `{ "input": unsigned, "domain": unsigned }`
+objects sorted by input position. Both positions are zero-based; `domain` indexes
+`domain_inputs`, not the interleaved authored port list. Both arrays are always
+present, including an empty origin list. This is the sole version-0 schema;
+there is no legacy suffix or inspection alias. Enclosing `requirements` remain
+obligations of the enclosing signature. `input_order` retains `data`, `service`,
+`domain` and `scoped` categories. This diagnostic view does not add runtime
+interface fields. The [computation library](../../../libraries/zkc/computation.zkc)
+and [component example](../../../examples/projects/scoped-computations/README.md)
+exercise user-defined apply/forward combinators. General finite domains, named consumers and mathematical binders use this same
+foundation.
 
 ## Bounds and scope
 

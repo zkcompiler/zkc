@@ -8,7 +8,7 @@ use zkc_runtime::interactive::{
     Backend, Identity, OperationBinding, Runner, Value as RuntimeValue, admit_supplied,
 };
 
-const SUITE: Identity = Identity::Spongefish074KeccakFr64Be;
+const SUITE: Identity = Identity::Spongefish080KeccakFr64Be;
 fn scalar(v: &Value) -> zkc_backends::Scalar {
     let Value::Field(f) = v else { panic!() };
     *f
@@ -224,7 +224,7 @@ fn nominal_provider_codec_and_wrong_field_admission() {
     obs.arguments[1] = "ristretto255.scalar".into();
     assert!(obs.signature().is_err());
     assert!(b.binding_signature(&obs).is_none());
-    assert!(Identity::parse("spongefish0.7.4.keccak.ristretto255.scalar64le/0").is_err());
+    assert!(Identity::parse("spongefish0.8.0.keccak.ristretto255.scalar64le/0").is_err());
 }
 #[test]
 fn malformed_roots_wrong_suite_authority_and_budget() {

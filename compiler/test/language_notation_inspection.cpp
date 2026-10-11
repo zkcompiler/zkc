@@ -103,6 +103,24 @@ void referencesClose(const json::Value &view) {
 
 int main() {
   zkc::test::Cases cases;
+  cases.run("indexing inventory records library calls and excludes static "
+            "projections",
+            [] {
+              auto project = check({{"m",
+                                     R"(module m;
+      pub math fn choose(xs:bool,i:bool)->bool{return xs&&i;}
+      pub indexing xs[i]=choose(xs,i);
+      pub math fn picked(x:bool,y:bool)->bool{return x[y];}
+      pub math fn first(xs:[bool;2])->bool{return xs[0];}
+    )",
+                                     {}}});
+              auto view = report(project);
+              find(array(view, "occurrences"), "owner", "m::picked");
+              for (const auto &value : array(view, "occurrences"))
+                require(value.getAsObject()->getString("owner") != "m::first",
+                        "static projection reported as notation");
+              referencesClose(view);
+            });
   cases.run(
       "public captured inventory excludes private and nested local text", [] {
         auto project = inventory();

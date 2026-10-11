@@ -10,7 +10,7 @@ exports an alternative environment.
 |---|---|---|
 | Nix | `flake.nix`, `flake.lock`, `nix/default.nix` | Pinned inputs and package/check composition |
 | Environment | `nix/environment.nix`, `nix/shell.nix` | Tool paths, development defaults and explicit check environments |
-| Source selection | `nix/source.nix` | Exclude generated/private data; isolate component inputs |
+| Source selection | `nix/sources.nix`, `nix/source.nix` | Declare package/check inputs and exclude generated/private data |
 | Native builds | `compiler/CMakePresets.json`, Cargo/Lake manifests | Build graph, profiles and dependency versions |
 | Workspace operations | `scripts/develop.py`, `scripts/workspace.py` | Explicit setup, profile resolution and mutable checkout paths |
 | Test execution | `common/tests/run.py` and the existing test drivers | Ordered integrations and report routing, shared by local commands and Nix |
@@ -22,12 +22,14 @@ fetch Lake dependencies, or build the project. Use `just setup` explicitly;
 the same operation is available as
 `nix develop --command python3 scripts/develop.py setup`.
 
+Compiled package source sets exclude Python test orchestration and unrelated integration fixtures. Test derivations add their own inputs. `checks.sources` verifies representative inclusions and exclusions. Documentation, style and harness discovery inspect the full maintained repository; optional Lean integrations have separate source sets. Update the owning list in `nix/sources.nix` when a package or check starts reading a new path.
+
 ## Toolchain and concurrency
 
 Toolchain settings (`CC`, `CXX`, `MLIR_DIR`, `LLVM_CONFIG`, `UV_PYTHON`,
 `UV_PYTHON_DOWNLOADS` and `TZDIR`) are supplied by Nix. The optional formal
 environment separately owns Lean tools and its `LEAN_CC` default. Do not redefine these in just or a local `.env`.
-An intentional toolchain change belongs in the owning manifest or Nix input.
+Rust uses the exact release in `rust-toolchain.toml` in rustup, Nix and CI; doctor refuses a different release. An intentional toolchain change belongs in the owning manifest or Nix input.
 Native builds outside Nix require an explicitly supplied compatible toolchain.
 The configure driver requires `CC` and `CXX` to name executable files (including
 executable wrappers), and `MLIR_DIR` to contain `MLIRConfig.cmake`. Put compiler

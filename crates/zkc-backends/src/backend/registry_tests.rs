@@ -615,7 +615,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         ),
         Type::Sequence,
         I::None,
-        256 + sequence_type.descriptor_bytes() + 512 + 512,
+        256 + sequence_type.descriptor_bytes() + 256 + 512 + 512,
     );
     check(
         Value::pack_variant(descriptor, 0, vec![fixed]).unwrap(),
@@ -695,7 +695,7 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
         I::Merlin3Fr64Be,
         I::Merlin3KoalaBearExt8,
         I::Merlin3Ristretto64Le,
-        I::Spongefish074KeccakFr64Be,
+        I::Spongefish080KeccakFr64Be,
     ] {
         values.push(
             native
@@ -865,7 +865,7 @@ fn transcript_alternative_preserves_concrete_observation_policy() {
             false,
         ),
         (
-            "spongefish0.7.4.keccak.bls12-381.fr64be/0",
+            "spongefish0.8.0.keccak.bls12-381.fr64be/0",
             "field:bls12-381.fr",
             false,
         ),
@@ -1019,6 +1019,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "curve.equal",
         "curve.generator",
         "curve.get",
+        "curve.identity",
         "curve.length",
         "curve.msm",
         "curve.neg",
@@ -1039,6 +1040,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "field.sub",
         "matrix.bilinear",
         "matrix.dimension",
+        "matrix.get",
         "matrix.identity_check",
         "matrix.mul_vector",
         "matrix.shape_check",
@@ -1285,7 +1287,7 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
         &["merlin3.bls12-381.fr64be/0"],
         &["merlin3.ristretto255.scalar64le/0"],
         &["merlin3.koala-bear.ext8-binomial3.rejection31le/0"],
-        &["spongefish0.7.4.keccak.bls12-381.fr64be/0"],
+        &["spongefish0.8.0.keccak.bls12-381.fr64be/0"],
         &["merlin3.bls12-381.fr64be/0", "field:bls12-381.fr"],
         &[
             "merlin3.ristretto255.scalar64le/0",
@@ -1296,7 +1298,7 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
             "field:koala-bear",
         ],
         &[
-            "spongefish0.7.4.keccak.bls12-381.fr64be/0",
+            "spongefish0.8.0.keccak.bls12-381.fr64be/0",
             "field:bls12-381.fr",
         ],
         &["bls12-381.fr", "2"],

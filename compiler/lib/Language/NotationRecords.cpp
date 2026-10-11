@@ -92,6 +92,36 @@ bool Checker::retainNotations() {
     }
     for (const auto &argument : source.target.arguments)
       record.authoredArguments.push_back(argument.span);
+    if (binding.filtered) {
+      if (!source.filtered ||
+          !types.charge(binding.filtered->arguments.size() +
+                            source.filtered->arguments.size() + 1,
+                        source.span))
+        return {};
+      NotationTargetRecord target{binding.filtered->target.declaration,
+                                  {},
+                                  {},
+                                  source.filtered->span,
+                                  {}};
+      if (binding.filtered->target.component) {
+        target.component =
+            printType(*binding.filtered->target.component, source.span);
+        if (!target.component)
+          return {};
+      }
+      for (const auto &argument : binding.filtered->arguments) {
+        std::optional<std::string> printed;
+        if (argument) {
+          printed = printType(*argument, source.span);
+          if (!printed)
+            return {};
+        }
+        target.arguments.push_back(std::move(printed));
+      }
+      for (const auto &argument : source.filtered->arguments)
+        target.authoredArguments.push_back(argument.span);
+      record.filtered = std::move(target);
+    }
     for (const auto &hole : source.holes) {
       if (!types.charge(hole.size() + 1, source.span))
         return {};
@@ -167,7 +197,7 @@ bool Checker::retainNotations() {
       record.imports.push_back({modules.at(import.module), import.span,
                                 import.alias, import.names, import.operators,
                                 import.notations, import.reductions,
-                                import.isPublic});
+                                import.isPublic, import.indexing});
     }
     for (auto original : visibleOperators[module.id.index]) {
       if (!types.charge(1, record.span))
@@ -254,10 +284,57 @@ bool Checker::retainNotations() {
           record.descriptors.push_back(descriptor);
       }
     }
+    std::set<Site> indexedCalls;
+    std::set<const Body *> indexedBodies;
+    std::function<bool(const Body &, unsigned)> findIndexed =
+        [&](const Body &body, unsigned depth) {
+          if (!indexedBodies.insert(&body).second)
+            return true;
+          if (depth > work.limits.expressionDepth ||
+              !types.charge(body.operations.size() +
+                                body.scopedBindings.size() + 1,
+                            declaration.span))
+            return types.diagnostic
+                       ? false
+                       : types.fail("source.limit", "index occurrence depth",
+                                    declaration.span);
+          for (const auto &operation : body.operations) {
+            if (operation.binding && operation.binding->notation &&
+                operation.binding->notation->position ==
+                    NotationDescriptor::Position::Index)
+              indexedCalls.insert(site(operation.span));
+            if (const auto *control =
+                    std::get_if<LocalControl>(&operation.action)) {
+              for (const auto &nested : control->regions)
+                if (!findIndexed(*nested, depth + 1))
+                  return false;
+            } else if (const auto *repeat =
+                           std::get_if<ProtocolRepeat>(&operation.action)) {
+              if (!findIndexed(*repeat->region, depth + 1))
+                return false;
+            }
+          }
+          for (const auto &scoped : body.scopedBindings)
+            if (scoped.computation &&
+                scoped.computation->lexicalOwner.index ==
+                    declaration.id.index &&
+                scoped.computation->body &&
+                !findIndexed(*scoped.computation->body, depth + 1))
+              return false;
+          return true;
+        };
+    bool hasSubscripts =
+        llvm::any_of(source.expressions, [](const Expression &expr) {
+          return expr.kind == Expression::Kind::Subscript;
+        });
+    if (hasSubscripts && declaration.body && !findIndexed(*declaration.body, 1))
+      return false;
     std::map<Site, uint32_t> occurrences;
     for (unsigned i = 0; i < source.expressions.size(); ++i) {
       const auto &expression = source.expressions[i];
-      if (expression.kind != Expression::Kind::NotationCall)
+      if (expression.kind != Expression::Kind::NotationCall &&
+          !(expression.kind == Expression::Kind::Subscript &&
+            indexedCalls.count(site(expression.span))))
         continue;
       if (!expression.notation || !expression.scope)
         return types.fail("source.binding-witness",
@@ -287,8 +364,63 @@ bool Checker::retainNotations() {
                           expression.span);
       NotationOccurrenceRecord record{*descriptor,     scope, i, declaration.id,
                                       expression.span, {},    {}};
-      for (auto child : expression.children)
-        record.operands.push_back({child, source.expressions[child].span});
+      for (auto child : expression.children) {
+        NotationOperandRecord operand{child, source.expressions[child].span};
+        if (expression.notation->position ==
+            NotationDescriptor::Position::Reduction) {
+          auto &parts = operand.rendering;
+          std::function<bool(const Pattern &, unsigned)> pattern =
+              [&](const Pattern &value, unsigned depth) {
+                if (depth > work.limits.expressionDepth ||
+                    !types.charge(1, value.span))
+                  return false;
+                if (value.kind != Pattern::Kind::Tuple) {
+                  parts.emplace_back(value.span);
+                  return true;
+                }
+                parts.emplace_back(std::string("("));
+                for (unsigned i = 0; i < value.children.size(); ++i) {
+                  if (i)
+                    parts.emplace_back(std::string(", "));
+                  if (!pattern(value.children[i], depth + 1))
+                    return false;
+                }
+                parts.emplace_back(std::string(")"));
+                return true;
+              };
+          std::function<bool(uint32_t, unsigned)> render = [&](uint32_t id,
+                                                               unsigned depth) {
+            const auto &value = source.expressions[id];
+            if (depth > work.limits.expressionDepth ||
+                !types.charge(1, value.span))
+              return false;
+            if (value.kind == Expression::Kind::DomainProduct) {
+              parts.emplace_back(std::string("("));
+              if (!render(value.children[0], depth + 1))
+                return false;
+              parts.emplace_back(std::string(" × "));
+              if (!render(value.children[1], depth + 1))
+                return false;
+              parts.emplace_back(std::string(")"));
+            } else if (value.kind == Expression::Kind::Lambda) {
+              parts.emplace_back(std::string("fn("));
+              if (!pattern(value.payloads[0][0], depth + 1))
+                return false;
+              parts.emplace_back(std::string(") => "));
+              parts.emplace_back(source.bodies[value.regions[0]].span);
+            } else
+              parts.emplace_back(value.span);
+            return true;
+          };
+          if (!render(child, 1))
+            return types.diagnostic
+                       ? false
+                       : types.fail("source.limit",
+                                    "notation rendering depth exceeded",
+                                    expression.span);
+        }
+        record.operands.push_back(std::move(operand));
+      }
       auto id = uint32_t(records.occurrences.size());
       records.occurrences.push_back(std::move(record));
       if (!occurrences.emplace(site(expression.span), id).second)
@@ -297,12 +429,16 @@ bool Checker::retainNotations() {
                           expression.span);
     }
     uint32_t nextRegion = 0;
+    std::set<const Body *> visitedBodies;
     std::function<bool(const Body &, unsigned)> emitted;
     emitted = [&](const Body &body, unsigned depth) {
+      if (!visitedBodies.insert(&body).second)
+        return true;
       if (depth > work.limits.expressionDepth)
         return types.fail("source.limit", "notation region depth exceeded",
                           declaration.span);
-      if (!types.charge(body.operations.size() + 1, declaration.span))
+      if (!types.charge(body.operations.size() + body.scopedBindings.size() + 1,
+                        declaration.span))
         return false;
       auto region = nextRegion++;
       for (unsigned index = 0; index < body.operations.size(); ++index) {
@@ -327,7 +463,10 @@ bool Checker::retainNotations() {
           if (record.selection ||
               *binding.notation !=
                   records.descriptors[record.descriptor].descriptor ||
-              binding.operands.size() != record.operands.size())
+              (binding.notation->position ==
+                       NotationDescriptor::Position::Reduction
+                   ? binding.argumentOrder.size()
+                   : binding.operands.size()) != record.operands.size())
             return types.fail("source.binding-witness",
                               "emitted notation evidence differs",
                               operation.span);
@@ -397,20 +536,16 @@ bool Checker::retainNotations() {
             return false;
         }
       }
+      for (const auto &scoped : body.scopedBindings)
+        if (scoped.computation &&
+            scoped.computation->lexicalOwner.index == declaration.id.index &&
+            scoped.computation->body &&
+            !emitted(*scoped.computation->body, depth + 1))
+          return false;
       return true;
     };
     if (declaration.body && !emitted(*declaration.body, 1))
       return false;
-    if (!types.charge(output.declarations.size() - sources.size(),
-                      declaration.span))
-      return false;
-    for (unsigned index = sources.size(); index < output.declarations.size();
-         ++index) {
-      const auto &helper = output.declarations[index];
-      if (helper.generatedReduction->enclosing.index == owner &&
-          !emitted(*helper.body, 1))
-        return false;
-    }
     // Authored operand text can contain an entire nested block. Excluding just
     // the inner occurrence would still expose its private declaration through
     // the outer one's text. Merge hidden byte intervals before marking records.

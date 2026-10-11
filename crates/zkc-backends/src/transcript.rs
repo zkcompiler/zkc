@@ -28,7 +28,7 @@ impl Transcript {
             | Identity::Merlin3KoalaBearExt8 => {
                 Self::Merlin(merlin::Transcript::new(b"zkc.artifact/0"))
             }
-            Identity::Spongefish074KeccakFr64Be => {
+            Identity::Spongefish080KeccakFr64Be => {
                 let mut sponge = Keccak::default();
                 frame(&mut sponge, 0, b"domain", b"zkc.artifact/0");
                 frame(&mut sponge, 0, b"suite", suite.name().as_bytes());

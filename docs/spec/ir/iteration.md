@@ -59,6 +59,8 @@ Finite products cover heterogeneous and optional data, including matrices with
 independent runtime dimensions. Runtime-length collections of such values use
 [`data.sequence`](data.md), with its element, permission and framing rules.
 
+Ordered collection folds and materialization use the [finite computation contract](finite.md).
+
 ## Common iteration
 
 `protocol.repeat` has one isolated, single-block body. Its operands are a count,

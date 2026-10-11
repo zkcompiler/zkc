@@ -1,4 +1,4 @@
-//! Pinned Plonky3 0.5.1 AIR capture, export and import as views over the
+//! Pinned Plonky3 0.8.0 AIR capture, export and import as views over the
 //! shared `zkc.ring/0` expression arena.
 //!
 //! The exporter runs an `Air<SymbolicAirBuilder<KoalaBear>>` through the

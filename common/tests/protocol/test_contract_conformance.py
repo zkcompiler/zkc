@@ -117,7 +117,7 @@ def required_atomic_types():
         "rows.merkle-keccak256.koala-bear.ext8-binomial3/0": "commitment proof opening_state commitments opening_states",
         "merlin3.bls12-381.fr64be/0": "transcript",
         "merlin3.ristretto255.scalar64le/0": "transcript",
-        "spongefish0.7.4.keccak.bls12-381.fr64be/0": "transcript",
+        "spongefish0.8.0.keccak.bls12-381.fr64be/0": "transcript",
         "merlin3.koala-bear.ext8-binomial3.rejection31le/0": "transcript",
     }
     result = {(kind, domain) for domain, kinds in families.items() for kind in kinds.split()}
@@ -507,6 +507,8 @@ def test_logical_signatures_without_implementation(inventory, drivers, directory
 def test_explicit_semantic_witnesses(drivers, directory):
     # Independently authored signatures keep a shared inventory error visible.
     witnesses = [
+        *(("curve.identity", [group], [], [f"group:{group}"])
+          for group in ("ristretto255.group", "bls12-381.g1", "bn254.g1", "bn254.g2", "bn254.gt")),
         ("field.add", ["koala-bear"], ["field:koala-bear"] * 2, ["field:koala-bear"]),
         *(("vector.product", [field], [f"vector:{field}"], [f"field:{field}"])
           for field in ("bls12-381.fr", "bn254.fr", "ristretto255.scalar",
@@ -924,6 +926,71 @@ def test_native_shape_signature_witnesses(drivers, directory):
     replies = query(drivers, requests, directory)
     for consumer, rows in replies.items():
         assert rows == expected, (consumer, rows)
+
+
+def test_checked_access_independent_signatures(physical_drivers, directory):
+    # Literal expectations, independent of declaration enumeration and each resolver.
+    fields = [("bls12-381.fr", "arkworks"), ("bn254.fr", "arkworks"),
+              ("ristretto255.scalar", "dalek"), ("koala-bear", "plonky3"),
+              ("koala-bear.ext8-binomial3", "plonky3")]
+    requests, expected = [], []
+    for field, _ in fields:
+        requests.append(binding("matrix.get", [field]))
+        expected.append({"accepted": True, "physical": False,
+                         "inputs": [f"matrix:{field}", "index", "index"],
+                         "outputs": [f"field:{field}"]})
+        for n in (0, 4):
+            requests.append(binding("field_array.get", [field, str(n)]))
+            expected.append({"accepted": True, "physical": False,
+                             "inputs": [f"field_array<{field},{n}>", "index"],
+                             "outputs": [f"field:{field}"]})
+    replies = query({k: v for k, v in physical_drivers.items() if k != "backend"},
+                    requests, directory / "logical")
+    for consumer, rows in replies.items():
+        assert rows == expected, (consumer, rows)
+
+    requests, expected = [], []
+    for field, provider in fields:
+        requests.append(binding("matrix.get", [field], f"{provider}/matrix.get", True))
+        expected.append((True, [f"matrix:{field}", "index", "index"], [f"field:{field}"]))
+        # Only BLS arrays have a native representation, regardless of provider spelling.
+        requests.append(binding("field_array.get", [field, "4"], "arkworks/field_array.get", True))
+        expected.append((field == "bls12-381.fr", [f"field_array<{field},4>", "index"],
+                         [f"field:{field}"]))
+    for contract, args, implementation in [
+        ("matrix.get", [], "arkworks/matrix.get"),
+        ("matrix.get", ["bls12-381.fr", "0"], "arkworks/matrix.get"),
+        ("matrix.get", ["bls12-381.g1"], "arkworks/matrix.get"),
+        ("matrix.get", ["bls12-381.fr"], "dalek/matrix.get"),
+        ("field_array.get", ["bls12-381.fr"], "arkworks/field_array.get"),
+        ("field_array.get", ["bls12-381.fr", "04"], "arkworks/field_array.get"),
+        ("field_array.get", ["bls12-381.fr", "1048577"], "arkworks/field_array.get"),
+        ("field_array.get", ["bls12-381.fr", "4"], "arkworks/field_array.at"),
+    ]:
+        requests.append(binding(contract, args, implementation, True))
+        expected.append((False, [], []))
+    replies = query(physical_drivers, requests, directory / "physical")
+    finish(directory, agreements(replies, requests))
+    for consumer, rows in replies.items():
+        for row, (accepted, inputs, outputs) in zip(rows, expected):
+            assert row["accepted"] == accepted, (consumer, row)
+            if accepted:
+                assert row["physical"]
+                assert [s.split("@")[0] for s in row["inputs"]] == inputs
+                assert [s.split("@")[0] for s in row["outputs"]] == outputs
+
+
+def test_checked_access_admits_only_dynamic_operands_without_attributes(drivers, directory):
+    cases = []
+    for contract, args in [("matrix.get", ["bls12-381.fr"]),
+                           ("field_array.get", ["bls12-381.fr", "0"]),
+                           ("field_array.get", ["bls12-381.fr", "4"])]:
+        for attributes in ([], ["0"], ["18446744073709551615"], ["0", "1"]):
+            cases.append({"contract": contract, "arguments": args,
+                          "implementation": "arkworks/" + contract,
+                          "attributes": attributes, "admitted": not attributes})
+    replies = query(drivers, [attribute_request(case) for case in cases], directory)
+    finish(directory, admission_failures(cases, replies))
 
 
 def attribute_request(case):

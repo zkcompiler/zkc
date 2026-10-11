@@ -1,5 +1,7 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "ResourceOrigins.h"
+#include "mlir/IR/IRMapping.h"
+#include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
@@ -7,6 +9,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
@@ -50,6 +53,7 @@ struct HelperSummary {
   unsigned expandedOperations = 0;
   unsigned depth = 1;
   uint64_t replayIndices = 0;
+  bool observesPolynomial = false;
 };
 class HelperAnalysis {
   Operation *unit;
@@ -59,6 +63,8 @@ class HelperAnalysis {
   llvm::DenseSet<Operation *> active;
   uint64_t remainingDependencyWork = 1000000;
   unsigned remainingOperations = 100000;
+  uint64_t remainingObservationWork = 1000000;
+  bool hasFinite = false;
 
   LogicalResult charge(Operation *op, uint64_t work) {
     if (work > remainingDependencyWork)
@@ -85,9 +91,57 @@ class HelperAnalysis {
     return result;
   }
 
+  LogicalResult checkObservations(func::FuncOp function) {
+    auto chargeObservation = [&](Operation *op) -> LogicalResult {
+      uint64_t work = 1 + op->getNumOperands() + op->getNumResults();
+      if (work > remainingObservationWork)
+        return limit(function,
+                     "polynomial observation expansion exceeds 1000000 slots");
+      remainingObservationWork -= work;
+      return success();
+    };
+    for (auto &op : function.front())
+      if (failed(chargeObservation(&op)))
+        return failure();
+    OwningOpRef<func::FuncOp> scratch(cast<func::FuncOp>(function->clone()));
+    SmallVector<func::CallOp> pending;
+    scratch->walk([&](func::CallOp call) { pending.push_back(call); });
+    while (!pending.empty()) {
+      auto call = pending.pop_back_val();
+      auto helper =
+          tables.lookupSymbolIn<func::FuncOp>(unit, call.getCalleeAttr());
+      // Signatures and the acyclic closure were checked before this replay.
+      if (!helper || helper.isExternal())
+        return refuse(function, "missing polynomial observation helper");
+      IRMapping mapping;
+      for (auto [argument, value] :
+           zip(helper.getArguments(), call.getOperands()))
+        mapping.map(argument, value);
+      OpBuilder builder(call);
+      for (auto &op : helper.front().without_terminator()) {
+        if (failed(chargeObservation(&op)))
+          return failure();
+        auto *copy = builder.clone(op, mapping);
+        if (auto nested = dyn_cast<func::CallOp>(copy))
+          pending.push_back(nested);
+      }
+      for (auto [value, returned] :
+           zip(call.getResults(), helper.front().back().getOperands()))
+        value.replaceAllUsesWith(mapping.lookup(returned));
+      call.erase();
+    }
+    bool formalPolynomial = any_of(function.getArgumentTypes(), [](Type type) {
+      return isa<poly::PolynomialType>(type);
+    });
+    poly::Degrees degrees;
+    return poly::deriveDegrees(scratch->front(), degrees, formalPolynomial);
+  }
+
 public:
   HelperAnalysis(Operation *unit, SymbolTableCollection &tables)
-      : unit(unit), tables(tables), types(unit) {}
+      : unit(unit), tables(tables), types(unit) {
+    unit->walk([&](Operation *op) { hasFinite |= finite::isComputation(op); });
+  }
   LogicalResult get(func::FuncOp function, const HelperSummary *&result) {
     if (!function)
       return refuse(unit, "missing pure helper definition");
@@ -110,7 +164,8 @@ public:
                               "mathematical signatures");
     for (auto attr : function->getAttrs())
       if (!is_contained(ArrayRef<StringRef>{"sym_name", "sym_visibility",
-                                            "function_type"},
+                                            "function_type",
+                                            "data.preconditions"},
                         attr.getName().getValue()))
         return refuse(function, "unsupported pure helper attribute");
     if (auto found = summaries.find(function); found != summaries.end()) {
@@ -155,7 +210,12 @@ public:
         for (auto value : returned.getOperands())
           summary.results.push_back(environment.values.lookup(value));
       } else if (isTotal(op)) {
+        summary.observesPolynomial |= isa<poly::PolynomialCoefficientsOp>(op);
         if (failed(verifyTotal(op, types)))
+          return failure();
+        finite::Summary finiteSummary;
+        if (finite::isComputation(op) &&
+            failed(finite::summarize(op, finiteSummary)))
           return failure();
         for (auto [index, value] : enumerate(op->getResults())) {
           BitVector dependency(size);
@@ -176,6 +236,7 @@ public:
         if (callee->expandedOperations > 100000 - summary.expandedOperations)
           return limit(call, "expanded analysis exceeds 100000 operations");
         summary.expandedOperations += callee->expandedOperations;
+        summary.observesPolynomial |= callee->observesPolynomial;
         summary.depth = std::max(summary.depth, callee->depth + 1);
         if (summary.depth > 64)
           return limit(call, "helper depth exceeds 64");
@@ -201,6 +262,9 @@ public:
                       "helper contains an operation without total semantics");
       }
     }
+    if (hasFinite && summary.observesPolynomial &&
+        failed(checkObservations(function)))
+      return failure();
     for (const auto &requirement : summary.requirements)
       summary.replayIndices += requirement.size();
     for (const auto &dependency : summary.results)
@@ -684,6 +748,17 @@ public:
 };
 } // namespace
 
+LogicalResult verifyHelpers(protocol_ir::ProtocolModuleOp module) {
+  SymbolTableCollection tables;
+  HelperAnalysis helpers(module, tables);
+  for (auto helper : module.getBody().front().getOps<func::FuncOp>()) {
+    const HelperSummary *summary;
+    if (failed(helpers.get(helper, summary)))
+      return failure();
+  }
+  return success();
+}
+
 LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
   if (module.getProfile() == protocol_ir::Profile::Participant)
     return verifyParticipantModule(module);
@@ -697,6 +772,8 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
           "unexpected common mathematical module attribute");
   if (!hasSingleElement(module.getBody()))
     return refuse(module, "expected one mathematical symbol-table block");
+  if (failed(finite::verifyClosure(module)))
+    return failure();
   SymbolTableCollection tables;
   HelperAnalysis helpers(module, tables);
   algebra::MapFormulas maps(tables);
@@ -719,6 +796,12 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
           realization, realization.getHelperAttr());
       if (failed(helpers.get(helper, summary)))
         return failure();
+      if (auto assumptions =
+              helper->getAttrOfType<ArrayAttr>("data.preconditions");
+          assumptions && !assumptions.empty())
+        return diagnostics::emit(
+            realization.emitOpError(), "finite-bound",
+            "local.realize requires an unconditional total helper");
       if (summary->expandedOperations > remainingRealizations)
         return diagnostics::emit(
             realization.emitOpError(), "mathematical-analysis-limit",
@@ -740,6 +823,9 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
             map.emitOpError(), "mathematical-analysis-limit",
             "realized helpers exceed the shared expansion budget");
       remainingRealizations -= summary->expandedOperations;
+    } else if (isa<data::DomainOp, local::FiniteFoldOp, local::FiniteCollectOp>(
+                   op)) {
+      // The descriptor and finite closure were checked before any liveness.
     } else if (isa<protocol_ir::ConstructionOp, local::FuncOp,
                    local::OperationBindingOp, poly::RecipeOp, poly::RealizeOp>(
                    op)) {
@@ -783,6 +869,10 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
   // Every body is formed before a summary follows a forward callee reference.
   // Root obligations still cover every original repeat, including unused ones.
   ResourceOrigins origins(tables, types);
+  for (auto &declaration : module.getBody().front())
+    if (finite::isDeclaration(&declaration) &&
+        failed(origins.verifyFinite(&declaration)))
+      return failure();
   for (auto repeat : originQueries)
     if (failed(origins.verify(repeat)))
       return failure();

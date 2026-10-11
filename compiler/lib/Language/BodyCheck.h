@@ -1,6 +1,7 @@
 #ifndef ZKC_LANGUAGE_BODYCHECK_H
 #define ZKC_LANGUAGE_BODYCHECK_H
 #include "Checker.h"
+#include "FreePlaces.h"
 #include "Placement.h"
 #include "TypeInference.h"
 namespace zkc::language::detail {
@@ -9,6 +10,8 @@ public:
   BodyChecker(Checker &, Declaration &, const SyntaxDeclaration &, Body &,
               unsigned);
   bool run(const SyntaxBody &, std::vector<Port> &, bool protocol);
+  bool addScoped(BindingId, const ScopedSignature &, Span);
+  bool addDomain(BindingId, const DomainParameter &, unsigned);
   bool addService(BindingId, const ServicePort &);
   bool addInput(BindingId, const Type &, std::vector<unsigned>, Span);
 
@@ -20,16 +23,18 @@ private:
   Body &body;
   unsigned callDepth;
   uint32_t statement = 0;
+  bool retainExpressionValues = false;
   Placement *placement = nullptr;
   const ExpressionTypes *inference = nullptr;
-  std::map<uint32_t, ValueId> *reductionValues = nullptr;
   std::set<uint32_t> mathematicalExpressions;
+  std::set<std::vector<unsigned>> formationRequirements;
   struct TypeScope {
     BodyChecker &checker;
     const ExpressionTypes *outer;
     std::optional<ExpressionTypes> state;
     bool valid;
-    TypeScope(BodyChecker &, uint32_t, std::optional<Type>);
+    TypeScope(BodyChecker &, uint32_t, std::optional<Type>,
+              bool domain = false);
     TypeScope(const TypeScope &) = delete;
     TypeScope &operator=(const TypeScope &) = delete;
     ~TypeScope();
@@ -57,6 +62,19 @@ private:
     std::vector<std::pair<std::vector<unsigned>, ValueId>> pieces;
   };
   std::map<BindingId, BindingState> bindings;
+  std::map<BindingId, unsigned> scoped, domains;
+  std::optional<unsigned> domainArgument(uint32_t, unsigned);
+  std::optional<unsigned> scopedArgument(uint32_t, const ScopedSignature &,
+                                         unsigned);
+  std::optional<ValueId> invokeScoped(uint32_t, unsigned);
+  bool inheritScoped(BodyChecker &);
+  bool inheritDomains(BodyChecker &, const std::set<BindingId> &,
+                      std::vector<unsigned> &);
+  /// Import a checked recipe at a protocol region boundary, where ordinary
+  /// data ports must retain their participant availability during checking.
+  bool captureDomains(BodyChecker &, const std::set<BindingId> &,
+                      const std::function<std::optional<ValueId>(ValueId)> &,
+                      Span);
   std::map<BindingId, ServiceId> services;
   std::optional<ServiceId> service(const Expression &);
   struct Uses {
@@ -108,19 +126,7 @@ private:
   std::optional<ValueId> block(const Expression &, std::optional<Type>,
                                bool allowUntypedStop);
   std::optional<std::pair<BindingId, std::vector<unsigned>>>
-  sourcePlace(uint32_t, unsigned = 1);
-  struct FreePlace {
-    BindingId binding;
-    std::vector<unsigned> path;
-    bool operator<(const FreePlace &other) const {
-      return binding == other.binding ? path < other.path
-                                      : binding < other.binding;
-    }
-  };
-  struct RegionInputs {
-    std::set<FreePlace> places;
-    std::set<BindingId> writes, services;
-  };
+  sourcePlace(uint32_t, unsigned = 1, bool optional = false);
   std::optional<RegionInputs> regionInputs(const Expression &);
   std::optional<std::set<BindingId>> regionStates(const RegionInputs &, Span);
   std::optional<ValueId> capturePlace(const FreePlace &, Span);
@@ -131,7 +137,8 @@ private:
   bool data(const Type &, Span);
   bool restricted(const Type &);
   std::optional<Type> projected(Type, llvm::ArrayRef<unsigned>, Span);
-  std::optional<ExpressionTypes> inferExpression(uint32_t, std::optional<Type>);
+  std::optional<ExpressionTypes> inferExpression(uint32_t, std::optional<Type>,
+                                                 bool domain = false);
   std::optional<Type> inferredType(uint32_t) const;
   std::optional<ValueId> expression(uint32_t, std::optional<Type> = {},
                                     unsigned = 1,
@@ -140,7 +147,6 @@ private:
                                   bool allowUntypedStop);
   std::optional<ValueId> call(const Expression &, unsigned);
   std::optional<ValueId> bulk(const Expression &, unsigned);
-  std::optional<ValueId> reduction(const Expression &, unsigned);
   std::optional<ValueId> control(const Expression &, std::optional<Type>,
                                  unsigned, bool allowUntypedStop);
   std::optional<ValueId> construct(const Expression &, std::optional<Type>,

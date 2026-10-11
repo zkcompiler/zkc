@@ -161,7 +161,7 @@ pub const TRANSCRIPTS: &[NativeTranscript] = &[
         provider: "dalek",
     },
     NativeTranscript {
-        suite: Identity::Spongefish074KeccakFr64Be,
+        suite: Identity::Spongefish080KeccakFr64Be,
         domain: BLS,
         provider: "spongefish",
     },

@@ -378,16 +378,17 @@ run Demo = Count<Recurrence>;
     require(rows.protocol().inputs[0].type.kind == Type::Kind::Array &&
                 rows.protocol().inputs[0].type.dimension.closedValue() == 2,
             "alias did not close its projected length");
-    auto component = source(
-        "interface Eval<T: Field> { fn eval(v: Vector<T>) -> Vector<T>; }\n"
-        "component Fixed<T: Field, A: Ring>: Eval<T> {\n"
-        "  fn eval(v: Vector<T>) -> Vector<T> {"
-        " return kernel<T>(\"ring.point\", v; A); }\n}\n"
-        "fn through<T: Field, E: Eval<T>>(v: Vector<T>) -> Vector<T> {"
-        " return E::eval(v); }\n"
-        "protocol Dispatch roles(E)(v: Vector<F>@E)->(r: Vector<F>@E)"
-        " { let r @E = through<F, Fixed<F, Product>>(v);"
-        " return (r=r); }\nrun Selected = Dispatch;\n");
+    auto component =
+        source("interface Eval<T: Field> { fn eval(v: Vector<T>) -> Vector<T> "
+               "effects(stop, opaque); }\n"
+               "component Fixed<T: Field, A: Ring>: Eval<T> {\n"
+               "  fn eval(v: Vector<T>) -> Vector<T> {"
+               " return kernel<T>(\"ring.point\", v; A); }\n}\n"
+               "fn through<T: Field, E: Eval<T>>(v: Vector<T>) -> Vector<T> {"
+               " return E::eval(v); }\n"
+               "protocol Dispatch roles(E)(v: Vector<F>@E)->(r: Vector<F>@E)"
+               " { let r @E = through<F, Fixed<F, Product>>(v);"
+               " return (r=r); }\nrun Selected = Dispatch;\n");
     auto dispatched =
         take(close(component, {product()}, {}, "sample::Selected"));
     require(ringReferences(dispatched).size() == 1 &&
@@ -450,6 +451,13 @@ run Demo = Count<Recurrence>;
       auto captured = capture(
           {{"example", client, "main.zkc"},
            {"expression_sumcheck", library, "library.zkc"},
+           {"zkc::accumulation", file(ZKC_MATH_LIBRARIES "/accumulation.zkc"),
+            "accumulation.zkc"},
+           {"zkc::curve", file(ZKC_MATH_LIBRARIES "/curve.zkc"), "curve.zkc"},
+           {"zkc::finite", file(ZKC_MATH_LIBRARIES "/finite.zkc"),
+            "finite.zkc"},
+           {"zkc::sequence", file(ZKC_MATH_LIBRARIES "/sequence.zkc"),
+            "sequence.zkc"},
            {"zkc::vector", file(ZKC_MATH_LIBRARIES "/vector.zkc"),
             "vector.zkc"},
            {"zkc::polynomial", file(ZKC_MATH_LIBRARIES "/polynomial.zkc"),

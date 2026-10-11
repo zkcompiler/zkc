@@ -249,14 +249,16 @@ def package_pins(integrations):
     pins = {entry["name"]: entry["rev"] for entry in main["packages"]}
     if any(set(external) & pins.keys() for _, _, external in INTEGRATIONS.values()):
         raise ValueError("optional dependencies entered the main package")
+    shared = dict(pins)
     for selected in integrations:
         directory = INTEGRATIONS[selected][0]
         optional = json.loads((directory / "lake-manifest.json").read_text())
         other = {entry["name"]: entry["rev"] for entry in optional["packages"]
                  if entry["type"] == "git"}
-        for name, rev in pins.items():
-            if other.get(name) != rev:
+        for name in pins.keys() | (shared.keys() & other.keys()):
+            if other.get(name) != shared[name]:
                 raise ValueError(f"incompatible shared dependency: {name} in {selected}")
+        shared.update(other)
         if (ROOT / "lean-toolchain").read_bytes() != (directory / "lean-toolchain").read_bytes():
             raise ValueError(f"incompatible main and {selected} integration Lean toolchains")
     return pins

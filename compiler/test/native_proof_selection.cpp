@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
   };
   auto schnorr = read("schnorr-services");
   for (StringRef suite : {"merlin3.bls12-381.fr64be/0",
-                          "spongefish0.7.4.keccak.bls12-381.fr64be/0"})
+                          "spongefish0.8.0.keccak.bls12-381.fr64be/0"})
     for (StringRef fixture :
          {"schnorr-services", "iterated-sumcheck", "nested-schnorr"})
       cases.run(fixture + ": " + suite, [&] {

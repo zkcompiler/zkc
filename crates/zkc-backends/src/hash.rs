@@ -4,7 +4,7 @@
 //! squeeze(n) returns SHAKE128(M)[k..k+n] and advances k. Neither read positions
 //! nor absorb boundaries are encoded into M. Library code owns all framing.
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
-use sha3::{
+use shake::{
     Shake128, Shake128Reader,
     digest::{ExtendableOutput, Update, XofReader},
 };

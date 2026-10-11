@@ -299,6 +299,7 @@ fn dense<G: Group>(
         p.output(512, i.max_output_bytes)?;
     }
     let result = match name {
+        "curve.identity" => G::value(G::identity()),
         "curve.generator" => G::value(G::generator()),
         "curve.add" => G::value(point(0)?.add(point(1)?)),
         "curve.neg" => G::value(point(0)?.neg()),
@@ -423,6 +424,8 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::curve;
     use zkc_runtime::interactive::{AttributeRule, Type::*};
     &[
+        curve::operation("curve.identity", &[], &[Group], AttributeRule::None)
+            .implemented_by(&["arkworks/curve.identity", "dalek/curve.identity"]),
         curve::operation("curve.generator", &[], &[Group], AttributeRule::None)
             .implemented_by(&["arkworks/curve.generator", "dalek/curve.generator"]),
         curve::operation("curve.add", &[Group, Group], &[Group], AttributeRule::None)
@@ -526,6 +529,7 @@ fn target(name: &str, args: &[Value], i: &Invocation<'_>, p: &Policy) -> Result<
     use crate::Bn254Gt as G;
     p.output(512, i.max_output_bytes)?;
     let v = match (name, args) {
+        ("curve.identity", []) => Value::Bn254Gt(G::identity()),
         ("curve.generator", []) => {
             p.output(32768, usize::MAX)?;
             Value::Bn254Gt(G::generator())

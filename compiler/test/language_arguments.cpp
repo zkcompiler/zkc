@@ -81,7 +81,7 @@ int main() {
                   "return E::V(b=n,a=x);}"),
             "source.call");
     refuses(check(R"(
-      interface I{type Value:Drop;fn make(x:index)->Value;}
+      interface I{type Value:Drop;fn make(x:index)->Value effects(stop, opaque);}
       component Impl:I{
         type Value:Drop=bool;
         fn make(x:index)->Value{return Value(payload=x);}
@@ -91,7 +91,7 @@ int main() {
   });
   cases.run("interface names and concrete names bind their own contracts", [] {
     compile(R"(
-      interface Ops<T:Type>{fn use_value(first:T,second:index)->(T,index);}
+      interface Ops<T:Type>{fn use_value(first:T,second:index)->(T,index) effects(stop, opaque);}
       component Impl<T:Type>:Ops<T>{
         fn use_value(a:T,b:index)->(T,index){return(a,b);}
       }
@@ -107,7 +107,7 @@ int main() {
       }run Demo=Run;
     )");
     refuses(check(R"(
-      interface Ops<T:Type>{fn f(x:T)->T;}
+      interface Ops<T:Type>{fn f(x:T)->T effects(stop, opaque);}
       fn wrapper<C:Ops<bool>>(x:bool){return C::f<T=bool>(x);}
     )"),
             "source.generic");
@@ -174,8 +174,9 @@ int main() {
                   "protocol Run "
                   "roles(P)(coins:Random<F=F>@P)->(r:bool@P){return true;}"),
             "source.service");
-    refuses(check("interface I{fn f(x:bool,x:bool)->bool;}"),
-            "source.duplicate");
+    refuses(
+        check("interface I{fn f(x:bool,x:bool)->bool effects(stop, opaque);}"),
+        "source.duplicate");
     refuses(check(R"(
       interface I{type Value:Drop;}
       component Impl<T:Type+Drop,N:nat>:I{type Value:Drop=[T;N];}
@@ -183,7 +184,7 @@ int main() {
     )"),
             "source.generic");
     refuses(check(R"(
-      interface I{type Value:Drop;fn make(x:bool)->Value;}
+      interface I{type Value:Drop;fn make(x:bool)->Value effects(stop, opaque);}
       component Impl:I{
         type Value:Drop=bool;
         fn make(x:bool)->Value{return Value<Wrong=bool>(x);}

@@ -237,6 +237,7 @@ impl Backend for Probe {
                 max_output_bytes: 0,
                 binding: i.binding,
                 logical_origin: i.logical_origin,
+                retained: i.retained,
             };
             return self.inner.apply(&invocation, args);
         }
@@ -255,6 +256,7 @@ impl Backend for Probe {
                 max_output_bytes: i.max_output_bytes,
                 binding: i.binding,
                 logical_origin: i.logical_origin,
+                retained: i.retained,
             };
             self.findings
                 .lock()

@@ -7,6 +7,7 @@ use ark_ec::PrimeGroup;
 use ark_ff::UniformRand;
 use serde_json::json;
 use spongefish::{Encoding, VerificationError, VerifierState};
+use spongefish_074 as spongefish;
 
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()

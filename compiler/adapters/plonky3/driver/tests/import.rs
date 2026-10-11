@@ -109,7 +109,7 @@ fn layout_slot_and_feature_mutations_refuse() {
             "plonky3-artifact-schema",
         ),
         (
-            Box::new(|v| v["upstream"]["crates"]["p3-air"] = json!("0.8.0")),
+            Box::new(|v| v["upstream"]["crates"]["p3-air"] = json!("0.0.0")),
             "plonky3-artifact-schema",
         ),
         (

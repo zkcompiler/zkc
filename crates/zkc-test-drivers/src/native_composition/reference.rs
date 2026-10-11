@@ -15,7 +15,6 @@ fn encode<T: CanonicalSerialize>(value: &T) -> Vec<u8> {
 }
 fn matrix_products(matrices: &Sequence, w: &[F]) -> Vec<Vec<F>> {
     matrices
-        .elements()
         .iter()
         .map(|value| {
             let Value::Bn254Matrix(matrix) = value else {

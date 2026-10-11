@@ -35,6 +35,7 @@ impl<'a> AirBuilder for RowBuilder<'a> {
     type PreprocessedWindow = RowWindow<'a, F>;
     type MainWindow = RowWindow<'a, F>;
     type PublicVar = F;
+    type PeriodicVar = F;
 
     fn main(&self) -> Self::MainWindow {
         self.main
@@ -48,8 +49,7 @@ impl<'a> AirBuilder for RowBuilder<'a> {
     fn is_last_row(&self) -> F {
         self.selectors[1]
     }
-    fn is_transition_window(&self, size: usize) -> F {
-        assert_eq!(size, 2, "only two-row windows are captured");
+    fn is_transition(&self) -> F {
         self.selectors[2]
     }
     fn assert_zero<I: Into<F>>(&mut self, x: I) {
@@ -77,6 +77,7 @@ impl<'a> AirBuilder for PointBuilder<'a> {
     type PreprocessedWindow = RowWindow<'a, Ext8>;
     type MainWindow = RowWindow<'a, Ext8>;
     type PublicVar = F;
+    type PeriodicVar = Ext8;
 
     fn main(&self) -> Self::MainWindow {
         self.main
@@ -90,8 +91,7 @@ impl<'a> AirBuilder for PointBuilder<'a> {
     fn is_last_row(&self) -> Ext8 {
         self.selectors[1]
     }
-    fn is_transition_window(&self, size: usize) -> Ext8 {
-        assert_eq!(size, 2, "only two-row windows are captured");
+    fn is_transition(&self) -> Ext8 {
         self.selectors[2]
     }
     fn assert_zero<I: Into<Ext8>>(&mut self, x: I) {
@@ -303,6 +303,7 @@ where
             F::from_bool(row == 0),
             F::from_bool(row == height - 1),
             F::from_bool(row != height - 1),
+            &[],
         );
         air.eval(&mut builder);
         failures.extend(builder.failures().iter().map(|f| (f.row, f.constraint)));

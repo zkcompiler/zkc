@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
     return 1;
   }
   for (const char *suite : {"merlin3.bls12-381.fr64be/0",
-                            "spongefish0.7.4.keccak.bls12-381.fr64be/0"}) {
+                            "spongefish0.8.0.keccak.bls12-381.fr64be/0"}) {
     policy->suite = suite;
     auto built = constructNativeProof(*source, *policy);
     if (!built) {

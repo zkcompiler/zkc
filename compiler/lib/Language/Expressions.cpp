@@ -17,8 +17,11 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
   if (!expected)
     expected = inferredType(id);
   auto result = evaluate(id, expected, depth, allowUntypedStop);
-  if (result && reductionValues)
-    reductionValues->insert_or_assign(id, *result);
+  if (result && retainExpressionValues) {
+    if (!checker.types.charge(1, syntax.expressions[id].span))
+      return {};
+    body.expressionValues.insert_or_assign(id, *result);
+  }
   const auto &expr = syntax.expressions[id];
   if (!result && body.stopped && !checker.types.diagnostic &&
       expr.kind != Expression::Kind::Block &&
@@ -52,8 +55,7 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
     result = kernel(expr, depth);
   } else if (expr.kind == K::Intrinsic) {
     result = intrinsic(expr, depth);
-  } else if (expr.kind == K::ReductionMap) {
-    result = reduction(expr, depth);
+
   } else if (expr.kind == K::Map) {
     result = bulk(expr, depth);
   } else if (expr.kind == K::MethodCall) {
@@ -106,7 +108,8 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
     if (!p)
       return {};
     result = p->first;
-  } else if (expr.kind == K::Projection) {
+  } else if (expr.kind == K::Projection ||
+             (expr.kind == K::Subscript && !inference->callees.count(id))) {
     auto p = place(id, depth);
     if (!p)
       return {};
@@ -133,14 +136,16 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
           fail("source.literal", "index literal overflows uint64", expr.span);
           return {};
         }
-        if (!local()) {
-          fail("source.mode", "index literals currently require local mode",
-               expr.span);
-          return {};
-        }
-        result =
-            emit(LocalPrimitive{"index.constant", {}, {std::to_string(number)}},
-                 type, {}, expr.span);
+        if (local())
+          result = emit(
+              LocalPrimitive{"index.constant", {}, {std::to_string(number)}},
+              type, {}, expr.span);
+        else
+          result = emit(MathValue{MathematicalIdentity::IndexConstant,
+                                  {},
+                                  std::to_string(number)},
+                        type, math() ? std::vector<unsigned>{} : allRoles(),
+                        expr.span);
       } else {
         if (type.symbolic) {
           if (auto error = protocol::checkGenericParameters("field.constant",

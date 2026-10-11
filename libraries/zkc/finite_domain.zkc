@@ -1,0 +1,16 @@
+module zkc::finite_domain;
+
+// Domains retain traversal and admission checks until their finite consumer.
+pub domain fn range(lower: index, upper: index) -> domain<index>
+  = domain("range");
+
+pub domain fn zip<A: Type + Copy + Drop, B: Type + Copy + Drop>(
+  left: domain<A>, right: domain<B>
+) -> domain<(A, B)> = domain("zip");
+
+pub domain fn product<A: Type + Copy + Drop, B: Type + Copy + Drop>(
+  left: domain<A>, right: domain<B>
+) -> domain<(A, B)> = domain("product");
+
+pub domain fn array<T: Type + Copy + Drop, N: nat>(values: [T; N])
+  -> domain<T> = domain("source_array");

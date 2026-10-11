@@ -27,6 +27,8 @@ def build(toolchain, journal, directory, entry, flags=(), arena=None):
     package = directory / f'{entry}.zkpkg'
     modules = ([f'--project={PROJECT}/zkc.toml'] if arena == PROJECT / 'product.ring.json' else [
         f'--module=expression_sumcheck={ROOT}/libraries/sumcheck/expression.zkc',
+        *[f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
+          for name in ('accumulation', 'curve', 'finite', 'sequence')],
         f'--module=zkc::vector={ROOT}/libraries/zkc/vector.zkc',
         f'--module=zkc::polynomial={ROOT}/libraries/zkc/polynomial.zkc',
         f'--module=example={PROJECT}/main.zkc', f'--asset=product=ring-json={arena}'])

@@ -44,13 +44,15 @@ Error insertNotation(NotationEnvironment &environment,
   if (environment.size() >= work.limits.notationDescriptors)
     return failure("source.limit", "notation descriptor limit exceeded",
                    syntax.span);
-  if (descriptor.position == Position::Delimited &&
+  if ((descriptor.position == Position::Delimited ||
+       descriptor.position == Position::Index) &&
       descriptor.arity > work.limits.notationHoles)
     return failure("source.limit", "notation hole limit exceeded", syntax.span);
   environment.emplace(descriptor.key(), syntax);
   work.notationDescriptors =
       std::max<uint64_t>(work.notationDescriptors, environment.size());
-  if (descriptor.position == Position::Delimited)
+  if ((descriptor.position == Position::Delimited ||
+       descriptor.position == Position::Index))
     work.notationHoles =
         std::max<uint64_t>(work.notationHoles, descriptor.arity);
   return Error::success();
@@ -87,7 +89,8 @@ Error resolveNotationSyntax(std::vector<SyntaxOperator> &bindings,
   for (const auto &[key, syntax] : environment) {
     if (auto error = work.charge(1, syntax.span))
       return error;
-    if (syntax.descriptor->position != Position::Delimited)
+    if (syntax.descriptor->position != Position::Delimited &&
+        syntax.descriptor->position != Position::Index)
       continue;
     if (syntax.descriptor->arity > work.limits.notationHoles)
       return failure("source.limit", "notation hole limit exceeded",
@@ -109,6 +112,7 @@ Error resolveNotationSyntax(std::vector<SyntaxOperator> &bindings,
     for (const auto &[key, syntax] : environment) {
       if (syntax.descriptor->position == Position::Reduction ||
           syntax.descriptor->position == Position::Delimited ||
+          syntax.descriptor->position == Position::Index ||
           syntax.descriptor->symbol != binding.symbol)
         continue;
       if (selected)

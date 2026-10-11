@@ -1,5 +1,6 @@
 #include "zkc/Dialect/Protocol/Execution.h"
 #include "../Verification.h"
+#include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/Services.h"
@@ -493,7 +494,8 @@ class ExecutionModelReader {
       fail("interactive-definition");
       return {};
     }
-    if (local && op->hasAttr("sym_visibility")) {
+    if (local && op->hasAttr("sym_visibility") &&
+        attr(op, "sym_visibility") != "private") {
       fail("interactive-local-visibility");
       return {};
     }
@@ -583,18 +585,31 @@ public:
         if (!binding)
           return binding.takeError();
         module.bindings.push_back(std::move(*binding));
-      } else if (isa<zkc::local::RealizeOp, zkc::algebra::MapRealizeOp>(op)) {
+      } else if (isa<zkc::local::RealizeOp, zkc::algebra::MapRealizeOp,
+                     zkc::local::FiniteFoldOp, zkc::local::FiniteCollectOp>(
+                     op)) {
         // Both declarations are admitted explicitly in this profile.
         bool map = isa<zkc::algebra::MapRealizeOp>(op);
+        bool finite = zkc::finite::isDeclaration(&op);
         if (profile.getValue() != zkc::protocol_ir::Profile::Protocol ||
-            (map ? !attributes(
-                       &op, {"sym_name", "helper", "function_type", "rowwise"})
-                 : !attributes(&op, {"sym_name", "helper", "function_type"})))
+            (!finite &&
+             (map ? !attributes(
+                        &op, {"sym_name", "helper", "function_type", "rowwise"})
+                  : !attributes(&op, {"sym_name", "helper", "function_type"}))))
           return error("local-realization-context");
         auto signature = cast<zkc::PreparationCallableOpInterface>(op)
                              .getPreparationSignature();
         LocalRealization value;
         value.name = SymbolTable::getSymbolName(&op).str();
+        if (finite) {
+          zkc::finite::Computation computation;
+          if (failed(zkc::finite::describe(&op, computation)))
+            return error("finite-formation");
+          value.kind = computation.collect
+                           ? LocalRealization::Kind::FiniteCollect
+                           : LocalRealization::Kind::FiniteFold;
+          value.domainArguments = computation.arguments;
+        }
         for (bool input : {true, false})
           for (auto type :
                input ? signature.getInputs() : signature.getResults()) {

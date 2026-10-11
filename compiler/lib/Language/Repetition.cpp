@@ -99,6 +99,35 @@ bool BodyChecker::repeat(const Expression &expr) {
       return false;
     operation.captures.push_back(*value);
   }
+  auto captureDomainOperand = [&](ValueId operand) -> std::optional<ValueId> {
+    const auto value = body.values[operand.index];
+    auto permissions = checker.types.permissions(value.type, expr.span, &decl);
+    if (!permissions || !permissions->copy || !permissions->drop) {
+      if (!checker.types.diagnostic)
+        fail("source.permission", "domain invariants require Copy and Drop",
+             expr.span);
+      return {};
+    }
+    std::vector<unsigned> selected;
+    std::set_intersection(value.components.begin(), value.components.end(),
+                          roles->begin(), roles->end(),
+                          std::back_inserter(selected));
+    if (selected.empty()) {
+      fail("source.roles", "domain capture has no loop participant", expr.span);
+      return {};
+    }
+    auto restricted = restrictRoles(operand, selected, expr.span);
+    if (!restricted || !use(*restricted, expr.span))
+      return {};
+    auto input = nested.input(value.type, selected, expr.span);
+    if (!input || !nested.use(*input, expr.span))
+      return {};
+    operation.captures.push_back(*restricted);
+    return input;
+  };
+  if (!captureDomains(nested, summary->domains, captureDomainOperand,
+                      expr.span))
+    return false;
   std::map<unsigned, ServiceId> roots;
   for (auto id : summary->services) {
     auto root = services.at(id);
@@ -133,8 +162,6 @@ bool BodyChecker::repeat(const Expression &expr) {
   }
   if (!nested.finish(expr.span))
     return false;
-  body.mayStop |= region->mayStop;
-  body.opaque |= region->opaque;
   operation.region = region;
   auto emitted =
       emitResults(std::move(operation), std::move(results), expr.span);

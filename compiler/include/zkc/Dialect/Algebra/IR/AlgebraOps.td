@@ -37,6 +37,8 @@ def CurveEqualOp : KernelOp<AlgebraDialect, "exec.group_equal", [OpCurveEqual]>;
 
 def CurveGeneratorOp : KernelOp<AlgebraDialect, "exec.group_generator", [OpCurveGenerator]>;
 
+def CurveIdentityOp : KernelOp<AlgebraDialect, "exec.group_identity", [OpCurveIdentity]>;
+
 def CurveGetOp : KernelOp<AlgebraDialect, "exec.group_get", [OpCurveGet]>;
 
 def CurveLengthOp : KernelOp<AlgebraDialect, "exec.group_length", [OpCurveLength]>;
@@ -77,6 +79,14 @@ def FixedVectorToVectorOp : KernelOp<AlgebraDialect, "exec.fixed_vector_to_vecto
                                    [OpFixedVectorToVector]>;
 
 def GroupAddOp : TotalMathOp<AlgebraDialect, "group_add", Group, Group, Group, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
+
+def GroupIdentityOp : Op<AlgebraDialect, "group_identity",
+    [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let summary = "The identity of the result's nominal group";
+  let results = (outs Group:$value);
+  let hasVerifier = 1;
+  let assemblyFormat = "attr-dict `:` type($value)";
+}
 
 def GroupEqualOp : TotalMathOp<AlgebraDialect, "group_equal", Group, Group, I1, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
 
@@ -120,6 +130,7 @@ def RingAffineSumOp : KernelOp<AlgebraDialect, "exec.ring_affine_sum", [OpRingAf
 def MatrixMulVectorOp : KernelOp<AlgebraDialect, "exec.matrix_mul_vector", [OpMatrixMulVector]>;
 
 def MatrixDimensionOp : KernelOp<AlgebraDialect, "exec.matrix_dimension", [OpMatrixDimension]>;
+def MatrixGetOp : KernelOp<AlgebraDialect, "exec.matrix_get", [OpMatrixGet]>;
 
 def MatrixShapeCheckOp : KernelOp<AlgebraDialect, "exec.matrix_shape_check", [OpMatrixShapeCheck]>;
 
@@ -222,6 +233,7 @@ def SubtractFieldOp : TotalMathOp<AlgebraDialect, "field_subtract", Field,
 def FieldArrayFromVectorOp : KernelOp<AlgebraDialect, "exec.field_array_from_vector",
                                     [OpFieldArrayFromVector]>;
 def FieldArrayAtOp : KernelOp<AlgebraDialect, "exec.field_array_at", [OpFieldArrayAt]>;
+def FieldArrayGetOp : KernelOp<AlgebraDialect, "exec.field_array_get", [OpFieldArrayGet]>;
 
 
 def PairingOp : TotalMathOp<AlgebraDialect, "pairing", Group, Group, Group, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
@@ -235,6 +247,17 @@ def VectorEqualOp : KernelOp<AlgebraDialect, "exec.vector_equal", [OpVectorEqual
 // preparation by an ordinary local.func with the same signature. It is a
 // checked bulk operation: shapes are compared before arithmetic, so it has no
 // totality or purity contract. Algebra owns its formula vocabulary.
+class AlgebraFiniteOp<string name> : Op<AlgebraDialect, name,
+    [Pure, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$domain,
+    OptionalAttr<FlatSymbolRefAttr>:$step, OptionalAttr<FlatSymbolRefAttr>:$body,
+    OptionalAttr<FlatSymbolRefAttr>:$predicate);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let hasVerifier = 1;
+}
+def FiniteFoldOp : AlgebraFiniteOp<"finite_fold">;
+def FiniteCollectOp : AlgebraFiniteOp<"finite_collect">;
+
 def MapRealizeOp : Op<AlgebraDialect, "map_realize",
     [Symbol, DeclareOpInterfaceMethods<SymbolUserOpInterface>,
      PreparationCallableOpInterface]> {

@@ -93,8 +93,13 @@ local functions and protocols by qualified name. It shows static parameters,
 permissions, input/output types, participant roles, services, completed
 requirements and effects. Members name their interface/component owner and mark
 inherited parameters; abstract members report their allowance explicitly.
-Inferred natural/capability requirements are marked; effect allowances (written
-or inherited) are separate from actual body effects. Private helpers
+Inferred natural/capability requirements are marked; written effect allowances
+are separate from actual body effects. Each effect summary contains fixed
+`stop`/`opaque` flags and callback dependencies with their remaining effect masks.
+A fixed effect removes the corresponding bits from dependency masks; callback
+acceptance ceilings remain under `scoped_inputs`. Callback `input_labels` preserve
+written names (or null for unnamed inputs); `item_origins` lists canonical input
+and domain indices, independent of those labels. Private helpers
 are still checked but are omitted from this view. The report is diagnostic data,
 not an importable interface or a proof of protocol security.
 

@@ -92,6 +92,25 @@ add_zkc_component(Language
   lib/Language/Resolution.cpp
   lib/Language/ResourceUsage.cpp
   lib/Language/Bindings.cpp
+  lib/Language/Effects.cpp
+  lib/Language/BodySummary.cpp
+  lib/Language/BodyMapping.cpp
+  lib/Language/ScopedSpecialization.cpp
+  lib/Language/ScopedWitness.cpp
+  lib/Language/SignatureWitness.cpp
+  lib/Language/ScopedValues.cpp
+  lib/Language/Scoped.cpp
+  lib/Language/FiniteDomains.cpp
+  lib/Language/FiniteDefinitions.cpp
+  lib/Language/FiniteContracts.cpp
+  lib/Language/FiniteFormation.cpp
+  lib/Language/DataRequirements.cpp
+  lib/Language/FiniteDomainArguments.cpp
+  lib/Language/DomainClosure.cpp
+  lib/Language/DomainWitness.cpp
+  lib/Language/ValueOrigins.cpp
+  lib/Language/ClosureInputs.cpp
+  lib/Language/FreePlaces.cpp
   lib/Language/Regions.cpp
   lib/Language/BodyCheck.cpp
   lib/Language/Placement.cpp
@@ -103,8 +122,6 @@ add_zkc_component(Language
   lib/Language/ExpressionInference.cpp
   lib/Language/CallResolution.cpp
   lib/Language/Calls.cpp
-  lib/Language/Reductions.cpp
-  lib/Language/ReductionWitness.cpp
   lib/Language/Builtins.cpp
   lib/Language/Kernels.cpp
   lib/Language/Intrinsics.cpp
@@ -143,6 +160,8 @@ add_zkc_component(IR
   lib/Dialect/Local/IR/Functions.cpp
   lib/Dialect/Local/IR/Control.cpp
   lib/Dialect/Data/IR/DataDialect.cpp
+  lib/Dialect/Data/IR/Domains.cpp
+  lib/Analysis/Finite.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
   lib/Dialect/Algebra/IR/Mathematical.cpp
   lib/Dialect/Algebra/IR/Maps.cpp
@@ -189,6 +208,9 @@ add_zkc_component(IR
 )
 add_zkc_component(Translation
   lib/Translation/Language/Emission.cpp
+  lib/Translation/Language/DataPreconditions.cpp
+  lib/Translation/Language/FiniteEmission.cpp
+  lib/Translation/Language/FiniteComparison.cpp
   lib/Translation/Language/Comparison.cpp
   lib/Translation/AIR.cpp
   lib/Translation/ProtocolExport.cpp
@@ -206,6 +228,9 @@ add_zkc_component(Transforms
   lib/Transforms/ProtocolApplications.cpp
   lib/Transforms/MathLowering.cpp
   lib/Transforms/MathRealizations.cpp
+  lib/Transforms/FiniteRecognition.cpp
+  lib/Transforms/FiniteRealizations.cpp
+  lib/Transforms/FiniteVerification.cpp
   lib/Transforms/MapRealizations.cpp
   lib/Transforms/VectorReductions.cpp
   lib/Transforms/PolynomialRecipes.cpp

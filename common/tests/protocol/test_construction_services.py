@@ -134,7 +134,7 @@ MIXED = '''module sample;
 domain F=field("bls12-381.fr");
 domain E=field("koala-bear.ext8-binomial3");
 domain Host=transcript("merlin3.bls12-381.fr64be/0");
-interface ProviderType {type State:Copy+Drop;fn initialize()->State;}
+interface ProviderType {type State:Copy+Drop;fn initialize()->State effects(stop, opaque);}
 component Provider:ProviderType {
   type State:Copy+Drop=index;
   fn initialize()->State{return State(0);}

@@ -69,14 +69,10 @@ run from the repository root:
 ```sh
 nix develop
 just setup
-just demo
+just build
 ```
 
-The demo builds the C++/Rust tools, compiles Schnorr with known-witness inputs,
-produces a proof and verifies it in a separate process. It reports `Proof accepted`
-and the output directory containing `proof.bin` and execution reports. The
-witness is deliberately public; runtime randomness is fresh. See the
-[walkthrough](docs/getting-started.md) for individual steps and authority binding.
+Then follow the [Schnorr walkthrough](docs/getting-started.md) to compile a source Entry, produce a proof and verify it in a separate process. Its checked-in witness is deliberately public; runtime randomness is fresh.
 
 ## Explore
 

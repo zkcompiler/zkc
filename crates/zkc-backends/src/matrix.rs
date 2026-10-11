@@ -109,6 +109,21 @@ fn preflight<S>(rows: usize, columns: usize, nnz: usize, p: &Policy) -> Result<(
     }
     p.output(size(nnz, std::mem::size_of::<(u32, u32, S)>())?, usize::MAX)
 }
+
+/// Checked lookup in the logical coefficient map. Missing entries within the
+/// shape denote zero; coordinates outside the shape are refused.
+pub(crate) fn get<S: Coefficient>(matrix: &SparseCoo<S>, row: usize, column: usize) -> Result<S> {
+    if row >= matrix.rows || column >= matrix.columns {
+        return Err(refused("matrix-index"));
+    }
+    // Construction caps each dimension at 65536. Check bounds before narrowing
+    // so a large dynamic index cannot alias an in-range coordinate.
+    Ok(matrix
+        .entries
+        .binary_search_by_key(&(row as u32, column as u32), |&(r, c, _)| (r, c))
+        .map(|i| matrix.entries[i].2)
+        .unwrap_or_else(|_| S::zero()))
+}
 fn entry<S: Coefficient>(
     rows: usize,
     columns: usize,
@@ -187,7 +202,12 @@ pub(crate) fn identity_check<S: IdentityCoefficient>(
         hash.update(b"\"]");
     }
     hash.update(b"]]]");
-    Ok(format!("{:x}", hash.finalize()) == *expected)
+    Ok(hash
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()
+        == *expected)
 }
 
 /// Shared algorithms use upstream scalar arithmetic. Exact dimensions are

@@ -64,7 +64,7 @@ impl std::ops::Deref for BoundInterface {
 }
 impl BoundInterface {
     pub fn read(package: &Package) -> Result<Self> {
-        let original = format!("{:x}", Sha256::digest(package.original().as_bytes()));
+        let original = crate::host::inputs::hex(&Sha256::digest(package.original().as_bytes()));
         let view = Interface::decode(package.interface().as_bytes(), Some(&original))?;
         Ok(Self {
             view,

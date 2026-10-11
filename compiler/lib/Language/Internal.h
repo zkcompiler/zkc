@@ -51,6 +51,11 @@ struct SyntaxOperator {
   std::shared_ptr<const NotationDescriptor> notation;
   bool explicitNotation = false;
   std::vector<std::string> holes;
+  std::optional<SyntaxType> filtered;
+};
+struct BoundNotationTarget {
+  CallableReference target;
+  std::vector<std::optional<Type>> arguments;
 };
 struct OperatorBinding {
   std::string symbol;
@@ -58,13 +63,27 @@ struct OperatorBinding {
   std::vector<std::optional<Type>> arguments;
   Span span;
   std::shared_ptr<const NotationDescriptor> notation;
+  std::optional<BoundNotationTarget> filtered = {};
 };
+using NotationFamilies = std::map<uint32_t, std::vector<OperatorBinding>>;
 struct SyntaxSelector {
   bool output = false;
   std::string port;
   std::vector<std::string> path;
   std::optional<std::string> role;
   Span span;
+};
+struct SyntaxItemOrigin {
+  std::string input, domain;
+  Span span;
+};
+struct SyntaxScopedSignature {
+  ScopedSignature::Mode mode;
+  std::vector<SyntaxType> inputs;
+  SyntaxType result;
+  Effects allowance;
+  std::vector<std::string> inputLabels;
+  std::vector<SyntaxItemOrigin> itemOrigins;
 };
 struct SyntaxPort {
   std::string name;
@@ -74,6 +93,8 @@ struct SyntaxPort {
   bool isPublic = true;
   std::optional<RelationPurpose> purpose;
   std::optional<SyntaxSelector> binding;
+  std::optional<SyntaxScopedSignature> scoped;
+  std::optional<SyntaxType> domain;
 };
 struct SyntaxParameter {
   std::string name;
@@ -81,7 +102,15 @@ struct SyntaxParameter {
   Permissions permissions;
   Span span;
 };
+struct SyntaxInputSelector {
+  std::string port;
+  std::vector<std::string> path;
+  Span span;
+};
 struct SyntaxRequirement {
+  std::optional<DataPrecondition::Kind> data;
+  SyntaxInputSelector left, right;
+  unsigned leftAxis = 0, rightAxis = 0;
   std::string permission, capability;
   std::vector<SyntaxType> arguments;
   SyntaxType lhs, rhs;
@@ -104,13 +133,14 @@ struct Pattern {
 struct Expression {
   enum class Kind {
     Name,
+    Lambda,
     Decimal,
     Boolean,
     Call,
     Kernel,
     Intrinsic,
     Map,
-    ReductionMap,
+    DomainProduct,
     MethodCall,
     FinishIf,
     NotationCall,
@@ -121,6 +151,7 @@ struct Expression {
     Array,
     Record,
     Projection,
+    Subscript,
     If,
     Match,
     For,
@@ -147,8 +178,7 @@ struct Expression {
   std::shared_ptr<const NotationDescriptor> notation;
   unsigned height = 1;
   bool grouped = false;
-  bool reductionCall = false;
-  uint32_t reducerExpression = 0, reductionOrdinal = 0;
+  bool filteredReduction = false;
 };
 struct Statement {
   enum class Kind {
@@ -231,7 +261,9 @@ struct Binding {
   Span span;
   bool mutableBinding = false;
   bool service = false;
+  bool scoped = false;
   unsigned scope = 0;
+  bool domain = false;
 };
 /// Token intervals refer to the module's non-trivia token sequence. Fixed
 /// declaration headers are collected before imports; expression bodies are
@@ -270,11 +302,13 @@ struct SyntaxDeclaration {
   std::string name, domain, target;
   bool assetDomain = false;
   std::optional<std::string> primitive;
+  std::optional<std::string> domainConstructor, finiteDefinition;
+  std::optional<SyntaxType> domainResult;
   bool isPublic = false;
   bool completes = false;
   Span span;
   std::vector<std::string> roles;
-  std::vector<SyntaxPort> inputs, outputs, services;
+  std::vector<SyntaxPort> inputs, outputs, services, scopedInputs, domainInputs;
   std::vector<Declaration::InputSlot> inputOrder;
   std::vector<Expression> expressions;
   std::optional<DeferredBody> deferredBody;
@@ -282,7 +316,8 @@ struct SyntaxDeclaration {
   std::vector<SyntaxBody> bodies;
   // Resolved lexical identities are private elaboration data, never serialized.
   std::vector<Binding> bindings;
-  std::vector<BindingId> inputBindings, serviceBindings;
+  std::vector<BindingId> inputBindings, serviceBindings, scopedBindings,
+      domainBindings;
   bool resolved = false;
   bool elaborated = false;
   std::vector<SyntaxParameter> parameters;
@@ -290,6 +325,7 @@ struct SyntaxDeclaration {
   bool explicitRequirements = false;
   std::optional<Permissions> permissions;
   std::optional<Effects> effects;
+  std::vector<std::string> effectDependencies;
   std::optional<SyntaxType> definition;
   std::vector<SyntaxType> targetArguments;
   std::vector<ArgumentLabel> targetLabels;
@@ -310,13 +346,24 @@ struct SyntaxDeclaration {
   bool entryBlock = false;
   EntryKind entryKind = EntryKind::Run;
 };
+/// Static source arrays project a literal element. Receiver typing belongs to
+/// each caller; this predicate only reads retained authored syntax.
+inline std::optional<llvm::StringRef>
+staticSubscriptIndex(const SyntaxDeclaration &syntax, const Expression &expr) {
+  if (expr.kind != Expression::Kind::Subscript || expr.children.size() != 2)
+    return {};
+  const auto &index = syntax.expressions.at(expr.children[1]);
+  if (index.kind != Expression::Kind::Decimal)
+    return {};
+  return index.text;
+}
 struct Import {
   std::string module;
   std::vector<std::string> names;
   Span span;
   std::optional<std::string> alias;
   std::vector<std::string> operators, notations, reductions;
-  bool isPublic = false;
+  bool isPublic = false, indexing = false;
 };
 std::string operatorBindingKey(const OperatorBinding &,
                                llvm::ArrayRef<Declaration>);

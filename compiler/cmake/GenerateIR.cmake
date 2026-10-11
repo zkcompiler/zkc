@@ -41,6 +41,13 @@ mlir_tablegen(include/zkc/Dialect/Protocol/IR/protocolAttrs.h.inc -gen-attrdef-d
 mlir_tablegen(include/zkc/Dialect/Protocol/IR/protocolAttrs.cpp.inc -gen-attrdef-defs
   -attrdefs-dialect=protocol EXTRA_INCLUDES ${zkc_tablegen_includes})
 set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/IR.td)
+set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Data/IR/DataAttrs.td)
+list(APPEND zkc_generated_headers include/zkc/Dialect/Data/IR/dataAttrs.h.inc)
+mlir_tablegen(include/zkc/Dialect/Data/IR/dataAttrs.h.inc -gen-attrdef-decls
+  -attrdefs-dialect=data EXTRA_INCLUDES ${zkc_tablegen_includes})
+mlir_tablegen(include/zkc/Dialect/Data/IR/dataAttrs.cpp.inc -gen-attrdef-defs
+  -attrdefs-dialect=data EXTRA_INCLUDES ${zkc_tablegen_includes})
+set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/IR.td)
 set(zkc_builtin_headers "// Generated private registration includes.\n")
 set(zkc_builtin_classes "// Generated private registration classes.\n")
 foreach(record IN LISTS zkc_builtin_dialects)

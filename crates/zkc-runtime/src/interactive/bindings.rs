@@ -25,7 +25,7 @@ pub enum Identity {
     MerkleKoalaBearExt8,
     Merlin3KoalaBearExt8,
     Merlin3Fr64Be,
-    Spongefish074KeccakFr64Be,
+    Spongefish080KeccakFr64Be,
     Ristretto255Scalar,
     KoalaBear,
     KoalaBearExt8,
@@ -79,7 +79,7 @@ impl Identity {
             Self::Bn254Fr | Self::Bn254G1 | Self::Bn254G2 | Self::Bn254Gt => Some(Self::Bn254Fr),
             Self::Bls12381Fr
             | Self::Bls12381G1
-            | Self::Spongefish074KeccakFr64Be
+            | Self::Spongefish080KeccakFr64Be
             | Self::Merlin3Fr64Be
             | Self::MultilinearKzgBls12381 => Some(Self::Bls12381Fr),
             Self::Ristretto255Scalar | Self::Ristretto255Group | Self::Merlin3Ristretto64Le => {
@@ -118,13 +118,13 @@ impl Identity {
         match self {
             Self::Merlin3Fr64Be
             | Self::Merlin3Ristretto64Le
-            | Self::Spongefish074KeccakFr64Be
+            | Self::Spongefish080KeccakFr64Be
             | Self::Merlin3KoalaBearExt8 => Some(self),
             _ => None,
         }
     }
     pub fn provider(self) -> Option<&'static str> {
-        if self == Self::Spongefish074KeccakFr64Be {
+        if self == Self::Spongefish080KeccakFr64Be {
             return Some("spongefish");
         }
         match self.scalar_field()? {
@@ -154,7 +154,7 @@ impl Identity {
             Self::Merlin3Ristretto64Le => "merlin3.ristretto255.scalar64le/0",
             Self::Merlin3KoalaBearExt8 => "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
             Self::Merlin3Fr64Be => "merlin3.bls12-381.fr64be/0",
-            Self::Spongefish074KeccakFr64Be => "spongefish0.7.4.keccak.bls12-381.fr64be/0",
+            Self::Spongefish080KeccakFr64Be => "spongefish0.8.0.keccak.bls12-381.fr64be/0",
         }
     }
     pub fn parse(name: &str) -> Result<Self> {
@@ -171,7 +171,7 @@ impl Identity {
             Self::MerkleKoalaBearExt8,
             Self::Merlin3KoalaBearExt8,
             Self::Merlin3Fr64Be,
-            Self::Spongefish074KeccakFr64Be,
+            Self::Spongefish080KeccakFr64Be,
             Self::Ristretto255Scalar,
             Self::KoalaBear,
             Self::KoalaBearExt8,
@@ -274,7 +274,7 @@ impl LogicalType {
                 identity,
                 Merlin3Fr64Be
                     | Merlin3Ristretto64Le
-                    | Spongefish074KeccakFr64Be
+                    | Spongefish080KeccakFr64Be
                     | Merlin3KoalaBearExt8
             ),
             Type::Commitments | Type::OpeningStates => identity.is_row_commitment(),

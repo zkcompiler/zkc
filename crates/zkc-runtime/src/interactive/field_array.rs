@@ -1,6 +1,6 @@
 //! Logical fixed-length public field-array contracts. This layer selects no cryptographic code.
 use super::{
-    AdmissionError, ArgumentKind, AttributeRule, ErrorCode, KernelSignature, LogicalType,
+    AdmissionError, ArgumentKind, AttributeRule, ErrorCode, Identity, KernelSignature, LogicalType,
     OperationBinding, Type, TypeArgument,
 };
 
@@ -27,6 +27,10 @@ pub(super) fn signature(
     let (inputs, outputs) = match binding.contract.as_str() {
         "field_array.from_vector" => (vec![vector], vec![fixed]),
         "field_array.at" => (vec![fixed], vec![scalar]),
+        "field_array.get" => (
+            vec![fixed, LogicalType::new(Type::Index, Identity::None)?],
+            vec![scalar],
+        ),
         _ => {
             return Err(AdmissionError::new(
                 ErrorCode::Signature,
@@ -55,6 +59,7 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
         Contract::custom("field_array.from_vector")
             .implemented_by(&["arkworks/field_array.from_vector"]),
         Contract::custom("field_array.at").implemented_by(&["arkworks/field_array.at"]),
+        Contract::custom("field_array.get").implemented_by(&["arkworks/field_array.get"]),
     ],
     resolve: |binding, _| signature(binding),
     select: super::operations::default_ports,

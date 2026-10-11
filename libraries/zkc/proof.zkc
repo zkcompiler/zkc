@@ -6,11 +6,11 @@ use zkc::bytes::{Bytes};
 // ordinary library methods for constructions that store messages sequentially.
 pub interface StreamCodec {
   type Record:Copy+Drop;
-  fn initialize(layout:())->Record;
-  fn write(record:Record)->Bytes;
-  fn finish(record:Record,proof:Bytes)->();
-  fn append(record:Record,chunk:Bytes)->(Record,Bytes);
-  fn take(record:Record,count:index)->(Record,(index,index));
+  fn initialize(layout:())->Record effects(stop, opaque);
+  fn write(record:Record)->Bytes effects(stop, opaque);
+  fn finish(record:Record,proof:Bytes)->() effects(stop, opaque);
+  fn append(record:Record,chunk:Bytes)->(Record,Bytes) effects(stop, opaque);
+  fn take(record:Record,count:index)->(Record,(index,index)) effects(stop, opaque);
 }
 pub component Stream:StreamCodec {
   type Record:Copy+Drop=(Bytes,index);

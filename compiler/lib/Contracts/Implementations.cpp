@@ -35,7 +35,7 @@ constexpr ProviderDomain providerDomains[] = {
     {"plonky3", "merlin3.koala-bear.ext8-binomial3.rejection31le/0"},
     {"plonky3", "rows.merkle-keccak256.koala-bear/0"},
     {"plonky3", "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"},
-    {"spongefish", "spongefish0.7.4.keccak.bls12-381.fr64be/0"}};
+    {"spongefish", "spongefish0.8.0.keccak.bls12-381.fr64be/0"}};
 
 // These finite rows are the implementation inventory, not a walk over logical
 // declarations. Adding a declaration grants no implementation. Provider sets
@@ -167,6 +167,7 @@ constexpr ContractRow contractRows[] = {
     {"matrix.transpose_mul_vector", Arithmetic},
     {"matrix.bilinear", Arithmetic},
     {"matrix.dimension", Arithmetic},
+    {"matrix.get", Arithmetic},
     {"matrix.shape_check", Arithmetic},
     {"matrix.identity_check", Arithmetic},
     {"poly.coefficient_count", Arithmetic},
@@ -202,6 +203,7 @@ constexpr ContractRow contractRows[] = {
     {"curve.split", Arkworks | Dalek},
     {"curve.concat", Arkworks | Dalek},
     {"curve.generator", Arkworks | Dalek},
+    {"curve.identity", Arkworks | Dalek},
     {"curve.add", Arkworks | Dalek},
     {"curve.scale", Arkworks | Dalek},
     {"curve.equal", Arkworks | Dalek},
@@ -246,6 +248,7 @@ constexpr ContractRow contractRows[] = {
     {"field_array.from_vector", Arkworks, Compatibility::Nominal,
      "bls12-381.fr"},
     {"field_array.at", Arkworks, Compatibility::Nominal, "bls12-381.fr"},
+    {"field_array.get", Arkworks, Compatibility::Nominal, "bls12-381.fr"},
     {"fixed_vector.from_vector", Plonky3, Compatibility::Nominal, "koala-bear"},
     {"fixed_vector.to_vector", Plonky3, Compatibility::Nominal, "koala-bear"},
     {"fixed_vector.dot", Plonky3, Compatibility::Nominal, "koala-bear"}};

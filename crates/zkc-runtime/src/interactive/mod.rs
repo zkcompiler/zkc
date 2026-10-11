@@ -31,7 +31,7 @@ pub use native_proof::{
     ConstructionPlan, NativeProofEntry, NativeProofError, NativeTranscriptEvent, ProofConstruction,
 };
 pub use program::{AssetReference, ProgramAction, ProgramCut, ProgramRole, ProgramState};
-pub use retention::Backing;
+pub use retention::{Backing, Retained};
 mod runner;
 mod transport;
 

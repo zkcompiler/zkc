@@ -14,9 +14,9 @@ SOURCE = '''module sample;
 domain F=field("bls12-381.fr");
 interface TestTranscript<T:Field> {
   type State:Copy+Drop;
-  fn initialize()->State;
-  fn observe(t:State,v:T)->State;
-  fn draw(t:State)->(State,T);
+  fn initialize()->State effects(stop, opaque);
+  fn observe(t:State,v:T)->State effects(stop, opaque);
+  fn draw(t:State)->(State,T) effects(stop, opaque);
 }
 protocol Round<T:Field+Share+Wire> roles(P,V)
     (public:T@(P,V),rounds:index@(P,V),secret:T@P,challenges:Random<T>@V)->(ok:bool@V){
@@ -100,7 +100,7 @@ def test_custom_index_query_keeps_the_service_range(toolchain, journal, director
     source = directory / 'main.zkc'
     source.write_text('''module sample;
     domain F=field("koala-bear.ext8-binomial3");
-    interface ProviderType {type State:Copy+Drop;fn initialize()->State;}
+    interface ProviderType {type State:Copy+Drop;fn initialize()->State effects(stop, opaque);}
     component Provider:ProviderType {
       type State:Copy+Drop=();
       fn initialize()->State{return State(());}

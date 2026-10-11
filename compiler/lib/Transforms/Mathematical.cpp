@@ -9,6 +9,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Transforms/CSE.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Relation.h"
 #include "zkc/Dialect/Bindings.h"
@@ -21,6 +22,7 @@
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Algorithms.h"
+#include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/VectorReductions.h"
 #include "llvm/ADT/DenseSet.h"
@@ -583,10 +585,14 @@ public:
     declarations = new Block();
     root.getBody().push_back(declarations);
     builder.setInsertionPointToEnd(declarations);
+    bool hasFinite = false;
+    common->walk(
+        [&](Operation *op) { hasFinite |= finite::isComputation(op); });
     for (auto &op : common.getBody().front()) {
       if (auto symbol = SymbolTable::getSymbolName(&op))
         names.insert(symbol.getValue());
-      if (isa<zkc::relation::DeclareOp, zkc::local::FuncOp,
+      if ((hasFinite && isa<data::DomainOp, func::FuncOp>(op)) ||
+          isa<zkc::relation::DeclareOp, zkc::local::FuncOp,
               zkc::local::OperationBindingOp>(op))
         builder.clone(op);
     }
@@ -820,6 +826,7 @@ namespace {
 // executable local definitions will not be traversed by this optimization.
 OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
                                     bool fuseVectorReductions,
+                                    std::optional<bool> optimizeFinite = {},
                                     ArrayRef<ApplicationStart> starts = {}) {
   if (failed(verify(source)))
     return {};
@@ -839,21 +846,26 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
   }
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
   if (failed(expandPolynomialRecipes(*candidate)) ||
-      failed(expandMathRealizations(*candidate)))
+      failed(expandMathRealizations(*candidate,
+                                    optimizeFinite.value_or(simplify))))
     return {};
-  if (fuseVectorReductions) {
+  bool hasFinite = false;
+  candidate->walk(
+      [&](Operation *op) { hasFinite |= finite::isDeclaration(op); });
+  if (hasFinite || fuseVectorReductions) {
     protocol::AlgorithmExpansionState expansion;
     if (failed(protocol::expandAlgorithms(
             *candidate, protocol::AlgorithmExpansionPhase::RetainMaps,
             expansion)) ||
-        failed(mathematical::fuseVectorReductions(*candidate, expansion)) ||
+        (hasFinite && failed(finite::realizeLocals(
+                          *candidate, optimizeFinite.value_or(simplify)))) ||
+        (fuseVectorReductions &&
+         failed(mathematical::fuseVectorReductions(*candidate, expansion))) ||
         failed(expandMapRealizations(*candidate)) ||
         failed(protocol::expandAlgorithms(
             *candidate, protocol::AlgorithmExpansionPhase::Finish, expansion)))
       return {};
   } else {
-    // Preserve the exact baseline preparation and budget admission when the
-    // sufficient-resource vector rewrite has not been explicitly requested.
     if (failed(expandMapRealizations(*candidate)) ||
         failed(protocol::expandAlgorithms(*candidate)))
       return {};
@@ -936,7 +948,7 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   void runOnOperation() final {
     auto source = getOperation();
     auto candidate =
-        prepareSource(source, simplify, fuseVectorReductions, starts);
+        prepareSource(source, simplify, fuseVectorReductions, {}, starts);
     if (!candidate)
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
@@ -1018,8 +1030,10 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
 } // namespace
 
 std::optional<PreparedProtocol>
-PreparedProtocol::prepare(ModuleOp source, bool fuseVectorReductions) {
-  auto candidate = prepareSource(source, false, fuseVectorReductions);
+PreparedProtocol::prepare(ModuleOp source, bool fuseVectorReductions,
+                          bool optimizeFinite) {
+  auto candidate =
+      prepareSource(source, false, fuseVectorReductions, optimizeFinite);
   if (!candidate)
     return std::nullopt;
   return PreparedProtocol(std::move(candidate));

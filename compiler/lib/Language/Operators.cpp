@@ -1,11 +1,13 @@
 #include "Arguments.h"
+#include "BindingWitness.h"
 #include "CallableConstraints.h"
 #include "Checker.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::language::detail {
 StringRef operatorSymbol(const Expression &expression) {
-  return expression.kind == Expression::Kind::NotationCall &&
+  return (expression.kind == Expression::Kind::NotationCall ||
+          expression.kind == Expression::Kind::Subscript) &&
                  expression.notation
              ? StringRef(expression.notation->symbol)
              : StringRef{};
@@ -26,11 +28,24 @@ std::string operatorBindingKey(const OperatorBinding &binding,
                                       : "");
   for (const auto &argument : binding.arguments)
     frame(key, argument ? typeIdentity(*argument) : "");
+  if (binding.notation &&
+      binding.notation->position == NotationDescriptor::Position::Reduction)
+    frame(key, binding.filtered ? "filtered" : "unfiltered");
+  if (binding.filtered) {
+    frame(
+        key,
+        declarations[binding.filtered->target.declaration.index].qualifiedName);
+    frame(key, binding.filtered->target.component
+                   ? typeIdentity(*binding.filtered->target.component)
+                   : "");
+    for (const auto &argument : binding.filtered->arguments)
+      frame(key, argument ? typeIdentity(*argument) : "");
+  }
   return key;
 }
 std::optional<OperatorBinding>
 Checker::operatorBinding(const Declaration &context,
-                         const SyntaxOperator &source) {
+                         const SyntaxOperator &source, bool filtered) {
   if (!source.notation || source.symbol != source.notation->symbol) {
     types.fail("source.operator",
                "notation declaration has no resolved descriptor", source.span);
@@ -42,6 +57,8 @@ Checker::operatorBinding(const Declaration &context,
   bool validArity = false;
   switch (notation.position) {
   case Position::Reduction:
+    validArity = arity == 2;
+    break;
   case Position::Prefix:
   case Position::Postfix:
     validArity = arity == 1;
@@ -49,12 +66,13 @@ Checker::operatorBinding(const Declaration &context,
   case Position::Infix:
     validArity = arity == 2;
     break;
+  case Position::Index:
   case Position::Delimited:
     if (arity > work.limits.notationHoles) {
       types.fail("source.limit", "notation hole limit exceeded", source.span);
       return {};
     }
-    validArity = arity > 0;
+    validArity = arity >= (notation.position == Position::Index ? 2u : 1u);
     break;
   }
   if (!validArity) {
@@ -68,7 +86,9 @@ Checker::operatorBinding(const Declaration &context,
   const auto &callee = output.declarations[target->declaration.index];
   if ((callee.kind != Declaration::Kind::Math &&
        callee.kind != Declaration::Kind::Local) ||
-      callee.inputs.size() != arity || callee.outputs.size() != 1 ||
+      (notation.position != Position::Reduction &&
+       callee.inputs.size() != arity) ||
+      callee.outputs.size() != 1 ||
       sources[callee.id.index]->outputs.size() != 1) {
     types.fail("source.operator",
                "notation target requires its descriptor's input count and a "
@@ -126,13 +146,73 @@ Checker::operatorBinding(const Declaration &context,
   (void)callableArguments(equations, types, callee, signature, source.span);
   if (types.diagnostic)
     return {};
-  if (notation.position == Position::Reduction) {
-    std::vector<Type> arguments;
-    for (unsigned i = 0; i < callee.parameters.size(); ++i)
-      arguments.push_back(
-          result.arguments[i].value_or(parameterType(callee.parameters[i])));
-    if (!reductionTarget(types, callee, *target, arguments, source.span))
+  if (notation.position == Position::Reduction &&
+      !checkFiniteReductionTarget(types, callee, filtered, source.span))
+    return {};
+  if (source.filtered) {
+    if (notation.position != Position::Reduction || filtered) {
+      types.fail("source.reduction-target",
+                 "filtered companion requires a reduction binding",
+                 source.span);
       return {};
+    }
+    auto companion = source;
+    companion.target = *source.filtered;
+    companion.filtered.reset();
+    auto resolved = operatorBinding(context, companion, true);
+    if (!resolved)
+      return {};
+    const auto &other = output.declarations[resolved->target.declaration.index];
+    auto refuse = [&] {
+      types.fail(
+          "source.reduction-target",
+          "filtered companion has a different generic or callable signature",
+          source.span, {callee.span, other.span});
+      return std::optional<OperatorBinding>{};
+    };
+    if (callee.kind != other.kind ||
+        callee.parameters.size() != other.parameters.size())
+      return refuse();
+    Substitution rename;
+    for (unsigned i = 0; i < callee.parameters.size(); ++i) {
+      const auto &left = callee.parameters[i], &right = other.parameters[i];
+      if (left.sort != right.sort || left.domainSort != right.domainSort ||
+          left.permissions.copy != right.permissions.copy ||
+          left.permissions.drop != right.permissions.drop ||
+          left.interface.has_value() != right.interface.has_value() ||
+          (left.interface && left.interface->index != right.interface->index))
+        return refuse();
+      rename.emplace(right.atom, parameterType(left));
+    }
+    auto same = [&](const Type &left, const Type &right) {
+      auto renamed = types.substitute(right, rename, source.span);
+      return renamed && *renamed == left;
+    };
+    for (unsigned i = 0; i < callee.parameters.size(); ++i) {
+      const auto &left = callee.parameters[i], &right = other.parameters[i];
+      if (left.arguments.size() != right.arguments.size())
+        return refuse();
+      for (unsigned j = 0; j < left.arguments.size(); ++j)
+        if (!same(left.arguments[j], right.arguments[j]))
+          return refuse();
+      if (result.arguments[i].has_value() !=
+              resolved->arguments[i].has_value() ||
+          (result.arguments[i] &&
+           !same(*result.arguments[i], *resolved->arguments[i])))
+        return refuse();
+    }
+    const auto &body = callee.scopedInputs[0].signature;
+    const auto &filteredBody = other.scopedInputs[1].signature;
+    if (body.mode != filteredBody.mode ||
+        !(body.allowance == filteredBody.allowance) ||
+        callee.scopedInputs[0].itemOrigins !=
+            other.scopedInputs[1].itemOrigins ||
+        !same(callee.domainInputs[0].item, other.domainInputs[0].item) ||
+        !same(body.result, filteredBody.result) ||
+        !same(callee.outputs[0].type, other.outputs[0].type))
+      return refuse();
+    result.filtered =
+        BoundNotationTarget{resolved->target, std::move(resolved->arguments)};
   }
   return result;
 }
@@ -159,7 +239,9 @@ Checker::operatorCandidates(const Declaration &decl,
                             uint32_t expression) {
   const auto &expr = source.expressions[expression];
   auto symbol = operatorSymbol(expr);
-  if (symbol.empty() || expr.children.size() != expr.notation->arity) {
+  if (symbol.empty() ||
+      expr.children.size() !=
+          expr.notation->arity + unsigned(expr.filteredReduction)) {
     types.fail("source.operator", "expected an operator occurrence", expr.span);
     return {};
   }

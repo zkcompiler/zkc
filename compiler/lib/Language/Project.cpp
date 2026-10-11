@@ -464,7 +464,7 @@ Expected<DeclarationId> selectEntry(const CheckedProject &project,
 Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
                                  const Limits &limits,
                                  std::optional<EntryKind> kind) {
-  if (auto error = checkReductionElaboration(project, limits))
+  if (auto error = checkScopedElaboration(project, limits))
     return std::move(error);
   auto selected = selectEntry(project, name, limits, kind);
   if (!selected)
@@ -483,6 +483,8 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
   if (auto error = detail::closeAssets(project, *storage, work))
     return error;
   ClosedEntry entry(project, decl.id, std::move(storage));
+  if (auto error = checkScopedSpecialization(entry, limits))
+    return error;
   Layouts layouts(entry, limits);
   if (auto error = detail::checkSetups(entry, layouts, work))
     return error;

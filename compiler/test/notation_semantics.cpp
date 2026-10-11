@@ -118,7 +118,8 @@ int main() {
         const auto &body = *decl(project, "m::f").body;
         const std::vector<std::string> expected{"m::first", "m::second",
                                                 "m::third", "m::combine"};
-        require(body.mayStop && body.operations.size() == expected.size(),
+        require(body.effects.fixed.mayStop &&
+                    body.operations.size() == expected.size(),
                 "operand effects were duplicated or lost");
         for (unsigned i = 0; i < expected.size(); ++i) {
           const auto *call =

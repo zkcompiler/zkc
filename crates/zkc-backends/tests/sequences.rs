@@ -140,7 +140,6 @@ fn ragged_matrices_preserve_shape_including_zero_dimensions() {
         panic!()
     };
     let dims: Vec<_> = loaded
-        .elements()
         .iter()
         .map(|v| {
             let Value::Matrix(m) = v else { panic!() };

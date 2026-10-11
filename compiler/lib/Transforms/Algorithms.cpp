@@ -14,6 +14,7 @@
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/Support/SHA256.h"
 
 using namespace llvm;
@@ -50,11 +51,10 @@ Expected<std::string> algorithmSite(const protocol::Assignments &path,
     return "lc_h_" + toHex(SHA256::hash(arrayRefFromStringRef(result)), true);
   return result;
 }
-namespace {
 // Inlining an identity helper can make two admitted, distinct capture bindings
 // alias one SSA value. Retain its first occurrence and rewrite the region's
 // arguments together. Recurse after rewriting: aliases can reach inner regions.
-LogicalResult canonicalizeCaptures(Operation *op) {
+LogicalResult detail::canonicalizeCaptures(Operation *op) {
   if (isa<zkc::local::LocalIfOp, zkc::local::LocalMatchOp,
           zkc::local::LocalForOp>(op)) {
     unsigned prefix =
@@ -98,13 +98,14 @@ LogicalResult canonicalizeCaptures(Operation *op) {
   return success();
 }
 
+namespace {
 class Expander {
   OpBuilder builder;
   std::map<std::string, zkc::local::FuncOp> functions;
   AlgorithmExpansionPhase phase;
   const detail::AlgorithmExpansionRecord &input;
   detail::AlgorithmExpansionRecord output;
-  std::map<std::string, algebra::MapRealizeOp> maps;
+  std::map<std::string, Operation *> maps;
   std::vector<AlgorithmOrigin> origins;
 
   std::string definition(zkc::local::FuncOp function) {
@@ -116,7 +117,9 @@ class Expander {
   LogicalResult body(zkc::local::FuncOp function, Block &block,
                      IRMapping &mapping, StringRef root,
                      protocol::Assignments path, bool encode,
-                     SmallVector<Value> &returned, unsigned depth = 0) {
+                     SmallVector<Value> &returned, unsigned depth = 0,
+                     const protocol::Assignments &invocation = {},
+                     unsigned invocationDepth = 0) {
     if (path.size() > 64 || depth > 64)
       return diagnostics::emit(function.emitOpError(),
                                "interactive-call-depth");
@@ -128,9 +131,13 @@ class Expander {
       --output.work;
       auto saved =
           detail::occurrence(input, function.getSymName(), attr(&op, "site"));
-      auto currentPath = saved ? saved->path : path;
+      // Recorded paths are relative to this function's earlier expansion.
+      // A later caller adds its own prefix, including inside recorded regions.
+      auto currentPath = saved ? invocation : path;
+      if (saved)
+        llvm::append_range(currentPath, saved->path);
       auto originalSite = saved ? saved->originalSite : attr(&op, "site").str();
-      unsigned currentDepth = saved ? saved->depth : depth;
+      unsigned currentDepth = saved ? invocationDepth + saved->depth : depth;
       if (currentPath.size() > 64 || currentDepth > 64)
         return diagnostics::emit(op.emitOpError(), "interactive-call-depth");
       if (auto ret = dyn_cast<zkc::local::ReturnOp>(op)) {
@@ -150,8 +157,9 @@ class Expander {
         auto nested = currentPath;
         nested.emplace_back(originalSite, definition(callee));
         SmallVector<Value> results;
-        if (failed(body(callee, callee.getBody().front(), inner, root,
-                        std::move(nested), true, results, currentDepth + 1)))
+        if (failed(body(callee, callee.getBody().front(), inner, root, nested,
+                        true, results, currentDepth + 1, nested,
+                        currentDepth + 1)))
           return failure();
         if (!builder.getInsertionBlock()->empty() &&
             isa<zkc::local::StopOp>(builder.getInsertionBlock()->back()))
@@ -167,7 +175,7 @@ class Expander {
         if (isa<local::ApplyOp>(op) &&
             (currentPath.size() >= 64 || currentDepth >= 64))
           return diagnostics::emit(op.emitOpError(), "interactive-call-depth");
-        if (encode && !saved) {
+        if (encode && (!saved || !invocation.empty())) {
           auto encoded =
               algorithmSite(currentPath, original, output.originBytes);
           if (!encoded)
@@ -186,22 +194,28 @@ class Expander {
           builder.setInsertionPointToEnd(nestedBlock);
           SmallVector<Value> ignored;
           if (failed(body(function, before.front(), inner, root, currentPath,
-                          encode, ignored, currentDepth + 1)))
+                          encode, ignored, currentDepth + 1, invocation,
+                          invocationDepth)))
             return failure();
         }
         if (op.hasAttr("site"))
           copy->setAttr("site", builder.getStringAttr(site));
-        // Specialization can make every continuing arm stop. Until expansion
-        // can rebuild the surrounding result-less region and continuation,
-        // refuse at the actual control operation rather than emit undefined
-        // results that fail later during source export.
-        if (isa<zkc::local::LocalIfOp, zkc::local::LocalMatchOp>(copy) &&
-            copy->getNumResults() &&
-            llvm::all_of(copy->getRegions(), [](Region &region) {
-              return isa<zkc::local::StopOp>(region.front().back());
-            }))
-          return diagnostics::emit(copy->emitOpError(),
-                                   "algorithm-terminal-results");
+        bool terminal = isa<local::LocalIfOp, local::LocalMatchOp>(copy) &&
+                        llvm::all_of(copy->getRegions(), [](Region &region) {
+                          return isa<local::StopOp>(region.front().back());
+                        });
+        if (terminal && copy->getNumResults()) {
+          // No arm returns these results. Rebuild without results and discard
+          // the unreachable continuation instead of leaving undefined values.
+          OperationState state(copy->getLoc(), copy->getName());
+          state.addOperands(copy->getOperands());
+          state.addAttributes(copy->getAttrs());
+          for (Region &region : copy->getRegions())
+            state.addRegion()->takeBody(region);
+          auto *replacement = builder.create(state);
+          copy->erase();
+          copy = replacement;
+        }
         // Cloning retains the leaf diagnostic location. The checked site path
         // carries the nested occurrence separately from diagnostic metadata.
         auto record =
@@ -209,6 +223,8 @@ class Expander {
                   : detail::AlgorithmOccurrence{
                         definition(function), function.getSymName().str(),
                         original, currentPath, currentDepth};
+        record.path = currentPath;
+        record.depth = currentDepth;
         if (op.hasAttr("site"))
           output.occurrences.emplace(detail::OccurrenceKey{root.str(), site},
                                      record);
@@ -217,6 +233,22 @@ class Expander {
         if (record.definition != record.declaration)
           origins.push_back(
               {root.str(), site, record.declaration, original, currentPath});
+        if (terminal) {
+          // A syntactic terminator is required, but cannot be reached. Its
+          // name is fresh in the generated function; it has no source event.
+          llvm::StringSet<> sites;
+          copy->getParentOfType<local::FuncOp>().walk([&](Operation *at) {
+            if (auto s = at->getAttrOfType<StringAttr>("site"))
+              sites.insert(s.getValue());
+          });
+          unsigned number = 0;
+          std::string unreachable;
+          do {
+            unreachable = "unreachable_" + std::to_string(number++);
+          } while (sites.contains(unreachable));
+          local::StopOp::create(builder, copy->getLoc(), unreachable, "abort");
+          return success();
+        }
         if (isa<zkc::local::StopOp>(copy))
           return success();
       }
@@ -234,8 +266,10 @@ public:
         cast<zkc::protocol_ir::ProtocolModuleOp>(&original.getBody()->front());
     for (auto fn : root.getBody().front().getOps<zkc::local::FuncOp>())
       functions.emplace(fn.getSymName().str(), fn);
-    for (auto map : root.getBody().front().getOps<algebra::MapRealizeOp>())
-      maps.emplace(map.getSymName().str(), map);
+    for (auto &op : root.getBody().front())
+      if (isa<algebra::MapRealizeOp, local::FiniteFoldOp,
+              local::FiniteCollectOp>(op))
+        maps.emplace(SymbolTable::getSymbolName(&op).str(), &op);
   }
   LogicalResult run(ModuleOp candidate) {
     auto root =
@@ -260,7 +294,7 @@ public:
       if (block.empty() || !isa<zkc::local::StopOp>(block.back()))
         zkc::local::ReturnOp::create(
             builder, original.getBody().front().back().getLoc(), returned);
-      if (failed(canonicalizeCaptures(fn)))
+      if (failed(detail::canonicalizeCaptures(fn)))
         return failure();
     }
     return success();

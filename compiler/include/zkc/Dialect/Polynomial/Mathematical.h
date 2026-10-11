@@ -26,7 +26,11 @@ mlir::FailureOr<mlir::FunctionType> realizationType(RealizeOp realization);
 struct Degrees {
   llvm::DenseMap<mlir::Value, llvm::SmallVector<uint64_t>> bounds;
 };
-mlir::LogicalResult deriveDegrees(mlir::Block &body, Degrees &result);
+// A generic helper with formal polynomial inputs may defer observations whose
+// bounds depend on those inputs. Such observations must be checked again after
+// call substitution; deferral is never a degree certificate.
+mlir::LogicalResult deriveDegrees(mlir::Block &body, Degrees &result,
+                                  bool deferUnknownObservations = false);
 // Call after degree validation in a verified flat block. Remove dead polynomial
 // constructors and observations in reverse SSA order, retaining live bounds.
 void eraseUnusedPolynomials(mlir::Block &body, Degrees &degrees);

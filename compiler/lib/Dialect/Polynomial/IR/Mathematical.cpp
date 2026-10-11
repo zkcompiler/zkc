@@ -167,7 +167,8 @@ LogicalResult FixTableOp::verify() {
   return success();
 }
 
-LogicalResult deriveDegrees(Block &body, Degrees &result) {
+LogicalResult deriveDegrees(Block &body, Degrees &result,
+                            bool deferUnknownObservations) {
   result.bounds.clear();
   unsigned remaining = 100000;
   for (auto &operation : body) {
@@ -177,6 +178,8 @@ LogicalResult deriveDegrees(Block &body, Degrees &result) {
                     "polynomial degree analysis exceeds its operation budget");
     if (auto observed = dyn_cast<PolynomialCoefficientsOp>(op)) {
       auto bound = result.bounds.find(observed.getPolynomial());
+      if (bound == result.bounds.end() && deferUnknownObservations)
+        continue;
       if (bound == result.bounds.end() || bound->second.size() != 1 ||
           bound->second[0] >= length(observed.getCoefficients().getType()))
         return refuse(

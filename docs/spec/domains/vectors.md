@@ -75,6 +75,14 @@ returns `dot(u,M*x)`. `matrix.shape_check` compares both actual dimensions with
 its declared natural attributes. Zero dimensions have their ordinary empty-sum
 meaning. Storage and library choices belong to the physical representation.
 
+`matrix.get<F>(M, row, column)` takes two dynamic `index` operands, no
+attributes, and returns a field element of `F`. It requires `row < rows(M)`
+and `column < columns(M)`. Failure of either check refuses with `matrix-index`;
+large indices must not wrap or truncate into the shape. A matrix with either
+dimension zero has no valid element access. Within the shape, an absent sparse
+COO entry denotes the zero of `F`, and a present entry yields its coefficient.
+This is checked execution, not total mathematical access for arbitrary indices.
+
 `matrix.identity_check<F>(M) [digest]` compares SHA-256 of a canonical
 mathematical encoding with one lowercase 64-character hexadecimal attribute.
 The encoding is compact UTF-8 JSON
@@ -247,7 +255,7 @@ The independent [Lean reduction model](../../../lean/docs/spec/core/ring-express
 proves list-value, empty, unused-row refusal and error-propagation laws under
 its stated admission premises. It does not prove native compiler correspondence,
 source capture snapshots or runtime adequacy. Source binding and evaluation
-order belong to the [finite reduction contract](../language/definitions.md#finite-vector-reductions).
+order belong to the [finite reduction contract](../language/definitions.md#finite-reduction-binders).
 
 ## Representation and execution
 

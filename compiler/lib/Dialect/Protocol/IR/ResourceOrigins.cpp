@@ -1,5 +1,6 @@
 #include "ResourceOrigins.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
+#include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -34,6 +35,14 @@ LogicalResult ResourceOrigins::call(Operation *op, unsigned depth,
   auto name = op->getAttrOfType<FlatSymbolRefAttr>("callee");
   Operation *callee =
       name ? symbols.lookupNearestSymbolFrom(op, name) : nullptr;
+  if (finite::isDeclaration(callee)) {
+    if (failed(verifyFinite(callee)))
+      return failure();
+    result = &summaries.find(callee)->second;
+    if (depth > depthLimit || result->depth > depthLimit - depth)
+      return limit(op, "resource-origin nesting limit exceeded");
+    return success();
+  }
   bool local = isa_and_nonnull<local::FuncOp>(callee);
   if (!callee ||
       (isa<protocol_ir::ApplyOp>(op) ? !isa<protocol_ir::MathematicalOp>(callee)
@@ -276,6 +285,41 @@ LogicalResult ResourceOrigins::block(Block &body, bool local, unsigned depth,
       return failure();
   }
   return malformed(owner, "resource-origin body has no terminator");
+}
+
+LogicalResult ResourceOrigins::verifyFinite(Operation *declaration) {
+  if (summaries.count(declaration))
+    return success();
+  finite::Computation c;
+  if (failed(finite::describe(declaration, c)))
+    return failure();
+  if (!active.insert(declaration).second)
+    return malformed(declaration, "finite resource-origin cycle");
+  auto cleanup = scope_exit([&] { active.erase(declaration); });
+  if (failed(charge(declaration, 1)))
+    return failure();
+  Summary result;
+  if (!c.collect) {
+    Summary step;
+    if (failed(block(c.helper->getRegion(0).front(), true, 1, step)))
+      return failure();
+    result.depth = step.depth + 1;
+    if (result.depth > depthLimit)
+      return limit(declaration, "resource-origin nesting limit exceeded");
+    for (unsigned i = 0; i < c.states; ++i) {
+      auto policy = types.get(c.signature.getResult(i));
+      if (!policy || !policy->affine)
+        continue;
+      auto root = step.roots.find(i);
+      if (step.continues && (root == step.roots.end() || root->second != i))
+        return malformed(
+            declaration,
+            "finite state transition must preserve each exact affine root");
+      result.roots[i] = c.arguments + i;
+    }
+  }
+  summaries[declaration] = std::move(result);
+  return success();
 }
 
 LogicalResult ResourceOrigins::verify(protocol_ir::RepeatOp repeat) {

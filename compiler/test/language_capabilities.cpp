@@ -136,7 +136,7 @@ int main() {
   });
   cases.run("component bounds are inherited and enforced on application", [] {
     const std::string implementation = (root + R"(
-      interface Roots<F:Field>{fn get(n:index)->F;}
+      interface Roots<F:Field>{fn get(n:index)->F effects(stop, opaque);}
       component Impl<F:Field>:Roots<F> where zkc::algebra::TwoAdicField(F) {
         fn get(n:index)->F {return root<F>(n);}
       }
@@ -153,7 +153,7 @@ int main() {
     )"),
             "source.capability");
     refuses(check(R"(
-      interface Roots<F:Field>{fn get(n:index)->F;}
+      interface Roots<F:Field>{fn get(n:index)->F effects(stop, opaque);}
       component Impl<F:Field>:Roots<F> {
         fn get(n:index)->F where zkc::algebra::TwoAdicField(F) {
           return kernel<F>("poly.domain_root",n);
@@ -164,7 +164,7 @@ int main() {
   });
   cases.run("member bounds substitute interface parameters and self", [] {
     take(check(R"(
-      interface Roots<F:Field>{fn get(n:index)->F where zkc::algebra::TwoAdicField(F);}
+      interface Roots<F:Field>{fn get(n:index)->F effects(stop, opaque) where zkc::algebra::TwoAdicField(F);}
       component Impl<F:Field>:Roots<F> {
         fn get(n:index)->F where zkc::algebra::TwoAdicField(F) {
           return kernel<F>("poly.domain_root",n);
@@ -173,7 +173,7 @@ int main() {
     )"));
     take(check(R"(
       domain K=field("koala-bear");
-      interface Roots{type Scalar:Field;fn get(n:index)->Scalar where zkc::algebra::TwoAdicField(Scalar);}
+      interface Roots{type Scalar:Field;fn get(n:index)->Scalar effects(stop, opaque) where zkc::algebra::TwoAdicField(Scalar);}
       component Impl:Roots{type Scalar:Field=K;
         fn get(n:index)->K{return kernel<K>("poly.domain_root",n);}
       }
@@ -182,7 +182,7 @@ int main() {
     )"));
     refuses(check(R"(
       domain Fr=field("bls12-381.fr");
-      interface Roots{type Scalar:Field;fn get(n:index)->Scalar where zkc::algebra::TwoAdicField(Scalar);}
+      interface Roots{type Scalar:Field;fn get(n:index)->Scalar effects(stop, opaque) where zkc::algebra::TwoAdicField(Scalar);}
       component Impl:Roots{type Scalar:Field=Fr;fn get(n:index)->Fr{return 1;}}
     )"),
             "source.conformance");

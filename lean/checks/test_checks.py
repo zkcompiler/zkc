@@ -138,21 +138,14 @@ class TargetControls(unittest.TestCase):
 
         config = tomllib.loads((ROOT / "lakefile.toml").read_text())
         executables = [entry["name"] for entry in config.get("lean_exe", [])]
-        repository = ROOT.parent
-        # Only files that could invoke one. The lakefile names every executable
-        # twice by construction -- once declared, once a default target -- so
-        # counting it made this pass for everything; and this file's own prose
-        # mentions two of them.
+        # Only maintained Lean check callers count. A Rust/C++ usage string
+        # can name the same binary without ever invoking the Lean executable.
         callers = "".join(
-            path.read_text(errors="replace")
-            for folder in ("lean", "common/tests", "crates", "compiler", ".github")
-            for path in sorted((repository / folder).rglob("*"))
-            if path.is_file()
-            and path.suffix in {".py", ".rs", ".yml"}
-            and path != Path(__file__).resolve()
-            and ".lake" not in path.parts
-            and "target" not in path.parts
-        ) + (repository / "justfile").read_text()
+            path.read_text()
+            for folder in ("checks", "consumers")
+            for path in sorted((ROOT / folder).rglob("*.py"))
+            if path != Path(__file__).resolve()
+        )
         unrun = [name for name in executables if name not in callers]
         self.assertEqual(
             unrun,
@@ -549,6 +542,27 @@ class CleanIntegrationControls(unittest.TestCase):
                 self.assertEqual((packages / "CompPoly").resolve(),
                                  (work / reproduce.INTEGRATION / ".lake/packages/CompPoly").resolve())
                 self.assertEqual((packages / "mathlib").resolve(), (work / ".lake/packages/mathlib").resolve())
+
+    def test_library_check_compares_dependencies_shared_only_by_integrations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            integrations = {}
+            for name, revision in (("arklib", "b"), ("clean", "c")):
+                package = root / name
+                package.mkdir()
+                integrations[name] = (package, (), ("CompPoly",))
+                (package / "lake-manifest.json").write_text(json.dumps({"packages": [
+                    {"type": "git", "name": "mathlib", "rev": "a"},
+                    {"type": "git", "name": "CompPoly", "rev": revision}]}))
+            (root / "lake-manifest.json").write_text(json.dumps({"packages": [
+                {"type": "git", "name": "mathlib", "rev": "a"}]}))
+            for path in (root, *(entry[0] for entry in integrations.values())):
+                (path / "lean-toolchain").write_text("leanprover/lean4:v4.34.1\n")
+            with patch.object(check_library, "ROOT", root), \
+                 patch.object(check_library, "INTEGRATIONS", integrations):
+                self.assertEqual(check_library.package_pins(["arklib"]), {"mathlib": "a"})
+                with self.assertRaisesRegex(ValueError, "incompatible shared dependency: CompPoly in clean"):
+                    check_library.package_pins(["arklib", "clean"])
 
     def test_library_check_refuses_a_diverging_pin(self):
         with tempfile.TemporaryDirectory() as directory:

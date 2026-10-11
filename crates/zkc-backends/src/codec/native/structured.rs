@@ -68,7 +68,7 @@ pub(super) fn value_counts(value: &Value, policy: &Policy) -> Result<Counts> {
                 (69, Value::Sequence(v)) => {
                     let logical = ty.logical();
                     let element = physical(logical.sequence_element().ok_or_else(unsupported)?)?;
-                    for child in v.elements() {
+                    for child in v.iter() {
                         visit(&element, child, policy, counts)?;
                     }
                 }
@@ -136,7 +136,7 @@ fn width(value: &Value, policy: &Policy, key: &crate::SetupRegistry) -> Result<u
         }
         v.validate(policy).map_err(Error::Backend)?;
         let mut n = 10;
-        for child in v.elements() {
+        for child in v.iter() {
             n = add(n, add(4, width(child, policy, key)?)?)?;
         }
         return Ok(n);
@@ -191,8 +191,8 @@ fn write(
     };
     match value {
         Value::Sequence(v) => {
-            out.extend_from_slice(&integer(v.elements().len())?);
-            for child in v.elements() {
+            out.extend_from_slice(&integer(v.len())?);
+            for child in v.iter() {
                 let prefix = out.len();
                 out.extend_from_slice(&[0; 4]);
                 write(child, policy, key, out)?;
@@ -300,7 +300,10 @@ pub(super) fn scan(
             }
             let logical = ty.logical();
             let element = physical(logical.sequence_element().ok_or_else(unsupported)?)?;
-            let mut total = add(add(256, logical.descriptor_bytes())?, mul(n, 512)?)?;
+            let mut total = add(
+                add(add(256, logical.descriptor_bytes())?, mul(n, 512)?)?,
+                crate::sequence::tree_overhead(n).map_err(|_| Error::Limit)?,
+            )?;
             let mut rest = &bytes[10..];
             for _ in 0..n {
                 total = add(

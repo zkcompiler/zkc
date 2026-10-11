@@ -1,10 +1,10 @@
 # Finite vector reductions
 
 The [Entry](main.zkc) computes the same weighted sum with imported `∑`,
-named `reduce vec::sum`, and `vec::dot`. It also computes `∏ [x in left] { x + α }`,
+named `finite::sum`, and `vec::dot`. It also computes `∏ x in left, (x + α)`,
 which captures the scalar `α` once for all rows. The vector library supplies
-both named functions and reduction bindings; importing a module activates its
-public notation.
+vector operations and reexports general finite reduction bindings; importing a
+module activates its public notation.
 
 `zip(left, right)` requires equal lengths, including when one vector is empty.
 Every collection is evaluated once before the scalar captures. Equal empty
@@ -21,11 +21,13 @@ zkc compile --project=examples/projects/finite-reductions/zkc.toml \
   example::Demo --fuse-vector-reductions --output=finite-reductions-fused.zkpkg
 ```
 
-The optional fusion can replace the multiply-map/sum with ordered shape checks
-and a native dot operation. It preserves values and shape refusals under
-sufficient resources; resource exhaustion can differ. Other formulas retain the
-ordinary map and reducer path. The [integration controls](../../../common/tests/protocol/test_finite_reductions.py)
-exercise both choices through the common Host, alongside independent field arithmetic.
+Default preparation recognizes checked finite field contractions without the
+optional map fusion flag. `--no-simplify` and unrecognized bodies use the ordered
+loop fallback. The separate optional
+fusion still handles explicit ring `map` followed by native vector sum. Both
+paths preserve values and required shape checks under sufficient resources;
+resource exhaustion can differ. The [integration controls](../../../common/tests/protocol/test_finite_reductions.py)
+exercise these distinctions with independent field arithmetic.
 
 See the [language guide](../../../docs/language/notation.md) for scope and imports,
 and the [compiler guide](../../../docs/compiler/mathematics.md) for the optimization boundary.

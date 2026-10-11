@@ -11,8 +11,7 @@ bool elaborateExpressions(Checker &checker, SyntaxDeclaration &syntax) {
   const auto count = syntax.expressions.size();
   for (unsigned i = 0; i < count; ++i) {
     auto kind = syntax.expressions[i].kind;
-    if (kind != K::Not && (syntax.kind != Declaration::Kind::Local ||
-                           (kind != K::And && kind != K::Or)))
+    if (kind != K::Not && kind != K::And && kind != K::Or)
       continue;
     auto expression = syntax.expressions[i];
     expression.notation.reset();
@@ -30,8 +29,7 @@ bool elaborateExpressions(Checker &checker, SyntaxDeclaration &syntax) {
       expression.children.push_back(constant);
     } else {
       const auto right = expression.children[1];
-      expression.kind = K::If;
-      expression.children.resize(1);
+
       for (auto value : kind == K::And
                             ? std::vector<uint32_t>{right, constant}
                             : std::vector<uint32_t>{constant, right}) {

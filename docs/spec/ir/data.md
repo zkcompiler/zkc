@@ -54,41 +54,54 @@ live-value and cleanup rules.
 
 ## Storage and work
 
-The native representation stores an immutable reference-counted element slice.
-Cloning a sequence shares storage; append allocates a new slice. Append therefore
-has linear element-copy cost; repeatedly appending has quadratic cumulative cost.
-This representation is bounded; it makes no throughput claim.
+The native representation is an immutable reference-counted tree. Leaves contain
+up to four ordered elements and branches contain up to sixteen children. All
+levels are packed from the left, and the shape depends only on length. Bulk
+construction, decoding and repeated append therefore have the same full charge.
+Append copies only the right edge. It never mutates shared storage or tests Arc
+reference counts. Index lookup follows the tree; iteration visits leaves in order.
 
-Each sequence caches its expanded node count and conservative retained-byte
-charge. Count the sequence root, every nested variant/sequence occurrence and each leaf;
-sharing does not reduce either charge. Runner
-[retained-value ledgers](../runtime/capacity.md#retained-values-and-logical-work)
-separately count the element slice and each element's allocations once while
-they are retained. The current storage estimate is 256
-wrapper bytes, the complete logical descriptor estimate, 512 bytes per element
-slot, and each element's retained charge. Formation checks exact element physical
-types. Construction checks counts before inspecting elements, then checks peak
-storage before copying into the immutable slice. Before allocation, append checks
-the complete result against the per-value ceiling and its new vector and slice
-of element slots against the invocation allowance; the old input and elements
-are shared.
+Each sequence caches its expanded value-node count and full retained-byte charge.
+Count the sequence root, every nested variant/sequence occurrence and each leaf
+value; sharing does not reduce this per-value bound. The full charge includes:
 
-Expanded nodes use `Policy.max_table_elements`; bytes use the existing value-byte
-policy. A zero node budget cannot hold an empty sequence. A backend additionally
-limits cumulative sequence-kernel work, defaulting to 16,777,216 units. At native
-kernel dispatch, before the backend recursively validates operands,
-charge `3 * (1 + sum(expanded_nodes(input)))`.
-A non-container leaf counts as one. This is a conservative container-traversal
-metric, not elapsed time or cryptographic primitive work. Work consumed by a
-failed call remains spent. Cleanup, a new frame or changing the configured limit
-does not refund it. Exceeding the allowance gives `exhausted:sequence-work`.
-Other kernels and codecs retain their own bounds.
-The generic runner validates call operands before dispatch; frame entry and exit
-also validate sequence elements under the backend's policy. These traversals use
-existing frame/instruction and value limits, independently of the sequence-kernel
-work allowance. Exhausting that allowance therefore does not avoid the runner's
-preceding bounded validation. Each native proof invocation creates a
-backend; attempts within that invocation retain its consumed work.
+- 256 root bytes and the complete logical descriptor estimate;
+- 256 bytes per tree node;
+- 32 bytes per branch child slot;
+- 512 bytes per element slot and each element's full retained charge.
+
+Runner [retained-value ledgers](../runtime/capacity.md#retained-values-and-logical-work)
+count each live root, tree node and nested element allocation once. Inline
+storage held by a leaf belongs to that leaf's allocation charge. Construction
+checks exact element types, expanded counts and temporary storage before
+allocation. Append checks the full result against the per-value ceiling and the
+new right edge, root and temporary slots against the invocation allowance.
+
+Expanded value nodes use `Policy.max_table_elements`; bytes use the existing
+value-byte policy. A zero node budget cannot hold an empty sequence. Native
+sequence kernels additionally have a cumulative work allowance, defaulting to
+16,777,216 units. Before operand validation, charge three times one plus the
+examined node bound of each input. An immutable sequence root already admitted
+by this Runner's backend and still retained counts as one; other sequences keep
+their full expanded node bound. Variants include their active payloads and other
+leaves count as one. A failed call keeps its charge. Cleanup, a new frame or
+changing the configured limit does not refund it. Exhaustion gives
+`exhausted:sequence-work`.
+
+The runtime can lend a backend a view of its live retained allocations. Native
+sequence validation can skip an intrinsically typed immutable tree node present
+in that view. Policy and setup authorization remain backend-owned; the view
+cannot validate capabilities, a different backend's values, or type-dependent
+numeric views. New nodes and substituted operands absent from the view are
+checked. Standalone backend calls and codecs have no such evidence and validate
+in full. Local return/yield handoffs keep shared allocations in the ledger until
+the receiving binding is installed, with cleanup on every failure path.
+
+Logical work charges the selected element path for `sequence.at`, the stored
+length for `sequence.length`, and a conservative copied-edge bound for append.
+Other operations retain their full-operand charge. These are deterministic
+storage/traversal units, not elapsed time or cryptographic primitive work.
+Per-value, instruction, frame, wire and other primitive limits remain separate.
 
 ## Native framing and setup
 

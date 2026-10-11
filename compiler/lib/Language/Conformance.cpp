@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "Effects.h"
 #include "zkc/Language/Builtins.h"
 #include <algorithm>
 using namespace llvm;
@@ -59,6 +60,14 @@ bool Checker::conformance(DeclarationId id) {
     } else {
       if (!body(provided->id, 1))
         return false;
+      if (!llvm::all_of(provided->dataPreconditions,
+                        [&](const auto &condition) {
+                          return llvm::is_contained(required.dataPreconditions,
+                                                    condition);
+                        }))
+        return types.fail("source.conformance",
+                          "member strengthens data preconditions",
+                          provided->span);
       if (required.inputs.size() != provided->inputs.size() ||
           required.outputs.size() != provided->outputs.size())
         return types.fail("source.conformance", "member arity differs",
@@ -163,23 +172,64 @@ bool Checker::conformance(DeclarationId id) {
                               provided->span);
         }
       }
-      auto allowance = required.effectAllowance.value_or(
-          Effects{required.kind == Declaration::Kind::Local,
-                  required.kind == Declaration::Kind::Local});
-      auto &mutableProvided = output.declarations[provided->id.index];
-      if (mutableProvided.effectAllowance) {
-        auto p = *mutableProvided.effectAllowance;
-        if ((p.mayStop && !allowance.mayStop) ||
-            (p.opaque && !allowance.opaque))
+      if (required.scopedInputs.size() != provided->scopedInputs.size() ||
+          required.domainInputs.size() != provided->domainInputs.size() ||
+          required.inputOrder.size() != provided->inputOrder.size())
+        return types.fail("source.conformance", "scoped member arity differs",
+                          provided->span);
+      for (unsigned i = 0; i < required.inputOrder.size(); ++i)
+        if (required.inputOrder[i].kind != provided->inputOrder[i].kind ||
+            required.inputOrder[i].index != provided->inputOrder[i].index)
           return types.fail("source.conformance",
-                            "member effect allowance exceeds interface",
+                            "member input categories differ", provided->span);
+      for (unsigned i = 0; i < required.domainInputs.size(); ++i) {
+        auto expected = types.substitute(required.domainInputs[i].item,
+                                         bindings, provided->span);
+        if (!expected)
+          return false;
+        if (*expected != provided->domainInputs[i].item)
+          return types.fail("source.conformance",
+                            "domain item signature differs", provided->span);
+      }
+      if (required.domainResult) {
+        auto expected =
+            types.substitute(*required.domainResult, bindings, provided->span);
+        if (!expected)
+          return false;
+        if (provided->domainResult != expected)
+          return types.fail("source.conformance", "domain result differs",
                             provided->span);
-      } else
-        mutableProvided.effectAllowance = allowance;
-      if ((provided->body->mayStop && !allowance.mayStop) ||
-          (provided->body->opaque && !allowance.opaque))
+      }
+      for (unsigned i = 0; i < required.scopedInputs.size(); ++i) {
+        if (!types.charge(required.scopedInputs[i].itemOrigins.size() +
+                              provided->scopedInputs[i].itemOrigins.size(),
+                          provided->span))
+          return false;
+        auto expected = required.scopedInputs[i].signature;
+        for (auto &input : expected.inputs) {
+          auto value = types.substitute(input, bindings, provided->span);
+          if (!value)
+            return false;
+          input = *value;
+        }
+        auto value =
+            types.substitute(expected.result, bindings, provided->span);
+        if (!value)
+          return false;
+        expected.result = *value;
+        if (!(expected == provided->scopedInputs[i].signature) ||
+            required.scopedInputs[i].itemOrigins !=
+                provided->scopedInputs[i].itemOrigins)
+          return types.fail("source.conformance",
+                            "scoped member signature differs", provided->span);
+      }
+      if (required.kind == Declaration::Kind::DomainFunction)
+        continue;
+      auto allowance = required.effectAllowance.value_or(EffectSummary{});
+      if (!effectsWithin(types, provided->body->effects, allowance,
+                         provided->span))
         return types.fail("source.effect",
-                          "body exceeds its interface effect allowance",
+                          "body exceeds its interface effect contract",
                           provided->span);
     }
   }

@@ -56,6 +56,31 @@ countermodels cover phase-mismatched ingress and iteration re-entry, typed hosti
 continuation replies, reset callbacks, persistent hidden coins and insufficient
 observations for future transitions.
 
+## Ordered finite computations
+
+The [finite computation model](spec/core/finite-computations.md) supplies ordered
+list enumeration with duplicates, recursively strict heterogeneous zip,
+independent product admission and dependent nested traversal. Total and
+failure-aware Local folds have distinct item, mapped-result and accumulator
+types. Predicate rejection skips body and update; admission and first failures
+are preserved by the stated ordered composition laws.
+
+`Local.fold_total` and `runFold_total` relate explicitly total callbacks to Local
+execution at the `Except String` boundary. `materialize_total_step` permits
+streaming with a total update; `materialize_total_selection` instead requires
+total predicate/body callbacks. Neither law applies to an arbitrary reducer.
+Monoid laws permit adjacent grouping and homomorphism transport; permutations
+require commutativity. Dot, heterogeneous module-valued MSM and explicit-axis
+matrix contractions have consumers of these laws with shape, bound and
+algebraic assumptions. The [correspondence map](correspondence/finite-computations.md)
+locates each theorem, controls and exact future bridge obligations.
+
+These are independent Lean value/error laws. They do not cover native source
+formation, eager evaluation/capture timing, residual state on failure, protocol
+effects, resource exhaustion, concrete curve arithmetic or native compiler and
+kernel correspondence. The focused declaration audit checks all four model
+modules and their imported controls under the existing allowed-axiom policy.
+
 ## Maintained APIs and actual consumers
 
 Shared [ring-expression laws](spec/core/ring-expressions.md) establish input

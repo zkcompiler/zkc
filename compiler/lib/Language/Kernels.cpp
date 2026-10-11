@@ -90,10 +90,11 @@ std::optional<ValueId> BodyChecker::kernel(const Expression &expr,
   Type result = signature->resultType();
   LocalPrimitive primitive{expr.text, std::move(operands),
                            std::move(parameters)};
+  primitive.origin = LocalPrimitive::Origin::Kernel;
   primitive.bindingArguments = std::move(arguments);
   primitive.assetReferences = std::move(references);
   // The installed local envelope does not certify totality.
-  body.mayStop = true;
+
   return emit(std::move(primitive), result, {}, expr.span);
 }
 } // namespace zkc::language::detail

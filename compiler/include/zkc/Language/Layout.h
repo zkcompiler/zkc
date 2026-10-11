@@ -1,9 +1,13 @@
 #ifndef ZKC_LANGUAGE_LAYOUT_H
 #define ZKC_LANGUAGE_LAYOUT_H
+#include "zkc/Contracts/Bindings.h"
 #include "zkc/Language/Project.h"
 #include <map>
 #include <variant>
 namespace zkc::language {
+namespace detail {
+class Semantics;
+}
 struct PolynomialLayout {
   std::string field;
   uint64_t arity;
@@ -63,6 +67,15 @@ struct LayoutSlice {
   unsigned offset;
   std::shared_ptr<const Layout> layout;
 };
+/// Contextual single-value carrier. Products use one alternative whose payload
+/// is exactly flat->leaves in order, including the empty payload for unit.
+/// This representation conveys no source constructor or field-access authority.
+struct PackedLayout {
+  std::shared_ptr<const Layout> flat;
+  protocol::BoundType carrier;
+  bool product = false;
+  std::string alternative;
+};
 /// A phase-local cache borrowing an immutable checked project or closed Entry.
 /// Keep the owner alive. Work accounting and cache state do not move or copy.
 class Layouts {
@@ -73,14 +86,19 @@ public:
   Layouts(const Layouts &) = delete;
   Layouts &operator=(const Layouts &) = delete;
   llvm::Expected<std::shared_ptr<const Layout>> get(const Type &);
+  llvm::Expected<PackedLayout> packed(const Type &);
+  llvm::Expected<std::vector<std::string>>
+      kernelArguments(llvm::StringRef, llvm::ArrayRef<Type>);
   /// Select a checked logical product component in the flattened signature.
   /// This computes representation only, not source field-access authority.
   llvm::Expected<LayoutSlice> select(const Declaration &,
                                      const SpecificationSelector &);
   llvm::Expected<LayoutSlice> selectInput(const Declaration &,
-                                          const EntryInput &);
+                                          const InputSelector &);
 
 private:
+  friend class detail::Semantics;
+  Layouts(const std::vector<Declaration> &, const Limits &);
   llvm::ArrayRef<Declaration> definitions;
   Limits limits;
   struct State;
@@ -91,6 +109,7 @@ private:
   llvm::Expected<LayoutSlice> select(llvm::ArrayRef<Port>, unsigned,
                                      llvm::ArrayRef<unsigned>);
   llvm::Expected<std::shared_ptr<const Layout>> build(const Type &, unsigned);
+  llvm::Expected<PackedLayout> pack(std::shared_ptr<const Layout>);
   llvm::Expected<Type>
   substitute(const Type &, const std::map<std::string, Type> &, unsigned);
 };

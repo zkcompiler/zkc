@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "ScopedWitness.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include <algorithm>
@@ -91,6 +92,7 @@ Error Checker::run() {
     auto &decl = output.declarations[i];
     if ((decl.kind == Declaration::Kind::Math ||
          decl.kind == Declaration::Kind::Local ||
+         decl.kind == Declaration::Kind::DomainFunction ||
          decl.kind == Declaration::Kind::Protocol ||
          (decl.kind == Declaration::Kind::Relation &&
           decl.relation->kind == RelationDefinition::Kind::Formula)) &&
@@ -102,9 +104,22 @@ Error Checker::run() {
   inferredContracts.clear();
   types.inferCapability = {};
   types.inferNatural = {};
-  if (!finalizeReductions() || !retainNotations() || !retainReductionSources())
+  if (!retainNotations() || !retainScopedSources())
     return types.takeError();
-  return checkReductions(output, work);
+  return checkScopedSources(output, work);
+}
+std::shared_ptr<const SyntaxDeclaration>
+Checker::retainSyntax(DeclarationId owner) {
+  // Run after all source consumers (including notation retention) have
+  // finished. Different witnesses for one declaration share the same immutable
+  // syntax.
+  if (!types.charge(1, output.declarations[owner.index].span))
+    return {};
+  auto &retained = retainedSyntax[owner.index];
+  if (!retained)
+    retained =
+        std::make_shared<SyntaxDeclaration>(std::move(*sources[owner.index]));
+  return retained;
 }
 bool Checker::bindingName(const Declaration &decl, StringRef name, Span span) {
   if (visible[decl.module.index].count(name.str()) ||
@@ -138,7 +153,8 @@ bool Checker::collect() {
     decl.abstract = source.abstract;
     decl.completes = source.completes;
     decl.permissions = source.permissions;
-    decl.effectAllowance = source.effects;
+    if (source.effects)
+      decl.effectAllowance = EffectSummary{*source.effects};
     decl.inputOrder = source.inputOrder;
     decl.associatedSort = source.associatedSort;
     decl.anonymous = source.anonymous;

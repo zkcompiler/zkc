@@ -1,138 +1,115 @@
 #!/usr/bin/env python3
-"""Run maintained test scopes against built outputs, without building them.
+"""Run maintained checks without synchronizing dependencies.
 
-Both just and Nix call this driver. Tool selection and report locations use the
-same contract as direct pytest and Cargo invocations. No scope installs tools,
-updates locks, or substitutes a missing tool with an executable on PATH.
+Just prepares ordinary project builds; Nix supplies installed packages. Checks
+may compile their own test targets and consumers. Install-domain explicitly
+prepares isolated base/domain builds unless existing builds are selected.
 """
 
 import argparse
-from datetime import datetime, timezone
-import json
 import os
 from pathlib import Path
-import shlex
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "common/tests/support"))
-from toolchain import Missing, Toolchain  # noqa: E402
+sys.path.insert(0, str(ROOT / "scripts"))
 from workspace import compiler_directory, reports_root, validate_environment  # noqa: E402
-from processes import Interrupted, run as run_process  # noqa: E402
-from reporting import new_directory  # noqa: E402
+from processes import Interrupted, checked  # noqa: E402
+from reporting import run_report  # noqa: E402
 
 
 def run(arguments, *, cwd=ROOT, env=None, stdout=None):
-    arguments = list(map(str, arguments))
-    print(f"+ {shlex.join(arguments)}", flush=True)
     child = dict(os.environ)
-    # Standalone generator scripts share the native harness modules.
     child["PYTHONPATH"] = os.pathsep.join(map(str, [ROOT / "common/tests/support",
                                                   ROOT / "compiler/test/support", ROOT / "scripts"]))
     if env:
         child.update(env)
-    run_process(arguments, cwd=cwd, env=child, stdout=stdout, check=True, cleanup_grace=5)
+    checked(arguments, cwd=cwd, env=child, stdout=stdout)
 
 
-def formal_checks():
+def lean_checks():
     return sorted((ROOT / "lean/checks").glob("*.py")) + sorted(
-        (ROOT / "lean/consumers").glob("*/check.py")) + [
-            ROOT / "common/tests/support/lean/check_cli.py"]
-
-
-def demo(output):
-    """Compile a source Entry and execute independent common-Host proof calls."""
-    tools = Toolchain()
-    output.mkdir(parents=True, exist_ok=False)
-
-    def emit(name, arguments):
-        path = output / name
-        with path.open("w") as stream:
-            run(arguments, stdout=stream)
-        return json.loads(path.read_text())
-
-    package, proof = output / "proof.zkpkg", output / "proof.bin"
-    built = emit("build.json", [tools.runtime, '--json', "compile", f"--compiler={tools.compiler}",
-        "--module=schnorr=libraries/schnorr/lib.zkc",
-        "--module=example=examples/projects/schnorr/main.zkc",
-        "example::Proof", f"--output={package}"])
-    inputs = ROOT / "examples/projects/schnorr/inputs/example.Proof"
-    for command, role, expected in [("prove", "producer", "produced"), ("verify", "validator", "accepted")]:
-        flags = [f"--witness={inputs / 'witness.json'}", f"--output={proof}"] if command == "prove" else [f"--proof={proof}"]
-        report = emit(f"{role}.json", [tools.runtime, '--json', command, f"--package={package}",
-            f"--sha256={built['package_sha256']}", f"--public={inputs / 'public.json'}", *flags])
-        if report["status"] != expected:
-            raise RuntimeError(f"{command} did not report {expected}; see {output}")
-    print(f"Proof accepted: {proof.stat().st_size} bytes. Files: {output}", flush=True)
+        (ROOT / "lean/consumers").glob("*/check.py"))
 
 
 def execute(scope, args):
     reports = reports_root()
-    if scope in ("integration", "harness"):
-        reports.mkdir(parents=True, exist_ok=True)
-        # Without the Nix development defaults use one worker, not the host's
-        # entire CPU count (each worker may run threaded native tools).
+    if scope in {"integration", "harness", "sdk"}:
         workers = os.environ.get("PYTEST_XDIST_AUTO_NUM_WORKERS", "1")
         if not workers.isdecimal() or int(workers) < 1:
             raise ValueError("PYTEST_XDIST_AUTO_NUM_WORKERS must be a positive integer")
-        selection = "common/tests/harness" if scope == "harness" else "common/tests"
-        report = "harness.xml" if scope == "harness" else "tests.xml"
-        run(["uv", "run", "--no-sync", "--locked", "pytest", selection, "-n", workers,
-             f"--junit-xml={reports / report}"])
+        selection = {
+            "harness": ["common/tests/harness"],
+            "sdk": ["common/tests/consumer"],
+            "integration": ["common/tests/protocol", "common/tests/kernels"],
+        }[scope]
+        run(["uv", "run", "--no-sync", "--locked", "pytest", *selection, "-n", workers,
+             f"--junit-xml={reports / (scope + '.xml')}"])
     elif scope == "rust":
         run(["cargo", "test", "--workspace", "--locked", "--all-features", "--no-fail-fast"])
     elif scope == "compiler":
         compiler_directory(args.profile)
         run(["ctest", "--preset", args.profile, "--output-junit", reports / "ctest.xml"], cwd=ROOT / "compiler")
     elif scope == "lean":
-        output = reports / "lean"
-        output.mkdir(parents=True, exist_ok=True)
-        for check in formal_checks():
-            run([sys.executable, check], env={"PYTHONPATH": str(ROOT / "common/tests/support/lean")})
+        for check in lean_checks():
+            run([sys.executable, check])
+    elif scope == "lean-integration":
+        run([sys.executable, ROOT / "lean/checks/check_clients.py", "--with-arklib",
+             "--output", reports / "lean/clients-arklib"], cwd=ROOT / "lean")
+    elif scope == "lean-clean":
+        directory = ROOT / "lean/integrations/clean"
+        output = reports / "lean/clean-air-control.json"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with output.open("w") as stream:
+            run(["lake", "env", "lean", "--run", "TestsClean/Control.lean"], cwd=directory, stdout=stream)
+        control = ROOT / "common/tests/fixtures/clean/air-control.json"
+        if output.read_bytes() != control.read_bytes():
+            raise ValueError(f"{control.relative_to(ROOT)} is not the current Clean export; "
+                             f"review {output} and replace the fixture with it")
+    elif scope == "install":
+        from check_sdk import check_install
+        check_install(args, run)
+    elif scope == "install-domain":
+        from check_domain import install_domain
+        install_domain(args, run)
     elif scope == "docs":
         run([sys.executable, "common/tests/check_docs.py", "--all"])
-    elif scope == "demo":
-        demo(reports / "demo")
-    elif scope == "lint":
-        run([sys.executable, "scripts/format.py"])
+    elif scope == "style":
+        run(["just", "--list"])
+        nix = [ROOT / "flake.nix", *sorted((ROOT / "nix").rglob("*.nix"))]
+        run(["nixfmt", "--check", *nix])
+        run(["actionlint", "-shellcheck=", *sorted((ROOT / ".github/workflows").glob("*.yml"))])
         run(["cargo", "fmt", "--all", "--", "--check"])
+        run(["uv", "run", "--no-sync", "--locked", "ruff", "check", "."])
+    elif scope == "lint":
+        execute("style", args)
+        run([sys.executable, "scripts/format.py"])
         run(["cargo", "clippy", "--workspace", "--locked", "--all-targets",
              "--all-features", "--", "-D", "warnings"])
-        run(["uv", "run", "--no-sync", "--locked", "ruff", "check", "."])
-    elif scope == "project":
-        # Nix's independent style check owns documentation and lint.
-        for part in ["integration", "demo"]:
-            execute(part, args)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("scope", choices=["integration", "harness", "rust", "compiler", "lean",
-                                          "docs", "demo", "lint", "project"])
-    parser.add_argument("--profile", default="release")
+    scopes = parser.add_subparsers(dest="scope", required=True)
+    for scope in ["integration", "harness", "sdk", "rust", "compiler", "lean",
+                  "lean-integration", "lean-clean", "install", "install-domain", "docs", "style", "lint"]:
+        command = scopes.add_parser(scope)
+        if scope in {"compiler", "install", "install-domain"}:
+            command.add_argument("--profile", default="release", help="CMake build profile (default: release)")
+        if scope in {"install", "install-domain"}:
+            command.add_argument("--output", help="fresh installation output directory")
+        if scope == "install-domain":
+            command.add_argument("--base-build", help="explicit base CMake build directory")
+            command.add_argument("--domain-build", help="explicit envelope CMake build directory")
+            command.add_argument("--skip-build", action="store_true",
+                                 help="install already built, cache-checked directories without rebuilding")
     args = parser.parse_args()
     validate_environment()
-    # Normalize native Cargo's cwd-relative setting before changing cwd.
     if os.environ.get("CARGO_TARGET_DIR"):
         os.environ["CARGO_TARGET_DIR"] = str(Path(os.environ["CARGO_TARGET_DIR"]).resolve())
-    output = new_directory(reports_root() / "runs", args.scope)
-    os.environ["ZKC_REPORTS_DIR"] = str(output)
-    print(f"Reports: {output}", flush=True)
-    record = {"scope": args.scope, "argv": sys.argv, "status": "running",
-              "started_utc": datetime.now(timezone.utc).isoformat()}
-    manifest = output / "run.json"
-    manifest.write_text(json.dumps(record, indent=2) + "\n")
-    try:
+    with run_report(reports_root(), args.scope, sys.argv):
         execute(args.scope, args)
-        record["status"] = "pass"
-    except BaseException as error:
-        record["status"] = "interrupted" if isinstance(error, KeyboardInterrupt) else "failed"
-        record["error"] = str(error)
-        raise
-    finally:
-        record["finished_utc"] = datetime.now(timezone.utc).isoformat()
-        manifest.write_text(json.dumps(record, indent=2) + "\n")
 
 
 if __name__ == "__main__":
@@ -143,5 +120,5 @@ if __name__ == "__main__":
     except subprocess.CalledProcessError as error:
         print(error, file=sys.stderr)
         sys.exit(error.returncode if error.returncode >= 0 else 128 - error.returncode)
-    except (Missing, ValueError, OSError) as error:
+    except (ValueError, OSError) as error:
         sys.exit(str(error))

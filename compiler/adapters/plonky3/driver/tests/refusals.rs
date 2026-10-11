@@ -54,6 +54,21 @@ fn metadata_that_contradicts_evaluation_refuses() {
     let cases = [
         (
             MetadataAir {
+                declared_preprocessed_width: Some(1),
+                ..MetadataAir::consistent()
+            },
+            "plonky3-preprocessed-shape",
+        ),
+        (
+            MetadataAir {
+                preprocessed: Some((8, 1)),
+                declared_preprocessed_width: Some(2),
+                ..MetadataAir::consistent()
+            },
+            "plonky3-preprocessed-shape",
+        ),
+        (
+            MetadataAir {
                 next_row_columns: vec![],
                 ..MetadataAir::consistent()
             },

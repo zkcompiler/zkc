@@ -4,7 +4,7 @@ module zkc::sampling;
 // The compiler checks signatures and execution, not that probabilistic premise.
 pub interface Words {
   type State;
-  fn next(state: State) -> (State, index);
+  fn next(state: State) -> (State, index) effects(stop, opaque);
 }
 
 // Reject the short prefix so each residue has equally many accepted preimages.

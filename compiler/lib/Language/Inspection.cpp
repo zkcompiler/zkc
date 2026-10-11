@@ -96,36 +96,92 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                      {"type", type(bound.type)},
                      {"permissions", permissions(bound.permissions)},
                      {"inferred", false}});
+  auto selector = [&](const InputSelector &input, unsigned axis) {
+    json::Array path;
+    for (auto index : input.path)
+      path.push_back(index);
+    return json::Object{{"input", decl.inputs[input.port].name},
+                        {"path", std::move(path)},
+                        {"axis", axis}};
+  };
+  for (const auto &condition : decl.dataPreconditions)
+    requirements.push_back(json::Object{
+        {"kind", condition.kind == DataPrecondition::Kind::IndexBound
+                     ? "index_bound"
+                     : "equal_extent"},
+        {"left", selector(condition.left, condition.leftAxis)},
+        {"right", selector(condition.right, condition.rightAxis)}});
+  json::Array scoped;
+  for (const auto &parameter : decl.scopedInputs) {
+    json::Array inputs;
+    for (const auto &input : parameter.signature.inputs)
+      inputs.push_back(type(input));
+    scoped.push_back(json::Object{
+        {"name", parameter.name},
+        {"mode", parameter.signature.mode == ScopedSignature::Mode::Math
+                     ? "math"
+                     : "local"},
+        {"inputs", std::move(inputs)},
+        {"result", type(parameter.signature.result)},
+        {"effect_allowance",
+         json::Object{{"stop", parameter.signature.allowance.mayStop},
+                      {"opaque", parameter.signature.allowance.opaque}}}});
+    json::Array labels, origins;
+    for (unsigned i = 0; i < parameter.signature.inputs.size(); ++i)
+      labels.push_back(i < parameter.inputLabels.size() &&
+                               !parameter.inputLabels[i].empty()
+                           ? json::Value(parameter.inputLabels[i])
+                           : json::Value(nullptr));
+    for (const auto &[input, domain] : parameter.itemOrigins)
+      origins.push_back(json::Object{{"input", input}, {"domain", domain}});
+    (*scoped.back().getAsObject())["input_labels"] = std::move(labels);
+    (*scoped.back().getAsObject())["item_origins"] = std::move(origins);
+  }
   json::Array roster, order;
   for (const auto &role : decl.roles)
     roster.push_back(role);
   for (const auto &slot : decl.inputOrder)
     order.push_back(json::Object{
-        {"kind",
-         slot.kind == Declaration::InputSlot::Kind::Data ? "data" : "service"},
+        {"kind", slot.kind == Declaration::InputSlot::Kind::Data     ? "data"
+                 : slot.kind == Declaration::InputSlot::Kind::Scoped ? "scoped"
+                 : slot.kind == Declaration::InputSlot::Kind::Domain
+                     ? "domain"
+                     : "service"},
         {"index", slot.index}});
-  bool ordered = decl.kind != Declaration::Kind::Math;
-  Effects effects =
-      decl.body ? Effects{decl.body->mayStop, decl.body->opaque}
-                : decl.effectAllowance.value_or(Effects{ordered, ordered});
+  bool domain = decl.kind == Declaration::Kind::DomainFunction;
+  bool ordered = decl.kind != Declaration::Kind::Math && !domain;
+  auto renderEffects = [](const EffectSummary &summary) {
+    json::Array dependencies;
+    for (const auto &[slot, ceiling] : summary.dependencies)
+      dependencies.push_back(json::Object{{"callback", slot},
+                                          {"stop", ceiling.mayStop},
+                                          {"opaque", ceiling.opaque}});
+    return json::Object{{"stop", summary.fixed.mayStop},
+                        {"opaque", summary.fixed.opaque},
+                        {"dependencies", std::move(dependencies)}};
+  };
+  auto effects = decl.body ? decl.body->effects
+                           : decl.effectAllowance.value_or(EffectSummary{});
   json::Object result{
       {"name", decl.qualifiedName},
       {"abstract", decl.abstract},
-      {"definition", decl.primitive  ? "primitive"
-                     : decl.abstract ? "abstract"
-                                     : "body"},
-      {"kind", !ordered                                ? "math"
+      {"definition", decl.primitive          ? "primitive"
+                     : decl.finiteDefinition ? "finite"
+                     : decl.abstract         ? "abstract"
+                                             : "body"},
+      {"kind", domain                                  ? "domain"
+               : !ordered                              ? "math"
                : decl.kind == Declaration::Kind::Local ? "local"
                                                        : "protocol"},
       {"parameters", std::move(parameters)},
       {"roles", std::move(roster)},
       {"input_order", std::move(order)},
       {"inputs", ports(decl.inputs)},
+      {"scoped_inputs", std::move(scoped)},
       {"outputs", ports(decl.outputs)},
       {"services", std::move(services)},
       {"requirements", std::move(requirements)},
-      {"effects",
-       json::Object{{"stop", effects.mayStop}, {"opaque", effects.opaque}}},
+      {"effects", renderEffects(effects)},
       {"source",
        json::Object{{"module", project.sources()[decl.module.index].module},
                     {"origin", project.sources()[decl.module.index].origin ==
@@ -213,10 +269,22 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
   }
   if (decl.primitive)
     result["primitive"] = decl.primitive->identity;
+  if (decl.finiteDefinition)
+    result["finite"] = *decl.finiteDefinition;
+  if (domain || !decl.domainInputs.empty()) {
+    json::Array domains;
+    for (const auto &input : decl.domainInputs)
+      domains.push_back(
+          json::Object{{"name", input.name}, {"item", type(input.item)}});
+    result["domain_inputs"] = std::move(domains);
+    if (decl.domainResult)
+      result["domain_result"] = type(*decl.domainResult);
+    if (decl.domainDefinition && decl.domainDefinition->constructor)
+      result["definition"] = "domain_constructor";
+  }
   if (decl.effectAllowance || decl.abstract) {
-    auto allowance = decl.effectAllowance.value_or(Effects{ordered, ordered});
-    result["effect_allowance"] =
-        json::Object{{"stop", allowance.mayStop}, {"opaque", allowance.opaque}};
+    auto allowance = decl.effectAllowance.value_or(EffectSummary{});
+    result["effect_allowance"] = renderEffects(allowance);
   }
   if (owner) {
     json::Object parent{{"name", owner->qualifiedName},
@@ -264,10 +332,9 @@ Expected<std::string> inspectDeclarations(const CheckedProject &project,
       continue;
     if (decl.kind != Declaration::Kind::Math &&
         decl.kind != Declaration::Kind::Local &&
+        decl.kind != Declaration::Kind::DomainFunction &&
         decl.kind != Declaration::Kind::Protocol &&
         decl.kind != Declaration::Kind::Construction)
-      continue;
-    if (decl.generatedReduction)
       continue;
     if (decl.anonymous && decl.parent &&
         project.declarations()[decl.parent->index].kind ==

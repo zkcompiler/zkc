@@ -89,6 +89,11 @@
     "hash": "sha256-ox5Zn+0wfIk/eznSq/avpP6DVB7dnB/bzXZEenBXVZk=",
     "url": "https://github.com/Verified-zkEVM/CompPoly"
   },
+  "b449bf590f93e13827c3c7e747e392d6969aa380": {
+    "format": "canonical-git-v0",
+    "hash": "sha256-0Enp57zQZ2hIHKPs9RWX+CZjJ4W4yWsS4vQu3wSOoWk=",
+    "url": "https://github.com/Verified-zkEVM/clean"
+  },
   "b7eb3304aeae834b12dda98993a37f6a41f6f0bb": {
     "format": "canonical-git-v0",
     "hash": "sha256-wkw7QsjAd0OX8uBc5LrwEdWxUtutaHh06gBkErQV8lI=",

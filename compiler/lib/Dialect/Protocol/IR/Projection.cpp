@@ -1,3 +1,4 @@
+#include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -994,6 +995,8 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
     return refuse(unit, "expected one participant symbol-table block");
   if (unit->getAttrs().size() != 1)
     return refuse(unit, "unexpected attribute in the 'participant' profile");
+  if (failed(finite::verifyClosure(unit)) || failed(verifyHelpers(unit)))
+    return failure();
   unsigned operations = 0;
   NativeTypePolicies types(unit);
   for (auto &declaration : unit.getBody().front()) {
@@ -1011,7 +1014,8 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
           return refuse(entry, "unsupported participant entry attribute");
       continue;
     }
-    if (isa<local::FuncOp, local::OperationBindingOp>(declaration))
+    if (isa<data::DomainOp, func::FuncOp, local::FuncOp,
+            local::OperationBindingOp>(declaration))
       continue;
     if (isa<protocol_ir::ProjectionOp>(declaration))
       continue;

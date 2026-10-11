@@ -2,6 +2,13 @@
 #define ZKC_DIALECT_DATA_IR_DATATYPES_TD
 include "mlir/IR/AttrTypeBase.td"
 include "zkc/Dialect/Data/IR/DataDialect.td"
+def Domain : TypeDef<DataDialect, "Domain"> {
+  let mnemonic = "domain";
+  let summary = "preparation-only ordered finite item parameter list";
+  let parameters = (ins ArrayRefParameter<"::mlir::Type">:$itemTypes);
+  let assemblyFormat = "`<` $itemTypes `>`";
+  let genVerifyDecl = 1;
+}
 def Sequence : TypeDef<DataDialect, "Sequence"> {
   let mnemonic = "sequence";
   let summary = "immutable ordered values with a runtime length";

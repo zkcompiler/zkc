@@ -178,7 +178,7 @@ Protocol loops additionally spell `roles(P, V) max N`. Protocol calls use ordina
 call syntax, such as `let result = Round(x, coins);`. Declare the service alongside
 data inputs, for example `(x: F @V, coins: Random<F> @V)`.
 `let alias = coins;` gives the same service another name.
-Defined functions infer effects. Write `!{}` only
+Defined functions infer effects. Write `effects()` only
 when an effect-free interface is an intended contract. Ordinary calls can nest;
 all calls in one statement must have uniquely determined participants. Use `@P`
 on a binding to resolve ambiguity. Later statements never move an earlier call.
@@ -234,12 +234,12 @@ all rows. Unequal lengths end execution like a failed vector kernel; `require`
 equal lengths first when a protocol should reject such inputs. The [map contract](../spec/language/definitions.md#checked-pointwise-maps)
 states the admitted helpers and refusals.
 
-To reduce an inline scalar body, write `reduce vec::sum [x in xs] { x * x }`
-or import the vector library's `∑`/`∏` bindings. Multiple rows require explicit
-strict `zip`; scalar captures are immutable snapshots after collection evaluation.
-The [notation guide](notation.md#reduce-finite-vectors) shows both spellings and
-the [source contract](../spec/language/definitions.md#finite-vector-reductions)
-defines the restricted body, capture order and helper checks.
+To reduce an inline body, write `finite::sum(xs, fn(x) => x * x)` or import
+`∑` and write `∑ x in xs, x * x`. General finite domains, filtering, nested
+binders and tuple items share the same scoped computation path. The
+[notation guide](notation.md#reduce-finite-domains) covers syntax and precedence;
+the [source contract](../spec/language/definitions.md#finite-reduction-binders)
+defines capture order, total conditions and retained checks.
 
 Type information also flows through nested expressions:
 

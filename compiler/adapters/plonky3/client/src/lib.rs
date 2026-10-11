@@ -1,4 +1,4 @@
-//! Ordinary Plonky3 0.5.1 AIRs maintained as external clients of the zkc
+//! Ordinary Plonky3 0.8.0 AIRs maintained as external clients of the zkc
 //! adapter. This crate depends only on upstream Plonky3 crates. Its trace
 //! generators are witness tools; they are not part of any exported relation.
 
@@ -66,6 +66,10 @@ impl RecurrenceAir {
 impl<T: Field> BaseAir<T> for RecurrenceAir {
     fn width(&self) -> usize {
         RECURRENCE_WIDTH
+    }
+
+    fn preprocessed_width(&self) -> usize {
+        1
     }
 
     fn preprocessed_trace(&self) -> Option<RowMajorMatrix<T>> {

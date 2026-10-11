@@ -5,6 +5,8 @@
 #include <tuple>
 
 namespace zkc::protocol::detail {
+mlir::LogicalResult canonicalizeCaptures(mlir::Operation *op);
+
 // One record per site, with both the logical definition and concrete local
 // declaration retained. A call record describes its occurrence, not its callee.
 struct AlgorithmOccurrence {

@@ -25,9 +25,9 @@ constexpr StringLiteral program = R"(module m;
 domain F=field("bls12-381.fr");
 interface TestTranscript<T:Field> {
   type State:Copy+Drop;
-  fn initialize()->State;
-  fn observe(t:State,v:T)->State;
-  fn draw(t:State)->(State,T);
+  fn initialize()->State effects(stop, opaque);
+  fn observe(t:State,v:T)->State effects(stop, opaque);
+  fn draw(t:State)->(State,T) effects(stop, opaque);
 }
 protocol Round<T:Field+Share+Wire> roles(P,V)
     (public:T@(P,V),secret:T@P,challenges:Random<T>@V)->(ok:bool@V){
@@ -61,9 +61,9 @@ constexpr StringLiteral codec = R"(
   fn empty()->Bytes=primitive("bytes.empty");
   interface RecordCodec<L:Type+Copy+Drop> {
     type Record:Copy+Drop;
-    fn initialize(layout:L)->Record;
-    fn write(record:Record)->Bytes;
-    fn finish(record:Record,proof:Bytes)->();
+    fn initialize(layout:L)->Record effects(stop, opaque);
+    fn write(record:Record)->Bytes effects(stop, opaque);
+    fn finish(record:Record,proof:Bytes)->() effects(stop, opaque);
   }
   component Packing:RecordCodec<F> {
     type Record:Copy+Drop=();
@@ -102,6 +102,35 @@ int main() {
   zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  for (StringRef mutation : {"factory", "handler", "codec", "body"})
+    cases.run(
+        "independent construction closure refuses changed " + mutation, [&] {
+          auto project = take(checked((program + deployment + codec).str()));
+          auto closed = take(closeEntry(project, "m::Packed"));
+          auto &selected = const_cast<Declaration &>(
+              closed.declarations()
+                  [closed.entry().proof()->selectedConstruction->index]);
+          auto &plan = *selected.construction;
+          if (mutation == "factory")
+            plan.initializer->declaration = plan.rules.front().handler;
+          else if (mutation == "handler")
+            plan.rules.front().path.push_back("unexpected");
+          else if (mutation == "codec")
+            plan.codec->write.target = plan.codec->finish.target;
+          else {
+            auto &handler = const_cast<Declaration &>(
+                closed.declarations()[plan.rules.front().handler.index]);
+            auto changed = std::make_shared<Body>(*handler.body);
+            changed->stopReason = "changed";
+            handler.body = std::move(changed);
+          }
+          auto error = checkScopedSpecialization(closed);
+          require(bool(error), "corrupted construction closure accepted");
+          require(
+              toString(std::move(error)).find("source.scoped-specialization") !=
+                  std::string::npos,
+              "wrong construction closure refusal");
+        });
   cases.run(
       "record codecs close ordinary component methods and typed rules", [&] {
         auto project = take(checked((program + deployment + codec).str()));
@@ -796,8 +825,8 @@ int main() {
             [&] {
               compileSource(R"(module m;
       domain F=field("koala-bear.ext8-binomial3");
-      fn less(x:index,y:index)->bool=primitive("index.less");
-      interface ProviderType {type State:Copy+Drop;fn initialize()->State;}
+      math fn less(x:index,y:index)->bool=primitive("index.less");
+      interface ProviderType {type State:Copy+Drop;fn initialize()->State effects(stop, opaque);}
       component Provider:ProviderType {
         type State:Copy+Drop=();
         fn initialize()->State{return State(());}
@@ -1080,7 +1109,8 @@ int main() {
        "replace challenges; base "
        "fiat_shamir(\"merlin3.bls12-381.fr64be/0\",challenges);"},
       {"on message delivery(t,value)", "on message delivery(t,value:bool)"},
-      {"fn initialize()->State;", "fn initialize(v:T)->State;"},
+      {"fn initialize()->State effects(stop, opaque);",
+       "fn initialize(v:T)->State effects(stop, opaque);"},
   };
   for (const auto &change : invalid)
     cases.run(change.second, [&] {

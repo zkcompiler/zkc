@@ -1,7 +1,7 @@
 use super::*;
 use serde_json::{Value, json};
 fn digest(s: &str) -> String {
-    format!("{:x}", Sha256::digest(s.as_bytes()))
+    crate::host::inputs::hex(&Sha256::digest(s.as_bytes()))
 }
 fn schema(kind: &str, ty: &str, leaves: Value) -> Value {
     json!({"kind":kind,"identity":digest(ty),"type":ty,"custody":false,

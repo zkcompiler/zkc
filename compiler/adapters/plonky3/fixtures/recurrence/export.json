@@ -12,5 +12,5 @@
   "read_model": "cyclic",
   "selector_semantics": "guard-only",
   "slots": [["main",0,0],["main",1,0],["main",2,0],["main",3,0],["main",0,1],["main",1,1],["main",3,1],["preprocessed",0,0],["public",0],["public",1],["public",2],["selector","first-row"],["selector","last-row"],["selector","transition"]],
-  "upstream": {"commit":"45e0ffe4d294816755522dd2cf7c38d6bcd701ce","crates":{"p3-air":"0.5.1","p3-field":"0.5.1","p3-koala-bear":"0.5.1","p3-matrix":"0.5.1"}}
+  "upstream": {"commit":"a21e3ed42905040ad49c519e402f018381c12d0c","crates":{"p3-air":"0.8.0","p3-field":"0.8.0","p3-koala-bear":"0.8.0","p3-matrix":"0.8.0"}}
 }

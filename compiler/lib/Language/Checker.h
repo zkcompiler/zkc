@@ -1,7 +1,6 @@
 #ifndef ZKC_LANGUAGE_CHECKER_H
 #define ZKC_LANGUAGE_CHECKER_H
 #include "Internal.h"
-#include "Reductions.h"
 #include "Semantics.h"
 namespace zkc::language::detail {
 class Checker {
@@ -34,7 +33,8 @@ public:
   std::optional<CallableReference> callable(const Declaration &,
                                             llvm::StringRef, Span);
   std::optional<OperatorBinding> operatorBinding(const Declaration &,
-                                                 const SyntaxOperator &);
+                                                 const SyntaxOperator &,
+                                                 bool filtered = false);
   std::optional<std::vector<OperatorBinding>>
   operatorCandidates(const Declaration &, const SyntaxDeclaration &, uint32_t);
   std::optional<std::vector<OperatorBinding>>
@@ -42,6 +42,10 @@ public:
                         uint32_t);
   bool body(DeclarationId, unsigned);
   bool primitiveBody(Declaration &, Body &);
+  bool finiteBody(Declaration &, Body &);
+  bool domainBody(Declaration &, unsigned);
+  bool domainExpression(const Declaration &, const SyntaxDeclaration &,
+                        uint32_t);
   bool relation(Declaration &);
 
   std::map<unsigned, std::vector<SpecificationSelector>> inlineBindings;
@@ -54,19 +58,18 @@ public:
   bool configureEntry(Declaration &, const Declaration &,
                       const SyntaxProofEntry &);
   bool retainNotations();
-  struct PendingReduction {
-    Declaration declaration;
-    unsigned height;
-  };
-  std::vector<PendingReduction> pendingReductions;
-  std::vector<std::shared_ptr<ReductionSource>> reductionSources;
-  bool finalizeReductions();
-  bool retainReductionSources();
+  std::vector<std::shared_ptr<ScopedSource>> scopedSources;
+  std::vector<std::shared_ptr<ScopedCallSource>> scopedCalls;
+  std::vector<std::shared_ptr<ScopedInvocationSource>> scopedInvocations;
+  std::map<unsigned, std::shared_ptr<NotationFamilies>> notationFamilies;
+  bool retainScopedSources();
+  std::shared_ptr<const SyntaxDeclaration> retainSyntax(DeclarationId);
 
 private:
   std::optional<Type> elaborateType(const Declaration &, const SyntaxType &,
                                     unsigned);
   std::vector<SyntaxModule> syntax;
+  std::map<unsigned, std::shared_ptr<const SyntaxDeclaration>> retainedSyntax;
   std::map<std::string, ModuleId> modules;
   std::map<std::string, DeclarationId> qualified;
   std::vector<std::map<std::string, DeclarationId>> visible;
@@ -103,6 +106,7 @@ private:
   bool signature(DeclarationId, unsigned = 1);
   bool conformance(DeclarationId);
   bool requirements(Declaration &);
+  bool dataRequirements(Declaration &);
 };
 bool resolveBindings(Checker &, Declaration &, SyntaxDeclaration &);
 bool elaborateExpressions(Checker &, SyntaxDeclaration &);

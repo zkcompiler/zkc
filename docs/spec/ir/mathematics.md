@@ -25,6 +25,7 @@ The following flat operations are total on their verified types:
 
 | Operation | Signature and judgment |
 |---|---|
+| `algebra.group_identity` | No operands; identity of the nominal result group with scalar action |
 | `algebra.constant` | Canonical field literal string to scalar |
 | `algebra.field_subtract` | Two scalars in one field to their difference |
 | `tensor.from_elements` | Exactly `N` field operands to the static array |
@@ -76,6 +77,13 @@ domain literal contract is not part of this implementation.
 
 ## Realization
 
+The nullary `algebra.group_identity : !algebra.group<"G">` lowers to
+`algebra.exec.group_identity` bound to `curve.identity<G>`. The producer reads
+`G` from the result type; the independent recipe checker verifies the exact
+contract, nominal group, empty operands/parameters and result. Provider selection
+then applies ordinary group representation restrictions. See the
+[group identity laws](../domains/values.md#group-identity).
+
 `zkc-eliminate-polynomials` operates on a verified participant candidate. It
 realizes observations through field arithmetic, static extraction and packing,
 then removes formal polynomial values. It caches actual SSA inputs and prefixes.
@@ -124,6 +132,15 @@ The installed array representation is
 identity. This complete identity is checked independently in C++ and Rust.
 Other fields can have mathematical formation without an installed native array
 provider.
+
+`field_array.get<F,N>(array, position)` is ordinary checked execution with a
+dynamic `index` operand and no attributes. It returns the element of `F` at
+`position` when `position < N`, otherwise refusing with `field-array-index`.
+Length zero has no valid access, and large indices cannot wrap into range.
+`field_array.at<F,N>` remains the separate checked kernel with a static index
+attribute used by mathematical lowering. Neither executable kernel establishes
+total mathematical access; the mathematical static operation has its own bound
+premise. `field_array.from_vector<F,N>` checks exact length before construction.
 
 Arrays use immutable shared storage. Their generic custody declaration is
 `PrivateImmutable` (copy and drop); codec support is an independent property.

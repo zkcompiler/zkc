@@ -27,27 +27,35 @@ OPTIONS = [[], ['--fuse-vector-reductions'],
            ['--fuse-vector-reductions', '--no-simplify'],
            ['--fuse-vector-reductions', '--release-storage']]
 
+FINITE = '''
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)>=domain("zip");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item, rows))->S effects(stop)=finite("local.fold");
+fn sum<I:Type+Copy+Drop,E:Field>(rows:domain<I>,term:fn(item:I)->E effects(stop) where item_from(item, rows))->E effects(stop){return fold(rows,0,fn(state, item)=>state+term(item));}
+fn product<I:Type+Copy+Drop,E:Field>(rows:domain<I>,term:fn(item:I)->E effects(stop) where item_from(item, rows))->E effects(stop){return fold(rows,1,fn(state, item)=>state*term(item));}
+reduction ∑=sum;
+reduction ∏=product;
+'''
+
+
 SOURCE = '''module sample;
 domain F = field("FIELD");
 type Vector<E: Field> = builtin("vector", E);
-fn sum<E: Field>(v: Vector<E>) -> E = primitive("vector.sum");
-fn product<E: Field>(v: Vector<E>) -> E = primitive("vector.product");
-reduction ∑ = sum;
-reduction ∏ = product;
+FINITE
+fn vector_product<E:Field>(v:Vector<E>)->E=primitive("vector.product");
 fn work<E: Field>(a: Vector<E>, b: Vector<E>, ignored: Vector<E>, α: E)
     -> (E,E,E,E,E,E) {
-  let zipped = ∑ [(x,y,_) in zip(a,b,ignored)] { x*y };
-  let named = reduce sum [(x,y,_) in zip(a,b,ignored)] { x*y };
-  let products = ∏ [(x,y,_) in zip(a,b,ignored)] { x*y };
-  let native = product(a);
-  let shifted = ∑ [x in a] { α*x+α };
-  let square = ∑ [x in a] { x*x };
+  let zipped = ∑ ((x,y),_) in zip(zip(a,b),ignored), x*y;
+  let named = sum(zip(zip(a,b),ignored),fn(((x,y),_))=>x*y);
+  let products = ∏ ((x,y),_) in zip(zip(a,b),ignored), x*y;
+  let native = vector_product(a);
+  let shifted = ∑ x in a, (α*x+α);
+  let square = ∑ x in a, x*x;
   return (zipped,named,products,native,shifted,square);
 }
 protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P,ignored:Vector<F>@P,α:F@P)
     -> (result:(F,F,F,F,F,F)@P) { return work(a,b,ignored,α); }
 run Demo = Run;
-'''
+'''.replace('FINITE', FINITE)
 
 
 def subdirectory(directory, name):
@@ -116,18 +124,18 @@ def test_collections_execute_once_in_written_order(toolchain, journal, directory
     source = '''module sample;
 domain F=field("koala-bear");
 type Vector<E:Field>=builtin("vector",E);
-fn sum(v:Vector<F>)->F=primitive("vector.sum");
+FINITE
 fn fill(x:F,n:index)->Vector<F>=primitive("vector.fill");
 fn work(n:index)->(F,index){
   let mut state:index=0;
-  let result=reduce sum [(x,y) in zip(
-      {state=state+1; fill(2,n)}, {state=state*10+3; fill(5,n)})] {x*y};
+  let result=sum(zip(
+      {state=state+1; fill(2,n)}, {state=state*10+3; fill(5,n)}),fn((x,y))=>x*y);
   return(result,state);
 }
 protocol Run roles(P)(n:index@P)->(result:(F,index)@P){return work(n);}
 run Demo=Run;
 '''
-    entry = Entry(toolchain, journal, directory, source, flags)
+    entry = Entry(toolchain, journal, directory, source.replace('FINITE', FINITE), flags)
     for n in (0, 3):
         assert entry.run(f'rows-{n}', {'n': n})['result'] == [decimal_values(10*n), '13']
 
@@ -140,12 +148,13 @@ type Vector<E:Field>=builtin("vector",E);
 fn length(v:Vector<F>)->index=primitive("vector.length");
 fn sum(v:Vector<F>)->F=primitive("vector.sum");
 fn nonempty(v:Vector<F>)->F{require !(length(v)==0);return sum(v);}
-reduction ∑=nonempty;
-fn work(a:Vector<F>,b:Vector<F>)->F{return ∑ [(x,y) in zip(a,b)] {x*y};}
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)>=domain("zip");
+fn collect<I:Type+Copy+Drop,E:Field>(rows:domain<I>,term:fn(item:I)->E effects(stop) where item_from(item, rows))->Vector<E> effects(stop)=finite("local.collect.vector");
+fn work(a:Vector<F>,b:Vector<F>)->F{let terms=collect(zip(a,b),fn((x,y))=>x*y);return nonempty(terms);}
 protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P)->(result:F@P){return work(a,b);}
 run Demo=Run;
 '''
-    entry = Entry(toolchain, journal, directory, source, flags)
+    entry = Entry(toolchain, journal, directory, source.replace('FINITE', FINITE), flags)
     assert entry.run('nonempty', {'a': decimal_values([2, 3]),
                                  'b': decimal_values([5, 7])})['result'] == decimal_values(31)
     refused = entry.run('empty', {'a': decimal_values([]), 'b': decimal_values([])},
@@ -220,19 +229,19 @@ def run_report(entry, name, inputs, capacity=None, refuses=None):
 
 
 BINDER_SUM = MAP_SUM.replace(
+    'fn sum(v:Vector<F>)->F=primitive("vector.sum");', FINITE).replace(
     'let mapped=map times(each a,each b,each unused);\n  return sum(mapped);',
-    'return reduce sum [(x,y,_) in zip(a,b,unused)] {x*y};')
+    'return ∑ ((x,y),_) in zip(zip(a,b),unused),x*y;')
 
 
-@pytest.mark.parametrize('source', [MAP_SUM, BINDER_SUM], ids=['named-map', 'binder'])
 @pytest.mark.parametrize('extra', [[], ['--no-simplify'], ['--release-storage']])
 def test_fusion_preserves_values_and_guards_with_different_resource_charges(
-    toolchain, journal, directory, source, extra,
+    toolchain, journal, directory, extra,
 ):
     # Repeat the same computation so the allocation gap exceeds the separate
     # input-loading charge on the original three vectors.
     repetitions = 8
-    source = source.replace('return work(a,b,unused);',
+    source = MAP_SUM.replace('return work(a,b,unused);',
                             'return ' + '+'.join(['work(a,b,unused)'] * repetitions) + ';')
     entries = {name: Entry(toolchain, journal, subdirectory(directory, name), source,
                            [*extra, *flags])
@@ -277,8 +286,9 @@ PROOF = '''module sample;
 domain F=field("bls12-381.fr");
 type Vector<E:Field>=builtin("vector",E);
 fn sum(v:Vector<F>)->F=primitive("vector.sum");
+math fn times(x:F,y:F)->F{return x*y;}
 fn weighted(a:Vector<F>,b:Vector<F>)->F{
-  return reduce sum [(x,y) in zip(a,b)] {x*y};
+  return sum(map times(each a,each b));
 }
 protocol Check roles(P,V)(a:Vector<F>@(P,V),b:Vector<F>@(P,V),coins:Random<F>@V)
     ->(accepted:bool@V){
@@ -367,15 +377,15 @@ def test_binder_and_body_shadowing_keep_outer_values(toolchain, journal, directo
     source = '''module sample;
 domain F=field("koala-bear");
 type Vector<E:Field>=builtin("vector",E);
-fn sum(v:Vector<F>)->F=primitive("vector.sum");
+FINITE
 fn work(a:Vector<F>,x:F,α:F)->(F,F){
-  let total=reduce sum [x in a] {let x=x+1; x*α};
+  let total=∑ x in a,{let x=x+1;x*α};
   return(total,x);
 }
 protocol Run roles(P)(a:Vector<F>@P,x:F@P,α:F@P)->(result:(F,F)@P){return work(a,x,α);}
 run Demo=Run;
 '''
-    entry = Entry(toolchain, journal, directory, source, flags)
+    entry = Entry(toolchain, journal, directory, source.replace('FINITE', FINITE), flags)
     assert entry.run('shadowed', {'a': decimal_values([2, 3]), 'x': decimal_values(77),
                                  'α': decimal_values(5)})['result'] == [
                                      decimal_values(35), decimal_values(77)]
@@ -383,7 +393,7 @@ run Demo=Run;
 
 def test_registered_participant_pipeline_forwards_fusion(toolchain, journal, directory):
     source = directory / 'source.zkc'
-    source.write_text(BINDER_SUM)
+    source.write_text(MAP_SUM)
     original = directory / 'original.mlir'
     original.write_text(journal.run([
         toolchain.compiler, 'language-emit', '--source-format=zkc',

@@ -83,6 +83,13 @@ remain independent of source effects and typing.
 
 ## Participant meaning
 
+A protocol may supply [scoped computations](definitions.md#scoped-computations)
+to a named Math or Local function. The signature fixes the literal's body mode.
+For a Local call, its data arguments and capture snapshots jointly constrain
+one owner. Captures are evaluated at their authored argument position. They
+cannot write outer bindings or borrow managed services. Local control inside
+the literal uses normal Local semantics, including short-circuit Boolean code.
+
 ```text
 protocol Transfer roles(P, V)(x: Fr @P, n: index @P, go: bool @P) -> (result: Fr @V) {
   let payload @P = accumulate(x, n, go);

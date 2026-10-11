@@ -1,0 +1,17 @@
+module zkc::field_array;
+use zkc::vector::{Vector};
+
+pub type Array<F: Field, N: nat> = builtin("field_array", F, N);
+pub fn from_vector<F: Field, N: nat>(values: Vector<F>) -> Array<F, N> = primitive("field_array.from_vector");
+pub fn get<F: Field, N: nat>(values: Array<F, N>, position: index) -> F = primitive("field_array.get");
+
+pub domain fn elements<F: Field, N: nat>(values: Array<F, N>) -> domain<F> = domain("elements");
+pub domain fn indices<F: Field, N: nat>(values: Array<F, N>) -> domain<index> = domain("indices");
+pub math fn at<F: Field, N: nat>(values: Array<F, N>, position: index) -> F where in_bounds(position, values)
+  = primitive("container.at");
+pub math fn collect<I: Type + Copy + Drop, F: Field, N: nat>(
+  rows: domain<I>, body: math fn(item: I) -> F where item_from(item, rows)
+) -> Array<F, N> = finite("math.collect.field_array");
+
+// Bounds follow the selected total accessor; checked access can be rebound locally.
+pub indexing values[position] = at(values, position);

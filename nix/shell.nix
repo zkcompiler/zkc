@@ -23,6 +23,7 @@ pkgs.mkShell.override { stdenv = llvm.stdenv; } (
       rust
       python
       pkgs.uv
+      pkgs.actionlint
       pkgs.nixfmt
     ];
     shellHook = environment.development + ''

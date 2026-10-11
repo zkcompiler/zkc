@@ -59,6 +59,22 @@ bool matchesStaticSort(const Type &type, StringRef sort) {
          : sort == "Type" ? isNativeData(type)
                           : isDomainSort(sort) && domainSort(type) == sort;
 }
+bool isSequenceKernel(StringRef contract) {
+  return contract == "sequence.empty" || contract == "sequence.append" ||
+         contract == "sequence.length" || contract == "sequence.at";
+}
+bool isSequenceElement(const Type &type) {
+  return isNativeData(type) || type.kind == K::Record ||
+         type.kind == K::Variant || type.kind == K::Tuple ||
+         type.kind == K::Array || type.kind == K::Unit ||
+         type.kind == K::Parameter || type.kind == K::Associated;
+}
+bool matchesKernelStaticSort(StringRef contract, const Type &type,
+                             StringRef sort) {
+  return sort == "Type" && isSequenceKernel(contract)
+             ? isSequenceElement(type)
+             : matchesStaticSort(type, sort);
+}
 Expected<std::string> kernelArgument(const Type &type, StringRef sort) {
   if (type.symbolic)
     return error("source.builtin", "installed binding requires closed statics");
@@ -109,10 +125,13 @@ Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
     const auto &argument = arguments[i];
     const auto &parameter = constructor->parameters[i];
     using S = protocol::StaticKind;
-    bool formed = matchesStaticSort(argument, parameter.kind == S::Type ? "Type"
-                                              : parameter.kind == S::Nat
-                                                  ? "Nat"
-                                                  : parameter.sort);
+    bool formed =
+        name == "sequence"
+            ? isSequenceElement(argument)
+            : matchesStaticSort(argument, parameter.kind == S::Type ? "Type"
+                                          : parameter.kind == S::Nat
+                                              ? "Nat"
+                                              : parameter.sort);
     if (!formed)
       return error("source.builtin",
                    "native type argument sort or representation differs");
@@ -124,7 +143,8 @@ Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
   result.arguments.assign(arguments.begin(), arguments.end());
   return result;
 }
-Expected<protocol::BoundType> builtinLayout(const Type &type) {
+Expected<protocol::BoundType>
+builtinLayout(const Type &type, const NativeLayoutResolver &resolve) {
   if (type.symbolic)
     return error("source.builtin", "native data layout requires a closed type");
   if (type.kind == K::Boolean)
@@ -140,6 +160,12 @@ Expected<protocol::BoundType> builtinLayout(const Type &type) {
   auto formed = builtinType(type.domain, type.arguments);
   if (!formed)
     return formed.takeError();
+  if (type.domain == "sequence" && resolve) {
+    auto element = resolve(type.arguments.front());
+    if (!element)
+      return element.takeError();
+    return protocol::applyBoundType("sequence", {element->spelling()});
+  }
   const auto *constructor = protocol::typeDeclaration(type.domain);
   std::vector<std::string> arguments;
   for (unsigned i = 0; i < type.arguments.size(); ++i) {
@@ -155,8 +181,9 @@ Expected<protocol::BoundType> builtinLayout(const Type &type) {
   }
   return protocol::applyBoundType(type.domain, arguments);
 }
-Expected<std::vector<std::string>> kernelArguments(StringRef contract,
-                                                   ArrayRef<Type> arguments) {
+Expected<std::vector<std::string>>
+kernelArguments(StringRef contract, ArrayRef<Type> arguments,
+                const NativeLayoutResolver &resolve) {
   auto operations = protocol::executableOperationContracts();
   auto found = llvm::find_if(operations, [&](const auto &operation) {
     return operation.name == contract;
@@ -171,7 +198,17 @@ Expected<std::vector<std::string>> kernelArguments(StringRef contract,
       continue;
     if (result.size() >= arguments.size())
       return error("source.kernel", "installed static argument count differs");
-    auto value = kernelArgument(arguments[result.size()], scope.sorts[i]);
+    const auto &argument = arguments[result.size()];
+    auto value = [&]() -> Expected<std::string> {
+      if (scope.sorts[i] != "Type" || !resolve)
+        return kernelArgument(argument, scope.sorts[i]);
+      auto layout = isSequenceKernel(contract)
+                        ? resolve(argument)
+                        : builtinLayout(argument, resolve);
+      if (!layout)
+        return layout.takeError();
+      return layout->spelling();
+    }();
     if (!value)
       return value.takeError();
     result.push_back(std::move(*value));

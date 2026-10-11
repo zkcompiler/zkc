@@ -3,6 +3,7 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "llvm/ADT/TypeSwitch.h"
@@ -12,7 +13,13 @@ using namespace mlir;
 #include "zkc/Dialect/Data/IR/dataOps.cpp.inc"
 #define GET_TYPEDEF_CLASSES
 #include "zkc/Dialect/Data/IR/dataTypes.cpp.inc"
+#define GET_ATTRDEF_CLASSES
+#include "zkc/Dialect/Data/IR/dataAttrs.cpp.inc"
 void zkc::data::DataDialect::initialize() {
+  addAttributes<
+#define GET_ATTRDEF_LIST
+#include "zkc/Dialect/Data/IR/dataAttrs.cpp.inc"
+      >();
   addTypes<
 #define GET_TYPEDEF_LIST
 #include "zkc/Dialect/Data/IR/dataTypes.cpp.inc"
@@ -62,6 +69,22 @@ LogicalResult IndexOp::verify() {
       text.getAsInteger(10, value))
     return refuse(*this, "expected a canonical unsigned 64-bit natural");
   return success();
+}
+std::optional<MathematicalIdentity> IndexOp::getMathematicalIdentity() {
+  return MathematicalIdentity::IndexConstant;
+}
+SmallVector<unsigned> IndexOp::getOperandDependencies(unsigned) { return {}; }
+std::optional<MathematicalIdentity> EqualOp::getMathematicalIdentity() {
+  return MathematicalIdentity::IndexEqual;
+}
+SmallVector<unsigned> EqualOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
+}
+std::optional<MathematicalIdentity> LessOp::getMathematicalIdentity() {
+  return MathematicalIdentity::IndexLess;
+}
+SmallVector<unsigned> LessOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
 }
 LogicalResult EqualOp::verify() { return success(); }
 LogicalResult LessOp::verify() { return success(); }

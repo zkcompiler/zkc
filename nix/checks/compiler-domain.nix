@@ -31,7 +31,7 @@ stdenv.mkDerivation {
   checkPhase = ''
     runHook preCheck
     export CMAKE_BUILD_PARALLEL_LEVEL="$NIX_BUILD_CORES"
-    ${python3.interpreter} scripts/install_domain.py \
+    ${python3.interpreter} common/tests/check_domain.py \
       --base-prefix ${base} --domain-prefix ${domain} \
       --output "$TMPDIR/domain-check"
     runHook postCheck
