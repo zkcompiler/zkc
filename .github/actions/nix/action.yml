@@ -1,5 +1,5 @@
 name: Nix environment
-description: Install upstream Nix and optionally enable the GitHub Actions binary cache
+description: Install upstream Nix and optionally restore the GitHub Actions Nix store cache
 inputs:
   cores:
     description: Parallel workers within one Nix build
@@ -10,6 +10,12 @@ inputs:
   cache:
     description: Read and write build outputs in the GitHub Actions cache
     default: "true"
+  cache-scope:
+    description: Separate store snapshots for jobs with different build graphs
+    default: "${{ github.job }}"
+  require-cache:
+    description: Require an empty project store before restoring cached results
+    default: "false"
 runs:
   using: composite
   steps:
@@ -39,36 +45,23 @@ runs:
             exit 1
           fi
         done
-    - name: Prefer the signed upstream cache
+    - name: Require an empty project store before restoration
+      if: inputs.require-cache == 'true'
       shell: bash
-      run: |
-        # The GitHub cache daemon sets priority=1. Prefer upstream packages
-        # while retaining GitHub storage for project outputs missing upstream.
-        nix_config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/nix"
-        mkdir -p "$nix_config_dir"
-        touch "$nix_config_dir/nix.conf"
-        upstream='extra-substituters = https://cache.nixos.org?priority=0'
-        if ! grep -Fxq "$upstream" "$nix_config_dir/nix.conf"; then
-          printf '%s\n' "$upstream" >> "$nix_config_dir/nix.conf"
-        fi
-    - name: Fetch the pinned cache daemon
+      run: bash .github/scripts/check-nix-cache.sh --assert-empty
+    - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
       if: inputs.cache == 'true'
-      shell: bash
-      run: |
-        curl --fail --location --retry 3 \
-          https://install.determinate.systems/magic-nix-cache-closure/rev/5a7f052c8f0c6511bbef3570eeed4d39242171ef/X64-Linux \
-          --output "$RUNNER_TEMP/zkc-magic-nix-cache.xz"
-        echo "8a854c5cd4d8519b3893e2cf1f0c3429ed57dd83b7f6d8defc048fa75750d410  $RUNNER_TEMP/zkc-magic-nix-cache.xz" | sha256sum --check
-    - uses: DeterminateSystems/magic-nix-cache-action@84c0677f58dcedf3b91f8223ce36a9ea5b3c84b7
-      if: inputs.cache == 'true'
-      env:
-        OTEL_SDK_DISABLED: "true"
       with:
-        source-binary: ${{ runner.temp }}/zkc-magic-nix-cache.xz
-        use-gha-cache: enabled
-        use-flakehub: disabled
-        diff-store: false
-        diagnostic-endpoint: ""
+        primary-key: nix-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock') }}-${{ github.sha }}
+        restore-prefixes-first-match: |
+          nix-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock') }}-
+        # Successful build graphs receive temporary GC roots. Remove stale
+        # results before snapshotting, including results from earlier commits.
+        gc-max-store-size-linux: 0
+    - name: Enable retention of successful build graphs
+      if: inputs.cache == 'true'
+      shell: bash
+      run: echo "ZKC_NIX_CACHE_ROOTS=$RUNNER_TEMP/zkc-nix-cache-roots" >> "$GITHUB_ENV"
     - name: Verify effective build isolation
       shell: bash
       run: |

@@ -37,7 +37,11 @@ def main():
         with (output / "outputs.json").open("w") as result:
             checked(["nix", "build", "-L", "--keep-going", "--no-link", "--json", *targets],
                     cwd=ROOT, stdout=result)
-        for result in json.loads((output / "outputs.json").read_text()):
+        results = json.loads((output / "outputs.json").read_text())
+        if os.environ.get("ZKC_NIX_CACHE_ROOTS"):
+            checked([sys.executable, str(ROOT / ".github/scripts/retain-nix-cache.py"),
+                     *(result["drvPath"] for result in results)], cwd=ROOT)
+        for result in results:
             for path in result["outputs"].values():
                 source = Path(path) / "reports"
                 if source.is_dir():

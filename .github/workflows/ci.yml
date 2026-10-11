@@ -161,6 +161,8 @@ jobs:
         if: runner.environment == 'github-hosted'
         run: sudo rm -rf /usr/local/lib/android
       - uses: ./.github/actions/nix
+        with:
+          require-cache: ${{ github.event_name == 'workflow_dispatch' && inputs.scope == 'cache' }}
       - name: Require restoration on a fresh project store
         if: github.event_name == 'workflow_dispatch' && inputs.scope == 'cache'
         run: bash .github/scripts/check-nix-cache.sh
@@ -201,6 +203,8 @@ jobs:
         if: runner.environment == 'github-hosted'
         run: sudo rm -rf /usr/local/lib/android
       - uses: ./.github/actions/nix
+        with:
+          cache-scope: optional-${{ matrix.package }}
       - name: Build and test the selected integration
         env:
           PACKAGE: ${{ matrix.package }}
@@ -208,6 +212,7 @@ jobs:
           mkdir -p build/reports
           nix build -L ".#$PACKAGE" --out-link "build/nix-$PACKAGE" \
             2>&1 | tee "build/reports/$PACKAGE.log"
+          python3 .github/scripts/retain-nix-cache.py "$(nix eval --raw ".#$PACKAGE.drvPath")"
           if [ -d "build/nix-$PACKAGE/reports" ]; then
             cp -RL "build/nix-$PACKAGE/reports" "build/reports/$PACKAGE"
           fi
