@@ -2,6 +2,7 @@
 #define ZKC_COMPILER_NATIVEPROOF_H
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Compiler/Compilation.h"
+#include "zkc/Transforms/MathematicalSelection.h"
 #include "llvm/Support/JSON.h"
 #include <variant>
 namespace zkc {
@@ -23,7 +24,7 @@ llvm::json::Value encodeNativeProofPolicy(const NativeProofPolicy &policy);
 llvm::Expected<NativeProofPolicy>
 selectNativeProofDraws(mlir::ModuleOp source,
                        const NativeProofPolicy &selection,
-                       bool fuseVectorReductions = false);
+                       MathematicalSelectionPolicy mathematicalSelection = {});
 struct NativeProofConstruction {
   mlir::OwningOpRef<mlir::ModuleOp> module;
   llvm::json::Value descriptor;
@@ -36,13 +37,14 @@ struct NativeProofConstruction {
 /// is asserted. An empty suite selects the authored no-transcript profile.
 llvm::Expected<NativeProofConstruction>
 constructNativeProof(mlir::ModuleOp source, const NativeProofPolicy &policy,
-                     bool fuseVectorReductions = false);
+                     MathematicalSelectionPolicy mathematicalSelection = {});
 /// Construct with an independent projected-to-constructed postcondition, then
 /// compare the entire supplied candidate, including SSA and retained records,
 /// ignoring locations. Source policy/occurrence admission remains a premise.
-llvm::Error checkNativeProof(mlir::ModuleOp source, mlir::ModuleOp candidate,
-                             const NativeProofPolicy &policy,
-                             bool fuseVectorReductions = false);
+llvm::Error
+checkNativeProof(mlir::ModuleOp source, mlir::ModuleOp candidate,
+                 const NativeProofPolicy &policy,
+                 MathematicalSelectionPolicy mathematicalSelection = {});
 /// Request service-based occurrence selection inside the owned compiler
 /// context. The policy fixes every choice except draws, which must be empty.
 struct NativeProofSelection {
@@ -51,7 +53,7 @@ struct NativeProofSelection {
 struct NativeProofOptions {
   std::variant<std::string, NativeProofSelection> policy;
   bool simplify = true, releaseStorage = false;
-  bool fuseVectorReductions = false;
+  MathematicalSelectionPolicy mathematicalSelection = {};
 };
 struct CompiledNativeProof {
   Compilation compilation;

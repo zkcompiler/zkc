@@ -12,7 +12,7 @@ use zkc_runtime::interactive::{LogicalType, PhysicalType};
 fn package(document: &Value, artifact: &str) -> Package {
     let bytes =
         json!({"format":"zkc.entry/0", "original":"original", "interface":document.to_string(),
-        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"fuse_vector_reductions":false},"assets":[]})
+        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false},"assets":[]})
         .to_string();
     Package::capture(
         bytes.as_bytes(),
@@ -612,7 +612,7 @@ fn proof_fixture() -> (Value, String) {
                 ""
             ]
         ],
-        ["true", "false", "false"],
+        ["true", "false", "false", "true"],
         []
     ])
     .to_string();
@@ -791,7 +791,12 @@ fn unicode_setup_material_is_injected_into_both_independent_proof_requests() {
 fn proof_package_binds_every_compilation_choice_to_the_deployment() {
     let (doc, artifact) = proof_fixture();
     let original = package(&doc, &artifact);
-    for key in ["simplify", "release_storage", "fuse_vector_reductions"] {
+    for key in [
+        "simplify",
+        "release_storage",
+        "fuse_vector_reductions",
+        "finite_bulk",
+    ] {
         let mut frame: Value = serde_json::from_slice(original.bytes()).unwrap();
         frame["options"][key] = json!(!frame["options"][key].as_bool().unwrap());
         let raw = frame.to_string();

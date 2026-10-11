@@ -1,10 +1,10 @@
-#include "FiniteSupport.h"
 #include "MathematicalSupport.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "zkc/Analysis/Computation.h"
 #include "zkc/Contracts/Binding.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -827,7 +827,7 @@ public:
 LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
                            const llvm::DenseSet<Operation *> &generated,
                            BindingSymbols &symbols,
-                           bool optimizeFinite = true) {
+                           MathematicalSelectionPolicy policy = {}) {
   // Finite control introduces regions and recursively referenced expressions.
   // Expand it before primitive dialect conversion: detached helper construction
   // must not escape the conversion rewriter's transaction bookkeeping.
@@ -844,8 +844,8 @@ LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
     if (!finiteWork--)
       return diagnostics::emit(next->emitError(), "finite-analysis-limit");
     OpBuilder builder(next);
-    auto result = finite::realizeExpression(next, next->getOperands(), builder,
-                                            optimizeFinite);
+    auto result =
+        finite::realizeExpression(next, next->getOperands(), builder, policy);
     if (failed(result))
       return failure();
     next->replaceAllUsesWith(*result);
@@ -872,12 +872,19 @@ LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
 struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerMathPass)
   LowerMathPass() = default;
-  explicit LowerMathPass(bool optimize) { optimizeFinite = optimize; }
+  explicit LowerMathPass(MathematicalSelectionPolicy policy) {
+    optimizeFinite = policy.finiteBulk;
+    fuseVectorReductions = policy.vectorReductionFusion;
+  }
   LowerMathPass(const LowerMathPass &other) : PassWrapper(other) {}
   Option<bool> optimizeFinite{
       *this, "optimize-finite",
       llvm::cl::desc("Recognize checked native finite realizations"),
       llvm::cl::init(true)};
+  Option<bool> fuseVectorReductions{
+      *this, "fuse-vector-reductions",
+      llvm::cl::desc("Select admitted vector reduction fusion"),
+      llvm::cl::init(false)};
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<local::LocalDialect, algebra::AlgebraDialect>();
   }
@@ -915,7 +922,8 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
         generated.insert(outlinedSymbols.lookup(reference.getValue()));
       }
     }
-    if (failed(lowerRecipes(unit, generated, symbols, optimizeFinite)))
+    if (failed(lowerRecipes(unit, generated, symbols,
+                            {optimizeFinite, fuseVectorReductions})))
       return signalPassFailure();
     for (auto &declaration : make_early_inc_range(unit.getBody().front()))
       if (isa<data::DomainOp, func::FuncOp>(declaration))
@@ -931,7 +939,7 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
 } // namespace
 LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
                                 ArrayRef<local::FuncOp> functions,
-                                bool optimizeFinite) {
+                                MathematicalSelectionPolicy policy) {
   BindingSymbols symbols(unit);
   llvm::DenseSet<Operation *> selected;
   for (auto function : functions)
@@ -941,12 +949,12 @@ LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
   // candidate is not an executable module until conversion finishes.
   OwningOpRef<protocol_ir::ProtocolModuleOp> original(
       cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
-  if (failed(lowerRecipes(unit, selected, symbols, optimizeFinite)))
+  if (failed(lowerRecipes(unit, selected, symbols, policy)))
     return failure();
   return verifyCalculationRecipes(*original, unit, functions);
 }
 } // namespace zkc::mathematical
 std::unique_ptr<mlir::Pass>
-zkc::protocol::createLowerMathPass(bool optimizeFinite) {
-  return std::make_unique<mathematical::LowerMathPass>(optimizeFinite);
+zkc::protocol::createLowerMathPass(MathematicalSelectionPolicy policy) {
+  return std::make_unique<mathematical::LowerMathPass>(policy);
 }

@@ -718,8 +718,8 @@ int main() {
                        : "fusion independent of simplification",
               [&] {
                 auto candidate = parse(fixture);
-                run(*candidate,
-                    protocol::createProjectProtocolPass(simplify, true));
+                run(*candidate, protocol::createProjectProtocolPass(
+                                    simplify, {true, true}));
                 run(*candidate, protocol::createEliminatePolynomialsPass());
                 run(*candidate, protocol::createLowerMathPass());
                 require(count(*candidate, "algebra.exec.vector_dot") == 1,
@@ -739,7 +739,7 @@ int main() {
       require(bool(original), "ordinary recipe fixture refused");
       auto enabled = copy(*original);
       run(*original, protocol::createPrepareProtocolPass(false));
-      run(*enabled, protocol::createPrepareProtocolPass(false, true));
+      run(*enabled, protocol::createPrepareProtocolPass(false, {true, true}));
       require(OperationEquivalence::isEquivalentTo(
                   *original, *enabled, OperationEquivalence::IgnoreLocations),
               "nonmatching recipe changed under enabled preparation");

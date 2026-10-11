@@ -24,6 +24,7 @@ impl Source {
         let mut options = CompileOptions {
             simplify: true,
             release_storage: false,
+            finite_bulk: true,
             fuse_vector_reductions: false,
         };
         for &(key, value) in &args.options {
@@ -43,6 +44,10 @@ impl Source {
                 }
                 "--release-storage" => {
                     options.release_storage = true;
+                    false
+                }
+                "--no-finite-bulk" => {
+                    options.finite_bulk = false;
                     false
                 }
                 "--fuse-vector-reductions" => {
@@ -100,7 +105,7 @@ impl Source {
     pub fn describe(&self, report: &mut Json) {
         report["mode"] = json!("project");
         report["compiler"] = json!(self.compiler.path());
-        report["options"] = json!({"simplify":self.options.simplify,"release_storage":self.options.release_storage,"fuse_vector_reductions":self.options.fuse_vector_reductions});
+        report["options"] = json!({"simplify":self.options.simplify,"release_storage":self.options.release_storage,"finite_bulk":self.options.finite_bulk,"fuse_vector_reductions":self.options.fuse_vector_reductions});
         if let Some(path) = self.project.manifest() {
             report["project"] = json!(path);
         }

@@ -40,7 +40,7 @@ int zkc::runCompiler(int argc, char **argv,
            "--module=MODULE=FILE.zkc\n"
            "    [--module=MODULE=FILE.zkc ...] [--asset=NAME=FORMAT=FILE ...]\n"
            "    [--no-simplify] [--release-storage] "
-           "[--fuse-vector-reductions]\n"
+           "[--fuse-vector-reductions] [--no-finite-bulk]\n"
            "    language-check may omit --entry to check definitions alone.\n"
            "    Output commands accept [--entry-kind=run|proof] and select the "
            "sole eligible Entry when --entry is omitted.\n"
@@ -56,22 +56,22 @@ int zkc::runCompiler(int argc, char **argv,
            "Protocol IR and native participant programs:\n"
            "  protocol-export FILE.mlir\n"
            "  protocol-bundle FILE.mlir [--entry=NAME] [--no-simplify] "
-           "[--release-storage] [--fuse-vector-reductions]\n"
+           "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
            "    [--fix-polynomial-factors]\n"
            "  protocol-checked-bundle FILE.mlir [--requirements=FILE] "
            "[--public-coin=FILE] [--entry=NAME] [--no-simplify] "
-           "[--release-storage] [--fuse-vector-reductions]\n"
+           "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
            "  protocol-check-reductions SOURCE.mlir REQUIREMENTS.json "
-           "CANDIDATE.mlir [--fuse-vector-reductions]\n"
+           "CANDIDATE.mlir [--fuse-vector-reductions] [--no-finite-bulk]\n"
            "  protocol-public-coin SOURCE.mlir REQUIREMENT.json\n"
            "  protocol-check-public-coin SOURCE.mlir REQUIREMENT.json "
            "REPORT.json\n"
            "  protocol-proof FILE.mlir POLICY [--no-simplify] "
-           "[--release-storage] [--fuse-vector-reductions]\n"
+           "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
            "  protocol-construct-proof FILE.mlir POLICY "
-           "[--fuse-vector-reductions]\n"
+           "[--fuse-vector-reductions] [--no-finite-bulk]\n"
            "  protocol-check-proof FILE.mlir POLICY CANDIDATE.mlir "
-           "[--fuse-vector-reductions]\n\n"
+           "[--fuse-vector-reductions] [--no-finite-bulk]\n\n"
            "Relation data (binary R1CS or canonical JSON):\n"
            "  relation-read | relation-inspect | relation-matrices FILE\n"
            "  relation-import FILE [SYMBOL] | relation-export FILE.mlir\n"
@@ -118,8 +118,10 @@ int zkc::runCompiler(int argc, char **argv,
           options.simplify = false;
         else if (option == "--release-storage")
           options.releaseStorage = true;
+        else if (option == "--no-finite-bulk")
+          options.mathematicalSelection.finiteBulk = false;
         else if (option == "--fuse-vector-reductions")
-          options.fuseVectorReductions = true;
+          options.mathematicalSelection.vectorReductionFusion = true;
         else
           return fail(error("native-proof-options"));
       }
@@ -131,9 +133,20 @@ int zkc::runCompiler(int argc, char **argv,
     }
     bool check = mode == "protocol-check-proof";
     const int required = check ? 5 : 4;
-    const bool fuse = argc == required + 1 &&
-                      StringRef(argv[required]) == "--fuse-vector-reductions";
-    if ((argc != required && !fuse) || !mlirNestingWithinLimit(*source))
+    MathematicalSelectionPolicy mathematicalSelection;
+    std::set<std::string> seen;
+    for (int i = required; i < argc; ++i) {
+      StringRef option(argv[i]);
+      if (!seen.insert(option.str()).second)
+        return fail(error("native-proof-options"));
+      if (option == "--fuse-vector-reductions")
+        mathematicalSelection.vectorReductionFusion = true;
+      else if (option == "--no-finite-bulk")
+        mathematicalSelection.finiteBulk = false;
+      else
+        return fail(error("native-proof-options"));
+    }
+    if (argc < required || !mlirNestingWithinLimit(*source))
       return fail(error("native-proof-options"));
     auto policy = parseNativeProofPolicy(*selected);
     if (!policy)
@@ -153,11 +166,13 @@ int zkc::runCompiler(int argc, char **argv,
           mlir::parseSourceString<mlir::ModuleOp>(*bytes, &context);
       if (!candidate)
         return fail(error("native-proof-candidate"));
-      if (auto e = checkNativeProof(*original, *candidate, *policy, fuse))
+      if (auto e = checkNativeProof(*original, *candidate, *policy,
+                                    mathematicalSelection))
         return fail(std::move(e));
       outs() << "[\"zkc.native-proof-checked/0\"]\n";
     } else {
-      auto constructed = constructNativeProof(*original, *policy, fuse);
+      auto constructed =
+          constructNativeProof(*original, *policy, mathematicalSelection);
       if (!constructed)
         return fail(constructed.takeError());
       constructed->module->print(outs());
@@ -198,10 +213,21 @@ int zkc::runCompiler(int argc, char **argv,
     return 0;
   }
   if (mode == "protocol-check-reductions") {
-    const bool fuse =
-        argc == 6 && StringRef(argv[5]) == "--fuse-vector-reductions";
-    if (argc != 5 && !fuse)
+    if (argc < 5)
       return fail(error("polynomial-requirement-options"));
+    MathematicalSelectionPolicy mathematicalSelection;
+    std::set<std::string> seen;
+    for (int i = 5; i < argc; ++i) {
+      StringRef option(argv[i]);
+      if (!seen.insert(option.str()).second)
+        return fail(error("polynomial-requirement-options"));
+      if (option == "--fuse-vector-reductions")
+        mathematicalSelection.vectorReductionFusion = true;
+      else if (option == "--no-finite-bulk")
+        mathematicalSelection.finiteBulk = false;
+      else
+        return fail(error("polynomial-requirement-options"));
+    }
     auto source = readInput(argv[2], 16 * 1024 * 1024);
     if (!source)
       return fail(source.takeError());
@@ -220,8 +246,8 @@ int zkc::runCompiler(int argc, char **argv,
         mlir::parseSourceString<mlir::ModuleOp>(*candidate, &context);
     if (!original || !proposed)
       return fail(error("polynomial-correspondence-module"));
-    auto checked =
-        checkPolynomialReductions(*original, *proposed, *requirements, fuse);
+    auto checked = checkPolynomialReductions(
+        *original, *proposed, *requirements, mathematicalSelection);
     if (!checked)
       return fail(checked.takeError());
     outs() << *checked << '\n';
@@ -241,8 +267,10 @@ int zkc::runCompiler(int argc, char **argv,
         options.simplify = false;
       else if (argument == "--release-storage")
         options.releaseStorage = true;
+      else if (argument == "--no-finite-bulk")
+        options.mathematicalSelection.finiteBulk = false;
       else if (argument == "--fuse-vector-reductions")
-        options.fuseVectorReductions = true;
+        options.mathematicalSelection.vectorReductionFusion = true;
       else if (argument == "--fix-polynomial-factors")
         options.fixPolynomialFactors = true;
       else if (mode == "protocol-checked-bundle" &&

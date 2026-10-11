@@ -68,12 +68,39 @@ avoid repeated scalar-frame capture charges. [Representation](representation.md)
 owns implementation selection; [capacity](../spec/runtime/capacity.md) owns
 operational limits.
 
+## Analysis and realization boundaries
+
+Typed domain operations remain the mathematical representation. Contracts own
+closed scalar laws, lane lifting and contraction equations with exact nominal
+ports. `Analysis/Computation` derives bounded, read-only views of existing SSA:
+iteration and admission order, accesses, captures, seeds, nested calls and result
+demand. These views borrow the current IR and must be recomputed after changes.
+They are neither serialized evidence nor a second mathematical language.
+
+Transforms select among admitted realizations and the ordered fallback. Map and
+finite field formulas share lane emission, including scalar subexpression
+sharing and cached broadcasts. A separate reader reconstructs meanings from
+actual source and candidate operations without the selector's classifications.
+Closed Ring laws justify its bounded comparison; ordered guards, helper
+expansion and unchanged context have their own checks.
+
+Demand determines the contraction's size. A single selected row or column uses
+`matrix.row_dot` or `matrix.column_dot` and returns one scalar. Collecting a
+uniform dot fold over all rows or columns can use one matrix-vector product.
+The nested rule keeps inner shape admission inside the nonempty outer branch,
+so an empty outer collection still skips the inner fold. Uniform nonzero seeds
+are broadcast and added after the contraction. Other nested or effectful
+callbacks retain ordered execution.
+
 ## Finite vector reductions
 
 Source binders reach general finite IR through ordinary scoped consumers. Its
 checked lowering recognizes admitted native contractions and retains an ordered
-loop fallback. Default simplification enables finite optimization; `--no-simplify`
-selects the loop path while retaining the same domain admission. Explicit authored `map` plus reducer calls keep the separate
+loop fallback. `MathematicalSelectionPolicy` enables the finite bulk family by
+default and leaves vector reduction fusion disabled. `--no-finite-bulk` selects
+the ordered finite fallback while retaining the same domain admission.
+`--no-simplify` controls generic total-expression folding independently; it does
+not disable mathematical selection. Explicit authored `map` plus reducer calls keep the separate
 `algebra.map_realize` path. Native `vector.product` reduces an already constructed
 vector to a scalar with empty identity one, separately from elementwise
 multiplication. The [source contract](../spec/language/definitions.md#finite-reduction-binders)
@@ -88,10 +115,33 @@ actual fused candidate with their originals, retaining full occurrence paths.
 The [IR contract](../spec/ir/protocols.md#optional-vector-reduction-fusion)
 defines exact eligibility and shared bounds.
 
-Fusion is disabled by default and independent of simplify/release-storage
-choices. `EntryOptions`, `RunOptions` and `NativeProofOptions` carry the same
-`fuseVectorReductions` Boolean to preparation; proof construction and polynomial
-correspondence checking also receive that choice. Fusion compares values and
+`EntryOptions`, `RunOptions` and `NativeProofOptions` carry one
+`mathematicalSelection` policy, with independent `finiteBulk` and
+`vectorReductionFusion` family controls. Preparation, total Math demand
+lowering, proof construction and polynomial correspondence reconstruction all
+receive the same policy. Public preparation, projection and lowering passes
+expose `optimize-finite` and `fuse-vector-reductions` options; the participant
+pipeline forwards both choices to its stages. Physical storage release remains
+a separate control.
+
+Entry packages and compilation reports record `finite_bulk` and
+`fuse_vector_reductions` alongside their separate simplify and storage choices.
+Native-proof deployments record simplify, storage release, fusion and finite
+bulk in that order; readers require all four choices. Reconstruction uses the
+selected policy, including when generic simplification is disabled.
+
+The explicit `rewriteLocalAlgorithms` preparation service admits the immutable
+whole source and owns each proposed rewrite. It retains finite and map structure
+through the checked selection window, then expands residual helpers. When
+there is no finite declaration or requested fusion, helper expansion runs once;
+an empty intermediate window must not charge the same expansion twice. Independent
+readers compare each actual nested-collection, finite, map and fusion candidate and both staged
+expansion results before publication. Generic simplification runs afterward;
+projection and execution lowering retain their structural Local preservation
+checks against the accepted preparation result. No additional profile or
+post-projection Local rewrite window is introduced.
+
+Fusion compares values and
 ordered shape refusals under sufficient resources; changed allocation and
 instruction charges may change exhaustion.
 No general optimization theorem, backend-failure equivalence or peak-memory

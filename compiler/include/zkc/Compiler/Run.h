@@ -2,6 +2,7 @@
 #define ZKC_COMPILER_RUN_H
 
 #include "zkc/Compiler/Compilation.h"
+#include "zkc/Transforms/MathematicalSelection.h"
 #include <optional>
 #include <string>
 
@@ -19,8 +20,8 @@ struct RunOptions {
   /// unsimplified common source before projection; bind the view to this
   /// bundle.
   std::optional<std::string> publicCoinRequirement;
-  /// Checked multiply-map/sum fusion; may change resource exhaustion.
-  bool fuseVectorReductions = false;
+  /// Mathematical algorithm families, independent of simplify/storage release.
+  MathematicalSelectionPolicy mathematicalSelection = {};
 };
 /// Owns the final physical module, including retained statement/interface
 /// metadata, and a complete zkc.run/0 bundle for the selected entry.

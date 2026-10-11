@@ -149,6 +149,8 @@ constexpr ContractRow contractRows[] = {
     {"matrix.bilinear", Arithmetic},
     {"matrix.dimension", Arithmetic},
     {"matrix.get", Arithmetic},
+    {"matrix.row_dot", Arithmetic},
+    {"matrix.column_dot", Arithmetic},
     {"matrix.shape_check", Arithmetic},
     {"matrix.identity_check", Arithmetic},
     {"poly.coefficient_count", Arithmetic},

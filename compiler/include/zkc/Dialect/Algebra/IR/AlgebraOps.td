@@ -131,6 +131,8 @@ def MatrixMulVectorOp : KernelOp<AlgebraDialect, "exec.matrix_mul_vector", [OpMa
 
 def MatrixDimensionOp : KernelOp<AlgebraDialect, "exec.matrix_dimension", [OpMatrixDimension]>;
 def MatrixGetOp : KernelOp<AlgebraDialect, "exec.matrix_get", [OpMatrixGet]>;
+def MatrixRowDotOp : KernelOp<AlgebraDialect, "exec.matrix_row_dot", [OpMatrixRowDot]>;
+def MatrixColumnDotOp : KernelOp<AlgebraDialect, "exec.matrix_column_dot", [OpMatrixColumnDot]>;
 
 def MatrixShapeCheckOp : KernelOp<AlgebraDialect, "exec.matrix_shape_check", [OpMatrixShapeCheck]>;
 

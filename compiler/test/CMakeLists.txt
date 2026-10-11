@@ -12,6 +12,11 @@ function(add_zkc_test name component)
   endif()
 endfunction()
 
+add_zkc_test(computation_analysis IR computation-analysis)
+target_compile_definitions(zkc-computation_analysis-test PRIVATE
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-computation_analysis-test PRIVATE MLIRParser)
+
 add_zkc_test(finite_computation Transforms finite-computation)
 target_compile_definitions(zkc-finite_computation-test PRIVATE
   ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
@@ -268,3 +273,18 @@ add_test(NAME relation-bundle-polynomial COMMAND zkc-relation_bundle_polynomial-
   "${PROJECT_SOURCE_DIR}/adapters/plonky3/fixtures/recurrence"
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/relation/polynomial-chunks.json")
 set_tests_properties(relation-bundle-polynomial PROPERTIES LABELS native)
+
+add_zkc_test(mathematical_comparison Transforms mathematical-comparison)
+target_compile_definitions(zkc-mathematical_comparison-test PRIVATE
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-mathematical_comparison-test PRIVATE MLIRParser)
+
+add_zkc_test(nested_contractions Transforms nested-contractions)
+target_compile_definitions(zkc-nested_contractions-test PRIVATE
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-nested_contractions-test PRIVATE MLIRParser)
+
+add_zkc_test(nested_contractions_source Compiler nested-contractions-source)
+target_compile_definitions(zkc-nested_contractions_source-test PRIVATE
+  ZKC_NESTED_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/language/nested-matrix.zkc")
+mlir_target_link_libraries(zkc-nested_contractions_source-test PRIVATE MLIRParser)

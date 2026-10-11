@@ -91,7 +91,7 @@ fn deployment() -> Json {
             ],
             ["V", "v", [["2", "bool"]], [["3", "bool"]], [], "0"]
         ],
-        ["true", "false", "false"],
+        ["true", "false", "false", "true"],
         [[first, "first"], [second, "second"]]
     ]);
     seal(&mut result);
@@ -558,17 +558,24 @@ fn deployment_compilation_choices_have_exact_boolean_shape() {
     let original = deployment();
     for choices in [
         json!(["true", "false"]),
-        json!(["true", "false", "false", "false"]),
-        json!(["true", "false", false]),
-        json!(["true", "false", "invalid"]),
+        json!(["true", "false", "false"]),
+        json!(["true", "false", "false", "true", "false"]),
+        json!(["true", "false", false, "true"]),
+        json!(["true", "false", "false", "invalid"]),
     ] {
         let mut changed = original.clone();
         changed[7] = choices;
         assert!(admit(&changed).is_err());
     }
     for fuse in [false, true] {
-        let mut changed = original.clone();
-        changed[7][2] = json!(if fuse { "true" } else { "false" });
-        assert_eq!(admit(&changed).unwrap().choices, [true, false, fuse]);
+        for finite in [false, true] {
+            let mut changed = original.clone();
+            changed[7][2] = json!(if fuse { "true" } else { "false" });
+            changed[7][3] = json!(if finite { "true" } else { "false" });
+            assert_eq!(
+                admit(&changed).unwrap().choices,
+                [true, false, fuse, finite]
+            );
+        }
     }
 }

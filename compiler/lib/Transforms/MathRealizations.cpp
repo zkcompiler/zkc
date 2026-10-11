@@ -97,7 +97,8 @@ LogicalResult verifyMathRealizationsPreserved(ModuleOp original,
   return success();
 }
 
-LogicalResult expandMathRealizations(ModuleOp module, bool optimizeFinite) {
+LogicalResult expandMathRealizations(ModuleOp module,
+                                     MathematicalSelectionPolicy policy) {
   if (failed(verify(module)) || !hasSingleElement(*module.getBody()))
     return failure();
   auto original =
@@ -167,7 +168,7 @@ LogicalResult expandMathRealizations(ModuleOp module, bool optimizeFinite) {
       op.setAttr("site", builder.getStringAttr("value_" +
                                                std::to_string(occurrence++)));
   }
-  if (failed(lowerCalculations(unit, functions, optimizeFinite)) ||
+  if (failed(lowerCalculations(unit, functions, policy)) ||
       failed(verifyMathRealizationsPreserved(module, *candidate)))
     return diagnostics::emit(
         module.emitError(), "local-realization-lowering",

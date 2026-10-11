@@ -160,6 +160,7 @@ add_zkc_component(IR
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Data/IR/Domains.cpp
   lib/Analysis/Finite.cpp
+  lib/Analysis/Computation.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
   lib/Dialect/Algebra/IR/Mathematical.cpp
   lib/Dialect/Algebra/IR/Maps.cpp
@@ -224,9 +225,12 @@ add_zkc_component(Transforms
   lib/Transforms/ProtocolApplications.cpp
   lib/Transforms/MathLowering.cpp
   lib/Transforms/MathRealizations.cpp
-  lib/Transforms/FiniteRecognition.cpp
   lib/Transforms/FiniteRealizations.cpp
   lib/Transforms/FiniteVerification.cpp
+  lib/Transforms/ComputationSelection.cpp
+  lib/Transforms/LaneRealization.cpp
+  lib/Transforms/MathematicalComparison.cpp
+  lib/Transforms/NestedContractions.cpp
   lib/Transforms/MapRealizations.cpp
   lib/Transforms/VectorReductions.cpp
   lib/Transforms/PolynomialRecipes.cpp

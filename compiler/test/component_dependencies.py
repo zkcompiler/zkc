@@ -172,7 +172,9 @@ def main():
         ROOT / "lib/Conversion/Bindings.h", ROOT / "lib/Target/PhysicalPlan.h",
         ROOT / "lib/Transforms/MathematicalSupport.h",
         ROOT / "lib/Transforms/AlgorithmSupport.h",
-        ROOT / "lib/Transforms/FiniteSupport.h",
+        ROOT / "lib/Transforms/ComputationSelection.h",
+        ROOT / "lib/Transforms/LaneRealization.h",
+        ROOT / "lib/Transforms/MathematicalComparison.h",
         ROOT / "lib/Transforms/MathematicalValues.h",
         ROOT / "lib/Transforms/PreparedProtocol.h",
         ROOT / "lib/Transforms/ProtocolApplications.h"

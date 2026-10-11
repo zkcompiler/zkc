@@ -72,9 +72,9 @@ void refusesIR(StringRef text, MLIRContext &context, StringRef code) {
 }
 void pipeline(ModuleOp module, bool optimize = true) {
   PassManager pm(module.getContext());
-  pm.addPass(protocol::createProjectProtocolPass(optimize));
+  pm.addPass(protocol::createProjectProtocolPass(optimize, {optimize, false}));
   pm.addPass(protocol::createEliminatePolynomialsPass());
-  pm.addPass(protocol::createLowerMathPass(optimize));
+  pm.addPass(protocol::createLowerMathPass({optimize, false}));
   pm.addPass(protocol::createSelectPhysicalPass());
   require(succeeded(pm.run(module)), "finite pipeline failed");
 }
@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
   for (bool optimize : {false, true})
     cases.run(optimize ? "native sum" : "generic fold", [&] {
       OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*original)->clone()));
-      require(succeeded(finite::realizeLocals(*candidate, optimize)),
+      require(succeeded(finite::realizeLocals(*candidate, {optimize, false})),
               "finite realization failed");
       require(succeeded(finite::verifyRealizations(*original, *candidate)),
               "independent correspondence failed");
@@ -116,12 +116,74 @@ int main(int argc, char **argv) {
     cases.run(optimize ? "optimized pipeline" : "fallback pipeline", [&] {
       OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*original)->clone()));
       PassManager pm(&context);
-      pm.addPass(protocol::createProjectProtocolPass(optimize));
+      pm.addPass(
+          protocol::createProjectProtocolPass(optimize, {optimize, false}));
       pm.addPass(protocol::createEliminatePolynomialsPass());
-      pm.addPass(protocol::createLowerMathPass(optimize));
+      pm.addPass(protocol::createLowerMathPass({optimize, false}));
       pm.addPass(protocol::createSelectPhysicalPass());
       require(succeeded(pm.run(*candidate)), "finite pipeline failed");
     });
+  for (bool simplify : {false, true})
+    for (bool bulk : {false, true})
+      cases.run(
+          std::string("finite policy independent of simplify ") +
+              (simplify ? "on/" : "off/") + (bulk ? "bulk" : "loop"),
+          [&] {
+            for (bool fuse : {false, true}) {
+              MathematicalSelectionPolicy policy{bulk, fuse};
+              OwningOpRef<ModuleOp> candidate(
+                  cast<ModuleOp>((*original)->clone()));
+              PassManager prepare(&context);
+              prepare.addPass(
+                  protocol::createPrepareProtocolPass(simplify, policy));
+              require(succeeded(prepare.run(*candidate)),
+                      "policy preparation failed");
+              bool sum = false, loop = false;
+              candidate->walk([&](Operation *op) {
+                sum |=
+                    op->getName().getStringRef() == "algebra.exec.vector_sum";
+                loop |= isa<local::LocalForOp>(op);
+              });
+              require(sum == bulk && loop == !bulk,
+                      "finite selection followed simplify or fusion");
+              OwningOpRef<ModuleOp> projected(
+                  cast<ModuleOp>((*candidate)->clone()));
+              PassManager project(&context);
+              project.addPass(
+                  protocol::createProjectProtocolPass(simplify, policy));
+              require(succeeded(project.run(*projected)),
+                      "policy projection failed");
+              require(succeeded(mathematical::verifyAuthoredLocalsPreserved(
+                          &candidate->getBody()->front(),
+                          &projected->getBody()->front())),
+                      "projection changed accepted Local algorithms");
+              auto total = parseSourceString<ModuleOp>(fixture("total-collect"),
+                                                       &context);
+              require(bool(total), "total fixture refused");
+              PassManager demand(&context);
+              demand.addPass(
+                  protocol::createProjectProtocolPass(simplify, policy));
+              demand.addPass(protocol::createLowerMathPass(policy));
+              require(succeeded(demand.run(*total)),
+                      "total demand policy failed");
+              bool totalLoop = false;
+              total->walk([&](local::LocalForOp) { totalLoop = true; });
+              require(totalLoop == !bulk,
+                      "total demand ignored finite family policy");
+            }
+          });
+  cases.run("default preparation selects bulk without generic simplify", [&] {
+    auto candidate = mathematical::rewriteLocalAlgorithms(*original);
+    require(bool(candidate), "checked Local preparation failed");
+    bool sum = false, originalFinite = false;
+    candidate->walk([&](Operation *op) {
+      sum |= op->getName().getStringRef() == "algebra.exec.vector_sum";
+    });
+    original->walk(
+        [&](Operation *op) { originalFinite |= finite::isDeclaration(op); });
+    require(sum && originalFinite,
+            "default preparation changed source or omitted bulk selection");
+  });
   cases.run("descriptor arbitrary expression refused", [&] {
     auto invalid = replace(
         source, "   %d =",
@@ -380,7 +442,7 @@ int main(int argc, char **argv) {
   cases.run("actual predicate arms exchanged", [&] {
     auto before = parseSourceString<ModuleOp>(fixture("filter"), &context);
     OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-    require(succeeded(finite::realizeLocals(*after, false)),
+    require(succeeded(finite::realizeLocals(*after, {false, false})),
             "realization failed");
     local::LocalIfOp branch;
     after->walk([&](local::LocalIfOp op) { branch = op; });
@@ -536,7 +598,7 @@ int main(int argc, char **argv) {
     require(succeeded(project.run(*before)), "projection failed");
     OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
     PassManager lower(&context);
-    lower.addPass(protocol::createLowerMathPass(false));
+    lower.addPass(protocol::createLowerMathPass({false, false}));
     require(succeeded(lower.run(*after)), "lowering failed");
     bool changed = false;
     after->walk([&](local::ReturnOp op) {

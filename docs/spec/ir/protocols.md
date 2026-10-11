@@ -240,17 +240,18 @@ simplifier does not rewrite realized bodies. Their value laws are the
 [pointwise map laws](../domains/vectors.md#pointwise-maps); their effects are
 measured by the [map tests](../../../common/tests/protocol/test_native_map.py).
 
-The map matcher derives the formula again from the retained original and reads
-the actual generated body independently of the realizer: guards, operand modes,
-broadcasts, field and vector operations, literals, the returned value and
-bindings. It also requires every other declaration to be retained unchanged and
-refuses with `algebra-map-correspondence`. It establishes equal values and equal
-shape refusals under the declared vector contracts and sufficient resources, not
-equal resource exhaustion against another realization. The matcher shares the
-formula derivation with the realizer: helper expansion, Ring admission and the
-removal of unused formula nodes, as well as the scalar or row mode of each value
-and the shape-guard contract. These shared steps are trusted on this edge; for
-helper expansion this matches `local.realize`.
+The map reader interprets the retained scalar helper and actual generated
+payload separately. It checks all source instructions, exact nominal fields,
+scalar and row inputs, broadcasts, literals and the returned value. Admitted
+ring laws allow shared subexpressions and commuted additions or multiplications.
+Ordered shape guards and unchanged surrounding declarations are checked outside
+that payload comparison. Failure reports `algebra-map-correspondence`.
+
+Helper expansion, installed contract semantics and Ring admission are shared
+foundations. The reader does not consume the selector's lane classifications,
+product slots or emission plan. The relation covers equal values and ordered
+shape refusals under sufficient resources. Allocation and instruction charges,
+arbitrary provider failures and exact resource exhaustion are outside it.
 
 Preparation then expands admitted `local.apply` using `canonical-expanded-locals/0`
 before freezing local definitions. An application inside a local region remains
@@ -277,7 +278,8 @@ operations and occurrence sites. The enabled path uses the existing
 `algebra.map_realize`, `local.apply` and typed native vector reduction operations;
 it introduces no separate mathematical graph or runtime callback.
 The C++ preparation/project pass factories and `PreparedProtocol::prepare`
-take the same default-false `fuseVectorReductions` choice. Direct
+take the same `MathematicalSelectionPolicy`, whose `vectorReductionFusion`
+choice defaults to false. Direct
 `zkc-prepare-protocol` and `zkc-project-protocol` pass invocations expose the
 `fuse-vector-reductions` Boolean option separately from `simplify`.
 

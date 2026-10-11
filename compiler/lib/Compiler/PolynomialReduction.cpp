@@ -617,10 +617,9 @@ Expected<json::Value> checkComposition(pir::ProtocolModuleOp source,
 }
 } // namespace
 
-Expected<json::Value> checkPolynomialReductions(ModuleOp original,
-                                                ModuleOp candidate,
-                                                StringRef text,
-                                                bool fuseVectorReductions) {
+Expected<json::Value>
+checkPolynomialReductions(ModuleOp original, ModuleOp candidate, StringRef text,
+                          MathematicalSelectionPolicy mathematicalSelection) {
   auto requirements = parse(text);
   if (!requirements)
     return requirements.takeError();
@@ -654,7 +653,7 @@ Expected<json::Value> checkPolynomialReductions(ModuleOp original,
   OwningOpRef<ModuleOp> projected(cast<ModuleOp>(original->clone()));
   PassManager preparation(original.getContext());
   preparation.addPass(
-      protocol::createProjectProtocolPass(false, fuseVectorReductions));
+      protocol::createProjectProtocolPass(false, mathematicalSelection));
   if (failed(preparation.run(*projected)))
     return error("polynomial-correspondence-source");
   auto expected = cast<pir::ProtocolModuleOp>(projected->getBody()->front());
@@ -761,7 +760,8 @@ Expected<json::Value> checkPolynomialReductions(ModuleOp original,
   };
   return json::Object{
       {"format", "zkc.polynomial-correspondence/0"},
-      {"fuse_vector_reductions", fuseVectorReductions},
+      {"finite_bulk", mathematicalSelection.finiteBulk},
+      {"fuse_vector_reductions", mathematicalSelection.vectorReductionFusion},
       {"requirements", std::move(results)},
       {"requirement_source", requirementSource},
       {"requirements_sha256", digest(requirementSource)},

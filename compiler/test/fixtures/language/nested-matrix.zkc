@@ -1,0 +1,15 @@
+module sample;
+domain F=field("koala-bear");
+type Vector<E:Field>=builtin("vector",E);
+type Matrix<E:Field>=builtin("matrix",E);
+domain fn elements<E:Field>(xs:Vector<E>)->domain<E>=domain("elements");
+domain fn row_indices<E:Field>(m:Matrix<E>)->domain<index>=domain("indices.rows");
+domain fn row_values<E:Field>(m:Matrix<E>,r:index)->domain<E>=domain("matrix.row");
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(xs:domain<A>,ys:domain<B>)->domain<(A,B)>=domain("zip");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item,rows))->S effects(stop)=finite("local.fold");
+fn collect<I:Type+Copy+Drop,E:Field>(rows:domain<I>,body:fn(item:I)->E effects(stop) where item_from(item,rows))->Vector<E> effects(stop)=finite("local.collect.vector");
+fn work(m:Matrix<F>,xs:Vector<F>,seed:F)->Vector<F>{
+  return collect(row_indices(m),fn(r)=>fold(zip(row_values(m,r),elements(xs)),seed,fn(s,(a,b))=>s+a*b));
+}
+protocol Run roles(P)(m:Matrix<F>@P,xs:Vector<F>@P,seed:F@P)->(result:Vector<F>@P){return work(m,xs,seed);}
+run Demo=Run;

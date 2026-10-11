@@ -241,6 +241,37 @@ pub(crate) fn mul<S: Coefficient>(
     }
     Ok(result)
 }
+/// Contract only the selected row. Sorted COO gives a contiguous range, found
+/// without reading coefficients in other rows or allocating a dense vector.
+pub(crate) fn row_dot<S: Coefficient>(m: &SparseCoo<S>, x: &[S], row: usize) -> Result<S> {
+    if x.len() != m.columns {
+        return Err(refused("matrix-shape"));
+    }
+    if row >= m.rows {
+        return Err(refused("matrix-index"));
+    }
+    let start = m.entries.partition_point(|&(r, _, _)| (r as usize) < row);
+    let end = start + m.entries[start..].partition_point(|&(r, _, _)| (r as usize) == row);
+    Ok(m.entries[start..end]
+        .iter()
+        .fold(S::zero(), |sum, &(_, c, a)| sum + a * x[c as usize]))
+}
+
+/// Row-major COO has no contiguous column range. Scan its existing nonzeros,
+/// multiplying only the selected column and retaining just one accumulator.
+pub(crate) fn column_dot<S: Coefficient>(m: &SparseCoo<S>, y: &[S], column: usize) -> Result<S> {
+    if y.len() != m.rows {
+        return Err(refused("matrix-shape"));
+    }
+    if column >= m.columns {
+        return Err(refused("matrix-index"));
+    }
+    Ok(m.entries
+        .iter()
+        .filter(|&&(_, c, _)| c as usize == column)
+        .fold(S::zero(), |sum, &(r, _, a)| sum + a * y[r as usize]))
+}
+
 pub(crate) fn bilinear<S: Coefficient>(m: &SparseCoo<S>, y: &[S], x: &[S]) -> Result<S> {
     if y.len() != m.rows || x.len() != m.columns {
         return Err(refused("matrix-shape"));

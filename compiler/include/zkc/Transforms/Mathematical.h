@@ -1,10 +1,20 @@
 #ifndef ZKC_TRANSFORMS_MATHEMATICAL_H
 #define ZKC_TRANSFORMS_MATHEMATICAL_H
 #include "mlir/IR/BuiltinOps.h"
+#include "zkc/Transforms/MathematicalSelection.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
 namespace zkc::mathematical {
+/// Checked Local algorithm-selection window on an immutable protocol source.
+/// Returns an owned candidate only after admission and independent checks of
+/// actual nested-collection, finite, map and fusion rewrites and staged helper
+/// expansion. Generic total simplification is separate; projection preserves
+/// this accepted Local input.
+mlir::OwningOpRef<mlir::ModuleOp>
+rewriteLocalAlgorithms(mlir::ModuleOp source,
+                       MathematicalSelectionPolicy policy = {});
+
 /// Admit the whole mathematical module, then check polynomial observations in
 /// selected pure helpers even when no execution path calls them. Expansion and
 /// degree checks use bounded scratch copies without simplification or
@@ -30,8 +40,9 @@ mlir::LogicalResult expandPolynomialRecipes(mlir::ModuleOp module);
 
 /// Realize admitted data-signature math helpers through the common polynomial
 /// and calculation lowerers. Calls remain ordered and expand with local.apply.
-mlir::LogicalResult expandMathRealizations(mlir::ModuleOp module,
-                                           bool optimizeFinite = true);
+mlir::LogicalResult
+expandMathRealizations(mlir::ModuleOp module,
+                       MathematicalSelectionPolicy policy = {});
 /// Structural containment check, not an independent proof of the math lowerers.
 /// Checks retained declarations, data-only recipes and binding accounting.
 mlir::LogicalResult verifyMathRealizationsPreserved(mlir::ModuleOp original,
@@ -44,12 +55,11 @@ mlir::LogicalResult verifyMathRealizationsPreserved(mlir::ModuleOp original,
 /// then applies the live formula with O(formula) checked vector operations.
 /// Calls remain ordered local.apply occurrences.
 mlir::LogicalResult expandMapRealizations(mlir::ModuleOp module);
-/// Independent pattern check of each generated body against the formula
-/// derived again from the retained original: shape guards, operand modes,
-/// broadcasts, field operations, return value, bindings and the declaration
-/// inventory. It claims equal values and shape refusals under sufficient
-/// resources under the declared primitive contracts, not equal resource
-/// exhaustion.
+/// Independently interpret the retained scalar formula and actual candidate
+/// payload under admitted ring laws. Check ordered shape guards, return use,
+/// bindings and unchanged declarations separately from payload equivalence. It
+/// claims equal values and shape refusals under sufficient resources under the
+/// declared primitive contracts, not equal resource exhaustion.
 mlir::LogicalResult verifyMapRealizationsPreserved(mlir::ModuleOp original,
                                                    mlir::ModuleOp candidate);
 /// Admission of every map formula on an immutable original, using bounded

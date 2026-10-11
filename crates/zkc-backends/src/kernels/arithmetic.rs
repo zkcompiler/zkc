@@ -378,6 +378,16 @@ fn dense<S: Family>(
             )])
         }
         "matrix.bilinear" => scalar(crate::matrix::bilinear(S::matrix(arg(0)?)?, v(1)?, v(2)?)?),
+        "matrix.row_dot" => scalar(crate::matrix::row_dot(
+            S::matrix(arg(0)?)?,
+            v(1)?,
+            index(2)?,
+        )?),
+        "matrix.column_dot" => scalar(crate::matrix::column_dot(
+            S::matrix(arg(0)?)?,
+            v(1)?,
+            index(2)?,
+        )?),
         "matrix.get" => scalar(crate::matrix::get(
             S::matrix(arg(0)?)?,
             index(1)?,
@@ -1012,6 +1022,28 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             "arkworks/matrix.bilinear",
             "dalek/matrix.bilinear",
             "plonky3/matrix.bilinear",
+        ]),
+        field::operation(
+            "matrix.row_dot",
+            &[Matrix, Vector, Index],
+            &[Field],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/matrix.row_dot",
+            "dalek/matrix.row_dot",
+            "plonky3/matrix.row_dot",
+        ]),
+        field::operation(
+            "matrix.column_dot",
+            &[Matrix, Vector, Index],
+            &[Field],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/matrix.column_dot",
+            "dalek/matrix.column_dot",
+            "plonky3/matrix.column_dot",
         ]),
         field::operation(
             "matrix.get",

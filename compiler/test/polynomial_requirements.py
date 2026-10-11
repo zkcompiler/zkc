@@ -254,4 +254,35 @@ with case("independent reduction checker rejects mismatched preparation choices"
                       requirement_path, candidate_path, *opposite],
                      refuses='polynomial-correspondence-declaration')
 
+with case("finite policy matches independent reconstruction with and without simplify"):
+    finite = (fixtures.parent / 'finite/sum.mlir').read_text()
+    declarations = finite.split('module { "protocol.module"() ({', 1)[1].split(' "protocol.func"', 1)[0]
+    declarations = declarations.replace('!V', vector).replace('!F', field)
+    mixed = source.replace('module { "protocol.module"() ({',
+                           'module { "protocol.module"() ({' + declarations, 1)
+    source_path.write_text(mixed)
+    requirement_path.write_text(canonical)
+    for bulk in (False, True):
+        choice = 'true' if bulk else 'false'
+        candidate = commands.verified(
+            mixed, None, f'--zkc-project-protocol=simplify=false optimize-finite={choice}')
+        assert ('algebra.exec.vector_sum' in candidate) == bulk
+        candidate_path.write_text(candidate)
+        flags = [] if bulk else ['--no-finite-bulk']
+        report = json.loads(commands.run([
+            compiler, 'protocol-check-reductions', source_path,
+            requirement_path, candidate_path, *flags]))
+        assert report['finite_bulk'] is bulk
+        opposite = ['--no-finite-bulk'] if bulk else []
+        commands.run([compiler, 'protocol-check-reductions', source_path,
+                      requirement_path, candidate_path, *opposite],
+                     refuses='polynomial-correspondence-declaration')
+        for simplify in (False, True):
+            compiled = json.loads(commands.source(
+                'protocol-checked-bundle', mixed, '--entry=reduction',
+                f'--requirements={requirement_path}', *flags,
+                *([] if simplify else ['--no-simplify'])))
+            assert compiled['correspondence']['finite_bulk'] is bulk
+            assert compiled['correspondence']['simplify'] is simplify
+
 print(f"polynomial requirements: {counted()} cases")

@@ -54,6 +54,7 @@ Expected<OwningOpRef<ModuleOp>> parseNativeSource(StringRef text,
 }
 LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
                            bool releaseStorage,
+                           MathematicalSelectionPolicy mathematicalSelection,
                            LinearContractionStats &statistics) {
   PassManager pipeline(module.getContext());
   if (simplify)
@@ -61,7 +62,7 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
   if (fixPolynomials)
     pipeline.addPass(protocol::createFixPolynomialFactorsPass());
   pipeline.addPass(protocol::createEliminatePolynomialsPass());
-  pipeline.addPass(protocol::createLowerMathPass(simplify));
+  pipeline.addPass(protocol::createLowerMathPass(mathematicalSelection));
   pipeline.addPass(protocol::createSelectPhysicalPass({}, false, releaseStorage,
                                                       &statistics));
   return pipeline.run(module);
@@ -97,7 +98,7 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   if (options.polynomialRequirements)
     original = cast<ModuleOp>(result->module->getOperation()->clone());
   auto preparation = mathematical::PreparedProtocol::prepare(
-      *result->module, options.fuseVectorReductions, options.simplify);
+      *result->module, options.mathematicalSelection);
   if (!preparation || diagnostics.hasErrors())
     return diagnostics.failure();
   auto prepared = preparation->snapshot();
@@ -109,7 +110,7 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   if (options.polynomialRequirements) {
     auto checked = checkPolynomialReductions(*original, *result->module,
                                              *options.polynomialRequirements,
-                                             options.fuseVectorReductions);
+                                             options.mathematicalSelection);
     if (!checked)
       return diagnostics.failure(checked.takeError());
     bool covered = false;
@@ -126,7 +127,7 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   }
   if (failed(lowerProgram(*result->module, options.simplify,
                           options.fixPolynomialFactors, options.releaseStorage,
-                          result->statistics)) ||
+                          options.mathematicalSelection, result->statistics)) ||
       diagnostics.hasErrors())
     return diagnostics.failure();
   auto bundle =
@@ -148,7 +149,9 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
     object["entry"] = options.entry;
     object["simplify"] = options.simplify;
     object["release_storage"] = options.releaseStorage;
-    object["fuse_vector_reductions"] = options.fuseVectorReductions;
+    object["finite_bulk"] = options.mathematicalSelection.finiteBulk;
+    object["fuse_vector_reductions"] =
+        options.mathematicalSelection.vectorReductionFusion;
     object["fix_polynomial_factors"] = options.fixPolynomialFactors;
     json::Array passes;
     if (options.simplify) {
@@ -196,7 +199,9 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
                      {"bundle_sha256", digest(*bundle)},
                      {"simplify", options.simplify},
                      {"release_storage", options.releaseStorage},
-                     {"fuse_vector_reductions", options.fuseVectorReductions},
+                     {"finite_bulk", options.mathematicalSelection.finiteBulk},
+                     {"fuse_vector_reductions",
+                      options.mathematicalSelection.vectorReductionFusion},
                      {"fix_polynomial_factors", options.fixPolynomialFactors}});
     // Describe semantic pipeline stages with their public pass names. This is
     // not a PassManager execution trace: preparation is implicit here, and
@@ -240,18 +245,19 @@ compileNativeProof(StringRef text, StringRef filename,
   if (!policy) {
     auto selected = selectNativeProofDraws(
         *original, std::get<NativeProofSelection>(options.policy).policy,
-        options.fuseVectorReductions);
+        options.mathematicalSelection);
     if (!selected)
       return diagnostics.failure(selected.takeError());
     policy = std::move(*selected);
   }
   auto constructed =
-      constructNativeProof(*original, *policy, options.fuseVectorReductions);
+      constructNativeProof(*original, *policy, options.mathematicalSelection);
   if (!constructed)
     return diagnostics.failure(constructed.takeError());
   result->module = std::move(constructed->module);
   if (failed(lowerProgram(*result->module, options.simplify, false,
-                          options.releaseStorage, result->statistics)) ||
+                          options.releaseStorage, options.mathematicalSelection,
+                          result->statistics)) ||
       diagnostics.hasErrors())
     return diagnostics.failure();
   auto exported = protocol::exportModule(*result->module);
@@ -325,7 +331,9 @@ compileNativeProof(StringRef text, StringRef filename,
       digest(*descriptorBytes), candidate, digest(candidate), std::move(maps),
       json::Array{options.simplify ? "true" : "false",
                   options.releaseStorage ? "true" : "false",
-                  options.fuseVectorReductions ? "true" : "false"},
+                  options.mathematicalSelection.vectorReductionFusion ? "true"
+                                                                      : "false",
+                  options.mathematicalSelection.finiteBulk ? "true" : "false"},
       json::Array(constructed->wireSites)});
   auto encoded = printJson(deployment);
   if (encoded.size() > 16 * 1024 * 1024)
