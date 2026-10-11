@@ -246,6 +246,70 @@ protocol Demo roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return iterate(x,n,fun y=>y+x
                     std::string::npos,
                 "wrong loop alias refusal");
       });
+  for (bool components : {false, true})
+    for (const auto &control :
+         {std::string("for"), std::string("if"), std::string("match")})
+      cases.run(
+          "hidden " + control + " input " +
+              (components ? "participants" : "type"),
+          [components, control] {
+            std::string expression;
+            if (control == "for")
+              expression = "let mut state=x;for _ in 0..1 "
+                           "{state=body(state);}return state;";
+            else if (control == "if")
+              expression = "return if flag {body(x)} else {x};";
+            else
+              expression =
+                  "return match flag {Left(v)=>{body(v)},Right(v)=>{v}};";
+            std::string flagType = control == "match" ? "Choice" : "bool";
+            auto project = take(check(
+                "enum Choice {Left(Fr),Right(Fr)} fn choose(x:Fr,flag:" +
+                flagType +
+                ",body:scoped fn(Fr)->Fr "
+                "!{stop})->Fr !{stop}{" +
+                expression +
+                "}protocol Demo roles(P)(x:Fr@P,y:Fr@P,flag:" + flagType +
+                "@P)"
+                "->(r:Fr@P){return choose(x,flag,fun v=>v+y);}run Run=Demo;"));
+            auto closed = take(closeEntry(project, "m::Run"));
+            bool changed = false;
+            for (const auto &decl : closed.declarations())
+              if (decl.body && decl.name == "choose") {
+                auto body = std::make_shared<Body>(*decl.body);
+                const_cast<Declaration &>(decl).body = body;
+                for (auto &op : body->operations)
+                  if (auto *region = std::get_if<LocalControl>(&op.action)) {
+                    auto copy = std::make_shared<Body>(*region->regions.back());
+                    require(!region->regionLayouts.back().captures.empty(),
+                            "missing hidden control capture");
+                    auto port = region->regionLayouts.back().captures.back();
+                    require(port < copy->inputs, "invalid hidden input");
+                    if (components)
+                      copy->values[port].components = {0};
+                    else
+                      copy->values[port].type = Type(Type::Kind::Index);
+                    region->regions.back() = std::move(copy);
+                    changed = true;
+                  }
+              }
+            require(changed, "missing closed control region");
+            auto error = checkScopedSpecialization(closed);
+            require(bool(error), "forged hidden input accepted");
+            require(toString(std::move(error))
+                            .find("source.scoped-specialization") !=
+                        std::string::npos,
+                    "wrong hidden input refusal");
+          });
+  cases.run("control regions preserve function call depth", [] {
+    std::string source = "fn f40(x:Fr)->Fr{return x;}";
+    for (unsigned i = 0; i < 40; ++i)
+      source += "fn f" + std::to_string(i) +
+                "(x:Fr)->Fr{let mut s=x;for _ in 0..1 {s=f" +
+                std::to_string(i + 1) + "(s);}return s;}";
+    succeeds(source + "protocol Demo roles(P)(x:Fr@P)->(r:Fr@P)"
+                      "{return f0(x);}run Run=Demo;");
+  });
   cases.run("generic Math apply and forwarding", [] {
     succeeds(R"(
 protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return(r=forward_math(x,fun y=>y+a));}

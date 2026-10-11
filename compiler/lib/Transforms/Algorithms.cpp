@@ -117,7 +117,9 @@ class Expander {
   LogicalResult body(zkc::local::FuncOp function, Block &block,
                      IRMapping &mapping, StringRef root,
                      protocol::Assignments path, bool encode,
-                     SmallVector<Value> &returned, unsigned depth = 0) {
+                     SmallVector<Value> &returned, unsigned depth = 0,
+                     const protocol::Assignments &invocation = {},
+                     unsigned invocationDepth = 0) {
     if (path.size() > 64 || depth > 64)
       return diagnostics::emit(function.emitOpError(),
                                "interactive-call-depth");
@@ -129,9 +131,13 @@ class Expander {
       --output.work;
       auto saved =
           detail::occurrence(input, function.getSymName(), attr(&op, "site"));
-      auto currentPath = saved ? saved->path : path;
+      // Recorded paths are relative to this function's earlier expansion.
+      // A later caller adds its own prefix, including inside recorded regions.
+      auto currentPath = saved ? invocation : path;
+      if (saved)
+        llvm::append_range(currentPath, saved->path);
       auto originalSite = saved ? saved->originalSite : attr(&op, "site").str();
-      unsigned currentDepth = saved ? saved->depth : depth;
+      unsigned currentDepth = saved ? invocationDepth + saved->depth : depth;
       if (currentPath.size() > 64 || currentDepth > 64)
         return diagnostics::emit(op.emitOpError(), "interactive-call-depth");
       if (auto ret = dyn_cast<zkc::local::ReturnOp>(op)) {
@@ -151,8 +157,9 @@ class Expander {
         auto nested = currentPath;
         nested.emplace_back(originalSite, definition(callee));
         SmallVector<Value> results;
-        if (failed(body(callee, callee.getBody().front(), inner, root,
-                        std::move(nested), true, results, currentDepth + 1)))
+        if (failed(body(callee, callee.getBody().front(), inner, root, nested,
+                        true, results, currentDepth + 1, nested,
+                        currentDepth + 1)))
           return failure();
         if (!builder.getInsertionBlock()->empty() &&
             isa<zkc::local::StopOp>(builder.getInsertionBlock()->back()))
@@ -168,7 +175,7 @@ class Expander {
         if (isa<local::ApplyOp>(op) &&
             (currentPath.size() >= 64 || currentDepth >= 64))
           return diagnostics::emit(op.emitOpError(), "interactive-call-depth");
-        if (encode && !saved) {
+        if (encode && (!saved || !invocation.empty())) {
           auto encoded =
               algorithmSite(currentPath, original, output.originBytes);
           if (!encoded)
@@ -187,7 +194,8 @@ class Expander {
           builder.setInsertionPointToEnd(nestedBlock);
           SmallVector<Value> ignored;
           if (failed(body(function, before.front(), inner, root, currentPath,
-                          encode, ignored, currentDepth + 1)))
+                          encode, ignored, currentDepth + 1, invocation,
+                          invocationDepth)))
             return failure();
         }
         if (op.hasAttr("site"))
@@ -215,6 +223,8 @@ class Expander {
                   : detail::AlgorithmOccurrence{
                         definition(function), function.getSymName().str(),
                         original, currentPath, currentDepth};
+        record.path = currentPath;
+        record.depth = currentDepth;
         if (op.hasAttr("site"))
           output.occurrences.emplace(detail::OccurrenceKey{root.str(), site},
                                      record);

@@ -1,3 +1,4 @@
+#include "Finite.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Builders.h"
@@ -621,6 +622,16 @@ class Emitter {
         if (!actual)
           return false;
         result = Values(actual->getResults());
+      } else if (auto *finite = std::get_if<FiniteComputation>(&op.action)) {
+        auto emitted =
+            take(emitFinite(project, source, *finite,
+                            source.values[op.results.front().index].type,
+                            values, builder, location, *definitions, layouts,
+                            "finite_" + decl.symbol + "_" + site, site, limits,
+                            operations, remaining));
+        if (!emitted)
+          return false;
+        result = std::move(*emitted);
       } else if (auto *bulk = std::get_if<BulkApplication>(&op.action)) {
         if (source.mode != Body::Mode::Local) {
           failure = error("source.mode", "map requires local mode");

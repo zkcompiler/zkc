@@ -43,10 +43,15 @@ closeInputs(Semantics &types, const Body &body,
     if (!types.charge((origin->second.size() + 1) * levels, span))
       return {};
     auto [found, inserted] = selected.emplace(std::move(*origin), fresh);
-    if (!inserted && body.values[result.operands[found->second]->index].type !=
-                         body.values[value.index].type) {
+    if (!inserted &&
+        (body.values[result.operands[found->second]->index].type !=
+             body.values[value.index].type ||
+         (body.mode == Body::Mode::Protocol &&
+          body.values[result.operands[found->second]->index].components !=
+              body.values[value.index].components))) {
       types.fail("source.closure-inputs",
-                 "one captured place has different types", span);
+                 "one captured place has different types or participants",
+                 span);
       return {};
     }
     return found->second;
@@ -95,7 +100,9 @@ bindClosureInputs(Semantics &types, const Body &body,
   }
   auto equal = [&](ValueId a, ValueId b) {
     if (a.index >= body.values.size() || b.index >= body.values.size() ||
-        body.values[a.index].type != body.values[b.index].type)
+        body.values[a.index].type != body.values[b.index].type ||
+        (body.mode == Body::Mode::Protocol &&
+         body.values[a.index].components != body.values[b.index].components))
       return false;
     auto permissions = types.permissions(body.values[a.index].type, span);
     if (!permissions || !permissions->copy || !permissions->drop)

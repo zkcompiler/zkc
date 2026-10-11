@@ -39,6 +39,16 @@ captures reachable recipes with explicit data operands and participant
 availability. Independent domain and specialization witnesses check the selected
 constructor graph, operand substitutions and region layouts before emission.
 
+Closed finite operations emit private `data.domain` recipes and callback adapters
+with the finite IR's state, item, domain and capture ports. Ordinary scoped helpers
+retain their source calling convention. The adapter unpacks sequence products,
+calls that helper, and packs collected products where required. Exact SSA aliases
+reuse domain or capture ports; equal types do not justify reuse. Local definitions
+emit preparation callables and ordinary `local.apply` sites; Math definitions
+emit Algebra finite expressions. An independent reader checks constructor order,
+callback targets, operand mappings, packing and complete auxiliary-definition
+coverage against the closed source operation.
+
 Math helpers become private `func.func` definitions. A selected formula relation
 adds a non-callable `relation.declare` and a private Boolean `func.func`; its exact
 link is retained in the interface. Opaque and captured relations emit declarations

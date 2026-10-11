@@ -42,6 +42,7 @@ public:
                         uint32_t);
   bool body(DeclarationId, unsigned);
   bool primitiveBody(Declaration &, Body &);
+  bool finiteBody(Declaration &, Body &);
   bool domainBody(Declaration &, unsigned);
   bool domainExpression(const Declaration &, const SyntaxDeclaration &,
                         uint32_t);

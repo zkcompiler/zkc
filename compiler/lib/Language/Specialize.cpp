@@ -389,6 +389,26 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
               HelperCall{selected->helper, std::move(operands), {}, {}, {}, {}};
           continue;
         }
+        if (const auto *finite = std::get_if<FiniteApplication>(&op.action)) {
+          auto domain = resolveDomain(finite->domain);
+          auto step = resolveScoped(finite->body, 1);
+          if (!domain || !step)
+            return false;
+          std::optional<FiniteCallback> predicate;
+          if (finite->predicate) {
+            auto selected = resolveScoped(*finite->predicate, 1);
+            if (!selected)
+              return false;
+            predicate = FiniteCallback{selected->helper, selected->captures};
+          }
+          op.action = FiniteComputation{finite->kind,
+                                        domain->shape,
+                                        domain->operands,
+                                        finite->operands,
+                                        {step->helper, step->captures},
+                                        std::move(predicate)};
+          continue;
+        }
         if (!types.charge(1, op.span))
           return false;
         if (op.binding) {
@@ -719,9 +739,15 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
               if (copy->results.size() < invariants)
                 return types.fail("source.closure-inputs",
                                   "loop invariant results differ", op.span);
-              for (unsigned i = 0; i < invariants; ++i)
+              for (unsigned i = 0; i < invariants; ++i) {
+                if (region->results[region->results.size() - invariants + i]
+                        .index != region->inputs - invariants + i)
+                  return types.fail("source.closure-inputs",
+                                    "source loop invariant yield differs",
+                                    op.span);
                 copy->results[copy->results.size() - invariants + i] = {
                     region->inputs - invariants + i};
+              }
               copy->results.insert(copy->results.end(), inputs.begin(),
                                    inputs.end());
             }

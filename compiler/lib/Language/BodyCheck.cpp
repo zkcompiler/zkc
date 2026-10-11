@@ -531,9 +531,14 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     inferredContracts.erase(&decl);
     return true;
   }
-  if (sources[id.index]->finiteDefinition)
-    return types.fail("source.finite", "finite definition has no checked body",
-                      decl.span);
+  if (sources[id.index]->finiteDefinition) {
+    if (!finiteBody(decl, result))
+      return false;
+    decl.body = std::make_shared<Body>(std::move(result));
+    bodyState[id.index] = 2;
+    inferredContracts.erase(&decl);
+    return true;
+  }
   BodyChecker check(*this, decl, *sources[id.index], result, depth);
   for (unsigned i = 0; i < decl.inputs.size(); ++i) {
     auto &p = decl.inputs[i];

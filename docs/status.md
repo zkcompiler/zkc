@@ -95,9 +95,14 @@ constructors, composed factories, component selection, static helper arguments,
 callback captures and nested local/protocol control. Joint closure retains
 immutable operand aliases and independent witnesses check closed recipes and
 capture layouts. Source checking and native tests cover forwarding, zero trips,
-participant availability and specialization mutations. General finite consumers
-and total source bounds are still being connected to the retained finite IR;
-the existing finite-vector reductions retain the following restrictions.
+participant availability and specialization mutations. Registered finite folds
+and collects now reach retained finite IR through independently checked adapters.
+Native source tests cover ordered and Unit state, mixed state dependencies,
+filtered stops, strict zip admission, packed record sequences, repeated calls,
+dependent inner ranges and mutable capture snapshots. Fixed source-array domain
+adaptation, source item-provenance enforcement and total source bounds remain
+open; these checks are required before the general library/notation migration.
+The existing finite-vector reductions retain the following restrictions.
 [Finite reduction binders](spec/language/definitions.md#finite-vector-reductions)
 support named reducers and library-owned `∑`/`∏`, explicit strict zip and
 immutable same-field scalar captures in module-level local functions. Protocols

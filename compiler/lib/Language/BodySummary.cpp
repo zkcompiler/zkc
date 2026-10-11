@@ -271,6 +271,95 @@ summarizeBody(Semantics &types, ArrayRef<Declaration> declarations,
         dependencies = std::move(*combined);
         dependencies.parameterized = true;
       }
+    } else if (std::holds_alternative<FiniteApplication>(op.action) ||
+               std::holds_alternative<FiniteComputation>(op.action)) {
+      const auto *open = std::get_if<FiniteApplication>(&op.action);
+      const auto *closed = std::get_if<FiniteComputation>(&op.action);
+      std::optional<Dependencies> domain;
+      if (open)
+        domain = summarizeDomainBinding(types, body, open->domain,
+                                        result.values, domains, depth);
+      else {
+        auto inputs = gather(closed->domainOperands);
+        if (inputs)
+          domain = join(types, *inputs);
+      }
+      const auto kind = open ? open->kind : closed->kind;
+      auto operands = gather(open ? open->operands : closed->operands);
+      if (!domain || !operands ||
+          operands->size() != unsigned(kind == FiniteApplication::Kind::Fold))
+        return {};
+      // Item/cardinality facts have the domain's dependencies. Concrete
+      // callbacks refine result dependencies; formation remains independent.
+      Dependencies admission = *domain;
+      result.formation.push_back(admission);
+      auto invoke =
+          [&](bool predicate,
+              std::vector<Dependencies> inputs) -> std::optional<Dependencies> {
+        std::optional<BodySummary> nested;
+        if (closed) {
+          const auto &selected = predicate ? *closed->predicate : closed->body;
+          auto captures = gather(selected.captures);
+          if (!captures || selected.helper.index >= declarations.size())
+            return {};
+          const auto &helper = declarations[selected.helper.index];
+          if (!helper.body || !helper.parameters.empty() ||
+              !helper.scopedInputs.empty() || !helper.domainInputs.empty())
+            return {};
+          inputs.insert(inputs.end(), captures->begin(), captures->end());
+          nested = summarizeBody(types, declarations, *helper.body, {}, inputs,
+                                 {}, depth + 1);
+        } else {
+          auto binding = summarizeScopedBinding(
+              types, body, predicate ? *open->predicate : open->body, statics,
+              result.values, environment, depth, false, domains);
+          if (!binding)
+            return {};
+          if (!binding->computation) {
+            auto result = join(types, inputs);
+            if (result)
+              result->parameterized = true;
+            return result;
+          }
+          inputs.insert(inputs.end(), binding->captures.begin(),
+                        binding->captures.end());
+          nested =
+              summarizeBody(types, declarations, *binding->computation->body,
+                            binding->statics, inputs, binding->scoped,
+                            depth + 1, binding->domains);
+        }
+        if (!nested || !absorb(*nested))
+          return {};
+        return join(types, nested->results);
+      };
+      if (open ? bool(open->predicate) : bool(closed->predicate)) {
+        auto predicate = invoke(true, {*domain});
+        auto combined =
+            predicate ? join(types, {admission, *predicate}) : std::nullopt;
+        if (!combined)
+          return {};
+        admission = std::move(*combined);
+      }
+      if (kind == FiniteApplication::Kind::Collect) {
+        auto item = invoke(false, {*domain});
+        auto combined = item ? join(types, {admission, *item}) : std::nullopt;
+        if (!combined)
+          return {};
+        dependencies = std::move(*combined);
+      } else {
+        dependencies = operands->front();
+        for (;;) {
+          auto step = invoke(false, {dependencies, *domain});
+          auto next = step ? join(types, {dependencies, admission, *step})
+                           : std::nullopt;
+          if (!next)
+            return {};
+          if (dependencies.inputs == next->inputs &&
+              dependencies.parameterized == next->parameterized)
+            break;
+          dependencies = std::move(*next);
+        }
+      }
     } else if (const auto *call = std::get_if<HelperCall>(&op.action)) {
       auto operands = gather(call->operands);
       if (!operands || call->callee.index >= declarations.size())

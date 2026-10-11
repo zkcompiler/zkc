@@ -193,3 +193,29 @@ protocol Run roles(P,V)(xs:Vector<F>@P,x:F@P,n:index@(P,V))->(result:F@P){
         })
         assert outputs['P']['result'] == str(7 * (count * count + 1))
         assert outputs['V'] == {}
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_domain_captures_in_match_arms_with_different_payloads(toolchain, journal, directory, flags):
+    source = PREFIX + '''
+domain fn elements<E:Field>(xs:Vector<E>)->scoped domain<E>=domain("elements");
+enum Choice { Single(F), Pair(F,F) }
+fn ignore(rows:scoped domain<F>,fallback:F)->F{return fallback;}
+fn choose(value:Choice,rows:scoped domain<F>,body:scoped fn(F)->F !{})->F !{}{
+ return match value {
+  Single(a)=>{body(ignore(rows,a))},
+  Pair(a,b)=>{body(ignore(rows,a+b))}
+ };
+}
+fn outer(xs:Vector<F>,x:F,paired:bool)->F{
+ let rows=elements(xs);
+ let value=if paired{Choice::Pair(x,x)}else{Choice::Single(x)};
+ return choose(value,rows,fun y=>y+x);
+}
+protocol Run roles(P)(xs:Vector<F>@P,x:F@P,paired:bool@P)->(result:F@P){return outer(xs,x,paired);}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    for paired, expected in [(False, '14'), (True, '21')]:
+        assert entry.run(f'paired-{paired}', {
+            'xs': ['4', '9'], 'x': '7', 'paired': paired,
+        })['result'] == expected

@@ -976,6 +976,42 @@ against the checked factory recipe and caller operand mapping, without trusting
 its cached identity. This is a checked-recipe witness, not a source-elaboration
 correctness theorem.
 
+## Finite computations
+
+Registered finite definitions connect ordinary typed functions to the retained
+[finite computation IR](../ir/finite.md). They use the same domain arguments,
+scoped functions, effects and capture rules as authored helpers:
+
+```zkc
+fn fold<I: Type + Copy + Drop, S: Type>(
+  rows: scoped domain<I>, initial: S,
+  step: scoped fn(S, I) -> S !{stop} on(rows)
+) -> S !{stop} = finite("local.fold");
+
+fn collect<I: Type + Copy + Drop, B: Type + Copy + Drop>(
+  rows: scoped domain<I>, body: scoped fn(I) -> B !{stop} on(rows)
+) -> Sequence<B> !{stop} = finite("local.collect.sequence");
+```
+
+The complete signature is checked against the selected identity. Fold state
+and domain item types are independent; Unit is a valid state. `on(rows)` ties
+the callback's last explicit parameter to an item from the indicated domain.
+`local.fold_where` adds a predicate before the step parameter. Its predicate
+has signature `scoped fn(I) -> bool !{stop} on(rows)`; false skips the step.
+The corresponding collect identities are `local.collect.vector`, `.groups`,
+`.sequence`, `.indices` and `.field_array`; each admits the matching native
+result type. Appending `_where` adds a predicate before the body, except for
+fixed field arrays, whose result length cannot follow from a general filter.
+`math.` identities require Math functions and total Math callbacks.
+
+Eager argument computations and capture snapshots execute in written order,
+including named arguments. Domain admission follows those computations. A fold
+then calls its step in enumeration order; an empty fold returns its initial
+state after admission. A collect preserves body-result order. Stops propagate
+through the ordinary Local path. No associativity law is assumed for a fold.
+Nested finite calls admit their own domains only on reached body invocations.
+The [status page](../../status.md) records source integration coverage.
+
 ## Scoped computations
 
 Named Math and Local functions, including interface/component members, may take

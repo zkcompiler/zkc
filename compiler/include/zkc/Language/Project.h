@@ -219,6 +219,29 @@ struct ScopedInvoke {
   unsigned binding;
   std::vector<ValueId> operands;
 };
+/// A registered finite definition uses the same static environments as an
+/// authored helper. Fold operands contain its initial logical state; collect
+/// has no ordinary operands. Closure resolves the domain and callbacks.
+struct FiniteApplication {
+  enum class Kind { Fold, Collect } kind;
+  unsigned domain, body;
+  std::optional<unsigned> predicate;
+  std::vector<ValueId> operands;
+};
+/// Closed finite work keeps ordinary helper calling conventions. Translation
+/// supplies descriptor/item adapter ports, while capture identities remain
+/// explicit values in this body's SSA space.
+struct FiniteCallback {
+  DeclarationId helper;
+  std::vector<ValueId> captures;
+};
+struct FiniteComputation {
+  FiniteApplication::Kind kind;
+  std::shared_ptr<const DomainShape> domain;
+  std::vector<ValueId> domainOperands, operands;
+  FiniteCallback body;
+  std::optional<FiniteCallback> predicate;
+};
 struct HelperCall {
   DeclarationId callee;
   std::vector<ValueId> operands;
@@ -339,6 +362,9 @@ struct CallBinding {
   std::optional<Span> origin;
   std::optional<NotationDescriptor> notation;
   /// Source occurrence and complete authored argument mapping for scoped calls.
+  /// Scoped and domain indices always refer to the checked source body,
+  /// including after closure erases its static binding tables from the
+  /// executable body.
   std::optional<unsigned> scopedSource = {};
   std::vector<unsigned> argumentOrder = {};
   std::vector<unsigned> scopedArguments = {};
@@ -383,7 +409,8 @@ struct Operation {
   std::variant<MathValue, HelperCall, BulkApplication, Exchange, Restriction,
                Construct, Projection, LocalPrimitive, Consume, LocalControl,
                ProtocolApplication, ServiceQuery, Require, ProtocolRepeat,
-               ProtocolCompletion, ScopedInvoke>
+               ProtocolCompletion, ScopedInvoke, FiniteApplication,
+               FiniteComputation>
       action;
   /// Each result has its own type and participant availability.
   std::vector<ValueId> results;

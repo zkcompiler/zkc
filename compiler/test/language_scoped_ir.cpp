@@ -96,5 +96,108 @@ protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,n:index@P)->(r:Fr@P){return outer(x
         take(compileEntry(original));
         take(compileEntry(original, {false, false}));
       });
+  for (bool mathematical : {false, true})
+    cases.run(
+        mathematical ? "total finite fold source pipeline"
+                     : "ordered finite fold source pipeline",
+        [&] {
+          std::string mode = mathematical ? "math " : "";
+          std::string effects = mathematical ? "" : " !{stop}";
+          auto captured = take(capture(
+              {{"sample",
+                std::string(R"(module sample;
+domain Fr=field("koala-bear");
+type Vector<F:Field>=builtin("vector",F);
+domain fn elements<F:Field>(xs:Vector<F>)->scoped domain<F>=domain("elements");
+)") + mode +
+                    "fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped "
+                    "domain<I>,initial:S,step:scoped " +
+                    mode + "fn(S,I)->S" + effects + " on(rows))->S" + effects +
+                    "=finite(\"" + (mathematical ? "math.fold" : "local.fold") +
+                    R"(");
+protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,offset:Fr@P)->(r:Fr@P){return fold(elements(xs),x,fun state item=>state+item+offset);}run Demo=Run;
+)",
+                "fold.zkc"}}));
+          auto entry = take(closeEntry(take(analyze(captured).checkedProject()),
+                                       "sample::Demo"));
+          auto original = take(prepareOriginal(entry));
+          require(original.bytes().contains("data.domain_elements") &&
+                      original.bytes().contains(mathematical
+                                                    ? "algebra.finite_fold"
+                                                    : "local.finite_fold"),
+                  "finite structure missing from source original");
+          take(compileEntry(original));
+          take(compileEntry(original, {false, false}));
+        });
+  cases.run("packed sequence collection source pipeline", [&] {
+    auto captured = take(capture({{"sample", R"(module sample;
+domain Fr=field("koala-bear");
+type Sequence<T:Type+Copy+Drop>=builtin("sequence",T);
+struct Row {pub value:Fr,pub enabled:bool}
+domain fn elements<T:Type+Copy+Drop>(xs:Sequence<T>)->scoped domain<T>=domain("elements");
+fn collect<I:Type+Copy+Drop,B:Type+Copy+Drop>(rows:scoped domain<I>,body:scoped fn(I)->B !{stop} on(rows))->Sequence<B> !{stop}=finite("local.collect.sequence");
+protocol Run roles(P)(xs:Sequence<Row>@P)->(r:Sequence<Row>@P){return collect(elements(xs),fun row=>row);}run Demo=Run;
+)",
+                                   "collect.zkc"}}));
+    auto entry = take(
+        closeEntry(take(analyze(captured).checkedProject()), "sample::Demo"));
+    auto original = take(prepareOriginal(entry));
+    require(original.bytes().contains("local.finite_collect") &&
+                original.bytes().contains("local.match"),
+            "packed sequence item adapter missing");
+    take(compileEntry(original));
+    take(compileEntry(original, {false, false}));
+  });
+  for (unsigned mutation = 0; mutation < 3; ++mutation)
+    cases.run(
+        "finite native adapter corruption " + std::to_string(mutation), [&] {
+          auto captured = take(capture({{"sample", R"(module sample;
+domain Fr=field("koala-bear");
+type Vector<F:Field>=builtin("vector",F);
+domain fn elements<F:Field>(xs:Vector<F>)->scoped domain<F>=domain("elements");
+domain fn choose<F:Field>(left:Vector<F>,right:Vector<F>)->scoped domain<F>{let a=elements(left);let b=elements(right);return a;}
+fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+protocol Run roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,offset:Fr@P)->(r:Fr@P){return fold(choose(xs,ys),0,fun state item=>state*10+item+offset);}run Demo=Run;
+)",
+                                         "mutation.zkc"}}));
+          auto entry = take(closeEntry(take(analyze(captured).checkedProject()),
+                                       "sample::Demo"));
+          auto bytes = take(emitOriginal(entry, context));
+          auto module =
+              mlir::parseSourceString<mlir::ModuleOp>(bytes, &context);
+          require(bool(module), "finite original did not parse");
+          take(compareOriginal(entry, *module));
+          bool changed = false;
+          mlir::Operation *extra = nullptr;
+          module->walk([&](mlir::Operation *op) {
+            if (changed)
+              return;
+            if (mutation == 0 &&
+                op->getName().getStringRef() == "local.apply" &&
+                op->getAttrOfType<mlir::StringAttr>("site").getValue() ==
+                    "body") {
+              auto value = op->getOperand(0);
+              op->setOperand(0, op->getOperand(1));
+              op->setOperand(1, value);
+              changed = true;
+            } else if (mutation == 1 &&
+                       op->getName().getStringRef() == "data.domain_yield") {
+              op->setOperand(0, op->getPrevNode()->getResult(0));
+              changed = true;
+            } else if (mutation == 2 &&
+                       op->getName().getStringRef() == "data.domain") {
+              extra = op;
+              changed = true;
+            }
+          });
+          if (extra) {
+            auto *copy = extra->clone();
+            copy->setAttr("sym_name",
+                          mlir::StringAttr::get(&context, "finite_unused"));
+            extra->getBlock()->push_back(copy);
+          }
+          require(changed, "no finite native mutation target");
+          refuses(compareOriginal(entry, *module), "source.correspondence");
+        });
   return cases.result();
 }

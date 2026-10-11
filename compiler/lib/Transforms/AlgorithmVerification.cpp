@@ -58,7 +58,9 @@ class AlgorithmCorrespondence {
                       bool encode, SmallVectorImpl<Value> &returned,
                       bool &stopped, unsigned depth,
                       ArrayRef<unsigned> yieldIndices = {},
-                      bool filterYield = false) {
+                      bool filterYield = false,
+                      const protocol::Assignments &invocation = {},
+                      unsigned invocationDepth = 0) {
     if (depth > 64)
       return diagnostics::emit(source.getParentOp()->emitOpError(),
                                "algorithm-correspondence-limit");
@@ -70,9 +72,12 @@ class AlgorithmCorrespondence {
       --expected.work;
       auto saved =
           detail::occurrence(input, declarationName, attr(&op, "site"));
-      auto currentPath = saved ? saved->path : path;
+      auto currentPath = saved ? invocation : path;
+      if (saved)
+        currentPath.insert(currentPath.end(), saved->path.begin(),
+                           saved->path.end());
       auto originalSite = saved ? saved->originalSite : attr(&op, "site").str();
-      unsigned currentDepth = saved ? saved->depth : depth;
+      unsigned currentDepth = saved ? invocationDepth + saved->depth : depth;
       if (currentPath.size() > 64 || currentDepth > 64)
         return refuse(&op, "expanded occurrence depth");
       if (auto ret = dyn_cast<local::ReturnOp>(op)) {
@@ -107,7 +112,8 @@ class AlgorithmCorrespondence {
         definitionName = definition(callee).str();
         SmallVector<Value> results;
         if (failed(block(callee.getBody().front(), target, cursor, inner,
-                         nested, true, results, stopped, currentDepth + 1)))
+                         nested, true, results, stopped, currentDepth + 1, {},
+                         false, nested, currentDepth + 1)))
           return failure();
         declarationName = std::move(oldDeclaration);
         definitionName = std::move(oldDefinition);
@@ -130,7 +136,7 @@ class AlgorithmCorrespondence {
       if (isa<local::ApplyOp>(op) &&
           (currentDepth >= 64 || currentPath.size() >= 64))
         return refuse(&op, "retained map call depth");
-      if (encode && !saved && op.hasAttr("site")) {
+      if (encode && (!saved || !invocation.empty()) && op.hasAttr("site")) {
         auto site =
             algorithmSite(currentPath, originalSite, expected.checkOriginBytes);
         if (!site)
@@ -150,6 +156,8 @@ class AlgorithmCorrespondence {
                             : detail::AlgorithmOccurrence{
                                   definitionName, declarationName, originalSite,
                                   currentPath, currentDepth};
+        record.path = currentPath;
+        record.depth = currentDepth;
         if (!expected.occurrences
                  .emplace(detail::OccurrenceKey{functionName,
                                                 attr(&actual, "site").str()},
@@ -243,7 +251,8 @@ class AlgorithmCorrespondence {
         bool terminated = false;
         if (failed(block(before, after, position, inner, currentPath, encode,
                          ignored, terminated, currentDepth + 1, yields,
-                         isa<local::LocalForOp>(op))) ||
+                         isa<local::LocalForOp>(op), invocation,
+                         invocationDepth)) ||
             position != after.end())
           return refuse(&actual, "region body correspondence");
         allStopped &= terminated;

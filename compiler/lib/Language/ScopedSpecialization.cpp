@@ -160,8 +160,7 @@ class SpecializationCheck {
       result.captures.push_back(*value);
     }
     if (!instance(selected, source[computation.lexicalOwner.index],
-                  &computation, statics, actual.scopedArguments, depth + 1,
-                  true))
+                  &computation, statics, actual.scopedArguments, depth, true))
       return {};
     return result;
   }
@@ -202,9 +201,13 @@ class SpecializationCheck {
       if (*invariantSuffix > original.inputs ||
           *invariantSuffix > results.size())
         return refuse({}, "loop invariant result coverage differs");
-      for (unsigned i = 0; i < *invariantSuffix; ++i)
+      for (unsigned i = 0; i < *invariantSuffix; ++i) {
+        if (original.results[original.results.size() - *invariantSuffix + i]
+                .index != original.inputs - *invariantSuffix + i)
+          return refuse({}, "source loop invariant yield differs");
         results[results.size() - *invariantSuffix + i] = {original.inputs -
                                                           *invariantSuffix + i};
+      }
       for (unsigned i = original.inputs; i < actual.inputs; ++i)
         results.push_back({i});
     }
@@ -299,6 +302,29 @@ class SpecializationCheck {
                         selected->captures.end());
         if (!same(call->operands, operands))
           return refuse(op.span, "invocation environment mapping differs");
+        continue;
+      }
+      if (const auto *finite = std::get_if<FiniteApplication>(&op.action)) {
+        const auto *closed = std::get_if<FiniteComputation>(&out.action);
+        if (!closed || closed->kind != finite->kind || !closed->domain ||
+            bool(closed->predicate) != bool(finite->predicate) ||
+            !same(closed->operands, mapped(finite->operands)))
+          return refuse(op.span, "finite operation differs");
+        auto operands = bindDomainInputs(types, source, original, actual, map,
+                                         finite->domain, subst, domains,
+                                         *closed->domain, &bodyOrigins);
+        if (!operands || !same(closed->domainOperands, *operands))
+          return refuse(op.span, "finite domain mapping differs");
+        auto callback = [&](unsigned index, const FiniteCallback &selected) {
+          auto expected =
+              binding(original, actual, bodyOrigins, index, selected.helper,
+                      subst, environment, domains, map, depth + 1);
+          return expected && same(selected.captures, expected->captures);
+        };
+        if (!callback(finite->body, closed->body) ||
+            (finite->predicate &&
+             !callback(*finite->predicate, *closed->predicate)))
+          return refuse(op.span, "finite callback mapping differs");
         continue;
       }
       if (op.action.index() != out.action.index())
@@ -528,6 +554,12 @@ class SpecializationCheck {
                                       closed.inputs, op.span, &bodyOrigins);
                 if (!inputs)
                   return false;
+                for (unsigned k = region.inputs; k < closed.inputs; ++k)
+                  if (!(*inputs)[k] || k >= closed.values.size() ||
+                      closed.values[k].type !=
+                          actual.values[(*inputs)[k]->index].type ||
+                      !closed.values[k].components.empty())
+                    return false;
                 auto expectedOperands = operands;
                 for (auto input : ArrayRef(*inputs).drop_front(region.inputs)) {
                   if (!input)
@@ -546,8 +578,8 @@ class SpecializationCheck {
                 for (auto &domain : nestedDomains)
                   for (auto &operand : domain.operands)
                     operand = {layout.captures[offset++]};
-                if (!body(region, closed, subst, nested, nestedDomains,
-                          depth + 1, &layout,
+                if (!body(region, closed, subst, nested, nestedDomains, depth,
+                          &layout,
                           loop ? std::optional<unsigned>(forwarded -
                                                          action.carried)
                                : std::nullopt))
@@ -577,8 +609,8 @@ class SpecializationCheck {
                                      value.regionLayout, value.region->inputs,
                                      op.span, &bodyOrigins))
                 return false;
-              return body(*action.region, *value.region, subst, {}, {},
-                          depth + 1, &value.regionLayout);
+              return body(*action.region, *value.region, subst, {}, {}, depth,
+                          &value.regionLayout);
             } else
               return false;
           },

@@ -37,6 +37,122 @@ const Declaration &declarationNamed(const CheckedProject &project,
 } // namespace
 int main() {
   Cases cases;
+  cases.run("registered finite definitions retain ordered callback slots", [] {
+    auto project = take(check(R"(
+fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+fn filtered<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,keep:scoped fn(I)->bool !{stop} on(rows),step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold_where");
+fn collect<I:Type+Copy+Drop,F:Field>(rows:scoped domain<I>,body:scoped fn(I)->F !{stop} on(rows))->Vector<F> !{stop}=finite("local.collect.vector");
+math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold");
+)"));
+    const auto &fold = declarationNamed(project, "m::fold");
+    require(fold.finiteDefinition == "local.fold" && fold.body &&
+                fold.body->parameterizedSummary && fold.body->mayStop,
+            "finite definition omitted admission effects");
+    const auto &filtered =
+        std::get<FiniteApplication>(declarationNamed(project, "m::filtered")
+                                        .body->operations.front()
+                                        .action);
+    require(filtered.body == 1 && filtered.predicate == 0,
+            "filtered callback order differs");
+    const auto &collect =
+        std::get<FiniteApplication>(declarationNamed(project, "m::collect")
+                                        .body->operations.front()
+                                        .action);
+    require(collect.kind == FiniteApplication::Kind::Collect &&
+                collect.operands.empty(),
+            "collect invented an initial state");
+    require(!declarationNamed(project, "m::total").body->mayStop,
+            "total finite definition acquired ordered failure");
+  });
+  cases.run("finite closure preserves selected helpers and captures", [] {
+    auto project = take(check(R"(
+domain Fr=field("koala-bear");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+fn work(xs:Vector<Fr>,initial:Fr,offset:Fr)->Fr !{stop}{return fold(elements(xs),initial,fun acc x=>acc+x+offset);}
+protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){return work(xs,initial,offset);}run Run=Demo;
+)"));
+    auto closed = take(closeEntry(project, "m::Run"));
+    bool found = false;
+    for (const auto &decl : closed.declarations())
+      if (decl.name == "fold" && decl.body) {
+        const auto &finite =
+            std::get<FiniteComputation>(decl.body->operations.front().action);
+        require(finite.domain && finite.domain->nodes.size() == 1 &&
+                    finite.domainOperands.size() == 1 &&
+                    finite.operands.size() == 1 &&
+                    finite.body.captures.size() == 1 && !finite.predicate,
+                "finite closure lost its domain or callback environment");
+        found = true;
+      }
+    require(found, "missing closed fold");
+  });
+  for (unsigned mutation = 0; mutation < 4; ++mutation)
+    cases.run("finite closed witness corruption " + std::to_string(mutation),
+              [mutation] {
+                auto project = take(check(R"(
+domain Fr=field("koala-bear");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){return fold(elements(xs),initial,fun acc x=>acc+x+offset);}run Run=Demo;
+)"));
+                auto closed = take(closeEntry(project, "m::Run"));
+                bool changed = false;
+                for (const auto &decl : closed.declarations())
+                  if (decl.name == "fold" && decl.body) {
+                    auto body = std::make_shared<Body>(*decl.body);
+                    const_cast<Declaration &>(decl).body = body;
+                    auto &finite = std::get<FiniteComputation>(
+                        body->operations.front().action);
+                    if (mutation == 0)
+                      finite.kind = FiniteApplication::Kind::Collect;
+                    else if (mutation == 1)
+                      finite.body.captures.front() = finite.operands.front();
+                    else if (mutation == 2)
+                      finite.body.helper = decl.id;
+                    else {
+                      auto domain =
+                          std::make_shared<DomainShape>(*finite.domain);
+                      domain->nodes.front().axis = 1;
+                      finite.domain = std::move(domain);
+                    }
+                    changed = true;
+                  }
+                require(changed, "missing finite mutation target");
+                auto error = checkScopedSpecialization(closed);
+                require(bool(error), "forged closed finite operation accepted");
+                auto message = toString(std::move(error));
+                require(message.find(mutation == 3
+                                         ? "source.domain-witness"
+                                         : "source.scoped-specialization") !=
+                            std::string::npos,
+                        "wrong finite witness refusal: " + message);
+              });
+  cases.run("finite Math callback formation retains private captures", [] {
+    const std::string definitions = R"(
+domain Fr=field("koala-bear");
+math fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold");
+math fn sum(xs:Vector<Fr>,initial:Fr,offset:Fr)->Fr{return fold(elements(xs),initial,fun acc x=>acc+x+offset);}
+)";
+    refuses(check(definitions + R"(
+protocol Demo roles(P,V)(xs:Vector<Fr>@(P,V),initial:Fr@(P,V),offset:Fr@P)->(r:Fr@(P,V)){return sum(xs,initial,offset);}run Run=Demo;
+)"),
+            "source.roles");
+    auto project = take(check(definitions + R"(
+protocol Demo roles(P,V)(xs:Vector<Fr>@(P,V),initial:Fr@(P,V),offset:Fr@P)->(r:Fr@P){return sum(xs,initial,offset);}run Run=Demo;
+)"));
+    take(closeEntry(project, "m::Run"));
+  });
+  for (const auto &definition :
+       {std::string("fn f<I:Type+Copy+Drop,S:Type>(rows:scoped "
+                    "domain<I>,initial:S,step:scoped fn(S,I)->S !{stop})->S "
+                    "!{stop}=finite(\"local.fold\");"),
+        std::string("fn f<I:Type+Copy+Drop,S:Type>(rows:scoped "
+                    "domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} "
+                    "on(rows))->S !{stop}=finite(\"math.fold\");"),
+        std::string("fn f<I:Type+Copy+Drop,S:Type>(rows:scoped "
+                    "domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} "
+                    "on(rows))->S !{stop}=finite(\"local.unknown\");")})
+    cases.run("finite registered signature refusal " + definition,
+              [&] { refuses(check(definition), "source.finite"); });
   cases.run("domain constructors retain a separate static signature", [] {
     auto project = take(check(""));
     const auto &zip = declarationNamed(project, "m::zip");

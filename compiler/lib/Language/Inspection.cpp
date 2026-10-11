@@ -134,9 +134,10 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
   json::Object result{
       {"name", decl.qualifiedName},
       {"abstract", decl.abstract},
-      {"definition", decl.primitive  ? "primitive"
-                     : decl.abstract ? "abstract"
-                                     : "body"},
+      {"definition", decl.primitive          ? "primitive"
+                     : decl.finiteDefinition ? "finite"
+                     : decl.abstract         ? "abstract"
+                                             : "body"},
       {"kind", domain                                  ? "domain"
                : !ordered                              ? "math"
                : decl.kind == Declaration::Kind::Local ? "local"
@@ -161,6 +162,8 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
                     {"end", decl.span.end}}}};
   if (decl.primitive)
     result["primitive"] = decl.primitive->identity;
+  if (decl.finiteDefinition)
+    result["finite"] = *decl.finiteDefinition;
   if (domain || !decl.domainInputs.empty()) {
     json::Array domains;
     for (const auto &input : decl.domainInputs)

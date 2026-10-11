@@ -29,11 +29,18 @@ void mapBodyValues(Body &body, const std::function<ValueId(ValueId)> &map) {
                         std::is_same_v<T, Construct> ||
                         std::is_same_v<T, LocalPrimitive> ||
                         std::is_same_v<T, LocalControl> ||
-                        std::is_same_v<T, ScopedInvoke>)
+                        std::is_same_v<T, ScopedInvoke> ||
+                        std::is_same_v<T, FiniteApplication>)
             list(action.operands);
-          else if constexpr (std::is_same_v<T, Projection> ||
-                             std::is_same_v<T, Consume> ||
-                             std::is_same_v<T, Restriction>)
+          else if constexpr (std::is_same_v<T, FiniteComputation>) {
+            list(action.domainOperands);
+            list(action.operands);
+            list(action.body.captures);
+            if (action.predicate)
+              list(action.predicate->captures);
+          } else if constexpr (std::is_same_v<T, Projection> ||
+                               std::is_same_v<T, Consume> ||
+                               std::is_same_v<T, Restriction>)
             action.input = map(action.input);
           else if constexpr (std::is_same_v<T, Require>)
             action.condition = map(action.condition);

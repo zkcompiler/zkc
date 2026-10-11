@@ -97,6 +97,7 @@ add_zkc_component(Language
   lib/Language/ScopedValues.cpp
   lib/Language/Scoped.cpp
   lib/Language/FiniteDomains.cpp
+  lib/Language/FiniteDefinitions.cpp
   lib/Language/FiniteDomainArguments.cpp
   lib/Language/DomainClosure.cpp
   lib/Language/DomainWitness.cpp
@@ -200,6 +201,8 @@ add_zkc_component(IR
 )
 add_zkc_component(Translation
   lib/Translation/Language/Emission.cpp
+  lib/Translation/Language/FiniteEmission.cpp
+  lib/Translation/Language/FiniteComparison.cpp
   lib/Translation/Language/Comparison.cpp
   lib/Translation/AIR.cpp
   lib/Translation/ProtocolExport.cpp

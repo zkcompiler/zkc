@@ -1,3 +1,4 @@
+#include "Finite.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
@@ -53,6 +54,8 @@ class Comparator {
   Layouts layouts;
   std::map<std::string, mlir::Operation *> realizations, maps;
   std::set<mlir::Operation *> usedRealizations, usedMaps;
+  std::map<std::string, mlir::Operation *> finiteDefinitions;
+  std::set<mlir::Operation *> usedFiniteDefinitions;
   Error failure = Error::success();
   Correspondence report;
   uint64_t remaining;
@@ -593,6 +596,19 @@ class Comparator {
                        !string(*actual, "role", nativeRoleName(*call->owner)))))
           return fail("call target, mode, owner or site differs");
         result = Values(actual->getResults());
+      } else if (auto *finite = std::get_if<FiniteComputation>(&op.action)) {
+        if (cursor == block.end())
+          return fail("omitted finite computation");
+        auto &actual = *cursor++;
+        auto compared = take(
+            compareFinite(project, source, *finite,
+                          source.values[op.results.front().index].type, values,
+                          actual, finiteDefinitions, usedFiniteDefinitions,
+                          layouts, "finite_" + decl.symbol + "_" + site, site,
+                          limits, report.operations, remaining));
+        if (!compared || !record(actual, op.span))
+          return false;
+        result = std::move(*compared);
       } else if (auto *bulk = std::get_if<BulkApplication>(&op.action)) {
         auto &target = project.declarations()[bulk->callee.index];
         if (source.mode != Body::Mode::Local ||
@@ -931,6 +947,13 @@ public:
     std::set<std::string> realizedHelpers;
     std::set<std::pair<std::string, std::vector<bool>>> mappedHelpers;
     for (auto &op : native.getBody().front()) {
+      auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
+      if (name && name.getValue().starts_with("finite_")) {
+        if (!finiteDefinitions.emplace(name.getValue().str(), &op).second)
+          return error("source.correspondence",
+                       "duplicate finite auxiliary symbol");
+        continue;
+      }
       if (auto declaration = mlir::dyn_cast<relation::DeclareOp>(op)) {
         if (!relations.emplace(declaration.getSymName().str(), declaration)
                  .second)
@@ -1163,7 +1186,8 @@ public:
       return error("source.correspondence", "extra relation declaration");
     if (index != functions.size() || usedBindings.size() != bindings.size() ||
         usedRealizations.size() != realizations.size() ||
-        usedMaps.size() != maps.size())
+        usedMaps.size() != maps.size() ||
+        usedFiniteDefinitions.size() != finiteDefinitions.size())
       return error("source.correspondence",
                    "extra definition or unused binding");
     llvm::sort(report.locations, [](auto &a, auto &b) {
