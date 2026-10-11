@@ -1294,9 +1294,9 @@ inputs; `fn(()) => expression` takes one Unit input.
 one tuple input; it does not curry the function. Ordinary binding patterns,
 including `_`, apply. Input and result types are inferred contextually using
 the ordinary expression solver and the receiving scoped signature. Generic
-functions and their literal computations are checked even when unused. Their
-explicit generic permissions and bounds remain necessary; call sites do not
-repair malformed definitions.
+functions and their literal computations are checked even when unused. The
+enclosing definition infers requirements under the ordinary `where` rules;
+call sites check that contract and do not repair malformed definitions.
 
 A signature fixes the body's mode. `math fn(A) -> B` is total Math;
 `fn(A) -> B` is ordered Local. An omitted Local callback ceiling allows both

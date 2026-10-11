@@ -79,10 +79,10 @@ embedded prelude, so they require no project file.
 A generic library can bind an explicit interface implementation locally:
 
 ```zkc
-interface Addition<T: Type + Copy + Drop> {
+interface Addition<T: Type + Copy> {
   math fn add(a: T, b: T) -> T;
 }
-math fn combine<T: Type + Copy + Drop, A: Addition<T>>(a: T, b: T) -> T {
+math fn combine<T: Type + Copy, A: Addition<T>>(a: T, b: T) -> T {
   operator + = A::add;
   return a + b;
 }
@@ -214,20 +214,21 @@ Nonlinear dimension inference and arbitrary inequality solving remain outside
 this source profile.
 
 Defined helpers can omit result types. Defined helpers and protocols infer
-catalog and natural preconditions when `where` is absent. A written clause is a
-complete contract; `where ()` forbids additional preconditions. Resource
-permissions stay explicit. For example:
+usage, catalog and natural preconditions when `where` is absent. A written clause
+is a complete contract; `where ()` forbids additional inferred preconditions.
+Resource restrictions use explicit attributes. For example:
 
 ```text
-fn first<T: Type + Copy + Drop, N: nat>(xs: [T; N]) {
+fn first<T: Type, N: nat>(xs: [T; N]) {
   return xs[0];
 }
-fn pairFirst<T: Type + Copy + Drop>(xs: [T; 2]) {
+fn pairFirst<T: Type>(xs: [T; 2]) {
   return first<N = 2>(xs = xs);
 }
 ```
 
-`first` infers result `T` and condition `1 <= N`; the call fixes `N` and infers `T`.
+`first` infers result `T`, `Copy(T)` and `1 <= N`; the call fixes `N` and infers
+`T`. `pairFirst` inherits the usage requirement.
 An explicit result type remains useful for literals and stable library interfaces.
 
 Static and value arguments can use declared parameter names. Positional arguments
