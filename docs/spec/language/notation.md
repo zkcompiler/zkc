@@ -150,7 +150,7 @@ explicit local binding or selective imports; mode and effects never choose one.
 For example, a mathematical function can declare
 `reduction ∑ = finite_math::sum, finite_math::sum_where;` in its declaration prefix.
 
-Expansion creates an ordinary call with unary `fun` callbacks and structural
+Expansion creates an ordinary call with unary `fn(...) => ...` callbacks and structural
 domain products. Product construction never looks up a generated textual
 `product` name. The [source binder contract](definitions.md#finite-reduction-binders)
 defines evaluation, captures and retained checks. Named calls remain available
@@ -266,7 +266,7 @@ persistent cross-build identifiers.
 
 Canonical named-call rendering is a diagnostic aid. It is not a byte-preserving
 rewrite, and named and symbolic captures need not have equal artifact identities.
-Binder renderings show `fun` callbacks and use `×` to display structural products;
+Binder renderings show `fn(...) => ...` callbacks and use `×` to display structural products;
 that diagnostic product spelling is not an implicit source name lookup.
 Syntax metadata does not enter the native Entry interface or grant execution
 authority. Retained inventories survive the temporary parser and checker without

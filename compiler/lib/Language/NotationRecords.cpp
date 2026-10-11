@@ -403,10 +403,10 @@ bool Checker::retainNotations() {
                 return false;
               parts.emplace_back(std::string(")"));
             } else if (value.kind == Expression::Kind::Lambda) {
-              parts.emplace_back(std::string("fun "));
+              parts.emplace_back(std::string("fn("));
               if (!pattern(value.payloads[0][0], depth + 1))
                 return false;
-              parts.emplace_back(std::string(" => "));
+              parts.emplace_back(std::string(") => "));
               parts.emplace_back(source.bodies[value.regions[0]].span);
             } else
               parts.emplace_back(value.span);

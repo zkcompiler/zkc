@@ -234,7 +234,7 @@ all rows. Unequal lengths end execution like a failed vector kernel; `require`
 equal lengths first when a protocol should reject such inputs. The [map contract](../spec/language/definitions.md#checked-pointwise-maps)
 states the admitted helpers and refusals.
 
-To reduce an inline body, write `finite::sum(xs, fun x => x * x)` or import
+To reduce an inline body, write `finite::sum(xs, fn(x) => x * x)` or import
 `∑` and write `∑ x in xs, x * x`. General finite domains, filtering, nested
 binders and tuple items share the same scoped computation path. The
 [notation guide](notation.md#reduce-finite-domains) covers syntax and precedence;

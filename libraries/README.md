@@ -47,10 +47,10 @@ item, accumulated state and output element can have different types. For example
 use zkc::finite as finite;
 use zkc::finite_domain as domains;
 
-let dot = finite::sum(domains::zip(xs, ys), fun (x, y) => x * y);
-let decimal = finite::fold(xs, initial, fun state x => state * 10 + x);
-let selected = finite::sum_where(rows, fun row => row.enabled,
-                                fun row => checked_value(row));
+let dot = finite::sum(domains::zip(xs, ys), fn((x, y)) => x * y);
+let decimal = finite::fold(xs, initial, fn(state, x) => state * 10 + x);
+let selected = finite::sum_where(rows, fn(row) => row.enabled,
+                                fn(row) => checked_value(row));
 ```
 
 A native vector, group vector, sequence, index collection or fixed array supplied
@@ -177,7 +177,7 @@ defines ambiguity and local replacement rules. The
 delimiter declarations and Unicode input. Symbols preserve ordinary callable
 modes and effects; they supply no additional algebra, optimizer or security claim.
 The vector module reexports `finite`'s paired sum/product notation. Write
-`∑ x in xs, x * x` or `finite::sum(xs, fun x => x * x)`. Selective imports use
+`∑ x in xs, x * x` or `finite::sum(xs, fn(x) => x * x)`. Selective imports use
 `reduction ∑` and `reduction ∏`; filters use `with`. Strict zip retains checks
 for ignored rows. Named `vec::sum(xs)` and `vec::product(xs)` still reduce an
 already constructed vector. The [finite reduction guide](../docs/language/notation.md#reduce-finite-domains)

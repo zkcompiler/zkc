@@ -44,9 +44,9 @@ fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(
 fn apply<A:Type,B:Type>(x:A,body:scoped fn(A)->B !{stop})->B !{stop}{return body(x);}
 )";
   const std::string notationPrelude = finitePrelude + R"(
-fn sum<I:Type+Copy+Drop>(rows:scoped domain<I>,term:scoped fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fun state item=>state+term(item));}
+fn sum<I:Type+Copy+Drop>(rows:scoped domain<I>,term:scoped fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fn(state, item)=>state+term(item));}
 fn fold_where<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,keep:scoped fn(I)->bool !{stop} on(rows),step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold_where");
-fn sum_where<I:Type+Copy+Drop>(rows:scoped domain<I>,keep:scoped fn(I)->bool !{stop} on(rows),term:scoped fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold_where(rows,0,keep,fun state item=>state+term(item));}
+fn sum_where<I:Type+Copy+Drop>(rows:scoped domain<I>,keep:scoped fn(I)->bool !{stop} on(rows),term:scoped fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold_where(rows,0,keep,fn(state, item)=>state+term(item));}
 )";
   cases.run(
       "indexed callbacks capture static elements and dynamic containers", [&] {
@@ -54,7 +54,7 @@ fn sum_where<I:Type+Copy+Drop>(rows:scoped domain<I>,keep:scoped fn(I)->bool !{s
 fn at<F:Field>(xs:Vector<F>,i:index)->F=primitive("vector.get");
 indexing xs[i]=at(xs,i);
 struct State{pub xs:Vector<Fr>,pub fixed:[Fr;2]}
-fn work(state:State)->Fr{return sum(indices(state.xs),fun i=>state.xs[i]+state.fixed[0]);}
+fn work(state:State)->Fr{return sum(indices(state.xs),fn(i)=>state.xs[i]+state.fixed[0]);}
 protocol Demo roles(P)(state:State@P)->(r:Fr@P){return work(state);}run Run=Demo;
 )"));
         take(closeEntry(project, "m::Run"));
@@ -77,7 +77,7 @@ protocol Demo roles(P)(state:State@P)->(r:Fr@P){return work(state);}run Run=Demo
 fn note(value:Fr)->(){return ();}
 fn at<F:Field>(xs:Vector<F>,i:index)->F=primitive("vector.get");
 indexing xs[i]=at(xs,i);
-fn work(xs:Vector<Fr>)->Fr{return sum(indices(xs),fun i=>{note(0);let ignored=xs[i];0});}
+fn work(xs:Vector<Fr>)->Fr{return sum(indices(xs),fn(i)=>{note(0);let ignored=xs[i];0});}
 )"));
   });
   for (unsigned mutation = 0; mutation < 11; ++mutation)
@@ -88,10 +88,10 @@ fn at<F:Field>(xs:Vector<F>,i:index)->F=primitive("vector.get");
 indexing xs[i]=at(xs,i);
 )" +
                         std::string(mutation == 8 ? R"(
-fn work(xs:Vector<Fr>)->Fr{return sum(indices(xs),fun i=>{let value=xs[i];value});}
+fn work(xs:Vector<Fr>)->Fr{return sum(indices(xs),fn(i)=>{let value=xs[i];value});}
 )"
                                                   : R"(
-fn work(xs:Vector<Fr>)->Fr{return sum(indices(xs),fun i=>xs[i]);}
+fn work(xs:Vector<Fr>)->Fr{return sum(indices(xs),fn(i)=>xs[i]);}
 )");
           auto project = take(check(source));
           auto &outer =
@@ -170,7 +170,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,enabled:bool@P)->(r:Fr@P)
         std::string("interface Scale{math fn apply(x:Fr)->Fr;}fn "
                     "custom<C:Scale>(rows:scoped domain<Fr>,term:scoped "
                     "fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{return "
-                    "sum(rows,fun x=>C::apply(term(x)));}fn "
+                    "sum(rows,fn(x)=>C::apply(term(x)));}fn "
                     "work<C:Scale>(xs:Vector<Fr>)->Fr{reduction "
                     "∑=custom<C>;return ∑ x∈xs,x;}"),
         std::string(
@@ -178,8 +178,8 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,enabled:bool@P)->(r:Fr@P)
             "domain<I>,initial:Fr,step:scoped math fn(Fr,I)->Fr "
             "on(rows))->Fr=finite(\"math.fold\");math fn "
             "total<I:Type+Copy+Drop>(rows:scoped domain<I>,term:scoped math "
-            "fn(I)->Fr on(rows))->Fr{return math_fold(rows,0,fun state "
-            "x=>state+term(x));}math fn work(xs:Vector<Fr>)->Fr{reduction "
+            "fn(I)->Fr on(rows))->Fr{return math_fold(rows,0,fn(state, "
+            "x)=>state+term(x));}math fn work(xs:Vector<Fr>)->Fr{reduction "
             "∑=total;return ∑ x∈xs,x*x;}")})
     cases.run("general finite notation " + source,
               [&] { take(check(notationPrelude + source)); });
@@ -255,7 +255,7 @@ fn work(xs:Vector<Fr>)->Fr{return ∑ x in xs with true,x;}
 struct Record {pub values:Vector<Fr>}
 fn keep(xs:Vector<Fr>)->Vector<Fr>{return xs;}
 fn work(xs:Vector<Fr>,record:Record,array:[Fr;2])->Fr{
- return fold()" + input + R"(,0,fun state item=>state+item);
+ return fold()" + input + R"(,0,fn(state, item)=>state+item);
 }
 protocol Demo roles(P)(xs:Vector<Fr>@P,record:Record@P,array:[Fr;2]@P)->(r:Fr@P){return work(xs,record,array);}run Run=Demo;
 )"));
@@ -264,7 +264,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,record:Record@P,array:[Fr;2]@P)->(r:Fr@P)
   cases.run("domain factories use the same collection conversion", [&] {
     auto project = take(check(finitePrelude + R"(
 domain fn paired(xs:Vector<Fr>,ys:[Fr;2])->scoped domain<(Fr,Fr)>{return zip(xs,ys);}
-protocol Demo roles(P)(xs:Vector<Fr>@P,ys:[Fr;2]@P)->(r:Fr@P){return fold(paired(xs,ys),0,fun state (a,b)=>state+a*b);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:[Fr;2]@P)->(r:Fr@P){return fold(paired(xs,ys),0,fn(state, (a,b))=>state+a*b);}run Run=Demo;
 )"));
     take(closeEntry(project, "m::Run"));
   });
@@ -273,7 +273,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,ys:[Fr;2]@P)->(r:Fr@P){return fold(paired
         "collection conversion source witness " + std::to_string(mutation),
         [&] {
           auto project = take(check(finitePrelude + R"(
-fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return fold(xs,0,fun state item=>state+item);}
+fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return fold(xs,0,fn(state, item)=>state+item);}
 )"));
           auto &body =
               const_cast<Body &>(*declarationNamed(project, "m::work").body);
@@ -299,7 +299,7 @@ fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return fold(xs,0,fun state item=>state+
         "nested collection source witness " + std::to_string(mutation), [&] {
           auto project = take(check(finitePrelude + R"(
 fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
- return fold(zip(b=ys,a=xs),0,fun state (x,y)=>state+x*y);
+ return fold(zip(b=ys,a=xs),0,fn(state, (x,y))=>state+x*y);
 }
 )"));
           auto &body =
@@ -338,7 +338,7 @@ fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
   cases.run("nested factories retain authored data operands", [&] {
     auto project = take(check(finitePrelude + R"(
 fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
- return fold(zip(elements(xs),elements(ys)),0,fun state (x,y)=>state+x*y);
+ return fold(zip(elements(xs),elements(ys)),0,fn(state, (x,y))=>state+x*y);
 }
 )"));
     auto &body = const_cast<Body &>(*declarationNamed(project, "m::work").body);
@@ -353,35 +353,36 @@ fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
        {std::string("Matrix<Fr>"), std::string("Fr"), std::string("bool")})
     cases.run("no implicit traversal for " + type, [&] {
       refuses(check(finitePrelude + "fn bad(xs:" + type +
-                    ")->Fr{return fold(xs,0,fun state item=>state);}"),
+                    ")->Fr{return fold(xs,0,fn(state, item)=>state);}"),
               "source.finite-domain");
     });
   for (const auto &body :
-       {std::string("return fold(rows,0,fun s x=>s+term(x));"),
-        std::string("let alias=rows;return fold(alias,0,fun s x=>s+term(x));"),
+       {std::string("return fold(rows,0,fn(s, x)=>s+term(x));"),
+        std::string("let alias=rows;return fold(alias,0,fn(s, x)=>s+term(x));"),
         std::string(
-            "return fold(step=fun s x=>s+term(x),initial=0,rows=rows);"),
-        std::string("return fold(rows,0,fun s x=>apply(s,fun t=>t+term(x)));"),
-        std::string("return fold(rows,0,fun s x=>{let value=if flag {term(x)} "
+            "return fold(step=fn(s, x)=>s+term(x),initial=0,rows=rows);"),
+        std::string("return fold(rows,0,fn(s, x)=>apply(s,fn(t)=>t+term(x)));"),
+        std::string("return fold(rows,0,fn(s, x)=>{let value=if flag {term(x)} "
                     "else {0};s+value});"),
-        std::string("return fold(rows,0,fun s x=>{let mut result:Fr=s;for j in "
-                    "0..2 {result=result+term(x);}result});")})
+        std::string(
+            "return fold(rows,0,fn(s, x)=>{let mut result:Fr=s;for j in "
+            "0..2 {result=result+term(x);}result});")})
     cases.run("restricted item forwarding " + body, [&] {
       auto project = take(check(finitePrelude + R"(
 fn sum(rows:scoped domain<Fr>,flag:bool,term:scoped fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{
 )" + body + R"(
 }
 fn reordered(unused:scoped domain<Fr>,rows:scoped domain<Fr>,term:scoped fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{return sum(rows,true,term);}
-protocol Demo roles(P)(xs:Vector<Fr>@P,shift:Fr@P)->(r:Fr@P){return reordered(elements(xs),elements(xs),fun x=>x+shift);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P,shift:Fr@P)->(r:Fr@P){return reordered(elements(xs),elements(xs),fn(x)=>x+shift);}run Run=Demo;
 )"));
       take(closeEntry(project, "m::Run"));
     });
   for (const auto &body :
        {std::string("return term(0);"), std::string("return apply(0,term);"),
-        std::string("return fold(b,0,fun s x=>s+term(x));"),
-        std::string("return fold(a,0,fun s x=>s+term(x+1));"),
-        std::string("return fold(a,0,fun s x=>apply(x,fun y=>s+term(y)));"),
-        std::string("return fold(a,0,fun s x=>{let mut y=x;for i in 0..2 "
+        std::string("return fold(b,0,fn(s, x)=>s+term(x));"),
+        std::string("return fold(a,0,fn(s, x)=>s+term(x+1));"),
+        std::string("return fold(a,0,fn(s, x)=>apply(x,fn(y)=>s+term(y)));"),
+        std::string("return fold(a,0,fn(s, x)=>{let mut y=x;for i in 0..2 "
                     "{y=term(y);}s+y});")})
     cases.run("restricted item refusal " + body, [&] {
       refuses(check(finitePrelude + R"(
@@ -402,7 +403,7 @@ fn wrapper(a:scoped domain<Fr>,b:scoped domain<Fr>,step:scoped fn(Fr,Fr)->Fr !{s
   });
   cases.run("reconstructed product is not a genuine domain item", [&] {
     refuses(check(finitePrelude + R"(
-fn wrapper(rows:scoped domain<(Fr,Fr)>,term:scoped fn((Fr,Fr))->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fun s (a,b)=>s+term((a,b)));}
+fn wrapper(rows:scoped domain<(Fr,Fr)>,term:scoped fn((Fr,Fr))->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fn(s, (a,b))=>s+term((a,b)));}
 )"),
             "source.scoped-domain");
   });
@@ -427,7 +428,7 @@ fn wrapper(rows:scoped domain<Fr>,step:scoped fn(Fr,Fr)->Fr !{stop} on(rows))->F
                 std::string source =
                     finitePrelude + R"(
 fn nested(rows:scoped domain<Fr>,free:scoped fn(Fr)->Fr !{stop},term:scoped fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{
- return fold(rows,0,fun state item=>{let mut result:Fr=state;
+ return fold(rows,0,fn(state, item)=>{let mut result:Fr=state;
    for j in 0..2 {let value=if true {term()" +
                     std::string(valid ? "item" : "0") +
                     R"()} else {free(item)};result=result+value;}
@@ -448,7 +449,7 @@ fn nested(rows:scoped domain<Fr>,free:scoped fn(Fr)->Fr !{stop},term:scoped fn(F
         [&] {
           auto project = take(check(finitePrelude + R"(
 fn nested(rows:scoped domain<Fr>,free:scoped fn(Fr)->Fr !{stop},term:scoped fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{
- return fold(rows,0,fun state item=>{let mut result:Fr=state;
+ return fold(rows,0,fn(state, item)=>{let mut result:Fr=state;
    for j in 0..2 {let value=if true {term(item)} else {free(item)};result=result+value;}
    result});
 }
@@ -598,23 +599,23 @@ domain fn paired(xs:Vector<Fr>,ys:Vector<Fr>)->scoped domain<(index,index)>{retu
 domain fn coords(xs:Matrix<Fr>)->scoped domain<(index,index)>=domain("matrix.coordinates.row_major");
 )";
   for (StringRef source :
-       {"math fn work(xs:Vector<Fr>)->Fr{return total(indices(xs),0,fun state "
-        "i=>state+at(xs,i));}",
-        "math fn work(xs:Vector<Fr>)->Fr{return total(step=fun state "
-        "i=>state+at(xs,i),initial=0,rows=indices(xs));}",
+       {"math fn work(xs:Vector<Fr>)->Fr{return total(indices(xs),0,fn(state, "
+        "i)=>state+at(xs,i));}",
+        "math fn work(xs:Vector<Fr>)->Fr{return total(step=fn(state, "
+        "i)=>state+at(xs,i),initial=0,rows=indices(xs));}",
         "struct Data {pub xs:Vector<Fr>} math fn work(data:Data)->Fr{return "
-        "total(indices(data.xs),0,fun state i=>state+at(data.xs,i));}",
+        "total(indices(data.xs),0,fn(state, i)=>state+at(data.xs,i));}",
         "math fn work(xs:Vector<Fr>)->Fr{let alias=xs;return "
-        "total(indices(xs),0,fun state i=>state+at(alias,i));}",
+        "total(indices(xs),0,fn(state, i)=>state+at(alias,i));}",
         "math fn apply(i:index,body:scoped math fn(index)->Fr)->Fr{return "
         "body(i);} math fn work(xs:Vector<Fr>)->Fr{return "
-        "total(indices(xs),0,fun state i=>state+apply(i,fun "
-        "unused=>at(xs,i)));}",
-        "math fn work(xs:Matrix<Fr>)->Fr{return total(coords(xs),0,fun state "
-        "(i,j)=>state+intrinsic<Matrix<Fr>>(\"matrix.at\",xs,i,j));}",
+        "total(indices(xs),0,fn(state, "
+        "i)=>state+apply(i,fn(unused)=>at(xs,i)));}",
+        "math fn work(xs:Matrix<Fr>)->Fr{return total(coords(xs),0,fn(state, "
+        "(i,j))=>state+intrinsic<Matrix<Fr>>(\"matrix.at\",xs,i,j));}",
         "math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr where "
-        "equal_extent(xs,ys){return total(paired(xs,ys),0,fun state "
-        "(i,j)=>state+at(xs,i)+at(ys,j));}"})
+        "equal_extent(xs,ys){return total(paired(xs,ys),0,fn(state, "
+        "(i,j))=>state+at(xs,i)+at(ys,j));}"})
     cases.run("finite item establishes exact bound " + source.str(), [&] {
       auto project = take(check(boundPrelude + source.str()));
       if (auto error = checkScopedElaboration(project))
@@ -622,21 +623,21 @@ domain fn coords(xs:Matrix<Fr>)->scoped domain<(index,index)>=domain("matrix.coo
     });
   for (StringRef source :
        {"math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return "
-        "total(indices(xs),0,fun state i=>state+at(ys,i));}",
-        "math fn work(xs:Vector<Fr>,n:index)->Fr{return total(range(0,n),0,fun "
-        "state i=>state+at(xs,i));}",
-        "math fn work(xs:Matrix<Fr>)->Fr{return total(coords(xs),0,fun state "
-        "(i,j)=>state+intrinsic<Matrix<Fr>>(\"matrix.at\",xs,j,i));}",
+        "total(indices(xs),0,fn(state, i)=>state+at(ys,i));}",
+        "math fn work(xs:Vector<Fr>,n:index)->Fr{return "
+        "total(range(0,n),0,fn(state, i)=>state+at(xs,i));}",
+        "math fn work(xs:Matrix<Fr>)->Fr{return total(coords(xs),0,fn(state, "
+        "(i,j))=>state+intrinsic<Matrix<Fr>>(\"matrix.at\",xs,j,i));}",
         "math fn apply(i:index,body:scoped math fn(index)->Fr)->Fr{return "
         "body(i);} math fn work(xs:Vector<Fr>)->Fr{return "
-        "total(indices(xs),0,fun state i=>state+apply(i,fun j=>at(xs,j)));}"})
+        "total(indices(xs),0,fn(state, i)=>state+apply(i,fn(j)=>at(xs,j)));}"})
     cases.run("finite item cannot invent a bound " + source.str(), [&] {
       refuses(check(boundPrelude + source.str()), "source.data-bound");
     });
   cases.run("closed total finite helper discharges extracted bounds", [&] {
     auto project = take(check(boundPrelude + R"(
 math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr where equal_extent(xs,ys) {
- return total(indices(xs),0,fun state i=>state+at(ys,i));
+ return total(indices(xs),0,fn(state, i)=>state+at(ys,i));
 }
 math fn same(xs:Vector<Fr>)->Fr{return work(xs,xs);}
 protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return same(xs);}run Run=Demo;
@@ -663,21 +664,21 @@ protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return same(xs);}run Run=Demo;
   });
   for (
       const std::string &source : {
-          R"(math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return total(zip(elements(xs),elements(ys)),0,fun state pair=>state);}
+          R"(math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return total(zip(elements(xs),elements(ys)),0,fn(state, pair)=>state);}
 protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}run Run=Demo;)",
           R"(domain fn choose(xs:Vector<Fr>,ys:Vector<Fr>)->scoped domain<Fr>{let unused=zip(elements(xs),elements(ys));return elements(xs);}
-math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return total(choose(xs,ys),0,fun state item=>state);}
+math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return total(choose(xs,ys),0,fn(state, item)=>state);}
 protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}run Run=Demo;)",
           R"(domain fn row(xs:Matrix<Fr>,i:index)->scoped domain<Fr>=domain("matrix.row");
-math fn work(xs:Matrix<Fr>,i:index)->Fr{return total(row(xs,i),0,fun state item=>state+item);}
+math fn work(xs:Matrix<Fr>,i:index)->Fr{return total(row(xs,i),0,fn(state, item)=>state+item);}
 protocol Demo roles(P)(xs:Matrix<Fr>@P,i:index@P)->(r:Fr@P){return work(xs,i);}run Run=Demo;)",
           R"(domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
-math fn work(a:Fr)->Fr{let empty:[Fr;0]=[];return total(zip(array(empty),array([a])),0,fun state item=>state);}
+math fn work(a:Fr)->Fr{let empty:[Fr;0]=[];return total(zip(array(empty),array([a])),0,fn(state, item)=>state);}
 protocol Demo roles(P)(a:Fr@P)->(r:Fr@P){return work(a);}run Run=Demo;)",
           R"(type Array<F:Field,N:nat>=builtin("field_array",F,N);
 domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
 math fn collect<I:Type+Copy+Drop,N:nat>(rows:scoped domain<I>,body:scoped math fn(I)->Fr on(rows))->Array<Fr,N>=finite("math.collect.field_array");
-math fn work(a:Fr)->Array<Fr,3>{return collect(array([a,a]),fun x=>x);}
+math fn work(a:Fr)->Array<Fr,3>{return collect(array([a,a]),fn(x)=>x);}
 protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,3>@P){return work(a);}run Run=Demo;)",
       })
     cases.run("total formation is checked before native emission " +
@@ -690,7 +691,7 @@ protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,3>@P){return work(a);}run Run=Demo;)
             [&] {
               auto project = take(check(boundPrelude + R"(
 math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
- return total(zip(elements(xs),elements(ys)),0,fun state item=>state);
+ return total(zip(elements(xs),elements(ys)),0,fn(state, item)=>state);
 }
 protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs,xs);}run Run=Demo;
 )"));
@@ -744,7 +745,7 @@ math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S
     auto project = take(check(R"(
 domain Fr=field("koala-bear");
 fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn work(xs:Vector<Fr>,initial:Fr,offset:Fr)->Fr !{stop}{return fold(elements(xs),initial,fun acc x=>acc+x+offset);}
+fn work(xs:Vector<Fr>,initial:Fr,offset:Fr)->Fr !{stop}{return fold(elements(xs),initial,fn(acc, x)=>acc+x+offset);}
 protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){return work(xs,initial,offset);}run Run=Demo;
 )"));
     auto closed = take(closeEntry(project, "m::Run"));
@@ -768,7 +769,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){retur
                 auto project = take(check(R"(
 domain Fr=field("koala-bear");
 fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){return fold(elements(xs),initial,fun acc x=>acc+x+offset);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){return fold(elements(xs),initial,fn(acc, x)=>acc+x+offset);}run Run=Demo;
 )"));
                 auto closed = take(closeEntry(project, "m::Run"));
                 bool changed = false;
@@ -806,7 +807,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,initial:Fr@P,offset:Fr@P)->(r:Fr@P){retur
     const std::string definitions = R"(
 domain Fr=field("koala-bear");
 math fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold");
-math fn sum(xs:Vector<Fr>,initial:Fr,offset:Fr)->Fr{return fold(elements(xs),initial,fun acc x=>acc+x+offset);}
+math fn sum(xs:Vector<Fr>,initial:Fr,offset:Fr)->Fr{return fold(elements(xs),initial,fn(acc, x)=>acc+x+offset);}
 )";
     refuses(check(definitions + R"(
 protocol Demo roles(P,V)(xs:Vector<Fr>@(P,V),initial:Fr@(P,V),offset:Fr@P)->(r:Fr@(P,V)){return sum(xs,initial,offset);}run Run=Demo;
@@ -1000,7 +1001,7 @@ fn ignore<T:Type+Copy+Drop>(rows:scoped domain<T>,fallback:T)->T{return fallback
 fn apply<T:Type+Copy+Drop>(x:T,body:scoped fn(T)->T !{stop})->T !{stop}{return body(x);}
 fn example<F:Field>(xs:Vector<F>,x:F,choose:bool)->F {
  let rows=elements(xs);
- return apply(x,fun y=>if choose {ignore(rows,y)} else {y});
+ return apply(x,fn(y)=>if choose {ignore(rows,y)} else {y});
 }
 )"));
     const auto &body = *declarationNamed(project, "m::example").body;
@@ -1023,7 +1024,7 @@ math fn outer<F:Field,C:Inspect<F>>(rows:scoped domain<F>,fallback:F)->F {
 }
 math fn apply<F:Field>(x:F,body:scoped math fn(F)->F !{})->F{return body(x);}
 math fn captured<F:Field,C:Inspect<F>>(rows:scoped domain<F>,fallback:F)->F {
- return apply(fallback,fun x=>inner<F,C>(rows,x));
+ return apply(fallback,fn(x)=>inner<F,C>(rows,x));
 }
 )"));
         std::vector<Declaration> declarations(project.declarations().begin(),
@@ -1323,7 +1324,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,fallback:Fr@P)->(r:Fr@P){return forward(e
     auto project = take(check(R"(
 domain Fr=field("koala-bear");
 fn observe(rows:scoped domain<index>,xs:Vector<Fr>,body:scoped fn(Vector<Fr>)->Vector<Fr> !{})->Vector<Fr>{return body(xs);}
-protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Vector<Fr>@P){return observe(indices(xs),xs,fun _=>xs);}run Run=Demo;
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Vector<Fr>@P){return observe(indices(xs),xs,fn(_)=>xs);}run Run=Demo;
 )"));
     auto closed = take(closeEntry(project, "m::Run"));
     bool found = false;
@@ -1341,7 +1342,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Vector<Fr>@P){return observe(indices
 domain Fr=field("koala-bear");
 fn ignore<T:Type+Copy+Drop>(rows:scoped domain<T>,fallback:T)->T{return fallback;}
 fn apply(x:Fr,body:scoped fn(Fr)->Fr !{})->Fr{return body(x);}
-fn outer(xs:Vector<Fr>,x:Fr)->Fr{let rows=elements(xs);return apply(x,fun y=>ignore(rows,y));}
+fn outer(xs:Vector<Fr>,x:Fr)->Fr{let rows=elements(xs);return apply(x,fn(y)=>ignore(rows,y));}
 protocol Demo roles(P)(xs:Vector<Fr>@P,x:Fr@P)->(r:Fr@P){return outer(xs,x);}run Run=Demo;
 )"));
     auto closed = take(closeEntry(project, "m::Run"));

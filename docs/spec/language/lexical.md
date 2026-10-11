@@ -46,9 +46,10 @@ grammar; elsewhere they remain available as ordinary names.
 
 ## Mathematical tokens
 
-`scoped` and `fun` are reserved for [scoped computation signatures and
-literals](definitions.md#scoped-computations). `=>` separates a literal's input
-patterns from its expression or block.
+`scoped` marks [scoped computation signatures](definitions.md#scoped-computations).
+The reserved keyword `fn` introduces both named function declarations and
+anonymous computation literals. A literal uses a parenthesized, comma-separated
+input pattern list followed by `=>` and its expression or block.
 
 A custom operator token is exactly one non-ASCII scalar with Unicode general
 category `Sm`. It must already be NFC and must not be an identifier character,

@@ -497,7 +497,7 @@ fn weighted<F: Field>(xs: vec::Vector<F>, ys: vec::Vector<F>, α: F) -> F {
 ```
 
 A binder is an ordinary statically selected finite consumer call. The example
-has the same computation as `sum(zip(xs, ys), fun (x, y) => x * y + α)`.
+has the same computation as `sum(zip(xs, ys), fn((x, y)) => x * y + α)`.
 The [notation contract](notation.md#finite-reduction-syntax) fixes its parsing,
 selection and optional predicate. Names, tuple patterns, `_`, lexical captures,
 component dispatch and nested computations use the ordinary scoped-function
@@ -1109,8 +1109,12 @@ Protocol signatures and Entry ports cannot expose it. A protocol body may call
 a named function with a literal scoped argument. Invocation and forwarding
 select a statically known body; there is no dynamic dispatch or closure ABI.
 
-The literal syntax is `fun x => expression` or `fun x => { statements; result }`.
-`fun x y => expression` binds two inputs. `fun (x, y) => expression` destructures
+The literal syntax is `fn(x) => expression` or `fn(x) => { statements; result }`.
+The same `fn` keyword introduces named declarations; an anonymous literal omits
+the name and starts its parenthesized input list immediately. Inputs are
+comma-separated, with an optional trailing comma. `fn() => expression` takes no
+inputs; `fn(()) => expression` takes one Unit input.
+`fn(x, y) => expression` binds two inputs. `fn((x, y)) => expression` destructures
 one tuple input; it does not curry the function. Ordinary binding patterns,
 including `_`, apply. Input and result types are inferred contextually using
 the ordinary expression solver and the receiving scoped signature. Generic
@@ -1156,7 +1160,7 @@ For a direct protocol call to a Local accepting function, eager data arguments
 and every runtime capture constrain one common owner. P-only captures can select
 P when a data argument is shared with V. Incompatible captures or an unresolved
 owner refuse. A constant Math callback's result does not choose the owner of an
-eager Local argument: `apply_math(local_identity(shared), fun _ => 0)` still
+eager Local argument: `apply_math(local_identity(shared), fn(_) => 0)` still
 requires an independently determined owner for `local_identity(shared)`.
 
 The shared summary query uses the checked `Body`. It separates result

@@ -40,8 +40,8 @@ protocol Run roles(P)(a:F@P,b:F@P,enabled:bool@P)->(xs:Sequence<Row>@P){return m
 def test_ordered_fold_initial_state_and_mixed_state(toolchain, journal, directory, flags):
     source = PREFIX + '''
 fn work(xs:Vector<F>,initial:F,offset:F)->(F,(F,F)){
- let ordered=fold(elements(xs),initial,fun state item=>state*10+item+offset);
- let mixed=fold(elements(xs),(initial,offset),fun (a,b) item=>(b,item));
+ let ordered=fold(elements(xs),initial,fn(state, item)=>state*10+item+offset);
+ let mixed=fold(elements(xs),(initial,offset),fn((a,b), item)=>(b,item));
  return(ordered,mixed);
 }
 protocol Run roles(P)(xs:Vector<F>@P,initial:F@P,offset:F@P)->(result:(F,(F,F))@P){return work(xs,initial,offset);}run Demo=Run;
@@ -55,8 +55,8 @@ protocol Run roles(P)(xs:Vector<F>@P,initial:F@P,offset:F@P)->(result:(F,(F,F))@
 def test_filtered_body_skips_stops_and_still_admits_zip(toolchain, journal, directory, flags):
     source = PREFIX + '''
 protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P,enabled:bool@P)->(result:F@P){
- return filtered(zip(elements(xs),elements(ys)),0,fun item=>enabled,
-                 fun state item=>{stop "abort";});
+ return filtered(zip(elements(xs),elements(ys)),0,fn(item)=>enabled,
+                 fn(state, item)=>{stop "abort";});
 }run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
@@ -71,8 +71,8 @@ def test_sequence_records_collect_and_unit_state(toolchain, journal, directory, 
     source = PREFIX + '''
 struct Row {pub value:F,pub enabled:bool}
 fn work(xs:Sequence<Row>)->Sequence<Row>{
- let checked=fold(sequence(xs),(),fun state row=>{require row.enabled;state});
- return collect(sequence(xs),fun row=>Row{value:row.value+1,enabled:row.enabled});
+ let checked=fold(sequence(xs),(),fn(state, row)=>{require row.enabled;state});
+ return collect(sequence(xs),fn(row)=>Row{value:row.value+1,enabled:row.enabled});
 }
 protocol Run roles(P)(xs:Sequence<Row>@P)->(result:Sequence<Row>@P){return work(xs);}run Demo=Run;
 '''
@@ -90,9 +90,9 @@ protocol Run roles(P)(xs:Sequence<Row>@P)->(result:Sequence<Row>@P){return work(
 def test_dependent_inner_domain_and_snapshot_order(toolchain, journal, directory, flags):
     source = PREFIX + '''
 fn work(xs:Vector<F>,offset:F)->(F,F){
- let triangular=fold(indices(xs),0,fun outer i=>outer+fold(range(0,i),0,fun inner j=>inner+get(xs,j)));
+ let triangular=fold(indices(xs),0,fn(outer, i)=>outer+fold(range(0,i),0,fn(inner, j)=>inner+get(xs,j)));
  let mut shift=offset;
- let snapshots=fold(step=fun state item=>state+item+shift,
+ let snapshots=fold(step=fn(state, item)=>state+item+shift,
                     rows=elements({shift=shift+1;xs}),initial=0);
  return(triangular,snapshots);
 }
@@ -109,8 +109,8 @@ def test_repeated_zipped_record_computations(toolchain, journal, directory, flag
 struct Row {pub value:F,pub enabled:bool}
 fn work(xs:Sequence<Row>)->(F,F){
  let pairs=zip(sequence(xs),sequence(xs));
- let first=fold(pairs,0,fun state (left,right)=>state+left.value*right.value);
- let second=fold(pairs,1,fun state (left,right)=>state+left.value+right.value);
+ let first=fold(pairs,0,fn(state, (left,right))=>state+left.value*right.value);
+ let second=fold(pairs,1,fn(state, (left,right))=>state+left.value+right.value);
  return(first,second);
 }
 protocol Run roles(P)(xs:Sequence<Row>@P)->(result:(F,F)@P){return work(xs);}run Demo=Run;
@@ -127,14 +127,14 @@ def test_generic_item_restrictions_through_nested_scopes(toolchain, journal, dir
     source = PREFIX + '''
 fn apply<A:Type,B:Type>(value:A,body:scoped fn(A)->B !{stop})->B !{stop}{return body(value);}
 fn sum(rows:scoped domain<F>,flag:bool,body:scoped fn(F)->F !{stop} on(rows))->F !{stop}{
- return fold(step=fun state item=>apply(state,fun initial=>{
+ return fold(step=fn(state, item)=>apply(state,fn(initial)=>{
    let mut total:F=initial;
    for i in 0..2 {let value=if flag {body(item)} else {0};total=total+value;}
    total
  }),rows=rows,initial=0);
 }
 protocol Run roles(P)(xs:Vector<F>@P,flag:bool@P,shift:F@P)->(result:F@P){
- return sum(elements(xs),flag,fun item=>item+shift);
+ return sum(elements(xs),flag,fn(item)=>item+shift);
 }run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
@@ -150,12 +150,12 @@ domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("sour
 domain fn array_indices<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<index>=domain("indices");
 fn work(a:F,b:F)->(F,F,F,F){
  let xs=[a,b];
- let order=fold(array(xs),0,fun state item=>state*10+item);
- let positions:F=fold(array_indices(xs),0,fun state item=>state+1);
+ let order=fold(array(xs),0,fn(state, item)=>state*10+item);
+ let positions:F=fold(array_indices(xs),0,fn(state, item)=>state+1);
  let empty:[F;0]=[];
  let units=[(),(),()];
- let zero=fold(array(empty),a,fun state item=>state+item);
- let three:F=fold(array(units),0,fun state item=>state+1);
+ let zero=fold(array(empty),a,fn(state, item)=>state+item);
+ let three:F=fold(array(units),0,fn(state, item)=>state+1);
  return(order,positions,zero,three);
 }
 protocol Run roles(P)(a:F@P,b:F@P)->(result:(F,F,F,F)@P){return work(a,b);}run Demo=Run;
@@ -172,7 +172,7 @@ domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("sour
 fn work(a:F,b:F)->F{
  let xs=[Row{value:a,enabled:true},Row{value:b,enabled:true}];
  let ys=[b,a];
- return fold(zip(array(xs),array(ys)),0,fun state (row,other)=>{
+ return fold(zip(array(xs),array(ys)),0,fn(state, (row,other))=>{
    require row.enabled;
    state+row.value*other+xs[0].value
  });
@@ -188,7 +188,7 @@ def test_total_fixed_array_fold_realization(toolchain, journal, directory, flags
     source = PREFIX + '''
 domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
 math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold");
-math fn work(a:F,b:F)->F{return total(array([(a,b),(b,a)]),0,fun state (x,y)=>state*100+x*10+y);}
+math fn work(a:F,b:F)->F{return total(array([(a,b),(b,a)]),0,fn(state, (x,y))=>state*100+x*10+y);}
 protocol Run roles(P)(a:F@P,b:F@P)->(result:F@P){return work(a,b);}run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
@@ -201,7 +201,7 @@ def test_total_index_range_and_predicate(toolchain, journal, directory, flags):
 math fn total_filtered<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,keep:scoped math fn(I)->bool on(rows),step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold_where");
 math fn threshold<N:nat>()->index{return index<N>();}
 math fn work(n:index)->(F,bool,index){
- let result:F=total_filtered(range(0,n),0,fun i=>intrinsic("index.less",i,threshold<2>()),fun state item=>state+1);
+ let result:F=total_filtered(range(0,n),0,fn(i)=>intrinsic("index.less",i,threshold<2>()),fn(state, item)=>state+1);
  return(result,intrinsic("index.equal",n,2),18446744073709551615);
 }
 protocol Run roles(P)(n:index@P)->(result:(F,bool,index)@P){return work(n);}run Demo=Run;
@@ -224,12 +224,12 @@ domain fn row(xs:Matrix<F>,i:index)->scoped domain<F>=domain("matrix.row");
 math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold");
 math fn at(xs:Vector<F>,i:index)->F where in_bounds(i,xs){return intrinsic<Vector<F>>("container.at",xs,i);}
 math fn read(xs:Sequence<Row>,i:index)->Row where in_bounds(i,xs){return intrinsic<Sequence<Row>>("container.at",xs,i);}
-math fn inner(xs:Vector<F>,ys:Vector<F>)->F where equal_extent(xs,ys){return total(indices(xs),0,fun s i=>s+at(ys,i));}
+math fn inner(xs:Vector<F>,ys:Vector<F>)->F where equal_extent(xs,ys){return total(indices(xs),0,fn(s, i)=>s+at(ys,i));}
 math fn work(xs:Vector<F>,rows:Sequence<Row>,matrix:Matrix<F>)->(F,F,F,F){
  let first=inner(xs,xs);
- let records:F=total(positions(rows),0,fun s i=>{let record=read(rows,i);s+record.value});
- let entries:F=total(coords(matrix),0,fun s (i,j)=>s+intrinsic<Matrix<F>>("matrix.at",matrix,i,j));
- let nested:F=total(row_indices(matrix),0,fun outer i=>outer+total(row(matrix,i),0,fun row_state item=>row_state+item));
+ let records:F=total(positions(rows),0,fn(s, i)=>{let record=read(rows,i);s+record.value});
+ let entries:F=total(coords(matrix),0,fn(s, (i,j))=>s+intrinsic<Matrix<F>>("matrix.at",matrix,i,j));
+ let nested:F=total(row_indices(matrix),0,fn(outer, i)=>outer+total(row(matrix,i),0,fn(row_state, item)=>row_state+item));
  return(first,records,entries,nested);
 }
 protocol Run roles(P)(xs:Vector<F>@P,rows:Sequence<Row>@P,matrix:Matrix<F>@P)->(result:(F,F,F,F)@P){return work(xs,rows,matrix);}run Demo=Run;
@@ -251,7 +251,7 @@ type Array<E:Field,N:nat>=builtin("field_array",E,N);
 domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
 domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
 math fn collect<I:Type+Copy+Drop,N:nat>(rows:scoped domain<I>,body:scoped math fn(I)->F on(rows))->Array<F,N>=finite("math.collect.field_array");
-math fn work(xs:[F;2],ys:[F;2])->Array<F,2>{return collect(zip(array(xs),array(ys)),fun (x,y)=>x+10*y);}
+math fn work(xs:[F;2],ys:[F;2])->Array<F,2>{return collect(zip(array(xs),array(ys)),fn((x,y))=>x+10*y);}
 protocol Run roles(P)(xs:[F;2]@P,ys:[F;2]@P)->(result:Array<F,2>@P){return work(xs,ys);}run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)

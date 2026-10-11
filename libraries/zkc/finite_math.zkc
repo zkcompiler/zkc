@@ -25,14 +25,14 @@ pub math fn collect_where<I: Type + Copy + Drop, T: Type + Copy + Drop>(
 pub math fn accumulate<I: Type + Copy + Drop, T: Type + Copy + Drop, C: Combiner<T>>(
   rows: scoped domain<I>, body: scoped math fn(I) -> T on(rows)
 ) -> T {
-  return fold(rows, C::identity(), fun state item => C::combine(state, body(item)));
+  return fold(rows, C::identity(), fn(state, item) => C::combine(state, body(item)));
 }
 
 pub math fn accumulate_where<I: Type + Copy + Drop, T: Type + Copy + Drop, C: Combiner<T>>(
   rows: scoped domain<I>, keep: scoped math fn(I) -> bool on(rows),
   body: scoped math fn(I) -> T on(rows)
 ) -> T {
-  return fold_where(rows, C::identity(), keep, fun state item => C::combine(state, body(item)));
+  return fold_where(rows, C::identity(), keep, fn(state, item) => C::combine(state, body(item)));
 }
 
 pub math fn sum<I: Type + Copy + Drop, F: Field>(

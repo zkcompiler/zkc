@@ -12,7 +12,7 @@ interface Transform<F: Field> {
 component Increment<F: Field>: Transform<F> {
   fn adjust(value: F) -> F !{} { return value + 1; }
   fn run(value: F, body: scoped fn(F) -> F !{stop}) -> F !{stop} {
-    return computation::forward(value, fun x => body(adjust(x)));
+    return computation::forward(value, fn(x) => body(adjust(x)));
   }
 }
 
@@ -32,8 +32,8 @@ protocol Compute roles(P, V)(
 ) -> (result: Fr @P) {
   let result = through<Fr, Increment<Fr>>(
     shared,
-    fun x => computation::forward(
-      x, fun y => vec::get(parameters.table, position) + y + parameters.shift
+    fn(x) => computation::forward(
+      x, fn(y) => vec::get(parameters.table, position) + y + parameters.shift
     )
   );
   return result;

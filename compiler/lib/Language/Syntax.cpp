@@ -1516,16 +1516,19 @@ private:
     Expression value;
     value.span = span;
     auto reductionNotation = notation(text(), Position::Reduction);
-    if (take("fun")) {
+    if (take("fn")) {
       value.kind = Expression::Kind::Lambda;
       value.payloads.emplace_back();
-      while (!at("=>") && !atEnd()) {
-        auto binder = pattern(depth + 1);
-        if (!binder)
-          return {};
-        value.payloads.front().push_back(std::move(*binder));
-      }
-      if (!expect("=>"))
+      if (!expect("("))
+        return {};
+      if (!at(")"))
+        do {
+          auto binder = pattern(depth + 1);
+          if (!binder)
+            return {};
+          value.payloads.front().push_back(std::move(*binder));
+        } while (take(",") && !at(")"));
+      if (!expect(")") || !expect("=>"))
         return {};
       if (at("{")) {
         auto region = body(decl, false, true, depth + 1);
