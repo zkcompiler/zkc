@@ -25,11 +25,11 @@ BUNDLE = ['zkc.relation-bundle/0', [['x0', 'koala-bear']], [], [[
 SOURCE = '''module air_stark_example;
 use air_stark::{Base, Extension, Statement, TableArgument};
 use air_polynomial::{Vector};
-domain Scoped = bundle(asset scoped);
+domain Scoped = bundle(asset statement_fixture);
 
 relation ScopedRelation(statement x0: Base, witness trace: Vector<Base>,
     parameter configuration: Vector<Base>, statement public_columns: Vector<Base>)
-  = bundle(asset scoped);
+  = bundle(asset statement_fixture);
 
 fn statement(configuration: Vector<Base>, public_columns: Vector<Base>,
     x0: Base, shift: Base) -> Statement {
@@ -87,7 +87,7 @@ def test_private_prover_statement_cannot_replace_verifier_inputs(
               'query_count': 8, 'attempt_count': 8}
     bundle = journal.write('scoped.json', BUNDLE)
     variant = build(toolchain, journal, directory, 'scoped', main=SOURCE,
-                    asset=('scoped', bundle))
+                    asset=('statement_fixture', bundle))
     honest = prove(toolchain, journal, variant, 'honest', public,
                    witness(configuration, columns, x0))
     assert verify(toolchain, journal, variant, 'honest', public, honest)['status'] == 'accepted'
@@ -111,7 +111,7 @@ def test_private_prover_statement_cannot_replace_verifier_inputs(
     # precisely that equality accepts the same false statement. Production
     # library sources are never changed by this control.
     unchecked = build(toolchain, journal, directory, 'unchecked', main=SOURCE,
-                      asset=('scoped', bundle), edits=[('air_table',
+                      asset=('statement_fixture', bundle), edits=[('air_table',
                       '      known = both(known, get(assignments, slot) == expected);',
                       '      known = both(known, true);')])
     forged = prove(toolchain, journal, unchecked, 'foreign', public, false_private)

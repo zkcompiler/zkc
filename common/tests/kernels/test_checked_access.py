@@ -7,7 +7,8 @@ from entry import Entry
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULES = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
-           for name in ('vector', 'matrix', 'field_array', 'symbolic')]
+           for name in ('vector', 'matrix', 'field_array', 'symbolic',
+                        'finite', 'sequence', 'accumulation', 'curve')]
 
 
 @pytest.mark.parametrize('field', ['bls12-381.fr', 'bn254.fr', 'ristretto255.scalar',
