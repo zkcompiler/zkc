@@ -34,7 +34,8 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
       target.getInputRoles().size() != signature.getNumInputs())
     return fail("replacement must select a protocol service input");
   if (record.getProvider().empty() || record.getProvider().size() > 65536 ||
-      record.getState().size() > 1024 || record.getRules().size() > 2048)
+      record.getState().size() > 1024 || record.getRules().size() > 2048 ||
+      record.getApplications().size() > 2048)
     return fail("invalid or oversized construction selection");
   if (record.getRoot() != "local" && record.getRoot() != "host")
     return fail("unknown construction root");
@@ -50,7 +51,25 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
                         record.getNativeBase(),
                         {},
                         {},
-                        std::nullopt};
+                        std::nullopt,
+                        {},
+                        record.getRootOnly()};
+  llvm::StringSet<> calls;
+  for (auto item : record.getApplications()) {
+    auto application = dyn_cast<DictionaryAttr>(item);
+    auto child = application
+                     ? application.getAs<FlatSymbolRefAttr>("construction")
+                     : FlatSymbolRefAttr{};
+    auto site =
+        application ? application.getAs<StringAttr>("site") : StringAttr{};
+    if (!application || application.size() != 2 || !child || !site ||
+        site.empty() || site.size() > 4096 ||
+        !calls.insert(site.getValue()).second ||
+        !symbols.lookupNearestSymbolFrom<protocol_ir::ConstructionOp>(record,
+                                                                      child))
+      return fail("invalid or duplicate child construction selection");
+    plan.applications.push_back({child, site.getValue().str()});
+  }
   mathematical::NativeTypePolicies types(record);
   for (auto attr : record.getState()) {
     auto type = dyn_cast<TypeAttr>(attr);

@@ -18,6 +18,7 @@ concrete domains, Entries and transcript constructions in
 | [`zkc::shake128`](zkc/shake128.zkc) | `State`, init/absorb/squeeze | Private copyable XOF snapshots; ordered transitions and bounded work |
 | [`zkc::proof`](zkc/proof.zkc) | `StreamCodec`, `Stream` | Ordinary sequential record accumulation, offset selection and exact EOF; encoding and observations belong to the construction |
 | [`zkc::transcript`](zkc/transcript.zkc) | `State`, observe/challenge/challenge_index | Explicit methods on a construction's managed affine state; no source initializer |
+| [`zkc::sampling`](zkc/sampling.zkc) | `Words`, `uniform_index` | Bounded rejection over explicit 64-bit word providers; positive u64 ranges and explicit exhaustion |
 | [`zkc::encoding`](zkc/encoding.zkc) | field_be/field_from_be/field_reduce_be/group_compressed/group_from_compressed | Explicit mathematical codecs; currently BLS12-381 Fr and G1 |
 | [`schnorr`](schnorr/lib.zkc) | `DLog<G>`, `Schnorr<G>` | Discrete-log relation and three-message group protocol |
 | [`spongefish`, `spongefish_schnorr`](spongefish/README.md) | SHAKE128 framing, point/scalar observations, challenges and explicit Schnorr | Spongefish 0.7.4 BLS12-381 G1 specialization; authored 80-byte proofs |
@@ -26,6 +27,23 @@ concrete domains, Entries and transcript constructions in
 | [`fri`](fri/lib.zkc) | `LowDegree<C, LogSize, TerminalLog, Rounds, Queries>` | Binary FRI over a natural-order two-adic coset |
 | [`air_polynomial`, `air_table`, `air_stark`](air/README.md) | Scope polynomials, Bundle opening equations and `TableArgument` | A nonhiding KoalaBear/Ext8 argument for one present table, composed with FRI |
 | [`air_interaction`, `air_bundle`](air/README.md#whole-bundle-argument) | `Reduction<F>`, `LogUp<F>`, `GrandProduct<F>`, `ThreeTableArgument` | Three-table multiset arguments with phased auxiliary commitments and shared FRI |
+
+### Bounded sampling
+
+`zkc::sampling::uniform_index<W, Attempts>(state, bound)` returns the next
+provider state and an index in `[0, bound)`. `W: Words` supplies one unsigned
+64-bit word per `next` call; the interface does not require copyable state.
+`bound` may be any positive u64. Zero rejects before a provider call. The
+sampler stops drawing after the first accepted word; exhausting `Attempts`
+stops with `exhausted`, including when the attempt count is zero. Bound one
+still consumes one word when an attempt is available.
+
+The rejected prefix has length `2^64 mod bound`. The accepted interval therefore
+contains equally many representatives of each residue. Under independent
+uniform provider words, the result conditioned on success is uniform. Provider
+uniformity and independence are premises; compiler checks and deterministic
+test vectors do not establish them. A copied provider state is an explicit
+trial of that snapshot, and its executed work remains chargeable.
 
 ### Mathematics
 

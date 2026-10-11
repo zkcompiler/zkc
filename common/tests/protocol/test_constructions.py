@@ -406,3 +406,38 @@ def test_copyable_construction_state_survives_untaken_completion(toolchain, jour
                       f'--witness={witness}', f'--output={proof}'])
         assert journal.json([toolchain.runtime, '--json', 'verify', *args,
                              f'--proof={proof}'])['status'] == 'accepted'
+
+
+@pytest.mark.parametrize('mutation', ['ordinary-call', 'send', 'output', 'capture', 'carried'])
+def test_copyable_construction_state_is_internal(toolchain, journal, directory, mutation):
+    text = SOURCE.replace('STATE', 'bool' if mutation == 'output' else 'F')
+    text = text.replace('INITIAL', 'false' if mutation == 'output' else '0')
+    source = directory / 'main.zkc'
+    source.write_text(text.replace('LOOP_START', '').replace('LOOP_END', ''))
+    package = directory / 'proof.zkpkg'
+    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+                  f'--module=sample={source}', 'sample::Demo', f'--output={package}'])
+    deployment = json.loads(json.loads(package.read_text())['artifact'])
+    program = json.loads(deployment[4])
+    producer = program[3][1 if mutation == 'output' else 0]
+    body = producer[6]
+    state = body[1][4][0]  # The start handler's actual current state.
+    state_type = producer[5][-1]
+    if mutation == 'ordinary-call':
+        program[2].append(['function', 'leak', [['input', state_type]], [],
+                           [['return', []]], ['leak', []]])
+        body.insert(2, ['local', 'leak', 'leak', [state], []])
+    elif mutation == 'send':
+        next(op for op in body if op[0] == 'send')[4] = state
+    elif mutation == 'output':
+        body[-1][1][0] = state
+    else:
+        rounds = producer[4][1][0]
+        carried = [['state_copy', state]] if mutation == 'carried' else []
+        captures = [state] if mutation == 'capture' else []
+        yielded = ['state_copy'] if carried else []
+        outputs = ['leaked_state'] if carried else []
+        body.insert(2, ['loop', 'leak', ['value', rounds, '2', 'iteration'],
+                        carried, captures, [['yield', yielded]], outputs])
+    deployment[4] = json.dumps(program)
+    reject_deployment(toolchain, journal, directory, deployment, mutation, 'native-proof-state-escape')

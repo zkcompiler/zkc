@@ -194,6 +194,21 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
            project.declarations()[rule.handler.index].qualifiedName}});
     }
     result["rules"] = std::move(rules);
+    json::Array applications;
+    for (const auto &application : construction.applications) {
+      json::Array path, arguments;
+      for (const auto &part : application.path)
+        path.push_back(part);
+      for (const auto &argument : application.arguments)
+        arguments.push_back(type(argument));
+      applications.push_back(
+          json::Object{{"construction",
+                        project.declarations()[application.construction.index]
+                            .qualifiedName},
+                       {"arguments", std::move(arguments)},
+                       {"path", std::move(path)}});
+    }
+    result["applications"] = std::move(applications);
     return result;
   }
   if (decl.primitive)

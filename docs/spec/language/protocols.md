@@ -232,7 +232,7 @@ protocol Query<N: nat> roles(P, V)(coins: Random<E> @V) -> (p: index @P) {
 `coins.index<N>()` samples UniformIndex(N): an `index` uniform on `[0, N)` under
 the [installed sampler's premise](../runtime/services.md#uniformindex-realization).
 `N` is a static natural, such as `pow2(K)`, and is fixed before sampling. A closed
-`N` must be a power of two from 1 through 2^63; a generic `N` is checked when its
+`N` must be a positive u64; a generic `N` is checked when its
 body closes. The service field must satisfy `zkc::random::IndexRandomness`, as
 a closed fact or a declared or inferred generic requirement. The result is available only
 at the service owner and the query is ordered like `draw()`. It emits a

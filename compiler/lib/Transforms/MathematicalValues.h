@@ -1,6 +1,7 @@
 #ifndef ZKC_TRANSFORMS_MATHEMATICALVALUES_H
 #define ZKC_TRANSFORMS_MATHEMATICALVALUES_H
 #include "zkc/Dialect/Operations.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseMap.h"
 #include <map>
 #include <memory>
@@ -55,8 +56,10 @@ ValueCorrespondence::Term
 normalizePolynomialValues(ValueCorrespondence &terms,
                           ValueCorrespondence::Term value,
                           PolynomialValueCache &cache);
-mlir::LogicalResult verifyPreparedValues(protocol_ir::ProtocolModuleOp before,
-                                         protocol_ir::ProtocolModuleOp after);
+mlir::LogicalResult
+verifyPreparedValues(protocol_ir::ProtocolModuleOp before,
+                     protocol_ir::ProtocolModuleOp after,
+                     llvm::ArrayRef<ApplicationStart> starts = {});
 mlir::LogicalResult
 verifyParticipantValues(protocol_ir::ProtocolModuleOp before,
                         protocol_ir::ProtocolModuleOp after);

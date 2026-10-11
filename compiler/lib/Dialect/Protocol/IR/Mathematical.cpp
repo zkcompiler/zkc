@@ -513,12 +513,25 @@ public:
         }
       } else if (isa<zkc::protocol_ir::ExchangeOp, zkc::protocol_ir::GuardOp,
                      zkc::protocol_ir::FinishIfOp, zkc::protocol_ir::QueryOp,
-                     zkc::protocol_ir::LocalCallOp>(op)) {
+                     zkc::protocol_ir::LocalCallOp,
+                     zkc::protocol_ir::ConstructionStartOp>(op)) {
         auto site = op->getAttrOfType<StringAttr>("site");
         if (!site || !name(site.getValue()) ||
             !sites.insert(site.getValue()).second)
           return refuse(op, "ordered sites must be unique identifiers");
-        if (auto completion = dyn_cast<protocol_ir::FinishIfOp>(op)) {
+        if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
+          BitVector participants;
+          if (start.getRoles().size() != 2 ||
+              failed(roles(op, start.getRoles(), participants)))
+            return refuse(op, "construction start requires two distinct roles");
+          for (Value input : start.getInputs()) {
+            auto policy = types.get(input.getType());
+            if (!policy || !policy->shared ||
+                !subset(participants, env.values.lookup(input)))
+              return refuse(op,
+                            "construction start requires shared data operands");
+          }
+        } else if (auto completion = dyn_cast<protocol_ir::FinishIfOp>(op)) {
           int owner = role(completion.getOwnerAttr());
           if (owner < 0 || any_of(
                                completion.getOperands(),

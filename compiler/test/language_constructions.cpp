@@ -485,7 +485,7 @@ int main() {
     mlir::Builder builder(&context);
     record.setRulesAttr(builder.getArrayAttr(missing));
     refuses(zkc::selectNativeProofDraws(*parsed, policy),
-            "native-proof-construction-coverage");
+            "protocol-construction");
     record.setRulesAttr(rules);
   });
   auto compileSource = [&](StringRef source, bool collideSites = false,
@@ -553,14 +553,51 @@ int main() {
   cases.run("record codecs lower through physical compilation", [&] {
     compileSource((program + deployment + codec).str(), false, "m::Packed");
   });
-  for (StringRef mutation : {"provider", "record", "layout", "group", "slice",
-                             "helper", "calculation"})
+  cases.run(
+      "record correspondence indexes many independent message sites", [&] {
+        std::string source = (program + deployment + codec).str();
+        std::string messages, selectors = "{commitment,response";
+        for (unsigned i = 0; i < 200; ++i) {
+          auto site = "extra_" + std::to_string(i);
+          messages +=
+              "#[site(" + site + ")] let " + site + "=send P->V(secret);\n";
+          selectors += "," + site;
+        }
+        selectors += "}";
+        auto at = source.find("#[site(commitment)]");
+        require(at != std::string::npos, "message insertion anchor exists");
+        source.insert(at, messages);
+        for (at = 0; (at = source.find("{commitment,response}", at)) !=
+                     std::string::npos;) {
+          source.replace(at, StringRef("{commitment,response}").size(),
+                         selectors);
+          at += selectors.size();
+        }
+        compileSource(source, false, "m::Packed");
+      });
+  for (StringRef mutation :
+       {"provider", "record", "layout", "group", "slice", "helper",
+        "calculation", "large-body", "action-order", "helper-selection",
+        "unknown-metadata", "reader-calculation"})
     cases.run(
         ("independent record checker refuses changed " + mutation).str(),
         [&, mutation] {
-          auto closed = take(
-              closeEntry(take(checked((program + deployment + codec).str())),
-                         "m::Packed"));
+          auto input = (program + deployment + codec).str();
+          if (mutation == "reader-calculation") {
+            for (auto change :
+                 {std::pair<StringRef, StringRef>{
+                      "send P->V(secret);", "send P->V((secret,secret));"},
+                  {"send P->V(secret+actual);",
+                   "send P->V((secret+actual,secret));"},
+                  {"last==first+c", "last.0==first.0+c"},
+                  {"H::observe(t,value);", "H::observe(t,value.0);"},
+                  {"(wire){return 0;}", "(wire){return (0,0);}"}}) {
+              auto at = input.find(change.first.str());
+              require(at != std::string::npos, "tuple fixture anchor exists");
+              input.replace(at, change.first.size(), change.second.str());
+            }
+          }
+          auto closed = take(closeEntry(take(checked(input)), "m::Packed"));
           auto text = take(emitOriginal(closed, context));
           auto source = mlir::parseSourceString<mlir::ModuleOp>(text, &context);
           mlir::PassManager prepare(&context);
@@ -616,6 +653,49 @@ int main() {
                                     : message.getInput().getType(),
                               bool(query), 0, std::nullopt});
           });
+          if (mutation == "large-body") {
+            // A long ordinary block should consume linear correspondence work.
+            // Repeated full environment copies used to exhaust the budget here.
+            transcript.module->walk(
+                [&](zkc::protocol_ir::ParticipantOp participant) {
+                  mlir::Operation *calculation = nullptr;
+                  for (auto &op : participant.getBody().front())
+                    if (op.getName().getStringRef() == "algebra.field_add") {
+                      calculation = &op;
+                      break;
+                    }
+                  require(calculation,
+                          "participant has an ordinary calculation");
+                  mlir::OpBuilder builder(&context);
+                  builder.setInsertionPoint(
+                      &participant.getBody().front().back());
+                  for (unsigned i = 0; i < 2000; ++i)
+                    builder.clone(*calculation);
+                });
+          }
+          if (mutation == "reader-calculation") {
+            transcript.module->walk(
+                [&](zkc::protocol_ir::ParticipantOp participant) {
+                  if (participant.getRole() != policy.validator)
+                    return;
+                  auto &body = participant.getBody().front();
+                  auto first =
+                      *body.getOps<zkc::protocol_ir::AwaitOp>().begin();
+                  mlir::Operation *calculation = nullptr;
+                  for (auto &op : body)
+                    if (op.getName().getStringRef() == "algebra.field_add") {
+                      calculation = &op;
+                      break;
+                    }
+                  require(calculation, "verifier has an ordinary calculation");
+                  mlir::OpBuilder builder(&context);
+                  builder.setInsertionPointAfter(first);
+                  auto *interleaved = builder.clone(*calculation);
+                  interleaved->setOperand(0, first.getResult());
+                  interleaved->setOperand(1, body.getArgument(0));
+                  calculation->setOperand(0, interleaved->getResult(0));
+                });
+          }
           auto candidate = mlir::OwningOpRef<mlir::ModuleOp>(
               mlir::cast<mlir::ModuleOp>(transcript.module->clone()));
           auto exported =
@@ -628,7 +708,38 @@ int main() {
                   *transcript.module, *candidate, policy, plan, events,
                   exported, transport))
             throw std::runtime_error(toString(std::move(error)));
-          if (mutation == "provider")
+          if (mutation == "large-body" || mutation == "reader-calculation")
+            return;
+          bool metadata = mutation == "action-order" ||
+                          mutation == "helper-selection" ||
+                          mutation == "unknown-metadata";
+          if (metadata) {
+            auto module = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+                candidate->getBody()->front());
+            auto projection = *module.getBody()
+                                   .front()
+                                   .getOps<zkc::protocol_ir::ProjectionOp>()
+                                   .begin();
+            auto original =
+                mlir::cast<mlir::DictionaryAttr>(projection.getInterfaces()[0]);
+            mlir::NamedAttrList construction(
+                original.getAs<mlir::DictionaryAttr>("construction"));
+            mlir::Builder builder(&context);
+            if (mutation == "unknown-metadata")
+              construction.set("unexpected", builder.getUnitAttr());
+            else if (mutation == "helper-selection")
+              construction.set("helpers", builder.getArrayAttr({}));
+            else {
+              auto actions =
+                  mlir::cast<mlir::ArrayAttr>(construction.get("actions"));
+              SmallVector<mlir::Attribute> reversed(llvm::reverse(actions));
+              construction.set("actions", builder.getArrayAttr(reversed));
+            }
+            mlir::NamedAttrList interface(original);
+            interface.set("construction", construction.getDictionary(&context));
+            projection.setInterfacesAttr(
+                builder.getArrayAttr({interface.getDictionary(&context)}));
+          } else if (mutation == "provider")
             transport[0] = "different-provider";
           else if (mutation == "record")
             transport[1] = json::Array{"index"};
@@ -672,8 +783,10 @@ int main() {
           auto error = zkc::detail::verifyNativeCodec(
               *transcript.module, *candidate, policy, plan, events, exported,
               transport);
-          require(bool(error) && namesIdentifier(toString(std::move(error)),
-                                                 "native-codec-correspondence"),
+          require(bool(error) &&
+                      namesIdentifier(toString(std::move(error)),
+                                      metadata ? "native-codec-subject"
+                                               : "native-codec-correspondence"),
                   "independent codec checker refuses mutation");
         });
   cases.run("index adapters allocate fresh sites around existing Local code",
@@ -854,6 +967,72 @@ int main() {
     Limits limits;
     limits.work = project.checkedWork() - 1;
     refuses(checked(source, limits), "source.limit");
+  });
+  cases.run("repeated handler copies have a separate construction budget", [&] {
+    std::string messages, labels;
+    for (unsigned i = 0; i < 24; ++i) {
+      auto label = "extra" + std::to_string(i);
+      messages += "#[site(" + label + ")] let ignored" + std::to_string(i) +
+                  "=send P->V(secret);";
+      labels += "," + label;
+    }
+    auto source =
+        replace("return last==first+c;", messages + "return last==first+c;");
+    auto at = source.find("{commitment,response}");
+    require(at != std::string::npos, "message selectors exist");
+    source.replace(at, StringRef("{commitment,response}").size(),
+                   "{commitment,response" + labels + "}");
+    auto project = take(checked(source + deployment.str()));
+    auto closed = take(closeEntry(project, "m::Demo"));
+    auto parsed = mlir::parseSourceString<mlir::ModuleOp>(
+        take(emitOriginal(closed, context)), &context);
+    require(bool(parsed), "budget fixture parses");
+    auto unit = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+        parsed->getBody()->front());
+    auto record = *unit.getBody()
+                       .front()
+                       .getOps<zkc::protocol_ir::ConstructionOp>()
+                       .begin();
+    mlir::SymbolTableCollection symbols;
+    auto plan = take(zkc::protocol::readConstructionPlan(record, symbols));
+    mlir::SymbolTable table(unit);
+    auto message = llvm::find_if(plan.rules, [](const auto &rule) {
+      return rule.kind == zkc::protocol::ConstructionRuleKind::Message;
+    });
+    require(message != plan.rules.end(), "message handler exists");
+    auto handler =
+        table.lookup<zkc::local::FuncOp>(message->handler.getValue());
+    mlir::OpBuilder builder(&context);
+    builder.setInsertionPoint(&handler.getBody().front().back());
+    for (unsigned i = 0; i < 12000; ++i) {
+      zkc::local::BoolConstantOp::create(
+          builder, handler.getLoc(), builder.getBoolAttr(false),
+          builder.getStringAttr("cost" + std::to_string(i)));
+    }
+    SmallVector<mlir::Attribute> rules;
+    for (auto item : record.getRules()) {
+      mlir::NamedAttrList rule(mlir::cast<mlir::DictionaryAttr>(item));
+      if (rule.get("kind") == builder.getStringAttr("message"))
+        rule.set("handler", message->handler);
+      rules.push_back(rule.getDictionary(&context));
+    }
+    record.setRulesAttr(builder.getArrayAttr(rules));
+    require(mlir::succeeded(mlir::verify(*parsed)),
+            "one large handler remains well formed before repeated copying");
+    zkc::NativeProofPolicy policy;
+    policy.entry = plan.target.getValue().str();
+    policy.construction = plan.symbol.getValue().str();
+    policy.service = plan.service;
+    policy.publicInputs = {0};
+    auto protocol =
+        table.lookup<zkc::protocol_ir::MathematicalOp>(policy.entry);
+    policy.producer =
+        mlir::cast<mlir::StringAttr>(protocol.getRoles()[0]).str();
+    policy.validator =
+        mlir::cast<mlir::StringAttr>(protocol.getRoles()[1]).str();
+    auto selected = take(zkc::selectNativeProofDraws(*parsed, policy));
+    refuses(zkc::constructNativeProof(*parsed, selected),
+            "native-proof-construction-limit");
   });
   cases.run("selectors descend through labelled protocol applications", [&] {
     auto text = replace("protocol Round<T:", "protocol Child<T:");

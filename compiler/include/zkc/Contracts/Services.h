@@ -30,15 +30,13 @@ inline llvm::StringRef randomServiceContract(llvm::StringRef field) {
       return service.contract;
   return {};
 }
-// UniformIndex(N) admits exactly the powers of two 1 through 2^63; the
-// installed sampler masks one uniform 64-bit word to log2(N) bits.
-inline bool uniformIndexBound(uint64_t bound) {
-  return bound && !(bound & (bound - 1));
-}
+// UniformIndex(N) is an ideal range request over a positive u64 bound.
+// A selected provider or construction separately admits its sampling algorithm.
+inline bool uniformIndexBound(uint64_t bound) { return bound != 0; }
 // Canonical unsigned decimal spelling of an admitted bound.
 inline std::optional<uint64_t> parseUniformIndexBound(llvm::StringRef text) {
   uint64_t bound;
-  if (text.empty() || text.size() > 19 || (text.size() > 1 && text[0] == '0') ||
+  if (text.empty() || text.size() > 20 || (text.size() > 1 && text[0] == '0') ||
       !llvm::all_of(text, [](char c) { return c >= '0' && c <= '9'; }) ||
       text.getAsInteger(10, bound) || !uniformIndexBound(bound))
     return {};

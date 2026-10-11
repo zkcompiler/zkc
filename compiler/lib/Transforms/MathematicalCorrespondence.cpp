@@ -2,6 +2,7 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "llvm/ADT/StringMap.h"
+#include <set>
 
 using namespace mlir;
 using namespace llvm;
@@ -21,6 +22,11 @@ class Correspondence {
   ValueCorrespondence terms;
   StringMap<Term> services;
   SymbolTableCollection symbols;
+  std::map<std::pair<std::string, std::string>, const ApplicationStart *>
+      starts;
+  std::set<std::pair<std::string, std::string>> reachedStarts;
+  std::string definition;
+  bool validStarts = true;
   struct Substitution {
     StringMap<Attribute> roles;
     std::string prefix;
@@ -133,6 +139,36 @@ class Correspondence {
           terms.bind(arguments, argument,
                      restrict(terms.value(left, input), input.getType(),
                               cast<ArrayAttr>(owners)));
+        auto selected = starts.find({definition, nested.prefix});
+        if (selected != starts.end()) {
+          auto start =
+              dyn_cast_if_present<protocol_ir::ConstructionStartOp>(cursor);
+          if (!start || !terms.charge(selected->second->inputs.size()) ||
+              start->getAttrs().size() != 2 ||
+              start.getSite() != nested.prefix ||
+              start.getRoles() != substitution.set(application.getRoles()) ||
+              callee.getRoles().size() != 2 ||
+              start.getNumOperands() != selected->second->inputs.size() ||
+              !reachedStarts.insert(selected->first).second)
+            return fail("selected application start differs");
+          std::set<unsigned> seen;
+          nested.bindRoles(terms, arguments, callee.getContext());
+          for (auto [port, actual] :
+               zip(selected->second->inputs, start.getInputs())) {
+            if (port >= callee.getFunctionType().getNumInputs() ||
+                !seen.insert(port).second)
+              return fail("selected application input differs");
+            auto owners = cast<ArrayAttr>(callee.getInputRoles()[port]);
+            auto formal = callee.getBody().front().getArgument(port);
+            if (isa<protocol_ir::ServiceReferenceType>(formal.getType()) ||
+                owners.size() != callee.getRoles().size() ||
+                !all_of(callee.getRoles(),
+                        [&](Attribute r) { return is_contained(owners, r); }) ||
+                !terms.compare(arguments, formal, right, actual))
+              return fail("selected application input correspondence differs");
+          }
+          cursor = nextAction(cursor->getNextNode());
+        }
         if (failed(sameBlock(callee.getBody().front(), cursor, arguments, right,
                              nested, depth + 1, true)))
           return failure();
@@ -281,6 +317,13 @@ class Correspondence {
             return fail("projected receive occurrence differs");
         } else
           continue;
+      } else if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
+        if (!is_contained(start.getRoles(), role))
+          continue;
+        if (!isa_and_nonnull<protocol_ir::ConstructionStartOp>(cursor) ||
+            op.getAttrDictionary() != cursor->getAttrDictionary() ||
+            !operands(left, op.getOperands(), right, cursor->getOperands()))
+          return fail("projected construction start differs");
       } else if (auto query = dyn_cast<protocol_ir::QueryOp>(op)) {
         if (query.getOwnerAttr() != role)
           continue;
@@ -326,9 +369,28 @@ class Correspondence {
   }
 
 public:
-  explicit Correspondence(Operation *diagnostic, bool roleComponents = false)
-      : terms(diagnostic, roleComponents) {}
+  explicit Correspondence(Operation *diagnostic, bool roleComponents = false,
+                          ArrayRef<ApplicationStart> selected = {})
+      : terms(diagnostic, roleComponents) {
+    validStarts = selected.size() <= 2048;
+    for (const auto &start : selected) {
+      validStarts &= terms.charge(start.protocol.size() + start.site.size() +
+                                  start.inputs.size());
+      validStarts &=
+          starts.emplace(std::make_pair(start.protocol, start.site), &start)
+              .second;
+    }
+  }
+  LogicalResult completeStarts() {
+    return validStarts && starts.size() == reachedStarts.size()
+               ? success()
+               : fail(
+                     "selected application occurrence is absent or duplicated");
+  }
   LogicalResult same(Operation *source, Operation *target) {
+    if (!validStarts)
+      return fail("invalid application start selection");
+    definition = SymbolTable::getSymbolName(source).str();
     auto &a = source->getRegion(0).front();
     auto &b = target->getRegion(0).front();
     if (source->getAttrDictionary() != target->getAttrDictionary() ||
@@ -395,8 +457,9 @@ public:
 };
 template <typename Definition>
 LogicalResult definitions(protocol_ir::ProtocolModuleOp before,
-                          protocol_ir::ProtocolModuleOp after) {
-  Correspondence compare(after);
+                          protocol_ir::ProtocolModuleOp after,
+                          ArrayRef<ApplicationStart> starts = {}) {
+  Correspondence compare(after, false, starts);
   SymbolTable symbols(after);
   auto originals = before.getBody().front().getOps<Definition>();
   auto candidates = after.getBody().front().getOps<Definition>();
@@ -410,12 +473,13 @@ LogicalResult definitions(protocol_ir::ProtocolModuleOp before,
     if (failed(compare.same(source, target)))
       return failure();
   }
-  return success();
+  return compare.completeStarts();
 }
 } // namespace
 LogicalResult verifyPreparedValues(protocol_ir::ProtocolModuleOp before,
-                                   protocol_ir::ProtocolModuleOp after) {
-  return definitions<protocol_ir::MathematicalOp>(before, after);
+                                   protocol_ir::ProtocolModuleOp after,
+                                   ArrayRef<ApplicationStart> starts) {
+  return definitions<protocol_ir::MathematicalOp>(before, after, starts);
 }
 LogicalResult verifyParticipantValues(protocol_ir::ProtocolModuleOp before,
                                       protocol_ir::ProtocolModuleOp after) {

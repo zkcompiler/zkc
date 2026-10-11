@@ -10,6 +10,7 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
+#include <map>
 using namespace llvm;
 using namespace mlir;
 namespace zkc::detail {
@@ -20,6 +21,7 @@ class TranscriptCorrespondence {
   const NativeProofPolicy &policy;
   const protocol::ConstructionPlan *plan;
   StringMap<const protocol::ConstructionRule *> rules;
+  std::map<std::string, protocol::ConstructionRule> startRules;
   llvm::StringSet<> rootHelpers, recordedHelpers;
   bool hostRoot;
   ArrayRef<NativeTranscriptEvent> events;
@@ -140,9 +142,13 @@ class TranscriptCorrespondence {
         !isa<ArrayAttr>(origin[1]) || !cast<ArrayAttr>(origin[1]).empty())
       return false;
     auto *rule = rules.lookup(event.site);
+    if (!rule && event.bound && (*event.bound & (*event.bound - 1)))
+      return false;
     SmallVector<Type> inputs(stateTypes), outputs;
     if (event.query)
       outputs.push_back(event.payload);
+    else if (event.startInputs)
+      append_range(inputs, *event.startInputs);
     else if (rule)
       append_range(inputs, rule->payload);
     else
@@ -211,6 +217,8 @@ class TranscriptCorrespondence {
       checkedHelpers.try_emplace(function.getSymName(), &event);
       return true;
     }
+    if (event.startInputs)
+      return false;
     {
       if (!kernel(cursor, "indices.empty", {}, {}, {}))
         return false;
@@ -280,7 +288,8 @@ class TranscriptCorrespondence {
                     return WalkResult::interrupt();
                   bool required =
                       observed.contains(op) ||
-                      isa<pir::EmitOp, pir::AwaitOp, pir::FinishIfOp>(op) ||
+                      isa<pir::EmitOp, pir::AwaitOp, pir::FinishIfOp,
+                          pir::ConstructionStartOp>(op) ||
                       (isa<pir::ParticipantQueryOp>(op) &&
                        participant.getRole() == policy.validator);
                   if (required) {
@@ -409,7 +418,18 @@ class TranscriptCorrespondence {
       } else if (event != bySite.end()) {
         const auto &fact = *event->second;
         auto delivery = deliveries.find(fact.site);
-        if (isa<pir::ParticipantQueryOp>(op)) {
+        if (auto start = dyn_cast<pir::ConstructionStartOp>(op)) {
+          SmallVector<Value> inputs;
+          for (Value input : start.getInputs()) {
+            auto value = env.lookup(input);
+            if (!value)
+              return false;
+            inputs.push_back(value);
+          }
+          if (!fact.startInputs || !payloadGroup.empty() ||
+              !call(cursor, fact, state, inputs, coordinates, nullptr, reached))
+            return false;
+        } else if (isa<pir::ParticipantQueryOp>(op)) {
           Value challenge;
           if (role != policy.validator || !fact.query ||
               !call(cursor, fact, state, {}, coordinates, &challenge,
@@ -589,10 +609,11 @@ class TranscriptCorrespondence {
   }
 
 public:
-  TranscriptCorrespondence(pir::ProtocolModuleOp candidate,
-                           const NativeProofPolicy &policy,
-                           ArrayRef<NativeTranscriptEvent> events,
-                           const protocol::ConstructionPlan *plan)
+  TranscriptCorrespondence(
+      pir::ProtocolModuleOp candidate, const NativeProofPolicy &policy,
+      ArrayRef<NativeTranscriptEvent> events,
+      const protocol::ConstructionPlan *plan,
+      ArrayRef<protocol::ConstructionInvocation> invocations)
       : policy(policy), plan(plan),
         hostRoot(!plan || plan->root == protocol::ConstructionPlan::Root::Host),
         events(events), symbols(candidate) {
@@ -605,6 +626,17 @@ public:
     } else {
       stateTypes.push_back(local::CapabilityType::get(
           candidate.getContext(), "transcript:" + policy.suite));
+    }
+    for (const auto &invocation : invocations) {
+      auto inserted = startRules.emplace(
+          invocation.site,
+          protocol::ConstructionRule{protocol::ConstructionRuleKind::Start,
+                                     invocation.handler,
+                                     {invocation.site},
+                                     invocation.inputs,
+                                     {},
+                                     {}});
+      rules[invocation.site] = &inserted.first->second;
     }
   }
   bool check(pir::ProtocolModuleOp before, pir::ProtocolModuleOp after) {
@@ -712,10 +744,11 @@ Error verifyNativeEntrySelection(ModuleOp prepared, ModuleOp selected,
     return error("native-entry-correspondence");
   return Error::success();
 }
-Error verifyNativeTranscript(ModuleOp projected, ModuleOp constructed,
-                             const NativeProofPolicy &policy,
-                             ArrayRef<NativeTranscriptEvent> events,
-                             const protocol::ConstructionPlan *plan) {
+Error verifyNativeTranscript(
+    ModuleOp projected, ModuleOp constructed, const NativeProofPolicy &policy,
+    ArrayRef<NativeTranscriptEvent> events,
+    const protocol::ConstructionPlan *plan,
+    ArrayRef<protocol::ConstructionInvocation> invocations) {
   if (!projected || !constructed ||
       projected.getContext() != constructed.getContext() ||
       failed(verify(projected)) || failed(verify(constructed)) ||
@@ -733,7 +766,7 @@ Error verifyNativeTranscript(ModuleOp projected, ModuleOp constructed,
   if (!before || !after || before.getProfile() != pir::Profile::Participant ||
       after.getProfile() != pir::Profile::Participant)
     return error("native-transcript-subject");
-  TranscriptCorrespondence checker(after, policy, events, plan);
+  TranscriptCorrespondence checker(after, policy, events, plan, invocations);
   if (!checker.check(before, after))
     return error(checker.exhausted() ? "native-transcript-limit"
                                      : "native-transcript-correspondence",

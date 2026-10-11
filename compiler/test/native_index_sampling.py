@@ -79,14 +79,13 @@ with case("index results constrain unannotated arithmetic and service aliases"):
     aliased += "fn increment(value: index) { return 1 + value; }\n"
     language("language-check", aliased, "Demo", name="index_alias_inference")
 
-with case("a selected generic domain must close to a power of two"):
+with case("a selected generic domain may be a non-power-of-two range"):
     language("language-check",
              GENERIC.replace("REQUIRE", "where zkc::random::IndexRandomness(F)")
              .replace("SIZE", "12"),
-             "Demo", name="generic_twelve", refuses="source.service")
+             "Demo", name="generic_twelve")
 
 for name, old, new in [
-    ("non-power-of-two domain", "index<8>", "index<3>"),
     ("empty domain", "index<8>", "index<0>"),
     ("missing domain", "index<8>()", "index()"),
     ("two domains", "index<8>", "index<8, 8>"),
@@ -112,14 +111,13 @@ FORMED = f'''module {{ "protocol.module"() ({{
 }}) {{profile = #protocol.profile<protocol>}} : () -> () }}'''
 
 with case("formation admits the smallest and largest domains"):
-    for value in ("1", "9223372036854775808"):
+    for value in ("1", "3", "9223372036854775808", "18446744073709551615"):
         commands.verified(FORMED.replace('value = "8"', f'value = "{value}"'), None)
 
 for name, old, new in [
-    ("non-power-of-two bound", 'value = "8"', 'value = "3"'),
     ("zero bound", 'value = "8"', 'value = "0"'),
     ("noncanonical bound", 'value = "8"', 'value = "08"'),
-    ("bound above 2^63", 'value = "8"', 'value = "18446744073709551616"'),
+    ("bound above u64", 'value = "8"', 'value = "18446744073709551616"'),
     ("runtime bound", '"protocol.query"(%r, %b)', '"protocol.query"(%r, %n)'),
     ("service without index randomness", '"random.koala-bear.ext8-binomial3/0"', '"random.bls12-381.fr/0"'),
     ("field result", '(ui64) -> ()', '(!algebra.field<"koala-bear.ext8-binomial3">) -> ()'),
@@ -210,7 +208,7 @@ with case("the explicit policy reconstructs and checks the same candidate"):
     commands.run([compiler, "protocol-check-proof", source, policy, OUT / "echo.candidate.mlir"])
     constant = re.search(r'"algebra.exec.index_constant"\(\) <\{[^}]*parameters = \["32"\]', candidate)
     assert constant, "the helper materializes its static bound"
-    for value, reason in [("64", "native-proof-correspondence"), ("3", "mathematical-projection")]:
+    for value, reason in [("64", "native-proof-correspondence"), ("3", "native-proof-correspondence")]:
         changed = OUT / f"echo.candidate.{value}.mlir"
         changed.write_text(candidate.replace('parameters = ["32"]', f'parameters = ["{value}"]'))
         commands.run([compiler, "protocol-check-proof", source, policy, changed], refuses=reason)

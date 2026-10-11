@@ -5,6 +5,7 @@ use super::{Admitted, EntryRole, PhysicalType, ProgramAction, Type, model::*};
 use std::collections::{BTreeMap, BTreeSet};
 mod codec;
 mod construction;
+mod dependencies;
 pub use construction::ConstructionPlan;
 
 /// Construction facts authenticated by the caller's selected deployment.
@@ -23,6 +24,8 @@ pub struct NativeTranscriptEvent {
     pub payload: Option<super::LogicalType>,
     /// The static UniformIndex domain of an index transition.
     pub bound: Option<u64>,
+    /// Actual shared argument types of a child start; Some([]) is an empty start.
+    pub start_inputs: Option<Vec<super::LogicalType>>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NativeProofError(pub &'static str);
@@ -195,6 +198,9 @@ fn helper<'a>(
                 };
                 let value = crate::logical::uniform_index_bound(value)
                     .map_err(|_| refuse("native-proof-index-bound"))?;
+                if !value.is_power_of_two() {
+                    return Err(refuse("native-proof-index-bound"));
+                }
                 if !inputs.is_empty() || outputs.len() != 1 {
                     return Err(refuse("native-proof-index-bound"));
                 }
@@ -255,6 +261,7 @@ fn helper<'a>(
                 Some(function.inputs[1].1.logical())
             },
             bound: bound.map(|b| b.1),
+            start_inputs: None,
         }],
         function,
     }))
@@ -270,33 +277,48 @@ fn custom_helper<'a>(
     let first = events
         .first()
         .ok_or_else(|| refuse("native-proof-construction-coverage"))?;
-    let query = first.payload.is_none();
+    let start = first.start_inputs.is_some();
+    let query = !start && first.payload.is_none();
     let mut loops = Vec::new();
     let mut message = None;
     let mut expected_inputs = state.to_vec();
     let mut expected_outputs = Vec::new();
     for (index, event) in events.iter().enumerate() {
-        let expected = if !query {
+        let expected = if start {
+            "construction.start"
+        } else if !query {
             "transcript.native.indexed.observe.data"
         } else if event.bound.is_some() {
             "transcript.native.indexed.index"
         } else {
             "transcript.native.indexed.challenge"
         };
-        if event.contract != expected || !query && event.bound.is_some() {
+        if event.contract != expected
+            || !query && event.bound.is_some()
+            || start && event.payload.is_some()
+        {
             return Err(refuse("native-proof-event"));
         }
         if let Some(bound) = event.bound
-            && (bound == 0 || !bound.is_power_of_two() || bound > (1u64 << 63))
+            && bound == 0
         {
             return Err(refuse("native-proof-index-bound"));
         }
-        if event.payload.is_none() != query || query && events.len() != 1 {
+        if event.start_inputs.is_some() != start
+            || !start && event.payload.is_none() != query
+            || (query || start) && events.len() != 1
+        {
             return Err(refuse("native-proof-construction-coverage"));
         }
         let bytes = crate::logical::native_origin_template(
             std::slice::from_ref(&event.origin),
-            if query { "query" } else { "message" },
+            if start {
+                "start"
+            } else if query {
+                "query"
+            } else {
+                "message"
+            },
         )
         .map_err(|_| refuse("native-proof-origin"))?;
         let origin =
@@ -319,7 +341,7 @@ fn custom_helper<'a>(
                 event_loops.push(path.clone());
             }
         }
-        let event_message = if query {
+        let event_message = if query || start {
             None
         } else {
             Some((
@@ -332,7 +354,17 @@ fn custom_helper<'a>(
         }
         loops = event_loops;
         message = event_message;
-        if let Some(payload) = &event.payload {
+        if let Some(inputs) = &event.start_inputs {
+            if inputs.len() > 1024 {
+                return Err(refuse("native-proof-helper-signature"));
+            }
+            for input in inputs {
+                expected_inputs.push(
+                    PhysicalType::default_for(input.clone())
+                        .map_err(|_| refuse("native-proof-helper-signature"))?,
+                );
+            }
+        } else if let Some(payload) = &event.payload {
             expected_inputs.push(
                 PhysicalType::default_for(payload.clone())
                     .map_err(|_| refuse("native-proof-helper-signature"))?,
@@ -541,6 +573,7 @@ struct ProofWalk<'a> {
     transcript: bool,
     affine_state: bool,
     calls: BTreeSet<String>,
+    states: BTreeSet<String>,
     reached: Vec<NativeTranscriptEvent>,
     loops: BTreeMap<LoopPath, (String, u64)>,
     loop_sites: BTreeMap<String, LoopPath>,
@@ -552,6 +585,12 @@ fn tail<T>(values: &[T], count: usize) -> Option<&[T]> {
         .map(|start| &values[start..])
 }
 impl ProofWalk<'_> {
+    fn ordinary<'a>(&self, values: impl IntoIterator<Item = &'a String>) -> Result<()> {
+        if values.into_iter().any(|name| self.states.contains(name)) {
+            return Err(refuse("native-proof-state-escape"));
+        }
+        Ok(())
+    }
     fn has_events(&self, body: &Body) -> bool {
         body.iter().any(|op| match op {
             Instruction::Local { function, .. } => self.helpers.contains_key(function),
@@ -573,6 +612,9 @@ impl ProofWalk<'_> {
         if depth > 64 {
             return Err(refuse("native-proof-loop-limit"));
         }
+        if let Some(state) = &current {
+            self.states.extend(state.iter().cloned());
+        }
         let mut pending_message = Vec::new();
         let mut pending_challenge = Vec::new();
         for instruction in body.iter() {
@@ -593,7 +635,11 @@ impl ProofWalk<'_> {
                         {
                             return Err(refuse("native-proof-state-chain"));
                         }
-                        let payloads = if checked.message.is_some() {
+                        self.ordinary(&inputs[state.len()..])?;
+                        let start_inputs = checked.events[0].start_inputs.as_ref();
+                        let payloads = if let Some(inputs) = start_inputs {
+                            inputs.len()
+                        } else if checked.message.is_some() {
                             checked.events.len()
                         } else {
                             0
@@ -634,11 +680,16 @@ impl ProofWalk<'_> {
                             if !pending_message.is_empty() || !pending_challenge.is_empty() {
                                 return Err(refuse("native-proof-observation-order"));
                             }
-                            pending_challenge.push(outputs[0].clone());
+                            if start_inputs.is_none() {
+                                pending_challenge.push(outputs[0].clone());
+                            }
                         }
-                        current = Some(tail(outputs, state.len()).unwrap().to_vec());
+                        let next = tail(outputs, state.len()).unwrap();
+                        self.states.extend(next.iter().cloned());
+                        current = Some(next.to_vec());
                         self.reached.extend_from_slice(&checked.events);
                     } else {
+                        self.ordinary(inputs)?;
                         if self.validating {
                             verifier_function(&self.admitted.program.functions[function])?;
                         }
@@ -647,6 +698,7 @@ impl ProofWalk<'_> {
                 Instruction::Send { peer, input, .. }
                     if !self.validating && peer == self.validator =>
                 {
+                    self.ordinary([input])?;
                     if self.transcript && current.is_none() {
                         return Err(refuse("native-proof-loop-state"));
                     }
@@ -670,7 +722,12 @@ impl ProofWalk<'_> {
                         pending_message.push(output.clone());
                     }
                 }
-                Instruction::Query { .. } if !self.validating => {}
+                Instruction::Query { inputs, .. } if !self.validating => {
+                    self.ordinary(inputs)?;
+                    if !pending_message.is_empty() || !pending_challenge.is_empty() {
+                        return Err(refuse("native-proof-observation-order"));
+                    }
+                }
                 Instruction::Loop {
                     site,
                     count,
@@ -682,6 +739,8 @@ impl ProofWalk<'_> {
                     if !pending_message.is_empty() || !pending_challenge.is_empty() {
                         return Err(refuse("native-proof-observation-order"));
                     }
+                    self.ordinary([&count.value])?;
+                    self.ordinary(captures)?;
                     let before = self.reached.len();
                     if self.has_events(body) {
                         let state = current
@@ -694,6 +753,11 @@ impl ProofWalk<'_> {
                         {
                             return Err(refuse("native-proof-loop-state"));
                         }
+                        self.ordinary(
+                            carried[..carried.len() - state.len()]
+                                .iter()
+                                .map(|(_, v)| v),
+                        )?;
                         let mut child_coordinates = coordinates.to_vec();
                         child_coordinates.push(count.induction.clone());
                         let mut child_parents = parents.to_vec();
@@ -705,12 +769,12 @@ impl ProofWalk<'_> {
                             &child_parents,
                             depth + 1,
                         )?;
-                        current = Some(
-                            tail(outputs, state.len())
-                                .ok_or_else(|| refuse("native-proof-loop-state"))?
-                                .to_vec(),
-                        );
+                        let next = tail(outputs, state.len())
+                            .ok_or_else(|| refuse("native-proof-loop-state"))?;
+                        self.states.extend(next.iter().cloned());
+                        current = Some(next.to_vec());
                     } else {
+                        self.ordinary(carried.iter().map(|(_, v)| v))?;
                         self.block(body, None, &[], &[], depth + 1)?;
                         if self.reached.len() != before {
                             return Err(refuse("native-proof-loop-state"));
@@ -718,10 +782,12 @@ impl ProofWalk<'_> {
                     }
                 }
                 Instruction::ReturnIf {
+                    condition,
                     values,
                     continuations,
                     ..
                 } => {
+                    self.ordinary([condition])?;
                     if !pending_message.is_empty() || !pending_challenge.is_empty() {
                         return Err(refuse("native-proof-observation-order"));
                     }
@@ -732,25 +798,38 @@ impl ProofWalk<'_> {
                         if tail(values, state.len()) != Some(state.as_slice()) {
                             return Err(refuse("native-proof-state-chain"));
                         }
+                        self.ordinary(&values[..values.len() - state.len()])?;
                         if self.affine_state {
                             current = Some(
                                 tail(continuations, state.len())
                                     .ok_or_else(|| refuse("native-proof-state-chain"))?
                                     .to_vec(),
                             );
+                            self.states
+                                .extend(current.as_ref().unwrap().iter().cloned());
                         }
+                    } else {
+                        self.ordinary(values)?;
                     }
                 }
                 Instruction::Yield(values)
                     if depth != 0
                         && current
                             .as_ref()
-                            .is_none_or(|s| tail(values, s.len()) == Some(s.as_slice())) => {}
+                            .is_none_or(|s| tail(values, s.len()) == Some(s.as_slice())) =>
+                {
+                    let states = current.as_ref().map_or(0, Vec::len);
+                    self.ordinary(&values[..values.len() - states])?;
+                }
                 Instruction::Return(values)
                     if depth == 0
                         && current
                             .as_ref()
-                            .is_none_or(|s| tail(values, s.len()) == Some(s.as_slice())) => {}
+                            .is_none_or(|s| tail(values, s.len()) == Some(s.as_slice())) =>
+                {
+                    let states = current.as_ref().map_or(0, Vec::len);
+                    self.ordinary(&values[..values.len() - states])?;
+                }
                 _ => return Err(refuse("native-proof-state-chain")),
             }
         }
@@ -929,8 +1008,9 @@ impl NativeProofEntry {
             }
             Ok(messages)
         };
-        if messages(&producer.role)? != messages(&validator.role)?
-            || has_codec && !messages(&producer.role)?.is_empty()
+        let producer_messages = messages(&producer.role)?;
+        if producer_messages != messages(&validator.role)?
+            || has_codec && !producer_messages.is_empty()
         {
             return Err(refuse("native-proof-wire-layout"));
         }
@@ -977,6 +1057,9 @@ impl NativeProofEntry {
                     .collect::<Vec<_>>()
             });
             let mut body = participant.body.as_ref();
+            // Copyable values from the checked root prefix remain in ordinary
+            // scope even after a later start operation produces the live state.
+            let mut root_definitions = current.clone().unwrap_or_default();
             if let Some(plan) = plan {
                 let mut invoke = |symbol: &str,
                                   inputs: &[String],
@@ -1000,6 +1083,7 @@ impl NativeProofEntry {
                     if validating {
                         construction_function(&admitted.program.functions[function], &plan.state)?;
                     }
+                    root_definitions.extend(outputs.iter().cloned());
                     body = &body[1..];
                     Ok(outputs.clone())
                 };
@@ -1047,6 +1131,50 @@ impl NativeProofEntry {
             }
             let ordinary_inputs = inputs_end - state_inputs;
             let ordinary_outputs = outputs_end - state_outputs;
+            if events.iter().any(|event| event.start_inputs.is_some()) {
+                let mut private = BTreeSet::new();
+                if !validating {
+                    let actual = source_inputs
+                        .get(&endpoint.role)
+                        .ok_or_else(|| refuse("native-proof-construction-start"))?;
+                    let public = source_inputs
+                        .get(&validator.role)
+                        .ok_or_else(|| refuse("native-proof-construction-start"))?;
+                    if actual.len() != ordinary_inputs {
+                        return Err(refuse("native-proof-construction-start"));
+                    }
+                    for (position, original) in actual.iter().enumerate() {
+                        if !public.contains(original) {
+                            private.insert(
+                                participant
+                                    .inputs
+                                    .get(position)
+                                    .ok_or_else(|| refuse("native-proof-construction-start"))?
+                                    .0
+                                    .clone(),
+                            );
+                        }
+                    }
+                }
+                // Codec normalization removes the hidden proof port from
+                // ReturnIf and Return. Pair that body with the same logical
+                // output ports when tracking affine continuations.
+                let env = participant
+                    .inputs
+                    .iter()
+                    .map(|(name, _)| name)
+                    .chain(&root_definitions)
+                    .map(|name| (name.clone(), private.contains(name)))
+                    .collect();
+                dependencies::check_participant(
+                    &admitted,
+                    body,
+                    output_ports,
+                    &helpers,
+                    env,
+                    !validating,
+                )?;
+            }
             if participant.inputs[..ordinary_inputs]
                 .iter()
                 .any(|(_, t)| t.kind() == Type::Transcript || validating && !verifier_data(t))
@@ -1065,6 +1193,7 @@ impl NativeProofEntry {
                 transcript: transcript.is_some() || plan.is_some(),
                 affine_state: transcript.is_some(),
                 calls: BTreeSet::new(),
+                states: root_definitions.into_iter().collect(),
                 reached: Vec::new(),
                 loops: BTreeMap::new(),
                 loop_sites: BTreeMap::new(),

@@ -1,6 +1,6 @@
 # Transcript construction
 
-This is a native contract. [Construction](construction.md),
+This is a native contract. [Compilation](../../compiler/construction.md),
 [transport](../formats/proof.md), [execution](../runtime/proofs.md)
 and [attempts](../runtime/attempts.md) define separate boundaries.
 [Proof usage](../../runtime/proofs.md) explains their application.
@@ -75,6 +75,26 @@ service, state slots, root factory and typed Local handlers. Preparation preserv
 that record exactly. Construction admits its event coverage and authority before
 consuming the record and projecting participant programs.
 
+Construction checks sequencing, selected operands and authority. An authored
+handler can ignore or reset copyable state through ordinary computation; these
+checks do not establish an absorption law or security of the chosen transcript.
+
+Records retain child associations as `applications = [{site, construction},
+...]`; `root_only` records an explicit/inherited format or native-root
+requirement that prevents child reuse. The independent resolver checks original
+call targets, role and service mappings, closed provider identity and complete
+child coverage before producing an execution selection. The emitted module
+contains exactly the selected construction closure.
+
+Preparation inserts an ordered `protocol.construction_start` at each selected
+application. Its operands are the actual selected callee inputs, available at
+both participants; its `roles` and `site` identify the owners and occurrence.
+Correspondence checks its position against the original call. Projection
+preserves it at both roles. Construction consumes it into ordinary Local calls
+on the current state, actual arguments and enclosing loop coordinates. It is
+neither a runtime opcode nor a second state initializer. Starts of empty
+children remain ordered; zero-trip loops execute no starts.
+
 A local root calls its zero-argument factory once per participant, followed by
 the start handler on that role's actual selected original inputs. Local state
 requires `Copy` and `Drop`; it may contain several native slots or none. State
@@ -122,7 +142,8 @@ rule if selected, decodes them, then invokes the mathematical handlers on the
 actual decoded values. The prover encodes its actual message and executes the
 same selected wire and mathematical handlers in order. These handlers form a
 contiguous sequence; unrelated local calls and service queries cannot interrupt
-it. Range selection may be
+it. Verifier calculations that lay between the original leaves follow the
+observations; only total calculations may be crossed. Range selection may be
 noncontiguous: a round's two chunks can come from separate `L[]` and `R[]`
 regions. Future messages are decoded only at their own occurrences.
 
@@ -302,6 +323,7 @@ An indexed native kernel carries the bounded static template:
 ["zkc.native-origin-template/0", entry, [step, ...], [], event]
 event = ["query", protocol, site, service_port, service_contract, method, owner]
       | ["message", protocol, site, schema, sender, receiver]
+      | ["start", original_caller_protocol, original_apply_site]
 step = ["apply", original_caller_protocol, original_apply_site]
      | ["repeat", original_protocol, original_repeat_site]
 ```
@@ -311,6 +333,10 @@ little-endian UTF-8 byte count and string bytes, or tag 1 followed by a u64
 little-endian element count and recursively encoded elements. An application
 step precedes its callee's steps; a repeat step precedes every event in its body.
 The path excludes the final event. Roles reflect static application substitution.
+For a child start the path excludes that child's apply step; it records the
+caller's enclosing applications and repeats. The following child events include
+the apply step. Start origins identify ordinary construction calls and do not
+select a transcript kernel or prescribe bytes to absorb.
 Service ports are `input_N`, with the original input index as a canonical u64
 decimal. A message schema is its original source site. The checked wire map
 connects it to the prepared site without using generated names in the origin.
@@ -376,7 +402,9 @@ the same mapping. Every listed event must appear, and every helper must be used.
 Observation operands must be the actual sent/received value or the newly derived
 challenge delivery. The state must flow from the internal entry port through
 every transition and loop to the final internal result. Capturing, dropping,
-substituting or bypassing that state refuses.
+substituting or bypassing that state refuses. Copyable state values also cannot
+appear in ordinary Local arguments, messages, loop captures or application
+outputs. Unrelated values of the same type remain ordinary data.
 
 Draw/delivery pairs remain within one source block. A selected draw cannot remain
 pending at a loop boundary. Original guards, local work, producer service draws,

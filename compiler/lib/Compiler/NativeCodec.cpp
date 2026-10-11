@@ -175,8 +175,11 @@ class CodecEmitter {
                       const json::Array &transcript) {
     StringMap<FlatSymbolRefAttr> observers;
     StringMap<std::string> sites;
-    for (const auto &event : events)
+    StringMap<const NativeTranscriptEvent *> bySite;
+    for (const auto &event : events) {
       sites[event.origin] = event.site;
+      bySite[event.site] = &event;
+    }
     for (const auto &item : *transcript[6].getAsArray()) {
       const auto &adapter = *item.getAsArray();
       for (const auto &origin : *adapter[2].getAsArray())
@@ -214,9 +217,8 @@ class CodecEmitter {
           return error("native-proof-codec-observation");
         if (!is_contained(message.observations, observation))
           message.observations.push_back(observation);
-        auto event = find_if(
-            events, [&](const auto &event) { return event.site == site; });
-        if (event == events.end())
+        auto *event = bySite.lookup(site);
+        if (!event)
           return error("native-proof-codec-origin");
         message.origins.push_back(event->origin);
       }
@@ -225,7 +227,8 @@ class CodecEmitter {
   }
   Error message(pir::ParticipantOp participant, Message &selected,
                 ArrayRef<Operation *> transport, SmallVectorImpl<Value> &record,
-                Value proof) {
+                Value proof,
+                const StringMap<SmallVector<local::CallOp>> &calls) {
     if (transport.size() != selected.encode->sites.size() ||
         !llvm::equal(
             transport, selected.encode->sites,
@@ -236,17 +239,10 @@ class CodecEmitter {
     bool writing = participant.getRole() == policy.producer;
     SmallVector<local::CallOp> observations;
     for (auto reference : selected.observations) {
-      local::CallOp found;
-      for (auto &op : *transport.front()->getBlock())
-        if (auto call = dyn_cast<local::CallOp>(op);
-            call && call.getCalleeAttr() == reference) {
-          if (found)
-            return error("native-proof-codec-observation");
-          found = call;
-        }
-      if (!found)
+      auto found = calls.find(reference.getValue());
+      if (found == calls.end() || found->second.size() != 1)
         return error("native-proof-codec-observation");
-      observations.push_back(found);
+      observations.push_back(found->second.front());
     }
     auto first = observations.front();
     StringRef anchor = first.getSite();
@@ -293,6 +289,10 @@ class CodecEmitter {
           invoke(participant, selected.decode->handler, chunks, anchor);
       for (auto [i, op] : enumerate(transport))
         op->getResult(0).replaceAllUsesWith(decoded.getResult(i));
+      // Preserve one contiguous decode/observation sequence. Total
+      // calculations between the original leaves now follow the observers.
+      for (auto call : reverse(observations))
+        call->moveAfter(decoded);
     }
     for (auto *op : transport)
       op->erase();
@@ -302,6 +302,13 @@ class CodecEmitter {
               SmallVector<Value> record, Value proof, unsigned depth) {
     if (depth > 64)
       return error("native-proof-codec-limit");
+    StringMap<SmallVector<local::CallOp>> calls;
+    for (auto &op : body) {
+      if (!remaining--)
+        return error("native-proof-codec-limit");
+      if (auto call = dyn_cast<local::CallOp>(op))
+        calls[call.getCallee()].push_back(call);
+    }
     SmallVector<Operation *> transport;
     for (auto cursor = body.begin(); cursor != body.end();) {
       auto &op = *cursor++;
@@ -386,8 +393,8 @@ class CodecEmitter {
           // Moving observer calls may invalidate the current list iterator.
           // Resume at the last transport's original successor after conversion.
           Operation *resume = cursor == body.end() ? nullptr : &*cursor;
-          if (auto e =
-                  message(participant, *selected, transport, record, proof))
+          if (auto e = message(participant, *selected, transport, record, proof,
+                               calls))
             return e;
           transport.clear();
           cursor = resume ? resume->getIterator() : body.end();

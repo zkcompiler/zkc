@@ -19,6 +19,7 @@ pub(super) struct DeploymentPolicy<'a> {
     pub(super) format: super::ProofFormat,
     public_selection: &'a Json,
     pub(super) draw_count: usize,
+    replaced_service: Option<usize>,
 }
 impl<'a> DeploymentPolicy<'a> {
     pub(super) fn read(value: &'a Json) -> Result<Self> {
@@ -47,9 +48,7 @@ impl<'a> DeploymentPolicy<'a> {
         {
             return Err("native-proof-policy".into());
         }
-        if selected {
-            index(&policy[6])?;
-        }
+        let replaced_service = selected.then(|| index(&policy[6])).transpose()?;
         let mut selected_sites = std::collections::BTreeSet::new();
         for draw in draws {
             for site in array(draw, 2)? {
@@ -73,6 +72,7 @@ impl<'a> DeploymentPolicy<'a> {
             format,
             public_selection: &policy[7],
             draw_count: draws.len(),
+            replaced_service,
         })
     }
 }
@@ -150,6 +150,7 @@ impl RoleInterface {
                     || index(&row[3])? != service.input_index
                     || data.iter().any(|p| p.original == original)
                     || services.contains(&original)
+                    || policy.replaced_service == Some(original)
                 {
                     return Err("native-proof-service-map".into());
                 }

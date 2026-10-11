@@ -862,30 +862,41 @@ class Comparator {
     return cursor == block.end() || fail("extra operations after source body");
   }
 
-  bool construction(protocol_ir::ConstructionOp record) {
-    const auto *proof = project.entry().proof();
-    bool selected =
-        proof && proof->construction == ProofEntry::Construction::Derived;
-    if (!selected)
-      return !record || fail("unexpected construction selection");
+  bool construction(const Declaration &definition,
+                    protocol_ir::ConstructionOp record) {
     if (!record)
       return fail("missing construction selection");
     mlir::SymbolTableCollection symbols;
     auto plan = take(protocol::readConstructionPlan(record, symbols));
     if (!plan)
       return false;
-    const auto &definition =
-        project.declarations()[proof->selectedConstruction->index];
     const auto &source = *definition.construction;
-    const auto &target = project.protocol();
+    const auto &target = project.declarations()[definition.target->index];
     if (plan->symbol.getValue() != definition.symbol ||
         plan->target.getValue() != target.symbol ||
         plan->provider != typeIdentity(*source.provider) ||
         plan->suite != source.suite || plan->nativeBase != source.nativeBase ||
+        plan->rootOnly !=
+            (definition.proofFormat.has_value() || source.nativeBase) ||
         (plan->root == protocol::ConstructionPlan::Root::Local) !=
             (source.root == ConstructionDefinition::Root::Local) ||
-        plan->rules.size() != source.rules.size())
+        plan->rules.size() != source.rules.size() ||
+        plan->applications.size() != source.applications.size())
       return fail("construction identity or root differs");
+    for (auto [expected, actual] :
+         zip(source.applications, plan->applications)) {
+      std::string site;
+      for (const auto &part : expected.path) {
+        auto label = nativeSiteName(part, 0);
+        site = site.empty()
+                   ? label
+                   : mathematical::expandedApplicationSite(site, label);
+      }
+      if (!charge(site.size() + 1) || actual.site != site ||
+          actual.construction.getValue() !=
+              project.declarations()[expected.construction.index].symbol)
+        return fail("construction application differs");
+    }
     if (bool(plan->initializer) != bool(source.initializer) ||
         (source.initializer &&
          plan->initializer.getValue() !=
@@ -992,16 +1003,15 @@ public:
         !llvm::hasSingleElement(native.getBody()))
       return error("source.correspondence", "unexpected original module");
     SmallVector<mlir::Operation *> functions;
-    protocol_ir::ConstructionOp selectedConstruction;
+    std::map<std::string, protocol_ir::ConstructionOp> constructions;
     std::map<std::string, relation::DeclareOp> relations;
     std::set<std::string> realizedHelpers;
     std::set<std::pair<std::string, std::vector<bool>>> mappedHelpers;
     for (auto &op : native.getBody().front()) {
       if (auto record = mlir::dyn_cast<protocol_ir::ConstructionOp>(op)) {
-        if (selectedConstruction)
+        if (!constructions.emplace(record.getSymName().str(), record).second)
           return error("source.correspondence",
                        "duplicate construction selection");
-        selectedConstruction = record;
       } else if (auto declaration = mlir::dyn_cast<relation::DeclareOp>(op)) {
         if (!relations.emplace(declaration.getSymName().str(), declaration)
                  .second)
@@ -1040,8 +1050,27 @@ public:
       } else
         functions.push_back(&op);
     }
-    if (!construction(selectedConstruction))
-      return takeFailure();
+    SmallVector<DeclarationId> pendingConstructions;
+    if (const auto *proof = project.entry().proof();
+        proof && proof->construction == ProofEntry::Construction::Derived)
+      pendingConstructions.push_back(*proof->selectedConstruction);
+    std::set<unsigned> checkedConstructions;
+    while (!pendingConstructions.empty()) {
+      auto selected = pendingConstructions.pop_back_val();
+      if (!checkedConstructions.insert(selected.index).second)
+        continue;
+      const auto &definition = project.declarations()[selected.index];
+      auto found = constructions.find(definition.symbol);
+      if (found == constructions.end())
+        return error("source.correspondence", "missing construction selection");
+      if (!construction(definition, found->second))
+        return takeFailure();
+      for (const auto &application : definition.construction->applications)
+        pendingConstructions.push_back(application.construction);
+    }
+    if (checkedConstructions.size() != constructions.size())
+      return error("source.correspondence",
+                   "unexpected construction selection");
     unsigned index = 0;
     mlir::SymbolTableCollection symbols;
     relation::FormulaIdentities formulas(remaining, limits.irBytes);

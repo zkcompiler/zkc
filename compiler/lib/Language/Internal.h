@@ -248,6 +248,11 @@ struct SyntaxConstructionRule {
   std::vector<SyntaxName> parameters;
   Span span;
 };
+struct SyntaxConstructionApplication {
+  SyntaxType construction;
+  std::vector<SyntaxName> path;
+  Span span;
+};
 struct SyntaxConstruction {
   ConstructionDefinition::Base base = ConstructionDefinition::Base::None;
   std::optional<SyntaxType> parent, provider;
@@ -256,6 +261,7 @@ struct SyntaxConstruction {
   std::optional<SyntaxName> service;
   std::string suite;
   std::vector<SyntaxConstructionRule> rules;
+  std::vector<SyntaxConstructionApplication> applications;
 };
 struct SyntaxDeclaration {
   Declaration::Kind kind;

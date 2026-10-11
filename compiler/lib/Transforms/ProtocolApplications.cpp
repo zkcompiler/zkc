@@ -4,10 +4,32 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "llvm/ADT/StringMap.h"
+#include <map>
+#include <set>
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
-LogicalResult expandApplications(protocol_ir::ProtocolModuleOp module) {
+LogicalResult expandApplications(protocol_ir::ProtocolModuleOp module,
+                                 ArrayRef<ApplicationStart> starts) {
+  auto fail = [&]() {
+    return diagnostics::emit(module.emitError(), "protocol-construction-start",
+                             "invalid selected application start");
+  };
+  std::map<std::pair<std::string, std::string>, const ApplicationStart *>
+      selected;
+  unsigned work = 1000000;
+  if (starts.size() > 2048)
+    return fail();
+  for (const auto &start : starts) {
+    auto size = start.protocol.size() + start.site.size() + start.inputs.size();
+    if (start.protocol.empty() || start.protocol.size() > 4096 ||
+        start.site.empty() || start.site.size() > 4096 ||
+        start.inputs.size() > 1024 || size > work ||
+        !selected.emplace(std::make_pair(start.protocol, start.site), &start)
+             .second)
+      return fail();
+    work -= size;
+  }
   if (failed(verifyApplications(module)))
     return failure();
   // Snapshot definitions: expanding one caller never changes a later callee's
@@ -52,6 +74,30 @@ LogicalResult expandApplications(protocol_ir::ProtocolModuleOp module) {
            zip(callee.getBody().front().getArguments(), call.getInputs(),
                callee.getInputRoles()))
         values.map(argument, restrict(input, mapped(cast<ArrayAttr>(owners))));
+      auto start =
+          selected.find({function.getSymName().str(), call.getSite().str()});
+      if (start != selected.end()) {
+        if (callee.getRoles().size() != 2)
+          return fail();
+        SmallVector<Value> inputs;
+        std::set<unsigned> seen;
+        for (unsigned port : start->second->inputs) {
+          if (port >= callee.getFunctionType().getNumInputs() ||
+              !seen.insert(port).second)
+            return fail();
+          auto owners = cast<ArrayAttr>(callee.getInputRoles()[port]);
+          auto argument = callee.getBody().front().getArgument(port);
+          if (owners.size() != callee.getRoles().size() ||
+              isa<protocol_ir::ServiceReferenceType>(argument.getType()) ||
+              !all_of(callee.getRoles(),
+                      [&](Attribute r) { return is_contained(owners, r); }))
+            return fail();
+          inputs.push_back(values.lookup(argument));
+        }
+        protocol_ir::ConstructionStartOp::create(
+            builder, call.getLoc(), inputs, call.getRoles(), call.getSite());
+        selected.erase(start);
+      }
       for (auto &op : callee.getBody().front().without_terminator()) {
         auto *copy = builder.clone(op, values);
         auto renamed = copy->walk<WalkOrder::PreOrder>([&](Operation *copy)
@@ -79,6 +125,9 @@ LogicalResult expandApplications(protocol_ir::ProtocolModuleOp module) {
             local.setRoleAttr(role(local.getRoleAttr()));
           } else if (auto view = dyn_cast<protocol_ir::RestrictRolesOp>(copy)) {
             view.setRolesAttr(mapped(view.getRoles()));
+          } else if (auto start =
+                         dyn_cast<protocol_ir::ConstructionStartOp>(copy)) {
+            start.setRolesAttr(mapped(start.getRoles()));
           } else if (auto nested = dyn_cast<protocol_ir::ApplyOp>(copy)) {
             nested.setRolesAttr(mapped(nested.getRoles()));
           }
@@ -106,6 +155,6 @@ LogicalResult expandApplications(protocol_ir::ProtocolModuleOp module) {
       call.erase();
     }
   }
-  return success();
+  return selected.empty() ? success() : fail();
 }
 } // namespace zkc::mathematical

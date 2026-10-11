@@ -1143,6 +1143,27 @@ private:
         std::string key;
         if (!name(key))
           return {};
+        if (key == "apply") {
+          SyntaxConstructionApplication application;
+          application.span = span;
+          if (!type(application.construction) ||
+              application.construction.kind != SyntaxType::Kind::Name ||
+              !expect("at"))
+            return {};
+          do {
+            SyntaxName part;
+            part.span = current().span;
+            if (!name(part.name))
+              return {};
+            part.span.end = previousEnd;
+            application.path.push_back(std::move(part));
+          } while (take("."));
+          if (!expect(";"))
+            return {};
+          application.span.end = previousEnd;
+          construction.applications.push_back(std::move(application));
+          continue;
+        }
         if (key == "on") {
           ConstructionRule::Kind kind;
           std::vector<std::vector<SyntaxName>> selectors;

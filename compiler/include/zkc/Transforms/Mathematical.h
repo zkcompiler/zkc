@@ -2,9 +2,19 @@
 #define ZKC_TRANSFORMS_MATHEMATICAL_H
 #include "mlir/IR/BuiltinOps.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
 namespace zkc::mathematical {
+/// Preserve the start of one selected expanded application. Input indices
+/// refer to the callee's original argument list, before role substitution.
+/// Selection comes from a checked construction; expansion and correspondence
+/// independently validate that the exact occurrence and shared inputs exist.
+struct ApplicationStart {
+  std::string protocol, site;
+  llvm::SmallVector<unsigned> inputs;
+};
+
 /// Admit the whole mathematical module, then check polynomial observations in
 /// selected pure helpers even when no execution path calls them. Expansion and
 /// degree checks use bounded scratch copies without simplification or

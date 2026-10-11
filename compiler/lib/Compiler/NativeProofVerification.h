@@ -15,6 +15,9 @@ struct NativeTranscriptEvent {
   /// The static UniformIndex domain of an index query; absent for field draws
   /// and message observations.
   std::optional<uint64_t> bound;
+  /// Present only for a child construction start, including an empty input
+  /// list.
+  std::optional<llvm::SmallVector<mlir::Type>> startInputs = std::nullopt;
 };
 llvm::Error verifyNativeEntrySelection(mlir::ModuleOp prepared,
                                        mlir::ModuleOp selected,
@@ -23,6 +26,7 @@ llvm::Error verifyNativeTranscript(
     mlir::ModuleOp projected, mlir::ModuleOp constructed,
     const NativeProofPolicy &policy,
     llvm::ArrayRef<NativeTranscriptEvent> events,
-    const protocol::ConstructionPlan *construction = nullptr);
+    const protocol::ConstructionPlan *construction = nullptr,
+    llvm::ArrayRef<protocol::ConstructionInvocation> invocations = {});
 } // namespace zkc::detail
 #endif

@@ -94,8 +94,7 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
       }
       if (bound->dimension.isClosed() &&
           !protocol::uniformIndexBound(bound->dimension.closedValue())) {
-        fail("source.service",
-             "index domain must be a power of two no greater than 2^63",
+        fail("source.service", "index domain must be a positive u64 natural",
              expr.span);
         return {};
       }

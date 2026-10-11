@@ -15,6 +15,17 @@ struct ConstructionSite {
   std::optional<Natural> bound;
   bool proofMessage = false;
 };
+struct ConstructionCall {
+  std::vector<std::string> path;
+  bool labelled;
+  DeclarationId target;
+  std::vector<Type> arguments;
+  std::vector<unsigned> services, roles;
+};
+bool within(ArrayRef<std::string> path, ArrayRef<std::string> parent) {
+  return path.size() >= parent.size() &&
+         equal(path.take_front(parent.size()), parent);
+}
 } // namespace
 
 bool Checker::constructions() {
@@ -28,7 +39,7 @@ bool Checker::constructions() {
     if (state[id.index] == 2)
       return true;
     if (state[id.index] == 1)
-      return types.fail("source.construction", "cyclic construction base",
+      return types.fail("source.construction", "cyclic construction selection",
                         decl.span);
     state[id.index] = 1;
     const auto &syntax = *sources[id.index]->construction;
@@ -87,6 +98,10 @@ bool Checker::constructions() {
       for (auto &argument : result.initializerArguments)
         if (!replace(argument))
           return false;
+      for (auto &application : result.applications)
+        for (auto &argument : application.arguments)
+          if (!replace(argument))
+            return false;
       for (auto &rule : result.rules) {
         for (auto &argument : rule.arguments)
           if (!replace(argument))
@@ -123,7 +138,7 @@ bool Checker::constructions() {
         (syntax.base == ConstructionDefinition::Base::Named &&
          result.root == ConstructionDefinition::Root::None)) {
       if (syntax.provider || syntax.service || syntax.codec ||
-          !syntax.rules.empty())
+          !syntax.rules.empty() || !syntax.applications.empty())
         return types.fail("source.construction",
                           "authored base accepts only a proof format",
                           decl.span);
@@ -249,6 +264,7 @@ bool Checker::constructions() {
                         "record codecs require two participants", decl.span);
 
     std::vector<ConstructionSite> sites;
+    std::vector<ConstructionCall> calls;
     std::function<bool(const Body &, const Substitution &, ArrayRef<unsigned>,
                        ArrayRef<unsigned>, ArrayRef<std::string>, bool,
                        unsigned)>
@@ -292,6 +308,8 @@ bool Checker::constructions() {
           std::vector<unsigned> mappedRoles;
           for (auto role : call->roles)
             mappedRoles.push_back(roles[role]);
+          calls.push_back(
+              {path, validPath, call->callee, actual, captured, mappedRoles});
           if (!collect(*callee.body, types.substitution(callee, actual),
                        captured, mappedRoles, path, validPath, depth + 1))
             return false;
@@ -332,6 +350,120 @@ bool Checker::constructions() {
     std::iota(roles.begin(), roles.end(), 0);
     if (!collect(*target.body, substitution, services, roles, {}, true, 1))
       return false;
+    std::set<std::vector<std::string>> selectedCalls;
+    for (const auto &source : syntax.applications) {
+      ConstructionApplication application;
+      application.span = source.span;
+      for (const auto &part : source.path)
+        application.path.push_back(part.name);
+      if (!selectedCalls.insert(application.path).second)
+        return types.fail("source.construction",
+                          "duplicate construction application", source.span);
+      auto selected = resolve(decl, source.construction.name, source.span);
+      if (!selected)
+        return false;
+      const auto &child = output.declarations[selected->index];
+      if (child.kind != Declaration::Kind::Construction || !child.target)
+        return types.fail("source.construction",
+                          "apply requires a construction", source.span);
+      if (!check(*selected, depth + 1))
+        return false;
+      auto arguments =
+          this->arguments(decl, child, source.construction.arguments,
+                          source.span, source.construction.labels);
+      if (!arguments)
+        return false;
+      application.construction = *selected;
+      application.arguments = std::move(*arguments);
+      auto prior = llvm::find_if(result.applications, [&](const auto &prior) {
+        return prior.path == application.path;
+      });
+      if (prior == result.applications.end())
+        result.applications.push_back(std::move(application));
+      else
+        *prior = std::move(application);
+    }
+    for (auto item : enumerate(result.applications)) {
+      auto index = item.index();
+      const auto &application = item.value();
+      if (!types.charge(calls.size() + result.applications.size(),
+                        application.span))
+        return false;
+      for (const auto &other :
+           ArrayRef<ConstructionApplication>(result.applications)
+               .take_front(index))
+        if (within(application.path, other.path) ||
+            within(other.path, application.path))
+          return types.fail("source.construction",
+                            "construction applications overlap",
+                            application.span);
+      auto call = llvm::find_if(calls, [&](const auto &call) {
+        return call.labelled && call.path == application.path;
+      });
+      const auto &child = output.declarations[application.construction.index];
+      if (call == calls.end() || call->target.index != child.target->index)
+        return types.fail("source.construction",
+                          "child does not target the selected protocol call",
+                          application.span);
+      auto bindings = types.substitution(child, application.arguments);
+      if (child.staticArguments.size() != call->arguments.size())
+        return types.fail("source.construction",
+                          "child specialization differs from the protocol call",
+                          application.span);
+      for (auto [formal, actual] :
+           zip(child.staticArguments, call->arguments)) {
+        auto closed = types.substitute(formal, bindings, application.span);
+        if (!closed)
+          return false;
+        if (*closed != actual)
+          return types.fail(
+              "source.construction",
+              "child specialization differs from the protocol call",
+              application.span);
+      }
+      const auto &childPlan = *child.construction;
+      if (child.proofFormat || childPlan.codec || childPlan.nativeBase ||
+          childPlan.root == ConstructionDefinition::Root::None)
+        return types.fail("source.construction",
+                          "child requires a root-only format or construction",
+                          application.span);
+      for (auto [childType, parentType] :
+           {std::make_pair(&childPlan.provider, &result.provider),
+            std::make_pair(&childPlan.state, &result.state)}) {
+        if (!*childType || !*parentType)
+          return types.fail("source.construction",
+                            "child has no transcript state", application.span);
+        auto closed = types.substitute(**childType, bindings, application.span);
+        if (!closed)
+          return false;
+        if (*closed != **parentType)
+          return types.fail("source.construction",
+                            "child transcript provider or state differs",
+                            application.span);
+      }
+      const auto &childTarget = output.declarations[child.target->index];
+      if (target.roles.size() != 2 || childPlan.root != result.root ||
+          childPlan.suite != result.suite || !childPlan.service ||
+          call->roles.size() != 2 ||
+          call->services[*childPlan.service] != *result.service ||
+          call->roles[childTarget.services[*childPlan.service].owner] !=
+              target.services[*result.service].owner)
+        return types.fail(
+            "source.construction",
+            "child transcript authority or participant mapping differs",
+            application.span);
+      for (auto [port, mapped] : enumerate(call->services))
+        if (mapped == *result.service && port != *childPlan.service)
+          return types.fail(
+              "source.construction",
+              "child aliases the replaced authority through an unselected port",
+              application.span);
+    }
+    auto delegated = [&](ArrayRef<std::string> path) {
+      return any_of(result.applications, [&](const auto &application) {
+        return within(path, application.path);
+      });
+    };
     auto bytes = builtinType("bytes", {});
     if (!bytes)
       return types.accept(bytes.takeError(), decl.span);
@@ -398,6 +530,11 @@ bool Checker::constructions() {
                             {},          {}};
       for (const auto &part : source.path)
         rule.path.push_back(part.name);
+      if (!protocol::isCodecRule(rule.kind) &&
+          rule.kind != ConstructionRule::Kind::Start && delegated(rule.path))
+        return types.fail("source.construction",
+                          "a child owns this complete construction subtree",
+                          source.span);
       if (!written.emplace(rule.kind, rule.path).second)
         return types.fail("source.construction",
                           "duplicate construction selector", source.span);
@@ -478,8 +615,9 @@ bool Checker::constructions() {
         else {
           if (site->bound)
             inputs.emplace_back(Type::Kind::Index);
-          // Source handlers return (state, value). Native lowering adapts this
-          // ordinary source signature to its selected state-slot convention.
+          // Source handlers return (state, value). Native lowering adapts
+          // this ordinary source signature to its selected state-slot
+          // convention.
           Type pair(Type::Kind::Tuple);
           pair.arguments = {*result.state, site->payload};
           outputs = {std::move(pair)};
@@ -528,6 +666,12 @@ bool Checker::constructions() {
       else
         *prior = std::move(rule);
     }
+    for (const auto &rule : result.rules)
+      if (!protocol::isCodecRule(rule.kind) &&
+          rule.kind != ConstructionRule::Kind::Start && delegated(rule.path))
+        return types.fail(
+            "source.construction",
+            "an inherited rule overlaps a construction application", rule.span);
     if (result.codec) {
       for (const auto &site : sites) {
         if (!site.proofMessage)
@@ -555,6 +699,8 @@ bool Checker::constructions() {
         return types.fail("source.construction",
                           "construction requires on start", decl.span);
       for (const auto &site : sites) {
+        if (site.labelled && delegated(site.path))
+          continue;
         if (!types.charge(result.rules.size(), decl.span))
           return false;
         if (!site.labelled ||

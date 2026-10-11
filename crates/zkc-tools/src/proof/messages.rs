@@ -41,7 +41,13 @@ impl<'a> MessageLayout<'a> {
             // bound] draws UniformIndex(bound); ["message", origin] observes.
             let row = list(row)?;
             let kind = text(row.first().ok_or("artifact-record")?)?;
-            if row.len() != if kind == "index" { 3 } else { 2 } {
+            if row.len()
+                != if kind == "index" || kind == "start" {
+                    3
+                } else {
+                    2
+                }
+            {
                 return Err("artifact-record".into());
             }
             let bound = if kind == "index" {
@@ -53,6 +59,23 @@ impl<'a> MessageLayout<'a> {
                 None
             };
             let origin = text(&row[1])?;
+            let start_inputs = if kind == "start" {
+                let inputs = list(&row[2])?;
+                if policy.construction.is_empty() || inputs.len() > 1024 {
+                    return Err("native-proof-construction-start".into());
+                }
+                Some(
+                    inputs
+                        .iter()
+                        .map(|input| {
+                            LogicalType::parse(text(input)?)
+                                .map_err(|_| "native-proof-helper-signature".into())
+                        })
+                        .collect::<Result<Vec<_>>>()?,
+                )
+            } else {
+                None
+            };
             let query = kind == "query" || kind == "index";
             let bytes = logical::native_origin_template(
                 &[origin.into()],
@@ -90,7 +113,7 @@ impl<'a> MessageLayout<'a> {
                 {
                     return Err("native-proof-query-origin".into());
                 }
-            } else {
+            } else if kind == "message" {
                 observed_messages += 1;
                 if record[4][4].as_str() == Some(producer)
                     && record[4][5].as_str() == Some(validator)
@@ -116,6 +139,7 @@ impl<'a> MessageLayout<'a> {
                 "query" => "transcript.native.indexed.challenge".to_owned(),
                 "index" => "transcript.native.indexed.index".to_owned(),
                 "message" => "transcript.native.indexed.observe.data".to_owned(),
+                "start" => "construction.start".to_owned(),
                 _ => return Err("native-proof-event".into()),
             };
             if suite.is_some() || !policy.construction.is_empty() {
@@ -124,6 +148,7 @@ impl<'a> MessageLayout<'a> {
                     origin: origin.into(),
                     payload,
                     bound,
+                    start_inputs,
                 });
             }
         }

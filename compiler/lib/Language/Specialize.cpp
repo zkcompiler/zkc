@@ -350,8 +350,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           if (!protocol::uniformIndexBound(bound.dimension.closedValue()))
             return types.fail(
                 "source.service",
-                "selected index domain must be a power of two no greater "
-                "than 2^63",
+                "selected index domain must be a positive u64 natural",
                 op.span);
           query->bound = bound.dimension;
         } else if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
@@ -627,6 +626,16 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
               return {};
             method->target.declaration = *closed;
           }
+        }
+        for (auto &application : construction.applications) {
+          for (auto &argument : application.arguments)
+            if (!closeType(argument, bindings, application.span))
+              return {};
+          auto child = instantiate(application.construction,
+                                   application.arguments, depth + 1);
+          if (!child)
+            return {};
+          application.construction = *child;
         }
         for (auto &rule : construction.rules) {
           for (auto *value : {&rule.payload, &rule.chunks})

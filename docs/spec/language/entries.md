@@ -132,6 +132,28 @@ whole inherited rule at that selector; other rules remain inherited. Without a
 native base, the resolved construction must have a start handler and cover every
 message and every query on the selected authority. Bases must be acyclic.
 
+### Child constructions
+
+`apply Child<...> at call.path;` delegates one complete labelled protocol call.
+The child's target and static arguments must match that call. Its closed
+provider, state, initializer and root must match the parent, and its selected
+service must map to the parent's authority with the same verifier. An unselected
+child service cannot alias that authority. Selections must be disjoint and
+acyclic. Inheritance can replace a whole child selection; parent mathematical
+handlers cannot override individual leaves inside it.
+
+The root initializes state once per participant. Each selected call invokes the
+child's `on start` on the live state and that call's actual shared arguments,
+before the child body. An event-free child still starts; a call inside a
+zero-trip loop does not. Children must cover their messages and selected queries
+without a native fallback. No implicit child domain tag is added.
+
+Only the root selects a record format. A child with an explicit or inherited
+format, or an inherited native root-binding requirement, refuses. A native-root
+parent may delegate to an explicit child using the same managed provider.
+Parent record-codec rules still cover delegated message leaves: child ownership
+applies to mathematical handlers, while root transport covers the whole proof.
+
 ### Record codecs
 
 `format Codec;` selects an ordinary component with an associated

@@ -117,11 +117,8 @@ fn same_body(
             return false;
         }
         *work -= 1;
-        // Branch environments and operand vectors are part of the admission
-        // work bound, including rejected candidates.
-        if charge(work, env.len()).is_err() {
-            return false;
-        }
+        // Charge operand vectors where they are traversed and environments
+        // where they are copied. Ordinary instructions do not copy the map.
         let valid = match (a, b) {
             (
                 LocalInstruction::Op {
@@ -139,7 +136,12 @@ fn same_body(
                     ..
                 },
             ) => {
-                a.declaration() == b.declaration()
+                charge(
+                    work,
+                    ai.len() + bi.len() + ao.len() + bo.len() + aa.len() + ba.len(),
+                )
+                .is_ok()
+                    && a.declaration() == b.declaration()
                     && aa == ba
                     && values(&env, ai) == *bi
                     && bind(&mut env, ao, bo)
@@ -175,7 +177,10 @@ fn same_body(
                     ..
                 },
             ) => {
-                let same = a == b && aa == ba && values(&env, ai) == *bi;
+                let same = charge(work, ai.len() + bi.len()).is_ok()
+                    && a == b
+                    && aa == ba
+                    && values(&env, ai) == *bi;
                 env.insert(ao.clone(), bo.clone());
                 same
             }
@@ -201,9 +206,12 @@ fn same_body(
                     ..
                 },
             ) => {
-                mapped(&env, a) == *b
+                charge(work, ac.len() + bc.len() + ao.len() + bo.len()).is_ok()
+                    && mapped(&env, a) == *b
                     && values(&env, ac) == *bc
+                    && charge(work, env.len()).is_ok()
                     && same_body(at, bt, env.clone(), depth + 1, work)
+                    && charge(work, env.len()).is_ok()
                     && same_body(ae, be, env.clone(), depth + 1, work)
                     && bind(&mut env, ao, bo)
             }
@@ -231,6 +239,14 @@ fn same_body(
                     ..
                 },
             ) => {
+                if charge(
+                    work,
+                    env.len() + ac.len() + bc.len() + ap.len() + bp.len() + ao.len() + bo.len(),
+                )
+                .is_err()
+                {
+                    return false;
+                }
                 let mut inner = env.clone();
                 inner.insert(ai.clone(), bi.clone());
                 let same = a == b
@@ -260,11 +276,16 @@ fn same_body(
                     ..
                 },
             ) => {
-                mapped(&env, a) == *b
+                charge(
+                    work,
+                    ac.len() + bc.len() + aa.len() + ba.len() + ao.len() + bo.len(),
+                )
+                .is_ok()
+                    && mapped(&env, a) == *b
                     && values(&env, ac) == *bc
                     && aa.len() == ba.len()
                     && aa.iter().zip(ba).all(|(a, b)| {
-                        if charge(work, env.len()).is_err() {
+                        if charge(work, env.len() + a.payload.len() + b.payload.len()).is_err() {
                             return false;
                         }
                         let mut inner = env.clone();
@@ -275,10 +296,12 @@ fn same_body(
                     && bind(&mut env, ao, bo)
             }
             (LocalInstruction::Return(a), LocalInstruction::Yield(b)) if depth == 0 => {
-                values(&env, a) == *b
+                charge(work, a.len() + b.len()).is_ok() && values(&env, a) == *b
             }
             (LocalInstruction::Yield(a), LocalInstruction::Yield(b))
-            | (LocalInstruction::Return(a), LocalInstruction::Return(b)) => values(&env, a) == *b,
+            | (LocalInstruction::Return(a), LocalInstruction::Return(b)) => {
+                charge(work, a.len() + b.len()).is_ok() && values(&env, a) == *b
+            }
             _ => false,
         };
         if !valid {
@@ -1028,5 +1051,67 @@ fn rename(op: &mut Instruction, names: &Names) {
             map(values);
         }
         Instruction::Return(values) | Instruction::Yield(values) => map(values),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_finalizer_correspondence_charges_instructions_and_operands() {
+        let make = |prefix: &str, returned: bool| {
+            let mut body: Vec<_> = (0..2000)
+                .map(|i| LocalInstruction::BoolConstant {
+                    site: format!("{prefix}_site_{i}"),
+                    output: format!("{prefix}_{i}"),
+                    value: true,
+                })
+                .collect();
+            let output = vec![format!("{prefix}_1999")];
+            body.push(if returned {
+                LocalInstruction::Return(output)
+            } else {
+                LocalInstruction::Yield(output)
+            });
+            body
+        };
+        let source = make("source", true);
+        let mut candidate = make("candidate", false);
+        let mut work = 1_000_000;
+        assert!(same_body(&source, &candidate, Names::new(), 0, &mut work));
+        assert!(work > 990_000);
+        let LocalInstruction::BoolConstant { value, .. } = &mut candidate[1999] else {
+            unreachable!()
+        };
+        *value = false;
+        assert!(!same_body(
+            &source,
+            &candidate,
+            Names::new(),
+            0,
+            &mut 1_000_000
+        ));
+        assert!(!same_body(&source, &source, Names::new(), 0, &mut 100));
+    }
+
+    #[test]
+    fn conditional_finalizer_charges_both_branch_environments() {
+        let env: Names = (0..100)
+            .map(|i| (format!("v{i}"), format!("v{i}")))
+            .collect();
+        let body = vec![
+            LocalInstruction::Conditional {
+                site: "branch".into(),
+                condition: "v0".into(),
+                captures: vec![],
+                then_body: vec![LocalInstruction::Yield(vec![])].into(),
+                else_body: vec![LocalInstruction::Yield(vec![])].into(),
+                outputs: vec![],
+            },
+            LocalInstruction::Return(vec![]),
+        ];
+        assert!(!same_body(&body, &body, env.clone(), 0, &mut 150));
+        assert!(same_body(&body, &body, env, 0, &mut 1000));
     }
 }

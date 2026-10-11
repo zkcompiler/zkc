@@ -181,6 +181,7 @@ def main():
         ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",
         ROOT / "lib/Compiler/LanguageInterface.h",
         ROOT / "lib/Compiler/NativeDeployment.h",
+        ROOT / "lib/Compiler/NativeCodec.h",
         ROOT / "lib/Compiler/NativeProofVerification.h",
     }
     private_headers["ZkcDriver"] = set((ROOT / "lib/Driver").glob("*.h"))

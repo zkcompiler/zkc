@@ -159,6 +159,10 @@ class Projector {
             operation = zkc::protocol_ir::EmitOp::getOperationName();
           else if (exchange.getReceiverAttr() == role)
             operation = zkc::protocol_ir::AwaitOp::getOperationName();
+        } else if (auto start =
+                       dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
+          if (is_contained(start.getRoles(), role))
+            operation = protocol_ir::ConstructionStartOp::getOperationName();
         } else if (isa<zkc::protocol_ir::LocalCallOp>(op)) {
           if (op.getAttr("role") == role)
             operation = zkc::local::CallOp::getOperationName();
@@ -264,6 +268,9 @@ class Projector {
       if (auto completion = dyn_cast<protocol_ir::FinishIfOp>(op))
         if (completion.getOwnerAttr() == roleName)
           append_range(pending, completion.getOperands());
+      if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(op))
+        if (is_contained(start.getRoles(), roleName))
+          append_range(pending, start.getInputs());
       if (auto query = dyn_cast<zkc::protocol_ir::QueryOp>(op))
         if (query.getOwnerAttr() == roleName)
           llvm::append_range(pending, query.getInputs());
@@ -408,6 +415,14 @@ class Projector {
         for (auto [old, value] :
              zip(call.getResults(), invocation.getResults()))
           mapping.map(old, value);
+      } else if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
+        if (!is_contained(start.getRoles(), roleName))
+          continue;
+        SmallVector<Value> inputs;
+        for (Value input : start.getInputs())
+          inputs.push_back(mapping.lookup(input));
+        protocol_ir::ConstructionStartOp::create(
+            builder, op.getLoc(), inputs, start.getRoles(), start.getSite());
       } else if (auto query = dyn_cast<zkc::protocol_ir::QueryOp>(op)) {
         if (query.getOwnerAttr() != roleName)
           continue;
@@ -795,7 +810,8 @@ namespace {
 // rewrite is confined to mathematical protocol bodies on an owned candidate;
 // executable local definitions will not be traversed by this optimization.
 OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
-                                    bool fuseVectorReductions) {
+                                    bool fuseVectorReductions,
+                                    ArrayRef<ApplicationStart> starts = {}) {
   if (failed(verify(source)))
     return {};
   if (!llvm::hasSingleElement(*source.getBody())) {
@@ -837,8 +853,8 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
       cast<zkc::protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
   OwningOpRef<protocol_ir::ProtocolModuleOp> beforeApplications(
       cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
-  if (failed(expandApplications(unit)) || failed(verify(*candidate)) ||
-      failed(verifyPreparedValues(*beforeApplications, unit)))
+  if (failed(expandApplications(unit, starts)) || failed(verify(*candidate)) ||
+      failed(verifyPreparedValues(*beforeApplications, unit, starts)))
     return {};
   OwningOpRef<protocol_ir::ProtocolModuleOp> expanded(
       cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
@@ -886,11 +902,15 @@ OwningOpRef<ModuleOp> projectPrepared(ModuleOp candidate) {
 struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PreparePass)
   PreparePass() = default;
-  explicit PreparePass(bool value, bool fusion) {
+  SmallVector<ApplicationStart> starts;
+  explicit PreparePass(bool value, bool fusion,
+                       ArrayRef<ApplicationStart> selected)
+      : starts(selected.begin(), selected.end()) {
     simplify = value;
     fuseVectorReductions = fusion;
   }
-  PreparePass(const PreparePass &other) : PassWrapper(other) {}
+  PreparePass(const PreparePass &other)
+      : PassWrapper(other), starts(other.starts) {}
   Option<bool> simplify{*this, "simplify",
                         llvm::cl::desc("Simplify after expansion"),
                         llvm::cl::init(true)};
@@ -906,7 +926,8 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   }
   void runOnOperation() final {
     auto source = getOperation();
-    auto candidate = prepareSource(source, simplify, fuseVectorReductions);
+    auto candidate =
+        prepareSource(source, simplify, fuseVectorReductions, starts);
     if (!candidate)
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
@@ -1033,11 +1054,11 @@ zkc::protocol::createProjectProtocolPass(bool simplify,
                                                      fuseVectorReductions);
 }
 
-std::unique_ptr<mlir::Pass>
-zkc::protocol::createPrepareProtocolPass(bool simplify,
-                                         bool fuseVectorReductions) {
-  return std::make_unique<mathematical::PreparePass>(simplify,
-                                                     fuseVectorReductions);
+std::unique_ptr<mlir::Pass> zkc::protocol::createPrepareProtocolPass(
+    bool simplify, bool fuseVectorReductions,
+    ArrayRef<mathematical::ApplicationStart> starts) {
+  return std::make_unique<mathematical::PreparePass>(
+      simplify, fuseVectorReductions, starts);
 }
 
 std::unique_ptr<mlir::Pass> zkc::protocol::createSimplifyParticipantPass() {

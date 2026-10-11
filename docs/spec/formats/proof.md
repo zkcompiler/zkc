@@ -239,11 +239,14 @@ The immutable compiler descriptor is:
  [[validator, original_port, logical_type, codec], ...],
  [[message_origin_hex, logical_type, codec], ...], construction_plan]
 event = ["query", origin_hex] | ["index", origin_hex, bound] | ["message", origin_hex]
+      | ["start", origin_hex, [logical_input_type, ...]]
 ```
 
 `query` is a field challenge and `index` a UniformIndex transition; their origins
 name the service methods `draw` and `index` respectively. `bound` is the canonical
-decimal power of two from 1 through 2^63 that the transition absorbs. A reader
+positive u64 domain fixed by the query. Native adapters additionally require a
+power of two from 1 through 2^63 and absorb that bound. Explicit handlers receive
+the bound and own its observation and sampling algorithm. A reader
 refuses any other row width, a noncanonical or invalid bound, and a kind whose
 origin method differs. Events and messages follow original source order. Public ports follow original
 input order. The descriptor includes the complete selected logical policy,
@@ -264,6 +267,9 @@ exactly once in descriptor order. A message adapter receives all leaves of its
 ordered group; a query adapter returns one sample. Each group has one direction
 and loop path. State inputs come first, then message values, then loop
 coordinates; outputs are the query sample, if any, followed by state slots.
+Child-start adapters instead receive state, their actual shared call arguments
+and loop coordinates, and return state. A start event always has its own adapter,
+including when its input list is empty. Only programmable plans admit starts.
 
 A Local root calls its zero-argument initializer once per participant, then its
 start handler with state and the selected original inputs. Each start input must

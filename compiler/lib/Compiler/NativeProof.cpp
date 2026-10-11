@@ -81,6 +81,7 @@ bool admittedOperation(Operation &op, bool beforePreparation) {
           // preparation pass expands both kinds of static call under its
           // bounds.
           (beforePreparation && isa<pir::ApplyOp, func::CallOp>(op)) ||
+          (!beforePreparation && isa<pir::ConstructionStartOp>(op)) ||
           mathematical::isTotal(&op));
 }
 struct Origin {
@@ -101,9 +102,13 @@ BlockArgument sourcePort(Value value) {
   }
   return {};
 }
-Expected<StringMap<Origin>> origins(pir::MathematicalOp entry,
-                                    SymbolTable &symbols) {
+Expected<StringMap<Origin>>
+origins(pir::MathematicalOp entry, SymbolTable &symbols,
+        ArrayRef<protocol::ConstructionInvocation> invocations) {
   StringMap<Origin> out;
+  llvm::StringSet<> starts;
+  for (const auto &invocation : invocations)
+    starts.insert(invocation.site);
   unsigned remaining = 100000;
   auto collect = [&](auto &&self, pir::MathematicalOp function, Block &body,
                      ArrayRef<std::array<std::string, 3>> steps,
@@ -125,6 +130,14 @@ Expected<StringMap<Origin>> origins(pir::MathematicalOp entry,
                                  : mathematical::expandedApplicationSite(
                                        expanded, site.getValue());
       if (auto apply = dyn_cast<pir::ApplyOp>(op)) {
+        if (starts.contains(id)) {
+          Origin origin{function.getSymName().str(),
+                        site.str(),
+                        {"start", function.getSymName().str(), site.str()},
+                        {steps.begin(), steps.end()}};
+          if (out.size() >= maxActions || !out.try_emplace(id, origin).second)
+            return error("native-proof-origin");
+        }
         auto callee = symbols.lookup<pir::MathematicalOp>(apply.getCallee());
         if (!callee || !hasSingleElement(callee.getBody()))
           return error("native-proof-source");
@@ -333,7 +346,7 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
         {site, *encoded, payload, query,
          static_cast<unsigned>(count_if(
              origin.steps, [](const auto &s) { return s[0] == "repeat"; })),
-         bound});
+         bound, std::nullopt});
     if (bound)
       sequence.push_back(
           json::Array{"index", *encoded, std::to_string(*bound)});
@@ -376,6 +389,36 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
       }
       if (!admittedOperation(op, false) && !isa<pir::ProtocolYieldOp>(op))
         return error("native-proof-operation");
+      if (auto start = dyn_cast<pir::ConstructionStartOp>(op)) {
+        if (pending)
+          return error("native-proof-prefix");
+        auto found = consume(start.getSite(), "start");
+        if (!found)
+          return found.takeError();
+        const auto &origin = **found;
+        auto encoded = protocol::encodeNativeOriginTemplate(
+            policy.entry, origin.steps, origin.event);
+        if (!encoded)
+          return encoded.takeError();
+        SmallVector<Type> inputs(start.getOperandTypes());
+        json::Array types;
+        for (Type input : inputs) {
+          auto logical = protocol::encodeBoundType(input, false);
+          if (!logical)
+            return logical.takeError();
+          types.push_back(logical->spelling());
+        }
+        admitted.events.push_back(
+            {start.getSite().str(),
+             *encoded,
+             {},
+             false,
+             static_cast<unsigned>(count_if(
+                 origin.steps, [](const auto &s) { return s[0] == "repeat"; })),
+             std::nullopt,
+             std::move(inputs)});
+        sequence.push_back(json::Array{"start", *encoded, std::move(types)});
+      }
       if (auto statement = dyn_cast<pir::StatementOp>(op)) {
         auto declaration =
             symbols.lookup<relation::DeclareOp>(statement.getRelation());
@@ -436,7 +479,7 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
              (draw >= policy.draws.size() ||
               query.getSite() != policy.draws[draw].first)))
           return error("native-proof-draw-selection");
-        // Formation already fixes an index domain to a power-of-two constant;
+        // Formation already fixes an index domain to a positive u64 constant;
         // its value becomes part of the transcript event. The suite's
         // IndexTranscript fact is checked when the transition is bound.
         std::optional<uint64_t> bound;
@@ -565,7 +608,8 @@ Error admitConstruction(pir::MathematicalOp source,
   if (!plan.nativeBase &&
       covered[protocol::ConstructionRule::Kind::Message].size() +
               covered[protocol::ConstructionRule::Kind::Query].size() !=
-          events.size())
+          size_t(count_if(
+              events, [](const auto &event) { return !event.startInputs; })))
     return error("native-proof-construction-coverage");
   if (plan.codec) {
     auto owners = cast<ArrayAttr>(source.getInputRoles()[plan.service]);
@@ -688,6 +732,7 @@ class Emitter {
   const NativeProofPolicy &policy;
   const protocol::ConstructionPlan *plan;
   StringMap<const protocol::ConstructionRule *> rules;
+  std::map<std::string, protocol::ConstructionRule> startRules;
   SmallVector<Attribute> invokedHelpers;
   OpBuilder builder;
   SymbolTable symbols;
@@ -737,6 +782,8 @@ class Emitter {
       SmallVector<Type> inputs(stateTypes), outputs;
       if (event.query)
         outputs.push_back(event.payload);
+      else if (event.startInputs)
+        append_range(inputs, *event.startInputs);
       else
         append_range(inputs, rule->payload);
       unsigned dataInputs = inputs.size();
@@ -794,6 +841,12 @@ class Emitter {
       }
       return FlatSymbolRefAttr::get(function);
     }
+    if (event.startInputs)
+      return error("native-proof-construction-start");
+    if (event.bound && (*event.bound & (*event.bound - 1)))
+      return error("native-proof-index-bound",
+                   "the native sampler requires a power-of-two bound; "
+                   "select an explicit query handler for other ranges");
     auto type = wire(event.payload);
     if (!type)
       return type.takeError();
@@ -856,7 +909,8 @@ class Emitter {
 
 public:
   Emitter(pir::ProtocolModuleOp module, const NativeProofPolicy &policy,
-          const protocol::ConstructionPlan *plan)
+          const protocol::ConstructionPlan *plan,
+          ArrayRef<protocol::ConstructionInvocation> invocations)
       : module(module), policy(policy), plan(plan),
         builder(module.getContext()), symbols(module) {
     if (plan)
@@ -864,6 +918,17 @@ public:
         if (!protocol::isCodecRule(rule.kind))
           for (const auto &site : rule.sites)
             rules[site] = &rule;
+    for (const auto &invocation : invocations) {
+      auto inserted = startRules.emplace(
+          invocation.site,
+          protocol::ConstructionRule{protocol::ConstructionRuleKind::Start,
+                                     invocation.handler,
+                                     {invocation.site},
+                                     invocation.inputs,
+                                     {},
+                                     {}});
+      rules[invocation.site] = &inserted.first->second;
+    }
     module.walk([&](Operation *op) {
       if (auto site = op->getAttrOfType<StringAttr>("site"))
         occupied.insert(site.getValue());
@@ -901,7 +966,9 @@ public:
     for (const auto &event : admitted.events) {
       const auto *rule = rules.lookup(event.site);
       uint64_t cost = 16 * (1 + stateTypes.size() + event.depth +
-                            (rule ? rule->payload.size() : 1));
+                            (event.startInputs ? event.startInputs->size()
+                             : rule            ? rule->payload.size()
+                                               : 1));
       if (rule && rule->sites.back() == event.site) {
         auto function = symbols.lookup<local::FuncOp>(rule->handler.getValue());
         if (!function)
@@ -1171,7 +1238,13 @@ public:
           if (found == events.end())
             continue;
           auto &event = *found->second;
-          if (isa<pir::ParticipantQueryOp>(op)) {
+          if (auto start = dyn_cast<pir::ConstructionStartOp>(op)) {
+            if (!event.startInputs || !payloadGroup.empty())
+              return error("native-proof-construction-start");
+            builder.setInsertionPoint(&op);
+            call(event, site.getValue(), start.getInputs());
+            op.erase();
+          } else if (isa<pir::ParticipantQueryOp>(op)) {
             if (!event.query || participant.getRole() != policy.validator)
               return error("native-proof-projected-event");
             builder.setInsertionPoint(&op);
@@ -1229,7 +1302,8 @@ public:
           edited.set("body", self(self, body));
           action = edited.getDictionary(module.getContext());
         }
-        if (!queries.count(site) && !deliveries.count(site))
+        if (!queries.count(site) && !deliveries.count(site) &&
+            !startRules.count(site))
           actions.push_back(action);
         append_range(actions, addedActions[site]);
       }
@@ -1268,6 +1342,7 @@ struct PreparedProof {
   OwningOpRef<ModuleOp> module;
   StringMap<Origin> origins;
   std::optional<protocol::ConstructionPlan> construction;
+  SmallVector<protocol::ConstructionInvocation> invocations;
 };
 Expected<PreparedProof> prepareProof(ModuleOp source,
                                      const NativeProofPolicy &policy,
@@ -1278,28 +1353,38 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
   if (!original || original.getProfile() != pir::Profile::Protocol)
     return error("native-proof-source");
   std::optional<protocol::ConstructionPlan> construction;
+  SmallVector<protocol::ConstructionInvocation> invocations;
   SymbolTableCollection constructionSymbols;
-  for (auto record : original.getBody().front().getOps<pir::ConstructionOp>()) {
-    if (construction || record.getSymName() != policy.construction)
+  auto records = original.getBody().front().getOps<pir::ConstructionOp>();
+  if (!policy.construction.empty()) {
+    auto record =
+        constructionSymbols.lookupNearestSymbolFrom<pir::ConstructionOp>(
+            original,
+            StringAttr::get(source.getContext(), policy.construction));
+    if (!record)
       return error("native-proof-construction-selection");
-    auto checked = protocol::readConstructionPlan(record, constructionSymbols);
-    if (!checked)
-      return checked.takeError();
-    if (checked->target.getValue() != policy.entry ||
-        checked->suite != policy.suite || checked->service != policy.service)
+    auto resolved =
+        protocol::resolveConstructionPlan(record, constructionSymbols);
+    if (!resolved)
+      return resolved.takeError();
+    auto &checked = resolved->plan;
+    if (resolved->definitions.size() !=
+            size_t(std::distance(records.begin(), records.end())) ||
+        checked.target.getValue() != policy.entry ||
+        checked.suite != policy.suite || checked.service != policy.service)
       return error("native-proof-construction-selection");
-    if (bool(checked->codec) !=
+    if (bool(checked.codec) !=
         (policy.format == protocol::ProofFormat::RawBytes))
       return error("native-proof-format");
-    construction = std::move(*checked);
-  }
-  if (construction.has_value() != !policy.construction.empty())
+    construction = std::move(checked);
+    invocations = std::move(resolved->invocations);
+  } else if (!records.empty())
     return error("native-proof-construction-selection");
   SymbolTable originalSymbols(original);
   auto entry = originalSymbols.lookup<pir::MathematicalOp>(policy.entry);
   if (!entry)
     return error("native-proof-entry");
-  auto occurrenceMap = origins(entry, originalSymbols);
+  auto occurrenceMap = origins(entry, originalSymbols, invocations);
   if (!occurrenceMap)
     return occurrenceMap.takeError();
   // Only the selected construction closure can consume the managed root.
@@ -1311,6 +1396,9 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
     for (const auto &rule : construction->rules)
       pending.push_back(
           originalSymbols.lookup<local::FuncOp>(rule.handler.getValue()));
+    for (const auto &invocation : invocations)
+      pending.push_back(
+          originalSymbols.lookup<local::FuncOp>(invocation.handler.getValue()));
     while (!pending.empty()) {
       auto function = pending.pop_back_val();
       if (!function || !authorized.insert(function).second)
@@ -1364,14 +1452,17 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
     return error("native-proof-authored-transcript");
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
   PassManager passes(source.getContext());
+  SmallVector<mathematical::ApplicationStart> starts;
+  for (const auto &invocation : invocations)
+    starts.push_back({policy.entry, invocation.site, invocation.inputs});
   passes.addPass(
-      protocol::createPrepareProtocolPass(false, fuseVectorReductions));
+      protocol::createPrepareProtocolPass(false, fuseVectorReductions, starts));
   if (failed(passes.run(*candidate)))
     return error("native-proof-preparation");
   if (!unit(*candidate))
     return error("native-proof-preparation");
   return PreparedProof{std::move(candidate), std::move(*occurrenceMap),
-                       std::move(construction)};
+                       std::move(construction), std::move(invocations)};
 }
 } // namespace
 Expected<NativeProofPolicy>
@@ -1422,6 +1513,11 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy,
     if (auto e = admitConstruction(program, *preparedSource->construction,
                                    admitted->events))
       return std::move(e);
+  // The resolved plan owns the checked construction closure. Consume its
+  // declarations before dropping protocol definitions they may reference.
+  for (auto record : make_early_inc_range(
+           prepared.getBody().front().getOps<pir::ConstructionOp>()))
+    record.erase();
   auto allDefinitions =
       OwningOpRef<ModuleOp>(cast<ModuleOp>((*candidate)->clone()));
   // Applications have already expanded. Export only the selected entry; local
@@ -1434,9 +1530,6 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy,
                                                   policy.entry))
     return std::move(e);
   allDefinitions = {};
-  for (auto record : make_early_inc_range(
-           prepared.getBody().front().getOps<pir::ConstructionOp>()))
-    record.erase();
   PassManager passes(source.getContext());
   passes.addPass(protocol::createProjectProtocolPass(false));
   if (failed(passes.run(*candidate)))
@@ -1446,13 +1539,15 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy,
       preparedSource->construction ? &*preparedSource->construction : nullptr;
   json::Array exportedPlan;
   if (!policy.suite.empty() || plan)
-    if (auto e = Emitter(unit(*candidate), policy, plan)
-                     .run(*admitted, exportedPlan))
+    if (auto e =
+            Emitter(unit(*candidate), policy, plan, preparedSource->invocations)
+                .run(*admitted, exportedPlan))
       return std::move(e);
   if (failed(verify(*candidate)))
     return error("native-proof-construction");
   if (auto e = detail::verifyNativeTranscript(*projected, *candidate, policy,
-                                              admitted->events, plan))
+                                              admitted->events, plan,
+                                              preparedSource->invocations))
     return std::move(e);
   json::Array codecPlan;
   if (plan && plan->codec) {

@@ -327,14 +327,15 @@ struct MetadataVerifier {
           bool call = kind && kind.getValue() == "protocol.local_call";
           bool exchange = kind && kind.getValue() == "protocol.exchange";
           bool loop = kind && kind.getValue() == "protocol.repeat";
+          bool start = kind && kind.getValue() == "protocol.construction_start";
           if (!kind || !site || site.getValue().empty() ||
               !sourceSites.insert(site.getValue()).second || !targets ||
               (loop ? targets.empty() || targets.size() > 2
-                    : targets.size() != (exchange ? 2u : 1u)) ||
+                    : targets.size() != (exchange || start ? 2u : 1u)) ||
               (kind.getValue() != "protocol.query" &&
                kind.getValue() != "protocol.guard" &&
                kind.getValue() != "protocol.finish_if" && !call && !exchange &&
-               !loop) ||
+               !loop && !start) ||
               !(call   ? keys(action, {"site", "kind", "targets", "callee"})
                 : loop ? keys(action,
                               {"site", "kind", "targets", "maximum", "body"})
@@ -366,6 +367,7 @@ struct MetadataVerifier {
                                 operation.getValue() != "protocol.receive"
                  : call   ? operation.getValue() != "local.call"
                  : loop   ? operation.getValue() != "protocol.loop"
+                 : start ? operation.getValue() != "protocol.construction_start"
                  : kind.getValue() == "protocol.query"
                      ? operation.getValue() != "protocol.service_query"
                  : kind.getValue() == "protocol.finish_if"
@@ -555,6 +557,13 @@ struct MetadataVerifier {
           auto targets = action.getAs<ArrayAttr>("targets");
           auto kind = action.getAs<StringAttr>("kind").getValue();
           bool remove = false, codecMessage = false;
+          bool start = kind == "protocol.construction_start";
+          if (start) {
+            if (!programmable)
+              return refuse(record,
+                            "construction start requires a selected plan");
+            remove = true;
+          }
           if (kind == "protocol.query")
             remove = cast<DictionaryAttr>(targets[0]).get("participant") ==
                      validator;
@@ -579,7 +588,7 @@ struct MetadataVerifier {
               retainedCallees.push_back(callee);
           } else if (kind == "protocol.query") {
             ++removedQueries;
-          } else if (!codecMessage) {
+          } else if (!codecMessage && !start) {
             ++removedMessages;
           }
         }
@@ -685,15 +694,18 @@ struct MetadataVerifier {
       auto site = action.getAs<StringAttr>("site");
       auto kind = action.getAs<StringAttr>("kind");
       auto targets = action.getAs<ArrayAttr>("targets");
+      bool start = kind && kind.getValue() == "protocol.construction_start";
       if (!site || site.getValue().empty() ||
           !sites.insert(site.getValue()).second || !kind || !targets ||
           targets.empty() ||
           (kind.getValue() != "protocol.exchange" &&
            kind.getValue() != "protocol.guard" &&
            kind.getValue() != "protocol.finish_if" &&
-           kind.getValue() != "protocol.query" && !localCall && !loop) ||
-          (!loop && targets.size() !=
-                        (kind.getValue() == "protocol.exchange" ? 2u : 1u)))
+           kind.getValue() != "protocol.query" && !localCall && !loop &&
+           !start) ||
+          (!loop &&
+           targets.size() !=
+               (kind.getValue() == "protocol.exchange" || start ? 2u : 1u)))
         return refuse(record, "invalid source action occurrence");
       llvm::DenseSet<Operation *> owners;
       llvm::DenseMap<Operation *, Operation *> children;
@@ -707,16 +719,18 @@ struct MetadataVerifier {
         auto operation = target.getAs<StringAttr>("operation");
         if (!participant || !operation || !owners.insert(participant).second)
           return refuse(record, "invalid action participant reference");
-        bool allowed = kind.getValue() == "protocol.exchange"
-                           ? (operation.getValue() == "protocol.send" ||
-                              operation.getValue() == "protocol.receive")
-                       : loop      ? operation.getValue() == "protocol.loop"
-                       : localCall ? operation.getValue() == "local.call"
-                       : kind.getValue() == "protocol.query"
-                           ? operation.getValue() == "protocol.service_query"
-                       : kind.getValue() == "protocol.finish_if"
-                           ? operation.getValue() == "protocol.finish_if"
-                           : operation.getValue() == "local.guard";
+        bool allowed =
+            kind.getValue() == "protocol.exchange"
+                ? (operation.getValue() == "protocol.send" ||
+                   operation.getValue() == "protocol.receive")
+            : loop      ? operation.getValue() == "protocol.loop"
+            : localCall ? operation.getValue() == "local.call"
+            : start     ? operation.getValue() == "protocol.construction_start"
+            : kind.getValue() == "protocol.query"
+                ? operation.getValue() == "protocol.service_query"
+            : kind.getValue() == "protocol.finish_if"
+                ? operation.getValue() == "protocol.finish_if"
+                : operation.getValue() == "local.guard";
         if (!allowed)
           return refuse(record, "action target has wrong execution kind");
         // Targets retain their source projection kind. The checked profile
@@ -734,6 +748,18 @@ struct MetadataVerifier {
             !retainedActions.insert({participant, site}).second)
           return refuse(record,
                         "action occurrence is missing, changed or reordered");
+        if (start) {
+          auto boundary =
+              dyn_cast<protocol_ir::ConstructionStartOp>(found->second.second);
+          if (!boundary || boundary.getRoles().size() != targets.size() ||
+              !all_of(targets, [&](Attribute item) {
+                auto endpoint = byReference.lookup(
+                    cast<DictionaryAttr>(item).get("participant"));
+                return endpoint && is_contained(boundary.getRoles(),
+                                                endpoint.getRoleAttr());
+              }))
+            return refuse(record, "construction start role boundary differs");
+        }
         if (loop) {
           auto projected =
               dyn_cast<protocol_ir::ProtocolLoopOp>(found->second.second);
@@ -1005,6 +1031,19 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
                           "unsupported participant operation operand type");
           if (policy->affine && !consumed.insert(input).second)
             return refuse(&op, "affine participant value reused");
+        }
+        if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
+          if (start.getRoles().size() != 2 ||
+              start.getRoles()[0] == start.getRoles()[1] ||
+              !is_contained(start.getRoles(), participant.getRoleAttr()))
+            return refuse(
+                &op, "construction start requires its selected participant");
+          for (Value input : start.getInputs()) {
+            auto policy = types.get(input.getType());
+            if (!policy || !policy->shared)
+              return refuse(&op,
+                            "construction start requires shared data operands");
+          }
         }
         if (isa<protocol_ir::EmitOp, protocol_ir::AwaitOp>(op)) {
           auto type = isa<protocol_ir::EmitOp>(op) ? op.getOperand(0).getType()

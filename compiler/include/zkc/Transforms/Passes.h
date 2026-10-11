@@ -3,6 +3,7 @@
 
 #include "mlir/Pass/Pass.h"
 #include "zkc/Contracts/Binding.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/StringRef.h"
 #include <memory>
 
@@ -15,9 +16,9 @@ namespace protocol {
 /// Validate and expand whole-protocol mathematics, with optional folding.
 /// Vector fusion is separately opt-in and preserves values/ordered shape
 /// refusals under sufficient resources, not exhaustion or backend failures.
-std::unique_ptr<mlir::Pass>
-createPrepareProtocolPass(bool simplify = true,
-                          bool fuseVectorReductions = false);
+std::unique_ptr<mlir::Pass> createPrepareProtocolPass(
+    bool simplify = true, bool fuseVectorReductions = false,
+    llvm::ArrayRef<mathematical::ApplicationStart> starts = {});
 /// Project the protocol profile into participant programs, retaining
 /// mathematics.
 std::unique_ptr<mlir::Pass>

@@ -32,8 +32,8 @@ The admitted operations are:
 
 `draw` draws one field element. `index` draws one sample of UniformIndex(N),
 whose ideal distribution is uniform on `[0, N)`. Its single data operand must be
-defined by a `data.index` constant whose canonical decimal value N is a power of
-two from 1 through 2^63; the domain is therefore fixed before sampling and cannot
+defined by a `data.index` constant whose canonical decimal value N is a positive
+u64; the domain is therefore fixed before sampling and cannot
 be chosen by a received value or other runtime data. Each query changes the
 root's state. Its result is available only to the owner. A query is an ordered
 occurrence even when its reply is unused. It shares the conservative default
@@ -42,7 +42,14 @@ merge or remove draws.
 
 ### UniformIndex realization
 
-The installed sampler obtains 64 provider bytes, reads the first eight as a
+The installed interactive sampler and native transcript suite admit only powers
+of two from 1 through 2^63, rejecting other bounds before consuming their root.
+An explicit construction handler may implement another positive u64 range;
+admission checks its result range, not its claimed probability distribution.
+The ordinary [sampling library](../../../libraries/README.md#bounded-sampling)
+provides bounded threshold rejection with explicit exhaustion.
+
+The installed power-of-two sampler obtains 64 provider bytes, reads the first eight as a
 little-endian unsigned 64-bit word `w` and returns `w mod N`, equivalently the low
 `log2(N)` bits of `w`. If `w` is uniform on `[0, 2^64)`, each result has exactly
 `2^64 / N` preimages, so the result is exactly uniform; there is no rejection,
@@ -57,7 +64,7 @@ References are used directly by queries. They cannot be selected, restricted,
 passed to mathematical helpers, exchanged, returned, or bound as statement data.
 Static [protocol applications](../ir/composition.md) pass existing references with exact contracts and mapped owners. `draw` has no data arguments and exactly one field reply;
 `index` has its static bound and exactly one index reply. Other distributions,
-general bounds, rejection or retry sampling, dynamic
+dynamic bounds,
 reference results, ownership transfer,
 asynchronous providers and other service contracts require explicit extensions.
 

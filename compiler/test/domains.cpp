@@ -311,7 +311,7 @@ void installedInventory() {
   // Frozen independently of representations: changing physical availability
   // must not broaden or narrow this logical formation profile.
   const std::map<std::string, std::vector<std::string>> expected{
-      {"", {"bool", "index", "indices"}},
+      {"", {"bool", "index", "indices", "bytes", "shake128_state"}},
       {"bls12-381.fr",
        {"field", "vector", "polynomial", "round", "matrix", "table", "point",
         "rng", "nonce"}},
@@ -346,7 +346,7 @@ void installedInventory() {
   for (const auto &type : catalog.allLogicalTypes())
     require(actual.emplace(type.kind, type.domain).second,
             "logical inventory contains no duplicate instances");
-  require(pairs.size() == 64 && actual == pairs,
+  require(pairs.size() == 66 && actual == pairs,
           "the complete installed logical inventory is unchanged");
 
   std::vector<std::string> identities{"", "missing"};
@@ -408,6 +408,8 @@ const ExpectedType types[] = {
     {"bool", "", "native.bool/0", "zkcv.bool/0"},
     {"index", "", "native.index/0", "zkcv.index/0"},
     {"indices", "", "native.indices/0", "zkcv.indices/0"},
+    {"bytes", "", "native.bytes/0", "zkcv.bytes/0"},
+    {"shake128_state", "", "native.shake128/0", ""},
     {"field", "bls12-381.fr", "arkworks.fr/0", "zkcv.field.bls12-381.fr/0"},
     {"vector", "bls12-381.fr", "arkworks.fr-vector/0",
      "zkcv.vector.bls12-381.fr/0"},
@@ -524,7 +526,8 @@ void installedBindings() {
                                   operation.name == "pairing.apply")
                 ? "bn254.fr"
             : sort == "Transcript" &&
-                    operation.name == "transcript.native.indexed.index"
+                    (operation.name == "transcript.native.indexed.index" ||
+                     operation.name == "transcript.index")
                 ? "merlin3.koala-bear.ext8-binomial3.rejection31le/0"
             : sort == "Nat" ? "4"
             : sort == "Field" &&

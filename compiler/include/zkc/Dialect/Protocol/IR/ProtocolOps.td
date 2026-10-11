@@ -34,7 +34,8 @@ def ConstructionOp : Op<ProtocolDialect, "construction",
   let arguments = (ins SymbolNameAttr:$sym_name, FlatSymbolRefAttr:$target, StrAttr:$provider,
     StrAttr:$root, ArrayAttr:$state,
     OptionalAttr<FlatSymbolRefAttr>:$initializer, StrAttr:$suite,
-    I64Attr:$service, BoolAttr:$native_base, ArrayAttr:$rules,
+    I64Attr:$service, BoolAttr:$native_base, BoolAttr:$root_only, ArrayAttr:$rules,
+    ArrayAttr:$applications,
     OptionalAttr<DictionaryAttr>:$codec);
 }
 
@@ -47,6 +48,18 @@ def ApplyOp : Op<ProtocolDialect, "apply",
     StrArrayAttr:$roles, StrAttr:$site);
   let results = (outs Variadic<AnyType>:$outputs);
   let assemblyFormat = "$callee `(` $inputs `)` attr-dict `:` functional-type($inputs, $outputs)";
+}
+
+// Ordered construction invocation boundary. Preparation creates it only at a
+// selected application occurrence; construction consumes it into ordinary
+// participant Local calls before executable lowering. Inputs are actual shared
+// child arguments. State belongs to the selected construction, not this op.
+def ConstructionStartOp : Op<ProtocolDialect, "construction_start",
+    [MemoryEffects<[MemRead, MemWrite]>,
+     ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp",
+                  "zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp"]>]> {
+  let arguments = (ins Variadic<AnyType>:$inputs, StrArrayAttr:$roles, StrAttr:$site);
+  let assemblyFormat = "`(` $inputs `)` attr-dict `:` type($inputs)";
 }
 
 def ExchangeOp : Op<ProtocolDialect, "exchange",

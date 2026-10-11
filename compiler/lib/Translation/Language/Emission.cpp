@@ -820,13 +820,30 @@ class Emitter {
                 {}, results, {});
   }
 
-  bool construction() {
-    const auto *proof = project.entry().proof();
-    if (!proof || proof->construction != ProofEntry::Construction::Derived)
+  std::set<unsigned> emittedConstructions;
+  bool construction(const Declaration &definition) {
+    if (!emittedConstructions.insert(definition.id.index).second)
       return true;
-    const auto &definition =
-        project.declarations()[proof->selectedConstruction->index];
     const auto &plan = *definition.construction;
+    const auto &target = project.declarations()[definition.target->index];
+    SmallVector<mlir::Attribute> applications;
+    for (const auto &application : plan.applications) {
+      const auto &child =
+          project.declarations()[application.construction.index];
+      if (!construction(child))
+        return false;
+      std::string site;
+      for (const auto &part : application.path) {
+        auto label = nativeSiteName(part, 0);
+        site = site.empty()
+                   ? label
+                   : mathematical::expandedApplicationSite(site, label);
+      }
+      applications.push_back(builder.getDictionaryAttr(
+          {text("site", site),
+           attr("construction",
+                mlir::FlatSymbolRefAttr::get(&context, child.symbol))}));
+    }
     auto stateLayout = take(layouts.get(*plan.state));
     if (!stateLayout)
       return false;
@@ -840,7 +857,7 @@ class Emitter {
       return builder.getArrayAttr(attrs);
     };
     std::vector<unsigned> offsets{0};
-    for (const auto &port : project.protocol().inputs) {
+    for (const auto &port : target.inputs) {
       auto layout = take(layouts.get(port.type));
       if (!layout)
         return false;
@@ -904,8 +921,7 @@ class Emitter {
     }
     SmallVector<mlir::NamedAttribute> attrs{
         text("sym_name", definition.symbol),
-        attr("target",
-             mlir::FlatSymbolRefAttr::get(&context, project.protocol().symbol)),
+        attr("target", mlir::FlatSymbolRefAttr::get(&context, target.symbol)),
         text("provider", typeIdentity(*plan.provider)),
         text("root", plan.root == ConstructionDefinition::Root::Local ? "local"
                                                                       : "host"),
@@ -914,7 +930,11 @@ class Emitter {
         attr("service",
              builder.getI64IntegerAttr(offsets.back() + *plan.service)),
         attr("native_base", builder.getBoolAttr(plan.nativeBase)),
-        attr("rules", builder.getArrayAttr(rules))};
+        attr("root_only",
+             builder.getBoolAttr(definition.proofFormat.has_value() ||
+                                 plan.nativeBase)),
+        attr("rules", builder.getArrayAttr(rules)),
+        attr("applications", builder.getArrayAttr(applications))};
     if (plan.codec) {
       const auto &codec = *plan.codec;
       auto layout = take(layouts.get(codec.record));
@@ -1035,8 +1055,11 @@ public:
       if (!body(decl, *decl.body, function->getRegion(0).front()))
         return std::move(failure);
     }
-    if (!construction())
-      return std::move(failure);
+    if (const auto *proof = project.entry().proof();
+        proof && proof->construction == ProofEntry::Construction::Derived)
+      if (!construction(
+              project.declarations()[proof->selectedConstruction->index]))
+        return std::move(failure);
     mlir::SymbolTable table(unit);
     relation::FormulaIdentities formulas(remaining, limits.irBytes);
     LayoutIdentities schemaIdentities(remaining);

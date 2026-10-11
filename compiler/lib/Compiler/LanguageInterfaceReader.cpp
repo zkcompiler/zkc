@@ -1285,18 +1285,20 @@ class Reader {
           current->services[*service].owner != proof.verifier)
         return fail("construction selection or verifier service differs");
       auto found = nativeConstructions.find(symbol->str());
-      if (nativeConstructions.size() != 1 || found == nativeConstructions.end())
+      if (found == nativeConstructions.end())
         return fail("construction record differs");
       mlir::SymbolTableCollection symbols;
-      auto plan = protocol::readConstructionPlan(found->second, symbols);
-      if (!plan) {
-        consumeError(plan.takeError());
+      auto resolved = protocol::resolveConstructionPlan(found->second, symbols);
+      if (!resolved) {
+        consumeError(resolved.takeError());
         return fail("invalid construction record");
       }
-      if (plan->codec.has_value() !=
+      const auto &plan = resolved->plan;
+      if (resolved->definitions.size() != nativeConstructions.size() ||
+          plan.codec.has_value() !=
               (proof.format == protocol::ProofFormat::RawBytes) ||
-          plan->target.getValue() != current->symbol || plan->suite != suite ||
-          plan->service != current->services[*service].native)
+          plan.target.getValue() != current->symbol || plan.suite != suite ||
+          plan.service != current->services[*service].native)
         return fail("construction record differs");
       proof.construction = ProofEntry::Construction::Derived;
       proof.selectedConstruction = symbol->str();

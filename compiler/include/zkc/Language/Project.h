@@ -390,6 +390,14 @@ struct ConstructionCodec {
   /// Actual shared protocol inputs used to initialize the layout record.
   std::vector<unsigned> inputs;
 };
+/// A child owns the complete mathematical construction at one labelled call.
+/// Arguments specialize the child construction, not the protocol call inputs.
+struct ConstructionApplication {
+  DeclarationId construction;
+  std::vector<Type> arguments;
+  std::vector<std::string> path;
+  Span span;
+};
 struct ConstructionDefinition {
   enum class Base { None, Authored, Native, Named } base = Base::None;
   enum class Root { None, Host, Local } root = Root::None;
@@ -403,6 +411,7 @@ struct ConstructionDefinition {
   std::string suite;
   bool nativeBase = false;
   std::vector<ConstructionRule> rules;
+  std::vector<ConstructionApplication> applications;
   std::optional<ConstructionCodec> codec;
 };
 /// Explicit two-participant proof job choices. Public inputs name whole logical

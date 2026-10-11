@@ -8,7 +8,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
-#include <map>
+#include <utility>
 using namespace mlir;
 using namespace llvm;
 namespace zkc::detail {
@@ -29,7 +29,7 @@ class CodecCorrespondence {
   SymbolTable symbols;
   Type bytes;
   StringMap<CodecMessage> messages;
-  StringMap<CodecMessage *> leaves;
+  StringMap<CodecMessage *> leaves, observerMessages;
   llvm::StringSet<> allowedFunctions, allowedBindings, usedHelpers;
   FlatSymbolRefAttr conditionalWrite, conditionalFinish;
   uint64_t remaining = 1000000;
@@ -79,12 +79,10 @@ class CodecCorrespondence {
       if (!x.hasOneBlock() || !y.hasOneBlock() ||
           x.front().getOperations().size() != y.front().getOperations().size())
         return false;
-      Env inner;
-      if (!a.hasTrait<OpTrait::IsIsolatedFromAbove>()) {
-        if (!charge(env.size()))
-          return false;
-        inner = env;
-      }
+      // Both subjects are verified: SSA values are globally distinct and
+      // cannot escape their regions. Non-isolated regions can share mappings.
+      Env isolated;
+      Env &inner = a.hasTrait<OpTrait::IsIsolatedFromAbove>() ? isolated : env;
       if (!bind(x.front().getArguments(), y.front().getArguments(), inner))
         return false;
       for (auto [u, v] : zip(x.front(), y.front()))
@@ -93,6 +91,28 @@ class CodecCorrespondence {
     }
     return bind(a.getResults(), b.getResults(), env);
   }
+  bool exactWithState(
+      Operation &source, Operation &candidate, Env &env,
+      const llvm::DenseMap<Operation *, SmallVector<Value>> &overrides,
+      unsigned depth) {
+    auto found = overrides.find(&source);
+    if (found == overrides.end())
+      return exact(source, candidate, env, depth);
+    if (!charge(found->second.size()))
+      return false;
+    SmallVector<std::pair<Value, Value>> saved;
+    for (auto [oldState, newState] :
+         zip(source.getOperands().take_front(plan.state.size()),
+             found->second)) {
+      saved.emplace_back(oldState, env.lookup(oldState));
+      env[oldState] = newState;
+    }
+    bool matches = exact(source, candidate, env, depth);
+    for (auto [value, previous] : reverse(saved))
+      env[value] = previous;
+    return matches;
+  }
+
   bool kernel(Operation *op, StringRef contract, ValueRange inputs,
               unsigned results) {
     if (!op || !charge() ||
@@ -225,6 +245,23 @@ class CodecCorrespondence {
             unsigned depth, Operation *sourceStart = nullptr) {
     if (depth > 64)
       return false;
+    struct Occurrences {
+      SmallVector<Operation *> transport;
+      SmallVector<local::CallOp> observations;
+    };
+    llvm::DenseMap<const CodecMessage *, Occurrences> occurrences;
+    for (auto &op : source) {
+      if (!charge())
+        return false;
+      if (isa<pir::EmitOp, pir::AwaitOp>(op)) {
+        auto site = op.getAttrOfType<StringAttr>("site");
+        if (auto *message = site ? leaves.lookup(site.getValue()) : nullptr)
+          occurrences[message].transport.push_back(&op);
+      } else if (auto call = dyn_cast<local::CallOp>(op)) {
+        if (auto *message = observerMessages.lookup(call.getCallee()))
+          occurrences[message].observations.push_back(call);
+      }
+    }
     llvm::DenseSet<Operation *> completed, postponed;
     llvm::DenseMap<Operation *, SmallVector<Value>> overridden;
     for (auto &op :
@@ -319,19 +356,9 @@ class CodecCorrespondence {
                                         : message->encode->sites.front());
         if (!boundary)
           continue;
-        SmallVector<Operation *> transport;
-        SmallVector<local::CallOp> observations;
-        for (auto &candidate : source) {
-          if (!charge())
-            return false;
-          if (auto label = candidate.getAttrOfType<StringAttr>("site");
-              label && is_contained(message->encode->sites, label.str()) &&
-              isa<pir::EmitOp, pir::AwaitOp>(candidate))
-            transport.push_back(&candidate);
-          if (auto call = dyn_cast<local::CallOp>(candidate);
-              call && is_contained(message->observations, call.getCalleeAttr()))
-            observations.push_back(call);
-        }
+        auto &group = occurrences[message];
+        const auto &transport = group.transport;
+        auto &observations = group.observations;
         if (!llvm::equal(
                 transport, message->encode->sites,
                 [](Operation *op, const std::string &site) {
@@ -390,62 +417,42 @@ class CodecCorrespondence {
           append_range(observedState, observed.getResults());
           overridden[observations.front()] = observedState;
         }
+        // Only total calculations and this message's observations may be
+        // crossed while gathering one logical payload.
+        for (auto *between = transport.front(); between != transport.back();
+             between = between->getNextNode()) {
+          if (!between || !charge())
+            return false;
+          if (is_contained(transport, between) ||
+              is_contained(observations, dyn_cast<local::CallOp>(between)))
+            continue;
+          if (!mathematical::isTotal(between))
+            return false;
+        }
         if (!writing) {
           auto decoded = invoke(cursor, message->decode->handler, chunks);
           if (!decoded || decoded.getNumResults() != transport.size())
             return false;
           for (auto [i, receive] : enumerate(transport))
             env[receive->getResult(0)] = decoded.getResult(i);
-        } else {
-          // Only total calculations and this message's observations may be
-          // crossed while gathering one logical payload.
-          for (auto *between = transport.front(); between != transport.back();
-               between = between->getNextNode()) {
-            if (!between || !charge())
-              return false;
-            if (is_contained(transport, between) ||
-                is_contained(observations, dyn_cast<local::CallOp>(between)))
-              continue;
-            if (!mathematical::isTotal(between))
-              return false;
-          }
-          for (auto call : observations) {
-            if (!charge(env.size()))
-              return false;
-            Env selected(env);
-            if (auto found = overridden.find(call); found != overridden.end())
-              for (auto [a, b] :
-                   zip(call.getInputs().take_front(plan.state.size()),
-                       found->second))
-                selected[a] = b;
-            if (!cursor || !exact(*call, *cursor, selected, depth) ||
-                !bind(call.getResults(), cursor->getResults(), env))
-              return false;
-            completed.insert(call);
-            cursor = cursor->getNextNode();
-          }
+        }
+        for (auto call : observations) {
+          if (!cursor ||
+              !exactWithState(*call, *cursor, env, overridden, depth))
+            return false;
+          completed.insert(call);
+          cursor = cursor->getNextNode();
         }
       } else {
         if (writing) {
           auto call = dyn_cast<local::CallOp>(op);
-          bool pending = call && any_of(messages, [&](auto &item) {
-                           return is_contained(item.second.observations,
-                                               call.getCalleeAttr());
-                         });
+          bool pending = call && observerMessages.count(call.getCallee());
           if (pending) {
             postponed.insert(&op);
             continue;
           }
         }
-        if (!charge(env.size()))
-          return false;
-        Env selected(env);
-        if (auto found = overridden.find(&op); found != overridden.end())
-          for (auto [a, b] : zip(op.getOperands().take_front(plan.state.size()),
-                                 found->second))
-            selected[a] = b;
-        if (!exact(op, *cursor, selected, depth) ||
-            !bind(op.getResults(), cursor->getResults(), env))
+        if (!exactWithState(op, *cursor, env, overridden, depth))
           return false;
         cursor = cursor->getNextNode();
       }
@@ -533,6 +540,12 @@ public:
     auto associations = selected[6].getAsArray();
     if (!associations || associations->size() != messages.size())
       return false;
+    StringMap<const NativeTranscriptEvent *> bySite;
+    for (const auto &event : events) {
+      if (!charge())
+        return false;
+      bySite[event.site] = &event;
+    }
     unsigned association = 0;
     for (const auto &first : events) {
       auto found = messages.find(first.site);
@@ -549,13 +562,15 @@ public:
       json::Array origins;
       for (const auto &site : message.encode->sites) {
         leaves[site] = &message;
-        auto event = find_if(
-            events, [&](const auto &event) { return event.site == site; });
-        if (event == events.end())
+        auto *event = bySite.lookup(site);
+        if (!event || !charge())
           return false;
         origins.push_back(event->origin);
         auto ref = observations.lookup(event->origin);
         if (!ref)
+          return false;
+        auto inserted = observerMessages.try_emplace(ref.getValue(), &message);
+        if (!inserted.second && inserted.first->second != &message)
           return false;
         if (!is_contained(message.observations, ref))
           message.observations.push_back(ref);

@@ -525,3 +525,41 @@ def test_record_codec_checks_producer_program(toolchain, journal, directory, mut
         steps.insert(steps.index(selected[wire]) + 1, ['local', 'stop_here', 'stop_here', [], []])
     deployment[4] = json.dumps(program)
     reject_deployment(toolchain, journal, directory, deployment, mutation, reason)
+
+
+@pytest.mark.parametrize('native', [False, True])
+@pytest.mark.parametrize('flags', [[], ['--release-storage']])
+def test_codec_record_crosses_event_free_protocol_loop(toolchain, journal, directory, native, flags):
+    text = SOURCE.replace('STATE', '(index,index)').replace('INITIAL', '(0,0)')
+    text = text.replace('LOOP_START', '').replace('LOOP_END', '')
+    text = text.replace(
+        '#[site(challenge)]',
+        'for _ in 0..rounds roles(P,V) max 2 {'
+        'let keep@V=allowed(rounds);accepted=accepted && keep;}'
+        '#[site(challenge)]')
+    text = text.replace('accepted=last.0==first.0+c;', 'accepted=accepted && last.0==first.0+c;')
+    text += '\nfn allowed(v:index)->bool{return v==2;}'
+    base = ('base fiat_shamir("merlin3.bls12-381.fr64be/0",challenges);' if native else
+            'base Derived<F,Provider>;')
+    source = directory / 'main.zkc'
+    source.write_text(text + CODEC.replace('BASE', base))
+    package = directory / 'proof.zkpkg'
+    compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+                             f'--module=sample={source}', 'sample::Packed', f'--output={package}', *flags])
+    deployment = json.loads(json.loads(package.read_text())['artifact'])
+    program = json.loads(deployment[4])
+    assert all(any(op[0] == 'loop' for op in participant[6]) for participant in program[3])
+    witness = journal.write('witness.json', {'secret': '7'})
+    for rounds in [0, 2]:
+        public = journal.write(f'public-{rounds}.json', {'public': '5', 'rounds': str(rounds)})
+        args = [f'--package={package}', f'--sha256={compiled["package_sha256"]}', f'--public={public}']
+        if not native:
+            args.append('--allow-authored')
+        proof = directory / f'proof-{rounds}.bin'
+        produced = journal.json([toolchain.runtime, '--json', 'prove', *args,
+                                 f'--witness={witness}', f'--output={proof}'])
+        assert len(proof.read_bytes()) == 128
+        assert not produced['execution']['cleanup_errors']
+        verified = journal.json([toolchain.runtime, '--json', 'verify', *args, f'--proof={proof}'])
+        assert verified['status'] == 'accepted'
+        assert not verified['execution']['cleanup_errors']

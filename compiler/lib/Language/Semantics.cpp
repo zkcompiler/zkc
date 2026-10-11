@@ -71,7 +71,9 @@ Error Semantics::takeError() {
 bool valueType(const Type &type) { return !isStaticOnly(type); }
 bool Semantics::chargeConstruction(const ConstructionDefinition &value,
                                    Span span) {
-  if (!charge(value.suite.size() + value.rules.size() + 1, span))
+  if (!charge(value.suite.size() + value.rules.size() +
+                  value.applications.size() + 1,
+              span))
     return false;
   for (const auto *type : {&value.provider, &value.state})
     if (*type && !chargeType(**type, span))
@@ -97,6 +99,14 @@ bool Semantics::chargeConstruction(const ConstructionDefinition &value,
         if (!chargeType(argument, span))
           return false;
     }
+  }
+  for (const auto &application : value.applications) {
+    for (const auto &part : application.path)
+      if (!charge(part.size() + 1, application.span))
+        return false;
+    for (const auto &argument : application.arguments)
+      if (!chargeType(argument, application.span))
+        return false;
   }
   for (const auto &rule : value.rules) {
     if (!charge(rule.inputs.size() + 1, rule.span))

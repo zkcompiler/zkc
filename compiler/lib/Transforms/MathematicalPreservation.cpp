@@ -368,7 +368,8 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate) {
               symbolTables.lookupNearestSymbolFrom<protocol_ir::ParticipantOp>(
                   result, target.getAs<FlatSymbolRefAttr>("participant"));
           owners.insert(participant.getRoleAttr());
-          if (isa<protocol_ir::RepeatOp>(action))
+          if (isa<protocol_ir::RepeatOp, protocol_ir::ConstructionStartOp>(
+                  action))
             continue;
           auto operation = target.getAs<StringAttr>("operation").getValue();
           auto owner = action->getAttrOfType<StringAttr>(
@@ -378,6 +379,13 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate) {
                                                       : "owner");
           if (participant.getRoleAttr() != owner)
             return refuse(result, "role projection changed an action owner");
+        }
+        if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(action)) {
+          if (owners.size() != start.getRoles().size() ||
+              !all_of(start.getRoles(),
+                      [&](Attribute role) { return owners.contains(role); }))
+            return refuse(result,
+                          "role projection changed construction participants");
         }
         if (auto loop = dyn_cast<protocol_ir::RepeatOp>(action)) {
           if (map.get("maximum") != loop.getMaximumAttr() ||

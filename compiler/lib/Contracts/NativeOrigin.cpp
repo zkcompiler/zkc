@@ -72,7 +72,10 @@ Error checkNativeOrigin(StringRef hex, StringRef kind, StringRef method) {
         !reader.name())
       return invalid();
   }
-  unsigned fields = kind == "query" ? 7 : kind == "message" ? 6 : 0;
+  unsigned fields = kind == "query"     ? 7
+                    : kind == "message" ? 6
+                    : kind == "start"   ? 3
+                                        : 0;
   if (!fields || !reader.array(0) || !reader.array(fields) ||
       !reader.string(value) || value != kind)
     return invalid();
