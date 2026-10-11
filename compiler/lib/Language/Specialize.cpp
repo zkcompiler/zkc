@@ -782,9 +782,9 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       if (!effects)
         return false;
       if (!effects->dependencies.empty())
-        return types.fail("source.effect",
-                          "closed body retains callback effect dependencies",
-                          {});
+        return types.fail(
+            "source.effect", "closed body retains callback effect dependencies",
+            body.operations.empty() ? Span{} : body.operations.front().span);
       body.effects = std::move(*effects);
       body.scopedBindings.clear();
       body.domainBindings.clear();
@@ -849,9 +849,14 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         return {};
       }
       for (auto selected : scoped) {
-        frame(key, declarations[selected.index].symbol);
         if (!types.charge(1, source.span))
           return {};
+        if (selected.index >= declarations.size()) {
+          types.fail("source.effect",
+                     "selected callback is outside the project", source.span);
+          return {};
+        }
+        frame(key, declarations[selected.index].symbol);
       }
       if (domains.size() != source.domainInputs.size()) {
         types.fail("source.finite-domain",
@@ -961,10 +966,14 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       if (source.effectAllowance) {
         std::vector<EffectSummary> effects;
         for (auto callback : scoped) {
-          if (!types.charge(1, source.span) ||
-              callback.index >= declarations.size() ||
-              !declarations[callback.index].body)
+          if (!types.charge(1, source.span))
             return {};
+          if (callback.index >= declarations.size() ||
+              !declarations[callback.index].body) {
+            types.fail("source.effect", "selected callback has no effect body",
+                       source.span);
+            return {};
+          }
           if (!types.charge(declarations[callback.index]
                                     .body->effects.dependencies.size() +
                                 1,

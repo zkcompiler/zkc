@@ -27,9 +27,10 @@ bool chargeBinding(Semantics &types, const ScopedSummaryBinding &binding,
                    unsigned depth, Span span) {
   if (depth > types.work.limits.callDepth)
     return types.fail("source.limit", "scoped summary copy depth", span);
-  if (!types.charge(binding.signature.inputs.size() + binding.captures.size() +
-                        binding.scoped.size() + binding.domains.size() +
-                        binding.statics.size() + 1,
+  if (!types.charge(binding.signature.inputs.size() +
+                        binding.signature.itemOrigins.size() +
+                        binding.captures.size() + binding.scoped.size() +
+                        binding.domains.size() + binding.statics.size() + 1,
                     span) ||
       !types.chargeType(binding.signature.result, span))
     return false;

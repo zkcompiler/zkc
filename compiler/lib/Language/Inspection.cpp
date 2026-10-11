@@ -126,9 +126,16 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
         {"effect_allowance",
          json::Object{{"stop", parameter.signature.allowance.mayStop},
                       {"opaque", parameter.signature.allowance.opaque}}}});
-    if (parameter.signature.itemDomain)
-      (*scoped.back().getAsObject())["on"] =
-          decl.domainInputs[*parameter.signature.itemDomain].name;
+    json::Array labels, origins;
+    for (unsigned i = 0; i < parameter.signature.inputs.size(); ++i)
+      labels.push_back(i < parameter.inputLabels.size() &&
+                               !parameter.inputLabels[i].empty()
+                           ? json::Value(parameter.inputLabels[i])
+                           : json::Value(nullptr));
+    for (const auto &[input, domain] : parameter.signature.itemOrigins)
+      origins.push_back(json::Object{{"input", input}, {"domain", domain}});
+    (*scoped.back().getAsObject())["input_labels"] = std::move(labels);
+    (*scoped.back().getAsObject())["item_origins"] = std::move(origins);
   }
   json::Array roster, order;
   for (const auto &role : decl.roles)

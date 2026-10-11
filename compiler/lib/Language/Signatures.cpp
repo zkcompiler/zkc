@@ -450,16 +450,43 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         return types.fail("source.type", "scoped result must be data",
                           src.span);
       signature.result = *result;
-      if (written.itemDomain) {
-        auto found = llvm::find_if(decl.domainInputs, [&](const auto &domain) {
-          return domain.name == *written.itemDomain;
+      std::map<std::string, unsigned> labels;
+      for (unsigned i = 0; i < written.inputLabels.size(); ++i) {
+        const auto &label = written.inputLabels[i];
+        if (!types.charge(label.size() + decl.parameters.size() + 1, src.span))
+          return false;
+        if (label.empty())
+          continue;
+        if (!bindingName(decl, label, src.span))
+          return false;
+        if (!labels.emplace(label, i).second)
+          return types.fail("source.duplicate",
+                            "duplicate callback input label", src.span);
+      }
+      for (const auto &condition : written.itemOrigins) {
+        if (!types.charge(decl.domainInputs.size() + 1, condition.span))
+          return false;
+        auto input = labels.find(condition.input);
+        auto domain = llvm::find_if(decl.domainInputs, [&](const auto &formal) {
+          return formal.name == condition.domain;
         });
-        if (found == decl.domainInputs.end() || signature.inputs.empty() ||
-            signature.inputs.back() != found->item)
+        if (input == labels.end() || domain == decl.domainInputs.end())
           return types.fail("source.finite-domain",
-                            "on(domain) must supply the last scoped input",
-                            src.span);
-        signature.itemDomain = unsigned(found - decl.domainInputs.begin());
+                            "item_from requires a named callback input and an "
+                            "enclosing domain formal",
+                            condition.span);
+        if (signature.inputs[input->second] != domain->item)
+          return types.fail(
+              "source.finite-domain",
+              "item_from input type differs from domain item type",
+              condition.span);
+        if (!signature.itemOrigins
+                 .emplace(input->second,
+                          unsigned(domain - decl.domainInputs.begin()))
+                 .second)
+          return types.fail("source.finite-domain",
+                            "callback input has more than one item_from clause",
+                            condition.span);
       }
       if (signature.mode == ScopedSignature::Mode::Math) {
         for (const auto &input : signature.inputs)
@@ -474,7 +501,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         if (!types.executableType(signature.result, src.span))
           return false;
       }
-      decl.scopedInputs.push_back({src.name, std::move(signature), src.span});
+      decl.scopedInputs.push_back(
+          {src.name, std::move(signature), src.span, written.inputLabels});
     }
     if (decl.kind == Declaration::Kind::Local && decl.abstract &&
         !decl.effectAllowance)

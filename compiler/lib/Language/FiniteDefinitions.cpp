@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "Effects.h"
 using namespace llvm;
 namespace zkc::language::detail {
 bool Checker::finiteBody(Declaration &decl, Body &body) {
@@ -50,7 +51,9 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
   auto matches = [&](const ScopedSignature &signature, ArrayRef<Type> inputs,
                      const Type &result) {
     return signature.mode == mode && ArrayRef(signature.inputs) == inputs &&
-           signature.result == result && signature.itemDomain == 0 &&
+           signature.result == result &&
+           signature.itemOrigins ==
+               std::map<unsigned, unsigned>{{unsigned(inputs.size() - 1), 0}} &&
            !signature.allowance.opaque &&
            (!mathematical || !signature.allowance.mayStop);
   };
@@ -64,9 +67,6 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
         "finite body must accept the selected item and state on its domain");
   if (filtered && !matches(decl.scopedInputs[0].signature, {item}, Type{}))
     return refuse("finite predicate must return bool on its domain");
-  if (decl.effectAllowance && !mathematical &&
-      !decl.effectAllowance->fixed.mayStop)
-    return types.fail("source.effect", "finite admission can stop", decl.span);
   for (const auto &type : {item, element, output}) {
     if (!types.permissions(type, decl.span, &decl) ||
         (mathematical ? !types.mathematicalData(type, decl.span, &decl)
@@ -108,7 +108,15 @@ bool Checker::finiteBody(Declaration &decl, Body &body) {
        decl.span,
        0});
   body.results = {result};
-  body.effects.fixed.mayStop = !mathematical;
+  auto effects = inferEffects(types, this->output.declarations, body);
+  if (!effects)
+    return false;
+  body.effects = std::move(*effects);
+  if (decl.effectAllowance &&
+      !effectsWithin(types, body.effects, *decl.effectAllowance, decl.span))
+    return types.fail("source.effect",
+                      "finite definition exceeds its written effect allowance",
+                      decl.span);
   body.parameterizedSummary = true;
   decl.finiteDefinition = identity;
   return true;

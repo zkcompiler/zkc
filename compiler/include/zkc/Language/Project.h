@@ -9,6 +9,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -132,7 +133,7 @@ struct CallableReference {
   DeclarationId declaration;
   std::optional<Type> component;
 };
-/// Scoped signatures are static argument contracts, never runtime Types.
+/// The tracked Local effects, also used as fixed callback acceptance ceilings.
 struct Effects {
   bool mayStop = false;
   bool opaque = false;
@@ -155,24 +156,27 @@ struct EffectSummary {
     return !(*this == other);
   }
 };
+/// Scoped signatures are static argument contracts, never runtime Types.
 struct ScopedSignature {
   enum class Mode { Math, Local } mode;
   std::vector<Type> inputs;
   Type result;
   Effects allowance;
-  /// Domain formal supplying the last explicit input. This is an invocation
-  /// contract, not a dependent runtime type.
-  std::optional<unsigned> itemDomain = {};
+  /// Canonical input position -> enclosing domain formal position.
+  /// Each invocation must supply the whole original item of that domain.
+  std::map<unsigned, unsigned> itemOrigins = {};
   bool operator==(const ScopedSignature &other) const {
     return mode == other.mode && inputs == other.inputs &&
            result == other.result && allowance == other.allowance &&
-           itemDomain == other.itemDomain;
+           itemOrigins == other.itemOrigins;
   }
 };
 struct ScopedParameter {
   std::string name;
   ScopedSignature signature;
   Span span;
+  /// Source-only labels; excluded from semantic signature identity.
+  std::vector<std::string> inputLabels = {};
 };
 /// Finite domains are a separate static argument category. Their ordinary
 /// operands remain checked data values with authored evaluation order.

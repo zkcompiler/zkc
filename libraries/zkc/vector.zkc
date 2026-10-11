@@ -39,16 +39,16 @@ pub math fn at<F: Field>(values: Vector<F>, position: index) -> F where in_bound
   = primitive("container.at");
 
 pub fn collect<I: Type + Copy + Drop, F: Field>(
-  rows: domain<I>, body: fn(I) -> F effects(stop) on(rows)
+  rows: domain<I>, body: fn(item: I) -> F effects(stop) where item_from(item, rows)
 ) -> Vector<F> effects(stop) = finite("local.collect.vector");
 pub fn collect_where<I: Type + Copy + Drop, F: Field>(
-  rows: domain<I>, keep: fn(I) -> bool effects(stop) on(rows),
-  body: fn(I) -> F effects(stop) on(rows)
+  rows: domain<I>, keep: fn(item: I) -> bool effects(stop) where item_from(item, rows),
+  body: fn(item: I) -> F effects(stop) where item_from(item, rows)
 ) -> Vector<F> effects(stop) = finite("local.collect.vector_where");
 
 // Materialize every selected body result before invoking the reducer once.
 pub fn reduce<I: Type + Copy + Drop, F: Field, R: Type>(
-  rows: domain<I>, body: fn(I) -> F effects(stop) on(rows),
+  rows: domain<I>, body: fn(item: I) -> F effects(stop) where item_from(item, rows),
   reducer: fn(Vector<F>) -> R effects(stop)
 ) -> R effects(stop) {
   return reducer(collect(rows, body));

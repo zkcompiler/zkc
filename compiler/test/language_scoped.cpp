@@ -132,8 +132,8 @@ run Run=Demo;)");
   });
   cases.run("existing reduction inside scoped callback", [] {
     succeeds(R"(
-fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S effects(stop) on(rows))->S effects(stop)=finite("local.fold");
-fn sum<I:Type+Copy+Drop>(rows:domain<I>,term:fn(I)->Fr effects(stop) on(rows))->Fr effects(stop){return fold(rows,0,fn(state, item)=>state+term(item));}
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item, rows))->S effects(stop)=finite("local.fold");
+fn sum<I:Type+Copy+Drop>(rows:domain<I>,term:fn(item:I)->Fr effects(stop) where item_from(item, rows))->Fr effects(stop){return fold(rows,0,fn(state, item)=>state+term(item));}
 reduction ∑=sum;
 fn example(xs:Vector<Fr>,a:Fr)->Fr {
  return apply(a,fn(y)=>∑ x in xs, (x+a+y));
@@ -265,8 +265,8 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return twice(x,x,fn(y)=>y+a);}ru
   cases.run("finite binder inside a scoped helper preserves capture layouts",
             [] {
               auto project = take(check(R"(
-fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S effects(stop) on(rows))->S effects(stop)=finite("local.fold");
-fn sum<I:Type+Copy+Drop>(rows:domain<I>,term:fn(I)->Fr effects(stop) on(rows))->Fr effects(stop){return fold(rows,0,fn(state, item)=>state+term(item));}
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item, rows))->S effects(stop)=finite("local.fold");
+fn sum<I:Type+Copy+Drop>(rows:domain<I>,term:fn(item:I)->Fr effects(stop) where item_from(item, rows))->Fr effects(stop){return fold(rows,0,fn(state, item)=>state+term(item));}
 reduction ∑=sum;
 fn g(xs:Vector<Fr>,a:Fr,body:fn(Fr)->Fr effects(stop))->Fr effects(stop){let r=∑ x in xs,(x+a);return body(r);}
 protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return g(xs,a,fn(y)=>y+b);}run Run=Demo;

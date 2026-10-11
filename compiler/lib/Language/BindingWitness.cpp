@@ -206,7 +206,8 @@ bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
     return refuse();
   for (unsigned i = 0; i < count; ++i) {
     const auto &signature = callee.scopedInputs[i].signature;
-    if (!types.chargeType(callee.domainInputs[0].item, span) ||
+    if (!types.charge(signature.itemOrigins.size(), span) ||
+        !types.chargeType(callee.domainInputs[0].item, span) ||
         !types.chargeType(signature.result, span))
       return false;
     for (const auto &input : signature.inputs)
@@ -215,7 +216,8 @@ bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
     if (callee.inputOrder[i + 1].kind != K::Scoped ||
         callee.inputOrder[i + 1].index != i ||
         signature.inputs != std::vector<Type>{callee.domainInputs[0].item} ||
-        (signature.itemDomain && *signature.itemDomain != 0))
+        (!signature.itemOrigins.empty() &&
+         signature.itemOrigins != std::map<unsigned, unsigned>{{0, 0}}))
       return refuse();
   }
   if (filtered) {
@@ -223,7 +225,7 @@ bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
     const auto &body = callee.scopedInputs[1].signature;
     if (predicate.result != Type{} || predicate.mode != body.mode ||
         !(predicate.allowance == body.allowance) ||
-        predicate.itemDomain != body.itemDomain)
+        predicate.itemOrigins != body.itemOrigins)
       return refuse();
   }
   return true;

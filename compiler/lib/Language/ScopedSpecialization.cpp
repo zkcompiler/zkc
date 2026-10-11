@@ -171,8 +171,10 @@ class SpecializationCheck {
             ArrayRef<Environment> environment,
             ArrayRef<DomainEnvironment> domains, unsigned depth,
             const ClosureLayout *layout = nullptr,
-            std::optional<unsigned> invariantSuffix = {}) {
-    if (depth > work.limits.callDepth)
+            std::optional<unsigned> invariantSuffix = {},
+            unsigned regionDepth = 1) {
+    if (depth > work.limits.callDepth ||
+        regionDepth > work.limits.expressionDepth)
       return types.fail("source.limit", "specialization witness depth exceeded",
                         {});
     if (!types.charge(original.values.size() + original.operations.size() + 1,
@@ -589,7 +591,8 @@ class SpecializationCheck {
                           &layout,
                           loop ? std::optional<unsigned>(forwarded -
                                                          action.carried)
-                               : std::nullopt))
+                               : std::nullopt,
+                          regionDepth + 1))
                   return false;
               }
               return true;
@@ -617,7 +620,7 @@ class SpecializationCheck {
                                      op.span, &bodyOrigins))
                 return false;
               return body(*action.region, *value.region, subst, {}, {}, depth,
-                          &value.regionLayout);
+                          &value.regionLayout, {}, regionDepth + 1);
             } else
               return false;
           },
@@ -862,6 +865,10 @@ class SpecializationCheck {
                                domains, depth, &layout)))
       return refuse(actual.span);
     if (actual.body) {
+      if (actual.effectAllowance &&
+          !effectsWithin(types, actual.body->effects, *actual.effectAllowance,
+                         actual.span))
+        return refuse(actual.span, "closed body exceeds its effect contract");
       auto assumptions = mapDataPreconditions(
           types,
           computation ? ArrayRef<DataPrecondition>{}

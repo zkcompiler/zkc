@@ -138,7 +138,7 @@ scoped callback. The optional filtered target has the same domain and body
 shape, with a Boolean predicate callback between them. Targets are ordinary
 Math or Local functions with one written result and no data or service inputs.
 Generic parameter sorts, permissions, interfaces, partial static arguments,
-item/result/output types, callback modes and allowances must correspond after
+item/result/output types, callback modes, allowances and normalized origin maps must correspond after
 parameter renaming. Each target retains its own independently checked input
 conditions and component identity; the pair asserts no equivalence law.
 

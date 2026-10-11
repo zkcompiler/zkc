@@ -26,9 +26,9 @@ struct CheckedStorage {
   uint64_t work = 0, declarationCount = 0, operationCount = 0;
   uint64_t notationDescriptors = 0, notationHoles = 0;
   NotationRecords notations;
-  /// Immutable authored effect contracts, independent of mutable checked
-  /// metadata.
-  std::map<uint32_t, std::shared_ptr<const SyntaxDeclaration>> effectSources;
+  /// Immutable authored callback and effect contracts, independent of mutable
+  /// checked metadata.
+  std::map<uint32_t, std::shared_ptr<const SyntaxDeclaration>> signatureSources;
   std::vector<std::shared_ptr<const ScopedSource>> scopedSources;
   std::vector<std::shared_ptr<const ScopedCallSource>> scopedCalls;
   std::vector<std::shared_ptr<const ScopedInvocationSource>> scopedInvocations;

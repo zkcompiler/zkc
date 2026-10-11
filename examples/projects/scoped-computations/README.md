@@ -4,6 +4,23 @@ Callback parameters use `fn(...) -> ... effects(...)` for Local computation or
 `math fn(...) -> ...` for total Math computation. The compiler selects each
 callback statically; callbacks cannot escape into runtime data.
 
+The Local combinators preserve the effects of the selected callback:
+
+```zkc
+fn apply<A: Type, B: Type>(value: A, body: fn(A) -> B) -> B effects(body) {
+  return body(value);
+}
+
+fn increment(value: F) -> F effects() {
+  return apply(value, fn(x) => x + 1);
+}
+```
+
+Here `F` is a field declared by the client. The callback parameter allows either
+tracked effect, but `increment` is checked to have neither. Replacing its callback
+with a stopping computation causes the `effects()` contract to fail. A defined
+function can omit its output clause and let the compiler infer it.
+
 This [Entry](main.zkc) uses ordinary generic user combinators from
 [`zkc::computation`](../../../libraries/zkc/computation.zkc). A component forwards a nested
 Local callback that retains lexical access to its `adjust` member. The

@@ -201,6 +201,11 @@ bool Checker::conformance(DeclarationId id) {
                             provided->span);
       }
       for (unsigned i = 0; i < required.scopedInputs.size(); ++i) {
+        if (!types.charge(
+                required.scopedInputs[i].signature.itemOrigins.size() +
+                    provided->scopedInputs[i].signature.itemOrigins.size(),
+                provided->span))
+          return false;
         auto expected = required.scopedInputs[i].signature;
         for (auto &input : expected.inputs) {
           auto value = types.substitute(input, bindings, provided->span);

@@ -5,6 +5,7 @@
 #include "FiniteContracts.h"
 #include "FiniteDomains.h"
 #include "Semantics.h"
+#include "SignatureWitness.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -280,49 +281,8 @@ public:
 } // namespace
 Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   Semantics types(storage.declarations, storage.assets, work);
-  for (const auto &[index, syntax] : storage.effectSources) {
-    auto refuse = [&] {
-      return failure("source.scoped-witness",
-                     "effect contract differs from authored signature");
-    };
-    if (!syntax || index >= storage.declarations.size())
-      return refuse();
-    const auto &decl = storage.declarations[index];
-    if (!types.charge(syntax->scopedInputs.size() +
-                          syntax->effectDependencies.size() + 1,
-                      decl.span))
-      return types.takeError();
-    if (decl.scopedInputs.size() != syntax->scopedInputs.size())
-      return refuse();
-    for (unsigned slot = 0; slot < decl.scopedInputs.size(); ++slot) {
-      const auto &written = syntax->scopedInputs[slot].scoped;
-      const auto &actual = decl.scopedInputs[slot].signature;
-      if (!written || written->mode != actual.mode ||
-          written->allowance != actual.allowance)
-        return refuse();
-    }
-    std::optional<EffectSummary> expected;
-    if (syntax->effects) {
-      expected = EffectSummary{*syntax->effects};
-      for (const auto &name : syntax->effectDependencies) {
-        if (!types.charge(syntax->scopedInputs.size() + 1, decl.span))
-          return types.takeError();
-        auto found =
-            llvm::find_if(syntax->scopedInputs, [&](const auto &input) {
-              return input.name == name;
-            });
-        if (found == syntax->scopedInputs.end() || !found->scoped)
-          return refuse();
-        expected->dependencies.emplace(
-            unsigned(found - syntax->scopedInputs.begin()),
-            found->scoped->allowance);
-      }
-      if (!joinEffects(types, *expected, EffectSummary{}, decl.span))
-        return types.takeError();
-    }
-    if (expected != decl.effectAllowance)
-      return refuse();
-  }
+  if (auto error = checkSignatureSources(storage, work))
+    return error;
   std::vector<unsigned> uses(storage.scopedSources.size());
   std::vector<unsigned> callUses(storage.scopedCalls.size());
   std::vector<unsigned> invocationUses(storage.scopedInvocations.size());
@@ -541,6 +501,14 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
       if (index >= body.scopedBindings.size())
         return refuse();
       const auto &actual = body.scopedBindings[index];
+      auto effect = bindingEffects(types, body, index);
+      if (!effect ||
+          !effectsWithin(
+              types, *effect,
+              EffectSummary{
+                  callee.scopedInputs[slot.index].signature.allowance},
+              op.span))
+        return types.diagnostic ? false : refuse();
       const auto &argument = source.syntax->expressions[expr.children[i]];
       if (argument.kind == Expression::Kind::Lambda) {
         if (!actual.computation ||
@@ -577,7 +545,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
                             {});
         unsigned formalIndex = 0;
         for (const auto &binding : body.scopedBindings) {
-          if (!types.charge(1, binding.span))
+          if (!types.charge(binding.signature.itemOrigins.size() + 1,
+                            binding.span))
             return false;
           if (binding.parameter) {
             if (formalIndex >= formals.size() ||
@@ -624,6 +593,12 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
               !checkScopedValues(types, storage, source, binding) ||
               !visit(*binding.computation->body, captured, depth + 1))
             return false;
+          if (!effectsWithin(types, binding.computation->body->effects,
+                             EffectSummary{binding.signature.allowance},
+                             binding.span))
+            return types.fail("source.scoped-witness",
+                              "callback exceeds its effect ceiling",
+                              binding.span);
         }
         for (const auto &op : body.operations) {
           if (!types.charge(1, op.span) || !checkCall(body, op))
@@ -692,7 +667,16 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     if (!visit(*decl.body, formals, 1) ||
         !checkFiniteContracts(types, storage.declarations, decl, *decl.body))
       return types.takeError();
+    if (decl.effectAllowance &&
+        !effectsWithin(types, decl.body->effects, *decl.effectAllowance,
+                       decl.span)) {
+      types.fail("source.scoped-witness",
+                 "body exceeds its authored effect contract", decl.span);
+      return types.takeError();
+    }
   }
+  if (auto error = checkComponentEffects(storage, work))
+    return error;
   for (auto count : invocationUses)
     if (count != 1)
       return failure("source.scoped-witness",

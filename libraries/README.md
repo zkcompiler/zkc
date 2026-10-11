@@ -14,7 +14,7 @@ concrete domains, Entries and transcript constructions in
 | [`zkc::finite_math`](zkc/finite_math.zkc) | Total counterparts of the finite functions | Mathematical callbacks; every domain formation and bounded read must be justified |
 | [`zkc::accumulation`](zkc/accumulation.zkc) | `Combiner`, `FieldSum`, `FieldProduct`, `GroupSum` | Explicit identity/combine implementations; no associativity or commutativity is inferred |
 | [`zkc::indices`](zkc/indices.zkc) | `Indices`, empty/append/length/get/at/elements/indices/collect | Ordered index collections, checked and total access, finite traversal |
-| [`zkc::computation`](zkc/computation.zkc) | apply_math/forward_math/apply/forward/twice | Generic statically bound scoped computations; explicit fixed modes and Local effect allowances |
+| [`zkc::computation`](zkc/computation.zkc) | apply_math/forward_math/apply/forward/twice | Generic statically bound callbacks; fixed modes and effects that depend on the selected callback |
 | [`zkc::vector`](zkc/vector.zkc) | `Vector`, length/get/at/elements/indices/sum/product/split/add/hadamard/scale/dot/fill/collect/collect_where/reduce/fold/has_length, reduction bindings `∑`/`∏` | Ordered finite vectors; fold pairs contiguous halves |
 | [`zkc::sequence`](zkc/sequence.zkc) | `Sequence`, empty/append/length/get/at/elements/indices | Immutable sequences of executable Copy + Drop elements, including source products |
 | [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, get/at/multiply/transpose_multiply/bilinear/rows/columns and explicit finite views | Ordered sparse matrix operations |
@@ -43,7 +43,11 @@ forwards nested callbacks with record/vector captures and a checked lookup.
 The finite libraries use statically bound callbacks written `fn(...) -> ...`
 or `math fn(...) -> ...`, and finite domains written `domain<I>`. These are
 static parameter categories, with no runtime function or domain values. The input
-item, accumulated state and output element can have different types. For example:
+item, accumulated state and output element can have different types. Library
+callback signatures name the item input and promise
+`where item_from(item, rows)` after their effects. This requires the whole
+original item of that exact domain; an equal or reconstructed value does not
+satisfy the contract. Lambda binders can use any valid name. For example:
 
 ```text
 use zkc::finite as finite;

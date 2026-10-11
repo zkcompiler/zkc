@@ -6,7 +6,8 @@ using namespace llvm;
 namespace zkc::language::detail {
 bool BodyChecker::addScoped(BindingId binding, const ScopedSignature &signature,
                             Span span) {
-  if (!checker.types.charge(signature.inputs.size() + 1, span))
+  if (!checker.types.charge(
+          signature.inputs.size() + signature.itemOrigins.size() + 1, span))
     return false;
   unsigned index = body.scopedBindings.size();
   scoped.emplace(binding, index);
@@ -214,7 +215,7 @@ bool Checker::retainScopedSources() {
     auto syntax = retainSyntax(decl.id);
     if (!syntax)
       return false;
-    output.effectSources.emplace(decl.id.index, std::move(syntax));
+    output.signatureSources.emplace(decl.id.index, std::move(syntax));
   }
 
   for (auto &source : scopedInvocations) {

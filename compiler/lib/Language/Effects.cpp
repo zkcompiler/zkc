@@ -76,13 +76,20 @@ substituteEffects(Semantics &types, const EffectSummary &summary,
   return result;
 }
 std::optional<EffectSummary> bindingEffects(Semantics &types, const Body &body,
-                                            unsigned index, unsigned depth) {
-  if (!types.charge(1, {}) || depth > types.work.limits.callDepth ||
-      index >= body.scopedBindings.size()) {
-    types.fail("source.limit", "effect binding depth or index exceeded", {});
+                                            unsigned index, unsigned depth,
+                                            Span span) {
+  if (!types.charge(1, span))
+    return {};
+  if (index >= body.scopedBindings.size()) {
+    types.fail("source.effect",
+               "effect binding index outside callback environment", span);
     return {};
   }
   const auto &binding = body.scopedBindings[index];
+  if (depth > types.work.limits.expressionDepth) {
+    types.fail("source.limit", "effect capture depth exceeded", binding.span);
+    return {};
+  }
   if (binding.parameter) {
     EffectSummary result;
     auto ceiling = binding.signature.allowance;
@@ -97,7 +104,7 @@ std::optional<EffectSummary> bindingEffects(Semantics &types, const Body &body,
   }
   std::vector<EffectSummary> captures;
   for (auto slot : binding.scopedCaptures) {
-    auto effect = bindingEffects(types, body, slot, depth + 1);
+    auto effect = bindingEffects(types, body, slot, depth + 1, binding.span);
     if (!effect)
       return {};
     captures.push_back(std::move(*effect));
@@ -107,12 +114,12 @@ std::optional<EffectSummary> bindingEffects(Semantics &types, const Body &body,
 }
 std::optional<EffectSummary> inferEffects(Semantics &types,
                                           ArrayRef<Declaration> declarations,
-                                          const Body &body, unsigned depth) {
-  if (!types.charge(body.operations.size() + 1, {}) ||
-      depth > types.work.limits.callDepth) {
-    types.fail("source.limit", "effect reconstruction depth exceeded", {});
+                                          const Body &body) {
+  Span bodySpan = !body.operations.empty() ? body.operations.front().span
+                  : !body.values.empty()   ? body.values.front().span
+                                           : Span{};
+  if (!types.charge(body.operations.size() + 1, bodySpan))
     return {};
-  }
   EffectSummary result{Effects{body.stopped, false}};
   auto absorb = [&](const std::optional<EffectSummary> &summary, Span span) {
     return summary && joinEffects(types, result, *summary, span);
@@ -124,7 +131,7 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
     const auto &callee = declarations[id.index];
     std::vector<EffectSummary> actuals;
     for (auto slot : slots) {
-      auto effect = bindingEffects(types, body, slot, depth + 1);
+      auto effect = bindingEffects(types, body, slot, 1, span);
       if (!effect)
         return false;
       actuals.push_back(std::move(*effect));
@@ -144,8 +151,9 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
   for (const auto &operation : body.operations) {
     const auto &action = operation.action;
     if (const auto *invoke = std::get_if<ScopedInvoke>(&action)) {
-      if (!absorb(bindingEffects(types, body, invoke->binding, depth + 1),
-                  operation.span))
+      if (!absorb(
+              bindingEffects(types, body, invoke->binding, 1, operation.span),
+              operation.span))
         return {};
     } else if (const auto *helper = std::get_if<HelperCall>(&action)) {
       if (!call(helper->callee, helper->scopedArguments, operation.span))
@@ -156,11 +164,12 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
         return {};
     } else if (const auto *finite = std::get_if<FiniteApplication>(&action)) {
       result.fixed.mayStop |= body.mode != Body::Mode::Math;
-      if (!absorb(bindingEffects(types, body, finite->body, depth + 1),
+      if (!absorb(bindingEffects(types, body, finite->body, 1, operation.span),
                   operation.span))
         return {};
       if (finite->predicate &&
-          !absorb(bindingEffects(types, body, *finite->predicate, depth + 1),
+          !absorb(bindingEffects(types, body, *finite->predicate, 1,
+                                 operation.span),
                   operation.span))
         return {};
     } else if (const auto *finite = std::get_if<FiniteComputation>(&action)) {
@@ -171,13 +180,22 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
           !call(finite->predicate->helper, {}, operation.span))
         return {};
     } else if (const auto *control = std::get_if<LocalControl>(&action)) {
-      for (const auto &region : control->regions)
-        if (!absorb(inferEffects(types, declarations, *region, depth + 1),
-                    operation.span))
+      for (const auto &region : control->regions) {
+        if (!region) {
+          types.fail("source.effect", "missing control region effect evidence",
+                     operation.span);
           return {};
+        }
+        if (!joinEffects(types, result, region->effects, operation.span))
+          return {};
+      }
     } else if (const auto *repeat = std::get_if<ProtocolRepeat>(&action)) {
-      if (!absorb(inferEffects(types, declarations, *repeat->region, depth + 1),
-                  operation.span))
+      if (!repeat->region) {
+        types.fail("source.effect", "missing repeat region effect evidence",
+                   operation.span);
+        return {};
+      }
+      if (!joinEffects(types, result, repeat->region->effects, operation.span))
         return {};
     } else if (const auto *primitive = std::get_if<LocalPrimitive>(&action)) {
       result.fixed.mayStop |=
@@ -191,7 +209,7 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
                std::holds_alternative<BulkApplication>(action))
       result.fixed.mayStop = true;
   }
-  if (!types.charge(result.dependencies.size() + 1, {}))
+  if (!types.charge(result.dependencies.size() + 1, bodySpan))
     return {};
   normalizeEffects(result);
   return result;

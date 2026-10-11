@@ -743,6 +743,9 @@ private:
     do {
       SyntaxRequirement req;
       req.span = current().span;
+      if (at("item_from") && look(1) == "(")
+        return fail("source.finite-domain",
+                    "item_from belongs on a callback signature's where clause");
       if (at("in_bounds") || at("equal_extent")) {
         if (!dataRequirement(req))
           return false;
@@ -1121,6 +1124,10 @@ private:
           if (!at(")"))
             do {
               SyntaxType input;
+              std::string label;
+              if (look(1) == ":" && (!name(label) || !expect(":")))
+                return false;
+              signature.inputLabels.push_back(std::move(label));
               if (!type(input))
                 return false;
               signature.inputs.push_back(std::move(input));
@@ -1136,12 +1143,44 @@ private:
           bool local = signature.mode == ScopedSignature::Mode::Local;
           signature.allowance =
               allowance.effects.value_or(Effects{local, local});
-          if (take("on")) {
-            std::string domain;
-            if (!expect("(") || !name(domain) || !expect(")"))
-              return false;
-            signature.itemDomain = std::move(domain);
+          if (take("where")) {
+            if (take("(")) {
+              if (!expect(")"))
+                return false;
+            } else {
+              do {
+                SyntaxItemOrigin condition;
+                condition.span = current().span;
+                if (!take("item_from"))
+                  return fail(
+                      "source.finite-domain",
+                      "callback where requires item_from(input, domain)");
+                if (!expect("(") || !name(condition.input) || !expect(",") ||
+                    !name(condition.domain) || !expect(")"))
+                  return false;
+                condition.span.end = previousEnd;
+                if (!accept(work.charge(condition.input.size() +
+                                            condition.domain.size() + 1,
+                                        condition.span)))
+                  return false;
+                if (signature.itemOrigins.size() >= work.limits.typeNodes)
+                  return fail("source.limit",
+                              "callback condition count exceeded");
+                signature.itemOrigins.push_back(std::move(condition));
+                // A following name ':' starts an enclosing port, including
+                // a port named item_from. Leave its comma to ports().
+                if (!at(",") ||
+                    (tokens[cursor + 1].kind == TokenKind::Word &&
+                     look(2) == ":") ||
+                    look(1) == ")")
+                  break;
+                advance();
+              } while (true);
+            }
           }
+          if (at("effects"))
+            return fail("source.effect",
+                        "callback effects(...) must precede where");
           p.scoped = std::move(signature);
         } else if (!type(p.type))
           return false;

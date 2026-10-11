@@ -10,7 +10,7 @@ pub domain fn indices<F: Field, N: nat>(values: Array<F, N>) -> domain<index> = 
 pub math fn at<F: Field, N: nat>(values: Array<F, N>, position: index) -> F where in_bounds(position, values)
   = primitive("container.at");
 pub math fn collect<I: Type + Copy + Drop, F: Field, N: nat>(
-  rows: domain<I>, body: math fn(I) -> F on(rows)
+  rows: domain<I>, body: math fn(item: I) -> F where item_from(item, rows)
 ) -> Array<F, N> = finite("math.collect.field_array");
 
 // Bounds follow the selected total accessor; checked access can be rebound locally.

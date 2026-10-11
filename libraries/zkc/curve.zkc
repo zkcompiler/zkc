@@ -10,7 +10,7 @@ pub domain fn indices<G: Group>(values: Groups<G>) -> domain<index> = domain("in
 pub math fn at<G: Group>(values: Groups<G>, position: index) -> G where in_bounds(position, values)
   = primitive("container.at");
 pub fn collect<I: Type + Copy + Drop, G: Group>(
-  rows: domain<I>, body: fn(I) -> G effects(stop) on(rows)
+  rows: domain<I>, body: fn(item: I) -> G effects(stop) where item_from(item, rows)
 ) -> Groups<G> effects(stop) = finite("local.collect.groups");
 
 // Bounds follow the selected total accessor; checked access can be rebound locally.

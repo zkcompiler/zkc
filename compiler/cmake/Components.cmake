@@ -95,6 +95,7 @@ add_zkc_component(Language
   lib/Language/BodyMapping.cpp
   lib/Language/ScopedSpecialization.cpp
   lib/Language/ScopedWitness.cpp
+  lib/Language/SignatureWitness.cpp
   lib/Language/ScopedValues.cpp
   lib/Language/Scoped.cpp
   lib/Language/FiniteDomains.cpp

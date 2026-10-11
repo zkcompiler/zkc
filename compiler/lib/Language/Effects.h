@@ -7,14 +7,15 @@ bool joinEffects(Semantics &, EffectSummary &, const EffectSummary &,
 bool effectsWithin(Semantics &, const EffectSummary &, const EffectSummary &,
                    Span = {});
 std::optional<EffectSummary> bindingEffects(Semantics &, const Body &, unsigned,
-                                            unsigned depth = 1);
+                                            unsigned depth = 1, Span = {});
 std::optional<EffectSummary> substituteEffects(Semantics &,
                                                const EffectSummary &,
                                                llvm::ArrayRef<EffectSummary>,
                                                Span = {});
-/// Reconstruct from operations, never from the body's advertised summary.
-std::optional<EffectSummary> inferEffects(Semantics &,
-                                          llvm::ArrayRef<Declaration>,
-                                          const Body &, unsigned depth = 1);
+/// Reconstruct from immediate operations and independently checked child-body
+/// summaries, never from this body's advertised summary. Producers finish child
+/// bodies first; witnesses must reconstruct every child body as well.
+std::optional<EffectSummary>
+inferEffects(Semantics &, llvm::ArrayRef<Declaration>, const Body &);
 } // namespace zkc::language::detail
 #endif

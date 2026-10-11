@@ -205,7 +205,7 @@ Checker::operatorBinding(const Declaration &context,
     const auto &filteredBody = other.scopedInputs[1].signature;
     if (body.mode != filteredBody.mode ||
         !(body.allowance == filteredBody.allowance) ||
-        body.itemDomain != filteredBody.itemDomain ||
+        body.itemOrigins != filteredBody.itemOrigins ||
         !same(callee.domainInputs[0].item, other.domainInputs[0].item) ||
         !same(body.result, filteredBody.result) ||
         !same(callee.outputs[0].type, other.outputs[0].type))

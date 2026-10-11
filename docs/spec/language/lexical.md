@@ -42,7 +42,8 @@ a guarantee against visually confusable identifiers.
 Keywords remain reserved except in explicitly contextual positions. `run`,
 `proof`, `operator`, `as`, `primitive`, `notation`, `infixl`, `infixr`, `infix`,
 `prefix` and `postfix` have special meanings in their declaration or import
-grammar; elsewhere they remain available as ordinary names.
+grammar; elsewhere they remain available as ordinary names. `item_from` is
+contextual only as a callback-local `where` clause head; `on` is an ordinary name.
 
 ## Mathematical tokens
 

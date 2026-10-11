@@ -123,5 +123,32 @@ fn run(x:F,body:fn(F)->F effects(stop))->F effects(body){return body(x);}
                 "coordinated callback ceiling and summary mutation accepted");
         llvm::consumeError(std::move(error));
       });
+  for (bool abstract : {false, true})
+    cases.run(
+        abstract ? "abstract effect source survives contract mutation"
+                 : "defined effect source survives contract mutation",
+        [&] {
+          const std::string source =
+              abstract
+                  ? "interface I{fn work(x:F)->F effects(stop);}"
+                  : "fn work(x:F)->F effects(stop){require x==1;return x;}";
+          auto captured = take(capture(
+              {{"m", "module m;domain F=field(\"koala-bear\");" + source,
+                "contract-source.zkc"}}));
+          auto project = take(analyze(captured).checkedProject());
+          bool mutated = false;
+          for (const auto &decl : project.declarations())
+            if (decl.name == "work") {
+              const_cast<Declaration &>(decl).effectAllowance = EffectSummary{};
+              mutated = true;
+            }
+          require(mutated, "missing contract fixture");
+          auto error = checkScopedElaboration(project);
+          require(bool(error), "altered authored output contract accepted");
+          require(
+              llvm::toString(std::move(error)).find("source.scoped-witness") !=
+                  std::string::npos,
+              "wrong contract witness diagnostic");
+        });
   return cases.result();
 }

@@ -996,19 +996,22 @@ scoped functions, effects and capture rules as authored helpers:
 ```zkc
 fn fold<I: Type + Copy + Drop, S: Type>(
   rows: domain<I>, initial: S,
-  step: fn(S, I) -> S effects(stop) on(rows)
+  step: fn(S, item: I) -> S effects(stop) where item_from(item, rows)
 ) -> S effects(stop) = finite("local.fold");
 
 fn collect<I: Type + Copy + Drop, B: Type + Copy + Drop>(
-  rows: domain<I>, body: fn(I) -> B effects(stop) on(rows)
+  rows: domain<I>, body: fn(item: I) -> B effects(stop) where item_from(item, rows)
 ) -> Sequence<B> effects(stop) = finite("local.collect.sequence");
 ```
 
 The complete signature is checked against the selected identity. Fold state
-and domain item types are independent; Unit is a valid state. `on(rows)` ties
-the callback's last explicit parameter to an item from the indicated domain.
+and domain item types are independent; Unit is a valid state. Fold requires
+exactly the origin map `{1 -> 0}`: its second callback input receives the whole
+item from its sole domain formal. Collect and predicates require `{0 -> 0}`.
+The general callback contract supports arbitrary positions; a registered finite
+definition must still obey its fixed state/item ABI.
 `local.fold_where` adds a predicate before the step parameter. Its predicate
-has signature `fn(I) -> bool effects(stop) on(rows)`; false skips the step.
+has signature `fn(item: I) -> bool effects(stop) where item_from(item, rows)`; false skips the step.
 The corresponding collect identities are `local.collect.vector`, `.groups`,
 `.sequence`, `.indices` and `.field_array`; each admits the matching native
 result type. Appending `_where` adds a predicate before the body, except for
@@ -1026,13 +1029,21 @@ sequence conversion; this preserves their ordinary flattened source ABI and
 array element order, including empty arrays and Unit elements.
 The [status page](../../status.md) records source integration coverage.
 
-An `on(rows)` parameter may be forwarded to another parameter restricted to the
-same domain. An unrestricted parameter can be used by a restricted consumer;
-the reverse is refused. Generic definitions are checked with distinct abstract
-domain identities, independently of their eventual callers. A wrapper cannot
-promise items from `a` and forward its callback to a fold over `b`.
+Callback origin contracts are canonical partial maps from explicit input
+positions to enclosing domain formal positions. For forwarding, substitute the
+actual domain arguments first: every restriction of the supplied callback must
+appear in the receiving consumer's guarantees at the same input position and
+with the same domain identity. Thus the supplied restriction map must be a
+subset of the receiving guarantee map. An unrestricted callback can flow to a
+restricted consumer; the reverse and partially guaranteed multi-input contracts
+refuse. Generic definitions are checked with distinct abstract domain identities,
+independently of eventual callers. Equal types or equal domain contents do not
+identify origins. A wrapper cannot promise items from `a` and forward its
+callback to a fold over `b`.
 
-Literal bodies receive an item fact for the selected domain. Immutable aliases,
+Literal bodies receive a whole-item fact at every constrained input position.
+Multiple independent origins do not imply a shared iteration or correlation;
+correlated coordinates require one whole item from a zip/product domain. Immutable aliases,
 capture snapshots and invariant region inputs preserve it. Invoking a restricted
 callback requires its whole item, so constructing an equal-looking tuple or
 performing arithmetic does not establish provenance. Control results and loop
@@ -1135,6 +1146,41 @@ Protocol signatures and Entry ports cannot expose it. A protocol body may call
 a named function with a literal scoped argument. Invocation and forwarding
 select a statically known body; there is no dynamic dispatch or closure ABI.
 
+A callback signature accepts optional labels on its data inputs:
+`fn(state: S, item: I) -> S effects(stop) where item_from(item, rows)`.
+The order is inputs, result, optional effects, then optional callback-local
+`where`. Local effects remain mandatory. Named and unnamed input types can mix;
+only inputs selected by a condition require a label. Labels are unique within a
+callback and obey ordinary binding-name/shadowing rules. Different callbacks
+may reuse labels. Labels do not bind values or types, and literal binders and
+positional invocations need not use them.
+
+Callback-local `where` accepts only `item_from(input, domain)` clauses separated
+by commas, or `where ()`. The first selector names this callback's input; the
+second names an enclosing domain formal, independently of textual parameter
+order. Input and domain item types must match. Unknown/category-invalid selectors,
+projections, numeric selectors, duplicate clauses and multiple domains for one
+input refuse. There is no implicit last-input selection, arbitrary predicate,
+result condition or alternative parenthesized nonempty clause list.
+
+`item_from` is contextual, not reserved. After a clause comma, a two-token
+`name :` prefix begins the next enclosing parameter; `item_from (` begins another
+condition. A parameter named `item_from` therefore remains valid. A malformed
+condition stays a callback-clause error. The callback clause never sets the
+outer declaration's explicit requirements flag: open catalog/natural inference
+continues, while an outer `where ()` still closes the outer contract. Outer
+`where item_from(...)` is rejected with a diagnostic directing it to the callback.
+Anonymous literals inherit conditions; they cannot author their own clause.
+
+Conditions require compiler-tracked whole original items from exact domains,
+not value membership or equality. Each invoker proves the conditions and a
+literal body assumes them. A canonical position-to-domain map excludes source
+labels, clause order and spans from semantic compatibility and specialization
+identity. Interface/component conformance requires exact normalized map equality
+after type substitution; it does not apply forwarding subtyping. Source-bearing
+artifacts may still change when labels change. Parsing, normalization, map
+substitution and independent witness reconstruction charge the shared work budget.
+
 The literal syntax is `fn(x) => expression` or `fn(x) => { statements; result }`.
 The same `fn` keyword introduces named declarations; an anonymous literal omits
 the name and starts its parenthesized input list immediately. Inputs are
@@ -1152,7 +1198,8 @@ A signature fixes the body's mode. `math fn(A) -> B` is total Math;
 `fn(A) -> B` is ordered Local. An omitted Local callback ceiling allows both
 tracked effects. An explicit `effects()` accepts only nonstopping, nonopaque
 callbacks; `effects(stop)` excludes opaque effects. The written callback ceiling
-contains fixed labels only, never sibling or enclosing callback names. In callback headers, `effects(...)` precedes `on(rows)`.
+contains fixed labels only, never sibling or enclosing callback names. In callback
+headers, `effects(...)` precedes `where item_from(...)`.
 
 Invoking a callback contributes its bounded symbolic dependency, not its full
 ceiling. Calls substitute actual callback summaries into the callee summary.
@@ -1169,8 +1216,8 @@ member resolution, notation and `self`, including through nested lambdas.
 Open bodies have one canonical symbolic effect summary. Specialization produces
 a closed summary from the selected helpers; independent extraction and closure
 checks reconstruct effects from operations and validate retained identities.
-Immutable authored signatures independently anchor callback ceilings and output
-contracts, including abstract declarations.
+Immutable authored signatures independently anchor callback ceilings, item-origin
+selectors and output contracts, including abstract declarations.
 Dependency normalization, substitution and witness traversal use the shared
 work budget.
 
@@ -1222,6 +1269,12 @@ before MLIR emission. Expansion, flattened environments, summary work and helper
 instances count against the ordinary work, operation, depth and instance bounds.
 Cycles and excessive completed-instance call heights refuse.
 
+Independent origin checking reconstructs normalized contracts from retained
+source labels and clauses, checks exact input/domain types and coverage, and
+rejects changed slots, domain positions or missing requirements even if body
+signatures were changed to agree. These source selectors are compile-time
+evidence, not trusted runtime attributes.
+
 Independent capture checking walks retained resolved syntax to reconstruct
 free places and compares actual capture slots, snapshot projections, types,
 roles, lexical identity and occurrence coverage. A separate specialization
@@ -1240,9 +1293,16 @@ callback result must agree with its authored tail expression. Resolved syntax
 and the retained lexical families remain trusted inputs to this check.
 
 Declaration inspection reports `scoped_inputs` separately from `inputs`, with
-name, mode, input/result types and effect allowance. `input_order` retains
-`data`, `service` and `scoped` categories. This diagnostic view does not add
-runtime interface fields. The [computation library](../../../libraries/zkc/computation.zkc)
+name, mode, input/result types and effect allowance. Each callback also has
+`input_labels`, an array parallel to `inputs` with a string or null per input,
+and `item_origins`, an array of exact `{ "input": unsigned, "domain": unsigned }`
+objects sorted by input position. Both positions are zero-based; `domain` indexes
+`domain_inputs`, not the interleaved authored port list. Both arrays are always
+present, including an empty origin list. This is the sole version-0 schema;
+there is no legacy suffix or inspection alias. Enclosing `requirements` remain
+obligations of the enclosing signature. `input_order` retains `data`, `service`,
+`domain` and `scoped` categories. This diagnostic view does not add runtime
+interface fields. The [computation library](../../../libraries/zkc/computation.zkc)
 and [component example](../../../examples/projects/scoped-computations/README.md)
 exercise user-defined apply/forward combinators. General finite domains, named consumers and mathematical binders use this same
 foundation.
