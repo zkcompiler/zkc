@@ -1,5 +1,6 @@
 #include "Effects.h"
 #include "zkc/Language/Builtins.h"
+#include <type_traits>
 using namespace llvm;
 
 namespace zkc::language::detail {
@@ -149,65 +150,76 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
                   span);
   };
   for (const auto &operation : body.operations) {
-    const auto &action = operation.action;
-    if (const auto *invoke = std::get_if<ScopedInvoke>(&action)) {
-      if (!absorb(
-              bindingEffects(types, body, invoke->binding, 1, operation.span),
-              operation.span))
-        return {};
-    } else if (const auto *helper = std::get_if<HelperCall>(&action)) {
-      if (!call(helper->callee, helper->scopedArguments, operation.span))
-        return {};
-    } else if (const auto *protocol =
-                   std::get_if<ProtocolApplication>(&action)) {
-      if (!call(protocol->callee, {}, operation.span))
-        return {};
-    } else if (const auto *finite = std::get_if<FiniteApplication>(&action)) {
-      result.fixed.mayStop |= body.mode != Body::Mode::Math;
-      if (!absorb(bindingEffects(types, body, finite->body, 1, operation.span),
-                  operation.span))
-        return {};
-      if (finite->predicate &&
-          !absorb(bindingEffects(types, body, *finite->predicate, 1,
-                                 operation.span),
-                  operation.span))
-        return {};
-    } else if (const auto *finite = std::get_if<FiniteComputation>(&action)) {
-      result.fixed.mayStop |= body.mode != Body::Mode::Math;
-      if (!call(finite->body.helper, {}, operation.span))
-        return {};
-      if (finite->predicate &&
-          !call(finite->predicate->helper, {}, operation.span))
-        return {};
-    } else if (const auto *control = std::get_if<LocalControl>(&action)) {
-      for (const auto &region : control->regions) {
-        if (!region) {
-          types.fail("source.effect", "missing control region effect evidence",
-                     operation.span);
-          return {};
-        }
-        if (!joinEffects(types, result, region->effects, operation.span))
-          return {};
-      }
-    } else if (const auto *repeat = std::get_if<ProtocolRepeat>(&action)) {
-      if (!repeat->region) {
-        types.fail("source.effect", "missing repeat region effect evidence",
-                   operation.span);
-        return {};
-      }
-      if (!joinEffects(types, result, repeat->region->effects, operation.span))
-        return {};
-    } else if (const auto *primitive = std::get_if<LocalPrimitive>(&action)) {
-      result.fixed.mayStop |=
-          primitive->origin == LocalPrimitive::Origin::Kernel ||
-          (primitive->contract != "index.equal" &&
-           primitive->contract != "field.constant" &&
-           primitive->contract != "bool.constant" &&
-           primitive->contract != "index.constant" &&
-           !mathematicalIntrinsic(primitive->contract));
-    } else if (std::holds_alternative<Require>(action) ||
-               std::holds_alternative<BulkApplication>(action))
-      result.fixed.mayStop = true;
+    auto span = operation.span;
+    if (!std::visit(
+            [&](const auto &action) -> bool {
+              using Action = std::decay_t<decltype(action)>;
+              if constexpr (std::is_same_v<Action, ScopedInvoke>) {
+                return absorb(
+                    bindingEffects(types, body, action.binding, 1, span), span);
+              } else if constexpr (std::is_same_v<Action, HelperCall>) {
+                return call(action.callee, action.scopedArguments, span);
+              } else if constexpr (std::is_same_v<Action,
+                                                  ProtocolApplication>) {
+                return call(action.callee, {}, span);
+              } else if constexpr (std::is_same_v<Action, FiniteApplication>) {
+                result.fixed.mayStop |= body.mode != Body::Mode::Math;
+                return absorb(bindingEffects(types, body, action.body, 1, span),
+                              span) &&
+                       (!action.predicate ||
+                        absorb(bindingEffects(types, body, *action.predicate, 1,
+                                              span),
+                               span));
+              } else if constexpr (std::is_same_v<Action, FiniteComputation>) {
+                result.fixed.mayStop |= body.mode != Body::Mode::Math;
+                return call(action.body.helper, {}, span) &&
+                       (!action.predicate ||
+                        call(action.predicate->helper, {}, span));
+              } else if constexpr (std::is_same_v<Action, LocalControl>) {
+                for (const auto &region : action.regions) {
+                  if (!region)
+                    return types.fail("source.effect",
+                                      "missing control region effect evidence",
+                                      span);
+                  if (!joinEffects(types, result, region->effects, span))
+                    return false;
+                }
+                return true;
+              } else if constexpr (std::is_same_v<Action, ProtocolRepeat>) {
+                if (!action.region)
+                  return types.fail("source.effect",
+                                    "missing repeat region effect evidence",
+                                    span);
+                return joinEffects(types, result, action.region->effects, span);
+              } else if constexpr (std::is_same_v<Action, LocalPrimitive>) {
+                result.fixed.mayStop |=
+                    action.origin == LocalPrimitive::Origin::Kernel ||
+                    (action.contract != "index.equal" &&
+                     action.contract != "field.constant" &&
+                     action.contract != "bool.constant" &&
+                     action.contract != "index.constant" &&
+                     !mathematicalIntrinsic(action.contract));
+                return true;
+              } else if constexpr (std::is_same_v<Action, Require> ||
+                                   std::is_same_v<Action, BulkApplication>) {
+                result.fixed.mayStop = true;
+                return true;
+              } else {
+                // New operations must explicitly choose their source effects.
+                static_assert(std::is_same_v<Action, MathValue> ||
+                                  std::is_same_v<Action, Exchange> ||
+                                  std::is_same_v<Action, Restriction> ||
+                                  std::is_same_v<Action, Construct> ||
+                                  std::is_same_v<Action, Projection> ||
+                                  std::is_same_v<Action, Consume> ||
+                                  std::is_same_v<Action, ServiceQuery> ||
+                                  std::is_same_v<Action, ProtocolCompletion>,
+                              "operation needs an effect inference rule");
+                return true;
+              }
+            },
+            operation.action))
+      return {};
   }
   if (!types.charge(result.dependencies.size() + 1, bodySpan))
     return {};

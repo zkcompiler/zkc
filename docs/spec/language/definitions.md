@@ -1149,7 +1149,7 @@ select a statically known body; there is no dynamic dispatch or closure ABI.
 A callback signature accepts optional labels on its data inputs:
 `fn(state: S, item: I) -> S effects(stop) where item_from(item, rows)`.
 The order is inputs, result, optional effects, then optional callback-local
-`where`. Local effects remain mandatory. Named and unnamed input types can mix;
+`where`. Named and unnamed input types can mix;
 only inputs selected by a condition require a label. Labels are unique within a
 callback and obey ordinary binding-name/shadowing rules. Different callbacks
 may reuse labels. Labels do not bind values or types, and literal binders and
