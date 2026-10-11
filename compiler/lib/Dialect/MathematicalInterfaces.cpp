@@ -1,7 +1,5 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Interfaces/Mathematical.h"
 
 using namespace mlir;
@@ -67,30 +65,9 @@ struct ArithModel final
     return dependencies;
   }
 };
-struct ArrayModel final
-    : MathematicalOpInterface::ExternalModel<ArrayModel,
-                                             tensor::FromElementsOp> {
-  std::optional<MathematicalIdentity>
-  getMathematicalIdentity(Operation *op) const {
-    if (!algebra::isFieldArray(op->getResult(0).getType()))
-      return std::nullopt;
-    return MathematicalIdentity::ArrayFromElements;
-  }
-  llvm::SmallVector<unsigned> getOperandDependencies(Operation *op,
-                                                     unsigned result) const {
-    llvm::SmallVector<unsigned> indices;
-    if (result == 0)
-      for (unsigned i = 0; i < op->getNumOperands(); ++i)
-        indices.push_back(i);
-    return indices;
-  }
-};
 } // namespace
 
 void registerMathematicalInterfaces(DialectRegistry &registry) {
-  registry.addExtension(+[](MLIRContext *context, tensor::TensorDialect *) {
-    tensor::FromElementsOp::attachInterface<ArrayModel>(*context);
-  });
   registry.addExtension(+[](MLIRContext *context, arith::ArithDialect *) {
     arith::ConstantOp::attachInterface<ArithModel<arith::ConstantOp>>(*context);
     arith::AndIOp::attachInterface<ArithModel<arith::AndIOp>>(*context);

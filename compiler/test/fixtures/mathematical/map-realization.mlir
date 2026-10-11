@@ -1,5 +1,5 @@
 !F = !algebra.field<"koala-bear">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"koala-bear">
 module { "protocol.module"() ({
  func.func private @square(%x:!F)->!F {
    %r = "algebra.field_multiply"(%x,%x) : (!F,!F)->!F

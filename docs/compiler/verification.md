@@ -209,7 +209,8 @@ still pins the actual selected bytes.
 
 The admitted upstream arithmetic vocabulary is scalar constants, Boolean
 and/or/xor, comparisons and typed selects. Existing-operation greedy folding and
-CSE run in mathematical bodies; tensor containers remain excluded. The checker
+CSE run in mathematical bodies. Builtin tensor containers remain excluded;
+nominal collection operations retain their own admitted laws. The checker
 uses the expression semantics rather than upstream rewrite implementations.
 An upstream rewrite outside its recognized laws is refused. Installed compiler
 versions and finite fold controls are validation evidence, not a proof of every

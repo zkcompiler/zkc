@@ -18,7 +18,7 @@ using namespace zkc::test;
 namespace {
 const char *laneFixture = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="add",contract="vector.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "local.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
@@ -45,7 +45,7 @@ module { "protocol.module"() ({
 )mlir";
 const char *indexed = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
@@ -348,7 +348,7 @@ readCopiedHelper(Operation *helper, ValueRange inputs, Operation *&cursor) {
 }
 const char *operationExtents = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>

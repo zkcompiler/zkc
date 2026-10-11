@@ -64,8 +64,8 @@ determine transcript bytes. A flat event descriptor plus retained SSA control
 describes loop structure without a second executable graph.
 
 Canonical receive decoding precedes observation. [Structured frames](../spec/formats/messages.md)
-bind complete types, tags, lengths and payloads. Records, alternatives, numeric
-tensors and sequences use the same typed codec. Copyability alone grants neither
+bind complete types, tags, lengths and payloads. Records, alternatives, nominal
+numerical collections and sequences use the same typed codec. Copyability alone grants neither
 wire permission nor cross-role availability. External byte formats need an
 adapter preserving the bytes their construction observes.
 

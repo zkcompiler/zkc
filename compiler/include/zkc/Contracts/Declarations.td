@@ -1,6 +1,7 @@
 #ifndef ZKC_CONTRACT_DECLARATIONS
 #define ZKC_CONTRACT_DECLARATIONS
 include "zkc/Contracts/Declarations/Schema.td"
+include "zkc/Contracts/Declarations/Mathematical.td"
 include "zkc/Contracts/Declarations/Vocabulary.td"
 include "zkc/Contracts/Declarations/Types.td"
 include "zkc/Contracts/Declarations/Core.td"

@@ -123,8 +123,8 @@ FailureOr<FunctionType> realizationType(RealizeOp realization) {
     outputs = {state};
   } else if (kind == "round") {
     inputs = {state};
-    outputs = {
-        RankedTensorType::get({int64_t(*recipeDegree(recipe)) + 1}, field)};
+    outputs = {algebra::FieldArrayType::get(
+        context, field.getDomain(), uint64_t(*recipeDegree(recipe)) + 1)};
   } else if (kind == "finish") {
     inputs = {state};
     outputs = {point, field};

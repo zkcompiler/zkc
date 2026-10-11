@@ -46,9 +46,12 @@ for name in (original_manifest.parent / "ir-generated-files.txt").read_text().sp
     shutil.copyfile(source, target)
     generated.append(str(target))
 (manifest.parent / "ir-generated-files.txt").write_text("\n".join(generated) + "\n")
-declarations = Path("include/zkc/Contracts/Declarations.cpp.inc")
-(manifest.parent / declarations).parent.mkdir(parents=True, exist_ok=True)
-shutil.copyfile(original_manifest.parent / declarations, manifest.parent / declarations)
+for relative in ("include/zkc/Contracts/Declarations.cpp.inc",
+                 "include/zkc/Contracts/Mathematical.inc",
+                 "generated/Transforms/MathematicalRecipes.inc"):
+    target = manifest.parent / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(original_manifest.parent / relative, target)
 
 def check():
     with patch.object(policy, "ROOT", root), patch.dict(os.environ, {"ZKC_CTEST_COMPONENTS": str(manifest)}), redirect_stdout(io.StringIO()):
@@ -70,6 +73,12 @@ def rejects(name, path, transform, message):
 
 with case("the actual component graph passes in an isolated tree"):
     check()
+for source in ("lib/Contracts/Mathematical.cpp",
+               "lib/Analysis/Computation.cpp", "include/zkc/Transforms/Finite.h"):
+    rejects(f"mathematical recipes stay private to selection: {source}",
+            root / source,
+            lambda text: '#include "MathematicalRecipes.inc"\n' + text,
+            "recipe inventory outside its owner")
 for filename in ("BuiltinHeaders.h.inc", "BuiltinDialects.inc",
                  "ContributionHeaders.h.inc", "ContributionDialects.inc"):
     for source in ("lib/Dialect/Algebra/IR/Mathematical.cpp", "include/zkc/Dialect/Registry.h"):

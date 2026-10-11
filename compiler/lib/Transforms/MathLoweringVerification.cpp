@@ -1,7 +1,6 @@
 #include "HelperNormalization.h"
 #include "MathematicalSupport.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
@@ -9,6 +8,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Interfaces/Collection.h"
 #include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -189,20 +189,22 @@ class LoweringVerifier {
                   inputs, {spelling});
     }
     if (auto dim = dyn_cast<data::DimOp>(source)) {
-      auto tensor = dim.getInput().getType();
+      auto collection = cast<CollectionTypeInterface>(dim.getInput().getType());
       auto axis = dim.getAxisAttr().getInt();
-      if (!tensor.isDynamicDim(axis)) {
-        auto length = std::to_string(tensor.getDimSize(axis));
+      if (auto extent = collection.getStaticExtent(axis)) {
+        auto length = std::to_string(*extent);
         return take("index.constant", {}, {}, {length});
       }
-      if (auto field = dyn_cast<algebra::FieldType>(tensor.getElementType())) {
-        if (tensor.getRank() == 1)
+      if (auto field =
+              dyn_cast<algebra::FieldType>(collection.getElementType())) {
+        if (collection.getRank() == 1)
           return take("vector.length", inputs, {field.getDomain()});
         auto coordinate = std::to_string(axis);
         return take("matrix.dimension", inputs, {field.getDomain()},
                     {coordinate});
       }
-      if (auto group = dyn_cast<algebra::GroupType>(tensor.getElementType()))
+      if (auto group =
+              dyn_cast<algebra::GroupType>(collection.getElementType()))
         return take("curve.length", inputs, {group.getDomain()});
       return take("indices.length", inputs);
     }
@@ -345,14 +347,15 @@ class LoweringVerifier {
     if (auto at = dyn_cast<algebra::ArrayAtOp>(source)) {
       auto array = at.getArray().getType();
       auto field = cast<algebra::FieldType>(array.getElementType()).getDomain();
-      auto length = std::to_string(array.getDimSize(0));
+      auto length = std::to_string(array.getLength());
       auto index = std::to_string(at.getIndexAttr().getInt());
       return take("field_array.at", inputs, {field, length}, {index});
     }
-    if (isa<tensor::FromElementsOp>(source)) {
-      auto array = cast<RankedTensorType>(source->getResult(0).getType());
+    if (isa<algebra::ArrayFromElementsOp>(source)) {
+      auto array =
+          cast<algebra::FieldArrayType>(source->getResult(0).getType());
       auto field = cast<algebra::FieldType>(array.getElementType()).getDomain();
-      auto length = std::to_string(array.getDimSize(0));
+      auto length = std::to_string(array.getLength());
       auto vector = take("vector.empty", {}, {field});
       for (auto element : inputs) {
         if (!vector || !vector.hasOneUse())

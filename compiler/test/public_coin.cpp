@@ -29,7 +29,7 @@ constexpr StringLiteral requirement =
     R"({"format":"zkc.public-coin-requirement/0","entry":"main","prover":"P","verifier":"V","service":0,"decision":0,"bound_inputs":[],"draws":[{"query_site":"draw","delivery_site":"coin"}]})";
 constexpr StringLiteral policyFixture = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
 !S = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
@@ -91,8 +91,8 @@ constexpr StringLiteral polynomialPrograms = R"mlir(
 !field = !algebra.field<"bls12-381.fr">
 !polynomial = !poly.polynomial<"bls12-381.fr", 1>
 module { "protocol.module"() ({
-  func.func private @square(%values: tensor<2x!field>) -> !polynomial {
-    %linear = "poly.mle"(%values) : (tensor<2x!field>)->!polynomial
+  func.func private @square(%values: !algebra.field_array<"bls12-381.fr", 2>) -> !polynomial {
+    %linear = "poly.mle"(%values) : (!algebra.field_array<"bls12-381.fr", 2>)->!polynomial
     %square = "poly.multiply"(%linear, %linear) : (!polynomial, !polynomial)->!polynomial
     return %square : !polynomial
   }
@@ -102,11 +102,11 @@ module { "protocol.module"() ({
     "protocol.return"(%both) : (i1)->()
   }) {sym_name="main", function_type=()->i1, roles=["V"], input_roles=[], output_roles=[["V"]]} : ()->()
   "protocol.func"() ({
-  ^entry(%values: tensor<2x!field>):
-    %square = func.call @square(%values) : (tensor<2x!field>)->!polynomial
-    %unused = "poly.coefficients"(%square) : (!polynomial)->tensor<3x!field>
-    "protocol.return"(%values) : (tensor<2x!field>)->()
-  }) {sym_name="observation", function_type=(tensor<2x!field>)->tensor<2x!field>, roles=["P"], input_roles=[["P"]], output_roles=[["P"]]} : ()->()
+  ^entry(%values: !algebra.field_array<"bls12-381.fr", 2>):
+    %square = func.call @square(%values) : (!algebra.field_array<"bls12-381.fr", 2>)->!polynomial
+    %unused = "poly.coefficients"(%square) : (!polynomial)->!algebra.field_array<"bls12-381.fr", 3>
+    "protocol.return"(%values) : (!algebra.field_array<"bls12-381.fr", 2>)->()
+  }) {sym_name="observation", function_type=(!algebra.field_array<"bls12-381.fr", 2>)->!algebra.field_array<"bls12-381.fr", 2>, roles=["P"], input_roles=[["P"]], output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() })mlir";
 void require(bool ok, StringRef message) {
   if (!ok) {
@@ -277,10 +277,11 @@ int preparationCases() {
 
   cases.run("unused observation in a later program fails preparation", [&] {
     std::string invalid = polynomialPrograms.str();
-    auto extent = invalid.find("tensor<3x!field>");
+    auto extent = invalid.find("!algebra.field_array<\"bls12-381.fr\", 3>");
     test::require(extent != std::string::npos, "observation fixture extent");
-    invalid.replace(extent, StringRef("tensor<3x!field>").size(),
-                    "tensor<2x!field>");
+    invalid.replace(
+        extent, StringRef("!algebra.field_array<\"bls12-381.fr\", 3>").size(),
+        "!algebra.field_array<\"bls12-381.fr\", 2>");
     auto original = mlir::parseSourceString<mlir::ModuleOp>(invalid, &context);
     test::require(bool(original) && succeeded(mlir::verify(*original)),
                   "invalid observation must reach helper expansion");

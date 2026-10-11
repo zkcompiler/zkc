@@ -3,6 +3,7 @@ def OpVectorGetF : ZKC_Root<"F", FieldDomain>;
 def OpVectorGet : ZKC_Operation<"vector.get", [OpVectorGetF],
     [ZKC_Apply<TypeVector, [OpVectorGetF]>, ZKC_Apply<TypeIndex, []>],
     [ZKC_Apply<TypeField, [OpVectorGetF]>], [ZKC_Holds<CapabilityField, [OpVectorGetF]>]> {
+  let facets = [ZKC_Mathematical<MathContainerAt>];
   int ordinal = 24;
 }
 def ExportVectorGet : ZKC_OperationExport<"zkc::algebra", "vector_get",
@@ -123,6 +124,7 @@ def OpFieldSubF : ZKC_Root<"F", FieldDomain>;
 def OpFieldSub : ZKC_Operation<"field.sub", [OpFieldSubF],
     [ZKC_Apply<TypeField, [OpFieldSubF]>, ZKC_Apply<TypeField, [OpFieldSubF]>],
     [ZKC_Apply<TypeField, [OpFieldSubF]>], [ZKC_Holds<CapabilityField, [OpFieldSubF]>]> {
+  let facets = [ZKC_Mathematical<MathFieldSubtract>];
   int ordinal = 45;
 }
 def ExportFieldSub : ZKC_OperationExport<"zkc::algebra", "sub",
@@ -196,7 +198,9 @@ def OpMatrixGetF : ZKC_Root<"F", FieldDomain>;
 def OpMatrixGet : ZKC_Operation<"matrix.get", [OpMatrixGetF],
     [ZKC_Apply<TypeMatrix, [OpMatrixGetF]>, ZKC_Apply<TypeIndex, []>,
      ZKC_Apply<TypeIndex, []>], [ZKC_Apply<TypeField, [OpMatrixGetF]>],
-    [ZKC_Holds<CapabilityField, [OpMatrixGetF]>]>;
+    [ZKC_Holds<CapabilityField, [OpMatrixGetF]>]> {
+  let facets = [ZKC_Mathematical<MathMatrixAt>];
+}
 def ExportMatrixGet : ZKC_OperationExport<"zkc::algebra", "matrix_get",
     OpMatrixGet, ["matrix", "row", "column"]>;
 
@@ -470,7 +474,7 @@ def OpFieldConstant : ZKC_Operation<"field.constant", [OpFieldConstantF],
   int ordinal = 93;
   let parameters = FieldLiteral;
   let parameterField = OpFieldConstantF;
-  let facets = [PublicReplay, ZKC_DomainValue<ConstantValue, 0, 0, 1>];
+  let facets = [ZKC_Mathematical<MathFieldConstant>, PublicReplay, ZKC_DomainValue<ConstantValue, 0, 0, 1>];
 }
 def ExportFieldConstant : ZKC_OperationExport<"zkc::algebra", "constant",
     OpFieldConstant, []>;
@@ -480,7 +484,7 @@ def OpFieldAdd : ZKC_Operation<"field.add", [OpFieldAddF],
     [ZKC_Apply<TypeField, [OpFieldAddF]>, ZKC_Apply<TypeField, [OpFieldAddF]>],
     [ZKC_Apply<TypeField, [OpFieldAddF]>], [ZKC_Holds<CapabilityField, [OpFieldAddF]>]> {
   int ordinal = 94;
-  let facets = [PublicReplay];
+  let facets = [ZKC_Mathematical<MathFieldAdd>, PublicReplay];
 }
 def ExportFieldAdd : ZKC_OperationExport<"zkc::algebra", "add",
     OpFieldAdd, ["field0", "field1"]>;
@@ -490,7 +494,7 @@ def OpFieldMul : ZKC_Operation<"field.mul", [OpFieldMulF],
     [ZKC_Apply<TypeField, [OpFieldMulF]>, ZKC_Apply<TypeField, [OpFieldMulF]>],
     [ZKC_Apply<TypeField, [OpFieldMulF]>], [ZKC_Holds<CapabilityField, [OpFieldMulF]>]> {
   int ordinal = 95;
-  let facets = [PublicReplay, ZKC_DomainValue<MultiplyValue, 0, 0, 1>];
+  let facets = [ZKC_Mathematical<MathFieldMultiply>, PublicReplay, ZKC_DomainValue<MultiplyValue, 0, 0, 1>];
 }
 def ExportFieldMul : ZKC_OperationExport<"zkc::algebra", "mul",
     OpFieldMul, ["field0", "field1"]>;

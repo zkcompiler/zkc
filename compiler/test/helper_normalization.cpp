@@ -157,11 +157,11 @@ int main() {
   });
   cases.run("static dimension meaning is checked before recipe lowering", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, R"(
- func.func private @dimension(%v:tensor<4x!F>)->ui64 {
-   %n = "data.dim"(%v) {axis=0:i64} : (tensor<4x!F>)->ui64
+ func.func private @dimension(%v:!algebra.field_array<"bls12-381.fr", 4>)->ui64 {
+   %n = "data.dim"(%v) {axis=0:i64} : (!algebra.field_array<"bls12-381.fr", 4>)->ui64
    func.return %n : ui64
  }
- func.func private @constant(%v:tensor<4x!F>)->ui64 {
+ func.func private @constant(%v:!algebra.field_array<"bls12-381.fr", 4>)->ui64 {
    %n = "data.index"() {value="4"} : ()->ui64
    func.return %n : ui64
  }
@@ -201,14 +201,14 @@ int main() {
   });
   cases.run("bounded indices retain their argument assignment", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, R"(
- func.func private @access(%xs:tensor<?x!F>,%i:ui64,%j:ui64)->!F
+ func.func private @access(%xs:!algebra.field_vector<"bls12-381.fr">,%i:ui64,%j:ui64)->!F
  attributes {data.preconditions=[#data.index_bound<1,0,0>,#data.index_bound<2,0,0>]} {
-   %v = "data.bounded_at"(%xs,%i) : (tensor<?x!F>,ui64)->!F
+   %v = "data.bounded_at"(%xs,%i) : (!algebra.field_vector<"bls12-381.fr">,ui64)->!F
    func.return %v : !F
  }
- func.func private @other(%xs:tensor<?x!F>,%i:ui64,%j:ui64)->!F
+ func.func private @other(%xs:!algebra.field_vector<"bls12-381.fr">,%i:ui64,%j:ui64)->!F
  attributes {data.preconditions=[#data.index_bound<1,0,0>,#data.index_bound<2,0,0>]} {
-   %v = "data.bounded_at"(%xs,%j) : (tensor<?x!F>,ui64)->!F
+   %v = "data.bounded_at"(%xs,%j) : (!algebra.field_vector<"bls12-381.fr">,ui64)->!F
    func.return %v : !F
  }
  )"),
@@ -293,7 +293,7 @@ int main() {
    func.return %c : !A
  }
  func.func private @tables(%a:!F,%b:!F,%x:!F)->(!A,!A,!F) {
-   %v = tensor.from_elements %a,%b : !A
+   %v = "algebra.array_from_elements"(%a,%b) : (!F,!F)-> !A
    %p = "poly.interpolate"(%v) {points=["0","1"]} : (!A)->!P
    %c = func.call @observe(%p) : (!P)->!A
    %d = "poly.evaluate_domain"(%p) {points=["2","3"]} : (!P)->!A
@@ -305,12 +305,12 @@ int main() {
  }
  local.realize @tables_exec = @tables : (!F,!F,!F)->(!A,!A,!F)
  func.func private @sum(%a:!F,%b:!F,%x:!F)->(!A,!A,ui64) {
-   %v = tensor.from_elements %a,%b,%b,%a : tensor<4x!F>
-   %m = "poly.mle"(%v) : (tensor<4x!F>)->!poly.polynomial<"bls12-381.fr",2>
+   %v = "algebra.array_from_elements"(%a,%b,%b,%a) : (!F,!F,!F,!F)-> !algebra.field_array<"bls12-381.fr", 4>
+   %m = "poly.mle"(%v) : (!algebra.field_array<"bls12-381.fr", 4>)->!poly.polynomial<"bls12-381.fr",2>
    %s = "poly.sum_suffix"(%m) {count=1:i64} : (!poly.polynomial<"bls12-381.fr",2>)->!P
    %c = "poly.coefficients"(%s) : (!P)->!A
-   %t = "poly.fix_table"(%v,%x) : (tensor<4x!F>,!F)->!A
-   %n = "data.dim"(%v) {axis=0:i64} : (tensor<4x!F>)->ui64
+   %t = "poly.fix_table"(%v,%x) : (!algebra.field_array<"bls12-381.fr", 4>,!F)->!A
+   %n = "data.dim"(%v) {axis=0:i64} : (!algebra.field_array<"bls12-381.fr", 4>)->ui64
    func.return %c,%t,%n : !A,!A,ui64
  }
  local.realize @sum_exec = @sum : (!F,!F,!F)->(!A,!A,ui64)
@@ -352,8 +352,8 @@ int main() {
     require(returned != std::string::npos,
             "finite polynomial insertion unavailable");
     text.replace(returned, std::string("   func.return %b,%v").size(), R"(
-   %coeffs = tensor.from_elements %a,%b : tensor<2x!F>
-   %p = "poly.from_coefficients"(%coeffs) : (tensor<2x!F>)->!poly.polynomial<"bls12-381.fr",1>
+   %coeffs = "algebra.array_from_elements"(%a,%b) : (!F,!F)-> !algebra.field_array<"bls12-381.fr", 2>
+   %p = "poly.from_coefficients"(%coeffs) : (!algebra.field_array<"bls12-381.fr", 2>)->!poly.polynomial<"bls12-381.fr",1>
    %y = "poly.evaluate"(%p,%v) : (!poly.polynomial<"bls12-381.fr",1>,!F)->!F
    func.return %b,%y)");
     auto source = parseSourceString<ModuleOp>(text, &context);

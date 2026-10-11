@@ -1,5 +1,6 @@
 #include "zkc/Transforms/VectorReductions.h"
 #include "AlgorithmSupport.h"
+#include "ComputationSelection.h"
 #include "MathematicalSupport.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
@@ -18,7 +19,7 @@ namespace {
 using Record = protocol::detail::AlgorithmExpansionRecord;
 using Occurrence = protocol::detail::AlgorithmOccurrence;
 using StateAccess = protocol::detail::AlgorithmStateAccess;
-using Products = std::map<std::string, std::pair<unsigned, unsigned>>;
+using Reductions = std::map<std::string, SelectedReduction>;
 
 protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
   if (!hasSingleElement(*module.getBody()))
@@ -107,12 +108,12 @@ public:
   Rewriter(protocol_ir::ProtocolModuleOp root, Record &record)
       : root(root), symbols(root), names(root), builder(root.getContext()),
         record(record) {}
-  LogicalResult run(const Products &products) {
+  LogicalResult run(const Reductions &reductions) {
     SmallVector<local::ApplyOp> calls;
     root.walk([&](local::ApplyOp call) { calls.push_back(call); });
     for (auto call : calls) {
       auto map = reductionMap(call, symbols);
-      if (!map || !products.count(call.getCallee().str()))
+      if (!map || !reductions.count(call.getCallee().str()))
         continue;
       auto function = call->getParentOfType<local::FuncOp>();
       auto saved = protocol::detail::occurrence(record, function.getSymName(),
@@ -196,13 +197,14 @@ public:
             return failure();
         }
       }
-      auto [left, right] = products.at(map.getSymName().str());
-      auto dot =
-          emit("vector.dot", {call->getOperand(left), call->getOperand(right)},
-               field, false);
-      if (!dot)
+      const auto &reduction = reductions.at(map.getSymName().str());
+      SmallVector<Value> inputs;
+      for (unsigned input : reduction.inputs)
+        inputs.push_back(call->getOperand(input));
+      auto reduced = emit(reduction.recipe->target, inputs, field, false);
+      if (!reduced)
         return failure();
-      sum->getResult(0).replaceAllUsesWith(dot->getResult(0));
+      sum->getResult(0).replaceAllUsesWith(reduced->getResult(0));
       sum->erase();
       call.erase();
     }
@@ -461,6 +463,11 @@ LogicalResult verifyVectorReductionsPreserved(
 }
 LogicalResult fuseVectorReductions(ModuleOp module,
                                    protocol::AlgorithmExpansionState &state) {
+  return fuseVectorReductions(module, state, mathematicalRecipes().reductions);
+}
+LogicalResult fuseVectorReductions(ModuleOp module,
+                                   protocol::AlgorithmExpansionState &state,
+                                   ArrayRef<ReductionRecipe> reductionRecipes) {
   const auto &input = StateAccess::get(state);
   if (!input.retained || input.finished || !unit(module))
     return refuse(module, "expected retained preparation");
@@ -470,9 +477,15 @@ LogicalResult fuseVectorReductions(ModuleOp module,
   auto products = describeMapProducts(module);
   if (failed(products))
     return failure();
+  const MathematicalRecipes recipes{mathematicalRecipes().lanes,
+                                    reductionRecipes};
+  Reductions reductions;
+  for (const auto &[name, product] : *products)
+    if (auto selected = selectMapSum(product, recipes))
+      reductions.emplace(name, std::move(*selected));
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
   Record output = input;
-  if (failed(Rewriter(unit(*candidate), output).run(*products)) ||
+  if (failed(Rewriter(unit(*candidate), output).run(reductions)) ||
       failed(check(module, *candidate, input, output)))
     return failure();
   module.getBodyRegion().takeBody(candidate->getBodyRegion());

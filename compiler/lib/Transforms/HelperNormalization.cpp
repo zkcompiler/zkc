@@ -3,6 +3,7 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Interfaces/Collection.h"
 
 using namespace mlir;
 namespace zkc::mathematical {
@@ -76,14 +77,15 @@ CheckedHelperNormalizations::prepareRealization(func::FuncOp helper) {
   auto &body = proposal->front();
   OpBuilder builder(helper.getContext());
   for (auto dim : llvm::make_early_inc_range(body.getOps<data::DimOp>())) {
-    auto type = dim.getInput().getType();
+    auto type = cast<CollectionTypeInterface>(dim.getInput().getType());
     auto axis = dim.getAxisAttr().getInt();
-    if (type.isDynamicDim(axis))
+    auto extent = type.getStaticExtent(axis);
+    if (!extent)
       continue;
     builder.setInsertionPoint(dim);
-    auto index = data::IndexOp::create(
-        builder, dim.getLoc(), dim.getOutput().getType(),
-        builder.getStringAttr(std::to_string(type.getDimSize(axis))));
+    auto index =
+        data::IndexOp::create(builder, dim.getLoc(), dim.getOutput().getType(),
+                              builder.getStringAttr(std::to_string(*extent)));
     dim.getOutput().replaceAllUsesWith(index.getOutput());
     dim.erase();
   }

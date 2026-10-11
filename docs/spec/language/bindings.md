@@ -72,6 +72,12 @@ support the complete logical application, including every nested type and natura
 argument. Missing support is a physical-selection refusal, not a malformed
 logical type. MLIR retains both parts in `!plan.data<logical, representation>`;
 domain-owned logical MLIR types preserve their static arguments before planning.
+The [nominal collection types](../ir/iteration.md) map directly to the existing
+`vector:F`, `groups:G`, `indices`, `matrix:F` and `field_array<F,N>` constructors.
+Adapter round trips preserve the exact native type and logical application;
+shape evidence cannot select another constructor. Builtin tensors are not
+compatibility carriers. These MLIR choices leave source syntax, native carriers
+and codec spellings unchanged.
 
 The bounded reader admits at most 4096 bytes per nonvariant logical spelling,
 eight combined structural/variant nesting levels and 200000 nodes per type

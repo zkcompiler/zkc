@@ -209,4 +209,40 @@ class ZKC_OperationExport<string m, string n, ZKC_Operation op,
   ZKC_Operation operation = op;
   list<string> inputLabels = labels;
 }
+// Closed mathematical vocabulary. Meanings are independent of executable
+// declarations, intrinsic spellings, and realization availability.
+class ZKC_ScalarLaws<string family, string shape> : ZKC_Declaration {
+  string name = shape;
+  string algebra = family;
+  string signature = shape;
+  bit associative = 0;
+  bit commutative = 0;
+  bit total = 0;
+  string leftIdentity = "None";
+  string rightIdentity = "None";
+  string annihilator = "None";
+  bit scalarAction = 0;
+  string access = "None";
+}
+class ZKC_MathematicalIdentity<string value, int position> : ZKC_Declaration {
+  string name = value;
+  int ordinal = position;
+  ZKC_ScalarLaws laws = ?;
+}
+class ZKC_MathematicalIntrinsic<string value, ZKC_MathematicalIdentity meaning,
+                                 string domain, int position,
+                                 int ns = 0, bit points = 0, bit ordered = 0>
+    : ZKC_Declaration {
+  string name = value;
+  ZKC_MathematicalIdentity identity = meaning;
+  string domainKind = domain;
+  int ordinal = position;
+  int naturals = ns;
+  bit domainPoints = points;
+  bit scalar = ordered;
+}
+class ZKC_Mathematical<ZKC_MathematicalIdentity meaning> : ZKC_Facet {
+  ZKC_MathematicalIdentity identity = meaning;
+}
+
 #endif

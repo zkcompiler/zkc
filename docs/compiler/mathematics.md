@@ -35,11 +35,18 @@ bounds remain separate from runtime capacity.
 
 ## Containers and changing shapes
 
-Numeric tensors carry field/group vectors and matrices. Runtime lengths may
-change while the logical MLIR type remains fixed. `data.sequence` carries an
+Nominal Algebra types carry field/group vectors, indices, field matrices and
+field arrays. Runtime vector lengths and matrix dimensions may change while
+their logical MLIR types remain fixed. Known shape evidence cannot change a
+collection's family or logical binding identity. `data.sequence` carries an
 ordered runtime count of immutable records, sums or independently shaped data.
 The [sequence rationale](../rationale/nested-sequences.md) explains this
-choice alongside numeric tensors.
+choice alongside numerical collections. The shared `CollectionTypeInterface`
+reports structure only; finite, mathematical, Copy/Drop, wire and physical
+admission still use their owning contracts. Builtin tensors are not alternate
+logical carriers. `algebra.array_from_elements` packs ordered field operands
+into a nominal field array, including an empty array. Source arrays and nominal
+fixed vectors retain their separate meanings and representations.
 
 Copyability, total mathematics, disclosure, wire admission and setup authority
 are separate properties. A copyable PCS payload can be constructed and matched
@@ -71,8 +78,11 @@ operational limits.
 ## Analysis and realization boundaries
 
 Typed domain operations remain the mathematical representation. Contracts own
-closed scalar laws, lane lifting and contraction equations with exact nominal
-ports. `Analysis/Computation` derives bounded, read-only views of existing SSA:
+declaration-generated identities and closed scalar/access laws with exact nominal
+ports. Transforms own the lane and reduction recipe associations; the
+[operation-contract guide](operation-contracts.md#mathematical-meaning-and-realization)
+describes their separate queries and checks. `Analysis/Computation` derives
+bounded, read-only views of existing SSA:
 iteration and admission order, accesses, captures, seeds, nested calls and result
 demand. These views borrow the current IR and must be recomputed after changes.
 They are neither serialized evidence nor a second mathematical language.
@@ -87,7 +97,9 @@ same mappings directly from the finite ABI. Selection never uses an extent fact
 known only on a total operation's actual operands: the source domain or helper
 premises must also make it available to the independent reader.
 
-Transforms select among admitted realizations and the ordered fallback. Map and
+Reduction views retain the combiner, term and semantic operand roles without
+selecting a native operation or its operand order. Transforms select among
+installed recipes and the ordered fallback. Map and
 finite field formulas share lane emission, including scalar subexpression
 sharing and cached broadcasts. Their common lane analysis takes explicit lane
 arguments and treats other arguments of the exact field type as uniform. It
@@ -96,6 +108,11 @@ mode inventory. A separate reader reconstructs meanings from
 actual source and candidate operations without the selector's classifications.
 Closed Ring laws justify its bounded comparison; ordered guards, helper
 expansion and unchanged context have their own checks.
+
+Indexed-access recognition currently covers field vectors and field matrices.
+Group-vector indexing remains an ordered realization; zipped group/scalar
+elements can select MSM. Extending this access vocabulary and consolidating the
+collection execution adapters are separate from the nominal type migration.
 
 Helper normalization has an explicit checked boundary. The producer proposes
 an expanded polynomial-free body; a separate reader follows the original helper
@@ -146,7 +163,8 @@ owns binder scope, captures and shared scoped extraction.
 
 Optional `--fuse-vector-reductions` exposes admitted maps through checked
 `RetainMaps` local expansion, recognizes adjacent single-use multiply-map/sum,
-and replaces it with all original shape guards followed by dot. Residual maps
+and selects the declared dot recipe, retaining all original shape guards.
+Without that reduction recipe, the map and sum remain unchanged. Residual maps
 and helpers finish through the ordinary realization path before the strict
 local snapshot. Independent checks compare both expansion stages and the
 actual fused candidate with their originals, retaining full occurrence paths.

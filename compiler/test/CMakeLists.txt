@@ -17,6 +17,11 @@ target_compile_definitions(zkc-computation_analysis-test PRIVATE
   ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
 mlir_target_link_libraries(zkc-computation_analysis-test PRIVATE MLIRParser)
 
+add_zkc_test(mathematical_recipes Transforms mathematical-recipes)
+target_compile_definitions(zkc-mathematical_recipes-test PRIVATE
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-mathematical_recipes-test PRIVATE MLIRParser)
+
 add_zkc_test(finite_computation Transforms finite-computation)
 target_compile_definitions(zkc-finite_computation-test PRIVATE
   ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
@@ -151,6 +156,8 @@ add_test(NAME native-proof-selection COMMAND zkc-native_proof_selection-test
 add_zkc_test(structural_types Contracts structural-types)
 add_zkc_test(implementation_policy Transforms implementation-policy)
 add_zkc_test(type_adapters IR type-adapters)
+add_zkc_test(collection_types IR collection-types)
+mlir_target_link_libraries(zkc-collection_types-test PRIVATE MLIRParser)
 add_zkc_test(type_adapter_ambiguity Contracts type-adapter-ambiguity)
 target_sources(zkc-type_adapter_ambiguity-test PRIVATE
   "${PROJECT_SOURCE_DIR}/lib/Dialect/TypeAdapters/Registry.cpp")

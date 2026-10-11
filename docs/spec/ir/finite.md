@@ -33,6 +33,17 @@ zeros. Row and column selectors are checked even when the other dimension is
 zero. Fixed arrays remain native field arrays; other immutable element types
 use their explicitly selected sequence representation.
 
+Collection element, rank and intrinsic extent queries use the structural
+[`CollectionTypeInterface`](iteration.md). The interface does not widen domain,
+fold, collect or bounded-access admission: in particular, fixed vectors do not
+gain finite-operation permission. Type-guaranteed extents for field arrays and
+fixed vectors remain distinct from value-level evidence derived from admitted
+constructors or helper premises. Such evidence can establish a bound or exact
+collection cardinality without changing a vector into a field array, changing
+a matrix's nominal family, or equating container contents. Field-array collection
+still requires the exact output length and rejects filtering that cannot provide
+that cardinality.
+
 Bounds, containers and capture snapshots are computed by ordinary eager
 operations at the call site. A descriptor cannot evaluate arbitrary expressions.
 Every domain constructor is admitted in descriptor order before traversal,
@@ -177,10 +188,13 @@ Sparse-zero elision requires a mathematical contraction, not an arbitrary Local
 callback with per-cell failures.
 
 The selector consumes a read-only computation view of actual typed domain,
-helper, access, seed and capture SSA. Installed scalar-law and lane-lifting
-facets state exact field/group and representation premises; source annotations
-or matching function names do not grant these laws. Explicit implementation
-bindings retain their selected execution path.
+helper, access, seed and capture SSA. Declaration-owned scalar/access laws state
+exact nominal field/group premises; source annotations or matching function
+names do not grant these laws. Recognition is independent of a physical provider
+or a lane/reduction recipe. Private transformation recipes choose native
+operations and operand permutations only after replacement eligibility is
+established. Explicit implementation bindings retain their selected execution
+path even when their mathematical meaning is known.
 
 The analysis retains all constructors in admission order separately from the
 items of the returned descriptor, and retains every helper instruction even

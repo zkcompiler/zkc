@@ -35,7 +35,7 @@ def digest(field, matrix):
 
 
 def source(field, parameters):
-    return f'''!M = tensor<?x?x!algebra.field<"{field}">>
+    return f'''!M = !algebra.field_matrix<"{field}">
 module {{ "protocol.module"() ({{
  "local.binding"() {{sym_name="check",contract="matrix.identity_check",arguments=["{field}"],implementation=""}} : ()->()
  local.func @Check(%m:!M)->i1 attributes {{logical_origin=["Check",[]]}} {{

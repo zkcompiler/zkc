@@ -14,8 +14,8 @@ for group in (False, True):
     provider = 'dalek' if group else 'arkworks'
     source = f'''!f = !algebra.field<"{scalar}">
 !r = {value}
-!v = tensor<?x!f>
-!a = tensor<?x!r>
+!v = !algebra.field_vector<"{scalar}">
+!a = !algebra.{"group_vector" if group else "field_vector"}<"{domain}">
 module {{ "protocol.module"() ({{
  "local.binding"() {{sym_name="map",contract="{mapping}",arguments=["{domain}"],implementation=""}} : ()->()
  "local.binding"() {{sym_name="reduce",contract="{reduction}",arguments=["{domain}"],implementation=""}} : ()->()

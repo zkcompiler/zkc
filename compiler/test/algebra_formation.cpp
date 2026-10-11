@@ -74,15 +74,36 @@ int main() {
                          " func.return %v : " + field.str() + " } }";
     parse("canonical field literal", source, llvm::StringRef(value) == "0");
   }
-  for (auto shape : {"2", "0", "?", "2x2", "1048577"}) {
-    std::string array =
-        "tensor<" + std::string(shape) + "x" + field.str() + ">";
+  for (auto length : {0, 2}) {
+    std::string array = "!algebra.field_array<\"bls12-381.fr\", " +
+                        std::to_string(length) + ">";
     std::string source =
         "module { func.func @extract(%a: " + array + ") -> " + field.str() +
         " { %v = \"algebra.array_at\"(%a) {index=0:i64} : (" + array + ") -> " +
         field.str() + " func.return %v : " + field.str() + " } }";
-    parse("static field array", source, llvm::StringRef(shape) == "2");
+    parse("field array index bounds", source, length == 2);
   }
+  auto pack = [&](llvm::StringRef name, llvm::StringRef inputs,
+                  llvm::StringRef operands, llvm::StringRef types,
+                  llvm::StringRef domain, unsigned length, bool valid) {
+    std::string array = "!algebra.field_array<\"" + domain.str() + "\", " +
+                        std::to_string(length) + ">";
+    std::string source = "module { func.func @pack(" + inputs.str() + ") -> " +
+                         array + " { %v = \"algebra.array_from_elements\"(" +
+                         operands.str() + ") : (" + types.str() + ") -> " +
+                         array + " func.return %v : " + array + " } }";
+    parse(name, source, valid);
+  };
+  pack("empty field array", "", "", "", "bls12-381.fr", 0, true);
+  std::string inputs = "%a: " + field.str() + ", %b: " + field.str();
+  std::string types = field.str() + ", " + field.str();
+  pack("ordered field elements", inputs, "%a, %b", types, "bls12-381.fr", 2,
+       true);
+  pack("wrong operand count", inputs, "%a, %b", types, "bls12-381.fr", 1,
+       false);
+  pack("wrong result field", inputs, "%a, %b", types, "bn254.fr", 2, false);
+  pack("mixed operand fields", "%a: " + field.str() + ", %b: " + other.str(),
+       "%a, %b", field.str() + ", " + other.str(), "bls12-381.fr", 2, false);
   if (context.getLoadedDialect("poly")) {
     llvm::errs() << "standalone algebra unexpectedly loaded Polynomial\n";
     ++failures;

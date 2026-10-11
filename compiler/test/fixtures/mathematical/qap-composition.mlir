@@ -1,11 +1,11 @@
 // Direct relation checking discloses the witness. This is a composition client.
 !f = !algebra.field<"bn254.fr">
-!v = tensor<?x!f>
-!m = tensor<?x?x!f>
+!v = !algebra.field_vector<"bn254.fr">
+!m = !algebra.field_matrix<"bn254.fr">
 !ms = !data.sequence<!m>
 !p = !poly.univariate<"bn254.fr">
 !g = !algebra.group<"bn254.g1">
-!gs = tensor<?x!g>
+!gs = !algebra.group_vector<"bn254.g1">
 !g2 = !algebra.group<"bn254.g2">
 !gt = !algebra.group<"bn254.gt">
 module { "protocol.module"() ({

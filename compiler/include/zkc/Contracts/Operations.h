@@ -12,6 +12,7 @@ namespace zkc::protocol {
 /// module are different algebras; neither purity nor a user attribute grants
 /// one of these facets. Applicability is checked on complete nominal ports.
 enum class ComputationAlgebra { FieldRing, GroupModule, Access };
+enum class ScalarIdentity { None, Zero, One, GroupIdentity };
 enum class AccessRule { Element, MatrixCell };
 struct ScalarLawContract {
   ComputationAlgebra algebra;
@@ -19,41 +20,36 @@ struct ScalarLawContract {
   bool commutative = false;
   /// No logical stop on admitted scalar inputs. Does not describe resources.
   bool total = false;
-};
-struct LaneLiftingContract {
-  llvm::StringRef rows;
-  /// Optional mixed scalar/lane kernel and the scalar port in that kernel.
-  llvm::StringRef mixed;
-  unsigned scalarOperand = 1;
-  /// Source scalar operand positions in the row kernel's native input order.
-  /// Group action uses (point, scalar), while scale_each uses (scalars,
-  /// points).
-  unsigned first = 0, second = 1;
-};
-struct ReductionContract {
-  llvm::StringRef direct;
-  std::optional<MathematicalIdentity> term;
-  llvm::StringRef contraction;
-  /// Source term operand positions in the contraction's native input order.
-  unsigned first = 0, second = 1;
-  llvm::StringRef matrixRow, matrixColumn;
+  ScalarIdentity leftIdentity = ScalarIdentity::None;
+  ScalarIdentity rightIdentity = ScalarIdentity::None;
+  ScalarIdentity annihilator = ScalarIdentity::None;
+  bool scalarAction = false;
+  /// Scalar action source ports are (group, associated scalar).
+  unsigned groupOperand = 0, scalarOperand = 1;
 };
 struct ComputationContract {
   llvm::StringRef key;
   MathematicalIdentity identity;
   ScalarLawContract law;
-  std::optional<LaneLiftingContract> lanes;
-  std::optional<ReductionContract> reduction;
   std::optional<AccessRule> access;
 };
-/// Closed vocabulary, without application authority. Unknown operations have
-/// no positive facet. Access facets are successful-value equations only.
+/// Declaration-owned meaning without an executable operation choice.
+struct MathematicalMeaning {
+  MathematicalIdentity identity;
+  ScalarLawContract law;
+  std::optional<AccessRule> access;
+};
+const MathematicalMeaning *mathematicalMeaning(MathematicalIdentity identity);
 const ComputationContract *computationContract(llvm::StringRef key);
-const ComputationContract *computationContract(MathematicalIdentity identity);
-/// Admit an exact logical application for mathematical replacement. Explicit
-/// implementation choices and physical representations are deliberately not
-/// replaceable. The native signature resolver checks nominal identities,
-/// associated scalar fields, parameters and installed domain requirements.
+/// Exact logical meaning, independent of physical availability. This does not
+/// validate a pinned implementation or authorize replacement of that choice.
+const ComputationContract *
+admitMathematicalMeaning(const BindingApplication &,
+                         llvm::ArrayRef<BoundType> inputs,
+                         llvm::ArrayRef<BoundType> outputs,
+                         llvm::ArrayRef<std::string> parameters = {});
+/// Exact meaning plus eligibility for mathematical replacement. Explicit
+/// implementations and physical representations remain nonreplaceable.
 const ComputationContract *
 admitComputationContract(const BindingApplication &,
                          llvm::ArrayRef<BoundType> inputs,
@@ -129,6 +125,7 @@ const CosetConvention *cosetConvention(llvm::StringRef field);
 /// Independently consumed semantic facets of a registered operation. Absence
 /// of a facet never grants purity, speculation, replay, or sampling authority.
 struct OperationContracts {
+  std::optional<ComputationContract> mathematical;
   std::optional<HistoryContract> history;
   std::optional<SamplingContract> sampling;
   std::optional<ObservationContract> observation;

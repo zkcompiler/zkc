@@ -1,6 +1,5 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Support/Refusal.h"
@@ -49,8 +48,11 @@ class R1CSSumcheckBuilder {
         field, array, {b.getNamedAttr("index", b.getI64IntegerAttr(index))});
   }
   Value array(ValueRange values) {
-    return value<tensor::FromElementsOp>(
-        RankedTensorType::get({int64_t(values.size())}, field), values);
+    return value<algebra::ArrayFromElementsOp>(
+        algebra::FieldArrayType::get(
+            field.getContext(), cast<algebra::FieldType>(field).getDomain(),
+            values.size()),
+        values);
   }
   Value equal(Value a, Value c) {
     return value<algebra::FieldEqualOp>(b.getI1Type(), {a, c});
@@ -139,9 +141,13 @@ public:
     unit = pir::ProtocolModuleOp::create(b, loc, pir::Profile::Protocol);
     unit.getBody().push_back(new Block());
     b.setInsertionPointToEnd(&unit.getBody().front());
-    Type assignment = RankedTensorType::get({relation.columns()}, field);
-    Type point = RankedTensorType::get({arity}, field);
-    Type table = RankedTensorType::get({rows}, field);
+    Type assignment = algebra::FieldArrayType::get(
+        field.getContext(), cast<algebra::FieldType>(field).getDomain(),
+        relation.columns());
+    Type point = algebra::FieldArrayType::get(
+        field.getContext(), cast<algebra::FieldType>(field).getDomain(), arity);
+    Type table = algebra::FieldArrayType::get(
+        field.getContext(), cast<algebra::FieldType>(field).getDomain(), rows);
     Type service =
         pir::ServiceReferenceType::get(b.getContext(), "random.bls12-381.fr/0");
     auto helper = func::FuncOp::create(
@@ -194,7 +200,10 @@ public:
           polynomial(1), current,
           {b.getNamedAttr("count", b.getI64IntegerAttr(arity - i - 1))});
       auto coefficients = value<poly::PolynomialCoefficientsOp>(
-          RankedTensorType::get({4}, field), round);
+          algebra::FieldArrayType::get(
+              field.getContext(), cast<algebra::FieldType>(field).getDomain(),
+              4),
+          round);
       auto received =
           exchange(coefficients, "P", "V", "round" + std::to_string(i));
       auto q = value<poly::CoefficientPolynomialOp>(polynomial(1), received);
@@ -313,7 +322,6 @@ Expected<OwningOpRef<ModuleOp>> authorR1CSSumcheck(const R1CS &relation,
   context.getOrLoadDialect<algebra::AlgebraDialect>();
   context.getOrLoadDialect<poly::PolynomialDialect>();
   context.getOrLoadDialect<func::FuncDialect>();
-  context.getOrLoadDialect<tensor::TensorDialect>();
   context.getOrLoadDialect<arith::ArithDialect>();
   auto module = R1CSSumcheckBuilder(relation, context).run();
   if (failed(verify(*module)))

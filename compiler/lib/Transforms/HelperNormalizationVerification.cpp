@@ -3,6 +3,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
+#include "zkc/Interfaces/Collection.h"
 #include <limits>
 #include <vector>
 
@@ -41,7 +42,7 @@ struct HelperNormalizationChecker::Implementation {
     if (isa<poly::PolynomialCoefficientsOp>(op)) {
       auto bound = degrees.find(inputs[0]);
       auto width =
-          cast<RankedTensorType>(op.getResult(0).getType()).getDimSize(0);
+          cast<algebra::FieldArrayType>(op.getResult(0).getType()).getLength();
       if (bound == degrees.end() || bound->second.size() != 1 ||
           bound->second[0] >= uint64_t(width))
         return false;
@@ -59,8 +60,9 @@ struct HelperNormalizationChecker::Implementation {
     else if (isa<poly::MultilinearPolynomialOp>(op))
       bound.assign(type.getArity(), 1);
     else if (isa<poly::CoefficientPolynomialOp, poly::InterpolateDomainOp>(op))
-      bound.push_back(
-          cast<RankedTensorType>(op.getOperand(0).getType()).getDimSize(0) - 1);
+      bound.push_back(cast<algebra::FieldArrayType>(op.getOperand(0).getType())
+                          .getLength() -
+                      1);
     else {
       auto first = degrees.find(inputs[0]);
       if (first == degrees.end())
@@ -149,13 +151,13 @@ struct HelperNormalizationChecker::Implementation {
         attributes.erase("site");
         auto name = op.getName().getStringRef();
         if (auto dim = dyn_cast<data::DimOp>(op)) {
-          auto type = dim.getInput().getType();
+          auto type = cast<CollectionTypeInterface>(dim.getInput().getType());
           auto axis = dim.getAxisAttr().getInt();
-          if (!type.isDynamicDim(axis)) {
+          if (auto extent = type.getStaticExtent(axis)) {
             name = data::IndexOp::getOperationName();
             attributes.clear();
-            attributes.set("value", builder.getStringAttr(
-                                        std::to_string(type.getDimSize(axis))));
+            attributes.set("value",
+                           builder.getStringAttr(std::to_string(*extent)));
             operands.clear();
           }
         }

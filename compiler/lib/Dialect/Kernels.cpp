@@ -36,9 +36,11 @@ LogicalResult verifyKernel(Operation *op, bool physical) {
 bool detail::isLogicalKernelData(Type type) {
   return isa<algebra::FieldType, poly::MultilinearType, poly::QuadraticType,
              poly::PointType, algebra::GroupType, poly::UnivariateType,
-             algebra::FixedVectorType, data::SequenceType, RankedTensorType,
-             pcs::ObjectType, oracle::OracleObjectType, local::CapabilityType,
-             local::VariantType>(type) ||
+             algebra::FixedVectorType, data::SequenceType,
+             algebra::FieldVectorType, algebra::GroupVectorType,
+             algebra::IndicesType, algebra::FieldMatrixType,
+             algebra::FieldArrayType, pcs::ObjectType, oracle::OracleObjectType,
+             local::CapabilityType, local::VariantType>(type) ||
          type.isSignlessInteger(1) || type.isUnsignedInteger(64);
 }
 

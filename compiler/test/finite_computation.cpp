@@ -20,7 +20,7 @@ using namespace zkc::test;
 namespace {
 const char *source = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : () -> ()
  "data.domain"() ({
@@ -492,50 +492,55 @@ int main(int argc, char **argv) {
     refusesIR(wrong, context, "finite-bound");
   });
   cases.run("dead helper polynomial observation refused", [&] {
-    auto wrong =
-        replace(fixture("total-state"), "   func.return",
-                R"mlir(   %array = tensor.from_elements %a,%b : tensor<2x!F>
-   %poly = "poly.from_coefficients"(%array) : (tensor<2x!F>)->!poly.polynomial<"bls12-381.fr",1>
-   %bad = "poly.coefficients"(%poly) : (!poly.polynomial<"bls12-381.fr",1>)->tensor<1x!F>
+    auto wrong = replace(
+        fixture("total-state"), "   func.return",
+        R"mlir(   %array = "algebra.array_from_elements"(%a,%b) : (!F,!F)-> !algebra.field_array<"bls12-381.fr", 2>
+   %poly = "poly.from_coefficients"(%array) : (!algebra.field_array<"bls12-381.fr", 2>)->!poly.polynomial<"bls12-381.fr",1>
+   %bad = "poly.coefficients"(%poly) : (!poly.polynomial<"bls12-381.fr",1>)->!algebra.field_array<"bls12-381.fr", 1>
    func.return)mlir");
     refusesIR(wrong, context, "polynomial-formation");
   });
   for (bool fits : {false, true})
-    cases.run(
-        fits ? "substituted polynomial observation fits"
-             : "dead substituted polynomial observation refused",
-        [&] {
-          std::string width = fits ? "2" : "1";
-          auto text = replace(
-              fixture("total-state"), " func.func private @step",
-              " func.func private "
-              "@observe(%p:!poly.polynomial<\"bls12-381.fr\",1>)->tensor<" +
-                  width +
-                  "x!F> {\n"
-                  "   %v = \"poly.coefficients\"(%p) : "
-                  "(!poly.polynomial<\"bls12-381.fr\",1>)->tensor<" +
-                  width +
-                  "x!F>\n"
-                  "   func.return %v : tensor<" +
-                  width + "x!F>\n }\n func.func private @step");
-          text =
-              replace(text, "   func.return %b,%v",
-                      "   %array = tensor.from_elements %a,%b : tensor<2x!F>\n"
-                      "   %poly = \"poly.from_coefficients\"(%array) : "
-                      "(tensor<2x!F>)->!poly.polynomial<\"bls12-381.fr\",1>\n"
-                      "   %dead = func.call @observe(%poly) : "
-                      "(!poly.polynomial<\"bls12-381.fr\",1>)->tensor<" +
-                          width +
-                          "x!F>\n"
-                          "   func.return %b,%v");
-          if (fits) {
-            auto module = parseSourceString<ModuleOp>(text, &context);
-            require(bool(module),
-                    "generic polynomial helper was prematurely refused");
-            pipeline(*module);
-          } else
-            refusesIR(text, context, "polynomial-formation");
-        });
+    cases.run(fits ? "substituted polynomial observation fits"
+                   : "dead substituted polynomial observation refused",
+              [&] {
+                std::string width = fits ? "2" : "1";
+                auto text =
+                    replace(fixture("total-state"), " func.func private @step",
+                            " func.func private "
+                            "@observe(%p:!poly.polynomial<\"bls12-381.fr\",1>)-"
+                            ">!algebra.field_array<\"bls12-381.fr\", " +
+                                width +
+                                "> {\n"
+                                "   %v = \"poly.coefficients\"(%p) : "
+                                "(!poly.polynomial<\"bls12-381.fr\",1>)->!"
+                                "algebra.field_array<\"bls12-381.fr\", " +
+                                width +
+                                ">\n"
+                                "   func.return %v : "
+                                "!algebra.field_array<\"bls12-381.fr\", " +
+                                width + ">\n }\n func.func private @step");
+                text = replace(
+                    text, "   func.return %b,%v",
+                    "   %array = \"algebra.array_from_elements\"(%a,%b) : "
+                    "(!F,!F)-> !algebra.field_array<\"bls12-381.fr\", 2>\n"
+                    "   %poly = \"poly.from_coefficients\"(%array) : "
+                    "(!algebra.field_array<\"bls12-381.fr\", "
+                    "2>)->!poly.polynomial<\"bls12-381.fr\",1>\n"
+                    "   %dead = func.call @observe(%poly) : "
+                    "(!poly.polynomial<\"bls12-381.fr\",1>)->!algebra.field_"
+                    "array<\"bls12-381.fr\", " +
+                        width +
+                        ">\n"
+                        "   func.return %b,%v");
+                if (fits) {
+                  auto module = parseSourceString<ModuleOp>(text, &context);
+                  require(bool(module),
+                          "generic polynomial helper was prematurely refused");
+                  pipeline(*module);
+                } else
+                  refusesIR(text, context, "polynomial-formation");
+              });
   cases.run("domain argument must have native encoding", [&] {
     auto text = replace(source, " \"local.binding\"()", R"mlir(
  "data.domain"() ({

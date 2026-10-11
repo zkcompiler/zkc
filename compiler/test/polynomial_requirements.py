@@ -196,7 +196,7 @@ for helper in (
 
 with case("unused invalid polynomial observation precedes folding and requirements"):
     marker = ' %coefficients0 = "poly.coefficients"'
-    extra = ' %unused = "poly.coefficients"(%round0) : (!poly.polynomial<"bls12-381.fr", 1>) -> tensor<2x!algebra.field<"bls12-381.fr">>\n'
+    extra = ' %unused = "poly.coefficients"(%round0) : (!poly.polynomial<"bls12-381.fr", 1>) -> !algebra.field_array<"bls12-381.fr", 2>\n'
     invalid = source.replace(marker, extra + marker)
     checked("{", program=invalid, refuses="polynomial-formation")
 
@@ -220,7 +220,7 @@ with case("fusion preparation choice is explicit in independent and compiled rep
 
 
 field = '!algebra.field<"bls12-381.fr">'
-vector = f'tensor<?x{field}>'
+vector = '!algebra.field_vector<"bls12-381.fr">'
 fusable = f'''
  "local.binding"() {{sym_name="vf_sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation=""}} : ()->()
  func.func private @vf_mul(%x:{field},%y:{field})->{field} {{

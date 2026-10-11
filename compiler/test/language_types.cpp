@@ -995,7 +995,7 @@ void nativeData() {
     run Demo=Run;
   )");
   must(compileEntry(selected));
-  require(selected.bytes().contains("tensor<?x!algebra.field"),
+  require(selected.bytes().contains("!algebra.field_vector<"),
           "dynamic vector did not retain native representation");
   mutation(selected, [](mlir::ModuleOp module) {
     mlir::Builder builder(module.getContext());

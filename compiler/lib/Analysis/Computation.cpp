@@ -28,11 +28,35 @@ Collection collection(Type type) {
     c.arguments.push_back(field.getDomain().str());
     if (c.family == "field_array")
       c.arguments.push_back(
-          std::to_string(cast<RankedTensorType>(type).getDimSize(0)));
+          std::to_string(cast<algebra::FieldArrayType>(type).getLength()));
   } else if (auto group = dyn_cast_if_present<algebra::GroupType>(c.element))
     c.arguments.push_back(group.getDomain().str());
   return c;
 }
+namespace {
+std::optional<protocol::BindingApplication> semanticBinding(Operation *op) {
+  auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
+  auto declaration =
+      reference
+          ? SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
+                op, reference)
+          : local::OperationBindingOp();
+  if (!declaration || !declaration.getContractAttr() ||
+      !declaration.getArgumentsAttr() || !declaration.getImplementationAttr())
+    return std::nullopt;
+  protocol::BindingApplication application{
+      declaration.getContract().str(),
+      {},
+      declaration.getImplementation().str()};
+  for (auto attr : declaration.getArguments()) {
+    auto value = dyn_cast<StringAttr>(attr);
+    if (!value)
+      return std::nullopt;
+    application.arguments.push_back(value.getValue().str());
+  }
+  return application;
+}
+} // namespace
 const protocol::ComputationContract *semantics(Operation *op) {
   if (!op || op->getNumRegions() || op->getNumResults() != 1)
     return nullptr;
@@ -43,12 +67,12 @@ const protocol::ComputationContract *semantics(Operation *op) {
       if (!is_contained(ArrayRef<StringRef>{"binding", "parameters", "site"},
                         attribute.getName().getValue()))
         return nullptr;
-    auto binding = protocol::operationBinding(op);
-    if (!binding) {
-      consumeError(binding.takeError());
+    // Binding admission validates the original physical constraint separately.
+    // Reading mathematical meaning must not re-enter physical resolution.
+    auto binding = semanticBinding(op);
+    if (!binding)
       return nullptr;
-    }
-    application = std::move(binding->application);
+    application = std::move(*binding);
     if (!protocol::operationSupportsContract(op->getName().getStringRef(),
                                              application.contract))
       return nullptr;
@@ -74,13 +98,24 @@ const protocol::ComputationContract *semantics(Operation *op) {
       parameters.push_back(constant.getValue().str());
     } else if (!op->getAttrs().empty())
       return nullptr;
-    auto mathematical = dyn_cast<MathematicalOpInterface>(op);
-    auto identity =
-        mathematical ? mathematical.getMathematicalIdentity() : std::nullopt;
-    auto *facet = identity ? protocol::computationContract(*identity) : nullptr;
-    if (!facet)
-      return nullptr;
-    application.contract = facet->key.str();
+    // The admitted total syntax has explicit logical signature adapters. A
+    // meaning lookup never chooses the first executable declaration sharing it.
+    if (isa<algebra::ConstantFieldOp>(op))
+      application.contract = "field.constant";
+    else if (isa<algebra::FieldAddOp>(op))
+      application.contract = "field.add";
+    else if (isa<algebra::SubtractFieldOp>(op))
+      application.contract = "field.sub";
+    else if (isa<algebra::FieldMultiplyOp>(op))
+      application.contract = "field.mul";
+    else if (isa<algebra::GroupAddOp>(op))
+      application.contract = "curve.add";
+    else if (isa<algebra::GroupScaleOp>(op))
+      application.contract = "curve.scale";
+    else if (isa<data::BoundedAtOp>(op))
+      application.contract = "vector.get";
+    else
+      application.contract = "matrix.get";
     auto result = protocol::encodeBoundType(op->getResult(0).getType(), false);
     if (!result) {
       consumeError(result.takeError());
@@ -103,8 +138,16 @@ const protocol::ComputationContract *semantics(Operation *op) {
   if (!read(op->getOperandTypes(), inputs) ||
       !read(op->getResultTypes(), outputs))
     return nullptr;
-  return protocol::admitComputationContract(application, inputs, outputs,
+  return protocol::admitMathematicalMeaning(application, inputs, outputs,
                                             parameters);
+}
+bool replaceable(Operation *op) {
+  if (!semantics(op))
+    return false;
+  if (!op->hasAttr("binding"))
+    return true;
+  auto binding = semanticBinding(op);
+  return binding && binding->implementation.empty();
 }
 std::optional<std::string> fieldConstant(Operation *op) {
   auto *facet = semantics(op);
@@ -182,16 +225,14 @@ struct PayloadAnalysis {
         break;
       auto left = constant(op->getOperand(0));
       auto right = constant(op->getOperand(1));
-      using I = MathematicalIdentity;
-      if ((facet->identity == I::FieldAdd ||
-           facet->identity == I::FieldSubtract) &&
-          right == "0")
+      auto identity = [](std::optional<StringRef> value,
+                         protocol::ScalarIdentity identity) {
+        return (identity == protocol::ScalarIdentity::Zero && value == "0") ||
+               (identity == protocol::ScalarIdentity::One && value == "1");
+      };
+      if (identity(right, facet->law.rightIdentity))
         value = op->getOperand(0);
-      else if (facet->identity == I::FieldAdd && left == "0")
-        value = op->getOperand(1);
-      else if (facet->identity == I::FieldMultiply && right == "1")
-        value = op->getOperand(0);
-      else if (facet->identity == I::FieldMultiply && left == "1")
+      else if (identity(left, facet->law.leftIdentity))
         value = op->getOperand(1);
       else
         break;
@@ -380,8 +421,7 @@ std::optional<Combine> combine(const ComputationFacts &facts) {
   Value result = facts.payload.transparent(view.result);
   auto *facet = facts.payload.contract(result);
   auto *op = result.getDefiningOp();
-  if (!facet || !facet->reduction || !facet->law.associative ||
-      op->getNumOperands() != 2)
+  if (!facet || !facet->law.associative || op->getNumOperands() != 2)
     return std::nullopt;
   Value accumulator = view.seeds.front().formal;
   Value left = facts.payload.transparent(op->getOperand(0));
@@ -401,28 +441,31 @@ std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
       }))
     return std::nullopt;
   auto c = facts.view.computation;
-  const auto &rule = *combined.facet->reduction;
   Reduction result;
-  result.combine = combined.facet->key.str();
+  result.combine = combined.facet->identity;
   result.accumulator = facts.view.seeds.front().formal;
   result.term = combined.term;
   result.combiner = combined.operation;
-  if (auto *direct = facts.access(combined.term);
-      direct && !rule.direct.empty()) {
-    result.kernel = rule.direct.str();
+  if (auto *direct = facts.access(combined.term)) {
     result.accesses.push_back(*direct);
   } else {
     Value term = facts.payload.transparent(combined.term);
     auto *facet = facts.payload.contract(term);
     auto *op = term.getDefiningOp();
-    if (!facet || !rule.term || facet->identity != *rule.term ||
-        op->getNumOperands() != 2)
+    if (!facet || op->getNumOperands() != 2)
       return std::nullopt;
-    auto *first = facts.access(op->getOperand(rule.first));
-    auto *second = facts.access(op->getOperand(rule.second));
+    // This bounded matcher recognizes two maintained term equations. Their
+    // recognition is independent of whether a realization is installed.
+    using I = MathematicalIdentity;
+    if (!((result.combine == I::FieldAdd &&
+           facet->identity == I::FieldMultiply) ||
+          (result.combine == I::GroupAdd && facet->identity == I::GroupScale)))
+      return std::nullopt;
+    auto *first = facts.access(op->getOperand(0));
+    auto *second = facts.access(op->getOperand(1));
     if (!first || !second)
       return std::nullopt;
-    result.kernel = rule.contraction.str();
+    result.termIdentity = facet->identity;
     result.accesses = {*first, *second};
   }
   for (unsigned i = 0; i < result.accesses.size(); ++i) {
@@ -435,18 +478,16 @@ std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
         return std::nullopt;
       continue;
     }
-    if (rule.matrixRow.empty() || result.accesses.size() != 2 ||
+    if (result.combine != MathematicalIdentity::FieldAdd ||
+        result.termIdentity != MathematicalIdentity::FieldMultiply ||
+        result.accesses.size() != 2 ||
         collection(c.signature.getInput(result.accesses[1 - i].input)).family !=
             "vector")
       return std::nullopt;
     result.demand = at.kind == AccessKind::MatrixRow ? DemandKind::MatrixRow
                                                      : DemandKind::MatrixColumn;
-    result.kernel = (result.demand == DemandKind::MatrixRow ? rule.matrixRow
-                                                            : rule.matrixColumn)
-                        .str();
     result.selectedIndex = at.selectedIndex;
-    if (i != 0)
-      std::swap(result.accesses[0], result.accesses[1]);
+    result.matrixOperand = i;
     break;
   }
   for (const auto &at : result.accesses)
@@ -489,8 +530,13 @@ analyzeLanes(Block &body, Type field, ValueRange laneArguments,
       result.lookups[value] = found->second;
       continue;
     }
-    if (op->getNumOperands() != 2 || !facet->lanes ||
-        facet->law.algebra != protocol::ComputationAlgebra::FieldRing)
+    if (op->getNumOperands() != 2 ||
+        facet->law.algebra != protocol::ComputationAlgebra::FieldRing ||
+        !is_contained(
+            ArrayRef<MathematicalIdentity>{MathematicalIdentity::FieldAdd,
+                                           MathematicalIdentity::FieldSubtract,
+                                           MathematicalIdentity::FieldMultiply},
+            facet->identity))
       return std::nullopt;
     Value left = op->getOperand(0), right = op->getOperand(1);
     if ((!scalars.contains(left) && !lanes.contains(left)) ||
@@ -719,6 +765,8 @@ public:
     append_range(result.results, body.back().getOperands());
     if (result.results.size() == 1)
       result.result = result.results.front();
+    result.replaceable = llvm::all_of(
+        result.payload, [](Operation *op) { return replaceable(op); });
     ComputationFacts facts(result, aligned);
     if (auto combined = combine(facts)) {
       result.reduction = analyzeReduction(facts, *combined);

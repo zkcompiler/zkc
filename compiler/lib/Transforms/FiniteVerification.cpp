@@ -87,7 +87,8 @@ class Reader {
     }
     auto col = collection(container.getType());
     if (col.family == "field_array")
-      return natural(cast<RankedTensorType>(container.getType()).getDimSize(0));
+      return natural(
+          cast<algebra::FieldArrayType>(container.getType()).getLength());
     return kernel(
         col.family == "matrix" ? "matrix.dimension" : col.family + ".length",
         container, index, col.arguments,
@@ -345,7 +346,9 @@ public:
         // An identity collect can return an existing vector without emitting
         // payload. Its ordered alternative starts with an empty container.
         (c.collect && cursor &&
-         isa<RankedTensorType>(c.signature.getResult(0)) &&
+         isa<algebra::FieldVectorType, algebra::GroupVectorType,
+             algebra::IndicesType, algebra::FieldArrayType>(
+             c.signature.getResult(0)) &&
          cursor->getName().getStringRef() !=
              protocol::boundOperationName("vector.empty"))) {
       // Semantic comparison is optional. Its bounded interpretation and
@@ -367,7 +370,9 @@ public:
       auto result = c.signature.getResult(0);
       auto col = collection(result);
       if (col.family == "field_array") {
-        result = RankedTensorType::get({ShapedType::kDynamic}, col.element);
+        result = algebra::FieldVectorType::get(
+            col.element.getContext(),
+            cast<algebra::FieldType>(col.element).getDomain());
         col = collection(result);
       }
       state.push_back(kernel(col.family + ".empty", {}, result, col.arguments));

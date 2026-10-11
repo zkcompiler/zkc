@@ -508,7 +508,7 @@ class Emitter {
             name = "algebra.group_equal";
             break;
           case MathematicalIdentity::ArrayFromElements:
-            name = "tensor.from_elements";
+            name = "algebra.array_from_elements";
             break;
           case MathematicalIdentity::ArrayAt:
             name = "algebra.array_at";

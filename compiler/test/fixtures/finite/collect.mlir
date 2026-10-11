@@ -1,5 +1,5 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : () -> ()
  "data.domain"() ({

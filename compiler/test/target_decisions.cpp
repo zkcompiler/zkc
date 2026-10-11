@@ -78,9 +78,9 @@ local.return %b : !R
         replaceText(text, "algebra.exec.vector_dot", "algebra.exec.group_msm");
   }
   std::string scalar = group ? "ristretto255.scalar" : "bls12-381.fr";
-  return "!V = tensor<?x!algebra.field<\"" + scalar + "\">>\n!A = " +
-         (group ? "tensor<?x!algebra.group<\"ristretto255.group\">>"
-                : "tensor<?x!algebra.field<\"bls12-381.fr\">>") +
+  return "!V = !algebra.field_vector<\"" + scalar + "\">\n!A = " +
+         (group ? "!algebra.group_vector<\"ristretto255.group\">"
+                : "!algebra.field_vector<\"bls12-381.fr\">") +
          "\n!R = " +
          (group ? "!algebra.group<\"ristretto255.group\">"
                 : "!algebra.field<\"bls12-381.fr\">") +

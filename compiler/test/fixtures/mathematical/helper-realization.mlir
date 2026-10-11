@@ -1,9 +1,9 @@
 !F = !algebra.field<"bls12-381.fr">
 !P = !poly.polynomial<"bls12-381.fr", 1>
-!A = tensor<2x!F>
+!A = !algebra.field_array<"bls12-381.fr", 2>
 module { "protocol.module"() ({
  func.func private @polynomial(%a:!F,%b:!F,%x:!F)->!F {
-   %v = "tensor.from_elements"(%a,%b) : (!F,!F)->!A
+   %v = "algebra.array_from_elements"(%a,%b) : (!F,!F)->!A
    %p = "poly.from_coefficients"(%v) : (!A)->!P
    %q = "poly.multiply"(%p,%p) : (!P,!P)->!P
    %r = "poly.evaluate"(%q,%x) : (!P,!F)->!F

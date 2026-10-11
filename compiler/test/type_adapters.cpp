@@ -6,6 +6,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/TypeAdapters.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -104,7 +105,7 @@ int main() {
   const std::string pcs = "multilinear.kzg.bls12-381/0";
   const std::string oracle = "rows.merkle-keccak256.koala-bear/0";
   const std::string transcript = "merlin3.bls12-381.fr64be/0";
-  auto dynamicVector = [](Type element) -> Type {
+  auto builtinTensor = [](Type element) -> Type {
     return RankedTensorType::get({ShapedType::kDynamic}, element);
   };
   // These expectations are independent of adapter dispatch and freeze the
@@ -112,17 +113,16 @@ int main() {
   std::vector<std::pair<std::string, Type>> nativeCases{
       {"bool", IntegerType::get(&context, 1)},
       {"index", IntegerType::get(&context, 64, IntegerType::Unsigned)},
-      {"indices",
-       dynamicVector(IntegerType::get(&context, 64, IntegerType::Unsigned))},
+      {"indices", zkc::algebra::IndicesType::get(&context)},
       {"field:" + field, zkc::algebra::FieldType::get(&context, field)},
-      {"matrix:" + field,
-       RankedTensorType::get({ShapedType::kDynamic, ShapedType::kDynamic},
-                             zkc::algebra::FieldType::get(&context, field))},
-      {"vector:" + field,
-       dynamicVector(zkc::algebra::FieldType::get(&context, field))},
+      {"matrix:" + field, zkc::algebra::FieldMatrixType::get(&context, field)},
+      {"vector:" + field, zkc::algebra::FieldVectorType::get(&context, field)},
       {"group:" + group, zkc::algebra::GroupType::get(&context, group)},
-      {"groups:" + group,
-       dynamicVector(zkc::algebra::GroupType::get(&context, group))},
+      {"groups:" + group, zkc::algebra::GroupVectorType::get(&context, group)},
+      {"field_array<" + field + ",0>",
+       zkc::algebra::FieldArrayType::get(&context, field, 0)},
+      {"field_array<" + field + ",4>",
+       zkc::algebra::FieldArrayType::get(&context, field, 4)},
       {"polynomial:" + field, zkc::poly::UnivariateType::get(&context, field)},
       {"table:" + field, zkc::poly::MultilinearType::get(&context, field)},
       {"point:" + field, zkc::poly::PointType::get(&context, field)},
@@ -173,8 +173,16 @@ int main() {
               "native carrier changed");
       require(take(encodeBoundType(native, false)) == bound,
               "native encoder changed identity");
+      std::string printed;
+      llvm::raw_string_ostream(printed) << native;
+      require(parseType(printed, &context) == native,
+              "native parser/printer changed identity");
+      if (isa<zkc::algebra::FieldVectorType, zkc::algebra::GroupVectorType,
+              zkc::algebra::IndicesType, zkc::algebra::FieldMatrixType,
+              zkc::algebra::FieldArrayType>(native))
+        roundTrip(context, take(defaultRepresentation(bound)), true);
     });
-    if (spelling == "bool" || spelling == "index" || spelling == "indices")
+    if (spelling == "bool" || spelling == "index")
       continue;
     for (bool registered : {false, true})
       cases.run(
@@ -194,7 +202,7 @@ int main() {
   }
   cases.run("builtin carriers need no zkc dialect", [&] {
     MLIRContext fresh;
-    for (StringRef kind : {"bool", "index", "indices"})
+    for (StringRef kind : {"bool", "index"})
       roundTrip(fresh, take(parseBoundType(kind, false)), false);
   });
   cases.run("loaded namespace without registered type", [&] {
@@ -261,7 +269,7 @@ int main() {
       {"unsigned boolean",
        IntegerType::get(&context, 1, IntegerType::Unsigned)},
       {"MLIR index", IndexType::get(&context)},
-      {"boolean tensor", dynamicVector(IntegerType::get(&context, 1))},
+      {"boolean tensor", builtinTensor(IntegerType::get(&context, 1))},
   };
   for (const auto &invalid : invalidCarriers)
     cases.run("wrong carrier: " + invalid.first, [&] {
@@ -273,25 +281,12 @@ int main() {
         Type(zkc::algebra::FieldType::get(&context, field)),
         Type(zkc::algebra::GroupType::get(&context, group))}) {
     for (const auto &shape : std::vector<SmallVector<int64_t>>{
-             {}, {0}, {2}, {ShapedType::kDynamic, ShapedType::kDynamic}})
-      cases.run("noncanonical tensor rank or dimension", [&] {
-        if ((shape == SmallVector<int64_t>{0} ||
-             shape == SmallVector<int64_t>{2}) &&
-            isa<zkc::algebra::FieldType>(element)) {
-          auto encoded =
-              encodeBoundType(RankedTensorType::get(shape, element), false);
-          require(bool(encoded) && encoded->kind == "field_array",
-                  "static field array");
-          return;
-        }
-        if (shape == SmallVector<int64_t>{ShapedType::kDynamic,
-                                          ShapedType::kDynamic} &&
-            isa<zkc::algebra::FieldType>(element)) {
-          auto encoded =
-              encodeBoundType(RankedTensorType::get(shape, element), false);
-          require(bool(encoded) && encoded->kind == "matrix", "dynamic matrix");
-          return;
-        }
+             {},
+             {0},
+             {2},
+             {ShapedType::kDynamic},
+             {ShapedType::kDynamic, ShapedType::kDynamic}})
+      cases.run("builtin tensor has no logical collection alias", [&] {
         refuses(encodeBoundType(RankedTensorType::get(shape, element), false),
                 "binding-type");
       });
@@ -309,6 +304,28 @@ int main() {
   }
   auto logical = zkc::algebra::FieldType::get(&context, field);
   auto physical = zkc::plan::DataType::get(&context, logical, "arkworks.fr/0");
+  cases.run("field-array domain and length identity", [&] {
+    auto empty = zkc::algebra::FieldArrayType::get(&context, field, 0);
+    auto array = zkc::algebra::FieldArrayType::get(&context, field, 4);
+    require(empty.getLength() == 0 && array.getLength() == 4 &&
+                array.getDomain() == field && array.getElementType() == logical,
+            "field-array domain, element or length changed");
+    require(Type(array) !=
+                    zkc::algebra::FieldVectorType::get(&context, field) &&
+                Type(array) !=
+                    zkc::algebra::FixedVectorType::get(&context, logical, 4) &&
+                Type(array) != zkc::data::SequenceType::get(&context, logical),
+            "distinct collection families acquired the same native type");
+    ScopedDiagnosticHandler diagnostics(&context,
+                                        [](Diagnostic &) { return success(); });
+    auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
+    require(succeeded(zkc::algebra::FieldArrayType::verify(emit, field, 0)) &&
+                succeeded(
+                    zkc::algebra::FieldArrayType::verify(emit, field, 1048576)),
+            "admitted field-array length boundary refused");
+    require(failed(zkc::algebra::FieldArrayType::verify(emit, field, 1048577)),
+            "field-array length limit ignored");
+  });
   cases.run("fixed-vector native type verifier", [&] {
     ScopedDiagnosticHandler diagnostics(&context,
                                         [](Diagnostic &) { return success(); });
@@ -344,7 +361,7 @@ int main() {
     refuses(encodeBoundType(zkc::plan::DataType::get(&context, tensor,
                                                      "arkworks.fr-vector/0"),
                             true),
-            "binding-representation");
+            "binding-type");
   });
   for (StringRef representation : {"", "uninstalled", "arkworks.g1/0"})
     cases.run(Twine("wrong physical representation: ") + representation, [&] {

@@ -116,8 +116,8 @@ LogicalResult DomainElementsOp::verify() {
 LogicalResult DomainIndicesOp::verify() {
   auto type = getInput().getType();
   auto axis = getAxisAttr().getInt();
-  auto tensor = dyn_cast<RankedTensorType>(type);
-  if (axis < 0 || (tensor ? axis >= tensor.getRank() : axis != 0) ||
+  auto collection = dyn_cast<CollectionTypeInterface>(type);
+  if (!collection || axis < 0 || uint64_t(axis) >= collection.getRank() ||
       (!finite::elementType(type) && !finite::elementType(type, true)))
     return refuse(*this, "indices requires a valid explicit collection axis");
   return constructor(*this, {indexType(getContext())}, {"axis"});

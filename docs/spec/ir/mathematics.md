@@ -15,11 +15,14 @@ may produce it; protocol inputs, outputs, messages and executable bindings may
 not contain it. Helper preparation exposes constructors before degree analysis.
 It is distinct from the existing normalized concrete `!poly.univariate` object.
 
-Concrete data uses `tensor<Nx!algebra.field<"F">>`, with no encoding attribute,
-rank one and `0 ≤ N ≤ 1048576`. Logical encoding is `field_array<F,N>`.
-This shape is part of complete type identity through physical selection.
-Dynamic field vectors retain their existing meaning. A static array does not
-denote a polynomial until an operation supplies that interpretation.
+Concrete field arrays use `!algebra.field_array<"F", N>`, with exact nominal
+field identity and `0 ≤ N ≤ 1048576`. Logical encoding remains
+`field_array<F,N>`; field and length survive physical selection. The type has
+rank one and an intrinsic extent of `N`. A field vector with proven length `N`
+retains `!algebra.field_vector<"F">` and cannot substitute for a field array.
+Builtin tensors have no compatibility alias. Source `[T; N]` and
+`!algebra.fixed_vector<T, N>` remain distinct. A field array does not denote a
+polynomial until an operation supplies that interpretation.
 
 The following flat operations are total on their verified types:
 
@@ -28,7 +31,7 @@ The following flat operations are total on their verified types:
 | `algebra.group_identity` | No operands; identity of the nominal result group with scalar action |
 | `algebra.constant` | Canonical field literal string to scalar |
 | `algebra.field_subtract` | Two scalars in one field to their difference |
-| `tensor.from_elements` | Exactly `N` field operands to the static array |
+| `algebra.array_from_elements` | Exactly `N` ordered operands of field `F` to `!algebra.field_array<"F", N>`; empty construction is allowed |
 | `algebra.array_at` | Static array and constant `index` attribute; `0 ≤ index < N` |
 | `poly.constant` | Scalar to a polynomial of the declared arity |
 | `poly.from_coefficients` | Positive array to univariate, ascending powers; trailing zeros allowed |
@@ -46,7 +49,12 @@ Every operand and result of a mathematical polynomial operation uses one field.
 An empty fixing prefix and a zero suffix count are identities. Fixing all axes
 produces arity zero, or a length-one table. Zero-length data arrays are admitted,
 but polynomial constructors and coefficient observations require positive arrays.
-Coefficients pad with zeros to their static output length.
+Coefficients pad with zeros to their static output length. Array packing retains
+the `ArrayFromElements` mathematical identity and depends on every operand in
+order. Its executable recipe uses vector construction followed by
+`field_array.from_vector`; static access uses `field_array.at`. This changes
+neither the native carrier nor the field-array codec below. The structural
+collection interface grants no polynomial interpretation or operation admission.
 
 `points` contains 1–64 distinct canonical field literal strings. Its order is
 observable. There is no implied FFT, root or coset capability: a coset client
@@ -205,7 +213,7 @@ echoed and hashed in its report. The raw input digest records the supplied bytes
 The retained original module defines one private, flat recipe from subject
 field scalars or positive static field arrays using MLE, polynomial constants,
 addition and multiplication. The closed recipe vocabulary also includes field
-constants/add/multiply/subtract, static array extraction and `tensor.from_elements`.
+constants/add/multiply/subtract, static array extraction and `algebra.array_from_elements`.
 Subject lengths need not equal the Boolean domain size; each actual recipe
 argument and terminal subject must still have exactly the original subject type. The
 recipe has positive arity and per-axis degree below 64.

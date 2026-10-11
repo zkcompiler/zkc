@@ -1,6 +1,6 @@
 !f = !algebra.field<"bls12-381.fr">
-!m = tensor<?x?x!f>
-!v = tensor<?x!f>
+!m = !algebra.field_matrix<"bls12-381.fr">
+!v = !algebra.field_vector<"bls12-381.fr">
 !ms = !data.sequence<!m>
 !vs = !data.sequence<!v>
 module { "protocol.module"() ({

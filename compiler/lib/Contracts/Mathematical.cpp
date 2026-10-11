@@ -1,44 +1,9 @@
-#include "zkc/Contracts/Mathematical.h"
+#include "zkc/Contracts/Operations.h"
 #include "llvm/ADT/STLExtras.h"
 namespace zkc {
-llvm::ArrayRef<MathematicalIntrinsic> mathematicalIntrinsics() {
-  using I = MathematicalIdentity;
-  using D = MathematicalIntrinsic::Domain;
-  static const MathematicalIntrinsic values[] = {
-      {"container.at", I::ContainerAt, D::Collection},
-      {"matrix.at", I::MatrixAt, D::Collection},
-      {"index.constant", I::IndexConstant, D::Index, 1},
-      {"index.equal", I::IndexEqual, D::Index, 0, false, true},
-      {"index.less", I::IndexLess, D::Index, 0, false, true},
-      {"field.add", I::FieldAdd, D::Field, 0, false, true},
-      {"field.sub", I::FieldSubtract, D::Field, 0, false, true},
-      {"field.mul", I::FieldMultiply, D::Field, 0, false, true},
-      {"field.equal", I::FieldEqual, D::Field, 0, false, true},
-      {"curve.identity", I::GroupIdentity, D::Group, 0, false, true},
-      {"curve.add", I::GroupAdd, D::Group, 0, false, true},
-      {"curve.scale", I::GroupScale, D::Group, 0, false, true},
-      {"curve.equal", I::GroupEqual, D::Group, 0, false, true},
-      {"bool.equal", I::BooleanEqual, D::Boolean, 0, false, true},
-      {"bool.and", I::BooleanAnd, D::Boolean},
-      {"bool.or", I::BooleanOr, D::Boolean},
-      {"bool.xor", I::BooleanXor, D::Boolean},
-      {"array.pack", I::ArrayFromElements, D::Field, 1},
-      {"array.at", I::ArrayAt, D::Field, 2},
-      {"poly.constant", I::PolynomialConstant, D::Field, 1},
-      {"poly.from_coefficients", I::PolynomialFromCoefficients, D::Field, 1},
-      {"poly.mle", I::PolynomialMLE, D::Field, 1},
-      {"poly.add", I::PolynomialAdd, D::Field, 1},
-      {"poly.multiply", I::PolynomialMultiply, D::Field, 1},
-      {"poly.fix", I::PolynomialFix, D::Field, 2},
-      {"poly.sum_suffix", I::PolynomialSum, D::Field, 2},
-      {"poly.evaluate", I::PolynomialEvaluate, D::Field, 1},
-      {"poly.coefficients", I::PolynomialCoefficients, D::Field, 1},
-      {"poly.evaluate_domain", I::PolynomialEvaluateDomain, D::Field, 0, true},
-      {"poly.interpolate", I::PolynomialInterpolate, D::Field, 0, true},
-      {"poly.fix_table", I::PolynomialFixTable, D::Field, 2},
-  };
-  return values;
-}
+#define ZKC_MATHEMATICAL_INTRINSICS
+#include "zkc/Contracts/Mathematical.inc"
+#undef ZKC_MATHEMATICAL_INTRINSICS
 const MathematicalIntrinsic *mathematicalIntrinsic(llvm::StringRef name) {
   auto values = mathematicalIntrinsics();
   auto found = llvm::find_if(
@@ -46,3 +11,9 @@ const MathematicalIntrinsic *mathematicalIntrinsic(llvm::StringRef name) {
   return found == values.end() ? nullptr : &*found;
 }
 } // namespace zkc
+
+namespace zkc::protocol {
+#define ZKC_MATHEMATICAL_LAWS
+#include "zkc/Contracts/Mathematical.inc"
+#undef ZKC_MATHEMATICAL_LAWS
+} // namespace zkc::protocol

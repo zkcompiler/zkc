@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
   cases.run("required map capacity is diagnosed without publishing", [&] {
     std::string text = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  func.func private @chain(%x:!F)->!F {
 )mlir";
@@ -408,7 +408,7 @@ module { "protocol.module"() ({
   auto chain = [](unsigned steps, StringRef operation, bool deepRight,
                   unsigned calls = 1) {
     std::string text = R"(!F = !algebra.field<"koala-bear">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"koala-bear">
 module { "protocol.module"() ({
  func.func private @chain(%x:!F)->!F {
    %v0 = "algebra.field_add"(%x,%x) : (!F,!F)->!F
@@ -505,7 +505,7 @@ module { "protocol.module"() ({
   // adds its multiplication (4).
   auto budgeted = [](unsigned dead) {
     std::string text = R"(!F = !algebra.field<"koala-bear">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"koala-bear">
 module { "protocol.module"() ({
  func.func private @square(%x:!F)->!F {
    %r = "algebra.field_multiply"(%x,%x) : (!F,!F)->!F
@@ -573,7 +573,7 @@ module { "protocol.module"() ({
   cases.run("preparation callables inside an affine local body", [&] {
     constexpr StringLiteral body = R"(!s = !local.capability<"rng:bls12-381.fr">
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
  func.func private @twice(%x:!F)->!F {
    %r = "algebra.field_add"(%x,%x) : (!F,!F)->!F

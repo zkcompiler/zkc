@@ -17,86 +17,17 @@ const Kernel *findKernel(llvm::StringRef key) {
   return found == catalog.end() ? nullptr : found->second;
 }
 } // namespace
-namespace {
-llvm::ArrayRef<ComputationContract> computationContracts() {
-  using I = MathematicalIdentity;
-  using A = ComputationAlgebra;
-  // These are exact installed equations, not name-prefix classification.
-  // Group operations require the installed ScalarAction contract; generic
-  // groups and noncommutative operations receive no field-ring authority.
-  static const ComputationContract values[] = {
-      {"field.constant",
-       I::FieldConstant,
-       {A::FieldRing, false, false, true},
-       std::nullopt,
-       std::nullopt,
-       std::nullopt},
-      {"field.add",
-       I::FieldAdd,
-       {A::FieldRing, true, true, true},
-       LaneLiftingContract{"vector.add", "", 1},
-       ReductionContract{"vector.sum", I::FieldMultiply, "vector.dot", 0, 1,
-                         "matrix.row_dot", "matrix.column_dot"},
-       std::nullopt},
-      {"field.sub",
-       I::FieldSubtract,
-       {A::FieldRing, false, false, true},
-       LaneLiftingContract{"vector.sub", "", 1},
-       std::nullopt,
-       std::nullopt},
-      {"field.mul",
-       I::FieldMultiply,
-       {A::FieldRing, true, true, true},
-       LaneLiftingContract{"vector.mul", "vector.scale", 1},
-       ReductionContract{"vector.product", std::nullopt, "", 0, 1, "", ""},
-       std::nullopt},
-      {"curve.add",
-       I::GroupAdd,
-       {A::GroupModule, true, true, true},
-       LaneLiftingContract{"curve.vector_add", "", 1},
-       ReductionContract{"", I::GroupScale, "curve.msm", 1, 0, "", ""},
-       std::nullopt},
-      {"curve.scale",
-       I::GroupScale,
-       {A::GroupModule, false, false, true},
-       LaneLiftingContract{"curve.scale_each", "", 1, 1, 0},
-       std::nullopt,
-       std::nullopt},
-      {"vector.get",
-       I::ContainerAt,
-       {A::Access, false, false, false},
-       std::nullopt,
-       std::nullopt,
-       AccessRule::Element},
-      {"matrix.get",
-       I::MatrixAt,
-       {A::Access, false, false, false},
-       std::nullopt,
-       std::nullopt,
-       AccessRule::MatrixCell},
-  };
-  return values;
-}
-} // namespace
 const ComputationContract *computationContract(llvm::StringRef key) {
-  for (const auto &facet : computationContracts())
-    if (facet.key == key && findKernel(key))
-      return &facet;
-  return nullptr;
+  const auto *facets = operationContracts(key);
+  return facets && facets->mathematical ? &*facets->mathematical : nullptr;
 }
-const ComputationContract *computationContract(MathematicalIdentity identity) {
-  for (const auto &facet : computationContracts())
-    if (facet.identity == identity && findKernel(facet.key))
-      return &facet;
-  return nullptr;
-}
-const ComputationContract *admitComputationContract(
+const ComputationContract *admitMathematicalMeaning(
     const BindingApplication &application, llvm::ArrayRef<BoundType> inputs,
     llvm::ArrayRef<BoundType> outputs, llvm::ArrayRef<std::string> parameters) {
   auto *facet = computationContract(application.contract);
-  if (!facet || !application.implementation.empty())
+  if (!facet)
     return nullptr;
-  auto signature = resolveBinding(application, false);
+  auto signature = resolveLogicalBinding(application);
   if (!signature) {
     llvm::consumeError(signature.takeError());
     return nullptr;
@@ -109,6 +40,13 @@ const ComputationContract *admitComputationContract(
     return nullptr;
   }
   return facet;
+}
+const ComputationContract *admitComputationContract(
+    const BindingApplication &application, llvm::ArrayRef<BoundType> inputs,
+    llvm::ArrayRef<BoundType> outputs, llvm::ArrayRef<std::string> parameters) {
+  if (!application.implementation.empty())
+    return nullptr;
+  return admitMathematicalMeaning(application, inputs, outputs, parameters);
 }
 bool isHistoryTransition(llvm::StringRef key) {
   const auto *contracts = operationContracts(key);

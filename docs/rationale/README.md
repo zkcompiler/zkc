@@ -11,7 +11,7 @@ the alternatives, the reason for choosing, and the cost that remains.
 | Why keep mathematics in ordinary SSA? | [Mathematical IR](mathematical-ir.md) |
 | Why check actual transformation results? | [Validation](validation.md) |
 | Why must projection preserve explicit communication? | [Participant generation](participant-generation.md) |
-| Why use sequences alongside numeric tensors? | [Nested data](nested-sequences.md) |
+| Why use sequences alongside numeric collections? | [Nested data](nested-sequences.md) |
 | Why distinguish artifact identity, live resources and authority? | [Identity](identity-purposes.md) |
 
 ## Keep a record only when it helps

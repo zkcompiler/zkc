@@ -369,7 +369,7 @@ module { "protocol.module"() ({
 void importedProduct(MLIRContext &context) {
   auto imported = mlir::parseSourceString<ModuleOp>(R"(
 !F = !algebra.field<"koala-bear">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"koala-bear">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="product",contract="vector.product",arguments=["koala-bear"],implementation=""} : ()->()
  "local.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()

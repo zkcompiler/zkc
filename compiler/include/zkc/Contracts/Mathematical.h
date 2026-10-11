@@ -6,44 +6,10 @@
 namespace zkc {
 /// Logical identities shared by source checking and admitted IR interfaces.
 /// This vocabulary does not select an operation implementation or a backend.
-enum class MathematicalIdentity {
-  FieldAdd,
-  FieldMultiply,
-  FieldEqual,
-  GroupIdentity,
-  GroupAdd,
-  GroupScale,
-  GroupEqual,
-  Pairing,
-  IndexConstant,
-  IndexEqual,
-  IndexLess,
-  ContainerAt,
-  MatrixAt,
-  BooleanConstant,
-  BooleanAnd,
-  BooleanOr,
-  BooleanXor,
-  BooleanEqual,
-  BooleanNotEqual,
-  Select,
-  FieldConstant,
-  FieldSubtract,
-  ArrayFromElements,
-  ArrayAt,
-  PolynomialConstant,
-  PolynomialFromCoefficients,
-  PolynomialMLE,
-  PolynomialAdd,
-  PolynomialMultiply,
-  PolynomialFix,
-  PolynomialSum,
-  PolynomialEvaluate,
-  PolynomialCoefficients,
-  PolynomialEvaluateDomain,
-  PolynomialInterpolate,
-  PolynomialFixTable
-};
+#define ZKC_MATHEMATICAL_IDENTITIES
+#include "zkc/Contracts/Mathematical.inc"
+#undef ZKC_MATHEMATICAL_IDENTITIES
+llvm::StringRef mathematicalIdentityName(MathematicalIdentity);
 /// Library authoring hooks for total mathematics. Field operations have a
 /// field root followed by naturals; Boolean operations have no static roots.
 /// Domain points are canonical field literals, independently checked by IR.

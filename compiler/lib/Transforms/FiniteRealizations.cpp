@@ -74,7 +74,7 @@ class Realizer {
   Value length(Value input, unsigned axis = 0) {
     auto col = collection(input.getType());
     if (col.family == "field_array")
-      return number(cast<RankedTensorType>(input.getType()).getDimSize(0));
+      return number(cast<algebra::FieldArrayType>(input.getType()).getLength());
     return emit(
         col.family == "matrix" ? "matrix.dimension" : col.family + ".length",
         input, index, col.arguments,
@@ -382,7 +382,7 @@ public:
       return success();
     }
     if (selection.kind == mathematical::RealizationKind::Reduction) {
-      const auto &reduction = selection.view->reduction;
+      const auto &reduction = selection.reduction;
       SmallVector<Value> inputs;
       for (unsigned position : reduction->inputs)
         inputs.push_back(entry->getArgument(position));
@@ -390,11 +390,12 @@ public:
         inputs.push_back(entry->getArgument(*reduction->selectedIndex));
       auto resultType = computation.signature.getResult(0);
       auto col = collection(
-          inputs[reduction->kernel == "curve.msm" ? 1 : 0].getType());
+          entry->getArgument(reduction->staticSourceInput).getType());
       Value reduced =
-          emit(reduction->kernel, inputs, resultType, col.arguments);
-      Value result = emit(reduction->combine, {initial.front(), reduced},
-                          resultType, col.arguments);
+          emit(reduction->recipe->target, inputs, resultType, col.arguments);
+      Value result =
+          emit(reduction->recipe->combiner, {initial.front(), reduced},
+               resultType, col.arguments);
       local::ReturnOp::create(builder, loc, result);
       if (!computation.total)
         declaration->erase();
@@ -420,7 +421,9 @@ public:
       // Fixed arrays are collected in their corresponding dynamic field vector.
       Type storage =
           col.family == "field_array"
-              ? Type(RankedTensorType::get({ShapedType::kDynamic}, col.element))
+              ? Type(algebra::FieldVectorType::get(
+                    col.element.getContext(),
+                    cast<algebra::FieldType>(col.element).getDomain()))
               : result;
       col = collection(storage);
       initial.push_back(

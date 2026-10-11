@@ -1,5 +1,4 @@
 #include "../lib/Transforms/MathematicalSupport.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
@@ -179,10 +178,10 @@ int main(int argc, char **argv) {
             named,
         "changed operand escaped independent recipe verification");
   });
-  cases.run("static dimension discards unused tensor construction", [&] {
+  cases.run("static dimension discards unused field-array construction", [&] {
     auto text = replace(fixture, " local.realize @realized", R"(
  func.func private @dimension(%a:!F,%b:!F)->ui64 {
-   %v = "tensor.from_elements"(%a,%b):(!F,!F)->!A
+   %v = "algebra.array_from_elements"(%a,%b):(!F,!F)->!A
    %n = "data.dim"(%v){axis=0:i64}:(!A)->ui64
    func.return %n:ui64
  }
@@ -197,7 +196,7 @@ int main(int argc, char **argv) {
         return;
       auto &block = function.getBody().front();
       require(std::distance(block.begin(), block.end()) == 2,
-              "static dimension emitted tensor construction");
+              "static dimension emitted field-array construction");
       require(block.front().getName().getStringRef() ==
                   "algebra.exec.index_constant",
               "dimension is not a constant");
@@ -210,9 +209,13 @@ int main(int argc, char **argv) {
     while (!block.empty())
       block.back().erase();
     OpBuilder builder(&block, block.end());
-    auto array = tensor::FromElementsOp::create(
+    auto array = algebra::ArrayFromElementsOp::create(
         builder, function.getLoc(),
-        RankedTensorType::get({2}, block.getArgument(0).getType()),
+        algebra::FieldArrayType::get(
+            &context,
+            cast<algebra::FieldType>(block.getArgument(0).getType())
+                .getDomain(),
+            2),
         ValueRange{block.getArgument(0), block.getArgument(1)});
     auto at = algebra::ArrayAtOp::create(
         builder, function.getLoc(), block.getArgument(0).getType(),

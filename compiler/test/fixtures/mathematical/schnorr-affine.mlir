@@ -6,10 +6,10 @@ module {
 "local.binding"() {sym_name="commit", contract="curve.commit", arguments=["bls12-381.g1"], implementation=""} : () -> ()
 "local.binding"() {sym_name="respond", contract="curve.response", arguments=["bls12-381.fr"], implementation=""} : () -> ()
 local.func @nonce_commit(%g: !algebra.group<"bls12-381.g1">, %nonce: !local.capability<"nonce:bls12-381.fr">) -> (!algebra.group<"bls12-381.g1">, !local.capability<"nonce:bls12-381.fr">) attributes {logical_origin=["nonce_commit", []]} {
-%empty = "algebra.exec.group_empty"() {binding=@empty, parameters=[], site="empty"} : () -> tensor<?x!algebra.group<"bls12-381.g1">>
-%bases = "algebra.exec.group_append"(%empty, %g) {binding=@append, parameters=[], site="append"} : (tensor<?x!algebra.group<"bls12-381.g1">>, !algebra.group<"bls12-381.g1">) -> tensor<?x!algebra.group<"bls12-381.g1">>
-%ready:2 = "crypto.exec.curve_commit"(%bases, %nonce) {binding=@commit, parameters=[], site="commit"} : (tensor<?x!algebra.group<"bls12-381.g1">>, !local.capability<"nonce:bls12-381.fr">) -> (tensor<?x!algebra.group<"bls12-381.g1">>, !local.capability<"nonce:bls12-381.fr">)
-%r = "algebra.exec.group_at"(%ready#0) {binding=@at, parameters=["0"], site="at"} : (tensor<?x!algebra.group<"bls12-381.g1">>) -> !algebra.group<"bls12-381.g1">
+%empty = "algebra.exec.group_empty"() {binding=@empty, parameters=[], site="empty"} : () -> !algebra.group_vector<"bls12-381.g1">
+%bases = "algebra.exec.group_append"(%empty, %g) {binding=@append, parameters=[], site="append"} : (!algebra.group_vector<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> !algebra.group_vector<"bls12-381.g1">
+%ready:2 = "crypto.exec.curve_commit"(%bases, %nonce) {binding=@commit, parameters=[], site="commit"} : (!algebra.group_vector<"bls12-381.g1">, !local.capability<"nonce:bls12-381.fr">) -> (!algebra.group_vector<"bls12-381.g1">, !local.capability<"nonce:bls12-381.fr">)
+%r = "algebra.exec.group_at"(%ready#0) {binding=@at, parameters=["0"], site="at"} : (!algebra.group_vector<"bls12-381.g1">) -> !algebra.group<"bls12-381.g1">
 local.return %r, %ready#1 : !algebra.group<"bls12-381.g1">, !local.capability<"nonce:bls12-381.fr">
 }
 local.func @nonce_respond(%x: !algebra.field<"bls12-381.fr">, %c: !algebra.field<"bls12-381.fr">, %nonce: !local.capability<"nonce:bls12-381.fr">) -> !algebra.field<"bls12-381.fr"> attributes {logical_origin=["nonce_respond", []]} {
