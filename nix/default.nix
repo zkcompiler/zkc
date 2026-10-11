@@ -1,4 +1,8 @@
-{ inputs, system }:
+{
+  inputs,
+  system,
+  compilerCache ? null,
+}:
 let
   pkgs = import inputs.nixpkgs {
     inherit system;
@@ -36,12 +40,22 @@ let
   pythonTools = pythonSet.mkVirtualEnv "zkc-python-tools" workspace.deps.all;
   environment = import ./environment.nix { inherit pkgs llvm python; };
   sources = import ./sources.nix { inherit lib; };
-  compiler = pkgs.callPackage ./compiler.nix {
-    inherit llvm utf8proc;
-    source = sources.compiler;
-    stdenv = llvm.stdenv;
-    python3 = python;
-  };
+  compilationCache = import ./compilation-cache.nix (
+    {
+      inherit pkgs;
+      stdenv = llvm.stdenv;
+      enabled = compilerCache != null;
+    }
+    // (if compilerCache == null then { } else compilerCache)
+  );
+  compiler = compilationCache.wrap "compiler" (
+    pkgs.callPackage ./compiler.nix {
+      inherit llvm utf8proc;
+      source = sources.compiler;
+      stdenv = compilationCache.stdenv;
+      python3 = python;
+    }
+  );
   compilerChecks = compiler.override {
     withTests = true;
     source = sources.compilerTests;
@@ -152,6 +166,25 @@ in
       arklib
       llzk
       ;
+    # Snapshot stable dependencies once per dependency graph, not per commit.
+    ci-native-dependencies = pkgs.linkFarmFromDrvs "zkc-native-ci-dependencies" (
+      compiler.nativeBuildInputs
+      ++ compiler.buildInputs
+      ++ compiler.propagatedBuildInputs
+      ++ [
+        llvm.stdenv.cc
+        tools.dependencies
+        testDrivers.dependencies
+        pythonTools
+        pkgs.ccache
+        pkgs.zstd
+      ]
+    );
+    ci-rust-dependencies = pkgs.linkFarmFromDrvs "zkc-rust-ci-dependencies" [
+      rust
+      rustBuild.testDependencies
+      python
+    ];
     lake-sources = lakeSources;
     default = zkc;
     test-drivers = testDrivers;
@@ -200,11 +233,13 @@ in
       python3 = python;
       source = sources.repository;
     };
-    compiler-consumer = pkgs.callPackage ./checks/compiler-consumer.nix {
-      inherit compiler llvm;
-      source = sources.consumer;
-      stdenv = llvm.stdenv;
-    };
+    compiler-consumer = compilationCache.wrap "consumer" (
+      pkgs.callPackage ./checks/compiler-consumer.nix {
+        inherit compiler llvm utf8proc;
+        source = sources.consumer;
+        stdenv = compilationCache.stdenv;
+      }
+    );
     core = pkgs.callPackage ./checks/core.nix {
       inherit
         compiler
@@ -230,7 +265,7 @@ in
     };
     rust = pkgs.callPackage ./checks/rust.nix {
       inherit craneLib environment;
-      inherit (rustBuild) cargoVendorDir;
+      inherit (rustBuild) cargoVendorDir testProfile;
       cargoArtifacts = rustBuild.testDependencies;
       source = sources.rustTests;
       python3 = python;

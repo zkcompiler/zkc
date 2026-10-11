@@ -79,10 +79,21 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/nix
+        with:
+          cache-scope: native-dependencies
+          cache-key-target: .#ci-native-dependencies
+          dependencies-only: "true"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: compilation-cache
+        with:
+          path: build/compilation-cache
+          key: cpp-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.lock', 'nix/compilation-cache.nix') }}-${{ github.sha }}
+          restore-keys: |
+            cpp-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.lock', 'nix/compilation-cache.nix') }}-
       - name: Check installed tools, SDK and core semantics
         run: |
           mkdir -p build/reports
-          python3 .github/scripts/build-nix.py \
+          python3 .github/scripts/build-nix.py --compiler-cache build/compilation-cache \
             .#checks.x86_64-linux.application \
             .#checks.x86_64-linux.compiler-consumer \
             .#checks.x86_64-linux.core \
@@ -90,6 +101,11 @@ jobs:
             .#checks.x86_64-linux.sources \
             .#checks.x86_64-linux.format \
             2>&1 | tee build/reports/native-checks.log
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.compilation-cache.outputs.cache-hit != 'true'
+        with:
+          path: build/compilation-cache
+          key: ${{ steps.compilation-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -109,7 +125,8 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/nix
         with:
-          cache-key-target: .#checks.x86_64-linux.rust
+          cache-key-target: .#ci-rust-dependencies
+          dependencies-only: "true"
       - name: Check the Rust workspace with cached dependencies
         run: |
           mkdir -p build/reports
@@ -162,6 +179,17 @@ jobs:
       - uses: ./.github/actions/nix
         with:
           require-cache: ${{ github.event_name == 'workflow_dispatch' && inputs.scope == 'cache' }}
+          cache-scope: ${{ inputs.scope == 'cache' && 'main' || 'native-dependencies' }}
+          cache-key-target: ${{ inputs.scope == 'cache' && '' || '.#ci-native-dependencies' }}
+          dependencies-only: ${{ inputs.scope != 'cache' }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: inputs.scope != 'cache'
+        id: compilation-cache
+        with:
+          path: build/compilation-cache
+          key: cpp-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.lock', 'nix/compilation-cache.nix') }}-${{ github.sha }}
+          restore-keys: |
+            cpp-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.lock', 'nix/compilation-cache.nix') }}-
       - name: Require restoration on a fresh project store
         if: github.event_name == 'workflow_dispatch' && inputs.scope == 'cache'
         run: bash .github/scripts/check-nix-cache.sh
@@ -174,10 +202,16 @@ jobs:
           nix config show sandbox > build/reports/environment/sandbox.txt
           test "$(cat build/reports/environment/sandbox.txt)" = true
       - name: Check all main packages in the sandbox
+        env:
+          VALIDATION_SCOPE: ${{ inputs.scope }}
         run: |
           nix flake check --no-build
           python3 .github/scripts/check-nix-inputs.py
-          python3 .github/scripts/build-nix.py --all-checks 2>&1 | tee build/reports/nix-check.log
+          cache_options=()
+          if [ "$VALIDATION_SCOPE" != cache ]; then
+            cache_options+=(--compiler-cache build/compilation-cache)
+          fi
+          python3 .github/scripts/build-nix.py --all-checks "${cache_options[@]}" 2>&1 | tee build/reports/nix-check.log
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -202,7 +236,7 @@ jobs:
         with:
           # Weekly native variants reuse the ordinary toolchain snapshot,
           # without evicting daily caches with three large, rarely reused stores.
-          cache-scope: ${{ startsWith(matrix.package, 'compiler-') && 'native-packages' || format('optional-{0}', matrix.package) }}
+          cache-scope: ${{ startsWith(matrix.package, 'compiler-') && 'native-dependencies' || format('optional-{0}', matrix.package) }}
           cache-save: ${{ !startsWith(matrix.package, 'compiler-') }}
       - name: Build and test the selected integration
         env:

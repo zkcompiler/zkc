@@ -26,6 +26,8 @@ def identities(directory):
       checks = flake.checks.x86_64-linux;
     in {
       compiler = packages.compiler.drvPath;
+      nativeSnapshot = packages.ci-native-dependencies.drvPath;
+      rustSnapshot = packages.ci-rust-dependencies.drvPath;
       tools = packages.tools.drvPath;
       productDependencies = packages.tools.dependencies.drvPath;
       rust = checks.rust.drvPath;
@@ -53,7 +55,7 @@ def main():
             ("libraries/zkc/finite.zkc", "\n// cache boundary control\n", {"core"}),
             ("compiler/lib/Support/Input.cpp", "\n// cache boundary control\n", {"compiler", "core"}),
             ("crates/zkc-tools/src/lib.rs", "\n// cache boundary control\n", {"tools", "rust", "core"}),
-            ("Cargo.toml", None, {"tools", "rust", "core", "productDependencies", "testDependencies"}),
+            ("Cargo.toml", None, {"tools", "rust", "core", "productDependencies", "testDependencies", "nativeSnapshot", "rustSnapshot"}),
         ]
         records = []
         for name, suffix, expected in cases:

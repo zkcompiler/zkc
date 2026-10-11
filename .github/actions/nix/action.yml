@@ -16,6 +16,9 @@ inputs:
   cache-key-target:
     description: Optional flake target whose derivation identifies this snapshot
     default: ""
+  dependencies-only:
+    description: Retain only cache-key-target and its dependencies in the snapshot
+    default: "false"
   cache-save:
     description: Save a new snapshot after a successful job
     default: "true"
@@ -80,17 +83,27 @@ runs:
     - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
       if: inputs.cache == 'true'
       with:
-        primary-key: nix-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock') }}-${{ steps.cache-identity.outputs.identity }}
+        primary-key: nix-v2-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock') }}-${{ steps.cache-identity.outputs.identity }}
         restore-prefixes-first-match: |
-          nix-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock') }}-
+          nix-v2-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock') }}-
         save: ${{ inputs.cache-save }}
         # Successful build graphs receive temporary GC roots. Remove stale
         # results before snapshotting, including results from earlier commits.
         gc-max-store-size-linux: 0
     - name: Enable retention of successful build graphs
-      if: inputs.cache == 'true' && inputs.cache-save == 'true'
+      if: inputs.cache == 'true' && inputs.cache-save == 'true' && inputs.dependencies-only != 'true'
       shell: bash
       run: echo "ZKC_NIX_CACHE_ROOTS=$RUNNER_TEMP/zkc-nix-cache-roots" >> "$GITHUB_ENV"
+    - name: Retain the stable dependency graph
+      if: inputs.cache == 'true' && inputs.dependencies-only == 'true'
+      env:
+        CACHE_KEY_TARGET: ${{ inputs.cache-key-target }}
+        ZKC_NIX_CACHE_ROOTS: ${{ runner.temp }}/zkc-nix-cache-roots
+      shell: bash
+      run: |
+        test -n "$CACHE_KEY_TARGET"
+        nix build "$CACHE_KEY_TARGET" --no-link
+        python3 .github/scripts/retain-nix-cache.py "$(nix eval --raw "$CACHE_KEY_TARGET.drvPath")"
     - name: Verify effective build isolation
       shell: bash
       run: |

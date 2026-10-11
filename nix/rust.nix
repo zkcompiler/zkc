@@ -40,8 +40,14 @@ let
         // metadata;
       }
     );
+  # Match this profile in the check and its external dependency artifacts.
+  # Keep line-number backtraces without full variable/type debug information.
+  testProfile = {
+    CARGO_PROFILE_DEV_DEBUG = "line-tables-only";
+  };
   testDependencies = craneLib.buildDepsOnly (
     common
+    // testProfile
     // {
       pname = "zkc-rust-tests";
       CARGO_PROFILE = "dev";
@@ -54,7 +60,7 @@ let
   );
 in
 {
-  inherit testDependencies;
+  inherit testDependencies testProfile;
   inherit (common) cargoVendorDir;
   tools = release "zkc-tools" "-p zkc-tools --bin zkc" {
     description = "Program runtime and common Host tools";
