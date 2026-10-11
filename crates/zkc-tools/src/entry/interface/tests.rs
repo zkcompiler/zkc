@@ -256,8 +256,8 @@ fn proof_and_clause_selections_are_complete() {
     let mut value = document();
     value["protocols"][0]["services"] =
         json!([{"name":"coins","owner":"V","contract":"random.bls12-381.fr/0","native":2}]);
-    assert_eq!(read(&value).unwrap_err(), InterfaceError::Selection);
-    value["job"]["construction"] = json!({"kind":"fiat_shamir", "format": "zkc.framed/0","suite":"merlin3.bls12-381.fr64be/0","service":0});
+    assert!(read(&value).is_ok());
+    value["job"]["construction"] = json!({"kind":"fiat_shamir", "format": "zkc.framed/0","suite":"merlin3.bls12-381.fr64be/0","services":[0]});
     assert!(read(&value).is_ok());
     value["job"]["construction"]["suite"] = json!("merlin3.ristretto255.scalar64le/0");
     assert_eq!(read(&value).unwrap_err(), InterfaceError::Selection);
@@ -550,8 +550,18 @@ fn custody_optional_targets_and_continuations_have_positive_controls() {
     value["protocols"][0]["services"] = json!([
         {"name":"coins","owner":"V","contract":"random.bls12-381.fr/0","native":2},
         {"name":"other","owner":"V","contract":"random.bls12-381.fr/0","native":3}]);
-    value["job"]["construction"] = json!({"kind":"fiat_shamir", "format": "zkc.framed/0","suite":"merlin3.bls12-381.fr64be/0","service":0});
-    assert_eq!(read(&value).unwrap_err(), InterfaceError::Selection);
+    value["job"]["construction"] = json!({"kind":"fiat_shamir", "format": "zkc.framed/0","suite":"merlin3.bls12-381.fr64be/0","services":[0]});
+    assert!(read(&value).is_ok());
+    for services in [
+        json!([]),
+        json!([0, 0]),
+        json!([1, 0]),
+        json!([2]),
+        json!([0, 1]),
+    ] {
+        value["job"]["construction"]["services"] = services;
+        assert_eq!(read(&value).unwrap_err(), InterfaceError::Selection);
+    }
 }
 #[test]
 fn excessive_schema_depth_refuses_on_a_two_mebibyte_stack() {

@@ -367,8 +367,8 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
     selection.suite = proof.suite;
     selection.construction = proof.selectedConstruction;
     selection.format = proof.format;
-    if (proof.service)
-      selection.service = protocol.services[*proof.service].native;
+    for (auto service : proof.services)
+      selection.services.push_back(protocol.services[service].native);
     for (auto index : proof.publicInputs)
       append_range(selection.publicInputs, protocol.inputs[index].native);
     NativeProofOptions native;

@@ -47,31 +47,41 @@ Construction does not issue a dummy zero-budget RNG to stand in for a
 transcript. Resource mappings describe correspondence; transcript generations
 need not equal source RNG generations.
 
-The construction has one validator random service port. A direct
-query takes exactly that service reference and is either a `draw`, with no data
-arguments and one field result, or an `index`, whose only data argument is its
-constant UniformIndex bound and whose result is one index. Its sole delivery uses
-that exact SSA result: derived values and `protocol.restrict_roles` wrappers
-refuse. Pairing is checked in the same source
-block after unsimplified static expansion, retaining the authored call path.
-There is no intervening query or producer-to-validator message. Two outstanding
-draws, batched/derived delivery and undelivered private coins refuse this profile.
-It refuses other validator service ports, unselected queries, unused selected
-draws, nonchallenge reverse messages, existing transcript inputs, and selected
-draws hidden in local programs. Those restrictions bound the constructor, not
-the common IR or every authored deployment.
+Native shorthand selects one validator random service port. A programmable
+construction selects a nonempty finite set of ports owned by that validator.
+Each direct query takes its actual selected service reference: `draw` returns
+that contract's field; `index` takes its constant UniformIndex bound and returns
+one index. Query result domains need not match the provider's state domain.
+Native fallback rules still require the installed suite's query domain.
 
-The selected authority includes every alias of its root. The construction's
-single validator port and native service owner contract exclude another
-validator alias and cross-owner binding respectively. A deployment attempting to
-share the validator challenge root with producer entropy refuses at registry
-admission. That owner check does not prove independently distributed randomness
-across distinct roots. Broader selectors must account for all reachable aliases.
+Each selected query has one delivery using its exact SSA result: derived values
+and `protocol.restrict_roles` wrappers refuse. Pairing is checked in the same
+source block after unsimplified static expansion, retaining the authored call
+path. There is no intervening query or producer-to-validator message. Two
+outstanding draws, batched/derived delivery, unused selected draws,
+nonchallenge reverse messages, existing transcript inputs and selected draws
+hidden in local programs refuse this profile. These restrictions bound the
+constructor, not the common IR.
+
+Unselected verifier queries remain explicit private service actions. Their
+replies may affect local guards and acceptance, but cannot flow into shared
+construction state, child-start arguments or counts of shared-event loops.
+Runtime admission checks actual Local bodies, control dependence and loop fixed
+points. It conservatively retains dependencies even when ordinary arithmetic
+would cancel them. Construction does not turn private entropy into a public
+challenge or prove independence of distinct randomness roots.
+
+A child's selected ports must be the exact preimage of the parent's selected
+set through the call's service mapping. Every alias of a selected parent root
+is selected; every selected child port maps to a selected parent root. Parent
+roots not passed to that call need no child counterpart. The mapped verifier
+owner is checked separately. Registry admission refuses cross-owner sharing of
+a randomness root; this owner check does not establish independent randomness.
 
 ## Programmable state and handlers
 
 A selected `protocol.construction` symbol binds a protocol, provider, replaced
-service, state slots, root factory and typed Local handlers. Preparation preserves
+services, state slots, root factory and typed Local handlers. Preparation preserves
 that record exactly. Construction admits its event coverage and authority before
 consuming the record and projecting participant programs.
 
@@ -121,7 +131,10 @@ result ABI. Dynamic occurrence coordinates remain explicit adapter operands;
 custom bodies absorb only what they explicitly compute and observe.
 
 Projection metadata records the selected plan, root kind, ordered state types,
-helper symbols, removed service and resulting action map. The source-relative
+helper symbols, the sorted removed-service set and resulting action map.
+Every original query action retains its original service input index; only
+queries selected by those indices may disappear. Retained service names keep
+their original identities while ingress positions account for removed ports. The source-relative
 checker independently checks those records, factory/start operands, handler
 bodies, message grouping and every state successor. A same-typed value cannot
 replace the selected successor. Construction also bounds repeated handler

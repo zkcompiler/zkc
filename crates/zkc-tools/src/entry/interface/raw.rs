@@ -67,12 +67,12 @@ pub(in crate::entry) enum Construction {
         symbol: String,
         #[serde(deserialize_with = "present_optional")]
         suite: Option<String>,
-        service: u32,
+        services: Vec<u32>,
         format: crate::proof::ProofFormat,
     },
     FiatShamir {
         suite: String,
-        service: u32,
+        services: Vec<u32>,
         format: crate::proof::ProofFormat,
     },
 }

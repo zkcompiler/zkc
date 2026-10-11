@@ -58,6 +58,9 @@ impl<'a> MessageLayout<'a> {
             } else {
                 None
             };
+            if policy.construction.is_empty() && bound.is_some_and(|b| !b.is_power_of_two()) {
+                return Err("native-proof-index-bound".into());
+            }
             let origin = text(&row[1])?;
             let start_inputs = if kind == "start" {
                 let inputs = list(&row[2])?;
@@ -103,7 +106,8 @@ impl<'a> MessageLayout<'a> {
                     .and_then(|c| zkc_runtime::interactive::ServiceContract::parse(c).ok())
                     .map(|c| c.field());
                 if field.is_none()
-                    || suite.is_some()
+                    || policy.construction.is_empty()
+                        && suite.is_some()
                         && field
                             != suite
                                 .and_then(|s| LogicalType::parse(&format!("transcript:{s}")).ok())

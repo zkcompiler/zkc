@@ -33,14 +33,15 @@ map exists.
 ## Admission and checking
 
 Source admission fixes entry, roles, acceptance, public bindings, suite and
-selected validator service/draws. `selectNativeProofDraws` can resolve ordered
-query/delivery occurrences when that service is explicit and the input draw list
+selected validator services and draws. `selectNativeProofDraws` can resolve ordered
+query/delivery occurrences when that service set is explicit and the input draw list
 is empty. It preserves original IR and returns a complete strict policy.
 `NativeProofSelection` exposes this through the Entry compiler; explicit policy
 callers retain exact occurrence selection.
 
-Construction adds internal transcript input/results, removes the selected
-validator service, and rewrites the admitted challenge deliveries. A selected
+Construction removes the selected validator services and rewrites their admitted
+challenge deliveries. Managed state has internal transcript input/results;
+source-created state uses its checked initializer. A selected
 `index` query becomes a [UniformIndex transition](../spec/ir/construction.md#uniformindex-transitions)
 whose helper materializes the source's constant bound, so both roles absorb the
 same deployment-fixed domain. It introduces no participant data ports. Hosts receive authorized public values for root
@@ -54,9 +55,11 @@ then checks lowering, executable bytes and deployment maps.
 
 ## Encoding and message semantics
 
-The invocation root binds source/policy identity, ordered actual public values,
-application context and applicable setup material. The complete canonical root
-enters the suite under `binding`; its SHA-256 digest binds the proof header.
+For managed state, the invocation root contains source/policy identity, ordered
+actual public values, application context and applicable setup material. The
+complete canonical root enters the suite under `binding`; native framing places
+its SHA-256 digest in the proof header. Custom handlers decide how subsequent
+transitions use that state.
 [Deployment formats](../spec/formats/proof.md) own exact bytes.
 
 Occurrences encode original entry/call/repeat paths and source sites, with

@@ -49,7 +49,8 @@ application must call `prove_attempts` with a larger count to authorize retries.
 
 `construction authored;` selects the existing no-derived-transcript profile.
 A `fiat_shamir` construction names an installed suite and exactly one verifier
-random service with the corresponding field. Other verifier services refuse.
+random service with the corresponding field. Other verifier services remain
+explicit private services in the verifier program.
 The native compiler resolves the service's actual ordered query/delivery pairs,
 including static applications and repeated occurrences. Both `draw()` and
 `index<N>()` queries of that service are selected; each becomes a transition of
@@ -97,7 +98,11 @@ the source call-depth and work bounds.
 ### Construction bodies
 
 A construction can select a component with `transcript Provider;` and a
-verifier service with `replace challenges;`. The provider declares an associated
+finite set of verifier services with `replace {base, extension};`. The singleton
+spelling is `replace challenges;`. Empty and duplicate selections refuse. The
+compiler orders selected services by their original input positions. Every
+selected service has the same owner; its actual query contract fixes the handler
+result type independently of the provider's state or domain. The provider declares an associated
 `State` and a zero-runtime-argument Local `initialize()` returning that state.
 Source-created state requires `Copy` and `Drop`; private state need not permit
 sharing or serialization.
@@ -132,13 +137,28 @@ whole inherited rule at that selector; other rules remain inherited. Without a
 native base, the resolved construction must have a start handler and cover every
 message and every query on the selected authority. Bases must be acyclic.
 
+Retained verifier services remain explicit Host inputs with their own budgets.
+Their replies may affect verifier-local guards, completion and acceptance. They
+cannot affect outgoing messages, shared construction state, child-start inputs
+or counts of loops containing shared construction events. Runtime admission
+checks the actual Local bodies and repeated data flow conservatively; algebraic
+cancellation of a private dependency is not inferred.
+
+Each selected query and its delivery form one ordered construction event.
+Retained queries belong before or after that pair. Both participants' loop
+counts for shared events must be independent of unpublished private values.
+Early completion remains explicit and may depend on private values; admission
+does not claim termination independence.
+
 ### Child constructions
 
 `apply Child<...> at call.path;` delegates one complete labelled protocol call.
 The child's target and static arguments must match that call. Its closed
 provider, state, initializer and root must match the parent, and its selected
-service must map to the parent's authority with the same verifier. An unselected
-child service cannot alias that authority. Selections must be disjoint and
+services must be exactly the child ports mapped to the parent's selected
+authorities, with the same verifier. All aliases of a selected parent authority
+must be selected in the child; selected child ports cannot map to an unselected
+parent authority. Parent services absent from the call require no child port. Selections must be disjoint and
 acyclic. Inheritance can replace a whole child selection; parent mathematical
 handlers cannot override individual leaves inside it.
 

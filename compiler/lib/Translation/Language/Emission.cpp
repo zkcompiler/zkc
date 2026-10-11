@@ -919,6 +919,9 @@ class Emitter {
            attr("payload", typeAttrs(payload)),
            attr("chunks", typeAttrs(chunks))}));
     }
+    SmallVector<int64_t> replaced;
+    for (auto port : plan.services)
+      replaced.push_back(offsets.back() + port);
     SmallVector<mlir::NamedAttribute> attrs{
         text("sym_name", definition.symbol),
         attr("target", mlir::FlatSymbolRefAttr::get(&context, target.symbol)),
@@ -927,8 +930,7 @@ class Emitter {
                                                                       : "host"),
         attr("state", typeAttrs(*state)),
         text("suite", plan.suite),
-        attr("service",
-             builder.getI64IntegerAttr(offsets.back() + *plan.service)),
+        attr("services", builder.getDenseI64ArrayAttr(replaced)),
         attr("native_base", builder.getBoolAttr(plan.nativeBase)),
         attr("root_only",
              builder.getBoolAttr(definition.proofFormat.has_value() ||

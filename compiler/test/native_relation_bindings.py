@@ -11,7 +11,7 @@ OUT = records()
 commands = Commands(OUT)
 fixtures = Path(__file__).parent / 'fixtures/mathematical'
 manifest = []
-policy_data = ['zkc.native-proof-policy/0', 'main', 'P', 'V', '1', '', '', ['0', '1'], [], "zkc.framed/0", ""]
+policy_data = ['zkc.native-proof-policy/0', 'main', 'P', 'V', '1', '', [], ['0', '1'], [], "zkc.framed/0", ""]
 policy = OUT / 'policy.json'
 policy.write_text(json.dumps(policy_data))
 for family in ['r1cs', 'air']:
@@ -121,7 +121,7 @@ for family in ['r1cs', 'air']:
         path = OUT / f'{family}_derived.mlir'
         path.write_text(derived)
         p = list(policy_data)
-        p[5:7] = ['merlin3.bls12-381.fr64be/0', '3']
+        p[5:7] = ['merlin3.bls12-381.fr64be/0', ['3']]
         p[8] = [['draw', 'challenge']]
         altered = OUT / 'derived.policy'
         altered.write_text(json.dumps(p))

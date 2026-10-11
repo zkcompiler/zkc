@@ -14,15 +14,16 @@ struct NativeProofPolicy {
   std::string construction;
   protocol::ProofFormat format = protocol::ProofFormat::Native;
   unsigned acceptance = 0;
-  std::optional<unsigned> service;
+  /// Replaced verifier authorities, in strictly increasing source input order.
+  std::vector<unsigned> services;
   std::vector<unsigned> publicInputs;
   std::vector<std::pair<std::string, std::string>> draws;
 };
 llvm::Expected<NativeProofPolicy> parseNativeProofPolicy(llvm::StringRef text);
 llvm::json::Value encodeNativeProofPolicy(const NativeProofPolicy &policy);
 /// Resolve the ordered query/delivery occurrences of the explicitly selected
-/// verifier service. All other policy choices remain explicit; input draws must
-/// be empty. Uses the same source preparation and event admission as
+/// verifier services. All other policy choices remain explicit; input draws
+/// must be empty. Uses the same source preparation and event admission as
 /// construction, including roles, public inputs, exact delivered values and
 /// ordering. Returns a complete strict policy without mutating the source.
 llvm::Expected<NativeProofPolicy>

@@ -34,7 +34,7 @@ def ConstructionOp : Op<ProtocolDialect, "construction",
   let arguments = (ins SymbolNameAttr:$sym_name, FlatSymbolRefAttr:$target, StrAttr:$provider,
     StrAttr:$root, ArrayAttr:$state,
     OptionalAttr<FlatSymbolRefAttr>:$initializer, StrAttr:$suite,
-    I64Attr:$service, BoolAttr:$native_base, BoolAttr:$root_only, ArrayAttr:$rules,
+    DenseI64ArrayAttr:$services, BoolAttr:$native_base, BoolAttr:$root_only, ArrayAttr:$rules,
     ArrayAttr:$applications,
     OptionalAttr<DictionaryAttr>:$codec);
 }

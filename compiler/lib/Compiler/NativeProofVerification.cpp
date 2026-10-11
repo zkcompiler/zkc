@@ -10,6 +10,7 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/MathExtras.h"
 #include <map>
 using namespace llvm;
 using namespace mlir;
@@ -142,7 +143,7 @@ class TranscriptCorrespondence {
         !isa<ArrayAttr>(origin[1]) || !cast<ArrayAttr>(origin[1]).empty())
       return false;
     auto *rule = rules.lookup(event.site);
-    if (!rule && event.bound && (*event.bound & (*event.bound - 1)))
+    if (!rule && event.bound && !isPowerOf2_64(*event.bound))
       return false;
     SmallVector<Type> inputs(stateTypes), outputs;
     if (event.query)
@@ -291,7 +292,7 @@ class TranscriptCorrespondence {
                       isa<pir::EmitOp, pir::AwaitOp, pir::FinishIfOp,
                           pir::ConstructionStartOp>(op) ||
                       (isa<pir::ParticipantQueryOp>(op) &&
-                       participant.getRole() == policy.validator);
+                       bySite.contains(text(op, "site")));
                   if (required) {
                     if (isa<pir::ProtocolLoopOp>(op))
                       observedLoops.insert(op);
@@ -328,9 +329,7 @@ class TranscriptCorrespondence {
       if (!charge() || !cursor)
         return false;
       auto event = bySite.find(text(&op, "site"));
-      if (event == bySite.end() &&
-          (isa<pir::EmitOp, pir::AwaitOp>(op) ||
-           (isa<pir::ParticipantQueryOp>(op) && role == policy.validator)))
+      if (event == bySite.end() && isa<pir::EmitOp, pir::AwaitOp>(op))
         return false;
       if (auto loop = dyn_cast<pir::ProtocolLoopOp>(op);
           loop && observedLoops.contains(loop)) {
@@ -504,10 +503,45 @@ class TranscriptCorrespondence {
         y.getResults().take_back(stateTypes.size()) !=
             ArrayRef<Type>(stateTypes))
       return false;
+    auto retained = a->getAttrOfType<ArrayAttr>("service_ports");
     if (a.getRole() == policy.validator) {
-      if (b->hasAttr("service_ports"))
+      auto records =
+          a->getParentOp()->getRegion(0).front().getOps<pir::ProjectionOp>();
+      if (!hasSingleElement(records))
         return false;
-    } else if (a->getAttr("service_ports") != b->getAttr("service_ports"))
+      auto source = cast<DictionaryAttr>((*records.begin()).getInterfaces()[0]);
+      auto owners = source.getAs<ArrayAttr>("input_roles");
+      if (!owners || policy.services.empty() ||
+          policy.services.back() >= owners.size())
+        return false;
+      SmallVector<unsigned> selected;
+      unsigned ingress = 0;
+      for (auto [i, roles] : enumerate(owners)) {
+        if (!is_contained(cast<ArrayAttr>(roles), a.getRoleAttr()))
+          continue;
+        if (is_contained(policy.services, i))
+          selected.push_back(ingress);
+        ++ingress;
+      }
+      SmallVector<Attribute> kept;
+      if (retained)
+        for (auto port : retained)
+          if (auto row = cast<ArrayAttr>(port);
+              !is_contained(selected, cast<IntegerAttr>(row[2]).getInt())) {
+            auto ingress = cast<IntegerAttr>(row[2]).getInt();
+            kept.push_back(ArrayAttr::get(
+                a.getContext(),
+                {row[0], row[1],
+                 IntegerAttr::get(
+                     IntegerType::get(a.getContext(), 64),
+                     ingress - llvm::count_if(selected, [&](unsigned port) {
+                       return port < ingress;
+                     }))}));
+          }
+      retained =
+          kept.empty() ? ArrayAttr() : ArrayAttr::get(a.getContext(), kept);
+    }
+    if (retained != b->getAttrOfType<ArrayAttr>("service_ports"))
       return false;
     auto &before = a.getBody().front();
     auto &after = b.getBody().front();
@@ -602,10 +636,14 @@ class TranscriptCorrespondence {
         return false;
     }
     auto removed = construction.getAs<ArrayAttr>("removed_services");
-    return removed && removed.size() == 1 && policy.service &&
-           isa<IntegerAttr>(removed[0]) &&
-           cast<IntegerAttr>(removed[0]).getInt() == *policy.service &&
-           bool(construction.getAs<ArrayAttr>("actions"));
+    if (!removed || removed.size() != policy.services.size())
+      return false;
+    for (auto [attr, service] : zip(removed, policy.services)) {
+      auto port = dyn_cast<IntegerAttr>(attr);
+      if (!port || port.getInt() != service)
+        return false;
+    }
+    return bool(construction.getAs<ArrayAttr>("actions"));
   }
 
 public:

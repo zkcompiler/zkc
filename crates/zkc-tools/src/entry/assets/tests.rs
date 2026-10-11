@@ -507,7 +507,7 @@ fn deployment(field: &str, arenas: &Arenas) -> String {
             "role00000001",
             "0",
             "",
-            "",
+            [],
             ["0"],
             [],
             "zkc.framed/0",

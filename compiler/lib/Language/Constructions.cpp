@@ -11,7 +11,6 @@ struct ConstructionSite {
   std::vector<std::string> path;
   bool labelled;
   Type payload;
-  std::optional<unsigned> service;
   std::optional<Natural> bound;
   bool proofMessage = false;
 };
@@ -30,10 +29,12 @@ bool within(ArrayRef<std::string> path, ArrayRef<std::string> parent) {
 
 bool Checker::constructions() {
   std::vector<unsigned> state(output.declarations.size());
+  std::vector<unsigned> height(output.declarations.size());
   std::function<bool(DeclarationId, unsigned)> check;
   check = [&](DeclarationId id, unsigned depth) {
     auto &decl = output.declarations[id.index];
-    if (depth > work.limits.typeDepth)
+    if (depth > work.limits.typeDepth ||
+        height[id.index] > work.limits.typeDepth - depth)
       return types.fail("source.limit", "construction inheritance depth",
                         decl.span);
     if (state[id.index] == 2)
@@ -59,6 +60,7 @@ bool Checker::constructions() {
                           syntax.parent->span);
       if (!check(*parent, depth + 1))
         return false;
+      height[id.index] = std::max(height[id.index], 1 + height[parent->index]);
       auto arguments =
           this->arguments(decl, base, syntax.parent->arguments,
                           syntax.parent->span, syntax.parent->labels);
@@ -128,7 +130,7 @@ bool Checker::constructions() {
       }
       if (!decl.proofFormat)
         decl.proofFormat = base.proofFormat;
-      if (syntax.provider || syntax.service)
+      if (syntax.provider || !syntax.services.empty())
         return types.fail(
             "source.construction",
             "a derived construction inherits its provider and authority",
@@ -137,7 +139,7 @@ bool Checker::constructions() {
     if (syntax.base == ConstructionDefinition::Base::Authored ||
         (syntax.base == ConstructionDefinition::Base::Named &&
          result.root == ConstructionDefinition::Root::None)) {
-      if (syntax.provider || syntax.service || syntax.codec ||
+      if (syntax.provider || !syntax.services.empty() || syntax.codec ||
           !syntax.rules.empty() || !syntax.applications.empty())
         return types.fail("source.construction",
                           "authored base accepts only a proof format",
@@ -163,16 +165,21 @@ bool Checker::constructions() {
         return types.accept(nativeState.takeError(), decl.span);
       result.state = std::move(*nativeState);
     }
-    if (syntax.service) {
+    for (const auto &service : syntax.services) {
       auto found = llvm::find_if(target.services, [&](const ServicePort &port) {
-        return port.name == syntax.service->name;
+        return port.name == service.name;
       });
       if (found == target.services.end())
         return types.fail("source.construction",
                           "replacement names no managed protocol port",
-                          syntax.service->span);
-      result.service = unsigned(found - target.services.begin());
+                          service.span);
+      auto port = unsigned(found - target.services.begin());
+      if (is_contained(result.services, port))
+        return types.fail("source.construction",
+                          "duplicate replacement authority", service.span);
+      result.services.push_back(port);
     }
+    llvm::sort(result.services);
     if (syntax.provider) {
       auto provider = type(decl, *syntax.provider);
       if (!provider)
@@ -252,11 +259,17 @@ bool Checker::constructions() {
           result.initializerArguments.push_back(bindings->at(parameter.atom));
       }
     }
-    if (!result.service || (!result.provider && result.suite.empty()))
+    if (result.services.empty() || (!result.provider && result.suite.empty()))
       return types.fail("source.construction",
                         "construction requires a transcript provider and "
                         "replacement authority",
                         decl.span);
+    auto verifier = target.services[result.services.front()].owner;
+    if (any_of(result.services, [&](unsigned port) {
+          return target.services[port].owner != verifier;
+        }))
+      return types.fail("source.construction",
+                        "replacement authorities require one owner", decl.span);
     if (!constructionCodec(decl, syntax, result, substitution))
       return false;
     if (result.codec && target.roles.size() != 2)
@@ -324,13 +337,10 @@ bool Checker::constructions() {
                            validPath,
                            std::move(*payload),
                            {},
-                           {},
-                           roles[message->receiver] ==
-                                   target.services[*result.service].owner &&
-                               roles[message->sender] !=
-                                   target.services[*result.service].owner});
+                           roles[message->receiver] == verifier &&
+                               roles[message->sender] != verifier});
         } else if (auto query = std::get_if<ServiceQuery>(&operation.action)) {
-          if (services[query->service.index] != *result.service)
+          if (!is_contained(result.services, services[query->service.index]))
             continue;
           auto payload = types.substitute(
               body.values[operation.results.front().index].type, bindings,
@@ -338,8 +348,7 @@ bool Checker::constructions() {
           if (!payload)
             return false;
           sites.push_back({ConstructionRule::Kind::Query, std::move(path),
-                           validPath, std::move(*payload),
-                           services[query->service.index], query->bound});
+                           validPath, std::move(*payload), query->bound});
         }
       }
       return true;
@@ -368,6 +377,8 @@ bool Checker::constructions() {
                           "apply requires a construction", source.span);
       if (!check(*selected, depth + 1))
         return false;
+      height[id.index] =
+          std::max(height[id.index], 1 + height[selected->index]);
       auto arguments =
           this->arguments(decl, child, source.construction.arguments,
                           source.span, source.construction.labels);
@@ -443,26 +454,30 @@ bool Checker::constructions() {
       }
       const auto &childTarget = output.declarations[child.target->index];
       if (target.roles.size() != 2 || childPlan.root != result.root ||
-          childPlan.suite != result.suite || !childPlan.service ||
+          childPlan.suite != result.suite || childPlan.services.empty() ||
           call->roles.size() != 2 ||
-          call->services[*childPlan.service] != *result.service ||
-          call->roles[childTarget.services[*childPlan.service].owner] !=
-              target.services[*result.service].owner)
+          call->roles[childTarget.services[childPlan.services.front()].owner] !=
+              verifier)
         return types.fail(
             "source.construction",
             "child transcript authority or participant mapping differs",
             application.span);
       for (auto [port, mapped] : enumerate(call->services))
-        if (mapped == *result.service && port != *childPlan.service)
-          return types.fail(
-              "source.construction",
-              "child aliases the replaced authority through an unselected port",
-              application.span);
+        if (is_contained(result.services, mapped) !=
+            is_contained(childPlan.services, port))
+          return types.fail("source.construction",
+                            "child replacement must select exactly the ports "
+                            "mapped to replaced authorities",
+                            application.span);
     }
-    auto delegated = [&](ArrayRef<std::string> path) {
-      return any_of(result.applications, [&](const auto &application) {
-        return within(path, application.path);
-      });
+    auto delegated = [&](ArrayRef<std::string> path) -> std::optional<bool> {
+      for (const auto &application : result.applications) {
+        if (!types.charge(path.size() + application.path.size(), decl.span))
+          return {};
+        if (within(path, application.path))
+          return true;
+      }
+      return false;
     };
     auto bytes = builtinType("bytes", {});
     if (!bytes)
@@ -531,10 +546,15 @@ bool Checker::constructions() {
       for (const auto &part : source.path)
         rule.path.push_back(part.name);
       if (!protocol::isCodecRule(rule.kind) &&
-          rule.kind != ConstructionRule::Kind::Start && delegated(rule.path))
-        return types.fail("source.construction",
-                          "a child owns this complete construction subtree",
-                          source.span);
+          rule.kind != ConstructionRule::Kind::Start) {
+        auto owned = delegated(rule.path);
+        if (!owned)
+          return false;
+        if (*owned)
+          return types.fail("source.construction",
+                            "a child owns this complete construction subtree",
+                            source.span);
+      }
       if (!written.emplace(rule.kind, rule.path).second)
         return types.fail("source.construction",
                           "duplicate construction selector", source.span);
@@ -668,10 +688,16 @@ bool Checker::constructions() {
     }
     for (const auto &rule : result.rules)
       if (!protocol::isCodecRule(rule.kind) &&
-          rule.kind != ConstructionRule::Kind::Start && delegated(rule.path))
-        return types.fail(
-            "source.construction",
-            "an inherited rule overlaps a construction application", rule.span);
+          rule.kind != ConstructionRule::Kind::Start) {
+        auto owned = delegated(rule.path);
+        if (!owned)
+          return false;
+        if (*owned)
+          return types.fail(
+              "source.construction",
+              "an inherited rule overlaps a construction application",
+              rule.span);
+      }
     if (result.codec) {
       for (const auto &site : sites) {
         if (!site.proofMessage)
@@ -699,7 +725,10 @@ bool Checker::constructions() {
         return types.fail("source.construction",
                           "construction requires on start", decl.span);
       for (const auto &site : sites) {
-        if (site.labelled && delegated(site.path))
+        auto owned = delegated(site.path);
+        if (!owned)
+          return false;
+        if (site.labelled && *owned)
           continue;
         if (!types.charge(result.rules.size(), decl.span))
           return false;
@@ -713,6 +742,9 @@ bool Checker::constructions() {
               decl.span);
       }
     }
+    if (height[id.index] > work.limits.typeDepth - depth)
+      return types.fail("source.limit", "construction selection depth",
+                        decl.span);
     decl.construction = std::move(result);
     state[id.index] = 2;
     return true;

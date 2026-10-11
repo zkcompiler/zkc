@@ -58,6 +58,21 @@ struct Helper<'a> {
     function: &'a Function,
     loops: Vec<LoopPath>,
 }
+fn query_result(origin: &serde_json::Value, index: bool) -> Result<PhysicalType> {
+    let contract = origin[4][4]
+        .as_str()
+        .and_then(|name| super::ServiceContract::parse(name).ok())
+        .ok_or_else(|| refuse("native-proof-query-origin"))?;
+    let logical = if index {
+        "index".into()
+    } else {
+        format!("field:{}", contract.field().name())
+    };
+    PhysicalType::default_for(
+        super::LogicalType::parse(&logical).map_err(|_| refuse("native-proof-helper-signature"))?,
+    )
+    .map_err(|_| refuse("native-proof-helper-signature"))
+}
 fn helper<'a>(
     function: &'a Function,
     transcript: Option<&PhysicalType>,
@@ -146,6 +161,7 @@ fn helper<'a>(
     if attributes.len() != 1
         || function.inputs.len() != ordinary + loops.len()
         || function.outputs.len() != if challenge { 2 } else { 1 }
+        || challenge && function.outputs[0] != query_result(&origin, index)?
         || function.inputs[0].1 != *state
         || function.outputs.last() != Some(state)
         || inputs.len() != ordinary + usize::from(index) + 1
@@ -370,8 +386,6 @@ fn custom_helper<'a>(
                     .map_err(|_| refuse("native-proof-helper-signature"))?,
             );
         } else {
-            let contract = super::ServiceContract::parse(origin[4][4].as_str().unwrap())
-                .map_err(|_| refuse("native-proof-query-origin"))?;
             if origin[4][6].as_str() != Some(validator)
                 || origin[4][5].as_str()
                     != Some(if event.bound.is_some() {
@@ -382,18 +396,7 @@ fn custom_helper<'a>(
             {
                 return Err(refuse("native-proof-query-origin"));
             }
-            let logical = if event.bound.is_some() {
-                "index".into()
-            } else {
-                format!("field:{}", contract.field().name())
-            };
-            expected_outputs.push(
-                PhysicalType::default_for(
-                    super::LogicalType::parse(&logical)
-                        .map_err(|_| refuse("native-proof-helper-signature"))?,
-                )
-                .map_err(|_| refuse("native-proof-helper-signature"))?,
-            );
+            expected_outputs.push(query_result(&origin, event.bound.is_some())?);
         }
     }
     expected_inputs.extend(std::iter::repeat_n(
@@ -722,7 +725,7 @@ impl ProofWalk<'_> {
                         pending_message.push(output.clone());
                     }
                 }
-                Instruction::Query { inputs, .. } if !self.validating => {
+                Instruction::Query { inputs, .. } => {
                     self.ordinary(inputs)?;
                     if !pending_message.is_empty() || !pending_challenge.is_empty() {
                         return Err(refuse("native-proof-observation-order"));
@@ -976,7 +979,6 @@ impl NativeProofEntry {
             .outputs
             .get(acceptance)
             .is_none_or(|t| t.kind() != Type::Bool)
-            || !validator.services.is_empty()
         {
             return Err(refuse("native-proof-validator"));
         }
@@ -1131,7 +1133,10 @@ impl NativeProofEntry {
             }
             let ordinary_inputs = inputs_end - state_inputs;
             let ordinary_outputs = outputs_end - state_outputs;
-            if events.iter().any(|event| event.start_inputs.is_some()) {
+            if transcript.is_some()
+                || plan.is_some()
+                || (validating && !participant.services.is_empty())
+            {
                 let mut private = BTreeSet::new();
                 if !validating {
                     let actual = source_inputs

@@ -81,7 +81,8 @@ struct InterfaceProofEntry {
   std::vector<unsigned> publicInputs;
   InterfaceSelector acceptance;
   std::optional<InterfaceSelector> completion;
-  std::optional<unsigned> target, service;
+  std::optional<unsigned> target;
+  std::vector<unsigned> services;
   std::string suite, selectedConstruction;
   protocol::ProofFormat format = protocol::ProofFormat::Native;
 };

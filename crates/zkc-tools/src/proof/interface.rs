@@ -19,7 +19,7 @@ pub(super) struct DeploymentPolicy<'a> {
     pub(super) format: super::ProofFormat,
     public_selection: &'a Json,
     pub(super) draw_count: usize,
-    replaced_service: Option<usize>,
+    replaced_services: Vec<usize>,
 }
 impl<'a> DeploymentPolicy<'a> {
     pub(super) fn read(value: &'a Json) -> Result<Self> {
@@ -42,13 +42,22 @@ impl<'a> DeploymentPolicy<'a> {
         }
         let draws = list(&policy[8])?;
         let selected = suite.is_some() || !construction.is_empty();
+        let selected_services = list(&policy[6])?;
+        if selected_services.len() > 1024 {
+            return Err("native-proof-policy".into());
+        }
+        let replaced_services = selected_services
+            .iter()
+            .map(index)
+            .collect::<Result<Vec<_>>>()?;
         if draws.len() > 64
             || construction.is_empty() && (suite.is_some() != !draws.is_empty())
-            || selected != !text(&policy[6])?.is_empty()
+            || selected != !replaced_services.is_empty()
+            || !replaced_services.windows(2).all(|pair| pair[0] < pair[1])
+            || construction.is_empty() && suite.is_some() && replaced_services.len() != 1
         {
             return Err("native-proof-policy".into());
         }
-        let replaced_service = selected.then(|| index(&policy[6])).transpose()?;
         let mut selected_sites = std::collections::BTreeSet::new();
         for draw in draws {
             for site in array(draw, 2)? {
@@ -72,7 +81,7 @@ impl<'a> DeploymentPolicy<'a> {
             format,
             public_selection: &policy[7],
             draw_count: draws.len(),
-            replaced_service,
+            replaced_services,
         })
     }
 }
@@ -148,9 +157,6 @@ impl RoleInterface {
                 if text(&row[1])? != service.name
                     || text(&row[2])? != service.contract.name()
                     || index(&row[3])? != service.input_index
-                    || data.iter().any(|p| p.original == original)
-                    || services.contains(&original)
-                    || policy.replaced_service == Some(original)
                 {
                     return Err("native-proof-service-map".into());
                 }
@@ -184,6 +190,20 @@ impl RoleInterface {
         }
         if maps.len() != 2 || !maps.contains_key(producer) || !maps.contains_key(validator) {
             return Err("native-proof-role-map".into());
+        }
+        let mut authorities: std::collections::BTreeSet<_> =
+            policy.replaced_services.iter().copied().collect();
+        for original in maps.values().flat_map(|role| &role.services) {
+            if !authorities.insert(*original) {
+                return Err("native-proof-service-map".into());
+            }
+        }
+        if maps
+            .values()
+            .flat_map(|role| &role.data)
+            .any(|port| authorities.contains(&port.original))
+        {
+            return Err("native-proof-service-map".into());
         }
         for port in &maps[producer].data {
             if maps[validator]

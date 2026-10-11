@@ -186,6 +186,15 @@ class Projector {
       action.set("targets", builder.getArrayAttr(targets));
       if (isa<zkc::protocol_ir::LocalCallOp>(op))
         action.set("callee", op.getAttr("callee"));
+      if (auto query = dyn_cast<protocol_ir::QueryOp>(op)) {
+        auto argument = cast<BlockArgument>(query.getReference());
+        while (auto repeat = dyn_cast<protocol_ir::RepeatOp>(
+                   argument.getOwner()->getParentOp()))
+          argument =
+              cast<BlockArgument>(repeat.getInputs()[argument.getArgNumber()]);
+        action.set("service",
+                   builder.getI64IntegerAttr(argument.getArgNumber()));
+      }
       if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op)) {
         action.set("maximum", repeat.getMaximumAttr());
         action.set("body",

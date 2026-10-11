@@ -234,6 +234,20 @@ fn check_admission(envelope: &Json) {
         .position(|r| r[0] == "query")
         .unwrap();
     let cases: Vec<(&str, Json, &str)> = vec![
+        // Runtime proof admission checks the erased source service's result
+        // domain independently of the native kernel's own valid signature.
+        (
+            "native sample differs from source service field",
+            with_candidate(envelope, |p| {
+                edit_operation(p, "transcript.native.indexed.challenge", |op| {
+                    let mut origin =
+                        logical::decode_tree(&unhex(op[3][0].as_str().unwrap())).unwrap();
+                    origin[4][4] = json!("random.bls12-381.fr/0");
+                    op[3] = json!([hex(&logical::encode_tree(&origin).unwrap())]);
+                });
+            }),
+            "native-proof-helper-signature",
+        ),
         // The helper's materialized bound must equal the descriptor event.
         (
             "helper bound differs from descriptor",

@@ -135,26 +135,28 @@ bool Semantics::checkProofEntry(const Declaration &entry,
        !booleanOutput(*value.completion, value.prover, "complete")))
     return false;
   if (value.construction == ProofEntry::Construction::Authored) {
-    if (!value.suite.empty() || value.service)
+    if (!value.suite.empty() || !value.services.empty())
       return fail("source.entry",
                   "authored construction cannot derive a service", value.span);
   } else if (value.construction == ProofEntry::Construction::Derived) {
-    if (!value.selectedConstruction || !value.service ||
-        *value.service >= protocol.services.size() ||
-        protocol.services[*value.service].owner != value.verifier)
+    if (!value.selectedConstruction || value.services.empty() ||
+        any_of(value.services, [&](unsigned service) {
+          return service >= protocol.services.size() ||
+                 protocol.services[service].owner != value.verifier;
+        }))
       return fail("source.entry",
                   "construction requires a selected verifier authority",
                   value.span);
   } else {
     auto field = protocol::nativeChallengeField(value.suite);
-    if (field.empty() || !value.service ||
-        *value.service >= protocol.services.size() ||
-        protocol.services[*value.service].owner != value.verifier)
+    if (field.empty() || value.services.size() != 1 ||
+        value.services.front() >= protocol.services.size() ||
+        protocol.services[value.services.front()].owner != value.verifier)
       return fail("source.entry",
                   "construction requires an installed suite and matching "
                   "verifier service",
                   value.span);
-    auto selected = substitute(protocol.services[*value.service].field,
+    auto selected = substitute(protocol.services[value.services.front()].field,
                                bindings, value.span);
     if (!selected)
       return false;
@@ -162,11 +164,6 @@ bool Semantics::checkProofEntry(const Declaration &entry,
       return fail("source.entry", "construction field differs from service",
                   value.span);
   }
-  for (unsigned i = 0; i < protocol.services.size(); ++i)
-    if (protocol.services[i].owner == value.verifier && value.service != i)
-      return fail("source.entry",
-                  "verifier services must belong to the selected construction",
-                  protocol.services[i].span);
   if (value.target) {
     if (*value.target >= protocol.specifications.size())
       return fail("source.entry", "selected target is absent", value.span);

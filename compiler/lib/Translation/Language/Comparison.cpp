@@ -913,7 +913,10 @@ class Comparator {
         return false;
       offsets.push_back(offsets.back() + (*layout)->leaves.size());
     }
-    if (plan->service != offsets.back() + *source.service)
+    SmallVector<unsigned> replaced;
+    for (auto port : source.services)
+      replaced.push_back(offsets.back() + port);
+    if (plan->services != replaced)
       return fail("construction replacement authority differs");
     if (bool(plan->codec) != bool(source.codec))
       return fail("construction record format differs");

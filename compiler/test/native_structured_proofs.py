@@ -14,7 +14,7 @@ for i, suite in enumerate(["merlin3.bls12-381.fr64be/0", "spongefish0.7.4.keccak
         name = f"message_{i}{suffix}"
         with case(name):
             policy = OUT / f"{name}.policy"
-            policy.write_text(json.dumps(["zkc.native-proof-policy/0", "main", "Alice", "Bob", "0", suite, "4", ["0", "2", "6", "7", "8"], [["draw_challenge", "challenge"]], "zkc.framed/0", ""]))
+            policy.write_text(json.dumps(["zkc.native-proof-policy/0", "main", "Alice", "Bob", "0", suite, ["4"], ["0", "2", "6", "7", "8"], [["draw_challenge", "challenge"]], "zkc.framed/0", ""]))
             result = commands.run([compiler, "protocol-proof", source, policy, *options])
             envelope = json.loads(result)
             assert envelope[0] == "zkc.native-proof/0"
@@ -45,7 +45,7 @@ for name, ty in [("vector", "tensor<?x!algebra.field<\"bls12-381.fr\">>"),
         fixture = OUT / f"{name}.mlir"
         fixture.write_text(text)
         policy = OUT / f"{name}.policy"
-        policy.write_text(json.dumps(["zkc.native-proof-policy/0", "main", "Alice", "Bob", "0", "", "", ["1"], [], "zkc.framed/0", ""]))
+        policy.write_text(json.dumps(["zkc.native-proof-policy/0", "main", "Alice", "Bob", "0", "", [], ["1"], [], "zkc.framed/0", ""]))
         deployment = commands.run([compiler, "protocol-proof", fixture, policy])
         envelope = json.loads(deployment)
         (OUT / f"{name}.deployment").write_text(deployment)

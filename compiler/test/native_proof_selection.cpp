@@ -28,7 +28,7 @@ NativeProofPolicy selection() {
   policy.producer = "Alice";
   policy.validator = "Bob";
   policy.suite = "merlin3.bls12-381.fr64be/0";
-  policy.service = 4;
+  policy.services = {4};
   policy.publicInputs = {0, 2};
   return policy;
 }
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
             policy.publicInputs = {1, 2, 3};
             expected = {{"draw", "challenge"}};
           } else {
-            policy.service = 5;
+            policy.services = {5};
             policy.publicInputs = {0, 1, 3};
             for (StringRef call : {"first", "second"}) {
               auto prefix =
@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
         refuses(selectNativeProofDraws(*module, policy),
                 "native-proof-public-bindings");
         policy = selection();
-        policy.service = 3;
+        policy.services = {3};
         refuses(selectNativeProofDraws(*module, policy),
                 "native-proof-verifier-service");
         policy = selection();

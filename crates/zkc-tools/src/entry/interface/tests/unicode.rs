@@ -578,7 +578,7 @@ fn proof_fixture() -> (Value, String) {
             "role00000000",
             "0",
             "",
-            "",
+            [],
             ["0"],
             [],
             "zkc.framed/0",

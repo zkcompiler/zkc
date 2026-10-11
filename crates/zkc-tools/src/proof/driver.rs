@@ -263,7 +263,7 @@ fn validate_admitted<B: Backend>(
     let outcome = (|| loop {
         while runner.advance_local_control()? {}
         match runner.poll() {
-            Action::Query(_) => return Err(ArtifactFailure::UnexpectedCommunication),
+            Action::Query(query) => runner.execute_query(&query.cut)?,
             Action::Local(local) => runner.execute_local(&local.cut)?,
             Action::Receive(request) => {
                 let bytes = reader

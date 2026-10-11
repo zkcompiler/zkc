@@ -119,7 +119,7 @@ def test_child_state_arguments_and_root_codec(toolchain, journal, directory, emp
         assert not verified['execution']['cleanup_errors']
 
 
-@pytest.mark.parametrize('mutation', ['private-start', 'omit-start', 'coordinate'])
+@pytest.mark.parametrize('mutation', ['private-start', 'verifier-private-start', 'omit-start', 'coordinate'])
 def test_serialized_child_start_admission(toolchain, journal, directory, mutation):
     source = directory / 'main.zkc'
     source.write_text(composed_source(False))
@@ -128,15 +128,22 @@ def test_serialized_child_start_admission(toolchain, journal, directory, mutatio
                   f'--module=sample={source}', 'sample::Packed', f'--output={package}'])
     deployment = json.loads(json.loads(package.read_text())['artifact'])
     program = json.loads(deployment[4])
-    producer = program[3][0]
+    participant = program[3][1 if mutation == 'verifier-private-start' else 0]
     helper = deployment[2][6][6][0][0]
-    loop = next(op for op in producer[6] if op[0] == 'loop')
+    loop = next(op for op in participant[6] if op[0] == 'loop')
     start = next(op for op in loop[5] if op[0] == 'local' and op[2] == helper)
     if mutation == 'private-start':
-        start[3][1] = producer[4][2][0]
+        start[3][1] = participant[4][2][0]
+        reason = 'native-proof-private-dependency'
+    elif mutation == 'verifier-private-start':
+        participant[7].append(['private', 'random.bls12-381.fr/0', '2'])
+        deployment[6][1][4].append(['4', 'private', 'random.bls12-381.fr/0', '2'])
+        loop[5].insert(loop[5].index(start),
+                       ['query', 'private_start', 'private', 'draw', [], ['private_value']])
+        start[3][1] = 'private_value'
         reason = 'native-proof-private-dependency'
     elif mutation == 'coordinate':
-        start[3][-1] = producer[4][1][0]
+        start[3][-1] = participant[4][1][0]
         reason = 'native-proof-coordinate-operand'
     else:
         # Remove only the invocation, preserving SSA formation and the rest of

@@ -42,7 +42,7 @@ for family, suite, service, public, roles, draws in [
                 *roles,
                 "0",
                 suite,
-                service,
+                [service] if service else [],
                 public,
                 draws,
                 "zkc.framed/0", "",

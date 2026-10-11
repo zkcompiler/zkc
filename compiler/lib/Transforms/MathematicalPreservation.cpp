@@ -361,6 +361,16 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate) {
         if (isa<protocol_ir::LocalCallOp>(action) &&
             map.get("callee") != action->getAttr("callee"))
           return refuse(result, "role projection changed an authored callee");
+        if (auto query = dyn_cast<protocol_ir::QueryOp>(action)) {
+          auto argument = cast<BlockArgument>(query.getReference());
+          while (auto repeat = dyn_cast<protocol_ir::RepeatOp>(
+                     argument.getOwner()->getParentOp()))
+            argument = cast<BlockArgument>(
+                repeat.getInputs()[argument.getArgNumber()]);
+          auto authority = map.getAs<IntegerAttr>("service");
+          if (!authority || authority.getInt() != argument.getArgNumber())
+            return refuse(result, "role projection changed a query authority");
+        }
         llvm::DenseSet<Attribute> owners;
         for (auto targetItem : map.getAs<ArrayAttr>("targets")) {
           auto target = cast<DictionaryAttr>(targetItem);

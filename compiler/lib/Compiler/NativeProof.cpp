@@ -23,6 +23,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/MathExtras.h"
 #include <map>
 #include <set>
 using namespace llvm;
@@ -231,27 +232,16 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
     return error("native-proof-interface");
   Admitted admitted;
   StringRef challengeField = protocol::nativeChallengeField(policy.suite);
-  if (construction) {
-    if (!policy.service || *policy.service >= signature.getNumInputs())
-      return error("native-proof-verifier-service");
-    auto reference = dyn_cast<pir::ServiceReferenceType>(
-        signature.getInput(*policy.service));
-    if (!reference)
-      return error("native-proof-verifier-service");
-    challengeField = protocol::randomServiceField(reference.getContract());
-    if (challengeField.empty())
-      return error("native-proof-verifier-service");
-  }
   std::vector<unsigned> required;
   for (auto [i, type] : enumerate(signature.getInputs())) {
     auto owners = cast<ArrayAttr>(source.getInputRoles()[i]);
     if (!owns(owners, policy.validator))
       continue;
     if (auto service = dyn_cast<pir::ServiceReferenceType>(type)) {
-      if (policy.service != i ||
-          protocol::randomServiceField(service.getContract()) !=
-              challengeField ||
-          owners.size() != 1)
+      auto field = protocol::randomServiceField(service.getContract());
+      if (field.empty() || owners.size() != 1 ||
+          (!construction && is_contained(policy.services, i) &&
+           field != challengeField))
         return error("native-proof-verifier-service");
       continue;
     }
@@ -301,12 +291,12 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
   }
   if (required != policy.publicInputs)
     return error("native-proof-public-bindings");
-  if (policy.service &&
-      (*policy.service >= signature.getNumInputs() ||
-       !isa<pir::ServiceReferenceType>(signature.getInput(*policy.service)) ||
-       !owns(cast<ArrayAttr>(source.getInputRoles()[*policy.service]),
-             policy.validator)))
-    return error("native-proof-verifier-service");
+  for (auto service : policy.services)
+    if (service >= signature.getNumInputs() ||
+        !isa<pir::ServiceReferenceType>(signature.getInput(service)) ||
+        !owns(cast<ArrayAttr>(source.getInputRoles()[service]),
+              policy.validator))
+      return error("native-proof-verifier-service");
   llvm::StringSet<> consumedOrigins;
   auto consume = [&](StringRef site,
                      StringRef kind) -> Expected<const Origin *> {
@@ -451,29 +441,31 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
       if (auto query = dyn_cast<pir::QueryOp>(op)) {
         if (pending)
           return error("native-proof-prefix");
-        if (query.getOwner() == policy.producer) {
-          if (policy.service &&
-              sourcePort(query.getReference()) ==
-                  source.getBody().front().getArgument(*policy.service))
-            return error("native-proof-draw-selection");
+        auto authority = sourcePort(query.getReference());
+        bool selected = authority &&
+                        is_contained(policy.services, authority.getArgNumber());
+        if (!selected) {
+          // Placement keeps this service and its results owner-local. Whole
+          // candidate pairing below still permits V->P messages only for an
+          // immediately pending selected challenge, never for private entropy.
           auto origin = consume(query.getSite(), "query");
           if (!origin)
             return origin.takeError();
           continue;
         }
+        if (query.getOwner() != policy.validator)
+          return error("native-proof-draw-selection");
         // A selected query is a field draw or a UniformIndex query. Both
         // become transitions of the same transcript at this occurrence.
         bool index = query.getMethod() == "index";
-        if (!policy.service ||
-            sourcePort(query.getReference()) !=
-                source.getBody().front().getArgument(*policy.service) ||
-            query.getNumOperands() != (index ? 2u : 1u) ||
+        if (query.getNumOperands() != (index ? 2u : 1u) ||
             query.getNumResults() != 1 ||
-            query.getResult(0).getType() !=
-                (index ? Type(IntegerType::get(source.getContext(), 64,
-                                               IntegerType::Unsigned))
-                       : Type(algebra::FieldType::get(source.getContext(),
-                                                      challengeField))) ||
+            (!construction &&
+             query.getResult(0).getType() !=
+                 (index ? Type(IntegerType::get(source.getContext(), 64,
+                                                IntegerType::Unsigned))
+                        : Type(algebra::FieldType::get(source.getContext(),
+                                                       challengeField)))) ||
             (!index && query.getMethod() != "draw") || draw >= 64 ||
             (selection == DrawSelection::Explicit &&
              (draw >= policy.draws.size() ||
@@ -588,7 +580,8 @@ Error admitConstruction(pir::MathematicalOp source,
       }
       if (protocol::isCodecRule(rule.kind)) {
         auto message = dyn_cast<pir::ExchangeOp>(operation);
-        auto owners = cast<ArrayAttr>(source.getInputRoles()[plan.service]);
+        auto owners =
+            cast<ArrayAttr>(source.getInputRoles()[plan.services.front()]);
         if (!message || owners.size() != 1 ||
             message.getReceiverAttr() != owners[0] ||
             message.getSenderAttr() == owners[0])
@@ -612,7 +605,8 @@ Error admitConstruction(pir::MathematicalOp source,
               events, [](const auto &event) { return !event.startInputs; })))
     return error("native-proof-construction-coverage");
   if (plan.codec) {
-    auto owners = cast<ArrayAttr>(source.getInputRoles()[plan.service]);
+    auto owners =
+        cast<ArrayAttr>(source.getInputRoles()[plan.services.front()]);
     for (const auto &event : events) {
       auto message =
           dyn_cast_or_null<pir::ExchangeOp>(operations.lookup(event.site));
@@ -628,7 +622,9 @@ Error admitConstruction(pir::MathematicalOp source,
 }
 } // namespace
 json::Value encodeNativeProofPolicy(const NativeProofPolicy &p) {
-  json::Array inputs, draws;
+  json::Array inputs, draws, services;
+  for (auto service : p.services)
+    services.push_back(std::to_string(service));
   for (auto port : p.publicInputs)
     inputs.push_back(std::to_string(port));
   for (const auto &[query, delivery] : p.draws)
@@ -639,7 +635,7 @@ json::Value encodeNativeProofPolicy(const NativeProofPolicy &p) {
                      p.validator,
                      std::to_string(p.acceptance),
                      p.suite,
-                     p.service ? std::to_string(*p.service) : "",
+                     std::move(services),
                      std::move(inputs),
                      std::move(draws),
                      protocol::proofFormatName(p.format),
@@ -680,27 +676,30 @@ Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
     *target = s->str();
   }
   auto acceptance = number((*a)[4]);
-  auto service = (*a)[6].getAsString();
+  auto *services = (*a)[6].getAsArray();
   auto *inputs = (*a)[7].getAsArray(), *draws = (*a)[8].getAsArray();
-  if (!acceptance || !service || !inputs || inputs->size() > maxPorts ||
-      !draws || draws->size() > 64 || (selectDraws && !draws->empty()) ||
-      p.producer == p.validator)
+  if (!acceptance || !services || services->size() > maxPorts || !inputs ||
+      inputs->size() > maxPorts || !draws || draws->size() > 64 ||
+      (selectDraws && !draws->empty()) || p.producer == p.validator)
     return error("native-proof-policy");
   p.acceptance = *acceptance;
-  if (!service->empty()) {
-    p.service = number((*a)[6]);
-    if (!p.service)
+  for (const auto &value : *services) {
+    auto service = number(value);
+    if (!service || (!p.services.empty() && p.services.back() >= *service))
       return error("native-proof-policy");
+    p.services.push_back(*service);
   }
   if (p.format == protocol::ProofFormat::RawBytes && p.construction.empty() &&
       !p.suite.empty())
     return error("native-proof-format");
   if (!p.construction.empty()
-          ? !p.service || (!p.suite.empty() &&
-                           protocol::nativeChallengeField(p.suite).empty())
-      : p.suite.empty() ? p.service.has_value() || !draws->empty()
-                        : protocol::nativeChallengeField(p.suite).empty() ||
-                              !p.service || (!selectDraws && draws->empty()))
+          ? p.services.empty() ||
+                (!p.suite.empty() &&
+                 protocol::nativeChallengeField(p.suite).empty())
+      : p.suite.empty()
+          ? !p.services.empty() || !draws->empty()
+          : protocol::nativeChallengeField(p.suite).empty() ||
+                p.services.size() != 1 || (!selectDraws && draws->empty()))
     return error("native-proof-policy");
   for (const auto &input : *inputs) {
     auto port = number(input);
@@ -843,7 +842,14 @@ class Emitter {
     }
     if (event.startInputs)
       return error("native-proof-construction-start");
-    if (event.bound && (*event.bound & (*event.bound - 1)))
+    if (event.query && !event.bound &&
+        event.payload != algebra::FieldType::get(
+                             module.getContext(),
+                             protocol::nativeChallengeField(policy.suite)))
+      return error(
+          "native-proof-construction-signature",
+          "native fallback query domain differs from the transcript suite");
+    if (event.bound && !isPowerOf2_64(*event.bound))
       return error("native-proof-index-bound",
                    "the native sampler requires a power-of-two bound; "
                    "select an explicit query handler for other ranges");
@@ -1066,8 +1072,35 @@ public:
       if (hostRoot)
         for (Type slot : stateTypes)
           state.push_back(body.addArgument(slot, participant.getLoc()));
-      if (participant.getRole() == policy.validator)
-        participant->removeAttr("service_ports");
+      if (participant.getRole() == policy.validator) {
+        SmallVector<unsigned> selected;
+        auto owners = original.getAs<ArrayAttr>("input_roles");
+        unsigned ingress = 0;
+        for (auto [i, roles] : enumerate(owners)) {
+          if (!owns(cast<ArrayAttr>(roles), policy.validator))
+            continue;
+          if (is_contained(policy.services, i))
+            selected.push_back(ingress);
+          ++ingress;
+        }
+        SmallVector<Attribute> retained;
+        if (auto ports = participant->getAttrOfType<ArrayAttr>("service_ports"))
+          for (auto port : ports)
+            if (auto row = cast<ArrayAttr>(port);
+                !is_contained(selected, cast<IntegerAttr>(row[2]).getInt())) {
+              auto ingress = cast<IntegerAttr>(row[2]).getInt();
+              retained.push_back(builder.getArrayAttr(
+                  {row[0], row[1],
+                   builder.getI64IntegerAttr(
+                       ingress - llvm::count_if(selected, [&](unsigned port) {
+                         return port < ingress;
+                       }))}));
+            }
+        if (retained.empty())
+          participant->removeAttr("service_ports");
+        else
+          participant->setAttr("service_ports", builder.getArrayAttr(retained));
+      }
       SmallVector<StringRef> reached;
       SmallVector<Value> coordinates;
       auto invoke = [&](FlatSymbolRefAttr reference, ValueRange operands,
@@ -1325,9 +1358,10 @@ public:
          builder.getNamedAttr("plan",
                               builder.getStringAttr(policy.construction)),
          builder.getNamedAttr("helpers", builder.getArrayAttr(invokedHelpers)),
-         builder.getNamedAttr("removed_services",
-                              builder.getArrayAttr({builder.getI64IntegerAttr(
-                                  *policy.service)})),
+         builder.getNamedAttr(
+             "removed_services",
+             builder.getI64ArrayAttr(SmallVector<int64_t>(
+                 policy.services.begin(), policy.services.end()))),
          builder.getNamedAttr("actions", actions)});
     NamedAttrList updated(original);
     updated.append("construction", construction);
@@ -1371,7 +1405,8 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
     if (resolved->definitions.size() !=
             size_t(std::distance(records.begin(), records.end())) ||
         checked.target.getValue() != policy.entry ||
-        checked.suite != policy.suite || checked.service != policy.service)
+        checked.suite != policy.suite ||
+        !llvm::equal(checked.services, policy.services))
       return error("native-proof-construction-selection");
     if (bool(checked.codec) !=
         (policy.format == protocol::ProofFormat::RawBytes))

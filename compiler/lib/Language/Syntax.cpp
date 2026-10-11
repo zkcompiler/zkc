@@ -1239,7 +1239,7 @@ private:
           if (take("authored"))
             construction.base = ConstructionDefinition::Base::Authored;
           else if (take("fiat_shamir")) {
-            if (construction.service) {
+            if (!construction.services.empty()) {
               fail("source.construction",
                    "query authority was already selected");
               return {};
@@ -1251,7 +1251,7 @@ private:
             service.span = current().span;
             if (!name(service.name) || !expect(")"))
               return {};
-            construction.service = std::move(service);
+            construction.services.push_back(std::move(service));
           } else {
             construction.base = ConstructionDefinition::Base::Named;
             construction.parent.emplace();
@@ -1265,13 +1265,20 @@ private:
           if (!type(*construction.provider) || !expect(";"))
             return {};
         } else if (key == "replace") {
-          if (construction.service) {
+          if (!construction.services.empty()) {
             fail("source.construction", "query authority was already selected");
             return {};
           }
-          construction.service.emplace();
-          construction.service->span = current().span;
-          if (!name(construction.service->name) || !expect(";"))
+          bool set = take("{");
+          do {
+            SyntaxName service;
+            service.span = current().span;
+            if (!name(service.name))
+              return {};
+            service.span.end = previousEnd;
+            construction.services.push_back(std::move(service));
+          } while (set && take(",") && !at("}"));
+          if ((set && !expect("}")) || !expect(";"))
             return {};
         } else if (key == "format") {
           if (take("RawBytes"))

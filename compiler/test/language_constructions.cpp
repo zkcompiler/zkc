@@ -152,7 +152,7 @@ int main() {
         zkc::NativeProofPolicy policy;
         policy.entry = native.target.getValue().str();
         policy.construction = native.symbol.getValue().str();
-        policy.service = native.service;
+        policy.services.assign(native.services.begin(), native.services.end());
         policy.suite = native.suite;
         policy.format = zkc::protocol::ProofFormat::RawBytes;
         policy.publicInputs = {0};
@@ -309,7 +309,9 @@ int main() {
                   "entries");
           if (declaration.getString("kind") == "construction") {
             ++constructors;
-            require(declaration.getString("replace") == "challenges" &&
+            require(declaration.get("replace") &&
+                        *declaration.get("replace") ==
+                            json::Value(json::Array{"challenges"}) &&
                         declaration.getString("root") == "local" &&
                         declaration.getArray("rules")->size() == 5,
                     "inspection retains checked authority, root and complete "
@@ -442,7 +444,7 @@ int main() {
     zkc::NativeProofPolicy policy;
     policy.entry = plan.target.getValue().str();
     policy.construction = plan.symbol.getValue().str();
-    policy.service = plan.service;
+    policy.services.assign(plan.services.begin(), plan.services.end());
     policy.publicInputs = {0};
     mlir::SymbolTable table(unit);
     auto protocol =
@@ -525,7 +527,7 @@ int main() {
     zkc::NativeProofPolicy policy;
     policy.entry = plan.target.getValue().str();
     policy.construction = plan.symbol.getValue().str();
-    policy.service = plan.service;
+    policy.services.assign(plan.services.begin(), plan.services.end());
     policy.suite = plan.suite;
     policy.format = plan.codec ? zkc::protocol::ProofFormat::RawBytes
                                : zkc::protocol::ProofFormat::Native;
@@ -534,8 +536,9 @@ int main() {
     policy.validator =
         mlir::cast<mlir::StringAttr>(protocol.getRoles()[1]).str();
     for (auto [i, roles] : enumerate(protocol.getInputRoles()))
-      if (i != plan.service && is_contained(mlir::cast<mlir::ArrayAttr>(roles),
-                                            protocol.getRoles()[1]))
+      if (!is_contained(plan.services, i) &&
+          is_contained(mlir::cast<mlir::ArrayAttr>(roles),
+                       protocol.getRoles()[1]))
         policy.publicInputs.push_back(i);
     auto selected = take(zkc::selectNativeProofDraws(*parsed, policy));
     auto result = take(zkc::constructNativeProof(*parsed, selected));
@@ -619,7 +622,7 @@ int main() {
           zkc::NativeProofPolicy policy;
           policy.entry = plan.target.getValue().str();
           policy.construction = plan.symbol.getValue().str();
-          policy.service = plan.service;
+          policy.services.assign(plan.services.begin(), plan.services.end());
           policy.publicInputs = {0};
           policy.producer =
               mlir::cast<mlir::StringAttr>(protocol.getRoles()[0]).str();
@@ -1022,7 +1025,7 @@ int main() {
     zkc::NativeProofPolicy policy;
     policy.entry = plan.target.getValue().str();
     policy.construction = plan.symbol.getValue().str();
-    policy.service = plan.service;
+    policy.services.assign(plan.services.begin(), plan.services.end());
     policy.publicInputs = {0};
     auto protocol =
         table.lookup<zkc::protocol_ir::MathematicalOp>(policy.entry);
@@ -1102,6 +1105,24 @@ int main() {
       construction A for P{base authored;format RawBytes;}
       construction B for P{base A;}
     )"));
+  });
+  cases.run("construction depth is independent of declaration order", [&] {
+    std::vector<std::string> definitions{
+        "construction C0 for P{base authored;}"};
+    for (unsigned i = 1; i <= 70; ++i)
+      definitions.push_back("construction C" + std::to_string(i) +
+                            " for P{base C" + std::to_string(i - 1) + ";}");
+    auto source = [&](ArrayRef<std::string> ordered) {
+      std::string text = "module m; protocol P roles(A,B)(ok:bool@B)"
+                         "->(ok:bool@B){return ok;}";
+      for (const auto &definition : ordered)
+        text += definition;
+      return text;
+    };
+    take(checked(source(ArrayRef<std::string>(definitions).take_front(5))));
+    refuses(checked(source(definitions)), "source.limit");
+    std::reverse(definitions.begin(), definitions.end());
+    refuses(checked(source(definitions)), "source.limit");
   });
   return cases.result();
 }

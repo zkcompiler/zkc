@@ -197,7 +197,7 @@ The compiler's policy is an exact array (JSON spelling carries no identity):
 
 ```text
 ["zkc.native-proof-policy/0", entry, producer, validator, acceptance,
- suite, service, public_inputs, [[query_site, delivery_site], ...], format,
+ suite, services, public_inputs, [[query_site, delivery_site], ...], format,
  construction]
 ```
 
@@ -207,15 +207,17 @@ target, provider suite and replacement authority must match this policy.
 
 Indices are canonical decimal strings less than 1024. Public input indices are
 strictly increasing and enumerate every validator data input, including unused
-inputs. All are explicitly authorized for public invocation binding. `service`
-is the original validator service input index. With no construction selector,
-an empty suite, service and draw list select authored execution; a native
-selection requires a supported suite, selected service and 1–64 draws. A custom
-selection requires its replaced service and permits 0–64 draws. Local factories
-use an empty suite. A managed root absorbs the canonical invocation at issuance;
-this does not establish that custom handlers use it correctly. A draw pair selects either a `draw` or an `index` query of that service. Selectors use prepared static occurrence sites; native labels retain
-original authored paths. No timing or security premise follows from selecting
-this policy.
+inputs. All are explicitly authorized for public invocation binding. `services`
+is a strictly increasing array of original validator service input indices.
+With no construction selector, an empty suite, service set and draw list select
+authored execution; native selection requires a supported suite, one selected
+service and 1–64 draws. A programmable selection requires a nonempty service set
+and permits 0–64 draws. Local factories use an empty suite. A managed root
+absorbs the canonical invocation at issuance; this does not establish that
+custom handlers use it correctly. Each draw pair selects a `draw` or `index`
+query on one selected authority, preserving that query's actual contract.
+Selectors use prepared static occurrence sites; native labels retain original
+authored paths. No timing or security premise follows from this policy.
 
 `format` is `zkc.framed/0` or `raw.bytes/0`. Native framing uses the header and
 message frames below. Raw Bytes uses no header, length prefix or implicit
@@ -308,14 +310,14 @@ structural admission does not authenticate handler source or prove its security.
 A constructed projection interface adds a `construction` dictionary with
 `format = "zkc.native-construction/0"`, `state` types, `root`, selected `plan`
 (or empty for native), `helpers`, `removed_services` (the original service
-index), and the complete actual `actions` map. Original interface fields, port
+indices in strictly increasing order), and the complete actual `actions` map. Original interface fields, port
 lists and action records remain unchanged. Host roots append state inputs;
 both root kinds append state results. Original data and output positions stay
 unchanged. Formation checks the new
 signatures, remaining services and every actual action. It retains original
 producer queries, messages, local calls and guards exactly and in order. Only
-queries at the removed service owner and that owner's outgoing challenge
-messages can disappear. Inserted actions call the [indexed helpers](../ir/construction.md#ordered-construction).
+queries whose original service index is selected, and their paired outgoing
+challenge messages, can disappear. Retained private queries stay in order. Inserted actions call the [indexed helpers](../ir/construction.md#ordered-construction).
 A record construction additionally carries a `codec` dictionary with exactly
 `producer`, `validator` and `helpers`. The action map removes typed proof
 transport and records the actual codec calls. Its helper list names precisely
@@ -354,7 +356,8 @@ All indices use canonical decimal strings below 1024.
 Role data/result maps are in original port order. A shared original data port
 must have the same nominal logical type at both roles; deployment admission
 checks this before invocation inputs. A service ingress index counts
-both original data and service inputs at that role. Acceptance is the validator's
+both data and retained service inputs at that role, after selected services
+are removed. Service names remain tied to their original ingress positions. Acceptance is the validator's
 actual result index, mapped to the selected original Boolean result; the
 producer's acceptance field is empty. Generated transcript ports are appended
 and excluded from these original port maps. The final wire map lists original
@@ -413,8 +416,9 @@ rows enumerate that role's mapped data ports in source order. `input_kind` is
 `wire` with lowercase canonical wire hex, producer-only `nonce`/`rng` with a
 canonical decimal transition budget, or an authorized key constructor described
 [below](#setup-authority-and-input-ownership). Issued resources use their exact
-admitted physical type and the role's host domain. Service rows select mapped producer random services;
-the validator has none. Budgets are at most 1,000,000. Context decodes to at most
+admitted physical type and the role's host domain. Service rows select retained
+random services at the executing role, including validator-local services.
+Replaced authorities have no service row. Budgets are at most 1,000,000. Context decodes to at most
 4096 bytes. An authored no-transcript invocation requires transcript budget zero.
 Input trees obey the common logical-tree limits, including through the direct
 Rust API. Shared public ports must equal the role's supplied value bytes.
@@ -432,9 +436,9 @@ The exact invocation root tree is:
  context_hex]
 ```
 
-The root has exactly ten fields. The full encoded root is absorbed at transcript
-initialization; changing these
-bytes changes the derived challenges. Its SHA-256 digest is the expected
+The root has exactly ten fields. A managed transcript absorbs the full encoded
+root at initialization. Native transitions derive challenges from that state.
+Its SHA-256 digest is the expected
 `ZKCPRF00` header. Physical candidates and lowering options are absent, allowing
 proof exchange between independently authenticated compilations of the same
 source/policy. Distinct source bytes, policies, public values or context change
@@ -444,14 +448,19 @@ The authored control is not a cryptographic binding or proof-of-knowledge claim.
 Execution reports use `binding_scope = "transcript"` for managed construction,
 `"header"` for native-framed local/authored execution, and `"authored"` for raw
 bytes with local/authored state. Raw codecs with a managed root keep
-`"transcript"` binding. With local/authored raw bytes, Host context contributes
+`"transcript"` binding. This reports Host absorption into the managed root;
+custom handlers can ignore that state or return constant challenges. Neither
+this report nor absence of an `--allow-authored` requirement establishes that
+custom rules bind the proof or preserve a security argument. With local/authored raw bytes, Host context contributes
 to the reported invocation identity but is not transmitted or authenticated. It is not visible to source code. Context
 that an authored algorithm must bind needs an explicit public protocol input.
 
 Final proof admission checks both roles' exact ordered native transitions,
 unique origins and complete affine state chain. It also checks matching wire
 layouts and that each message observation consumes the actual sent/received
-value (or the freshly derived erased delivery). An extra unreachable transition,
+value (or the freshly derived erased delivery). Private replies and unpublished
+inputs obey the [construction dependency rules](../language/entries.md#construction-bodies),
+which do not assert termination independence. An extra unreachable transition,
 a dropped final observation, duplicate static helper use or an unlisted transcript operation
 refuses. Ordinary supplied-carrier admission grants none of these proof-specific
 properties.

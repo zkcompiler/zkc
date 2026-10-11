@@ -4,6 +4,7 @@
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
+#include <map>
 #include <numeric>
 using namespace mlir;
 using namespace llvm;
@@ -37,6 +38,7 @@ class Resolver {
   SymbolTableCollection &symbols;
   uint64_t remaining = 1000000;
   llvm::StringSet<> active, definitions;
+  std::map<Operation *, ConstructionPlan> plans;
   ResolvedConstruction result;
   Error fail(StringRef detail) {
     return error("protocol-construction", detail);
@@ -46,6 +48,36 @@ class Resolver {
       return false;
     remaining -= count;
     return true;
+  }
+  bool chargePlan(const ConstructionPlan &plan) {
+    if (!charge(1 + plan.rules.size() + plan.applications.size() +
+                plan.state.size()))
+      return false;
+    for (const auto &rule : plan.rules) {
+      if (!charge(1 + 2 * plan.state.size() + rule.inputs.size() +
+                  2 * rule.payload.size() + 3 * rule.chunks.size() +
+                  (plan.codec ? 2 * plan.codec->record.size() : 0)))
+        return false;
+      for (const auto &site : rule.sites)
+        if (!charge(site.size() + 1))
+          return false;
+    }
+    return true;
+  }
+  Expected<const ConstructionPlan &> read(pir::ConstructionOp record) {
+    if (!charge(1))
+      return fail("construction resolution work limit exceeded");
+    auto found = plans.find(record);
+    if (found != plans.end())
+      return found->second;
+    // Each definition is read once. Its bounded signature work is charged to
+    // this traversal as well as each later occurrence's copying/expansion.
+    auto checked = readConstructionPlan(record, symbols);
+    if (!checked)
+      return checked.takeError();
+    if (!chargePlan(*checked))
+      return fail("construction resolution work limit exceeded");
+    return plans.emplace(record, std::move(*checked)).first->second;
   }
   Expected<std::string> site(ArrayRef<std::string> outer,
                              ArrayRef<std::string> path) {
@@ -132,22 +164,12 @@ class Resolver {
     if (depth > 64 || !active.insert(record.getSymName()).second)
       return fail("cyclic or excessively deep construction composition");
     auto remove = llvm::scope_exit([&] { active.erase(record.getSymName()); });
-    auto checked = readConstructionPlan(record, symbols);
+    auto checked = read(record);
     if (!checked)
       return checked.takeError();
-    auto plan = std::move(*checked);
-    if (!charge(1 + plan.rules.size() + plan.applications.size() +
-                plan.state.size()))
+    const auto &plan = *checked;
+    if (!chargePlan(plan))
       return fail("construction resolution work limit exceeded");
-    for (const auto &rule : plan.rules) {
-      if (!charge(1 + 2 * plan.state.size() + rule.inputs.size() +
-                  2 * rule.payload.size() + 3 * rule.chunks.size() +
-                  (plan.codec ? 2 * plan.codec->record.size() : 0)))
-        return fail("construction resolution work limit exceeded");
-      for (const auto &site : rule.sites)
-        if (!charge(site.size() + 1))
-          return fail("construction resolution work limit exceeded");
-    }
     if (definitions.insert(record.getSymName()).second)
       result.definitions.push_back(plan.symbol);
     auto target = symbols.lookupNearestSymbolFrom<pir::MathematicalOp>(
@@ -176,7 +198,7 @@ class Resolver {
       children.push_back(&call);
       auto child = symbols.lookupNearestSymbolFrom<pir::ConstructionOp>(
           record, selection.construction);
-      auto childPlan = readConstructionPlan(child, symbols);
+      auto childPlan = read(child);
       if (!childPlan)
         return childPlan.takeError();
       auto applied = cast<pir::ApplyOp>(call.operation);
@@ -185,19 +207,20 @@ class Resolver {
           childPlan->provider != plan.provider ||
           childPlan->state != plan.state || childPlan->root != plan.root ||
           childPlan->suite != plan.suite ||
-          childPlan->initializer != plan.initializer ||
-          call.services[childPlan->service] != plan.service)
+          childPlan->initializer != plan.initializer)
         return fail("child target, transcript root or authority differs");
       for (auto [port, type] : enumerate(applied.getOperandTypes()))
         if (isa<pir::ServiceReferenceType>(type) &&
-            call.services[port] == plan.service && port != childPlan->service)
+            (is_contained(plan.services, call.services[port]) !=
+             is_contained(childPlan->services, port)))
           return fail("child aliases the replaced authority through an "
                       "unselected port");
       auto childTarget = symbols.lookupNearestSymbolFrom<pir::MathematicalOp>(
           child, childPlan->target);
-      auto parentOwners = cast<ArrayAttr>(target.getInputRoles()[plan.service]);
-      auto childOwners =
-          cast<ArrayAttr>(childTarget.getInputRoles()[childPlan->service]);
+      auto parentOwners =
+          cast<ArrayAttr>(target.getInputRoles()[plan.services.front()]);
+      auto childOwners = cast<ArrayAttr>(
+          childTarget.getInputRoles()[childPlan->services.front()]);
       if (childTarget.getRoles().size() != 2 || parentOwners.size() != 1 ||
           childOwners.size() != 1)
         return fail("child authority requires one verifier owner");
@@ -238,7 +261,7 @@ class Resolver {
         const auto &occurrence = found->second;
         bool query = rule.kind == ConstructionRuleKind::Query;
         if ((query && (!isa<pir::QueryOp>(occurrence.operation) ||
-                       occurrence.authority != plan.service)) ||
+                       !is_contained(plan.services, occurrence.authority))) ||
             (!query && !isa<pir::ExchangeOp>(occurrence.operation)))
           return fail("construction rule kind or authority differs");
         if (!codec) {
@@ -263,7 +286,7 @@ class Resolver {
         const auto &occurrence = item.second;
         if (!isa<pir::ExchangeOp>(occurrence.operation) &&
             !(isa<pir::QueryOp>(occurrence.operation) &&
-              occurrence.authority == plan.service))
+              is_contained(plan.services, occurrence.authority)))
           continue;
         auto owned = delegated(occurrence);
         if (!owned)
@@ -287,10 +310,10 @@ class Resolver {
 public:
   explicit Resolver(SymbolTableCollection &symbols) : symbols(symbols) {}
   Expected<ResolvedConstruction> run(pir::ConstructionOp record) {
-    auto root = readConstructionPlan(record, symbols);
+    auto root = read(record);
     if (!root)
       return root.takeError();
-    result.plan = std::move(*root);
+    result.plan = *root;
     result.plan.rules.clear();
     result.plan.applications.clear();
     if (auto e = visit(record, {}, 0))

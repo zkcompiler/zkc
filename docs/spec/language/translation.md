@@ -59,7 +59,7 @@ is empty. Custody slot identities use the complete SHA-256 digest of canonical s
 A closed programmable construction emits one `protocol.construction` symbol
 beside its target `protocol.func` and ordinary Local functions. It retains the
 provider identity, root kind, ordered state types, initializer symbol,
-replacement service index, native-base requirement and resolved handler rules.
+sorted replacement service indices, native-base requirement and resolved handler rules.
 Rules refer to Local symbols. Start selectors identify original flattened input
 ports; message selectors retain the ordered native leaves of one logical
 payload. Query bodies retain the source `(state, value)` result order.
@@ -162,7 +162,7 @@ Every protocol in the selected closure passes target preparation.
 The selected Entry interface represents this association as
 `construction: {kind: "derived", format, symbol, suite, service}`. `suite` is null
 for a Local factory. The independently read interface checks the selected
-Protocol record, provider suite and original replaced service. The Host binds
+Protocol record, provider suite and original replaced service set. The Host binds
 that symbol to the executable construction plan and uses the ordinary compiled
 participant programs. A custom selection does not inherit the installed
 construction's invocation-binding claim.

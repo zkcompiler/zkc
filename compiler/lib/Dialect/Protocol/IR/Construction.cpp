@@ -28,11 +28,23 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
   if (!target || failed(target->getName().verifyInvariants(target)))
     return fail("construction target must be a protocol definition");
   auto signature = target.getFunctionType();
-  auto service = record.getService();
-  if (service < 0 || uint64_t(service) >= signature.getNumInputs() ||
-      !isa<protocol_ir::ServiceReferenceType>(signature.getInput(service)) ||
+  SmallVector<unsigned> services;
+  if (record.getServices().empty() ||
       target.getInputRoles().size() != signature.getNumInputs())
-    return fail("replacement must select a protocol service input");
+    return fail("replacement must select protocol service inputs");
+  ArrayAttr verifier;
+  for (auto service : record.getServices()) {
+    if (service < 0 || uint64_t(service) >= signature.getNumInputs() ||
+        (!services.empty() && services.back() >= uint64_t(service)) ||
+        !isa<protocol_ir::ServiceReferenceType>(signature.getInput(service)))
+      return fail(
+          "replacement services must be distinct inputs in original order");
+    auto owners = dyn_cast<ArrayAttr>(target.getInputRoles()[service]);
+    if (!owners || owners.size() != 1 || (verifier && owners != verifier))
+      return fail("replacement authorities require one verifier owner");
+    verifier = owners;
+    services.push_back(unsigned(service));
+  }
   if (record.getProvider().empty() || record.getProvider().size() > 65536 ||
       record.getState().size() > 1024 || record.getRules().size() > 2048 ||
       record.getApplications().size() > 2048)
@@ -47,7 +59,7 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
                         record.getInitializerAttr(),
                         record.getProvider().str(),
                         record.getSuite().str(),
-                        unsigned(service),
+                        std::move(services),
                         record.getNativeBase(),
                         {},
                         {},
@@ -98,9 +110,6 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
       return fail("local root requires a matching zero-argument factory");
   } else {
     if (plan.initializer || nativeChallengeField(plan.suite).empty() ||
-        randomServiceField(
-            cast<protocol_ir::ServiceReferenceType>(signature.getInput(service))
-                .getContract()) != nativeChallengeField(plan.suite) ||
         plan.state.size() != 1 ||
         plan.state.front() !=
             local::CapabilityType::get(record.getContext(),

@@ -529,12 +529,14 @@ def test_record_codec_checks_producer_program(toolchain, journal, directory, mut
 
 @pytest.mark.parametrize('native', [False, True])
 @pytest.mark.parametrize('flags', [[], ['--release-storage']])
-def test_codec_record_crosses_event_free_protocol_loop(toolchain, journal, directory, native, flags):
+@pytest.mark.parametrize('roles', ['P,V', 'V'])
+def test_codec_record_crosses_event_free_protocol_loop(toolchain, journal, directory, native, flags,
+                                                      roles):
     text = SOURCE.replace('STATE', '(index,index)').replace('INITIAL', '(0,0)')
     text = text.replace('LOOP_START', '').replace('LOOP_END', '')
     text = text.replace(
         '#[site(challenge)]',
-        'for _ in 0..rounds roles(P,V) max 2 {'
+        f'for _ in 0..rounds roles({roles}) max 2 {{'
         'let keep@V=allowed(rounds);accepted=accepted && keep;}'
         '#[site(challenge)]')
     text = text.replace('accepted=last.0==first.0+c;', 'accepted=accepted && last.0==first.0+c;')
@@ -548,7 +550,8 @@ def test_codec_record_crosses_event_free_protocol_loop(toolchain, journal, direc
                              f'--module=sample={source}', 'sample::Packed', f'--output={package}', *flags])
     deployment = json.loads(json.loads(package.read_text())['artifact'])
     program = json.loads(deployment[4])
-    assert all(any(op[0] == 'loop' for op in participant[6]) for participant in program[3])
+    loops = [any(op[0] == 'loop' for op in participant[6]) for participant in program[3]]
+    assert loops == [roles == 'P,V', True]
     witness = journal.write('witness.json', {'secret': '7'})
     for rounds in [0, 2]:
         public = journal.write(f'public-{rounds}.json', {'public': '5', 'rounds': str(rounds)})

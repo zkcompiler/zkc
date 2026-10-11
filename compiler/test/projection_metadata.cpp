@@ -51,6 +51,56 @@ constexpr StringLiteral fixture = R"mlir(module { "protocol.module"() ({
     "protocol.return"(%reply) : (i1) -> ()
   }) {sym_name="main", function_type=(i1) -> i1, roles=["P", "V"], input_roles=[["P"]], output_roles=[["V"]]} : () -> ()
 }) {profile=#protocol.profile<protocol>} : () -> () })mlir";
+void queryAuthority(MLIRContext &context) {
+  auto source =
+      parseSourceString<ModuleOp>(R"mlir(module { "protocol.module"() ({
+    "protocol.func"() ({
+    ^entry(%first: !protocol.service_ref<"random.bls12-381.fr/0">,
+           %second: !protocol.service_ref<"random.bls12-381.fr/0">):
+      %value = "protocol.query"(%first) {method="draw", owner="V", site="pick"} :
+        (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">
+      "protocol.return"(%value) : (!algebra.field<"bls12-381.fr">) -> ()
+    }) {sym_name="main", roles=["P","V"], input_roles=[["V"],["V"]], output_roles=[["V"]],
+        function_type=(!protocol.service_ref<"random.bls12-381.fr/0">,
+                       !protocol.service_ref<"random.bls12-381.fr/0">)->!algebra.field<"bls12-381.fr">} : () -> ()
+  }) {profile=#protocol.profile<protocol>} : () -> () })mlir",
+                                  &context);
+  require(bool(source), "query authority fixture refused");
+  auto projected = copy(*source);
+  run(*projected, protocol::createProjectProtocolPass());
+  require(
+      succeeded(mathematical::verifyProjectionPreserved(*source, *projected)),
+      "query authority positive control refused");
+  auto changed = copy(*projected);
+  changed->walk([&](protocol_ir::ParticipantQueryOp query) {
+    query.setPort("service_1");
+  });
+  bool identified = false;
+  ScopedDiagnosticHandler expected(&context, [&](Diagnostic &d) {
+    identified |= d.str().find("mathematical-projection") != std::string::npos;
+    return success();
+  });
+  require(failed(verify(*changed)) && identified,
+          "projection admitted a same-contract authority substitution");
+  changed->walk([&](protocol_ir::ProjectionOp record) {
+    auto interface = cast<DictionaryAttr>(record.getInterfaces()[0]);
+    NamedAttrList action(
+        cast<DictionaryAttr>(interface.getAs<ArrayAttr>("actions")[0]));
+    OpBuilder builder(&context);
+    action.set("service", builder.getI64IntegerAttr(1));
+    NamedAttrList updated(interface);
+    updated.set("actions",
+                builder.getArrayAttr({action.getDictionary(&context)}));
+    record.setInterfacesAttr(
+        builder.getArrayAttr({updated.getDictionary(&context)}));
+  });
+  require(succeeded(verify(*changed)),
+          "matching forged metadata lost formation");
+  identified = false;
+  require(failed(mathematical::verifyProjectionPreserved(*source, *changed)) &&
+              identified,
+          "source correspondence admitted jointly forged query authority");
+}
 void unverifiedCompletion(MLIRContext &context) {
   auto source = parseSourceString<ModuleOp>(R"mlir(module {
     "protocol.module"() ({
@@ -391,6 +441,7 @@ int main() {
   DialectRegistry registry;
   registerDialects(registry);
   MLIRContext context(registry);
+  queryAuthority(context);
   unverifiedCompletion(context);
   profileEdges(context);
   suppliedMaterialization(context);

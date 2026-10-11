@@ -54,6 +54,13 @@ capability retention is reserved before issuance. Loading and execution have
 separate [capacity ledgers](../spec/runtime/capacity.md). A stopped initializer
 does not open a proof reader or writer.
 
+Selected query authorities become transcript transitions. Other randomness
+services remain explicit participant inputs with separate budgets. Verification
+can use these private services for local checks; dependency admission prevents
+private replies from entering shared construction state or shared loop counts.
+The Host dispatches retained queries through the same service mechanism used by
+ordinary participant execution.
+
 ## Execution and results
 
 Derived construction uses explicit affine transcript state. Authored execution

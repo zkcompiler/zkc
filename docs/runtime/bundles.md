@@ -124,7 +124,7 @@ module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : () -> () }
 IR
 cat > "$work_dir/policy.json" <<'JSON'
-["zkc.native-proof-policy/0", "main", "P", "V", "0", "", "", [], [], "zkc.framed/0", ""]
+["zkc.native-proof-policy/0", "main", "P", "V", "0", "", [], [], [], "zkc.framed/0", ""]
 JSON
 "$compiler" protocol-proof "$work_dir/message.mlir" "$work_dir/policy.json" > "$work_dir/deployment.json"
 # Authorize these exact bytes from our own trusted compilation.

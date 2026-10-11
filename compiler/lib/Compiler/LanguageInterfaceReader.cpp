@@ -1247,33 +1247,51 @@ class Reader {
     if (!constructionKind || !parsedFormat)
       return fail("unknown Entry proof format");
     proof.format = *parsedFormat;
+    auto readServices = [&]() {
+      auto *services = array(*constructionObject, "services");
+      if (!services || services->empty() ||
+          services->size() > current->services.size())
+        return fail("construction requires verifier service inputs");
+      for (const auto &value : *services) {
+        auto service = value.getAsInteger();
+        if (!service || *service < 0 ||
+            uint64_t(*service) >= current->services.size() ||
+            (!proof.services.empty() &&
+             proof.services.back() >= uint64_t(*service)) ||
+            current->services[*service].owner != proof.verifier)
+          return fail("construction services must select verifier inputs in "
+                      "original order");
+        proof.services.push_back(unsigned(*service));
+      }
+      return true;
+    };
     if (*constructionKind == "authored") {
       if (!object(construction, {"kind", "format"}))
         return false;
     } else if (*constructionKind == "fiat_shamir") {
-      if (!object(construction, {"kind", "format", "suite", "service"}))
+      if (!object(construction, {"kind", "format", "suite", "services"}))
         return false;
       auto suite = text(*constructionObject, "suite");
-      auto service = natural(*constructionObject, "service");
-      if (!suite || !service)
+      if (!readServices())
+        return false;
+      if (!suite)
         return false;
       if (proof.format != protocol::ProofFormat::Native ||
-          *service >= current->services.size() ||
-          current->services[*service].owner != proof.verifier ||
+          proof.services.size() != 1 ||
           protocol::nativeChallengeField(*suite).empty() ||
           protocol::nativeChallengeField(*suite) !=
               protocol::randomServiceField(
-                  current->services[*service].contract))
+                  current->services[proof.services.front()].contract))
         return fail("construction suite or verifier service differs");
       proof.construction = ProofEntry::Construction::FiatShamir;
       proof.suite = suite->str();
-      proof.service = *service;
     } else if (*constructionKind == "derived") {
       if (!object(construction,
-                  {"kind", "format", "suite", "service", "symbol"}))
+                  {"kind", "format", "suite", "services", "symbol"}))
         return false;
       auto symbol = text(*constructionObject, "symbol");
-      auto service = natural(*constructionObject, "service");
+      if (!readServices())
+        return false;
       std::string suite;
       if (constructionObject->get("suite")->kind() != json::Value::Null) {
         auto name = text(*constructionObject, "suite");
@@ -1281,8 +1299,7 @@ class Reader {
           return false;
         suite = name->str();
       }
-      if (!symbol || !service || *service >= current->services.size() ||
-          current->services[*service].owner != proof.verifier)
+      if (!symbol)
         return fail("construction selection or verifier service differs");
       auto found = nativeConstructions.find(symbol->str());
       if (found == nativeConstructions.end())
@@ -1294,27 +1311,23 @@ class Reader {
         return fail("invalid construction record");
       }
       const auto &plan = resolved->plan;
+      SmallVector<unsigned> selectedServices;
+      for (auto service : proof.services)
+        selectedServices.push_back(current->services[service].native);
       if (resolved->definitions.size() != nativeConstructions.size() ||
           plan.codec.has_value() !=
               (proof.format == protocol::ProofFormat::RawBytes) ||
           plan.target.getValue() != current->symbol || plan.suite != suite ||
-          plan.service != current->services[*service].native)
+          plan.services != selectedServices)
         return fail("construction record differs");
       proof.construction = ProofEntry::Construction::Derived;
       proof.selectedConstruction = symbol->str();
       proof.suite = suite;
-      proof.service = *service;
     } else
       return fail("unknown Entry construction");
     if (proof.construction != ProofEntry::Construction::Derived &&
         !nativeConstructions.empty())
       return fail("unselected construction record");
-    for (unsigned i = 0; i < current->services.size(); ++i) {
-      if (!charge(1))
-        return false;
-      if (current->services[i].owner == proof.verifier && proof.service != i)
-        return fail("verifier service is outside the selected construction");
-    }
     if (obj->get("target")->kind() != json::Value::Null) {
       auto target = text(*obj, "target", limits.identifierBytes);
       if (!target)

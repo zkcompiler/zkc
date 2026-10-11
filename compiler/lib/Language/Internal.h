@@ -258,7 +258,7 @@ struct SyntaxConstruction {
   std::optional<SyntaxType> parent, provider;
   std::optional<SyntaxType> codec;
   std::vector<SyntaxName> layout;
-  std::optional<SyntaxName> service;
+  std::vector<SyntaxName> services;
   std::string suite;
   std::vector<SyntaxConstructionRule> rules;
   std::vector<SyntaxConstructionApplication> applications;

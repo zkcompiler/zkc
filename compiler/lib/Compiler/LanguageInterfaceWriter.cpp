@@ -268,7 +268,10 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
             out.attribute("suite", nullptr);
           else
             out.attribute("suite", proof->suite);
-          out.attribute("service", *proof->service);
+          out.attributeArray("services", [&] {
+            for (auto service : proof->services)
+              out.value(service);
+          });
         }
         if (selected)
           out.attribute(

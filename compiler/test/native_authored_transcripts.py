@@ -29,7 +29,7 @@ for suffix, options in [("", []), ("_plain", ["--no-simplify"]), ("_release", ["
      "local.condition"(%again,%next#0,%next#1,%state,%width,%choices) : (i1,ui64,i1,!words,ui64,!words)->()''')
         src, pol = OUT / f'{name}.mlir', OUT / f'{name}.policy'
         src.write_text(source)
-        pol.write_text(json.dumps(['zkc.native-proof-policy/0', 'main', 'P', 'V', '0', '', '', ['0', '1', '2'], [], "zkc.framed/0", ""]))
+        pol.write_text(json.dumps(['zkc.native-proof-policy/0', 'main', 'P', 'V', '0', '', [], ['0', '1', '2'], [], "zkc.framed/0", ""]))
         (OUT / f'{name}.deployment').write_text(commands.run([compiler, 'protocol-proof', src, pol, *options]))
         manifest.append(dict(name=name, family='openvm', early=True))
 
@@ -64,7 +64,7 @@ for family in ("monero", "openvm"):
     source = (fixtures / f"authored-{family}.mlir").read_text()
     policy = OUT / f"{family}.policy"
     policy.write_text(json.dumps(["zkc.native-proof-policy/0", "main", "P", "V", "0",
-                                  "", "", ["0", "1", "2"], [], "zkc.framed/0", ""]))
+                                  "", [], ["0", "1", "2"], [], "zkc.framed/0", ""]))
     for suffix, options in [("", []), ("_plain", ["--no-simplify"]),
                             ("_release", ["--release-storage"]),
                             ("_plain_release", ["--no-simplify", "--release-storage"])]:
@@ -151,7 +151,7 @@ for suffix, options in [("", []), ("_plain", ["--no-simplify"]), ("_release", ["
    %claim =''').replace('(%ok,%prepared#1,%prepared#2)', '(%ok,%prepared#1,%rng_next)')
         src, pol = OUT / f'{name}.mlir', OUT / f'{name}.policy'
         src.write_text(source)
-        pol.write_text(json.dumps(['zkc.native-proof-policy/0', 'main', 'P', 'V', '0', '', '', ['0', '1'], [], "zkc.framed/0", ""]))
+        pol.write_text(json.dumps(['zkc.native-proof-policy/0', 'main', 'P', 'V', '0', '', [], ['0', '1'], [], "zkc.framed/0", ""]))
         (OUT / f'{name}.deployment').write_text(commands.run([compiler, 'protocol-proof', src, pol, *options]))
         manifest.append(dict(name=name, family='prefix', early=True))
 
@@ -161,7 +161,7 @@ for suffix, options in [("", []), ("_plain", ["--no-simplify"]),
         name = "prefix" + suffix
         policy = OUT / "prefix.policy"
         policy.write_text(json.dumps(["zkc.native-proof-policy/0", "main", "P", "V", "0",
-                                      "", "", ["0", "1"], [], "zkc.framed/0", ""]))
+                                      "", [], ["0", "1"], [], "zkc.framed/0", ""]))
         (OUT / f"{name}.deployment").write_text(commands.run([
             compiler, "protocol-proof", fixtures / "authored-prefix.mlir", policy, *options]))
         manifest.append(dict(name=name, family="prefix"))

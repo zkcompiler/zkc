@@ -64,6 +64,7 @@ struct MetadataVerifier {
   SymbolTableCollection &tables;
   NativeTypePolicies &types;
   llvm::DenseSet<Attribute> authoredCallees;
+  llvm::DenseMap<std::pair<Attribute, Attribute>, StringAttr> queryPorts;
   llvm::DenseSet<Operation *> seenParticipants, entries;
   unsigned remaining = 1000000;
   using Occurrences =
@@ -247,8 +248,8 @@ struct MetadataVerifier {
           !format || format.getValue() != "zkc.native-construction/0" ||
           !states || states.size() > 1024 || !root ||
           (root.getValue() != "host" && root.getValue() != "local") || !plan ||
-          !helpers || helpers.size() > 16384 || !removed ||
-          removed.size() != 1 || !constructedActions)
+          !helpers || helpers.size() > 16384 || !removed || removed.empty() ||
+          removed.size() > type.getNumInputs() || !constructedActions)
         return refuse(record, "invalid native construction mapping");
       hostRoot = root.getValue() == "host";
       programmable = !plan.empty();
@@ -301,12 +302,14 @@ struct MetadataVerifier {
               !codecHelpers.insert(helper).second)
             return refuse(record, "invalid codec helper selection");
       }
+      std::optional<unsigned> previousService;
       for (auto item : removed) {
         auto port = index(item, type.getNumInputs());
-        if (!port ||
+        if (!port || (previousService && *previousService >= *port) ||
             !isa<protocol_ir::ServiceReferenceType>(type.getInput(*port)) ||
             !removedServices.insert(*port).second)
           return refuse(record, "invalid removed source service");
+        previousService = *port;
       }
       // Original actions remain source records. Only the actual action map is
       // resolved against the transformed body. Source-relative construction
@@ -339,8 +342,26 @@ struct MetadataVerifier {
               !(call   ? keys(action, {"site", "kind", "targets", "callee"})
                 : loop ? keys(action,
                               {"site", "kind", "targets", "maximum", "body"})
-                       : keys(action, {"site", "kind", "targets"})))
+                : kind.getValue() == "protocol.query"
+                    ? keys(action, {"site", "kind", "targets", "service"})
+                    : keys(action, {"site", "kind", "targets"})))
             return refuse(record, "invalid original construction action");
+          if (kind.getValue() == "protocol.query") {
+            auto authority = index(action.get("service"), type.getNumInputs());
+            if (!authority || !isa<protocol_ir::ServiceReferenceType>(
+                                  type.getInput(*authority)))
+              return refuse(record, "invalid original query authority");
+            auto owner = cast<ArrayAttr>(inputs[*authority]);
+            auto target = dyn_cast<DictionaryAttr>(targets[0]);
+            if (!target || owner.size() != 1 ||
+                !any_of(participants, [&](Attribute item) {
+                  auto port = dyn_cast<DictionaryAttr>(item);
+                  return port &&
+                         port.get("participant") == target.get("participant") &&
+                         port.get("role") == owner[0];
+                }))
+              return refuse(record, "original query authority owner differs");
+          }
           if (loop) {
             auto body = action.getAs<ArrayAttr>("body");
             if (!body || !index(action.get("maximum"), 1048577) ||
@@ -426,7 +447,7 @@ struct MetadataVerifier {
       targets.push_back(builder.getArrayAttr({role, participantRef}));
       SmallVector<Attribute> dataPorts, servicePorts, results, actualServices;
       SmallVector<Type> inputTypes, resultTypes;
-      unsigned ingress = 0;
+      unsigned ingress = 0, removedBefore = 0;
       for (auto [i, set] : enumerate(inputs)) {
         if (!is_contained(cast<ArrayAttr>(set), role))
           continue;
@@ -436,11 +457,16 @@ struct MetadataVerifier {
               protocol::randomServiceField(service.getContract()).empty())
             return refuse(record, "invalid service owner or contract");
           servicePorts.push_back(builder.getI64IntegerAttr(i));
-          if (!removedServices.contains(i))
+          if (!removedServices.contains(i)) {
+            auto name =
+                builder.getStringAttr("service_" + std::to_string(ingress));
+            queryPorts[{participantRef, builder.getI64IntegerAttr(i)}] = name;
             actualServices.push_back(builder.getArrayAttr(
-                {builder.getStringAttr("service_" + std::to_string(ingress)),
-                 builder.getStringAttr(service.getContract()),
-                 builder.getI64IntegerAttr(ingress)}));
+                {name, builder.getStringAttr(service.getContract()),
+                 builder.getI64IntegerAttr(ingress - removedBefore)}));
+          } else {
+            ++removedBefore;
+          }
         } else {
           dataPorts.push_back(builder.getI64IntegerAttr(i));
           inputTypes.push_back(type.getInput(i));
@@ -525,15 +551,19 @@ struct MetadataVerifier {
     if (construction) {
       if (roles.size() != 2)
         return refuse(record, "construction requires two roles");
-      unsigned removed = *removedServices.begin();
-      auto owners = cast<ArrayAttr>(inputs[removed]);
-      if (owners.size() != 1 ||
-          (codecValidator && owners[0] != codecValidator) ||
-          protocol::randomServiceField(
-              cast<protocol_ir::ServiceReferenceType>(type.getInput(removed))
-                  .getContract())
-              .empty())
-        return refuse(record, "invalid constructed service owner");
+      ArrayAttr owners;
+      for (auto removed : removedServices) {
+        auto selectedOwners = cast<ArrayAttr>(inputs[removed]);
+        if (selectedOwners.size() != 1 ||
+            (owners && owners != selectedOwners) ||
+            (codecValidator && selectedOwners[0] != codecValidator) ||
+            protocol::randomServiceField(
+                cast<protocol_ir::ServiceReferenceType>(type.getInput(removed))
+                    .getContract())
+                .empty())
+          return refuse(record, "invalid constructed service owner");
+        owners = selectedOwners;
+      }
       Attribute validator;
       for (auto item : participants) {
         auto port = cast<DictionaryAttr>(item);
@@ -565,8 +595,8 @@ struct MetadataVerifier {
             remove = true;
           }
           if (kind == "protocol.query")
-            remove = cast<DictionaryAttr>(targets[0]).get("participant") ==
-                     validator;
+            remove = removedServices.contains(
+                cast<IntegerAttr>(action.get("service")).getInt());
           if (kind == "protocol.exchange") {
             unsigned sends = 0, receives = 0;
             for (auto item : targets) {
@@ -689,7 +719,11 @@ struct MetadataVerifier {
                                                      "protocol.local_call");
       if (!(loop ? keys(action, {"site", "kind", "targets", "maximum", "body"})
             : localCall ? keys(action, {"site", "kind", "targets", "callee"})
-                        : keys(action, {"site", "kind", "targets"})))
+            : action &&
+                    action.getAs<StringAttr>("kind") ==
+                        StringAttr::get(record.getContext(), "protocol.query")
+                ? keys(action, {"site", "kind", "targets", "service"})
+                : keys(action, {"site", "kind", "targets"})))
         return refuse(record, "invalid retained action fields");
       auto site = action.getAs<StringAttr>("site");
       auto kind = action.getAs<StringAttr>("kind");
@@ -759,6 +793,15 @@ struct MetadataVerifier {
                                                 endpoint.getRoleAttr());
               }))
             return refuse(record, "construction start role boundary differs");
+        }
+        if (kind.getValue() == "protocol.query") {
+          auto authority = action.getAs<IntegerAttr>("service");
+          auto query =
+              dyn_cast<protocol_ir::ParticipantQueryOp>(found->second.second);
+          if (!authority || !query ||
+              queryPorts.lookup({target.get("participant"), authority}) !=
+                  query.getPortAttr())
+            return refuse(record, "query authority differs from original port");
         }
         if (loop) {
           auto projected =

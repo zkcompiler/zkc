@@ -61,7 +61,7 @@ fn deployment() -> Json {
             "V",
             "3",
             "",
-            "",
+            [],
             ["2"],
             [],
             "zkc.framed/0",

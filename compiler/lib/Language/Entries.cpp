@@ -186,7 +186,7 @@ bool Checker::configureEntry(Declaration &entry, const Declaration &protocol,
     value.selectedConstruction = *selected;
     value.constructionArguments = std::move(*actual);
     const auto &construction = *definition.construction;
-    value.service = construction.service;
+    value.services = construction.services;
     value.suite = construction.suite;
     value.construction = construction.provider || !construction.rules.empty()
                              ? ProofEntry::Construction::Derived
@@ -256,9 +256,10 @@ bool Checker::configureEntry(Declaration &entry, const Declaration &protocol,
       return false;
   }
   if (source.service) {
-    value.service = portIndex(protocol.services, *source.service);
-    if (!value.service)
+    auto service = portIndex(protocol.services, *source.service);
+    if (!service)
       return false;
+    value.services = {*service};
   }
   entry.configuration = std::move(value);
   return types.checkProofEntry(entry, protocol);

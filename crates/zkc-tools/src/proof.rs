@@ -72,7 +72,7 @@ pub(crate) struct SourceInterface<'a> {
     pub suite: Option<&'a str>,
     pub construction: &'a str,
     pub format: ProofFormat,
-    pub service: Option<usize>,
+    pub services: Vec<usize>,
     pub public: &'a [Port],
     pub roles: &'a BTreeMap<String, RoleMap>,
 }
@@ -394,7 +394,7 @@ impl NativeDeployment {
     pub(crate) fn source_interface(&self) -> SourceInterface<'_> {
         let policy = &self.descriptor[1];
         let suite = policy[5].as_str().expect("admitted policy suite");
-        let service = policy[6].as_str().expect("admitted policy service");
+        let services = policy[6].as_array().expect("admitted policy services");
         SourceInterface {
             publication: &self.publication,
             source: &self.source,
@@ -403,7 +403,10 @@ impl NativeDeployment {
             suite: (!suite.is_empty()).then_some(suite),
             construction: policy[10].as_str().expect("admitted construction"),
             format: self.format,
-            service: (!service.is_empty()).then(|| index(&policy[6]).expect("admitted service")),
+            services: services
+                .iter()
+                .map(|value| index(value).expect("admitted service"))
+                .collect(),
             public: &self.public,
             roles: &self.maps,
         }

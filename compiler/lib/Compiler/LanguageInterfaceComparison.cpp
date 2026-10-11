@@ -376,7 +376,7 @@ class Comparison {
             source->verifier == actual.verifier &&
             source->publicInputs == actual.publicInputs &&
             source->target == actual.target &&
-            source->service == actual.service &&
+            source->services == actual.services &&
             bool(source->completion) == bool(actual.completion) &&
             (!source->completion ||
              selector(entry.protocol(), *source->completion,

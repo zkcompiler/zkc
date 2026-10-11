@@ -156,10 +156,10 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
         construction.root == ConstructionDefinition::Root::Local  ? "local"
         : construction.root == ConstructionDefinition::Root::Host ? "host"
                                                                   : "none";
-    result["replace"] =
-        construction.service
-            ? json::Value(target.services[*construction.service].name)
-            : json::Value(nullptr);
+    json::Array replaced;
+    for (auto port : construction.services)
+      replaced.push_back(target.services[port].name);
+    result["replace"] = std::move(replaced);
     result["suite"] = construction.suite;
     result["format"] = protocol::proofFormatName(
         decl.proofFormat.value_or(protocol::ProofFormat::Native));

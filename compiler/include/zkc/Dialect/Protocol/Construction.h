@@ -31,7 +31,7 @@ struct ConstructionPlan {
   enum class Root { Local, Host } root;
   mlir::FlatSymbolRefAttr symbol, target, initializer;
   std::string provider, suite;
-  unsigned service;
+  llvm::SmallVector<unsigned> services;
   bool nativeBase;
   llvm::SmallVector<mlir::Type> state;
   llvm::SmallVector<ConstructionRule> rules;

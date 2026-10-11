@@ -61,9 +61,11 @@ impl BoundInterface {
         let native = deployment.source_interface();
         let entry = deployment.entry();
         let suite = proof.suite.as_deref();
-        let service = proof
-            .replaced_service
-            .map(|i| p.services[i].native as usize);
+        let services: Vec<_> = proof
+            .replaced_services
+            .iter()
+            .map(|&i| p.services[i].native as usize)
+            .collect();
         require(
             native.publication == self.artifact
                 && native.source == self.original()
@@ -80,7 +82,7 @@ impl BoundInterface {
                 && native.suite == suite
                 && native.construction == proof.construction.as_deref().unwrap_or("")
                 && native.format == proof.format
-                && native.service == service
+                && native.services == services
                 && native.roles.len() == p.roles.len(),
             E::NativeBinding,
         )?;

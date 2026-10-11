@@ -21,7 +21,7 @@ pub(in crate::entry) struct ProofPorts {
     pub suite: Option<String>,
     pub construction: Option<String>,
     pub format: crate::proof::ProofFormat,
-    pub replaced_service: Option<usize>,
+    pub replaced_services: Vec<usize>,
 }
 #[derive(Clone, Copy, Debug, Default)]
 struct Input {
@@ -131,21 +131,26 @@ impl Ports {
                     offset += len;
                     public_ports.push(i);
                 }
-                let (suite, replaced_service, format, selected) = match construction.as_ref() {
-                    raw::Construction::Authored { format } => (None, None, *format, None),
+                let (suite, replaced_services, format, selected) = match construction.as_ref() {
+                    raw::Construction::Authored { format } => (None, Vec::new(), *format, None),
                     raw::Construction::FiatShamir {
                         suite,
-                        service,
+                        services,
                         format,
-                    } => (Some(suite.clone()), Some(*service as usize), *format, None),
+                    } => (
+                        Some(suite.clone()),
+                        services.iter().map(|&s| s as usize).collect(),
+                        *format,
+                        None,
+                    ),
                     raw::Construction::Derived {
                         symbol,
                         suite,
-                        service,
+                        services,
                         format,
                     } => (
                         suite.clone(),
-                        Some(*service as usize),
+                        services.iter().map(|&s| s as usize).collect(),
                         *format,
                         Some(symbol.clone()),
                     ),
@@ -161,12 +166,15 @@ impl Ports {
                     suite,
                     construction: selected,
                     format,
-                    replaced_service,
+                    replaced_services,
                 })
             }
         };
         for (i, service) in protocol.services.iter().enumerate() {
-            if proof.as_ref().and_then(|p| p.replaced_service) != Some(i) {
+            if !proof
+                .as_ref()
+                .is_some_and(|p| p.replaced_services.contains(&i))
+            {
                 roles[indices[service.owner.as_str()]].services.push(i);
             }
         }

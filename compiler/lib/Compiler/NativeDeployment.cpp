@@ -65,19 +65,18 @@ Expected<json::Array> ports(pir::MathematicalOp source,
     for (auto [i, owners] : enumerate(source.getInputRoles())) {
       if (!owns(owners, role))
         continue;
+      if (is_contained(policy.services, i))
+        continue;
       if (auto reference =
               dyn_cast<pir::ServiceReferenceType>(type.getInput(i))) {
-        if (policy.service != i) {
-          if (service == participant->services.size())
-            return error("native-deployment-correspondence");
-          const auto &port = participant->services[service++];
-          if (port.contract != reference.getContract() ||
-              port.inputIndex != ingress)
-            return error("native-deployment-correspondence");
-          services.push_back(json::Array{std::to_string(i), port.name,
-                                         port.contract,
-                                         std::to_string(ingress)});
-        }
+        if (service == participant->services.size())
+          return error("native-deployment-correspondence");
+        const auto &port = participant->services[service++];
+        if (port.contract != reference.getContract() ||
+            port.inputIndex != ingress)
+          return error("native-deployment-correspondence");
+        services.push_back(json::Array{std::to_string(i), port.name,
+                                       port.contract, std::to_string(ingress)});
       } else {
         auto logical = protocol::encodeBoundType(type.getInput(i), false);
         if (!logical)

@@ -109,7 +109,7 @@ with case("exit operands preserve source correspondence"):
                 "V",
                 "0",
                 "merlin3.bls12-381.fr64be/0",
-                "3",
+                ["3"],
                 ["0", "1"],
                 [["draw", "challenge"]],
                 "zkc.framed/0",

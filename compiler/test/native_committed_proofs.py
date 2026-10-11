@@ -32,7 +32,7 @@ for family in ["product", "cubic", "authored", "structured"]:
                     "V",
                     "0",
                     suite,
-                    "" if family in ("authored", "structured") else "4",
+                    [] if family in ("authored", "structured") else ["4"],
                     ["2", "3", "4", "5"]
                     if family in ("authored", "structured")
                     else ["0", "3", "6", "7", "8"],
@@ -101,7 +101,7 @@ module { "protocol.module"() ({
  }) {sym_name="main",function_type=(!pk,i1)->i1,roles=["P","V"],input_roles=[["P"],["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 ''')
-    policy.write_text(json.dumps(["zkc.native-proof-policy/0", "main", "P", "V", "0", "", "", ["1"], [], "zkc.framed/0", ""]))
+    policy.write_text(json.dumps(["zkc.native-proof-policy/0", "main", "P", "V", "0", "", [], ["1"], [], "zkc.framed/0", ""]))
     commands.run([compiler, "protocol-proof", src, policy], refuses="native-proof-setup-coverage")
 
 with case("source checking retains terminal and construction provenance"):

@@ -240,9 +240,9 @@ int main() {
     const auto &proof = *selected.entry().proof();
     require(proof.prover == 0 && proof.verifier == 1 &&
                 proof.publicInputs == std::vector<unsigned>{0} &&
-                proof.service == 0 && proof.target == 0 &&
-                proof.acceptance.port == 0 && proof.acceptance.role == 1 &&
-                proof.acceptance.path.empty(),
+                proof.services == std::vector<unsigned>{0} &&
+                proof.target == 0 && proof.acceptance.port == 0 &&
+                proof.acceptance.role == 1 && proof.acceptance.path.empty(),
             "logical Entry choices differ");
     auto alias = take(close(
         (base + "proof Demo=Next;proof Next=Concrete;proof Concrete=Round" +
@@ -262,7 +262,7 @@ int main() {
       proof Demo=Verify{prover P;verifier V;public{ok};accept accepted;construction authored;})"));
               require(selected.entry().proof()->construction ==
                               ProofEntry::Construction::Authored &&
-                          !selected.entry().proof()->service &&
+                          selected.entry().proof()->services.empty() &&
                           !selected.entry().proof()->target,
                       "authored choices changed");
             });
@@ -277,6 +277,14 @@ int main() {
                     std::vector<unsigned>{0},
                 "acceptance product projection lost");
       });
+  cases.run("authored Entry retains verifier services", [&] {
+    auto selected = take(close(replaceText(
+        source(),
+        "construction fiat_shamir(\"merlin3.bls12-381.fr64be/0\", coins);",
+        "construction authored;")));
+    require(selected.entry().proof()->services.empty(),
+            "authored Entry replaces no authority");
+  });
   for (auto change : std::initializer_list<std::pair<StringRef, StringRef>>{
            {"prover P;", ""},
            {"verifier V;", ""},
@@ -294,9 +302,7 @@ int main() {
            {"accept ok", "accept absent"},
            {"target claim", "target absent"},
            {", coins)", ", absent)"},
-           {"merlin3.bls12-381.fr64be/0", "uninstalled"},
-           {"construction fiat_shamir(\"merlin3.bls12-381.fr64be/0\", coins);",
-            "construction authored;"}})
+           {"merlin3.bls12-381.fr64be/0", "uninstalled"}})
     cases.run(
         "invalid explicit choice: " + change.first + " -> " + change.second,
         [&] {

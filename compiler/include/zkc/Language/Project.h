@@ -407,7 +407,7 @@ struct ConstructionDefinition {
   std::optional<Type> state;
   std::optional<CallableReference> initializer;
   std::vector<Type> initializerArguments;
-  std::optional<unsigned> service;
+  std::vector<unsigned> services;
   std::string suite;
   bool nativeBase = false;
   std::vector<ConstructionRule> rules;
@@ -427,7 +427,8 @@ struct ProofEntry {
   std::vector<unsigned> publicInputs;
   SpecificationSelector acceptance;
   std::optional<SpecificationSelector> completion;
-  std::optional<unsigned> target, service;
+  std::optional<unsigned> target;
+  std::vector<unsigned> services;
   std::string suite;
   std::optional<DeclarationId> selectedConstruction;
   std::vector<Type> constructionArguments;
