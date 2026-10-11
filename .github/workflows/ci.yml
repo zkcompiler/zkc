@@ -204,7 +204,10 @@ jobs:
         run: sudo rm -rf /usr/local/lib/android
       - uses: ./.github/actions/nix
         with:
-          cache-scope: optional-${{ matrix.package }}
+          # Weekly native variants reuse the ordinary toolchain snapshot,
+          # without evicting daily caches with three large, rarely reused stores.
+          cache-scope: ${{ startsWith(matrix.package, 'compiler-') && 'native-packages' || format('optional-{0}', matrix.package) }}
+          cache-save: ${{ !startsWith(matrix.package, 'compiler-') }}
       - name: Build and test the selected integration
         env:
           PACKAGE: ${{ matrix.package }}

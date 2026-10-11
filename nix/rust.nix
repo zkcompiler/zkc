@@ -14,7 +14,7 @@ let
     strictDeps = true;
   };
   release =
-    name: arguments:
+    name: arguments: metadata:
     let
       options = common // {
         pname = name;
@@ -36,7 +36,8 @@ let
         meta = {
           license = lib.licenses.asl20;
           platforms = [ "x86_64-linux" ];
-        };
+        }
+        // metadata;
       }
     );
   testDependencies = craneLib.buildDepsOnly (
@@ -55,6 +56,11 @@ in
 {
   inherit testDependencies;
   inherit (common) cargoVendorDir;
-  tools = release "zkc-tools" "-p zkc-tools --bin zkc";
-  testDrivers = release "zkc-test-drivers" "-p zkc-test-drivers --bins";
+  tools = release "zkc-tools" "-p zkc-tools --bin zkc" {
+    description = "Program runtime and common Host tools";
+    mainProgram = "zkc";
+  };
+  testDrivers = release "zkc-test-drivers" "-p zkc-test-drivers --bins" {
+    description = "Native integration test drivers";
+  };
 }

@@ -13,6 +13,9 @@ inputs:
   cache-scope:
     description: Separate store snapshots for jobs with different build graphs
     default: "${{ github.job }}"
+  cache-save:
+    description: Save a new snapshot after a successful job
+    default: "true"
   require-cache:
     description: Require an empty project store before restoring cached results
     default: "false"
@@ -55,11 +58,12 @@ runs:
         primary-key: nix-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock') }}-${{ github.sha }}
         restore-prefixes-first-match: |
           nix-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock') }}-
+        save: ${{ inputs.cache-save }}
         # Successful build graphs receive temporary GC roots. Remove stale
         # results before snapshotting, including results from earlier commits.
         gc-max-store-size-linux: 0
     - name: Enable retention of successful build graphs
-      if: inputs.cache == 'true'
+      if: inputs.cache == 'true' && inputs.cache-save == 'true'
       shell: bash
       run: echo "ZKC_NIX_CACHE_ROOTS=$RUNNER_TEMP/zkc-nix-cache-roots" >> "$GITHUB_ENV"
     - name: Verify effective build isolation
