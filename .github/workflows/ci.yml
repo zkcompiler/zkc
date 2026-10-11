@@ -127,11 +127,33 @@ jobs:
         with:
           cache-key-target: .#ci-rust-dependencies
           dependencies-only: "true"
+      - name: Identify the exact Rust check
+        id: rust-check-identity
+        run: |
+          derivation=$(nix eval --raw .#checks.x86_64-linux.rust.drvPath)
+          echo "identity=${derivation##*/}" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: rust-check-cache
+        with:
+          path: build/rust-check-cache
+          key: rust-check-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-check-identity.outputs.identity }}
+      - name: Restore the completed Rust check
+        if: steps.rust-check-cache.outputs.cache-hit == 'true'
+        run: |
+          if ! gzip -dc build/rust-check-cache/result.nar.gz | nix-store --import; then
+            echo "::warning::Rust check cache could not be imported; rebuilding the check."
+          fi
       - name: Check the Rust workspace with cached dependencies
         run: |
           mkdir -p build/reports
           python3 .github/scripts/build-nix.py .#checks.x86_64-linux.rust \
             2>&1 | tee build/reports/rust-checks.log
+      - name: Export only the completed Rust check result
+        if: steps.rust-check-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p build/rust-check-cache
+          output=$(nix eval --raw .#checks.x86_64-linux.rust.outPath)
+          nix-store --export "$output" | gzip -1 > build/rust-check-cache/result.nar.gz
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

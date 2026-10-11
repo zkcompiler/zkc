@@ -62,7 +62,11 @@ in
           mkdir -p "$CCACHE_DIR"
           ${lib.optionalString (seed != null) ''
             if [ -f ${seed}/${name}/cache.tar.zst ]; then
-              tar --zstd -xf ${seed}/${name}/cache.tar.zst -C "$CCACHE_DIR"
+              if ! tar --zstd -xf ${seed}/${name}/cache.tar.zst -C "$CCACHE_DIR"; then
+                echo "Discarding an unreadable compilation cache seed"
+                rm -rf "$CCACHE_DIR"
+                mkdir -p "$CCACHE_DIR"
+              fi
               chmod -R u+w "$CCACHE_DIR"
             fi
           ''}
