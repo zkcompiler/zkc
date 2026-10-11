@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_imports)]
-mod fixture;
+use crate::fixture;
 pub use fixture::*;
 
 use serde_json::{Value as Json, json};
@@ -74,7 +74,7 @@ pub fn load<B: Backend<Value = Value>>(bytes: &[u8], backend: B, inputs: Vec<Val
     Runner::new(&admitted, "main", "P", "session", backend, inputs)
         .unwrap_or_else(|e| panic!("load failed: {}", e.error))
 }
-// The eleven tests that arrive through this root call the whole run `finish`.
+// Common execution tests call the whole run `finish`.
 pub use fixture::drive as finish;
 pub fn run<B: Backend<Value = Value>>(
     bytes: &[u8],
