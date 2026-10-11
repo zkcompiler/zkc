@@ -407,7 +407,7 @@ int main(int argc, char **argv) {
     first(module, "algebra.array_at")->setAttr("index", b.getI64IntegerAttr(1));
   });
   mutate("flattened array elements swapped", [&](auto module) {
-    auto *op = first(module, "tensor.from_elements");
+    auto *op = first(module, "algebra.array_from_elements");
     auto a = op->getOperand(0);
     op->setOperand(0, op->getOperand(1));
     op->setOperand(1, a);

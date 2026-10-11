@@ -37,6 +37,8 @@
       "matrix.transpose_mul_vector",
       "matrix.bilinear",
       "matrix.get",
+      "matrix.row_dot",
+      "matrix.column_dot",
       "matrix.shape_check",
       "matrix.identity_check",
       "vector.constant",

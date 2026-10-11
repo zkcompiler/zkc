@@ -13,7 +13,11 @@ def Data_DomainOp : Op<DataDialect, "domain", [Symbol, IsolatedFromAbove, Single
   let regions = (region AnyRegion:$body);
   let hasRegionVerifier = 1;
 }
-class DomainConstructor<string name> : Op<DataDialect, name, [Pure]> {
+// Every constructor contributes an ordered admission obligation, even when its
+// descriptor is unused. Leave effects unknown and provide no speculation
+// interface: NoMemoryEffect would allow generic DCE/CSE to discard admission.
+// This is a conservative transformation contract, not a heap allocation effect.
+class DomainConstructor<string name> : Op<DataDialect, name> {
   let results = (outs Domain:$output);
   let hasVerifier = 1;
 }
@@ -33,13 +37,13 @@ def Data_DomainProductOp : DomainConstructor<"domain_product"> {
   let arguments = (ins Variadic<Domain>:$inputs);
 }
 def Data_DomainMatrixRowOp : DomainConstructor<"domain_matrix_row"> {
-  let arguments = (ins AnyRankedTensor:$input, UI64:$selector);
+  let arguments = (ins FieldMatrix:$input, UI64:$selector);
 }
 def Data_DomainMatrixColumnOp : DomainConstructor<"domain_matrix_column"> {
-  let arguments = (ins AnyRankedTensor:$input, UI64:$selector);
+  let arguments = (ins FieldMatrix:$input, UI64:$selector);
 }
 def Data_DomainMatrixCoordinatesOp : DomainConstructor<"domain_matrix_coordinates"> {
-  let arguments = (ins AnyRankedTensor:$input, StrAttr:$order);
+  let arguments = (ins FieldMatrix:$input, StrAttr:$order);
 }
 def Data_DomainYieldOp : Op<DataDialect, "domain_yield",
     [Terminator, HasParent<"::zkc::data::DomainOp">]> {
@@ -51,7 +55,7 @@ def Data_BoundedAtOp : Op<DataDialect, "bounded_at", [Pure, DeclareOpInterfaceMe
   let hasVerifier = 1;
 }
 def Data_BoundedMatrixAtOp : Op<DataDialect, "bounded_matrix_at", [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
-  let arguments = (ins AnyRankedTensor:$input, UI64:$row, UI64:$column);
+  let arguments = (ins FieldMatrix:$input, UI64:$row, UI64:$column);
   let results = (outs AnyType:$output);
   let hasVerifier = 1;
 }
@@ -106,7 +110,9 @@ def Data_IsOp : DataExpression<"is"> {
   let results = (outs I1:$output);
 }
 def Data_DimOp : DataExpression<"dim"> {
-  let arguments = (ins AnyRankedTensor:$input, I64Attr:$axis);
+  let arguments = (ins AnyTypeOf<[FieldVector, GroupVector, Indices, Bytes,
+                                 FieldMatrix, FieldArray]>:$input,
+                       I64Attr:$axis);
   let results = (outs UI64:$output);
 }
 #endif

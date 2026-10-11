@@ -81,14 +81,34 @@ def composed_source(empty, nested=False):
 
 @pytest.mark.parametrize('empty', [False, True])
 @pytest.mark.parametrize('nested', [False, True])
-@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage'],
+                                   ['--no-finite-bulk'],
+                                   ['--fuse-vector-reductions', '--no-simplify', '--release-storage']])
 def test_child_state_arguments_and_root_codec(toolchain, journal, directory, empty, nested, flags):
     source = directory / 'main.zkc'
-    source.write_text(composed_source(empty, nested))
+    # Exercise the shared mathematical selection policy inside a stateful
+    # transcript helper. Summing three copies preserves the independent state
+    # oracle below, whether the fold becomes a bulk kernel or stays a loop.
+    source.write_text(composed_source(empty, nested).replace(
+        'State(unpack(t)*3+v)',
+        'State(zkc::finite::fold(zkc::vector::fill(unpack(t),3),v,fn(s,x)=>s+x))'))
+    root = Path(__file__).resolve().parents[3]
+    modules = [f'--module=zkc::{name}={root}/libraries/zkc/{name}.zkc'
+               for name in ['vector', 'finite', 'finite_domain', 'sequence', 'accumulation', 'curve']]
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile',
                              f'--compiler={toolchain.compiler}', f'--module=sample={source}',
-                             'sample::Packed', f'--output={package}', *flags])
+                             *modules, 'sample::Packed', f'--output={package}', *flags])
+    stored = json.loads(package.read_text())
+    deployment = json.loads(stored['artifact'])
+    choices = {'simplify': '--no-simplify' not in flags,
+               'release_storage': '--release-storage' in flags,
+               'fuse_vector_reductions': '--fuse-vector-reductions' in flags,
+               'finite_bulk': '--no-finite-bulk' not in flags}
+    assert stored['options'] == choices
+    assert deployment[7] == [str(value).lower() for value in choices.values()]
+    bindings = json.loads(deployment[4])[1]
+    assert any(binding[1] == 'vector.sum' for binding in bindings) == choices['finite_bulk']
     witness = journal.write('witness.json', {'secret': '7'})
     for rounds in [0, 1, 2]:
         public = journal.write(f'public-{rounds}.json', {'public': '5', 'rounds': str(rounds)})

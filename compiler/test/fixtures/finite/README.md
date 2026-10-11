@@ -6,9 +6,22 @@ resource origins, fixed-point dependencies and mutations of actual realization
 candidates. `finite_runtime.py` executes compiler-produced authenticated bundles
 with independent integer expectations and native failure reports.
 
+Optional-lane controls cover the Ring depth boundary, shared selection work,
+empty emission on a declined strategy, and hard construction errors. They require
+the default pipeline to retain ordered collection when only the bulk strategy
+exceeds its capacity. Bound queries also exercise cumulative comparison work.
+
+`domain_admission.cpp` runs generic canonicalization and CSE over admitted
+descriptors. It retains the complete constructor order and operands, including
+unused and duplicate constructors, and checks Local realization against the
+original source for strict zip, independent product and conditional nested entry.
+Its constructor controls also cover range, indices and matrix views; these are
+compiler transformation checks, not native execution tests.
+
 Run the compiler controls, including the checked-access prerequisite gate:
 
 ```sh
+build/compiler/test/zkc-domain_admission-test
 build/compiler/test/zkc-finite_computation-test --checked-access
 ```
 

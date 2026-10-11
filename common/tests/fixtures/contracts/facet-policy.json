@@ -23,6 +23,7 @@
     "Conjunction": "conjunction"
   },
   "uncompared_declarations": {
+    "Mathematical": "Compiler-owned identities and laws; native signature agreement is separate from a runtime law witness.",
     "Diagonal": "Compiler-only operand roles; no equivalent runtime classification API.",
     "Contraction": "Compiler-only operand roles; no equivalent runtime classification API.",
     "Coset": "Compiler analysis equation/port facts; not the reference numerical interpretation.",

@@ -83,6 +83,44 @@ dimension zero has no valid element access. Within the shape, an absent sparse
 COO entry denotes the zero of `F`, and a present entry yields its coefficient.
 This is checked execution, not total mathematical access for arbitrary indices.
 
+`matrix.row_dot<F>(M, x, row)` and `matrix.column_dot<F>(M, y, column)`
+take a matrix, a vector and a dynamic `index`, with no operation attributes,
+and return one scalar of the same nominal field `F`. Their equations are
+
+\[
+\operatorname{row\_dot}(M,x,r)=\sum_{j=0}^{\operatorname{columns}(M)-1} M_{r,j}x_j,
+\qquad
+\operatorname{column\_dot}(M,y,c)=\sum_{i=0}^{\operatorname{rows}(M)-1} M_{i,c}y_i.
+\]
+
+Row contraction first requires `length(x) = columns(M)`, then
+`row < rows(M)`. Column contraction first requires `length(y) = rows(M)`,
+then `column < columns(M)`. A length mismatch refuses with `matrix-shape`;
+an invalid selected index refuses with `matrix-index`, without wrapping or
+truncating the index. These checks apply even when the matrix has no nonzeros.
+A zero inner dimension returns zero for a valid selected index: an `R x 0`
+matrix has `R` valid row contractions and a `0 x C` matrix has `C` valid column
+contractions. A zero selected dimension has no valid contraction. The SDK
+exports these operations as `zkc::matrix::row_dot` and `zkc::matrix::column_dot`.
+
+The installed native implementations use canonical COO sorted by `(row,column)`.
+Row contraction locates its contiguous range by binary search and traverses only
+that range, taking `O(log(nnz + 1) + row_nnz)` work. Column contraction scans
+the existing `nnz` entries, taking `O(nnz)` work. Both use constant auxiliary
+storage and compute only the requested scalar, without materializing a row,
+column or whole matrix-vector product. These are kernel-body bounds; admission
+and [capacity accounting](../runtime/capacity.md) retain their own work.
+
+Bindings retain their explicit implementation choice and field identity:
+`arkworks` supports BLS12-381 Fr and BN254 Fr, `dalek` supports Ristretto255
+scalars, and `plonky3` supports KoalaBear and its installed octic extension.
+Native scalar output preflight reserves the existing 512-byte retained charge
+before arithmetic or shape/index checks, including zero results. Insufficient
+per-value or invocation output allowance reports `exhausted:output-bytes`.
+The result has no shared vector backing; operands retain their full logical
+read charge. The existing matrix dimension cap of 65,536 and nonzero cap of
+1,048,576 still apply, along with input and aggregate capacity limits.
+
 `matrix.identity_check<F>(M) [digest]` compares SHA-256 of a canonical
 mathematical encoding with one lowercase 64-character hexadecimal attribute.
 The encoding is compact UTF-8 JSON

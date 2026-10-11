@@ -1,6 +1,6 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
-!I = tensor<?xui64>
+!V = !algebra.field_vector<"bls12-381.fr">
+!I = !algebra.indices
 module { "protocol.module"() ({
  "local.binding"() {sym_name="mul",contract="index.mul",arguments=[],implementation=""} : ()->()
  "local.binding"() {sym_name="add",contract="index.add",arguments=[],implementation=""} : ()->()

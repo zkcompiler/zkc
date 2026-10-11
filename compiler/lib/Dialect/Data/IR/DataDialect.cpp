@@ -30,6 +30,23 @@ void zkc::data::DataDialect::initialize() {
       >();
 }
 namespace zkc::data {
+CollectionKind BytesType::getCollectionKind() const {
+  return CollectionKind::Bytes;
+}
+Type BytesType::getElementType() const {
+  return IntegerType::get(getContext(), 8, IntegerType::Unsigned);
+}
+unsigned BytesType::getRank() const { return 1; }
+std::optional<uint64_t> BytesType::getStaticExtent(unsigned) const {
+  return std::nullopt;
+}
+CollectionKind SequenceType::getCollectionKind() const {
+  return CollectionKind::Sequence;
+}
+unsigned SequenceType::getRank() const { return 1; }
+std::optional<uint64_t> SequenceType::getStaticExtent(unsigned) const {
+  return std::nullopt;
+}
 namespace {
 LogicalResult refuse(Operation *op, StringRef reason) {
   return diagnostics::emit(op->emitOpError(), "mathematical-formation", reason);
@@ -138,19 +155,10 @@ LogicalResult IsOp::verify() {
   return success();
 }
 LogicalResult DimOp::verify() {
-  auto tensor = getInput().getType();
+  auto collection = cast<CollectionTypeInterface>(getInput().getType());
   auto axis = getAxisAttr().getInt();
-  if (axis < 0 || axis >= tensor.getRank())
-    return refuse(*this, "tensor dimension axis");
-  auto bound = protocol::encodeBoundType(tensor, false);
-  if (!bound) {
-    llvm::consumeError(bound.takeError());
-    return refuse(*this, "unsupported canonical tensor");
-  }
-  if (bound->kind != "vector" && bound->kind != "matrix" &&
-      bound->kind != "indices" && bound->kind != "bytes" &&
-      bound->kind != "groups" && bound->kind != "field_array")
-    return refuse(*this, "unsupported tensor shape observation");
+  if (axis < 0 || uint64_t(axis) >= collection.getRank())
+    return refuse(*this, "collection dimension axis");
   return success();
 }
 } // namespace zkc::data

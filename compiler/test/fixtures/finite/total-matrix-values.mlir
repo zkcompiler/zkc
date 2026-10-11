@@ -1,7 +1,7 @@
 !F = !algebra.field<"bls12-381.fr">
-!V = tensor<?x!F>
-!I = tensor<?xui64>
-!M = tensor<?x?x!F>
+!V = !algebra.field_vector<"bls12-381.fr">
+!I = !algebra.indices
+!M = !algebra.field_matrix<"bls12-381.fr">
 module { "protocol.module"() ({
  "data.domain"() ({ ^entry(%matrix:!M):
    %d = "data.domain_matrix_coordinates"(%matrix) {order="row_major"} : (!M)->!data.domain<ui64,ui64>

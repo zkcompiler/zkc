@@ -1,6 +1,6 @@
 // Direct constraint checking deliberately discloses the witness in the proof.
 !f = !algebra.field<"bls12-381.fr">
-!v = tensor<?x!f>
+!v = !algebra.field_vector<"bls12-381.fr">
 !trace = !data.sequence<!v>
 !config = !local.variant<"variant:5b227a6b632e76617269616e742f30222c5b226578616d706c652f6169722d646174612f4c696e656172526563757272656e6365222c22636f656666696369656e7473222c226669656c643a626c7331322d3338312e6672222c5b2232222c2232225d2c5b2231222c2233225d2c5b2234225d2c5b2230222c2235225d5d5d">
 module { "protocol.module"() ({

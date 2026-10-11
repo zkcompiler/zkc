@@ -7,6 +7,7 @@
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Interfaces/Collection.h"
 #include "llvm/ADT/DenseSet.h"
 #include <optional>
 using namespace mlir;
@@ -26,7 +27,12 @@ Operation *resolve(Operation *op, StringRef key) {
   return ref ? SymbolTable::lookupNearestSymbolFrom(op, ref) : nullptr;
 }
 struct EvidenceWork {
-  uint64_t remaining = 65536;
+  uint64_t local = 65536;
+  uint64_t &remaining = local;
+  EvidenceWork() = default;
+  explicit EvidenceWork(uint64_t &remaining) : remaining(remaining) {}
+  EvidenceWork(const EvidenceWork &) = delete;
+  EvidenceWork &operator=(const EvidenceWork &) = delete;
   llvm::DenseMap<std::pair<Operation *, unsigned>, std::optional<unsigned>>
       inputs;
   llvm::DenseMap<Value, Value> forwarded;
@@ -97,15 +103,13 @@ Value forwarded(Value value, EvidenceWork &work) {
 }
 bool index(Type type) { return type.isUnsignedInteger(64); }
 bool axis(Type type, unsigned axis) {
-  if (auto tensor = dyn_cast<RankedTensorType>(type))
-    return axis < unsigned(tensor.getRank()) &&
-           bool(elementType(type, tensor.getRank() == 2));
-  return axis == 0 && bool(elementType(type));
+  auto collection = dyn_cast<CollectionTypeInterface>(type);
+  return collection && axis < collection.getRank() &&
+         bool(elementType(type, collection.getRank() == 2));
 }
 std::optional<uint64_t> staticExtent(Type type, unsigned axis) {
-  if (auto tensor = dyn_cast<RankedTensorType>(type))
-    if (axis < unsigned(tensor.getRank()) && !tensor.isDynamicDim(axis))
-      return tensor.getDimSize(axis);
+  if (auto collection = dyn_cast<CollectionTypeInterface>(type))
+    return collection.getStaticExtent(axis);
   return std::nullopt;
 }
 // Constructor evidence can preserve a fixed extent across a private helper
@@ -446,10 +450,8 @@ Type elementType(Type container, bool matrix) {
                                                "field_array", "sequence"},
                            bound->kind))
     return {};
-  if (auto sequence = dyn_cast<data::SequenceType>(container))
-    return sequence.getElementType();
-  auto tensor = dyn_cast<RankedTensorType>(container);
-  return tensor ? tensor.getElementType() : Type();
+  auto collection = dyn_cast<CollectionTypeInterface>(container);
+  return collection ? collection.getElementType() : Type();
 }
 bool isComputation(Operation *op) {
   return isa_and_nonnull<local::FiniteFoldOp, local::FiniteCollectOp,
@@ -464,6 +466,16 @@ bool provesEqualExtent(Value a, unsigned aa, Value b, unsigned ba) {
 }
 bool provesBound(Value idx, Value container, unsigned selectedAxis) {
   EvidenceWork work;
+  return provesBoundUnder(idx, container, selectedAxis, work);
+}
+bool provesEqualExtent(Value a, unsigned aa, Value b, unsigned ba,
+                       uint64_t &remaining) {
+  EvidenceWork work(remaining);
+  return equalUnder(a, aa, b, ba, work);
+}
+bool provesBound(Value idx, Value container, unsigned selectedAxis,
+                 uint64_t &remaining) {
+  EvidenceWork work(remaining);
   return provesBoundUnder(idx, container, selectedAxis, work);
 }
 LogicalResult verifyPreconditions(Operation *helper) {
@@ -522,7 +534,8 @@ LogicalResult verifyCallPreconditions(Operation *call) {
   }
   return success();
 }
-LogicalResult describe(Operation *op, Computation &c, Operation *symbolRoot) {
+LogicalResult describe(Operation *op, Computation &c, Operation *symbolRoot,
+                       SymbolTableCollection *symbols) {
   c = {};
   c.operation = op;
   if (!isComputation(op))
@@ -535,6 +548,9 @@ LogicalResult describe(Operation *op, Computation &c, Operation *symbolRoot) {
                     : signature(op);
   auto reference = [&](StringRef name) {
     auto ref = op->getAttrOfType<FlatSymbolRefAttr>(name);
+    if (symbols && ref)
+      return symbolRoot ? symbols->lookupSymbolIn(symbolRoot, ref)
+                        : symbols->lookupNearestSymbolFrom(op, ref);
     return symbolRoot && ref ? SymbolTable::lookupSymbolIn(symbolRoot, ref)
                              : resolve(op, name);
   };
@@ -558,19 +574,37 @@ LogicalResult describe(Operation *op, Computation &c, Operation *symbolRoot) {
   c.captures = c.signature.getNumInputs() - c.arguments - c.states;
   return success();
 }
-LogicalResult verify(Operation *op) {
-  Computation c;
-  if (failed(describe(op, c)))
-    return failure();
+LogicalResult verifyLocal(Operation *op) {
+  if (!isComputation(op))
+    return refuse(op, "expected finite computation");
+  bool total = !isDeclaration(op);
+  bool collect = isa<local::FiniteCollectOp, algebra::FiniteCollectOp>(op);
   for (auto attr : op->getAttrs()) {
     StringRef name = attr.getName().getValue();
     if (name == "domain" || name == "predicate" ||
-        name == (c.collect ? "body" : "step"))
+        name == (collect ? "body" : "step"))
       continue;
-    if (!c.total && (name == "sym_name" || name == "function_type"))
+    if (!total && (name == "sym_name" || name == "function_type"))
       continue;
     return refuse(op, "unexpected finite attribute");
   }
+  auto type = total ? FunctionType::get(op->getContext(), op->getOperandTypes(),
+                                        op->getResultTypes())
+                    : signature(op);
+  if (!type || (collect && type.getNumResults() != 1))
+    return refuse(op, "finite result signature");
+  return success();
+}
+LogicalResult verify(Operation *op) {
+  SymbolTableCollection symbols;
+  if (failed(verifyLocal(op)))
+    return failure();
+  return verifyReferences(op, symbols);
+}
+LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
+  Computation c;
+  if (failed(describe(op, c, nullptr, &symbols)))
+    return failure();
   auto dt = c.domain.getFunctionType();
   auto inputs = c.signature.getInputs();
   if (inputs.take_front(c.arguments) != dt.getInputs() ||
@@ -660,11 +694,10 @@ LogicalResult verify(Operation *op) {
     }
   }
   if (c.collect)
-    if (auto tensor = dyn_cast<RankedTensorType>(c.signature.getResult(0));
-        tensor && !tensor.isDynamicDim(0)) {
+    if (auto array =
+            dyn_cast<algebra::FieldArrayType>(c.signature.getResult(0))) {
       auto card = extent(domainResult(c.domain), c, work);
-      if (c.predicate || !card.fixed ||
-          *card.fixed != uint64_t(tensor.getDimSize(0)))
+      if (c.predicate || !card.fixed || *card.fixed != array.getLength())
         return refuse(
             op,
             "fixed collection requires proven exact unfiltered cardinality");
@@ -689,11 +722,13 @@ LogicalResult verifyClosure(Operation *unit) {
     return failure(checked.wasInterrupted());
   }
   llvm::DenseMap<Operation *, unsigned> color;
+  SymbolTableCollection symbols;
   unsigned work = 100000;
   std::function<LogicalResult(Operation *, unsigned)> visit =
       [&](Operation *definition, unsigned depth) -> LogicalResult {
-    if (depth > 64 || !work--)
+    if (depth > 64 || !work)
       return refuse(definition, "static closure exceeds analysis limit");
+    --work;
     if (color[definition] == 2)
       return success();
     if (color[definition] == 1)
@@ -701,10 +736,14 @@ LogicalResult verifyClosure(Operation *unit) {
                     "finite-cycle");
     color[definition] = 1;
     auto walked = definition->walk([&](Operation *op) -> WalkResult {
-      if (!work--)
+      if (!work) {
+        (void)refuse(op, "static closure exceeds analysis limit");
         return WalkResult::interrupt();
-      if (isComputation(op) && failed(verify(op)))
-        return WalkResult::interrupt();
+      }
+      --work;
+      // Symbol-table region verification has already checked each finite ABI.
+      // This traversal owns reference cycles and call premises, not another
+      // independent replay of every finite computation's verification.
       if (isa<func::FuncOp, local::FuncOp>(op) &&
           failed(verifyPreconditions(op)))
         return WalkResult::interrupt();
@@ -714,7 +753,8 @@ LogicalResult verifyClosure(Operation *unit) {
       for (StringRef edge : {"callee", "helper", "step", "body", "predicate"}) {
         if (!op->hasAttrOfType<FlatSymbolRefAttr>(edge))
           continue;
-        Operation *callee = resolve(op, edge);
+        Operation *callee = symbols.lookupNearestSymbolFrom(
+            op, op->getAttrOfType<FlatSymbolRefAttr>(edge));
         if (callee &&
             (isa<func::FuncOp, local::FuncOp, local::RealizeOp>(callee) ||
              isDeclaration(callee)))
@@ -736,23 +776,25 @@ LogicalResult verifyClosure(Operation *unit) {
 } // namespace zkc::finite
 
 namespace zkc::local {
-LogicalResult FiniteFoldOp::verify() { return finite::verify(*this); }
-LogicalResult FiniteCollectOp::verify() { return finite::verify(*this); }
-LogicalResult FiniteFoldOp::verifySymbolUses(SymbolTableCollection &) {
-  return finite::verify(*this);
+LogicalResult FiniteFoldOp::verify() { return finite::verifyLocal(*this); }
+LogicalResult FiniteCollectOp::verify() { return finite::verifyLocal(*this); }
+LogicalResult FiniteFoldOp::verifySymbolUses(SymbolTableCollection &symbols) {
+  return finite::verifyReferences(*this, symbols);
 }
-LogicalResult FiniteCollectOp::verifySymbolUses(SymbolTableCollection &) {
-  return finite::verify(*this);
+LogicalResult
+FiniteCollectOp::verifySymbolUses(SymbolTableCollection &symbols) {
+  return finite::verifyReferences(*this, symbols);
 }
 } // namespace zkc::local
 namespace zkc::algebra {
-LogicalResult FiniteFoldOp::verify() { return finite::verify(*this); }
-LogicalResult FiniteCollectOp::verify() { return finite::verify(*this); }
-LogicalResult FiniteFoldOp::verifySymbolUses(SymbolTableCollection &) {
-  return finite::verify(*this);
+LogicalResult FiniteFoldOp::verify() { return finite::verifyLocal(*this); }
+LogicalResult FiniteCollectOp::verify() { return finite::verifyLocal(*this); }
+LogicalResult FiniteFoldOp::verifySymbolUses(SymbolTableCollection &symbols) {
+  return finite::verifyReferences(*this, symbols);
 }
-LogicalResult FiniteCollectOp::verifySymbolUses(SymbolTableCollection &) {
-  return finite::verify(*this);
+LogicalResult
+FiniteCollectOp::verifySymbolUses(SymbolTableCollection &symbols) {
+  return finite::verifyReferences(*this, symbols);
 }
 } // namespace zkc::algebra
 

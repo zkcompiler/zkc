@@ -23,6 +23,7 @@
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Finite.h"
+#include "zkc/Transforms/NestedContractions.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/VectorReductions.h"
 #include "llvm/ADT/DenseSet.h"
@@ -795,9 +796,7 @@ LogicalResult simplifyCalculations(Operation *body) {
   // Select patterns only from the admitted primitive vocabulary present in
   // this body. Do not collect every pattern registered with this context.
   body->walk([&](Operation *op) {
-    // Tensor container identity is part of the closed profile. Exclude these
-    // operations from both upstream folders and canonicalization patterns.
-    if (!isTotal(op) || op->getName().getDialectNamespace() == "tensor")
+    if (!isTotal(op))
       return;
     worklist.push_back(op);
     if (names.insert(op->getName()).second)
@@ -820,14 +819,8 @@ LogicalResult simplifyCalculations(Operation *body) {
   return success();
 }
 
-namespace {
-// Admit the original whole unit before expanding or erasing anything. Every
-// rewrite is confined to mathematical protocol bodies on an owned candidate;
-// executable local definitions will not be traversed by this optimization.
-OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
-                                    bool fuseVectorReductions,
-                                    std::optional<bool> optimizeFinite = {},
-                                    ArrayRef<ApplicationStart> starts = {}) {
+OwningOpRef<ModuleOp>
+rewriteLocalAlgorithms(ModuleOp source, MathematicalSelectionPolicy policy) {
   if (failed(verify(source)))
     return {};
   if (!llvm::hasSingleElement(*source.getBody())) {
@@ -846,30 +839,47 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
   }
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
   if (failed(expandPolynomialRecipes(*candidate)) ||
-      failed(expandMathRealizations(*candidate,
-                                    optimizeFinite.value_or(simplify))))
+      failed(expandMathRealizations(*candidate, policy)))
     return {};
-  bool hasFinite = false;
-  candidate->walk(
-      [&](Operation *op) { hasFinite |= finite::isDeclaration(op); });
-  if (hasFinite || fuseVectorReductions) {
-    protocol::AlgorithmExpansionState expansion;
-    if (failed(protocol::expandAlgorithms(
-            *candidate, protocol::AlgorithmExpansionPhase::RetainMaps,
-            expansion)) ||
-        (hasFinite && failed(finite::realizeLocals(
-                          *candidate, optimizeFinite.value_or(simplify)))) ||
-        (fuseVectorReductions &&
-         failed(mathematical::fuseVectorReductions(*candidate, expansion))) ||
-        failed(expandMapRealizations(*candidate)) ||
-        failed(protocol::expandAlgorithms(
-            *candidate, protocol::AlgorithmExpansionPhase::Finish, expansion)))
-      return {};
-  } else {
-    if (failed(expandMapRealizations(*candidate)) ||
-        failed(protocol::expandAlgorithms(*candidate)))
-      return {};
-  }
+  // Each service owns its proposed candidate and invokes its independent
+  // source/candidate reader before publication. Compose those checked edges
+  // directly: another clone and the same check here would duplicate their work.
+  // Retain structure until nested and ordinary finite selection and optional
+  // fusion finish; projection later freezes their accepted Local definitions.
+  bool retain = policy.vectorReductionFusion;
+  candidate->walk([&](Operation *op) { retain |= finite::isDeclaration(op); });
+  protocol::AlgorithmExpansionState expansion;
+  if (retain &&
+      (failed(protocol::expandAlgorithms(
+           *candidate, protocol::AlgorithmExpansionPhase::RetainMaps,
+           expansion)) ||
+       failed(
+           nested::rewriteFiniteCollections(*candidate, expansion, policy)) ||
+       failed(finite::realizeLocals(*candidate, policy)) ||
+       (policy.vectorReductionFusion &&
+        failed(mathematical::fuseVectorReductions(*candidate, expansion)))))
+    return {};
+  if (failed(expandMapRealizations(*candidate)))
+    return {};
+  // Without a retained computation there is no intermediate selection window.
+  // A single expansion preserves its work budget and ordinary call-free path.
+  if (retain ? failed(protocol::expandAlgorithms(
+                   *candidate, protocol::AlgorithmExpansionPhase::Finish,
+                   expansion))
+             : failed(protocol::expandAlgorithms(*candidate)))
+    return {};
+  return candidate;
+}
+
+namespace {
+// Admit and realize Local algorithms before generic total simplification. The
+// accepted Local definitions are frozen for preparation and projection checks.
+OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
+                                    MathematicalSelectionPolicy policy,
+                                    ArrayRef<ApplicationStart> starts = {}) {
+  auto candidate = rewriteLocalAlgorithms(source, policy);
+  if (!candidate)
+    return {};
   auto unit =
       cast<zkc::protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
   OwningOpRef<protocol_ir::ProtocolModuleOp> beforeApplications(
@@ -923,18 +933,19 @@ OwningOpRef<ModuleOp> projectPrepared(ModuleOp candidate) {
 struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PreparePass)
   PreparePass() = default;
-  SmallVector<ApplicationStart> starts;
-  explicit PreparePass(bool value, bool fusion,
-                       ArrayRef<ApplicationStart> selected)
-      : starts(selected.begin(), selected.end()) {
+  explicit PreparePass(bool value, MathematicalSelectionPolicy policy) {
     simplify = value;
-    fuseVectorReductions = fusion;
+    optimizeFinite = policy.finiteBulk;
+    fuseVectorReductions = policy.vectorReductionFusion;
   }
-  PreparePass(const PreparePass &other)
-      : PassWrapper(other), starts(other.starts) {}
+  PreparePass(const PreparePass &other) : PassWrapper(other) {}
   Option<bool> simplify{*this, "simplify",
                         llvm::cl::desc("Simplify after expansion"),
                         llvm::cl::init(true)};
+  Option<bool> optimizeFinite{
+      *this, "optimize-finite",
+      llvm::cl::desc("Select checked bulk finite realizations"),
+      llvm::cl::init(true)};
   Option<bool> fuseVectorReductions{
       *this, "fuse-vector-reductions",
       llvm::cl::desc(
@@ -948,7 +959,7 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   void runOnOperation() final {
     auto source = getOperation();
     auto candidate =
-        prepareSource(source, simplify, fuseVectorReductions, {}, starts);
+        prepareSource(source, simplify, {optimizeFinite, fuseVectorReductions});
     if (!candidate)
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
@@ -993,14 +1004,19 @@ struct SimplifyParticipantPass
 struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ProjectPass)
   ProjectPass() = default;
-  explicit ProjectPass(bool value, bool fusion) {
+  explicit ProjectPass(bool value, MathematicalSelectionPolicy policy) {
     simplify = value;
-    fuseVectorReductions = fusion;
+    optimizeFinite = policy.finiteBulk;
+    fuseVectorReductions = policy.vectorReductionFusion;
   }
   ProjectPass(const ProjectPass &other) : PassWrapper(other) {}
   Option<bool> simplify{*this, "simplify",
                         llvm::cl::desc("Simplify before projection"),
                         llvm::cl::init(true)};
+  Option<bool> optimizeFinite{
+      *this, "optimize-finite",
+      llvm::cl::desc("Select checked bulk finite realizations"),
+      llvm::cl::init(true)};
   Option<bool> fuseVectorReductions{
       *this, "fuse-vector-reductions",
       llvm::cl::desc(
@@ -1017,7 +1033,8 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
   }
   void runOnOperation() final {
     auto source = getOperation();
-    auto candidate = prepareSource(source, simplify, fuseVectorReductions);
+    auto candidate =
+        prepareSource(source, simplify, {optimizeFinite, fuseVectorReductions});
     if (!candidate)
       return signalPassFailure();
     auto output = projectPrepared(*candidate);
@@ -1029,11 +1046,15 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
 };
 } // namespace
 
+OwningOpRef<ModuleOp> prepareProtocol(ModuleOp source, bool simplify,
+                                      MathematicalSelectionPolicy policy,
+                                      ArrayRef<ApplicationStart> starts) {
+  return prepareSource(source, simplify, policy, starts);
+}
+
 std::optional<PreparedProtocol>
-PreparedProtocol::prepare(ModuleOp source, bool fuseVectorReductions,
-                          bool optimizeFinite) {
-  auto candidate =
-      prepareSource(source, false, fuseVectorReductions, optimizeFinite);
+PreparedProtocol::prepare(ModuleOp source, MathematicalSelectionPolicy policy) {
+  auto candidate = prepareSource(source, false, policy);
   if (!candidate)
     return std::nullopt;
   return PreparedProtocol(std::move(candidate));
@@ -1072,16 +1093,14 @@ OwningOpRef<ModuleOp> PreparedProtocol::project(bool simplify) && {
 
 std::unique_ptr<mlir::Pass>
 zkc::protocol::createProjectProtocolPass(bool simplify,
-                                         bool fuseVectorReductions) {
-  return std::make_unique<mathematical::ProjectPass>(simplify,
-                                                     fuseVectorReductions);
+                                         MathematicalSelectionPolicy policy) {
+  return std::make_unique<mathematical::ProjectPass>(simplify, policy);
 }
 
-std::unique_ptr<mlir::Pass> zkc::protocol::createPrepareProtocolPass(
-    bool simplify, bool fuseVectorReductions,
-    ArrayRef<mathematical::ApplicationStart> starts) {
-  return std::make_unique<mathematical::PreparePass>(
-      simplify, fuseVectorReductions, starts);
+std::unique_ptr<mlir::Pass>
+zkc::protocol::createPrepareProtocolPass(bool simplify,
+                                         MathematicalSelectionPolicy policy) {
+  return std::make_unique<mathematical::PreparePass>(simplify, policy);
 }
 
 std::unique_ptr<mlir::Pass> zkc::protocol::createSimplifyParticipantPass() {

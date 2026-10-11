@@ -74,7 +74,7 @@ module { "protocol.module"() ({
     commands.source('protocol-bundle', affine.replace('"protocol.yield"(%left,%right)', '"protocol.yield"(%right,%left)'), refuses='mathematical-formation')
 with case('nested unused polynomial observation is checked before DCE'):
     source = (FIXTURES / 'iterated-sumcheck.mlir').read_text()
-    extra = '''     %too_small = "poly.coefficients"(%q) : (!q)->tensor<1x!f>
+    extra = '''     %too_small = "poly.coefficients"(%q) : (!q)->!algebra.field_array<"bls12-381.fr", 1>
 '''
     commands.source('protocol-bundle', source.replace('     %zero =', extra + '     %zero ='), refuses='polynomial-formation')
 with case('statement bindings stay at entry'):
@@ -107,19 +107,19 @@ module {{ "protocol.module"() ({{
     bundle = json.loads(commands.source('protocol-bundle', source))
     assert bundle['format'] == 'zkc.run/0'
     commands.source('protocol-bundle', source.replace('index=1:i64', 'index=2:i64'), refuses='mathematical-formation')
-with case('preparation retains tensor construction from scalar constants'):
+with case('preparation retains field-array construction from scalar constants'):
     source = '''!f = !algebra.field<"bls12-381.fr">
 module { "protocol.module"() ({
  "protocol.func"() ({
    %a = "algebra.constant"() {value="1"} : ()->!f
    %b = "algebra.constant"() {value="2"} : ()->!f
-   %xs = tensor.from_elements %a, %b : tensor<2x!f>
-   "protocol.return"(%xs) : (tensor<2x!f>)->()
- }) {sym_name="main",function_type=()->tensor<2x!f>,roles=["P"],input_roles=[],output_roles=[["P"]]} : ()->()
+   %xs = "algebra.array_from_elements"(%a, %b) : (!f, !f)-> !algebra.field_array<"bls12-381.fr", 2>
+   "protocol.return"(%xs) : (!algebra.field_array<"bls12-381.fr", 2>)->()
+ }) {sym_name="main",function_type=()->!algebra.field_array<"bls12-381.fr", 2>,roles=["P"],input_roles=[],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 '''
     prepared = commands.verified(source, None, '--zkc-prepare-protocol')
-    assert 'tensor.from_elements' in prepared
+    assert 'algebra.array_from_elements' in prepared
     assert 'arith.constant dense' not in prepared
     commands.source('protocol-bundle', prepared)
 counted()

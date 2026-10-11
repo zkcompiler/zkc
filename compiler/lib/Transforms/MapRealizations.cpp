@@ -1,3 +1,6 @@
+#include "ComputationSelection.h"
+#include "LaneRealization.h"
+#include "MathematicalComparison.h"
 #include "MathematicalSupport.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
@@ -23,10 +26,6 @@ namespace {
 // installed ordered control.require: a mismatch is a local backend stop of
 // this checked operation, as for polynomial realization shape checks.
 constexpr StringLiteral shapeGuard = "control.require";
-
-// A formula value either holds one scalar shared by every row or one value per
-// row. Vector results of a realization always have the common row count.
-enum class Mode { Scalar, Rows };
 
 bool boundWithoutField(StringRef contract) {
   return contract.starts_with("index.") || contract == shapeGuard;
@@ -70,30 +69,6 @@ scalarFormula(algebra::MapRealizeOp map, protocol_ir::ProtocolModuleOp unit,
   return std::move(scratch);
 }
 
-// Operations whose result reaches the formula result, in SSA order. The Ring
-// view has already checked the others; removing them preserves the value of a
-// formula built only from constants, addition, subtraction and multiplication.
-SmallVector<Operation *> liveOperations(Block &formula) {
-  llvm::DenseSet<Value> needed(formula.back().getOperands().begin(),
-                               formula.back().getOperands().end());
-  SmallVector<Operation *> live;
-  for (auto &op : llvm::reverse(formula.without_terminator())) {
-    if (!llvm::any_of(op.getResults(),
-                      [&](Value value) { return needed.contains(value); }))
-      continue;
-    live.push_back(&op);
-    needed.insert(op.getOperands().begin(), op.getOperands().end());
-  }
-  std::reverse(live.begin(), live.end());
-  return live;
-}
-
-StringRef contractSuffix(Operation *op) {
-  return isa<algebra::FieldAddOp>(op)        ? "add"
-         : isa<algebra::SubtractFieldOp>(op) ? "sub"
-                                             : "mul";
-}
-
 // Lower a checked map with O(formula) operations, independent of the runtime
 // row count. Scalar subexpressions stay scalar. A scalar meets rows through
 // vector.scale for multiplication; for addition and subtraction its broadcast
@@ -110,7 +85,6 @@ class MapRealizer {
   algebra::FieldType field;
   Type index, boolean, vector;
   Value rows;
-  llvm::DenseMap<Value, Value> broadcasts;
 
   FlatSymbolRefAttr binding(StringRef contract,
                             ArrayRef<std::string> arguments) {
@@ -153,12 +127,6 @@ class MapRealizer {
     auto *op = builder.create(state);
     return output ? op->getResult(0) : Value();
   }
-  Value broadcast(Value scalar) {
-    auto &found = broadcasts[scalar];
-    if (!found)
-      found = emit("vector.fill", {scalar, rows}, vector);
-    return found;
-  }
 
 public:
   explicit MapRealizer(protocol_ir::ProtocolModuleOp unit)
@@ -167,10 +135,9 @@ public:
       if (auto name = SymbolTable::getSymbolName(&op))
         names.insert(name.getValue());
   }
-  void run(algebra::MapRealizeOp map, Block &formula) {
+  LogicalResult run(algebra::MapRealizeOp map, Block &formula) {
     loc = map.getLoc();
     nextSite = 0;
-    broadcasts.clear();
     auto signature = map.getFunctionType();
     field = cast<algebra::FieldType>(
         algebra::mapField(signature, map.getRowwise()));
@@ -197,48 +164,35 @@ public:
       else
         emit(shapeGuard, emit("index.equal", {rows, length}, boolean), Type());
     }
-    llvm::DenseMap<Value, std::pair<Mode, Value>> values;
+    if (!selectLaneFormula(formula, rowwise))
+      return diagnostics::emit(map.emitOpError(),
+                               "mathematical-lane-unsupported",
+                               "required map has no supported lane formula");
+    llvm::DenseMap<Value, LaneInput> values;
     for (auto [i, argument] : llvm::enumerate(formula.getArguments()))
-      values[argument] = {rowwise[i] ? Mode::Rows : Mode::Scalar,
-                          entry->getArgument(i)};
-    for (Operation *op : liveOperations(formula)) {
-      std::pair<Mode, Value> result{Mode::Scalar, Value()};
-      if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op)) {
-        result.second =
-            emit("field.constant", {}, field, {constant.getValue().str()});
-      } else {
-        auto [leftMode, left] = values.lookup(op->getOperand(0));
-        auto [rightMode, right] = values.lookup(op->getOperand(1));
-        auto suffix = contractSuffix(op);
-        if (leftMode == Mode::Scalar && rightMode == Mode::Scalar) {
-          result.second = emit(("field." + suffix).str(), {left, right}, field);
-        } else if (suffix == "mul" &&
-                   (leftMode == Mode::Scalar || rightMode == Mode::Scalar)) {
-          result = {Mode::Rows,
-                    leftMode == Mode::Rows
-                        ? emit("vector.scale", {left, right}, vector)
-                        : emit("vector.scale", {right, left}, vector)};
-        } else {
-          if (leftMode == Mode::Scalar)
-            left = broadcast(left);
-          if (rightMode == Mode::Scalar)
-            right = broadcast(right);
-          result = {Mode::Rows,
-                    emit(("vector." + suffix).str(), {left, right}, vector)};
-        }
-      }
-      values[op->getResult(0)] = result;
-    }
-    auto [mode, value] = values.lookup(formula.back().getOperand(0));
-    if (mode == Mode::Scalar)
-      value = broadcast(value);
-    local::ReturnOp::create(builder, loc, value);
+      values[argument] = {entry->getArgument(i), rowwise[i]};
+    // Required maps have already charged their complete expanded helpers to
+    // the stage's operation/slot budgets. The optional finite-selection budget
+    // must not introduce a stricter second admission limit here.
+    auto result =
+        realizeLanes(formula, values, vector, rows, nullptr,
+                     [&](StringRef contract, ValueRange operands, Type output,
+                         ArrayRef<std::string> parameters) {
+                       return emit(contract, operands, output, parameters);
+                     });
+    if (!result)
+      return diagnostics::emit(map.emitOpError(), result.takeError());
+    if (result->status != LaneRealizationStatus::Realized)
+      return diagnostics::emit(map.emitOpError(), result->reason,
+                               "required map realization is unavailable");
+    local::ReturnOp::create(builder, loc, result->value);
     map.erase();
+    return success();
   }
 };
 
-// Read one generated body against the scalar formula. Values are actual
-// candidate SSA values; this checker never builds IR or calls the realizer.
+// Check ordered input admission, then independently compare the actual
+// candidate payload with the retained source formula.
 class MapCorrespondence {
   SymbolTable &symbols;
   llvm::DenseSet<Operation *> &bindings;
@@ -249,7 +203,6 @@ class MapCorrespondence {
   bool valid = true;
   unsigned nextSite = 0;
   Value rows;
-  llvm::DenseMap<Value, Value> broadcasts;
 
   Value primitive(StringRef contract, ValueRange operands, Type output,
                   ArrayRef<std::string> parameters = {}) {
@@ -291,12 +244,6 @@ class MapCorrespondence {
     }
     bindings.insert(declaration);
     return output ? op->getResult(0) : Value();
-  }
-  Value broadcast(Value scalar) {
-    auto &found = broadcasts[scalar];
-    if (!found)
-      found = primitive("vector.fill", {scalar, rows}, vector);
-    return found;
   }
 
 public:
@@ -340,63 +287,12 @@ public:
     }
     if (!rows)
       return failure();
-    llvm::DenseMap<Value, std::pair<Mode, Value>> values;
-    for (auto [i, argument] : llvm::enumerate(formula.getArguments()))
-      values[argument] = {rowwise[i] ? Mode::Rows : Mode::Scalar,
-                          entry.getArgument(i)};
-    for (Operation *op : liveOperations(formula)) {
-      if (!valid || !remaining)
-        return failure();
-      --remaining;
-      std::pair<Mode, Value> result{Mode::Scalar, Value()};
-      if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op)) {
-        result.second =
-            primitive("field.constant", {}, field, {constant.getValue().str()});
-      } else if (isa<algebra::FieldAddOp, algebra::SubtractFieldOp,
-                     algebra::FieldMultiplyOp>(op)) {
-        auto left = values.find(op->getOperand(0));
-        auto right = values.find(op->getOperand(1));
-        if (left == values.end() || right == values.end())
-          return failure();
-        auto [leftMode, leftValue] = left->second;
-        auto [rightMode, rightValue] = right->second;
-        StringRef suffix = isa<algebra::FieldAddOp>(op)        ? "add"
-                           : isa<algebra::SubtractFieldOp>(op) ? "sub"
-                                                               : "mul";
-        bool leftRows = leftMode == Mode::Rows,
-             rightRows = rightMode == Mode::Rows;
-        if (!leftRows && !rightRows)
-          result.second = primitive(("field." + suffix).str(),
-                                    {leftValue, rightValue}, field);
-        else if (suffix == "mul" && leftRows != rightRows)
-          // Field multiplication is commutative; the scaled rows come first.
-          result = {Mode::Rows, primitive("vector.scale",
-                                          {leftRows ? leftValue : rightValue,
-                                           leftRows ? rightValue : leftValue},
-                                          vector)};
-        else {
-          if (!leftRows)
-            leftValue = broadcast(leftValue);
-          if (!rightRows)
-            rightValue = broadcast(rightValue);
-          result = {Mode::Rows, primitive(("vector." + suffix).str(),
-                                          {leftValue, rightValue}, vector)};
-        }
-      } else
-        return failure();
-      if (!valid)
-        return failure();
-      values[op->getResult(0)] = result;
-    }
-    auto found = values.find(formula.back().getOperand(0));
-    if (found == values.end())
-      return failure();
-    auto [mode, value] = found->second;
-    if (mode == Mode::Scalar)
-      value = broadcast(value);
-    if (!valid || !cursor || !isa<local::ReturnOp>(cursor) ||
+    auto result =
+        compareLaneFormula(formula, rowwise, entry.getArguments(), rows, cursor,
+                           symbols, bindings, remaining, &entry.back());
+    if (failed(result) || !valid || !cursor || !isa<local::ReturnOp>(cursor) ||
         cursor->getNextNode() || !cursor->getAttrs().empty() ||
-        !llvm::equal(cursor->getOperands(), ValueRange{value}))
+        !llvm::equal(cursor->getOperands(), ValueRange{*result}))
       return failure();
     return success();
   }
@@ -428,10 +324,9 @@ LogicalResult verifyMapRealizationsPreserved(ModuleOp original,
       (*before)->getAttrDictionary() != (*after)->getAttrDictionary())
     return refuse("module shape or profile");
   SymbolTable symbols(*after);
-  SymbolTableCollection originalSymbols;
+  SymbolTable originalSymbols(*before);
   llvm::DenseSet<Operation *> retained, bindings;
-  uint64_t remaining = 1000000, indices = 1000000;
-  unsigned helpers = realizedHelperOperationLimit;
+  uint64_t remaining = 1000000;
   for (Operation &op : before->getBody().front()) {
     auto name = SymbolTable::getSymbolName(&op);
     if (!name)
@@ -441,14 +336,14 @@ LogicalResult verifyMapRealizationsPreserved(ModuleOp original,
       return refuse("missing declaration");
     retained.insert(replacement);
     if (auto map = dyn_cast<algebra::MapRealizeOp>(op)) {
-      // The reference formula is derived again from the retained original.
+      // Interpret the original helper closure directly. Sharing the producer's
+      // inlined scratch body would also share capture-substitution mistakes.
       auto function = dyn_cast<local::FuncOp>(replacement);
-      auto formula =
-          scalarFormula(map, *before, originalSymbols, helpers, indices);
-      if (!function || failed(formula))
+      auto helper = originalSymbols.lookup<func::FuncOp>(map.getHelper());
+      if (!function || !helper || !helper.getBody().hasOneBlock())
         return refuse("realization declaration or formula");
       if (failed(MapCorrespondence(symbols, bindings, remaining)
-                     .check(map, function, (*formula)->front())))
+                     .check(map, function, helper.getBody().front())))
         return refuse(remaining ? "realization body" : "work limit");
     } else if (!OperationEquivalence::isEquivalentTo(
                    &op, replacement, OperationEquivalence::IgnoreLocations))
@@ -486,7 +381,8 @@ LogicalResult expandMapRealizations(ModuleOp module) {
   }
   MapRealizer realizer(unit);
   for (auto &[map, formula] : maps)
-    realizer.run(map, formula->front());
+    if (failed(realizer.run(map, formula->front())))
+      return failure();
   if (failed(verifyMapRealizationsPreserved(module, *candidate)))
     return diagnostics::emit(module.emitError(), "algebra-map-lowering",
                              "realized map failed its correspondence check");
@@ -508,20 +404,26 @@ describeMapProducts(ModuleOp module) {
     if (failed(formula))
       return failure();
     auto &body = (*formula)->front();
-    auto product =
-        body.back().getOperand(0).getDefiningOp<algebra::FieldMultiplyOp>();
-    if (!product)
-      continue;
-    auto left = dyn_cast<BlockArgument>(product->getOperand(0));
-    auto right = dyn_cast<BlockArgument>(product->getOperand(1));
-    if (left && right && left.getOwner() == &body &&
-        right.getOwner() == &body && map.getRowwise()[left.getArgNumber()] &&
-        map.getRowwise()[right.getArgNumber()])
-      products.emplace(
-          map.getSymName().str(),
-          std::make_pair(left.getArgNumber(), right.getArgNumber()));
+    if (auto product = selectMapProduct(body, map.getRowwise()))
+      products.emplace(map.getSymName().str(), *product);
   }
   return products;
+}
+
+FailureOr<Value> compareMapSum(algebra::MapRealizeOp map, ValueRange inputs,
+                               Value rows, Operation *&cursor,
+                               SymbolTable &candidateSymbols,
+                               llvm::DenseSet<Operation *> &bindings,
+                               uint64_t &remaining) {
+  auto unit = map->getParentOfType<protocol_ir::ProtocolModuleOp>();
+  auto helper =
+      unit ? dyn_cast_or_null<func::FuncOp>(
+                 SymbolTable::lookupSymbolIn(unit, map.getHelperAttr()))
+           : func::FuncOp();
+  if (!helper || !helper.getBody().hasOneBlock())
+    return failure();
+  return compareLaneSum(helper.getBody().front(), map.getRowwise(), inputs,
+                        rows, cursor, candidateSymbols, bindings, remaining);
 }
 
 Error checkMapFormulas(ModuleOp original, uint64_t &remaining) {

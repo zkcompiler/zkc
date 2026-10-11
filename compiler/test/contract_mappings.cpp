@@ -132,6 +132,8 @@ constexpr ExpectedMapping expected[] = {
     {"matrix.bilinear", "algebra.exec.matrix_bilinear"},
     {"matrix.dimension", "algebra.exec.matrix_dimension"},
     {"matrix.get", "algebra.exec.matrix_get"},
+    {"matrix.row_dot", "algebra.exec.matrix_row_dot"},
+    {"matrix.column_dot", "algebra.exec.matrix_column_dot"},
     {"matrix.shape_check", "algebra.exec.matrix_shape_check"},
     {"matrix.identity_check", "algebra.exec.matrix_identity_check"},
     {"vector.constant", "algebra.exec.vector_constant"},
@@ -386,7 +388,7 @@ module { "protocol.module"() ({
 void importedProduct(MLIRContext &context) {
   auto imported = mlir::parseSourceString<ModuleOp>(R"(
 !F = !algebra.field<"koala-bear">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"koala-bear">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="product",contract="vector.product",arguments=["koala-bear"],implementation=""} : ()->()
  "local.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()

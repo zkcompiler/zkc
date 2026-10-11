@@ -5,24 +5,8 @@
 using namespace mlir;
 namespace zkc::protocol::type_adapters {
 namespace {
-Type decodeShake128(MLIRContext *context, const BoundType &) {
-  return loadedType<zkc::crypto::Shake128StateType>(context);
-}
-std::optional<BoundType> encodeShake128(Type type,
-                                        llvm::StringRef constructor) {
-  if (isa<zkc::crypto::Shake128StateType>(type))
-    return BoundType{constructor.str(), {}, {}};
-  return std::nullopt;
-}
-Type decodeBytes(MLIRContext *context, const BoundType &) {
-  return vectorType(IntegerType::get(context, 8, IntegerType::Unsigned));
-}
-std::optional<BoundType> encodeBytes(Type type, llvm::StringRef constructor) {
-  auto element = vectorElement(type);
-  if (element && element.isUnsignedInteger(8))
-    return BoundType{constructor.str(), {}, {}};
-  return std::nullopt;
-}
+using Shake128Adapter = NullaryAdapter<zkc::crypto::Shake128StateType>;
+using BytesAdapter = NullaryAdapter<zkc::data::BytesType>;
 Type decodeSequence(MLIRContext *context, const BoundType &type) {
   if (type.arguments.size() != 1 ||
       type.arguments[0].kind != TypeArgument::Kind::Type)

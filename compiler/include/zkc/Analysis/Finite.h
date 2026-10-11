@@ -20,14 +20,27 @@ bool isComputation(mlir::Operation *op);
 bool isDeclaration(mlir::Operation *op);
 mlir::Type elementType(mlir::Type container, bool matrix = false);
 mlir::LogicalResult describe(mlir::Operation *op, Computation &result,
-                             mlir::Operation *symbolRoot = nullptr);
+                             mlir::Operation *symbolRoot = nullptr,
+                             mlir::SymbolTableCollection *symbols = nullptr);
 mlir::LogicalResult verify(mlir::Operation *op);
+// Local shape and attributes do not traverse symbols. Symbol-user verification
+// checks the referenced ABI and premises with MLIR's supplied symbol tables.
+mlir::LogicalResult verifyLocal(mlir::Operation *op);
+mlir::LogicalResult verifyReferences(mlir::Operation *op,
+                                     mlir::SymbolTableCollection &symbols);
+// Region-level closure checks after local and symbol-user verification.
 mlir::LogicalResult verifyClosure(mlir::Operation *unit);
 mlir::LogicalResult verifyPreconditions(mlir::Operation *helper);
 mlir::LogicalResult verifyCallPreconditions(mlir::Operation *call);
 bool provesBound(mlir::Value index, mlir::Value container, unsigned axis);
 bool provesEqualExtent(mlir::Value left, unsigned leftAxis, mlir::Value right,
                        unsigned rightAxis);
+// Enclosing analyses/checkers use these overloads to share cumulative work.
+// False is conservative, including exhausted work; it grants no evidence.
+bool provesBound(mlir::Value index, mlir::Value container, unsigned axis,
+                 uint64_t &remaining);
+bool provesEqualExtent(mlir::Value left, unsigned leftAxis, mlir::Value right,
+                       unsigned rightAxis, uint64_t &remaining);
 // Result sets are precise up to control/cardinality conservatism; consumers
 // cloning whole operations must continue using operandDependencies instead.
 struct Summary {

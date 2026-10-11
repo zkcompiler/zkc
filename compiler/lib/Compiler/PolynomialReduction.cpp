@@ -1,6 +1,5 @@
 #include "zkc/Compiler/PolynomialReduction.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/PassManager.h"
@@ -278,7 +277,7 @@ bool recipeOperation(Operation *op) {
              poly::MultiplyPolynomialOp, poly::ConstantPolynomialOp,
              algebra::ConstantFieldOp, algebra::ArrayAtOp, algebra::FieldAddOp,
              algebra::FieldMultiplyOp, algebra::SubtractFieldOp,
-             tensor::FromElementsOp>(op);
+             algebra::ArrayFromElementsOp>(op);
 }
 // Match pure DAGs without algebraic equality or location-based provenance.
 // Multiple equal source nodes may share one candidate node.
@@ -385,7 +384,7 @@ Expected<json::Value> check(pir::ProtocolModuleOp original,
     if (!input || !ti || input != output || input.getType() != ti.getType() ||
         input.getType() != recipe.getArgument(i).getType())
       return refuse("residual subject");
-    auto array = dyn_cast<RankedTensorType>(input.getType());
+    auto array = dyn_cast<algebra::FieldArrayType>(input.getType());
     if (input.getType() != field && (!array || !algebra::isFieldArray(array) ||
                                      array.getElementType() != field))
       return refuse("subject domain");
@@ -457,8 +456,9 @@ Expected<json::Value> check(pir::ProtocolModuleOp original,
     auto guard = dyn_cast<local::GuardOp>(actions[4 * k + 1]);
     auto query = dyn_cast<pir::ParticipantQueryOp>(actions[4 * k + 2]);
     auto send = dyn_cast<pir::EmitOp>(actions[4 * k + 3]);
-    auto payload =
-        RankedTensorType::get({int64_t(bounds->second[k] + 1)}, field);
+    auto payload = algebra::FieldArrayType::get(
+        field.getContext(), cast<algebra::FieldType>(field).getDomain(),
+        bounds->second[k] + 1);
     if (!receive || !guard || !query || !send || receive.getPeer() != prover ||
         send.getPeer() != prover || receive.getOutput().getType() != payload ||
         query.getPort() != verifier->servicePort ||
@@ -617,10 +617,9 @@ Expected<json::Value> checkComposition(pir::ProtocolModuleOp source,
 }
 } // namespace
 
-Expected<json::Value> checkPolynomialReductions(ModuleOp original,
-                                                ModuleOp candidate,
-                                                StringRef text,
-                                                bool fuseVectorReductions) {
+Expected<json::Value>
+checkPolynomialReductions(ModuleOp original, ModuleOp candidate, StringRef text,
+                          MathematicalSelectionPolicy mathematicalSelection) {
   auto requirements = parse(text);
   if (!requirements)
     return requirements.takeError();
@@ -654,7 +653,7 @@ Expected<json::Value> checkPolynomialReductions(ModuleOp original,
   OwningOpRef<ModuleOp> projected(cast<ModuleOp>(original->clone()));
   PassManager preparation(original.getContext());
   preparation.addPass(
-      protocol::createProjectProtocolPass(false, fuseVectorReductions));
+      protocol::createProjectProtocolPass(false, mathematicalSelection));
   if (failed(preparation.run(*projected)))
     return error("polynomial-correspondence-source");
   auto expected = cast<pir::ProtocolModuleOp>(projected->getBody()->front());
@@ -761,7 +760,8 @@ Expected<json::Value> checkPolynomialReductions(ModuleOp original,
   };
   return json::Object{
       {"format", "zkc.polynomial-correspondence/0"},
-      {"fuse_vector_reductions", fuseVectorReductions},
+      {"finite_bulk", mathematicalSelection.finiteBulk},
+      {"fuse_vector_reductions", mathematicalSelection.vectorReductionFusion},
       {"requirements", std::move(results)},
       {"requirement_source", requirementSource},
       {"requirements_sha256", digest(requirementSource)},

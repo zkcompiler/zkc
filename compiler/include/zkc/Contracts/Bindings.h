@@ -8,6 +8,7 @@
 namespace zkc::protocol {
 
 struct TypeArgument;
+class ImplementationCatalog;
 /// Closed nominal type. Atomic constructors retain the compact identity slot;
 /// an applied constructor instead owns kinded arguments and has no atomic
 /// identity. Representation belongs only to the outer physical value.
@@ -61,8 +62,15 @@ struct BoundOperation {
   std::vector<BoundType> inputs, outputs;
 };
 
-/// Independently installed logical contract and physical implementation tables
-/// determine exact signatures. Serialized bindings do not declare new facts.
+/// Resolve only logical signatures and requirements. The caller retains the
+/// original implementation constraint; this query grants no physical admission.
+llvm::Expected<BoundOperation>
+resolveLogicalBinding(const BindingApplication &binding);
+/// Independently installed declarations and implementations determine exact
+/// signatures. The overload admits against an explicit immutable installation.
+llvm::Expected<BoundOperation> resolveBinding(const BindingApplication &,
+                                              bool physical,
+                                              const ImplementationCatalog &);
 llvm::Expected<BoundOperation> resolveBinding(const BindingApplication &,
                                               bool physical);
 /// Shared declaration validation for typed source, MLIR, and encoded inputs.

@@ -1,8 +1,7 @@
 # Runtime-count nested data uses an explicit immutable sequence type
 
 Use `!data.sequence<T>` for runtime-count immutable records and variable-size
-payloads. Keep numeric vectors and matrices in their existing ranked tensor
-representation. The [nested-data profile](../spec/ir/data.md)
+payloads. Keep numeric vectors and matrices in their dedicated nominal Algebra types. The [nested-data profile](../spec/ir/data.md)
 owns formation, operations and realization.
 
 ## Alternatives and reason
@@ -17,10 +16,10 @@ MLIR's [ranked tensor type](https://mlir.llvm.org/docs/Dialects/Builtin/#rankedt
 permits dialect-defined element types; it does not itself define zkc's ownership,
 wire or checked indexing semantics. Direct nested builtin tensors are excluded.
 Wrapping a matrix in a dialect record merely to place it in a tensor obscures
-this distinction and still requires a new storage/codec contract. Broadening all
-tensor lowering to arbitrary records would mix numerical and nested-data rules.
+this distinction and still requires a new storage/codec contract. Broadening numerical
+collection lowering to arbitrary records would mix numerical and nested-data rules.
 An explicit sequence gives both clients common construction, length, indexing
-and append contracts while preserving tensor arithmetic and layout.
+and append contracts while preserving the separate numerical operations and physical layouts.
 
 The existing `data` dialect owns immutable domain-independent data. Sequence
 formation and pure operations belong there; checked local execution uses the

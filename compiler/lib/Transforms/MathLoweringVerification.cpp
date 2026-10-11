@@ -1,13 +1,14 @@
-#include "FiniteSupport.h"
+#include "HelperNormalization.h"
 #include "MathematicalSupport.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "zkc/Analysis/Computation.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Interfaces/Collection.h"
 #include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -24,6 +25,7 @@ class LoweringVerifier {
   protocol_ir::ProtocolModuleOp before, after;
   llvm::DenseSet<Operation *> generated, invoked;
   SymbolTable sourceSymbols, symbols;
+  const CheckedHelperNormalizations &helpers;
   size_t remaining = 1000000;
 
   LogicalResult refuse(Operation *op, StringRef detail) {
@@ -34,6 +36,29 @@ class LoweringVerifier {
     if (amount > remaining)
       return false;
     remaining -= amount;
+    return true;
+  }
+  // Generated instructions belong to the source occurrence that introduced
+  // their recipe. Global admission separately checks uniqueness. Suffix
+  // allocation is deliberately not used as mathematical evidence.
+  bool occurrences(Operation *begin, Operation *end, StringRef root,
+                   bool finite) {
+    auto prefix = (root + (finite ? "_finite_" : "_recipe_")).str();
+    for (auto *op = begin; op != end; op = op->getNextNode()) {
+      if (!op)
+        return false;
+      auto walk = op->walk([&](Operation *nested) {
+        if (!charge())
+          return WalkResult::interrupt();
+        auto site = nested->getAttrOfType<StringAttr>("site");
+        if (site && site.getValue() != root &&
+            !site.getValue().starts_with(prefix))
+          return WalkResult::interrupt();
+        return WalkResult::advance();
+      });
+      if (walk.wasInterrupted())
+        return false;
+    }
     return true;
   }
   // Sites are allocated by lowering and checked for uniqueness by the profile.
@@ -54,8 +79,10 @@ class LoweringVerifier {
                                    symbols.lookup(reference.getValue()))
                              : local::OperationBindingOp();
     auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
+    auto site = op->getAttrOfType<StringAttr>("site");
     if (!binding || binding.getContract() != contract ||
-        !binding.getImplementation().empty() || !parameters ||
+        !binding.getImplementation().empty() || !site ||
+        site.getValue().empty() || op->getAttrs().size() != 3 || !parameters ||
         parameters.size() != expectedParameters.size() ||
         binding.getArguments().size() != arguments.size())
       return false;
@@ -76,40 +103,49 @@ class LoweringVerifier {
         source, inputs, cursor,
         [&](Operation *helper, ValueRange args,
             Operation *&at) -> FailureOr<SmallVector<Value>> {
-          OwningOpRef<func::FuncOp> scratch(
-              cast<func::FuncOp>(helper->clone()));
-          SymbolTableCollection tables;
-          unsigned operations = 100000;
-          uint64_t indices = 1000000, polynomial = 100000;
-          auto unit = helper->getParentOfType<protocol_ir::ProtocolModuleOp>();
-          if (failed(
-                  inlineHelpers(*scratch, operations, indices, tables, unit)) ||
-              failed(poly::eliminatePolynomials(scratch->front(), polynomial)))
+          // Only independently checked proposals are available here. Lookup
+          // is read-only: this verifier cannot run either normalizer.
+          auto normalized = helpers.lookup(helper);
+          if (!normalized || normalized.getNumArguments() != args.size())
             return failure();
-          auto &body = scratch->front();
+          auto &body = normalized.front();
           llvm::DenseMap<Value, Value> values;
-          for (auto [a, b] : zip(body.getArguments(), args))
+          for (auto [a, b] : zip(body.getArguments(), args)) {
+            if (a.getType() != b.getType())
+              return failure();
             values[a] = b;
+          }
           for (auto &op : body.without_terminator()) {
+            if (!charge(1 + op.getNumOperands() + op.getNumResults()))
+              return failure();
             SmallVector<Value> operands;
-            for (Value v : op.getOperands())
-              operands.push_back(values.lookup(v));
+            for (Value v : op.getOperands()) {
+              auto value = values.lookup(v);
+              if (!value)
+                return failure();
+              operands.push_back(value);
+            }
             if (finite::isComputation(&op)) {
               auto results = finiteRecipe(&op, at, operands);
-              if (failed(results))
+              if (failed(results) || results->size() != op.getNumResults())
                 return failure();
               for (auto [a, b] : zip(op.getResults(), *results))
                 values[a] = b;
             } else {
               auto value = recipe(&op, at, operands);
-              if (!value || op.getNumResults() != 1)
+              if (!value || op.getNumResults() != 1 ||
+                  value.getType() != op.getResult(0).getType())
                 return failure();
               values[op.getResult(0)] = value;
             }
           }
           SmallVector<Value> results;
-          for (Value v : body.back().getOperands())
-            results.push_back(values.lookup(v));
+          for (Value v : body.back().getOperands()) {
+            auto value = values.lookup(v);
+            if (!value)
+              return failure();
+            results.push_back(value);
+          }
           return results;
         },
         before);
@@ -153,22 +189,24 @@ class LoweringVerifier {
                   inputs, {spelling});
     }
     if (auto dim = dyn_cast<data::DimOp>(source)) {
-      auto tensor = dim.getInput().getType();
+      auto collection = cast<CollectionTypeInterface>(dim.getInput().getType());
       auto axis = dim.getAxisAttr().getInt();
-      if (!tensor.isDynamicDim(axis)) {
-        auto length = std::to_string(tensor.getDimSize(axis));
+      if (auto extent = collection.getStaticExtent(axis)) {
+        auto length = std::to_string(*extent);
         return take("index.constant", {}, {}, {length});
       }
-      if (auto field = dyn_cast<algebra::FieldType>(tensor.getElementType())) {
-        if (tensor.getRank() == 1)
+      if (auto field =
+              dyn_cast<algebra::FieldType>(collection.getElementType())) {
+        if (collection.getRank() == 1)
           return take("vector.length", inputs, {field.getDomain()});
         auto coordinate = std::to_string(axis);
         return take("matrix.dimension", inputs, {field.getDomain()},
                     {coordinate});
       }
-      if (auto group = dyn_cast<algebra::GroupType>(tensor.getElementType()))
+      if (auto group =
+              dyn_cast<algebra::GroupType>(collection.getElementType()))
         return take("curve.length", inputs, {group.getDomain()});
-      return take(tensor.getElementType().isUnsignedInteger(8)
+      return take(collection.getCollectionKind() == CollectionKind::Bytes
                       ? "bytes.length"
                       : "indices.length",
                   inputs);
@@ -312,14 +350,15 @@ class LoweringVerifier {
     if (auto at = dyn_cast<algebra::ArrayAtOp>(source)) {
       auto array = at.getArray().getType();
       auto field = cast<algebra::FieldType>(array.getElementType()).getDomain();
-      auto length = std::to_string(array.getDimSize(0));
+      auto length = std::to_string(array.getLength());
       auto index = std::to_string(at.getIndexAttr().getInt());
       return take("field_array.at", inputs, {field, length}, {index});
     }
-    if (isa<tensor::FromElementsOp>(source)) {
-      auto array = cast<RankedTensorType>(source->getResult(0).getType());
+    if (isa<algebra::ArrayFromElementsOp>(source)) {
+      auto array =
+          cast<algebra::FieldArrayType>(source->getResult(0).getType());
       auto field = cast<algebra::FieldType>(array.getElementType()).getDomain();
-      auto length = std::to_string(array.getDimSize(0));
+      auto length = std::to_string(array.getLength());
       auto vector = take("vector.empty", {}, {field});
       for (auto element : inputs) {
         if (!vector || !vector.hasOneUse())
@@ -562,21 +601,43 @@ class LoweringVerifier {
 
 public:
   LoweringVerifier(protocol_ir::ProtocolModuleOp before,
-                   protocol_ir::ProtocolModuleOp after)
-      : before(before), after(after), sourceSymbols(before), symbols(after) {}
-  LogicalResult calculations(ArrayRef<local::FuncOp> functions) {
+                   protocol_ir::ProtocolModuleOp after,
+                   const CheckedHelperNormalizations &helpers)
+      : before(before), after(after), sourceSymbols(before), symbols(after),
+        helpers(helpers) {}
+  LogicalResult calculations(ArrayRef<local::FuncOp> functions,
+                             bool realization = false) {
     for (auto target : functions) {
-      auto source = sourceSymbols.lookup<local::FuncOp>(target.getSymName());
-      if (!source ||
-          source->getAttrDictionary() != target->getAttrDictionary() ||
-          !hasSingleElement(source.getBody()) ||
-          !hasSingleElement(target.getBody()))
+      Block *sourceBody = nullptr;
+      if (realization) {
+        auto declaration =
+            sourceSymbols.lookup<local::RealizeOp>(target.getSymName());
+        auto helper =
+            declaration
+                ? sourceSymbols.lookup<func::FuncOp>(declaration.getHelper())
+                : func::FuncOp();
+        auto normalized =
+            helper ? helpers.lookup(helper, true) : func::FuncOp();
+        if (normalized &&
+            normalized.getFunctionType() == target.getFunctionType())
+          sourceBody = &normalized.front();
+      } else {
+        auto source = sourceSymbols.lookup<local::FuncOp>(target.getSymName());
+        if (source &&
+            source->getAttrDictionary() == target->getAttrDictionary() &&
+            source.getBody().hasOneBlock())
+          sourceBody = &source.getBody().front();
+      }
+      if (!sourceBody || !hasSingleElement(target.getBody()) ||
+          !llvm::equal(sourceBody->getArgumentTypes(),
+                       target.getArgumentTypes()))
         return refuse(target, "realized calculation interface changed");
       llvm::DenseMap<Value, Value> values;
-      for (auto [a, b] : zip(source.getArguments(), target.getArguments()))
+      for (auto [a, b] : zip(sourceBody->getArguments(), target.getArguments()))
         values[a] = b;
       auto *cursor = &target.getBody().front().front();
-      for (auto &op : source.getBody().front()) {
+      unsigned occurrence = 0;
+      for (auto &op : *sourceBody) {
         if (!charge(1 + op.getNumOperands() + op.getNumResults()))
           return refuse(target, "lowering comparison work limit exceeded");
         SmallVector<Value> inputs;
@@ -586,7 +647,7 @@ public:
             return refuse(target, "realized calculation lost a dependency");
           inputs.push_back(value);
         }
-        if (isa<local::ReturnOp>(op)) {
+        if (isa<local::ReturnOp, func::ReturnOp>(op)) {
           auto returned = dyn_cast_or_null<local::ReturnOp>(cursor);
           if (!returned || cursor->getNextNode() ||
               returned.getInputs() != ValueRange(inputs))
@@ -595,21 +656,39 @@ public:
           continue;
         }
         if (finite::isComputation(&op)) {
+          auto *begin = cursor;
           auto results = finiteRecipe(&op, cursor, inputs);
           if (failed(results) || results->size() != op.getNumResults())
             return refuse(target, "finite multi-result recipe changed");
           for (auto [a, b] : zip(op.getResults(), *results))
             values[a] = b;
+          if (realization &&
+              !occurrences(begin, cursor, "value_" + std::to_string(occurrence),
+                           true))
+            return refuse(target, "finite recipe changed its occurrence");
+          ++occurrence;
           continue;
         }
         if (!isTotal(&op) || op.getNumResults() != 1)
           return refuse(target, "unexpected realized mathematical operation");
+        auto *begin = cursor;
         auto value = recipe(&op, cursor, inputs);
         if (!value || value.getType() != op.getResult(0).getType() ||
             value.use_empty())
           return refuse(
               target,
               "realized calculation changed a recipe, operand or liveness");
+        // The complete local.realize path assigns these root occurrences
+        // before lowering; expanded recipe intermediates have their own sites.
+        if (realization) {
+          auto root = "value_" + std::to_string(occurrence);
+          auto site = value.getDefiningOp()->getAttrOfType<StringAttr>("site");
+          if (!site || site.getValue() != root ||
+              !occurrences(begin, cursor, root, false))
+            return refuse(target,
+                          "realized calculation changed its occurrence");
+        }
+        ++occurrence;
         values[op.getResult(0)] = value;
       }
       if (cursor)
@@ -711,10 +790,46 @@ public:
 LogicalResult verifyCalculationRecipes(protocol_ir::ProtocolModuleOp original,
                                        protocol_ir::ProtocolModuleOp candidate,
                                        ArrayRef<local::FuncOp> functions) {
-  return LoweringVerifier(original, candidate).calculations(functions);
+  CheckedHelperNormalizations helpers(original);
+  SymbolTable symbols(original);
+  for (auto function : functions) {
+    auto source = symbols.lookup<local::FuncOp>(function.getSymName());
+    if (!source || failed(helpers.prepare(source)))
+      return failure();
+  }
+  return LoweringVerifier(original, candidate, helpers).calculations(functions);
+}
+LogicalResult
+verifyRealizedHelperRecipes(protocol_ir::ProtocolModuleOp original,
+                            protocol_ir::ProtocolModuleOp candidate,
+                            ArrayRef<local::FuncOp> functions) {
+  CheckedHelperNormalizations helpers(original);
+  SymbolTable symbols(original);
+  for (auto function : functions) {
+    auto declaration = symbols.lookup<local::RealizeOp>(function.getSymName());
+    auto helper = declaration
+                      ? symbols.lookup<func::FuncOp>(declaration.getHelper())
+                      : func::FuncOp();
+    if (!helper || failed(helpers.prepareRealization(helper)))
+      return failure();
+  }
+  return verifyRealizedHelperRecipes(original, candidate, functions, helpers);
+}
+LogicalResult
+verifyRealizedHelperRecipes(protocol_ir::ProtocolModuleOp original,
+                            protocol_ir::ProtocolModuleOp candidate,
+                            ArrayRef<local::FuncOp> functions,
+                            const CheckedHelperNormalizations &helpers) {
+  return LoweringVerifier(original, candidate, helpers)
+      .calculations(functions, true);
 }
 LogicalResult verifyMathLowering(protocol_ir::ProtocolModuleOp original,
                                  protocol_ir::ProtocolModuleOp candidate) {
-  return LoweringVerifier(original, candidate).run();
+  CheckedHelperNormalizations helpers(original);
+  for (auto participant :
+       original.getBody().front().getOps<protocol_ir::ParticipantOp>())
+    if (failed(helpers.prepare(participant)))
+      return failure();
+  return LoweringVerifier(original, candidate, helpers).run();
 }
 } // namespace zkc::mathematical

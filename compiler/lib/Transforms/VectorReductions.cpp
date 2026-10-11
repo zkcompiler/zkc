@@ -1,5 +1,6 @@
 #include "zkc/Transforms/VectorReductions.h"
 #include "AlgorithmSupport.h"
+#include "ComputationSelection.h"
 #include "MathematicalSupport.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
@@ -18,7 +19,7 @@ namespace {
 using Record = protocol::detail::AlgorithmExpansionRecord;
 using Occurrence = protocol::detail::AlgorithmOccurrence;
 using StateAccess = protocol::detail::AlgorithmStateAccess;
-using Products = std::map<std::string, std::pair<unsigned, unsigned>>;
+using Reductions = std::map<std::string, SelectedReduction>;
 
 protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
   if (!hasSingleElement(*module.getBody()))
@@ -71,10 +72,8 @@ public:
 
 // Exact native contract recognition, never a source reducer spelling. The
 // typed operation and its resolved logical binding must both agree.
-algebra::MapRealizeOp productMap(local::ApplyOp call, SymbolTable &symbols,
-                                 const Products &products) {
-  if (!call || call->getNumResults() != 1 || !call->getResult(0).hasOneUse() ||
-      !products.count(call.getCallee().str()))
+algebra::MapRealizeOp reductionMap(local::ApplyOp call, SymbolTable &symbols) {
+  if (!call || call->getNumResults() != 1 || !call->getResult(0).hasOneUse())
     return {};
   auto map = symbols.lookup<algebra::MapRealizeOp>(call.getCallee());
   auto sum = dyn_cast_if_present<algebra::VectorSumOp>(call->getNextNode());
@@ -109,12 +108,12 @@ public:
   Rewriter(protocol_ir::ProtocolModuleOp root, Record &record)
       : root(root), symbols(root), names(root), builder(root.getContext()),
         record(record) {}
-  LogicalResult run(const Products &products) {
+  LogicalResult run(const Reductions &reductions) {
     SmallVector<local::ApplyOp> calls;
     root.walk([&](local::ApplyOp call) { calls.push_back(call); });
     for (auto call : calls) {
-      auto map = productMap(call, symbols, products);
-      if (!map)
+      auto map = reductionMap(call, symbols);
+      if (!map || !reductions.count(call.getCallee().str()))
         continue;
       auto function = call->getParentOfType<local::FuncOp>();
       auto saved = protocol::detail::occurrence(record, function.getSymName(),
@@ -198,13 +197,14 @@ public:
             return failure();
         }
       }
-      auto [left, right] = products.at(map.getSymName().str());
-      auto dot =
-          emit("vector.dot", {call->getOperand(left), call->getOperand(right)},
-               field, false);
-      if (!dot)
+      const auto &reduction = reductions.at(map.getSymName().str());
+      SmallVector<Value> inputs;
+      for (unsigned input : reduction.inputs)
+        inputs.push_back(call->getOperand(input));
+      auto reduced = emit(reduction.recipe->target, inputs, field, false);
+      if (!reduced)
         return failure();
-      sum->getResult(0).replaceAllUsesWith(dot->getResult(0));
+      sum->getResult(0).replaceAllUsesWith(reduced->getResult(0));
       sum->erase();
       call.erase();
     }
@@ -218,7 +218,6 @@ class Correspondence {
   using Values = llvm::DenseMap<Value, Value>;
   SymbolTable originalSymbols, candidateSymbols;
   BindingNames names;
-  const Products &products;
   const Record &input;
   Record expected;
   llvm::DenseSet<Operation *> addedBindings;
@@ -329,12 +328,25 @@ class Correspondence {
           return refuse(call, "ordered shape guard");
       }
     }
-    auto [left, right] = products.at(map.getSymName().str());
-    auto a = values.lookup(call->getOperand(left)),
-         b = values.lookup(call->getOperand(right));
-    auto dot = a && b ? primitive("vector.dot", {a, b}, field, false) : nullptr;
+    SmallVector<Value> inputs;
+    for (Value operand : call->getOperands()) {
+      Value mapped = values.lookup(operand);
+      if (!mapped)
+        return refuse(call, "unbound map input");
+      inputs.push_back(mapped);
+    }
+    if (cursor == target.end())
+      return refuse(call, "missing reduction payload");
+    Operation *payload = &*cursor;
+    Operation *after = payload;
+    auto result = compareMapSum(map, inputs, rows, after, candidateSymbols,
+                                addedBindings, expected.checkWork);
+    if (failed(result) || after != payload->getNextNode() ||
+        payload->getNumResults() != 1 || *result != payload->getResult(0))
+      return refuse(call, "reduction formula correspondence");
+    auto dot = primitive("vector.dot", payload->getOperands(), field, false);
     if (!dot || failed(bind(sum->getResults(), dot->getResults(), values)))
-      return refuse(call, "dot operands or result");
+      return refuse(call, "dot operation or result");
     return success();
   }
   LogicalResult block(Block &source, Block &target, unsigned depth) {
@@ -349,7 +361,7 @@ class Correspondence {
       if (!charge() || cursor == target.end())
         return refuse(&op, "work limit or missing operation");
       auto call = dyn_cast<local::ApplyOp>(op);
-      auto map = productMap(call, originalSymbols, products);
+      auto map = reductionMap(call, originalSymbols);
       if (map && !isa<local::ApplyOp>(*cursor)) {
         Operation *sum = &*++it;
         if (failed(replacement(call, map, sum, target, cursor, values)))
@@ -380,10 +392,9 @@ class Correspondence {
 
 public:
   Correspondence(protocol_ir::ProtocolModuleOp original,
-                 protocol_ir::ProtocolModuleOp candidate,
-                 const Products &products, const Record &input)
+                 protocol_ir::ProtocolModuleOp candidate, const Record &input)
       : originalSymbols(original), candidateSymbols(candidate), names(original),
-        products(products), input(input), expected(input) {}
+        input(input), expected(input) {}
   LogicalResult run(protocol_ir::ProtocolModuleOp original,
                     protocol_ir::ProtocolModuleOp candidate, Record &output) {
     llvm::DenseSet<Operation *> retained;
@@ -440,11 +451,7 @@ LogicalResult check(ModuleOp original, ModuleOp candidate, const Record &input,
       original->getAttrDictionary() != candidate->getAttrDictionary() ||
       before->getAttrDictionary() != after->getAttrDictionary())
     return refuse(candidate, "retained preparation context");
-  auto products = describeMapProducts(original);
-  if (failed(products))
-    return failure();
-  return Correspondence(before, after, *products, input)
-      .run(before, after, output);
+  return Correspondence(before, after, input).run(before, after, output);
 }
 } // namespace
 LogicalResult verifyVectorReductionsPreserved(
@@ -456,6 +463,11 @@ LogicalResult verifyVectorReductionsPreserved(
 }
 LogicalResult fuseVectorReductions(ModuleOp module,
                                    protocol::AlgorithmExpansionState &state) {
+  return fuseVectorReductions(module, state, mathematicalRecipes().reductions);
+}
+LogicalResult fuseVectorReductions(ModuleOp module,
+                                   protocol::AlgorithmExpansionState &state,
+                                   ArrayRef<ReductionRecipe> reductionRecipes) {
   const auto &input = StateAccess::get(state);
   if (!input.retained || input.finished || !unit(module))
     return refuse(module, "expected retained preparation");
@@ -465,9 +477,15 @@ LogicalResult fuseVectorReductions(ModuleOp module,
   auto products = describeMapProducts(module);
   if (failed(products))
     return failure();
+  const MathematicalRecipes recipes{mathematicalRecipes().lanes,
+                                    reductionRecipes};
+  Reductions reductions;
+  for (const auto &[name, product] : *products)
+    if (auto selected = selectMapSum(product, recipes))
+      reductions.emplace(name, std::move(*selected));
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
   Record output = input;
-  if (failed(Rewriter(unit(*candidate), output).run(*products)) ||
+  if (failed(Rewriter(unit(*candidate), output).run(reductions)) ||
       failed(check(module, *candidate, input, output)))
     return failure();
   module.getBodyRegion().takeBody(candidate->getBodyRegion());

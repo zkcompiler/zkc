@@ -64,10 +64,8 @@ int main() {
       {"main", "iteration", {1}}};
   auto source = parseSourceString<ModuleOp>(fixture, &context);
   require(bool(source), "invalid start fixture");
-  auto prepared = copy(*source);
-  require(succeeded(run(*prepared, protocol::createPrepareProtocolPass(
-                                       false, false, starts))),
-          "selected application preparation refused");
+  auto prepared = mathematical::prepareProtocol(*source, false, {}, starts);
+  require(bool(prepared), "selected application preparation refused");
   cases.run("empty child, nested role substitution and repeated boundary", [&] {
     unsigned count = 0;
     prepared->walk([&](protocol_ir::ConstructionStartOp) { ++count; });
@@ -91,6 +89,25 @@ int main() {
     ordinary->walk([&](protocol_ir::ConstructionStartOp) { found = true; });
     require(!found, "unselected invocation acquired a start");
   });
+  cases.run("simplification preserves selected application boundaries", [&] {
+    auto simplified = mathematical::prepareProtocol(*source, true, {}, starts);
+    require(bool(simplified), "simplified start preparation refused");
+    require(succeeded(mathematical::verifyPreparedValues(
+                unit(*source), unit(*simplified), starts)),
+            "simplification changed selected start operands or order");
+  });
+  cases.run(
+      "repreparation preserves existing boundaries without selecting new ones",
+      [&] {
+        auto repeated = mathematical::prepareProtocol(*prepared, false);
+        require(bool(repeated), "prepared start markers were refused");
+        require(succeeded(mathematical::verifyPreparedValues(unit(*prepared),
+                                                             unit(*repeated))),
+                "repreparation changed existing ordered boundaries");
+        require(succeeded(mathematical::verifyPreparedValues(
+                    unit(*source), unit(*repeated), starts)),
+                "repreparation lost original selected start correspondence");
+      });
   for (StringRef mutation : {"missing", "operand", "late", "unselected"})
     cases.run("independent boundary check: " + mutation, [&] {
       auto changed = copy(*prepared);
@@ -135,15 +152,13 @@ int main() {
         selected.front().inputs = {2};
       else
         selected.front().inputs = {0, 0};
-      auto changed = copy(*source);
       bool diagnostic = false;
       ScopedDiagnosticHandler expected(&context, [&](Diagnostic &d) {
         diagnostic |=
             d.str().find("protocol-construction-start") != std::string::npos;
         return success();
       });
-      require(failed(run(*changed, protocol::createPrepareProtocolPass(
-                                       false, false, selected))) &&
+      require(!mathematical::prepareProtocol(*source, false, {}, selected) &&
                   diagnostic,
               "invalid boundary selection passed");
     });
@@ -159,5 +174,36 @@ int main() {
                 mathematical::verifyProjectionPreserved(*prepared, *projected)),
             "start projection correspondence refused");
   });
+  for (bool operand : {false, true})
+    cases.run(
+        operand
+            ? "repeat refuses a start using a local constant for an absent role"
+            : "repeat refuses an empty start for an absent role",
+        [&] {
+          std::string text = R"mlir(module { "protocol.module"() ({
+        "protocol.func"() ({ ^entry(%n:ui64):
+          "protocol.repeat"(%n) ({ ^body(%i:ui64):
+            BODY
+            "protocol.yield"() : ()->()
+          }) {site="loop",carried=0:i64,maximum=2:i64,roles=["P"],carried_roles=[]} : (ui64)->()
+          "protocol.return"() : ()->()
+        }) {sym_name="main",function_type=(ui64)->(),roles=["P","V"],input_roles=[["P"]],output_roles=[]} : ()->()
+      }) {profile=#protocol.profile<protocol>} : ()->() })mlir";
+          text.replace(
+              text.find("BODY"), 4,
+              operand
+                  ? R"mlir(%x = "data.index"() {value="0"} : ()->ui64
+                     "protocol.construction_start"(%x) {roles=["P","V"],site="start"} : (ui64)->())mlir"
+                  : R"mlir("protocol.construction_start"() {roles=["P","V"],site="start"} : ()->())mlir");
+          bool diagnosed = false;
+          ScopedDiagnosticHandler expected(&context, [&](Diagnostic &d) {
+            diagnosed |=
+                d.str().find("mathematical-formation") != std::string::npos &&
+                d.str().find("nonparticipating role") != std::string::npos;
+            return success();
+          });
+          require(!parseSourceString<ModuleOp>(text, &context) && diagnosed,
+                  "construction start escaped the repeat participant boundary");
+        });
   return cases.result();
 }

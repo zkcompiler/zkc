@@ -17,6 +17,37 @@ const Kernel *findKernel(llvm::StringRef key) {
   return found == catalog.end() ? nullptr : found->second;
 }
 } // namespace
+const ComputationContract *computationContract(llvm::StringRef key) {
+  const auto *facets = operationContracts(key);
+  return facets && facets->mathematical ? &*facets->mathematical : nullptr;
+}
+const ComputationContract *admitMathematicalMeaning(
+    const BindingApplication &application, llvm::ArrayRef<BoundType> inputs,
+    llvm::ArrayRef<BoundType> outputs, llvm::ArrayRef<std::string> parameters) {
+  auto *facet = computationContract(application.contract);
+  if (!facet)
+    return nullptr;
+  auto signature = resolveLogicalBinding(application);
+  if (!signature) {
+    llvm::consumeError(signature.takeError());
+    return nullptr;
+  }
+  if (inputs != llvm::ArrayRef<BoundType>(signature->inputs) ||
+      outputs != llvm::ArrayRef<BoundType>(signature->outputs))
+    return nullptr;
+  if (auto error = checkParameters(application, parameters)) {
+    llvm::consumeError(std::move(error));
+    return nullptr;
+  }
+  return facet;
+}
+const ComputationContract *admitComputationContract(
+    const BindingApplication &application, llvm::ArrayRef<BoundType> inputs,
+    llvm::ArrayRef<BoundType> outputs, llvm::ArrayRef<std::string> parameters) {
+  if (!application.implementation.empty())
+    return nullptr;
+  return admitMathematicalMeaning(application, inputs, outputs, parameters);
+}
 bool isHistoryTransition(llvm::StringRef key) {
   const auto *contracts = operationContracts(key);
   return contracts && contracts->history.has_value();

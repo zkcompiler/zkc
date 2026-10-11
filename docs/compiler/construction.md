@@ -39,6 +39,12 @@ is empty. It preserves original IR and returns a complete strict policy.
 `NativeProofSelection` exposes this through the Entry compiler; explicit policy
 callers retain exact occurrence selection.
 
+`prepareProtocol` takes selected application starts as explicit semantic inputs
+and returns an owned, independently checked candidate. Pass options contain only
+simplification and mathematical selection choices. The same mathematical policy
+governs transcript helpers, projection and executable lowering; deployment
+records retain those choices for validation.
+
 Construction removes the selected validator services and rewrites their admitted
 challenge deliveries. Managed state has internal transcript input/results;
 source-created state uses its checked initializer. A selected
@@ -68,13 +74,14 @@ determine transcript bytes. A flat event descriptor plus retained SSA control
 describes loop structure without a second executable graph.
 
 Canonical receive decoding precedes observation. [Structured frames](../spec/formats/messages.md)
-bind complete types, tags, lengths and payloads. Records, alternatives, numeric
-tensors and sequences use the same typed codec. Copyability alone grants neither
-wire permission nor cross-role availability. A selected record codec uses
-ordinary Local functions for encoding, range selection, decoding and finalization.
-Compiler-owned slices preserve the exact proof bytes observed by optional wire
-handlers. Decoded values feed mathematical handlers. The common Host transports
-one bounded raw buffer and executes no codec-specific algorithm.
+bind complete types, tags, lengths and payloads. Records, alternatives, nominal
+numerical collections, bytes and sequences use the same typed codec. Copyability
+alone grants neither wire permission nor cross-role availability. A selected
+record codec uses ordinary Local functions for encoding, range selection,
+decoding and finalization. Compiler-owned slices preserve the exact proof bytes
+observed by optional wire handlers. Decoded values feed mathematical handlers.
+The common Host transports one bounded raw buffer and executes no codec-specific
+algorithm.
 
 ## Authored transcripts
 

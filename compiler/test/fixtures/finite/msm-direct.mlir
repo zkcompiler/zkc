@@ -1,7 +1,7 @@
 !F = !algebra.field<"bls12-381.fr">
 !G = !algebra.group<"bls12-381.g1">
-!V = tensor<?x!F>
-!GS = tensor<?x!G>
+!V = !algebra.field_vector<"bls12-381.fr">
+!GS = !algebra.group_vector<"bls12-381.g1">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="generator",contract="curve.generator",arguments=["bls12-381.g1"],implementation=""} : ()->()
  "local.binding"() {sym_name="empty",contract="curve.empty",arguments=["bls12-381.g1"],implementation=""} : ()->()

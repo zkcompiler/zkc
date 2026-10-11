@@ -410,8 +410,7 @@ public:
                const protocol::ConstructionPlan &plan)
       : module(module), policy(policy), plan(plan), codec(*plan.codec),
         builder(module.getContext()), symbols(module) {
-    bytes = RankedTensorType::get({ShapedType::kDynamic},
-                                  builder.getIntegerType(8, false));
+    bytes = data::BytesType::get(module.getContext());
     index = builder.getIntegerType(64, false);
     module.walk([&](Operation *op) {
       if (auto site = op->getAttrOfType<StringAttr>("site"))

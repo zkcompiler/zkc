@@ -153,17 +153,31 @@ After polynomial checks and elimination, static dimension queries become index
 constants and unused total expressions are removed before becoming ordered
 execution. This normalization applies to helper realization.
 
-The independent mathematical recipe matcher compares the remaining expressions,
+Before a normalized helper becomes a recipe input, an independent read-only
+checker compares it with the original admitted helper. The checker interprets
+calls by positional substitution, checks every result coordinate, and uses
+polynomial meaning and static shape facts without invoking helper inlining or
+polynomial elimination. It also checks unused polynomial observations before
+accepting their removal. Preparation still produces normalization proposals;
+the independent check is required before any proposal is used. The realization
+stage copies these checked bodies into its candidate and reuses them for recipe
+checking. Normalization is cached per helper, while every emitted copy consumes
+the stage's operation and operand/result-slot allowance. All helper
+comparisons in one check share a four-million-unit work budget. Exhaustion
+refuses with `mathematical-helper-limit`, separately from a correspondence
+mismatch.
+
+The mathematical recipe matcher then compares the checked expressions,
 operands and returns against the generated local body. A separate structural
 containment check preserves unrelated declarations and the realization's exact
 signature and origin. It admits only the closed calculation recipe vocabulary,
 excludes capabilities, history, sampling, unrelated partial contracts and explicit
 stops, and accounts for added bindings. Membership in that vocabulary alone does
 not ensure total execution: for example, vector-to-array conversion also needs an
-exact length. The recipe matcher checks those constructed instances. Helper
-expansion, static shape normalization and polynomial elimination remain trusted
-on this edge; these checks are not an independent proof of their
-arithmetic semantics. Resource exhaustion remains a possible runtime failure, as
+exact length. The recipe matcher checks those constructed instances. This is
+bounded native correspondence checking over the supported vocabulary, not a
+formal proof of arbitrary helper equivalence or native runtime semantics.
+Resource exhaustion remains a possible runtime failure, as
 with other realized total calculations.
 
 ### Checked pointwise maps
@@ -172,7 +186,9 @@ The protocol profile also declares a checked [pointwise map](../domains/vectors.
 of a total helper:
 
 ```mlir
-algebra.map_realize @rows = @scalar_helper [true, false] : (tensor<?xF>, F) -> tensor<?xF>
+!F = !algebra.field<"F">
+!V = !algebra.field_vector<"F">
+algebra.map_realize @rows = @scalar_helper [true, false] : (!V, !F) -> !V
 ```
 
 Algebra owns this declaration and its validation. The helper is private, defined
@@ -240,17 +256,18 @@ simplifier does not rewrite realized bodies. Their value laws are the
 [pointwise map laws](../domains/vectors.md#pointwise-maps); their effects are
 measured by the [map tests](../../../common/tests/protocol/test_native_map.py).
 
-The map matcher derives the formula again from the retained original and reads
-the actual generated body independently of the realizer: guards, operand modes,
-broadcasts, field and vector operations, literals, the returned value and
-bindings. It also requires every other declaration to be retained unchanged and
-refuses with `algebra-map-correspondence`. It establishes equal values and equal
-shape refusals under the declared vector contracts and sufficient resources, not
-equal resource exhaustion against another realization. The matcher shares the
-formula derivation with the realizer: helper expansion, Ring admission and the
-removal of unused formula nodes, as well as the scalar or row mode of each value
-and the shape-guard contract. These shared steps are trusted on this edge; for
-helper expansion this matches `local.realize`.
+The map reader interprets the retained scalar helper and actual generated
+payload separately. It checks all source instructions, exact nominal fields,
+scalar and row inputs, broadcasts, literals and the returned value. Admitted
+ring laws allow shared subexpressions and commuted additions or multiplications.
+Ordered shape guards and unchanged surrounding declarations are checked outside
+that payload comparison. Failure reports `algebra-map-correspondence`.
+
+Helper expansion, installed contract semantics and Ring admission are shared
+foundations. The reader does not consume the selector's lane classifications,
+product slots or emission plan. The relation covers equal values and ordered
+shape refusals under sufficient resources. Allocation and instruction charges,
+arbitrary provider failures and exact resource exhaustion are outside it.
 
 Preparation then expands admitted `local.apply` using `canonical-expanded-locals/0`
 before freezing local definitions. An application inside a local region remains
@@ -277,7 +294,8 @@ operations and occurrence sites. The enabled path uses the existing
 `algebra.map_realize`, `local.apply` and typed native vector reduction operations;
 it introduces no separate mathematical graph or runtime callback.
 The C++ preparation/project pass factories and `PreparedProtocol::prepare`
-take the same default-false `fuseVectorReductions` choice. Direct
+take the same `MathematicalSelectionPolicy`, whose `vectorReductionFusion`
+choice defaults to false. Direct
 `zkc-prepare-protocol` and `zkc-project-protocol` pass invocations expose the
 `fuse-vector-reductions` Boolean option separately from `simplify`.
 
@@ -346,7 +364,7 @@ The initial type-use policy is closed:
 
 All type instances require their exact logical declarations. Sharing, totality,
 wire permission, affine custody and installed representation are separate checks.
-[Structured values and iteration](iteration.md) owns canonical tensor
+[Structured values and iteration](iteration.md) owns nominal collection
 mapping, aggregate policy and loop invariants. Unknown families are refused.
 Affine uses retain existing consumption/return and cleanup rules. Unreturned
 logical resource units retire with their frame; completed cryptographic transitions
@@ -399,8 +417,8 @@ The complete canonical logical type is part of declaration consistency:
 element domain, rank, static extent, sequence element and nominal alternative
 names and ordered payloads. Dynamic dimensions are value properties; a declaration
 does not equate matrix dimensions or prove bounds for indexing. Such conditions
-need explicit executable checks or separately justified contracts. Static rank-two
-MLIR tensors have no canonical logical matrix encoding in this profile.
+need explicit executable checks or separately justified contracts. Builtin MLIR
+tensors have no logical collection encoding or compatibility alias in this profile.
 
 A purpose applies to its entire input, including nested leaves. Mixed purposes
 use separate entry ports. No per-member selector, computed operand or flattening

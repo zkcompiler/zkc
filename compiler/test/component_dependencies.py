@@ -17,7 +17,7 @@ ALLOWED = {
     "ZkcCompiler": {"ZkcTransforms", "ZkcTranslation", "MLIRParser"},
     "ZkcDriver": {"ZkcCompiler", "MLIRParser"},
     "ZkcTranslation": {"ZkcIR", "ZkcLanguage"},
-    "ZkcIR": {"ZkcProgram", "ZkcRelation", "MLIRIR", "MLIRControlFlowInterfaces", "MLIRSideEffectInterfaces", "MLIRInferTypeOpInterface", "MLIRFuncDialect", "MLIRFunctionInterfaces", "MLIRCallInterfaces", "MLIRArithDialect", "MLIRTensorDialect"},
+    "ZkcIR": {"ZkcProgram", "ZkcRelation", "MLIRIR", "MLIRControlFlowInterfaces", "MLIRSideEffectInterfaces", "MLIRInferTypeOpInterface", "MLIRFuncDialect", "MLIRFunctionInterfaces", "MLIRCallInterfaces", "MLIRArithDialect"},
 }
 HEADER_ROOTS = {
     "ZkcLanguage": ["Language"],
@@ -171,8 +171,12 @@ def main():
     private_headers["ZkcTransforms"] = {
         ROOT / "lib/Conversion/Bindings.h", ROOT / "lib/Target/PhysicalPlan.h",
         ROOT / "lib/Transforms/MathematicalSupport.h",
+        ROOT / "lib/Transforms/HelperNormalization.h",
         ROOT / "lib/Transforms/AlgorithmSupport.h",
-        ROOT / "lib/Transforms/FiniteSupport.h",
+        ROOT / "lib/Transforms/ComputationSelection.h",
+        ROOT / "lib/Transforms/MathematicalRecipes.h",
+        ROOT / "lib/Transforms/LaneRealization.h",
+        ROOT / "lib/Transforms/MathematicalComparison.h",
         ROOT / "lib/Transforms/MathematicalValues.h",
         ROOT / "lib/Transforms/PreparedProtocol.h",
         ROOT / "lib/Transforms/ProtocolApplications.h"
@@ -244,6 +248,12 @@ def main():
     contract_declarations = manifest.parent / "include/zkc/Contracts/Declarations.cpp.inc"
     assert contract_declarations.is_file(), "missing neutral contract declarations"
     assert contract_declarations not in generated, "neutral declarations must not belong to IR generation"
+    contract_mathematics = manifest.parent / "include/zkc/Contracts/Mathematical.inc"
+    assert contract_mathematics.is_file(), "missing neutral mathematical declarations"
+    assert contract_mathematics not in generated, "neutral mathematics must not belong to IR generation"
+    mathematical_recipes = manifest.parent / "generated/Transforms/MathematicalRecipes.inc"
+    assert mathematical_recipes.is_file(), "missing private mathematical recipes"
+    assert mathematical_recipes not in generated, "recipes must not belong to IR generation"
     assert generated and all(path.is_file() for path in generated), "missing declared TableGen outputs"
     for name in COMPONENTS:
         links, interface, sources = targets[name]
@@ -266,6 +276,8 @@ def main():
         permitted.update(path for path, owner in extra_generated.items() if owner in closure(name))
         if name == "ZkcContracts":
             permitted.add(contract_declarations)
+        if "ZkcContracts" in closure(name):
+            permitted.add(contract_mathematics)
         visited = set()
 
         def visit(path):
@@ -289,6 +301,9 @@ def main():
                     assert not include.startswith(("mlir/Pass/", "mlir/Transforms/")), f"{name}: transformation dependency {include}"
                 elif "ZkcIR" not in closure(name):
                     assert not include.startswith("mlir/"), f"{name}: {path} includes {include}"
+                if include == "MathematicalRecipes.inc":
+                    assert (name == "ZkcTransforms" and
+                            path == ROOT / "lib/Transforms/MathematicalRecipes.cpp"), f"recipe inventory outside its owner: {path}"
                 if include.endswith(".cpp.inc"):
                     neutral = (path == ROOT / "lib/Contracts/Declarations.cpp" and
                                include == "zkc/Contracts/Declarations.cpp.inc" and

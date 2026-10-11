@@ -482,12 +482,16 @@ struct MetadataVerifier {
       if (hostRoot)
         append_range(inputTypes, stateTypes);
       append_range(resultTypes, stateTypes);
-      auto bytes = RankedTensorType::get({ShapedType::kDynamic},
-                                         builder.getIntegerType(8, false));
-      if (role == codecProducer)
-        resultTypes.push_back(bytes);
-      if (role == codecValidator)
-        inputTypes.push_back(bytes);
+      if (role == codecProducer || role == codecValidator) {
+        auto bytes =
+            protocol::decodeBoundType(builder.getContext(), {"bytes", {}, {}});
+        if (!bytes)
+          return refuse(record, "codec requires an installed Bytes type");
+        if (role == codecProducer)
+          resultTypes.push_back(bytes);
+        else
+          inputTypes.push_back(bytes);
+      }
       auto participantType = participant.getFunctionType();
       auto matches = [](ArrayRef<Type> expected, ArrayRef<Type> actual) {
         return expected.size() == actual.size() &&

@@ -40,7 +40,7 @@ ZKC_MATH_OPERATION(arith::SelectOp, Total, Context::Protocol | Context::Particip
 ZKC_MATH_OPERATION(algebra::ConstantFieldOp, Total, Context::Protocol | Context::Participant | Context::Helper, "value")
 ZKC_MATH_OPERATION(algebra::SubtractFieldOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(algebra::ArrayAtOp, Total, Context::Protocol | Context::Participant | Context::Helper, "index")
-ZKC_MATH_OPERATION(tensor::FromElementsOp, Total, Context::Protocol | Context::Participant | Context::Helper)
+ZKC_MATH_OPERATION(algebra::ArrayFromElementsOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(poly::ConstantPolynomialOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(poly::CoefficientPolynomialOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(poly::MultilinearPolynomialOp, Total, Context::Protocol | Context::Participant | Context::Helper)

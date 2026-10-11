@@ -1,8 +1,8 @@
 // Executable algebraic clients; see docs/compiler/mathematics.md.
 !f = !algebra.field<"bls12-381.fr">
 !g = !algebra.group<"bls12-381.g1">
-!fs = tensor<?x!f>
-!gs = tensor<?x!g>
+!fs = !algebra.field_vector<"bls12-381.fr">
+!gs = !algebra.group_vector<"bls12-381.g1">
 !r = !local.capability<"rng:bls12-381.fr">
 !s = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({

@@ -1,5 +1,5 @@
 // A returned retry skips a local suffix but still reaches the later send.
-!words = tensor<?xui64>
+!words = !algebra.indices
 !f = !algebra.field<"bls12-381.fr">
 !rng = !local.capability<"rng:bls12-381.fr">
 module { "protocol.module"() ({

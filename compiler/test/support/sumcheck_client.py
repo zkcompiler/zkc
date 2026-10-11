@@ -7,7 +7,7 @@ def composed_sumcheck():
     fixtures = Path(__file__).resolve().parents[1] / "fixtures/mathematical"
     source = (fixtures / "sumcheck.mlir").read_text()
     field = '!algebra.field<"bls12-381.fr">'
-    array = f"tensor<4x{field}>"
+    array = '!algebra.field_array<"bls12-381.fr", 4>'
     service = '!protocol.service_ref<"random.bls12-381.fr/0">'
     inputs = f"{array}, {array}, {field}, {service}"
     residual = ", ".join([array, array, field, field, field, field, field])

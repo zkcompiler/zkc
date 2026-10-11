@@ -126,7 +126,7 @@ with case('same body under another terminal recipe name'):
     checked(before + '%f = func.call @copy' + terminal, refuses='polynomial-correspondence')
 
 with case('round coefficient arrays must fit the derived degree'):
-    invalid = source.replace('tensor<3x!algebra.field', 'tensor<2x!algebra.field')
+    invalid = source.replace('!algebra.field_array<"bls12-381.fr", 3>', '!algebra.field_array<"bls12-381.fr", 2>')
     commands.source('protocol-bundle', invalid, '--entry=reduction', refuses='polynomial-formation')
 
 with case('factorwise fixing retains two shared table leaves'):
@@ -184,7 +184,7 @@ with case('a coherently projected query before its guard fails correspondence'):
 
 with case('an oversized round payload does not establish the required degree'):
     # Source construction fits; the receive domain now also admits degree 3.
-    checked(source.replace('tensor<3x!algebra.field', 'tensor<4x!algebra.field'),
+    checked(source.replace('!algebra.field_array<"bls12-381.fr", 3>', '!algebra.field_array<"bls12-381.fr", 4>'),
             refuses='polynomial-correspondence')
 
 with case('canonical distinct interpolation points are checked before simplification'):
@@ -196,7 +196,7 @@ with case('canonical distinct interpolation points are checked before simplifica
 
 def single_math(length, arity, body):
     field = '!algebra.field<"bls12-381.fr">'
-    array = f'tensor<{length}x{field}>'
+    array = f'!algebra.field_array<"bls12-381.fr", {length}>'
     polynomial = f'!poly.polynomial<"bls12-381.fr", {arity}>'
     return f"""module {{ "protocol.module"() ({{
       "protocol.func"() ({{
@@ -239,7 +239,7 @@ with case('all verifier outputs must belong to the residual connector'):
 
 with case('unused invalid coefficients refuse before default simplification'):
     marker = ' %coefficients0 = "poly.coefficients"'
-    extra = ' %unused = "poly.coefficients"(%round0) : (!poly.polynomial<"bls12-381.fr", 1>) -> tensor<2x!algebra.field<"bls12-381.fr">>\n'
+    extra = ' %unused = "poly.coefficients"(%round0) : (!poly.polynomial<"bls12-381.fr", 1>) -> !algebra.field_array<"bls12-381.fr", 2>\n'
     commands.source('protocol-bundle', changed(source, marker, extra + marker),
                     '--entry=reduction', refuses='polynomial-formation')
 
@@ -253,7 +253,7 @@ with case('participant passes remove dead polynomial observations before expansi
     # chain and neither polynomial pass ever sees it.
     args = ', '.join(['%arg1'] * 15)
     types = ', '.join([field] * 15)
-    chain = f'''%dead_p = "poly.mle"(%arg0) : (tensor<65536x{field}>) -> !poly.polynomial<"bls12-381.fr", 16>
+    chain = f'''%dead_p = "poly.mle"(%arg0) : (!algebra.field_array<"bls12-381.fr", 65536>) -> !poly.polynomial<"bls12-381.fr", 16>
       %dead_fixed = "poly.fix"(%dead_p, %arg1) : (!poly.polynomial<"bls12-381.fr", 16>, {field}) -> !poly.polynomial<"bls12-381.fr", 15>
       %dead_value = "poly.evaluate"(%dead_fixed, {args}) : (!poly.polynomial<"bls12-381.fr", 15>, {types}) -> {field}
       '''
@@ -268,7 +268,7 @@ with case('domain formation does not promise interpolation within the expansion 
     polynomial = '!poly.polynomial<"bls12-381.fr", 1>'
     for count in [32, 64]:
         points = json.dumps([str(i) for i in range(count)])
-        body = f'''%interpolant = "poly.interpolate"(%T) {{points={points}}} : (tensor<{count}x{field}>) -> {polynomial}
+        body = f'''%interpolant = "poly.interpolate"(%T) {{points={points}}} : (!algebra.field_array<"bls12-381.fr", {count}>) -> {polynomial}
           %value = "poly.evaluate"(%interpolant, %x) : ({polynomial}, {field}) -> {field}'''
         text = single_math(count, 5 if count == 32 else 6, body)
         participant = commands.verified(text, None, '--zkc-project-protocol=simplify=false')
@@ -280,13 +280,13 @@ with case('domain formation does not promise interpolation within the expansion 
                               '--zkc-eliminate-polynomials')
             commands.source('protocol-bundle', text, refuses='polynomial-lowering')
 
-with case('constant tensor packing compiles under selected simplification'):
+with case('constant field-array packing compiles under selected simplification'):
     field = '!algebra.field<"bls12-381.fr">'
     polynomial = '!poly.polynomial<"bls12-381.fr", 1>'
     body = f'''%one = "algebra.constant"() {{value="1"}} : () -> {field}
       %two = "algebra.constant"() {{value="2"}} : () -> {field}
-      %table = tensor.from_elements %one, %two : tensor<2x{field}>
-      %constant_table = "poly.mle"(%table) : (tensor<2x{field}>) -> {polynomial}
+      %table = "algebra.array_from_elements"(%one, %two) : ({field}, {field}) -> !algebra.field_array<"bls12-381.fr", 2>
+      %constant_table = "poly.mle"(%table) : (!algebra.field_array<"bls12-381.fr", 2>) -> {polynomial}
       %value = "poly.evaluate"(%constant_table, %x) : ({polynomial}, {field}) -> {field}'''
     for flags in [(), ('--no-simplify',)]:
         commands.source('protocol-bundle', single_math(2, 1, body), *flags)
@@ -294,7 +294,7 @@ with case('constant tensor packing compiles under selected simplification'):
 
 with case('nonidentity ports preserve original requirements and actual handoff'):
     field = '!algebra.field<"bls12-381.fr">'
-    array = f'tensor<4x{field}>'
+    array = '!algebra.field_array<"bls12-381.fr", 4>'
     types = {name: field for name in ['claim', 'extra', 'r0', 'r1', 'next1',
                                      'delivered0', 'delivered1']}
     types.update(T=array, U=array, random='!protocol.service_ref<"random.bls12-381.fr/0">', accept='i1')

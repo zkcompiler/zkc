@@ -455,7 +455,8 @@ public:
   }
 };
 } // namespace
-Expected<json::Value> analyzePublicCoin(ModuleOp original, StringRef text) {
+Expected<json::Value> analyzePublicCoin(ModuleOp original, StringRef text,
+                                        MathematicalSelectionPolicy policy) {
   auto requirement = parseRequirement(text);
   if (!requirement)
     return requirement.takeError();
@@ -474,7 +475,7 @@ Expected<json::Value> analyzePublicCoin(ModuleOp original, StringRef text) {
     return sourceHash.takeError();
   OwningOpRef<ModuleOp> prepared(cast<ModuleOp>(original->clone()));
   PassManager pipeline(original.getContext());
-  pipeline.addPass(protocol::createPrepareProtocolPass(false));
+  pipeline.addPass(protocol::createPrepareProtocolPass(false, policy));
   if (failed(pipeline.run(*prepared)))
     return error("public-coin-module");
   auto preparedHash = fingerprint(*prepared);
@@ -499,15 +500,17 @@ Expected<json::Value> analyzePublicCoin(ModuleOp original, StringRef text) {
   (*view)["source_ir_sha256"] = std::move(*sourceHash);
   (*view)["prepared_ir_sha256"] = std::move(*preparedHash);
   (*view)["requirement_sha256"] = digest(text);
+  (*view)["finite_bulk"] = policy.finiteBulk;
+  (*view)["fuse_vector_reductions"] = policy.vectorReductionFusion;
   return json::Value(std::move(*view));
 }
-Error checkPublicCoin(ModuleOp original, StringRef requirement,
-                      StringRef text) {
+Error checkPublicCoin(ModuleOp original, StringRef requirement, StringRef text,
+                      MathematicalSelectionPolicy policy) {
   auto candidate = parseNaturalJson(text, 8 * 1024 * 1024, 64,
                                     "public-coin-report", "public-coin-limit");
   if (!candidate)
     return candidate.takeError();
-  auto checked = analyzePublicCoin(original, requirement);
+  auto checked = analyzePublicCoin(original, requirement, policy);
   if (!checked)
     return checked.takeError();
   if (*candidate != *checked)

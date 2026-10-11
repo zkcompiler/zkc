@@ -1,12 +1,11 @@
 #include "mlir/Parser/Parser.h"
-#include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Language/Project.h"
-#include "zkc/Transforms/Passes.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "zkc/Translation/Language.h"
 using namespace llvm;
 using namespace zkc::language;
@@ -184,10 +183,8 @@ int main() {
     for (const auto &invocation : resolved.invocations)
       starts.push_back(
           {closed.protocol().symbol, invocation.site, invocation.inputs});
-    mlir::PassManager passes(&context);
-    passes.addPass(
-        zkc::protocol::createPrepareProtocolPass(false, false, starts));
-    require(mlir::succeeded(passes.run(*parsed)),
+    parsed = zkc::mathematical::prepareProtocol(*parsed, false, {}, starts);
+    require(bool(parsed),
             "independent source expansion agrees with resolved child paths");
     unit = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
         parsed->getBody()->front());

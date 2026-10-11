@@ -59,10 +59,10 @@ class PolynomialValues {
     if (!array)
       return 0;
     auto node = terms.expression(array);
-    auto type = dyn_cast<RankedTensorType>(node.type);
-    if (!type || type.getRank() != 1 || index >= type.getDimSize(0))
+    auto type = dyn_cast<algebra::FieldArrayType>(node.type);
+    if (!type || index >= type.getLength())
       return 0;
-    if (node.name && node.name.getValue() == "tensor.from_elements")
+    if (node.name && node.name.getValue() == "algebra.array_from_elements")
       return node.operands[index];
     return make("algebra.array_at", type.getElementType(), {array},
                 builder.getDictionaryAttr({builder.getNamedAttr(
@@ -71,12 +71,11 @@ class PolynomialValues {
   SmallVector<Term> unpack(Term array) {
     if (!array)
       return {};
-    auto type = dyn_cast<RankedTensorType>(terms.expression(array).type);
-    if (!type || type.getRank() != 1 || type.isDynamicDim(0) ||
-        !terms.charge(type.getDimSize(0)))
+    auto type = dyn_cast<algebra::FieldArrayType>(terms.expression(array).type);
+    if (!type || !terms.charge(type.getLength()))
       return {};
     SmallVector<Term> values;
-    for (int64_t i = 0; i < type.getDimSize(0); ++i)
+    for (uint64_t i = 0; i < type.getLength(); ++i)
       values.push_back(at(array, i));
     return values;
   }
@@ -120,8 +119,8 @@ class PolynomialValues {
       return SmallVector<unsigned>(type.getArity(), 1);
     if (name == "poly.from_coefficients")
       return {unsigned(
-          cast<RankedTensorType>(terms.expression(node.operands[0]).type)
-              .getDimSize(0) -
+          cast<algebra::FieldArrayType>(terms.expression(node.operands[0]).type)
+              .getLength() -
           1)};
     if (name == "poly.interpolate")
       return {unsigned(node.attributes.getAs<ArrayAttr>("points").size() - 1)};
@@ -373,8 +372,9 @@ class PolynomialValues {
     if (name == "poly.mle") {
       if (type.getArity() >= 63)
         return 0;
-      auto table = RankedTensorType::get(
-          {int64_t(uint64_t(1) << type.getArity())}, field(polynomial));
+      auto table = algebra::FieldArrayType::get(type.getContext(),
+                                                field(polynomial).getDomain(),
+                                                uint64_t(1) << type.getArity());
       SmallVector<Term> inputs{node.operands[0]};
       append_range(inputs, prefix);
       return make("poly.mle", type, {make("poly.fix_table", table, inputs)});
@@ -401,11 +401,11 @@ class PolynomialValues {
       return evaluate(inputs[0], inputs.drop_front());
     if (name == "poly.coefficients") {
       auto values = coefficients(inputs[0]);
-      unsigned size = cast<RankedTensorType>(node.type).getDimSize(0);
+      unsigned size = cast<algebra::FieldArrayType>(node.type).getLength();
       if (values.empty() || values.size() > size || !terms.charge(size))
         return 0;
       values.resize(size, literal(field(inputs[0]), "0"));
-      return make("tensor.from_elements", node.type, values);
+      return make("algebra.array_from_elements", node.type, values);
     }
     if (name == "poly.evaluate_domain") {
       SmallVector<Term> values;
@@ -413,13 +413,13 @@ class PolynomialValues {
         values.push_back(evaluate(
             inputs[0],
             {literal(field(inputs[0]), cast<StringAttr>(point).getValue())}));
-      return make("tensor.from_elements", node.type, values);
+      return make("algebra.array_from_elements", node.type, values);
     }
     if (name == "poly.fix_table") {
       auto values = tablePrefix(inputs[0], inputs.drop_front());
       if (values.empty())
         return 0;
-      return make("tensor.from_elements", node.type, values);
+      return make("algebra.array_from_elements", node.type, values);
     }
     if (name == "algebra.array_at")
       return at(inputs[0],

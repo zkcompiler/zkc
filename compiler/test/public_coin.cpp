@@ -9,8 +9,11 @@
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Transforms/Passes.h"
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/SHA256.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
+#include <set>
 using namespace llvm;
 using namespace zkc;
 namespace {
@@ -24,6 +27,42 @@ constexpr StringLiteral fixture = R"(module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : ()->() })";
 constexpr StringLiteral requirement =
     R"({"format":"zkc.public-coin-requirement/0","entry":"main","prover":"P","verifier":"V","service":0,"decision":0,"bound_inputs":[],"draws":[{"query_site":"draw","delivery_site":"coin"}]})";
+constexpr StringLiteral policyFixture = R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+!V = !algebra.field_vector<"bls12-381.fr">
+!S = !protocol.service_ref<"random.bls12-381.fr/0">
+module { "protocol.module"() ({
+ "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "local.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "data.domain"() ({^entry(%xs:!V):
+   %items = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
+   "data.domain_yield"(%items) : (!data.domain<!F>)->()
+ }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
+ local.func private @step(%state:!F,%item:!F,%xs:!V)->!F attributes {logical_origin=["step",[]]} {
+   %next = "algebra.exec.field_add"(%state,%item) {binding=@add,parameters=[],site="add"} : (!F,!F)->!F
+   local.return %next : !F
+ }
+ "local.finite_fold"() {sym_name="fold",function_type=(!V,!F)->!F,domain=@items,step=@step} : ()->()
+ func.func private @product(%a:!F,%b:!F)->!F {
+   %p = "algebra.field_multiply"(%a,%b) : (!F,!F)->!F
+   return %p : !F
+ }
+ algebra.map_realize @mapped = @product [true,true] : (!V,!V)->!V
+ local.func @work(%a:!V,%b:!V,%seed:!F)->!F attributes {logical_origin=["work",[]]} {
+   %fold = local.apply @fold(%a,%seed) {site="fold"} : (!V,!F)->!F
+   %mapped = local.apply @mapped(%a,%b) {site="map"} : (!V,!V)->!V
+   %sum = "algebra.exec.vector_sum"(%mapped) {binding=@sum,parameters=[],site="sum"} : (!V)->!F
+   %result = "algebra.exec.field_add"(%fold,%sum) {binding=@add,parameters=[],site="result"} : (!F,!F)->!F
+   local.return %result : !F
+ }
+ "protocol.func"() ({^entry(%service:!S,%a:!V,%b:!V,%seed:!F):
+   %local = "protocol.local_call"(%a,%b,%seed) {callee=@work,role="P",site="work"} : (!V,!V,!F)->!F
+   %q = "protocol.query"(%service) {owner="V",method="draw",site="draw"} : (!S)->!F
+   %d = protocol.exchange %q {sender="V",receiver="P",site="coin"} : !F
+   %yes = arith.constant true
+   "protocol.return"(%yes) : (i1)->()
+ }) {sym_name="main",function_type=(!S,!V,!V,!F)->i1,roles=["P","V"],input_roles=[["V"],["P"],["P"],["P"]],output_roles=[["V"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() })mlir";
 constexpr StringLiteral helperPrograms = R"mlir(module { "protocol.module"() ({
   func.func private @conjoin(%x: i1, %y: i1) -> i1 {
     %both = arith.andi %x, %y : i1
@@ -52,8 +91,8 @@ constexpr StringLiteral polynomialPrograms = R"mlir(
 !field = !algebra.field<"bls12-381.fr">
 !polynomial = !poly.polynomial<"bls12-381.fr", 1>
 module { "protocol.module"() ({
-  func.func private @square(%values: tensor<2x!field>) -> !polynomial {
-    %linear = "poly.mle"(%values) : (tensor<2x!field>)->!polynomial
+  func.func private @square(%values: !algebra.field_array<"bls12-381.fr", 2>) -> !polynomial {
+    %linear = "poly.mle"(%values) : (!algebra.field_array<"bls12-381.fr", 2>)->!polynomial
     %square = "poly.multiply"(%linear, %linear) : (!polynomial, !polynomial)->!polynomial
     return %square : !polynomial
   }
@@ -63,11 +102,11 @@ module { "protocol.module"() ({
     "protocol.return"(%both) : (i1)->()
   }) {sym_name="main", function_type=()->i1, roles=["V"], input_roles=[], output_roles=[["V"]]} : ()->()
   "protocol.func"() ({
-  ^entry(%values: tensor<2x!field>):
-    %square = func.call @square(%values) : (tensor<2x!field>)->!polynomial
-    %unused = "poly.coefficients"(%square) : (!polynomial)->tensor<3x!field>
-    "protocol.return"(%values) : (tensor<2x!field>)->()
-  }) {sym_name="observation", function_type=(tensor<2x!field>)->tensor<2x!field>, roles=["P"], input_roles=[["P"]], output_roles=[["P"]]} : ()->()
+  ^entry(%values: !algebra.field_array<"bls12-381.fr", 2>):
+    %square = func.call @square(%values) : (!algebra.field_array<"bls12-381.fr", 2>)->!polynomial
+    %unused = "poly.coefficients"(%square) : (!polynomial)->!algebra.field_array<"bls12-381.fr", 3>
+    "protocol.return"(%values) : (!algebra.field_array<"bls12-381.fr", 2>)->()
+  }) {sym_name="observation", function_type=(!algebra.field_array<"bls12-381.fr", 2>)->!algebra.field_array<"bls12-381.fr", 2>, roles=["P"], input_roles=[["P"]], output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() })mlir";
 void require(bool ok, StringRef message) {
   if (!ok) {
@@ -81,25 +120,56 @@ std::string print(mlir::ModuleOp module) {
   module.print(stream);
   return text;
 }
-json::Value analyze() {
+json::Value analyze(StringRef source = fixture,
+                    MathematicalSelectionPolicy policy = {}) {
   mlir::DialectRegistry registry;
   registerDialects(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
-  auto module = mlir::parseSourceString<mlir::ModuleOp>(fixture, &context);
+  auto module = mlir::parseSourceString<mlir::ModuleOp>(source, &context);
   require(bool(module), "fixture parse");
   auto before = print(*module);
   std::string independent = requirement.str();
-  auto report = analyzePublicCoin(*module, independent);
+  auto report = analyzePublicCoin(*module, independent, policy);
   require(bool(report), "analysis");
   require(print(*module) == before, "analysis changed source");
   std::string text;
   raw_string_ostream(text) << *report;
-  auto checked = checkPublicCoin(*module, independent, text);
+  auto checked = checkPublicCoin(*module, independent, text, policy);
   require(!checked, "report check");
-  auto bad = checkPublicCoin(*module, independent, "{}");
+  auto bad = checkPublicCoin(*module, independent, "{}", policy);
   require(bool(bad), "bad report accepted");
   consumeError(std::move(bad));
+  auto prepared = mathematical::PreparedProtocol::prepare(*module, policy);
+  require(bool(prepared), "independent preparation failed");
+  auto snapshot = prepared->snapshot();
+  auto printed = print(*snapshot);
+  auto hash = toHex(SHA256::hash(arrayRefFromStringRef(printed)), true);
+  require(report->getAsObject()->getString("prepared_ir_sha256") == hash,
+          "public-coin fingerprint differs from selected preparation");
+  for (auto different :
+       {MathematicalSelectionPolicy{!policy.finiteBulk,
+                                    policy.vectorReductionFusion},
+        MathematicalSelectionPolicy{policy.finiteBulk,
+                                    !policy.vectorReductionFusion}}) {
+    auto mismatch = checkPublicCoin(*module, independent, text, different);
+    require(bool(mismatch), "report accepted under a different policy");
+    require(
+        namesIdentifier(toString(std::move(mismatch)), "public-coin-report"),
+        "policy mismatch has wrong refusal identifier");
+  }
+  for (StringRef key : {"finite_bulk", "fuse_vector_reductions"}) {
+    auto mutated = json::parse(text);
+    require(bool(mutated), "report mutation parse");
+    (*mutated->getAsObject())[key] = !*mutated->getAsObject()->getBoolean(key);
+    std::string changed;
+    raw_string_ostream(changed) << *mutated;
+    auto mismatch = checkPublicCoin(*module, independent, changed, policy);
+    require(bool(mismatch), "changed report policy accepted");
+    require(
+        namesIdentifier(toString(std::move(mismatch)), "public-coin-report"),
+        "changed policy has wrong refusal identifier");
+  }
   require(print(*module) == before, "failed check changed source");
   // The caller serializes only after source, prepared copy, requirement and
   // context have died. Dynamic site strings must be owned, not StringRefs.
@@ -207,10 +277,11 @@ int preparationCases() {
 
   cases.run("unused observation in a later program fails preparation", [&] {
     std::string invalid = polynomialPrograms.str();
-    auto extent = invalid.find("tensor<3x!field>");
+    auto extent = invalid.find("!algebra.field_array<\"bls12-381.fr\", 3>");
     test::require(extent != std::string::npos, "observation fixture extent");
-    invalid.replace(extent, StringRef("tensor<3x!field>").size(),
-                    "tensor<2x!field>");
+    invalid.replace(
+        extent, StringRef("!algebra.field_array<\"bls12-381.fr\", 3>").size(),
+        "!algebra.field_array<\"bls12-381.fr\", 2>");
     auto original = mlir::parseSourceString<mlir::ModuleOp>(invalid, &context);
     test::require(bool(original) && succeeded(mlir::verify(*original)),
                   "invalid observation must reach helper expansion");
@@ -280,22 +351,35 @@ int main() {
   mlir::DialectRegistry registry;
   RunOptions options;
   options.publicCoinRequirement = requirement.str();
-  for (bool fuse : {false, true}) {
-    options.fuseVectorReductions = fuse;
-    auto result = compileRun(fixture, "public-coin.mlir", options, registry);
-    require(bool(result) && result->publicCoin && !result->correspondence,
-            "checked invocation");
-    auto compiled = json::parse(*result->publicCoin);
-    require(bool(compiled) && *compiled->getAsObject()->get("view") == report,
-            "same unsimplified view");
-    require(compiled->getAsObject()->getBoolean("fuse_vector_reductions") ==
-                fuse,
-            "compiled public-coin record lost preparation choice");
-    auto *passes = compiled->getAsObject()->getArray("post_analysis_passes");
-    require(passes && !passes->empty() &&
-                passes->front().getAsString() == "zkc-prepare-protocol",
-            "compiled view omitted preparation before projection");
-  }
+  std::set<std::string> preparedHashes;
+  for (bool fuse : {false, true})
+    for (bool finite : {false, true}) {
+      options.mathematicalSelection = {finite, fuse};
+      auto selected = analyze(policyFixture, options.mathematicalSelection);
+      auto result =
+          compileRun(policyFixture, "public-coin.mlir", options, registry);
+      require(bool(result) && result->publicCoin && !result->correspondence,
+              "checked invocation");
+      auto compiled = json::parse(*result->publicCoin);
+      require(bool(compiled) &&
+                  *compiled->getAsObject()->get("view") == selected,
+              "same unsimplified view");
+      auto &view = *selected.getAsObject();
+      require(view.getBoolean("finite_bulk") == finite &&
+                  view.getBoolean("fuse_vector_reductions") == fuse,
+              "public-coin view lost preparation choice");
+      preparedHashes.insert(view.getString("prepared_ir_sha256")->str());
+      require(compiled->getAsObject()->getBoolean("fuse_vector_reductions") ==
+                      fuse &&
+                  compiled->getAsObject()->getBoolean("finite_bulk") == finite,
+              "compiled public-coin record lost preparation choice");
+      auto *passes = compiled->getAsObject()->getArray("post_analysis_passes");
+      require(passes && !passes->empty() &&
+                  passes->front().getAsString() == "zkc-prepare-protocol",
+              "compiled view omitted preparation before projection");
+    }
+  require(preparedHashes.size() == 4,
+          "fixture must distinguish every finite/fusion preparation policy");
   options.entry = "absent";
   auto refused = compileRun(fixture, "public-coin.mlir", options, registry);
   require(!refused, "entry mismatch accepted");

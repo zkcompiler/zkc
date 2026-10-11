@@ -137,14 +137,11 @@ GroupEqualOp::getOperandDependencies(unsigned result) {
 
 namespace zkc::algebra {
 bool isFieldArray(Type type) {
-  auto array = dyn_cast_if_present<RankedTensorType>(type);
-  if (!array || array.getRank() != 1 || !array.hasStaticShape() ||
-      array.getEncoding() || array.getDimSize(0) < 0 ||
-      uint64_t(array.getDimSize(0)) > MaximumArrayLength)
+  auto array = dyn_cast_if_present<FieldArrayType>(type);
+  if (!array || array.getLength() > MaximumArrayLength)
     return false;
-  auto element = dyn_cast<algebra::FieldType>(array.getElementType());
-  return element && protocol::installedDomains().identitySort(
-                        element.getDomain()) == "Field";
+  return protocol::installedDomains().identitySort(array.getDomain()) ==
+         "Field";
 }
 bool isCanonicalFieldLiteral(StringRef domain, StringRef value) {
   if (auto error =
@@ -160,10 +157,19 @@ LogicalResult ConstantFieldOp::verify() {
                              "expected a canonical field literal");
   return success();
 }
+LogicalResult ArrayFromElementsOp::verify() {
+  auto type = getResult().getType();
+  if (!isFieldArray(type) || getElements().size() != type.getLength() ||
+      !llvm::all_of(getOperandTypes(), [&](Type element) {
+        return element == type.getElementType();
+      }))
+    return refuse(*this, "expected exact field-array length and element field");
+  return success();
+}
 LogicalResult ArrayAtOp::verify() {
   auto type = getArray().getType();
   auto index = getIndexAttr().getInt();
-  if (!isFieldArray(type) || index < 0 || index >= type.getDimSize(0) ||
+  if (!isFieldArray(type) || index < 0 || uint64_t(index) >= type.getLength() ||
       type.getElementType() != getResult().getType())
     return diagnostics::emit(
         emitOpError(), "mathematical-formation",
@@ -179,6 +185,18 @@ SmallVector<unsigned> ConstantFieldOp::getOperandDependencies(unsigned) {
 }
 std::optional<MathematicalIdentity> ArrayAtOp::getMathematicalIdentity() {
   return MathematicalIdentity::ArrayAt;
+}
+std::optional<MathematicalIdentity>
+ArrayFromElementsOp::getMathematicalIdentity() {
+  return MathematicalIdentity::ArrayFromElements;
+}
+SmallVector<unsigned>
+ArrayFromElementsOp::getOperandDependencies(unsigned result) {
+  SmallVector<unsigned> dependencies;
+  if (result == 0)
+    for (unsigned i = 0; i < getNumOperands(); ++i)
+      dependencies.push_back(i);
+  return dependencies;
 }
 SmallVector<unsigned> ArrayAtOp::getOperandDependencies(unsigned result) {
   return result == 0 ? SmallVector<unsigned>{0} : SmallVector<unsigned>{};

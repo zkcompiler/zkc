@@ -74,6 +74,7 @@ impl BoundInterface {
                         self.options.simplify,
                         self.options.release_storage,
                         self.options.fuse_vector_reductions,
+                        self.options.finite_bulk,
                     ]
                 && entry.entry() == p.symbol
                 && &entry.producer().role == prover

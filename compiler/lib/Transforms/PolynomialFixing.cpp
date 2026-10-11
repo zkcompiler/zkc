@@ -57,8 +57,9 @@ class FactorFixing {
     } else if (auto table = dyn_cast_if_present<MultilinearPolynomialOp>(op)) {
       auto field =
           algebra::FieldType::get(builder.getContext(), type.getDomain());
-      auto data = RankedTensorType::get(
-          {int64_t(uint64_t(1) << type.getArity())}, field);
+      auto data =
+          algebra::FieldArrayType::get(field.getContext(), field.getDomain(),
+                                       uint64_t(1) << type.getArity());
       SmallVector<Value> inputs{table.getTable()};
       llvm::append_range(inputs, prefix);
       auto smaller = make(FixTableOp::getOperationName(), data, inputs);

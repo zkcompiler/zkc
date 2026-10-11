@@ -1,5 +1,4 @@
 #include "../lib/Transforms/MathematicalSupport.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
@@ -179,10 +178,10 @@ int main(int argc, char **argv) {
             named,
         "changed operand escaped independent recipe verification");
   });
-  cases.run("static dimension discards unused tensor construction", [&] {
+  cases.run("static dimension discards unused field-array construction", [&] {
     auto text = replace(fixture, " local.realize @realized", R"(
  func.func private @dimension(%a:!F,%b:!F)->ui64 {
-   %v = "tensor.from_elements"(%a,%b):(!F,!F)->!A
+   %v = "algebra.array_from_elements"(%a,%b):(!F,!F)->!A
    %n = "data.dim"(%v){axis=0:i64}:(!A)->ui64
    func.return %n:ui64
  }
@@ -197,7 +196,7 @@ int main(int argc, char **argv) {
         return;
       auto &block = function.getBody().front();
       require(std::distance(block.begin(), block.end()) == 2,
-              "static dimension emitted tensor construction");
+              "static dimension emitted field-array construction");
       require(block.front().getName().getStringRef() ==
                   "algebra.exec.index_constant",
               "dimension is not a constant");
@@ -205,11 +204,11 @@ int main(int argc, char **argv) {
   });
   cases.run("dynamic byte dimension uses the byte length recipe", [&] {
     auto text = replace(fixture, " local.realize @realized", R"(
- func.func private @byte_dimension(%bytes:tensor<?xui8>)->ui64 {
-   %n = "data.dim"(%bytes){axis=0:i64}:(tensor<?xui8>)->ui64
+ func.func private @byte_dimension(%bytes:!data.bytes)->ui64 {
+   %n = "data.dim"(%bytes){axis=0:i64}:(!data.bytes)->ui64
    func.return %n:ui64
  }
- local.realize @byte_dimension_exec = @byte_dimension : (tensor<?xui8>)->ui64
+ local.realize @byte_dimension_exec = @byte_dimension : (!data.bytes)->ui64
  local.realize @realized)");
     auto module = parseSourceString<ModuleOp>(text, &context);
     require(bool(module), "byte dimension fixture refused");
@@ -238,9 +237,13 @@ int main(int argc, char **argv) {
     while (!block.empty())
       block.back().erase();
     OpBuilder builder(&block, block.end());
-    auto array = tensor::FromElementsOp::create(
+    auto array = algebra::ArrayFromElementsOp::create(
         builder, function.getLoc(),
-        RankedTensorType::get({2}, block.getArgument(0).getType()),
+        algebra::FieldArrayType::get(
+            &context,
+            cast<algebra::FieldType>(block.getArgument(0).getType())
+                .getDomain(),
+            2),
         ValueRange{block.getArgument(0), block.getArgument(1)});
     auto at = algebra::ArrayAtOp::create(
         builder, function.getLoc(), block.getArgument(0).getType(),
@@ -351,6 +354,24 @@ int main(int argc, char **argv) {
       op.setOperand(0, op->getBlock()->getArgument(0));
     });
   });
+  mutation("realized result replaced by a same-type input",
+           [&](ModuleOp module) {
+             auto function = realized(module);
+             function.getBody().front().back().setOperand(
+                 0, function.getArgument(0));
+           });
+  mutation("realized polynomial evaluation operand changed",
+           [&](ModuleOp module) {
+             auto function = realized(module);
+             bool changed = false;
+             function.walk([&](Operation *op) {
+               if (!changed && isa<algebra::FieldProductOp>(op)) {
+                 op->setOperand(1, function.getArgument(0));
+                 changed = true;
+               }
+             });
+             require(changed, "missing polynomial multiplication");
+           });
   mutation("partial runtime operation inserted", [&](ModuleOp module) {
     auto function = realized(module);
     auto *returned = &function.getBody().front().back();

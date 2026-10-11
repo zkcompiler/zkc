@@ -2,6 +2,7 @@
 #define ZKC_TRANSFORMS_PREPARED_PROTOCOL_H
 
 #include "mlir/IR/BuiltinOps.h"
+#include "zkc/Transforms/MathematicalSelection.h"
 #include <optional>
 
 namespace zkc::mathematical {
@@ -16,8 +17,7 @@ class PreparedProtocol {
 
 public:
   static std::optional<PreparedProtocol>
-  prepare(mlir::ModuleOp source, bool fuseVectorReductions = false,
-          bool optimizeFinite = true);
+  prepare(mlir::ModuleOp source, MathematicalSelectionPolicy policy = {});
   mlir::OwningOpRef<mlir::ModuleOp> snapshot() const;
   mlir::OwningOpRef<mlir::ModuleOp> project(bool simplify) &&;
 };

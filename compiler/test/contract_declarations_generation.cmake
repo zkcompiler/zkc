@@ -363,6 +363,173 @@ execute_process(COMMAND "${ZKC_TABLEGEN}" -I "${ZKC_DECLARATION_INCLUDE}"
 if(missing_action EQUAL 0)
   list(APPEND failures "generation without an explicit action succeeded")
 endif()
+# Mathematical laws are declaration facets. These are consistency controls,
+# not claims about a provider's implementation of an equation.
+declaration_case(mathematical-field [=[
+include "zkc/Contracts/Declarations/Mathematical.td"
+def Good : ZKC_Operation<"law.add", [F],
+  [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[F]>], [ZKC_Apply<Element,[F]>],
+  [ZKC_Holds<Field,[F]>]> { let facets = [ZKC_Mathematical<MathFieldAdd>]; }
+]=] "")
+declaration_case(mathematical-different-root [=[
+include "zkc/Contracts/Declarations/Mathematical.td"
+def H : ZKC_Root<"H", FDomain>;
+def Bad : ZKC_Operation<"law.add", [F,H],
+  [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[H]>], [ZKC_Apply<Element,[F]>],
+  [ZKC_Holds<Field,[F]>]> { let facets = [ZKC_Mathematical<MathFieldAdd>]; }
+]=] "mathematical signature nominal ports or associated scalar mismatch")
+declaration_case(mathematical-result-root [=[
+include "zkc/Contracts/Declarations/Mathematical.td"
+def H : ZKC_Root<"H", FDomain>;
+def Bad : ZKC_Operation<"law.add", [F,H],
+  [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[F]>], [ZKC_Apply<Element,[H]>],
+  [ZKC_Holds<Field,[H]>]> { let facets = [ZKC_Mathematical<MathFieldAdd>]; }
+]=] "mathematical signature nominal ports or associated scalar mismatch")
+declaration_case(mathematical-capability [=[
+include "zkc/Contracts/Declarations/Mathematical.td"
+def Bad : ZKC_Operation<"law.add", [F],
+  [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[F]>], [ZKC_Apply<Element,[F]>],
+  [ZKC_Holds<Ring,[F]>]> { let facets = [ZKC_Mathematical<MathFieldAdd>]; }
+]=] "mathematical capability on exact nominal domain required")
+declaration_case(mathematical-duplicate [=[
+include "zkc/Contracts/Declarations/Mathematical.td"
+def Bad : ZKC_Operation<"law.add", [F],
+  [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[F]>], [ZKC_Apply<Element,[F]>],
+  [ZKC_Holds<Field,[F]>]> {
+  let facets = [ZKC_Mathematical<MathFieldAdd>, ZKC_Mathematical<MathFieldMultiply>];
+}
+]=] "duplicate semantic facet")
+declaration_case(mathematical-associated-scalar [=[
+include "zkc/Contracts/Declarations/Mathematical.td"
+def Action : ZKC_Capability<"ScalarAction", [GDomain]>;
+def Good : ZKC_Operation<"law.scale", [G,GS],
+  [ZKC_Apply<GroupElement,[G]>, ZKC_Apply<Element,[GS]>], [ZKC_Apply<GroupElement,[G]>],
+  [ZKC_Holds<Action,[G]>]> { let facets = [ZKC_Mathematical<MathGroupScale>]; }
+]=] "")
+declaration_case(mathematical-wrong-scalar [=[
+include "zkc/Contracts/Declarations/Mathematical.td"
+def Action : ZKC_Capability<"ScalarAction", [GDomain]>;
+def Bad : ZKC_Operation<"law.scale", [G,F],
+  [ZKC_Apply<GroupElement,[G]>, ZKC_Apply<Element,[F]>], [ZKC_Apply<GroupElement,[G]>],
+  [ZKC_Holds<Action,[G]>]> { let facets = [ZKC_Mathematical<MathGroupScale>]; }
+]=] "mathematical signature nominal ports or associated scalar mismatch")
+declaration_case(mathematical-access-family [=[
+include "zkc/Contracts/Declarations/Mathematical.td"
+def N : ZKC_Root<"N", NatParameter>;
+def Array : ZKC_Type<"field_array", [FDomain,NatParameter], PrivateImmutable>;
+def Index : ZKC_Type<"index">;
+def Bad : ZKC_Operation<"law.access", [F,N],
+  [ZKC_Apply<Array,[F,N]>, ZKC_Apply<Index>], [ZKC_Apply<Element,[F]>],
+  [ZKC_Holds<Field,[F]>]> { let facets = [ZKC_Mathematical<MathContainerAt>]; }
+]=] "mathematical signature nominal ports or associated scalar mismatch")
+declaration_case(linear-wrong-associated-scalar [=[
+def Action : ZKC_Capability<"ScalarAction", [GDomain]>;
+def Vector : ZKC_Type<"vector", [FDomain], PrivateImmutable>;
+def Groups : ZKC_Type<"groups", [GDomain], PrivateImmutable>;
+def Bad : ZKC_Operation<"law.msm", [G,F],
+  [ZKC_Apply<Vector,[F]>, ZKC_Apply<Groups,[G]>], [ZKC_Apply<GroupElement,[G]>],
+  [ZKC_Holds<Action,[G]>]> { let facets = [ZKC_Contraction<0,1>]; }
+]=] "linear facet nominal ports or associated scalar mismatch")
+
+function(recipe_case name definitions expected_error)
+  set(input "${ZKC_DECLARATION_TEST_DIRECTORY}/recipe-${name}.td")
+  file(WRITE "${input}" "include \"zkc/Contracts/Declarations.td\"\ninclude \"${ZKC_DECLARATION_INCLUDE}/../lib/Transforms/RecipeSchema.td\"\n${definitions}\n")
+  set(output "${ZKC_DECLARATION_TEST_DIRECTORY}/recipe-${name}.inc")
+  file(REMOVE "${output}")
+  execute_process(COMMAND "${ZKC_TABLEGEN}" -gen-mathematical-recipes
+    -I "${ZKC_DECLARATION_INCLUDE}" "${input}" -o "${output}"
+    RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
+  if(expected_error STREQUAL "")
+    if(NOT result EQUAL 0)
+      list(APPEND failures "recipe-${name}: ${stderr}")
+    endif()
+  else()
+    string(FIND "${stderr}" "${expected_error}" position)
+    if(NOT result MATCHES "^[1-9][0-9]*$" OR position EQUAL -1 OR EXISTS "${output}")
+      list(APPEND failures "recipe-${name}: expected '${expected_error}': ${stderr}")
+    endif()
+  endif()
+  set(failures "${failures}" PARENT_SCOPE)
+endfunction()
+recipe_case(field-lanes [=[
+def Good : ZKC_LaneRecipe<OpFieldAdd, OpVectorAdd>;
+]=] "")
+recipe_case(group-permutation [=[
+def Good : ZKC_LaneRecipe<OpCurveScale, OpCurveScaleEach, [1,0]>;
+]=] "")
+recipe_case(group-wrong-order [=[
+def Bad : ZKC_LaneRecipe<OpCurveScale, OpCurveScaleEach>;
+]=] "recipe endpoint input nominal type mismatch")
+recipe_case(wrong-family [=[
+def Bad : ZKC_LaneRecipe<OpFieldAdd, OpFieldAdd>;
+]=] "recipe endpoint input nominal type mismatch")
+recipe_case(wrong-result [=[
+def Bad : ZKC_LaneRecipe<OpFieldMul, OpVectorDot>;
+]=] "recipe endpoint result nominal type mismatch")
+recipe_case(wrong-static-mapping [=[
+def Bad : ZKC_LaneRecipe<OpFieldAdd, OpVectorAdd> { let staticArguments = [1]; }
+]=] "recipe requires the source domain root mapping")
+recipe_case(missing-meaning [=[
+def Bad : ZKC_LaneRecipe<OpFieldInverse, OpVectorInverse>;
+]=] "recipe source requires mathematical laws")
+recipe_case(missing-endpoint [=[
+def Bad : ZKC_LaneRecipe<OpFieldAdd, MissingEndpoint>;
+]=] "Variable not defined: 'MissingEndpoint'")
+recipe_case(subtraction-reduction [=[
+def Bad : ZKC_ReductionRecipe<OpFieldSub, OpVectorSum, "Direct", [0]>;
+]=] "reduction recipe requires associative total combiner and empty identity")
+recipe_case(msm [=[
+def Good : ZKC_ReductionRecipe<OpCurveAdd, OpCurveMsm, "Contraction", [1,0]> {
+  let term = OpCurveScale;
+}
+]=] "")
+recipe_case(msm-wrong-domain [=[
+def Bad : ZKC_ReductionRecipe<OpCurveAdd, OpCurveMsm, "Contraction", [1,0]> {
+  let term = OpCurveScale; let staticSourceOperand = 1;
+}
+]=] "recipe static source must supply the nominal root, not an associated scalar")
+recipe_case(matrix-row [=[
+def Good : ZKC_ReductionRecipe<OpFieldAdd, OpMatrixRowDot, "MatrixRow"> {
+  let term = OpFieldMul;
+}
+]=] "")
+recipe_case(matrix-index-arity [=[
+def Bad : ZKC_ReductionRecipe<OpFieldAdd, OpVectorDot, "MatrixRow"> {
+  let term = OpFieldMul;
+}
+]=] "recipe endpoint arity mismatch")
+
+recipe_case(direct-input-role [=[
+def Bad : ZKC_ReductionRecipe<OpFieldAdd, OpVectorSum, "Direct", [1]>;
+]=] "direct reduction has exactly one semantic input role")
+recipe_case(direct-static-role [=[
+def Bad : ZKC_ReductionRecipe<OpFieldAdd, OpVectorSum, "Direct", [0]> {
+  let staticSourceOperand = 1;
+}
+]=] "direct reduction static source must use its single input")
+recipe_case(matrix-role-order [=[
+def Bad : ZKC_ReductionRecipe<OpFieldAdd, OpMatrixRowDot, "MatrixRow", [1,0]> {
+  let term = OpFieldMul;
+}
+]=] "matrix recipe requires matrix then vector roles")
+
+declaration_case(mathematical-identity-role [=[
+def Laws : ZKC_ScalarLaws<"FieldRing", "FieldBinary"> {
+  let leftIdentity = "GroupIdentity";
+}
+def Meaning : ZKC_MathematicalIdentity<"BadIdentity", 0> { let laws = Laws; }
+def Bad : ZKC_Operation<"law.identity", [F],
+  [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[F]>], [ZKC_Apply<Element,[F]>],
+  [ZKC_Holds<Field,[F]>]> { let facets = [ZKC_Mathematical<Meaning>]; }
+]=] "scalar identity law has incompatible nominal role")
+declaration_case(mathematical-action-role [=[
+def Laws : ZKC_ScalarLaws<"FieldRing", "FieldBinary"> { let scalarAction = 1; }
+def Meaning : ZKC_MathematicalIdentity<"BadAction", 0> { let laws = Laws; }
+def Bad : ZKC_Operation<"law.action", [F],
+  [ZKC_Apply<Element,[F]>, ZKC_Apply<Element,[F]>], [ZKC_Apply<Element,[F]>],
+  [ZKC_Holds<Field,[F]>]> { let facets = [ZKC_Mathematical<Meaning>]; }
+]=] "scalar action law requires ordered group and associated scalar ports")
+
 if(failures)
   list(JOIN failures "\n" diagnostic)
   message(FATAL_ERROR "${diagnostic}")

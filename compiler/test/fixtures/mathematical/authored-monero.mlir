@@ -1,5 +1,5 @@
 // Exact encoded-word hash transitions. This is a transcript consistency client.
-!words = tensor<?xui64>
+!words = !algebra.indices
 !rounds = !data.sequence<!words>
 module { "protocol.module"() ({
  "local.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()

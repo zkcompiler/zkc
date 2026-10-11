@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
       admitted->interfaceJson() != original->interfaceJson())
     return 41;
   zkc::language::EntryOptions options;
-  options.fuseVectorReductions = true;
+  options.mathematicalSelection.vectorReductionFusion = true;
   auto execution = zkc::language::compileEntry(*admitted, options);
   if (!execution) {
     llvm::errs() << llvm::toString(execution.takeError());

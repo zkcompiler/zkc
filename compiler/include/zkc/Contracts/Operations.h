@@ -1,10 +1,60 @@
 #ifndef ZKC_CONTRACTS_OPERATIONS_H
 #define ZKC_CONTRACTS_OPERATIONS_H
 
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Mathematical.h"
 #include "llvm/ADT/StringRef.h"
 #include <optional>
 
 namespace zkc::protocol {
+
+/// Closed scalar laws used by computation analysis. A field ring and a group
+/// module are different algebras; neither purity nor a user attribute grants
+/// one of these facets. Applicability is checked on complete nominal ports.
+enum class ComputationAlgebra { FieldRing, GroupModule, Access };
+enum class ScalarIdentity { None, Zero, One, GroupIdentity };
+enum class AccessRule { Element, MatrixCell };
+struct ScalarLawContract {
+  ComputationAlgebra algebra;
+  bool associative = false;
+  bool commutative = false;
+  /// No logical stop on admitted scalar inputs. Does not describe resources.
+  bool total = false;
+  ScalarIdentity leftIdentity = ScalarIdentity::None;
+  ScalarIdentity rightIdentity = ScalarIdentity::None;
+  ScalarIdentity annihilator = ScalarIdentity::None;
+  bool scalarAction = false;
+  /// Scalar action source ports are (group, associated scalar).
+  unsigned groupOperand = 0, scalarOperand = 1;
+};
+struct ComputationContract {
+  llvm::StringRef key;
+  MathematicalIdentity identity;
+  ScalarLawContract law;
+  std::optional<AccessRule> access;
+};
+/// Declaration-owned meaning without an executable operation choice.
+struct MathematicalMeaning {
+  MathematicalIdentity identity;
+  ScalarLawContract law;
+  std::optional<AccessRule> access;
+};
+const MathematicalMeaning *mathematicalMeaning(MathematicalIdentity identity);
+const ComputationContract *computationContract(llvm::StringRef key);
+/// Exact logical meaning, independent of physical availability. This does not
+/// validate a pinned implementation or authorize replacement of that choice.
+const ComputationContract *
+admitMathematicalMeaning(const BindingApplication &,
+                         llvm::ArrayRef<BoundType> inputs,
+                         llvm::ArrayRef<BoundType> outputs,
+                         llvm::ArrayRef<std::string> parameters = {});
+/// Exact meaning plus eligibility for mathematical replacement. Explicit
+/// implementations and physical representations remain nonreplaceable.
+const ComputationContract *
+admitComputationContract(const BindingApplication &,
+                         llvm::ArrayRef<BoundType> inputs,
+                         llvm::ArrayRef<BoundType> outputs,
+                         llvm::ArrayRef<std::string> parameters = {});
 
 enum class RandomnessProvider { Entropy, Transcript };
 enum class SampleDomain { Field, FieldVector, BoundedIndex };
@@ -75,6 +125,7 @@ const CosetConvention *cosetConvention(llvm::StringRef field);
 /// Independently consumed semantic facets of a registered operation. Absence
 /// of a facet never grants purity, speculation, replay, or sampling authority.
 struct OperationContracts {
+  std::optional<ComputationContract> mathematical;
   std::optional<HistoryContract> history;
   std::optional<SamplingContract> sampling;
   std::optional<ObservationContract> observation;

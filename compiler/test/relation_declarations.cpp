@@ -118,9 +118,11 @@ relation.declare @predicate {
   const std::string optional = variant(
       "Optional", {{"None", {}}, {"Some", {"sequence<vector:bls12-381.fr>"}}});
   for (const auto &type : std::vector<std::string>{
-           "ui64", "tensor<0x" + fieldType + ">", "tensor<3x" + fieldType + ">",
-           "tensor<?x" + fieldType + ">", "tensor<?x?x" + fieldType + ">",
-           "tensor<?xui64>", "tensor<?x!algebra.group<\"bls12-381.g1\">>",
+           "ui64", "!algebra.field_array<\"bls12-381.fr\", 0>",
+           "!algebra.field_array<\"bls12-381.fr\", 3>",
+           "!algebra.field_vector<\"bls12-381.fr\">",
+           "!algebra.field_matrix<\"bls12-381.fr\">", "!algebra.indices",
+           "!algebra.group_vector<\"bls12-381.g1\">",
            "!data.sequence<!data.sequence<" + record + ">>", record,
            optional}) {
     auto left = parse(schema(type), context);
@@ -133,12 +135,15 @@ relation.declare @predicate {
   }
   for (auto [leftType, rightType] :
        std::vector<std::pair<std::string, std::string>>{
-           {"tensor<2x" + fieldType + ">", "tensor<3x" + fieldType + ">"},
-           {"tensor<2x" + fieldType + ">", "tensor<?x" + fieldType + ">"},
-           {"tensor<?x" + fieldType + ">", "tensor<?x?x" + fieldType + ">"},
+           {"!algebra.field_array<\"bls12-381.fr\", 2>",
+            "!algebra.field_array<\"bls12-381.fr\", 3>"},
+           {"!algebra.field_array<\"bls12-381.fr\", 2>",
+            "!algebra.field_vector<\"bls12-381.fr\">"},
+           {"!algebra.field_vector<\"bls12-381.fr\">",
+            "!algebra.field_matrix<\"bls12-381.fr\">"},
            {"!data.sequence<" + fieldType + ">", "!data.sequence<i1>"},
-           {"tensor<?x" + fieldType + ">",
-            "tensor<?x!algebra.field<\"bn254.fr\">>"},
+           {"!algebra.field_vector<\"bls12-381.fr\">",
+            "!algebra.field_vector<\"bn254.fr\">"},
            {record, variant("OtherData", {{"Record",
                                            {"matrix:bls12-381.fr",
                                             "vector:bls12-381.fr"}}})},

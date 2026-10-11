@@ -144,10 +144,13 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
       *actualDescriptor != *expectedDescriptor ||
       out[3].getAsString() != digest(*actualDescriptor) ||
       out[5].getAsString() != digest(*candidate) ||
-      out[7] != json::Value(json::Array{
-                    options.simplify ? "true" : "false",
-                    options.releaseStorage ? "true" : "false",
-                    options.fuseVectorReductions ? "true" : "false"}) ||
+      out[7] !=
+          json::Value(json::Array{
+              options.simplify ? "true" : "false",
+              options.releaseStorage ? "true" : "false",
+              options.mathematicalSelection.vectorReductionFusion ? "true"
+                                                                  : "false",
+              options.mathematicalSelection.finiteBulk ? "true" : "false"}) ||
       !out[8].getAsArray() || *out[8].getAsArray() != wireSites)
     return error("native-deployment-correspondence");
   auto decoded = protocol::verifyProgramArtifact(physical, *candidate);

@@ -76,11 +76,11 @@ def ConstantPolynomialOp : PolynomialMathOp<"constant"> {
   let results = (outs Polynomial:$polynomial);
 }
 def CoefficientPolynomialOp : PolynomialMathOp<"from_coefficients"> {
-  let arguments = (ins AnyRankedTensor:$coefficients);
+  let arguments = (ins FieldArray:$coefficients);
   let results = (outs Polynomial:$polynomial);
 }
 def MultilinearPolynomialOp : PolynomialMathOp<"mle"> {
-  let arguments = (ins AnyRankedTensor:$table);
+  let arguments = (ins FieldArray:$table);
   let results = (outs Polynomial:$polynomial);
 }
 def AddPolynomialOp : PolynomialMathOp<"add"> {
@@ -105,19 +105,19 @@ def EvaluatePolynomialOp : PolynomialMathOp<"evaluate"> {
 }
 def PolynomialCoefficientsOp : PolynomialMathOp<"coefficients"> {
   let arguments = (ins Polynomial:$polynomial);
-  let results = (outs AnyRankedTensor:$coefficients);
+  let results = (outs FieldArray:$coefficients);
 }
 def EvaluateDomainOp : PolynomialMathOp<"evaluate_domain"> {
   let arguments = (ins Polynomial:$polynomial, StrArrayAttr:$points);
-  let results = (outs AnyRankedTensor:$values);
+  let results = (outs FieldArray:$values);
 }
 def InterpolateDomainOp : PolynomialMathOp<"interpolate"> {
-  let arguments = (ins AnyRankedTensor:$values, StrArrayAttr:$points);
+  let arguments = (ins FieldArray:$values, StrArrayAttr:$points);
   let results = (outs Polynomial:$polynomial);
 }
 def FixTableOp : PolynomialMathOp<"fix_table"> {
-  let arguments = (ins AnyRankedTensor:$table, Variadic<Field>:$prefix);
-  let results = (outs AnyRankedTensor:$result);
+  let arguments = (ins FieldArray:$table, Variadic<Field>:$prefix);
+  let results = (outs FieldArray:$result);
 }
 
 // A ring expression over named factor slots. Its scalar algebra is interpreted

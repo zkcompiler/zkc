@@ -116,9 +116,7 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
                                        "transcript:" + plan.suite))
       return fail("host root requires the selected managed transcript state");
   }
-  auto bytes = RankedTensorType::get(
-      {ShapedType::kDynamic},
-      IntegerType::get(record.getContext(), 8, IntegerType::Unsigned));
+  auto bytes = decodeBoundType(record.getContext(), {"bytes", {}, {}});
   auto index = IntegerType::get(record.getContext(), 64, IntegerType::Unsigned);
   auto sharedInputs = [&](DenseI64ArrayAttr inputs,
                           SmallVectorImpl<unsigned> &ports,

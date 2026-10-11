@@ -1,3 +1,5 @@
+#include "../lib/Transforms/ComputationSelection.h"
+#include "../lib/Transforms/MathematicalSupport.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
@@ -16,7 +18,7 @@ namespace {
 using Phase = protocol::AlgorithmExpansionPhase;
 using State = protocol::AlgorithmExpansionState;
 constexpr StringLiteral fixture = R"mlir(!F = !algebra.field<"koala-bear">
-!V = tensor<?x!F>
+!V = !algebra.field_vector<"koala-bear">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
  "local.binding"() {sym_name="length_alias",contract="vector.length",arguments=["koala-bear"],implementation=""} : ()->()
@@ -148,6 +150,141 @@ int main() {
                 *retained, *fused, retainedState, fusedState)),
             "independent fusion checker refused");
   });
+  for (bool present : {true, false}) {
+    StringRef label =
+        present ? "map sum selects the installed FieldDot recipe"
+                : "map sum preserves realization with only FieldDot withheld";
+    cases.run(label, [&] {
+      using namespace mathematical;
+      const auto &installed = mathematicalRecipes();
+      const auto *dotRecipe = installed.reduction(
+          MathematicalIdentity::FieldAdd, MathematicalIdentity::FieldMultiply,
+          ReductionForm::Contraction);
+      require(dotRecipe, "missing installed FieldDot control");
+      SmallVector<ReductionRecipe> reductions;
+      for (const auto &recipe : installed.reductions)
+        if (present || &recipe != dotRecipe)
+          reductions.push_back(recipe);
+      const MathematicalRecipes recipes{installed.lanes, reductions};
+      require(reductions.size() + unsigned(!present) ==
+                      installed.reductions.size() &&
+                  recipes.lane(MathematicalIdentity::FieldAdd) &&
+                  recipes.lane(MathematicalIdentity::FieldMultiply),
+              "control must retain lane recipes and all other reductions");
+      auto products = describeMapProducts(*retained);
+      require(succeeded(products) && products->count("mapped"),
+              "admitted product map lost its scalar slots");
+      auto selected = selectMapSum(products->at("mapped"), recipes);
+      require(bool(selected) == present,
+              "map sum selection ignored reduction recipe availability");
+
+      auto candidate = copy(*retained);
+      State state = retainedState;
+      require(succeeded(fuseVectorReductions(*candidate, state, reductions)),
+              "recipe-controlled fusion refused");
+      require(succeeded(verifyVectorReductionsPreserved(*retained, *candidate,
+                                                        retainedState, state)),
+              "independent reader refused recipe-controlled candidate");
+      if (present) {
+        require(OperationEquivalence::isEquivalentTo(
+                    *fused, *candidate, OperationEquivalence::IgnoreLocations),
+                "private inventory override changed default fusion");
+        auto *reduced = nth(*candidate, selected->recipe->target);
+        require(reduced->getNumOperands() == selected->inputs.size(),
+                "selected recipe operand count changed");
+        for (auto [i, input] : llvm::enumerate(selected->inputs))
+          require(reduced->getOperand(i) ==
+                      function(*candidate).getArgument(input),
+                  "emission ignored selected recipe operand mapping");
+      } else {
+        require(count(*candidate, "local.apply") == 1 &&
+                    count(*candidate, "algebra.exec.vector_sum") == 1 &&
+                    count(*candidate, "algebra.exec.vector_dot") == 0 &&
+                    OperationEquivalence::isEquivalentTo(
+                        *retained, *candidate,
+                        OperationEquivalence::IgnoreLocations),
+                "withholding FieldDot changed the retained map/sum");
+      }
+
+      auto maps = copy(*candidate);
+      require(succeeded(expandMapRealizations(*maps)) &&
+                  succeeded(verifyMapRealizationsPreserved(*candidate, *maps)),
+              "ordinary map realization failed independent correspondence");
+      auto completed = copy(*maps);
+      State completedState = state;
+      require(succeeded(protocol::expandAlgorithms(*completed, Phase::Finish,
+                                                   completedState)) &&
+                  succeeded(protocol::verifyStagedAlgorithmExpansionPreserved(
+                      *maps, *completed, Phase::Finish, state, completedState)),
+              "ordinary Finish failed independent correspondence");
+      if (!present) {
+        auto baseline = copy(*retained);
+        State baselineState = retainedState;
+        finish(*baseline, baselineState);
+        require(count(*completed, "local.apply") == 0 &&
+                    count(*completed, "algebra.exec.vector_mul") == 1 &&
+                    count(*completed, "algebra.exec.vector_sum") == 1 &&
+                    count(*completed, "algebra.exec.vector_length") == 3 &&
+                    count(*completed, "local.exec.require") == 2 &&
+                    OperationEquivalence::isEquivalentTo(
+                        *baseline, *completed,
+                        OperationEquivalence::IgnoreLocations),
+                "withheld recipe changed ordered realization or occurrence "
+                "sites");
+      }
+    });
+  }
+  for (bool scalar : {false, true})
+    cases.run(
+        scalar ? "fusion preserves trailing unused scalar arithmetic"
+               : "fusion preserves trailing unused vector arithmetic",
+        [&] {
+          auto text =
+              edit(fixture, " func.func private @formula",
+                   std::string(
+                       " \"local.binding\"() {sym_name=\"tail\",contract=\"") +
+                       (scalar ? "field.add" : "vector.add") +
+                       "\",arguments=[\"koala-bear\"],implementation=\"\"} : "
+                       "()->()\n"
+                       " func.func private @formula");
+          text = edit(
+              text,
+              "   %r = local.apply @reduce(%v) {site=\"reduce\"} : "
+              "(!V)->!F\n",
+              std::string("   %r = local.apply @reduce(%v) "
+                          "{site=\"reduce\"} : (!V)->!F\n") +
+                  (scalar ? "   %unused = \"algebra.exec.field_add\"(%s,%s)"
+                          : "   %unused = \"algebra.exec.vector_add\"(%a,%b)") +
+                  " {binding=@tail,parameters=[],site=\"tail\"} : " +
+                  (scalar ? "(!F,!F)->!F\n" : "(!V,!V)->!V\n"));
+          auto original = parse(text);
+          State originalState;
+          retain(*original, originalState);
+          auto candidate = copy(*original);
+          State candidateState = originalState;
+          require(succeeded(mathematical::fuseVectorReductions(*candidate,
+                                                               candidateState)),
+                  "unused suffix prevented fusion");
+          require(count(*candidate, "algebra.exec.vector_dot") == 1 &&
+                      nth(*candidate, scalar ? "field.add" : "vector.add")
+                          ->use_empty(),
+                  "fusion changed the unused suffix");
+          require(succeeded(mathematical::verifyVectorReductionsPreserved(
+                      *original, *candidate, originalState, candidateState)),
+                  "suffix preservation check refused");
+          auto *tail = nth(*candidate, scalar ? "field.add" : "vector.add");
+          tail->setOperand(1, scalar
+                                  ? nth(*candidate, "vector.dot")->getResult(0)
+                                  : tail->getOperand(0));
+          require(named("vector-reduction-correspondence",
+                        [&] {
+                          return failed(
+                              mathematical::verifyVectorReductionsPreserved(
+                                  *original, *candidate, originalState,
+                                  candidateState));
+                        }),
+                  "unused suffix mutation escaped the caller's check");
+        });
   auto mutation = [&](StringRef label,
                       llvm::function_ref<void(ModuleOp)> change) {
     cases.run(label, [&] {
@@ -718,8 +855,8 @@ int main() {
                        : "fusion independent of simplification",
               [&] {
                 auto candidate = parse(fixture);
-                run(*candidate,
-                    protocol::createProjectProtocolPass(simplify, true));
+                run(*candidate, protocol::createProjectProtocolPass(
+                                    simplify, {true, true}));
                 run(*candidate, protocol::createEliminatePolynomialsPass());
                 run(*candidate, protocol::createLowerMathPass());
                 require(count(*candidate, "algebra.exec.vector_dot") == 1,
@@ -739,7 +876,7 @@ int main() {
       require(bool(original), "ordinary recipe fixture refused");
       auto enabled = copy(*original);
       run(*original, protocol::createPrepareProtocolPass(false));
-      run(*enabled, protocol::createPrepareProtocolPass(false, true));
+      run(*enabled, protocol::createPrepareProtocolPass(false, {true, true}));
       require(OperationEquivalence::isEquivalentTo(
                   *original, *enabled, OperationEquivalence::IgnoreLocations),
               "nonmatching recipe changed under enabled preparation");

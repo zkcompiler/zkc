@@ -312,7 +312,7 @@ def test_fusion_proof_construction_preserves_protocol_origins(toolchain, journal
         entry = Entry(toolchain, journal, subdirectory(directory, name), PROOF, flags)
         package = json.loads(entry.package.read_text())
         deployment = json.loads(package['artifact'])
-        assert deployment[7] == ['true', 'false', 'true' if flags else 'false']
+        assert deployment[7] == ['true', 'false', 'true' if flags else 'false', 'true']
         descriptors.append(deployment[2])
         wire_sites.append(deployment[8])
         candidates.append(deployment[4:6])
@@ -358,17 +358,55 @@ def test_fusion_proof_construction_preserves_protocol_origins(toolchain, journal
     assert candidates[0] != candidates[1]
 
 
-def test_fusion_flag_requires_source_compilation(toolchain, journal, directory):
+@pytest.mark.parametrize('bulk', [False, True])
+@pytest.mark.parametrize('simplify', [False, True])
+def test_finite_proof_policy_reconstructs_actual_candidate(
+    toolchain, journal, directory, bulk, simplify,
+):
+    source = PROOF.replace('fn sum(v:Vector<F>)->F=primitive("vector.sum");', FINITE)
+    source = source.replace('return sum(map times(each a,each b));',
+                            'return ∑ (x,y) in zip(a,b), x*y;')
+    selection = [] if bulk else ['--no-finite-bulk']
+    flags = selection + ([] if simplify else ['--no-simplify'])
+    entry = Entry(toolchain, journal, directory, source, flags)
+    package = json.loads(entry.package.read_text())
+    assert package['options'] == {'simplify': simplify, 'release_storage': False,
+                                  'fuse_vector_reductions': False, 'finite_bulk': bulk}
+    deployment = json.loads(package['artifact'])
+    assert deployment[7] == [str(simplify).lower(), 'false', 'false', str(bulk).lower()]
+    original = directory / 'original.mlir'
+    original.write_text(package['original'])
+    policy = journal.write('policy.json', deployment[2][1])
+    candidate = directory / 'candidate.mlir'
+    candidate.write_text(journal.run([
+        toolchain.compiler, 'protocol-construct-proof', original, policy, *selection]))
+    assert ('algebra.exec.vector_dot' in candidate.read_text()) == bulk
+    journal.run([toolchain.compiler, 'protocol-check-proof', original, policy,
+                 candidate, *selection])
+    journal.run([toolchain.compiler, 'protocol-check-proof', original, policy,
+                 candidate, *(['--no-finite-bulk'] if bulk else [])],
+                refuses='native-proof-correspondence')
+    request = input_files(journal, 'inputs.json', public={'a': [2, 3], 'b': [5, 7]})
+    proof = directory / 'proof.bin'
+    journal.json([toolchain.runtime, '--json', 'prove', f'--package={entry.package}',
+                  f'--sha256={entry.pin}', *request, f'--output={proof}'])
+    accepted = journal.json([toolchain.runtime, '--json', 'verify', f'--package={entry.package}',
+                            f'--sha256={entry.pin}', *request, f'--proof={proof}'])
+    assert accepted['status'] == 'accepted'
+
+
+@pytest.mark.parametrize('flag', ['--fuse-vector-reductions', '--no-finite-bulk'])
+def test_mathematical_flag_requires_source_compilation(toolchain, journal, directory, flag):
     source = directory / 'sample.zkc'
     source.write_text(MAP_SUM)
     journal.run([toolchain.compiler, 'language-check', '--source-format=zkc',
-                 f'--module=sample={source}', '--fuse-vector-reductions'], refuses='source.options')
+                 f'--module=sample={source}', flag], refuses='source.options')
     journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
-                  f'--module=sample={source}', '--fuse-vector-reductions'], refuses='cli-option')
+                  f'--module=sample={source}', flag], refuses='cli-option')
     for operation in ('run', 'prove', 'verify', 'bindings', 'inputs check'):
         refused = journal.json([toolchain.runtime, '--json', *operation.split(),
                                 '--package=missing.zkpkg', f'--sha256={"0" * 64}',
-                                '--fuse-vector-reductions'], refuses='cli-usage')
+                                flag], refuses='cli-usage')
         assert refused['phase'] == 'arguments'
 
 

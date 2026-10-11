@@ -467,9 +467,7 @@ public:
                       const NativeProofPolicy &policy,
                       const protocol::ConstructionPlan &plan)
       : policy(policy), plan(plan), codec(*plan.codec), symbols(candidate) {
-    bytes = RankedTensorType::get(
-        {ShapedType::kDynamic},
-        IntegerType::get(candidate.getContext(), 8, IntegerType::Unsigned));
+    bytes = data::BytesType::get(candidate.getContext());
   }
   bool check(pir::ProtocolModuleOp source, pir::ProtocolModuleOp candidate,
              ArrayRef<NativeTranscriptEvent> events,

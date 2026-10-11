@@ -133,7 +133,8 @@ def test_finite_library_project(toolchain, journal, directory):
         'dot': '47', 'square_sum': '13', 'selected_sum': '5', 'matrix_total': '9'}
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk'],
+                                  ['--no-simplify', '--no-finite-bulk']])
 @pytest.mark.parametrize('symbolic', [False, True])
 def test_field_finite_calls_keep_bulk_execution(toolchain, journal, directory, flags, symbolic):
     source = '''module sample;
@@ -158,13 +159,14 @@ protocol Run roles(P)(count:index@P,a:F@P,b:F@P,scale:F@P,shift:F@P)->(result:(F
         source = source.replace('finite::sum(xs,fn(x)=>x*x)', '∑ x in xs,x*x')
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     # Default preparation recognizes contractions at the container ceiling.
-    # Disabling simplification intentionally selects finite loop fallback;
-    # exercise it at a smaller size under the same unmodified capacity.
-    count = 1024 if flags else 2**16
+    # Finite selection is independent of generic simplification. Exercise
+    # explicit loop fallback at a smaller size under the same capacity.
+    fallback = '--no-finite-bulk' in flags
+    count = 1024 if fallback else 2**16
     assert entry.run('large', {'count': str(count), 'a': '3', 'b': '7', 'scale': '2', 'shift': '5'})['result'] == [str(21*count), str(9*count), str(11*count)]
     report = json.loads(journal.last.stdout)
     iterations = report['execution']['roles'][0]['usage']['iterations']
-    assert iterations > 0 if flags else iterations == 0
+    assert iterations > 0 if fallback else iterations == 0
 
 
 def test_named_group_sum_keeps_msm_execution(toolchain, journal, directory):
@@ -371,3 +373,16 @@ protocol Run roles(P)(xs:Array<G::Scalar,2>@P)->(result:(G::Scalar,G::Scalar,boo
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     assert entry.run('values', {'xs': ['2', '3']})['result'] == ['5', '5', True, True]
+
+
+def test_matrix_demand_example(toolchain, journal, directory):
+    source = (ROOT / 'examples/projects/finite-computations/main.zkc').read_text()
+    source = source.replace('module example;', 'module sample;')
+    source = source.replace('run Demo = Compute;', '').replace('run MatrixDemo = MatrixProducts;', 'run Demo = MatrixProducts;')
+    entry = Entry(toolchain, journal, directory, source, MODULES)
+    matrix = {'rows': '2', 'columns': '3', 'entries': [['0', '0', '2'], ['1', '2', '7']]}
+    assert entry.run('matrix-demands', {'matrix': matrix, 'xs': ['3', '5', '11'],
+                                        'row': 1, 'seed': '13'}) == {
+        'selected': '77', 'rows': ['19', '90']}
+    entry.run('selected-row-bounds', {'matrix': matrix, 'xs': ['3', '5', '11'],
+                                     'row': 2, 'seed': '13'}, refuses='entry-run-incomplete')

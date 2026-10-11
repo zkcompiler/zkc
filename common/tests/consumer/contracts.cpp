@@ -1,8 +1,14 @@
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
 
 int main() {
   using namespace zkc::protocol;
+  const auto *addition =
+      mathematicalMeaning(zkc::MathematicalIdentity::FieldAdd);
+  if (!addition || !addition->law.associative || !addition->law.commutative ||
+      zkc::mathematicalIdentityName(addition->identity) != "FieldAdd")
+    return 4;
   if (randomServiceField("random.bn254.fr/0") != "bn254.fr" ||
       !randomServiceField("random.koala-bear/0").empty() ||
       nativeChallengeField(

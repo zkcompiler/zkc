@@ -18,6 +18,7 @@
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringExtras.h"
@@ -891,8 +892,7 @@ class Emitter {
                  {builder.getStringAttr(std::to_string(*event.bound))})
               ->getResult(0));
     {
-      auto indices = RankedTensorType::get({ShapedType::kDynamic},
-                                           builder.getIntegerType(64, false));
+      auto indices = algebra::IndicesType::get(builder.getContext());
       auto empty = binding("indices.empty", {});
       Value coordinates =
           kernel("indices.empty", empty, {}, {indices}, "coordinates")
@@ -1378,9 +1378,9 @@ struct PreparedProof {
   std::optional<protocol::ConstructionPlan> construction;
   SmallVector<protocol::ConstructionInvocation> invocations;
 };
-Expected<PreparedProof> prepareProof(ModuleOp source,
-                                     const NativeProofPolicy &policy,
-                                     bool fuseVectorReductions) {
+Expected<PreparedProof>
+prepareProof(ModuleOp source, const NativeProofPolicy &policy,
+             MathematicalSelectionPolicy mathematicalSelection) {
   if (!source || failed(verify(source)))
     return error("native-proof-source");
   auto original = unit(source);
@@ -1485,16 +1485,12 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
   });
   if (transcript)
     return error("native-proof-authored-transcript");
-  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
-  PassManager passes(source.getContext());
   SmallVector<mathematical::ApplicationStart> starts;
   for (const auto &invocation : invocations)
     starts.push_back({policy.entry, invocation.site, invocation.inputs});
-  passes.addPass(
-      protocol::createPrepareProtocolPass(false, fuseVectorReductions, starts));
-  if (failed(passes.run(*candidate)))
-    return error("native-proof-preparation");
-  if (!unit(*candidate))
+  auto candidate = mathematical::prepareProtocol(source, false,
+                                                 mathematicalSelection, starts);
+  if (!candidate || !unit(*candidate))
     return error("native-proof-preparation");
   return PreparedProof{std::move(candidate), std::move(*occurrenceMap),
                        std::move(construction), std::move(invocations)};
@@ -1502,12 +1498,12 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
 } // namespace
 Expected<NativeProofPolicy>
 selectNativeProofDraws(ModuleOp source, const NativeProofPolicy &selection,
-                       bool fuseVectorReductions) {
+                       MathematicalSelectionPolicy mathematicalSelection) {
   auto policy =
       readProofPolicy(printJson(encodeNativeProofPolicy(selection)), true);
   if (!policy)
     return policy.takeError();
-  auto prepared = prepareProof(source, *policy, fuseVectorReductions);
+  auto prepared = prepareProof(source, *policy, mathematicalSelection);
   if (!prepared)
     return prepared.takeError();
   SymbolTable symbols(unit(*prepared->module));
@@ -1526,13 +1522,13 @@ selectNativeProofDraws(ModuleOp source, const NativeProofPolicy &selection,
 }
 Expected<NativeProofConstruction>
 constructNativeProof(ModuleOp source, const NativeProofPolicy &policy,
-                     bool fuseVectorReductions) {
+                     MathematicalSelectionPolicy mathematicalSelection) {
   // Validate public API callers too; policy structs are not admission tokens.
   auto checked =
       parseNativeProofPolicy(printJson(encodeNativeProofPolicy(policy)));
   if (!checked)
     return checked.takeError();
-  auto preparedSource = prepareProof(source, policy, fuseVectorReductions);
+  auto preparedSource = prepareProof(source, policy, mathematicalSelection);
   if (!preparedSource)
     return preparedSource.takeError();
   auto candidate = std::move(preparedSource->module);
@@ -1566,7 +1562,8 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy,
     return std::move(e);
   allDefinitions = {};
   PassManager passes(source.getContext());
-  passes.addPass(protocol::createProjectProtocolPass(false));
+  passes.addPass(
+      protocol::createProjectProtocolPass(false, mathematicalSelection));
   if (failed(passes.run(*candidate)))
     return error("native-proof-projection");
   auto projected = OwningOpRef<ModuleOp>(cast<ModuleOp>((*candidate)->clone()));
@@ -1611,11 +1608,11 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy,
 }
 Error checkNativeProof(ModuleOp source, ModuleOp candidate,
                        const NativeProofPolicy &policy,
-                       bool fuseVectorReductions) {
+                       MathematicalSelectionPolicy mathematicalSelection) {
   if (!source || !candidate || candidate.getContext() != source.getContext() ||
       failed(verify(candidate)))
     return error("native-proof-candidate");
-  auto expected = constructNativeProof(source, policy, fuseVectorReductions);
+  auto expected = constructNativeProof(source, policy, mathematicalSelection);
   if (!expected)
     return expected.takeError();
   if (!OperationEquivalence::isEquivalentTo(

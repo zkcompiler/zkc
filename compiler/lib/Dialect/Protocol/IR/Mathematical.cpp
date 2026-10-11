@@ -450,19 +450,19 @@ public:
         // A constant in a body is mathematically available everywhere, but
         // cannot authorize an action by a role outside this segment.
         for (auto &action : nested) {
-          if (auto child = dyn_cast<protocol_ir::RepeatOp>(action)) {
+          ArrayAttr actionRoles;
+          if (auto child = dyn_cast<protocol_ir::RepeatOp>(action))
+            actionRoles = child.getRoles();
+          else if (auto application = dyn_cast<protocol_ir::ApplyOp>(action))
+            actionRoles = application.getRoles();
+          else if (auto start =
+                       dyn_cast<protocol_ir::ConstructionStartOp>(action))
+            actionRoles = start.getRoles();
+          if (actionRoles) {
             BitVector required;
-            if (failed(roles(&action, child.getRoles(), required)) ||
+            if (failed(roles(&action, actionRoles, required)) ||
                 !subset(required, participants))
-              return refuse(&action,
-                            "nested repeat adds a nonparticipating role");
-          }
-          if (auto application = dyn_cast<protocol_ir::ApplyOp>(action)) {
-            BitVector required;
-            if (failed(roles(&action, application.getRoles(), required)) ||
-                !subset(required, participants))
-              return refuse(&action,
-                            "application adds a nonparticipating role");
+              return refuse(&action, "action adds a nonparticipating role");
           }
           for (StringRef key : {"owner", "sender", "receiver", "role"})
             if (auto owner = action.getAttrOfType<StringAttr>(key)) {

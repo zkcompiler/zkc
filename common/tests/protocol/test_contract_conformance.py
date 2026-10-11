@@ -711,6 +711,8 @@ def expected_facets(operation, group, declarations, policy):
         kind = facet["kind"]
         assert kind in policy["declared_fields"] or kind in policy["uncompared_declarations"], (
             operation["name"], "facet has no conformance disposition", facet)
+        if kind == "Mathematical":
+            assert set(facet) == {"kind", "identity"}
         if kind in policy["declared_fields"]:
             result[policy["declared_fields"][kind]] = True
     if group == "native_data_observation":
@@ -989,6 +991,57 @@ def test_checked_access_admits_only_dynamic_operands_without_attributes(drivers,
             cases.append({"contract": contract, "arguments": args,
                           "implementation": "arkworks/" + contract,
                           "attributes": attributes, "admitted": not attributes})
+    replies = query(drivers, [attribute_request(case) for case in cases], directory)
+    finish(directory, admission_failures(cases, replies))
+
+
+def test_matrix_contraction_independent_signatures(physical_drivers, directory):
+    fields = [("bls12-381.fr", "arkworks"), ("bn254.fr", "arkworks"),
+              ("ristretto255.scalar", "dalek"), ("koala-bear", "plonky3"),
+              ("koala-bear.ext8-binomial3", "plonky3")]
+    logical, logical_expected, physical, physical_expected = [], [], [], []
+    for contract in ("matrix.row_dot", "matrix.column_dot"):
+        for field, provider in fields:
+            inputs, outputs = [f"matrix:{field}", f"vector:{field}", "index"], [f"field:{field}"]
+            logical.append(binding(contract, [field]))
+            logical_expected.append({"accepted": True, "physical": False,
+                                     "inputs": inputs, "outputs": outputs})
+            for selected in ("arkworks", "dalek", "plonky3", "missing"):
+                physical.append(binding(contract, [field], f"{selected}/{contract}", True))
+                physical_expected.append((selected == provider, inputs, outputs))
+            for arguments, implementation in [
+                ([], f"{provider}/{contract}"),
+                ([field, "0"], f"{provider}/{contract}"),
+                (["bls12-381.g1"], f"{provider}/{contract}"),
+                ([field], f"{provider}/matrix.bilinear"),
+            ]:
+                physical.append(binding(contract, arguments, implementation, True))
+                physical_expected.append((False, [], []))
+    replies = query({k: v for k, v in physical_drivers.items() if k != "backend"},
+                    logical, directory / "logical")
+    for consumer, rows in replies.items():
+        assert rows == logical_expected, (consumer, rows)
+    replies = query(physical_drivers, physical, directory / "physical")
+    finish(directory, agreements(replies, physical))
+    for consumer, rows in replies.items():
+        for row, (accepted, inputs, outputs) in zip(rows, physical_expected):
+            assert row["accepted"] == accepted, (consumer, row)
+            if accepted:
+                assert row["physical"]
+                assert [s.split("@")[0] for s in row["inputs"]] == inputs
+                assert [s.split("@")[0] for s in row["outputs"]] == outputs
+
+
+def test_matrix_contraction_admits_only_dynamic_operands_without_attributes(drivers, directory):
+    cases = []
+    for contract in ("matrix.row_dot", "matrix.column_dot"):
+        for field, provider in [("bls12-381.fr", "arkworks"), ("bn254.fr", "arkworks"),
+                                ("ristretto255.scalar", "dalek"), ("koala-bear", "plonky3"),
+                                ("koala-bear.ext8-binomial3", "plonky3")]:
+            for attributes in ([], ["0"], ["18446744073709551615"], ["0", "1"]):
+                cases.append({"contract": contract, "arguments": [field],
+                              "implementation": f"{provider}/{contract}",
+                              "attributes": attributes, "admitted": not attributes})
     replies = query(drivers, [attribute_request(case) for case in cases], directory)
     finish(directory, admission_failures(cases, replies))
 

@@ -1,5 +1,4 @@
 #include "MathematicalSupport.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Kernels.h"
@@ -98,12 +97,12 @@ class Elimination {
         cast<PolynomialType>(polynomial.getType()).getDomain());
   }
   Value at(Value array, uint64_t index) {
-    if (auto packed = array.getDefiningOp<tensor::FromElementsOp>())
+    if (auto packed = array.getDefiningOp<algebra::ArrayFromElementsOp>())
       return packed.getElements()[index];
     auto key = std::make_pair(array, index);
     if (auto found = elements.find(key); found != elements.end())
       return found->second;
-    auto type = cast<RankedTensorType>(array.getType()).getElementType();
+    auto type = cast<algebra::FieldArrayType>(array.getType()).getElementType();
     auto result =
         make(algebra::ArrayAtOp::getOperationName(), type, ValueRange{array},
              {builder.getNamedAttr("index", builder.getI64IntegerAttr(index))});
@@ -112,11 +111,11 @@ class Elimination {
     return result;
   }
   SmallVector<Value> unpack(Value array) {
-    auto length = cast<RankedTensorType>(array.getType()).getDimSize(0);
+    auto length = cast<algebra::FieldArrayType>(array.getType()).getLength();
     if (!charge(length))
       return {};
     SmallVector<Value> result;
-    for (int64_t i = 0; i < length; ++i) {
+    for (uint64_t i = 0; i < length; ++i) {
       auto value = at(array, i);
       if (!value)
         return {};
@@ -125,7 +124,7 @@ class Elimination {
     return result;
   }
   Value pack(Type type, ArrayRef<Value> values) {
-    return make(tensor::FromElementsOp::getOperationName(), type, values);
+    return make(algebra::ArrayFromElementsOp::getOperationName(), type, values);
   }
   // Tables use lexicographic Boolean order: the first axis is the high bit.
   SmallVector<Value> fixTable(Value table, ValueRange prefix) {
@@ -386,8 +385,8 @@ public:
                    dyn_cast<PolynomialCoefficientsOp>(observation)) {
         auto values = coefficientValues(observed.getPolynomial());
         auto length =
-            cast<RankedTensorType>(observed.getCoefficients().getType())
-                .getDimSize(0);
+            cast<algebra::FieldArrayType>(observed.getCoefficients().getType())
+                .getLength();
         if (!charge(length) || values.empty())
           return failure();
         values.resize(length, literal(scalar(observed.getPolynomial()), "0"));
@@ -439,7 +438,7 @@ struct EliminatePolynomialsPass
            "tensor operations";
   }
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<algebra::AlgebraDialect, tensor::TensorDialect>();
+    registry.insert<algebra::AlgebraDialect>();
   }
   void runOnOperation() final {
     auto source = getOperation();

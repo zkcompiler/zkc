@@ -53,7 +53,7 @@ pub struct NativeDeployment {
     relation_assets: zkc_backends::relation::Registry,
     ring_work_limit: u64,
     publication: String,
-    choices: [bool; 3],
+    choices: [bool; 4],
     external_work_limit: u64,
     capacity: Capacity,
     setups: SetupAuthority,
@@ -67,7 +67,7 @@ pub struct NativeDeployment {
 pub(crate) struct SourceInterface<'a> {
     pub publication: &'a str,
     pub source: &'a str,
-    pub choices: [bool; 3],
+    pub choices: [bool; 4],
     pub acceptance: usize,
     pub suite: Option<&'a str>,
     pub construction: &'a str,
@@ -256,7 +256,7 @@ impl NativeDeployment {
         if text(&envelope[5])? != hash(candidate.as_bytes()) {
             return Err("native-proof-candidate-binding".into());
         }
-        let choices = array(&envelope[7], 3)?;
+        let choices = array(&envelope[7], 4)?;
         if choices
             .iter()
             .any(|v| !matches!(v.as_str(), Some("true" | "false")))
@@ -350,6 +350,7 @@ impl NativeDeployment {
                 choices[0] == "true",
                 choices[1] == "true",
                 choices[2] == "true",
+                choices[3] == "true",
             ],
             external_work_limit: NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
             capacity: Capacity::default(),

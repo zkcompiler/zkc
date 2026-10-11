@@ -99,6 +99,8 @@ contains exactly the selected construction closure.
 Preparation inserts an ordered `protocol.construction_start` at each selected
 application. Its operands are the actual selected callee inputs, available at
 both participants; its `roles` and `site` identify the owners and occurrence.
+Inside a repeat, both roles must participate in that repeat, even for a start
+with no inputs or with only body-local constants.
 Correspondence checks its position against the original call. Projection
 preserves it at both roles. Construction consumes it into ordinary Local calls
 on the current state, actual arguments and enclosing loop coordinates. It is

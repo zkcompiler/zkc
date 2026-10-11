@@ -1,9 +1,9 @@
 // A full-trace transition check, extension LDE, opening quotient, fold and Merkle opening.
 // This demonstrates composition, not a complete succinct AIR/FRI proof system.
 !b = !algebra.field<"koala-bear">
-!bv = tensor<?x!b>
+!bv = !algebra.field_vector<"koala-bear">
 !e = !algebra.field<"koala-bear.ext8-binomial3">
-!ev = tensor<?x!e>
+!ev = !algebra.field_vector<"koala-bear.ext8-binomial3">
 !poly = !poly.univariate<"koala-bear.ext8-binomial3">
 !root = !oracle.object<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0","commitment">
 !path = !oracle.object<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0","proof">

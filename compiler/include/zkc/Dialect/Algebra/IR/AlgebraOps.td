@@ -131,6 +131,8 @@ def MatrixMulVectorOp : KernelOp<AlgebraDialect, "exec.matrix_mul_vector", [OpMa
 
 def MatrixDimensionOp : KernelOp<AlgebraDialect, "exec.matrix_dimension", [OpMatrixDimension]>;
 def MatrixGetOp : KernelOp<AlgebraDialect, "exec.matrix_get", [OpMatrixGet]>;
+def MatrixRowDotOp : KernelOp<AlgebraDialect, "exec.matrix_row_dot", [OpMatrixRowDot]>;
+def MatrixColumnDotOp : KernelOp<AlgebraDialect, "exec.matrix_column_dot", [OpMatrixColumnDot]>;
 
 def MatrixShapeCheckOp : KernelOp<AlgebraDialect, "exec.matrix_shape_check", [OpMatrixShapeCheck]>;
 
@@ -221,9 +223,16 @@ def ConstantFieldOp : Op<AlgebraDialect, "constant",
   let results = (outs Field:$result);
   let hasVerifier = 1;
 }
+def ArrayFromElementsOp : Op<AlgebraDialect, "array_from_elements",
+    [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let summary = "Pack ordered field elements into an exact nominal field array";
+  let arguments = (ins Variadic<Field>:$elements);
+  let results = (outs FieldArray:$result);
+  let hasVerifier = 1;
+}
 def ArrayAtOp : Op<AlgebraDialect, "array_at",
                   [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
-  let arguments = (ins AnyRankedTensor:$array, I64Attr:$index);
+  let arguments = (ins FieldArray:$array, I64Attr:$index);
   let results = (outs Field:$result);
   let hasVerifier = 1;
 }
@@ -240,13 +249,6 @@ def PairingOp : TotalMathOp<AlgebraDialect, "pairing", Group, Group, Group, [Dec
 def PairingApplyOp : KernelOp<AlgebraDialect, "exec.pairing", [OpPairingApply]>;
 def VectorEqualOp : KernelOp<AlgebraDialect, "exec.vector_equal", [OpVectorEqual]>;
 
-// A checked pointwise application of an existing private scalar helper over
-// runtime vectors. `rowwise[i]` selects whether input i is a whole vector of
-// the helper's scalar field (one row per element) or a scalar broadcast to
-// every row. The declaration is called by local.apply and is replaced during
-// preparation by an ordinary local.func with the same signature. It is a
-// checked bulk operation: shapes are compared before arithmetic, so it has no
-// totality or purity contract. Algebra owns its formula vocabulary.
 class AlgebraFiniteOp<string name> : Op<AlgebraDialect, name,
     [Pure, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
   let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$domain,
@@ -258,6 +260,13 @@ class AlgebraFiniteOp<string name> : Op<AlgebraDialect, name,
 def FiniteFoldOp : AlgebraFiniteOp<"finite_fold">;
 def FiniteCollectOp : AlgebraFiniteOp<"finite_collect">;
 
+// A checked pointwise application of an existing private scalar helper over
+// runtime vectors. `rowwise[i]` selects whether input i is a whole vector of
+// the helper's scalar field (one row per element) or a scalar broadcast to
+// every row. The declaration is called by local.apply and is replaced during
+// preparation by an ordinary local.func with the same signature. It is a
+// checked bulk operation: shapes are compared before arithmetic, so it has no
+// totality or purity contract. Algebra owns its formula vocabulary.
 def MapRealizeOp : Op<AlgebraDialect, "map_realize",
     [Symbol, DeclareOpInterfaceMethods<SymbolUserOpInterface>,
      PreparationCallableOpInterface]> {

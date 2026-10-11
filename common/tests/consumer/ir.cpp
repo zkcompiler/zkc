@@ -1,6 +1,7 @@
 #include "zkc/Dialect/IR.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Interfaces/Collection.h"
 int main() {
   mlir::DialectRegistry registry;
   zkc::registerDialects(registry);
@@ -8,6 +9,12 @@ int main() {
       registry.getDialectAllocator("claim"))
     return 1;
   mlir::MLIRContext context(registry);
+  context.getOrLoadDialect<zkc::algebra::AlgebraDialect>();
+  auto vector = zkc::algebra::FieldVectorType::get(&context, "bls12-381.fr");
+  auto collection = mlir::cast<zkc::CollectionTypeInterface>(vector);
+  if (collection.getCollectionKind() != zkc::CollectionKind::FieldVector ||
+      collection.getRank() != 1 || collection.getStaticExtent(0))
+    return 4;
   auto module = mlir::parseSourceString<mlir::ModuleOp>(R"(
 module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%x:i1): "protocol.return"(%x) : (i1)->() })

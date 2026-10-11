@@ -116,8 +116,8 @@ LogicalResult DomainElementsOp::verify() {
 LogicalResult DomainIndicesOp::verify() {
   auto type = getInput().getType();
   auto axis = getAxisAttr().getInt();
-  auto tensor = dyn_cast<RankedTensorType>(type);
-  if (axis < 0 || (tensor ? axis >= tensor.getRank() : axis != 0) ||
+  auto collection = dyn_cast<CollectionTypeInterface>(type);
+  if (!collection || axis < 0 || uint64_t(axis) >= collection.getRank() ||
       (!finite::elementType(type) && !finite::elementType(type, true)))
     return refuse(*this, "indices requires a valid explicit collection axis");
   return constructor(*this, {indexType(getContext())}, {"axis"});
@@ -161,11 +161,12 @@ LogicalResult BoundedAtOp::verify() {
   return success();
 }
 LogicalResult BoundedMatrixAtOp::verify() {
+  uint64_t remaining = 65536;
   if (!(*this)->getAttrs().empty() ||
       finite::elementType(getInput().getType(), true) !=
           getOutput().getType() ||
-      !finite::provesBound(getRow(), getInput(), 0) ||
-      !finite::provesBound(getColumn(), getInput(), 1))
+      !finite::provesBound(getRow(), getInput(), 0, remaining) ||
+      !finite::provesBound(getColumn(), getInput(), 1, remaining))
     return diagnostics::emit(
         emitOpError(), "finite-bound",
         "matrix lookup requires both exact coordinate bounds");

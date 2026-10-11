@@ -33,6 +33,17 @@ zeros. Row and column selectors are checked even when the other dimension is
 zero. Fixed arrays remain native field arrays; other immutable element types
 use their explicitly selected sequence representation.
 
+Collection element, rank and intrinsic extent queries use the structural
+[`CollectionTypeInterface`](iteration.md). The interface does not widen domain,
+fold, collect or bounded-access admission: in particular, fixed vectors do not
+gain finite-operation permission. Type-guaranteed extents for field arrays and
+fixed vectors remain distinct from value-level evidence derived from admitted
+constructors or helper premises. Such evidence can establish a bound or exact
+collection cardinality without changing a vector into a field array, changing
+a matrix's nominal family, or equating container contents. Field-array collection
+still requires the exact output length and rejects filtering that cannot provide
+that cardinality.
+
 Bounds, containers and capture snapshots are computed by ordinary eager
 operations at the call site. A descriptor cannot evaluate arbitrary expressions.
 Every domain constructor is admitted in descriptor order before traversal,
@@ -40,6 +51,16 @@ including ignored zip factors and unused intermediate constructors. Independent
 product admits all its factors even when another factor is empty. A nested finite
 operation inside a helper is entered only when execution reaches that helper
 operation; its checks and captures cannot be hoisted to an outer empty domain.
+
+Domain constructors therefore expose conservatively unknown effects to MLIR
+and no speculation interface. They are not `Pure` or `NoMemoryEffect`: generic
+canonicalization and CSE must retain the complete constructor sequence, including
+unused and equal-looking constructors, with its operands and returned descriptor.
+Disabling speculation alone would still permit dead-code elimination. Unknown
+effects preserve admission obligations without asserting heap allocation or
+mutable mathematical data. A domain-aware rewrite needs separate justification
+that it preserves complete ordered admission and the conditional entry of nested
+computations; equality of the enumerated items alone is insufficient.
 
 Cardinalities are natural numbers. Executable arithmetic must check representable
 sizes and resource limits before multiplication can overflow. No wrapping count
@@ -144,6 +165,12 @@ references, nested finite computations and Math realizations. Whole-unit formati
 precedes liveness and includes dead operations and polynomial observations reached
 through the helper closure.
 
+Finite operation verification separates local attributes/result shape from
+referenced domain/helper ABI and premise checks. The latter use MLIR's
+`SymbolUserOpInterface` and its supplied symbol-table collection; local operation
+verification does not independently repeat that symbol traversal. Whole-unit
+closure checking continues to own reference cycles and call preconditions.
+
 Finite result dependencies close monotonically over repeated state transitions,
 including initial state, cardinality, predicate and captures. A single-step summary
 is insufficient for `(a,b) -> (b,item)`. Formation requirements remain separate
@@ -160,14 +187,65 @@ retain every original domain admission check, including ignored zip factors.
 Sparse-zero elision requires a mathematical contraction, not an arbitrary Local
 callback with per-cell failures.
 
-The producer and independent reader share structural recognition of the retained
-helper syntax; the reader does not invoke the producer or trust a recognition
-attribute. It checks the actual candidate operations, operand mappings,
-entry checks, helper closure and state results. Equal symbol spellings alone do
-not establish correspondence when a referenced body changed. Projection retains
-domain/helper declarations until total realization has consumed their references.
-Multi-result folds are checked and lowered as a complete state list.
+The selector consumes a read-only computation view of actual typed domain,
+helper, access, seed and capture SSA. Declaration-owned scalar/access laws state
+exact nominal field/group premises; source annotations or matching function
+names do not grant these laws. Recognition is independent of a physical provider
+or a lane/reduction recipe. Private transformation recipes choose native
+operations and operand permutations only after replacement eligibility is
+established. Explicit implementation bindings retain their selected execution
+path even when their mathematical meaning is known.
 
+The analysis retains all constructors in admission order separately from the
+items of the returned descriptor, and retains every helper instruction even
+when no bulk equation applies. Reduction, elementwise and bilinear selection
+consume this common view. Extent premises for optional selection come from
+the source domain and admitted helper preconditions; occurrence-only evidence
+that the independent reader cannot reconstruct retains the ordered realization.
+
+Optional lane realization distinguishes a supported candidate, an unsupported
+formula, and exhausted strategy capacity. The latter two outcomes emit no payload
+or bindings and retain the checked ordered loop, including all domain admission.
+In particular, exceeding Ring depth 1,024 does not make an otherwise admitted
+Local collection invalid. Construction or correspondence errors are mandatory
+failures; they cannot authorize publishing an unchecked candidate. Explicit map
+realization, which requires its bulk implementation, reports a diagnostic when
+that implementation is unavailable.
+
+One finite realization stage shares work across its definitions and nested
+expressions: 1,000,000 lane work units, 100,000 expanded helper operations,
+1,000,000 helper operand/result slots and 100,000 polynomial expansion units.
+Lane work reserves eight units per operation, block argument and operand/result
+slot before building or emitting its formula. These are compiler implementation limits,
+separate from runtime resources and Ring's own admission bounds. Standalone
+transform invocations start a fresh stage scope; an enclosing caller can supply
+the shared context. Required helper expansion reports a capacity refusal.
+Bound/extent queries made by the independent payload reader consume its enclosing
+comparison budget rather than obtaining a fresh allowance for every query.
+Required maps retain their separate cumulative helper admission limits instead
+of consuming the optional finite-strategy allowance.
+
+The independent reader reconstructs the source domain and payload and reads
+actual candidate operands separately. It does not use the selector's classified
+access map or emitter caches. The supported field-ring fragment admits
+structural sharing, neutral elements, and associative/commutative addition and
+multiplication; group/module contractions have a separate interpretation.
+Ordered domain checks, helper closure, seed and result mappings remain separate
+obligations. Unsupported ordered callbacks use the checked loop path.
+Projection retains domain/helper declarations until total realization has
+consumed their references. Multi-result folds preserve the complete state list.
+
+A selected row or column contraction produces one scalar via `matrix.row_dot`
+or `matrix.column_dot`. It does not materialize unrelated matrix outputs.
+Supported collection of all row/column contractions uses one whole matvec,
+inside a nonempty-outer branch. The empty branch returns an empty vector without
+performing the inner fold's shape checks. A uniform nonzero seed is added to
+each result. Both forms retain the corresponding source admission and field
+interpretation.
+This nested strategy covers the explicit outer matrix-index collection and
+inner dot fold described in the [nested matrix collection contract](nested-matrix-collections.md).
+Its conditional emitter and independent structural reader implement that
+bounded equation, not an equivalence rule for arbitrary nested Local loops.
 Bulk and loop realizations can consume different resources. Their value and
 non-resource failure contract assumes sufficient resources; it does not require
 identical exhaustion. Capacity checks must measure representative inputs, including
@@ -182,9 +260,13 @@ record the compiler and native test entry points.
 ## Preparation options
 
 Default source preparation enables finite contraction and collection recognition.
-`--no-simplify` disables those optimizations and uses the checked loop path;
+`--no-finite-bulk` disables those selections and uses the checked loop path;
 it does not disable domain admission or source/native correspondence checks.
+`--no-simplify` independently controls generic total-expression simplification.
 The separate `--fuse-vector-reductions` option controls explicit ring map plus
-native sum fusion. Neither option promises equal resource exhaustion: a large
+native sum fusion. These choices do not promise equal resource exhaustion: a large
 computation can fit the default optimized path and exceed the unchanged execution
 budget when run as a scalar loop.
+
+The [nested matrix collection contract](nested-matrix-collections.md) specifies
+the admitted whole-matrix rule and its conditional inner admission.
