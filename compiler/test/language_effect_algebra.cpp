@@ -51,25 +51,33 @@ int main() {
     Work work{limits};
     std::vector<Declaration> declarations;
     Semantics types(declarations, {}, work);
-    const std::array<EffectSummary, 3> arguments = {formula(12), formula(48),
-                                                    formula(192)};
+    const std::array<std::array<EffectSummary, 3>, 5> substitutions = {{
+        {formula(12), formula(48), formula(192)}, // Identity.
+        {formula(192), formula(12), formula(48)}, // Reordered callbacks.
+        {formula(12), formula(12), formula(12)},  // Shared callback capture.
+        {formula(41), formula(70), formula(144)}, // Fixed effects and masks.
+        {formula(3), formula(0), formula(2)},     // Closed callbacks.
+    }};
     for (unsigned code = 0; code < 256; ++code) {
       auto original = formula(code);
-      auto substituted = substituteEffects(types, original, arguments);
-      require(bool(substituted), "valid substitution refused");
       auto joined = original;
       require(joinEffects(types, joined, formula(37)), "valid union refused");
-      for (unsigned valuation = 0; valuation < 64; ++valuation) {
-        unsigned actuals = 0;
-        for (unsigned slot = 0; slot < arguments.size(); ++slot)
-          actuals |= evaluate(arguments[slot], valuation) << (2 * slot);
-        require(evaluate(*substituted, valuation) ==
-                    evaluate(original, actuals),
-                "substitution changed the effect interpretation");
+      for (unsigned valuation = 0; valuation < 64; ++valuation)
         require(evaluate(joined, valuation) ==
                     (evaluate(original, valuation) |
                      evaluate(formula(37), valuation)),
                 "union changed the effect interpretation");
+      for (const auto &arguments : substitutions) {
+        auto substituted = substituteEffects(types, original, arguments);
+        require(bool(substituted), "valid substitution refused");
+        for (unsigned valuation = 0; valuation < 64; ++valuation) {
+          unsigned actuals = 0;
+          for (unsigned slot = 0; slot < arguments.size(); ++slot)
+            actuals |= evaluate(arguments[slot], valuation) << (2 * slot);
+          require(evaluate(*substituted, valuation) ==
+                      evaluate(original, actuals),
+                  "substitution changed the effect interpretation");
+        }
       }
     }
   });
