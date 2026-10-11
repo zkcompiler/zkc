@@ -116,21 +116,23 @@ auto domainEvidence(const Computation &c, EvidenceWork &work, Query query) {
   };
   auto node = detail::cardinalityNode;
   auto child = detail::cardinalityChild;
-  auto extent = [&](facts::DomainExtent leaf, unsigned) {
+  auto extent = [&](facts::DomainExtent leaf, unsigned depth) {
     return work.analysis.cardinality(actual(leaf.value), leaf.axis,
-                                     work.context);
+                                     work.context, depth);
   };
-  auto integer = [&](facts::DomainLeaf leaf, unsigned) {
-    return work.analysis.integer(actual(leaf), work.context);
+  auto integer = [&](facts::DomainLeaf leaf, unsigned depth) {
+    return work.analysis.integer(actual(leaf), work.context, depth);
   };
-  auto same = [&](facts::DomainLeaf a, facts::DomainLeaf b) {
-    auto left = work.analysis.origin(actual(a), work.context);
-    auto right = work.analysis.origin(actual(b), work.context);
+  auto same = [&](facts::DomainLeaf a, facts::DomainLeaf b, unsigned depth) {
+    auto left = work.analysis.origin(actual(a), work.context, depth);
+    auto right = work.analysis.origin(actual(b), work.context, depth);
     return work.status(left.value && right.value &&
                        *left.value == *right.value);
   };
-  auto equal = [&](facts::DomainExtent a, facts::DomainExtent b) {
-    return equalUnder(actual(a.value), a.axis, actual(b.value), b.axis, work);
+  auto equal = [&](facts::DomainExtent a, facts::DomainExtent b,
+                   unsigned depth) {
+    return work.analysis.equalExtent(actual(a.value), a.axis, actual(b.value),
+                                     b.axis, work.context, depth);
   };
   facts::DomainCardinality cardinality(
       work.context, {node, child, extent, integer, same, equal}, 256);

@@ -88,13 +88,13 @@ bool checkFiniteFormation(Semantics &types, const FiniteComputation &finite,
     return value ? facts::Result<uint64_t>{facts::Status::Proven, *value}
                  : facts::Result<uint64_t>{};
   };
-  auto same = [&](facts::DomainLeaf a, facts::DomainLeaf b) {
+  auto same = [&](facts::DomainLeaf a, facts::DomainLeaf b, unsigned) {
     bool proven = evidence.same({unsigned(a)}, {unsigned(b)});
     if (exhausted())
       return facts::Status::Capacity;
     return proven ? facts::Status::Proven : facts::Status::Unknown;
   };
-  auto equal = [&](facts::DomainExtent a, facts::DomainExtent b) {
+  auto equal = [&](facts::DomainExtent a, facts::DomainExtent b, unsigned) {
     bool proven = evidence.equalExtent({unsigned(a.value)}, a.axis,
                                        {unsigned(b.value)}, b.axis);
     if (exhausted())

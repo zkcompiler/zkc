@@ -59,16 +59,18 @@ struct Graph {
                  ? Result<uint64_t>{}
                  : Result<uint64_t>{Status::Proven, it->second};
     };
-    auto same = [&](DomainLeaf a, DomainLeaf b) {
+    auto same = [&](DomainLeaf a, DomainLeaf b, unsigned depth) {
+      extentDepth = depth;
       return a == b || aliases.count({a, b}) || aliases.count({b, a})
                  ? Status::Proven
                  : Status::Unknown;
     };
-    auto equal = [&](DomainExtent a, DomainExtent b) {
+    auto equal = [&](DomainExtent a, DomainExtent b, unsigned depth) {
+      extentDepth = depth;
       ++equalityQueries;
       if (missingEqualityAxis == a.axis)
         return Status::Unknown;
-      return a.axis == b.axis ? same(a.value, b.value) : Status::Unknown;
+      return a.axis == b.axis ? same(a.value, b.value, depth) : Status::Unknown;
     };
     DomainCardinality view(work, {node, child, extent, integer, same, equal},
                            depth);
@@ -308,6 +310,24 @@ int main() {
       number(view.exact(value), 3);
       require(graph.extentDepth == 3, "leaf extraction reset domain depth");
     });
+  });
+  cases.run("symbolic equality callbacks retain the consumed domain depth", [] {
+    for (bool range : {false, true}) {
+      Graph graph;
+      auto a = range ? graph.range(1, 2) : graph.leaf(1);
+      auto b = range ? graph.range(3, 4) : graph.leaf(3);
+      graph.aliases = {{1, 3}, {2, 4}};
+      for (unsigned i = 0; i < 2; ++i) {
+        a = graph.combine(DomainKind::Product, {a});
+        b = graph.combine(DomainKind::Product, {b});
+      }
+      uint64_t remaining = 1000;
+      Work work(remaining);
+      graph.query(work, [&](DomainCardinality &view) {
+        require(view.equal(a, b) == Status::Proven, "symbolic equality lost");
+        require(graph.extentDepth == 3, "equality callback reset domain depth");
+      });
+    }
   });
   return cases.result();
 }

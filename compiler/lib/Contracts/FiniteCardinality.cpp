@@ -39,15 +39,17 @@ Result<uint64_t> DomainCardinality::integer(DomainLeaf leaf, unsigned depth) {
     return capacity<uint64_t>();
   return checked(work, adapter.integer(leaf, depth));
 }
-Status DomainCardinality::same(DomainLeaf left, DomainLeaf right) {
-  if (!work.charge())
+Status DomainCardinality::same(DomainLeaf left, DomainLeaf right,
+                               unsigned depth) {
+  if (!enter(depth))
     return Status::Capacity;
-  return checked(work, adapter.same(left, right));
+  return checked(work, adapter.same(left, right, depth));
 }
-Status DomainCardinality::equalExtent(DomainExtent left, DomainExtent right) {
-  if (!work.charge())
+Status DomainCardinality::equalExtent(DomainExtent left, DomainExtent right,
+                                      unsigned depth) {
+  if (!enter(depth))
     return Status::Capacity;
-  return checked(work, adapter.equalExtent(left, right));
+  return checked(work, adapter.equalExtent(left, right, depth));
 }
 Result<Cardinality> DomainCardinality::count(DomainRef domain, unsigned depth) {
   if (!enter(depth))
@@ -134,7 +136,7 @@ Status DomainCardinality::equal(DomainRef left, DomainRef right,
     return equal(left, adapter.child(right, 0), depth + 1);
   }
   if (x.kind == DomainKind::Extent && y.kind == DomainKind::Extent)
-    return equalExtent(x.extent, y.extent);
+    return equalExtent(x.extent, y.extent, depth + 1);
   if (x.kind == DomainKind::Product && y.kind == DomainKind::Product &&
       x.children == y.children) {
     for (size_t i = 0; i < x.children; ++i) {
@@ -148,15 +150,16 @@ Status DomainCardinality::equal(DomainRef left, DomainRef right,
     return Status::Proven;
   }
   if (x.kind == DomainKind::Range && y.kind == DomainKind::Range) {
-    auto lower = same(x.lower, y.lower);
-    return lower == Status::Proven ? same(x.upper, y.upper) : lower;
+    auto lower = same(x.lower, y.lower, depth + 1);
+    return lower == Status::Proven ? same(x.upper, y.upper, depth + 1) : lower;
   }
   if (x.kind == DomainKind::MatrixCoordinates &&
       y.kind == DomainKind::MatrixCoordinates) {
-    auto rows = equalExtent({x.extent.value, 0}, {y.extent.value, 0});
-    return rows == Status::Proven
-               ? equalExtent({x.extent.value, 1}, {y.extent.value, 1})
-               : rows;
+    auto rows =
+        equalExtent({x.extent.value, 0}, {y.extent.value, 0}, depth + 1);
+    return rows == Status::Proven ? equalExtent({x.extent.value, 1},
+                                                {y.extent.value, 1}, depth + 1)
+                                  : rows;
   }
   return Status::Unknown;
 }

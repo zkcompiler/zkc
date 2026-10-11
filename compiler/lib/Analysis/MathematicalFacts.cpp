@@ -39,6 +39,11 @@ Count exact(uint64_t n) { return {Status::Proven, Cardinality{n}}; }
 template <typename T> Result<T> missing(facts::Work &work) {
   return {work.exhausted() ? Status::Capacity : Status::Unknown, std::nullopt};
 }
+bool enterExtraction(facts::Work &work, unsigned depth) {
+  if (depth > 256)
+    work.exhaust();
+  return work.charge();
+}
 // Each frame preserves the complete actual order. Aliased actuals must not be
 // reverse-mapped to one arbitrarily chosen formal position.
 struct Environment {
@@ -113,13 +118,7 @@ struct MathematicalFactAnalysis::Impl {
       return analysis.helper(op, work);
     }
     bool enter(facts::Work &work, unsigned depth) {
-      if (depth > 256) {
-        // The recursion bound is capacity, not missing evidence. Mark the
-        // caller's context exhausted without obtaining a fresh nested budget.
-        work.exhaust();
-        return false;
-      }
-      return work.charge();
+      return enterExtraction(work, depth);
     }
     std::optional<unsigned> forwardedInput(Operation *op, unsigned result,
                                            facts::Work &work, unsigned depth) {
@@ -134,7 +133,7 @@ struct MathematicalFactAnalysis::Impl {
       // Copy borrowed values before nested cache insertions can rehash helpers.
       auto *body = view->body;
       Value value = view->returned[result];
-      for (unsigned step = 0; enter(work, step); ++step) {
+      for (unsigned step = depth; enter(work, step); ++step) {
         if (auto arg = dyn_cast<BlockArgument>(value)) {
           auto input = arg.getOwner() == body
                            ? std::optional<unsigned>(arg.getArgNumber())
@@ -149,15 +148,15 @@ struct MathematicalFactAnalysis::Impl {
         }
         auto input = forwardedInput(resolve(call, "callee"),
                                     cast<OpResult>(value).getResultNumber(),
-                                    work, depth + 1);
+                                    work, step + 1);
         if (!input || *input >= call->getNumOperands())
           return std::nullopt;
         value = call->getOperand(*input);
       }
       return std::nullopt;
     }
-    Result<Value> origin(Value value, facts::Work &work) {
-      if (!work.charge())
+    Result<Value> origin(Value value, facts::Work &work, unsigned depth) {
+      if (!enter(work, depth))
         return missing<Value>(work);
       if (!contains(value))
         return missing<Value>(work);
@@ -168,7 +167,7 @@ struct MathematicalFactAnalysis::Impl {
         origins.try_emplace(original, value);
         return {Status::Proven, value};
       };
-      for (unsigned depth = 0; enter(work, depth); ++depth) {
+      for (; enter(work, depth); ++depth) {
         auto *call = value.getDefiningOp();
         if (!isa_and_nonnull<func::CallOp, local::ApplyOp>(call))
           return finish();
@@ -195,7 +194,7 @@ struct MathematicalFactAnalysis::Impl {
                        depth + 1);
       }
       if (!env) {
-        auto forwarded = origin(value, work);
+        auto forwarded = origin(value, work, depth);
         if (!forwarded.value)
           return missing<uint64_t>(work);
         value = *forwarded.value;
@@ -232,10 +231,10 @@ struct MathematicalFactAnalysis::Impl {
       };
       // Counting does not request equality evidence. Formation separately
       // checks every zip and selector on its own substituted actuals.
-      auto same = [](facts::DomainLeaf, facts::DomainLeaf) {
+      auto same = [](facts::DomainLeaf, facts::DomainLeaf, unsigned) {
         return Status::Unknown;
       };
-      auto equal = [](facts::DomainExtent, facts::DomainExtent) {
+      auto equal = [](facts::DomainExtent, facts::DomainExtent, unsigned) {
         return Status::Unknown;
       };
       facts::DomainCardinality view(
@@ -259,7 +258,7 @@ struct MathematicalFactAnalysis::Impl {
                            work, depth + 1, known);
       }
       if (!env) {
-        auto forwarded = origin(value, work);
+        auto forwarded = origin(value, work, depth);
         if (!forwarded.value)
           return missing<Cardinality>(work);
         value = *forwarded.value;
@@ -322,7 +321,7 @@ struct MathematicalFactAnalysis::Impl {
                       depth + 1);
       }
       if (!env) {
-        auto forwarded = origin(value, work);
+        auto forwarded = origin(value, work, depth);
         if (!forwarded.value)
           return {};
         value = *forwarded.value;
@@ -373,15 +372,17 @@ struct MathematicalFactAnalysis::Impl {
   struct Query {
     Extraction analysis;
     facts::Work &work;
+    unsigned depth;
     facts::Snapshot kernel;
     facts::Scope scope;
     llvm::DenseMap<Value, facts::Value> identities;
     llvm::DenseSet<std::pair<Value, unsigned>> typed;
     llvm::DenseSet<std::pair<Value, unsigned>> seeded;
-    Query(Impl &analysis, facts::Work &work)
-        : analysis(analysis), work(work), kernel(work), scope(kernel.root()) {}
+    Query(Impl &analysis, facts::Work &work, unsigned depth)
+        : analysis(analysis), work(work), depth(depth), kernel(work),
+          scope(kernel.root()) {}
     facts::Value identity(Value value) {
-      auto origin = analysis.origin(value, work);
+      auto origin = analysis.origin(value, work, depth);
       if (!origin.value)
         return {};
       value = *origin.value;
@@ -411,13 +412,14 @@ struct MathematicalFactAnalysis::Impl {
       if (isa<BlockArgument>(value))
         return result;
       auto count = analysis.cardinality(
-          value, axis, nullptr, work, 0, [&](Value input, unsigned selected) {
+          value, axis, nullptr, work, depth,
+          [&](Value input, unsigned selected) {
             return kernel.cardinality(scope, {identity(input), selected});
           });
       if (count.value)
         kernel.addCardinality(scope, result, *count.value,
                               facts::Premise::Result);
-      auto source = analysis.source(value, axis, nullptr, work, 0);
+      auto source = analysis.source(value, axis, nullptr, work, depth);
       if (source.value && (source.value != value || source.axis != axis)) {
         auto input = extent(source.value, source.axis);
         kernel.addEquality(scope, result, input, facts::Premise::Result);
@@ -470,28 +472,31 @@ Operation *MathematicalFactAnalysis::rootFor(Operation *op) {
       root = op;
   return root;
 }
-Result<Value> MathematicalFactAnalysis::origin(Value value, facts::Work &work) {
-  return Impl::Extraction(*impl_).origin(value, work);
+Result<Value> MathematicalFactAnalysis::origin(Value value, facts::Work &work,
+                                               unsigned depth) {
+  return Impl::Extraction(*impl_).origin(value, work, depth);
 }
 Result<uint64_t> MathematicalFactAnalysis::integer(Value value,
-                                                   facts::Work &work) {
-  if (!work.charge())
+                                                   facts::Work &work,
+                                                   unsigned depth) {
+  if (!enterExtraction(work, depth))
     return missing<uint64_t>(work);
   if (!impl_->contains(value) || !value.getType().isUnsignedInteger(64))
     return {};
   Impl::Extraction extraction(*impl_);
-  return extraction.integer(value, nullptr, work, 0);
+  return extraction.integer(value, nullptr, work, depth);
 }
 Status MathematicalFactAnalysis::equalExtent(Value a, unsigned aa, Value b,
-                                             unsigned ba, facts::Work &work) {
-  if (!work.charge())
+                                             unsigned ba, facts::Work &work,
+                                             unsigned depth) {
+  if (!enterExtraction(work, depth))
     return Status::Capacity;
   if (!impl_->contains(a) || !impl_->contains(b) || !validAxis(a, aa) ||
       !validAxis(b, ba))
     return Status::Unknown;
   if (a == b && aa == ba)
     return Status::Proven;
-  Impl::Query query(*impl_, work);
+  Impl::Query query(*impl_, work, depth);
   auto *formation = formationOwner(a);
   if (formation == formationOwner(b))
     query.formation(formation);
@@ -504,13 +509,13 @@ Status MathematicalFactAnalysis::equalExtent(Value a, unsigned aa, Value b,
   return query.kernel.equal(query.scope, left, right);
 }
 Status MathematicalFactAnalysis::bound(Value i, Value a, unsigned axis,
-                                       facts::Work &work) {
-  if (!work.charge())
+                                       facts::Work &work, unsigned depth) {
+  if (!enterExtraction(work, depth))
     return Status::Capacity;
   if (!impl_->contains(i) || !impl_->contains(a) ||
       !i.getType().isUnsignedInteger(64) || !validAxis(a, axis))
     return Status::Unknown;
-  Impl::Query query(*impl_, work);
+  Impl::Query query(*impl_, work, depth);
   auto *formation = formationOwner(i);
   if (formation == formationOwner(a))
     query.formation(formation);
@@ -520,7 +525,7 @@ Status MathematicalFactAnalysis::bound(Value i, Value a, unsigned axis,
   if (established != Status::Unknown)
     return established;
   query.extent(a, axis);
-  auto n = query.analysis.integer(i, nullptr, work, 0);
+  auto n = query.analysis.integer(i, nullptr, work, depth);
   if (n.value)
     query.kernel.addInteger(query.scope, index, *n.value,
                             facts::Premise::Result);
@@ -528,19 +533,21 @@ Status MathematicalFactAnalysis::bound(Value i, Value a, unsigned axis,
 }
 Result<Cardinality> MathematicalFactAnalysis::cardinality(Value value,
                                                           unsigned axis,
-                                                          facts::Work &work) {
-  if (!work.charge())
+                                                          facts::Work &work,
+                                                          unsigned depth) {
+  if (!enterExtraction(work, depth))
     return missing<Cardinality>(work);
   if (!impl_->contains(value) || !validAxis(value, axis))
     return {};
-  Impl::Query query(*impl_, work);
+  Impl::Query query(*impl_, work, depth);
   query.formation(formationOwner(value));
   auto subject = query.extent(value, axis);
   return query.kernel.cardinality(query.scope, subject);
 }
 Result<uint64_t> MathematicalFactAnalysis::extent(Value value, unsigned axis,
-                                                  facts::Work &work) {
-  auto result = cardinality(value, axis, work);
+                                                  facts::Work &work,
+                                                  unsigned depth) {
+  auto result = cardinality(value, axis, work, depth);
   if (result.value && result.value->precision == Precision::Exact)
     return {Status::Proven, result.value->value};
   return missing<uint64_t>(work);

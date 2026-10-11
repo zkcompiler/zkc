@@ -39,7 +39,7 @@ struct DomainNode {
 /// to this adapter. No graph, identity, premise, or result cache is owned here.
 ///
 /// Every callback is charged by the view. Nonconstant extraction must also use
-/// the same Work. Count/integer callbacks receive the depth from the view root,
+/// the same Work. Leaf callbacks receive the depth from the view root,
 /// including the leaf boundary, so recursive extraction preserves its limit.
 /// Extent counts may be Upper for result analysis; exact() and
 /// equal() never use a positive upper bound as exact formation evidence.
@@ -49,8 +49,8 @@ struct DomainAdapter {
   llvm::function_ref<DomainRef(DomainRef, size_t)> child;
   llvm::function_ref<Result<Cardinality>(DomainExtent, unsigned)> extent;
   llvm::function_ref<Result<uint64_t>(DomainLeaf, unsigned)> integer;
-  llvm::function_ref<Status(DomainLeaf, DomainLeaf)> same;
-  llvm::function_ref<Status(DomainExtent, DomainExtent)> equalExtent;
+  llvm::function_ref<Status(DomainLeaf, DomainLeaf, unsigned)> same;
+  llvm::function_ref<Status(DomainExtent, DomainExtent, unsigned)> equalExtent;
 };
 
 /// Constructor cardinality rules only. A zip delegates to its first child;
@@ -74,8 +74,8 @@ private:
   bool enter(unsigned depth);
   Result<Cardinality> extent(DomainExtent leaf, unsigned depth);
   Result<uint64_t> integer(DomainLeaf leaf, unsigned depth);
-  Status same(DomainLeaf left, DomainLeaf right);
-  Status equalExtent(DomainExtent left, DomainExtent right);
+  Status same(DomainLeaf left, DomainLeaf right, unsigned depth);
+  Status equalExtent(DomainExtent left, DomainExtent right, unsigned depth);
   Result<Cardinality> count(DomainRef domain, unsigned depth);
   Status equal(DomainRef left, DomainRef right, unsigned depth);
 };

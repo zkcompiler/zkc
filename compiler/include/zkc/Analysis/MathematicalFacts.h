@@ -17,7 +17,9 @@ namespace zkc {
 /// optional fact extraction, not a substitute for closure/operation admission.
 ///
 /// Query scopes and work are separate from this reusable information. Every
-/// nested extraction and kernel query debits the caller's Work. Formation
+/// nested extraction and kernel query debits the caller's Work. Query depth
+/// starts at the caller's consumed interpretation depth (zero at a root);
+/// nested domain adapters must preserve it across the leaf boundary. Formation
 /// import seeds identities and type extents without deriving every formal.
 /// Helper observation charges depend on returned values, not unread body
 /// operations or cache warmth; recursive result caches live within a query.
@@ -42,18 +44,21 @@ public:
 
   /// Exact SSA forwarding only. Constructors/equal shapes retain their own
   /// origin, including distinct invocations of the same constructor helper.
-  facts::Result<mlir::Value> origin(mlir::Value, facts::Work &);
+  facts::Result<mlir::Value> origin(mlir::Value, facts::Work &,
+                                    unsigned depth = 0);
   /// Exact unsigned index literals and helper results; no wrapping arithmetic.
-  facts::Result<uint64_t> integer(mlir::Value, facts::Work &);
+  facts::Result<uint64_t> integer(mlir::Value, facts::Work &,
+                                  unsigned depth = 0);
   facts::Status equalExtent(mlir::Value left, unsigned leftAxis,
                             mlir::Value right, unsigned rightAxis,
-                            facts::Work &);
+                            facts::Work &, unsigned depth = 0);
   facts::Status bound(mlir::Value index, mlir::Value container, unsigned axis,
-                      facts::Work &);
-  facts::Result<uint64_t> extent(mlir::Value, unsigned axis, facts::Work &);
+                      facts::Work &, unsigned depth = 0);
+  facts::Result<uint64_t> extent(mlir::Value, unsigned axis, facts::Work &,
+                                 unsigned depth = 0);
   /// Upper bounds are not exact extents and never establish strict bounds.
-  facts::Result<facts::Cardinality> cardinality(mlir::Value, unsigned axis,
-                                                facts::Work &);
+  facts::Result<facts::Cardinality>
+  cardinality(mlir::Value, unsigned axis, facts::Work &, unsigned depth = 0);
 
 private:
   struct Impl;

@@ -143,6 +143,47 @@ int main() {
     require(cost(busyAnalysis, *busy) == expected,
             "clear changed the logical observation cost");
   });
+  cases.run("public queries preserve their caller's consumed depth", [&] {
+    auto module = parse(R"mlir(
+ func.func private @subject(%xs:!A)->ui64 {
+   %i = "data.index"() {value="0"} : ()->ui64
+   func.return %i : ui64
+ }
+)mlir");
+    auto subject = helper(*module, "subject");
+    Value xs = subject.getArgument(0), i = returned(subject)[0];
+    MathematicalFactAnalysis analysis(*module);
+    for (unsigned depth : {256u, 257u})
+      for (unsigned query = 0; query < 6; ++query) {
+        uint64_t remaining = 65536;
+        facts::Work work(remaining);
+        Status status = Status::Unknown;
+        switch (query) {
+        case 0:
+          status = analysis.origin(xs, work, depth).status;
+          break;
+        case 1:
+          status = analysis.integer(i, work, depth).status;
+          break;
+        case 2:
+          status = analysis.extent(xs, 0, work, depth).status;
+          break;
+        case 3:
+          status = analysis.cardinality(xs, 0, work, depth).status;
+          break;
+        case 4:
+          status = analysis.equalExtent(xs, 0, xs, 0, work, depth);
+          break;
+        case 5:
+          status = analysis.bound(i, xs, 0, work, depth);
+          break;
+        }
+        require(status == (depth == 256 ? Status::Proven : Status::Capacity),
+                "query reset or over-counted the inherited depth");
+        require(work.exhausted() == (depth > 256) && remaining > 65000,
+                "depth capacity reset or drained the shared work counter");
+      }
+  });
   cases.run("status wrappers retain exact work boundaries", [&] {
     auto module = parse(R"mlir(
  func.func private @subject(%xs:!V,%i:ui64)->!V attributes {
