@@ -275,6 +275,8 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "OracleStates" => R::MerkleStates,
             "Index" => R::Index,
             "Indices" => R::Indices,
+            "Bytes" => R::Bytes,
+            "Shake128State" => R::Shake128State,
             "Matrix" => R::FrSparseCoo,
             "RistrettoMatrix" => R::DalekSparseCoo,
             "KoalaBearMatrix" => R::KoalaBearSparseCoo,
@@ -328,6 +330,12 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         // Every payload is safe to clone/drop without executing a kernel.
         drop(cloned);
     };
+    check(
+        Value::Shake128State(Arc::new(crate::hash::Shake128State::default())),
+        Type::Shake128State,
+        I::None,
+        crate::hash::Shake128State::RETAINED_BYTES,
+    );
     macro_rules! scalar_family {
         ($scalar:expr, $identity:ident, $field:ident, $vector:ident, $poly:ident, $round:ident, $matrix:ident, $width:expr) => {{
             let scalar = $scalar;
@@ -453,6 +461,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     check(Value::Bool(true), Type::Bool, I::None, 512);
     check(Value::Index(3), Type::Index, I::None, 512);
     check(Value::Indices([1, 2].into()), Type::Indices, I::None, 272);
+    check(Value::Bytes([0, 255].into()), Type::Bytes, I::None, 258);
     check(
         Value::Point([Scalar::from(1); 2].into()),
         Type::Point,

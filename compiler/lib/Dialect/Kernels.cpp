@@ -38,7 +38,7 @@ bool detail::isLogicalKernelData(Type type) {
              poly::PointType, algebra::GroupType, poly::UnivariateType,
              algebra::FixedVectorType, data::SequenceType, RankedTensorType,
              pcs::ObjectType, oracle::OracleObjectType, local::CapabilityType,
-             local::VariantType>(type) ||
+             local::VariantType, crypto::Shake128StateType>(type) ||
          type.isSignlessInteger(1) || type.isUnsignedInteger(64);
 }
 

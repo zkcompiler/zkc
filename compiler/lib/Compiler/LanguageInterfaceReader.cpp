@@ -320,6 +320,7 @@ class Reader {
             : value.kind == K::Builtin &&
                   (leafKind == "vector" || leafKind == "matrix" ||
                    leafKind == "groups" || leafKind == "indices" ||
+                   leafKind == "bytes" || leafKind == "shake128_state" ||
                    leafKind == "polynomial" || leafKind == "table" ||
                    leafKind == "point" || leafKind == "round" ||
                    leafKind == "sequence" || leafKind == "field_array" ||
@@ -1238,19 +1239,24 @@ class Reader {
     if (!constructionObject)
       return fail("Entry construction must be an object");
     auto constructionKind = text(*constructionObject, "kind");
-    if (!constructionKind)
-      return false;
+    auto format = text(*constructionObject, "format");
+    auto parsedFormat =
+        format ? protocol::parseProofFormat(*format) : std::nullopt;
+    if (!constructionKind || !parsedFormat)
+      return fail("unknown Entry proof format");
+    proof.format = *parsedFormat;
     if (*constructionKind == "authored") {
-      if (!object(construction, {"kind"}))
+      if (!object(construction, {"kind", "format"}))
         return false;
     } else if (*constructionKind == "fiat_shamir") {
-      if (!object(construction, {"kind", "suite", "service"}))
+      if (!object(construction, {"kind", "format", "suite", "service"}))
         return false;
       auto suite = text(*constructionObject, "suite");
       auto service = natural(*constructionObject, "service");
       if (!suite || !service)
         return false;
-      if (*service >= current->services.size() ||
+      if (proof.format != protocol::ProofFormat::Native ||
+          *service >= current->services.size() ||
           current->services[*service].owner != proof.verifier ||
           protocol::nativeChallengeField(*suite).empty() ||
           protocol::nativeChallengeField(*suite) !=

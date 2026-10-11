@@ -77,6 +77,10 @@ impl Core {
                 self.policy.bn254_groups::<crate::Bn254G2>(v.len())?;
                 None
             }
+            Value::Bytes(a) => {
+                self.policy.bytes(a.len())?;
+                None
+            }
             Value::Indices(a) => {
                 self.policy.vector_width(a.len(), 8)?;
                 None
@@ -188,7 +192,8 @@ impl Core {
                     .vector_width(states.len(), std::mem::size_of::<crate::oracle::State>())?;
                 None
             }
-            Value::ResourceUnit(..)
+            Value::Shake128State(..)
+            | Value::ResourceUnit(..)
             | Value::Bn254Field(..)
             | Value::Bn254Round(..)
             | Value::Bn254G1(..)

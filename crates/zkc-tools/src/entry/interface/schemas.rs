@@ -272,6 +272,8 @@ impl<'a> Schemas<'a> {
                                 | Type::Matrix
                                 | Type::Groups
                                 | Type::Indices
+                                | Type::Bytes
+                                | Type::Shake128State
                                 | Type::Polynomial
                                 | Type::Table
                                 | Type::Point
@@ -336,6 +338,7 @@ fn shared(ty: &LogicalType, remaining: &mut usize) -> Result<bool> {
             | Type::FieldArray
             | Type::Index
             | Type::Indices
+            | Type::Bytes
             | Type::Vector
             | Type::Matrix
             | Type::Groups

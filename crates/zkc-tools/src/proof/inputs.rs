@@ -11,6 +11,9 @@ use crate::host::inputs::RESOURCE_BUDGET_LIMIT;
 pub struct ProofInputs {
     pub public: Vec<InputValue>,
     pub inputs: Vec<InputValue>,
+    /// Host invocation context. Native framing checks it in the header and
+    /// managed transcripts bind it in their root. RawBytes does neither:
+    /// protocol-visible context must be a declared public data input.
     pub context: Vec<u8>,
     pub services: Vec<u64>,
     pub transcript_budget: u64,

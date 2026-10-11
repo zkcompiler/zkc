@@ -199,7 +199,8 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
     // Open message shapes require a concrete admitted codec at closure.
     result.wire &= type.domain == "vector" || type.domain == "matrix" ||
                    type.domain == "groups" || type.domain == "indices" ||
-                   type.domain == "sequence" || type.domain == "field_array" ||
+                   type.domain == "bytes" || type.domain == "sequence" ||
+                   type.domain == "field_array" ||
                    type.domain == "commitment" || type.domain == "proof";
     return result;
   }

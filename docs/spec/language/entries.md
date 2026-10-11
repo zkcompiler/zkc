@@ -60,6 +60,24 @@ authors do not supply generated site names. These checks establish supported
 construction, not a security theorem. Native proof admission and its limits still
 apply to the resulting program.
 
+A named construction associates the protocol specialization with deployment
+choices. It may have ordinary static parameters and requirements:
+
+```zkc
+construction ExternalWire<G: Group + Share> for Schnorr<G> {
+  base authored;
+  format RawBytes;
+}
+```
+
+An Entry selects it with `construction ExternalWire<G>;`. Its target and closed
+static arguments must equal the Entry's target. `base authored` retains the
+protocol's explicit transcript operations. An omitted format uses native
+framing. `RawBytes` carries exactly one nonrepeated prover-to-verifier `Bytes`
+message unchanged. The library must parse its record, check its acceptance
+condition and reject unconsumed bytes. Format selection never depends on
+candidate proof contents. These transport choices add no transcript binding.
+
 `target` is optional. It names an existing target clause with the same acceptance
 selector. Export requires entry-input operands, with witness ports unavailable at
 the verifier and other purposes available there. The original gains one

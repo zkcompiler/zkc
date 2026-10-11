@@ -112,6 +112,7 @@ with case("exit operands preserve source correspondence"):
                 "3",
                 ["0", "1"],
                 [["draw", "challenge"]],
+                "zkc.framed/0",
             ]
         )
     )

@@ -6,6 +6,7 @@ mod codec;
 mod diagonal;
 pub mod external;
 mod external_kernels;
+pub mod hash;
 mod kernels;
 pub mod matrix;
 pub mod oracle;

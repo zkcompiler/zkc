@@ -125,8 +125,8 @@ LogicalResult DimOp::verify() {
     return refuse(*this, "unsupported canonical tensor");
   }
   if (bound->kind != "vector" && bound->kind != "matrix" &&
-      bound->kind != "indices" && bound->kind != "groups" &&
-      bound->kind != "field_array")
+      bound->kind != "indices" && bound->kind != "bytes" &&
+      bound->kind != "groups" && bound->kind != "field_array")
     return refuse(*this, "unsupported tensor shape observation");
   return success();
 }

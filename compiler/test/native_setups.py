@@ -30,6 +30,7 @@ for suffix, options in [
                     "",
                     ["2", "3", "4", "5", "8", "9", "10", "11"],
                     [],
+                    "zkc.framed/0",
                 ]
             )
         )
@@ -130,6 +131,7 @@ with case("derived transcript observes two authorized setups"):
                 "12",
                 ["2", "3", "4", "5", "8", "9", "10", "11"],
                 [["draw", "challenge"]],
+                "zkc.framed/0",
             ]
         )
     )

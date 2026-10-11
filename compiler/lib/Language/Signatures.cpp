@@ -248,6 +248,21 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         return false;
   }
   deferredApplications.erase(id.index);
+  if (decl.kind == Declaration::Kind::Construction) {
+    auto target = resolve(decl, source.target, source.span);
+    if (!target || !signature(*target, depth + 1))
+      return false;
+    const auto &definition = output.declarations[target->index];
+    if (definition.kind != Declaration::Kind::Protocol)
+      return types.fail("source.construction",
+                        "construction target must be a protocol", source.span);
+    auto selected = arguments(decl, definition, source.targetArguments,
+                              source.span, source.targetLabels);
+    if (!selected)
+      return false;
+    decl.target = *target;
+    decl.staticArguments = std::move(*selected);
+  }
   if (source.definition) {
     auto def = type(decl, *source.definition, depth + 1);
     if (!def)

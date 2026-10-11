@@ -12,12 +12,12 @@ bool dataConstructor(StringRef name) {
   // These are native data representations, including runtime polynomial data;
   // formal polynomials are a distinct mathematical type.
   return name == "vector" || name == "matrix" || name == "groups" ||
-         name == "indices" || name == "polynomial" || name == "table" ||
-         name == "point" || name == "round" || name == "sequence" ||
-         name == "field_array" || name == "commitment" ||
-         name == "commitments" || name == "proof" || name == "prover_key" ||
-         name == "verifier_key" || name == "opening_state" ||
-         name == "opening_states";
+         name == "shake128_state" || name == "indices" || name == "bytes" ||
+         name == "polynomial" || name == "table" || name == "point" ||
+         name == "round" || name == "sequence" || name == "field_array" ||
+         name == "commitment" || name == "commitments" || name == "proof" ||
+         name == "prover_key" || name == "verifier_key" ||
+         name == "opening_state" || name == "opening_states";
 }
 } // namespace
 bool isDomainSort(StringRef sort) {

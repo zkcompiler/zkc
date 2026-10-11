@@ -83,6 +83,7 @@ struct InterfaceProofEntry {
   std::optional<InterfaceSelector> completion;
   std::optional<unsigned> target, service;
   std::string suite;
+  protocol::ProofFormat format = protocol::ProofFormat::Native;
 };
 struct LanguageInterface {
   std::string capture, original, toolchain, entry;

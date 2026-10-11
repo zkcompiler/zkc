@@ -111,7 +111,10 @@ class LoweringVerifier {
       }
       if (auto group = dyn_cast<algebra::GroupType>(tensor.getElementType()))
         return take("curve.length", inputs, {group.getDomain()});
-      return take("indices.length", inputs);
+      return take(tensor.getElementType().isUnsignedInteger(8)
+                      ? "bytes.length"
+                      : "indices.length",
+                  inputs);
     }
     if (auto constant = dyn_cast<data::IndexOp>(source))
       return take("index.constant", {}, {}, {constant.getValue()});

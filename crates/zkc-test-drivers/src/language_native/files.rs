@@ -70,10 +70,7 @@ pub(super) fn setups(
     let proof = directory.join("cli-pcs-proof.bin");
     let mut common = target(directory, "pcs-setup-Prove.zkpkg");
     common.extend(settings.clone());
-    common.extend([
-        format!("--public={public_file}"),
-        "--allow-header-only".into(),
-    ]);
+    common.extend([format!("--public={public_file}"), "--allow-authored".into()]);
     let mut proving = common.clone();
     proving.extend([
         format!("--witness={witness_file}"),

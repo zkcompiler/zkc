@@ -2,12 +2,14 @@
 #define ZKC_COMPILER_NATIVEPROOF_H
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Compiler/Compilation.h"
+#include "zkc/Contracts/ProofFormat.h"
 #include "llvm/Support/JSON.h"
 #include <variant>
 namespace zkc {
-/// Current /4 deployment policy. The source remains independently owned.
+/// Current deployment policy. The source remains independently owned.
 struct NativeProofPolicy {
   std::string entry, producer, validator, suite;
+  protocol::ProofFormat format = protocol::ProofFormat::Native;
   unsigned acceptance = 0;
   std::optional<unsigned> service;
   std::vector<unsigned> publicInputs;

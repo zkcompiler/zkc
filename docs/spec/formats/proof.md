@@ -197,7 +197,7 @@ The compiler's policy is an exact array (JSON spelling carries no identity):
 
 ```text
 ["zkc.native-proof-policy/0", entry, producer, validator, acceptance,
- suite, service, public_inputs, [[query_site, delivery_site], ...]]
+ suite, service, public_inputs, [[query_site, delivery_site], ...], format]
 ```
 
 Indices are canonical decimal strings less than 1024. Public input indices are
@@ -209,6 +209,15 @@ both a supported suite and the selected service are required, with one through
 64 draws. A draw pair selects either a `draw` or an `index` query of that service. Selectors use prepared static occurrence sites; native labels retain
 original authored paths. No timing or security premise follows from selecting
 this policy.
+
+`format` is `zkc.framed/0` or `raw.bytes/0`. Native framing uses the header and
+message frames below. Raw Bytes uses no header, length prefix or implicit
+observation. Its admitted authored program has exactly one nonrepeated `bytes`
+message from producer to validator. One receive consumes the entire bounded
+input, including an empty byte string; the authored parser owns record decoding
+and inner EOF. Returning without that receive, or sending no message, refuses.
+The application authenticates the deployment independently. Raw Bytes carries
+no Host-level statement or context binding; authored code owns that obligation.
 
 The immutable compiler descriptor is:
 
@@ -302,7 +311,7 @@ candidate is at most 4 MiB, under the [program carrier ceiling](program.md#carri
 The `zkc prove-bundle` and `verify-bundle` file adapters require bounded regular
 inputs, including deployment, invocation, authority, capacity, attempt-policy and
 verification proof files. An authored deployment without a derived transcript
-requires `--allow-header-only` on either command, matching named Entry calls.
+requires `--allow-authored` on either command, matching named Entry calls.
 Its authenticated policy and reported `binding_scope` are checked before loading
 invocation values or proof bytes. This acknowledgement adds no cryptographic
 binding guarantee. Input symlinks may resolve to regular files. Producer output must differ from every configured input and referenced prover-key file,
@@ -362,7 +371,11 @@ source/policy. Distinct source bytes, policies, public values or context change
 the root. An authored protocol without transcript operations only checks the
 header's context: changing the header can preserve its mathematical acceptance.
 The authored control is not a cryptographic binding or proof-of-knowledge claim.
-Execution reports distinguish `binding_scope = "header"` from `"transcript"`.
+Execution reports use `binding_scope = "transcript"` for managed construction,
+`"header"` for native-framed authored execution, and `"authored"` for RawBytes.
+With RawBytes, Host context contributes to the reported invocation identity but
+is not transmitted or authenticated. It is not visible to source code. Context
+that an authored algorithm must bind needs an explicit public protocol input.
 
 Final proof admission checks both roles' exact ordered native transitions,
 unique origins and complete affine state chain. It also checks matching wire

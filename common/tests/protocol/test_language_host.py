@@ -41,7 +41,7 @@ def test_independent_named_proof_calls(toolchain, journal, directory, entry, sui
     proof = directory / 'proof.bin'
     results = directory / 'results.json'
     target = [f'--package={package}', f'--sha256={pin}']
-    flags = ['--allow-header-only'] if entry == 'Plain' else []
+    flags = ['--allow-authored'] if entry == 'Plain' else []
     proving = [toolchain.runtime, '--json', 'prove', *target, f'--witness={witness}', f'--output={proof}', *flags]
     def verify(path=proof, *extra):
         return [toolchain.runtime, '--json', 'verify', *target, f'--proof={path}', *flags, *extra]
@@ -451,18 +451,18 @@ proof Demo=Run{prover P;verifier V;public{};accept accepted;construction authore
     proof = directory / 'proof.bin'
     results = directory / 'results.json'
     results.write_bytes(b'unchanged')
-    baseline = json.loads(journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', '--allow-header-only']))
+    baseline = json.loads(journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', '--allow-authored']))
     accepted_proof = proof.read_bytes()
     proof.write_bytes(b'existing proof')
     limits = baseline['capacity']
     limits[3] = '64'
     capacity = write(directory / 'capacity.json', limits)
-    report = json.loads(journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', '--allow-header-only', f'--capacity={capacity}', f'--results={results}'], refuses='entry-output-encoding'))
+    report = json.loads(journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', '--allow-authored', f'--capacity={capacity}', f'--results={results}'], refuses='entry-output-encoding'))
     assert report['phase'] == 'results' and not report.get('proof_published', False)
     assert proof.read_bytes() == b'existing proof'
     assert results.read_bytes() == b'unchanged'
     proof.write_bytes(accepted_proof)
-    journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}', '--allow-header-only', f'--results={results}'])
+    journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}', '--allow-authored', f'--results={results}'])
     assert json.loads(results.read_text())['values']['accepted'] is True
 
 
@@ -553,8 +553,8 @@ proof Proof=Check{{prover P;verifier V;public{{}};accept accepted;construction a
     producer = input_files(journal, (directory / 'producer.json').name, public={}, witness={'produce': True, 'accept': True})
     verifier = input_files(journal, (directory / 'verifier.json').name, public={}, witness={})
     proof = directory / 'proof.bin'
-    proving = [toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', '--allow-header-only']
-    verifying = [toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}', '--allow-header-only']
+    proving = [toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}', '--allow-authored']
+    verifying = [toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}', '--allow-authored']
     assert journal.json(proving)['status'] == 'produced'
     assert journal.json(verifying)['status'] == 'accepted'
     input_files(journal, 'producer', public={}, witness={'produce': True, 'accept': False})

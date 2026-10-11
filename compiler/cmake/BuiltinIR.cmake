@@ -4,7 +4,7 @@ set(zkc_builtin_dialects
   "protocol|Protocol|types"
   "local|Local|types"
   "data|Data|types"
-  "crypto|Crypto|none"
+  "crypto|Crypto|types"
   "algebra|Algebra|types"
   "poly|Polynomial|types"
   "plan|Plan|types"

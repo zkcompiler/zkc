@@ -258,6 +258,7 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
         bool derived =
             proof->construction == ProofEntry::Construction::FiatShamir;
         out.attribute("kind", derived ? "fiat_shamir" : "authored");
+        out.attribute("format", protocol::proofFormatName(proof->format));
         if (derived) {
           out.attribute("suite", proof->suite);
           out.attribute("service", *proof->service);

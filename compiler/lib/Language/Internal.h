@@ -222,6 +222,7 @@ struct SyntaxProofEntry {
   std::optional<SyntaxName> target, service;
   ProofEntry::Construction construction = ProofEntry::Construction::Authored;
   std::string suite;
+  std::optional<SyntaxType> selectedConstruction;
   Span span;
 };
 struct Binding {
@@ -279,6 +280,7 @@ struct SyntaxDeclaration {
   std::optional<Span> specificationBlock;
   std::vector<SyntaxClause> specifications;
   std::optional<SyntaxProofEntry> proof;
+  std::optional<protocol::ProofFormat> proofFormat;
   std::vector<SyntaxSetupSlot> setups;
   bool entryBlock = false;
   EntryKind entryKind = EntryKind::Run;

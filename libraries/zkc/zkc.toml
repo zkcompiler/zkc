@@ -2,7 +2,10 @@ format = "zkc.project/0"
 
 [modules]
 "zkc::boolean" = "boolean.zkc"
+"zkc::bytes" = "bytes.zkc"
+"zkc::encoding" = "encoding.zkc"
 "zkc::matrix" = "matrix.zkc"
 "zkc::polynomial" = "polynomial.zkc"
+"zkc::shake128" = "shake128.zkc"
 "zkc::symbolic" = "symbolic.zkc"
 "zkc::vector" = "vector.zkc"

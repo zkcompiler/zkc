@@ -21,6 +21,7 @@ def TranscriptChallengeField : ZKC_Member<"ChallengeField", TranscriptDomain, Fi
 def CapabilityCharacteristicNotTwo : ZKC_Capability<"CharacteristicNotTwo", [FieldDomain]>;
 def CapabilityCommRing : ZKC_Capability<"CommRing", [FieldDomain]>;
 def CapabilityEncodesBool : ZKC_Capability<"Encodes.bool", [CodecDomain]>;
+def CapabilityEncodesBytes : ZKC_Capability<"Encodes.bytes", [CodecDomain]>;
 def CapabilityEncodesCommitment : ZKC_Capability<"Encodes.commitment", [CodecDomain, CommitmentDomain]>;
 def CapabilityEncodesCommitments : ZKC_Capability<"Encodes.commitments", [CodecDomain, CommitmentDomain]>;
 def CapabilityEncodesField : ZKC_Capability<"Encodes.field", [CodecDomain, FieldDomain]>;

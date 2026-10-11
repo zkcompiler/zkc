@@ -76,6 +76,7 @@ impl BoundInterface {
                 && &entry.validator().role == verifier
                 && native.acceptance == proof.acceptance
                 && native.suite == suite
+                && native.format == proof.format
                 && native.service == service
                 && native.roles.len() == p.roles.len(),
             E::NativeBinding,

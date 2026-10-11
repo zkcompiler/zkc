@@ -51,6 +51,34 @@ std::string replaceText(std::string text, StringRef before, StringRef after) {
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  cases.run("construction targets and static arguments are checked", [] {
+    std::string text = R"(module sample;
+      domain F=field("bls12-381.fr");
+      domain Other=field("koala-bear");
+      protocol Work<T:Field> roles(P,V)(ok:bool@V)->(ok:bool@V){return ok;}
+      protocol Different<T:Field> roles(P,V)(ok:bool@V)->(ok:bool@V){return ok;}
+      construction ExternalWire<T:Field> for Work<T>{base authored;format RawBytes;}
+      proof Demo=Work<F>{prover P;verifier V;public{ok};accept ok;construction ExternalWire<F>;}
+    )";
+    auto entry = take(close(text));
+    require(entry.entry().proof()->format ==
+                zkc::protocol::ProofFormat::RawBytes,
+            "Entry lost its selected proof format");
+    refuses(close(replaceText(text, "construction ExternalWire<F>;",
+                              "construction ExternalWire<Other>;")),
+            "source.construction");
+    refuses(close(replaceText(text, "for Work<T>", "for Different<T>")),
+            "source.construction");
+    refuses(close(replaceText(text, "base authored;", "")),
+            "source.construction");
+    refuses(close(replaceText(text, "format RawBytes;",
+                              "format RawBytes;format RawBytes;")),
+            "source.construction");
+    auto native = take(close(replaceText(text, "format RawBytes;", "")));
+    require(native.entry().proof()->format ==
+                zkc::protocol::ProofFormat::Native,
+            "construction without format changed the default");
+  });
   cases.run("execution kind is explicit and contextual", [] {
     take(close((base + "run Demo=Round{}").str()));
     refuses(close((base + "proof Demo=Round;").str()), "source.entry");

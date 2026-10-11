@@ -509,7 +509,8 @@ fn deployment(field: &str, arenas: &Arenas) -> String {
             "",
             "",
             ["0"],
-            []
+            [],
+            "zkc.framed/0"
         ],
         "zkc.native-origin/0",
         [],
@@ -549,7 +550,7 @@ fn proof_interface(field: &str) -> Json {
             "outputs":[port("accepted",0,&[0],&["V"],boolean)],"services":[],"clauses":[]}),
         json!({"kind":"proof","prover":"P","verifier":"V","public":[0],
             "acceptance":{"direction":"output","port":0,"role":"V","path":[]},
-            "completion":null,"target":null,"construction":{"kind":"authored"}}),
+            "completion":null,"target":null,"construction":{"kind":"authored", "format": "zkc.framed/0"}}),
     )
 }
 fn proof_entry(
@@ -561,7 +562,7 @@ fn proof_entry(
     ProofEntry::admit(
         package,
         ProofOptions {
-            binding: BindingPolicy::AllowHeaderOnly,
+            binding: BindingPolicy::AllowAuthored,
             ..Default::default()
         },
         SetupAuthority::default(),

@@ -2,6 +2,7 @@
 #define ZKC_DIALECT_TYPES_H
 // Convenience aggregate of independently usable type headers.
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
+#include "zkc/Dialect/Crypto/IR/CryptoTypes.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Local/IR/LocalTypes.h"
 #include "zkc/Dialect/Oracle/IR/OracleTypes.h"

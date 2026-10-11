@@ -468,6 +468,17 @@ Expected<Admitted> admit(pir::MathematicalOp source,
     return error("native-proof-draw-selection");
   if (consumedOrigins.size() != sourceOrigins.size())
     return error("native-proof-origin-coverage");
+  if (policy.format == protocol::ProofFormat::RawBytes) {
+    if (!policy.suite.empty() || admitted.events.size() != 1 ||
+        admitted.events.front().query || admitted.events.front().depth)
+      return error("native-proof-format");
+    auto type =
+        protocol::encodeBoundType(admitted.events.front().payload, false);
+    if (!type)
+      return type.takeError();
+    if (type->kind != "bytes")
+      return error("native-proof-format");
+  }
   return admitted;
 }
 } // namespace
@@ -485,7 +496,8 @@ json::Value encodeNativeProofPolicy(const NativeProofPolicy &p) {
                      p.suite,
                      p.service ? std::to_string(*p.service) : "",
                      std::move(inputs),
-                     std::move(draws)};
+                     std::move(draws),
+                     protocol::proofFormatName(p.format)};
 }
 namespace {
 Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
@@ -495,10 +507,16 @@ Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
   if (!parsed)
     return parsed.takeError();
   auto *a = parsed->getAsArray();
-  if (!a || a->size() != 9 ||
+  if (!a || a->size() != 10 ||
       (*a)[0].getAsString() != "zkc.native-proof-policy/0")
     return error("native-proof-policy");
   NativeProofPolicy p;
+  auto formatName = (*a)[9].getAsString();
+  auto format =
+      formatName ? protocol::parseProofFormat(*formatName) : std::nullopt;
+  if (!format)
+    return error("native-proof-format");
+  p.format = *format;
   for (auto [i, target] : {std::pair{1u, &p.entry},
                            {2u, &p.producer},
                            {3u, &p.validator},
@@ -526,6 +544,8 @@ Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
     if (!p.service)
       return error("native-proof-policy");
   }
+  if (p.format == protocol::ProofFormat::RawBytes && !p.suite.empty())
+    return error("native-proof-format");
   if (p.suite.empty() ? p.service.has_value() || !draws->empty()
                       : protocol::nativeChallengeField(p.suite).empty() ||
                             !p.service || (!selectDraws && draws->empty()))

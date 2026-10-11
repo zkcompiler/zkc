@@ -341,15 +341,11 @@ impl Session<'_> {
                         Err(failed.error.to_string())
                     }
                     Ok(mut runner) => {
-                        let produced = driver::produce_admitted_with_limit(
+                        let produced = driver::produce_native(
                             &mut runner,
                             self.binding,
+                            self.deployment.format,
                             self.plan.policy.limits.proof_bytes,
-                            |backend, value| {
-                                backend
-                                    .encode_native_value(value)
-                                    .map_err(driver::ArtifactFailure::NativeWire)
-                            },
                         );
                         record.stop = produced.stop().cloned();
                         if let Some(stop) = &record.stop {

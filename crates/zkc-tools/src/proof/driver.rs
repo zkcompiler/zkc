@@ -1,4 +1,4 @@
-use super::{FormatError, ProofReader, ProofWriter};
+use super::{FormatError, ProofFormat, ProofReader, ProofWriter};
 use zkc_runtime::interactive::{
     Action, Backend, BackendError, Runner, RuntimeError, Stop, StopKind,
 };
@@ -89,24 +89,28 @@ fn cancel_failure<B: Backend>(runner: &mut Runner<B>, failed: bool) -> Option<St
 }
 
 /// Called only by the host after native proof-entry admission.
-pub(super) fn produce_admitted<B: Backend>(
-    runner: &mut Runner<B>,
+pub(super) fn produce_native(
+    runner: &mut Runner<zkc_backends::NativeBackend>,
     expected_binding: &[u8; 32],
-    encode: impl Fn(&B, &B::Value) -> Result<Vec<u8>, ArtifactFailure>,
-) -> ArtifactReport<Produced<B::Value>> {
-    produce_admitted_with_limit(runner, expected_binding, super::MAX_PROOF_BYTES, encode)
+    format: ProofFormat,
+    limit: usize,
+) -> ArtifactReport<Produced<zkc_backends::Value>> {
+    produce_admitted_with_limit(runner, expected_binding, format, limit, |backend, value| {
+        format.encode(backend, value)
+    })
 }
 
 pub(super) fn produce_admitted_with_limit<B: Backend>(
     runner: &mut Runner<B>,
     expected_binding: &[u8; 32],
+    format: ProofFormat,
     limit: usize,
     encode: impl Fn(&B, &B::Value) -> Result<Vec<u8>, ArtifactFailure>,
 ) -> ArtifactReport<Produced<B::Value>> {
     if let Some(report) = entry_report(runner) {
         return report;
     }
-    let mut writer = match ProofWriter::with_limit(expected_binding, limit) {
+    let mut writer = match ProofWriter::with_limit(format, expected_binding, limit) {
         Ok(writer) => writer,
         Err(error) => {
             return ArtifactReport {
@@ -139,9 +143,11 @@ pub(super) fn produce_admitted_with_limit<B: Backend>(
     let bytes = writer.bytes_written();
     let cancelled = cancel_failure(runner, outcome.is_err());
     ArtifactReport {
-        outcome: outcome.map(|outputs| Produced {
-            proof: writer.finish(),
-            outputs,
+        outcome: outcome.and_then(|outputs| {
+            Ok(Produced {
+                proof: writer.finish()?,
+                outputs,
+            })
         }),
         messages,
         bytes,
@@ -153,12 +159,14 @@ pub(super) fn validate_native(
     runner: &mut Runner<zkc_backends::NativeBackend>,
     proof: &[u8],
     expected_binding: &[u8; 32],
+    format: ProofFormat,
     acceptance: usize,
 ) -> ArtifactReport<Vec<zkc_backends::Value>> {
     validate_admitted(
         runner,
         proof,
         expected_binding,
+        format,
         acceptance,
         |v| {
             if let zkc_backends::Value::Bool(b) = v {
@@ -171,7 +179,7 @@ pub(super) fn validate_native(
             let cut = Action::<zkc_backends::Value>::Receive(request.clone())
                 .cut()
                 .ok_or(ArtifactFailure::UnexpectedCommunication)?;
-            let decoded = match runner.backend().decode_native_value(&request.ty, bytes) {
+            let decoded = match format.decode(runner.backend(), &request.ty, bytes) {
                 Ok(value) => Ok(value),
                 Err(zkc_backends::NativeWireError::Invalid(reason)) => Err(reason),
                 Err(error) => return Err(ArtifactFailure::NativeWire(error)),
@@ -185,6 +193,7 @@ fn validate_admitted<B: Backend>(
     runner: &mut Runner<B>,
     proof: &[u8],
     expected_binding: &[u8; 32],
+    format: ProofFormat,
     acceptance_index: usize,
     boolean: impl Fn(&B::Value) -> Option<bool>,
     receive: impl Fn(
@@ -196,7 +205,7 @@ fn validate_admitted<B: Backend>(
     if let Some(report) = entry_report(runner) {
         return report;
     }
-    let mut reader = match ProofReader::new(proof, expected_binding) {
+    let mut reader = match ProofReader::new(format, proof, expected_binding) {
         Ok(reader) => reader,
         Err(error) => {
             let cancelled = cancel_failure(runner, true);

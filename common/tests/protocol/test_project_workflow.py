@@ -210,7 +210,7 @@ def test_unicode_proof_names_and_service_options(toolchain, journal, directory):
     journal.json(command(toolchain, 'prepare'), cwd=directory)
     witness = directory / 'inputs/数学.証明₂/witness.json'
     witness.write_text('{"秘密":true}')
-    options = ['--allow-header-only']
+    options = ['--allow-authored']
     journal.json(command(toolchain, 'prove', *options, '--service=証明者.乱数=0'),
                  cwd=directory, refuses='exhausted:resource-budget')
     produced = journal.json(command(toolchain, 'prove', *options, '--service=証明者.乱数=1'), cwd=directory)
@@ -235,8 +235,8 @@ def test_human_stops_use_source_participant_names(toolchain, journal, directory)
     (directory / 'inputs/example.Proof/witness.json').write_text('{"ok":false}')
     failed = journal.json(command(toolchain, 'run'), cwd=directory, refuses='entry-run-incomplete')
     assert failed['role_names'] == {'role00000000': '証明者', 'role00000001': '検証者'}
-    journal.json(command(toolchain, 'prove', '--allow-header-only'), cwd=directory)
-    for operation, options in [('run', []), ('verify', ['--allow-header-only'])]:
+    journal.json(command(toolchain, 'prove', '--allow-authored'), cwd=directory)
+    for operation, options in [('run', []), ('verify', ['--allow-authored'])]:
         human = journal.attempt([arg for arg in command(toolchain, operation, *options) if arg != '--json'],
                                 cwd=directory)
         assert human.returncode > 0
@@ -255,13 +255,13 @@ def test_default_proof_paths_do_not_discover_other_files(toolchain, journal, dir
     ''')
     prepared = journal.json(command(toolchain, 'prepare'), cwd=directory)
     selected = next(e for e in prepared['entries'] if e['name'] == 'example::Proof')
-    assert selected['requirements']['allow_header_only'] is True
+    assert selected['requirements']['allow_authored'] is True
     witness = directory / 'inputs/example.Proof/witness.json'
     witness.write_text('{"accept":true}')
     public = directory / 'inputs/example.Proof/public.json'
     public.write_text('{"expected":true}')
     proof = directory / 'build/zkc/example.Proof.zkproof'
-    options = ['--allow-header-only']
+    options = ['--allow-authored']
     produced = journal.json(command(toolchain, 'prove', *options), cwd=directory)
     assert produced['inputs'] == {'public': str(public), 'witness': str(witness)}
     assert produced['output'] == str(proof)
@@ -377,12 +377,12 @@ def test_run_result_policy_and_unserializable_outputs(toolchain, journal, direct
                             f'--compiler={toolchain.compiler}', '--results=explicit.json'],
                            cwd=directory, refuses='entry-output-codec')
     assert 'execution' not in refused and not (directory / 'explicit.json').exists()
-    refused = journal.json(command(toolchain, 'prove', '--allow-header-only', '--results=producer.json'),
+    refused = journal.json(command(toolchain, 'prove', '--allow-authored', '--results=producer.json'),
                            cwd=directory, refuses='entry-output-codec')
     assert 'execution' not in refused
-    journal.json(command(toolchain, 'prove', '--allow-header-only'), cwd=directory)
+    journal.json(command(toolchain, 'prove', '--allow-authored'), cwd=directory)
     # Only this invocation's participant outputs require a file codec.
-    verified = journal.json(command(toolchain, 'verify', '--allow-header-only', '--results=verifier.json'),
+    verified = journal.json(command(toolchain, 'verify', '--allow-authored', '--results=verifier.json'),
                             cwd=directory)
     assert verified['status'] == 'accepted'
     assert json.loads((directory / 'verifier.json').read_text())['values'] == {'accepted': True}
@@ -414,7 +414,7 @@ def test_generated_commands_use_defaults_and_empty_roles_need_no_file(toolchain,
         for argv in templates['commands']:
             assert not any(arg.startswith('--session=') for arg in argv)
             assert not any(arg.startswith(('--proof=', '--output=')) for arg in argv)
-            flags = ['--allow-header-only'] if name == 'Proof' else []
+            flags = ['--allow-authored'] if name == 'Proof' else []
             result = journal.json([toolchain.runtime, '--json', *argv[1:], *flags], cwd=directory)
             assert result['status'] in ('executed', 'produced', 'accepted')
         if name == 'Interactive':

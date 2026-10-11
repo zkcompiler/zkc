@@ -19,6 +19,7 @@ pub(in crate::entry) struct ProofPorts {
     pub acceptance: usize,
     pub completion: Option<usize>,
     pub suite: Option<String>,
+    pub format: crate::proof::ProofFormat,
     pub transcript: Option<usize>,
 }
 #[derive(Clone, Copy, Debug, Default)]
@@ -129,11 +130,13 @@ impl Ports {
                     offset += len;
                     public_ports.push(i);
                 }
-                let (suite, transcript) = match construction {
-                    raw::Construction::Authored {} => (None, None),
-                    raw::Construction::FiatShamir { suite, service } => {
-                        (Some(suite.clone()), Some(*service as usize))
-                    }
+                let (suite, transcript, format) = match construction {
+                    raw::Construction::Authored { format } => (None, None, *format),
+                    raw::Construction::FiatShamir {
+                        suite,
+                        service,
+                        format,
+                    } => (Some(suite.clone()), Some(*service as usize), *format),
                 };
                 Some(ProofPorts {
                     prover: indices[prover.as_str()],
@@ -144,6 +147,7 @@ impl Ports {
                         .map(|s| validate::select(protocol, s).map(|(_, n)| n[0] as usize))
                         .transpose()?,
                     suite,
+                    format,
                     transcript,
                 })
             }

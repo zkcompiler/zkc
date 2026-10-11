@@ -16,8 +16,9 @@ A run `job` has only `kind: "run"`. A proof job has exactly `kind: "proof"`,
 `construction`. Roles are original source roster names; `public` is a sorted
 array of logical input indices. Acceptance uses the selector format below. Completion is either
 a producer Boolean output selector or JSON null. Target is a clause name or JSON null. An authored
-construction has only `kind: "authored"`; a derived construction has exactly
-`kind: "fiat_shamir"`, `suite` and logical `service` index. Independent reading
+construction has `kind: "authored"` and `format`; a derived construction has exactly
+`kind: "fiat_shamir"`, `format`, `suite` and logical `service` index. Format is
+`zkc.framed/0` or `raw.bytes/0`; managed derivation requires native framing. Independent reading
 checks these choices against the original signature and the exact native statement.
 Source comparison separately checks that they match the selected checked Entry.
 

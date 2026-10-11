@@ -85,6 +85,96 @@ void mutation(const CheckedOriginal &source,
 }
 const std::string prefix = "module m;domain Fr=field(\"bls12-381.fr\");\n";
 const std::string unit = "protocol Run roles(P)()->(){return();}run Demo=Run;";
+void byteDataAndHistory() {
+  auto bytes = original(R"(
+module m;
+type Bytes=builtin("bytes");
+fn empty()->Bytes{return kernel("bytes.empty");}
+fn append(a:Bytes,b:index)->Bytes{return kernel("bytes.append",a,b);}
+fn concat(a:Bytes,b:Bytes)->Bytes{return kernel("bytes.concat",a,b);}
+fn slice(a:Bytes,b:index,c:index)->Bytes{return kernel("bytes.slice",a,b,c);}
+fn at(a:Bytes,b:index)->index{return kernel("bytes.at",a,b);}
+fn length(a:Bytes)->index{return kernel("bytes.length",a);}
+fn equal(a:Bytes,b:Bytes)->bool{return kernel("bytes.equal",a,b);}
+fn build()->Bytes {
+  return concat(append(empty(), 255), append(empty(), 0));
+}
+fn valid(c:Bytes)->bool {
+  return equal(slice(c, 0, 1), append(empty(), at(c, 0))) && length(c) == 2;
+}
+protocol Relay roles(P,V)()->(accepted:bool@V) {
+  let b @P = build();
+  let c = send P->V(b);
+  let accepted @V = valid(c);
+  return(accepted=accepted);
+}
+run Demo=Relay;
+)");
+  must(compileEntry(bytes));
+  auto history = original(R"(
+module m;
+
+fn sample()->index {
+  let state = kernel("external.openvm.init");
+  let (next, result) = kernel("external.openvm.sample", state);
+  return result;
+}
+protocol Run roles(P)()->(r:index@P){let r @P=sample();return(r=r);}
+run Demo=Run;
+)");
+  require(StringRef(history.bytes()).contains("crypto.exec.openvm_sample"),
+          "source history lost its ordered operation");
+  must(compileEntry(history));
+  auto shake = original(R"(
+module m;
+type Bytes=builtin("bytes");
+type State=builtin("shake128_state");
+fn digest(input:Bytes)->Bytes {
+  let state=kernel("shake128.init");
+  let state=kernel("shake128.absorb",state,input);
+  let (next,bytes)=kernel("shake128.squeeze",state,32);
+  let (unused,discarded)=kernel("shake128.squeeze",next,17);
+  return bytes;
+}
+protocol Run roles(P)(input:Bytes@P)->(r:Bytes@P){let r @P=digest(input);return(r=r);}
+run Demo=Run;
+)");
+  require(StringRef(shake.bytes()).count("crypto.exec.shake128_squeeze") == 2,
+          "unused history transition disappeared from source IR");
+  must(compileEntry(shake));
+  auto encoding = original(R"(
+module m;
+domain F=field("bls12-381.fr");
+domain G=group("bls12-381.g1");
+fn roundtrip(point:G,value:F)->bool {
+  let encoded=kernel<G>("encoding.group_compressed",point);
+  let (valid,decoded)=kernel<G>("encoding.group_from_compressed",encoded);
+  require valid;
+  let scalar=kernel<F>("encoding.field_be",value);
+  let (valid,decodedScalar)=kernel<F>("encoding.field_from_be",scalar);
+  require valid;
+  return decoded == point && decodedScalar == value;
+}
+protocol Run roles(P)(point:G@P,value:F@P)->(r:bool@P) {
+  let r @P=roundtrip(point,value);return(r=r);
+}
+run Demo=Run;
+)");
+  must(compileEntry(encoding));
+  closureRefuses(R"(module m;type State=builtin("shake128_state");
+protocol Run roles(P)(s:State@P)->(){return();}run Demo=Run;)",
+                 "source.ingress");
+  refuses(R"(module m;type State=builtin("shake128_state");
+protocol Run roles(P,V)(s:State@P)->(){let r=send P->V(s);return();})",
+          "source.permission");
+
+  refuses(R"(
+module m;
+domain F=field("bls12-381.fr");
+fn forged()->F { return kernel<F>("random.draw"); }
+)",
+          "source.kernel");
+}
 void wireAuthority() {
   const std::string relay = R"(
 protocol Relay<T:Type+Copy+Drop+Share+Wire> roles(P,V)(x:T@P)->(r:T@V){
@@ -1141,6 +1231,7 @@ void nativeData() {
 
 } // namespace
 int main() {
+  byteDataAndHistory();
   staticDomains();
   nativeData();
   wireAuthority();

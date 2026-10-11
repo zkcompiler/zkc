@@ -7,7 +7,8 @@ std::optional<NativeTypeConstructorPolicy>
 nativeTypeConstructorPolicy(StringRef kind) {
   bool total = kind == "bool" || kind == "field" || kind == "group" ||
                kind == "field_array" || kind == "index" || kind == "indices" ||
-               kind == "vector" || kind == "matrix" || kind == "groups";
+               kind == "vector" || kind == "matrix" || kind == "groups" ||
+               kind == "bytes";
   bool shared =
       total ||
       llvm::StringSwitch<bool>(kind)
@@ -20,6 +21,7 @@ nativeTypeConstructorPolicy(StringRef kind) {
                            "opening_state"},
                           true)
                    .Cases({"rng", "nonce", "transcript", "resource_unit"}, true)
+                   .Case("shake128_state", true)
                    .Cases({"fixed_vector", "variant"}, true)
                    .Default(false);
   if (!shared && !local && kind != "sequence")
@@ -148,7 +150,8 @@ RelationData logicalRelationData(const BoundType &type, TypeParseBudget &budget,
   return type.kind == "bool" || type.kind == "index" || type.kind == "field" ||
                  type.kind == "group" || type.kind == "field_array" ||
                  type.kind == "vector" || type.kind == "matrix" ||
-                 type.kind == "groups" || type.kind == "indices"
+                 type.kind == "groups" || type.kind == "indices" ||
+                 type.kind == "bytes"
              ? R::Supported
              : R::Unsupported;
 }

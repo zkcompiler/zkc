@@ -60,8 +60,14 @@ pub(in crate::entry) enum Job {
 #[serde(remote = "Self")]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub(in crate::entry) enum Construction {
-    Authored {},
-    FiatShamir { suite: String, service: u32 },
+    Authored {
+        format: crate::proof::ProofFormat,
+    },
+    FiatShamir {
+        suite: String,
+        service: u32,
+        format: crate::proof::ProofFormat,
+    },
 }
 #[derive(Debug, Deserialize)]
 #[serde(remote = "Self")]

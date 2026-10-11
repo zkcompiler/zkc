@@ -13,6 +13,7 @@ pub(super) struct MessageLayout<'a> {
     pub(super) payload_types: BTreeMap<&'a str, LogicalType>,
     pub(super) events: Vec<NativeTranscriptEvent>,
     wire_origins: Vec<&'a str>,
+    format: super::ProofFormat,
 }
 impl<'a> MessageLayout<'a> {
     pub(super) fn read(descriptor: &'a [Json], policy: &DeploymentPolicy<'_>) -> Result<Self> {
@@ -60,6 +61,15 @@ impl<'a> MessageLayout<'a> {
             let record = logical::decode_tree(&bytes).map_err(|e| e.to_string())?;
             if record[1].as_str() != Some(entry) || !origins.insert(origin) {
                 return Err("native-proof-origin-map".into());
+            }
+            if policy.format == super::ProofFormat::RawBytes
+                && record[2]
+                    .as_array()
+                    .ok_or("native-proof-origin-map")?
+                    .iter()
+                    .any(|s| s[0] == "repeat")
+            {
+                return Err("native-proof-format".into());
             }
             if query {
                 queries += 1;
@@ -118,10 +128,20 @@ impl<'a> MessageLayout<'a> {
         {
             return Err("native-proof-event-map".into());
         }
+        if policy.format == super::ProofFormat::RawBytes
+            && (observed_messages != 1
+                || wire_origins.len() != 1
+                || messages
+                    .values()
+                    .any(|t| t.kind() != zkc_runtime::interactive::Type::Bytes))
+        {
+            return Err("native-proof-format".into());
+        }
         Ok(Self {
             payload_types: messages,
             events,
             wire_origins,
+            format: policy.format,
         })
     }
 
@@ -152,6 +172,22 @@ impl<'a> MessageLayout<'a> {
             ));
         }
         for role in admitted.program_entry(entry).map_err(|e| e.to_string())? {
+            if self.format == super::ProofFormat::RawBytes {
+                // Program admission already validates loop boundaries. The
+                // flattened action order lets us check nesting in one pass.
+                let mut inside_until = 0;
+                for (index, action) in role.actions.iter().enumerate() {
+                    match action {
+                        ProgramAction::Loop { end, .. } => inside_until = inside_until.max(*end),
+                        ProgramAction::Send { .. } | ProgramAction::Receive { .. }
+                            if index < inside_until =>
+                        {
+                            return Err("native-proof-format".into());
+                        }
+                        _ => (),
+                    }
+                }
+            }
             let actual: Vec<_> = role
                 .actions
                 .iter()

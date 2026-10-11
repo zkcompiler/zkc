@@ -11,18 +11,20 @@ use zkc_backends::NativeBackend;
 
 type Result<T> = std::result::Result<T, String>;
 
-/// Authored deployments bind public inputs/context in the artifact header only.
-/// Applications must acknowledge that scope explicitly before admitting one.
+/// Authored deployments leave transcript binding to protocol code. Applications
+/// must acknowledge that responsibility explicitly before admitting one.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BindingPolicy {
     #[default]
     TranscriptRequired,
-    AllowHeaderOnly,
+    AllowAuthored,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BindingScope {
     Transcript,
     HeaderOnly,
+    /// Binding is entirely defined by the authored protocol; there is no Host header.
+    Authored,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct ProofOptions {
@@ -134,10 +136,12 @@ impl ProofEntry {
         let completion = proof.completion;
         let scope = if proof.suite.is_some() {
             BindingScope::Transcript
-        } else {
+        } else if proof.format == crate::proof::ProofFormat::Native {
             BindingScope::HeaderOnly
+        } else {
+            BindingScope::Authored
         };
-        if scope == BindingScope::HeaderOnly && options.binding == BindingPolicy::TranscriptRequired
+        if scope != BindingScope::Transcript && options.binding == BindingPolicy::TranscriptRequired
         {
             return Err(E::new(P::Admission, "entry-proof-binding-policy"));
         }

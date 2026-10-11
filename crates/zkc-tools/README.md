@@ -52,7 +52,7 @@ including when replacing an existing destination; previous destination permissio
 are not preserved. Attempts are explicit producer policies and
 retain the generic controller's resource and work accounting.
 
-All proof CLI commands require `--allow-header-only` when the selected deployment
+All proof CLI commands require `--allow-authored` when the selected deployment
 has no compiler-derived transcript. Bundle refusal reports `binding_scope: header`.
 This opt-in does not replace an independently trusted deployment pin or establish
 cryptographic transcript binding. Low-level native proof execution APIs leave that

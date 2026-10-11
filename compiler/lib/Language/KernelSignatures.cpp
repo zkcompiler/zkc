@@ -17,8 +17,10 @@ Semantics::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
     fail("source.kernel", "operation is not source authorable", span);
     return {};
   }
-  if (protocol::isHistoryTransition(contract) ||
-      protocol::samplingContract(contract)) {
+  const auto *effects = protocol::operationContracts(contract);
+  if (protocol::samplingContract(contract) ||
+      (protocol::isHistoryTransition(contract) &&
+       (!effects || !effects->sourceHistory))) {
     fail("source.kernel", "operation requires a managed effect interface",
          span);
     return {};
@@ -173,7 +175,7 @@ Semantics::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
   if (protocol::hasUnclassifiedProviderEffect(contract)) {
     // The generic registry cannot assume Copy for Type formals. Refine that
     // uncertainty only for signatures with those formals and admitted data
-    // ports; provider and history operations remain outside this interface.
+    // ports; managed providers remain outside this interface.
     bool typeRoot = false;
     for (unsigned i = 0; i < scope.terms.size(); ++i)
       typeRoot |= scope.sorts[i] == "Type" && !scope.terms[i].parent &&

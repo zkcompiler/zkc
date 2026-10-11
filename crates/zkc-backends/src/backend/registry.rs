@@ -160,6 +160,21 @@ pub(super) fn installed() -> Result<&'static Registry> {
             r.shaped(crate::kernels::resources::CONTRACTS, resources)?;
             r.shaped(crate::plonky3::numerical::CONTRACTS, numerical)?;
             r.family(
+                crate::kernels::encoding::IMPLEMENTATIONS,
+                Signature::Custom(crate::kernels::encoding::signature),
+                encoding,
+            )?;
+            r.family(
+                crate::hash::IMPLEMENTATIONS,
+                Signature::Custom(crate::hash::signature),
+                hash,
+            )?;
+            r.family(
+                crate::kernels::bytes::IMPLEMENTATIONS,
+                Signature::Custom(crate::kernels::bytes::signature),
+                bytes,
+            )?;
+            r.family(
                 crate::kernels::indices::IMPLEMENTATIONS,
                 Signature::Custom(crate::kernels::indices::signature),
                 indices,
@@ -297,6 +312,35 @@ fn numerical(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Resul
             &b.core.polynomial,
         )
     }
+}
+fn encoding(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::kernels::encoding::apply(
+        &i.binding.declaration().contract,
+        args,
+        i.attributes,
+        &b.core.policy,
+        i.max_output_bytes,
+        &mut b.external_work,
+    )
+}
+fn hash(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::hash::apply(
+        &i.binding.declaration().contract,
+        args,
+        i.attributes,
+        &b.core.policy,
+        i.max_output_bytes,
+        &mut b.external_work,
+    )
+}
+fn bytes(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::kernels::bytes::apply(
+        &i.binding.declaration().contract,
+        args,
+        i.attributes,
+        &b.core.policy,
+        i.max_output_bytes,
+    )
 }
 fn indices(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::kernels::indices::apply(

@@ -182,6 +182,7 @@ fn execute(command: &str, args: &Arguments<'_>, report: &mut Json) -> Result<()>
         report["binding_scope"] = json!(match host.binding_scope() {
             BindingScope::Transcript => "transcript",
             BindingScope::HeaderOnly => "header",
+            BindingScope::Authored => "authored",
         });
         report["capacity"] = options.proof.capacity.record();
         report["phase"] = json!("inputs");

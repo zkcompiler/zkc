@@ -32,10 +32,10 @@ bool isCalculationContract(StringRef contract) {
           "curve.scale",      "curve.equal",     "curve.length",
           "pairing.apply",    "field_array.at",  "field_array.from_vector",
           "vector.empty",     "vector.append",   "vector.length",
-          "matrix.dimension", "indices.length",  "index.constant",
-          "index.equal",      "index.less",      "sequence.empty",
-          "sequence.append",  "sequence.length", "bool.and",
-          "bool.or",          "bool.not"},
+          "matrix.dimension", "indices.length",  "bytes.length",
+          "index.constant",   "index.equal",     "index.less",
+          "sequence.empty",   "sequence.append", "sequence.length",
+          "bool.and",         "bool.or",         "bool.not"},
       contract);
 }
 namespace {
@@ -214,7 +214,9 @@ public:
         application.contract = "curve.length";
         application.arguments = {group.getDomain().str()};
       } else {
-        application.contract = "indices.length";
+        application.contract = tensor.getElementType().isUnsignedInteger(8)
+                                   ? "bytes.length"
+                                   : "indices.length";
       }
       auto name = protocol::boundOperationName(application.contract);
       if (name.empty())

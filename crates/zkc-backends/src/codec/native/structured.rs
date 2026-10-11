@@ -26,6 +26,7 @@ pub(super) fn tag(ty: &PhysicalType) -> Option<u8> {
         Type::Sequence => Some(69),
         Type::Variant => Some(65),
         Type::Indices => Some(68),
+        Type::Bytes => Some(70),
         _ => None,
     }
 }
@@ -86,6 +87,7 @@ pub(super) fn value_counts(value: &Value, policy: &Policy) -> Result<Counts> {
                     }
                 }
                 (68, Value::Indices(v)) => counts.add(v.len(), 0)?,
+                (70, Value::Bytes(v)) => policy.bytes(v.len()).map_err(|_| Error::Limit)?,
                 _ => return Err(unsupported()),
             }
         } else if super::bulk::format(ty).is_some() {
@@ -151,6 +153,10 @@ fn width(value: &Value, policy: &Policy, key: &crate::SetupRegistry) -> Result<u
         policy.wire(size).map_err(|_| Error::Limit)?;
         return Ok(size);
     }
+    if let Value::Bytes(v) = value {
+        policy.bytes(v.len()).map_err(|_| Error::Limit)?;
+        return add(10, v.len());
+    }
     if let Value::Indices(v) = value {
         policy.vector_width(v.len(), 8).map_err(|_| Error::Limit)?;
         return add(10, mul(v.len(), 8)?);
@@ -203,6 +209,10 @@ fn write(
                 let length = integer(out.len() - prefix - 4)?;
                 out[prefix..prefix + 4].copy_from_slice(&length);
             }
+        }
+        Value::Bytes(v) => {
+            out.extend_from_slice(&integer(v.len())?);
+            out.extend_from_slice(v);
         }
         Value::Indices(v) => {
             out.extend_from_slice(&integer(v.len())?);
@@ -328,6 +338,13 @@ pub(super) fn scan(
             policy.output(total, usize::MAX).map_err(|_| Error::Limit)?;
             return Ok(total);
         }
+        if tag == 70 {
+            policy.bytes(n).map_err(|_| Error::Limit)?;
+            if bytes.len() != add(10, n)? {
+                return Err(invalid(DecodeReason::Length));
+            }
+            return add(256, n);
+        }
         // The remaining structured leaf is an index vector.
         policy.vector_width(n, 8).map_err(|_| Error::Limit)?;
         counts.add(n, 0)?;
@@ -409,6 +426,12 @@ fn read(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Result<Valu
         return crate::Variant::new(descriptor.clone(), n, payload)
             .map(Value::Variant)
             .map_err(Error::Backend);
+    }
+    if tag == 70 {
+        let mut out = Vec::new();
+        out.try_reserve_exact(n).map_err(|_| Error::Limit)?;
+        out.extend_from_slice(&bytes[10..]);
+        return Ok(Value::Bytes(out.into()));
     }
     let mut out = Vec::new();
     out.try_reserve_exact(n).map_err(|_| Error::Limit)?;

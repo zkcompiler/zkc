@@ -2,6 +2,7 @@
 #define ZKC_LANGUAGE_PROJECT_H
 
 #include "zkc/Contracts/Mathematical.h"
+#include "zkc/Contracts/ProofFormat.h"
 #include "zkc/Language/Assets.h"
 #include "zkc/Language/Notation.h"
 #include "zkc/Language/Types.h"
@@ -379,6 +380,7 @@ struct ProofEntry {
   std::optional<SpecificationSelector> completion;
   std::optional<unsigned> target, service;
   std::string suite;
+  protocol::ProofFormat format = protocol::ProofFormat::Native;
   Span span;
 };
 /// A validated instance of an installed primitive scheme. The static roots are
@@ -397,6 +399,7 @@ struct Declaration {
     Math,
     Local,
     Protocol,
+    Construction,
     Entry,
     Alias,
     Record,
@@ -450,6 +453,7 @@ struct Declaration {
   std::optional<RelationDefinition> relation;
   std::vector<SpecificationClause> specifications;
   std::optional<DeclarationId> target;
+  std::optional<protocol::ProofFormat> proofFormat;
   std::variant<RunEntry, ProofEntry> configuration;
   EntryKind entryKind() const {
     return std::holds_alternative<ProofEntry>(configuration) ? EntryKind::Proof

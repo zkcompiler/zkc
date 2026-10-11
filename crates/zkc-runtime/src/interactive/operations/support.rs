@@ -19,7 +19,9 @@ pub(super) fn require_primary(binding: &OperationBinding, identity: Identity) ->
 
 pub(super) fn field_type(kind: Type, field: Identity) -> Result<LogicalType> {
     let identity = match kind {
-        Type::Bool | Type::Index | Type::Indices => Identity::None,
+        Type::Bool | Type::Index | Type::Indices | Type::Bytes | Type::Shake128State => {
+            Identity::None
+        }
         Type::Field
         | Type::Matrix
         | Type::Vector

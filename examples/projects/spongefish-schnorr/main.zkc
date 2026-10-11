@@ -1,0 +1,16 @@
+module example;
+use spongefish_schnorr::{Schnorr};
+domain G = group("bls12-381.g1");
+
+construction ExternalWire for Schnorr<G> {
+  base authored;
+  format RawBytes;
+}
+
+proof Proof = Schnorr<G> {
+  prover P;
+  verifier V;
+  public { tag, session, base, point };
+  accept accepted;
+  construction ExternalWire;
+}

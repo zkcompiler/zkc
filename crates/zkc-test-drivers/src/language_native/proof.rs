@@ -395,7 +395,7 @@ fn authored(directory: &Path) {
         "entry-proof-binding-policy"
     );
     let options = ProofOptions {
-        binding: BindingPolicy::AllowHeaderOnly,
+        binding: BindingPolicy::AllowAuthored,
         ..Default::default()
     };
     let interface: Json = serde_json::from_str(package.interface()).unwrap();

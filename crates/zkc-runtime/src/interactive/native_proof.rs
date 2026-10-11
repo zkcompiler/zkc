@@ -247,6 +247,24 @@ fn helper<'a>(
 }
 
 fn verifier_data(ty: &PhysicalType) -> bool {
+    // Private copyable snapshots are local computation data. Wire admission
+    // remains a separate boundary; a verifier can initialize its own snapshot.
+    if ty.kind() == Type::Shake128State {
+        return true;
+    }
+    let local = |logical: &super::LogicalType| {
+        PhysicalType::default_for(logical.clone()).is_ok_and(|t| verifier_data(&t))
+    };
+    if let Some(element) = ty.logical().sequence_element() {
+        return local(element);
+    }
+    if let Some(descriptor) = ty.logical().variant_descriptor() {
+        return descriptor
+            .alternatives()
+            .iter()
+            .flat_map(|a| a.payload())
+            .all(local);
+    }
     ty.is_serializable()
         || ty.has_native_array_frame()
         || verifier_key(ty)

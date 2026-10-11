@@ -155,6 +155,35 @@ bool Checker::configureEntry(Declaration &entry, const Declaration &protocol,
   value.verifier = verifier->front();
   value.suite = source.suite;
   value.span = source.span;
+  if (source.selectedConstruction) {
+    const auto &choice = *source.selectedConstruction;
+    auto selected = resolve(entry, choice.name, choice.span);
+    if (!selected)
+      return false;
+    const auto &definition = output.declarations[selected->index];
+    if (definition.kind != Declaration::Kind::Construction ||
+        !definition.target || definition.target->index != protocol.id.index)
+      return types.fail("source.construction",
+                        "construction targets another protocol", choice.span);
+    auto actual = arguments(entry, definition, choice.arguments, choice.span,
+                            choice.labels);
+    if (!actual)
+      return false;
+    auto bindings = types.substitution(definition, *actual);
+    std::vector<Type> targetArguments;
+    for (const auto &argument : definition.staticArguments) {
+      auto closed = types.substitute(argument, bindings, choice.span);
+      if (!closed)
+        return false;
+      targetArguments.push_back(std::move(*closed));
+    }
+    if (targetArguments != entry.staticArguments)
+      return types.fail("source.construction",
+                        "construction specialization differs from Entry",
+                        choice.span);
+    value.format =
+        definition.proofFormat.value_or(protocol::ProofFormat::Native);
+  }
   auto portIndex = [&](const auto &ports,
                        const SyntaxName &name) -> std::optional<unsigned> {
     if (!types.charge(ports.size() + 1, name.span))

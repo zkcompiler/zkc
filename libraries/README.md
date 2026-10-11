@@ -14,7 +14,11 @@ concrete domains, Entries and transcript constructions in
 | [`zkc::polynomial`](zkc/polynomial.zkc) | `Polynomial`, from_coefficients/evaluate/boundary | Runtime univariate polynomial data; boundary is p(0) + p(1) |
 | [`zkc::symbolic`](zkc/symbolic.zkc) | `Array`, `Polynomial`, pack/get/mle/from_coefficients/coefficients/evaluate/fix_prefix/sum_suffix/fix_table/add/multiply/constant | Total formal polynomial expressions |
 | [`zkc::boolean`](zkc/boolean.zkc) | both/either/different/negate | Total Boolean formulas; eager operands |
+| [`zkc::bytes`](zkc/bytes.zkc) | `Bytes`, empty/append/concat/slice/at/length/equal | Bounded immutable byte strings; slices and byte values are checked |
+| [`zkc::shake128`](zkc/shake128.zkc) | `State`, init/absorb/squeeze | Private copyable XOF snapshots; ordered transitions and bounded work |
+| [`zkc::encoding`](zkc/encoding.zkc) | field_be/field_from_be/field_reduce_be/group_compressed/group_from_compressed | Explicit mathematical codecs; currently BLS12-381 Fr and G1 |
 | [`schnorr`](schnorr/lib.zkc) | `DLog<G>`, `Schnorr<G>` | Discrete-log relation and three-message group protocol |
+| [`spongefish`, `spongefish_schnorr`](spongefish/README.md) | SHAKE128 framing, point/scalar observations, challenges and explicit Schnorr | Spongefish 0.7.4 BLS12-381 G1 specialization; authored 80-byte proofs |
 | [`sumcheck`](sumcheck/lib.zkc) | `Sumcheck<F, Max>` | Bounded multilinear Sumcheck over a public evaluation table |
 | [`expression_sumcheck`](sumcheck/expression.zkc) | `Sumcheck<F, Max, A: Ring>` | Sumcheck for a captured ring expression over public multilinear tables |
 | [`fri`](fri/lib.zkc) | `LowDegree<C, LogSize, TerminalLog, Rounds, Queries>` | Binary FRI over a natural-order two-adic coset |

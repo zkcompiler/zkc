@@ -85,6 +85,9 @@ struct OperationContracts {
   bool publicReplay = false;
   bool acceptanceGuard = false;
   bool conjunction = false;
+  /// Installed permission for ordinary source authoring of a copyable data
+  /// history transition. It grants no managed resource or sampling authority.
+  bool sourceHistory = false;
 };
 
 /// Resolve a logical contract key, independently of physical implementation.

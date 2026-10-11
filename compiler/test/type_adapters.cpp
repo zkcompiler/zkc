@@ -30,6 +30,11 @@ void roundTrip(MLIRContext &context, const BoundType &bound, bool physical) {
   require(encoded == bound, "logical identity or representation changed");
   require(decodeBoundType(&context, encoded) == native,
           "native type identity changed");
+  std::string printed;
+  llvm::raw_string_ostream stream(printed);
+  native.print(stream);
+  require(mlir::parseType(printed, &context) == native,
+          "textual native type roundtrip changed identity");
 }
 } // namespace
 
@@ -112,6 +117,9 @@ int main() {
   std::vector<std::pair<std::string, Type>> nativeCases{
       {"bool", IntegerType::get(&context, 1)},
       {"index", IntegerType::get(&context, 64, IntegerType::Unsigned)},
+      {"bytes",
+       dynamicVector(IntegerType::get(&context, 8, IntegerType::Unsigned))},
+      {"shake128_state", zkc::crypto::Shake128StateType::get(&context)},
       {"indices",
        dynamicVector(IntegerType::get(&context, 64, IntegerType::Unsigned))},
       {"field:" + field, zkc::algebra::FieldType::get(&context, field)},
@@ -174,7 +182,8 @@ int main() {
       require(take(encodeBoundType(native, false)) == bound,
               "native encoder changed identity");
     });
-    if (spelling == "bool" || spelling == "index" || spelling == "indices")
+    if (spelling == "bool" || spelling == "index" || spelling == "indices" ||
+        spelling == "bytes")
       continue;
     for (bool registered : {false, true})
       cases.run(
@@ -194,7 +203,7 @@ int main() {
   }
   cases.run("builtin carriers need no zkc dialect", [&] {
     MLIRContext fresh;
-    for (StringRef kind : {"bool", "index", "indices"})
+    for (StringRef kind : {"bool", "index", "indices", "bytes"})
       roundTrip(fresh, take(parseBoundType(kind, false)), false);
   });
   cases.run("loaded namespace without registered type", [&] {

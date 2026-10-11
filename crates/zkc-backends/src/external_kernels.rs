@@ -26,8 +26,10 @@ impl Default for Budget {
 }
 impl Budget {
     // Deliberately a logical work metric, not cycles or cryptographic security.
-    fn charge(&mut self, work: Work) -> Result<()> {
-        let cost = work.units().map_err(primitive)?;
+    pub(crate) fn charge(&mut self, work: Work) -> Result<()> {
+        self.charge_units(work.units().map_err(primitive)?)
+    }
+    pub(crate) fn charge_units(&mut self, cost: u64) -> Result<()> {
         // A sum past u64 is past any limit.
         let next = self
             .spent

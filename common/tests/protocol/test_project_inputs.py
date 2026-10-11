@@ -67,14 +67,14 @@ def test_selection_filters_only_when_the_name_is_omitted(toolchain, journal, dir
     for entry, group in [('Interactive', 'P'), ('Proof', 'witness')]:
         report = journal.json([toolchain.runtime, '--json', 'inputs', 'init', entry, *options])
         assert report['files'] == [str(project / f'inputs/example.{entry}/{group}.json')]
-        assert report['requirements'] == {'allow_header_only': entry == 'Proof', 'setups': []}
+        assert report['requirements'] == {'allow_authored': entry == 'Proof', 'setups': []}
         Path(report['files'][0]).write_text('{"b":true}')
     p = project / 'inputs/example.Interactive/P.json'
     run = journal.json([toolchain.runtime, '--json', 'run', *options, '--session=test', f'--input=P={p}'])
     assert run['entry'] == 'example::Interactive'
     witness = project / 'inputs/example.Proof/witness.json'
     proof = directory / 'proof.bin'
-    producing = ['--allow-header-only', f'--witness={witness}', f'--output={proof}']
+    producing = ['--allow-authored', f'--witness={witness}', f'--output={proof}']
     assert journal.json([toolchain.runtime, '--json', 'prove', *options, *producing])['entry'] == 'example::Proof'
 
     # Explicit short names must remain ambiguous across different execution kinds.
@@ -88,10 +88,10 @@ def test_selection_filters_only_when_the_name_is_omitted(toolchain, journal, dir
                                refuses='source-compilation')
         assert 'source.entry' in refused['diagnostics'] and 'ambiguous' in refused['diagnostics']
     assert journal.json([toolchain.runtime, '--json', 'prove', 'example::Proof', *options, *producing])['status'] == 'produced'
-    assert journal.json([toolchain.runtime, '--json', 'verify', *options, '--allow-header-only', f'--proof={proof}'])['status'] == 'accepted'
+    assert journal.json([toolchain.runtime, '--json', 'verify', *options, '--allow-authored', f'--proof={proof}'])['status'] == 'accepted'
     refusal = journal.json([toolchain.runtime, '--json', 'prove', 'Interactive', *options, *producing], refuses='source-compilation')
     assert 'source.entry-kind' in refusal['diagnostics']
-    journal.run([toolchain.runtime, '--json', 'verify', *options, '--allow-header-only', f'--proof={proof}', '--witness=missing'], refuses='cli-option')
+    journal.run([toolchain.runtime, '--json', 'verify', *options, '--allow-authored', f'--proof={proof}', '--witness=missing'], refuses='cli-option')
     # Additional run Entries require selection; proof selection remains unique.
     with (project / 'main.zkc').open('a') as f:
         f.write('\nrun Other=Test;\n')
@@ -105,7 +105,7 @@ def test_check_prepares_without_executing_or_issuing_resources(toolchain, journa
     protocol Test roles(P,V)(go:bool@P)->(accepted:bool@V){require go;let r=send P->V(go);return r;}
     proof Proof=Test{prover P;verifier V;public{};accept accepted;construction authored;}
     ''')
-    options = [f'--compiler={toolchain.compiler}', f'--module=test={source}', '--allow-header-only']
+    options = [f'--compiler={toolchain.compiler}', f'--module=test={source}', '--allow-authored']
     witness = journal.write('witness.json', {'go': False})
     checked = journal.json([toolchain.runtime, '--json', 'inputs', 'check', '--operation=prove', *options, f'--witness={witness}'])
     assert checked['status'] == 'inputs-checked' and 'execution' not in checked

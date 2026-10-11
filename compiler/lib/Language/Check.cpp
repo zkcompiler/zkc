@@ -143,6 +143,7 @@ bool Checker::collect() {
     decl.associatedSort = source.associatedSort;
     decl.anonymous = source.anonymous;
     decl.specificationBlock = source.specificationBlock;
+    decl.proofFormat = source.proofFormat;
     if (source.relation) {
       const auto &definition = *source.relation;
       decl.relation = RelationDefinition{

@@ -19,7 +19,7 @@ use serde_json::{Value as Json, json};
 pub use setups::SetupAuthority;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-pub use wire::{FormatError, MAX_PROOF_BYTES, ProofReader, ProofWriter};
+pub use wire::{FormatError, MAX_PROOF_BYTES, ProofFormat, ProofReader, ProofWriter};
 use zkc_backends::{
     Capability, Domain, EntryPolicy, NativeBackend, Policy, Value,
     services::{ServiceReference, ServiceRegistry},
@@ -43,7 +43,10 @@ pub(crate) struct RoleMap {
     pub(crate) services: Vec<usize>,
     pub(crate) outputs: Vec<Port>,
 }
-/// Immutable deployment admitted against an independently supplied digest.
+/// Low-level deployment admitted against an independently supplied digest.
+/// This API executes the pinned algorithm, including authored constructions;
+/// it does not impose an application binding policy. Use [`crate::entry::ProofEntry`]
+/// with [`crate::entry::ProofOptions`] to require managed transcript binding.
 #[derive(Clone, Debug)]
 pub struct NativeDeployment {
     ring_assets: zkc_backends::ring::Registry,
@@ -57,6 +60,7 @@ pub struct NativeDeployment {
     entry: NativeProofEntry,
     source: String,
     descriptor: Json,
+    format: ProofFormat,
     public: Vec<Port>,
     maps: BTreeMap<String, RoleMap>,
 }
@@ -66,6 +70,7 @@ pub(crate) struct SourceInterface<'a> {
     pub choices: [bool; 3],
     pub acceptance: usize,
     pub suite: Option<&'a str>,
+    pub format: ProofFormat,
     pub service: Option<usize>,
     pub public: &'a [Port],
     pub roles: &'a BTreeMap<String, RoleMap>,
@@ -326,6 +331,7 @@ impl NativeDeployment {
             entry: proof_entry,
             source,
             descriptor: envelope[2].clone(),
+            format: policy.format,
             public,
             maps,
         })
@@ -369,6 +375,7 @@ impl NativeDeployment {
             choices: self.choices,
             acceptance: index(&policy[4]).expect("admitted acceptance"),
             suite: (!suite.is_empty()).then_some(suite),
+            format: self.format,
             service: (!service.is_empty()).then(|| index(&policy[6]).expect("admitted service")),
             public: &self.public,
             roles: &self.maps,
@@ -379,8 +386,8 @@ impl NativeDeployment {
     /// default. This setting applies to every later invocation on this value;
     /// each allowance covers all attempts and successful or failed trial calls.
     /// It changes no program or transcript bytes and is reported separately
-    /// from deployment and attempt-policy identities. CLI execution uses the
-    /// default cap. Zero permits only transitions with zero primitive work.
+    /// from deployment and attempt-policy identities. The CLI exposes the same
+    /// cap through `--external-work`. Zero permits only zero-work transitions.
     pub fn with_external_work_limit(mut self, limit: u64) -> Result<Self> {
         if limit > NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT {
             return Err("native-proof-external-work-limit".into());
@@ -391,6 +398,9 @@ impl NativeDeployment {
 
     /// Execute immutable role inputs with an explicit production, verification
     /// or retry request. Public inputs and setups remain application-authorized.
+    /// Authored execution follows the pinned program's own binding algorithm.
+    /// For RawBytes, `input.context` identifies the invocation report only; pass
+    /// any context the protocol must authenticate through its public data ports.
     pub fn execute(
         &self,
         input: &ProofInputs,
@@ -596,14 +606,11 @@ impl NativeDeployment {
                 Ok(mut runner) => {
                     match proof {
                         None => {
-                            let produced = driver::produce_admitted(
+                            let produced = driver::produce_native(
                                 &mut runner,
                                 &binding,
-                                |backend, value| {
-                                    backend
-                                        .encode_native_value(value)
-                                        .map_err(driver::ArtifactFailure::NativeWire)
-                                },
+                                self.format,
+                                MAX_PROOF_BYTES,
                             );
                             retain_driver_stop(&mut report, &produced);
                             report.outcome = produced
@@ -622,6 +629,7 @@ impl NativeDeployment {
                                 &mut runner,
                                 proof,
                                 &binding,
+                                self.format,
                                 self.entry.acceptance(),
                             );
                             retain_driver_stop(&mut report, &validated);

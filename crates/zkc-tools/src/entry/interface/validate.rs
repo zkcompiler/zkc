@@ -321,8 +321,13 @@ fn job(
         check_decision(protocol, completion, prover)?;
     }
     let derived = match construction {
-        Construction::Authored {} => None,
-        Construction::FiatShamir { suite, service } => {
+        Construction::Authored { .. } => None,
+        Construction::FiatShamir {
+            suite,
+            service,
+            format,
+        } => {
+            require(*format == crate::proof::ProofFormat::Native, E::Selection)?;
             let selected = protocol
                 .services
                 .get(*service as usize)

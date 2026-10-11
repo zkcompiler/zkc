@@ -371,6 +371,7 @@ class Comparison {
     if (!charge(source->publicInputs.size() + actual.publicInputs.size() + 1))
       return false;
     return (source->construction == actual.construction &&
+            source->format == actual.format &&
             source->prover == actual.prover &&
             source->verifier == actual.verifier &&
             source->publicInputs == actual.publicInputs &&

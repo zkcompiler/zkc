@@ -14,7 +14,7 @@ manifest = []
 for family in ['fold', 'batch']:
     for suite_index, suite in enumerate(suites):
         policy = ['zkc.native-proof-policy/0', family, 'P', 'V', '0', suite,
-                  '5', ['0', '1', '2'], [['draw', 'challenge']]]
+                  '5', ['0', '1', '2'], [['draw', 'challenge']], "zkc.framed/0"]
         for mode, options in [('normal', []), ('plain', ['--no-simplify']),
                               ('release', ['--release-storage']),
                               ('plain_release', ['--no-simplify', '--release-storage'])]:

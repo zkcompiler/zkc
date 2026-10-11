@@ -43,6 +43,8 @@ pub enum Type {
     ResourceUnit,
     Index,
     Indices,
+    Bytes,
+    Shake128State,
     Matrix,
     Vector,
     Polynomial,
@@ -74,6 +76,8 @@ impl Type {
             Self::ResourceUnit => "resource_unit",
             Self::Index => "index",
             Self::Indices => "indices",
+            Self::Bytes => "bytes",
+            Self::Shake128State => "shake128_state",
             Self::Matrix => "matrix",
             Self::Vector => "vector",
             Self::Polynomial => "polynomial",
@@ -111,6 +115,8 @@ impl Type {
             | Self::Transcript => true,
             Self::FieldArray
             | Self::Index
+            | Self::Bytes
+            | Self::Shake128State
             | Self::Indices
             | Self::Matrix
             | Self::Vector
@@ -133,7 +139,8 @@ impl Type {
     }
     pub fn is_serializable(self) -> bool {
         match self {
-            Self::Sequence
+            Self::Shake128State
+            | Self::Sequence
             | Self::FieldArray
             | Self::FixedVector
             | Self::Variant
@@ -146,6 +153,7 @@ impl Type {
             | Self::VerifierKey
             | Self::OpeningState => false,
             Self::Index
+            | Self::Bytes
             | Self::Indices
             | Self::Matrix
             | Self::Vector
@@ -185,6 +193,8 @@ impl Type {
             | Self::Transcript => false,
             Self::FieldArray
             | Self::Index
+            | Self::Bytes
+            | Self::Shake128State
             | Self::Indices
             | Self::Matrix
             | Self::Vector
@@ -213,6 +223,8 @@ impl Type {
             "resource_unit" => Self::ResourceUnit,
             "index" => Self::Index,
             "indices" => Self::Indices,
+            "bytes" => Self::Bytes,
+            "shake128_state" => Self::Shake128State,
             "matrix" => Self::Matrix,
             "vector" => Self::Vector,
             "polynomial" => Self::Polynomial,

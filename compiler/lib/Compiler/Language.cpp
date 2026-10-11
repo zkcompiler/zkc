@@ -365,6 +365,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
     selection.validator = nativeRoleName(proof.verifier);
     selection.acceptance = proof.acceptance.native.front();
     selection.suite = proof.suite;
+    selection.format = proof.format;
     if (proof.service)
       selection.service = protocol.services[*proof.service].native;
     for (auto index : proof.publicInputs)

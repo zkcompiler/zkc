@@ -858,9 +858,13 @@ private:
           if (!expect("(") || !string(value.suite) || !expect(",") ||
               !named(*value.service) || !expect(")") || !expect(";"))
             return false;
-        } else
-          return fail("source.entry",
-                      "expected authored or fiat_shamir construction");
+        } else {
+          value.selectedConstruction.emplace();
+          if (!type(*value.selectedConstruction) ||
+              value.selectedConstruction->kind != SyntaxType::Kind::Name ||
+              !expect(";"))
+            return fail("source.entry", "expected a construction selection");
+        }
       } else
         return fail("source.entry", "unknown Entry choice");
     }
@@ -1116,6 +1120,47 @@ private:
         if (!expect(";"))
           return {};
       } else if (!body(d, false, false, 1))
+        return {};
+    } else if (take("construction")) {
+      d.kind = Declaration::Kind::Construction;
+      if (member) {
+        fail("source.construction", "constructions belong at module scope");
+        return {};
+      }
+      SyntaxType target;
+      if (!name(d.name) || !parameters(d.parameters) || !expect("for") ||
+          !type(target) || target.kind != SyntaxType::Kind::Name ||
+          !requirements(d) || !expect("{"))
+        return {};
+      d.target = target.name;
+      d.targetArguments = std::move(target.arguments);
+      d.targetLabels = std::move(target.labels);
+      std::set<std::string> choices;
+      while (!at("}") && !atEnd()) {
+        std::string key;
+        if (!name(key))
+          return {};
+        if (!choices.insert(key).second) {
+          fail("source.construction", "duplicate construction clause");
+          return {};
+        }
+        if (key == "base") {
+          if (!expect("authored") || !expect(";"))
+            return {};
+        } else if (key == "format") {
+          if (!expect("RawBytes") || !expect(";"))
+            return {};
+          d.proofFormat = protocol::ProofFormat::RawBytes;
+        } else {
+          fail("source.construction", "unknown construction clause");
+          return {};
+        }
+      }
+      if (!choices.count("base")) {
+        fail("source.construction", "authored construction requires its base");
+        return {};
+      }
+      if (!expect("}"))
         return {};
     } else if (at("run") || at("proof")) {
       d.entryKind = at("proof") ? EntryKind::Proof : EntryKind::Run;

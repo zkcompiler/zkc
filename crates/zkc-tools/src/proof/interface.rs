@@ -15,12 +15,13 @@ pub(super) struct DeploymentPolicy<'a> {
     pub(super) validator: &'a str,
     pub(super) original_acceptance: usize,
     pub(super) suite: Option<&'a str>,
+    pub(super) format: super::ProofFormat,
     public_selection: &'a Json,
     pub(super) draw_count: usize,
 }
 impl<'a> DeploymentPolicy<'a> {
     pub(super) fn read(value: &'a Json) -> Result<Self> {
-        let policy = array(value, 9)?;
+        let policy = array(value, 10)?;
         if text(&policy[0])? != "zkc.native-proof-policy/0" {
             return Err("native-proof-policy".into());
         }
@@ -32,6 +33,10 @@ impl<'a> DeploymentPolicy<'a> {
         let original_acceptance = index(&policy[4])?;
         let suite = text(&policy[5])?;
         let suite = (!suite.is_empty()).then_some(suite);
+        let format = super::ProofFormat::parse(text(&policy[9])?).ok_or("native-proof-format")?;
+        if format == super::ProofFormat::RawBytes && suite.is_some() {
+            return Err("native-proof-format".into());
+        }
         let draws = list(&policy[8])?;
         if draws.len() > 64
             || (suite.is_some() != !draws.is_empty())
@@ -61,6 +66,7 @@ impl<'a> DeploymentPolicy<'a> {
             validator,
             original_acceptance,
             suite,
+            format,
             public_selection: &policy[7],
             draw_count: draws.len(),
         })

@@ -386,10 +386,20 @@ relation.table_interaction 0
 relation.table_record_points 0
 vector.transpose 0";
     let sequences = "sequence.empty 0\nsequence.append 0\nsequence.length 0\nsequence.at 0";
+    let bytes = "bytes.empty 0\nbytes.append 0\nbytes.concat 0\nbytes.slice 0\nbytes.at 0\nbytes.length 0\nbytes.equal 0
+shake128.init 0
+shake128.absorb 1
+shake128.squeeze 1
+encoding.field_be 0
+encoding.field_from_be 0
+encoding.field_reduce_be 0
+encoding.group_compressed 0
+encoding.group_from_compressed 0";
     for line in fixture
         .lines()
         .chain(native.lines())
         .chain(sequences.lines())
+        .chain(bytes.lines())
     {
         let (contract, expected) = line.split_once(' ').expect("inventory row");
         assert!(seen.insert(contract), "duplicate inventory contract");

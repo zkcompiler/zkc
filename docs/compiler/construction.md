@@ -79,14 +79,18 @@ snapshot does not attest its history or reachability; every executed trial still
 charges primitive work. Affine RNG and derived-transcript resources keep their
 own custody rules.
 
-The Host binds public context into the outer header. Authored code decides what
+With native framing, the Host binds public context into the outer header. Authored code decides what
 enters its cryptographic state: automatically hashing the zkc header would
 change the authored algorithm. `binding_scope = "header"` states this limited
-guarantee, and the CLI requires `--allow-header-only` acknowledgement. Admission
+guarantee, and the CLI requires `--allow-authored` acknowledgement. Admission
 does not require every received message to be observed.
 
-Byte words currently use eight bytes per index plus framing. They preserve
-values without claiming upstream proof-wire compatibility. Bounded search and
+A format-only source construction can select `RawBytes`: one authored `Bytes`
+message becomes the entire proof without a header or prefix. The report then
+uses `binding_scope = "authored"`; source code owns statement/context binding.
+The [Spongefish example](../../examples/projects/spongefish-schnorr/README.md)
+uses this path for an external 80-byte record. Byte data and mathematical
+encodings are independent of native transport frames. Bounded search and
 early participant return use [ordinary control](control.md); retry remains an
 explicit returned decision handled by the [attempt Host](../runtime/attempts.md).
 
