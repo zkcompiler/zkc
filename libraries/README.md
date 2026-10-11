@@ -40,7 +40,9 @@ forwards nested callbacks with record/vector captures and a checked lookup.
 
 ### Finite computations
 
-The finite libraries use ordinary statically bound scoped functions. The input
+The finite libraries use statically bound callbacks written `fn(...) -> ...`
+or `math fn(...) -> ...`, and finite domains written `domain<I>`. These are
+static parameter categories, with no runtime function or domain values. The input
 item, accumulated state and output element can have different types. For example:
 
 ```text

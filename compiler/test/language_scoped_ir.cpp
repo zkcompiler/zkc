@@ -83,9 +83,9 @@ int main() {
         auto captured = take(capture({{"sample", R"(module sample;
 domain Fr=field("koala-bear");
 type Vector<F:Field>=builtin("vector",F);
-domain fn elements<F:Field>(xs:Vector<F>)->scoped domain<F>=domain("elements");
-fn ignore(rows:scoped domain<Fr>,fallback:Fr)->Fr{return fallback;}
-fn iterate(x:Fr,n:index,rows:scoped domain<Fr>,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{
+domain fn elements<F:Field>(xs:Vector<F>)->domain<F>=domain("elements");
+fn ignore(rows:domain<Fr>,fallback:Fr)->Fr{return fallback;}
+fn iterate(x:Fr,n:index,rows:domain<Fr>,body:fn(Fr)->Fr !{stop})->Fr !{stop}{
  let mut state=x;for _ in 0..n {state=ignore(rows,body(state));}return state;
 }
 fn outer(xs:Vector<Fr>,x:Fr,n:index)->Fr !{stop}{
@@ -114,10 +114,10 @@ protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,n:index@P)->(r:Fr@P){return outer(x
                 std::string(R"(module sample;
 domain Fr=field("koala-bear");
 type Vector<F:Field>=builtin("vector",F);
-domain fn elements<F:Field>(xs:Vector<F>)->scoped domain<F>=domain("elements");
+domain fn elements<F:Field>(xs:Vector<F>)->domain<F>=domain("elements");
 )") + mode +
-                    "fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped "
-                    "domain<I>,initial:S,step:scoped " +
+                    "fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:"
+                    "domain<I>,initial:S,step:" +
                     mode + "fn(S,I)->S" + effects + " on(rows))->S" + effects +
                     "=finite(\"" + (mathematical ? "math.fold" : "local.fold") +
                     R"(");
@@ -140,8 +140,8 @@ protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,offset:Fr@P)->(r:Fr@P){return fold(
 domain Fr=field("koala-bear");
 type Sequence<T:Type+Copy+Drop>=builtin("sequence",T);
 struct Row {pub value:Fr,pub enabled:bool}
-domain fn elements<T:Type+Copy+Drop>(xs:Sequence<T>)->scoped domain<T>=domain("elements");
-fn collect<I:Type+Copy+Drop,B:Type+Copy+Drop>(rows:scoped domain<I>,body:scoped fn(I)->B !{stop} on(rows))->Sequence<B> !{stop}=finite("local.collect.sequence");
+domain fn elements<T:Type+Copy+Drop>(xs:Sequence<T>)->domain<T>=domain("elements");
+fn collect<I:Type+Copy+Drop,B:Type+Copy+Drop>(rows:domain<I>,body:fn(I)->B !{stop} on(rows))->Sequence<B> !{stop}=finite("local.collect.sequence");
 protocol Run roles(P)(xs:Sequence<Row>@P)->(r:Sequence<Row>@P){return collect(elements(xs),fn(row)=>row);}run Demo=Run;
 )",
                                    "collect.zkc"}}));
@@ -167,10 +167,10 @@ protocol Run roles(P)(xs:Sequence<Row>@P)->(r:Sequence<Row>@P){return collect(el
                   std::string(R"(module sample;
 domain Fr=field("koala-bear");
 struct Row {pub a:Fr,pub b:Fr}
-domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
 )") + mode +
-                      "fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped "
-                      "domain<I>,initial:S,step:scoped " +
+                      "fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:"
+                      "domain<I>,initial:S,step:" +
                       mode + "fn(S,I)->S" + effects + " on(rows))->S" +
                       effects + "=finite(\"" +
                       (mathematical ? "math.fold" : "local.fold") + R"(");
@@ -263,11 +263,11 @@ protocol Run roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);})",
 math fn work(xs:Vector<Fr>)->Fr{return inner(xs,xs);}
 protocol Run roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);})",
           R"(struct Row {pub value:Fr,pub enabled:bool}
-domain fn positions(xs:Sequence<Row>)->scoped domain<index>=domain("indices");
+domain fn positions(xs:Sequence<Row>)->domain<index>=domain("indices");
 math fn get(xs:Sequence<Row>,i:index)->Row where in_bounds(i,xs){return intrinsic<Sequence<Row>>("container.at",xs,i);}
 math fn work(xs:Sequence<Row>)->Fr{return total(positions(xs),0,fn(state, i)=>{let row=get(xs,i);state+row.value});}
 protocol Run roles(P)(xs:Sequence<Row>@P)->(r:Fr@P){return work(xs);})",
-          R"(domain fn coords(xs:Matrix<Fr>)->scoped domain<(index,index)>=domain("matrix.coordinates.row_major");
+          R"(domain fn coords(xs:Matrix<Fr>)->domain<(index,index)>=domain("matrix.coordinates.row_major");
 math fn work(xs:Matrix<Fr>)->Fr{return total(coords(xs),0,fn(state, (i,j))=>state+intrinsic<Matrix<Fr>>("matrix.at",xs,i,j));}
 protocol Run roles(P)(xs:Matrix<Fr>@P)->(r:Fr@P){return work(xs);})"})
     cases.run("total bounds compile " + work.substr(0, 70), [&] {
@@ -276,9 +276,9 @@ domain Fr=field("koala-bear");
 type Vector<F:Field>=builtin("vector",F);
 type Matrix<F:Field>=builtin("matrix",F);
 type Sequence<T:Type+Copy+Drop>=builtin("sequence",T);
-domain fn indices(xs:Vector<Fr>)->scoped domain<index>=domain("indices");
+domain fn indices(xs:Vector<Fr>)->domain<index>=domain("indices");
 math fn at(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return intrinsic<Vector<Fr>>("container.at",xs,i);}
-math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold");
+math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:math fn(S,I)->S on(rows))->S=finite("math.fold");
 )") + work + "run Demo=Run;",
                                      "bounds.zkc"}}));
       auto entry = take(
@@ -307,9 +307,9 @@ math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S
     auto captured = take(capture({{"sample", R"(module sample;
 domain Fr=field("bls12-381.fr");
 type Array<F:Field,N:nat>=builtin("field_array",F,N);
-domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
-domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
-math fn collect<I:Type+Copy+Drop,N:nat>(rows:scoped domain<I>,body:scoped math fn(I)->Fr on(rows))->Array<Fr,N>=finite("math.collect.field_array");
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)>=domain("zip");
+math fn collect<I:Type+Copy+Drop,N:nat>(rows:domain<I>,body:math fn(I)->Fr on(rows))->Array<Fr,N>=finite("math.collect.field_array");
 math fn work(xs:[Fr;2],ys:[Fr;2])->Array<Fr,2>{return collect(zip(array(xs),array(ys)),fn((x,y))=>x+y);}
 protocol Run roles(P)(xs:[Fr;2]@P,ys:[Fr;2]@P)->(r:Array<Fr,2>@P){return work(xs,ys);}run Demo=Run;
 )",
@@ -323,8 +323,8 @@ protocol Run roles(P)(xs:[Fr;2]@P,ys:[Fr;2]@P)->(r:Array<Fr,2>@P){return work(xs
   cases.run("total index expressions and range filters", [&] {
     auto captured = take(capture({{"sample", R"(module sample;
 domain Fr=field("koala-bear");
-domain fn range(lower:index,upper:index)->scoped domain<index>=domain("range");
-math fn filtered<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,keep:scoped math fn(I)->bool on(rows),step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold_where");
+domain fn range(lower:index,upper:index)->domain<index>=domain("range");
+math fn filtered<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,keep:math fn(I)->bool on(rows),step:math fn(S,I)->S on(rows))->S=finite("math.fold_where");
 math fn threshold<N:nat>()->index{return index<N>();}
 math fn work(n:index)->(Fr,bool,index){
  let result:Fr=filtered(range(0,n),0,fn(i)=>intrinsic("index.less",i,threshold<2>()),fn(state, item)=>state+1);
@@ -360,9 +360,9 @@ protocol Run roles(P)(n:index@P)->(r:(Fr,bool,index)@P){return work(n);}run Demo
           auto captured = take(capture({{"sample", R"(module sample;
 domain Fr=field("koala-bear");
 type Vector<F:Field>=builtin("vector",F);
-domain fn elements<F:Field>(xs:Vector<F>)->scoped domain<F>=domain("elements");
-domain fn choose<F:Field>(left:Vector<F>,right:Vector<F>)->scoped domain<F>{let a=elements(left);let b=elements(right);return a;}
-fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+domain fn elements<F:Field>(xs:Vector<F>)->domain<F>=domain("elements");
+domain fn choose<F:Field>(left:Vector<F>,right:Vector<F>)->domain<F>{let a=elements(left);let b=elements(right);return a;}
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
 protocol Run roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,offset:Fr@P)->(r:Fr@P){return fold(choose(xs,ys),0,fn(state, item)=>state*10+item+offset);}run Demo=Run;
 )",
                                          "mutation.zkc"}}));

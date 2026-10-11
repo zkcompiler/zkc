@@ -3,73 +3,73 @@ use zkc::sequence::{Sequence};
 use zkc::accumulation::{Combiner, FieldSum, FieldProduct, GroupSum};
 
 pub fn fold<I: Type + Copy + Drop, S: Type>(
-  rows: scoped domain<I>, initial: S,
-  step: scoped fn(S, I) -> S !{stop} on(rows)
+  rows: domain<I>, initial: S,
+  step: fn(S, I) -> S !{stop} on(rows)
 ) -> S !{stop} = finite("local.fold");
 
 pub fn fold_where<I: Type + Copy + Drop, S: Type>(
-  rows: scoped domain<I>, initial: S,
-  keep: scoped fn(I) -> bool !{stop} on(rows),
-  step: scoped fn(S, I) -> S !{stop} on(rows)
+  rows: domain<I>, initial: S,
+  keep: fn(I) -> bool !{stop} on(rows),
+  step: fn(S, I) -> S !{stop} on(rows)
 ) -> S !{stop} = finite("local.fold_where");
 
 pub fn collect<I: Type + Copy + Drop, T: Type + Copy + Drop>(
-  rows: scoped domain<I>, body: scoped fn(I) -> T !{stop} on(rows)
+  rows: domain<I>, body: fn(I) -> T !{stop} on(rows)
 ) -> Sequence<T> !{stop} = finite("local.collect.sequence");
 
 pub fn collect_where<I: Type + Copy + Drop, T: Type + Copy + Drop>(
-  rows: scoped domain<I>, keep: scoped fn(I) -> bool !{stop} on(rows),
-  body: scoped fn(I) -> T !{stop} on(rows)
+  rows: domain<I>, keep: fn(I) -> bool !{stop} on(rows),
+  body: fn(I) -> T !{stop} on(rows)
 ) -> Sequence<T> !{stop} = finite("local.collect.sequence_where");
 
 pub fn accumulate<I: Type + Copy + Drop, T: Type + Copy + Drop, C: Combiner<T>>(
-  rows: scoped domain<I>, body: scoped fn(I) -> T !{stop} on(rows)
+  rows: domain<I>, body: fn(I) -> T !{stop} on(rows)
 ) -> T !{stop} {
   return fold(rows, C::identity(), fn(state, item) => C::combine(state, body(item)));
 }
 
 pub fn accumulate_where<I: Type + Copy + Drop, T: Type + Copy + Drop, C: Combiner<T>>(
-  rows: scoped domain<I>, keep: scoped fn(I) -> bool !{stop} on(rows),
-  body: scoped fn(I) -> T !{stop} on(rows)
+  rows: domain<I>, keep: fn(I) -> bool !{stop} on(rows),
+  body: fn(I) -> T !{stop} on(rows)
 ) -> T !{stop} {
   return fold_where(rows, C::identity(), keep, fn(state, item) => C::combine(state, body(item)));
 }
 
 pub fn sum<I: Type + Copy + Drop, F: Field>(
-  rows: scoped domain<I>, body: scoped fn(I) -> F !{stop} on(rows)
+  rows: domain<I>, body: fn(I) -> F !{stop} on(rows)
 ) -> F !{stop} {
   return accumulate<I, F, FieldSum<F>>(rows, body);
 }
 
 pub fn sum_where<I: Type + Copy + Drop, F: Field>(
-  rows: scoped domain<I>, keep: scoped fn(I) -> bool !{stop} on(rows),
-  body: scoped fn(I) -> F !{stop} on(rows)
+  rows: domain<I>, keep: fn(I) -> bool !{stop} on(rows),
+  body: fn(I) -> F !{stop} on(rows)
 ) -> F !{stop} {
   return accumulate_where<I, F, FieldSum<F>>(rows, keep, body);
 }
 
 pub fn product<I: Type + Copy + Drop, F: Field>(
-  rows: scoped domain<I>, body: scoped fn(I) -> F !{stop} on(rows)
+  rows: domain<I>, body: fn(I) -> F !{stop} on(rows)
 ) -> F !{stop} {
   return accumulate<I, F, FieldProduct<F>>(rows, body);
 }
 
 pub fn product_where<I: Type + Copy + Drop, F: Field>(
-  rows: scoped domain<I>, keep: scoped fn(I) -> bool !{stop} on(rows),
-  body: scoped fn(I) -> F !{stop} on(rows)
+  rows: domain<I>, keep: fn(I) -> bool !{stop} on(rows),
+  body: fn(I) -> F !{stop} on(rows)
 ) -> F !{stop} {
   return accumulate_where<I, F, FieldProduct<F>>(rows, keep, body);
 }
 
 pub fn group_sum<I: Type + Copy + Drop, G: Group>(
-  rows: scoped domain<I>, body: scoped fn(I) -> G !{stop} on(rows)
+  rows: domain<I>, body: fn(I) -> G !{stop} on(rows)
 ) -> G where zkc::curve::ScalarAction(G) !{stop} {
   return accumulate<I, G, GroupSum<G>>(rows, body);
 }
 
 pub fn group_sum_where<I: Type + Copy + Drop, G: Group>(
-  rows: scoped domain<I>, keep: scoped fn(I) -> bool !{stop} on(rows),
-  body: scoped fn(I) -> G !{stop} on(rows)
+  rows: domain<I>, keep: fn(I) -> bool !{stop} on(rows),
+  body: fn(I) -> G !{stop} on(rows)
 ) -> G where zkc::curve::ScalarAction(G) !{stop} {
   return accumulate_where<I, G, GroupSum<G>>(rows, keep, body);
 }

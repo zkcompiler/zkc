@@ -5,12 +5,12 @@ pub math fn identity<G: Group>() -> G where zkc::curve::ScalarAction(G)
   = primitive("curve.identity");
 
 pub type Groups<G: Group> = builtin("groups", G);
-pub domain fn elements<G: Group>(values: Groups<G>) -> scoped domain<G> = domain("elements");
-pub domain fn indices<G: Group>(values: Groups<G>) -> scoped domain<index> = domain("indices");
+pub domain fn elements<G: Group>(values: Groups<G>) -> domain<G> = domain("elements");
+pub domain fn indices<G: Group>(values: Groups<G>) -> domain<index> = domain("indices");
 pub math fn at<G: Group>(values: Groups<G>, position: index) -> G where in_bounds(position, values)
   = primitive("container.at");
 pub fn collect<I: Type + Copy + Drop, G: Group>(
-  rows: scoped domain<I>, body: scoped fn(I) -> G !{stop} on(rows)
+  rows: domain<I>, body: fn(I) -> G !{stop} on(rows)
 ) -> Groups<G> !{stop} = finite("local.collect.groups");
 
 // Bounds follow the selected total accessor; checked access can be rebound locally.

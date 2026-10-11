@@ -9,10 +9,10 @@ const std::string prelude = R"(module m;
 domain Fr=field("koala-bear");
 type Vector<F:Field>=builtin("vector",F);
 fn get<F:Field>(xs:Vector<F>,i:index)->F=primitive("vector.get");
-math fn apply_math<A:Type+Copy+Drop,B:Type+Copy+Drop>(x:A,body:scoped math fn(A)->B)->B{return body(x);}
-math fn forward_math<A:Type+Copy+Drop,B:Type+Copy+Drop>(x:A,body:scoped math fn(A)->B)->B{return apply_math(x,body);}
-fn apply<A:Type,B:Type>(x:A,body:scoped fn(A)->B !{stop})->B !{stop}{return body(x);}
-fn forward<A:Type,B:Type>(x:A,body:scoped fn(A)->B !{stop})->B !{stop}{return apply(x,body);}
+math fn apply_math<A:Type+Copy+Drop,B:Type+Copy+Drop>(x:A,body:math fn(A)->B)->B{return body(x);}
+math fn forward_math<A:Type+Copy+Drop,B:Type+Copy+Drop>(x:A,body:math fn(A)->B)->B{return apply_math(x,body);}
+fn apply<A:Type,B:Type>(x:A,body:fn(A)->B !{stop})->B !{stop}{return body(x);}
+fn forward<A:Type,B:Type>(x:A,body:fn(A)->B !{stop})->B !{stop}{return apply(x,body);}
 )";
 Expected<CheckedProject> check(StringRef source) {
   auto captured = capture({{"m", prelude + source.str(), "scoped.zkc"}});
@@ -45,8 +45,8 @@ run Run=Demo;)");
   });
   cases.run("existing reduction inside scoped callback", [] {
     succeeds(R"(
-fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn sum<I:Type+Copy+Drop>(rows:scoped domain<I>,term:scoped fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fn(state, item)=>state+term(item));}
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+fn sum<I:Type+Copy+Drop>(rows:domain<I>,term:fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fn(state, item)=>state+term(item));}
 reduction ∑=sum;
 fn example(xs:Vector<Fr>,a:Fr)->Fr {
  return apply(a,fn(y)=>∑ x in xs, (x+a+y));
@@ -57,8 +57,8 @@ run Run=Demo;)");
   cases.run(
       "scoped specialization retains joint authored and captured aliases", [] {
         auto project = take(check(R"(
-fn twice(x:Fr,y:Fr,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{return body(x)+y;}
-fn dispatcher(x:Fr,y:Fr,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{
+fn twice(x:Fr,y:Fr,body:fn(Fr)->Fr !{stop})->Fr !{stop}{return body(x)+y;}
+fn dispatcher(x:Fr,y:Fr,body:fn(Fr)->Fr !{stop})->Fr !{stop}{
  return twice(x,x,body)+twice(x,y,body);
 }
 protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){return dispatcher(x,y,fn(v)=>v+y);}
@@ -114,8 +114,7 @@ run Run=Demo;
                 throw std::runtime_error(toString(std::move(error)));
             });
   cases.run("many scoped calls share one body origin table", [] {
-    std::string program =
-        "fn wide(x:Fr,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{";
+    std::string program = "fn wide(x:Fr,body:fn(Fr)->Fr !{stop})->Fr !{stop}{";
     for (unsigned i = 0; i < 1200; ++i)
       program += "let a" + std::to_string(i) + "=apply(x,body);";
     program +=
@@ -155,7 +154,7 @@ protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){let r=Inner(x,y);return r;}run R
   });
   cases.run("truncated hidden input body is rejected before reading ports", [] {
     auto closed = take(closeEntry(take(check(R"(
-fn twice(x:Fr,y:Fr,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{return body(x)+y;}
+fn twice(x:Fr,y:Fr,body:fn(Fr)->Fr !{stop})->Fr !{stop}{return body(x)+y;}
 protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return twice(x,x,fn(y)=>y+a);}run Run=Demo;
 )")),
                                   "m::Run"));
@@ -178,10 +177,10 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return twice(x,x,fn(y)=>y+a);}ru
   cases.run("finite binder inside a scoped helper preserves capture layouts",
             [] {
               auto project = take(check(R"(
-fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn sum<I:Type+Copy+Drop>(rows:scoped domain<I>,term:scoped fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fn(state, item)=>state+term(item));}
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+fn sum<I:Type+Copy+Drop>(rows:domain<I>,term:fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fn(state, item)=>state+term(item));}
 reduction ∑=sum;
-fn g(xs:Vector<Fr>,a:Fr,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{let r=∑ x in xs,(x+a);return body(r);}
+fn g(xs:Vector<Fr>,a:Fr,body:fn(Fr)->Fr !{stop})->Fr !{stop}{let r=∑ x in xs,(x+a);return body(r);}
 protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return g(xs,a,fn(y)=>y+b);}run Run=Demo;
 )"));
               auto closed = take(closeEntry(project, "m::Run"));
@@ -199,7 +198,7 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return g(xs,a,fn
   cases.run(
       "loop carried state cannot alias an invariant callback capture", [] {
         auto project = take(check(R"(
-fn iterate(x:Fr,n:index,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{
+fn iterate(x:Fr,n:index,body:fn(Fr)->Fr !{stop})->Fr !{stop}{
  let mut state=x;for _ in 0..n {state=body(state);}return state;
 }
 protocol Demo roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return iterate(x,n,fn(y)=>y+x);}run Run=Demo;
@@ -250,7 +249,7 @@ protocol Demo roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return iterate(x,n,fn(y)=>y+x
             auto project = take(check(
                 "enum Choice {Left(Fr),Right(Fr)} fn choose(x:Fr,flag:" +
                 flagType +
-                ",body:scoped fn(Fr)->Fr "
+                ",body:fn(Fr)->Fr "
                 "!{stop})->Fr !{stop}{" +
                 expression +
                 "}protocol Demo roles(P)(x:Fr@P,y:Fr@P,flag:" + flagType +
@@ -301,12 +300,12 @@ run Run=Demo;)");
   });
   cases.run("component nested scoped capture and record projections", [] {
     succeeds(R"(
-interface Transform<F:Field>{fn adjust(x:F)->F !{};fn run(x:F,body:scoped fn(F)->F !{stop})->F !{stop};}
+interface Transform<F:Field>{fn adjust(x:F)->F !{};fn run(x:F,body:fn(F)->F !{stop})->F !{stop};}
 component Increment<F:Field>:Transform<F>{
  fn adjust(x:F)->F !{}{return x+1;}
- fn run(x:F,body:scoped fn(F)->F !{stop})->F !{stop}{return forward(x,fn(y)=>body(adjust(y)));}
+ fn run(x:F,body:fn(F)->F !{stop})->F !{stop}{return forward(x,fn(y)=>body(adjust(y)));}
 }
-fn through<F:Field,C:Transform<F>>(x:F,body:scoped fn(F)->F !{stop})->F !{stop}{return C::run(x,body);}
+fn through<F:Field,C:Transform<F>>(x:F,body:fn(F)->F !{stop})->F !{stop}{return C::run(x,body);}
 struct Parameters<F:Field>{pub shift:F,pub table:Vector<F>}
 protocol Demo roles(P,V)(x:Fr@(P,V),parameters:Parameters<Fr>@P,position:index@P)->(r:Fr@P){
  let result=through<Fr,Increment<Fr>>(x,fn(y)=>forward(y,fn(z)=>get(parameters.table,position)+z+parameters.shift));
@@ -322,16 +321,16 @@ run Run=Demo;)");
   });
   cases.run("multiple inputs and tuple destructuring", [] {
     succeeds(R"(
-fn two(x:Fr,y:Fr,body:scoped fn(Fr,Fr)->Fr !{})->Fr !{}{return body(x,y);}
-fn pair(x:(Fr,Fr),body:scoped fn((Fr,Fr))->Fr !{})->Fr !{}{return body(x);}
+fn two(x:Fr,y:Fr,body:fn(Fr,Fr)->Fr !{})->Fr !{}{return body(x,y);}
+fn pair(x:(Fr,Fr),body:fn((Fr,Fr))->Fr !{})->Fr !{}{return body(x);}
 fn example(x:Fr,y:Fr)->Fr{return two(x,y,fn(a, b)=>a+b)+pair((x,y),fn((a,b))=>a-b);}
 protocol Demo roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){return(r=example(x,y));}run Run=Demo;)");
   });
   cases.run("empty input list, Unit pattern and trailing comma", [] {
     succeeds(R"(
-fn zero(body:scoped fn()->Fr !{})->Fr !{}{return body();}
-fn unit(body:scoped fn(())->Fr !{})->Fr !{}{return body(());}
-fn one(x:Fr,body:scoped fn(Fr)->Fr !{})->Fr !{}{return body(x);}
+fn zero(body:fn()->Fr !{})->Fr !{}{return body();}
+fn unit(body:fn(())->Fr !{})->Fr !{}{return body(());}
+fn one(x:Fr,body:fn(Fr)->Fr !{})->Fr !{}{return body(x);}
 fn work(x:Fr)->Fr{return zero(fn()=>x)+unit(fn(())=>x)+one(x,fn(y,)=>y);}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}run Run=Demo;
 )");
@@ -342,6 +341,44 @@ fn fun(x:Fr)->Fr{return x;}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return apply(x,fn(y)=>fun(y));}run Run=Demo;
 )");
   });
+  cases.run("scoped is an ordinary type name", [] {
+    succeeds(R"(
+type scoped=Fr;
+fn identity(x:scoped)->scoped{return x;}
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return identity(x);}
+run Run=Demo;
+)");
+  });
+  cases.run("scoped is an ordinary local and lambda binding name", [] {
+    succeeds(R"(
+fn bind(x:Fr)->Fr{let scoped=x;return apply(scoped,fn(y)=>y);}
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return apply(bind(x),fn(scoped)=>scoped);}
+run Run=Demo;
+)");
+  });
+  cases.run("scoped is an ordinary function name", [] {
+    succeeds(R"(
+fn scoped(x:Fr)->Fr{return x;}
+protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return scoped(x);}
+run Run=Demo;
+)");
+  });
+  for (const auto &source :
+       {"fn f(body:scoped fn(Fr)->Fr !{})->Fr{return body(0);}",
+        "math fn f(body:scoped math fn(Fr)->Fr)->Fr{return body(0);}",
+        "fn f(rows:scoped domain<Fr>)->Fr{return 0;}",
+        "domain fn f(xs:Vector<Fr>)->scoped domain<Fr>=domain(\"elements\");"})
+    cases.run("reject obsolete signature " + std::string(source),
+              [source] { refuses(check(source), "source.syntax"); });
+  for (const auto &source :
+       {"type Callback=fn(Fr)->Fr !{};", "type Rows=domain<Fr>;",
+        "struct Holder{body:fn(Fr)->Fr !{}}", "struct Holder{rows:domain<Fr>}",
+        "fn f()->fn(Fr)->Fr !{}{return fn(x)=>x;}",
+        "fn f()->domain<Fr>{return [];}",
+        "fn f(pair:(Fr,fn(Fr)->Fr !{}))->Fr{return 0;}",
+        "fn f(body:fn(fn(Fr)->Fr !{})->Fr !{})->Fr{return 0;}"})
+    cases.run("reject static signature in runtime type " + std::string(source),
+              [source] { refuses(check(source), "source.name"); });
   for (const auto &[literal, code] :
        std::vector<std::pair<std::string, std::string>>{
            {"fun x=>x", "source.syntax"},
@@ -371,7 +408,7 @@ protocol Demo roles(P,V)(x:bool@(P,V))->(r:bool@(P,V)){return true && apply_math
   });
   cases.run("unused contextual callback and all-stopping callback", [] {
     succeeds(R"(
-fn ignore<A:Type+Drop,B:Type+Copy+Drop>(x:A,body:scoped fn(A)->B !{stop},fallback:B)->B !{}{return fallback;}
+fn ignore<A:Type+Drop,B:Type+Copy+Drop>(x:A,body:fn(A)->B !{stop},fallback:B)->B !{}{return fallback;}
 fn work(x:Fr)->Fr{return ignore(x,fn(_)=>{stop "reject";},x);}
 protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}run Run=Demo;
 )");
@@ -379,8 +416,8 @@ protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}run Run=Demo;
 
   cases.run("abstract Math callback captures survive wrapper summaries", [] {
     const std::string helpers = R"(
-interface MathOps<F:Field>{math fn run(x:F,body:scoped math fn(F)->F)->F;}
-component Impl<F:Field>:MathOps<F>{math fn run(x:F,body:scoped math fn(F)->F)->F{return body(x);}}
+interface MathOps<F:Field>{math fn run(x:F,body:math fn(F)->F)->F;}
+component Impl<F:Field>:MathOps<F>{math fn run(x:F,body:math fn(F)->F)->F{return body(x);}}
 math fn g<F:Field,C:MathOps<F>>(x:F,y:F)->F{return C::run(x,fn(t)=>t+y);}
 math fn h(x:Fr,y:Fr)->Fr{return g<Fr,Impl<Fr>>(x,y);}
 )";
@@ -441,27 +478,36 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return f(x,a);}run Run=Demo;
   });
 
   const std::vector<std::pair<std::string, std::string>> refusals = {
-      {"fn f(x:Fr,b:scoped fn(Fr)->Fr)->Fr{return x;}", "source.effect"},
-      {"fn f(x:Fr,b:scoped math fn(Fr)->Fr !{stop})->Fr{return x;}",
-       "source.effect"},
+      {"protocol Bad roles(P)(body:fn(Fr)->Fr !{}@P)->(){return();}",
+       "source.scoped"},
+      {"protocol Bad roles(P)(body:math fn(Fr)->Fr@P)->(){return();}",
+       "source.scoped"},
+      {"protocol Bad roles(P)()->(body:fn(Fr)->Fr !{}@P){return();}",
+       "source.scoped"},
+      {"protocol Bad roles(P)()->(body:math fn(Fr)->Fr@P){return();}",
+       "source.scoped"},
+      {"protocol Bad roles(P)()->(rows:domain<Fr>@P){return();}",
+       "source.scoped"},
+
+      {"fn f(x:Fr,b:fn(Fr)->Fr)->Fr{return x;}", "source.effect"},
+      {"fn f(x:Fr,b:math fn(Fr)->Fr !{stop})->Fr{return x;}", "source.effect"},
       {"fn f(x:Fr)->Fr{return apply_math(x,fn(y)=>get(([],),0));}",
        "source.type"},
-      {"fn f(x:Fr,b:scoped fn(Fr)->Fr !{})->Fr{return b;}", "source.scoped"},
+      {"fn f(x:Fr,b:fn(Fr)->Fr !{})->Fr{return b;}", "source.scoped"},
       {"fn f(x:Fr)->Fr{let b=fn(y)=>y;return x;}", "source.scoped"},
       {"fn f(x:Fr)->Fr{let mut a=x;return apply(x,fn(y)=>{a=y;y});}",
        "source.scoped-capture"},
-      {"fn unused<A:Type>(x:A,b:scoped fn(A)->A !{})->A{return b(true);}",
+      {"fn unused<A:Type>(x:A,b:fn(A)->A !{})->A{return b(true);}",
        "source.type"},
-      {"math fn f(x:Fr,b:scoped fn(Fr)->Fr !{})->Fr{return b(x);}",
-       "source.mode"},
+      {"math fn f(x:Fr,b:fn(Fr)->Fr !{})->Fr{return b(x);}", "source.mode"},
       {"fn stop_value(x:Fr)->Fr !{stop}{stop \"reject\";} fn "
        "f(x:Fr)->Fr{return apply_math(x,fn(y)=>stop_value(y));}",
        "source.mode"},
-      {"fn clean(x:Fr,b:scoped fn(Fr)->Fr !{})->Fr !{}{return b(x);} fn "
+      {"fn clean(x:Fr,b:fn(Fr)->Fr !{})->Fr !{}{return b(x);} fn "
        "stop_value(x:Fr)->Fr !{stop}{stop \"reject\";} fn f(x:Fr)->Fr{return "
        "clean(x,fn(y)=>stop_value(y));}",
        "source.effect"},
-      {"fn f(x:Fr,b:scoped fn(Fr)->Fr !{})->Fr{return apply_math(x,b);}",
+      {"fn f(x:Fr,b:fn(Fr)->Fr !{})->Fr{return apply_math(x,b);}",
        "source.scoped"},
       {"protocol Demo "
        "roles(P,V)(x:Fr@(P,V),a:Fr@P,b:Fr@V)->(r:Fr@P){return(r=apply(x,fn(y)=>"
@@ -494,8 +540,8 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return f(x,a);}run Run=Demo;
       {"protocol Demo roles(P)(x:Fr@P,coins:Random<Fr>@P)->(r:Fr@P){return "
        "apply(x,fn(y)=>y+coins.draw());}run Run=Demo;",
        "source.scoped-capture"},
-      {"interface I{fn f(x:Fr,b:scoped fn(Fr)->Fr !{})->Fr !{};}component "
-       "C:I{fn f(x:Fr,b:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{return b(x);}}",
+      {"interface I{fn f(x:Fr,b:fn(Fr)->Fr !{})->Fr !{};}component "
+       "C:I{fn f(x:Fr,b:fn(Fr)->Fr !{stop})->Fr !{stop}{return b(x);}}",
        "source.conformance"},
       {"fn unused<A:Type+Copy+Drop>(x:A)->A{return apply_math(x,fn(y)=>{let "
        "bad:bool=y;y});}",
@@ -523,7 +569,7 @@ protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return forward(x,fn(y)=>forward(y,fn(z)
             "wrong witness budget refusal");
   });
   cases.run("declaration inspection separates scoped and runtime inputs", [] {
-    auto project = take(check("pub fn export_body(x:Fr,body:scoped fn(Fr)->Fr "
+    auto project = take(check("pub fn export_body(x:Fr,body:fn(Fr)->Fr "
                               "!{stop})->Fr !{stop}{return body(x);}"));
     auto json = take(inspectDeclarations(project));
     require(StringRef(json).contains("\"scoped_inputs\"") &&
@@ -533,7 +579,7 @@ protocol Demo roles(P)(x:Fr@P)->(r:Fr@P){return forward(x,fn(y)=>forward(y,fn(z)
   });
   cases.run("forwarded scoped selection mutation is rejected", [] {
     auto project = take(check(R"(
-fn chain(x:Fr,first:scoped fn(Fr)->Fr !{stop},second:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{return second(first(x));}
+fn chain(x:Fr,first:fn(Fr)->Fr !{stop},second:fn(Fr)->Fr !{stop})->Fr !{stop}{return second(first(x));}
 protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return chain(x,fn(y)=>y+a,fn(y)=>y*b);}run Run=Demo;
 )"));
     auto closed = take(closeEntry(project, "m::Run"));
@@ -561,7 +607,7 @@ run Run=Demo;)";
               " scoped call mapping mutation " + std::to_string(mutation),
           [&] {
             auto project = take(check(R"(
-fn chain(x:Fr,first:scoped fn(Fr)->Fr !{stop},second:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{return second(first(x));}
+fn chain(x:Fr,first:fn(Fr)->Fr !{stop},second:fn(Fr)->Fr !{stop})->Fr !{stop}{return second(first(x));}
 protocol Demo roles(P)(x:Fr@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return chain(second=fn(y)=>y*b,x=x,first=fn(y)=>y+a);}run Run=Demo;
 )"));
             auto closed = take(closeEntry(project, "m::Run"));

@@ -46,10 +46,12 @@ grammar; elsewhere they remain available as ordinary names.
 
 ## Mathematical tokens
 
-`scoped` marks [scoped computation signatures](definitions.md#scoped-computations).
-The reserved keyword `fn` introduces both named function declarations and
+The reserved keyword `fn` introduces named function declarations,
+[computation parameter signatures](definitions.md#scoped-computations) and
 anonymous computation literals. A literal uses a parenthesized, comma-separated
-input pattern list followed by `=>` and its expression or block.
+input pattern list followed by `=>` and its expression or block. `math fn`
+specifies a total Math computation; `domain<I>` specifies a finite-domain
+parameter or a domain factory's result.
 
 A custom operator token is exactly one non-ASCII scalar with Unicode general
 category `Sm`. It must already be NFC and must not be an identifier character,

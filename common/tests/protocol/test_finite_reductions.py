@@ -28,10 +28,10 @@ OPTIONS = [[], ['--fuse-vector-reductions'],
            ['--fuse-vector-reductions', '--release-storage']]
 
 FINITE = '''
-domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
-fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn sum<I:Type+Copy+Drop,E:Field>(rows:scoped domain<I>,term:scoped fn(I)->E !{stop} on(rows))->E !{stop}{return fold(rows,0,fn(state, item)=>state+term(item));}
-fn product<I:Type+Copy+Drop,E:Field>(rows:scoped domain<I>,term:scoped fn(I)->E !{stop} on(rows))->E !{stop}{return fold(rows,1,fn(state, item)=>state*term(item));}
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)>=domain("zip");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+fn sum<I:Type+Copy+Drop,E:Field>(rows:domain<I>,term:fn(I)->E !{stop} on(rows))->E !{stop}{return fold(rows,0,fn(state, item)=>state+term(item));}
+fn product<I:Type+Copy+Drop,E:Field>(rows:domain<I>,term:fn(I)->E !{stop} on(rows))->E !{stop}{return fold(rows,1,fn(state, item)=>state*term(item));}
 reduction ∑=sum;
 reduction ∏=product;
 '''
@@ -148,8 +148,8 @@ type Vector<E:Field>=builtin("vector",E);
 fn length(v:Vector<F>)->index=primitive("vector.length");
 fn sum(v:Vector<F>)->F=primitive("vector.sum");
 fn nonempty(v:Vector<F>)->F{require !(length(v)==0);return sum(v);}
-domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
-fn collect<I:Type+Copy+Drop,E:Field>(rows:scoped domain<I>,term:scoped fn(I)->E !{stop} on(rows))->Vector<E> !{stop}=finite("local.collect.vector");
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)>=domain("zip");
+fn collect<I:Type+Copy+Drop,E:Field>(rows:domain<I>,term:fn(I)->E !{stop} on(rows))->Vector<E> !{stop}=finite("local.collect.vector");
 fn work(a:Vector<F>,b:Vector<F>)->F{let terms=collect(zip(a,b),fn((x,y))=>x*y);return nonempty(terms);}
 protocol Run roles(P)(a:Vector<F>@P,b:Vector<F>@P)->(result:F@P){return work(a,b);}
 run Demo=Run;

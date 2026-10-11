@@ -1,5 +1,9 @@
 # Scoped computations
 
+Callback parameters use `fn(...) -> ... !{...}` for Local computation or
+`math fn(...) -> ...` for total Math computation. The compiler selects each
+callback statically; callbacks cannot escape into runtime data.
+
 This [Entry](main.zkc) uses ordinary generic user combinators from
 [`zkc::computation`](../../../libraries/zkc/computation.zkc). A component forwards a nested
 Local callback that retains lexical access to its `adjust` member. The

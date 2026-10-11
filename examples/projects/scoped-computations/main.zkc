@@ -6,18 +6,18 @@ domain Fr = field("koala-bear");
 
 interface Transform<F: Field> {
   fn adjust(value: F) -> F !{};
-  fn run(value: F, body: scoped fn(F) -> F !{stop}) -> F !{stop};
+  fn run(value: F, body: fn(F) -> F !{stop}) -> F !{stop};
 }
 
 component Increment<F: Field>: Transform<F> {
   fn adjust(value: F) -> F !{} { return value + 1; }
-  fn run(value: F, body: scoped fn(F) -> F !{stop}) -> F !{stop} {
+  fn run(value: F, body: fn(F) -> F !{stop}) -> F !{stop} {
     return computation::forward(value, fn(x) => body(adjust(x)));
   }
 }
 
 fn through<F: Field, C: Transform<F>>(
-  value: F, body: scoped fn(F) -> F !{stop}
+  value: F, body: fn(F) -> F !{stop}
 ) -> F !{stop} {
   return C::run(value, body);
 }

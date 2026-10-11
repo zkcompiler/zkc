@@ -1099,44 +1099,45 @@ private:
         p.span = current().span;
         if (!name(p.name) || !expect(":"))
           return false;
-        if (take("scoped")) {
-          if (take("domain")) {
-            SyntaxType item;
-            if (!expect("<") || !type(item) || !expect(">"))
-              return false;
-            p.domain = std::move(item);
-          } else {
-            SyntaxScopedSignature signature;
-            signature.mode = take("math") ? ScopedSignature::Mode::Math
-                                          : ScopedSignature::Mode::Local;
-            if (!expect("fn") || !expect("("))
-              return false;
-            if (!at(")"))
-              do {
-                SyntaxType input;
-                if (!type(input))
-                  return false;
-                signature.inputs.push_back(std::move(input));
-              } while (take(",") && !at(")"));
-            if (!expect(")") || !expect("->") || !type(signature.result))
-              return false;
-            SyntaxDeclaration allowance;
-            if (signature.mode == ScopedSignature::Mode::Local && !at("!"))
-              return fail("source.effect", "Local scoped signatures require an "
-                                           "explicit effect allowance");
-            if (!effects(allowance))
-              return false;
-            signature.allowance = allowance.effects.value_or(Effects{});
-            if (take("on")) {
-              std::string domain;
-              if (!expect("(") || !name(domain) || !expect(")"))
+        if (take("domain")) {
+          SyntaxType item;
+          if (!expect("<") || !type(item) || !expect(">"))
+            return false;
+          p.domain = std::move(item);
+        } else if (at("fn") || at("math")) {
+          SyntaxScopedSignature signature;
+          signature.mode = take("math") ? ScopedSignature::Mode::Math
+                                        : ScopedSignature::Mode::Local;
+          if (!expect("fn") || !expect("("))
+            return false;
+          if (!at(")"))
+            do {
+              SyntaxType input;
+              if (!type(input))
                 return false;
-              signature.itemDomain = std::move(domain);
-            }
-            p.scoped = std::move(signature);
+              signature.inputs.push_back(std::move(input));
+            } while (take(",") && !at(")"));
+          if (!expect(")") || !expect("->") || !type(signature.result))
+            return false;
+          SyntaxDeclaration allowance;
+          if (signature.mode == ScopedSignature::Mode::Local && !at("!"))
+            return fail("source.effect", "Local function parameters require "
+                                         "an explicit effect allowance");
+          if (!effects(allowance))
+            return false;
+          signature.allowance = allowance.effects.value_or(Effects{});
+          if (take("on")) {
+            std::string domain;
+            if (!expect("(") || !name(domain) || !expect(")"))
+              return false;
+            signature.itemDomain = std::move(domain);
           }
+          p.scoped = std::move(signature);
         } else if (!type(p.type))
           return false;
+        if (roles && (p.scoped || p.domain))
+          return fail("source.scoped",
+                      "protocol ports cannot be static arguments");
         if (roles && (!expect("@") || !roleList(p.roles)))
           return false;
         p.span.end = previousEnd;
@@ -1400,10 +1401,6 @@ private:
         for (auto &port : ports) {
           bool service = protocol && port.type.kind == SyntaxType::Kind::Name &&
                          port.type.name == "Random";
-          if ((port.scoped || port.domain) && protocol) {
-            fail("source.scoped", "protocol ports cannot be static arguments");
-            return {};
-          }
           auto &selected = port.domain   ? d.domainInputs
                            : port.scoped ? d.scopedInputs
                            : service     ? d.services
@@ -1422,8 +1419,8 @@ private:
           return {};
       } else if (domainFunction) {
         SyntaxType item;
-        if (!expect("->") || !expect("scoped") || !expect("domain") ||
-            !expect("<") || !type(item) || !expect(">"))
+        if (!expect("->") || !expect("domain") || !expect("<") || !type(item) ||
+            !expect(">"))
           return {};
         d.domainResult = std::move(item);
       } else if (take("->")) {

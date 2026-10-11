@@ -29,8 +29,8 @@ int main() {
     pub operator infixl(65) ⊕ = zkc::prelude::index_add;
     pub fn 合成(α:index,β:index)->index{return α⊕β;}
     pub type Vector<F:Field>=builtin("vector",F);
-    pub fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-    pub fn sum<I:Type+Copy+Drop,F:Field>(rows:scoped domain<I>,body:scoped fn(I)->F !{stop} on(rows))->F !{stop}{return fold(rows,0,fn(state, item)=>state+body(item));}
+    pub fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+    pub fn sum<I:Type+Copy+Drop,F:Field>(rows:domain<I>,body:fn(I)->F !{stop} on(rows))->F !{stop}{return fold(rows,0,fn(state, item)=>state+body(item));}
     pub reduction ∑=sum;
     pub fn weighted<F:Field>(xs:Vector<F>,α:F)->F {
       return ∑ x in xs,x*α;

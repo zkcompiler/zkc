@@ -7,14 +7,14 @@ PREFIX = '''module sample;
 domain F=field("koala-bear");
 type Vector<E:Field>=builtin("vector",E);
 type Sequence<T:Type+Copy+Drop>=builtin("sequence",T);
-domain fn elements<E:Field>(xs:Vector<E>)->scoped domain<E>=domain("elements");
-domain fn indices<E:Field>(xs:Vector<E>)->scoped domain<index>=domain("indices");
-domain fn sequence<T:Type+Copy+Drop>(xs:Sequence<T>)->scoped domain<T>=domain("elements");
-domain fn range(lower:index,upper:index)->scoped domain<index>=domain("range");
-domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(left:scoped domain<A>,right:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
-fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
-fn filtered<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,keep:scoped fn(I)->bool !{stop} on(rows),step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold_where");
-fn collect<I:Type+Copy+Drop,B:Type+Copy+Drop>(rows:scoped domain<I>,body:scoped fn(I)->B !{stop} on(rows))->Sequence<B> !{stop}=finite("local.collect.sequence");
+domain fn elements<E:Field>(xs:Vector<E>)->domain<E>=domain("elements");
+domain fn indices<E:Field>(xs:Vector<E>)->domain<index>=domain("indices");
+domain fn sequence<T:Type+Copy+Drop>(xs:Sequence<T>)->domain<T>=domain("elements");
+domain fn range(lower:index,upper:index)->domain<index>=domain("range");
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(left:domain<A>,right:domain<B>)->domain<(A,B)>=domain("zip");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+fn filtered<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,keep:fn(I)->bool !{stop} on(rows),step:fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold_where");
+fn collect<I:Type+Copy+Drop,B:Type+Copy+Drop>(rows:domain<I>,body:fn(I)->B !{stop} on(rows))->Sequence<B> !{stop}=finite("local.collect.sequence");
 fn get<E:Field>(xs:Vector<E>,i:index)->E=primitive("vector.get");
 '''
 
@@ -125,8 +125,8 @@ protocol Run roles(P)(xs:Sequence<Row>@P)->(result:(F,F)@P){return work(xs);}run
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
 def test_generic_item_restrictions_through_nested_scopes(toolchain, journal, directory, flags):
     source = PREFIX + '''
-fn apply<A:Type,B:Type>(value:A,body:scoped fn(A)->B !{stop})->B !{stop}{return body(value);}
-fn sum(rows:scoped domain<F>,flag:bool,body:scoped fn(F)->F !{stop} on(rows))->F !{stop}{
+fn apply<A:Type,B:Type>(value:A,body:fn(A)->B !{stop})->B !{stop}{return body(value);}
+fn sum(rows:domain<F>,flag:bool,body:fn(F)->F !{stop} on(rows))->F !{stop}{
  return fold(step=fn(state, item)=>apply(state,fn(initial)=>{
    let mut total:F=initial;
    for i in 0..2 {let value=if flag {body(item)} else {0};total=total+value;}
@@ -146,8 +146,8 @@ protocol Run roles(P)(xs:Vector<F>@P,flag:bool@P,shift:F@P)->(result:F@P){
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
 def test_fixed_arrays_preserve_elements_indices_and_empty_unit(toolchain, journal, directory, flags):
     source = PREFIX + '''
-domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
-domain fn array_indices<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<index>=domain("indices");
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
+domain fn array_indices<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<index>=domain("indices");
 fn work(a:F,b:F)->(F,F,F,F){
  let xs=[a,b];
  let order=fold(array(xs),0,fn(state, item)=>state*10+item);
@@ -168,7 +168,7 @@ protocol Run roles(P)(a:F@P,b:F@P)->(result:(F,F,F,F)@P){return work(a,b);}run D
 def test_fixed_record_arrays_zip_and_capture_original(toolchain, journal, directory, flags):
     source = PREFIX + '''
 struct Row {pub value:F,pub enabled:bool}
-domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
 fn work(a:F,b:F)->F{
  let xs=[Row{value:a,enabled:true},Row{value:b,enabled:true}];
  let ys=[b,a];
@@ -186,8 +186,8 @@ protocol Run roles(P)(a:F@P,b:F@P)->(result:F@P){return work(a,b);}run Demo=Run;
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
 def test_total_fixed_array_fold_realization(toolchain, journal, directory, flags):
     source = PREFIX + '''
-domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
-math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold");
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
+math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:math fn(S,I)->S on(rows))->S=finite("math.fold");
 math fn work(a:F,b:F)->F{return total(array([(a,b),(b,a)]),0,fn(state, (x,y))=>state*100+x*10+y);}
 protocol Run roles(P)(a:F@P,b:F@P)->(result:F@P){return work(a,b);}run Demo=Run;
 '''
@@ -198,7 +198,7 @@ protocol Run roles(P)(a:F@P,b:F@P)->(result:F@P){return work(a,b);}run Demo=Run;
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
 def test_total_index_range_and_predicate(toolchain, journal, directory, flags):
     source = PREFIX + '''
-math fn total_filtered<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,keep:scoped math fn(I)->bool on(rows),step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold_where");
+math fn total_filtered<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,keep:math fn(I)->bool on(rows),step:math fn(S,I)->S on(rows))->S=finite("math.fold_where");
 math fn threshold<N:nat>()->index{return index<N>();}
 math fn work(n:index)->(F,bool,index){
  let result:F=total_filtered(range(0,n),0,fn(i)=>intrinsic("index.less",i,threshold<2>()),fn(state, item)=>state+1);
@@ -217,11 +217,11 @@ def test_total_bounds_on_distinct_captures_records_and_coordinates(toolchain, jo
     source = PREFIX + '''
 type Matrix<E:Field>=builtin("matrix",E);
 struct Row {pub value:F,pub enabled:bool}
-domain fn positions(xs:Sequence<Row>)->scoped domain<index>=domain("indices");
-domain fn coords(xs:Matrix<F>)->scoped domain<(index,index)>=domain("matrix.coordinates.row_major");
-domain fn row_indices(xs:Matrix<F>)->scoped domain<index>=domain("indices.rows");
-domain fn row(xs:Matrix<F>,i:index)->scoped domain<F>=domain("matrix.row");
-math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:scoped domain<I>,initial:S,step:scoped math fn(S,I)->S on(rows))->S=finite("math.fold");
+domain fn positions(xs:Sequence<Row>)->domain<index>=domain("indices");
+domain fn coords(xs:Matrix<F>)->domain<(index,index)>=domain("matrix.coordinates.row_major");
+domain fn row_indices(xs:Matrix<F>)->domain<index>=domain("indices.rows");
+domain fn row(xs:Matrix<F>,i:index)->domain<F>=domain("matrix.row");
+math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:math fn(S,I)->S on(rows))->S=finite("math.fold");
 math fn at(xs:Vector<F>,i:index)->F where in_bounds(i,xs){return intrinsic<Vector<F>>("container.at",xs,i);}
 math fn read(xs:Sequence<Row>,i:index)->Row where in_bounds(i,xs){return intrinsic<Sequence<Row>>("container.at",xs,i);}
 math fn inner(xs:Vector<F>,ys:Vector<F>)->F where equal_extent(xs,ys){return total(indices(xs),0,fn(s, i)=>s+at(ys,i));}
@@ -248,9 +248,9 @@ def test_total_fixed_zip_collection(toolchain, journal, directory, flags):
     source = '''module sample;
 domain F=field("bls12-381.fr");
 type Array<E:Field,N:nat>=builtin("field_array",E,N);
-domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->scoped domain<T>=domain("source_array");
-domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
-math fn collect<I:Type+Copy+Drop,N:nat>(rows:scoped domain<I>,body:scoped math fn(I)->F on(rows))->Array<F,N>=finite("math.collect.field_array");
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
+domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(A,B)>=domain("zip");
+math fn collect<I:Type+Copy+Drop,N:nat>(rows:domain<I>,body:math fn(I)->F on(rows))->Array<F,N>=finite("math.collect.field_array");
 math fn work(xs:[F;2],ys:[F;2])->Array<F,2>{return collect(zip(array(xs),array(ys)),fn((x,y))=>x+10*y);}
 protocol Run roles(P)(xs:[F;2]@P,ys:[F;2]@P)->(result:Array<F,2>@P){return work(xs,ys);}run Demo=Run;
 '''

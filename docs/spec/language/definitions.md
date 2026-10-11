@@ -908,14 +908,14 @@ operands remain checked values; the domain itself is not a runtime `Type`, an
 Entry port, or a value that can be returned by an ordinary function.
 
 ```zkc
-domain fn elements<F: Field>(xs: Vector<F>) -> scoped domain<F>
+domain fn elements<F: Field>(xs: Vector<F>) -> domain<F>
   = domain("elements");
-domain fn indices<F: Field>(xs: Vector<F>) -> scoped domain<index>
+domain fn indices<F: Field>(xs: Vector<F>) -> domain<index>
   = domain("indices");
-domain fn range(lower: index, upper: index) -> scoped domain<index>
+domain fn range(lower: index, upper: index) -> domain<index>
   = domain("range");
 
-domain fn positions<F: Field>(xs: Vector<F>) -> scoped domain<index> {
+domain fn positions<F: Field>(xs: Vector<F>) -> domain<index> {
   let rows = indices(xs);
   return rows;
 }
@@ -939,7 +939,7 @@ checking. Domain factories may use the same conversion on their data inputs.
 A matrix requires an explicit view; a scalar or unknown representation cannot
 be converted by guessing a domain from the callback's result type.
 
-Math and Local functions may accept `rows: scoped domain<I>`, forward it, or
+Math and Local functions may accept `rows: domain<I>`, forward it, or
 capture it in scoped computations and local control. A domain factory accepts
 ordinary data and domain parameters. Protocol signatures cannot expose domain
 parameters, but protocol bodies can construct domains and use them in calls or
@@ -971,12 +971,12 @@ scoped functions, effects and capture rules as authored helpers:
 
 ```zkc
 fn fold<I: Type + Copy + Drop, S: Type>(
-  rows: scoped domain<I>, initial: S,
-  step: scoped fn(S, I) -> S !{stop} on(rows)
+  rows: domain<I>, initial: S,
+  step: fn(S, I) -> S !{stop} on(rows)
 ) -> S !{stop} = finite("local.fold");
 
 fn collect<I: Type + Copy + Drop, B: Type + Copy + Drop>(
-  rows: scoped domain<I>, body: scoped fn(I) -> B !{stop} on(rows)
+  rows: domain<I>, body: fn(I) -> B !{stop} on(rows)
 ) -> Sequence<B> !{stop} = finite("local.collect.sequence");
 ```
 
@@ -984,7 +984,7 @@ The complete signature is checked against the selected identity. Fold state
 and domain item types are independent; Unit is a valid state. `on(rows)` ties
 the callback's last explicit parameter to an item from the indicated domain.
 `local.fold_where` adds a predicate before the step parameter. Its predicate
-has signature `scoped fn(I) -> bool !{stop} on(rows)`; false skips the step.
+has signature `fn(I) -> bool !{stop} on(rows)`; false skips the step.
 The corresponding collect identities are `local.collect.vector`, `.groups`,
 `.sequence`, `.indices` and `.field_array`; each admits the matching native
 result type. Appending `_where` adds a predicate before the body, except for
@@ -1088,23 +1088,25 @@ statically bound, nonescaping computations as a separate input category:
 
 ```zkc
 math fn apply_math<A: Type + Copy + Drop, B: Type + Copy + Drop>(
-  value: A, body: scoped math fn(A) -> B
+  value: A, body: math fn(A) -> B
 ) -> B {
   return body(value);
 }
 
-fn apply<A: Type, B: Type>(value: A, body: scoped fn(A) -> B !{stop}) -> B !{stop} {
+fn apply<A: Type, B: Type>(value: A, body: fn(A) -> B !{stop}) -> B !{stop} {
   return body(value);
 }
 
-fn forward<A: Type, B: Type>(value: A, body: scoped fn(A) -> B !{stop}) -> B !{stop} {
+fn forward<A: Type, B: Type>(value: A, body: fn(A) -> B !{stop}) -> B !{stop} {
   return apply(value, body);
 }
 ```
 
-`scoped` is not a runtime `Type`. A scoped argument is a literal computation or
-an in-scope scoped parameter. It cannot be bound by `let`, put in a product or
-variant, returned, sent, used as a data argument, or selected by runtime control.
+Computation parameters, written `fn(...) -> ... !{...}` or `math fn(...) -> ...`,
+are static, nonescaping inputs. Their signatures are not runtime `Type` values.
+A computation argument is a literal or an in-scope
+computation parameter. It cannot be bound by `let`, put in a product or variant,
+returned, sent, used as a data argument, or selected by runtime control.
 Protocol signatures and Entry ports cannot expose it. A protocol body may call
 a named function with a literal scoped argument. Invocation and forwarding
 select a statically known body; there is no dynamic dispatch or closure ABI.
@@ -1122,8 +1124,8 @@ functions and their literal computations are checked even when unused. Their
 explicit generic permissions and bounds remain necessary; call sites do not
 repair malformed definitions.
 
-A signature fixes the body's mode. `scoped math fn(A) -> B` is total Math;
-`scoped fn(A) -> B !{...}` is ordered Local and requires an explicit effect
+A signature fixes the body's mode. `math fn(A) -> B` is total Math;
+`fn(A) -> B !{...}` is ordered Local and requires an explicit effect
 allowance, including `!{}` when empty. The existing `stop` and `opaque` effect
 names apply. Math signatures cannot allow ordered effects. A forwarded parameter
 must have matching mode, input types and result type; its effect allowance must
