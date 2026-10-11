@@ -43,6 +43,115 @@ domain Fr=field("koala-bear");
 fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
 fn apply<A:Type,B:Type>(x:A,body:scoped fn(A)->B !{stop})->B !{stop}{return body(x);}
 )";
+  for (const auto &input : {std::string("xs"), std::string("keep(xs)"),
+                            std::string("{xs}"), std::string("record.values"),
+                            std::string("array"), std::string("[1,2]")})
+    cases.run("collection conversion " + input, [&] {
+      auto project = take(check(finitePrelude + R"(
+struct Record {pub values:Vector<Fr>}
+fn keep(xs:Vector<Fr>)->Vector<Fr>{return xs;}
+fn work(xs:Vector<Fr>,record:Record,array:[Fr;2])->Fr{
+ return fold()" + input + R"(,0,fun state item=>state+item);
+}
+protocol Demo roles(P)(xs:Vector<Fr>@P,record:Record@P,array:[Fr;2]@P)->(r:Fr@P){return work(xs,record,array);}run Run=Demo;
+)"));
+      take(closeEntry(project, "m::Run"));
+    });
+  cases.run("domain factories use the same collection conversion", [&] {
+    auto project = take(check(finitePrelude + R"(
+domain fn paired(xs:Vector<Fr>,ys:[Fr;2])->scoped domain<(Fr,Fr)>{return zip(xs,ys);}
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:[Fr;2]@P)->(r:Fr@P){return fold(paired(xs,ys),0,fun state (a,b)=>state+a*b);}run Run=Demo;
+)"));
+    take(closeEntry(project, "m::Run"));
+  });
+  for (unsigned mutation = 0; mutation != 5; ++mutation)
+    cases.run(
+        "collection conversion source witness " + std::to_string(mutation),
+        [&] {
+          auto project = take(check(finitePrelude + R"(
+fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{return fold(xs,0,fun state item=>state+item);}
+)"));
+          auto &body =
+              const_cast<Body &>(*declarationNamed(project, "m::work").body);
+          auto &domain = body.domainBindings.front();
+          if (mutation == 0)
+            domain.expression = 999;
+          if (mutation == 1)
+            domain.axis = 1;
+          if (mutation == 2)
+            domain.operands.front() = ValueId{1};
+          if (mutation == 3)
+            domain.kind = DomainBinding::Kind::SourceArray;
+          if (mutation == 4)
+            domain.item = Type{};
+          auto error = checkScopedElaboration(project);
+          require(bool(error), "corrupt collection conversion accepted");
+          require(toString(std::move(error)).find("source.scoped-witness") !=
+                      std::string::npos,
+                  "wrong collection conversion refusal");
+        });
+  for (unsigned mutation = 0; mutation != 10; ++mutation)
+    cases.run(
+        "nested collection source witness " + std::to_string(mutation), [&] {
+          auto project = take(check(finitePrelude + R"(
+fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
+ return fold(zip(b=ys,a=xs),0,fun state (x,y)=>state+x*y);
+}
+)"));
+          auto &body =
+              const_cast<Body &>(*declarationNamed(project, "m::work").body);
+          auto &application = body.domainBindings.back();
+          auto &child = body.domainBindings[application.children[0]];
+          if (mutation == 0)
+            child.expression = 999;
+          if (mutation == 1)
+            child.operands[0] =
+                body.domainBindings[application.children[1]].operands[0];
+          if (mutation == 2)
+            std::swap(application.children[0], application.children[1]);
+          if (mutation == 3)
+            child.kind = DomainBinding::Kind::SourceArray;
+          if (mutation == 4)
+            child.item = Type{};
+          if (mutation == 5)
+            std::swap(application.argumentOrder[0],
+                      application.argumentOrder[1]);
+          if (mutation == 6)
+            application.factory = CallableReference{
+                declarationNamed(project, "m::elements").id, {}};
+          if (mutation == 7)
+            application.arguments[0] = Type{};
+          if (mutation == 8)
+            application.children[0] = body.domainBindings.size();
+          if (mutation == 9)
+            application.children[0] = body.domainBindings.size() - 1;
+          auto error = checkScopedElaboration(project);
+          require(bool(error), "corrupt nested conversion accepted");
+          require(toString(std::move(error)).find("source.scoped-witness") !=
+                      std::string::npos,
+                  "wrong nested conversion refusal");
+        });
+  cases.run("nested factories retain authored data operands", [&] {
+    auto project = take(check(finitePrelude + R"(
+fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
+ return fold(zip(elements(xs),elements(ys)),0,fun state (x,y)=>state+x*y);
+}
+)"));
+    auto &body = const_cast<Body &>(*declarationNamed(project, "m::work").body);
+    auto &application = body.domainBindings.back();
+    auto &left = body.domainBindings[application.children[0]];
+    left.operands[0] = body.domainBindings[application.children[1]].operands[0];
+    auto error = checkScopedElaboration(project);
+    require(bool(error), "changed factory data operand accepted");
+    consumeError(std::move(error));
+  });
+  for (const auto &type :
+       {std::string("Matrix<Fr>"), std::string("Fr"), std::string("bool")})
+    cases.run("no implicit traversal for " + type, [&] {
+      refuses(check(finitePrelude + "fn bad(xs:" + type +
+                    ")->Fr{return fold(xs,0,fun state item=>state);}"),
+              "source.finite-domain");
+    });
   for (const auto &body :
        {std::string("return fold(rows,0,fun s x=>s+term(x));"),
         std::string("let alias=rows;return fold(alias,0,fun s x=>s+term(x));"),

@@ -314,9 +314,56 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     evidence.argumentOrder = binding;
     evidence.scopedArguments = scopedArgs;
     evidence.domainArguments = domainArgs;
+    ScopedCallSource source{
+        decl.id, target.declaration, id, {}, scoped, domains, {}};
+    std::function<bool(uint32_t, unsigned)> retainDomain =
+        [&](uint32_t expression, unsigned nesting) {
+          const auto &argument = syntax.expressions[expression];
+          if (nesting > checker.work.limits.expressionDepth)
+            return fail("source.limit", "domain source depth exceeded",
+                        argument.span);
+          if (!checker.types.charge(1, argument.span))
+            return false;
+          if (inference->collectionDomains.count(expression) ||
+              argument.binding)
+            return true;
+          // Resolve the authored name independently of the produced domain
+          // recipe.
+          auto selected = callable(argument);
+          if (!selected)
+            return false;
+          const auto &factory =
+              checker.output.declarations[selected->declaration.index];
+          if (factory.kind != Declaration::Kind::DomainFunction)
+            return fail("source.scoped-witness",
+                        "domain source is not a factory", argument.span);
+          const auto &statics = inference->arguments.at(expression);
+          if (!checker.types.charge(statics.size() + argument.children.size(),
+                                    argument.span))
+            return false;
+          for (const auto &argument : statics)
+            if (!checker.types.chargeType(argument, expr.span))
+              return false;
+          if (selected->component &&
+              !checker.types.chargeType(*selected->component, expr.span))
+            return false;
+          source.domainCalls.emplace(expression,
+                                     DomainCallSource{*selected, statics});
+          const auto &order = inference->inputs.at(expression);
+          for (unsigned i = 0; i < argument.children.size(); ++i)
+            if (factory.inputOrder[order[i]].kind ==
+                    Declaration::InputSlot::Kind::Domain &&
+                !retainDomain(argument.children[i], nesting + 1))
+              return false;
+          return true;
+        };
+    for (unsigned i = 0; i < expr.children.size(); ++i)
+      if (callee.inputOrder[binding[i]].kind ==
+              Declaration::InputSlot::Kind::Domain &&
+          !retainDomain(expr.children[i], 1))
+        return {};
     checker.scopedCalls.push_back(
-        std::make_shared<ScopedCallSource>(ScopedCallSource{
-            decl.id, target.declaration, id, {}, scoped, domains}));
+        std::make_shared<ScopedCallSource>(std::move(source)));
   }
   if (expr.kind == Expression::Kind::NotationCall &&
       (!expr.notation || !inference->operators.count(id))) {

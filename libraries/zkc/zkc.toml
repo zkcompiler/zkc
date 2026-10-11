@@ -1,10 +1,15 @@
 format = "zkc.project/0"
 
 [modules]
+"zkc::accumulation" = "accumulation.zkc"
 "zkc::boolean" = "boolean.zkc"
 "zkc::computation" = "computation.zkc"
 "zkc::curve" = "curve.zkc"
 "zkc::field_array" = "field_array.zkc"
+"zkc::finite" = "finite.zkc"
+"zkc::finite_domain" = "finite_domain.zkc"
+"zkc::finite_math" = "finite_math.zkc"
+"zkc::indices" = "indices.zkc"
 "zkc::matrix" = "matrix.zkc"
 "zkc::polynomial" = "polynomial.zkc"
 "zkc::sequence" = "sequence.zkc"

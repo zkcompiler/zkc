@@ -2,6 +2,11 @@
 #define ZKC_LANGUAGE_FINITEDOMAINS_H
 #include "Semantics.h"
 namespace zkc::language::detail {
+/// The one collection-to-domain conversion. Matrices require an explicit view.
+std::optional<Type> finiteDomainElement(const Type &);
+std::optional<unsigned> collectionDomain(Semantics &, const Type &, ValueId,
+                                         std::vector<DomainBinding> &,
+                                         uint32_t expression, Span);
 /// Retain a typed factory selection in an enclosing static environment.
 /// Data operands have already been evaluated in source order by the caller.
 /// Complete recipe expansion belongs to joint domain/callback specialization.

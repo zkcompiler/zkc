@@ -30,6 +30,14 @@ public:
   bool requireKinds(Variable, std::initializer_list<Type::Kind>, Span);
   bool allows(Variable, Type::Kind);
   std::optional<Type> get(Variable, Span);
+  struct Structure {
+    Type head;
+    std::vector<Variable> arguments;
+  };
+  /// Inspect an already known constructor without requiring its arguments to
+  /// be solved. Array arguments are the element followed by the dimension.
+  /// This never chooses a constructor for an unknown variable.
+  std::optional<Structure> structure(Variable, Span);
   /// Forward computations (associations, projections) may wait for their input
   /// types. They never infer those inputs by inverting the computation.
   void defer(std::function<bool()>);
@@ -88,6 +96,7 @@ struct ExpressionTypes {
   std::map<uint32_t, unsigned> reductionHeights;
   std::map<uint32_t, ScopedSignature> scopedSignatures;
   std::map<uint32_t, Type> domainItems;
+  std::set<uint32_t> collectionDomains;
 };
 } // namespace zkc::language::detail
 #endif

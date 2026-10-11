@@ -21,11 +21,16 @@ struct ScopedInvocationSource {
   uint32_t expression;
   std::shared_ptr<const SyntaxDeclaration> syntax;
 };
+struct DomainCallSource {
+  CallableReference target;
+  std::vector<Type> arguments;
+};
 struct ScopedCallSource {
   DeclarationId owner, target;
   uint32_t expression;
   std::shared_ptr<const SyntaxDeclaration> syntax;
   std::map<BindingId, unsigned> scoped, domains;
+  std::map<uint32_t, DomainCallSource> domainCalls;
 };
 bool checkScopedValues(Semantics &, const CheckedStorage &,
                        const ScopedSource &, const ScopedBinding &);

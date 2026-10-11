@@ -1,5 +1,7 @@
 #include "ScopedWitness.h"
+#include "Arguments.h"
 #include "FiniteContracts.h"
+#include "FiniteDomains.h"
 #include "Semantics.h"
 #include <algorithm>
 using namespace llvm;
@@ -302,6 +304,109 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
         call->scopedArguments.size() != callee.scopedInputs.size() ||
         call->domainArguments.size() != callee.domainInputs.size())
       return refuse();
+    std::function<bool(uint32_t, unsigned, unsigned)> domain =
+        [&](uint32_t expression, unsigned index, unsigned depth) {
+          if (depth > work.limits.expressionDepth)
+            return types.fail("source.limit", "domain witness depth exceeded",
+                              op.span);
+          if (!types.charge(1, op.span))
+            return false;
+          if (expression >= source.syntax->expressions.size() ||
+              index >= body.domainBindings.size())
+            return refuse();
+          const auto &argument = source.syntax->expressions[expression];
+          const auto &application = body.domainBindings[index];
+          if (argument.kind == Expression::Kind::Name && argument.binding) {
+            auto lexical = source.domains.find(*argument.binding);
+            if (lexical != source.domains.end())
+              return lexical->second == index || refuse();
+          }
+          auto expected = source.domainCalls.find(expression);
+          if (expected == source.domainCalls.end()) {
+            auto value = body.expressionValues.find(expression);
+            if (value == body.expressionValues.end() ||
+                value->second.index >= body.values.size() ||
+                application.expression != expression ||
+                !same(application.span, argument.span) ||
+                application.operands.size() != 1 ||
+                application.operands.front().index != value->second.index ||
+                !application.children.empty() || application.axis ||
+                application.parameter || application.factory ||
+                !application.arguments.empty() ||
+                !application.argumentOrder.empty())
+              return refuse();
+            const auto &type = body.values[value->second.index].type;
+            auto kind = type.kind == Type::Kind::Array
+                            ? DomainBinding::Kind::SourceArray
+                            : DomainBinding::Kind::Elements;
+            return (application.kind == kind &&
+                    finiteDomainElement(type) == application.item) ||
+                   refuse();
+          }
+          const auto &authored = expected->second;
+          if (argument.kind != Expression::Kind::Call ||
+              authored.target.declaration.index >=
+                  storage.declarations.size() ||
+              application.kind != DomainBinding::Kind::Application ||
+              application.expression != expression ||
+              !same(application.span, argument.span) || application.axis ||
+              application.parameter || !application.factory ||
+              application.factory->declaration.index !=
+                  authored.target.declaration.index ||
+              application.factory->component != authored.target.component ||
+              application.arguments != authored.arguments)
+            return refuse();
+          const auto &factory =
+              storage.declarations[authored.target.declaration.index];
+          if (factory.kind != Declaration::Kind::DomainFunction ||
+              !factory.domainResult ||
+              application.arguments.size() != factory.parameters.size() ||
+              application.operands.size() != factory.inputs.size() ||
+              application.children.size() != factory.domainInputs.size())
+            return refuse();
+          auto order =
+              bindArguments(types, inputNames(factory),
+                            argument.children.size(), argument.callLabels, true,
+                            argument.span, "source.scoped-witness");
+          if (!order || *order != application.argumentOrder)
+            return refuse();
+          auto substitution = types.substitution(factory, authored.arguments);
+          if (authored.target.component && factory.parent)
+            substitution.emplace(
+                "self:" +
+                    storage.declarations[factory.parent->index].qualifiedName,
+                *authored.target.component);
+          auto item = types.substitute(*factory.domainResult, substitution,
+                                       argument.span);
+          if (!item || *item != application.item)
+            return refuse();
+          for (unsigned i = 0; i < argument.children.size(); ++i) {
+            const auto &slot = factory.inputOrder[(*order)[i]];
+            auto child = argument.children[i];
+            if (slot.kind == Declaration::InputSlot::Kind::Domain) {
+              auto nested = application.children[slot.index];
+              if (!domain(child, nested, depth + 1))
+                return false;
+              auto item =
+                  types.substitute(factory.domainInputs[slot.index].item,
+                                   substitution, argument.span);
+              if (!item || *item != body.domainBindings[nested].item)
+                return refuse();
+            } else if (slot.kind == Declaration::InputSlot::Kind::Data) {
+              auto value = body.expressionValues.find(child);
+              auto type = types.substitute(factory.inputs[slot.index].type,
+                                           substitution, argument.span);
+              if (!type || value == body.expressionValues.end() ||
+                  value->second.index >= body.values.size() ||
+                  value->second.index !=
+                      application.operands[slot.index].index ||
+                  *type != body.values[value->second.index].type)
+                return refuse();
+            } else
+              return refuse();
+          }
+          return true;
+        };
     std::vector<bool> assigned(callee.inputOrder.size());
     for (unsigned i = 0; i < expr.children.size(); ++i) {
       unsigned parameter = i;
@@ -326,22 +431,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
       assigned[parameter] = true;
       const auto &slot = callee.inputOrder[parameter];
       if (slot.kind == Declaration::InputSlot::Kind::Domain) {
-        auto index = call->domainArguments[slot.index];
-        if (index >= body.domainBindings.size())
-          return refuse();
-        const auto &argument = source.syntax->expressions[expr.children[i]];
-        if (argument.kind == Expression::Kind::Name && argument.binding) {
-          auto lexical = source.domains.find(*argument.binding);
-          if (lexical == source.domains.end() || lexical->second != index)
-            return refuse();
-        } else if (argument.kind == Expression::Kind::Call) {
-          const auto &application = body.domainBindings[index];
-          if (application.kind != DomainBinding::Kind::Application ||
-              application.expression != expr.children[i] ||
-              !same(application.span, argument.span))
-            return refuse();
-        } else
-          return refuse();
+        if (!domain(expr.children[i], call->domainArguments[slot.index], 1))
+          return false;
         continue;
       }
       if (slot.kind != Declaration::InputSlot::Kind::Scoped)

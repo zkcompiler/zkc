@@ -140,9 +140,15 @@ std::optional<unsigned> BodyChecker::domainArgument(uint32_t id,
     auto found = domains.find(*expr.binding);
     if (found != domains.end())
       return found->second;
-    fail("source.finite-domain", "unavailable finite domain binding",
-         expr.span);
-    return {};
+  }
+  if (inference->collectionDomains.count(id)) {
+    auto value = expression(id, {}, depth + 1);
+    if (!value || !use(*value, expr.span) ||
+        !checker.types.charge(1, expr.span))
+      return {};
+    body.expressionValues.insert_or_assign(id, *value);
+    return collectionDomain(checker.types, body.values[value->index].type,
+                            *value, body.domainBindings, id, expr.span);
   }
   const auto &target = inference->callees.at(id);
   const auto &callee = checker.output.declarations[target.declaration.index];
@@ -164,6 +170,7 @@ std::optional<unsigned> BodyChecker::domainArgument(uint32_t id,
       auto value = expression(child, {}, depth + 1);
       if (!value || !use(*value, expr.span))
         return {};
+      body.expressionValues.insert_or_assign(child, *value);
       operands[slot.index] = *value;
     }
   }

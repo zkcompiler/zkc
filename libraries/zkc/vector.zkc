@@ -33,3 +33,24 @@ pub notation ⟪ left, right ⟫ = dot(left, right);
 
 pub reduction ∑ = sum;
 pub reduction ∏ = product;
+
+pub domain fn elements<F: Field>(values: Vector<F>) -> scoped domain<F> = domain("elements");
+pub domain fn indices<F: Field>(values: Vector<F>) -> scoped domain<index> = domain("indices");
+pub math fn at<F: Field>(values: Vector<F>, position: index) -> F where in_bounds(position, values)
+  = primitive("container.at");
+
+pub fn collect<I: Type + Copy + Drop, F: Field>(
+  rows: scoped domain<I>, body: scoped fn(I) -> F !{stop} on(rows)
+) -> Vector<F> !{stop} = finite("local.collect.vector");
+pub fn collect_where<I: Type + Copy + Drop, F: Field>(
+  rows: scoped domain<I>, keep: scoped fn(I) -> bool !{stop} on(rows),
+  body: scoped fn(I) -> F !{stop} on(rows)
+) -> Vector<F> !{stop} = finite("local.collect.vector_where");
+
+// Materialize every selected body result before invoking the reducer once.
+pub fn reduce<I: Type + Copy + Drop, F: Field, R: Type>(
+  rows: scoped domain<I>, body: scoped fn(I) -> F !{stop} on(rows),
+  reducer: scoped fn(Vector<F>) -> R !{stop}
+) -> R !{stop} {
+  return reducer(collect(rows, body));
+}

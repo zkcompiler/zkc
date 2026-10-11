@@ -3,21 +3,34 @@
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::language::detail {
+CollectionElementKind collectionElementKind(const Type &head,
+                                            size_t arguments) {
+  if (head.kind != Type::Kind::Builtin)
+    return CollectionElementKind::None;
+  if (head.domain == "indices" && !arguments)
+    return CollectionElementKind::Index;
+  if (((head.domain == "vector" || head.domain == "groups" ||
+        head.domain == "sequence") &&
+       arguments == 1) ||
+      (head.domain == "field_array" && arguments == 2))
+    return CollectionElementKind::Parameter;
+  return CollectionElementKind::None;
+}
 std::optional<Type> collectionElement(const Type &type, bool matrix) {
-  if (type.kind != Type::Kind::Builtin)
-    return {};
   if (matrix)
-    return type.domain == "matrix" && type.arguments.size() == 1
+    return type.kind == Type::Kind::Builtin && type.domain == "matrix" &&
+                   type.arguments.size() == 1
                ? std::optional<Type>(type.arguments.front())
                : std::nullopt;
-  if (type.domain == "indices" && type.arguments.empty())
-    return Type(Type::Kind::Index);
-  if (((type.domain == "vector" || type.domain == "groups" ||
-        type.domain == "sequence") &&
-       type.arguments.size() == 1) ||
-      (type.domain == "field_array" && type.arguments.size() == 2))
+  switch (collectionElementKind(type, type.arguments.size())) {
+  case CollectionElementKind::Parameter:
     return type.arguments.front();
-  return {};
+  case CollectionElementKind::Index:
+    return Type(Type::Kind::Index);
+  case CollectionElementKind::None:
+    return {};
+  }
+  llvm_unreachable("unknown collection element kind");
 }
 bool collectionAxis(const Type &type, unsigned axis) {
   return collectionElement(type, true) ? axis < 2

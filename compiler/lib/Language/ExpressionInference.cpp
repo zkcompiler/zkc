@@ -1,6 +1,7 @@
 #include "Arguments.h"
 #include "BodyCheck.h"
 #include "CallableConstraints.h"
+#include "DataRequirements.h"
 #include "OperatorInference.h"
 #include "TypeInference.h"
 #include "llvm/ADT/STLExtras.h"
@@ -116,6 +117,7 @@ class ExpressionInference {
         found != domainExpressions.end())
       return found->second;
     Variable result = types.fresh(expr.span);
+    bool collection = false;
     if (expr.kind == K::Name && expr.binding) {
       if (auto found = domains.find(*expr.binding); found != domains.end())
         types.equal(result, found->second, expr.span);
@@ -124,8 +126,7 @@ class ExpressionInference {
         constrain(result, owner.body.domainBindings[found->second].item,
                   expr.span);
       else
-        fail("source.finite-domain", "expected a finite domain binding",
-             expr.span);
+        collection = true;
     } else if (expr.kind == K::Call && !expr.binding && !expr.roles) {
       auto target = owner.callable(expr);
       if (!target)
@@ -133,19 +134,42 @@ class ExpressionInference {
       const auto &callee =
           checker.output.declarations[target->declaration.index];
       if (callee.kind != Declaration::Kind::DomainFunction) {
-        fail("source.finite-domain", "expected a finite domain factory",
-             expr.span);
-        return result;
+        collection = true;
+      } else {
+        output.callees.emplace(id, *target);
+        contexts.emplace(id, CallContext{scopedMode.value_or(owner.body.mode),
+                                         reductionSite, scopedDepth});
+        auto outputs = application(id, callee, target->component, depth);
+        if (outputs.size() == 1)
+          types.equal(result, outputs.front(), expr.span);
       }
-      output.callees.emplace(id, *target);
-      contexts.emplace(id, CallContext{scopedMode.value_or(owner.body.mode),
-                                       reductionSite, scopedDepth});
-      auto outputs = application(id, callee, target->component, depth);
-      if (outputs.size() == 1)
-        types.equal(result, outputs.front(), expr.span);
     } else
-      fail("source.finite-domain", "expected a finite domain argument",
-           expr.span);
+      collection = true;
+    if (collection) {
+      output.collectionDomains.insert(id);
+      auto input = expression(id, depth + 1).type;
+      types.defer([this, input, result, span = expr.span] {
+        auto structure = types.structure(input, span);
+        if (!structure)
+          return false;
+        const auto &head = structure->head;
+        const auto &arguments = structure->arguments;
+        auto kind = collectionElementKind(head, arguments.size());
+        if ((head.kind == T::Array && arguments.size() == 2) ||
+            kind == CollectionElementKind::Parameter) {
+          types.equal(result, arguments.front(), span);
+          return true;
+        }
+        if (kind == CollectionElementKind::Index) {
+          constrain(result, Type(T::Index), span);
+          return true;
+        }
+        return fail("source.finite-domain",
+                    "expected a finite domain or a collection; matrices "
+                    "require an explicit view",
+                    span);
+      });
+    }
     domainExpressions.emplace(id, result);
     return result;
   }

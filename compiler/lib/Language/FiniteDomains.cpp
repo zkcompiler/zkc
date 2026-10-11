@@ -7,6 +7,39 @@
 #include <numeric>
 using namespace llvm;
 namespace zkc::language::detail {
+std::optional<Type> finiteDomainElement(const Type &type) {
+  return type.kind == Type::Kind::Array && type.arguments.size() == 1
+             ? std::optional(type.arguments.front())
+             : collectionElement(type);
+}
+std::optional<unsigned> collectionDomain(Semantics &types, const Type &type,
+                                         ValueId value,
+                                         std::vector<DomainBinding> &bindings,
+                                         uint32_t expression, Span span) {
+  auto item = finiteDomainElement(type);
+  if (!item) {
+    types.fail("source.finite-domain",
+               "expected a finite domain or a collection with an element "
+               "traversal; matrices require an explicit view",
+               span);
+    return {};
+  }
+  if (!types.chargeType(*item, span) || !types.charge(1, span))
+    return {};
+  DomainBinding binding{type.kind == Type::Kind::Array
+                            ? DomainBinding::Kind::SourceArray
+                            : DomainBinding::Kind::Elements,
+                        *item,
+                        {value},
+                        {},
+                        0,
+                        {},
+                        span};
+  binding.expression = expression;
+  auto index = bindings.size();
+  bindings.push_back(std::move(binding));
+  return index;
+}
 namespace {
 using Kind = DomainBinding::Kind;
 struct Constructor {
@@ -114,6 +147,11 @@ class Composition {
       auto found = domains.find(*expr.binding);
       if (found != domains.end())
         return found->second;
+      auto input = data.find(*expr.binding);
+      if (input != data.end())
+        return collectionDomain(
+            checker.types, decl.inputs[input->second.index].type, input->second,
+            definition.bindings, id, expr.span);
       refuse(expr.span, "expected a finite domain binding");
       return {};
     }

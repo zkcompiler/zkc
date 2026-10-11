@@ -957,6 +957,16 @@ and admission. Defined factories compose domain calls and immutable aliases;
 ordinary computations producing their data operands stay at the call site.
 Interface and component members use the same resolved factory identities.
 
+At an expected scoped-domain input, an ordinary collection expression has one
+implicit element traversal: native vectors, group vectors, immutable sequences,
+index collections and fixed field arrays use `elements`; fixed source arrays
+use `source_array`. The expression is evaluated once at its written argument
+position. The conversion changes neither its representation nor the surrounding
+call's mode. It records the source expression and exact operand for independent
+checking. Domain factories may use the same conversion on their data inputs.
+A matrix requires an explicit view; a scalar or unknown representation cannot
+be converted by guessing a domain from the callback's result type.
+
 Math and Local functions may accept `rows: scoped domain<I>`, forward it, or
 capture it in scoped computations and local control. A domain factory accepts
 ordinary data and domain parameters. Protocol signatures cannot expose domain
