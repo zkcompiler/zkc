@@ -31,7 +31,7 @@ endif()
 # MLIR's C++ interfaces change between major releases, so the major release is
 # what a native build requires. The Nix lock selects the tested upstream patch;
 # other native 23 builds report their difference with this baseline.
-set(ZKC_TESTED_LLVM_VERSION "23.1.0")
+set(ZKC_TESTED_LLVM_VERSION "23.1.3")
 if(NOT LLVM_VERSION_MAJOR EQUAL 23)
   message(FATAL_ERROR
     "zkc requires LLVM/MLIR 23; found ${LLVM_PACKAGE_VERSION}")

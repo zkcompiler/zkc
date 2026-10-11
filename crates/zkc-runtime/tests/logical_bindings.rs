@@ -298,7 +298,7 @@ fn selected_observations_keep_the_installed_suite_policy() {
             "field:ristretto255.scalar",
         ),
         (
-            "spongefish0.7.4.keccak.bls12-381.fr64be/0",
+            "spongefish0.8.0.keccak.bls12-381.fr64be/0",
             "spongefish",
             "matrix:bls12-381.fr",
         ),
@@ -409,7 +409,7 @@ fn explicit_selections_preserve_ports_and_exact_physical_layouts() {
         ),
         (
             "transcript.native.indexed.challenge",
-            vec!["spongefish0.7.4.keccak.bls12-381.fr64be/0"],
+            vec!["spongefish0.8.0.keccak.bls12-381.fr64be/0"],
             "spongefish/transcript.native.indexed.challenge",
             Representation::Resource,
             false,

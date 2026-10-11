@@ -1,7 +1,7 @@
 //! Resolve the complete invocation before opening inputs or publishing outputs.
 use super::{inputs::Operation, *};
 use crate::project::{Artifact, Layout, input_path};
-use rand::{RngCore, rngs::OsRng};
+use rand::{TryRng, rngs::SysRng};
 use std::{collections::BTreeMap, path::PathBuf};
 
 pub(super) struct Invocation {
@@ -72,7 +72,7 @@ impl Invocation {
                 Some(session) => session.to_owned(),
                 None => {
                     let mut bytes = [0; 16];
-                    OsRng
+                    SysRng
                         .try_fill_bytes(&mut bytes)
                         .map_err(|_| "entry-session-random")?;
                     hex(&bytes)

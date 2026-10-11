@@ -66,7 +66,7 @@ inline std::optional<ServiceMethod> serviceMethod(llvm::StringRef contract,
 inline llvm::StringRef nativeChallengeField(llvm::StringRef suite) {
   // Native proof support is an explicit policy; the catalog owns the field.
   if (suite == "merlin3.bls12-381.fr64be/0" ||
-      suite == "spongefish0.7.4.keccak.bls12-381.fr64be/0" ||
+      suite == "spongefish0.8.0.keccak.bls12-381.fr64be/0" ||
       suite == "merlin3.ristretto255.scalar64le/0" ||
       suite == "merlin3.koala-bear.ext8-binomial3.rejection31le/0")
     return installedDomains().associatedIdentity(suite, "ChallengeField");

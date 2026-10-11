@@ -305,7 +305,7 @@ fn pair_metadata(a: &serde_json::Value, b: &serde_json::Value) -> Option<Vec<(us
     }
     for artifact in [a, b] {
         let bytes = artifact["bundle"].as_str()?;
-        let digest = format!("{:x}", Sha256::digest(bytes.as_bytes()));
+        let digest = zkc_test_support::hex(&Sha256::digest(bytes.as_bytes()));
         let report = &artifact["correspondence"];
         let entry = report["entry"].as_str()?;
         if report["bundle_sha256"].as_str()? != digest

@@ -36,7 +36,7 @@ fn read(path: &str, limit: u64) -> Result<String, Refusal> {
 }
 
 fn digest(text: &str) -> String {
-    format!("{:x}", Sha256::digest(text.as_bytes()))
+    zkc_test_support::hex(&Sha256::digest(text.as_bytes()))
 }
 
 fn field<'a>(value: &'a Value, key: &str, code: &str) -> Result<&'a Value, Refusal> {

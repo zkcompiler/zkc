@@ -41,7 +41,7 @@ jobs:
           mkdir -p build/reports
           nix develop .#quick --command bash .github/scripts/check-quick.sh \
             2>&1 | tee build/reports/quick-checks.log
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: quick-checks-${{ github.run_id }}
@@ -87,7 +87,7 @@ jobs:
             .#checks.x86_64-linux.sources \
             .#checks.x86_64-linux.format \
             2>&1 | tee build/reports/native-checks.log
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always() && steps.changes.outputs.native == 'true'
         with:
           name: native-checks-${{ github.run_id }}
@@ -127,7 +127,7 @@ jobs:
         run: |
           nix build .#checks.x86_64-linux.project --out-link build/nix-project
           cp -RL build/nix-project/reports build/reports/packaged
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: main-checks-${{ github.run_id }}
@@ -161,7 +161,7 @@ jobs:
           if [ -d "build/nix-$PACKAGE/reports" ]; then
             cp -RL "build/nix-$PACKAGE/reports" "build/reports/$PACKAGE"
           fi
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: optional-${{ matrix.package }}-${{ github.run_id }}
@@ -198,7 +198,7 @@ jobs:
           nix build -L .#lean .#arklib --no-link \
             --option substituters https://cache.nixos.org \
             2>&1 | tee build/reports/lean-fresh.log
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: lean-fresh-${{ github.run_id }}

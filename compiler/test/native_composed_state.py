@@ -9,7 +9,7 @@ from tools import compiler, records
 OUT = records()
 commands = Commands(OUT)
 source = Path(__file__).parent / 'fixtures/mathematical/composed-state.mlir'
-suites = ['merlin3.bls12-381.fr64be/0', 'spongefish0.7.4.keccak.bls12-381.fr64be/0']
+suites = ['merlin3.bls12-381.fr64be/0', 'spongefish0.8.0.keccak.bls12-381.fr64be/0']
 manifest = []
 for family in ['fold', 'batch']:
     for suite_index, suite in enumerate(suites):

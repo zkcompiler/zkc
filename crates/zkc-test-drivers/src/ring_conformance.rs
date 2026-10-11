@@ -11,7 +11,7 @@ fn main() {
             Ok(expression) => json!({
                 "accepted":true,
                 "arena":expression.encode(),
-                "identity":format!("{:x}",Sha256::digest(expression.canonical().as_bytes())),
+                "identity":zkc_test_support::hex(&Sha256::digest(expression.canonical().as_bytes())),
                 "facts":expression.facts().iter().map(|f|
                     json!([f.field.name(),f.degree,f.depth])).collect::<Vec<_>>()
             }),

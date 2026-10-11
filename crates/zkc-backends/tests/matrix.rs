@@ -1,7 +1,7 @@
 //! Matrix data is canonical, field-specific and independent of program size.
 #[path = "domains/support.rs"]
 mod support;
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{RngExt, SeedableRng, rngs::StdRng};
 use serde_json::json;
 use support::{Controlled, assert_value, backend, one, program};
 use zkc_backends::{KoalaBear, Policy, RistrettoScalar, Scalar, Value};
@@ -106,18 +106,18 @@ fn random_sparse_products_and_bilinear_match_coordinate_oracle() {
             let entries = (0..rows)
                 .flat_map(|r| (0..columns).map(move |c| (r, c)))
                 .filter_map(|(r, c)| {
-                    if rng.gen_ratio(1, 5) {
-                        Some((r, c, rng.gen_range(1..1000)))
+                    if rng.random_ratio(1, 5) {
+                        Some((r, c, rng.random_range(1..1000)))
                     } else {
                         None
                     }
                 })
                 .collect::<Vec<_>>();
             let x = (0..columns)
-                .map(|_| rng.gen_range(0..1000))
+                .map(|_| rng.random_range(0..1000))
                 .collect::<Vec<u64>>();
             let y = (0..rows)
-                .map(|_| rng.gen_range(0..1000))
+                .map(|_| rng.random_range(0..1000))
                 .collect::<Vec<u64>>();
             let modulus = if d == 2 { 2_130_706_433u128 } else { u128::MAX };
             let expected = (0..rows)

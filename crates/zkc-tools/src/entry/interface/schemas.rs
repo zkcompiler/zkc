@@ -61,7 +61,7 @@ impl<'a> Schemas<'a> {
                 }
                 let key =
                     crate::source_names::decode_nominal_identity(values[1].as_str()?, 256 * 1024)?;
-                (!key.is_empty()).then(|| format!("{:x}", Sha256::digest(key.as_bytes())))
+                (!key.is_empty()).then(|| crate::host::inputs::hex(&Sha256::digest(key.as_bytes())))
             });
             self.leaves.insert(
                 spelling,

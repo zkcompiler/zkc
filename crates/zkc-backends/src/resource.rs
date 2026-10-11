@@ -387,7 +387,7 @@ impl Resources {
             Identity::Merlin3KoalaBearExt8 => {
                 Value::KoalaBearExt8Field(crate::sampling::extension(block)?)
             }
-            Identity::Merlin3Fr64Be | Identity::Spongefish074KeccakFr64Be => {
+            Identity::Merlin3Fr64Be | Identity::Spongefish080KeccakFr64Be => {
                 Value::Field(zkc_arkworks::scalar_from_wide_be(&block()))
             }
             Identity::Merlin3Ristretto64Le => {
@@ -433,7 +433,7 @@ impl Resources {
         t: &Capability,
         bound: u64,
     ) -> Result<(Value, Capability)> {
-        use rand::RngCore;
+        use rand::Rng;
         if t.identity != Identity::KoalaBearExt8 {
             return Err(refused("query-rng"));
         }
@@ -459,7 +459,7 @@ impl Resources {
             ))),
             Identity::KoalaBearExt8 | Identity::Ristretto255Scalar => {
                 let rng = Box::new(
-                    rand::rngs::StdRng::from_rng(rand::rngs::OsRng)
+                    rand::rngs::StdRng::try_from_rng(&mut rand::rngs::SysRng)
                         .map_err(|_| exhausted("entropy-unavailable"))?,
                 );
                 if field == Identity::KoalaBearExt8 {
@@ -493,7 +493,7 @@ impl Resources {
             }
             Identity::Ristretto255Scalar => {
                 use rand::SeedableRng;
-                let mut rng = rand::rngs::StdRng::from_rng(rand::rngs::OsRng)
+                let mut rng = rand::rngs::StdRng::try_from_rng(&mut rand::rngs::SysRng)
                     .map_err(|_| exhausted("entropy-unavailable"))?;
                 let k = crate::RistrettoScalar::random(&mut rng);
                 Ok(Value::Nonce(self.issue(
@@ -582,7 +582,7 @@ impl Resources {
                 (Value::Bn254Vector(values.into()), slot.generation)
             }
             Identity::KoalaBearExt8 => {
-                use rand::RngCore;
+                use rand::Rng;
                 let mut values = crate::kernels::arithmetic::reserve(n)?;
                 let slot = self.transition(f, t, Type::Rng, draws)?;
                 let State::ExtensionRng(rng) = &mut slot.state else {
@@ -641,7 +641,7 @@ impl Resources {
                 Value::Bn254Field(tape.pop_front().ok_or_else(|| exhausted("test-tape"))?)
             }
             State::ExtensionRng(rng) => {
-                use rand::RngCore;
+                use rand::Rng;
                 Value::KoalaBearExt8Field(crate::sampling::extension(|| {
                     let mut bytes = [0; 64];
                     rng.fill_bytes(&mut bytes);
@@ -1018,7 +1018,7 @@ impl Resources {
         t: &Capability,
         bound: u64,
     ) -> Result<(Value, Capability)> {
-        use rand::RngCore;
+        use rand::Rng;
         if !self.frames.is_empty() {
             return Err(refused("service-resource-context"));
         }

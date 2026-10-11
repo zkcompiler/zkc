@@ -15,20 +15,20 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.mark.parametrize("description,status", [
-    ("rustc 1.98.1 (abc 2026-09-01)", "pass"),
+    ("rustc 1.98.1 (abc 2026-09-01)", "fail"),
     ("rustc 1.99.0 (abc 2026-10-01)", "pass"),
     ("rustc 1.99.0-nightly (abc 2026-09-01)", "fail"),
     ("rustc 1.99.0-beta.1 (abc 2026-09-01)", "fail"),
 ])
-def test_rust_stable_accepts_new_releases_but_not_prereleases(description, status, monkeypatch):
+def test_rust_requires_the_selected_release(description, status, monkeypatch):
     doctor = load("doctor", "scripts/doctor.py")
     monkeypatch.setattr(doctor.shutil, "which", lambda name: "/tools/rustc")
     monkeypatch.setattr(doctor, "run_process", lambda *args, **kwargs:
                         subprocess.CompletedProcess(args, 0, description, ""))
-    record = doctor.rust_version("stable")
+    record = doctor.rust_version("1.99.0")
     assert record["status"] == status
-    assert record["channel"] == "stable"
-    assert record["expected"] is None
+    assert record["channel"] == "1.99.0"
+    assert record["expected"] == "1.99.0"
 
 
 @pytest.mark.parametrize("variable", ["CC", "CXX", "MLIR_DIR"])
@@ -140,7 +140,9 @@ def test_doctor_reports_c_and_cxx_and_detects_stale_cache(state, monkeypatch, tm
     def inspect(name, command, expected=None, directory=None):
         commands.append((name, command))
         # GCC's version need not match the LLVM library's version.
-        return {"tool": name, "path": command[0], "version": "12.2.0", "status": "pass"}
+        return {"tool": name, "path": command[0], "version": expected or "12.2.0",
+                "description": f"rustc {expected}" if name == "rust" else "gcc 12.2.0",
+                "status": "pass"}
 
     monkeypatch.setattr(doctor, "inspect", inspect)
     monkeypatch.setattr(doctor, "python_environment", lambda: {"tool": "python-env", "status": "pass"})

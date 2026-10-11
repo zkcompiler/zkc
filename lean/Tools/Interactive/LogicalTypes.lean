@@ -16,7 +16,7 @@ def bn254Modulus : Nat := 218882428718392752222464057452572750885483644004160343
 def pcs := "multilinear.kzg.bls12-381/0"
 def extensionTranscript := "merlin3.koala-bear.ext8-binomial3.rejection31le/0"
 def transcriptIdentity := "merlin3.bls12-381.fr64be/0"
-def spongefishTranscript := "spongefish0.7.4.keccak.bls12-381.fr64be/0"
+def spongefishTranscript := "spongefish0.8.0.keccak.bls12-381.fr64be/0"
 
 def ristrettoScalar := "ristretto255.scalar"
 def ristrettoGroup := "ristretto255.group"

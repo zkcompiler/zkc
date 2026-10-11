@@ -279,7 +279,7 @@ fn exact_cubic_coefficients_and_preflight_failures() {
 fn registry_identity_and_large_two_column_execution() {
     let e = product();
     let text = e.canonical();
-    let digest = format!("{:x}", Sha256::digest(text.as_bytes()));
+    let digest = zkc_test_support::hex(&Sha256::digest(text.as_bytes()));
     let mut registry = Registry::default();
     assert_eq!(
         registry.insert(&"0".repeat(64), &text).unwrap_err().code,
@@ -406,7 +406,7 @@ fn runner_frames_retain_ring_work_after_a_later_operation_fails() {
     use zkc_runtime::interactive::OperationBinding;
 
     let text = product().canonical();
-    let digest = format!("{:x}", Sha256::digest(text.as_bytes()));
+    let digest = zkc_test_support::hex(&Sha256::digest(text.as_bytes()));
     let mut registry = Registry::default();
     registry.insert(&digest, &text).unwrap();
     let backend = support::backend(Policy::default())
@@ -483,7 +483,7 @@ fn registry_bounds_text_and_decoded_metadata_before_installation() {
         }
         let expression = Expression::new(vec![], nodes, level).unwrap();
         let text = expression.canonical();
-        let digest = format!("{:x}", Sha256::digest(text.as_bytes()));
+        let digest = zkc_test_support::hex(&Sha256::digest(text.as_bytes()));
         let previous = registry.admitted_bytes();
         if let Err(error) = registry.insert(&digest, &text) {
             assert_eq!(error.code, "exhausted:ring-assets-bytes");
@@ -535,7 +535,7 @@ fn registry_preflight_reports_missing_assets_and_incompatible_carriers() {
         .into_iter()
         .map(|e| {
             let text = e.canonical();
-            let digest = format!("{:x}", Sha256::digest(text.as_bytes()));
+            let digest = zkc_test_support::hex(&Sha256::digest(text.as_bytes()));
             registry.insert(&digest, &text).unwrap();
             digest
         })

@@ -59,7 +59,7 @@ private def decodeResource (json : Json) : Result Resource := do
     | "transcript:merlin3.ristretto255.scalar64le/0" => do pure (.transcript Bindings.ristrettoTranscript (← Tools.Artifact.treeBytes value) #[])
     | "rng" => do pure (.rng (← decodeScalars value))
     | "nonce" => do pure (.nonce (.issued (← decodeScalar value)))
-    | "transcript:spongefish0.7.4.keccak.bls12-381.fr64be/0" => do pure (.transcript Bindings.spongefishTranscript (← Tools.Artifact.treeBytes value) #[])
+    | "transcript:spongefish0.8.0.keccak.bls12-381.fr64be/0" => do pure (.transcript Bindings.spongefishTranscript (← Tools.Artifact.treeBytes value) #[])
     | "transcript" => do pure (.transcript Bindings.transcriptIdentity (← Tools.Artifact.treeBytes value) #[])
     | _ => throw "resource-kind"
   return ⟨← Decode.name identity, ← Decode.name owner, boundInstance, budget, payload, 0, 0⟩

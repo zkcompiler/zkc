@@ -39,7 +39,7 @@ responses before it can share authentication work.
 ## Installed binary Merkle schemes
 
 The installed schemes are `rows.merkle-keccak256.koala-bear/0` and
-`rows.merkle-keccak256.koala-bear.ext8-binomial3/0`. Both use Plonky3 0.5.1's
+`rows.merkle-keccak256.koala-bear.ext8-binomial3/0`. Both use Plonky3 0.8.0's
 binary single-root tree with Keccak-256, one rectangular matrix and cap height
 zero. Leaf hashing binds a fixed leaf tag, field/basis codec, width, height
 and canonical coordinates. Node hashing uses a distinct tag and two 32-byte

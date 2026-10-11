@@ -117,7 +117,7 @@ def required_atomic_types():
         "rows.merkle-keccak256.koala-bear.ext8-binomial3/0": "commitment proof opening_state commitments opening_states",
         "merlin3.bls12-381.fr64be/0": "transcript",
         "merlin3.ristretto255.scalar64le/0": "transcript",
-        "spongefish0.7.4.keccak.bls12-381.fr64be/0": "transcript",
+        "spongefish0.8.0.keccak.bls12-381.fr64be/0": "transcript",
         "merlin3.koala-bear.ext8-binomial3.rejection31le/0": "transcript",
     }
     result = {(kind, domain) for domain, kinds in families.items() for kind in kinds.split()}

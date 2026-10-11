@@ -268,7 +268,7 @@ run Demo=Identity;
     (OUT / 'deep-schema.zkpkg').write_text(package)
 
 for suite, identity in enumerate(('merlin3.bls12-381.fr64be/0',
-                                   'spongefish0.7.4.keccak.bls12-381.fr64be/0')):
+                                   'spongefish0.8.0.keccak.bls12-381.fr64be/0')):
     with case(f'proof Entry compiles through explicit construction: {identity}'):
         source = OUT / f'proof-{suite}.zkc'
         source.write_text((FIXTURES / 'schnorr.zkc').read_text().replace(
@@ -307,7 +307,7 @@ for entry in ('Derived', 'Plain', 'Once', 'Run'):
     with case(f'named attempt selection and operational budgets: {entry}'):
         source = OUT / f'attempt-{entry}.zkc'
         source.write_text((FIXTURES / 'attempts.zkc').read_text())
-        suites = ('merlin3.bls12-381.fr64be/0', 'spongefish0.7.4.keccak.bls12-381.fr64be/0') if entry == 'Derived' else ('merlin3.bls12-381.fr64be/0',)
+        suites = ('merlin3.bls12-381.fr64be/0', 'spongefish0.8.0.keccak.bls12-381.fr64be/0') if entry == 'Derived' else ('merlin3.bls12-381.fr64be/0',)
         for suite, identity in enumerate(suites):
             source.write_text((FIXTURES / 'attempts.zkc').read_text().replace(suites[0], identity))
             args = ['--source-format=zkc', f'--entry=sample::{entry}', f'--module=sample={source}']

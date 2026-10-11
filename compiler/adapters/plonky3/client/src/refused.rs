@@ -3,10 +3,7 @@
 //! a supported relation.
 
 use core::sync::atomic::{AtomicU32, Ordering};
-use p3_air::{
-    Air, AirBuilder, BaseAir, ExtensionBuilder, PeriodicAirBuilder, PermutationAirBuilder,
-    WindowAccess,
-};
+use p3_air::{Air, AirBuilder, BaseAir, ExtensionBuilder, PermutationAirBuilder, WindowAccess};
 use p3_field::{Field, PrimeCharacteristicRing};
 use p3_matrix::dense::RowMajorMatrix;
 
@@ -17,7 +14,7 @@ impl<T> BaseAir<T> for PeriodicAir {
         1
     }
 }
-impl<AB: PeriodicAirBuilder> Air<AB> for PeriodicAir {
+impl<AB: AirBuilder> Air<AB> for PeriodicAir {
     fn eval(&self, builder: &mut AB) {
         let x = builder.main().current_slice()[0];
         let period = builder.periodic_values()[0];
@@ -114,6 +111,8 @@ pub struct MetadataAir {
     pub degree: Option<usize>,
     /// Height and width of a preprocessed table filled with ones.
     pub preprocessed: Option<(usize, usize)>,
+    /// Override the declared width to test inconsistent upstream metadata.
+    pub declared_preprocessed_width: Option<usize>,
 }
 impl MetadataAir {
     pub fn consistent() -> Self {
@@ -122,6 +121,7 @@ impl MetadataAir {
             constraint_count: Some(1),
             degree: Some(2),
             preprocessed: None,
+            declared_preprocessed_width: None,
         }
     }
 }
@@ -137,6 +137,10 @@ impl<T: Field> BaseAir<T> for MetadataAir {
     }
     fn max_constraint_degree(&self) -> Option<usize> {
         self.degree
+    }
+    fn preprocessed_width(&self) -> usize {
+        self.declared_preprocessed_width
+            .unwrap_or_else(|| self.preprocessed.map_or(0, |(_, width)| width))
     }
     fn preprocessed_trace(&self) -> Option<RowMajorMatrix<T>> {
         self.preprocessed
@@ -190,7 +194,7 @@ impl<T> BaseAir<T> for ProbeDependentAir {
         1
     }
 }
-impl<AB: PeriodicAirBuilder> Air<AB> for ProbeDependentAir {
+impl<AB: AirBuilder> Air<AB> for ProbeDependentAir {
     fn eval(&self, builder: &mut AB) {
         let x: AB::Expr = builder.main().current_slice()[0].into();
         if builder.periodic_values().is_empty() {

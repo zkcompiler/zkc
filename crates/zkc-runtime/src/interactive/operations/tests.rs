@@ -123,7 +123,7 @@ fn transcript_alternatives_keep_payload_and_primary_checks() {
             false,
         ),
         (
-            "spongefish0.7.4.keccak.bls12-381.fr64be/0",
+            "spongefish0.8.0.keccak.bls12-381.fr64be/0",
             "field:bls12-381.fr",
             false,
         ),
@@ -146,7 +146,7 @@ fn transcript_alternatives_keep_payload_and_primary_checks() {
         ],
     };
     let logical = logical_signature(&binding).unwrap();
-    binding.arguments[0] = "spongefish0.7.4.keccak.bls12-381.fr64be/0".into();
+    binding.arguments[0] = "spongefish0.8.0.keccak.bls12-381.fr64be/0".into();
     assert!(registry.select(&binding, &logical).is_err());
 }
 

@@ -80,7 +80,7 @@ fn digest(field: &str, rows: usize, columns: usize, entries: &[(u32, u32, String
         [rows.to_string(), columns.to_string(), entries]
     ]))
     .unwrap();
-    format!("{:x}", Sha256::digest(bytes))
+    zkc_test_support::hex(&Sha256::digest(bytes))
 }
 fn check(d: usize, value: Value, hash: &str) -> bool {
     let out = one(backend(Policy::default()), binding(d), &[hash], vec![value])

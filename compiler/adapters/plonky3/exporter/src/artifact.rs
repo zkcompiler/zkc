@@ -26,13 +26,13 @@ pub const INSTANCE_BYTE_LIMIT: usize = 1 << 20;
 pub const WITNESS_BYTE_LIMIT: usize = 256 << 20;
 pub const WITNESS_CELL_LIMIT: usize = 1 << 22;
 
-/// Upstream source of the capture. 0.5.1 is the crates.io release of this commit.
-pub const UPSTREAM_COMMIT: &str = "45e0ffe4d294816755522dd2cf7c38d6bcd701ce";
+/// Upstream source of the capture. 0.8.0 is the crates.io release of this commit.
+pub const UPSTREAM_COMMIT: &str = "a21e3ed42905040ad49c519e402f018381c12d0c";
 pub const UPSTREAM_CRATES: [(&str, &str); 4] = [
-    ("p3-air", "0.5.1"),
-    ("p3-field", "0.5.1"),
-    ("p3-koala-bear", "0.5.1"),
-    ("p3-matrix", "0.5.1"),
+    ("p3-air", "0.8.0"),
+    ("p3-field", "0.8.0"),
+    ("p3-koala-bear", "0.8.0"),
+    ("p3-matrix", "0.8.0"),
 ];
 pub const EXPORTER: &str = concat!("zkc-plonky3-air ", env!("CARGO_PKG_VERSION"));
 pub const READ_MODEL: &str = "cyclic";

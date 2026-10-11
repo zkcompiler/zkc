@@ -48,18 +48,27 @@ fn guarded<T>(what: &str, call: impl FnOnce() -> T) -> Result<T> {
 
 /// Upstream metadata read from `BaseAir`, before any evaluation.
 fn metadata<A: BaseAir<F>>(air: &A) -> Result<(Layout, Option<usize>, Option<usize>)> {
-    let (width, preprocessed, main_next, preprocessed_next, publics, count, degree) =
-        guarded("BaseAir metadata", || {
-            (
-                air.width(),
-                air.preprocessed_trace(),
-                air.main_next_row_columns(),
-                air.preprocessed_next_row_columns(),
-                air.num_public_values(),
-                air.num_constraints(),
-                air.max_constraint_degree(),
-            )
-        })?;
+    let (
+        width,
+        preprocessed,
+        preprocessed_width,
+        main_next,
+        preprocessed_next,
+        publics,
+        count,
+        degree,
+    ) = guarded("BaseAir metadata", || {
+        (
+            air.width(),
+            air.preprocessed_trace(),
+            air.preprocessed_width(),
+            air.main_next_row_columns(),
+            air.preprocessed_next_row_columns(),
+            air.num_public_values(),
+            air.num_constraints(),
+            air.max_constraint_degree(),
+        )
+    })?;
     let normalize = |mut columns: Vec<usize>, width: usize, what: &str| -> Result<Vec<usize>> {
         let declared = columns.len();
         columns.sort_unstable();
@@ -74,6 +83,11 @@ fn metadata<A: BaseAir<F>>(air: &A) -> Result<(Layout, Option<usize>, Option<usi
     let preprocessed = match preprocessed {
         None => {
             ensure(
+                preprocessed_width == 0,
+                "plonky3-preprocessed-shape",
+                || "preprocessed width without a preprocessed table".into(),
+            )?;
+            ensure(
                 preprocessed_next.is_empty(),
                 "plonky3-next-row-metadata",
                 || "preprocessed next-row columns without a preprocessed table".into(),
@@ -83,11 +97,11 @@ fn metadata<A: BaseAir<F>>(air: &A) -> Result<(Layout, Option<usize>, Option<usi
         Some(matrix) => {
             let (w, h) = (matrix.width(), matrix.height());
             ensure(
-                w > 0 && matrix.values.len() == w * h,
+                w > 0 && w == preprocessed_width && matrix.values.len() == w * h,
                 "plonky3-preprocessed-shape",
                 || {
                     format!(
-                        "preprocessed table of width {w} with {} values",
+                        "preprocessed table of width {w} (declared {preprocessed_width}) with {} values",
                         matrix.values.len()
                     )
                 },

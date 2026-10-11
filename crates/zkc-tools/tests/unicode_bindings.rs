@@ -5,7 +5,7 @@ use std::{path::Path, process::Command};
 use zkc_tools::entry::{Package, bindings};
 
 fn digest(s: &str) -> String {
-    format!("{:x}", Sha256::digest(s.as_bytes()))
+    zkc_test_support::hex(&Sha256::digest(s.as_bytes()))
 }
 fn schema(kind: &str, key: &str, leaves: Json) -> Json {
     json!({"kind":kind,"identity":digest(key),"type":key,"custody":false,

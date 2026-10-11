@@ -1,7 +1,7 @@
 # Plonky3 AIR adapter
 
 This standalone Rust workspace captures AIRs written against pinned Plonky3
-0.5.1 and exports them as views over the shared `zkc.ring/0` expression arena.
+0.8.0 and exports them as views over the shared `zkc.ring/0` expression arena.
 An importer rechecks the exported view, binds it to an authorized instance and a
 witness, and derives relation-bundle carriers. Neither the root native workspace
 nor the compiler builds or links this adapter, and no Plonky3 type enters the
@@ -16,10 +16,10 @@ shared compiler or runtime model.
 | `zkc-plonky3-air-driver` | `driver/` | Fixture driver `zkc-plonky3-air-fixtures` and the differential tests |
 
 [`Cargo.toml`](Cargo.toml) pins `p3-air`, `p3-field`, `p3-koala-bear` and
-`p3-matrix` to exactly 0.5.1, the crates.io release of upstream commit
-`45e0ffe4d294816755522dd2cf7c38d6bcd701ce`. This is the family the native
+`p3-matrix` to exactly 0.8.0, the crates.io release of upstream commit
+`a21e3ed42905040ad49c519e402f018381c12d0c`. This is the family the native
 KoalaBear provider in `crates/zkc-backends` pins, so both name the same field
-types. `p3-commit` 0.5.1 is a test dependency for the upstream two-adic selector
+types. `p3-commit` 0.8.0 is a test dependency for the upstream two-adic selector
 law. The lockfile was seeded from the root lockfile; packages the two graphs
 share resolve to the same versions. Later Plonky3 releases have different AIR
 APIs and metadata and are not substitutes for this pin.
@@ -86,7 +86,7 @@ the next row is listed in `main_next_row_columns` or
 `preprocessed_next_row_columns`; those lists contain distinct in-range columns;
 a `num_constraints` hint equals the captured count; a `max_constraint_degree`
 hint bounds every captured degree multiple; a preprocessed table has positive
-width and a power-of-two height. The exporter recomputes each upstream
+width equal to `preprocessed_width()` and a power-of-two height. The exporter recomputes each upstream
 `degree_multiple` from the arena and refuses a mismatch.
 
 | Refusal | Cause |

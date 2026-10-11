@@ -59,11 +59,11 @@ state transitions are adapted from stark-backend v2.0.1's `DuplexSponge` and
 The permutation comes directly from `p3-baby-bear =0.4.3`'s
 `default_babybear_poseidon2_16`, the constructor used by pinned OpenVM. Field and
 symmetric traits are aliased to the same version. No equivalence to workspace
-0.5.1 is assumed. Differential tests use p3-challenger 0.4.3's separately
+0.8.0 is assumed. Differential tests use p3-challenger 0.4.3's separately
 implemented `DuplexChallenger`. Both paths trust the same crypto permutation.
 
-Monero hash and reduction use RustCrypto sha3 0.10.9 (`Keccak256`, **not**
-`Sha3_256`) and curve25519-dalek 4.1.3. The saved `BP_PLUS_INITIAL` is an encoded
+Monero hash and reduction use RustCrypto sha3 0.12.0 (`Keccak256`, **not**
+`Sha3_256`) and curve25519-dalek 5.0.0. The saved `BP_PLUS_INITIAL` is an encoded
 hash-to-point constant from the pinned upstream harness; this crate does not
 implement or independently prove its hash-to-point derivation. Six additional
 primitive vectors use the retained pinned native `cn_fast_hash` shared library

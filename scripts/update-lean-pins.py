@@ -1,30 +1,11 @@
 #!/usr/bin/env python3
-"""Select every Lean dependency revision from one ArkLib commit.
+"""Update the maintained Lean packages as one compatible dependency set.
 
-The main formal package and the optional ArkLib integration share Lean,
-Mathlib and Mathlib's own dependencies; `lean/checks/check_library.py`
-refuses differences in their shared dependencies. This coordinated upgrade
-starts from one ArkLib commit: its `lean-toolchain` and
-`lake-manifest.json` decide the Lean release, the Mathlib revision the main
-package requires, and every revision the integration resolves.
-
-In order, each step checked before the next:
-
-1. read ArkLib's toolchain and manifest at the commit;
-2. record the Lean release archive hash in nix/lean-toolchain.nix, so the Nix
-   development shell can provide that release;
-3. write both lean-toolchain files, the main package's Mathlib revision and
-   the integration's ArkLib revision;
-4. resolve both Lake manifests again (`lake update`) inside the development
-   shell of the new release;
-5. refresh the Nix transport hashes (scripts/update-nix-sources.py in the
-   maintenance shell);
-6. check that the shared revisions are the ones ArkLib's manifest selects.
-
-Building and testing stay separate: validate the formal package and the
-ArkLib integration after reviewing the resulting diff. Selecting compatible
-dependencies does not establish that the project's proofs still build. Run
-from any shell that has Nix; a failed resolution leaves its edits for review.
+Select an exact Mathlib commit and, when needed, exact ArkLib/Clean commits.
+Mathlib selects the Lean release; each package keeps its own Lake manifest.
+Resolve all three packages with that toolchain, verify common revisions, and
+refresh Nix source hashes. Builds and proof audits remain separate checks.
+A failed resolution leaves its edits available for inspection.
 """
 
 import argparse
@@ -39,7 +20,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = ROOT / "lean"
-INTEGRATION = MAIN / "integrations/arklib"
+INTEGRATIONS = {"Arklib": MAIN / "integrations/arklib", "Clean": MAIN / "integrations/clean"}
 NIX_LEAN = ROOT / "nix/lean-toolchain.nix"
 TOOLCHAIN = re.compile(r"leanprover/lean4:v(\d+\.\d+\.\d+(?:-rc\d+)?)")
 
@@ -79,9 +60,9 @@ def set_required_rev(lakefile, name, old, new):
     lakefile.write_text(text[:match.start()] + block + text[match.end():])
 
 
-def upstream_files(url, rev):
-    """ArkLib's lean-toolchain and lake-manifest.json at exactly this commit."""
-    with tempfile.TemporaryDirectory(prefix="zkc-arklib-") as directory:
+def upstream_toolchain(url, rev):
+    """Read the upstream toolchain at exactly the selected commit."""
+    with tempfile.TemporaryDirectory(prefix="zkc-lean-upgrade-") as directory:
         subprocess.run(["git", "init", "-q", directory], check=True)
         subprocess.run(["git", "-C", directory, "fetch", "-q", "--depth", "1", url, rev], check=True)
         fetched = subprocess.run(["git", "-C", directory, "rev-parse", "FETCH_HEAD"],
@@ -92,7 +73,7 @@ def upstream_files(url, rev):
         def show(path):
             return subprocess.run(["git", "-C", directory, "show", f"FETCH_HEAD:{path}"],
                                   check=True, capture_output=True, text=True).stdout
-        return show("lean-toolchain").strip(), json.loads(show("lake-manifest.json"))
+        return show("lean-toolchain").strip()
 
 
 def lean_archive_hash(version):
@@ -126,54 +107,83 @@ def git_revisions(manifest):
     return revisions
 
 
-def check(upstream_toolchain, upstream, arklib):
-    wanted = git_revisions(upstream)
-    for package in (MAIN, INTEGRATION):
-        if (package / "lean-toolchain").read_text().strip() != upstream_toolchain:
-            raise ValueError(f"{package / 'lean-toolchain'} differs from ArkLib's")
-        resolved = git_revisions(json.loads((package / "lake-manifest.json").read_text()))
-        required_names = {"mathlib"} if package == MAIN else set(wanted) | {"Arklib"}
-        missing = required_names - resolved.keys()
+def check(toolchain, selected):
+    main_pins = git_revisions(json.loads((MAIN / "lake-manifest.json").read_text()))
+    shared = {}
+    origins = {}
+    for directory, expected in [(MAIN, {"mathlib": selected["mathlib"]}),
+                                *((path, {name: selected[name], "mathlib": selected["mathlib"]})
+                                  for name, path in INTEGRATIONS.items())]:
+        if (directory / "lean-toolchain").read_text().strip() != toolchain:
+            raise ValueError(f"{directory}: toolchain differs from the selected Mathlib release")
+        manifest = json.loads((directory / "lake-manifest.json").read_text())
+        resolved = git_revisions(manifest)
+        for package in manifest["packages"]:
+            if package["type"] != "git":
+                continue
+            name, url = package["name"], package.get("url")
+            if name in origins and origins[name] != url:
+                raise ValueError(f"{directory}: incompatible shared source URL: {name}")
+            origins[name] = url
+        for name, rev in expected.items():
+            if resolved.get(name) != rev:
+                raise ValueError(f"{directory}: {name} did not resolve to {rev}")
+        missing = main_pins.keys() - resolved.keys()
         if missing:
-            raise ValueError(f"{package}: missing resolved dependencies: {sorted(missing)}")
-        if package == INTEGRATION and resolved["Arklib"] != arklib:
-            raise ValueError(f"{package}: resolved ArkLib is not the selected commit")
-        differing = {name: (rev, wanted[name]) for name, rev in resolved.items()
-                     if name in wanted and wanted[name] != rev}
-        if differing:
-            raise ValueError(f"{package}: revisions differ from ArkLib's manifest: {differing}")
-    print("every shared revision is the one ArkLib selects")
+            raise ValueError(f"{directory}: missing main dependencies: {sorted(missing)}")
+        for name, rev in resolved.items():
+            if name in shared and shared[name] != rev:
+                raise ValueError(f"{directory}: incompatible shared dependency: {name}")
+            shared[name] = rev
+    print("all maintained Lean packages resolved consistently to the selected revisions")
+
+
+def detach_dependency_links():
+    """Lake update replaces changed checkouts; do not let it traverse shared sources."""
+    for directory in INTEGRATIONS.values():
+        packages = directory / ".lake/packages"
+        if packages.is_dir():
+            for package in packages.iterdir():
+                if package.is_symlink():
+                    package.unlink()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--arklib", required=True, help="the full ArkLib commit to select from")
+    parser.add_argument("--mathlib", required=True, help="full Mathlib commit; selects the Lean release")
+    parser.add_argument("--arklib", help="full ArkLib commit (default: current requirement)")
+    parser.add_argument("--clean", help="full Clean commit (default: current requirement)")
     args = parser.parse_args()
-    if not re.fullmatch(r"[0-9a-f]{40}", args.arklib):
-        parser.error("--arklib takes a full 40-character commit, not a branch or tag")
-
-    url, current = required(INTEGRATION / "lakefile.toml", "Arklib")
-    _, main_mathlib = required(MAIN / "lakefile.toml", "mathlib")
-    toolchain, upstream = upstream_files(url, args.arklib)
+    selected = {"mathlib": args.mathlib, "Arklib": args.arklib, "Clean": args.clean}
+    packages = {"mathlib": MAIN, **INTEGRATIONS}
+    requirements = {name: required(path / "lakefile.toml", name) for name, path in packages.items()}
+    for name, rev in selected.items():
+        if rev is None:
+            selected[name] = requirements[name][1]
+        elif not re.fullmatch(r"[0-9a-f]{40}", rev):
+            parser.error(f"{name} requires a full 40-character commit, not a branch or tag")
+    toolchain = upstream_toolchain(requirements["mathlib"][0], selected["mathlib"])
     version = TOOLCHAIN.fullmatch(toolchain)
     if version is None:
-        raise ValueError(f"unexpected ArkLib toolchain: {toolchain}")
-    mathlib = git_revisions(upstream).get("mathlib")
-    if mathlib is None:
-        raise ValueError("ArkLib's manifest selects no Mathlib revision")
-
+        raise ValueError(f"unexpected Mathlib toolchain: {toolchain}")
     record_lean_hash(version.group(1), lean_archive_hash(version.group(1)))
-    for package in (MAIN, INTEGRATION):
-        (package / "lean-toolchain").write_text(toolchain + "\n")
-    set_required_rev(MAIN / "lakefile.toml", "mathlib", main_mathlib, mathlib)
-    set_required_rev(INTEGRATION / "lakefile.toml", "Arklib", current, args.arklib)
-
-    run(["nix", "develop", f"{ROOT}#lean", "--command", "bash", "-c",
-         "cd lean && lake update && cd integrations/arklib && lake update"])
+    for name, directory in packages.items():
+        (directory / "lean-toolchain").write_text(toolchain + "\n")
+        set_required_rev(directory / "lakefile.toml", name, requirements[name][1], selected[name])
+    for directory in INTEGRATIONS.values():
+        lakefile = directory / "lakefile.toml"
+        _, old_mathlib = required(lakefile, "mathlib")
+        set_required_rev(lakefile, "mathlib", old_mathlib, selected["mathlib"])
+    detach_dependency_links()
+    run(["nix", "develop", f"{ROOT}#lean", "--command", "bash", "-e", "-c",
+         "export MATHLIB_NO_CACHE_ON_UPDATE=1; "
+         "cd lean; lake --keep-toolchain update; "
+         "cd integrations/arklib; lake --keep-toolchain update; "
+         "cd ../clean; lake --keep-toolchain update"])
+    check(toolchain, selected)
     run(["nix", "develop", f"{ROOT}#maintenance", "--command",
          "python3", ROOT / "scripts/update-nix-sources.py", "--root", ROOT])
-    check(toolchain, upstream, args.arklib)
 
 
 if __name__ == "__main__":
