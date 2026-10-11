@@ -101,6 +101,8 @@ private:
   std::optional<ValueId> pack(llvm::ArrayRef<ValueId>, Span);
   std::optional<ValueId> project(ValueId, llvm::ArrayRef<unsigned>, Span);
   bool statements(const SyntaxBody &);
+  bool statementBody(const Statement &);
+  bool labelSite(const Statement &, size_t firstOperation);
   std::optional<ValueId> tail(const SyntaxBody &, std::optional<Type>,
                               bool allowUntypedStop = false);
   std::optional<ValueId> block(const Expression &, std::optional<Type>,

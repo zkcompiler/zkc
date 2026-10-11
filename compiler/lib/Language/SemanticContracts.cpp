@@ -138,6 +138,13 @@ bool Semantics::checkProofEntry(const Declaration &entry,
     if (!value.suite.empty() || value.service)
       return fail("source.entry",
                   "authored construction cannot derive a service", value.span);
+  } else if (value.construction == ProofEntry::Construction::Derived) {
+    if (!value.selectedConstruction || !value.service ||
+        *value.service >= protocol.services.size() ||
+        protocol.services[*value.service].owner != value.verifier)
+      return fail("source.entry",
+                  "construction requires a selected verifier authority",
+                  value.span);
   } else {
     auto field = protocol::nativeChallengeField(value.suite);
     if (field.empty() || !value.service ||

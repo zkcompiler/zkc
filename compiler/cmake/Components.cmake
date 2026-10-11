@@ -83,6 +83,7 @@ add_zkc_component(Language
   lib/Language/Specifications.cpp
   lib/Language/RelationABI.cpp
   lib/Language/Entries.cpp
+  lib/Language/Constructions.cpp
   lib/Language/EntrySetups.cpp
   lib/Language/Capabilities.cpp
   lib/Language/Permissions.cpp

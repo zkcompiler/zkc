@@ -15,6 +15,10 @@ std::string digest(StringRef bytes) {
 Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
                      StringRef original, StringRef toolchain,
                      const Limits &limits) {
+  if (const auto *proof = entry.entry().proof();
+      proof && proof->construction == ProofEntry::Construction::Derived)
+    return error("source.construction",
+                 "derived construction deployment is not available");
   Layouts layouts(entry, limits);
   struct Ports {
     std::vector<std::shared_ptr<const Layout>> inputs, outputs;

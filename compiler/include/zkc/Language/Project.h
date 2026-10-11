@@ -267,6 +267,8 @@ struct Operation {
   uint32_t statement;
   std::optional<CallBinding> binding = {};
   std::optional<ReductionBinding> reduction = {};
+  /// An authored selector, independent of generated operation ordinals.
+  std::optional<std::string> site = {};
 };
 struct Body {
   enum class Mode { Math, Local, Protocol } mode;
@@ -366,13 +368,36 @@ struct SetupSlot {
 };
 enum class EntryKind { Run, Proof };
 struct RunEntry {};
+/// A checked association of ordinary Local code with a protocol occurrence.
+struct ConstructionRule {
+  enum class Kind { Start, Message, Query } kind;
+  std::vector<std::string> path;
+  DeclarationId handler;
+  std::vector<Type> arguments;
+  std::vector<unsigned> inputs;
+  Span span;
+};
+struct ConstructionDefinition {
+  enum class Base { None, Authored, Native, Named } base = Base::None;
+  enum class Root { None, Host, Local } root = Root::None;
+  std::optional<DeclarationId> parent;
+  std::vector<Type> arguments;
+  std::optional<Type> provider;
+  std::optional<Type> state;
+  std::optional<CallableReference> initializer;
+  std::vector<Type> initializerArguments;
+  std::optional<unsigned> service;
+  std::string suite;
+  std::vector<ConstructionRule> rules;
+};
 /// Explicit two-participant proof job choices. Public inputs name whole logical
 /// ports; acceptance can select a Boolean product component. Service indices
 /// refer to managed ports, independently of native data flattening.
 struct ProofEntry {
   enum class Construction {
     Authored,
-    FiatShamir
+    FiatShamir,
+    Derived
   } construction = Construction::Authored;
   unsigned prover = 0, verifier = 0;
   std::vector<unsigned> publicInputs;
@@ -380,6 +405,8 @@ struct ProofEntry {
   std::optional<SpecificationSelector> completion;
   std::optional<unsigned> target, service;
   std::string suite;
+  std::optional<DeclarationId> selectedConstruction;
+  std::vector<Type> constructionArguments;
   protocol::ProofFormat format = protocol::ProofFormat::Native;
   Span span;
 };
@@ -454,6 +481,7 @@ struct Declaration {
   std::vector<SpecificationClause> specifications;
   std::optional<DeclarationId> target;
   std::optional<protocol::ProofFormat> proofFormat;
+  std::optional<ConstructionDefinition> construction;
   std::variant<RunEntry, ProofEntry> configuration;
   EntryKind entryKind() const {
     return std::holds_alternative<ProofEntry>(configuration) ? EntryKind::Proof

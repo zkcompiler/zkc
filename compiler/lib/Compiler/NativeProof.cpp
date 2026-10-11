@@ -618,7 +618,7 @@ class Emitter {
     state.addAttribute("parameters", builder.getArrayAttr(parameters));
     return builder.create(state);
   }
-  Expected<FlatSymbolRefAttr> helper(const Event &event, Type state) {
+  Expected<FlatSymbolRefAttr> helper(const Event &event, TypeRange stateTypes) {
     auto type = wire(event.payload);
     if (!type)
       return type.takeError();
@@ -630,14 +630,14 @@ class Emitter {
     if (!event.query)
       args.push_back(builder.getStringAttr(type->spelling()));
     auto selected = binding(contract, args);
-    SmallVector<Type> inputs{state}, outputs;
+    SmallVector<Type> inputs(stateTypes), outputs;
     if (event.query)
       outputs.push_back(event.payload);
     else
       inputs.push_back(event.payload);
     auto dataInputs = inputs.size();
     inputs.append(event.depth, builder.getIntegerType(64, false));
-    outputs.push_back(state);
+    append_range(outputs, stateTypes);
     builder.setInsertionPointToEnd(&module.getBody().front());
     auto function =
         local::FuncOp::create(builder, module.getLoc(), fresh(),
@@ -698,9 +698,10 @@ public:
     auto original = cast<DictionaryAttr>(record.getInterfaces()[0]);
     auto stateType = local::CapabilityType::get(module.getContext(),
                                                 "transcript:" + policy.suite);
+    SmallVector<Type> stateTypes{stateType};
     std::map<std::string, const Event *> events;
     for (const auto &event : admitted.events) {
-      auto result = helper(event, stateType);
+      auto result = helper(event, stateTypes);
       if (!result)
         return result.takeError();
       events.emplace(event.site, &event);
@@ -718,10 +719,12 @@ public:
       auto &body = participant.getBody().front();
       auto type = participant.getFunctionType();
       SmallVector<Type> inputs(type.getInputs()), outputs(type.getResults());
-      inputs.push_back(stateType);
-      outputs.push_back(stateType);
+      append_range(inputs, stateTypes);
+      append_range(outputs, stateTypes);
       participant.setFunctionType(builder.getFunctionType(inputs, outputs));
-      Value state = body.addArgument(stateType, participant.getLoc());
+      SmallVector<Value> state;
+      for (Type slot : stateTypes)
+        state.push_back(body.addArgument(slot, participant.getLoc()));
       if (participant.getRole() == policy.validator)
         participant->removeAttr("service_ports");
       SmallVector<StringRef> reached;
@@ -731,14 +734,16 @@ public:
         reached.push_back(event.origin);
         auto function =
             symbols.lookup<local::FuncOp>(helpers.at(event.site).getValue());
-        SmallVector<Value> operands{state};
+        SmallVector<Value> operands(state);
         if (payload)
           operands.push_back(payload);
         append_range(operands, coordinates);
         auto invocation = local::CallOp::create(
             builder, participant.getLoc(), function.getResultTypes(), operands,
             FlatSymbolRefAttr::get(function), builder.getStringAttr(fresh()));
-        state = invocation.getResults().back();
+        state.clear();
+        append_range(state,
+                     invocation.getResults().take_back(stateTypes.size()));
         auto target = builder.getDictionaryAttr(
             {builder.getNamedAttr("participant",
                                   FlatSymbolRefAttr::get(participant)),
@@ -770,9 +775,10 @@ public:
             unsigned carried = loop.getCarried();
             SmallVector<Value> operands(loop.getInputs().begin(),
                                         loop.getInputs().end());
-            operands.insert(operands.begin() + 1 + carried, state);
+            operands.insert(operands.begin() + 1 + carried, state.begin(),
+                            state.end());
             SmallVector<Type> results(loop.getResultTypes());
-            results.push_back(stateType);
+            append_range(results, stateTypes);
             // Fresh captures keep the source operands untouched. Normal later
             // simplification may deduplicate them; admission follows capture
             // SSA.
@@ -780,11 +786,15 @@ public:
             builder.setInsertionPoint(loop);
             auto replacement = pir::ProtocolLoopOp::create(
                 builder, loop.getLoc(), results, operands, loop.getSiteAttr(),
-                builder.getI64IntegerAttr(carried + 1), loop.getCountAttr(),
-                loop.getParameterAttr(), loop.getMaximumAttr());
+                builder.getI64IntegerAttr(carried + stateTypes.size()),
+                loop.getCountAttr(), loop.getParameterAttr(),
+                loop.getMaximumAttr());
             replacement.getBody().takeBody(loop.getBody());
             auto &child = replacement.getBody().front();
-            state = child.insertArgument(1 + carried, stateType, loop.getLoc());
+            state.clear();
+            for (auto [index, slot] : enumerate(stateTypes))
+              state.push_back(child.insertArgument(1 + carried + index, slot,
+                                                   loop.getLoc()));
             SmallVector<Value> outer = coordinates;
             coordinates.clear();
             for (Value coordinate : outer)
@@ -797,7 +807,9 @@ public:
             for (auto [oldValue, newValue] :
                  zip(loop.getResults(), replacement.getResults()))
               oldValue.replaceAllUsesWith(newValue);
-            state = replacement.getResults().back();
+            state.clear();
+            append_range(state,
+                         replacement.getResults().take_back(stateTypes.size()));
             loop.erase();
             continue;
           }
@@ -807,9 +819,9 @@ public:
           }
           if (auto completion = dyn_cast<pir::FinishIfOp>(op)) {
             SmallVector<Value> inputs(completion.getValues());
-            inputs.push_back(state);
+            append_range(inputs, state);
             SmallVector<Type> results(completion.getResultTypes());
-            results.push_back(stateType);
+            append_range(results, stateTypes);
             builder.setInsertionPoint(completion);
             auto replacement = pir::FinishIfOp::create(
                 builder, completion.getLoc(), results,
@@ -818,7 +830,9 @@ public:
             for (auto [oldValue, newValue] :
                  zip(completion.getResults(), replacement.getResults()))
               oldValue.replaceAllUsesWith(newValue);
-            state = replacement.getResults().back();
+            state.clear();
+            append_range(state,
+                         replacement.getResults().take_back(stateTypes.size()));
             completion.erase();
             continue;
           }

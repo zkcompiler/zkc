@@ -34,6 +34,8 @@ std::string sourceNameProfileIdentity();
 std::string nativeRoleName(unsigned ordinal);
 std::string nativeSetupName(unsigned ordinal);
 std::string nativeAlternativeName(unsigned ordinal);
+// Labelled source sites have a namespace disjoint from generated ordinals.
+std::string nativeSiteName(llvm::StringRef label, uint64_t ordinal);
 
 // Exact UTF-8 preimage bytes, without normalization. Decoding accepts only
 // lowercase, even-length hex and valid UTF-8, bounded by decoded byte count.

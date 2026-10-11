@@ -49,7 +49,7 @@ Error Checker::run() {
   };
   signatureState.resize(output.declarations.size());
   for (unsigned i = 0; i < output.declarations.size(); ++i)
-    if (!signature(DeclarationId{i}))
+    if (!sources[i]->constructionHandler && !signature(DeclarationId{i}))
       return types.takeError();
   if (!prepareOperators())
     return types.takeError();
@@ -94,10 +94,10 @@ Error Checker::run() {
          decl.kind == Declaration::Kind::Protocol ||
          (decl.kind == Declaration::Kind::Relation &&
           decl.relation->kind == RelationDefinition::Kind::Formula)) &&
-        !decl.abstract && !body(decl.id, 1))
+        !decl.abstract && !sources[i]->constructionHandler && !body(decl.id, 1))
       return types.takeError();
   }
-  if (!entries())
+  if (!constructions() || !entries())
     return types.takeError();
   inferredContracts.clear();
   types.inferCapability = {};

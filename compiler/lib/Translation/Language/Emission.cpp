@@ -354,7 +354,7 @@ class Emitter {
         llvm::append_range(resultTypes, *native);
         resultLayouts.push_back(*layout);
       }
-      auto site = "s" + std::to_string(siteOrdinal++);
+      auto site = nativeSiteName(op.site.value_or(""), siteOrdinal++);
       Values result;
       if (auto *projection = std::get_if<Projection>(&op.action)) {
         auto selected =

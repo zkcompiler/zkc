@@ -83,7 +83,7 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
                                    (c == '|' && text[offset] == '|') ||
                                    (c == '.' && text[offset] == '.')))
         ++offset;
-      else if (!StringRef(";,:(){}@=+-*<>[]!.").contains(c))
+      else if (!StringRef(";,:(){}@=+-*<>[]!.#").contains(c))
         return failure("source.token", "unsupported source character",
                        Span{module, uint32_t(begin), uint32_t(offset)});
     }
@@ -1135,30 +1135,132 @@ private:
       d.target = target.name;
       d.targetArguments = std::move(target.arguments);
       d.targetLabels = std::move(target.labels);
+      d.construction.emplace();
+      auto &construction = *d.construction;
       std::set<std::string> choices;
       while (!at("}") && !atEnd()) {
+        auto span = current().span;
         std::string key;
         if (!name(key))
           return {};
+        if (key == "on") {
+          ConstructionRule::Kind kind;
+          std::vector<std::vector<SyntaxName>> selectors;
+          if (take("start")) {
+            kind = ConstructionRule::Kind::Start;
+            selectors.emplace_back();
+          } else {
+            if (take("message"))
+              kind = ConstructionRule::Kind::Message;
+            else if (take("query"))
+              kind = ConstructionRule::Kind::Query;
+            else {
+              fail("source.construction", "expected start, message or query");
+              return {};
+            }
+            bool group = take("{");
+            do {
+              std::vector<SyntaxName> path;
+              do {
+                SyntaxName part;
+                part.span = current().span;
+                if (!name(part.name))
+                  return {};
+                part.span.end = previousEnd;
+                path.push_back(std::move(part));
+              } while (take("."));
+              selectors.push_back(std::move(path));
+            } while (group && take(",") && !at("}"));
+            if (group && !expect("}"))
+              return {};
+          }
+          SyntaxDeclaration handler;
+          handler.kind = Declaration::Kind::Local;
+          handler.anonymous = handler.constructionHandler = true;
+          handler.span = span;
+          std::vector<SyntaxName> parameters;
+          if (!expect("("))
+            return {};
+          if (!at(")"))
+            do {
+              SyntaxPort port;
+              port.span = current().span;
+              if (!name(port.name))
+                return {};
+              parameters.push_back({port.name, port.span});
+              if (take(":")) {
+                if (!type(port.type))
+                  return {};
+              }
+              handler.inputs.push_back(std::move(port));
+            } while (take(",") && !at(")"));
+          if (!expect(")") || !body(handler, false, false, depth + 1))
+            return {};
+          handler.span.end = previousEnd;
+          for (auto &path : selectors) {
+            if (!accept(work.count(work.declarations, work.limits.declarations,
+                                   "declaration count", span)))
+              return {};
+            auto member = unsigned(d.members.size());
+            handler.name = "handler_" + std::to_string(member);
+            d.members.push_back(handler);
+            construction.rules.push_back(
+                {kind, std::move(path), member, parameters, handler.span});
+          }
+          continue;
+        }
         if (!choices.insert(key).second) {
           fail("source.construction", "duplicate construction clause");
           return {};
         }
         if (key == "base") {
-          if (!expect("authored") || !expect(";"))
+          if (take("authored"))
+            construction.base = ConstructionDefinition::Base::Authored;
+          else if (take("fiat_shamir")) {
+            construction.base = ConstructionDefinition::Base::Native;
+            SyntaxName service;
+            if (!expect("(") || !string(construction.suite) || !expect(","))
+              return {};
+            service.span = current().span;
+            if (!name(service.name) || !expect(")"))
+              return {};
+            construction.service = std::move(service);
+          } else {
+            construction.base = ConstructionDefinition::Base::Named;
+            construction.parent.emplace();
+            if (!type(*construction.parent))
+              return {};
+          }
+          if (!expect(";"))
+            return {};
+        } else if (key == "transcript") {
+          construction.provider.emplace();
+          if (!type(*construction.provider) || !expect(";"))
+            return {};
+        } else if (key == "replace") {
+          if (construction.service) {
+            fail("source.construction", "query authority was already selected");
+            return {};
+          }
+          construction.service.emplace();
+          construction.service->span = current().span;
+          if (!name(construction.service->name) || !expect(";"))
             return {};
         } else if (key == "format") {
-          if (!expect("RawBytes") || !expect(";"))
+          if (take("RawBytes"))
+            d.proofFormat = protocol::ProofFormat::RawBytes;
+          else if (take("Native"))
+            d.proofFormat = protocol::ProofFormat::Native;
+          else {
+            fail("source.construction", "unknown proof format");
             return {};
-          d.proofFormat = protocol::ProofFormat::RawBytes;
+          }
+          if (!expect(";"))
+            return {};
         } else {
           fail("source.construction", "unknown construction clause");
           return {};
         }
-      }
-      if (!choices.count("base")) {
-        fail("source.construction", "authored construction requires its base");
-        return {};
       }
       if (!expect("}"))
         return {};
@@ -2160,6 +2262,21 @@ private:
       }
       Statement s;
       s.span = current().span;
+      if (take("#")) {
+        if (!protocol) {
+          fail("source.site", "site labels belong to protocol statements");
+          return {};
+        }
+        std::string label;
+        if (!expect("[") || !expect("site") || !expect("(") || !name(label) ||
+            !expect(")") || !expect("]"))
+          return {};
+        s.site = std::move(label);
+        if (at("return") || at("stop") || at("#")) {
+          fail("source.site", "one label must select a message, query or call");
+          return {};
+        }
+      }
       if (take("require")) {
         s.kind = Statement::Kind::Require;
         if (take("@")) {

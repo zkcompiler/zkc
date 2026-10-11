@@ -375,7 +375,7 @@ class Comparator {
         resultLayouts.push_back(*layout);
       }
       Values result;
-      auto site = "s" + std::to_string(siteOrdinal++);
+      auto site = nativeSiteName(op.site.value_or(""), siteOrdinal++);
       if (auto *projection = std::get_if<Projection>(&op.action)) {
         auto selected =
             take(layouts.get(source.values[projection->input.index].type));

@@ -183,6 +183,16 @@ bool Checker::configureEntry(Declaration &entry, const Declaration &protocol,
                         choice.span);
     value.format =
         definition.proofFormat.value_or(protocol::ProofFormat::Native);
+    value.selectedConstruction = *selected;
+    value.constructionArguments = std::move(*actual);
+    const auto &construction = *definition.construction;
+    value.service = construction.service;
+    value.suite = construction.suite;
+    value.construction = construction.provider || !construction.rules.empty()
+                             ? ProofEntry::Construction::Derived
+                         : construction.suite.empty()
+                             ? ProofEntry::Construction::Authored
+                             : ProofEntry::Construction::FiatShamir;
   }
   auto portIndex = [&](const auto &ports,
                        const SyntaxName &name) -> std::optional<unsigned> {

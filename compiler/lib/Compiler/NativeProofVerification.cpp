@@ -20,7 +20,7 @@ class TranscriptCorrespondence {
   const NativeProofPolicy &policy;
   ArrayRef<NativeTranscriptEvent> events;
   SymbolTable symbols;
-  Type stateType;
+  SmallVector<Type> stateTypes;
   StringMap<const NativeTranscriptEvent *> bySite;
   StringMap<std::string> deliveries;
   StringMap<const NativeTranscriptEvent *> checkedHelpers;
@@ -135,7 +135,7 @@ class TranscriptCorrespondence {
         cast<StringAttr>(origin[0]).getValue() != function.getSymName() ||
         !isa<ArrayAttr>(origin[1]) || !cast<ArrayAttr>(origin[1]).empty())
       return false;
-    SmallVector<Type> inputs{stateType}, outputs;
+    SmallVector<Type> inputs(stateTypes), outputs;
     if (event.query)
       outputs.push_back(event.payload);
     else
@@ -143,7 +143,7 @@ class TranscriptCorrespondence {
     unsigned data = inputs.size();
     inputs.append(event.depth, IntegerType::get(function.getContext(), 64,
                                                 IntegerType::Unsigned));
-    outputs.push_back(stateType);
+    append_range(outputs, stateTypes);
     if (function.getFunctionType() !=
             FunctionType::get(function.getContext(), inputs, outputs) ||
         !function.getBody().hasOneBlock())
@@ -197,8 +197,8 @@ class TranscriptCorrespondence {
     return true;
   }
   bool call(Operation *&cursor, const NativeTranscriptEvent &event,
-            Value &state, Value payload, ArrayRef<Value> coordinates,
-            Value *challenge,
+            SmallVectorImpl<Value> &state, Value payload,
+            ArrayRef<Value> coordinates, Value *challenge,
             SmallVectorImpl<const NativeTranscriptEvent *> &reached) {
     auto invocation = dyn_cast_if_present<local::CallOp>(cursor);
     if (!invocation || !charge())
@@ -206,7 +206,7 @@ class TranscriptCorrespondence {
     auto function = symbols.lookup<local::FuncOp>(invocation.getCallee());
     if (!function || !helper(function, event))
       return false;
-    SmallVector<Value> inputs{state};
+    SmallVector<Value> inputs(state.begin(), state.end());
     if (payload)
       inputs.push_back(payload);
     append_range(inputs, coordinates);
@@ -215,7 +215,8 @@ class TranscriptCorrespondence {
       return false;
     if (challenge)
       *challenge = invocation.getResult(0);
-    state = invocation.getResults().back();
+    state.clear();
+    append_range(state, invocation.getResults().take_back(stateTypes.size()));
     reached.push_back(&event);
     cursor = cursor->getNextNode();
     return true;
@@ -244,7 +245,7 @@ class TranscriptCorrespondence {
                 })
                 .wasInterrupted();
   }
-  bool body(Block &a, Block &b, Env env, Value state,
+  bool body(Block &a, Block &b, Env env, SmallVector<Value> state,
             ArrayRef<Value> coordinates, StringRef role,
             SmallVectorImpl<const NativeTranscriptEvent *> &reached,
             unsigned depth) {
@@ -268,16 +269,21 @@ class TranscriptCorrespondence {
         unsigned split = 1 + loop.getCarried();
         if (!actual || !loop.getMaximum() ||
             !attributes(&op, cursor, {"carried"}) ||
-            actual.getCarried() != loop.getCarried() + 1 ||
-            actual.getNumOperands() !=
-                loop.getNumOperands() + 1 + coordinates.size() ||
-            actual.getNumResults() != loop.getNumResults() + 1 ||
-            actual.getInputs()[split] != state ||
-            actual.getResults().back().getType() != stateType ||
+            actual.getCarried() != loop.getCarried() + stateTypes.size() ||
+            actual.getNumOperands() != loop.getNumOperands() +
+                                           stateTypes.size() +
+                                           coordinates.size() ||
+            actual.getNumResults() !=
+                loop.getNumResults() + stateTypes.size() ||
+            actual.getInputs().slice(split, stateTypes.size()) !=
+                ValueRange(state) ||
+            !llvm::equal(
+                actual.getResults().take_back(stateTypes.size()).getTypes(),
+                stateTypes) ||
             !operands(loop.getInputs().take_front(split),
                       actual.getInputs().take_front(split), env) ||
             !operands(loop.getInputs().drop_front(split),
-                      actual.getInputs().slice(split + 1,
+                      actual.getInputs().slice(split + stateTypes.size(),
                                                loop.getNumOperands() - split),
                       env) ||
             actual.getInputs().take_back(coordinates.size()) !=
@@ -287,40 +293,54 @@ class TranscriptCorrespondence {
         auto &y = actual.getBody().front();
         Env inner;
         if (y.getNumArguments() !=
-                x.getNumArguments() + 1 + coordinates.size() ||
-            y.getArgument(split).getType() != stateType ||
+                x.getNumArguments() + stateTypes.size() + coordinates.size() ||
+            !llvm::equal(ValueRange(y.getArguments())
+                             .slice(split, stateTypes.size())
+                             .getTypes(),
+                         stateTypes) ||
             !bind(x.getArguments().take_front(split),
                   y.getArguments().take_front(split), inner) ||
-            !bind(
-                x.getArguments().drop_front(split),
-                y.getArguments().slice(split + 1, x.getNumArguments() - split),
-                inner))
+            !bind(x.getArguments().drop_front(split),
+                  y.getArguments().slice(split + stateTypes.size(),
+                                         x.getNumArguments() - split),
+                  inner))
           return false;
         SmallVector<Value> indices(
             y.getArguments().take_back(coordinates.size()));
         indices.push_back(y.getArgument(0));
-        if (!body(x, y, std::move(inner), y.getArgument(split), indices, role,
-                  reached, depth + 1) ||
-            !bind(loop.getResults(), actual.getResults().drop_back(), env))
+        if (!body(x, y, std::move(inner),
+                  SmallVector<Value>(
+                      y.getArguments().slice(split, stateTypes.size())),
+                  indices, role, reached, depth + 1) ||
+            !bind(loop.getResults(),
+                  actual.getResults().drop_back(stateTypes.size()), env))
           return false;
-        state = actual.getResults().back();
+        state.clear();
+        append_range(state, actual.getResults().take_back(stateTypes.size()));
         cursor = cursor->getNextNode();
       } else if (isa<pir::FinishOp, pir::ProtocolYieldOp, pir::FinishIfOp>(
                      op)) {
         bool continuing = isa<pir::FinishIfOp>(op);
         if (op.getName() != cursor->getName() || !attributes(&op, cursor) ||
-            cursor->getNumOperands() != op.getNumOperands() + 1 ||
+            cursor->getNumOperands() !=
+                op.getNumOperands() + stateTypes.size() ||
             cursor->getNumResults() !=
-                op.getNumResults() + unsigned(continuing) ||
-            cursor->getOperands().back() != state ||
-            !operands(op.getOperands(), cursor->getOperands().drop_back(),
+                op.getNumResults() + (continuing ? stateTypes.size() : 0) ||
+            cursor->getOperands().take_back(stateTypes.size()) !=
+                ValueRange(state) ||
+            !operands(op.getOperands(),
+                      cursor->getOperands().drop_back(stateTypes.size()),
                       env) ||
             !bind(op.getResults(),
                   cursor->getResults().take_front(op.getNumResults()), env))
           return false;
         if (continuing) {
-          state = cursor->getResults().back();
-          if (state.getType() != stateType)
+          state.clear();
+          append_range(state,
+                       cursor->getResults().take_back(stateTypes.size()));
+          if (!llvm::equal(
+                  cursor->getResults().take_back(stateTypes.size()).getTypes(),
+                  stateTypes))
             return false;
         }
         cursor = cursor->getNextNode();
@@ -394,11 +414,14 @@ class TranscriptCorrespondence {
         !attributes(a, b, {"function_type", "service_ports"}))
       return false;
     auto x = a.getFunctionType(), y = b.getFunctionType();
-    if (y.getNumInputs() != x.getNumInputs() + 1 ||
-        y.getNumResults() != x.getNumResults() + 1 ||
-        y.getInputs().drop_back() != x.getInputs() ||
-        y.getResults().drop_back() != x.getResults() ||
-        y.getInputs().back() != stateType || y.getResults().back() != stateType)
+    if (y.getNumInputs() != x.getNumInputs() + stateTypes.size() ||
+        y.getNumResults() != x.getNumResults() + stateTypes.size() ||
+        y.getInputs().drop_back(stateTypes.size()) != x.getInputs() ||
+        y.getResults().drop_back(stateTypes.size()) != x.getResults() ||
+        y.getInputs().take_back(stateTypes.size()) !=
+            ArrayRef<Type>(stateTypes) ||
+        y.getResults().take_back(stateTypes.size()) !=
+            ArrayRef<Type>(stateTypes))
       return false;
     if (a.getRole() == policy.validator) {
       if (b->hasAttr("service_ports"))
@@ -408,11 +431,14 @@ class TranscriptCorrespondence {
     auto &before = a.getBody().front();
     auto &after = b.getBody().front();
     Env env;
-    if (!bind(before.getArguments(), after.getArguments().drop_back(), env))
+    if (!bind(before.getArguments(),
+              after.getArguments().drop_back(stateTypes.size()), env))
       return false;
     SmallVector<const NativeTranscriptEvent *> reached;
-    if (!body(before, after, std::move(env), after.getArguments().back(), {},
-              a.getRole(), reached, 0) ||
+    if (!body(before, after, std::move(env),
+              SmallVector<Value>(
+                  after.getArguments().take_back(stateTypes.size())),
+              {}, a.getRole(), reached, 0) ||
         reached.size() != events.size())
       return false;
     for (auto [actual, expected] : zip(reached, events))
@@ -434,7 +460,8 @@ class TranscriptCorrespondence {
         construction.getAs<StringAttr>("format").getValue() !=
             "zkc.native-construction/0" ||
         !construction.getAs<TypeAttr>("transcript") ||
-        construction.getAs<TypeAttr>("transcript").getValue() != stateType)
+        construction.getAs<TypeAttr>("transcript").getValue() !=
+            stateTypes.front())
       return false;
     auto removed = construction.getAs<ArrayAttr>("removed_services");
     return removed && removed.size() == 1 && policy.service &&
@@ -448,8 +475,8 @@ public:
                            const NativeProofPolicy &policy,
                            ArrayRef<NativeTranscriptEvent> events)
       : policy(policy), events(events), symbols(candidate),
-        stateType(local::CapabilityType::get(candidate.getContext(),
-                                             "transcript:" + policy.suite)) {}
+        stateTypes{local::CapabilityType::get(candidate.getContext(),
+                                              "transcript:" + policy.suite)} {}
   bool check(pir::ProtocolModuleOp before, pir::ProtocolModuleOp after) {
     if (!attributes(before, after))
       return false;

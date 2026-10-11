@@ -342,6 +342,12 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       decl.kind == Declaration::Kind::Local ||
       decl.kind == Declaration::Kind::Protocol ||
       decl.kind == Declaration::Kind::Relation) {
+    // Construction handlers receive their ports from the selected protocol
+    // occurrence before their ordinary Local body is checked.
+    if (source.constructionHandler) {
+      signatureState[id.index] = 2;
+      return true;
+    }
     decl.roles = source.roles;
     std::set<std::string> roster(decl.roles.begin(), decl.roles.end());
     if (roster.size() != decl.roles.size())

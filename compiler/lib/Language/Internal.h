@@ -166,6 +166,7 @@ struct Statement {
   std::optional<std::vector<std::string>> roles;
   std::optional<std::pair<std::string, std::string>> exchange;
   std::optional<std::string> owner;
+  std::optional<std::string> site;
   uint32_t expression;
   Span span;
 };
@@ -240,6 +241,20 @@ struct DeferredBody {
   unsigned depth;
   bool protocol;
 };
+struct SyntaxConstructionRule {
+  ConstructionRule::Kind kind;
+  std::vector<SyntaxName> path;
+  unsigned member;
+  std::vector<SyntaxName> parameters;
+  Span span;
+};
+struct SyntaxConstruction {
+  ConstructionDefinition::Base base = ConstructionDefinition::Base::None;
+  std::optional<SyntaxType> parent, provider;
+  std::optional<SyntaxName> service;
+  std::string suite;
+  std::vector<SyntaxConstructionRule> rules;
+};
 struct SyntaxDeclaration {
   Declaration::Kind kind;
   /// A domain declaration's target is its sort word; its domain is the
@@ -281,6 +296,8 @@ struct SyntaxDeclaration {
   std::vector<SyntaxClause> specifications;
   std::optional<SyntaxProofEntry> proof;
   std::optional<protocol::ProofFormat> proofFormat;
+  std::optional<SyntaxConstruction> construction;
+  bool constructionHandler = false;
   std::vector<SyntaxSetupSlot> setups;
   bool entryBlock = false;
   EntryKind entryKind = EntryKind::Run;

@@ -88,6 +88,7 @@ private:
   std::set<unsigned> formingParameters;
   std::map<unsigned, std::vector<DeferredApplication>> deferredApplications;
   bool entries();
+  bool constructions();
   bool configureSetups(Declaration &, const Declaration &,
                        llvm::ArrayRef<SyntaxSetupSlot>);
   bool collect();

@@ -171,6 +171,27 @@ by receiver-only `protocol.restrict_roles`. Zero-leaf messages refuse because er
 a message would erase an interaction. These operations assume neither honest
 delivery nor equality of participant components.
 
+### Site labels
+
+`#[site(name)]` labels one outer message, managed query or static protocol call:
+
+```zkc
+#[site(commitment)] let received = send P -> V(value);
+#[site(challenge)] let challenge = coins.draw();
+```
+
+Labels are unique within a protocol definition, including nested loop bodies.
+They use source identifiers and are independent of binding names and generated
+operation ordinals. A repeated site retains one label; runtime coordinates
+distinguish its occurrences. A labelled call supplies the path prefix for its
+callee's sites. Labels do not change participant placement or insert transcript
+observations.
+
+A label cannot select a nested query inside an arithmetic expression or a send's
+payload, several events in one statement, a local function call, a guard or a
+loop itself. Split such expressions into statements to label their events.
+Translation retains each label and independently checks its emitted site name.
+
 ## Managed services and rejection
 
 ```text
