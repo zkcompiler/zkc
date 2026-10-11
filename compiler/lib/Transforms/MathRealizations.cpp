@@ -1,5 +1,6 @@
 #include "HelperNormalization.h"
 #include "MathematicalSupport.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -12,8 +13,9 @@
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
-LogicalResult verifyMathRealizationsPreserved(ModuleOp original,
-                                              ModuleOp candidate) {
+namespace {
+LogicalResult checkRealizations(ModuleOp original, ModuleOp candidate,
+                                const CheckedHelperNormalizations *helpers) {
   if (failed(verify(original)) || failed(verify(candidate)))
     return failure();
   auto refuse = [&](StringRef reason) {
@@ -98,9 +100,18 @@ LogicalResult verifyMathRealizationsPreserved(ModuleOp original,
   for (auto &op : after.getBody().front())
     if (!retained.contains(&op) && !bindings.contains(&op))
       return refuse("unexpected declaration");
-  if (failed(verifyRealizedHelperRecipes(before, after, functions)))
+  auto checked =
+      helpers ? verifyRealizedHelperRecipes(before, after, functions, *helpers)
+              : verifyRealizedHelperRecipes(before, after, functions);
+  if (failed(checked))
     return refuse("original helper and realized computation differ");
   return success();
+}
+
+} // namespace
+LogicalResult verifyMathRealizationsPreserved(ModuleOp original,
+                                              ModuleOp candidate) {
+  return checkRealizations(original, candidate, nullptr);
 }
 
 LogicalResult expandMathRealizations(ModuleOp module,
@@ -117,75 +128,49 @@ LogicalResult expandMathRealizations(ModuleOp module,
   auto unit =
       cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
   SmallVector<local::FuncOp> functions;
-  unsigned remainingHelpers = realizedHelperOperationLimit;
-  uint64_t helperIndices = 1000000, polynomialWork = 100000;
+  SymbolTable sourceSymbols(original);
+  CheckedHelperNormalizations helpers(original);
+  unsigned cloneOperations = realizedHelperOperationLimit;
+  uint64_t cloneSlots = 1000000;
   for (auto realization : make_early_inc_range(
            unit.getBody().front().getOps<local::RealizeOp>())) {
+    auto helper = sourceSymbols.lookup<func::FuncOp>(realization.getHelper());
+    if (!helper || failed(helpers.prepareRealization(helper)))
+      return failure();
+    auto normalized = helpers.lookup(helper, true);
+    // Preparing a helper is cached, but every emitted copy still costs work.
+    if (!normalized ||
+        failed(chargeHelperOperations(normalized, cloneOperations, cloneSlots)))
+      return failure();
     OpBuilder builder(realization);
     auto location = realization.getLoc();
     auto name = realization.getSymNameAttr();
-    auto helper = realization.getHelperAttr();
     auto signature = realization.getFunctionType();
     builder.setInsertionPointAfter(realization);
     realization.erase();
     auto function = local::FuncOp::create(builder, location, name, signature);
     function->setAttr(
         "logical_origin",
-        builder.getArrayAttr({builder.getStringAttr(helper.getValue()),
+        builder.getArrayAttr({builder.getStringAttr(helper.getSymName()),
                               builder.getArrayAttr({})}));
     auto *block = function.addEntryBlock();
     builder.setInsertionPointToEnd(block);
-    auto call =
-        func::CallOp::create(builder, location, helper.getValue(),
-                             function.getResultTypes(), block->getArguments());
-    local::ReturnOp::create(builder, location, call.getResults());
+    IRMapping mapping;
+    mapping.map(normalized.getArguments(), block->getArguments());
+    unsigned occurrence = 0;
+    for (auto &op : normalized.front().without_terminator()) {
+      auto *copy = builder.clone(op, mapping);
+      copy->setAttr("site", builder.getStringAttr(
+                                "value_" + std::to_string(occurrence++)));
+    }
+    SmallVector<Value> results;
+    for (auto value : normalized.front().back().getOperands())
+      results.push_back(mapping.lookup(value));
+    local::ReturnOp::create(builder, location, results);
     functions.push_back(function);
   }
-  // Build the symbol cache only after every declaration has been replaced.
-  SymbolTableCollection symbols;
-  SymbolTable sourceSymbols(original);
-  HelperNormalizationChecker normalization(original);
-  for (auto function : functions) {
-    auto *block = &function.getBody().front();
-    OpBuilder builder(function);
-    if (failed(inlineHelpers(function, remainingHelpers, helperIndices,
-                             symbols)) ||
-        failed(poly::eliminatePolynomials(*block, polynomialWork)))
-      return failure();
-    // A static dimension observes a type, not its producer's runtime value.
-    // Resolve it before liveness so its producer cannot become dead execution.
-    for (auto dim : llvm::make_early_inc_range(block->getOps<data::DimOp>())) {
-      auto type = dim.getInput().getType();
-      auto axis = dim.getAxisAttr().getInt();
-      if (type.isDynamicDim(axis))
-        continue;
-      builder.setInsertionPoint(dim);
-      auto index = data::IndexOp::create(
-          builder, dim.getLoc(), dim.getOutput().getType(),
-          builder.getStringAttr(std::to_string(type.getDimSize(axis))));
-      dim.getOutput().replaceAllUsesWith(index.getOutput());
-      dim.erase();
-    }
-    // Elimination has checked every observation, including unused ones. Only
-    // now may dead total expressions be removed before ordering runtime work.
-    for (auto &op : llvm::make_early_inc_range(llvm::reverse(*block)))
-      if (isTotal(&op) && op.use_empty())
-        op.erase();
-    unsigned occurrence = 0;
-    for (auto &op : block->without_terminator())
-      op.setAttr("site", builder.getStringAttr("value_" +
-                                               std::to_string(occurrence++)));
-    auto declaration =
-        sourceSymbols.lookup<local::RealizeOp>(function.getSymName());
-    auto helper =
-        declaration
-            ? sourceSymbols.lookup<func::FuncOp>(declaration.getHelper())
-            : func::FuncOp();
-    if (!helper || failed(normalization.check(helper, *block)))
-      return failure();
-  }
   if (failed(lowerCalculations(unit, functions, policy)) ||
-      failed(verifyMathRealizationsPreserved(module, *candidate)))
+      failed(checkRealizations(module, *candidate, &helpers)))
     return diagnostics::emit(
         module.emitError(), "local-realization-lowering",
         "realized body failed recipe or executable admission");

@@ -807,6 +807,13 @@ verifyRealizedHelperRecipes(protocol_ir::ProtocolModuleOp original,
     if (!helper || failed(helpers.prepareRealization(helper)))
       return failure();
   }
+  return verifyRealizedHelperRecipes(original, candidate, functions, helpers);
+}
+LogicalResult
+verifyRealizedHelperRecipes(protocol_ir::ProtocolModuleOp original,
+                            protocol_ir::ProtocolModuleOp candidate,
+                            ArrayRef<local::FuncOp> functions,
+                            const CheckedHelperNormalizations &helpers) {
   return LoweringVerifier(original, candidate, helpers)
       .calculations(functions, true);
 }

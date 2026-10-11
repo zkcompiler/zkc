@@ -100,9 +100,11 @@ expansion and unchanged context have their own checks.
 Helper normalization has an explicit checked boundary. The producer proposes
 an expanded polynomial-free body; a separate reader follows the original helper
 calls under positional argument substitution and checks all result coordinates
-with the existing independent polynomial laws. Recipe checking reads only these
-checked bodies. `local.realize` also compares against its original helper before
-publication, so a snapshot taken after normalization cannot hide a substitution
+with the existing independent polynomial laws. A realization stage caches these
+checked bodies, copies them into its candidate, and reuses them for recipe
+checking; each emitted copy still consumes work. `local.realize` also compares
+against its original helper before publication, so a snapshot taken after
+normalization cannot hide a substitution
 or polynomial error. This is native compiler correspondence checking; the
 independent Lean models do not establish a bridge to this implementation.
 

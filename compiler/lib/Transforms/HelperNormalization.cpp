@@ -47,7 +47,7 @@ LogicalResult CheckedHelperNormalizations::prepare(Operation *source) {
       if (!finite::isComputation(op))
         return WalkResult::advance();
       finite::Computation computation;
-      if (failed(finite::describe(op, computation, root)))
+      if (failed(finite::describe(op, computation, root, &symbols)))
         return WalkResult::interrupt();
       if (computation.total) {
         pending.push_back(computation.helper);

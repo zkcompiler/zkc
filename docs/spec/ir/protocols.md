@@ -159,7 +159,10 @@ calls by positional substitution, checks every result coordinate, and uses
 polynomial meaning and static shape facts without invoking helper inlining or
 polynomial elimination. It also checks unused polynomial observations before
 accepting their removal. Preparation still produces normalization proposals;
-the independent check is required before any proposal is used. All helper
+the independent check is required before any proposal is used. The realization
+stage copies these checked bodies into its candidate and reuses them for recipe
+checking. Normalization is cached per helper, while every emitted copy consumes
+the stage's operation and operand/result-slot allowance. All helper
 comparisons in one check share a four-million-unit work budget. Exhaustion
 refuses with `mathematical-helper-limit`, separately from a correspondence
 mismatch.

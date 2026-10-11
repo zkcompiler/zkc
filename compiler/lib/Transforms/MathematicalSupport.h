@@ -41,12 +41,19 @@ mlir::LogicalResult
 verifyCalculationRecipes(protocol_ir::ProtocolModuleOp original,
                          protocol_ir::ProtocolModuleOp candidate,
                          llvm::ArrayRef<local::FuncOp> functions);
+class CheckedHelperNormalizations;
 // Compare original local.realize helpers to complete actual executable bodies,
 // composing independently checked normalization proposals and recipe reading.
 mlir::LogicalResult
 verifyRealizedHelperRecipes(protocol_ir::ProtocolModuleOp original,
                             protocol_ir::ProtocolModuleOp candidate,
                             llvm::ArrayRef<local::FuncOp> functions);
+// Reuse a proposal scope already checked against this exact original unit.
+mlir::LogicalResult
+verifyRealizedHelperRecipes(protocol_ir::ProtocolModuleOp original,
+                            protocol_ir::ProtocolModuleOp candidate,
+                            llvm::ArrayRef<local::FuncOp> functions,
+                            const CheckedHelperNormalizations &helpers);
 mlir::LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
                                       llvm::ArrayRef<local::FuncOp> functions,
                                       MathematicalSelectionPolicy policy = {});

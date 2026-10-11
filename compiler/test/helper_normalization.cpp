@@ -117,6 +117,71 @@ int main() {
     require(failed(checker.check(helper, expanded.front())),
             "same-type permutation escaped substitution comparison");
   });
+  cases.run(
+      "unexpanded candidates do not substitute for checked proposals", [&] {
+        auto source =
+            parseSourceString<ModuleOp>(insert(base, nested), &context);
+        require(bool(source), "ordinary nested program refused");
+        SymbolTable symbols(unit(*source));
+        auto helper = symbols.lookup<func::FuncOp>("nested");
+        bool named = false;
+        ScopedDiagnosticHandler handler(&context, [&](Diagnostic &d) {
+          named |= d.str().find("mathematical-helper-correspondence") !=
+                   std::string::npos;
+          return success();
+        });
+        mathematical::HelperNormalizationChecker checker(unit(*source));
+        require(failed(checker.check(helper, helper.front())) && named,
+                "an unexpanded call was accepted as a normalization proposal");
+      });
+  cases.run("checked proposals are explicit cached and source preserving", [&] {
+    auto source = parseSourceString<ModuleOp>(insert(base, nested), &context);
+    require(bool(source), "ordinary nested program refused");
+    SymbolTable symbols(unit(*source));
+    auto helper = symbols.lookup<func::FuncOp>("nested");
+    std::string before, after;
+    llvm::raw_string_ostream(before) << *source;
+    mathematical::CheckedHelperNormalizations proposals(unit(*source));
+    require(!proposals.lookup(helper) && !proposals.lookup(helper, true),
+            "lookup manufactured an unchecked proposal");
+    require(succeeded(proposals.prepareRealization(helper)),
+            "normalization proposal failed");
+    auto normalized = proposals.lookup(helper, true);
+    require(normalized && normalized.front().getOps<func::CallOp>().empty(),
+            "checked proposal retained an unexpanded call");
+    require(succeeded(proposals.prepareRealization(helper)) &&
+                proposals.lookup(helper, true) == normalized,
+            "an already checked helper was regenerated");
+    llvm::raw_string_ostream(after) << *source;
+    require(before == after, "proposal preparation changed its original");
+  });
+  cases.run("static dimension meaning is checked before recipe lowering", [&] {
+    auto source = parseSourceString<ModuleOp>(insert(base, R"(
+ func.func private @dimension(%v:tensor<4x!F>)->ui64 {
+   %n = "data.dim"(%v) {axis=0:i64} : (tensor<4x!F>)->ui64
+   func.return %n : ui64
+ }
+ func.func private @constant(%v:tensor<4x!F>)->ui64 {
+   %n = "data.index"() {value="4"} : ()->ui64
+   func.return %n : ui64
+ }
+ )"),
+                                              &context);
+    require(bool(source), "ordinary dimension program refused");
+    SymbolTable symbols(unit(*source));
+    auto helper = symbols.lookup<func::FuncOp>("dimension");
+    auto expanded = symbols.lookup<func::FuncOp>("constant");
+    mathematical::HelperNormalizationChecker checker(unit(*source));
+    require(succeeded(checker.check(helper, expanded.front())),
+            "correct static dimension refused");
+    expanded.front().front().setAttr("value", StringAttr::get(&context, "3"));
+    require(succeeded(verify(*source)),
+            "dimension mutation is not ordinary math");
+    ScopedDiagnosticHandler handler(&context,
+                                    [](Diagnostic &) { return success(); });
+    require(failed(checker.check(helper, expanded.front())),
+            "incorrect static dimension escaped independent comparison");
+  });
   cases.run("outer correspondence checks the full realized tuple", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, nested), &context);
     require(bool(source), "ordinary nested program refused");

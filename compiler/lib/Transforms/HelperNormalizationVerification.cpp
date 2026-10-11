@@ -24,13 +24,14 @@ struct HelperNormalizationChecker::Implementation {
   explicit Implementation(Operation *root, size_t work)
       : root(root), terms(root, false, work), builder(root->getContext()) {}
 
-  LogicalResult refuse() {
+  LogicalResult refuse(Operation *subject) {
     if (terms.workExhausted() || depthExhausted)
-      return diagnostics::emit(root->emitOpError(), "mathematical-helper-limit",
+      return diagnostics::emit(subject->emitOpError(),
+                               "mathematical-helper-limit",
                                "helper comparison work or depth exhausted");
     return diagnostics::emit(
-        root->emitOpError(), "mathematical-helper-correspondence",
-        "helper substitution or polynomial meaning differs");
+        subject->emitOpError(), "mathematical-helper-correspondence",
+        "helper normalization is unsupported or its meaning differs");
   }
 
   // Check observation premises before dropping anything. In particular, a
@@ -194,17 +195,17 @@ struct HelperNormalizationChecker::Implementation {
   LogicalResult check(func::FuncOp source, Block &candidate) {
     if (!source.getBody().hasOneBlock() ||
         !llvm::equal(source.getArgumentTypes(), candidate.getArgumentTypes()))
-      return refuse();
+      return refuse(source);
     SmallVector<Term> inputs;
     for (Type type : source.getArgumentTypes())
       inputs.push_back(terms.anchor(type));
     auto before = read(source.front(), inputs, true);
     auto after = read(candidate, inputs, false);
     if (failed(before) || failed(after) || before->size() != after->size())
-      return refuse();
+      return refuse(source);
     for (auto [a, b] : zip(*before, *after))
       if (!terms.equal(a, b))
-        return refuse();
+        return refuse(source);
     return success();
   }
 };

@@ -28,7 +28,8 @@ public:
 // Producer-owned proposals, independently checked before becoming recipe
 // inputs. This is ordinary temporary MLIR, never a second editable IR model.
 // Preparation is separate from the read-only recipe verifier. Its lookup
-// cannot generate a body, and an unchecked body is never exposed.
+// cannot generate a body, and an unchecked body is never exposed. Discard the
+// scope if preparation fails; checked bodies are immutable while in use.
 class CheckedHelperNormalizations {
   mlir::Operation *root;
   HelperNormalizationChecker checker;
