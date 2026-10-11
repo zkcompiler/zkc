@@ -1063,9 +1063,9 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
     RealizationTrace trace;
     trace.remarks = traceMathematics;
     trace.ir = dumpMathematics ? &llvm::errs() : nullptr;
-    auto candidate =
-        prepareSource(source, simplify, {optimizeFinite, fuseVectorReductions}, {},
-                      traceMathematics || dumpMathematics ? &trace : nullptr);
+    auto candidate = prepareSource(
+        source, simplify, {optimizeFinite, fuseVectorReductions}, {},
+        traceMathematics || dumpMathematics ? &trace : nullptr);
     if (!candidate)
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());

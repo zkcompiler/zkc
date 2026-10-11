@@ -71,6 +71,10 @@ int main() {
   auto vector = algebra::FieldVectorType::get(&context, field.getDomain());
   auto group = algebra::GroupType::get(&context, "bls12-381.g1");
   auto index = IntegerType::get(&context, 64, IntegerType::Unsigned);
+  cases.run("byte collection observations do not grant finite recipes", [&] {
+    require(!collectionRealization(data::BytesType::get(&context)),
+            "byte observations acquired finite execution admission");
+  });
   struct Family {
     Type type, element;
     const char *length, *get, *empty, *append;
@@ -124,11 +128,7 @@ int main() {
         Family{algebra::FieldArrayType::get(&context, field.getDomain(), 0),
                field, nullptr, "field_array.get", "vector.empty",
                "vector.append", 1, 0}}) {
-    cases.run("byte collection observations do not grant finite recipes", [&] {
-    require(!collectionRealization(data::BytesType::get(&context)),
-            "byte observations acquired finite execution admission");
-  });
-  cases.run(
+    cases.run(
         "collection realization: " +
             take(protocol::encodeBoundType(family.type, false)).spelling(),
         [&] {

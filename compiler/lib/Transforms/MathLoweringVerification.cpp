@@ -705,8 +705,11 @@ public:
           return refuse(target, "unexpected realized mathematical operation");
         auto *begin = cursor;
         auto value = recipe(&op, cursor, inputs);
+        // A checked finite realization may discard an ignored capture in an
+        // outlined participant calculation. Its eagerly computed primitive
+        // still has to match exactly, even when it is no longer used.
         if (!value || value.getType() != op.getResult(0).getType() ||
-            value.use_empty())
+            (realization && value.use_empty()))
           return refuse(
               target,
               "realized calculation changed a recipe, operand or liveness");
