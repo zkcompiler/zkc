@@ -3,7 +3,7 @@
 | Project | Library and Entry | Execution |
 |---|---|---|
 | [Finite computations](finite-computations/README.md) | Shared domain, Local and Math libraries | Strict dot product, records and filters, bounded reads and nested matrix traversal |
-| [Scoped computations](scoped-computations/README.md) | Generic user apply/forward functions and a component wrapper | Nested callbacks with record projections, vector lookup and capture-selected ownership |
+| [Scoped computations](scoped-computations/README.md) | Generic user apply/forward functions and a module wrapper | Nested callbacks with record projections, vector lookup and capture-selected ownership |
 | [Schnorr](schnorr/README.md) | Generic group protocol, discrete-log relation and concrete Entry | Interactive exchange or independent transcript-derived proofs |
 | [Spongefish Schnorr](spongefish-schnorr/README.md) | Explicit source transcript with BLS12-381 G1 byte encodings | Raw 80-byte external proofs with ordinary prover/verifier execution |
 | [Sumcheck](sumcheck/README.md) | Generic public-table protocol and bounded-round Entry | Actual receives, repeated state and direct terminal evaluation |
