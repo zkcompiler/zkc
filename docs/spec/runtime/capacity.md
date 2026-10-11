@@ -94,11 +94,12 @@ successful backend validation for aliases. A borrowed runtime-owned `Retained`
 view also lets the backend reuse validation of intrinsically typed immutable
 sequence subtrees. Only allocations still held by this Runner are present;
 entries disappear with their final reference. Numeric storage whose validity
-depends on its physical type and capabilities do not use subtree reuse. Backend
+depends on its physical type does not use subtree reuse. Capabilities are always
+checked against current custody. Backend
 policy, setup authorization, frame custody and capability checks remain required.
 External calls and codecs receive no retained-validation evidence.
 
-Local return/yield handoffs keep shared backing in the ledger between region
+Local and participant return/yield handoffs keep shared backing in the ledger between region
 exit and caller binding. These internal references add no value binding or
 inline charge. They are released after transfer and on every failed transfer,
 loop step or frame leave. This preserves storage accounting while avoiding a

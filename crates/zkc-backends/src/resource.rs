@@ -846,6 +846,9 @@ impl Resources {
             Ok(())
         };
         for value in values {
+            if value.is_resource_free() {
+                continue;
+            }
             value.visit_active_leaves(&mut check)?;
         }
         Ok(ids)
@@ -909,6 +912,9 @@ impl Resources {
         let mut returned = BTreeSet::new();
         if result.is_ok() && exit == FrameExit::Returned {
             for value in outputs {
+                if value.is_resource_free() {
+                    continue;
+                }
                 let Ok(()) = value.visit_active_leaves(&mut |v| {
                     if let Value::ResourceUnit(t) = v {
                         returned.insert(t.token.id);

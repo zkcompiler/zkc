@@ -1091,6 +1091,111 @@ fn local_handoff_references_are_released_on_every_failure() {
     }
 }
 
+fn carried_participant() -> Json {
+    one(
+        json!([
+            [
+                "function",
+                "make",
+                [],
+                ["field"],
+                [
+                    ["op", "first", "field.constant", ["7"], [], ["initial"]],
+                    ["return", ["initial"]]
+                ]
+            ],
+            [
+                "function",
+                "step",
+                [["state", "field"]],
+                ["field"],
+                [
+                    ["op", "alias", "field.add", [], ["state", "state"], ["read"]],
+                    ["op", "later", "field.constant", ["7"], [], ["next"]],
+                    ["return", ["next"]]
+                ]
+            ]
+        ]),
+        json!([["count", "index@native.index/0"]]),
+        json!([]),
+        json!([
+            ["local", "make", "make", [], ["initial"]],
+            [
+                "loop",
+                "carry",
+                ["value", "count", "128", "i"],
+                [["state", "initial"]],
+                [],
+                [
+                    ["local", "step", "step", ["state"], ["next"]],
+                    ["yield", ["next"]]
+                ],
+                ["result"]
+            ],
+            ["return", []]
+        ]),
+    )
+}
+
+#[test]
+fn participant_carried_backing_keeps_validation_across_frame_handoffs() {
+    for n in [0, 1, 16, 128] {
+        let (result, usage, backend) = drive(
+            &carried_participant(),
+            StorageBackend::shared(64, 64),
+            count(n),
+            values(192, (n as usize + 1) * 64),
+            WorkBudget::default(),
+        );
+        assert_eq!(result, "returned", "n={n} {usage:?}");
+        assert_eq!(backend.validations.get(), n as usize + 1);
+        assert_eq!(backend.allocations, n as usize + 1);
+        assert_eq!(usage.total_value_bytes, (n as usize + 1) * 64);
+        assert_eq!((usage.live_values, usage.live_value_bytes), (0, 0));
+        assert!(backend.all_freed());
+    }
+}
+
+#[test]
+fn participant_handoff_references_are_released_on_every_failure() {
+    for failure in [Some("alias"), Some("later"), Some("leave"), None] {
+        for (live, total, instructions, iterations) in [
+            (192, 256, 1000, 1000),
+            (191, 256, 1000, 1000),
+            (192, 255, 1000, 1000),
+            (192, 256, 9, 1000),
+            (192, 256, 1000, 1),
+        ] {
+            let (result, usage, backend) = drive(
+                &carried_participant(),
+                StorageBackend {
+                    failure,
+                    ..StorageBackend::shared(64, 64)
+                },
+                count(3),
+                values(live, total),
+                WorkBudget {
+                    instructions,
+                    iterations,
+                    ..WorkBudget::default()
+                },
+            );
+            let succeeds = failure.is_none()
+                && live == 192
+                && total == 256
+                && instructions == 1000
+                && iterations == 1000;
+            assert_eq!(result == "returned", succeeds, "{result} {usage:?}");
+            assert_eq!(
+                (usage.live_values, usage.live_value_bytes),
+                (0, 0),
+                "{result}"
+            );
+            assert!(backend.all_freed(), "{result}");
+        }
+    }
+}
+
 #[test]
 fn logical_work_budget_has_a_hard_ceiling() {
     let backend = StorageBackend::new(1, None);

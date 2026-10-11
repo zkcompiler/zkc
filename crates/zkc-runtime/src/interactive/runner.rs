@@ -556,7 +556,11 @@ impl<B: Backend> Runner<B> {
         self.retain(&values, retention)?;
         let env = &mut self.stack.last_mut().expect("parent frame").env;
         for (name, value) in names.iter().zip(values) {
-            env.insert(name.clone(), value);
+            let previous = env.insert(name.clone(), value);
+            debug_assert!(
+                previous.is_none(),
+                "admission guarantees fresh SSA bindings"
+            );
         }
         Ok(())
     }
@@ -926,19 +930,27 @@ impl<B: Backend> Runner<B> {
             // Ordinary finish would restart a loop. Transfer the actual entry
             // tuple directly instead, using the backend's normal returned-frame
             // custody checks at each boundary.
-            while self.stack.len() > 1 {
-                if !matches!(
-                    self.stack.last().expect("enclosing frame").frame.kind(),
-                    FrameKind::Loop { .. }
-                ) {
-                    return Err(BackendError::new("program-return-frame").into());
+            self.ledger.retain(&values);
+            self.accept_return(values, |runner, values| {
+                while runner.stack.len() > 1 {
+                    if !matches!(
+                        runner.stack.last().expect("enclosing frame").frame.kind(),
+                        FrameKind::Loop { .. }
+                    ) {
+                        return Err(BackendError::new("program-return-frame").into());
+                    }
+                    let execution = runner.stack.pop().expect("enclosing loop");
+                    runner.release(execution.env.values());
+                    runner.backend.leave_frame_retained(
+                        &execution.frame,
+                        FrameExit::Returned,
+                        values,
+                        runner.ledger.view(),
+                    )?;
                 }
-                let execution = self.stack.pop().expect("enclosing loop");
-                self.release(execution.env.values());
-                self.backend
-                    .leave_frame(&execution.frame, FrameExit::Returned, &values)?;
-            }
-            self.finish(values)?;
+                runner.finish_retained(values.to_vec())?;
+                Ok(())
+            })?;
             if self.returned_values().is_some() {
                 self.early_return = Some((origin.clone(), site.into()));
             } else if let Some(Action::Stopped(stop)) = &mut self.pending {
@@ -953,6 +965,15 @@ impl<B: Backend> Runner<B> {
         Ok(())
     }
     fn finish(&mut self, values: Vec<B::Value>) -> Result<()> {
+        // The returning environment is still live and validates every value.
+        // Preserve shared backing through cleanup, custody checks and the next
+        // participant frame just as for a Local region handoff.
+        self.ledger.retain(&values);
+        self.accept_return(values, |runner, values| {
+            runner.finish_retained(values.to_vec())
+        })
+    }
+    fn finish_retained(&mut self, values: Vec<B::Value>) -> Result<()> {
         let execution = self.stack.pop().expect("return frame");
         let origin = execution.frame.origin.clone();
         self.release(execution.env.values());
@@ -969,9 +990,12 @@ impl<B: Backend> Runner<B> {
             }
             return Ok(());
         }
-        let leave = self
-            .backend
-            .leave_frame(&execution.frame, FrameExit::Returned, &values);
+        let leave = self.backend.leave_frame_retained(
+            &execution.frame,
+            FrameExit::Returned,
+            &values,
+            self.ledger.view(),
+        );
         if let Err(e) = leave {
             if root {
                 self.release(values.iter());
@@ -1200,7 +1224,7 @@ impl<B: Backend> Runner<B> {
             return Ok(());
         }
         let values = result.expect("successful local result");
-        self.accept_local_return(values, |runner, values| {
+        self.accept_return(values, |runner, values| {
             runner.bind(outputs, values.to_vec(), Retention::Transfer)
         })?;
         self.stack.last_mut().expect("local parent").pc += 1;
@@ -1209,16 +1233,16 @@ impl<B: Backend> Runner<B> {
     }
     /// Returned shared backing stays accounted for until its caller installs
     /// the result. The handoff itself adds no binding or inline-storage charge.
-    fn unpin_local_return(&mut self, values: &[B::Value]) {
+    fn unpin_return(&mut self, values: &[B::Value]) {
         self.usage.live_value_bytes -= self.ledger.unpin(values);
     }
-    fn accept_local_return<T>(
+    fn accept_return<T>(
         &mut self,
         values: Vec<B::Value>,
         accept: impl FnOnce(&mut Self, &[B::Value]) -> Result<T>,
     ) -> Result<T> {
         let result = accept(self, &values);
-        self.unpin_local_return(&values);
+        self.unpin_return(&values);
         result
     }
     /// Execute one accepted local frame, preserving the original failure and
@@ -1248,7 +1272,7 @@ impl<B: Backend> Runner<B> {
         match result {
             Ok(values) => {
                 if let Err(error) = leave {
-                    self.unpin_local_return(&values);
+                    self.unpin_return(&values);
                     return Err(error.into());
                 }
                 Ok(values)
@@ -1333,7 +1357,11 @@ impl<B: Backend> Runner<B> {
                         )?;
                         self.retain(std::slice::from_ref(&value), Retention::Input)?;
                         local_count += 1;
-                        env.insert(output.clone(), value);
+                        let previous = env.insert(output.clone(), value);
+                        debug_assert!(
+                            previous.is_none(),
+                            "admission guarantees fresh SSA bindings"
+                        );
                     }
                     LocalInstruction::Stop { reason, .. } => {
                         return Err(RuntimeError::ExplicitStop(reason.clone()));
@@ -1360,7 +1388,11 @@ impl<B: Backend> Runner<B> {
                         self.validate(&value, ty.clone(), false)?;
                         self.retain(std::slice::from_ref(&value), Retention::Input)?;
                         local_count += 1;
-                        env.insert(output.clone(), value);
+                        let previous = env.insert(output.clone(), value);
+                        debug_assert!(
+                            previous.is_none(),
+                            "admission guarantees fresh SSA bindings"
+                        );
                     }
                     LocalInstruction::Match {
                         site,
@@ -1418,7 +1450,7 @@ impl<B: Backend> Runner<B> {
                             },
                             depth,
                         )?;
-                        self.accept_local_return(values, |runner, values| {
+                        self.accept_return(values, |runner, values| {
                             Self::matches_outputs(outputs, values)?;
                             runner.retain(values, Retention::Transfer)?;
                             local_count += values.len();
@@ -1471,7 +1503,11 @@ impl<B: Backend> Runner<B> {
                         self.retain(&values, Retention::Result)?;
                         local_count += values.len();
                         for (n, v) in outputs.iter().zip(values) {
-                            env.insert(n.clone(), v);
+                            let previous = env.insert(n.clone(), v);
+                            debug_assert!(
+                                previous.is_none(),
+                                "admission guarantees fresh SSA bindings"
+                            );
                         }
                     }
                     LocalInstruction::Conditional {
@@ -1501,7 +1537,7 @@ impl<B: Backend> Runner<B> {
                             },
                             depth,
                         )?;
-                        self.accept_local_return(values, |runner, values| {
+                        self.accept_return(values, |runner, values| {
                             Self::matches_outputs(outputs, values)?;
                             runner.retain(values, Retention::Transfer)?;
                             local_count += values.len();
@@ -1567,14 +1603,14 @@ impl<B: Backend> Runner<B> {
                                     depth,
                                 )?;
                                 if pinned {
-                                    self.unpin_local_return(&values);
+                                    self.unpin_return(&values);
                                 }
                                 values = returned;
                                 pinned = true;
                                 if *conditional {
                                     let condition = values.remove(0);
                                     let continue_loop = condition.control_bool();
-                                    self.unpin_local_return(std::slice::from_ref(&condition));
+                                    self.unpin_return(std::slice::from_ref(&condition));
                                     if !continue_loop? {
                                         break;
                                     }
@@ -1587,7 +1623,7 @@ impl<B: Backend> Runner<B> {
                             Ok::<(), RuntimeError>(())
                         })();
                         if pinned {
-                            self.unpin_local_return(&values);
+                            self.unpin_return(&values);
                         }
                         result?;
                     }

@@ -69,8 +69,9 @@ impl NativeBackend {
         self.core.check_entry_values(&role.inputs, values)
     }
 
-    /// Bound cumulative sequence work: `3 * (1 + expanded operand nodes)` per
-    /// call. Shared subtrees count per occurrence.
+    /// Bound cumulative sequence work: `3 * (1 + examined operand nodes)` per
+    /// call. A validated root retained by this Runner counts as one; other
+    /// subtrees count fully, including each repeated occurrence.
     /// Previously spent work survives frame cleanup and changes to the limit.
     pub fn with_sequence_work_limit(mut self, limit: u64) -> Self {
         self.sequence_work.limit = limit;

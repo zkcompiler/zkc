@@ -240,3 +240,94 @@ fn collection_budget_failures_release_all_carried_storage() {
         assert!(backend.sequence_work_spent() <= sequence_work);
     }
 }
+
+#[test]
+fn participant_loop_carries_persistent_sequences_with_default_budgets() {
+    let sequence = physical("sequence<index>").spelling();
+    let index = physical("index").spelling();
+    let program = serde_json::to_vec(&json!([
+        "zkc.program/0",
+        [
+            [
+                "empty",
+                "sequence.empty",
+                ["index"],
+                "native/sequence.empty"
+            ],
+            [
+                "append",
+                "sequence.append",
+                ["index"],
+                "native/sequence.append"
+            ]
+        ],
+        [
+            [
+                "function",
+                "make",
+                [],
+                [sequence],
+                [
+                    ["op", "empty", "empty", [], [], ["out"]],
+                    ["return", ["out"]]
+                ],
+                ["make", []]
+            ],
+            [
+                "function",
+                "step",
+                [["state", sequence], ["i", index]],
+                [sequence],
+                [
+                    ["op", "append", "append", [], ["state", "i"], ["out"]],
+                    ["return", ["out"]]
+                ],
+                ["step", []]
+            ]
+        ],
+        [[
+            "participant",
+            "actor",
+            "instance",
+            "P",
+            [["count", index]],
+            [sequence],
+            [
+                ["local", "make", "make", [], ["initial"]],
+                [
+                    "loop",
+                    "collect",
+                    ["value", "count", "16384", "i"],
+                    [["state", "initial"]],
+                    [],
+                    [
+                        ["local", "step", "step", ["state", "i"], ["next"]],
+                        ["yield", ["next"]]
+                    ],
+                    ["out"]
+                ],
+                ["return", ["out"]]
+            ],
+            []
+        ]],
+        [["entry", "main", [["P", "actor"]]]]
+    ]))
+    .unwrap();
+    let (result, usage, backend) = drive(
+        &program,
+        support::backend(Policy::default()),
+        vec![Value::Index(16384)],
+        ValueBudget::default(),
+        WorkBudget::default(),
+    );
+    let values = result.unwrap();
+    let [Value::Sequence(values)] = values.as_slice() else {
+        panic!("sequence output")
+    };
+    assert_eq!(values.len(), 16384);
+    for (i, value) in values.iter().enumerate() {
+        assert!(matches!(value,Value::Index(n) if *n==i as u64));
+    }
+    assert_eq!(usage.iterations, 16384);
+    assert_eq!(backend.sequence_work_spent(), 3 + 9 * 16384);
+}

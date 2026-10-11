@@ -113,7 +113,10 @@ impl Ledger {
         Some(Charge { live, fresh })
     }
 
-    /// Record one binding of each value. The caller has checked `plan`.
+    /// Record one binding of each value. The caller has checked `plan` and
+    /// validated every value with this Runner's backend. Nested allocation
+    /// entries and handoff pins also certify that immutable contents passed
+    /// validation; they must remain backed by live values until released.
     pub fn retain<V: Value>(&mut self, values: &[V]) {
         for value in values {
             value.retained_parts(&mut |backing| {
