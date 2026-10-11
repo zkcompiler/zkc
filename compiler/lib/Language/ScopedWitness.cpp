@@ -1,5 +1,6 @@
 #include "ScopedWitness.h"
 #include "Arguments.h"
+#include "BindingWitness.h"
 #include "FiniteContracts.h"
 #include "FiniteDomains.h"
 #include "Semantics.h"
@@ -304,6 +305,28 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
         call->scopedArguments.size() != callee.scopedInputs.size() ||
         call->domainArguments.size() != callee.domainInputs.size())
       return refuse();
+    if (expr.kind == Expression::Kind::NotationCall) {
+      if (!expr.notation ||
+          expr.notation->position != NotationDescriptor::Position::Reduction ||
+          expr.filteredReduction != binding.filteredReduction ||
+          op.results.size() != 1 || op.results[0].index >= body.values.size() ||
+          !expr.scope || *expr.scope >= source.syntax->bodies.size() ||
+          !source.syntax->bodies[*expr.scope].notationEnvironment)
+        return refuse();
+      if (!checkNotationOccurrence(
+              types, expr,
+              *source.syntax->bodies[*expr.scope].notationEnvironment) ||
+          !checkOperatorOperands(types, *expr.notation, binding,
+                                 binding.argumentOrder, {}, op.span) ||
+          !checkOperatorWitness(types, storage.declarations,
+                                source.notationFamily, *expr.notation, binding,
+                                {}, body.values[op.results[0].index].type,
+                                op.span) ||
+          !checkCallAction(types, storage.declarations, body, op))
+        return false;
+    } else if (binding.notation || binding.filteredReduction ||
+               !source.notationFamily.empty())
+      return refuse();
     std::function<bool(uint32_t, unsigned, unsigned)> domain =
         [&](uint32_t expression, unsigned index, unsigned depth) {
           if (depth > work.limits.expressionDepth)
@@ -320,6 +343,27 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
             auto lexical = source.domains.find(*argument.binding);
             if (lexical != source.domains.end())
               return lexical->second == index || refuse();
+          }
+          if (argument.kind == Expression::Kind::DomainProduct) {
+            if (argument.children.size() != 2 ||
+                application.children.size() != 2 ||
+                application.kind != DomainBinding::Kind::Product ||
+                application.expression != expression ||
+                !same(application.span, argument.span) ||
+                !application.operands.empty() || application.axis ||
+                application.parameter || application.factory ||
+                !application.arguments.empty() ||
+                !application.argumentOrder.empty())
+              return refuse();
+            Type item(Type::Kind::Tuple);
+            for (unsigned i = 0; i < 2; ++i) {
+              if (!domain(argument.children[i], application.children[i],
+                          depth + 1))
+                return false;
+              item.arguments.push_back(
+                  body.domainBindings[application.children[i]].item);
+            }
+            return application.item == item || refuse();
           }
           auto expected = source.domainCalls.find(expression);
           if (expected == source.domainCalls.end()) {

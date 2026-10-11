@@ -371,14 +371,7 @@ struct CallBinding {
   std::vector<unsigned> argumentOrder = {};
   std::vector<unsigned> scopedArguments = {};
   std::vector<unsigned> domainArguments = {};
-};
-/// Extraction evidence. Input slots name resolved lexical BindingIds; ignored
-/// rows have no binding. Expression values refer to the generated Math body.
-/// Immutable authored evidence is retained separately by CheckedProject.
-struct ReductionBinding {
-  uint32_t source;
-  std::vector<std::optional<uint32_t>> inputs;
-  std::vector<std::pair<uint32_t, ValueId>> expressions;
+  bool filteredReduction = false;
 };
 struct CaptureSlot {
   uint32_t binding;
@@ -419,7 +412,6 @@ struct Operation {
   Span span;
   uint32_t statement;
   std::optional<CallBinding> binding = {};
-  std::optional<ReductionBinding> reduction = {};
 };
 struct Body {
   enum class Mode { Math, Local, Protocol } mode;
@@ -557,10 +549,6 @@ struct PrimitiveDefinition {
   std::string identity;
   std::vector<Type> arguments;
 };
-struct GeneratedReduction {
-  DeclarationId enclosing;
-  uint32_t ordinal;
-};
 struct Declaration {
   enum class Kind {
     Domain,
@@ -627,7 +615,6 @@ struct Declaration {
   std::vector<InputSlot> inputOrder;
   std::shared_ptr<const Body> body;
   bool anonymous = false;
-  std::optional<GeneratedReduction> generatedReduction;
   std::optional<Span> specificationBlock;
   std::optional<RelationDefinition> relation;
   std::vector<SpecificationClause> specifications;
@@ -685,10 +672,6 @@ private:
                                                  const CaptureOptions &);
 };
 
-/// Independently validate finite binder extraction against retained source.
-llvm::Error checkReductionElaboration(const CheckedProject &,
-                                      const Limits & = {});
-
 /// Check retained source places against actual capture extraction and
 /// snapshots.
 llvm::Error checkScopedElaboration(const CheckedProject &, const Limits & = {});
@@ -717,8 +700,6 @@ private:
   friend class Layouts;
   friend llvm::Error checkScopedElaboration(const CheckedProject &,
                                             const Limits &);
-  friend llvm::Error checkReductionElaboration(const CheckedProject &,
-                                               const Limits &);
   explicit CheckedProject(std::shared_ptr<const detail::CheckedStorage>);
   std::shared_ptr<const detail::CheckedStorage> storage;
   friend Analysis analyze(const CapturedProject &, const Limits &);

@@ -51,6 +51,11 @@ struct SyntaxOperator {
   std::shared_ptr<const NotationDescriptor> notation;
   bool explicitNotation = false;
   std::vector<std::string> holes;
+  std::optional<SyntaxType> filtered;
+};
+struct BoundNotationTarget {
+  CallableReference target;
+  std::vector<std::optional<Type>> arguments;
 };
 struct OperatorBinding {
   std::string symbol;
@@ -58,6 +63,7 @@ struct OperatorBinding {
   std::vector<std::optional<Type>> arguments;
   Span span;
   std::shared_ptr<const NotationDescriptor> notation;
+  std::optional<BoundNotationTarget> filtered = {};
 };
 struct SyntaxSelector {
   bool output = false;
@@ -128,7 +134,7 @@ struct Expression {
     Kernel,
     Intrinsic,
     Map,
-    ReductionMap,
+    DomainProduct,
     MethodCall,
     FinishIf,
     NotationCall,
@@ -165,8 +171,7 @@ struct Expression {
   std::shared_ptr<const NotationDescriptor> notation;
   unsigned height = 1;
   bool grouped = false;
-  bool reductionCall = false;
-  uint32_t reducerExpression = 0, reductionOrdinal = 0;
+  bool filteredReduction = false;
 };
 struct Statement {
   enum class Kind {

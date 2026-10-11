@@ -70,12 +70,14 @@ operational limits.
 
 ## Finite vector reductions
 
-Source binders and ordinary authored `map` plus reducer calls reach the same
-retained `algebra.map_realize` and typed vector kernels. Native `vector.product`
-reduces one vector to a same-field scalar, including the empty identity one;
-it is separate from elementwise multiplication. The
-[source contract](../spec/language/definitions.md#finite-vector-reductions)
-owns binder scope, captures and generated-helper extraction.
+Source binders reach general finite IR through ordinary scoped consumers. Its
+checked lowering recognizes admitted native contractions and retains an ordered
+loop fallback. Default simplification enables finite optimization; `--no-simplify`
+selects the loop path while retaining the same domain admission. Explicit authored `map` plus reducer calls keep the separate
+`algebra.map_realize` path. Native `vector.product` reduces an already constructed
+vector to a scalar with empty identity one, separately from elementwise
+multiplication. The [source contract](../spec/language/definitions.md#finite-reduction-binders)
+owns binder scope, captures and shared scoped extraction.
 
 Optional `--fuse-vector-reductions` exposes admitted maps through checked
 `RetainMaps` local expansion, recognizes adjacent single-use multiply-map/sum,

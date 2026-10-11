@@ -1250,8 +1250,6 @@ Expected<Correspondence> compareOriginal(const ClosedEntry &project,
                                          const Limits &limits) {
   if (auto e = checkLimits(limits))
     return e;
-  if (auto e = checkReductionElaboration(project.project(), limits))
-    return e;
   if (auto e = checkScopedElaboration(project.project(), limits))
     return e;
   if (auto e = checkScopedSpecialization(project, limits))

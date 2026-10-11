@@ -43,6 +43,113 @@ domain Fr=field("koala-bear");
 fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
 fn apply<A:Type,B:Type>(x:A,body:scoped fn(A)->B !{stop})->B !{stop}{return body(x);}
 )";
+  const std::string notationPrelude = finitePrelude + R"(
+fn sum<I:Type+Copy+Drop>(rows:scoped domain<I>,term:scoped fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fun state item=>state+term(item));}
+fn fold_where<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,keep:scoped fn(I)->bool !{stop} on(rows),step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold_where");
+fn sum_where<I:Type+Copy+Drop>(rows:scoped domain<I>,keep:scoped fn(I)->bool !{stop} on(rows),term:scoped fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold_where(rows,0,keep,fun state item=>state+term(item));}
+)";
+  cases.run("finite notation uses ordinary scoped calls", [&] {
+    auto project = take(check(notationPrelude + R"(
+reduction ∑=sum,sum_where;
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,enabled:bool@P)->(r:Fr@P){
+ let one@P=∑ x ∈ xs, x*x;
+ let two@P=∑ (x ∈ xs) (y ∈ ys) with enabled, x*y;
+ let three@P=∑ x in xs, (∑ y in ys, x*y);
+ return one+two+three;
+}run Run=Demo;
+)"));
+    take(closeEntry(project, "m::Run"));
+    auto report = take(inspectNotations(project, {true, false}));
+    require(report.find("m::sum_where") != std::string::npos,
+            "filtered target lost from inspection");
+  });
+  for (const auto &source :
+       {std::string("reduction ⨁=sum,sum_where;fn "
+                    "work(xs:Vector<Fr>)->Fr{return ⨁ x ∈ xs with true,x*x;}"),
+        std::string("reduction ∑=sum;fn work(xs:Vector<Fr>)->Fr{return ∑ (x in "
+                    "xs) (y in xs) (z in xs),x*y*z;}"),
+        std::string("reduction ∑=sum;fn work(xs:Vector<Fr>)->Fr{return ∑ "
+                    "((x,y) in zip(xs,xs)) (z in xs),x*y*z;}"),
+        std::string("interface Scale{math fn apply(x:Fr)->Fr;}fn "
+                    "custom<C:Scale>(rows:scoped domain<Fr>,term:scoped "
+                    "fn(Fr)->Fr !{stop} on(rows))->Fr !{stop}{return "
+                    "sum(rows,fun x=>C::apply(term(x)));}fn "
+                    "work<C:Scale>(xs:Vector<Fr>)->Fr{reduction "
+                    "∑=custom<C>;return ∑ x∈xs,x;}"),
+        std::string(
+            "math fn math_fold<I:Type+Copy+Drop>(rows:scoped "
+            "domain<I>,initial:Fr,step:scoped math fn(Fr,I)->Fr "
+            "on(rows))->Fr=finite(\"math.fold\");math fn "
+            "total<I:Type+Copy+Drop>(rows:scoped domain<I>,term:scoped math "
+            "fn(I)->Fr on(rows))->Fr{return math_fold(rows,0,fun state "
+            "x=>state+term(x));}math fn work(xs:Vector<Fr>)->Fr{reduction "
+            "∑=total;return ∑ x∈xs,x*x;}")})
+    cases.run("general finite notation " + source,
+              [&] { take(check(notationPrelude + source)); });
+  for (const auto &[source, code] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"reduction ∑=sum;fn work(xs:Vector<Fr>)->Fr{return ∑ x in xs with "
+            "true,x;}",
+            "source.reduction-target"},
+           {"reduction ∑=sum,sum_where;fn work(xs:Vector<Fr>)->Fr{reduction "
+            "∑=sum;return ∑ x in xs with true,x;}",
+            "source.reduction-target"},
+           {"reduction ∑=sum;reduction ∑=sum_where;",
+            "source.reduction-target"},
+           {"fn other<I:Type+Copy+Drop>(rows:scoped domain<I>,term:scoped "
+            "fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return "
+            "sum(rows,term);}reduction ∑=sum;reduction ∑=other;fn "
+            "work(xs:Vector<Fr>)->Fr{return ∑ x in xs,x;}",
+            "source.notation-ambiguous"},
+           {"reduction ∑=sum,sum;", "source.reduction-target"},
+           {"reduction ∑=sum<Fr>,sum_where<index>;", "source.reduction-target"},
+           {"reduction ∑=sum;fn work(xs:Vector<Fr>)->Fr{return ∑ (x in xs) (y "
+            "in [x]),x*y;}",
+            "source.name"}})
+    cases.run("finite notation refusal " + source,
+              [&, source = source, code = code] {
+                refuses(check(notationPrelude + source), code);
+              });
+  for (const auto &source :
+       {"reduction *=sum;", "operator prefix(75) ∈=sum;",
+        "reduction ∑=sum;fn work(xs:Vector<Fr>,x:Fr)->Fr{return ∑ (x in xs) (y "
+        "in [x]),x*y;}"})
+    cases.run(std::string("reserved or ambiguous binder ") + source, [&] {
+      auto result = check(notationPrelude + source);
+      require(!result, "ambiguous or reserved syntax accepted");
+      consumeError(result.takeError());
+    });
+  cases.run("independent domains permit their own lexical shadowing", [&] {
+    take(check(notationPrelude + R"(
+reduction ∑=sum;
+fn work(xs:Vector<Fr>,x:Fr)->Fr{return ∑ (x in xs) (y in {let x:Fr=1;[x]}),x*y;}
+)"));
+  });
+  for (unsigned mutation = 0; mutation != 4; ++mutation)
+    cases.run("finite binding source witness " + std::to_string(mutation), [&] {
+      auto project = take(check(notationPrelude + R"(
+reduction ∑=sum,sum_where;
+fn work(xs:Vector<Fr>)->Fr{return ∑ x in xs with true,x;}
+)"));
+      auto &body =
+          const_cast<Body &>(*declarationNamed(project, "m::work").body);
+      auto found = llvm::find_if(body.operations, [](const Operation &op) {
+        return op.binding && op.binding->notation.has_value();
+      });
+      require(found != body.operations.end(), "missing reduction call");
+      if (mutation == 0)
+        found->binding->filteredReduction = false;
+      if (mutation == 1)
+        found->binding->family[0] = "fabricated";
+      if (mutation == 2)
+        found->binding->notation->arity = 1;
+      if (mutation == 3)
+        std::swap(found->binding->scopedArguments[0],
+                  found->binding->scopedArguments[1]);
+      auto error = checkScopedElaboration(project);
+      require(bool(error), "corrupt finite binding accepted");
+      consumeError(std::move(error));
+    });
   for (const auto &input : {std::string("xs"), std::string("keep(xs)"),
                             std::string("{xs}"), std::string("record.values"),
                             std::string("array"), std::string("[1,2]")})

@@ -91,10 +91,8 @@ class ValueCheck {
     }
     return true;
   }
-  bool body(const Body &body, Origins origins, unsigned depth,
-            const std::map<uint32_t, ValueId> *extracted = nullptr) {
-    const auto &expressionValues =
-        extracted ? *extracted : body.expressionValues;
+  bool body(const Body &body, Origins origins, unsigned depth) {
+    const auto &expressionValues = body.expressionValues;
     if (!bounded(depth, {}) ||
         !types.charge(body.values.size() + body.operations.size() +
                           expressionValues.size(),
@@ -227,36 +225,6 @@ class ValueCheck {
       }
     }
     for (const auto &op : body.operations) {
-      if (const auto *bulk = std::get_if<BulkApplication>(&op.action);
-          bulk && op.reduction) {
-        if (bulk->callee.index >= storage.declarations.size())
-          return refuse(op.span);
-        const auto &helper = storage.declarations[bulk->callee.index];
-        if (!helper.body || helper.body->inputs != bulk->operands.size() ||
-            bulk->mapped.size() != bulk->operands.size() ||
-            !types.charge(bulk->operands.size() +
-                              op.reduction->expressions.size(),
-                          op.span))
-          return types.diagnostic ? false : refuse(op.span);
-        Origins nested(helper.body->inputs);
-        for (unsigned i = 0; i < bulk->operands.size(); ++i) {
-          auto operand = bulk->operands[i];
-          if (operand.index >= origins.size())
-            return refuse(op.span);
-          // A mapped row is an element, not an alias of its outer collection.
-          if (!bulk->mapped[i])
-            nested[i] = origins[operand.index];
-        }
-        std::map<uint32_t, ValueId> expressions;
-        for (const auto &[id, value] : op.reduction->expressions)
-          if (!expressions.emplace(id, value).second)
-            return refuse(op.span);
-        // The reduction witness independently checks extraction, source IDs,
-        // and scalar helper operations. Here we connect outer capture origins.
-        if (!this->body(*helper.body, std::move(nested), depth + 1,
-                        &expressions))
-          return false;
-      }
       if (const auto *control = std::get_if<LocalControl>(&op.action)) {
         unsigned head = control->kind == LocalControl::Kind::For ? 2 : 1;
         if (control->operands.size() < head)

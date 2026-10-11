@@ -146,9 +146,6 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     return {};
   }
   const auto &staticArgs = inference->arguments.at(id);
-  if (expr.reductionCall &&
-      !reductionTarget(checker.types, callee, target, staticArgs, expr.span))
-    return {};
   auto subst = checker.types.substitution(callee, staticArgs);
   if (target.component && callee.parent)
     subst.emplace(
@@ -327,6 +324,12 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
           if (inference->collectionDomains.count(expression) ||
               argument.binding)
             return true;
+          if (argument.kind == Expression::Kind::DomainProduct) {
+            for (auto child : argument.children)
+              if (!retainDomain(child, nesting + 1))
+                return false;
+            return true;
+          }
           // Resolve the authored name independently of the produced domain
           // recipe.
           auto selected = callable(argument);
@@ -380,11 +383,14 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     }
     evidence.symbol = operatorSymbol(expr).str();
     evidence.notation = *expr.notation;
+    evidence.filteredReduction = expr.filteredReduction;
     evidence.family = found->second.family;
     evidence.origin = found->second.binding;
     auto visible = checker.operatorWitnessFamily(decl, syntax, id);
     if (!visible)
       return {};
+    if (evidence.scopedSource)
+      checker.scopedCalls[*evidence.scopedSource]->notationFamily = *visible;
     if (!checkOperatorOperands(checker.types, *expr.notation, evidence, binding,
                                authoredOperands, expr.span))
       return {};

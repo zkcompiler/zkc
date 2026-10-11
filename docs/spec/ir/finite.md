@@ -177,3 +177,14 @@ establish a bridge to the native implementation.
 
 The [handwritten controls](../../../compiler/test/fixtures/finite/README.md)
 record the compiler and native test entry points.
+
+
+## Preparation options
+
+Default source preparation enables finite contraction and collection recognition.
+`--no-simplify` disables those optimizations and uses the checked loop path;
+it does not disable domain admission or source/native correspondence checks.
+The separate `--fuse-vector-reductions` option controls explicit ring map plus
+native sum fusion. Neither option promises equal resource exhaustion: a large
+computation can fit the default optimized path and exceed the unchanged execution
+budget when run as a scalar loop.

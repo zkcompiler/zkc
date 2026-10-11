@@ -26,7 +26,6 @@ private:
   bool retainExpressionValues = false;
   Placement *placement = nullptr;
   const ExpressionTypes *inference = nullptr;
-  std::map<uint32_t, ValueId> *reductionValues = nullptr;
   std::set<uint32_t> mathematicalExpressions;
   std::set<std::vector<unsigned>> formationRequirements;
   struct TypeScope {
@@ -146,7 +145,6 @@ private:
                                   bool allowUntypedStop);
   std::optional<ValueId> call(const Expression &, unsigned);
   std::optional<ValueId> bulk(const Expression &, unsigned);
-  std::optional<ValueId> reduction(const Expression &, unsigned);
   std::optional<ValueId> control(const Expression &, std::optional<Type>,
                                  unsigned, bool allowUntypedStop);
   std::optional<ValueId> construct(const Expression &, std::optional<Type>,

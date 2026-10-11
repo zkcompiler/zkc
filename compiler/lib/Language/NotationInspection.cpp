@@ -86,6 +86,12 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
                   (options.includePrivate || binding.isPublic);
     if (bindings[i])
       descriptors[binding.descriptor] = true;
+    if (binding.filtered)
+      if (auto error =
+              work.charge(binding.filtered->arguments.size() +
+                              binding.filtered->authoredArguments.size() + 1,
+                          binding.span))
+        return std::move(error);
     if (auto error = work.charge(binding.arguments.size() +
                                      binding.authoredArguments.size() +
                                      binding.holes.size(),
@@ -100,6 +106,8 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
   }
   for (const auto &occurrence : records.occurrences) {
     uint64_t count = occurrence.operands.size();
+    for (const auto &operand : occurrence.operands)
+      count += operand.rendering.size();
     if (occurrence.selection)
       count += occurrence.selection->arguments.size() +
                occurrence.selection->family.size();
@@ -240,6 +248,34 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
           });
           authored("authored_static_arguments", binding.authoredArguments);
           strings("holes", binding.holes);
+          json.attributeBegin("filtered_target");
+          if (!binding.filtered)
+            json.value(nullptr);
+          else {
+            const auto &target = *binding.filtered;
+            json.object([&] {
+              json.attribute(
+                  "target",
+                  project.declarations()[target.target.index].qualifiedName);
+              json.attribute("target_declaration", target.target.index);
+              json.attribute("component", target.component
+                                              ? json::Value(*target.component)
+                                              : json::Value(nullptr));
+              json.attributeBegin("target_span");
+              span(target.span);
+              json.attributeEnd();
+              json.attributeArray("static_arguments", [&] {
+                for (const auto &argument : target.arguments) {
+                  if (out.overflow())
+                    break;
+                  json.value(argument ? json::Value(*argument)
+                                      : json::Value(nullptr));
+                }
+              });
+              authored("authored_static_arguments", target.authoredArguments);
+            });
+          }
+          json.attributeEnd();
         });
       }
     });
@@ -343,10 +379,28 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
                 span(value.span);
                 json.attributeEnd();
                 json.attribute("text", text(value.span));
-                if (selection)
-                  json.attribute(
-                      "runtime_value",
-                      selection->emitted->binding->operands[operand].index);
+                if (selection) {
+                  const auto &evidence = *selection->emitted->binding;
+                  if (evidence.notation->position ==
+                      NotationDescriptor::Position::Reduction) {
+                    const auto &target =
+                        project
+                            .declarations()[evidence.target.declaration.index];
+                    const auto &slot =
+                        target.inputOrder[evidence.argumentOrder[operand]];
+                    bool domain =
+                        slot.kind == Declaration::InputSlot::Kind::Domain;
+                    json.attribute("kind", domain ? "domain" : "scoped");
+                    json.attribute("binding",
+                                   domain
+                                       ? evidence.domainArguments[slot.index]
+                                       : evidence.scopedArguments[slot.index]);
+                  } else {
+                    json.attribute("kind", "data");
+                    json.attribute("runtime_value",
+                                   evidence.operands[operand].index);
+                  }
+                }
               });
             }
           });
@@ -396,7 +450,18 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
                    ++operand) {
                 if (operand)
                   out << ", ";
-                quotedPart(text(occurrence.operands[operand].span));
+                const auto &value = occurrence.operands[operand];
+                if (value.rendering.empty())
+                  quotedPart(text(value.span));
+                else
+                  for (const auto &part : value.rendering) {
+                    if (out.overflow())
+                      break;
+                    if (auto source = std::get_if<Span>(&part))
+                      quotedPart(text(*source));
+                    else
+                      quotedPart(std::get<std::string>(part));
+                  }
               }
               out << ")\"";
               json.rawValueEnd();
@@ -410,6 +475,7 @@ Expected<std::string> inspectNotations(const CheckedProject &project,
                 }
               });
               json.attribute("symbol", evidence.symbol);
+              json.attribute("filtered", evidence.filteredReduction);
               references("family", selection->family, bindings);
               bool complete = true;
               for (auto member : selection->family)

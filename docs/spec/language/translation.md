@@ -78,14 +78,13 @@ written directly inside `fn` remains an ordered primitive. A `map` emits one
 ordered `local.apply`; comparison checks the helper, mask, signature and site and
 accounts for every declaration.
 
-Finite reduction binders emit the same map declaration for a private generated
-scalar helper, followed by the selected ordinary reducer call. Row inputs and
-ordered scalar capture snapshots are explicit operands. Generated helper
-identity includes its enclosing declaration and binder occurrence; specialization
-retains its original lexical and notation selections. The
-[extraction witness](definitions.md#finite-vector-reductions) checks this graph
-against retained authored syntax before emission. No callback interpreter or
-general binder IR is introduced.
+Finite binders use ordinary scoped consumer calls, whose closure emits typed
+finite domains and fold/collect operations through the shared adapters. Lambda
+captures and domain data become explicit native inputs; structural products
+remain domain nodes. Their [source witnesses](definitions.md#finite-reduction-binders)
+check lexical selection, capture layout and domain recipes before emission.
+The existing finite lowering owns native contraction selection and checked loop
+fallback. Source notation introduces no runtime callback interpreter.
 
 Protocols become `protocol.func`, with explicit `protocol.local_call` for owned calls.
 Total operations use their admitted dialect identities; ordered operations use

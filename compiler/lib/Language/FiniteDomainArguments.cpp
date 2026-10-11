@@ -136,6 +136,26 @@ std::optional<unsigned> BodyChecker::domainArgument(uint32_t id,
     fail("source.limit", "domain argument depth exceeded", expr.span);
     return {};
   }
+  if (expr.kind == Expression::Kind::DomainProduct) {
+    std::vector<unsigned> children;
+    for (auto child : expr.children) {
+      auto domain = domainArgument(child, depth + 1);
+      if (!domain)
+        return {};
+      children.push_back(*domain);
+    }
+    DomainBinding product{DomainBinding::Kind::Product,
+                          inference->domainItems.at(id),
+                          {},
+                          std::move(children),
+                          0,
+                          {},
+                          expr.span};
+    product.expression = id;
+    auto index = body.domainBindings.size();
+    body.domainBindings.push_back(std::move(product));
+    return index;
+  }
   if (expr.kind == Expression::Kind::Name && expr.binding) {
     auto found = domains.find(*expr.binding);
     if (found != domains.end())

@@ -73,3 +73,6 @@ pub fn group_sum_where<I: Type + Copy + Drop, G: Group>(
 ) -> G where zkc::curve::ScalarAction(G) !{stop} {
   return accumulate_where<I, G, GroupSum<G>>(rows, keep, body);
 }
+
+pub reduction ∑ = sum, sum_where;
+pub reduction ∏ = product, product_where;

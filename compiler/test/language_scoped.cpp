@@ -45,9 +45,11 @@ run Run=Demo;)");
   });
   cases.run("existing reduction inside scoped callback", [] {
     succeeds(R"(
-fn sum<F:Field>(xs:Vector<F>)->F=primitive("vector.sum");
+fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+fn sum<I:Type+Copy+Drop>(rows:scoped domain<I>,term:scoped fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fun state item=>state+term(item));}
+reduction ∑=sum;
 fn example(xs:Vector<Fr>,a:Fr)->Fr {
- return apply(a,fun y=>reduce sum [x in xs] {x+a+y});
+ return apply(a,fun y=>∑ x in xs, (x+a+y));
 }
 protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P)->(r:Fr@P){return example(xs,a);}
 run Run=Demo;)");
@@ -173,45 +175,27 @@ protocol Demo roles(P)(x:Fr@P,a:Fr@P)->(r:Fr@P){return twice(x,x,fun y=>y+a);}ru
                 std::string::npos,
             "wrong specialization refusal");
   });
-  cases.run("reduction expression evidence keeps the helper value space", [] {
-    auto project = take(check(R"(
-fn sum<F:Field>(xs:Vector<F>)->F=primitive("vector.sum");
-fn g(xs:Vector<Fr>,a:Fr,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{let r=reduce sum [x in xs]{x+a};return body(r);}
+  cases.run("finite binder inside a scoped helper preserves capture layouts",
+            [] {
+              auto project = take(check(R"(
+fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+fn sum<I:Type+Copy+Drop>(rows:scoped domain<I>,term:scoped fn(I)->Fr !{stop} on(rows))->Fr !{stop}{return fold(rows,0,fun state item=>state+term(item));}
+reduction ∑=sum;
+fn g(xs:Vector<Fr>,a:Fr,body:scoped fn(Fr)->Fr !{stop})->Fr !{stop}{let r=∑ x in xs,(x+a);return body(r);}
 protocol Demo roles(P)(xs:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){return g(xs,a,fun y=>y+b);}run Run=Demo;
 )"));
-    const ReductionBinding *evidence = nullptr;
-    for (const auto &declaration : project.declarations())
-      if (declaration.name == "g" && declaration.body)
-        for (const auto &op : declaration.body->operations)
-          if (op.reduction)
-            evidence = &*op.reduction;
-    require(evidence != nullptr, "missing source reduction evidence");
-    auto closed = take(closeEntry(project, "m::Run"));
-    bool checked = false;
-    for (const auto &declaration : closed.declarations())
-      if (declaration.name == "g" && declaration.body) {
-        require(declaration.inputs.size() == 3,
-                "helper did not gain a capture port");
-        for (const auto &op : declaration.body->operations)
-          if (op.reduction) {
-            require(op.reduction->expressions.size() ==
-                        evidence->expressions.size(),
-                    "reduction expression coverage changed");
-            for (const auto &entry : evidence->expressions) {
-              auto expression = entry.first;
-              auto value = entry.second;
-              auto found = llvm::find_if(
-                  op.reduction->expressions,
-                  [&](const auto &entry) { return entry.first == expression; });
-              require(found != op.reduction->expressions.end() &&
-                          found->second.index == value.index,
-                      "enclosing capture layout rewrote a nested helper value");
-            }
-            checked = true;
-          }
-      }
-    require(checked, "missing closed reduction evidence");
-  });
+              auto closed = take(closeEntry(project, "m::Run"));
+              bool found = false;
+              for (const auto &declaration : closed.declarations())
+                if (declaration.name == "g" && declaration.body) {
+                  require(declaration.inputs.size() == 3,
+                          "helper did not gain a callback capture port");
+                  found = true;
+                }
+              require(found, "missing closed helper");
+              if (auto error = checkScopedSpecialization(closed))
+                throw std::runtime_error(toString(std::move(error)));
+            });
   cases.run(
       "loop carried state cannot alias an invariant callback capture", [] {
         auto project = take(check(R"(

@@ -3,6 +3,9 @@
 #include "Internal.h"
 #include "Semantics.h"
 namespace zkc::language::detail {
+/// The binder calls one domain/body combinator; filtered forms add a predicate.
+bool checkFiniteReductionTarget(Semantics &, const Declaration &, bool filtered,
+                                Span);
 /// Recover the occurrence's complete shape from its immutable lexical syntax.
 /// The caller supplies the body or module environment, never a solver result.
 bool checkNotationOccurrence(Semantics &, const Expression &,

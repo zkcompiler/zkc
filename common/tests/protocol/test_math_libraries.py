@@ -7,7 +7,8 @@ from entry import Entry
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULES = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
-           for name in ('vector', 'matrix', 'boolean', 'polynomial', 'symbolic', 'field_array')]
+           for name in ('vector', 'matrix', 'boolean', 'polynomial', 'symbolic', 'field_array',
+                        'accumulation', 'curve', 'finite', 'sequence')]
 
 
 def scalar(n):

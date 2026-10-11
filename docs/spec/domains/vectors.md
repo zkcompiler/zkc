@@ -255,7 +255,7 @@ The independent [Lean reduction model](../../../lean/docs/spec/core/ring-express
 proves list-value, empty, unused-row refusal and error-propagation laws under
 its stated admission premises. It does not prove native compiler correspondence,
 source capture snapshots or runtime adequacy. Source binding and evaluation
-order belong to the [finite reduction contract](../language/definitions.md#finite-vector-reductions).
+order belong to the [finite reduction contract](../language/definitions.md#finite-reduction-binders).
 
 ## Representation and execution
 

@@ -22,8 +22,6 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
       return {};
     body.expressionValues.insert_or_assign(id, *result);
   }
-  if (result && reductionValues)
-    reductionValues->insert_or_assign(id, *result);
   const auto &expr = syntax.expressions[id];
   if (!result && body.stopped && !checker.types.diagnostic &&
       expr.kind != Expression::Kind::Block &&
@@ -57,8 +55,7 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
     result = kernel(expr, depth);
   } else if (expr.kind == K::Intrinsic) {
     result = intrinsic(expr, depth);
-  } else if (expr.kind == K::ReductionMap) {
-    result = reduction(expr, depth);
+
   } else if (expr.kind == K::Map) {
     result = bulk(expr, depth);
   } else if (expr.kind == K::MethodCall) {

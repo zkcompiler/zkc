@@ -31,8 +31,7 @@ pub operator * = scale;
 pub operator infixl(70) ⊙ = hadamard;
 pub notation ⟪ left, right ⟫ = dot(left, right);
 
-pub reduction ∑ = sum;
-pub reduction ∏ = product;
+pub use zkc::finite::{reduction ∑, reduction ∏};
 
 pub domain fn elements<F: Field>(values: Vector<F>) -> scoped domain<F> = domain("elements");
 pub domain fn indices<F: Field>(values: Vector<F>) -> scoped domain<index> = domain("indices");

@@ -484,89 +484,60 @@ its helper. Invalid value-argument binding uses `source.call`; invalid static
 binding uses `source.generic`, as for ordinary calls. Other map-specific source
 refusals use `source.map`; a map outside local code uses `source.mode`.
 
-## Finite vector reductions
+## Finite reduction binders
 
 ```zkc
 use zkc::vector as vec;
+use zkc::finite_domain::{zip};
+use zkc::finite::{sum};
 fn weighted<F: Field>(xs: vec::Vector<F>, ys: vec::Vector<F>, α: F) -> F {
-  return reduce vec::sum [(x, y) in zip(xs, ys)] { x * y + α };
+  return ∑ (x, y) in zip(xs, ys), (x * y + α);
 }
 ```
 
-A finite reduction applies a checked pointwise map to the written collections,
-then calls the selected reducer on that vector. The single-row form is
-`reduce reducer [x in xs] { body }`. Multiple rows require the explicit strict
-`zip` form above. [Reduction notation](notation.md#finite-reduction-syntax)
-gives the equivalent library-bound `∑` and `∏` spellings.
+A binder is an ordinary statically selected finite consumer call. The example
+has the same computation as `sum(zip(xs, ys), fun (x, y) => x * y + α)`.
+The [notation contract](notation.md#finite-reduction-syntax) fixes its parsing,
+selection and optional predicate. Names, tuple patterns, `_`, lexical captures,
+component dispatch and nested computations use the ordinary scoped-function
+machinery. There is no separate ring-body checker or generated-map subsystem.
+Binders work directly in protocols, local functions and component members;
+mathematical functions use a binding to a total mathematical consumer.
 
-All collections have the installed dynamic `Vector<F>` type for one field `F`.
-The reducer is a statically resolved, defined local callable with exactly one
-`Vector<F>` input, one `F` result and no service inputs. Reduction notation
-bindings require a written result type, as other callable notation does. Named and
-symbolic forms use ordinary callable resolution, static argument inference and
-definition-site identity. A custom reducer may stop; it is an ordinary call,
-with no inferred sum/product law. Component dispatch and function values are
-outside this reducer profile.
+The first argument is a [finite domain](#finite-domains), including ordinary
+collection conversion. A pair of independent groups, `(x ∈ xs) (y ∈ ys)`,
+constructs a lexicographic product. Use explicit `zip(xs, ys)` for strict
+pairwise traversal and nested binders for dependent domains. Independent groups
+do not put earlier names in scope in later domains. An outer value whose name
+matches an earlier binder cannot be read from a later domain: rename the outer
+value or write nested binders to make the intended dependency clear.
 
-Evaluation has this order:
+Evaluation follows the selected ordinary call:
 
-1. Evaluate every collection once, left to right, in the enclosing scope.
-   Repeated collection expressions remain separate evaluations. Row bindings
-   are not in scope in any collection.
-2. Read each captured outer binding once after all collections, in the order
-   of its first textual use in the body. Captures are whole immutable scalar
-   bindings of field `F`, with the ordinary copy/drop permissions. Projection
-   from an aggregate must be assigned to an outer scalar `let` first; mutable
-   bindings, services, vectors and other aggregate captures refuse.
-3. Check every row length in written order against the first row, including
-   `_` and named rows the scalar result does not use. Only then realize the
-   scalar formula over the rows and call the reducer. Unequal lengths fail
-   through the map's ordered `control.require` guards (`rejected:require` in
-   native execution); strict zip never truncates.
+1. Evaluate domain data once in written order, in the enclosing scope.
+2. Snapshot predicate and body captures in argument order and first-use order
+   within each callback. Captures follow the shared free-place and permission
+   rules, including immutable aggregate projections.
+3. Admit every domain constructor, including ignored strict-zip inputs, before
+   entering callbacks. Visit items in the domain's order. Evaluate the predicate
+   first; false skips that item's body. Nested domains are admitted when reached.
 
-Named rows are distinct lexical bindings local to the scalar body; `_` introduces
-no name. Rows can shadow outer immutable bindings under the ordinary binding
-rules, without changing collection resolution or capturing those outer values.
-Shadowing a mutable binding remains forbidden. Body-local immutable lets follow
-normal shadowing. Extraction uses resolved binding identities and original
-definition scopes; generated
-names neither capture source bindings nor become source-callable declarations.
+The target's mode and callback contracts determine whether a body can stop or
+perform local work. No effects or expected result choose another binding. Total
+consumers require established domain formation and access conditions. Local
+consumers retain checked failure behavior. Empty sums and products use the
+library's zero and one identities; a custom consumer keeps its own semantics.
+An arbitrary `Vector<F> -> F` reducer uses `vector::reduce(rows, term, reducer)`,
+which collects first and calls the reducer exactly once, including on empty input.
+It is not implicitly interpreted as an associative combiner.
 
-The body returns one scalar of `F`. It admits immutable scalar lets, scalar
-aliases, field constants, addition, subtraction and multiplication, and concrete
-static mathematical helpers whose entire reachable bodies satisfy the same
-field-ring rule. Admission checks every operation, including dead operations;
-field-typed results or custom symbols alone do not establish this rule. Deferred
-call and notation inference inside the body uses Math mode, with the generated
-helper edge included in depth accounting. Local calls, effects, mutation,
-services, nonfield values, component dispatch and nested reductions refuse.
-The initial binder occurs only in module-level local functions, not directly
-in protocols, math functions or component members. Protocols can call a local
-wrapper. Existing named `map` retains its later IR formula admission; the binder
-adds this earlier source-body check.
-
-For the library sum, matched empty rows return zero; for the library product,
-they return one. A custom reducer instead receives the empty mapped vector and
-retains its own behavior. Empty selected rows do not bypass other row checks,
-collection evaluation or scalar capture snapshots.
-
-Each binder owns a private generated mathematical helper with positional row
-inputs followed by captures in their snapshot order. Helpers remain in a
-checker-owned pending collection until authored bodies, signatures and Entries
-are checked and their live inference references have expired. Finalization
-inherits the completed enclosing static parameters and requirements. Generated
-helpers have distinct semantic identities, consume declaration/instance/work
-limits, and add a call-depth edge even for a constant body. Closure rechecks
-the retained limits and does not reparse or resolve the extracted expressions.
-
-A separate extraction witness checker reconstructs row bindings, free captures
-and their order from retained authored syntax and resolved identities. It checks
-the scalar body, positional inputs, map mask, field, reducer, sites and lexical
-selection against the actual checked graph before source-to-IR comparison.
-The checker retains collection result identities; it trusts the enclosing
-source checker to emit their producing operations in authored order. It does
-not independently reconstruct those collection computations. Parser, resolver,
-inference and native runtime adequacy remain outside this extraction check.
+Retained evidence uses the shared scoped extraction, domain and call witnesses.
+They compare lexical captures, callback arguments, structural product recipes,
+definition-site target selection and actual checked operations before closure
+and source-to-IR comparison. Limits count generated scoped work. The parser's
+construction of the lambda patterns and product syntax, lexical resolution and
+inference remain trusted frontend steps; these checks are not a proof of source
+elaboration or native execution correctness.
 
 ## Group identity
 
@@ -826,7 +797,7 @@ two for infix, one for prefix/postfix, and one per delimiter hole. Only reserved
 `==` requires a Boolean result. Protocols and implicit services are not targets.
 Public bindings require public targets. Unused bindings are checked too.
 Reduction descriptors have one mapped-vector operand and the additional
-[finite reduction target rules](#finite-vector-reductions).
+[finite reduction target rules](#finite-reduction-binders).
 
 A block can begin with `operator + = A::add;`, where `A` is an explicit component
 parameter, or with other callable bindings. Targets accept partial static
@@ -1220,9 +1191,8 @@ name, mode, input/result types and effect allowance. `input_order` retains
 `data`, `service` and `scoped` categories. This diagnostic view does not add
 runtime interface fields. The [computation library](../../../libraries/zkc/computation.zkc)
 and [component example](../../../examples/projects/scoped-computations/README.md)
-exercise user-defined apply/forward combinators. General finite domains and
-fold syntax are separate from this foundation; the existing finite-vector
-reduction profile above remains unchanged.
+exercise user-defined apply/forward combinators. General finite domains, named consumers and mathematical binders use this same
+foundation.
 
 ## Bounds and scope
 

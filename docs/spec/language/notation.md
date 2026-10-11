@@ -1,7 +1,7 @@
 # Mathematical notation
 
 This native contract defines callable operators, paired-delimiter calls and
-finite-vector reduction bindings.
+general finite reduction bindings.
 The [lexical profile](lexical.md#mathematical-tokens) admits their tokens;
 [definition checking](definitions.md#library-defined-operators) owns callable
 selection and native checks. [Status](../../status.md#source-and-application-boundary)
@@ -13,7 +13,7 @@ records implementation coverage.
 [pub] operator SYMBOL = CALLABLE;
 [pub] operator FIXITY(PRECEDENCE) SYMBOL = CALLABLE;
 [pub] notation OPENER HOLE ("," HOLE)* CLOSER = CALLABLE(HOLE, ...);
-[pub] reduction SYMBOL = CALLABLE;
+[pub] reduction SYMBOL = CALLABLE ["," FILTERED_CALLABLE];
 ```
 
 `FIXITY` is `infixl`, `infixr`, `infix`, `prefix` or `postfix`. The first three
@@ -35,10 +35,10 @@ never choose syntax. An explicit declaration creates a descriptor or repeats
 an identical visible shape. Prefix and infix may share a symbol. Postfix and
 infix may not share one symbol in the same environment.
 
-A reduction descriptor has its own position, one semantic data operand (the
-mapped vector), and fixed bracket/body syntax. Its symbol is `∑` or `∏`;
-it has no user-selected precedence, holes or association. A prefix and a
-reduction descriptor cannot share a token. An `operator` declaration or selector
+A reduction descriptor has its own position, a domain and a scoped body, with
+an optional scoped predicate. Its non-ASCII mathematical symbol has fixed body
+binding power 67. ASCII operators and `∈` cannot name a reduction. Prefix and
+reduction descriptors cannot share a token. An `operator` declaration or selector
 does not bind or import a reduction descriptor.
 
 The fixed grammar is:
@@ -113,26 +113,47 @@ a symbol asserts no algebraic law and adds no optimizer or proof rule.
 ## Finite reduction syntax
 
 ```text
-reduce CALLABLE [NAME in COLLECTION] { SCALAR_BODY }
-reduce CALLABLE [(NAME, NAME, ...) in zip(COLLECTION, COLLECTION, ...)] { SCALAR_BODY }
-SYMBOL [NAME in COLLECTION] { SCALAR_BODY }
-SYMBOL [(NAME, NAME, ...) in zip(COLLECTION, COLLECTION, ...)] { SCALAR_BODY }
+SYMBOL PATTERN in DOMAIN [with PREDICATE], BODY
+SYMBOL PATTERN ∈ DOMAIN [with PREDICATE], BODY
+SYMBOL (PATTERN ∈ DOMAIN) (PATTERN ∈ DOMAIN) ... [with PREDICATE], BODY
 ```
 
-`CALLABLE` is an ordinary static callable reference with optional static
-arguments. `SYMBOL` requires a visible reduction binding. A row name may be `_`;
-tuple binders require at least two rows and exactly the same number of explicit
-`zip` operands. There is no implicit zip or arbitrary pattern comprehension.
-The braces delimit a scalar expression block; its row names are scoped only to
-that block. These forms can occur as ordinary expressions.
+`in` and `∈` are equivalent membership spellings. Patterns use ordinary names,
+`_` and tuples. One domain may itself yield a tuple; independent parenthesized
+groups construct ordered Cartesian products. Explicit `zip` provides strict
+pairwise traversal. Dependent domains use nested binders. The body is parsed at
+binding power 67: `∑ x ∈ xs, x * x + c` means `(∑ x ∈ xs, x * x) + c`.
+Parentheses or an expression block include an addition in the body. A binder can
+begin an operand expression, including the right operand of multiplication.
 
-The library declarations are `pub reduction ∑ = sum;` and
-`pub reduction ∏ = product;`. Their targets are defined static local callables
-of type `Vector<F> -> F`, with one written scalar result and no service inputs.
-Ordinary callable inference, lexical identity and effects remain in force;
-a reduction symbol supplies neither an algebraic law nor permission to
-substitute another reducer. The [source reduction contract](definitions.md#finite-vector-reductions)
-defines collection evaluation, captures, body admission and helper extraction.
+```zkc
+pub reduction ∑ = sum, sum_where;
+pub reduction ∏ = product, product_where;
+```
+
+Each occurrence requires one canonical visible binding before inferring the
+body or result. Its unfiltered target has a domain input followed by one unary
+scoped callback. The optional filtered target has the same domain and body
+shape, with a Boolean predicate callback between them. Targets are ordinary
+Math or Local functions with one written result and no data or service inputs.
+Generic parameter sorts, permissions, interfaces, partial static arguments,
+item/result/output types, callback modes and allowances must correspond after
+parameter renaming. Each target retains its own independently checked input
+conditions and component identity; the pair asserts no equivalence law.
+
+`with` requires the companion from that binding. A local unfiltered declaration
+replaces the entire inherited pair; it does not retain an outer predicate target.
+`finite` exports Local bindings and `finite_math` exports total Math bindings.
+`vector` reexports the Local bindings. Importing both families requires an
+explicit local binding or selective imports; mode and effects never choose one.
+For example, a mathematical function can declare
+`reduction ∑ = finite_math::sum, finite_math::sum_where;` in its declaration prefix.
+
+Expansion creates an ordinary call with unary `fun` callbacks and structural
+domain products. Product construction never looks up a generated textual
+`product` name. The [source binder contract](definitions.md#finite-reduction-binders)
+defines evaluation, captures and retained checks. Named calls remain available
+without notation imports; the old `reduce callable [...] {...}` syntax is removed.
 
 ## Imports and lexical scope
 
@@ -184,10 +205,10 @@ authored operands and the selected ordinary call. Callable selection and the
 independent [binding witness](definitions.md#library-defined-operators) use the
 same descriptor arity; the witness reconstructs the lexical family independently
 of the solver. Specialization preserves definition-site selection.
-Reduction extraction also preserves the original body scope and its selected
-notation occurrences in generated helpers. Its separate
-[extraction witness](definitions.md#finite-vector-reductions) precedes native
-source-to-IR comparison.
+Finite binder callbacks retain their authored scopes through the common scoped
+extraction and specialization witnesses. Domain recipes and selected binding
+families are independently compared with the retained source records before
+native source-to-IR comparison. This does not independently verify parsing.
 
 ## Inspection
 
@@ -211,6 +232,8 @@ persistent cross-build identifiers.
 
 Canonical named-call rendering is a diagnostic aid. It is not a byte-preserving
 rewrite, and named and symbolic captures need not have equal artifact identities.
+Binder renderings show `fun` callbacks and use `×` to display structural products;
+that diagnostic product spelling is not an implicit source name lookup.
 Syntax metadata does not enter the native Entry interface or grant execution
 authority. Retained inventories survive the temporary parser and checker without
 requiring either to run again. Compiler spans and inspection support do not

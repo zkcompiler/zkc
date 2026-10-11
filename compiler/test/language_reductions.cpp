@@ -6,14 +6,18 @@ using namespace llvm;
 using namespace zkc::language;
 using namespace zkc::test;
 namespace {
-const std::string prelude = R"(module m;
+const std::string definitions = R"(
+pub type Vector<F:Field>=builtin("vector",F);
+pub domain fn zip<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:scoped domain<A>,b:scoped domain<B>)->scoped domain<(A,B)>=domain("zip");
+pub fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+pub fn sum<I:Type+Copy+Drop,F:Field>(rows:scoped domain<I>,term:scoped fn(I)->F !{stop} on(rows))->F !{stop}{return fold(rows,0,fun state item=>state+term(item));}
+)";
+const std::string prelude = "module m;" + definitions + R"(
 domain Fr=field("koala-bear");
 domain Ext=field("koala-bear.ext8-binomial3");
-type Vector<F:Field>=builtin("vector",F);
-pub fn sum<F:Field>(xs:Vector<F>)->F=primitive("vector.sum");
 math fn square<F:Field>(x:F)->F{return x*x;}
 math fn difference<F:Field>(a:F,b:F)->F{return a-b;}
-fn custom<F:Field>(xs:Vector<F>)->F{return sum(xs)+1;}
+fn custom<I:Type+Copy+Drop,F:Field>(rows:scoped domain<I>,term:scoped fn(I)->F !{stop} on(rows))->F !{stop}{return sum(rows,term)+1;}
 )";
 Expected<CheckedProject> check(StringRef text, const Limits &limits = {}) {
   auto captured = capture({{"m", prelude + text.str(), "reductions.zkc"}});
@@ -31,21 +35,15 @@ void success(Error error) {
   if (error)
     throw std::runtime_error(toString(std::move(error)));
 }
-void refusal(Error error, StringRef code) {
-  require(bool(error), "expected " + code);
-  auto message = toString(std::move(error));
-  require(message.find(code.str()) != std::string::npos, message);
-}
 const std::string program = R"(
 pub reduction ∑=sum;
-pub reduction ∏=sum;
 pub fn f<F:Field>(xs:Vector<F>,ys:Vector<F>,a:F,b:F)->F{
-  let first=reduce sum [(x,_) in zip(xs,ys)] { b*x+a };
-  return first+∑ [(x,y) in zip(xs,ys)] {
+  let first=sum(zip(xs,ys),fun (x,_)=>b*x+a);
+  return first+(∑ (x,y) in zip(xs,ys), {
     operator *=difference;
     let z=x*y;
     square(z)+a
-  };
+  });
 }
 protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,a:Fr@P,b:Fr@P)->(r:Fr@P){
   return (r=f(xs,ys,a,b));
@@ -55,450 +53,211 @@ run Run=Demo;
 } // namespace
 int main() {
   Cases cases;
-  cases.run("named and symbolic generic reductions retain scoped helpers", [] {
-    auto project = take(check(program));
-    success(checkReductionElaboration(project));
-    auto closed = take(closeEntry(project, "m::Run"));
-    (void)closed;
-    unsigned generated = 0;
-    for (const auto &decl : project.declarations())
-      if (decl.generatedReduction) {
-        ++generated;
-        require(decl.parameters.size() == 1 &&
-                    decl.symbol.rfind("zki_", 0) == 0 && decl.anonymous &&
-                    !decl.isPublic,
-                "helper identity or generic context lost");
-        for (unsigned i = 0; i < decl.body->inputs; ++i)
-          require(decl.body->values[i].components == std::vector<unsigned>{i},
-                  "math dependency uses local ownership");
-      }
-    require(generated == 2, "generated helper count differs");
-    auto declarationReport = take(inspectDeclarations(project));
-    require(declarationReport.find("reduction<") == std::string::npos,
-            "private helper leaked");
-    auto notationReport = take(inspectNotations(project, {true, false}));
-    auto report = take(json::parse(notationReport));
-    require(report.getAsObject() != nullptr &&
-                notationReport.find("reduction") != std::string::npos,
-            "notation inspection lost reduction descriptors");
-  });
+  cases.run("named and symbolic reductions retain ordinary scoped computations",
+            [] {
+              auto project = take(check(program));
+              success(checkScopedElaboration(project));
+              auto closed = take(closeEntry(project, "m::Run"));
+              success(checkScopedSpecialization(closed));
+              const auto &function = declaration(project, "m::f");
+              require(function.body->scopedBindings.size() == 2,
+                      "expected one callback per authored body");
+              auto report = take(inspectNotations(project, {true, false}));
+              require(take(json::parse(report)).getAsObject() &&
+                          report.find("reduction") != std::string::npos,
+                      "notation inspection lost reduction descriptors");
+              require(take(inspectDeclarations(project)).find("reduction<") ==
+                          std::string::npos,
+                      "obsolete synthetic declaration leaked");
+            });
   for (const auto &body :
-       {"reduce sum [x in xs] {x*x}", "reduce custom [x in xs] {x}",
-        "reduce sum<Fr> [_ in xs] {1}", "reduce sum [(x,_) in zip(xs,xs)] {x}",
-        "reduce sum [a in xs] {let t=a; t+a}",
-        "reduce sum [x in xs] {({let x=a; x})+x}",
-        "reduce sum [x in xs] {intrinsic<Fr>(\"field.mul\",x,a)}"})
+       {"sum(xs,fun x=>x*x)", "custom(xs,fun x=>x)", "sum(xs,fun _=>1)",
+        "sum(zip(xs,xs),fun (x,_)=>x)", "sum(xs,fun a=>{let t=a;t+a})",
+        "sum(xs,fun x=>({let x=a;x})+x)",
+        "sum(xs,fun x=>if x==a {x} else {a})"})
     cases.run(body, [&] {
       take(check("fn f(xs:Vector<Fr>,a:Fr)->Fr{return " + std::string(body) +
                  ";}"));
     });
-  cases.run("symbolic product spelling may select an ordinary custom reducer",
-            [] {
-              take(check("reduction ∏=custom;fn f(xs:Vector<Fr>)->Fr{return ∏ "
-                         "[x in xs]{x};}"));
-            });
-  cases.run("local reduction family overrides without fallback", [] {
+  cases.run("local binding selects an ordinary custom finite consumer", [] {
     auto project =
         take(check("reduction ∑=sum;fn f(xs:Vector<Fr>)->Fr{reduction "
-                   "∑=custom;return ∑ [x in xs]{x};}"));
+                   "∑=custom;return ∑ x in xs,x;}"));
     const auto &op = declaration(project, "m::f").body->operations.back();
     require(op.binding && op.binding->target.declaration.index ==
                               declaration(project, "m::custom").id.index,
-            "local reducer lost");
+            "local reduction binding lost");
   });
-  cases.run("selective import and reexport retain reduction identity", [] {
-    auto project = take(capture(
-        {{"lib",
-          R"(module lib;pub type Vector<F:Field>=builtin("vector",F);pub fn sum<F:Field>(xs:Vector<F>)->F=primitive("vector.sum");pub reduction ∑=sum;)",
-          {}},
-         {"bridge", "module bridge;pub use lib::{Vector,sum,reduction ∑};", {}},
-         {"m",
-          R"(module m;use bridge::{Vector,reduction ∑};domain F=field("koala-bear");fn f(xs:Vector<F>)->F{return ∑ [x in xs]{x};})",
-          {}}}));
-    take(analyze(project).checkedProject());
-  });
-  for (bool alias : {false, true})
-    cases.run(
-        alias ? "module alias activates reductions"
-              : "named imports do not activate reductions",
-        [&] {
-          auto project = take(capture(
-              {{"lib",
-                R"(module lib;pub type Vector<F:Field>=builtin("vector",F);pub fn sum<F:Field>(xs:Vector<F>)->F=primitive("vector.sum");pub reduction ∑=sum;)",
-                {}},
-               {"m",
-                std::string("module m;") +
-                    (alias
-                         ? "use lib as lib;type Vector<T:Field>=lib::Vector<T>;"
-                         : "use lib::{Vector,sum};") +
-                    R"(domain F=field("koala-bear");fn f(xs:Vector<F>)->F{return ∑ [x in xs]{x};})",
-                {}}}));
-          auto result = analyze(project).checkedProject();
-          if (alias)
-            take(std::move(result));
-          else
-            refuses(std::move(result), "source.notation-visibility");
-        });
-  const std::vector<std::pair<std::string, std::string>> bad = {
-      {"reduction ⊕=sum;", "source.reduction"},
-      {"reduction ∑=square;", "source.reduction-target"},
-      {"fn f(xs:Vector<Fr>)->Fr{return reduce square[x in xs]{x};}",
-       "source.type"},
-      {"reduction ∑=sum;reduction ∑=custom;fn f(xs:Vector<Fr>)->Fr{return ∑[x "
-       "in xs]{x};}",
-       "source.operator"},
-      {"fn f(xs:Vector<Fr>)->Fr{return reduce sum[(x,x) in zip(xs,xs)]{x};}",
-       "source.binding"},
-      {"fn f(xs:Vector<Fr>)->Fr{return reduce sum[(x,y) in xs]{x};}",
-       "source.syntax"},
-      {"fn f(xs:Vector<Fr>)->Fr{return reduce sum[x in zip(xs,xs)]{x};}",
-       "source.reduction"},
-      {"fn f(xs:Vector<Fr>)->Fr{return reduce sum[(x,y) in zip(xs)]{x};}",
-       "source.reduction"},
-      {"fn f(xs:Vector<Fr>)->Fr{return reduce sum[(x) in zip(xs)]{x};}",
-       "source.reduction"},
-      {"fn f(xs:Vector<Fr>)->Fr{return reduce sum[x in xs,y in xs]{x};}",
-       "source.syntax"},
-      {"fn f(xs:Vector<Fr>)->Fr{return reduce sum[x in x]{x};}", "source.name"},
-      {"fn f(xs:Vector<Fr>)->Fr{let r=reduce sum[x in xs]{x};return x;}",
-       "source.name"},
-      {"fn f(xs:Vector<Fr>)->Fr{return reduce sum[x in xs]{reduce sum[y in "
-       "xs]{y}};}",
-       "source.reduction"},
-      {"math fn f(xs:Vector<Fr>)->Fr{return reduce sum[x in xs]{x};}",
-       "source.mode"},
-      {"fn f(xs:Vector<Fr>,a:Fr)->Fr{let mut b=a;return reduce sum[x in "
-       "xs]{b*x};}",
-       "source.reduction-capture"},
-      {"fn f(xs:Vector<Fr>,a:Fr)->Fr{let mut x=a;return reduce sum[x in "
-       "xs]{x};}",
-       "source.shadow"},
-      {"fn f(xs:Vector<Fr>)->Fr{return reduce sum[x in xs]{let mut y=x;y};}",
-       "source.reduction-body"},
-      {"fn f(xs:Vector<Fr>)->Fr{return reduce sum[x in "
-       "xs]{kernel<Fr>(\"field.inverse\",x)};}",
-       "source.reduction-body"},
-      {"fn effect(x:Fr)->Fr{return x;}fn f(xs:Vector<Fr>)->Fr{return reduce "
-       "sum[x in xs]{effect(x)};}",
-       "source.mode"},
-      {"fn f(xs:Vector<Fr>,a:Ext)->Fr{return reduce sum[x in xs]{a};}",
-       "source.type"},
-      {"fn f(xs:Vector<Fr>,a:(Fr,Fr))->Fr{return reduce sum[x in xs]{a.0};}",
-       "source.reduction-body"},
-      {"fn f(xs:[Fr;2])->Fr{return reduce sum[x in xs]{x};}", "source.type"},
-      {"fn f(xs:Vector<Fr>,ys:Vector<Ext>)->Fr{return reduce sum[(x,y) in "
-       "zip(xs,ys)]{x};}",
-       "source.type"},
-      {"math fn bad(x:Fr)->Fr{let ignored=x==x;return x;}fn "
-       "f(xs:Vector<Fr>)->Fr{return reduce sum[x in xs]{bad(x)};}",
-       "source.reduction-body"},
-      {"fn f(xs:Vector<Fr>)->Fr{return reduce sum[x in xs]{let "
-       "ignored=x==x;x};}",
-       "source.reduction-body"},
-  };
-  for (const auto &test : bad)
-    cases.run(test.first, [&] { refuses(check(test.first), test.second); });
-  cases.run(
-      "capture order follows first textual use and ignores unused rows", [] {
-        auto project =
-            take(check("fn f(xs:Vector<Fr>,ys:Vector<Fr>,a:Fr,b:Fr)->Fr{return "
-                       "reduce sum[(_,x) in zip(xs,ys)]{b*x+a+b};}"));
-        const auto &body = *declaration(project, "m::f").body;
-        require(body.operations.size() == 4,
-                "expected two capture reads then map and reducer");
-        require(
-            std::get<Projection>(body.operations[0].action).input.index == 3 &&
-                std::get<Projection>(body.operations[1].action).input.index ==
-                    2,
-            "captures were sorted by declaration instead of use");
-        auto &map = std::get<BulkApplication>(body.operations[2].action);
-        require(map.mapped == std::vector<bool>({true, true, false, false}),
-                "strict mask dropped ignored input");
-      });
-  for (unsigned limit = 1; limit <= 5; ++limit)
-    cases.run("exact generated helper depth " + Twine(limit), [&] {
-      Limits limits;
-      limits.callDepth = limit;
-      auto project = check(
-          "fn f(xs:Vector<Fr>)->Fr{return reduce sum[x in "
-          "xs]{square(x)};}protocol Demo "
-          "roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return(r=f(xs));}run Run=Demo;",
-          limits);
-      if (limit < 4)
-        refuses(std::move(project), "source.limit");
-      else {
-        auto checked = take(std::move(project));
-        take(closeEntry(checked, "m::Run", limits));
-      }
+  for (unsigned mode = 0; mode != 3; ++mode)
+    cases.run("reduction import visibility " + Twine(mode), [&] {
+      auto captured = take(capture(
+          {{"lib", "module lib;" + definitions + "pub reduction ∑=sum;", {}},
+           {"bridge",
+            "module bridge;pub use lib::{Vector,sum,reduction ∑};",
+            {}},
+           {"m",
+            std::string("module m;") +
+                (mode == 0 ? "use bridge::{Vector,reduction ∑};"
+                 : mode == 1
+                     ? "use lib as lib;type Vector<F:Field>=lib::Vector<F>;"
+                     : "use bridge::{Vector,sum};") +
+                "domain Fr=field(\"koala-bear\");fn "
+                "f(xs:Vector<Fr>)->Fr{return ∑ x in xs,x;}",
+            {}}}));
+      auto project = analyze(captured).checkedProject();
+      if (mode == 2)
+        refuses(std::move(project), "source.notation-visibility");
+      else
+        take(std::move(project));
     });
-  cases.run("constant helper adds a depth edge even without calls", [] {
-    Limits limits;
-    limits.callDepth = 2;
-    refuses(
-        check("fn f(xs:Vector<Fr>)->Fr{return reduce sum[_ in xs]{1};}protocol "
-              "Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return(r=f(xs));}run "
-              "Run=Demo;",
-              limits),
-        "source.limit");
-    limits.callDepth = 3;
-    auto project = take(check(
-        "fn f(xs:Vector<Fr>)->Fr{return reduce sum[_ in xs]{1};}protocol Demo "
-        "roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return(r=f(xs));}run Run=Demo;",
-        limits));
-    take(closeEntry(project, "m::Run", limits));
-  });
-  cases.run("declaration, operation and work budgets include generated work",
-            [] {
-              auto project = take(check(program));
-              Limits limits;
-              limits.declarations = project.checkedDeclarations() - 1;
-              refuses(check(program, limits), "source.limit");
-              limits = {};
-              limits.operations = project.checkedOperations() - 1;
-              refuses(check(program, limits), "source.limit");
-              limits = {};
-              limits.work = project.checkedWork() - 1;
-              refuses(check(program, limits), "source.limit");
-            });
-  const std::vector<std::string> mutations = {
-      "capture",     "capture-order",  "mask",         "row",
-      "field",       "reducer",        "map-origin",   "capture-origin",
-      "body-origin", "input-binding",  "body-operand", "missing-evidence",
-      "helper-name", "helper-display", "helper-parent"};
-  for (const auto &mutation : mutations)
-    cases.run("independent extraction rejects " + mutation, [&] {
-      auto project =
-          take(check("fn f(xs:Vector<Fr>,ys:Vector<Fr>,a:Fr,b:Fr)->Fr{return "
-                     "reduce sum[(x,y) in zip(xs,ys)]{b*x+a*y};}"));
-      auto &function = const_cast<Declaration &>(declaration(project, "m::f"));
-      auto changed = std::make_shared<Body>(*function.body);
-      function.body = changed;
-      auto &op = changed->operations[2];
-      auto &bulk = std::get<BulkApplication>(op.action);
-      auto &helper =
-          const_cast<Declaration &>(project.declarations()[bulk.callee.index]);
-      if (mutation == "capture")
-        bulk.operands[2] = bulk.operands[3];
-      if (mutation == "capture-order")
-        std::swap(bulk.operands[2], bulk.operands[3]);
-      if (mutation == "mask")
-        bulk.mapped[1] = false;
-      if (mutation == "row")
-        std::swap(bulk.operands[0], bulk.operands[1]);
-      if (mutation == "field")
-        helper.outputs[0].type = Type{};
-      if (mutation == "reducer")
-        changed->operations[3].binding->target.declaration =
-            declaration(project, "m::custom").id;
-      if (mutation == "map-origin")
-        ++op.span.begin;
-      if (mutation == "capture-origin")
-        ++changed->operations[0].span.begin;
-      if (mutation == "body-origin" || mutation == "body-operand") {
-        auto scalar = std::make_shared<Body>(*helper.body);
-        helper.body = scalar;
-        if (mutation == "body-origin")
-          ++scalar->operations[0].span.begin;
-        else
-          std::get<MathValue>(scalar->operations[0].action).operands[0] = {0};
-      }
-      if (mutation == "input-binding")
-        std::swap(op.reduction->inputs[2], op.reduction->inputs[3]);
-      if (mutation == "missing-evidence")
-        op.reduction.reset();
-      if (mutation == "helper-name")
-        helper.symbol = "zki_invalid";
-      if (mutation == "helper-display")
-        helper.qualifiedName = "m::f::wrong";
-      if (mutation == "helper-parent")
-        helper.parent.reset();
-      refusal(checkReductionElaboration(project),
-              mutation == "body-operand" ? "source.binding-witness"
-                                         : "source.reduction-witness");
+  for (const auto &[source, code] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"reduction ∑=square;", "source.reduction-target"},
+           {"fn f(xs:Vector<Fr>)->Fr{return reduce sum[x in xs]{x};}",
+            "source.reduction"},
+           {"reduction ∑=sum;fn f(xs:Vector<Fr>)->Fr{return ∑ (x,x) in "
+            "zip(xs,xs),x;}",
+            "source.binding"},
+           {"reduction ∑=sum;fn f(xs:Vector<Fr>)->Fr{let r=∑ x in xs,x;return "
+            "x;}",
+            "source.name"},
+           {"reduction ∑=sum;math fn f(xs:Vector<Fr>)->Fr{return ∑ x in xs,x;}",
+            "source.mode"},
+           {"reduction ∑=sum;fn f(xs:Vector<Fr>,a:Ext)->Fr{return ∑ x in "
+            "xs,a;}",
+            "source.type"}})
+    cases.run(source, [&, source = source, code = code] {
+      refuses(check(source), code);
     });
-  cases.run("inspection owns extracted operation pointers after analysis dies",
-            [] {
-              auto project = take(check(program));
-              std::vector<std::string> churn(2000, std::string(1024, 'x'));
-              (void)churn;
-              auto first = take(inspectNotations(project, {true, false}));
-              auto second = take(inspectNotations(project, {true, false}));
-              require(first == second,
-                      "inspection depends on expired analysis storage");
-              require(first.find("not-emitted") == std::string::npos,
-                      "generated notation was lost");
-            });
-
-  cases.run("local prefix and forward notation keep their authored scopes", [] {
+  cases.run("captures follow first use and preserve ignored zip domains", [] {
+    auto project = take(check("reduction ∑=sum;fn "
+                              "f(xs:Vector<Fr>,ys:Vector<Fr>,a:Fr,b:Fr)->Fr{"
+                              "return ∑ (_,x) in zip(xs,ys),(b*x+a+b);}"));
+    const auto &body = *declaration(project, "m::f").body;
+    const auto &binding = body.scopedBindings.back();
+    require(binding.captures.size() == 2, "unexpected capture count");
+    const auto &first = body.operations[0], &second = body.operations[1];
+    require(std::get<Projection>(first.action).input.index == 3 &&
+                std::get<Projection>(second.action).input.index == 2,
+            "capture reads lost first-use order");
+    const auto &domain = body.domainBindings.back();
+    require(domain.children.size() == 2, "ignored row removed from strict zip");
+    success(checkScopedElaboration(project));
+  });
+  cases.run("collections evaluate once in written order before captures", [] {
     auto project = take(check(R"(
-      operator prefix(75) ⊖=square;
-      fn f(xs:Vector<Fr>)->Fr {
-        return reduce sum[x in xs]{
-          operator ⊗=difference;
-          operator infixl(70) ⊗=difference;
-          operator prefix(75) ⊖=identity;
-          ⊖x ⊗ x
-        };
-      }
-      math fn identity(x:Fr)->Fr{return x;}
-    )"));
-    success(checkReductionElaboration(project));
-    for (const auto &decl : project.declarations())
-      if (decl.generatedReduction) {
-        const auto &first = decl.body->operations.front();
-        require(first.binding &&
-                    first.binding->target.declaration.index ==
-                        declaration(project, "m::identity").id.index,
-                "prefix was resolved outside its authored scope");
-      }
+reduction ∑=sum;
+fn first(xs:Vector<Fr>)->Vector<Fr>{return xs;}
+fn second(xs:Vector<Fr>)->Vector<Fr>{return xs;}
+fn f(xs:Vector<Fr>,a:Fr)->Fr{return ∑ ((x,y),z) in zip(zip(second(xs),first(xs)),second(xs)),(x*y*z+a);}
+)"));
+    const auto &body = *declaration(project, "m::f").body;
+    for (unsigned i = 0; i != 3; ++i)
+      require(body.operations[i].binding &&
+                  body.operations[i].binding->target.declaration.index ==
+                      declaration(project, i == 1 ? "m::first" : "m::second")
+                          .id.index,
+              "collection evaluation changed");
+    require(std::holds_alternative<Projection>(body.operations[3].action),
+            "capture preceded collections");
+    success(checkScopedElaboration(project));
   });
   cases.run(
-      "collections are evaluated once in written order before captures", [] {
+      "local notation in a binder retains its authored lexical scope", [] {
         auto project = take(check(R"(
-      fn first(xs:Vector<Fr>)->Vector<Fr>{return xs;}
-      fn second(xs:Vector<Fr>)->Vector<Fr>{return xs;}
-      fn f(xs:Vector<Fr>,a:Fr)->Fr {
-        return reduce sum[(x,y,z) in zip(second(xs),first(xs),second(xs))]{x*y*z+a};
-      }
-    )"));
-        const auto &body = *declaration(project, "m::f").body;
-        require(body.operations.size() == 6,
-                "collection was evaluated more than once");
-        const std::vector<std::string> targets = {"m::second", "m::first",
-                                                  "m::second"};
-        for (unsigned i = 0; i < targets.size(); ++i)
-          require(body.operations[i].binding &&
-                      body.operations[i].binding->target.declaration.index ==
-                          declaration(project, targets[i]).id.index,
-                  "collection evaluation order changed");
-        require(std::holds_alternative<Projection>(body.operations[3].action),
-                "capture read preceded collections");
-        success(checkReductionElaboration(project));
+reduction ∑=sum;operator prefix(75) ⊖=square;
+fn f(xs:Vector<Fr>)->Fr{return ∑ x in xs,{
+ operator ⊗=difference;operator infixl(70) ⊗=difference;
+ operator prefix(75) ⊖=identity; ⊖x ⊗ x
+};}
+math fn identity(x:Fr)->Fr{return x;}
+)"));
+        const auto &body = *declaration(project, "m::f")
+                                .body->scopedBindings.back()
+                                .computation->body;
+        auto prefix = llvm::find_if(body.operations, [](const Operation &op) {
+          return op.binding && op.binding->symbol == "⊖";
+        });
+        require(prefix != body.operations.end() &&
+                    prefix->binding->target.declaration.index ==
+                        declaration(project, "m::identity").id.index,
+                "prefix resolved outside its authored scope");
+        success(checkScopedElaboration(project));
       });
-  cases.run("abstract same-field math dispatch is outside the ring profile",
-            [] {
-              refuses(check(R"(
-      interface Step<F:Field>{math fn apply(x:F)->F;}
-      fn f<C:Step<Fr>>(xs:Vector<Fr>)->Fr{return reduce sum[x in xs]{C::apply(x)};}
-    )"),
-                      "source.reduction-body");
-            });
-  cases.run("component members require a separate self-capture contract", [] {
-    refuses(check(R"(
-      interface Step<F:Field>{fn apply(xs:Vector<F>)->F;}
-      component Impl<F:Field>:Step<F>{
-        fn apply(xs:Vector<F>)->F{return reduce sum[x in xs]{x};}
-      }
-    )"),
-            "source.reduction-body");
-  });
-  cases.run("reducer signatures must preserve the vector field exactly", [] {
-    refuses(check(R"(
-      fn wrong(xs:Vector<Fr>)->Ext{stop "wrong field";}
-      reduction ∑=wrong;
-    )"),
-            "source.reduction-target");
-  });
-  cases.run("generated helpers are not source-resolvable members", [] {
-    refuses(check(R"(
-      fn f(xs:Vector<Fr>)->Fr{return reduce sum[x in xs]{x};}
-      fn g(x:Fr)->Fr{return f::reduction(x);}
-    )"),
-            "source.name");
-  });
-  for (bool helper : {false, true})
-    cases.run(helper ? "deferred helper notation charges its extra edge"
-                     : "deferred inline notation uses Math depth",
-              [&] {
-                auto source =
-                    std::string(helper ? "operator prefix(75) ⊖=square;" : "") +
-                    "fn f(xs:Vector<Fr>)->Fr{return reduce sum[x in xs]{" +
-                    (helper ? "⊖x" : "x+x") +
-                    "};}"
-                    "protocol Demo "
-                    "roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return(r=f(xs));}run "
-                    "Run=Demo;";
-                Limits limits;
-                limits.callDepth = helper ? 4 : 3;
-                auto checked = take(check(source, limits));
-                take(closeEntry(checked, "m::Run", limits));
-                --limits.callDepth;
-                refuses(check(source, limits), "source.limit");
-                refuses(closeEntry(checked, "m::Run", limits), "source.limit");
-              });
-  cases.run("many pending helpers retain stable distinct site identities", [] {
-    std::string source = "fn f(xs:Vector<Fr>)->Fr{";
-    for (unsigned i = 0; i < 64; ++i)
-      source += "let r" + std::to_string(i) + "=reduce sum[x in xs]{x+1};";
-    source += "return r63;}";
-    auto first = take(check(source));
-    auto second = take(check(source));
-    std::set<std::string> symbols;
-    unsigned ordinal = 0;
-    for (const auto &decl : first.declarations())
-      if (decl.generatedReduction) {
-        require(decl.generatedReduction->ordinal == ++ordinal,
-                "site preorder changed");
-        require(symbols.insert(decl.symbol).second,
-                "generated identity collided");
-        require(decl.symbol == second.declarations()[decl.id.index].symbol,
-                "generated identity is unstable");
-      }
-    require(ordinal == 64, "pending helper was lost");
-    success(checkReductionElaboration(first));
-    auto report = take(inspectNotations(first, {true, false}));
-    require(report.find("not-emitted") == std::string::npos,
-            "pending helper lost notation evidence");
-  });
-  cases.run("closure independently rejects altered extraction evidence", [] {
+  cases.run("budgets include ordinary scoped binder work", [] {
     auto project = take(check(program));
-    auto &function = const_cast<Declaration &>(declaration(project, "m::f"));
-    auto changed = std::make_shared<Body>(*function.body);
-    function.body = changed;
-    for (auto &op : changed->operations)
-      if (op.reduction) {
-        std::get<BulkApplication>(op.action).mapped[1] = false;
-        break;
-      }
-    refuses(closeEntry(project, "m::Run"), "source.reduction-witness");
+    Limits limits;
+    limits.declarations = project.checkedDeclarations() - 1;
+    refuses(check(program, limits), "source.limit");
+    limits = {};
+    limits.operations = project.checkedOperations() - 1;
+    refuses(check(program, limits), "source.limit");
+    limits = {};
+    limits.work = project.checkedWork() - 1;
+    refuses(check(program, limits), "source.limit");
   });
-
-  cases.run("helpers inherit requirements completed after the binder", [] {
-    auto project = take(check(R"(
-      fn root<F:Field>(n:index)->F where zkc::algebra::TwoAdicField(F) {
-        return kernel<F>("poly.domain_root",n);
-      }
-      fn f<F:Field>(xs:Vector<F>,n:index)->F{
-        let r=reduce sum[x in xs]{x*x};
-        return r+root<F>(n);
-      }
-      protocol Demo roles(P)(xs:Vector<Fr>@P,n:index@P)->(r:Fr@P){return(r=f(xs,n));}
-      run Run=Demo;
-    )"));
-    const auto &owner = declaration(project, "m::f");
-    require(!owner.capabilityBounds.empty(), "expected an inferred capability");
-    for (const auto &decl : project.declarations())
-      if (decl.generatedReduction) {
-        require(decl.capabilityBounds.size() == owner.capabilityBounds.size(),
-                "helper inherited an incomplete contract");
-        for (unsigned i = 0; i < owner.capabilityBounds.size(); ++i)
-          require(decl.capabilityBounds[i].predicate ==
-                          owner.capabilityBounds[i].predicate &&
-                      decl.capabilityBounds[i].arguments ==
-                          owner.capabilityBounds[i].arguments,
-                  "helper requirement differs from completed owner");
-      }
-    take(closeEntry(project, "m::Run"));
+  cases.run("many binder sites have stable distinct closure identities", [] {
+    std::string source = "reduction ∑=sum;fn f(xs:Vector<Fr>)->Fr{";
+    for (unsigned i = 0; i != 64; ++i)
+      source += "let r" + std::to_string(i) + "=∑ x in xs,(x+1);";
+    source += "return r63;}protocol Demo "
+              "roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return f(xs);}run Run=Demo;";
+    auto first = take(check(source)), second = take(check(source));
+    const auto &bindings = declaration(first, "m::f").body->scopedBindings;
+    require(bindings.size() == 64, "binder site lost");
+    std::set<unsigned> expressions;
+    for (const auto &binding : bindings)
+      require(expressions.insert(binding.computation->expression).second,
+              "binder identity collided");
+    auto closed = take(closeEntry(first, "m::Run")),
+         other = take(closeEntry(second, "m::Run"));
+    require(closed.declarations().size() == other.declarations().size(),
+            "unstable specialization count");
+    for (unsigned i = 0; i != closed.declarations().size(); ++i)
+      require(closed.declarations()[i].symbol == other.declarations()[i].symbol,
+              "unstable closed identity");
+    auto report = take(inspectNotations(first, {true, false}));
+    require(report == take(inspectNotations(first, {true, false})) &&
+                report.find("not-emitted") == std::string::npos,
+            "inspection lost a scoped occurrence");
   });
-  cases.run("mutable capture assigned by a collection remains inadmissible",
-            [] {
-              refuses(check(R"(
-      fn f(xs:Vector<Fr>,a:Fr)->Fr{
-        let mut b=a;
-        return reduce sum[x in {b=b+1;xs}]{x+b};
+  for (const auto &mutation : {"capture", "capture-order", "body-operand",
+                               "binding-target", "missing-binding"})
+    cases.run(Twine("independent binder witness rejects ") + mutation, [&] {
+      auto project = take(check(program));
+      auto &body = const_cast<Body &>(*declaration(project, "m::f").body);
+      auto &binding = body.scopedBindings.front();
+      StringRef change = mutation;
+      if (change == "capture")
+        binding.captures[0] = binding.captures[1];
+      else if (change == "capture-order")
+        std::swap(binding.captures[0], binding.captures[1]);
+      else if (change == "body-operand") {
+        auto &nested = const_cast<Body &>(*binding.computation->body);
+        bool changed = false;
+        for (auto &op : nested.operations)
+          if (auto *call = std::get_if<LocalPrimitive>(&op.action)) {
+            if (call->operands.size() == 2) {
+              call->operands[0] = call->operands[1];
+              changed = true;
+              break;
+            }
+          }
+        require(changed, "missing callback operand mutation target");
+      } else {
+        auto found = llvm::find_if(body.operations, [](const Operation &op) {
+          return op.binding && op.binding->scopedSource;
+        });
+        require(found != body.operations.end(), "missing scoped call");
+        if (change == "binding-target")
+          found->binding->target.declaration =
+              declaration(project, "m::custom").id;
+        else
+          found->binding.reset();
       }
-    )"),
-                      "source.reduction-capture");
-            });
+      auto error = checkScopedElaboration(project);
+      require(bool(error), "corrupt binder evidence accepted");
+      consumeError(std::move(error));
+    });
   return cases.result();
 }

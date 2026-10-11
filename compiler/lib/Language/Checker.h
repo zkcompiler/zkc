@@ -1,7 +1,6 @@
 #ifndef ZKC_LANGUAGE_CHECKER_H
 #define ZKC_LANGUAGE_CHECKER_H
 #include "Internal.h"
-#include "Reductions.h"
 #include "Semantics.h"
 namespace zkc::language::detail {
 class Checker {
@@ -34,7 +33,8 @@ public:
   std::optional<CallableReference> callable(const Declaration &,
                                             llvm::StringRef, Span);
   std::optional<OperatorBinding> operatorBinding(const Declaration &,
-                                                 const SyntaxOperator &);
+                                                 const SyntaxOperator &,
+                                                 bool filtered = false);
   std::optional<std::vector<OperatorBinding>>
   operatorCandidates(const Declaration &, const SyntaxDeclaration &, uint32_t);
   std::optional<std::vector<OperatorBinding>>
@@ -58,19 +58,11 @@ public:
   bool configureEntry(Declaration &, const Declaration &,
                       const SyntaxProofEntry &);
   bool retainNotations();
-  struct PendingReduction {
-    Declaration declaration;
-    unsigned height;
-  };
-  std::vector<PendingReduction> pendingReductions;
-  std::vector<std::shared_ptr<ReductionSource>> reductionSources;
   std::vector<std::shared_ptr<ScopedSource>> scopedSources;
   std::vector<std::shared_ptr<ScopedCallSource>> scopedCalls;
   std::vector<std::shared_ptr<ScopedInvocationSource>> scopedInvocations;
   bool retainScopedSources();
   std::shared_ptr<const SyntaxDeclaration> retainSyntax(DeclarationId);
-  bool finalizeReductions();
-  bool retainReductionSources();
 
 private:
   std::optional<Type> elaborateType(const Declaration &, const SyntaxType &,

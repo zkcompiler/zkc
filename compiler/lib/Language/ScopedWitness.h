@@ -31,6 +31,7 @@ struct ScopedCallSource {
   std::shared_ptr<const SyntaxDeclaration> syntax;
   std::map<BindingId, unsigned> scoped, domains;
   std::map<uint32_t, DomainCallSource> domainCalls;
+  std::vector<OperatorBinding> notationFamily = {};
 };
 bool checkScopedValues(Semantics &, const CheckedStorage &,
                        const ScopedSource &, const ScopedBinding &);

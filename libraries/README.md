@@ -168,14 +168,12 @@ defines ambiguity and local replacement rules. The
 [notation guide](../docs/language/notation.md) shows weighted vector expressions,
 delimiter declarations and Unicode input. Symbols preserve ordinary callable
 modes and effects; they supply no additional algebra, optimizer or security claim.
-The library owns `pub reduction ∑ = sum;` and `pub reduction ∏ = product;`.
-Write `∑ [x in xs] { x * x }` or the named
-`reduce vec::sum [x in xs] { x * x }`; selective imports use `reduction ∑`
-and `reduction ∏`. Multiple rows require explicit strict zip, including guards
-for ignored rows. `sum` returns zero on empty vectors and `product` returns one;
-`product` reduces one vector to a scalar, unlike pairwise `hadamard`.
-The [finite reduction guide](../docs/language/notation.md#reduce-finite-vectors)
-explains scalar snapshots and the restricted field-ring body.
+The vector module reexports `finite`'s paired sum/product notation. Write
+`∑ x in xs, x * x` or `finite::sum(xs, fun x => x * x)`. Selective imports use
+`reduction ∑` and `reduction ∏`; filters use `with`. Strict zip retains checks
+for ignored rows. Named `vec::sum(xs)` and `vec::product(xs)` still reduce an
+already constructed vector. The [finite reduction guide](../docs/language/notation.md#reduce-finite-domains)
+explains general domains, scoped bodies, precedence and Local/Math selection.
 
 These functions use `primitive` bodies when their ports determine the installed
 scheme. Algorithms and operations with explicit attributes retain ordinary bodies.

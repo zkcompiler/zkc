@@ -129,7 +129,9 @@ def test_finite_library_project(toolchain, journal, directory):
         'dot': '47', 'square_sum': '13', 'selected_sum': '5', 'matrix_total': '9'}
 
 
-def test_named_field_finite_calls_keep_bulk_execution(toolchain, journal, directory):
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('symbolic', [False, True])
+def test_field_finite_calls_keep_bulk_execution(toolchain, journal, directory, flags, symbolic):
     source = '''module sample;
 use zkc::vector::{Vector};
 use zkc::finite as finite;
@@ -146,13 +148,19 @@ fn work(count:index,a:F,b:F,scale:F,shift:F)->(F,F,F){
 }
 protocol Run roles(P)(count:index@P,a:F@P,b:F@P,scale:F@P,shift:F@P)->(result:(F,F,F)@P){return work(count,a,b,scale,shift);}run Demo=Run;
 '''
-    entry = Entry(toolchain, journal, directory, source, MODULES)
-    # Each vector fits the 65536-element container limit. Three scalar
-    # traversals exceed the shared 100000-iteration limit. No capacity override.
-    count = 2**16
+    if symbolic:
+        source = source.replace('finite::sum(domains::zip(xs,ys),fun (x,y)=>x*y)',
+                                '∑ (x,y) in domains::zip(xs,ys),x*y')
+        source = source.replace('finite::sum(xs,fun x=>x*x)', '∑ x in xs,x*x')
+    entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
+    # Default preparation recognizes contractions at the container ceiling.
+    # Disabling simplification intentionally selects finite loop fallback;
+    # exercise it at a smaller size under the same unmodified capacity.
+    count = 1024 if flags else 2**16
     assert entry.run('large', {'count': str(count), 'a': '3', 'b': '7', 'scale': '2', 'shift': '5'})['result'] == [str(21*count), str(9*count), str(11*count)]
     report = json.loads(journal.last.stdout)
-    assert report['execution']['roles'][0]['usage']['iterations'] == 0
+    iterations = report['execution']['roles'][0]['usage']['iterations']
+    assert iterations > 0 if flags else iterations == 0
 
 
 def test_named_group_sum_keeps_msm_execution(toolchain, journal, directory):
@@ -262,3 +270,47 @@ protocol Run roles(P)(xs:Vector<G::Scalar>@P,enabled:bool@P)->(result:(bool,bool
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     for label, values, enabled in [('values', ['2', '3'], True), ('none-kept', ['2', '3'], False), ('empty', [], True)]:
         assert entry.run(label, {'xs': values, 'enabled': enabled})['result'] == [True, True]
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_symbolic_finite_calls_filters_precedence_and_nesting(toolchain, journal, directory, flags):
+    source = '''module sample;
+use zkc::vector::{Vector};
+use zkc::finite::{reduction ∑,reduction ∏};
+use zkc::finite_domain::{zip,range};
+domain F=field("koala-bear");
+fn inverted(x:F)->F=primitive("field.inverse");
+protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P,enabled:bool@P,n:index@P)->(result:(F,F,F,F,F,F,F,F)@P){
+ let dot@P=∑ (x,y) ∈ zip(xs,ys), x*y;
+ let square@P=∑ x in xs, x*x;
+ let shifted@P=∏ x ∈ xs, (x+1);
+ let filtered@P=∑ x ∈ xs with enabled, inverted(x);
+ let product@P=∑ (x ∈ xs) (y ∈ ys), x*y;
+ let nested@P=∑ x ∈ xs, (∑ y ∈ ys, x*y);
+ let triangular:F@P=∑ i ∈ range(0,n), (∑ j ∈ range(0,i), 1);
+ let precedence@P=∑ x ∈ xs, x + 1;
+ return(dot,square,shifted,filtered,product,nested,triangular,precedence);
+}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
+    assert entry.run('values', {'xs': ['1', '1'], 'ys': ['7', '11'], 'enabled': True, 'n': 4})['result'] == ['18', '2', '4', '2', '36', '36', '6', '3']
+    assert entry.run('skip-failing-body', {'xs': ['0', '1'], 'ys': ['7', '11'], 'enabled': False, 'n': 0})['result'] == ['11', '1', '2', '0', '18', '18', '0', '2']
+    assert entry.run('empty', {'xs': [], 'ys': [], 'enabled': True, 'n': 0})['result'] == ['0', '0', '1', '0', '0', '0', '0', '1']
+    entry.run('strict-zip', {'xs': [], 'ys': ['1'], 'enabled': False, 'n': 0}, refuses='entry-run-incomplete')
+
+
+@pytest.mark.parametrize('explicit', [False, True])
+def test_local_and_math_notation_require_an_explicit_choice(toolchain, journal, directory, explicit):
+    source = directory / 'choice.zkc'
+    source.write_text('''module sample;
+use zkc::vector as vector;
+use zkc::finite_math as total;
+domain F=field("koala-bear");
+math fn work(xs:vector::Vector<F>)->F {
+ BINDING
+ return ∑ x in xs with true,x*x;
+}
+'''.replace('BINDING', 'reduction ∑=total::sum,total::sum_where;' if explicit else ''))
+    journal.run([toolchain.compiler, 'language-check', '--source-format=zkc',
+                 f'--module=sample={source}', *MODULES],
+                refuses=None if explicit else 'source.notation-ambiguous')

@@ -10,7 +10,6 @@ struct CaptureStorage {
   std::vector<AssetBuffer> assets;
   std::string identity, format;
 };
-struct ReductionSource;
 struct ScopedSource;
 struct ScopedCallSource;
 struct ScopedInvocationSource;
@@ -26,7 +25,6 @@ struct CheckedStorage {
   uint64_t work = 0, declarationCount = 0, operationCount = 0;
   uint64_t notationDescriptors = 0, notationHoles = 0;
   NotationRecords notations;
-  std::vector<std::shared_ptr<const ReductionSource>> reductions;
   std::vector<std::shared_ptr<const ScopedSource>> scopedSources;
   std::vector<std::shared_ptr<const ScopedCallSource>> scopedCalls;
   std::vector<std::shared_ptr<const ScopedInvocationSource>> scopedInvocations;

@@ -38,7 +38,6 @@ class ExpressionInference {
   std::vector<uint32_t> expressionOrder;
   std::vector<Call> calls;
   ExpressionTypes output;
-  std::optional<uint32_t> reductionSite;
   std::optional<Body::Mode> scopedMode;
   unsigned scopedDepth = 0;
   struct ScopedEquations {
@@ -117,6 +116,19 @@ class ExpressionInference {
         found != domainExpressions.end())
       return found->second;
     Variable result = types.fresh(expr.span);
+    if (expr.kind == K::DomainProduct) {
+      if (expr.children.size() != 2) {
+        fail("source.finite-domain", "domain product requires two operands",
+             expr.span);
+        return result;
+      }
+      auto left = domainArgument(expr.children[0], depth + 1);
+      auto right = domainArgument(expr.children[1], depth + 1);
+      types.equal(result, types.shape(Type(T::Tuple), {left, right}, expr.span),
+                  expr.span);
+      domainExpressions.emplace(id, result);
+      return result;
+    }
     bool collection = false;
     if (expr.kind == K::Name && expr.binding) {
       if (auto found = domains.find(*expr.binding); found != domains.end())
@@ -137,8 +149,8 @@ class ExpressionInference {
         collection = true;
       } else {
         output.callees.emplace(id, *target);
-        contexts.emplace(id, CallContext{scopedMode.value_or(owner.body.mode),
-                                         reductionSite, scopedDepth});
+        contexts.emplace(
+            id, CallContext{scopedMode.value_or(owner.body.mode), scopedDepth});
         auto outputs = application(id, callee, target->component, depth);
         if (outputs.size() == 1)
           types.equal(result, outputs.front(), expr.span);
@@ -175,7 +187,6 @@ class ExpressionInference {
   }
   struct CallContext {
     Body::Mode mode;
-    std::optional<uint32_t> reduction;
     unsigned scopedDepth;
   };
   std::map<uint32_t, CallContext> contexts;
@@ -189,15 +200,12 @@ class ExpressionInference {
         !mapped && primitive && primitiveCallIsInline(context.mode, *primitive)
             ? 0
             : 1;
-    unsigned extra = context.scopedDepth + (context.reduction ? 1 : 0);
+    unsigned extra = context.scopedDepth;
     if (!checker.body(callee.id, owner.callDepth + extra + edge))
       return false;
     unsigned height = checker.bodyHeights[callee.id.index] + edge;
     checker.bodyHeights[decl.id.index] =
         std::max(checker.bodyHeights[decl.id.index], height + extra);
-    if (context.reduction)
-      output.reductionHeights[*context.reduction] =
-          std::max(output.reductionHeights[*context.reduction], height);
     return true;
   }
 
@@ -365,7 +373,8 @@ class ExpressionInference {
   std::vector<Variable> application(uint32_t id, const Declaration &callee,
                                     std::optional<Type> component,
                                     unsigned depth,
-                                    const std::vector<bool> &rows = {}) {
+                                    const std::vector<bool> &rows = {},
+                                    ArrayRef<std::optional<Type>> bound = {}) {
     const auto &expr = syntax.expressions[id];
     if (!accountCall(id, callee, expr.kind == K::Map))
       return {};
@@ -374,6 +383,10 @@ class ExpressionInference {
     if (checker.types.diagnostic)
       return {};
     const auto &parameters = constraints.parameters;
+    for (unsigned i = 0; i < bound.size(); ++i)
+      if (bound[i])
+        types.equal(parameters.at(callee.parameters[i].atom),
+                    known(*bound[i], expr.span), expr.span);
     unsigned inherited = 0;
     if (component && callee.parent)
       inherited =
@@ -719,10 +732,8 @@ class ExpressionInference {
     if (auto it = expressions.find(id); it != expressions.end())
       return it->second;
     const auto &expr = syntax.expressions[id];
-    contexts.emplace(id, CallContext{reductionSite
-                                         ? Body::Mode::Math
-                                         : scopedMode.value_or(owner.body.mode),
-                                     reductionSite, scopedDepth});
+    contexts.emplace(
+        id, CallContext{scopedMode.value_or(owner.body.mode), scopedDepth});
     Result result{types.fresh(expr.span)};
     if (checker.types.diagnostic ||
         depth > checker.work.limits.expressionDepth ||
@@ -748,6 +759,10 @@ class ExpressionInference {
       constrain(result.type, Type{}, expr.span);
       constrain(child(0), Type{}, expr.span);
       constrain(child(1), Type{}, expr.span);
+      break;
+    case K::DomainProduct:
+      fail("source.finite-domain",
+           "domain products require a scoped domain argument", expr.span);
       break;
     case K::Lambda:
       fail("source.scoped",
@@ -792,6 +807,39 @@ class ExpressionInference {
       auto visible = checker.operatorCandidates(decl, syntax, id);
       if (!visible)
         break;
+      if (expr.notation->position == NotationDescriptor::Position::Reduction) {
+        if (visible->size() != 1) {
+          fail("source.notation-ambiguous",
+               "finite binder requires one visible reduction binding; select "
+               "an import or rebind it locally",
+               expr.span);
+          break;
+        }
+        const auto &binding = visible->front();
+        if (expr.filteredReduction && !binding.filtered) {
+          fail("source.reduction-target",
+               "this reduction binding has no filtered companion", expr.span);
+          break;
+        }
+        auto target =
+            expr.filteredReduction ? binding.filtered->target : binding.target;
+        const auto &arguments = expr.filteredReduction
+                                    ? binding.filtered->arguments
+                                    : binding.arguments;
+        output.operators.emplace(
+            id, ExpressionTypes::Operator{
+                    {operatorBindingKey(binding, checker.output.declarations)},
+                    binding.span});
+        output.callees.emplace(id, target);
+        const auto &callee =
+            checker.output.declarations[target.declaration.index];
+        types.equal(result.type,
+                    packed(application(id, callee, target.component, depth, {},
+                                       arguments),
+                           expr.span),
+                    expr.span);
+        break;
+      }
       std::vector<Variable> inputs;
       for (unsigned i = 0; i < expr.children.size(); ++i)
         inputs.push_back(child(i));
@@ -806,38 +854,6 @@ class ExpressionInference {
       output.operators.emplace(id, std::move(witness));
       operators->add(id, expr.span, std::move(inputs), result.type,
                      std::move(candidates));
-      break;
-    }
-    case K::ReductionMap: {
-      if (reductionSite ||
-          scopedMode.value_or(owner.body.mode) != Body::Mode::Local) {
-        fail(
-            "source.mode",
-            "finite reductions require local code outside a scalar binder body",
-            expr.span);
-        break;
-      }
-      if (owner.callDepth + 1 > checker.work.limits.callDepth) {
-        fail("source.limit", "generated reduction helper exceeds call depth",
-             expr.span);
-        break;
-      }
-      auto field = types.fresh(expr.span);
-      types.requireKinds(field, {T::Field}, expr.span);
-      auto rows = vectorOf(field, expr.span);
-      types.equal(result.type, rows, expr.span);
-      for (auto collection : expr.children)
-        types.equal(expression(collection, depth + 1).type, rows, expr.span);
-      for (const auto &row : expr.index.children)
-        if (row.binding)
-          bindings.emplace(*row.binding, field);
-      reductionSite = id;
-      output.reductionHeights[id] = 1;
-      checker.bodyHeights[decl.id.index] =
-          std::max(checker.bodyHeights[decl.id.index], 2u);
-      auto scalar = region(expr.regions.front(), depth + 1);
-      types.equal(field, scalar.type, expr.span);
-      reductionSite.reset();
       break;
     }
     case K::Block:
@@ -951,13 +967,6 @@ class ExpressionInference {
                   expr.span);
       break;
     }
-    }
-    if (expr.reductionCall && !checker.types.diagnostic) {
-      auto field = types.fresh(expr.span);
-      types.requireKinds(field, {T::Field}, expr.span);
-      types.equal(result.type, field, expr.span);
-      types.equal(expressions.at(expr.children.front()).type,
-                  vectorOf(field, expr.span), expr.span);
     }
     expressions.emplace(id, result);
     expressionOrder.push_back(id);

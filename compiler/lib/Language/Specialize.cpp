@@ -322,7 +322,6 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           helper.domainDefinition.reset();
           helper.finiteDefinition.reset();
           helper.dataPreconditions.clear();
-          helper.generatedReduction.reset();
           helper.body = computation.body;
           helper.effectAllowance = computation.signature.allowance;
           for (unsigned i = 0; i < helper.body->inputs; ++i)
@@ -821,14 +820,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       if (!types.checkArguments(source, args, source.span))
         return {};
       std::string key;
-      if (source.generatedReduction) {
-        detail::frame(key, "generated-reduction");
-        detail::frame(key,
-                      declarations[source.generatedReduction->enclosing.index]
-                          .qualifiedName);
-        detail::frame(key, std::to_string(source.generatedReduction->ordinal));
-      } else
-        detail::frame(key, source.qualifiedName);
+      detail::frame(key, source.qualifiedName);
       for (auto &arg : args) {
         if (types.symbolic(arg)) {
           types.fail("source.generic",

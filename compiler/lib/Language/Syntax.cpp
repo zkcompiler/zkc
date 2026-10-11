@@ -228,7 +228,6 @@ private:
   std::optional<Diagnostic> diagnostic;
   bool headersOnly = true;
   std::shared_ptr<const NotationEnvironment> notationEnvironment;
-  unsigned reductionDepth = 0;
   std::optional<uint32_t> currentScope;
   bool finish(SyntaxDeclaration &declaration) {
     // Inline relation specifications precede their protocol body in the source.
@@ -301,13 +300,14 @@ private:
     result.isPublic = take("pub");
     auto descriptor = std::make_shared<NotationDescriptor>();
     if (take("reduction")) {
-      if (!at("∑") && !at("∏")) {
-        fail("source.reduction", "reduction symbols are limited to ∑ and ∏");
+      if (!operatorSymbol(text()) || at("∈") ||
+          static_cast<unsigned char>(text().front()) < 128) {
+        fail("source.reduction", "expected an admitted reduction symbol");
         return {};
       }
       descriptor->position = Position::Reduction;
-      descriptor->precedence = 100;
-      descriptor->arity = 1;
+      descriptor->precedence = 67;
+      descriptor->arity = 2;
       descriptor->symbol = text().str();
       result.explicitNotation = true;
       advance();
@@ -379,9 +379,10 @@ private:
         if (!expect(")"))
           return {};
       }
-      if (!operatorSymbol(text()) || at("∑") || at("∏")) {
-        fail("source.notation", "expected an admitted operator symbol; sums "
-                                "and products are reserved for binders");
+      if (!operatorSymbol(text()) || at("∑") || at("∏") || at("∈")) {
+        fail("source.notation",
+             "expected an admitted operator symbol; sums "
+             "and products are reserved for binders; ∈ is membership");
         return {};
       }
       descriptor->symbol = text().str();
@@ -405,6 +406,16 @@ private:
     if (!path(result.target.name, false, true) ||
         !staticArguments(result.target.arguments, result.target.labels, 1))
       return {};
+    result.target.span.end = previousEnd;
+    if (descriptor->position == Position::Reduction && take(",")) {
+      SyntaxType companion;
+      companion.span = current().span;
+      if (!path(companion.name, false, true) ||
+          !staticArguments(companion.arguments, companion.labels, 1))
+        return {};
+      companion.span.end = previousEnd;
+      result.filtered = std::move(companion);
+    }
     if (descriptor->position == Position::Delimited) {
       if (!expect("("))
         return {};
@@ -422,7 +433,6 @@ private:
     }
     if (!expect(";"))
       return {};
-    result.target.span.end = previousEnd;
     result.span.end = previousEnd;
     if (!accept(work.count(work.declarations, work.limits.declarations,
                            "notation declaration count", result.span)))
@@ -1501,81 +1511,102 @@ private:
         value.regions.push_back(decl.bodies.size());
         decl.bodies.push_back(std::move(region));
       }
-    } else if (reductionNotation ||
-               (at("reduce") && (isIdentifier(look(1)) || look(1) == "::"))) {
-      if (reductionDepth) {
-        fail("source.reduction", "nested reductions are not admitted");
-        return {};
-      }
-      ++reductionDepth;
-      auto exitReduction = scope_exit([&] { --reductionDepth; });
-      value.kind = reductionNotation ? Expression::Kind::NotationCall
-                                     : Expression::Kind::Call;
+    } else if (reductionNotation) {
+      value.kind = Expression::Kind::NotationCall;
       value.notation = reductionNotation;
-      value.reductionCall = true;
       advance();
-      if (!reductionNotation &&
-          (!path(value.text, false, true) ||
-           !staticArguments(value.arguments, value.staticLabels, depth + 1)))
-        return {};
-      Expression mapping;
-      mapping.kind = Expression::Kind::ReductionMap;
-      mapping.span = current().span;
-      mapping.reductionOrdinal = 1;
-      if (!accept(work.charge(decl.expressions.size() + 1, mapping.span)))
-        return {};
-      for (const auto &prior : decl.expressions)
-        if (prior.kind == Expression::Kind::ReductionMap)
-          ++mapping.reductionOrdinal;
-      if (!expect("["))
-        return {};
-      bool zipped = take("(");
-      mapping.index.kind = Pattern::Kind::Tuple;
-      mapping.index.span = current().span;
+      // Parenthesized independent binders form an eager ordered product.
+      // A tuple pattern followed by membership remains one binder.
+      auto groupedBinder = [&] {
+        if (!at("("))
+          return false;
+        unsigned nesting = 0;
+        for (unsigned i = 0; cursor + i < tokens.size(); ++i) {
+          if (!accept(work.charge(1, current().span)))
+            return false;
+          auto token = look(i);
+          if (token == "(")
+            ++nesting;
+          else if (token == ")" && !--nesting)
+            return false;
+          else if (nesting == 1 && (token == "in" || token == "∈"))
+            return true;
+        }
+        return false;
+      };
+      bool multiple = groupedBinder();
+      Pattern binding;
+      std::optional<uint32_t> domain;
       do {
-        Pattern row;
-        row.span = current().span;
-        if (!name(row.name))
+        if (multiple && !expect("("))
           return {};
-        row.kind =
-            row.name == "_" ? Pattern::Kind::Ignore : Pattern::Kind::Name;
-        row.span.end = previousEnd;
-        mapping.index.children.push_back(std::move(row));
-      } while (zipped && take(","));
-      if ((zipped && !expect(")")) || !expect("in"))
-        return {};
-      if (zipped && (!expect("zip") || !expect("(")))
-        return {};
-      if (!zipped && at("zip") && look(1) == "(") {
-        fail("source.reduction",
-             "zip requires a tuple of at least two binders");
-        return {};
-      }
-      do {
-        auto collection = expression(decl, depth + 1);
-        if (!collection)
+        auto nextPattern = pattern(depth + 1);
+        if (!nextPattern)
           return {};
-        mapping.children.push_back(*collection);
-      } while (zipped && take(","));
-      if (zipped && !expect(")"))
-        return {};
-      if (mapping.children.size() != mapping.index.children.size() ||
-          (zipped && mapping.children.size() < 2)) {
-        fail("source.reduction",
-             "zip and binder arities must match and be at least two");
-        return {};
+        if (!take("in") && !take("∈")) {
+          fail("source.reduction", "expected in or ∈ after the binder pattern");
+          return {};
+        }
+        auto nextDomain = expression(decl, depth + 1);
+        if (!nextDomain || (multiple && !expect(")")))
+          return {};
+        if (!domain) {
+          domain = *nextDomain;
+          binding = std::move(*nextPattern);
+        } else {
+          Expression product;
+          product.kind = Expression::Kind::DomainProduct;
+          product.span = {span.module, decl.expressions[*domain].span.begin,
+                          previousEnd};
+          product.children = {*domain, *nextDomain};
+          domain = appendExpression(decl, std::move(product));
+          if (!domain)
+            return {};
+          Pattern pair;
+          pair.kind = Pattern::Kind::Tuple;
+          pair.span = {span.module, binding.span.begin, nextPattern->span.end};
+          pair.children.push_back(std::move(binding));
+          pair.children.push_back(std::move(*nextPattern));
+          binding = std::move(pair);
+        }
+      } while (multiple && at("("));
+      value.children.push_back(*domain);
+      auto scopedBody = [&](unsigned precedence) -> std::optional<uint32_t> {
+        SyntaxBody region;
+        region.region = true;
+        region.span = current().span;
+        region.notationEnvironment = notationEnvironment;
+        auto result = expression(decl, depth + 1, precedence);
+        if (!result)
+          return {};
+        region.results.emplace_back("", *result);
+        region.span.end = previousEnd;
+        Expression lambda;
+        lambda.kind = Expression::Kind::Lambda;
+        lambda.span = {span.module, binding.span.begin, previousEnd};
+        lambda.payloads = {{binding}};
+        lambda.regions.push_back(decl.bodies.size());
+        decl.bodies.push_back(std::move(region));
+        return appendExpression(decl, std::move(lambda));
+      };
+      if (take("with")) {
+        value.filteredReduction = true;
+        auto predicate = scopedBody(0);
+        if (!predicate)
+          return {};
+        value.children.push_back(*predicate);
       }
-      if (!expect("]"))
+      if (!expect(","))
         return {};
-      auto scalar = body(decl, false, true, depth + 1);
-      if (!scalar)
+      auto body = scopedBody(reductionNotation->precedence);
+      if (!body)
         return {};
-      mapping.regions.push_back(*scalar);
-      mapping.span.end = previousEnd;
-      auto mapped = appendExpression(decl, std::move(mapping));
-      if (!mapped)
-        return {};
-      value.children.push_back(*mapped);
+      value.children.push_back(*body);
+    } else if (at("reduce")) {
+      fail("source.reduction",
+           "use an ordinary scoped call or a finite binder; materialized "
+           "reducers use vector::reduce");
+      return {};
     } else if (at("!")) {
       value.kind = Expression::Kind::Not;
       if (minimum > 75) {
@@ -1919,9 +1950,6 @@ private:
                      value.kind == Expression::Kind::Match ||
                      value.kind == Expression::Kind::For;
     auto left = appendExpression(decl, std::move(value));
-    if (left && decl.expressions[*left].reductionCall)
-      decl.expressions[decl.expressions[*left].children.front()]
-          .reducerExpression = *left;
     if (!left || (statementStart && blockLike))
       return left;
     return postfix(decl, *left, span, depth, minimum, records);

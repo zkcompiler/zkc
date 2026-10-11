@@ -29,10 +29,11 @@ int main() {
     pub operator infixl(65) ⊕ = zkc::prelude::index_add;
     pub fn 合成(α:index,β:index)->index{return α⊕β;}
     pub type Vector<F:Field>=builtin("vector",F);
-    pub fn sum<F:Field>(xs:Vector<F>)->F=primitive("vector.sum");
+    pub fn fold<I:Type+Copy+Drop,S:Type>(rows:scoped domain<I>,initial:S,step:scoped fn(S,I)->S !{stop} on(rows))->S !{stop}=finite("local.fold");
+    pub fn sum<I:Type+Copy+Drop,F:Field>(rows:scoped domain<I>,body:scoped fn(I)->F !{stop} on(rows))->F !{stop}{return fold(rows,0,fun state item=>state+body(item));}
     pub reduction ∑=sum;
     pub fn weighted<F:Field>(xs:Vector<F>,α:F)->F {
-      return ∑ [x in xs] {x*α};
+      return ∑ x in xs,x*α;
     }
     struct Pair<T:Type>{pub first:T,pub second:T}
     pub fn swap<T:Type+Copy+Drop>(x:Pair<T>)->Pair<T>{
@@ -58,7 +59,7 @@ int main() {
     llvm::errs() << llvm::toString(checked.takeError());
     return 2;
   }
-  if (auto error = zkc::language::checkReductionElaboration(*checked)) {
+  if (auto error = zkc::language::checkScopedElaboration(*checked)) {
     llvm::errs() << llvm::toString(std::move(error));
     return 17;
   }

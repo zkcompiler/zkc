@@ -19,11 +19,13 @@ bool sameSpan(Span a, Span b) {
          a.end == b.end;
 }
 bool checkNotationArity(Semantics &types, const NotationDescriptor &notation,
-                        size_t inputs, Span span) {
+                        size_t inputs, Span span, bool filtered = false) {
   using Position = NotationDescriptor::Position;
   bool valid = false;
   switch (notation.position) {
   case Position::Reduction:
+    valid = notation.arity == 2;
+    break;
   case Position::Prefix:
   case Position::Postfix:
     valid = notation.arity == 1;
@@ -37,7 +39,8 @@ bool checkNotationArity(Semantics &types, const NotationDescriptor &notation,
     valid = notation.arity > 0;
     break;
   }
-  return (valid && notation.arity == inputs) ||
+  return (valid && (!filtered || notation.position == Position::Reduction) &&
+          notation.arity + unsigned(filtered) == inputs) ||
          types.fail("source.binding-witness", "notation input count differs",
                     span);
 }
@@ -179,6 +182,51 @@ public:
   }
 };
 } // namespace
+bool checkFiniteReductionTarget(Semantics &types, const Declaration &callee,
+                                bool filtered, Span span) {
+  auto refuse = [&] {
+    return types.fail(
+        "source.reduction-target",
+        "reduction target requires a domain followed by its unary scoped body; "
+        "a filtered target also takes a unary predicate",
+        span, {callee.span});
+  };
+  unsigned count = filtered ? 2 : 1;
+  if (!types.charge(callee.inputOrder.size() + 1, span))
+    return false;
+  if ((callee.kind != Declaration::Kind::Math &&
+       callee.kind != Declaration::Kind::Local) ||
+      !callee.inputs.empty() || !callee.services.empty() ||
+      callee.domainInputs.size() != 1 || callee.scopedInputs.size() != count ||
+      callee.outputs.size() != 1 || callee.inputOrder.size() != count + 1)
+    return refuse();
+  using K = Declaration::InputSlot::Kind;
+  if (callee.inputOrder[0].kind != K::Domain || callee.inputOrder[0].index != 0)
+    return refuse();
+  for (unsigned i = 0; i < count; ++i) {
+    const auto &signature = callee.scopedInputs[i].signature;
+    if (!types.chargeType(callee.domainInputs[0].item, span) ||
+        !types.chargeType(signature.result, span))
+      return false;
+    for (const auto &input : signature.inputs)
+      if (!types.chargeType(input, span))
+        return false;
+    if (callee.inputOrder[i + 1].kind != K::Scoped ||
+        callee.inputOrder[i + 1].index != i ||
+        signature.inputs != std::vector<Type>{callee.domainInputs[0].item} ||
+        (signature.itemDomain && *signature.itemDomain != 0))
+      return refuse();
+  }
+  if (filtered) {
+    const auto &predicate = callee.scopedInputs[0].signature;
+    const auto &body = callee.scopedInputs[1].signature;
+    if (predicate.result != Type{} || predicate.mode != body.mode ||
+        !(predicate.allowance == body.allowance) ||
+        predicate.itemDomain != body.itemDomain)
+      return refuse();
+  }
+  return true;
+}
 bool checkNotationOccurrence(Semantics &types, const Expression &expr,
                              const NotationEnvironment &environment) {
   auto refuse = [&] {
@@ -198,7 +246,8 @@ bool checkNotationOccurrence(Semantics &types, const Expression &expr,
       !expr.staticLabels.empty() || !expr.callLabels.empty() || expr.roles)
     return refuse();
   return checkNotationArity(types, *found->second.descriptor,
-                            expr.children.size(), expr.span);
+                            expr.children.size(), expr.span,
+                            expr.filteredReduction);
 }
 
 std::optional<std::vector<OperatorBinding>>
@@ -296,6 +345,25 @@ bool checkOperatorOperands(Semantics &types, const NotationDescriptor &notation,
                            const CallBinding &witness,
                            ArrayRef<unsigned> parameterOrder,
                            ArrayRef<ValueId> authoredOperands, Span span) {
+  if (notation.position == NotationDescriptor::Position::Reduction) {
+    if (!types.charge(parameterOrder.size() + 1, span) ||
+        !checkNotationArity(types, notation, parameterOrder.size(), span,
+                            witness.filteredReduction))
+      return false;
+    if (!witness.notation || *witness.notation != notation ||
+        !witness.operands.empty() || !authoredOperands.empty() ||
+        witness.argumentOrder.size() != parameterOrder.size())
+      return types.fail("source.binding-witness",
+                        "reduction argument categories differ", span);
+    for (unsigned i = 0; i < parameterOrder.size(); ++i)
+      if (parameterOrder[i] != i || witness.argumentOrder[i] != i)
+        return types.fail("source.binding-witness",
+                          "reduction argument order differs", span);
+    return true;
+  }
+  if (witness.filteredReduction)
+    return types.fail("source.binding-witness",
+                      "filtered flag requires a reduction", span);
   if (!types.charge(parameterOrder.size() + authoredOperands.size() + 1,
                     span) ||
       !checkNotationArity(types, notation, authoredOperands.size(), span))
@@ -328,6 +396,47 @@ bool checkOperatorWitness(Semantics &types, ArrayRef<Declaration> declarations,
       !witness.notation || *witness.notation != notation ||
       witness.symbol != notation.symbol ||
       witness.operands.size() != inputs.size())
+    return refuse();
+  if (notation.position == NotationDescriptor::Position::Reduction) {
+    if (expected.size() != 1 || !inputs.empty() || !witness.operands.empty())
+      return refuse();
+    const auto &binding = expected.front();
+    if (!binding.notation || *binding.notation != notation ||
+        binding.symbol != notation.symbol ||
+        !sameSpan(binding.span, *witness.origin) ||
+        (witness.filteredReduction && !binding.filtered))
+      return refuse();
+    const auto &target =
+        witness.filteredReduction ? binding.filtered->target : binding.target;
+    const auto &arguments = witness.filteredReduction
+                                ? binding.filtered->arguments
+                                : binding.arguments;
+    if (!sameTarget(target, witness.target) ||
+        target.declaration.index >= declarations.size() ||
+        witness.family[0] != operatorBindingKey(binding, declarations))
+      return refuse();
+    const auto &selected = declarations[target.declaration.index];
+    if (arguments.size() != selected.parameters.size() ||
+        witness.arguments.size() != arguments.size() ||
+        !checkFiniteReductionTarget(types, selected, witness.filteredReduction,
+                                    span))
+      return refuse();
+    if (!checkNotationArity(types, notation, selected.inputOrder.size(), span,
+                            witness.filteredReduction))
+      return false;
+    for (unsigned i = 0; i < arguments.size(); ++i)
+      if (arguments[i] && *arguments[i] != witness.arguments[i])
+        return refuse();
+    auto substitution = types.substitution(selected, witness.arguments);
+    if (target.component && selected.parent)
+      substitution.emplace(
+          "self:" + declarations[selected.parent->index].qualifiedName,
+          *target.component);
+    auto result =
+        types.substitute(selected.outputs[0].type, substitution, span);
+    return result && (*result == output || refuse());
+  }
+  if (witness.filteredReduction)
     return refuse();
   if (!checkNotationArity(types, notation, inputs.size(), span))
     return false;
@@ -407,11 +516,15 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
       return refuse();
     // The selected declaration supplies an independent input count. A changed
     // descriptor and operand vector cannot certify one another.
-    if (!checkNotationArity(types, *binding.notation, callee.inputs.size(),
-                            operation.span))
+    bool reduction =
+        binding.notation->position == NotationDescriptor::Position::Reduction;
+    if (!checkNotationArity(types, *binding.notation,
+                            reduction ? callee.inputOrder.size()
+                                      : callee.inputs.size(),
+                            operation.span, binding.filteredReduction))
       return false;
   } else if (!binding.symbol.empty() || !binding.family.empty() ||
-             binding.origin) {
+             binding.origin || binding.filteredReduction) {
     return refuse();
   }
   if (binding.arguments.size() != callee.parameters.size() ||

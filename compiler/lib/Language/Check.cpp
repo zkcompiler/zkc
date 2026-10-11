@@ -104,12 +104,9 @@ Error Checker::run() {
   inferredContracts.clear();
   types.inferCapability = {};
   types.inferNatural = {};
-  if (!finalizeReductions() || !retainNotations() ||
-      !retainReductionSources() || !retainScopedSources())
+  if (!retainNotations() || !retainScopedSources())
     return types.takeError();
-  if (auto error = checkScopedSources(output, work))
-    return error;
-  return checkReductions(output, work);
+  return checkScopedSources(output, work);
 }
 std::shared_ptr<const SyntaxDeclaration>
 Checker::retainSyntax(DeclarationId owner) {

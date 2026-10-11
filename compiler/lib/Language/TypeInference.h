@@ -93,7 +93,6 @@ struct ExpressionTypes {
     Span binding;
   };
   std::map<uint32_t, Operator> operators;
-  std::map<uint32_t, unsigned> reductionHeights;
   std::map<uint32_t, ScopedSignature> scopedSignatures;
   std::map<uint32_t, Type> domainItems;
   std::set<uint32_t> collectionDomains;

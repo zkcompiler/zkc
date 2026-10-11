@@ -60,7 +60,9 @@ does not become an operator; use a named function.
 
 `∑` and `∏` are reserved for [finite reduction bindings](notation.md) and cannot
 be declared as ordinary operators. Their spelling alone selects no reducer; a
-visible library or local `reduction` binding supplies the callable.
+visible library or local `reduction` binding supplies the callable. Other admitted
+non-ASCII mathematical symbols can name reductions. `∈` is reserved for binder
+membership and cannot name a callable operator or reduction.
 
 Custom delimiters are non-ASCII matching pairs from Unicode 17
 `BidiBrackets.txt`. The opener has category `Ps` and the closer `Pe`; both are

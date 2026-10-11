@@ -15,14 +15,20 @@ std::string read(const std::string &path) {
 }
 ClosedEntry example() {
   std::string root = ZKC_SCOPED_ROOT;
-  auto captured = take(
-      capture({{"example",
-                read(root + "/examples/projects/scoped-computations/main.zkc"),
-                "main.zkc"},
-               {"zkc::computation",
-                read(root + "/libraries/zkc/computation.zkc"), "scoped.zkc"},
-               {"zkc::vector", read(root + "/libraries/zkc/vector.zkc"),
-                "vector.zkc"}}));
+  auto captured = take(capture(
+      {{"example",
+        read(root + "/examples/projects/scoped-computations/main.zkc"),
+        "main.zkc"},
+       {"zkc::computation", read(root + "/libraries/zkc/computation.zkc"),
+        "scoped.zkc"},
+       {"zkc::accumulation", read(root + "/libraries/zkc/accumulation.zkc"),
+        "accumulation.zkc"},
+       {"zkc::curve", read(root + "/libraries/zkc/curve.zkc"), "curve.zkc"},
+       {"zkc::finite", read(root + "/libraries/zkc/finite.zkc"), "finite.zkc"},
+       {"zkc::sequence", read(root + "/libraries/zkc/sequence.zkc"),
+        "sequence.zkc"},
+       {"zkc::vector", read(root + "/libraries/zkc/vector.zkc"),
+        "vector.zkc"}}));
   return take(
       closeEntry(take(analyze(captured).checkedProject()), "example::Demo"));
 }
