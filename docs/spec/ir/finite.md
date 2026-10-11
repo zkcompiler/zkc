@@ -41,6 +41,16 @@ product admits all its factors even when another factor is empty. A nested finit
 operation inside a helper is entered only when execution reaches that helper
 operation; its checks and captures cannot be hoisted to an outer empty domain.
 
+Domain constructors therefore expose conservatively unknown effects to MLIR
+and no speculation interface. They are not `Pure` or `NoMemoryEffect`: generic
+canonicalization and CSE must retain the complete constructor sequence, including
+unused and equal-looking constructors, with its operands and returned descriptor.
+Disabling speculation alone would still permit dead-code elimination. Unknown
+effects preserve admission obligations without asserting heap allocation or
+mutable mathematical data. A domain-aware rewrite needs separate justification
+that it preserves complete ordered admission and the conditional entry of nested
+computations; equality of the enumerated items alone is insufficient.
+
 Cardinalities are natural numbers. Executable arithmetic must check representable
 sizes and resource limits before multiplication can overflow. No wrapping count
 or truncated zip is a valid realization. The current flattened Local recipe
@@ -144,6 +154,12 @@ references, nested finite computations and Math realizations. Whole-unit formati
 precedes liveness and includes dead operations and polynomial observations reached
 through the helper closure.
 
+Finite operation verification separates local attributes/result shape from
+referenced domain/helper ABI and premise checks. The latter use MLIR's
+`SymbolUserOpInterface` and its supplied symbol-table collection; local operation
+verification does not independently repeat that symbol traversal. Whole-unit
+closure checking continues to own reference cycles and call preconditions.
+
 Finite result dependencies close monotonically over repeated state transitions,
 including initial state, cardinality, predicate and captures. A single-step summary
 is insufficient for `(a,b) -> (b,item)`. Formation requirements remain separate
@@ -172,6 +188,28 @@ when no bulk equation applies. Reduction, elementwise and bilinear selection
 consume this common view. Extent premises for optional selection come from
 the source domain and admitted helper preconditions; occurrence-only evidence
 that the independent reader cannot reconstruct retains the ordered realization.
+
+Optional lane realization distinguishes a supported candidate, an unsupported
+formula, and exhausted strategy capacity. The latter two outcomes emit no payload
+or bindings and retain the checked ordered loop, including all domain admission.
+In particular, exceeding Ring depth 1,024 does not make an otherwise admitted
+Local collection invalid. Construction or correspondence errors are mandatory
+failures; they cannot authorize publishing an unchecked candidate. Explicit map
+realization, which requires its bulk implementation, reports a diagnostic when
+that implementation is unavailable.
+
+One finite realization stage shares work across its definitions and nested
+expressions: 1,000,000 lane work units, 100,000 expanded helper operations,
+1,000,000 helper operand/result slots and 100,000 polynomial expansion units.
+Lane work reserves eight units per operation, block argument and operand/result
+slot before building or emitting its formula. These are compiler implementation limits,
+separate from runtime resources and Ring's own admission bounds. Standalone
+transform invocations start a fresh stage scope; an enclosing caller can supply
+the shared context. Required helper expansion reports a capacity refusal.
+Bound/extent queries made by the independent payload reader consume its enclosing
+comparison budget rather than obtaining a fresh allowance for every query.
+Required maps retain their separate cumulative helper admission limits instead
+of consuming the optional finite-strategy allowance.
 
 The independent reader reconstructs the source domain and payload and reads
 actual candidate operands separately. It does not use the selector's classified

@@ -225,6 +225,8 @@ add_zkc_component(Transforms
   lib/Transforms/ProtocolApplications.cpp
   lib/Transforms/MathLowering.cpp
   lib/Transforms/MathRealizations.cpp
+  lib/Transforms/HelperNormalization.cpp
+  lib/Transforms/HelperNormalizationVerification.cpp
   lib/Transforms/FiniteRealizations.cpp
   lib/Transforms/FiniteVerification.cpp
   lib/Transforms/ComputationSelection.cpp

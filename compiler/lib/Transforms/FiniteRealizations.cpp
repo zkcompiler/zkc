@@ -28,6 +28,7 @@ class Realizer {
       bindings;
   llvm::DenseMap<Value, Value> values, sizes, lowers;
   Computation computation;
+  mathematical::RealizationWork &work;
   bool failedHelper = false;
   std::string sitePrefix = "finite_";
   std::string site() { return sitePrefix + std::to_string(occurrence++); }
@@ -226,7 +227,8 @@ class Realizer {
     return {emit(col.family + suffix.str(), {container, position}, col.element,
                  col.arguments)};
   }
-  Value elementwise(const ComputationView &view, ValueRange entry) {
+  Expected<mathematical::LaneRealizationResult>
+  elementwise(const ComputationView &view, ValueRange entry) {
     auto &body = computation.helper->getRegion(0).front();
     Value root = view.iteration[view.root].descriptor;
     llvm::DenseMap<Value, mathematical::LaneInput> inputs;
@@ -240,30 +242,29 @@ class Realizer {
     auto vector = computation.signature.getResult(0);
     SmallVector<std::string> args{
         cast<algebra::FieldType>(elementType(vector)).getDomain().str()};
-    auto result = mathematical::realizeLanes(
-        body, inputs, vector, sizes.lookup(root),
+    return mathematical::realizeLanes(
+        body, inputs, vector, sizes.lookup(root), &work.lanes,
         [&](StringRef contract, ValueRange operands, Type output,
             ArrayRef<std::string> parameters) {
           return emit(contract, operands, output, args, parameters);
         });
-    if (failed(result)) {
-      failedHelper = true;
-      return {};
-    }
-    return *result;
   }
   SmallVector<Value> apply(Operation *helper, ValueRange arguments) {
     auto type = cast<FunctionType>(
         helper->getAttrOfType<TypeAttr>("function_type").getValue());
     if (computation.total) {
       auto math = cast<func::FuncOp>(helper);
+      if (failed(mathematical::chargeHelperOperations(
+              math, work.helperOperations, work.helperSlots))) {
+        failedHelper = true;
+        return {};
+      }
       OwningOpRef<func::FuncOp> scratch(cast<func::FuncOp>(math->clone()));
       SymbolTableCollection tables;
-      unsigned operations = 100000;
-      uint64_t indices = 1000000, polynomial = 100000;
-      if (failed(mathematical::inlineHelpers(*scratch, operations, indices,
-                                             tables, unit)) ||
-          failed(poly::eliminatePolynomials(scratch->front(), polynomial))) {
+      if (failed(mathematical::inlineHelpers(*scratch, work.helperOperations,
+                                             work.helperSlots, tables, unit)) ||
+          failed(
+              poly::eliminatePolynomials(scratch->front(), work.polynomial))) {
         failedHelper = true;
         return {};
       }
@@ -302,10 +303,11 @@ class Realizer {
   }
 
 public:
-  explicit Realizer(protocol_ir::ProtocolModuleOp unit)
+  Realizer(protocol_ir::ProtocolModuleOp unit,
+           mathematical::RealizationWork &work)
       : unit(unit), builder(unit.getContext()), loc(unit.getLoc()),
         index(IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned)),
-        boolean(builder.getI1Type()) {
+        boolean(builder.getI1Type()), work(work) {
     for (auto &op : unit.getBody().front())
       if (auto name = SymbolTable::getSymbolName(&op))
         names.insert(name.getValue());
@@ -328,6 +330,7 @@ public:
     sizes.clear();
     lowers.clear();
     occurrence = 0;
+    failedHelper = false;
     loc = declaration->getLoc();
     if (computation.total)
       sitePrefix =
@@ -398,13 +401,18 @@ public:
       return success();
     }
     if (selection.kind == mathematical::RealizationKind::Elementwise) {
-      Value result = elementwise(*view, entry->getArguments());
+      auto result = elementwise(*view, entry->getArguments());
       if (!result)
-        return failure();
-      local::ReturnOp::create(builder, loc, result);
-      if (!computation.total)
-        declaration->erase();
-      return success();
+        return diagnostics::emit(declaration->emitOpError(),
+                                 result.takeError());
+      if (result->status == mathematical::LaneRealizationStatus::Realized) {
+        local::ReturnOp::create(builder, loc, result->value);
+        if (!computation.total)
+          declaration->erase();
+        return success();
+      }
+      // A declined optional formula has emitted no payload or bindings. Keep
+      // the complete admission above and continue with the ordinary loop.
     }
     if (computation.collect) {
       auto result = computation.signature.getResult(0);
@@ -517,7 +525,8 @@ public:
 } // namespace
 FailureOr<SmallVector<Value>>
 realizeExpression(Operation *op, ValueRange inputs, OpBuilder &builder,
-                  MathematicalSelectionPolicy policy) {
+                  MathematicalSelectionPolicy policy,
+                  mathematical::RealizationWork *work) {
   auto unit = op->getParentOfType<protocol_ir::ProtocolModuleOp>();
   auto site = op->getAttrOfType<StringAttr>("site");
   if (!unit || !site || site.getValue().empty())
@@ -528,7 +537,8 @@ realizeExpression(Operation *op, ValueRange inputs, OpBuilder &builder,
   do {
     name = "_finite_expression_" + std::to_string(next++);
   } while (symbols.lookup(name));
-  Realizer realizer(unit);
+  mathematical::RealizationWork standalone;
+  Realizer realizer(unit, work ? *work : standalone);
   if (failed(realizer.run(op, policy.finiteBulk, name)))
     return failure();
   auto function = cast<local::FuncOp>(SymbolTable::lookupSymbolIn(unit, name));
@@ -547,8 +557,8 @@ realizeExpression(Operation *op, ValueRange inputs, OpBuilder &builder,
   return outputs;
 }
 
-LogicalResult realizeLocals(ModuleOp module,
-                            MathematicalSelectionPolicy policy) {
+LogicalResult realizeLocals(ModuleOp module, MathematicalSelectionPolicy policy,
+                            mathematical::RealizationWork *work) {
   if (failed(mlir::verify(module)) || !hasSingleElement(*module.getBody()))
     return failure();
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
@@ -556,7 +566,8 @@ LogicalResult realizeLocals(ModuleOp module,
       dyn_cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
   if (!unit)
     return failure();
-  Realizer realizer(unit);
+  mathematical::RealizationWork standalone;
+  Realizer realizer(unit, work ? *work : standalone);
   for (auto &op : make_early_inc_range(unit.getBody().front()))
     if (isDeclaration(&op) && failed(realizer.run(&op, policy.finiteBulk)))
       return failure();

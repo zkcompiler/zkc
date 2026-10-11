@@ -480,6 +480,7 @@ struct Dimension {
 
 class Comparison {
   Terms terms;
+  uint64_t &remaining;
   SymbolTable &symbols;
   llvm::DenseSet<Operation *> usedBindings;
   llvm::DenseMap<Value, unsigned> identities;
@@ -645,14 +646,20 @@ class Comparison {
                 bool equal = false;
                 // Read admitted helper extent premises through their actual
                 // argument assignment. They equate lengths, never elements.
-                for (auto &entry : values)
+                for (auto &entry : values) {
+                  if (equal)
+                    break;
                   if (entry.second.kind == Meaning::Container)
                     for (Extent extent : dimensions[index.identity].equal)
                       if (terms.charge() &&
                           extent.container == entry.second.container &&
                           finite::provesEqualExtent(op.getOperand(0), axis,
-                                                    entry.first, extent.axis))
+                                                    entry.first, extent.axis,
+                                                    remaining)) {
                         equal = true;
+                        break;
+                      }
+                }
                 if (!equal)
                   return {};
                 dimensions[index.identity].equal.push_back(
@@ -666,7 +673,7 @@ class Comparison {
                 // bound must already follow from source formation before an
                 // eager scalar contraction is permitted.
                 if (!finite::provesBound(op.getOperand(axis + 1),
-                                         op.getOperand(0), axis))
+                                         op.getOperand(0), axis, remaining))
                   return {};
                 selectedBounds.insert(key);
               }
@@ -912,7 +919,7 @@ class Comparison {
 
 public:
   Comparison(SymbolTable &symbols, Value rows, uint64_t &remaining)
-      : terms(remaining), symbols(symbols), rows(rows) {}
+      : terms(remaining), remaining(remaining), symbols(symbols), rows(rows) {}
   FailureOr<Value> map(Block &source, ArrayRef<bool> rowwise, ValueRange inputs,
                        Operation *&cursor,
                        llvm::DenseSet<Operation *> &bindings, Operation *end,

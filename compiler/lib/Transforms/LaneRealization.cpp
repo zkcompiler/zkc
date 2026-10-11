@@ -2,17 +2,50 @@
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Contracts/RingSharing.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseSet.h"
 
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
-FailureOr<Value> realizeLanes(Block &formula,
-                              const llvm::DenseMap<Value, LaneInput> &inputs,
-                              Type vector, Value length, LaneEmitter emit) {
+Expected<LaneRealizationResult>
+realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
+             Type vector, Value length, uint64_t *remaining, LaneEmitter emit) {
+  auto unsupported = [] {
+    return LaneRealizationResult{LaneRealizationStatus::Unsupported,
+                                 {},
+                                 "mathematical-lane-unsupported"};
+  };
+  auto capacity = [](StringRef reason) {
+    return LaneRealizationResult{
+        LaneRealizationStatus::Capacity, {}, reason.str()};
+  };
+  auto invalid = [](StringRef reason) {
+    return zkc::error("mathematical-lane-realization", reason);
+  };
+  // Bound all scans before allocating a Ring arena or emitting instructions.
+  // Every charged step covers an operation and its operand/result slots; the
+  // fixed multiplier covers the construction, liveness, sharing and emission
+  // traversals. Ring's independent byte/node/depth limits still apply.
+  auto charge = [&](uint64_t slots) {
+    if (!remaining)
+      return true;
+    uint64_t cost = 8 * slots;
+    if (cost > *remaining) {
+      *remaining = 0;
+      return false;
+    }
+    *remaining -= cost;
+    return true;
+  };
+  if (!charge(formula.getNumArguments()))
+    return capacity("mathematical-lane-work");
+  for (Operation &op : formula)
+    if (!charge(uint64_t(op.getNumOperands()) + op.getNumResults() + 1))
+      return capacity("mathematical-lane-work");
   auto field = dyn_cast<algebra::FieldType>(finite::elementType(vector));
   if (!field || formula.empty() || formula.back().getNumOperands() != 1)
-    return failure();
+    return unsupported();
   std::vector<ring::Input> slots;
   std::vector<ring::Node> nodes;
   llvm::DenseMap<Value, uint32_t> meanings;
@@ -27,7 +60,7 @@ FailureOr<Value> realizeLanes(Block &formula,
     input(argument);
   for (Operation &op : formula.without_terminator()) {
     if (op.getNumResults() != 1)
-      return failure();
+      return unsupported();
     Value result = op.getResult(0);
     if (inputs.contains(result)) {
       input(result);
@@ -40,20 +73,20 @@ FailureOr<Value> realizeLanes(Block &formula,
     }
     if (op.getNumOperands() != 2 || !meanings.contains(op.getOperand(0)) ||
         !meanings.contains(op.getOperand(1)))
-      return failure();
+      return unsupported();
     uint32_t left = meanings.lookup(op.getOperand(0)),
              right = meanings.lookup(op.getOperand(1));
     auto *contract = finite::semantics(&op);
     if (!contract ||
         contract->law.algebra != protocol::ComputationAlgebra::FieldRing ||
-        !contract->law.total)
-      return failure();
+        !contract->law.total || !contract->lanes)
+      return unsupported();
     if (contract->identity == MathematicalIdentity::FieldSubtract) {
       nodes.push_back(ring::Node::neg(right));
       right = nodes.size() - 1;
     } else if (contract->identity != MathematicalIdentity::FieldAdd &&
                contract->identity != MathematicalIdentity::FieldMultiply)
-      return failure();
+      return unsupported();
     meanings[result] = nodes.size();
     nodes.push_back(contract->identity == MathematicalIdentity::FieldMultiply
                         ? ring::Node::mul(left, right)
@@ -61,7 +94,7 @@ FailureOr<Value> realizeLanes(Block &formula,
   }
   Value returned = formula.back().getOperand(0);
   if (!meanings.contains(returned))
-    return failure();
+    return unsupported();
   // Ring arenas contain exactly reachable nodes while their input inventory
   // retains unused slots. Admission above still inspected every instruction.
   std::vector<bool> needed(nodes.size(), false);
@@ -94,18 +127,26 @@ FailureOr<Value> realizeLanes(Block &formula,
   auto expression = ring::Expression::create(
       std::move(slots), std::move(liveNodes), {meanings.lookup(returned)});
   if (!expression) {
-    consumeError(expression.takeError());
-    return failure();
+    std::string reason;
+    auto error =
+        handleErrors(expression.takeError(), [&](const Refusal &r) -> Error {
+          if (r.code == "ring-limit" || r.code == "ring-depth") {
+            reason = r.code;
+            return Error::success();
+          }
+          return zkc::error(r.code, r.detail);
+        });
+    if (error)
+      return std::move(error);
+    return capacity(reason);
   }
   auto shared = ring::shareExpression(*expression);
   if (!shared) {
-    consumeError(shared.takeError());
-    return failure();
+    return shared.takeError();
   }
   if (auto error = ring::checkSharing(*expression, shared->expression,
                                       shared->nodeMap)) {
-    consumeError(std::move(error));
-    return failure();
+    return std::move(error);
   }
 
   // Only admitted pure ring instructions enter this window. Keep source SSA
@@ -146,10 +187,10 @@ FailureOr<Value> realizeLanes(Block &formula,
       LaneInput left = values.lookup(op.getOperand(0)),
                 right = values.lookup(op.getOperand(1));
       if (!left.value || !right.value)
-        return failure();
+        return invalid("missing realized operand");
       const auto *contract = finite::semantics(&op);
       if (!contract || !contract->lanes)
-        return failure();
+        return invalid("missing admitted lane contract");
       realized.lanes = left.lanes || right.lanes;
       if (!realized.lanes)
         realized.value =
@@ -165,13 +206,16 @@ FailureOr<Value> realizeLanes(Block &formula,
                               {broadcast(left), broadcast(right)}, vector, {});
     }
     if (!realized.value)
-      return failure();
+      return invalid("emitter returned no value");
     values[result] = realized;
     representatives[meaning] = realized;
   }
   LaneInput result = values.lookup(returned);
   if (!result.value)
-    return failure();
-  return broadcast(result);
+    return invalid("missing realized result");
+  Value value = broadcast(result);
+  if (!value)
+    return invalid("broadcast returned no value");
+  return LaneRealizationResult{LaneRealizationStatus::Realized, value, {}};
 }
 } // namespace zkc::mathematical

@@ -165,19 +165,27 @@ public:
         emit(shapeGuard, emit("index.equal", {rows, length}, boolean), Type());
     }
     if (!selectLaneFormula(formula, rowwise))
-      return failure();
+      return diagnostics::emit(map.emitOpError(),
+                               "mathematical-lane-unsupported",
+                               "required map has no supported lane formula");
     llvm::DenseMap<Value, LaneInput> values;
     for (auto [i, argument] : llvm::enumerate(formula.getArguments()))
       values[argument] = {entry->getArgument(i), rowwise[i]};
+    // Required maps have already charged their complete expanded helpers to
+    // the stage's operation/slot budgets. The optional finite-selection budget
+    // must not introduce a stricter second admission limit here.
     auto result =
-        realizeLanes(formula, values, vector, rows,
+        realizeLanes(formula, values, vector, rows, nullptr,
                      [&](StringRef contract, ValueRange operands, Type output,
                          ArrayRef<std::string> parameters) {
                        return emit(contract, operands, output, parameters);
                      });
-    if (failed(result))
-      return failure();
-    local::ReturnOp::create(builder, loc, *result);
+    if (!result)
+      return diagnostics::emit(map.emitOpError(), result.takeError());
+    if (result->status != LaneRealizationStatus::Realized)
+      return diagnostics::emit(map.emitOpError(), result->reason,
+                               "required map realization is unavailable");
+    local::ReturnOp::create(builder, loc, result->value);
     map.erase();
     return success();
   }

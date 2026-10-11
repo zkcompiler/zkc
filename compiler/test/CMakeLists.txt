@@ -22,11 +22,22 @@ target_compile_definitions(zkc-finite_computation-test PRIVATE
   ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
 mlir_target_link_libraries(zkc-finite_computation-test PRIVATE MLIRParser)
 
+add_zkc_test(domain_admission Transforms domain-admission)
+target_compile_definitions(zkc-domain_admission-test PRIVATE
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-domain_admission-test PRIVATE
+  MLIRParser MLIRTransforms)
+
 add_zkc_test(math_realization Transforms)
 add_test(NAME math-realization COMMAND zkc-math_realization-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/helper-realization.mlir")
 set_tests_properties(math-realization PROPERTIES LABELS native)
 mlir_target_link_libraries(zkc-math_realization-test PRIVATE MLIRParser)
+add_zkc_test(helper_normalization Transforms helper-normalization)
+target_compile_definitions(zkc-helper_normalization-test PRIVATE
+  ZKC_MATH_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical"
+  ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-helper_normalization-test PRIVATE MLIRParser)
 add_zkc_test(vector_reductions Transforms vector-reductions)
 target_compile_definitions(zkc-vector_reductions-test PRIVATE
   ZKC_MATH_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical")

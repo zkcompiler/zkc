@@ -97,6 +97,21 @@ actual source and candidate operations without the selector's classifications.
 Closed Ring laws justify its bounded comparison; ordered guards, helper
 expansion and unchanged context have their own checks.
 
+Helper normalization has an explicit checked boundary. The producer proposes
+an expanded polynomial-free body; a separate reader follows the original helper
+calls under positional argument substitution and checks all result coordinates
+with the existing independent polynomial laws. Recipe checking reads only these
+checked bodies. `local.realize` also compares against its original helper before
+publication, so a snapshot taken after normalization cannot hide a substitution
+or polynomial error. This is native compiler correspondence checking; the
+independent Lean models do not establish a bridge to this implementation.
+
+Optional finite strategies share a work allowance and may decline before payload
+emission. Their ordered fallback retains full domain admission. Required maps
+use their existing cumulative helper limits; an optional optimization allowance
+does not impose a new map admission limit. Domain constructors retain unknown
+MLIR effects until their ordered admission is explicit in the lowered code.
+
 Demand determines the contraction's size. A single selected row or column uses
 `matrix.row_dot` or `matrix.column_dot` and returns one scalar. Collecting a
 uniform dot fold over all rows or columns can use one matrix-vector product.

@@ -832,6 +832,7 @@ LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
   // Expand it before primitive dialect conversion: detached helper construction
   // must not escape the conversion rewriter's transaction bookkeeping.
   unsigned finiteWork = 100000;
+  RealizationWork realizationWork;
   while (true) {
     Operation *next = nullptr;
     unit.walk<WalkOrder::PreOrder>([&](Operation *op) {
@@ -844,8 +845,8 @@ LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
     if (!finiteWork--)
       return diagnostics::emit(next->emitError(), "finite-analysis-limit");
     OpBuilder builder(next);
-    auto result =
-        finite::realizeExpression(next, next->getOperands(), builder, policy);
+    auto result = finite::realizeExpression(next, next->getOperands(), builder,
+                                            policy, &realizationWork);
     if (failed(result))
       return failure();
     next->replaceAllUsesWith(*result);

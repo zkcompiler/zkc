@@ -1,3 +1,4 @@
+#include "HelperNormalization.h"
 #include "MathematicalSupport.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
@@ -33,6 +34,7 @@ LogicalResult verifyMathRealizationsPreserved(ModuleOp original,
     return refuse("profile");
   SymbolTable symbols(after);
   llvm::DenseSet<Operation *> retained, bindings;
+  SmallVector<local::FuncOp> functions;
   uint64_t remaining = 1000000;
   NativeTypePolicies types(after);
   for (auto &op : before.getBody().front()) {
@@ -53,6 +55,7 @@ LogicalResult verifyMathRealizationsPreserved(ModuleOp original,
         function.getFunctionType() != realization.getFunctionType() ||
         function->getAttrs().size() != 3)
       return refuse("realization interface");
+    functions.push_back(function);
     auto origin = function->getAttrOfType<ArrayAttr>("logical_origin");
     if (!origin || origin.size() != 2 ||
         origin[0] !=
@@ -60,8 +63,9 @@ LogicalResult verifyMathRealizationsPreserved(ModuleOp original,
         origin[1] != ArrayAttr::get(original.getContext(), {}))
       return refuse("realization origin");
     auto result = function.walk([&](Operation *nested) -> WalkResult {
-      if (!remaining--)
+      if (!remaining)
         return WalkResult::interrupt();
+      --remaining;
       auto data = [&](Type type) {
         auto policy = types.get(type);
         return policy && policy->total && !policy->affine &&
@@ -94,6 +98,8 @@ LogicalResult verifyMathRealizationsPreserved(ModuleOp original,
   for (auto &op : after.getBody().front())
     if (!retained.contains(&op) && !bindings.contains(&op))
       return refuse("unexpected declaration");
+  if (failed(verifyRealizedHelperRecipes(before, after, functions)))
+    return refuse("original helper and realized computation differ");
   return success();
 }
 
@@ -137,6 +143,8 @@ LogicalResult expandMathRealizations(ModuleOp module,
   }
   // Build the symbol cache only after every declaration has been replaced.
   SymbolTableCollection symbols;
+  SymbolTable sourceSymbols(original);
+  HelperNormalizationChecker normalization(original);
   for (auto function : functions) {
     auto *block = &function.getBody().front();
     OpBuilder builder(function);
@@ -167,6 +175,14 @@ LogicalResult expandMathRealizations(ModuleOp module,
     for (auto &op : block->without_terminator())
       op.setAttr("site", builder.getStringAttr("value_" +
                                                std::to_string(occurrence++)));
+    auto declaration =
+        sourceSymbols.lookup<local::RealizeOp>(function.getSymName());
+    auto helper =
+        declaration
+            ? sourceSymbols.lookup<func::FuncOp>(declaration.getHelper())
+            : func::FuncOp();
+    if (!helper || failed(normalization.check(helper, *block)))
+      return failure();
   }
   if (failed(lowerCalculations(unit, functions, policy)) ||
       failed(verifyMathRealizationsPreserved(module, *candidate)))

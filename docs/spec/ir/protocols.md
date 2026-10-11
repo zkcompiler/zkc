@@ -153,17 +153,28 @@ After polynomial checks and elimination, static dimension queries become index
 constants and unused total expressions are removed before becoming ordered
 execution. This normalization applies to helper realization.
 
-The independent mathematical recipe matcher compares the remaining expressions,
+Before a normalized helper becomes a recipe input, an independent read-only
+checker compares it with the original admitted helper. The checker interprets
+calls by positional substitution, checks every result coordinate, and uses
+polynomial meaning and static shape facts without invoking helper inlining or
+polynomial elimination. It also checks unused polynomial observations before
+accepting their removal. Preparation still produces normalization proposals;
+the independent check is required before any proposal is used. All helper
+comparisons in one check share a four-million-unit work budget. Exhaustion
+refuses with `mathematical-helper-limit`, separately from a correspondence
+mismatch.
+
+The mathematical recipe matcher then compares the checked expressions,
 operands and returns against the generated local body. A separate structural
 containment check preserves unrelated declarations and the realization's exact
 signature and origin. It admits only the closed calculation recipe vocabulary,
 excludes capabilities, history, sampling, unrelated partial contracts and explicit
 stops, and accounts for added bindings. Membership in that vocabulary alone does
 not ensure total execution: for example, vector-to-array conversion also needs an
-exact length. The recipe matcher checks those constructed instances. Helper
-expansion, static shape normalization and polynomial elimination remain trusted
-on this edge; these checks are not an independent proof of their
-arithmetic semantics. Resource exhaustion remains a possible runtime failure, as
+exact length. The recipe matcher checks those constructed instances. This is
+bounded native correspondence checking over the supported vocabulary, not a
+formal proof of arbitrary helper equivalence or native runtime semantics.
+Resource exhaustion remains a possible runtime failure, as
 with other realized total calculations.
 
 ### Checked pointwise maps

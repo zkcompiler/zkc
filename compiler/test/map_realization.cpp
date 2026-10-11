@@ -80,6 +80,40 @@ int main(int argc, char **argv) {
     return body() && seen;
   };
 
+  cases.run("required map capacity is diagnosed without publishing", [&] {
+    std::string text = R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+!V = tensor<?x!F>
+module { "protocol.module"() ({
+ func.func private @chain(%x:!F)->!F {
+)mlir";
+    std::string previous = "%x";
+    for (unsigned i = 0; i < 1024; ++i) {
+      auto next = "%v" + std::to_string(i);
+      text += "  " + next + " = algebra.field_add " + previous +
+              ", %x : (!F,!F)->!F\n";
+      previous = next;
+    }
+    text += "  func.return " + previous + " : !F\n }\n";
+    text += " algebra.map_realize @mapped = @chain [true] : (!V)->!V\n";
+    text += R"mlir(
+ "protocol.func"() ({ "protocol.return"() : ()->() })
+ {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+    auto module = parseSourceString<ModuleOp>(text, &context);
+    require(bool(module), "ordinary map collection was not admitted");
+    std::string before, after;
+    llvm::raw_string_ostream(before) << *module;
+    require(named("algebra-map-formula",
+                  [&] {
+                    return failed(mathematical::expandMapRealizations(*module));
+                  }),
+            "required map capacity had no diagnostic");
+    llvm::raw_string_ostream(after) << *module;
+    require(before == after, "failed map stage published a partial candidate");
+  });
+
   cases.run("guards precede formula and every operation is checked", [&] {
     std::vector<std::string> contracts;
     for (auto &[contract, op] : actions(*expanded, "mapped"))
