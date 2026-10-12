@@ -20,6 +20,10 @@ use zkc::finite_domain as domains;
 domain F = field("FIELD");
 math fn multiply(a:F,b:F)->F { return a*b; }
 math fn wrapped(a:F,b:F)->F { return multiply(a,b); }
+// These helpers infer Copy(T) and Drop(T), respectively. The callback must
+// retain their exact result values through specialization and preparation.
+math fn duplicate<T:Type>(value:T)->(T,T) { return (value,value); }
+math fn first<T:Type>(pair:(T,T))->T { return pair.0; }
 '''
 FOLD = '''
 protocol Inspect roles(P)(values:vec::Vector<F>@P, initial:F@P)->(value:F@P) {
@@ -59,7 +63,8 @@ def compile_entry(toolchain, journal, directory, source, flags):
 @pytest.mark.parametrize('callback,contract', [
     ('p*x', 'vector.product'), ('p+x', 'vector.sum'),
     ('wrapped(p,x)', 'vector.product'),
-], ids=['product', 'sum', 'wrapped-product'])
+    ('multiply(first(duplicate(p)),x)', 'vector.product'),
+], ids=['product', 'sum', 'wrapped-product', 'inferred-usage-product'])
 def test_total_fold_selects_actual_bulk_sites(
         toolchain, journal, directory, flags, field, callback, contract):
     source = (PREFIX + FOLD).replace('FIELD', field).replace('CALLBACK', callback)
