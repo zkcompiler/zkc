@@ -11,9 +11,6 @@ bool canReplacePayload(const finite::ComputationView &view);
 bool canReplaceNestedContraction(const finite::ComputationView &view);
 
 enum class RealizationKind { Ordered, Bilinear, Reduction, Elementwise };
-/// Compatibility name for the common optional producer vocabulary.
-using SelectionOutcome = OptimizationStatus;
-llvm::StringRef describeSelectionOutcome(SelectionOutcome outcome);
 struct SelectedReduction {
   const ReductionRecipe *recipe = nullptr;
   llvm::SmallVector<unsigned> inputs;
@@ -23,7 +20,7 @@ struct SelectedReduction {
 struct ComputationSelection {
   RealizationKind kind = RealizationKind::Ordered;
   finite::ComputationDiagnostic diagnostic;
-  SelectionOutcome outcome() const { return diagnostic.outcome.status; }
+  OptimizationStatus outcome() const { return diagnostic.outcome.status; }
   std::optional<finite::ComputationView> view;
   ComputationEquations equations;
   std::optional<SelectedReduction> reduction;
@@ -44,7 +41,7 @@ struct NestedContractionSelection {
   std::optional<NestedContraction> equation;
   const MatrixContractionRecipe *recipe = nullptr;
   finite::ComputationDiagnostic diagnostic;
-  SelectionOutcome outcome() const { return diagnostic.outcome.status; }
+  OptimizationStatus outcome() const { return diagnostic.outcome.status; }
 };
 /// Recognize the nested equation even if an implementation pin or absent
 /// matrix recipe prevents selection. The caller controls family policy.

@@ -45,25 +45,6 @@ selectReduction(const Reduction &equation, const MathematicalRecipes &recipes) {
   return result;
 }
 } // namespace
-StringRef describeSelectionOutcome(SelectionOutcome outcome) {
-  switch (outcome) {
-  case SelectionOutcome::Succeeded:
-    return "selected bulk realization";
-  case SelectionOutcome::Capacity:
-    return "ordered fallback: optional capacity";
-  case SelectionOutcome::MissingEvidence:
-    return "ordered fallback: missing evidence";
-  case SelectionOutcome::PolicyDisabled:
-    return "ordered fallback: bulk selection disabled";
-  case SelectionOutcome::Unsupported:
-    return "ordered fallback: no supported equation";
-  case SelectionOutcome::ReplacementRestricted:
-    return "ordered fallback: payload replacement restricted";
-  case SelectionOutcome::MissingRecipe:
-    return "ordered fallback: missing recipe";
-  }
-  llvm_unreachable("unknown selection outcome");
-}
 bool canReplacePayload(const finite::ComputationView &view) {
   return llvm::all_of(view.payload,
                       [](Operation *op) { return finite::replaceable(op); });
@@ -95,7 +76,7 @@ ComputationSelection selectComputation(finite::Computation computation,
   selection.equations =
       matchComputation(*selection.view, work, &selection.diagnostic);
   if (!policy.finiteBulk) {
-    selection.diagnostic.outcome = {SelectionOutcome::PolicyDisabled,
+    selection.diagnostic.outcome = {OptimizationStatus::PolicyDisabled,
                                     OptimizationReason::Policy};
     return selection;
   }
@@ -111,7 +92,7 @@ ComputationSelection selectComputation(finite::Computation computation,
     return selection;
   }
   if (!canReplacePayload(*selection.view)) {
-    selection.diagnostic.outcome = {SelectionOutcome::ReplacementRestricted,
+    selection.diagnostic.outcome = {OptimizationStatus::ReplacementRestricted,
                                     OptimizationReason::Replacement};
     return selection;
   }
@@ -132,7 +113,7 @@ ComputationSelection selectComputation(finite::Computation computation,
     selection.kind = RealizationKind::Elementwise;
   selection.diagnostic.outcome =
       selection.kind == RealizationKind::Ordered
-          ? OptimizationOutcome{SelectionOutcome::MissingRecipe,
+          ? OptimizationOutcome{OptimizationStatus::MissingRecipe,
                                 OptimizationReason::Recipe}
           : OptimizationOutcome::success();
   return selection;
@@ -160,7 +141,7 @@ selectNestedContraction(const finite::ComputationView &view,
     return selection;
   }
   if (!canReplaceNestedContraction(view)) {
-    selection.diagnostic.outcome = {SelectionOutcome::ReplacementRestricted,
+    selection.diagnostic.outcome = {OptimizationStatus::ReplacementRestricted,
                                     OptimizationReason::Replacement};
     return selection;
   }
@@ -170,7 +151,7 @@ selectNestedContraction(const finite::ComputationView &view,
                                     : MatrixContractionForm::Columns);
   selection.diagnostic.outcome =
       selection.recipe ? OptimizationOutcome::success()
-                       : OptimizationOutcome{SelectionOutcome::MissingRecipe,
+                       : OptimizationOutcome{OptimizationStatus::MissingRecipe,
                                              OptimizationReason::Recipe};
   return selection;
 }

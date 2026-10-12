@@ -21,6 +21,22 @@ using namespace mlir;
 using namespace llvm;
 namespace zkc::finite {
 namespace {
+mathematical::RealizationChoice
+observedChoice(mathematical::RealizationKind kind) {
+  using Kind = mathematical::RealizationKind;
+  using Choice = mathematical::RealizationChoice;
+  switch (kind) {
+  case Kind::Ordered:
+    return Choice::Ordered;
+  case Kind::Bilinear:
+    return Choice::Bilinear;
+  case Kind::Reduction:
+    return Choice::Reduction;
+  case Kind::Elementwise:
+    return Choice::Elementwise;
+  }
+  llvm_unreachable("unknown finite realization");
+}
 class Realizer {
   protocol_ir::ProtocolModuleOp unit;
   RewriterBase &builder;
@@ -346,8 +362,7 @@ public:
     if (observation)
       observation->selectionDiagnostic(
           source, mathematical::DecisionFamily::Finite,
-          static_cast<mathematical::RealizationChoice>(selection.kind),
-          selection.diagnostic);
+          observedChoice(selection.kind), selection.diagnostic);
     const ComputationView *view = selection.view ? &*selection.view : nullptr;
     SmallVector<Operation *> admission;
     for (auto &op : computation.domain.getBody().front().without_terminator())
