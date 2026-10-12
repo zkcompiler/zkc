@@ -3,6 +3,7 @@
 
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Support/LogicalResult.h"
+#include "zkc/Support/OptimizationOutcome.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
 #include "llvm/Support/Error.h"
@@ -27,6 +28,7 @@ struct LaneRealizationResult {
   LaneRealizationStatus status;
   mlir::Value value;
   std::string reason;
+  OptimizationOutcome outcome = OptimizationOutcome::success();
 };
 
 /// Realize a field-ring payload using the same scalar/broadcast/packed rules

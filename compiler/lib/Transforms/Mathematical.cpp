@@ -3,6 +3,7 @@
 #include "MathematicalValues.h"
 #include "PreparedProtocol.h"
 #include "ProtocolApplications.h"
+#include "RealizationTrace.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/PatternMatch.h"
@@ -40,7 +41,8 @@ namespace zkc::mathematical {
 // copy, preserving the caller's snapshot and ordinary SSA use-def ownership.
 LogicalResult inlineHelpers(Operation *program, unsigned &remaining,
                             uint64_t &indices, SymbolTableCollection &tables,
-                            Operation *lookupRoot, uint64_t *work) {
+                            Operation *lookupRoot, uint64_t *work,
+                            OptimizationOutcome *outcome) {
   SmallVector<func::CallOp> pending;
   program->walk([&](func::CallOp call) { pending.push_back(call); });
   while (!pending.empty()) {
@@ -57,17 +59,29 @@ LogicalResult inlineHelpers(Operation *program, unsigned &remaining,
       mapping.map(arg, input);
     OpBuilder builder(call);
     for (auto &op : helper.front().without_terminator()) {
-      if (!remaining)
+      if (!remaining) {
+        if (outcome)
+          *outcome = OptimizationOutcome::exhausted(WorkOwner::HelperOperations,
+                                                    1, remaining);
         return diagnostics::emit(call.emitError(),
                                  "mathematical-expansion-limit");
+      }
       --remaining;
       uint64_t slots = op.getNumOperands() + op.getNumResults();
-      if (slots > indices)
+      if (slots > indices) {
+        if (outcome)
+          *outcome = OptimizationOutcome::exhausted(WorkOwner::HelperSlots,
+                                                    slots, indices);
         return diagnostics::emit(call.emitError(),
                                  "mathematical-expansion-limit");
-      if (work && slots + 1 > *work)
+      }
+      if (work && slots + 1 > *work) {
+        if (outcome)
+          *outcome = OptimizationOutcome::exhausted(WorkOwner::HelperOperations,
+                                                    slots + 1, *work);
         return diagnostics::emit(call.emitError(),
                                  "mathematical-expansion-limit");
+      }
       indices -= slots;
       if (work)
         *work -= slots + 1;
@@ -85,10 +99,19 @@ LogicalResult inlineHelpers(Operation *program, unsigned &remaining,
 }
 
 LogicalResult chargeHelperOperations(Operation *helper, unsigned &remaining,
-                                     uint64_t &indices, uint64_t *work) {
+                                     uint64_t &indices, uint64_t *work,
+                                     OptimizationOutcome *outcome) {
   auto traversal = helper->walk([&](Operation *op) {
     uint64_t slots = op->getNumOperands() + op->getNumResults();
     if (!remaining || slots > indices || (work && slots + 1 > *work)) {
+      if (outcome)
+        *outcome = !remaining ? OptimizationOutcome::exhausted(
+                                    WorkOwner::HelperOperations, 1, remaining)
+                   : slots > indices
+                       ? OptimizationOutcome::exhausted(WorkOwner::HelperSlots,
+                                                        slots, indices)
+                       : OptimizationOutcome::exhausted(
+                             WorkOwner::HelperOperations, slots + 1, *work);
       diagnostics::emit(op->emitError(), "mathematical-expansion-limit");
       return WalkResult::interrupt();
     }
@@ -867,12 +890,14 @@ LogicalResult runRealizationStage(ModuleOp module, StringRef name,
 OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
                                              MathematicalSelectionPolicy policy,
                                              RealizationTrace *trace) {
-  if (trace) {
-    trace->policy = policy;
-    trace->stages.clear();
-    trace->initialWork = {};
-    trace->remainingWork = {};
-  }
+  RealizationWork work;
+  return rewriteLocalAlgorithms(source, policy, trace, work);
+}
+OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
+                                             MathematicalSelectionPolicy policy,
+                                             RealizationTrace *trace,
+                                             RealizationWork &work) {
+  RealizationScope scope(trace, "local-algorithms", source, policy, &work);
   if (failed(verify(source)))
     return {};
   if (!llvm::hasSingleElement(*source.getBody())) {
@@ -889,8 +914,8 @@ OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
                       "projection metadata");
     return {};
   }
+  scope.propose(policy);
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
-  RealizationWork work;
   if (trace) {
     trace->initialWork = work;
     std::string configuration;
@@ -919,7 +944,7 @@ OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
   if (failed(stage("polynomial-recipes",
                    [&] { return expandPolynomialRecipes(*candidate); })) ||
       failed(stage("math-realizations", [&] {
-        return expandMathRealizations(*candidate, policy, &work);
+        return expandMathRealizations(*candidate, policy, &work, trace);
       })))
     return {};
   // Services publish independently checked edges. Retain structure through
@@ -934,32 +959,39 @@ OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
                        return protocol::expandAlgorithms(
                            *candidate,
                            protocol::AlgorithmExpansionPhase::RetainMaps,
-                           expansion);
+                           expansion, nullptr, trace);
                      })) ||
         failed(stage("nested-contractions",
                      [&] {
                        return nested::rewriteFiniteCollections(
-                           *candidate, expansion, policy, &work);
+                           *candidate, expansion, policy, &work, trace);
                      })) ||
         failed(stage("finite-realizations", [&] {
-          return finite::realizeLocals(*candidate, policy, &work);
+          return finite::realizeLocals(*candidate, policy, &work, trace);
         })))
       return {};
     if (policy.vectorReductionFusion && failed(stage("vector-reductions", [&] {
-          return mathematical::fuseVectorReductions(*candidate, expansion);
+          return mathematical::fuseVectorReductions(*candidate, expansion,
+                                                    trace);
         })))
       return {};
   }
-  if (failed(stage("map-realizations",
-                   [&] { return expandMapRealizations(*candidate, &work); })) ||
+  if (failed(stage(
+          "map-realizations",
+          [&] { return expandMapRealizations(*candidate, &work, trace); })) ||
       failed(stage("finish-expansion", [&] {
         return retain
                    ? protocol::expandAlgorithms(
                          *candidate, protocol::AlgorithmExpansionPhase::Finish,
-                         expansion)
-                   : protocol::expandAlgorithms(*candidate);
+                         expansion, nullptr, trace)
+                   : protocol::expandAlgorithms(*candidate, nullptr, trace);
       })))
     return {};
+  if (!policy.vectorReductionFusion)
+    scope.selection(
+        source, DecisionFamily::VectorReduction, RealizationChoice::Ordered,
+        {OptimizationStatus::PolicyDisabled, OptimizationReason::Policy});
+  scope.publish(PublicationBoundary::ReturnedCandidate);
   return candidate;
 }
 
@@ -970,6 +1002,8 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
                                     MathematicalSelectionPolicy policy,
                                     ArrayRef<ApplicationStart> starts = {},
                                     RealizationTrace *trace = nullptr) {
+  RealizationScope scope(trace, "prepare-source", source, policy);
+  scope.propose(policy);
   auto candidate = rewriteLocalAlgorithms(source, policy, trace);
   if (!candidate)
     return {};
@@ -995,9 +1029,13 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
   SymbolTableCollection helperSymbols;
   for (auto program :
        unit.getBody().front().getOps<zkc::protocol_ir::MathematicalOp>()) {
+    OptimizationOutcome outcome;
     if (failed(inlineHelpers(program, remainingHelpers, helperIndices,
-                             helperSymbols)))
+                             helperSymbols, nullptr, nullptr, &outcome))) {
+      scope.failure(
+          RequiredFailure{"preparation helper expansion", outcome.capacity});
       return {};
+    }
     if (simplify ? failed(simplifyCalculations(program))
                  : failed(verifyNestedDegrees(program)))
       return {};
@@ -1008,6 +1046,7 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
       failed(verifyProtocolPreparationPreserved(*expanded, unit)) ||
       failed(verifyAuthoredLocalsPreserved(*frozenLocals, unit)))
     return {};
+  scope.publish(PublicationBoundary::ReturnedCandidate);
   return candidate;
 }
 
@@ -1026,12 +1065,16 @@ OwningOpRef<ModuleOp> projectPrepared(ModuleOp candidate) {
 struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PreparePass)
   PreparePass() = default;
-  explicit PreparePass(bool value, MathematicalSelectionPolicy policy) {
+  RealizationTrace *observer = nullptr;
+  explicit PreparePass(bool value, MathematicalSelectionPolicy policy,
+                       RealizationTrace *trace)
+      : observer(trace) {
     simplify = value;
     optimizeFinite = policy.finiteBulk;
     fuseVectorReductions = policy.vectorReductionFusion;
   }
-  PreparePass(const PreparePass &other) : PassWrapper(other) {}
+  PreparePass(const PreparePass &other)
+      : PassWrapper(other), observer(other.observer) {}
   Option<bool> simplify{*this, "simplify",
                         llvm::cl::desc("Simplify after expansion"),
                         llvm::cl::init(true)};
@@ -1068,13 +1111,19 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
     RealizationTrace trace;
     trace.remarks = traceMathematics;
     trace.ir = dumpMathematics ? &llvm::errs() : nullptr;
+    auto *output =
+        observer ? observer
+                 : (traceMathematics || dumpMathematics ? &trace : nullptr);
+    RealizationScope scope(output, "prepare-pass", source,
+                           {optimizeFinite, fuseVectorReductions});
+    scope.propose({optimizeFinite, fuseVectorReductions});
     auto candidate = prepareSource(
-        source, simplify, {optimizeFinite, fuseVectorReductions}, {},
-        traceMathematics || dumpMathematics ? &trace : nullptr);
+        source, simplify, {optimizeFinite, fuseVectorReductions}, {}, output);
     if (!candidate)
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
     source.getBodyRegion().takeBody(candidate->getBodyRegion());
+    scope.publish(PublicationBoundary::PublishedToCaller);
   }
 };
 struct SimplifyParticipantPass
@@ -1159,8 +1208,9 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
 
 OwningOpRef<ModuleOp> prepareProtocol(ModuleOp source, bool simplify,
                                       MathematicalSelectionPolicy policy,
-                                      ArrayRef<ApplicationStart> starts) {
-  return prepareSource(source, simplify, policy, starts);
+                                      ArrayRef<ApplicationStart> starts,
+                                      RealizationTrace *trace) {
+  return prepareSource(source, simplify, policy, starts, trace);
 }
 
 std::optional<PreparedProtocol>
@@ -1208,10 +1258,10 @@ zkc::protocol::createProjectProtocolPass(bool simplify,
   return std::make_unique<mathematical::ProjectPass>(simplify, policy);
 }
 
-std::unique_ptr<mlir::Pass>
-zkc::protocol::createPrepareProtocolPass(bool simplify,
-                                         MathematicalSelectionPolicy policy) {
-  return std::make_unique<mathematical::PreparePass>(simplify, policy);
+std::unique_ptr<mlir::Pass> zkc::protocol::createPrepareProtocolPass(
+    bool simplify, MathematicalSelectionPolicy policy,
+    mathematical::RealizationTrace *trace) {
+  return std::make_unique<mathematical::PreparePass>(simplify, policy, trace);
 }
 
 std::unique_ptr<mlir::Pass> zkc::protocol::createSimplifyParticipantPass() {

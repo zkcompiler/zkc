@@ -1,6 +1,7 @@
 #include "CheckedCandidate.h"
 #include "HelperNormalization.h"
 #include "MathematicalSupport.h"
+#include "RealizationTrace.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
@@ -117,29 +118,36 @@ LogicalResult verifyMathRealizationsPreserved(ModuleOp original,
 
 LogicalResult expandMathRealizations(ModuleOp module,
                                      MathematicalSelectionPolicy policy,
-                                     RealizationWork *work) {
-  return expandMathRealizations(module, policy, work, {});
+                                     RealizationWork *work,
+                                     RealizationTrace *trace) {
+  return expandMathRealizations(module, policy, work, {}, trace);
 }
 LogicalResult expandMathRealizations(ModuleOp module,
                                      MathematicalSelectionPolicy policy,
                                      RealizationWork *work,
-                                     finite::VerificationLimits limits) {
+                                     finite::VerificationLimits limits,
+                                     RealizationTrace *trace) {
+  RealizationWork standalone;
+  auto &stageWork = work ? *work : standalone;
+  RealizationScope scope(trace, "math-realizations", module, policy,
+                         &stageWork);
   if (failed(verify(module)) || !hasSingleElement(*module.getBody()))
     return failure();
   auto original =
       dyn_cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
   if (!original || original.getProfile() != protocol_ir::Profile::Protocol)
     return diagnostics::emit(module.emitError(), "local-realization-context");
-  if (original.getBody().front().getOps<local::RealizeOp>().empty())
+  if (original.getBody().front().getOps<local::RealizeOp>().empty()) {
+    scope.complete(CompletionKind::Unchanged);
     return success();
+  }
+  scope.propose(policy);
   mathematical::CheckedCandidate candidate(module);
   auto unit =
       cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
   SmallVector<local::FuncOp> functions;
   SymbolTable sourceSymbols(original);
   CheckedHelperNormalizations helpers(original);
-  RealizationWork standalone;
-  auto &stageWork = work ? *work : standalone;
   auto &cloneOperations = stageWork.helperOperations;
   auto &cloneSlots = stageWork.helperSlots;
   for (auto realization : make_early_inc_range(
@@ -149,9 +157,14 @@ LogicalResult expandMathRealizations(ModuleOp module,
       return failure();
     auto normalized = helpers.lookup(helper, true);
     // Preparing a helper is cached, but every emitted copy still costs work.
+    OptimizationOutcome outcome;
     if (!normalized ||
-        failed(chargeHelperOperations(normalized, cloneOperations, cloneSlots)))
+        failed(chargeHelperOperations(normalized, cloneOperations, cloneSlots,
+                                      nullptr, &outcome))) {
+      scope.failure(
+          RequiredFailure{"realization helper expansion", outcome.capacity});
       return failure();
+    }
     OpBuilder builder(realization);
     auto location = realization.getLoc();
     auto name = realization.getSymNameAttr();
@@ -179,13 +192,21 @@ LogicalResult expandMathRealizations(ModuleOp module,
     local::ReturnOp::create(builder, location, results);
     functions.push_back(function);
   }
-  if (failed(lowerCalculations(unit, functions, policy, &stageWork, limits)) ||
+  auto lower =
+      lowerCalculations(unit, functions, policy, &stageWork, limits, trace);
+  if (succeeded(lower))
+    scope.failure(VerificationDecision{VerificationObservation::Unclassified,
+                                       "realized helper correspondence",
+                                       {},
+                                       {}});
+  if (failed(lower) ||
       failed(candidate.publish([&](ModuleOp before, ModuleOp after) {
         return checkRealizations(before, after, &helpers);
       })))
     return diagnostics::emit(
         module.emitError(), "local-realization-lowering",
         "realized body failed recipe or executable admission");
+  scope.publish();
   return success();
 }
 } // namespace zkc::mathematical

@@ -1,6 +1,6 @@
 #include "FiniteFormation.h"
+#include "FiniteCardinality.h"
 #include "MathematicalFacts.h"
-#include "zkc/Contracts/FiniteCardinality.h"
 using namespace llvm;
 namespace zkc::language::detail {
 bool checkFiniteFormation(Semantics &types, const FiniteComputation &finite,
@@ -12,41 +12,7 @@ bool checkFiniteFormation(Semantics &types, const FiniteComputation &finite,
   });
   using Kind = DomainBinding::Kind;
   auto node = [&](facts::DomainRef id) {
-    const auto &source = shape.nodes[id];
-    facts::DomainNode view;
-    view.children = source.children.size();
-    switch (source.kind) {
-    case Kind::Elements:
-    case Kind::SourceArray:
-    case Kind::Indices:
-    case Kind::MatrixRow:
-    case Kind::MatrixColumn:
-      view.kind = facts::DomainKind::Extent;
-      view.extent = {source.operands.front().index,
-                     source.kind == Kind::Indices     ? source.axis
-                     : source.kind == Kind::MatrixRow ? 1u
-                                                      : 0u};
-      break;
-    case Kind::Range:
-      view.kind = facts::DomainKind::Range;
-      view.lower = source.operands[0].index;
-      view.upper = source.operands[1].index;
-      break;
-    case Kind::Zip:
-      view.kind = facts::DomainKind::Zip;
-      break;
-    case Kind::Product:
-      view.kind = facts::DomainKind::Product;
-      break;
-    case Kind::MatrixCoordinates:
-      view.kind = facts::DomainKind::MatrixCoordinates;
-      view.extent.value = source.operands.front().index;
-      break;
-    case Kind::Parameter:
-    case Kind::Application:
-      break;
-    }
-    return view;
+    return cardinalityNode(shape.nodes[id]);
   };
   auto child = [&](facts::DomainRef id, size_t index) -> facts::DomainRef {
     return shape.nodes[id].children[index];

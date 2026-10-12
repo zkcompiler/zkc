@@ -31,6 +31,12 @@ public:
   void restore(facts::Scope scope) { current = scope; }
   facts::Status record(const ValueOrigin &, const Type &, Span);
   facts::Status constant(const ValueOrigin &, uint64_t, Span);
+  facts::Result<facts::Cardinality> cardinality(const ValueOrigin &, unsigned,
+                                                Span);
+  facts::Status resultCardinality(const ValueOrigin &, facts::Cardinality,
+                                  Span);
+  facts::Status resultExtent(const ValueOrigin &, const ValueOrigin &, unsigned,
+                             Span);
   facts::Status assume(const SourceDataFact &, Span);
   facts::Status prove(const SourceDataFact &, Span);
 };

@@ -4,6 +4,7 @@
 #include "MathematicalComparison.h"
 #include "MathematicalSupport.h"
 #include "RealizationEmission.h"
+#include "RealizationTrace.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
@@ -40,17 +41,19 @@ bool boundWithoutField(StringRef contract) {
 FailureOr<OwningOpRef<func::FuncOp>>
 scalarFormula(algebra::MapRealizeOp map, protocol_ir::ProtocolModuleOp unit,
               SymbolTableCollection &symbols, unsigned &remaining,
-              uint64_t &indices, uint64_t *work = nullptr) {
+              uint64_t &indices, uint64_t *work = nullptr,
+              OptimizationOutcome *outcome = nullptr) {
   auto helper = symbols.lookupSymbolIn<func::FuncOp>(unit, map.getHelperAttr());
   if (!helper || helper.isExternal() || !helper.getBody().hasOneBlock()) {
     diagnostics::emit(map.emitOpError(), "algebra-map-helper",
                       "expected a helper body");
     return failure();
   }
-  if (failed(chargeHelperOperations(helper, remaining, indices, work)))
+  if (failed(chargeHelperOperations(helper, remaining, indices, work, outcome)))
     return failure();
   OwningOpRef<func::FuncOp> scratch(cast<func::FuncOp>(helper->clone()));
-  if (failed(inlineHelpers(*scratch, remaining, indices, symbols, unit, work)))
+  if (failed(inlineHelpers(*scratch, remaining, indices, symbols, unit, work,
+                           outcome)))
     return failure();
   auto &body = scratch->front();
   if (body.getNumArguments() != map.getRowwise().size() ||
@@ -101,7 +104,8 @@ public:
   explicit MapRealizer(protocol_ir::ProtocolModuleOp unit)
       : builder(unit.getContext()), emitter(unit, "_map_binding_"),
         loc(unit.getLoc()) {}
-  LogicalResult run(algebra::MapRealizeOp map, Block &formula) {
+  LogicalResult run(algebra::MapRealizeOp map, Block &formula,
+                    RealizationScope &scope) {
     loc = map.getLoc();
     nextSite = 0;
     auto signature = map.getFunctionType();
@@ -131,7 +135,11 @@ public:
         emit(shapeGuard, emit("index.equal", {rows, length}, boolean), Type());
     }
     const auto &recipes = mathematicalRecipes();
-    if (!selectLaneFormula(formula, rowwise, recipes))
+    OptimizationOutcome outcome;
+    auto selection = selectLaneFormula(formula, rowwise, recipes, &outcome);
+    scope.selection(map, DecisionFamily::Map, RealizationChoice::Elementwise,
+                    outcome);
+    if (!selection)
       return diagnostics::emit(map.emitOpError(),
                                "mathematical-lane-unsupported",
                                "required map has no supported lane formula");
@@ -149,9 +157,14 @@ public:
                      });
     if (!result)
       return diagnostics::emit(map.emitOpError(), result.takeError());
-    if (result->status != LaneRealizationStatus::Realized)
+    if (result->status != LaneRealizationStatus::Realized) {
+      scope.selection(map, DecisionFamily::Lanes,
+                      RealizationChoice::Elementwise, result->outcome);
+      scope.failure(RequiredFailure{"required map realization is unavailable",
+                                    result->outcome.capacity});
       return diagnostics::emit(map.emitOpError(), result->reason,
                                "required map realization is unavailable");
+    }
     local::ReturnOp::create(builder, loc, result->value);
     map.erase();
     return success();
@@ -322,44 +335,60 @@ LogicalResult verifyMapRealizationsPreserved(ModuleOp original,
   return success();
 }
 
-LogicalResult expandMapRealizations(ModuleOp module, RealizationWork *work) {
+LogicalResult expandMapRealizations(ModuleOp module, RealizationWork *work,
+                                    RealizationTrace *trace) {
+  RealizationWork standalone;
+  auto &stageWork = work ? *work : standalone;
+  RealizationScope scope(trace, "map-realizations", module, {}, &stageWork);
   if (failed(verify(module)))
     return failure();
   auto original = protocolUnit(module);
   if (failed(original))
     return diagnostics::emit(module.emitError(), "algebra-map-context",
                              "expected the 'protocol' profile");
-  if (original->getBody().front().getOps<algebra::MapRealizeOp>().empty())
+  if (original->getBody().front().getOps<algebra::MapRealizeOp>().empty()) {
+    scope.complete(CompletionKind::Unchanged);
     return success();
+  }
+  scope.propose();
   mathematical::CheckedCandidate candidate(module);
   auto unit = *protocolUnit(*candidate);
   // Derive every formula before editing the candidate's symbol table.
   SmallVector<std::pair<algebra::MapRealizeOp, OwningOpRef<func::FuncOp>>> maps;
   {
     SymbolTableCollection symbols;
-    RealizationWork standalone;
-    auto &stageWork = work ? *work : standalone;
     auto &helpers = stageWork.helperOperations;
     auto &indices = stageWork.helperSlots;
     for (auto map : unit.getBody().front().getOps<algebra::MapRealizeOp>()) {
-      auto formula = scalarFormula(map, unit, symbols, helpers, indices);
-      if (failed(formula))
+      OptimizationOutcome outcome;
+      auto formula = scalarFormula(map, unit, symbols, helpers, indices,
+                                   nullptr, &outcome);
+      if (failed(formula)) {
+        scope.failure(
+            RequiredFailure{"required map helper expansion", outcome.capacity});
         return failure();
+      }
       maps.emplace_back(map, std::move(*formula));
     }
   }
   MapRealizer realizer(unit);
   for (auto &[map, formula] : maps)
-    if (failed(realizer.run(map, formula->front())))
+    if (failed(realizer.run(map, formula->front(), scope)))
       return failure();
+  scope.failure(VerificationDecision{VerificationObservation::Unclassified,
+                                     "required map correspondence",
+                                     {},
+                                     {}});
   if (failed(candidate.publish(verifyMapRealizationsPreserved)))
     return diagnostics::emit(module.emitError(), "algebra-map-lowering",
                              "realized map failed its correspondence check");
+  scope.publish();
   return success();
 }
 
 FailureOr<std::map<std::string, std::pair<unsigned, unsigned>>>
-describeMapProducts(ModuleOp module) {
+describeMapProducts(ModuleOp module, RealizationTrace *trace) {
+  RealizationScope scope(trace, "map-products", module);
   auto unit = protocolUnit(module);
   if (failed(unit))
     return failure();
@@ -368,13 +397,25 @@ describeMapProducts(ModuleOp module) {
   unsigned helpers = realizedHelperOperationLimit;
   uint64_t indices = 1000000;
   for (auto map : unit->getBody().front().getOps<algebra::MapRealizeOp>()) {
-    auto formula = scalarFormula(map, *unit, symbols, helpers, indices);
-    if (failed(formula))
+    OptimizationOutcome expansionOutcome;
+    auto formula = scalarFormula(map, *unit, symbols, helpers, indices, nullptr,
+                                 &expansionOutcome);
+    if (failed(formula)) {
+      scope.failure(
+          RequiredFailure{"map formula admission", expansionOutcome.capacity});
       return failure();
+    }
     auto &body = (*formula)->front();
-    if (auto product = selectMapProduct(body, map.getRowwise()))
+    OptimizationOutcome outcome;
+    auto product = selectMapProduct(body, map.getRowwise(), &outcome);
+    scope.selection(map, DecisionFamily::MapProduct,
+                    product ? RealizationChoice::MapProduct
+                            : RealizationChoice::Ordered,
+                    outcome);
+    if (product)
       products.emplace(map.getSymName().str(), *product);
   }
+  scope.complete();
   return products;
 }
 

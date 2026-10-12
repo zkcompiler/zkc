@@ -1,5 +1,6 @@
 #include "FiniteContracts.h"
 #include "DataRequirements.h"
+#include "FiniteCardinality.h"
 #include "FiniteFormation.h"
 #include "MathematicalFacts.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -32,9 +33,20 @@ class ContractCheck {
   ArrayRef<Declaration> declarations;
   unsigned nextValue = 0;
   std::vector<std::vector<ItemBound>> domainBounds;
+  struct DomainEvidence {
+    facts::DomainNode node;
+    std::vector<unsigned> children;
+  };
+  std::vector<DomainEvidence> domainEvidence;
+  std::vector<ValueOrigin> domainLeaves;
+  std::map<ValueOrigin, unsigned> domainLeafIds;
+  struct FactoryFacts {
+    std::vector<ItemBound> bounds;
+    DomainEvidence evidence;
+  };
   using RecipeKey =
       std::tuple<unsigned, std::vector<ValueOrigin>, std::vector<unsigned>>;
-  std::map<RecipeKey, std::vector<ItemBound>> factoryFacts;
+  std::map<RecipeKey, FactoryFacts> factoryFacts;
   const Declaration *owner = nullptr;
   bool infer, allowAdditional;
   unsigned rootInputs = 0;
@@ -42,18 +54,32 @@ class ContractCheck {
   std::vector<DataFact> assumptions;
   std::map<ValueOrigin, Type> valueTypes;
   std::map<ValueOrigin, uint64_t> constants;
+  using ForwardedResult = std::optional<ValueOrigin>;
+  struct ForwardingSummary {
+    std::vector<ForwardedResult> outputs;
+    unsigned height = 0;
+  };
+  // Checked declarations may grow between ContractCheck runs. Never retain
+  // these descriptions in Semantics or in the capture-layout origin reader.
+  std::map<unsigned, ForwardingSummary> forwardingMemo;
+  std::set<unsigned> forwardingActive;
   struct Context {
     const Body &body;
     Facts inputs;
     Restrictions scoped;
-    std::vector<unsigned> domains;
+    std::vector<std::optional<unsigned>> domains;
     ValueOrigins origins;
     InputValues inputValues;
+    std::map<unsigned, ValueOrigin> forwardedValues;
+    std::map<unsigned, Item> forwardedItems;
     unsigned base;
+    unsigned depth;
     Context(Semantics &types, const Body &body, Facts inputs,
-            Restrictions scoped, InputValues values, unsigned base)
+            Restrictions scoped, InputValues values, unsigned base,
+            unsigned depth)
         : body(body), inputs(std::move(inputs)), scoped(std::move(scoped)),
-          origins(types, body), inputValues(std::move(values)), base(base) {}
+          domains(body.domainBindings.size()), origins(types, body),
+          inputValues(std::move(values)), base(base), depth(depth) {}
   };
   bool refuse(Span span, StringRef message) {
     return types.fail("source.scoped-domain", message, span);
@@ -68,9 +94,14 @@ class ContractCheck {
     if (!local)
       return {};
     ValueOrigin result{context.base + local->first, local->second};
-    if (local->first < context.inputValues.size() &&
-        context.inputValues[local->first]) {
-      result = *context.inputValues[local->first];
+    std::optional<ValueOrigin> replacement;
+    if (auto found = context.forwardedValues.find(local->first);
+        found != context.forwardedValues.end())
+      replacement = found->second;
+    else if (local->first < context.inputValues.size())
+      replacement = context.inputValues[local->first];
+    if (replacement) {
+      result = *replacement;
       if (!types.charge(result.second.size() + local->second.size() + 1, span))
         return {};
       result.second.insert(result.second.end(), local->second.begin(),
@@ -81,6 +112,145 @@ class ContractCheck {
       return {};
     valueTypes.emplace(result, type);
     return result;
+  }
+  const ForwardingSummary *forwarding(unsigned id, unsigned depth, Span span) {
+    if (!bounded(depth, span) || depth > types.work.limits.callDepth) {
+      if (!types.diagnostic)
+        types.fail("source.limit", "helper forwarding depth", span);
+      return nullptr;
+    }
+    if (auto found = forwardingMemo.find(id); found != forwardingMemo.end()) {
+      const auto &summary = found->second;
+      if (depth + summary.height > types.work.limits.expressionDepth ||
+          depth + summary.height > types.work.limits.callDepth) {
+        types.fail("source.limit", "helper forwarding depth", span);
+        return nullptr;
+      }
+      // Charge the lookup and each applied selector, not repeated expansion
+      // of the same dependency graph. Extraction is paid once per declaration.
+      return &summary;
+    }
+    if (id >= declarations.size())
+      return nullptr;
+    const auto &callee = declarations[id];
+    if (callee.abstract || callee.kind != Declaration::Kind::Math ||
+        !callee.body || !forwardingActive.insert(id).second)
+      return nullptr;
+    auto leave = llvm::scope_exit([&] { forwardingActive.erase(id); });
+    const auto &body = *callee.body;
+    if (!types.charge(body.values.size() + body.operations.size() +
+                          body.results.size() + 1,
+                      span))
+      return nullptr;
+    ValueOrigins origins(types, body);
+    std::vector<const Operation *> producers(body.values.size());
+    for (const auto &op : body.operations) {
+      if (!types.charge(op.results.size() + 1, op.span))
+        return nullptr;
+      for (auto result : op.results)
+        producers[result.index] = &op;
+    }
+    ForwardingSummary summary;
+    std::map<unsigned, ForwardedResult> results;
+    std::function<ForwardedResult(ValueId, unsigned)> describe =
+        [&](ValueId id, unsigned nesting) -> ForwardedResult {
+      if (!bounded(depth + nesting, span))
+        return {};
+      summary.height = std::max(summary.height, nesting);
+      auto origin = origins.get(id, span);
+      if (!origin)
+        return {};
+      if (origin->first < body.inputs)
+        return origin;
+      auto found = results.find(origin->first);
+      if (found == results.end()) {
+        ForwardedResult result;
+        const auto *producer = producers[origin->first];
+        const auto *call =
+            producer ? std::get_if<HelperCall>(&producer->action) : nullptr;
+        if (call) {
+          // Read only a returned value's dependency path. Checked callee
+          // contracts justify internal calls, but supply no caller premises.
+          summary.height = std::max(summary.height, nesting + 1);
+          auto nested = forwarding(call->callee.index, depth + nesting + 1,
+                                   producer->span);
+          if (types.diagnostic)
+            return {};
+          if (nested) {
+            summary.height =
+                std::max(summary.height, nesting + 1 + nested->height);
+            for (unsigned i = 0; i < producer->results.size(); ++i) {
+              if (!types.charge(1, span))
+                return {};
+              if (producer->results[i].index != origin->first ||
+                  i >= nested->outputs.size() || !nested->outputs[i])
+                continue;
+              const auto &[port, path] = *nested->outputs[i];
+              if (port >= call->operands.size())
+                return {};
+              result = describe(call->operands[port], nesting + 1);
+              if (result) {
+                if (!types.charge(result->second.size() + path.size() + 1,
+                                  span))
+                  return {};
+                result->second.insert(result->second.end(), path.begin(),
+                                      path.end());
+              }
+            }
+          }
+        }
+        found = results.emplace(origin->first, std::move(result)).first;
+      }
+      auto result = found->second;
+      if (result) {
+        if (!types.charge(result->second.size() + origin->second.size() + 1,
+                          span))
+          return {};
+        result->second.insert(result->second.end(), origin->second.begin(),
+                              origin->second.end());
+      }
+      return result;
+    };
+    for (auto output : body.results) {
+      summary.outputs.push_back(describe(output, 0));
+      if (types.diagnostic)
+        return nullptr;
+    }
+    return &forwardingMemo.emplace(id, std::move(summary)).first->second;
+  }
+  bool forward(Context &context, const HelperCall &call,
+               ArrayRef<ValueId> outputs, Span span) {
+    // Lexical regions and callback binding depth are not helper call depth.
+    auto descriptions = forwarding(call.callee.index, 0, span);
+    if (!descriptions)
+      return !types.diagnostic;
+    for (unsigned i = 0; i < descriptions->outputs.size() && i < outputs.size();
+         ++i) {
+      const auto &description = descriptions->outputs[i];
+      if (!types.charge(1, span))
+        return false;
+      if (description) {
+        const auto &[port, path] = *description;
+        if (port >= call.operands.size())
+          return refuse(span, "forwarded result input coverage differs");
+        auto origin = value(context, call.operands[port], span);
+        if (!origin ||
+            !types.charge(origin->second.size() + path.size() + 1, span))
+          return false;
+        origin->second.insert(origin->second.end(), path.begin(), path.end());
+        context.forwardedValues.emplace(outputs[i].index, std::move(*origin));
+        std::optional<Item> item;
+        if (!fact(context, call.operands[port], item, span))
+          return false;
+        if (item) {
+          if (!types.charge(item->path.size() + path.size() + 1, span))
+            return false;
+          item->path.insert(item->path.end(), path.begin(), path.end());
+          context.forwardedItems.emplace(outputs[i].index, std::move(*item));
+        }
+      }
+    }
+    return true;
   }
   std::optional<ValueOrigin> select(Context &context,
                                     ArrayRef<ValueId> operands,
@@ -201,6 +371,7 @@ class ContractCheck {
   unsigned newDomain(std::vector<ItemBound> facts = {}) {
     unsigned id = domainBounds.size();
     domainBounds.push_back(std::move(facts));
+    domainEvidence.push_back({});
     return id;
   }
   std::optional<unsigned> recipe(const DomainBinding &binding,
@@ -210,6 +381,7 @@ class ContractCheck {
       return {};
     using Kind = DomainBinding::Kind;
     std::vector<ItemBound> facts;
+    DomainEvidence evidence;
     if (binding.kind == Kind::Application) {
       if (!binding.factory ||
           binding.factory->declaration.index >= declarations.size()) {
@@ -221,9 +393,13 @@ class ContractCheck {
         return {};
       RecipeKey key{callee.id.index, operands.vec(), children.vec()};
       if (auto found = factoryFacts.find(key); found != factoryFacts.end()) {
-        if (!types.charge(found->second.size() + 1, binding.span))
+        if (!types.charge(found->second.bounds.size() +
+                              found->second.evidence.children.size() + 1,
+                          binding.span))
           return {};
-        return newDomain(found->second);
+        auto result = newDomain(found->second.bounds);
+        domainEvidence[result] = found->second.evidence;
+        return result;
       }
       // A generic module's implementation is not evidence available to its
       // clients. Only the checked recipe of a concrete factory supplies facts.
@@ -268,11 +444,12 @@ class ContractCheck {
           return {};
         }
         facts = domainBounds[nested[definition.result]];
+        evidence = domainEvidence[nested[definition.result]];
       }
-      // This cache stores only structural item/container facts, which do not
-      // depend on static sizes. Each application still has a fresh item-domain
-      // identity; caching evidence never equates two domain instances.
-      factoryFacts.emplace(std::move(key), facts);
+      // Only structural constructors and exact operand origins are cached,
+      // never a count or a caller premise. Each application has a fresh item
+      // domain identity even when its evidence references the same leaves.
+      factoryFacts.emplace(std::move(key), FactoryFacts{facts, evidence});
     } else if (binding.kind == Kind::Indices ||
                binding.kind == Kind::MatrixCoordinates) {
       if (operands.empty()) {
@@ -302,9 +479,129 @@ class ContractCheck {
         }
       }
     }
-    if (!types.charge(facts.size() + 1, binding.span))
+    if (binding.kind != Kind::Application) {
+      DomainBinding constructor{};
+      constructor.kind = binding.kind;
+      constructor.axis = binding.axis;
+      constructor.children = children.vec();
+      for (const auto &operand : operands) {
+        if (!types.charge(operand.second.size() + 1, binding.span))
+          return {};
+        auto [found, inserted] =
+            domainLeafIds.emplace(operand, domainLeaves.size());
+        if (inserted)
+          domainLeaves.push_back(operand);
+        constructor.operands.push_back({found->second});
+      }
+      evidence.node = cardinalityNode(constructor);
+      evidence.children = children.vec();
+    }
+    if (!types.charge(facts.size() + evidence.children.size() + 1,
+                      binding.span))
       return {};
-    return newDomain(std::move(facts));
+    auto result = newDomain(std::move(facts));
+    domainEvidence[result] = std::move(evidence);
+    return result;
+  }
+  bool collectResult(Context &context, unsigned domain, ValueId output,
+                     bool filtered, Span span) {
+    auto result = value(context, output, span);
+    if (!result)
+      return false;
+    facts::Work work([&](uint64_t amount) {
+      return !types.diagnostic && types.charge(amount, span);
+    });
+    auto node = [&](facts::DomainRef id) { return domainEvidence[id].node; };
+    auto child = [&](facts::DomainRef id, size_t index) -> facts::DomainRef {
+      return domainEvidence[id].children[index];
+    };
+    auto extent = [&](facts::DomainExtent leaf, unsigned) {
+      return mathematical.cardinality(domainLeaves[leaf.value], leaf.axis,
+                                      span);
+    };
+    auto integer = [&](facts::DomainLeaf leaf,
+                       unsigned) -> facts::Result<uint64_t> {
+      auto found = constants.find(domainLeaves[leaf]);
+      return found == constants.end()
+                 ? facts::Result<uint64_t>{}
+                 : facts::Result<uint64_t>{facts::Status::Proven,
+                                           found->second};
+    };
+    auto same = [&](facts::DomainLeaf a, facts::DomainLeaf b, unsigned) {
+      if (!work.charge(domainLeaves[a].second.size() +
+                       domainLeaves[b].second.size() + 1))
+        return facts::Status::Capacity;
+      return domainLeaves[a] == domainLeaves[b] ? facts::Status::Proven
+                                                : facts::Status::Unknown;
+    };
+    auto equal = [&](facts::DomainExtent a, facts::DomainExtent b, unsigned) {
+      return mathematical.prove({DataPrecondition::Kind::EqualExtent,
+                                 domainLeaves[a.value], domainLeaves[b.value],
+                                 a.axis, b.axis},
+                                span);
+    };
+    facts::DomainCardinality cardinality(
+        work, {node, child, extent, integer, same, equal},
+        types.work.limits.expressionDepth - context.depth);
+    auto count = facts::collect(work, cardinality.count(domain), filtered);
+    if (count.status == facts::Status::Capacity)
+      return established(count.status, span);
+    const auto &resultType = context.body.values[output.index].type;
+    if (resultType.kind == Type::Kind::Builtin &&
+        resultType.domain == "field_array") {
+      const auto &size = resultType.arguments[1].dimension;
+      if (size.isClosed() && count.status == facts::Status::Proven &&
+          count.value->precision == facts::Precision::Exact &&
+          count.value->value != size.closedValue())
+        return types.fail(
+            "source.data-bound",
+            "fixed collection cardinality differs from its result size", span);
+      // The type already supplies the result extent. Before closed formation,
+      // neither an unknown count nor a symbolic result size justifies relating
+      // that extent to the source domain. Publish no additional fixed facts.
+      return !types.diagnostic;
+    }
+    if (count.status == facts::Status::Proven &&
+        !established(
+            mathematical.resultCardinality(*result, *count.value, span), span))
+      return false;
+    // Dynamic element traversal preserves an extent even when its numeric
+    // count is unknown. Equality relates axes, never container identities.
+    if (!filtered) {
+      unsigned depth = 0;
+      while (domainEvidence[domain].node.kind == facts::DomainKind::Zip) {
+        if (!bounded(context.depth + ++depth, span))
+          return false;
+        if (domainEvidence[domain].children.empty())
+          return refuse(span, "zip cardinality has no first child");
+        domain = domainEvidence[domain].children.front();
+      }
+      const auto &source = domainEvidence[domain].node;
+      if (source.kind == facts::DomainKind::Extent)
+        return established(mathematical.resultExtent(
+                               *result, domainLeaves[source.extent.value],
+                               source.extent.axis, span),
+                           span);
+    }
+    return !types.diagnostic;
+  }
+  bool finiteResult(Context &context, const HelperCall &call,
+                    ArrayRef<ValueId> outputs, Span span) {
+    const auto &callee = declarations[call.callee.index];
+    if (context.body.mode != Body::Mode::Math || callee.abstract ||
+        callee.kind != Declaration::Kind::Math || !callee.finiteDefinition ||
+        !callee.body || callee.body->operations.size() != 1)
+      return true;
+    const auto *finite =
+        std::get_if<FiniteApplication>(&callee.body->operations.front().action);
+    if (!finite || finite->kind != FiniteApplication::Kind::Collect)
+      return true;
+    if (outputs.size() != 1 || call.domainArguments.size() != 1)
+      return refuse(span, "finite definition result coverage differs");
+    unsigned selected;
+    return domain(context, call.domainArguments.front(), selected, span) &&
+           collectResult(context, selected, outputs.front(),
+                         bool(finite->predicate), span);
   }
   bool fact(Context &context, ValueId value, std::optional<Item> &result,
             Span span) {
@@ -312,10 +609,13 @@ class ContractCheck {
     if (!origin)
       return false;
     result.reset();
-    if (origin->first >= context.inputs.size() ||
-        !context.inputs[origin->first])
+    if (auto found = context.forwardedItems.find(origin->first);
+        found != context.forwardedItems.end())
+      result = found->second;
+    else if (origin->first < context.inputs.size())
+      result = context.inputs[origin->first];
+    if (!result)
       return true;
-    result = context.inputs[origin->first];
     if (!types.charge(result->path.size() + origin->second.size() + 1, span))
       return false;
     result->path.insert(result->path.end(), origin->second.begin(),
@@ -334,10 +634,42 @@ class ContractCheck {
     result = context.scoped[*binding.parameter];
     return true;
   }
-  bool domain(Context &context, unsigned index, unsigned &result, Span span) {
+  bool domain(Context &context, unsigned index, unsigned &result, Span span,
+              unsigned nested = 0) {
+    if (!bounded(context.depth + nested, span))
+      return false;
     if (index >= context.domains.size())
       return refuse(span, "finite domain is outside its body");
-    result = context.domains[index];
+    if (context.domains[index]) {
+      result = *context.domains[index];
+      return true;
+    }
+    const auto &binding = context.body.domainBindings[index];
+    if (binding.parameter)
+      return refuse(span, "missing finite domain environment");
+    std::vector<ValueOrigin> data;
+    std::vector<unsigned> children;
+    if (!types.charge(binding.operands.size() + binding.children.size() + 1,
+                      binding.span))
+      return false;
+    for (auto operand : binding.operands) {
+      auto origin = value(context, operand, binding.span);
+      if (!origin)
+        return false;
+      data.push_back(std::move(*origin));
+    }
+    for (auto child : binding.children) {
+      unsigned selected;
+      if (child >= index)
+        return refuse(binding.span, "domain child facts must precede use");
+      if (!domain(context, child, selected, binding.span, nested + 1))
+        return false;
+      children.push_back(selected);
+    }
+    auto selected = recipe(binding, data, children, context.depth + nested + 1);
+    if (!selected)
+      return false;
+    context.domains[index] = result = *selected;
     return true;
   }
   bool callback(Context &context, unsigned index, const OriginMap &expected,
@@ -552,7 +884,7 @@ class ContractCheck {
     return true;
   }
   bool closedFinite(Context &context, const FiniteComputation &finite,
-                    unsigned depth, Span span, const Type &result) {
+                    unsigned depth, Span span, ValueId output) {
     if (!finite.domain || finite.domain->result >= finite.domain->nodes.size())
       return refuse(span, "invalid closed finite descriptor");
     std::vector<ValueOrigin> operands;
@@ -589,9 +921,12 @@ class ContractCheck {
                                       : std::optional<uint64_t>(found->second);
     };
     auto size = [&](ValueId id, unsigned axis) -> std::optional<uint64_t> {
-      auto known = extent(operands[id.index], axis);
-      return known && known->isClosed()
-                 ? std::optional<uint64_t>(known->closedValue())
+      auto known = mathematical.cardinality(operands[id.index], axis, span);
+      if (known.status == facts::Status::Capacity)
+        established(known.status, span);
+      return known.status == facts::Status::Proven &&
+                     known.value->precision == facts::Precision::Exact
+                 ? std::optional<uint64_t>(known.value->value)
                  : std::nullopt;
     };
     auto same = [&](ValueId a, ValueId b) {
@@ -607,17 +942,24 @@ class ContractCheck {
                     operands[container.index], 0, axis},
                    span);
     };
-    if (!checkFiniteFormation(types, finite, result,
+    if (!checkFiniteFormation(types, finite,
+                              context.body.values[output.index].type,
                               context.body.mode == Body::Mode::Math, span,
-                              {constant, size, same, equal, bound}))
+                              {constant, size, same, equal, bound}) ||
+        types.diagnostic)
       return false;
     unsigned selected = domains[finite.domain->result];
-    return closedCallback(context, finite.body, selected,
-                          finiteItemInput(finite.kind), depth + 1, span) &&
-           (!finite.predicate ||
-            closedCallback(context, *finite.predicate, selected,
-                           finiteItemInput(finite.kind, true), depth + 1,
-                           span));
+    if (!closedCallback(context, finite.body, selected,
+                        finiteItemInput(finite.kind), depth + 1, span))
+      return false;
+    if (finite.predicate &&
+        !closedCallback(context, *finite.predicate, selected,
+                        finiteItemInput(finite.kind, true), depth + 1, span))
+      return false;
+    return finite.kind != FiniteApplication::Kind::Collect ||
+           context.body.mode != Body::Mode::Math ||
+           collectResult(context, selected, output, bool(finite.predicate),
+                         span);
   }
   bool body(const Body &source, Facts inputs, Restrictions scoped,
             ArrayRef<unsigned> environment, unsigned depth,
@@ -647,7 +989,7 @@ class ContractCheck {
     if (values.size() != source.inputs)
       return refuse({}, "data input identity coverage differs");
     Context context(types, source, std::move(inputs), std::move(scoped),
-                    std::move(values), base);
+                    std::move(values), base, depth);
     if (depth == 1) {
       std::vector<ValueId> arguments;
       for (unsigned i = 0; i < source.inputs; ++i)
@@ -661,33 +1003,20 @@ class ContractCheck {
           return false;
       }
     }
-    for (const auto &binding : source.domainBindings) {
+    for (unsigned i = 0; i < source.domainBindings.size(); ++i) {
+      const auto &binding = source.domainBindings[i];
       if (binding.parameter) {
         if (*binding.parameter >= environment.size())
           return refuse(binding.span, "missing finite domain environment");
-        context.domains.push_back(environment[*binding.parameter]);
-      } else {
-        std::vector<ValueOrigin> data;
-        std::vector<unsigned> children;
-        if (!types.charge(binding.operands.size() + binding.children.size() + 1,
-                          binding.span))
-          return false;
-        for (auto operand : binding.operands) {
-          auto origin = value(context, operand, binding.span);
-          if (!origin)
-            return false;
-          data.push_back(std::move(*origin));
-        }
-        for (auto child : binding.children) {
-          if (child >= context.domains.size())
-            return refuse(binding.span, "domain child facts must precede use");
-          children.push_back(context.domains[child]);
-        }
-        auto selected = recipe(binding, data, children, depth + 1);
-        if (!selected)
-          return false;
-        context.domains.push_back(*selected);
+        context.domains[i] = environment[*binding.parameter];
       }
+      // Constructor order is structural. Semantic operand evidence is read
+      // only when used, after preceding helper calls discharge their premises.
+      if (!types.charge(binding.children.size() + 1, binding.span))
+        return false;
+      for (auto child : binding.children)
+        if (child >= i)
+          return refuse(binding.span, "domain child facts must precede use");
     }
     for (unsigned i = 0; i < context.inputs.size(); ++i) {
       const auto &item = context.inputs[i];
@@ -789,7 +1118,9 @@ class ContractCheck {
                                    "from its declared domain");
         }
       } else if (const auto *helper = std::get_if<HelperCall>(&op.action)) {
-        if (!call(context, *helper, depth + 1, op.span))
+        if (!call(context, *helper, depth + 1, op.span) ||
+            !forward(context, *helper, op.results, op.span) ||
+            !finiteResult(context, *helper, op.results, op.span))
           return false;
       } else if (const auto *finite =
                      std::get_if<FiniteApplication>(&op.action)) {
@@ -807,7 +1138,7 @@ class ContractCheck {
                      std::get_if<FiniteComputation>(&op.action)) {
         if (op.results.size() != 1 ||
             !closedFinite(context, *finite, depth + 1, op.span,
-                          source.values[op.results.front().index].type))
+                          op.results.front()))
           return false;
       } else if (const auto *region = std::get_if<LocalControl>(&op.action)) {
         if (!control(context, *region, depth + 1, op.span))
@@ -832,6 +1163,13 @@ class ContractCheck {
                   std::move(values)))
           return false;
       }
+    }
+    // Retain checking of unused recipes without borrowing evidence from an
+    // unchecked operation or admitting unrelated constructors at a consumer.
+    for (unsigned i = 0; i < context.domains.size(); ++i) {
+      unsigned selected;
+      if (!domain(context, i, selected, source.domainBindings[i].span))
+        return false;
     }
     return true;
   }
