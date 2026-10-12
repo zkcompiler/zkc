@@ -1,0 +1,12 @@
+module example;
+use evaluation::{Open};
+domain Rows = commitment("rows.merkle-keccak256.koala-bear.ext8-binomial3/0");
+
+proof Proof = Open<Rows> {
+  prover P;
+  verifier V;
+  public { shift, point, value };
+  accept accepted;
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
+}
+run Interactive = Open<Rows>;

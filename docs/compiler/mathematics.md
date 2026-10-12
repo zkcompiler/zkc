@@ -344,7 +344,7 @@ Their tests compare arithmetic with independent integer references under default
 unsimplified and ordered compilation. They establish these mathematical slices,
 not complete proof protocols or a performance improvement.
 
-The maintained [AIR library](../../libraries/air/README.md) also uses finite
+The maintained [AIR library](../../libraries/stark/README.md) also uses finite
 folds for quotient-claim recombination and interaction nonzero checks. Complete
 single-table AIR and three-table machine tests exercise these through proof
 construction and verification, with both LogUp and grand-product reductions.

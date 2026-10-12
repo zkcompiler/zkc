@@ -1,4 +1,6 @@
-module air_table;
+module air::table;
+use zkc::opening::{deep_columns, deep_column_values, same_rotation};
+use zkc::coset as coset;
 use zkc::vector as vector;
 use zkc::indices as indices;
 use zkc::boolean as boolean;
@@ -11,7 +13,7 @@ use zkc::indices::{less};
 use zkc::boolean::{both};
 
 use zkc::coset::{point, column_at};
-use air_polynomial::{vanishing, vanishing_values, recombine};
+use air::polynomial::{vanishing, vanishing_values, recombine};
 
 pub struct Shape {
   pub witness: index,
@@ -101,7 +103,7 @@ pub fn claims<F: Field, Table: nat, B: Bundle>(witness: Vector<F>,
 pub fn input_assignments<F: Field>(slots: Inputs, witness: Vector<F>,
     configuration: Vector<F>, public_columns: Vector<F>, public_data: Vector<F>,
     height: index, size: index) -> Vector<F> {
-  let blowup = kernel("index.div", size, height);
+  let blowup = indices::divide(size, height);
   require size == height * blowup;
   let count = indices::length(slots.kind);
   let mut columns = empty<F>();
@@ -113,7 +115,7 @@ pub fn input_assignments<F: Field>(slots: Inputs, witness: Vector<F>,
         let values = if kind == 1 { slice(witness, column * size, size) }
           else { if kind == 2 { slice(configuration, column * size, size) }
           else { slice(public_columns, column * size, size) } };
-        kernel<F>("vector.rotate", values, indices::get(slots.rotation, slot) * blowup)
+        vector::rotate(values, indices::get(slots.rotation, slot) * blowup)
       };
     columns = concat(columns, evaluations);
   }
@@ -159,7 +161,7 @@ pub fn divide_scopes<F: Field>(numerators: Vector<F>, begin: Indices, end: Indic
     if less(first, last) {
       let denominator = vanishing_values(height, first, last, shift, size);
       let quotient = vector::hadamard(slice(numerators, constraint * size, size),
-        kernel<F>("vector.inverse", denominator));
+        vector::inverse(denominator));
       result = accumulate(result, quotient, weight);
       weight = weight * alpha;
     }
@@ -194,16 +196,6 @@ pub fn quotient_values<F: Field, Table: nat, B: Bundle>(witness: Vector<F>,
   let scopes = assertion_scopes<F,Table,B>(height);
   return divide_scopes(transpose(rows, size, facts.assertions), scopes.0, scopes.1,
     height, shift, size, alpha);
-}
-
-pub fn opening_claims<F: Field>(columns: Vector<F>, count: index, shift: F,
-    size: index, zeta: F) -> Vector<F> {
-  require length(columns) == count * size;
-  let mut result = empty<F>();
-  for column in 0..count {
-    result = append(result, column_at(columns, column, size, zeta, shift));
-  }
-  return result;
 }
 
 // Values the verifier knows: public slots and configuration/public columns
@@ -264,7 +256,7 @@ pub fn read_quotients<F: Field>(slots: Inputs, witness: Vector<F>,
     if indices::get(slots.kind, slot) == 1 {
       let column = slice(witness, indices::get(slots.column, slot) * size, size);
       let x = shifted_point(height, indices::get(slots.rotation, slot), zeta);
-      let reduced = kernel<F>("poly.opening_quotient", column, shift, x, get(assignments, slot));
+      let reduced = coset::opening_quotient(column, shift, x, get(assignments, slot));
       result = accumulate(result, reduced, weight);
       weight = weight * rho;
     }
@@ -304,49 +296,6 @@ pub fn deep_read_values<F: Field, Table: nat, B: Bundle>(witness_row: Vector<F>,
   return read_values(inputs<F,Table,B>(height), witness_row, assignments, height, x, zeta, rho,
     initial, first_weight);
 }
-// Opening j reads column selected_j at zeta*g^rotation_j, with claimed value_j.
-pub fn deep_columns<F: Field>(columns: Vector<F>, selected: Indices, rotations: Indices,
-    values: Vector<F>, height: index, shift: F, size: index, zeta: F, rho: F,
-    initial: Vector<F>, first_weight: F) -> (Vector<F>, F) {
-  let count = indices::length(selected);
-  require both(indices::length(rotations) == count, length(values) == count);
-  let mut result = initial;
-  let mut weight = first_weight;
-  for opening in 0..count {
-    let column = slice(columns, indices::get(selected, opening) * size, size);
-    let x = shifted_point(height, indices::get(rotations, opening), zeta);
-    let reduced = kernel<F>("poly.opening_quotient", column, shift, x, get(values, opening));
-    result = accumulate(result, reduced, weight);
-    weight = weight * rho;
-  }
-  return (result, weight);
-}
-pub fn deep_column_values<F: Field>(row: Vector<F>, selected: Indices, rotations: Indices,
-    values: Vector<F>, height: index, x: F, zeta: F, rho: F,
-    initial: F, first_weight: F) -> (F, F) {
-  let count = indices::length(selected);
-  require both(indices::length(rotations) == count, length(values) == count);
-  let mut result = initial;
-  let mut weight = first_weight;
-  for opening in 0..count {
-    let at = shifted_point(height, indices::get(rotations, opening), zeta);
-    let reduced = (get(row, indices::get(selected, opening)) - get(values, opening)) * inverse(x - at);
-    result = result + weight * reduced;
-    weight = weight * rho;
-  }
-  return (result, weight);
-}
-// Quotient chunks are opened at zeta itself: rotation zero.
-pub fn same_rotation(count: index, rotation: index) -> (Indices, Indices) {
-  let mut selected = indices::empty();
-  let mut rotations = indices::empty();
-  for column in 0..count {
-    selected = indices::append(selected, column);
-    rotations = indices::append(rotations, rotation);
-  }
-  return (selected, rotations);
-}
-
 pub fn deep_word<F: Field, Table: nat, B: Bundle>(witness: Vector<F>,
     quotients: Vector<F>, assignments: Vector<F>, quotient_claims: Vector<F>,
     height: index, shift: F, size: index, zeta: F, rho: F, adjustment: F) -> Vector<F> {
@@ -359,7 +308,7 @@ pub fn deep_word<F: Field, Table: nat, B: Bundle>(witness: Vector<F>,
   let combined = deep_columns(quotients, chunks.0, chunks.1, quotient_claims, height, shift, size,
     zeta, rho, reads.0, reads.1);
   let result = combined.0;
-  let xs = kernel<F>("poly.domain_points", shift, size);
+  let xs = coset::points(shift, size);
   return vector::hadamard(result, add(fill<F>(1, size), scale(xs, adjustment)));
 }
 

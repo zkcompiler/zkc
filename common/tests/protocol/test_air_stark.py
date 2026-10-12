@@ -17,7 +17,7 @@ from logical_tree import decode_tree
 ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE = ROOT / 'examples/projects/air-stark/main.zkc'
 TABLE = ROOT / 'libraries/air/table.zkc'
-STARK = ROOT / 'libraries/air/stark.zkc'
+STARK = ROOT / 'libraries/stark/koala_bear/table.zkc'
 FIXTURE = ROOT / 'compiler/adapters/plonky3/fixtures/recurrence'
 P = 2130706433
 
@@ -68,10 +68,7 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, queries=8,
     path.write_text(source)
     command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                f'--module=air_stark_example={path}',
-               f'--module=air_stark={stark}',
-               f'--module=air_table={table}',
-               f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
-               f'--module=fri={ROOT}/libraries/fri/lib.zkc', *library_modules('zkc'),
+               *library_modules('stark', overrides={'stark::koala_bear::table': stark, 'air::table': table}),
                f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json',
                f'air_stark_example::{entry}', f'--output={package}', *flags]
     report = journal.json(command)
@@ -204,9 +201,7 @@ def test_stark_authenticates_claims_roots_and_late_openings(toolchain, journal, 
 def test_stark_transcript_orders_commitments_claims_and_queries(toolchain, journal):
     bundle = journal.json([toolchain.compiler, 'language-bundle', '--source-format=zkc',
         '--entry=air_stark_example::Proof', f'--module=air_stark_example={EXAMPLE}',
-        f'--module=air_stark={STARK}', f'--module=air_table={TABLE}',
-        f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
-        f'--module=fri={ROOT}/libraries/fri/lib.zkc', *library_modules('zkc'),
+        *library_modules('stark', overrides={'stark::koala_bear::table': STARK}),
         f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json'])
     descriptor = bundle[2]
     assert descriptor[0] == 'zkc.native-proof-descriptor/0'
@@ -279,9 +274,7 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
     # the honest source's generated identifiers after inserting P operations.
     emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
         '--entry=air_stark_example::Proof', f'--module=air_stark_example={directory}/main.zkc',
-        f'--module=air_stark={library}', f'--module=air_table={TABLE}',
-        f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
-        f'--module=fri={ROOT}/libraries/fri/lib.zkc', *library_modules('zkc'),
+        *library_modules('stark', overrides={'stark::koala_bear::table': library}),
         f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json'])
     sites = re.findall(r'"protocol\.guard"\(%\d+(?:#\d+)?\) <\{owner = "(\w+)", site = "(s\d+)"\}>', emitted)
     assert [owner for owner, _ in sites[:7]] == [
@@ -301,7 +294,8 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
 
 
 SAMPLER = '''module air_stark_example;
-use air_stark::{Extension, consider, finish};
+use stark::koala_bear::{Extension};
+use stark::sampling::{consider, finish};
 use zkc::vector::{Vector};
 fn choose(values: Vector<Extension>, shift: Extension) -> Extension {
   let mut chosen: Extension = 0;
@@ -359,8 +353,9 @@ def test_outside_sampler_excludes_domains_selects_first_and_exhausts(toolchain, 
 POLYNOMIAL_VIEW = '''module air_stark_example;
 use zkc::vector::{Vector, empty};
 use zkc::coset::{extend_columns};
-use air_polynomial::{split_quotient};
-use air_table::{quotient_values, claims, opening_claims, identity, deep_word};
+use air::polynomial::{split_quotient};
+use air::table::{quotient_values, claims, identity, deep_word};
+use zkc::opening::{opening_claims};
 domain E=field("koala-bear.ext8-binomial3");
 domain B=bundle(asset recurrence);
 fn inspect(trace:Vector<E>, configuration:Vector<E>, data:Vector<E>,

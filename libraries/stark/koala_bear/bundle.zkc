@@ -1,10 +1,12 @@
-module air_bundle;
+module stark::koala_bear::bundle;
 use zkc::vector as vector;
 use zkc::indices as indices;
 use zkc::boolean as boolean;
 use zkc::oracle as oracle;
-use air_stark::{Base, Extension, Outside};
-use zkc::vector::{Vector, length, empty, append, concat, get, slice, fill, add, scale, transpose};
+use zkc::coset as coset;
+use stark::koala_bear::{Base, Extension, TraceRows, ExtensionRows, embed_scalar, embed_vector, characteristic};
+use stark::sampling::{Outside};
+use zkc::vector::{Vector, length, empty, append, concat, slice, fill, add, scale, transpose};
 
 use zkc::indices::{Indices};
 
@@ -12,25 +14,15 @@ use zkc::indices::{less, maximum, two_adic};
 use zkc::boolean::{both};
 
 use zkc::coset::{point, extend_columns, column_at, disjoint_coset};
-use air_polynomial::{split_quotient, recombine, chunks_for};
-use air_table::{Shape, shape, claims, domain_assignments, assertion_scopes, divide_scopes,
-  combine_scopes, known_inputs, opening_claims, deep_reads, deep_read_values, deep_columns,
-  deep_column_values, same_rotation};
-use air_interaction::{Interactions, Layout, Reduction, interactions, no_interactions,
+use air::polynomial::{split_quotient, recombine, chunks_for};
+use air::table::{Shape, shape, claims, domain_assignments, assertion_scopes, divide_scopes,
+  combine_scopes, known_inputs, deep_reads, deep_read_values};
+use zkc::opening::{opening_claims, deep_columns, deep_column_values, same_rotation};
+use air::interaction::{Interactions, Layout, Reduction, interactions, no_interactions,
   range_constraints};
 use fri::{LowDegree};
 
 use zkc::oracle::{commit, open};
-
-domain TraceRows = commitment("rows.merkle-keccak256.koala-bear/0");
-domain ExtensionRows = commitment("rows.merkle-keccak256.koala-bear.ext8-binomial3/0");
-fn embed_vector(values: Vector<Base>) -> Vector<Extension> {
-  return kernel<Extension>("vector.embed", values);
-}
-fn embed_scalar(value: Base) -> Extension { return kernel<Extension>("field.embed", value); }
-fn same_index(left: index, right: index) -> bool { return left == right; }
-// The profile's count field is KoalaBear, of characteristic 2^31 - 2^24 + 1.
-fn characteristic() -> index { return 2130706433; }
 
 // One table's verifier-known data. `height` is the table's configured or
 // instance height; an absent instance-height table has height 0. Matrices are
@@ -49,12 +41,12 @@ pub struct Statement {
 }
 
 // Authority 0 is fixed, 1 configured and 2 instance.
-pub struct Policy {
-  pub optional: bool,
-  pub authority: index,
-  pub minimum: index,
-  pub maximum: index,
-  pub power_of_two: bool
+struct Policy {
+  optional: bool,
+  authority: index,
+  minimum: index,
+  maximum: index,
+  power_of_two: bool
 }
 fn policy<Table: nat, B: Bundle>() -> Policy {
   let facts = kernel<Base,Table>("relation.table_policy"; B);
@@ -216,7 +208,7 @@ fn auxiliary_width(layouts: [TableLayout; 3]) -> index {
 fn quotient_width(layouts: [TableLayout; 3]) -> index {
   return layouts[0].chunks + layouts[1].chunks + layouts[2].chunks;
 }
-fn split<F: Field>(values: Vector<F>, first: index, second: index, third: index)
+fn partition<F: Field>(values: Vector<F>, first: index, second: index, third: index)
     -> [Vector<F>; 3] {
   require length(values) == first + second + third;
   return [slice(values, 0, first), slice(values, first, second),
@@ -230,22 +222,22 @@ fn schedule<B: Bundle, MaxLogHeight: nat, Queries: nat, Attempts: nat>(rounds: i
 
 // Prover state. Columns are contiguous; `assignments` holds every ordered
 // arena input at every point of the common domain D, row-major.
-pub struct Extended {
-  pub trace: Vector<Extension>,
-  pub configuration: Vector<Extension>,
-  pub public_columns: Vector<Extension>,
-  pub trace_lde: Vector<Base>,
-  pub assignments: Vector<Extension>
+struct Extended {
+  trace: Vector<Extension>,
+  configuration: Vector<Extension>,
+  public_columns: Vector<Extension>,
+  trace_lde: Vector<Base>,
+  assignments: Vector<Extension>
 }
-pub struct Auxiliary {
-  pub columns: Vector<Extension>,
-  pub lde: Vector<Extension>,
-  pub claims: Vector<Extension>
+struct Auxiliary {
+  columns: Vector<Extension>,
+  lde: Vector<Extension>,
+  claims: Vector<Extension>
 }
-pub struct Opened {
-  pub inputs: Vector<Extension>,
-  pub auxiliary: Vector<Extension>,
-  pub quotient: Vector<Extension>
+struct Opened {
+  inputs: Vector<Extension>,
+  auxiliary: Vector<Extension>,
+  quotient: Vector<Extension>
 }
 fn nothing() -> Vector<Extension> { return empty<Extension>(); }
 
@@ -349,7 +341,7 @@ fn rotated(columns: Vector<Extension>, reduction: Layout, size: index, blowup: i
   let mut result = nothing();
   for opening in 0..indices::length(reduction.opened) {
     let column = slice(columns, indices::get(reduction.opened, opening) * size, size);
-    result = concat(result, kernel<Extension>("vector.rotate", column,
+    result = concat(result, vector::rotate(column,
       indices::get(reduction.rotations, opening) * blowup));
   }
   return result;
@@ -360,7 +352,7 @@ fn quotient_table<Table: nat, B: Bundle, R: Reduction<Extension>>(extended: Exte
     -> Vector<Extension> {
   return if layout.present {
     let height = layout.height;
-    let blowup = kernel("index.div", size, height);
+    let blowup = indices::divide(size, height);
     let residuals = kernel<Extension,Table>("relation.table_points", extended.assignments, size; B);
     let values = record_points<Table,B>(extended.assignments, size, layout.records.width);
     let openings = rotated(auxiliary.lde, layout.reduction, size, blowup);
@@ -419,11 +411,11 @@ fn joined(opened: [Opened; 3]) -> Opened {
 }
 fn separated(inputs: Vector<Extension>, auxiliary: Vector<Extension>,
     quotient: Vector<Extension>, layouts: [TableLayout; 3]) -> [Opened; 3] {
-  let first = split(inputs, layouts[0].facts.inputs, layouts[1].facts.inputs,
+  let first = partition(inputs, layouts[0].facts.inputs, layouts[1].facts.inputs,
     layouts[2].facts.inputs);
-  let second = split(auxiliary, indices::length(layouts[0].reduction.opened),
+  let second = partition(auxiliary, indices::length(layouts[0].reduction.opened),
     indices::length(layouts[1].reduction.opened), indices::length(layouts[2].reduction.opened));
-  let third = split(quotient, layouts[0].chunks, layouts[1].chunks, layouts[2].chunks);
+  let third = partition(quotient, layouts[0].chunks, layouts[1].chunks, layouts[2].chunks);
   return [Opened { inputs: first[0], auxiliary: second[0], quotient: third[0] },
     Opened { inputs: first[1], auxiliary: second[1], quotient: third[1] },
     Opened { inputs: first[2], auxiliary: second[2], quotient: third[2] }];
@@ -487,7 +479,7 @@ fn deep_tables<B: Bundle>(extended: [Extended; 3], tables: [Auxiliary; 3],
     size, zeta, rho, first.0, first.1);
   let third = deep_table<2,B>(extended[2], tables[2], chunks[2], layouts[2], opened[2], shift,
     size, zeta, rho, second.0, second.1);
-  let xs = kernel<Extension>("poly.domain_points", shift, size);
+  let xs = coset::points(shift, size);
   return vector::hadamard(third.0, add(fill<Extension>(1, size), scale(xs, adjustment)));
 }
 fn deep_table_value<Table: nat, B: Bundle>(layout: TableLayout, base_row: Vector<Extension>,
@@ -508,11 +500,11 @@ fn deep_table_value<Table: nat, B: Bundle>(layout: TableLayout, base_row: Vector
 fn deep_tables_value<B: Bundle>(layouts: [TableLayout; 3], base_row: Vector<Base>,
     auxiliary_row: Vector<Extension>, quotient_row: Vector<Extension>, opened: [Opened; 3],
     x: Extension, zeta: Extension, rho: Extension, adjustment: Extension) -> Extension {
-  let bases = split(embed_vector(base_row), layouts[0].facts.witness, layouts[1].facts.witness,
+  let bases = partition(embed_vector(base_row), layouts[0].facts.witness, layouts[1].facts.witness,
     layouts[2].facts.witness);
-  let auxiliaries = split(auxiliary_row, layouts[0].reduction.columns,
+  let auxiliaries = partition(auxiliary_row, layouts[0].reduction.columns,
     layouts[1].reduction.columns, layouts[2].reduction.columns);
-  let quotients = split(quotient_row, layouts[0].chunks, layouts[1].chunks, layouts[2].chunks);
+  let quotients = partition(quotient_row, layouts[0].chunks, layouts[1].chunks, layouts[2].chunks);
   let first = deep_table_value<0,B>(layouts[0], bases[0], auxiliaries[0], quotients[0],
     opened[0], x, zeta, rho, 0, 1);
   let second = deep_table_value<1,B>(layouts[1], bases[1], auxiliaries[1], quotients[1],
@@ -555,6 +547,7 @@ pub protocol ThreeTableArgument<B: Bundle, R: Reduction<Extension>,
      round_count: index @(P,V), query_count: index @(P,V), attempt_count: index @(P,V),
      channel_count: index @(P,V), coins: Random<Extension> @V) -> (accepted: bool @V)
     where B::Tables <= 3, 3 <= B::Tables, 1 <= B::Channels, 1 <= MaxLogHeight,
+      MaxLogHeight <= 63,
       MaxLogHeight+1 <= LogSize, 1 <= Queries, 1 <= Attempts {
   let scheduledV @V = schedule<B,MaxLogHeight,Queries,Attempts>(round_count, query_count,
     attempt_count, channel_count);

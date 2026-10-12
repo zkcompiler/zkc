@@ -21,7 +21,7 @@ def project_text(value):
     return '\n'.join(lines) + '\n'
 
 
-def project_inputs(path):
+def project_inputs(path, *, manifests=None):
     """Expand known-good test projects for comparison with explicit SDK inputs.
 
     Production admission and refusal cases belong to the Rust loader. This
@@ -35,6 +35,8 @@ def project_inputs(path):
         if context in seen:
             return
         seen.add(context)
+        if manifests is not None:
+            manifests.append(context)
         config = tomllib.loads(path.read_text())
         for name, source in config.get('modules', {}).items():
             source = (path.parent / source).resolve()

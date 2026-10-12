@@ -92,7 +92,7 @@ def emitted_sites(emitted):
 def local_symbol(variant, module, name):
     """The generated symbol of one source function, by its retained origin."""
     expected = 's' + ''.join(f'{len(part.encode())}h{part.encode().hex()}'
-                             for part in (module, name))
+                             for part in (*module.split('::'), name))
     (symbol,) = [symbol for origin, symbol in variant.functions.items() if origin == expected]
     return symbol
 
@@ -119,18 +119,19 @@ def build(toolchain, journal, directory, name, *, main=None, asset=None, edits=(
     where = directory / name
     where.mkdir()
     texts = {'air_stark_example': EXAMPLE.read_text() if main is None else main,
-             'air_stark': STARK.read_text(), 'air_table': TABLE.read_text(),
-             'air_polynomial': POLYNOMIAL.read_text(), 'fri': FRI.read_text()}
+             'stark::koala_bear::table': STARK.read_text(), 'air::table': TABLE.read_text(),
+             'air::polynomial': POLYNOMIAL.read_text(), 'fri': FRI.read_text()}
     for module, old, new in edits:
         assert texts[module].count(old) == 1, (module, old)
         texts[module] = texts[module].replace(old, new)
     for module, extra in appended:
         texts[module] += '\n' + extra
-    arguments = library_modules('zkc')
+    overrides = {}
     for module, text in texts.items():
         path = where / f'{module}.zkc'
         path.write_text(text)
-        arguments.append(f'--module={module}={path}')
+        overrides[module] = path
+    arguments = library_modules('stark', overrides=overrides)
     label, bundle = asset or ('recurrence', FIXTURE / 'bundle.json')
     arguments.append(f'--asset={label}=relation-bundle-json={bundle}')
     package = where / 'Proof.zkpkg'
@@ -161,8 +162,8 @@ def verify(toolchain, journal, variant, name, public, proof, *, refuses=None):
 
 # The prover's own coefficient bound in split_quotient, replaced by silent
 # truncation to the chunk capacity.
-TRUNCATION = ('air_polynomial',
-              '  require not(less(capacity, actual));\n'
+TRUNCATION = ('air::polynomial',
+              '  require boolean::negate(less(capacity, actual));\n'
               '  let padded = concat(coefficients, fill<F>(0, capacity - actual));',
               '  let padded = slice(concat(coefficients, fill<F>(0, capacity)), 0, capacity);')
 
@@ -186,7 +187,7 @@ def test_false_trace_with_truncated_quotient_stops_at_identity(toolchain, journa
     assert report['status'] == 'refused' and report['code'].startswith('artifact-stopped:')
     stop = report['execution']['stop']
     assert stop['role'] == 'role00000000' and stop['kind'] == 'Explicit("reject")', stop
-    assert stop['local']['function'] == local_symbol(shipped, 'air_polynomial', 'split_quotient')
+    assert stop['local']['function'] == local_symbol(shipped, 'air::polynomial', 'split_quotient')
 
     truncating = build(toolchain, journal, directory, 'truncating', edits=[TRUNCATION])
     proof = prove(toolchain, journal, truncating, 'false', public, false_private)
@@ -198,7 +199,7 @@ def test_false_trace_with_truncated_quotient_stops_at_identity(toolchain, journa
     assert verify(toolchain, journal, truncating, 'honest', public, honest)['status'] == 'accepted'
 
 
-USE_TABLE = ('use air_table::{shape, claims, quotient_values, opening_claims, '
+USE_TABLE = ('use air::table::{shape, claims, quotient_values, '
              'identity, deep_word, deep_value};')
 CLAIMS = ('  let proposed @P = claims<Extension,Table,B>(trace_baseP, config_baseP, public_baseP,\n'
           '    dataP, heightP, zetaP);')
@@ -260,16 +261,16 @@ def test_witness_claim_lie_consistent_at_zeta_stops_at_fri_degree(toolchain, jou
     bundle = json.loads((FIXTURE / 'bundle.json').read_text())
     assert bundle[3][0][6][0] == ['read', 0, '0', 0]
     helpers = 'bump_slot, compensate' if compensated else 'bump_slot'
-    edits = [('air_stark', USE_TABLE, USE_TABLE.replace('deep_value}', f'deep_value, {helpers}}}')),
-             ('air_stark', CLAIMS, CLAIMS.replace('let proposed @P', 'let honest @P')
+    edits = [('stark::koala_bear::table', USE_TABLE, USE_TABLE.replace('deep_value}', f'deep_value, {helpers}}}')),
+             ('stark::koala_bear::table', CLAIMS, CLAIMS.replace('let proposed @P', 'let honest @P')
               + '\n  let proposed @P = bump_slot(honest, index<0>());')]
     if compensated:
-        edits.append(('air_stark', QUOTIENT_CLAIMS,
+        edits.append(('stark::koala_bear::table', QUOTIENT_CLAIMS,
                       QUOTIENT_CLAIMS.replace('let proposed_quotient @P', 'let honest_quotient @P')
                       + '\n  let proposed_quotient @P = compensate<Extension,Table,B>('
                       'honest_quotient, honest, proposed, heightP, zetaP, alphaP);'))
     variant = build(toolchain, journal, directory, 'lying', edits=edits,
-                    appended=[('air_table', COMPENSATION)])
+                    appended=[('air::table', COMPENSATION)])
     public, private = inputs()
     proof = prove(toolchain, journal, variant, 'lying', public, private)
     checked = verify(toolchain, journal, variant, 'lying', public, proof, refuses='artifact-stopped')
@@ -288,7 +289,8 @@ COLUMN_BUNDLE = ['zkc.relation-bundle/0', [['x0', 'koala-bear']], [], [[
     [['read', 0, '0', 0], ['read', 0, '1', 0], ['public', 0]],
     [[0, ['interior', 0, 1]], [1, ['first']]], []]]]
 COLUMN_MAIN = '''module air_stark_example;
-use air_stark::{Base, Extension, Statement, TableArgument};
+use stark::koala_bear::{Base, Extension};
+use stark::koala_bear::table::{Statement, TableArgument};
 use zkc::vector::{Vector};
 domain Column = bundle(asset column);
 
@@ -333,7 +335,7 @@ proof Proof = ColumnProof {
 # trace, so the lifted column is claimed consistently at every opening point.
 LIFT = '''
 pub fn lift<F: Field>(values: Vector<F>, height: index, shift: F, size: index) -> Vector<F> {
-  return add(values, vanishing_values(height, 0, height, shift, size));
+  return vector::add(values, vanishing_values(height, 0, height, shift, size));
 }
 '''
 CLAIMS_FROM_EXTENSION = '''
@@ -351,21 +353,21 @@ pub fn claims_lde<F: Field, Table: nat, B: Bundle>(witness: Vector<F>,
   return assignments;
 }
 '''
-USE_POLYNOMIAL = 'use air_polynomial::{split_quotient};'
+USE_POLYNOMIAL = 'use air::polynomial::{split_quotient};'
 
 EXTENSION = ('let trace_lde @P = extend_columns(trace_columns, factsP.witness, heightP, '
              'statementP.shift, sizeP);')
-LIFTED = [('air_stark', USE_POLYNOMIAL, USE_POLYNOMIAL.replace('split_quotient}', 'split_quotient, lift}')),
-          ('air_stark', USE_TABLE, USE_TABLE.replace('deep_value}', 'deep_value, claims_lde}')),
-          ('air_stark', EXTENSION, EXTENSION.replace('= extend_columns(', '= lift(extend_columns(')
+LIFTED = [('stark::koala_bear::table', USE_POLYNOMIAL, USE_POLYNOMIAL.replace('split_quotient}', 'split_quotient, lift}')),
+          ('stark::koala_bear::table', USE_TABLE, USE_TABLE.replace('deep_value}', 'deep_value, claims_lde}')),
+          ('stark::koala_bear::table', EXTENSION, EXTENSION.replace('= extend_columns(', '= lift(extend_columns(')
            .replace('sizeP);', 'sizeP), heightP, statementP.shift, sizeP);')),
-          ('air_stark', CLAIMS, '  let proposed @P = claims_lde<Extension,Table,B>('
+          ('stark::koala_bear::table', CLAIMS, '  let proposed @P = claims_lde<Extension,Table,B>('
                                 'trace_extension, dataP, heightP, shiftP, sizeP, zetaP);')]
 # The (1 + eta X) degree adjustment removed from both the prover's DEEP word
 # and the verifier's DEEP value.
-UNADJUSTED = [('air_table', '  return multiply(result, add(fill<F>(1, size), scale(xs, adjustment)));',
+UNADJUSTED = [('air::table', '  return vector::hadamard(result, add(fill<F>(1, size), scale(xs, adjustment)));',
                '  return result;'),
-              ('air_table', '  return result * (1 + adjustment * x);', '  return result;')]
+              ('air::table', '  return result * (1 + adjustment * x);', '  return result;')]
 
 
 def test_degree_adjustment_rejects_committed_column_of_degree_height(toolchain, journal, directory):
@@ -381,7 +383,7 @@ def test_degree_adjustment_rejects_committed_column_of_degree_height(toolchain, 
     public = {'x0': scalar(5), 'shift': scalar(3), 'round_count': 3, 'query_count': 8,
               'attempt_count': 8}
     private = {'trace': vector([5] * 8)}
-    helpers = [('air_polynomial', LIFT), ('air_table', CLAIMS_FROM_EXTENSION)]
+    helpers = [('air::polynomial', LIFT), ('air::table', CLAIMS_FROM_EXTENSION)]
     roots = {}
     for name, edits in [('honest', []), ('lifted', LIFTED), ('lifted-unadjusted', LIFTED + UNADJUSTED),
                         ('honest-unadjusted', UNADJUSTED)]:

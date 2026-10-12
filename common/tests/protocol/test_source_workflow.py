@@ -477,3 +477,11 @@ def test_local_dependency_capture_matches_explicit_and_protects_manifests(toolch
     journal.run([*command, f'--project={project}', f'--output={directory}/cycle.zkpkg'],
                 refuses='source-project-cycle')
     assert not (directory / 'cycle.zkpkg').exists()
+
+
+@pytest.mark.parametrize('family', ['zkc', 'schnorr', 'sumcheck', 'fri', 'air', 'stark', 'spongefish'])
+def test_library_family_has_a_complete_standalone_capture(toolchain, journal, family):
+    root = Path(__file__).resolve().parents[3]
+    result = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
+                           f'--project={root}/libraries/{family}/zkc.toml'])
+    assert result['status'] == 'checked' and result['scope'] == 'definitions'

@@ -12,6 +12,7 @@ from project import project_inputs
 import pytest
 
 from entry import Entry
+from source_modules import library_modules
 from input_files import decimal_values
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -99,7 +100,7 @@ def test_fri_pairs_match_polynomial_and_existing_kernel(toolchain, journal, dire
     kernel_dir = directory / 'kernel'
     kernel_dir.mkdir()
     kernel = Entry(toolchain, journal, kernel_dir, FRI_KERNEL_ADAPTER,
-                   [f'--module=fri={ROOT}/libraries/fri/lib.zkc', *flags])
+                   [*library_modules('fri'), *flags])
 
     fixture, _, folded = polynomial_fold([3, 2, 1, 4], 4, 1, 5)
     assert folded == [34, KOALA_BEAR - 8]

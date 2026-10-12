@@ -23,7 +23,8 @@ BUNDLE = ['zkc.relation-bundle/0', [['x0', 'koala-bear']], [], [[
     [[0, ['interval', 2, 6]], [1, ['interval', 3, 3]]], []]]]
 
 SOURCE = '''module air_stark_example;
-use air_stark::{Base, Extension, Statement, TableArgument};
+use stark::koala_bear::{Base, Extension};
+use stark::koala_bear::table::{Statement, TableArgument};
 use zkc::vector::{Vector};
 domain Scoped = bundle(asset statement_fixture);
 
@@ -111,7 +112,7 @@ def test_private_prover_statement_cannot_replace_verifier_inputs(
     # precisely that equality accepts the same false statement. Production
     # library sources are never changed by this control.
     unchecked = build(toolchain, journal, directory, 'unchecked', main=SOURCE,
-                      asset=('statement_fixture', bundle), edits=[('air_table',
+                      asset=('statement_fixture', bundle), edits=[('air::table',
                       '      known = both(known, get(assignments, slot) == expected);',
                       '      known = both(known, true);')])
     forged = prove(toolchain, journal, unchecked, 'foreign', public, false_private)

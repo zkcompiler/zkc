@@ -6,7 +6,7 @@ They select no application relation, participant protocol or transcript policy.
 | Family | Modules |
 |---|---|
 | Collections and traversal | `vector`, `indices`, `sequence`, `matrix`, `field_array`, `finite`, `finite_math`, `finite_domain`, `accumulation` |
-| Algebra and polynomials | `scalar`, `curve`, `polynomial`, `multilinear`, `coset`, `symbolic`, `boolean` |
+| Algebra and polynomials | `scalar`, `curve`, `polynomial`, `multilinear`, `coset`, `opening`, `symbolic`, `boolean` |
 | Commitments and encoding | `oracle`, `bytes`, `encoding`, `proof`, `shake128`, `transcript`, `sampling` |
 
 Names above are under `zkc::`. The [manifest](zkc.toml) captures this family.
@@ -31,8 +31,18 @@ contains prover opening data; `Root` and `Path` are distinct native values.
 
 `scalar::inverse` and vector inversion refuse zero. Vector arithmetic and
 layout operations retain native shape checks. `scalar::power` uses an unsigned
-64-bit index exponent. `polynomial` stores univariate coefficients in increasing
+64-bit index exponent. `indices::two_adic<Max>` recognizes powers of two from
+2 through `2^Max`, with `Max <= 63`; zero and one return false. Prefix sums and
+products preserve every prefix, while ordinary sums and products return one
+value. `polynomial` stores univariate coefficients in increasing
 power order; an empty coefficient vector denotes zero.
+
+`opening::deep_columns` and `deep_column_values` batch ordered column openings
+with successive powers of `rho`, continuing the supplied accumulator and first
+weight. The vector accumulator has the evaluation-domain size, including for
+an empty batch. Callers exclude every rotated opening point from that domain.
+The row form checks the same equation at one authenticated row; the caller
+still supplies authentication, degree checks and acceptance.
 
 ## Bounded sampling
 
@@ -127,7 +137,7 @@ The [FRI fold](../../examples/projects/fri-fold/README.md) and
 [LogUp row](../../examples/projects/logup-rows/README.md) examples exercise returned
 projections, intermediate collection lengths and fixed compression weights in
 two protocol computations. They reuse `fri::fold_value` and the
-`air_interaction` functions `gated_denominator`, `reciprocal_residual` and
+`air::interaction` functions `gated_denominator`, `reciprocal_residual` and
 `boolean_residual`. These scalar functions express the equations; their callers
 supply authenticated values, valid inverses and the remaining protocol checks.
 
@@ -229,4 +239,3 @@ These functions use `primitive` bodies when their ports determine the installed
 scheme. Algorithms and operations with explicit attributes retain ordinary bodies.
 Both paths reach the same native mathematical/vector contracts; imports control
 source notation and do not install new runtime semantics.
-

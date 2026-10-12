@@ -1,7 +1,7 @@
-module air_interaction;
+module air::interaction;
 use zkc::vector as vector;
 use zkc::indices as indices;
-use zkc::vector as vec;
+use zkc::boolean as boolean;
 use zkc::finite_math as total;
 use zkc::vector::{Vector, length, empty, append, concat, get, slice, fill, accumulate};
 
@@ -35,11 +35,11 @@ pub fn interactions(channels: index, channel: Indices, side: Indices, arity: Ind
     both(indices::length(tuple_degree) == count, indices::length(count_degree) == count));
   let mut offset = indices::empty();
   let mut width: index = 0;
-  for interaction in 0..count {
-    require both(less(indices::get(channel, interaction), channels),
-      less(indices::get(side, interaction), 2));
+  for record_index in 0..count {
+    require both(less(indices::get(channel, record_index), channels),
+      less(indices::get(side, record_index), 2));
     offset = indices::append(offset, width);
-    width = width + indices::get(arity, interaction) + 1;
+    width = width + indices::get(arity, record_index) + 1;
   }
   return Interactions { channels, count, width, channel, side, arity, offset,
     tuple_degree, count_degree };
@@ -50,21 +50,21 @@ pub fn no_interactions(channels: index) -> Interactions {
 }
 
 pub fn coordinate<F: Field>(values: Vector<F>, records: Interactions, rows: index,
-    interaction: index, position: index) -> Vector<F> {
-  let column = indices::get(records.offset, interaction) + position;
+    record_index: index, position: index) -> Vector<F> {
+  let column = indices::get(records.offset, record_index) + position;
   return slice(values, column * rows, rows);
 }
 pub fn multiplicity<F: Field>(values: Vector<F>, records: Interactions, rows: index,
-    interaction: index) -> Vector<F> {
-  return coordinate(values, records, rows, interaction, indices::get(records.arity, interaction));
+    record_index: index) -> Vector<F> {
+  return coordinate(values, records, rows, record_index, indices::get(records.arity, record_index));
 }
 // fp(t) = t_0 + delta*t_1 + ... + delta^(k-1)*t_(k-1), row by row.
 pub fn fingerprint<F: Field>(values: Vector<F>, records: Interactions, rows: index,
-    interaction: index, delta: F) -> Vector<F> {
+    record_index: index, delta: F) -> Vector<F> {
   let mut result = fill<F>(0, rows);
   let mut weight: F = 1;
-  for position in 0..indices::get(records.arity, interaction) {
-    result = accumulate(result, coordinate(values, records, rows, interaction, position), weight);
+  for position in 0..indices::get(records.arity, record_index) {
+    result = accumulate(result, coordinate(values, records, rows, record_index, position), weight);
     weight = weight * delta;
   }
   return result;
@@ -103,10 +103,10 @@ fn shaped<F: Field>(records: Interactions, values: Vector<F>, rows: index,
 // is needed here; auxiliary running products remain explicit in the reduction.
 fn nonzero<F: Field>(values: Vector<F>) -> bool {
   let one: F = 1;
-  return not_zero(total::fold(vec::elements(values), one,
+  return not_zero(total::fold(vector::elements(values), one,
     fn(product, value) => product * value));
 }
-fn not_zero<F: Field>(value: F) -> bool { return kernel("bool.not", value == 0); }
+fn not_zero<F: Field>(value: F) -> bool { return boolean::negate(value == 0); }
 
 // The bound-1 range of every multiset record: m*(m-1) on the record's rows.
 // It is part of the relation's meaning, independent of the reduction.
@@ -114,8 +114,8 @@ pub fn range_constraints<F: Field>(records: Interactions, values: Vector<F>, row
     -> Vector<F> {
   require length(values) == records.width * rows;
   let mut result = empty<F>();
-  for interaction in 0..records.count {
-    let counts = multiplicity(values, records, rows, interaction);
+  for record_index in 0..records.count {
+    let counts = multiplicity(values, records, rows, record_index);
     result = concat(result, map boolean_residual<F>(each counts));
   }
   return result;
@@ -160,8 +160,8 @@ fn used_channels(records: Interactions) -> Indices {
   let mut result = indices::empty();
   for channel in 0..records.channels {
     let mut found = false;
-    for interaction in 0..records.count {
-      found = if indices::get(records.channel, interaction) == channel { true } else { found };
+    for record_index in 0..records.count {
+      found = if indices::get(records.channel, record_index) == channel { true } else { found };
     }
     if found { result = indices::append(result, channel); }
   }
@@ -174,11 +174,11 @@ fn channel_term<F: Field>(records: Interactions, values: Vector<F>, inverses: Ve
   let one: F = 1;
   let zero: F = 0;
   let mut term = fill<F>(0, rows);
-  for interaction in 0..records.count {
-    if indices::get(records.channel, interaction) == channel {
-      let sign = if indices::get(records.side, interaction) == 0 { one } else { zero - one };
-      let counts = multiplicity(values, records, rows, interaction);
-      term = accumulate(term, vector::hadamard(counts, slice(inverses, interaction * rows, rows)), sign);
+  for record_index in 0..records.count {
+    if indices::get(records.channel, record_index) == channel {
+      let sign = if indices::get(records.side, record_index) == 0 { one } else { zero - one };
+      let counts = multiplicity(values, records, rows, record_index);
+      term = accumulate(term, vector::hadamard(counts, slice(inverses, record_index * rows, rows)), sign);
     }
   }
   return term;
@@ -196,22 +196,22 @@ pub module LogUp<F: Field>: Reduction<F> {
     let mut begin = indices::empty();
     let mut end = indices::empty();
     let mut degree = indices::empty();
-    for interaction in 0..records.count {
-      opened = indices::append(opened, interaction);
+    for record_index in 0..records.count {
+      opened = indices::append(opened, record_index);
       rotations = indices::append(rotations, 0);
       begin = indices::append(begin, 0);
       end = indices::append(end, height);
-      degree = indices::append(degree, indices::get(records.count_degree, interaction) + 1 +
-        indices::get(records.tuple_degree, interaction));
+      degree = indices::append(degree, indices::get(records.count_degree, record_index) + 1 +
+        indices::get(records.tuple_degree, record_index));
     }
     for sum in 0..indices::length(sums) {
       let column = records.count + sum;
       opened = indices::append(indices::append(opened, column), column);
       rotations = indices::append(indices::append(rotations, 0), height - 1);
       let mut term_degree: index = 1;
-      for interaction in 0..records.count {
-        if indices::get(records.channel, interaction) == indices::get(sums, sum) {
-          term_degree = maximum(term_degree, indices::get(records.count_degree, interaction) + 1);
+      for record_index in 0..records.count {
+        if indices::get(records.channel, record_index) == indices::get(sums, sum) {
+          term_degree = maximum(term_degree, indices::get(records.count_degree, record_index) + 1);
         }
       }
       begin = indices::append(indices::append(indices::append(begin, 0), 1), height - 1);
@@ -225,10 +225,10 @@ pub module LogUp<F: Field>: Reduction<F> {
       challenges: Vector<F>) -> (Vector<F>, Vector<F>) {
     require shaped(records, values, height, challenges);
     let mut denominators = empty<F>();
-    for interaction in 0..records.count {
-      let channel = indices::get(records.channel, interaction);
-      let counts = multiplicity(values, records, height, interaction);
-      let fingerprints = fingerprint(values, records, height, interaction,
+    for record_index in 0..records.count {
+      let channel = indices::get(records.channel, record_index);
+      let counts = multiplicity(values, records, height, record_index);
+      let fingerprints = fingerprint(values, records, height, record_index,
         compression(challenges, channel));
       let gamma = shift_challenge(challenges, channel);
       denominators = concat(denominators,
@@ -236,18 +236,18 @@ pub module LogUp<F: Field>: Reduction<F> {
     }
     // An active record whose shift equals its fingerprint has no inverse.
     // This is a completeness failure of the honest prover, not a rejection.
-    if kernel("bool.not", nonzero(denominators)) { stop "abort"; }
-    let all = kernel<F>("vector.inverse", denominators);
+    if boolean::negate(nonzero(denominators)) { stop "abort"; }
+    let all = vector::inverse(denominators);
     let mut columns = empty<F>();
-    for interaction in 0..records.count {
-      let counts = multiplicity(values, records, height, interaction);
-      columns = concat(columns, vector::hadamard(counts, slice(all, interaction * height, height)));
+    for record_index in 0..records.count {
+      let counts = multiplicity(values, records, height, record_index);
+      columns = concat(columns, vector::hadamard(counts, slice(all, record_index * height, height)));
     }
     let sums = used_channels(records);
     let mut claims = empty<F>();
     for sum in 0..indices::length(sums) {
       let term = channel_term(records, values, columns, height, indices::get(sums, sum));
-      let running = kernel<F>("vector.prefix_sum", term);
+      let running = vector::prefix_sum(term);
       columns = concat(columns, running);
       claims = append(claims, get(running, height - 1));
     }
@@ -260,12 +260,12 @@ pub module LogUp<F: Field>: Reduction<F> {
     require both(length(openings) == (records.count + 2 * indices::length(sums)) * rows,
       length(claims) == indices::length(sums));
     let mut result = empty<F>();
-    for interaction in 0..records.count {
-      let channel = indices::get(records.channel, interaction);
-      let counts = multiplicity(values, records, rows, interaction);
-      let fingerprints = fingerprint(values, records, rows, interaction,
+    for record_index in 0..records.count {
+      let channel = indices::get(records.channel, record_index);
+      let counts = multiplicity(values, records, rows, record_index);
+      let fingerprints = fingerprint(values, records, rows, record_index,
         compression(challenges, channel));
-      let inverses = slice(openings, interaction * rows, rows);
+      let inverses = slice(openings, record_index * rows, rows);
       let gamma = shift_challenge(challenges, channel);
       result = concat(result,
         map reciprocal_residual<F>(each counts, each inverses, gamma, each fingerprints));
@@ -299,7 +299,7 @@ pub module LogUp<F: Field>: Reduction<F> {
   fn global(accumulator: Vector<F>, channels: index) -> Vector<F> { return empty<F>(); }
   fn close(accumulator: Vector<F>, global_sum: Vector<F>, channels: index) -> bool {
     return both(length(global_sum) == 0,
-      kernel<F>("vector.equal", accumulator, fill<F>(0, channels)));
+      vector::equal(accumulator, fill<F>(0, channels)));
   }
   // A field sum of natural Boolean counts is their natural sum only below the
   // characteristic.
@@ -314,8 +314,8 @@ fn used_keys(records: Interactions) -> Indices {
   let mut result = indices::empty();
   for key in 0..2 * records.channels {
     let mut found = false;
-    for interaction in 0..records.count {
-      let own = 2 * indices::get(records.channel, interaction) + indices::get(records.side, interaction);
+    for record_index in 0..records.count {
+      let own = 2 * indices::get(records.channel, record_index) + indices::get(records.side, record_index);
       found = if own == key { true } else { found };
     }
     if found { result = indices::append(result, key); }
@@ -326,11 +326,11 @@ fn used_keys(records: Interactions) -> Indices {
 fn row_factor<F: Field>(records: Interactions, values: Vector<F>, rows: index,
     challenges: Vector<F>, key: index) -> Vector<F> {
   let mut row = fill<F>(1, rows);
-  for interaction in 0..records.count {
-    let channel = indices::get(records.channel, interaction);
-    if 2 * channel + indices::get(records.side, interaction) == key {
-      let counts = multiplicity(values, records, rows, interaction);
-      let fingerprints = fingerprint(values, records, rows, interaction,
+  for record_index in 0..records.count {
+    let channel = indices::get(records.channel, record_index);
+    if 2 * channel + indices::get(records.side, record_index) == key {
+      let counts = multiplicity(values, records, rows, record_index);
+      let fingerprints = fingerprint(values, records, rows, record_index,
         compression(challenges, channel));
       let gamma = shift_challenge(challenges, channel);
       row = vector::hadamard(row, map gated_denominator<F>(each counts, gamma, each fingerprints));
@@ -356,11 +356,11 @@ pub module GrandProduct<F: Field>: Reduction<F> {
       opened = indices::append(indices::append(opened, column), column);
       rotations = indices::append(indices::append(rotations, 0), height - 1);
       let mut row_degree: index = 0;
-      for interaction in 0..records.count {
-        let own = 2 * indices::get(records.channel, interaction) + indices::get(records.side, interaction);
+      for record_index in 0..records.count {
+        let own = 2 * indices::get(records.channel, record_index) + indices::get(records.side, record_index);
         if own == indices::get(keys, column) {
-          row_degree = row_degree + indices::get(records.count_degree, interaction) +
-            indices::get(records.tuple_degree, interaction);
+          row_degree = row_degree + indices::get(records.count_degree, record_index) +
+            indices::get(records.tuple_degree, record_index);
         }
       }
       begin = indices::append(indices::append(indices::append(begin, 0), 1), height - 1);
@@ -380,11 +380,11 @@ pub module GrandProduct<F: Field>: Reduction<F> {
         indices::get(keys, column)));
     }
     // A zero factor is an active record whose shift equals its fingerprint.
-    if kernel("bool.not", nonzero(factors)) { stop "abort"; }
+    if boolean::negate(nonzero(factors)) { stop "abort"; }
     let mut columns = empty<F>();
     let mut claims = empty<F>();
     for column in 0..indices::length(keys) {
-      let running = kernel<F>("vector.prefix_product", slice(factors, column * height, height));
+      let running = vector::prefix_product(slice(factors, column * height, height));
       columns = concat(columns, running);
       claims = append(claims, get(running, height - 1));
     }

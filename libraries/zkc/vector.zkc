@@ -75,3 +75,7 @@ pub fn subtract<F: Field>(a: Vector<F>, b: Vector<F>) -> Vector<F> = primitive("
 
 pub fn inverse<F: Field>(values: Vector<F>) -> Vector<F> = primitive("vector.inverse");
 pub fn geometric<F: Field>(base: F, count: index) -> Vector<F> = primitive("vector.geometric");
+pub fn rotate<F: Field>(values: Vector<F>, offset: index) -> Vector<F> = primitive("vector.rotate");
+pub fn equal<F: Field>(left: Vector<F>, right: Vector<F>) -> bool = primitive("vector.equal");
+pub fn prefix_sum<F: Field>(values: Vector<F>) -> Vector<F> = primitive("vector.prefix_sum");
+pub fn prefix_product<F: Field>(values: Vector<F>) -> Vector<F> = primitive("vector.prefix_product");

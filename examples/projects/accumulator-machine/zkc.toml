@@ -4,7 +4,7 @@ format = "zkc.project/0"
 "accumulator_machine" = "main.zkc"
 
 [dependencies]
-air = "../../../libraries/air"
+stark = "../../../libraries/stark"
 fri = "../../../libraries/fri"
 
 [assets.machine]

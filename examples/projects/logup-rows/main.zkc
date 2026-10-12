@@ -1,5 +1,5 @@
 module logup_rows;
-use air_interaction::{gated_denominator, reciprocal_residual, boolean_residual};
+use air::interaction::{gated_denominator, reciprocal_residual, boolean_residual};
 use zkc::vector::{Vector};
 use zkc::vector as vec;
 use zkc::sequence::{Sequence};

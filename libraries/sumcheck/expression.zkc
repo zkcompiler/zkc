@@ -1,6 +1,7 @@
 module sumcheck::expression;
 
-use zkc::vector::{Vector, split, length, has_length, empty, append};
+use zkc::vector::{Vector, split, length, has_length, empty, append, get};
+use zkc::indices::{divide};
 use zkc::polynomial::{from_coefficients, boundary, evaluate};
 
 // The captured arena A fixes one closed expression and its ordered factor
@@ -9,13 +10,12 @@ use zkc::polynomial::{from_coefficients, boundary, evaluate};
 // the final factor values and reads the single output.
 fn round<F: Field, A: Ring>(values: Vector<F>) -> Vector<F> {
   let halves = split(values);
-  let rows = kernel("index.div", length(halves.0),
-                    index<A::Inputs>());
+  let rows = divide(length(halves.0), index<A::Inputs>());
   return kernel<F>("ring.affine_sum", halves.0, halves.1, rows; A);
 }
 fn terminal<F: Field, A: Ring>(values: Vector<F>) -> F {
   let result = kernel<F>("ring.point", values; A);
-  return kernel<F>("vector.at", result; "0");
+  return get(result, 0);
 }
 pub use zkc::multilinear::{Evaluation};
 use zkc::multilinear::{fix_first, fix_prefix};

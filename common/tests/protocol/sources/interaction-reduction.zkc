@@ -4,7 +4,7 @@ use zkc::vector::{Vector, empty, concat, slice};
 use zkc::indices::{Indices};
 
 
-use air_interaction::{Interactions, Layout, Reduction, LogUp, GrandProduct, interactions,
+use air::interaction::{Interactions, Layout, Reduction, LogUp, GrandProduct, interactions,
   range_constraints};
 domain E = field("koala-bear.ext8-binomial3");
 

@@ -1,0 +1,7 @@
+format = "zkc.project/0"
+[modules]
+example = "main.zkc"
+statement = "protocol.zkc"
+[dependencies]
+schnorr = "../../../libraries/schnorr"
+spongefish = "../../../libraries/spongefish"

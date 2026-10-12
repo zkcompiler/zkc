@@ -24,12 +24,13 @@ pub fn concat(left: Indices, right: Indices) -> Indices {
 
 pub fn less(left: index, right: index) -> bool { return kernel("index.less", left, right); }
 pub fn maximum(left: index, right: index) -> index { return if less(left, right) { right } else { left }; }
-pub fn two_adic<LogMaximum: nat>(height: index) -> bool {
-  let mut candidate: index = 2;
+// Powers of two in [2, 2^LogMaximum], within the unsigned index carrier.
+pub fn two_adic<LogMaximum: nat>(height: index) -> bool where LogMaximum <= 63 {
+  let mut candidate: index = 1;
   let mut found = false;
   for _ in 0..index<LogMaximum>() {
-    found = if candidate == height { true } else { found };
     candidate = candidate * 2;
+    found = if candidate == height { true } else { found };
   }
   return found;
 }

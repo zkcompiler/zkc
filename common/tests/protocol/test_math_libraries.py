@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from entry import Entry
+from source_modules import library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULES = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
@@ -137,3 +138,74 @@ def test_formal_contract_and_execution_modes_refuse(toolchain, journal, director
         path.write_text(prefix + definition)
         journal.run([toolchain.compiler, 'language-check', '--source-format=zkc',
                      '--entry=sample::Demo', f'--module=sample={path}', *MODULES], refuses=code)
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_two_adic_height_bound_covers_the_index_carrier(toolchain, journal, directory, flags):
+    source = '''module sample;
+use zkc::indices::{two_adic};
+protocol Check roles(P)(height:index@P)->(small:bool@P,full:bool@P,empty:bool@P) {
+  return (small=two_adic<4>(height),full=two_adic<63>(height),empty=two_adic<0>(height));
+}
+run Demo=Check;
+'''
+    entry = Entry(toolchain, journal, directory, source, [*library_modules('zkc'), *flags])
+    for height in [0, 1, 2, 3, 16, 32, (1 << 63) - 1, 1 << 63, (1 << 64) - 1]:
+        is_power = height >= 2 and height & (height - 1) == 0
+        assert entry.run(f'height-{height}', {'height': str(height)}) == {
+            'small': is_power and height <= 16, 'full': is_power, 'empty': False}
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_batched_opening_equations_match_independent_rotated_polynomials(
+        toolchain, journal, directory, flags):
+    source = '''module sample;
+use zkc::vector::{Vector};
+use zkc::indices::{Indices};
+use zkc::opening as opening;
+domain F=field("koala-bear");
+protocol Check roles(P)(columns:Vector<F>@P,selected:Indices@P,rotations:Indices@P,
+ values:Vector<F>@P,initial:Vector<F>@P,row:Vector<F>@P,x:F@P,initial_at:F@P)
+ ->(word:Vector<F>@P,weight:F@P,value:F@P,row_weight:F@P) {
+ let whole=opening::deep_columns(columns,selected,rotations,values,4,3,8,7,11,initial,5);
+ let at=opening::deep_column_values(row,selected,rotations,values,4,x,7,11,initial_at,5);
+ return (word=whole.0,weight=whole.1,value=at.0,row_weight=at.1);
+}
+run Demo=Check;
+'''
+    entry = Entry(toolchain, journal, directory, source, [*library_modules('zkc'), *flags])
+    p = 2130706433
+    root = pow(1791270792, (1 << 24) // 8, p)
+    assert pow(root, 8, p) == 1 and pow(root, 4, p) == p - 1
+    points = [3 * pow(root, i, p) % p for i in range(8)]
+    polynomials = [[2, 3, 1], [7, 0, 4]]
+
+    def evaluate(coefficients, x):
+        return sum(coefficient * pow(x, i, p) for i, coefficient in enumerate(coefficients)) % p
+
+    tables = [[evaluate(coefficients, x) for x in points] for coefficients in polynomials]
+    selected, rotations = [1, 0, 1], [0, 1, 3]
+    opening_points = [7 * pow(root, 2 * r, p) % p for r in rotations]
+    values = [evaluate(polynomials[column], at) for column, at in zip(selected, opening_points)]
+    initial = [(x + 9) % p for x in points]
+    expected = [(initial[i] + sum(5 * pow(11, j, p) * (tables[column][i] - value)
+                * pow((x - at) % p, -1, p)
+                for j, (column, at, value) in enumerate(zip(selected, opening_points, values)))) % p
+                for i, x in enumerate(points)]
+    base = {'columns': sum(tables, []), 'selected': selected, 'rotations': rotations,
+            'values': values, 'initial': initial}
+    for i, x in enumerate(points):
+        inputs = base | {'row': [table[i] for table in tables], 'x': x, 'initial_at': initial[i]}
+        assert entry.run(f'row-{i}', inputs) == {
+            'word': vector(expected), 'weight': str(5 * 11**3),
+            'value': str(expected[i]), 'row_weight': str(5 * 11**3)}
+    empty = inputs | {'selected': [], 'rotations': [], 'values': []}
+    assert entry.run('empty', empty) == {
+        'word': vector(initial), 'weight': '5', 'value': str(initial[-1]), 'row_weight': '5'}
+    for name, changed in [('rotation-count', {'rotations': [0]}),
+                          ('claim-count', {'values': values[:-1]}),
+                          ('column-index', {'selected': [2, 0, 1]}),
+                          ('row-width', {'row': [0]}),
+                          ('accumulator', {'initial': initial[:-1]})]:
+        entry.run(name, inputs | changed, refuses='entry-run-incomplete')
+    entry.run('empty-accumulator', empty | {'initial': []}, refuses='entry-run-incomplete')

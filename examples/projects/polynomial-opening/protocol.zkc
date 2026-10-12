@@ -1,0 +1,44 @@
+module evaluation;
+use zkc::vector as vector;
+use zkc::indices as indices;
+use zkc::oracle as oracle;
+use zkc::opening as opening;
+use zkc::coset as coset;
+use zkc::scalar::{power};
+use fri::{LowDegree};
+
+// One polynomial-opening composition. The quotient has degree < 4; the
+// original polynomial therefore has degree <= 4. Parameters are for tests.
+pub protocol Open<C: Commitment> roles(P,V)
+    (word: vector::Vector<C::ValueField> @P,
+     shift: C::ValueField @(P,V), point: C::ValueField @(P,V),
+    value: C::ValueField @(P,V), coins: Random<C::ValueField> @V)
+    -> (accepted: bool @V) {
+  require @P !(power(point, 32) == power(shift, 32));
+  require @V !(power(point, 32) == power(shift, 32));
+  let tree @P = oracle::commit<C>(word, 1);
+  let root = send P -> V(tree.0);
+  let columns @P = opening::same_rotation(1, 0);
+  let claimP @P = vector::fill(value, 1);
+  let reduced @P = opening::deep_columns(word, columns.0, columns.1,
+    claimP, 8, shift, 32, point, 1, vector::fill<C::ValueField>(0, 32), 1);
+  let rounds: index @(P,V) = 2;
+  let queries: index @(P,V) = 8;
+  let (ok, positionsP, positionsV, valuesV) =
+    LowDegree<C,5,0,2,8>(reduced.0, shift, shift, rounds, queries, coins);
+  require @V ok;
+  let columnsV @V = opening::same_rotation(1, 0);
+  let claimV @V = vector::fill(value, 1);
+  for query in 0..queries roles(P,V) max 8 {
+    let row @P = oracle::open<C>(tree.1, indices::get(positionsP, query));
+    let received = send P -> V(row.0);
+    let path = send P -> V(row.1);
+    let position @V = indices::get(positionsV, query);
+    require @V oracle::check<C>(root, 1, 32, position, received, path);
+    let x @V = coset::point(shift, 32, position);
+    let expected @V = opening::deep_column_values(received, columnsV.0,
+      columnsV.1, claimV, 8, x, point, 1, 0, 1);
+    require @V expected.0 == vector::get(valuesV, query);
+  }
+  return true;
+}

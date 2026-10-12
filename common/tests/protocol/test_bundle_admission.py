@@ -150,7 +150,7 @@ protocol InspectAdmission<R: Reduction<Extension>> roles(P)
         claims: index @P, chunks: index @P, scopes: index @P) {
   let supplied @P = statement(initial, final, cpu_height, program_height, instructions,
     memory_present, memory_height, schedule, shift);
-  let layouts @P = air_bundle::admit<Machine,R,5,6>(supplied);
+  let layouts @P = stark::koala_bear::bundle::admit<Machine,R,5,6>(supplied);
   let memory_layout @P = layouts[2];
   let present @P = memory_layout.present;
   let height @P = memory_layout.height;

@@ -34,7 +34,7 @@ run Demo = Inspect;
 
 
 def compile_entry(toolchain, journal, directory, source, flags, modules=()):
-    options = [*library_modules('zkc'), *modules, *flags]
+    options = list(dict.fromkeys([*library_modules('zkc'), *modules, *flags]))
     entry = Entry(toolchain, journal, directory, source, options)
     bundle = journal.json([
         toolchain.compiler, 'language-bundle', '--source-format=zkc',

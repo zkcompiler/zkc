@@ -282,7 +282,7 @@ mod tests {
     #[test]
     fn dependency_diamonds_share_one_capture_and_protect_every_manifest() {
         let directory = tempfile::tempdir().unwrap();
-        let root = directory.path();
+        let root = &directory.path().canonicalize().unwrap();
         let leaf = manifest(root, "leaf", "[modules]\nshared='lib.zkc'\n");
         std::fs::write(root.join("leaf/lib.zkc"), "module shared;").unwrap();
         let left = manifest(root, "left", "[dependencies]\nshared='../leaf'\n");
@@ -309,7 +309,7 @@ mod tests {
     #[test]
     fn dependencies_reject_cycles_conflicts_and_invalid_manifests() {
         let directory = tempfile::tempdir().unwrap();
-        let root = directory.path();
+        let root = &directory.path().canonicalize().unwrap();
         let top = manifest(root, "top", "[dependencies]\nleaf='../leaf'\n");
         manifest(root, "leaf", "[dependencies]\ntop='../top'\n");
         assert_eq!(Project::load(&top).err().unwrap(), "source-project-cycle");
@@ -340,7 +340,7 @@ mod tests {
     #[test]
     fn duplicate_bindings_require_the_same_source_and_asset_format() {
         let directory = tempfile::tempdir().unwrap();
-        let root = directory.path();
+        let root = &directory.path().canonicalize().unwrap();
         manifest(
             root,
             "leaf",
@@ -366,7 +366,7 @@ mod tests {
     #[test]
     fn dependency_depth_and_total_capture_are_bounded() {
         let directory = tempfile::tempdir().unwrap();
-        let root = directory.path();
+        let root = &directory.path().canonicalize().unwrap();
         for i in 0..DEPTH {
             manifest(
                 root,
@@ -379,11 +379,27 @@ mod tests {
             Project::load(root.join("d0/zkc.toml")).err().unwrap(),
             "source-project-limit"
         );
+        manifest(
+            root,
+            &format!("d{}", DEPTH - 1),
+            "[modules]\nleaf='lib.zkc'\n",
+        );
+        assert_eq!(
+            Project::load(root.join("d0/zkc.toml")).unwrap().flags.len(),
+            1
+        );
         let mut large = String::from("[modules]\n");
         for i in 0..FILES {
             large.push_str(&format!("m{i}='lib.zkc'\n"));
         }
         manifest(root, "leaf", &large);
+        assert_eq!(
+            Project::load(root.join("leaf/zkc.toml"))
+                .unwrap()
+                .flags
+                .len(),
+            FILES
+        );
         let top = manifest(
             root,
             "top",
@@ -393,10 +409,32 @@ mod tests {
     }
 
     #[test]
+    fn manifest_count_includes_the_root_and_shared_contexts_once() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = &directory.path().canonicalize().unwrap();
+        let mut dependencies = String::from("[dependencies]\n");
+        for i in 0..MANIFESTS {
+            manifest(
+                root,
+                &format!("m{i}"),
+                &format!("[modules]\nm{i}='lib.zkc'\n"),
+            );
+            if i + 1 < MANIFESTS {
+                dependencies.push_str(&format!("m{i}='../m{i}'\n"));
+            }
+        }
+        let top = manifest(root, "top", &dependencies);
+        assert_eq!(Project::load(&top).unwrap().flags.len(), MANIFESTS - 1);
+        dependencies.push_str(&format!("last='../m{}'\n", MANIFESTS - 1));
+        manifest(root, "top", &dependencies);
+        assert_eq!(Project::load(&top).err().unwrap(), "source-project-limit");
+    }
+
+    #[test]
     #[cfg(unix)]
     fn a_symlinked_manifest_keeps_its_visible_relative_path_context() {
         let directory = tempfile::tempdir().unwrap();
-        let root = directory.path();
+        let root = &directory.path().canonicalize().unwrap();
         let original = manifest(
             root,
             "original",

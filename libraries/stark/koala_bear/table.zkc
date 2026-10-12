@@ -1,19 +1,18 @@
-module air_stark;
+module stark::koala_bear::table;
+use stark::koala_bear::{Base, Extension, TraceRows, ExtensionRows, embed_scalar, embed_vector};
+use stark::sampling::{Outside};
 use zkc::boolean as boolean;
 use zkc::indices as indices;
 use zkc::vector as vector;
 use zkc::oracle as oracle;
-pub domain Base = field("koala-bear");
-pub domain Extension = field("koala-bear.ext8-binomial3");
-domain TraceRows = commitment("rows.merkle-keccak256.koala-bear/0");
-domain ExtensionRows = commitment("rows.merkle-keccak256.koala-bear.ext8-binomial3/0");
 use zkc::vector::{Vector, length, transpose};
 use zkc::boolean::{both};
 
 use zkc::indices::{less};
-use zkc::coset::{point, extend_columns, disjoint_coset, outside_domains};
-use air_polynomial::{split_quotient};
-use air_table::{shape, claims, quotient_values, opening_claims, identity, deep_word, deep_value};
+use zkc::coset::{point, extend_columns, disjoint_coset};
+use air::polynomial::{split_quotient};
+use air::table::{shape, claims, quotient_values, identity, deep_word, deep_value};
+use zkc::opening::{opening_claims};
 use fri::{LowDegree};
 
 use zkc::oracle::{commit, open};
@@ -27,11 +26,6 @@ pub struct Statement {
   pub public_data: Vector<Base>,
   pub shift: Base
 }
-fn embed_vector(values: Vector<Base>) -> Vector<Extension> {
-  return kernel<Extension>("vector.embed", values);
-}
-fn embed_scalar(value: Base) -> Extension { return kernel<Extension>("field.embed", value); }
-fn same_index(left: index, right: index) -> bool { return left == right; }
 fn profile<F: Field, Table: nat, B: Bundle, LogHeight: nat, LogSize: nat,
     Queries: nat, Attempts: nat>(configuration: Vector<F>, public_columns: Vector<F>,
     public_data: Vector<F>, shift: F, rounds: index, queries: index, attempts: index) -> bool {
@@ -45,49 +39,6 @@ fn profile<F: Field, Table: nat, B: Bundle, LogHeight: nat, LogSize: nat,
         both(length(configuration) == facts.configuration * height,
           both(length(public_columns) == facts.public_columns * height,
                length(public_data) == facts.public_slots)))));
-}
-
-// A bounded excluded-set sampler. All attempts are drawn and transmitted in
-// order; the first admissible value is selected. Exhaustion has an explicit
-// stop. No prover-selected candidate or unrecorded retry enters the transcript.
-pub fn consider<F: Field>(height: index, size: index, shift: F,
-    chosen: F, found: bool, candidate: F) -> (F, bool) {
-  return if found { (chosen, true) }
-    else { if both(boolean::negate(candidate == 0), outside_domains(height, size, shift, candidate)) {
-      (candidate, true)
-    } else { (chosen, false) } };
-}
-pub fn finish<F: Field>(chosen: F, found: bool) -> F {
-  return if found { chosen } else { stop "exhausted"; };
-}
-pub protocol Outside<F: Field, LogHeight: nat, LogSize: nat, Attempts: nat>
-    roles(P,V)(shiftP: F @P, shiftV: F @V, attempt_count: index @(P,V), coins: Random<F> @V)
-    -> (pointP: F @P, pointV: F @V) where 1 <= Attempts,
-      zkc::algebra::TwoAdicField(F) {
-  let expected @V = index<Attempts>();
-  let count_ok @V = same_index(attempt_count, expected);
-  require @V count_ok;
-  let heightP @P = index<pow2(LogHeight)>();
-  let heightV @V = index<pow2(LogHeight)>();
-  let sizeP @P = index<pow2(LogSize)>();
-  let sizeV @V = index<pow2(LogSize)>();
-  let mut chosenP: F @P = 0;
-  let mut chosenV: F @V = 0;
-  let mut foundP: bool @P = false;
-  let mut foundV: bool @V = false;
-  for _ in 0..attempt_count roles(P,V) max Attempts {
-    let candidateV = coins.draw();
-    let candidateP = send V -> P(candidateV);
-    let nextP @P = consider(heightP, sizeP, shiftP, chosenP, foundP, candidateP);
-    let nextV @V = consider(heightV, sizeV, shiftV, chosenV, foundV, candidateV);
-    chosenP = nextP.0;
-    chosenV = nextV.0;
-    foundP = nextP.1;
-    foundV = nextV.1;
-  }
-  let pointP @P = finish(chosenP, foundP);
-  let pointV @V = finish(chosenV, foundV);
-  return (pointP = pointP, pointV = pointV);
 }
 
 // A nonhiding argument for one present table's assertions. Public/configuration

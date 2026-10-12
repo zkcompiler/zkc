@@ -4,7 +4,7 @@ format = "zkc.project/0"
 "air_stark_example" = "main.zkc"
 
 [dependencies]
-air = "../../../libraries/air"
+stark = "../../../libraries/stark"
 fri = "../../../libraries/fri"
 
 [assets.recurrence]

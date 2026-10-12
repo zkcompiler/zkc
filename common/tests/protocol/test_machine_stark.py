@@ -6,7 +6,6 @@ adversarial evidence, not a proof of cryptographic soundness or upstream VM
 compatibility.
 """
 
-from source_modules import library_modules
 from input_files import input_files
 import importlib.util
 import json
@@ -36,13 +35,12 @@ def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None
                                f'accumulator_machine::{entry}', f'--output={package}', *flags])
         return package, report['package_sha256']
     command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-               f'--module=accumulator_machine={path}', *library_modules('zkc'),
+               f'--module=accumulator_machine={path}',
                f'--asset=machine=relation-bundle-json={asset or FIXTURES / "bundle.json"}',
                f'accumulator_machine::{entry}', f'--output={package}', *flags]
-    for module, file in [('air_bundle', 'air/bundle'), ('air_interaction', 'air/interaction'),
-                         ('air_stark', 'air/stark'), ('air_table', 'air/table'),
-                         ('air_polynomial', 'air/polynomial'), ('fri', 'fri/lib')]:
-        module_path = ROOT / 'libraries' / (file + '.zkc')
+    from project import project_inputs
+    modules, _ = project_inputs(ROOT / 'libraries/stark/zkc.toml')
+    for module, module_path in modules.items():
         replacements = [(old, new) for owner, old, new in edits if owner == module]
         if replacements:
             text = module_path.read_text()

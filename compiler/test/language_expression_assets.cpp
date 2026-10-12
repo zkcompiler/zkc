@@ -450,8 +450,10 @@ run Demo = Count<Recurrence>;
       auto captured = capture(
           {{"example", client, "main.zkc"},
            {"sumcheck::expression", library, "library.zkc"},
-           {"sumcheck", file(ZKC_MATH_LIBRARIES "/../sumcheck/lib.zkc"), "sumcheck.zkc"},
-           {"zkc::boolean", file(ZKC_MATH_LIBRARIES "/boolean.zkc"), "boolean.zkc"},
+           {"sumcheck", file(ZKC_MATH_LIBRARIES "/../sumcheck/lib.zkc"),
+            "sumcheck.zkc"},
+           {"zkc::boolean", file(ZKC_MATH_LIBRARIES "/boolean.zkc"),
+            "boolean.zkc"},
            {"zkc::accumulation", file(ZKC_MATH_LIBRARIES "/accumulation.zkc"),
             "accumulation.zkc"},
            {"zkc::curve", file(ZKC_MATH_LIBRARIES "/curve.zkc"), "curve.zkc"},
@@ -461,6 +463,8 @@ run Demo = Count<Recurrence>;
             "sequence.zkc"},
            {"zkc::multilinear", file(ZKC_MATH_LIBRARIES "/multilinear.zkc"),
             "multilinear.zkc"},
+           {"zkc::indices", file(ZKC_MATH_LIBRARIES "/indices.zkc"),
+            "indices.zkc"},
            {"zkc::vector", file(ZKC_MATH_LIBRARIES "/vector.zkc"),
             "vector.zkc"},
            {"zkc::polynomial", file(ZKC_MATH_LIBRARIES "/polynomial.zkc"),
@@ -477,11 +481,13 @@ run Demo = Count<Recurrence>;
         "product", "ring-json",
         file(ZKC_EXPRESSION_SUMCHECK_PROJECT "/product.ring.json"),
         "product.ring.json"};
+    // Width and degree constants come from the arena; the final zero selects
+    // the single terminal output through the shared vector accessor.
     require(indexConstants(take(compile(shipped))) ==
-                std::vector<std::string>({"2", "3", "2"}),
+                std::vector<std::string>({"2", "3", "2", "0"}),
             "shipped arena did not derive width 2 and degree bound 3");
     require(indexConstants(take(compile(cubic()))) ==
-                std::vector<std::string>({"3", "4", "3"}),
+                std::vector<std::string>({"3", "4", "3", "0"}),
             "cubic arena did not derive width 3 and degree bound 4");
     refuses(compile(twoOutputs()), "source.bound");
     refuses(compile(constant()), "source.bound");

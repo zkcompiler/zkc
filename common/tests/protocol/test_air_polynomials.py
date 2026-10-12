@@ -14,7 +14,7 @@ LIBRARY = ROOT / 'libraries/air/polynomial.zkc'
 SHIFT = [3, 1, 0, 0, 0, 0, 0, 0]
 CLIENT = '''module example;
 use zkc::vector::{Vector, transpose};
-use air_polynomial::{vanishing_values, vanishing};
+use air::polynomial::{vanishing_values, vanishing};
 use zkc::coset::{extend_columns};
 domain E = field("koala-bear.ext8-binomial3");
 protocol Run roles(P)(height:index@P, begin:index@P, end:index@P, shift:E@P,
@@ -56,7 +56,7 @@ def zero_polynomial_at(roots, x):
 
 SCOPE_CLIENT = '''module example;
 use zkc::vector::{Vector, empty, append, length, get};
-use air_polynomial::{vanishing_values, vanishing};
+use air::polynomial::{vanishing_values, vanishing};
 domain E = field("koala-bear.ext8-binomial3");
 protocol Run roles(P)(height:index@P, begin:index@P, end:index@P, shift:E@P,
  size:index@P, samples:Vector<E>@P) -> (scope:Vector<E>@P, sampled:Vector<E>@P) {
@@ -81,7 +81,7 @@ def test_scope_polynomials_on_intersecting_cosets(toolchain, journal, directory,
     source.write_text(SCOPE_CLIENT)
     package = directory / 'scope.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                           f'--module=example={source}', f'--module=air_polynomial={LIBRARY}', *library_modules('zkc'),
+                           f'--module=example={source}', *library_modules('air'),
                            'example::Demo', f'--output={package}', *flags])
     height = 8
     subgroup = points(height)
@@ -108,7 +108,7 @@ def test_scope_polynomials_and_column_extensions(toolchain, journal, directory, 
     source.write_text(CLIENT)
     package = directory / 'math.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                           f'--module=example={source}', f'--module=air_polynomial={LIBRARY}', *library_modules('zkc'),
+                           f'--module=example={source}', *library_modules('air'),
                            'example::Demo', f'--output={package}', *flags])
     pin = report['package_sha256']
     for height, size in [(8, 32), (16, 64)]:

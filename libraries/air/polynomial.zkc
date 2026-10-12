@@ -1,17 +1,16 @@
-module air_polynomial;
+module air::polynomial;
 use zkc::vector as vector;
 use zkc::boolean as boolean;
-use zkc::vector::{Vector, length, empty, concat, get, slice, fill, scale};
+use zkc::vector::{Vector, length, empty, concat, slice, fill, scale};
 
 use zkc::polynomial as polynomial;
 use zkc::coset as coset;
 use zkc::scalar::{inverse, power};
-use zkc::indices::{less, maximum};
+use zkc::indices::{less, maximum, divide};
 use zkc::boolean::{both};
 
 use zkc::coset::{point, interpolate, evaluate_coset};
 
-use zkc::vector as vec;
 use zkc::finite_math as total;
 
 // Coefficient blocks of length `height` needed by a quotient C/Z_A, where C
@@ -20,7 +19,7 @@ use zkc::finite_math as total;
 pub fn chunks_for(degree: index, height: index, active: index) -> index {
   let numerator = degree * (height - 1);
   return if less(numerator, active) { 0 }
-    else { kernel("index.div", numerator - active, height) + 1 };
+    else { divide(numerator - active, height) + 1 };
 }
 
 // The active scope is an interval [begin,end) of the trace subgroup. All,
@@ -67,7 +66,7 @@ pub fn split_quotient<F: Field>(values: Vector<F>, shift: F, size: index,
 pub fn recombine<F: Field>(claims: Vector<F>, height: index, x: F) -> F {
   let stride = power(x, height);
   let initial: (F, F) = (0, 1);
-  let combined = total::fold(vec::elements(claims), initial,
+  let combined = total::fold(vector::elements(claims), initial,
     fn((value, weight), claim) => (value + weight * claim, weight * stride));
   return combined.0;
 }

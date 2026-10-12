@@ -15,15 +15,14 @@ from test_total_callback_selection import compile_entry as compile_counted_entry
 
 ROOT = Path(__file__).resolve().parents[3]
 SHARED = library_modules('zkc')
-AIR = [f'--module=air_{name}={ROOT}/libraries/air/{name}.zkc'
-       for name in ('polynomial', 'table', 'interaction')]
+AIR = library_modules('air')
 FLAGS = [(), ('--no-simplify',), ('--no-finite-bulk',),
          ('--no-simplify', '--no-finite-bulk')]
 MODES = ['default', 'no-simplify', 'ordered', 'ordered-no-simplify']
 
 ARITHMETIC = '''module sample;
 use zkc::vector::{Vector};
-use air_polynomial::{recombine};
+use air::polynomial::{recombine};
 domain F = field("koala-bear.ext8-binomial3");
 protocol Inspect roles(P)(claims: Vector<F> @P, height: index @P, x: F @P)
     -> (value: F @P) {
@@ -36,7 +35,7 @@ run Demo = Inspect;
 @pytest.mark.parametrize('flags', FLAGS, ids=MODES)
 def test_air_recombination_matches_independent_powers(
         toolchain, journal, directory, flags):
-    entry = Entry(toolchain, journal, directory, ARITHMETIC, [*SHARED, *AIR, *flags])
+    entry = Entry(toolchain, journal, directory, ARITHMETIC, [*AIR, *flags])
     x = [11, 3, 0, 0, 0, 0, 0, 0]
     for count, height in [(0, 0), (1, 8), (5, 0), (5, 8)]:
         claims = [[i + 1, 0, i * i, 0, 0, 0, 0, 0] for i in range(count)]
@@ -86,12 +85,12 @@ def test_fri_terminal_coefficients_and_domain_admission(toolchain, journal, dire
                   refuses='entry-run-incomplete')
 
 
-REDUCTION = '''use zkc::indices as indices;
-module sample;
+REDUCTION = '''module sample;
+use zkc::indices as indices;
 use zkc::vector::{Vector};
 
 
-use air_interaction::{Reduction, LogUp, GrandProduct, interactions};
+use air::interaction::{Reduction, LogUp, GrandProduct, interactions};
 domain F = field("koala-bear");
 fn build<R: Reduction<F>>(values: Vector<F>, rows: index,
     gamma: F, delta: F, active: bool) -> (Vector<F>, Vector<F>) {

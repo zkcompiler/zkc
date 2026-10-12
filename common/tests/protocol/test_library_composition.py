@@ -85,3 +85,74 @@ def test_proof_binds_public_tables_even_with_unchanged_sum(toolchain, journal, d
     changed = input_files(journal, 'changed', public=public)
     journal.run([toolchain.runtime, '--json', 'verify', *args, *changed,
                  f'--proof={proof}'], refuses='proof-header')
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk']])
+def test_opening_composes_shared_equations_and_fri(toolchain, journal, directory, flags):
+    package, pin = build(toolchain, journal, directory, 'polynomial-opening', 'Proof', flags)
+    public = read('polynomial-opening', 'public')
+    witness = read('polynomial-opening', 'witness')
+    producer = input_files(journal, 'producer', public=public, witness=witness)
+    verifier = input_files(journal, 'verifier', public=public)
+    proof = directory / 'proof.bin'
+    args = [f'--package={package}', f'--sha256={pin}']
+    journal.run([toolchain.runtime, '--json', 'prove', *args, *producer, f'--output={proof}'])
+    assert journal.json([toolchain.runtime, '--json', 'verify', *args, *verifier,
+                         f'--proof={proof}'])['status'] == 'accepted'
+    # The committed word is unchanged but the claimed value is false. A new
+    # transcript cannot make the quotient a low-degree polynomial.
+    public['value'][0] = str(int(public['value'][0]) + 1)
+    producer = input_files(journal, 'false-producer', public=public, witness=witness)
+    verifier = input_files(journal, 'false-verifier', public=public)
+    wrong = directory / 'wrong.proof'
+    journal.run([toolchain.runtime, '--json', 'prove', *args, *producer, f'--output={wrong}'])
+    journal.run([toolchain.runtime, '--json', 'verify', *args, *verifier,
+                 f'--proof={wrong}'], refuses='artifact-stopped')
+
+
+def test_opening_refuses_a_pole_on_the_evaluation_domain(toolchain, journal, directory):
+    package, pin = build(toolchain, journal, directory, 'polynomial-opening', 'Proof', [])
+    public = read('polynomial-opening', 'public')
+    public['point'] = public['shift']
+    producer = input_files(journal, 'pole', public=public,
+                           witness=read('polynomial-opening', 'witness'))
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}',
+                 f'--sha256={pin}', *producer, f'--output={directory / "pole.proof"}'],
+                refuses=True)
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+def test_constructed_schnorr_uses_generic_protocol_and_external_bytes(toolchain, journal, directory, flags):
+    package, pin = build(toolchain, journal, directory, 'constructed-schnorr', 'Proof', flags)
+    public = read('constructed-schnorr', 'public')
+    public_path = journal.write('public.json', public)
+    witness_path = journal.write('witness.json', read('constructed-schnorr', 'witness'))
+    verifier = [f'--public={public_path}']
+    producer = [*verifier, f'--witness={witness_path}']
+    proof = directory / 'schnorr.proof'
+    args = [f'--package={package}', f'--sha256={pin}', '--allow-authored']
+    journal.run([toolchain.runtime, '--json', 'prove', *args, *producer, f'--output={proof}'])
+    assert len(proof.read_bytes()) == 80
+    assert journal.json([toolchain.runtime, '--json', 'verify', *args, *verifier,
+                         f'--proof={proof}'])['status'] == 'accepted'
+    assert journal.json([toolchain.driver('spongefish_schnorr'), 'verify', proof])['accepted']
+    trailing = directory / 'trailing.proof'
+    trailing.write_bytes(proof.read_bytes() + b'\x00')
+    journal.run([toolchain.runtime, '--json', 'verify', *args, *verifier,
+                 f'--proof={trailing}'], refuses='artifact-stopped')
+
+
+@pytest.mark.parametrize('role', ['P', 'V'])
+def test_each_opening_participant_checks_its_own_domain(toolchain, journal, directory, role):
+    package, pin = build(toolchain, journal, directory, 'polynomial-opening', 'Interactive', [])
+    public = read('polynomial-opening', 'public')
+    witness = read('polynomial-opening', 'witness')
+    roles = {'P': {'inputs': public | witness}, 'V': {'inputs': dict(public)}}
+    roles[role]['inputs']['point'] = public['shift']
+    request = input_files(journal, 'pole', roles=roles)
+    refused = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
+                            f'--sha256={pin}', *request, f'--results={directory / "outputs.json"}'],
+                           refuses='entry-run-incomplete')
+    stopped = refused['execution']['roles'][0 if role == 'P' else 1]['after']
+    assert stopped[0] == 'stopped'
+    assert stopped[1]['cause'] == ['explicit', {'text': 'reject', 'omitted_bytes': 0}]

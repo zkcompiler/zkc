@@ -1,5 +1,5 @@
 module example;
-use spongefish_schnorr::{Schnorr};
+use spongefish::schnorr::{Schnorr};
 domain G = group("bls12-381.g1");
 
 construction ExternalWire for Schnorr<G> {

@@ -9,6 +9,7 @@ import hashlib
 import json
 
 import pytest
+from source_modules import library_modules
 
 SOURCE = '''module sample;
 domain F=field("bls12-381.fr");
@@ -277,7 +278,7 @@ def test_source_construction_cryptographic_histories(toolchain, journal, directo
         modules['sumcheck'] = root / 'libraries/sumcheck/lib.zkc'
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                             *[f'--module={name}={path}' for name, path in modules.items()],
+                             *library_modules('spongefish', 'sumcheck', overrides=modules),
                              'sample::Demo', f'--output={package}', *flags])
     public_value = PUBLIC if protocol == 'schnorr' else {
         'values': ['1', '2', '3', '4'], 'claim': '10', 'rounds': '2'}
@@ -327,7 +328,7 @@ def test_managed_provider_methods_are_ordinary_checked_functions(toolchain, jour
                     for name in ['bytes', 'encoding', 'transcript']})
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                             *[f'--module={name}={path}' for name, path in modules.items()],
+                             *library_modules('spongefish', 'sumcheck', overrides=modules),
                              'sample::Demo', f'--output={package}', *flags])
     public = journal.write('public.json', {'public': '5'})
     witness = journal.write('witness.json', {'secret': '7'})
@@ -368,7 +369,7 @@ def test_managed_index_methods_reject_invalid_bounds_and_clean_up(toolchain, jou
     modules = {'sample': source, 'zkc::transcript': root / 'libraries/zkc/transcript.zkc',
                'zkc::bytes': root / 'libraries/zkc/bytes.zkc'}
     compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                             *[f'--module={name}={path}' for name, path in modules.items()],
+                             *library_modules('spongefish', 'sumcheck', overrides=modules),
                              'sample::Demo', f'--output={package}'])
     args = [f'--package={package}', f'--sha256={compiled["package_sha256"]}']
     proof = directory / 'proof.bin'

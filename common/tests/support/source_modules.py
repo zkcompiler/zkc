@@ -7,7 +7,7 @@ from project import project_inputs
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def library_modules(*families):
+def library_modules(*families, overrides=None):
     modules = {}
     for family in families:
         selected, assets = project_inputs(ROOT / 'libraries' / family / 'zkc.toml')
@@ -15,4 +15,5 @@ def library_modules(*families):
         for name, path in selected.items():
             assert name not in modules or modules[name] == path
             modules[name] = path
+    modules.update(overrides or {})
     return [f'--module={name}={path}' for name, path in sorted(modules.items())]

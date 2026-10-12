@@ -2,14 +2,15 @@
 
 Libraries are ordinary `.zkc` modules built and tested with the compiler. Their
 public functions, records and child protocols are composed using the existing
-language. Applications own concrete assets, inputs and Entries.
+language. Applications select concrete statements, inputs and Entries. A library
+may capture its own mathematical assets through its manifest.
 
 ## Layers
 
 | Layer | Responsibility | Examples |
 |---|---|---|
 | [Common operations](zkc/README.md) | Collections, algebra, polynomial representations, encoding and local commitment operations | `zkc::vector`, `zkc::multilinear`, `zkc::coset`, `zkc::oracle` |
-| Protocol families | Reusable equations, interaction and returned obligations | [Sumcheck](sumcheck/README.md), [FRI](fri/lib.zkc), [AIR/STARK](air/README.md) |
+| Protocol families | Reusable equations, interaction and returned obligations | [Sumcheck](sumcheck/README.md), [FRI](fri/lib.zkc), [AIR](air/README.md), [STARK](stark/README.md) |
 | Concrete constructions | Selected transcript transitions and wire encodings | [Spongefish](spongefish/README.md) |
 | [Projects](../examples/projects/README.md) | Domains, captured relations, complete compositions and Entries | Schnorr, composed Sumcheck, AIR and machine clients |
 
@@ -46,6 +47,9 @@ Each family owns a `zkc.toml` with its sources and local dependencies. The loade
 captures all listed sources, including private implementation modules. Dependency
 labels do not rename source modules. Shared dependencies load once; conflicting
 providers and cycles refuse. Paths are relative to the declaring manifest.
+All captured modules share one namespace, including transitive dependencies.
+Declare a directly used family explicitly so its availability does not depend
+on another family's implementation dependencies.
 There is no registry, download or global implicit import. Explicit compiler
 module maps and SDK byte captures remain available.
 

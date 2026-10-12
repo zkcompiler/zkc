@@ -1,14 +1,17 @@
 module spongefish;
+pub module schnorr;
+pub module bls12_381;
 use zkc::bytes as bytes;
 use zkc::bytes::{Bytes};
 use zkc::shake128 as shake;
 use zkc::shake128::{State};
 use zkc::encoding as encoding;
+use zkc::indices::{less};
 
 // Spongefish 0.7.4 StdHash initialization. Tags are bytes supplied by the
 // application; the protocol identifier occupies a full SHAKE128 rate block.
 fn pad(value: Bytes, width: index) -> Bytes {
-  require !kernel("index.less", width, bytes::length(value));
+  require !less(width, bytes::length(value));
   let mut result = value;
   for _ in bytes::length(value)..width { result = bytes::append(result, 0); }
   return result;
@@ -41,7 +44,7 @@ fn session_tag() -> Bytes {
   return pad(result, 168);
 }
 pub fn initialize(protocol_id: Bytes, session: Bytes) -> State {
-  require !kernel("index.less", 64, bytes::length(protocol_id));
+  require !less(64, bytes::length(protocol_id));
   let root = shake::absorb(shake::init(), pad(protocol_id, 168));
   let session_state = shake::absorb(shake::init(), session_tag());
   let session_state = shake::absorb(session_state, session);
