@@ -319,10 +319,22 @@ sliceBundleTableData(const Bundle &, const BundleTableView &,
                      const BundleConfiguration &, const BundleInstance &,
                      const BundleWitness &);
 
+/// Immutable element widths by data authority, independent of presence,
+/// height, windows and polynomial activity. These are descriptive metadata,
+/// not admitted data lengths or active-table contributions.
+struct BundleTableWidths {
+  uint32_t witnessWidth = 0, configWidth = 0, publicWidth = 0;
+};
+/// Whole-table carrier admission, then sums of the declared group widths.
+/// No height, window, data or polynomial profile is evaluated.
+llvm::Expected<BundleTableWidths>
+bundleTableWidths(const Bundle &, uint32_t table, llvm::StringRef carrier);
+
 /// The static reference rule of an installed Bundle kernel contract: the
 /// dense table view for `relation.table_rows`, `checkBundlePolynomialTable`
 /// (BundlePolynomial.h) for the polynomial kernels, `admitBundleTableCarrier`
-/// for the interaction kernels, and `relation-table-contract` otherwise.
+/// for width/policy metadata and interaction kernels, and
+/// `relation-table-contract` otherwise.
 llvm::Error checkBundleTableReference(const Bundle &, llvm::StringRef contract,
                                       uint32_t table, llvm::StringRef carrier);
 

@@ -1165,6 +1165,16 @@ fn read_height(value: &Value) -> Result<Option<u32>> {
 }
 
 impl Table {
+    /// Declared element widths by witness, configuration and public authority.
+    /// No height, presence, window or polynomial domain is involved.
+    pub fn data_widths(&self) -> [u64; 3] {
+        let mut widths = [0; 3];
+        for group in &self.groups {
+            widths[polynomial::kind(group.authority) as usize - 1] += u64::from(group.width);
+        }
+        widths
+    }
+
     fn groups_with(&self, authority: Authority) -> impl Iterator<Item = (usize, &Group)> {
         self.groups
             .iter()

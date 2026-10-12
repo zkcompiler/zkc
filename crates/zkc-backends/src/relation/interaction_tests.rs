@@ -391,7 +391,12 @@ fn interaction_views_use_declared_policies_without_polynomial_premises() {
     assert_eq!(view.work(), 54);
     assert_eq!(view.interactions(12).unwrap(), (6, 14));
     assert_eq!(
-        fixed.polynomial_view(0, EXT).unwrap_err().0,
+        fixed
+            .polynomial_view(0, EXT)
+            .unwrap()
+            .shape(12)
+            .unwrap_err()
+            .0,
         "bundle-polynomial-two-adic"
     );
     // A range keeps its declared bounds, not its two-adic sub-range.
@@ -747,6 +752,7 @@ fn registry_references_and_signatures_cover_the_interaction_kernels() {
     }
     let index = crate::domains::KOALA_BEAR.physical(Type::Index).unwrap();
     for (contract, inputs, outputs) in [
+        ("relation.table_widths", 0, 3),
         ("relation.table_policy", 0, 5),
         ("relation.table_interactions", 1, 2),
         ("relation.table_interaction", 2, 12),

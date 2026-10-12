@@ -1,6 +1,6 @@
 //! One table of an immutable Bundle asset: assertion residuals over actual
 //! columns, the polynomial view's shape, input descriptors, scopes and point
-//! substitutions, and the interaction view's declared policy, interaction
+//! substitutions, and the metadata/interaction view's widths, policy, interaction
 //! descriptors and record substitutions.
 use super::*;
 
@@ -60,6 +60,11 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
             ),
         )
         .implemented_by(&["plonky3/relation.table_points"]),
+        Contract::new(
+            "relation.table_widths",
+            (&[], &[Type::Index; 3], AttributeRule::AssetIdentity),
+        )
+        .implemented_by(&["plonky3/relation.table_widths"]),
         Contract::new(
             "relation.table_policy",
             (&[], &[Type::Index; 5], AttributeRule::AssetIdentity),

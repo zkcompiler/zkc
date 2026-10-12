@@ -451,6 +451,7 @@ relation.table_input 0
 relation.table_scope 0
 relation.table_point 0
 relation.table_points 0
+relation.table_widths 0
 relation.table_policy 0
 relation.table_interactions 0
 relation.table_interaction 0

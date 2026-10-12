@@ -59,6 +59,14 @@ def OpRelationTablePoints : ZKC_Operation<"relation.table_points",
     [ZKC_Apply<TypeVector, [RelationF]>], [ZKC_Holds<CapabilityField, [RelationF]>]> {
   let parameters = RelationAssetIdentity;
 }
+// Immutable group element widths by witness, configuration and public
+// authority. The captured Bundle is authoritative; no height is involved.
+def OpRelationTableWidths : ZKC_Operation<"relation.table_widths",
+    [RelationF, RelationTable], [],
+    [ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeIndex, []>], [ZKC_Holds<CapabilityField, [RelationF]>]> {
+  let parameters = RelationAssetIdentity;
+}
 // Interaction view of one table. These operations expose the declared height
 // policy and the interaction records; they apply no scope, multiplicity range,
 // balance, challenge or reduction, and claim no satisfaction.

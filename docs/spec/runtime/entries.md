@@ -115,17 +115,20 @@ trace to arbitrary extension-field values. For `relation.table_shape`,
 contracts share one rule, checked once per asset, table and carrier without
 allocating: the static table index, the
 [polynomial view's](../domains/relation-bundles.md#compiler-visible-polynomial-view)
-carrier rule, which lets a KoalaBear table be substituted in Ext8, and that
-the height policy admits a power of two of at least 2. The
+carrier rule, which lets a KoalaBear table be substituted in Ext8. No height
+or polynomial domain is selected or required to exist. The
 [interaction view's](../domains/relation-bundles.md#compiler-visible-interaction-view)
 `relation.table_interactions`, `relation.table_interaction` and
-`relation.table_record_points`, together with `relation.table_policy`, share
+`relation.table_record_points`, together with `relation.table_policy` and
+[`relation.table_widths`](../domains/relation-bundles.md#compiler-visible-table-metadata), share
 a second rule: the static table index and the whole-table carrier rule,
 which also visits every interaction output. None requires a polynomial
 domain or power-of-two height at reference admission. Height-taking kernels
-check their own height policies and windows at execution. A polynomial
-reference whose table admits no supported two-adic height is refused at Host
-admission with `refused:bundle-polynomial-two-adic`. A Bundle relation declaration also
+check their actual domain, height policies and windows at execution. A
+polynomial reference whose table admits no supported two-adic height can
+remain in an untaken branch; a reached height-taking polynomial operation
+refuses `bundle-polynomial-two-adic` at that declared height. Point substitution
+requires no domain. A Bundle relation declaration also
 requires its packaged body; the Host independently checks its derived formal
 ABI, returning `entry-asset-relation` on disagreement. An operation
 of another asset-naming contract returns `entry-asset-contract`. These checks

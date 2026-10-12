@@ -1,5 +1,5 @@
-//! The interaction view of one table: its declared height policy, interaction
-//! descriptors and record substitutions. The immutable Bundle owns the
+//! Immutable table metadata and interaction view: declared widths, height
+//! policy, interaction descriptors and record substitutions. The immutable Bundle owns the
 //! interactions and degree facts; this view derives the descriptors a
 //! consuming library needs and prepares the record outputs for substitution.
 //! It applies no scope, multiplicity range, balance, challenge or reduction,
@@ -36,9 +36,19 @@ pub struct InteractionView<'a> {
     field: Identity,
 }
 impl Bundle {
+    /// Immutable element widths by witness, configuration and public authority,
+    /// using the same whole-table carrier admission as policy metadata.
+    /// No actual data, height, window or polynomial domain is admitted here.
+    pub fn table_widths(&self, table: usize, field: Identity) -> Result<[u64; 3]> {
+        Ok(self
+            .interaction_view(table, field)?
+            .definition()
+            .data_widths())
+    }
+
     /// Whole-table carrier admission, the static premise of
-    /// the interaction kernels: table index, an installed carrier, and
-    /// carrier compatibility of every public slot, table group, assertion
+    /// width/policy metadata and interaction kernels: table index, an installed
+    /// carrier, and carrier compatibility of every public slot, table group, assertion
     /// output and interaction output. No height is involved, so the declared
     /// policy of any table is exposed. Nothing is allocated.
     pub fn interaction_view(&self, table: usize, field: Identity) -> Result<InteractionView<'_>> {

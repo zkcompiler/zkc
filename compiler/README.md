@@ -155,6 +155,12 @@ constructing records. Aggregate construction does not install an operation or
 validate its semantics; installed queries and contribution admission retain
 those responsibilities.
 
+`Relation/Bundle.h` exposes `bundleTableWidths` for immutable witness,
+configuration and public element widths, with whole-table carrier admission
+and no height requirement. `Relation/BundlePolynomial.h` separates static
+polynomial reference admission from analysis at actual parameters; reference
+admission alone grants no executable polynomial domain.
+
 `Program/Model.h` contains `zkc::program` records. `LocalDefinitions` is an internal
 structural view used to check mathematical local callables, with `LocalApply`
 representing native `local.apply` before expansion; it has no authored carrier.

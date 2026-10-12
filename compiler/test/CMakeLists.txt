@@ -36,6 +36,9 @@ mlir_target_link_libraries(zkc-finite_direct_emission-test PRIVATE MLIRParser)
 add_zkc_test(finite_abi IR finite-abi)
 mlir_target_link_libraries(zkc-finite_abi-test PRIVATE MLIRParser)
 
+add_zkc_test(finite_callback_selection Transforms finite-callback-selection)
+mlir_target_link_libraries(zkc-finite_callback_selection-test PRIVATE MLIRParser)
+
 add_zkc_test(computation_analysis IR computation-analysis)
 target_compile_definitions(zkc-computation_analysis-test PRIVATE
   ZKC_FINITE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
@@ -279,6 +282,8 @@ add_zkc_test(expansion_preservation Transforms expansion-preservation)
 target_compile_definitions(zkc-expansion_preservation-test PRIVATE
   ZKC_MATH_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical")
 mlir_target_link_libraries(zkc-expansion_preservation-test PRIVATE MLIRParser)
+add_zkc_test(algorithm_accounting Transforms algorithm-accounting)
+mlir_target_link_libraries(zkc-algorithm_accounting-test PRIVATE MLIRParser)
 add_zkc_test(construction_starts Transforms construction-starts)
 mlir_target_link_libraries(zkc-construction_starts-test PRIVATE MLIRParser)
 add_zkc_test(mathematical_correspondence Transforms mathematical-correspondence)

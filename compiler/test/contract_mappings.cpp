@@ -46,6 +46,7 @@ constexpr ExpectedMapping expected[] = {
     {"relation.table_scope", "relation.exec.table_scope"},
     {"relation.table_point", "relation.exec.table_point"},
     {"relation.table_points", "relation.exec.table_points"},
+    {"relation.table_widths", "relation.exec.table_widths"},
     {"relation.table_policy", "relation.exec.table_policy"},
     {"relation.table_interactions", "relation.exec.table_interactions"},
     {"relation.table_interaction", "relation.exec.table_interaction"},

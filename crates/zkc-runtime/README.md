@@ -20,6 +20,10 @@ proof framing and application acceptance belong to `zkc-tools`.
 Protocol algorithms are source libraries; field arithmetic and cryptographic
 operations are supplied by installed backends. The runtime hashes canonical
 relation carriers for identity, independently of backend operation installation.
+`Bundle::table_widths` derives immutable element widths after whole-table
+carrier admission, without a height. `Bundle::polynomial_view` checks static
+carrier compatibility; its height-taking methods check actual domain, policy,
+windows and limits when called. Point substitution requires no domain.
 Admission establishes executable structure, not compiler correctness or protocol
 security. See [the interpreter contract](src/interactive/README.md).
 

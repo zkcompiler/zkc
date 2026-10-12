@@ -5,6 +5,7 @@ the source builds columns with generic vector operations. This compares their
 values, claim order and scoped residuals for both reductions on all tables.
 """
 
+from source_modules import finite_modules
 from input_files import input_files
 import json
 from pathlib import Path
@@ -53,7 +54,7 @@ def test_source_reduction_matches_independent_staged_reference(toolchain, journa
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
         f'--module=inspect_reduction={ROOT}/common/tests/protocol/sources/interaction-reduction.zkc',
         f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
-        f'--module=air_interaction={ROOT}/libraries/air/interaction.zkc',
+        f'--module=air_interaction={ROOT}/libraries/air/interaction.zkc', *finite_modules(),
         f'inspect_reduction::{entry}', f'--output={package}'])
     pin = report['package_sha256']
     reduction = reductions.Reduction(kind, bundle, [True, True, True])

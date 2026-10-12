@@ -6,6 +6,7 @@ adversarial evidence, not a proof of cryptographic soundness or upstream VM
 compatibility.
 """
 
+from source_modules import finite_modules
 from input_files import input_files
 import importlib.util
 import json
@@ -35,7 +36,7 @@ def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None
                                f'accumulator_machine::{entry}', f'--output={package}', *flags])
         return package, report['package_sha256']
     command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-               f'--module=accumulator_machine={path}',
+               f'--module=accumulator_machine={path}', *finite_modules(),
                f'--asset=machine=relation-bundle-json={asset or FIXTURES / "bundle.json"}',
                f'accumulator_machine::{entry}', f'--output={package}', *flags]
     for module, file in [('air_bundle', 'air/bundle'), ('air_interaction', 'air/interaction'),
@@ -120,7 +121,9 @@ def test_machine_supports_distinct_heights_and_idle_memory(toolchain, journal, d
 
 
 @pytest.mark.parametrize('entry,flags', [('ProofLogUp', ['--no-simplify']),
-                                        ('ProofProduct', ['--release-storage'])])
+                                        ('ProofProduct', ['--release-storage']),
+                                        ('ProofLogUp', ['--no-finite-bulk']),
+                                        ('ProofProduct', ['--no-finite-bulk'])])
 def test_machine_proof_compiler_policies(toolchain, journal, directory, entry, flags):
     package, pin = compile_entry(toolchain, journal, directory, entry, flags=flags)
     prove_and_verify(toolchain, journal, directory, package, pin, 'policy', requests('store-load'))

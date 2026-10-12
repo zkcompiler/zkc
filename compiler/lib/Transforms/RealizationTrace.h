@@ -347,6 +347,13 @@ public:
       selection(realizationSubject(op), family, choice, diagnostic.outcome,
                 realizationSubject(diagnostic));
   }
+  void selection(mlir::Operation *op,
+                 const protocol::detail::AlgorithmExpansionRecord &record,
+                 DecisionFamily family, RealizationChoice choice,
+                 OptimizationOutcome outcome) {
+    if (trace)
+      selection(realizationSubject(op, record), family, choice, outcome);
+  }
   void selection(const RealizationSubject &key, DecisionFamily family,
                  RealizationChoice choice, OptimizationOutcome outcome,
                  RealizationSubject query = {}) {
@@ -360,8 +367,11 @@ public:
   void retry(MathematicalSelectionPolicy effective) {
     append(RetryDecision{id, effective}, subject);
   }
-  void publish(PublicationBoundary boundary =
-                   PublicationBoundary::IncorporatedIntoParent) {
+  void publish() {
+    publish(parent ? PublicationBoundary::IncorporatedIntoParent
+                   : PublicationBoundary::PublishedToCaller);
+  }
+  void publish(PublicationBoundary boundary) {
     append(PublicationDecision{boundary}, subject);
     finished = true;
   }

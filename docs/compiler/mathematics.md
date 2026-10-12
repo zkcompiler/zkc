@@ -246,6 +246,13 @@ projection and execution lowering retain their structural Local preservation
 checks against the accepted preparation result. No additional profile or
 post-projection Local rewrite window is introduced.
 
+Preparation expands callers that reach retained computations and the callbacks
+those computations name. Unrelated definitions keep their exact bodies.
+Source inspection and actual helper substitution have separate cumulative
+allowances; copying an unchanged root is not a second helper expansion. Both
+phase results and their accounting are independently read before publication.
+The [function contract](../spec/ir/functions.md) defines these boundaries.
+
 ### Inspecting preparation
 
 `RealizationTrace` optionally records the requested selection policy,
@@ -336,6 +343,16 @@ constructs a fixed array over a range whose endpoint passes through a helper.
 Their tests compare arithmetic with independent integer references under default,
 unsimplified and ordered compilation. They establish these mathematical slices,
 not complete proof protocols or a performance improvement.
+
+The maintained [AIR library](../../libraries/air/README.md) also uses finite
+folds for quotient-claim recombination and interaction nonzero checks. Complete
+single-table AIR and three-table machine tests exercise these through proof
+construction and verification, with both LogUp and grand-product reductions.
+FRI retains native polynomial evaluation and coset folding. The
+[protocol measurement tool](../../common/benchmarks/README.md) compares these
+workloads with bulk selection disabled and storage release enabled separately.
+It records process timings, executed work and cumulative allocation charges;
+these counters do not establish peak memory or a security theorem.
 
 ## Extension boundary
 
