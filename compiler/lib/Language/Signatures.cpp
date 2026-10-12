@@ -160,6 +160,12 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     }
   }
   auto &source = *sources[id.index];
+  if ((decl.resource || decl.sealed) &&
+      decl.kind == Declaration::Kind::Associated &&
+      isDomainSort(decl.associatedSort))
+    return types.fail("source.resource",
+                      "resource attributes require an opaque runtime type",
+                      decl.span);
   if (decl.resource && decl.permissions &&
       (decl.permissions->copy ||
        (*decl.resource == Resource::Linear && decl.permissions->drop)))

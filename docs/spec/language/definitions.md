@@ -737,7 +737,9 @@ it. `#[linear]` forbids copying and requires transfer or consumption on every
 successful path. Both seal construction and representation access to the defining
 module. `#[sealed]` supplies that access boundary without restricting ordinary
 usage. Restrictions cannot grant properties missing from a field. These
-attributes also apply to opaque type definitions.
+attributes also apply to opaque runtime type definitions. Associated domains
+such as `type F: Field` and `type C: Commitment` cannot carry them: selecting a
+domain does not introduce a nominal runtime wrapper.
 
 Private fields, sealed declarations and opaque associated types do not grant
 external constructor authority. Concrete associated types derive usage from their

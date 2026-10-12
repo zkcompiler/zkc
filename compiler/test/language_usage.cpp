@@ -293,6 +293,19 @@ fn duplicate<C:Linear>(x:C::Token)->(C::Token,C::Token)
 )"),
                 "source.move");
       });
+  cases.run("resource attributes cannot restrict associated domains", [] {
+    for (StringRef attribute : {"affine", "linear", "sealed"})
+      for (StringRef sort : {"Field", "Group", "Commitment", "Transcript"})
+        refuses(check("interface Family {#[" + attribute.str() +
+                      "] type Domain:" + sort.str() + ";}"),
+                "source.resource");
+    refuses(check(R"(
+domain F=field("bls12-381.fr");
+module Family {#[sealed] pub type Scalar:Field=F;}
+fn duplicate(x:Family::Scalar)->(Family::Scalar,Family::Scalar){return(x,x);}
+)"),
+            "source.resource");
+  });
   cases.run("early completion cannot skip a live normal-exit obligation", [] {
     refuses(check(R"(
 protocol Run roles(P)(go:bool@P)->(accepted:bool@P) completes {
