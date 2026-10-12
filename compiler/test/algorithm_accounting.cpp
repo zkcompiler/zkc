@@ -118,13 +118,6 @@ bool same(Operation *a, Operation *b) {
       OperationEquivalence::IgnoreLocations |
           OperationEquivalence::IgnoreCommutativity);
 }
-bool sameRecord(const Record &a, const Record &b) {
-  return a.occurrences == b.occurrences && a.work == b.work &&
-         a.inspectionWork == b.inspectionWork &&
-         a.originBytes == b.originBytes && a.checkWork == b.checkWork &&
-         a.checkOriginBytes == b.checkOriginBytes && a.retained == b.retained &&
-         a.finished == b.finished;
-}
 local::FuncOp function(ModuleOp module, StringRef name) {
   return cast<local::FuncOp>(
       SymbolTable::lookupSymbolIn(&module.getBody()->front(), name));
@@ -225,7 +218,7 @@ int main() {
       return protocol::expandAlgorithms(*module, Phase::RetainMaps, state,
                                         &origins);
     });
-    require(same(*module, *before) && sameRecord(record, Access::get(state)) &&
+    require(same(*module, *before) && record == Access::get(state) &&
                 origins.size() == 1 && origins.front().function == "sentinel",
             "callback refusal published partial IR, state or origins");
   });
@@ -429,8 +422,7 @@ int main() {
                 return protocol::expandAlgorithms(*module, Phase::Finish, state,
                                                   &origins);
               });
-              require(same(*module, *before) &&
-                          sameRecord(record, Access::get(state)) &&
+              require(same(*module, *before) && record == Access::get(state) &&
                           origins.size() == 1 &&
                           origins.front().function == "sentinel",
                       "failed expansion published IR, state or origins");
@@ -453,8 +445,7 @@ int main() {
                         return protocol::expandAlgorithms(
                             *module, Phase::RetainMaps, state);
                       });
-                require(same(*module, *before) &&
-                            sameRecord(record, Access::get(state)),
+                require(same(*module, *before) && record == Access::get(state),
                         "inspection failure published a partial candidate");
               });
   cases.run(

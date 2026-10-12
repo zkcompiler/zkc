@@ -474,12 +474,7 @@ public:
       } else if (!addedBindings.contains(&op))
         return refuse(&op, "unexpected declaration");
     }
-    if (expected.occurrences != output.occurrences ||
-        expected.work != output.work ||
-        expected.inspectionWork != output.inspectionWork ||
-        expected.originBytes != output.originBytes ||
-        expected.retained != output.retained ||
-        expected.finished != output.finished)
+    if (!expected.sameExpansion(output))
       return refuse(candidate, "occurrence records or cumulative limits");
     output.checkWork = expected.checkWork;
     output.checkOriginBytes = expected.checkOriginBytes;

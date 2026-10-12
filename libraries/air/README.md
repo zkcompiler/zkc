@@ -35,8 +35,8 @@ compare arithmetic, empty inputs and admission through complete proofs.
 The [measurement tool](../../common/benchmarks/README.md) compares FRI,
 single-table AIR and both machine reductions at several sizes. It retains
 compile timings, selected operations, execution charges and proof results.
-FRI's terminal polynomial evaluation keeps its existing native operation;
-expressing it as a finite fold did not improve the measured work or storage.
+FRI's terminal polynomial evaluation keeps its native polynomial operation,
+preserving the direct evaluation contract and its existing implementation.
 
 `vanishing(height,begin,end,x)` evaluates the product over subgroup rows
 `[begin,end)` at any field point, including excluded subgroup roots.

@@ -509,12 +509,7 @@ LogicalResult detail::checkAlgorithmExpansion(
       return refuse();
   }
   const auto &expected = check.result();
-  if (compareRecords && (expected.occurrences != output.occurrences ||
-                         expected.work != output.work ||
-                         expected.inspectionWork != output.inspectionWork ||
-                         expected.originBytes != output.originBytes ||
-                         expected.retained != output.retained ||
-                         expected.finished != output.finished))
+  if (compareRecords && !expected.sameExpansion(output))
     return refuse();
   output.checkWork = expected.checkWork;
   output.checkOriginBytes = expected.checkOriginBytes;

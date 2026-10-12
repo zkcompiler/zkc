@@ -11,6 +11,7 @@ from source_modules import finite_modules
 import test_air_stark as stark
 import test_fri as fri
 import test_machine_stark as machine
+from test_total_callback_selection import compile_entry as compile_counted_entry
 
 ROOT = Path(__file__).resolve().parents[3]
 SHARED = finite_modules()
@@ -114,7 +115,11 @@ def test_interaction_product_admission_and_inactive_rows(
         toolchain, journal, directory, flags, reduction):
     source = REDUCTION.replace('run Demo = Inspect<LogUp<F>>;',
                                f'run Demo = Inspect<{reduction}<F>>;')
-    entry = Entry(toolchain, journal, directory, source, [*SHARED, *AIR, *flags])
+    entry, sites = compile_counted_entry(toolchain, journal, directory, source,
+                                        flags, modules=AIR)
+    # Observe the production library's nonzero fold, including generic usage
+    # inference. Correct values alone would not detect a lost bulk selection.
+    assert bool(sites['vector.product']) == ('--no-finite-bulk' not in flags)
     # fp = [7, 11]. The second denominator is zero before Boolean gating.
     inputs = {'values': [1, 5, 3, 3, 1, 0], 'rows': 2,
               'gamma': 11, 'delta': 2, 'active': True}

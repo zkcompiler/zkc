@@ -431,10 +431,7 @@ int main() {
         "fusion observer changed output");
     const auto &a = protocol::detail::AlgorithmStateAccess::get(controlState);
     const auto &b = protocol::detail::AlgorithmStateAccess::get(observedState);
-    require(a.occurrences == b.occurrences && a.work == b.work &&
-                a.originBytes == b.originBytes && a.checkWork == b.checkWork &&
-                a.checkOriginBytes == b.checkOriginBytes,
-            "fusion observer changed occurrence accounting");
+    require(a == b, "fusion observer changed occurrence accounting");
     bool occurrence = false, product = false;
     for (auto *event : events<SelectionDecision>(trace)) {
       const auto &decision = std::get<SelectionDecision>(event->payload);
@@ -555,12 +552,7 @@ int main() {
             "nested observation changed selection");
     const auto &ar = protocol::detail::AlgorithmStateAccess::get(a);
     const auto &br = protocol::detail::AlgorithmStateAccess::get(b);
-    require(ar.occurrences == br.occurrences && ar.work == br.work &&
-                ar.originBytes == br.originBytes &&
-                ar.checkWork == br.checkWork &&
-                ar.checkOriginBytes == br.checkOriginBytes &&
-                ar.retained == br.retained && ar.finished == br.finished,
-            "observer changed occurrence state");
+    require(ar == br, "observer changed occurrence state");
     bool selected = false;
     for (auto *event : events<SelectionDecision>(trace))
       selected |= std::get<SelectionDecision>(event->payload).choice ==

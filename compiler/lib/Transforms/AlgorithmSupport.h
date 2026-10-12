@@ -28,6 +28,19 @@ struct AlgorithmExpansionRecord {
   uint64_t inspectionWork = 1000000;
   uint64_t checkWork = 1000000, checkOriginBytes = 16 * 1024 * 1024;
   bool retained = false, finished = false;
+
+  // Readers independently derive expansion state before publishing their own
+  // checking balances. Compare those balances only for complete snapshots.
+  bool sameExpansion(const AlgorithmExpansionRecord &other) const {
+    return std::tie(occurrences, work, originBytes, inspectionWork, retained,
+                    finished) ==
+           std::tie(other.occurrences, other.work, other.originBytes,
+                    other.inspectionWork, other.retained, other.finished);
+  }
+  bool operator==(const AlgorithmExpansionRecord &other) const {
+    return sameExpansion(other) && checkWork == other.checkWork &&
+           checkOriginBytes == other.checkOriginBytes;
+  }
 };
 struct AlgorithmStateAccess {
   static const AlgorithmExpansionRecord &get(const AlgorithmExpansionState &s) {

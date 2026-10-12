@@ -33,8 +33,8 @@ run Demo = Inspect;
 '''
 
 
-def compile_entry(toolchain, journal, directory, source, flags):
-    options = [*finite_modules(), *flags]
+def compile_entry(toolchain, journal, directory, source, flags, modules=()):
+    options = [*finite_modules(), *modules, *flags]
     entry = Entry(toolchain, journal, directory, source, options)
     bundle = journal.json([
         toolchain.compiler, 'language-bundle', '--source-format=zkc',
