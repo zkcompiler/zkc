@@ -570,11 +570,7 @@ LogicalResult checkFiniteCollections(ModuleOp source, ModuleOp candidate,
       return refuse("unexpected definition or unused binding");
   }
   if (output) {
-    if (expected.occurrences != output->occurrences ||
-        expected.originBytes != output->originBytes ||
-        expected.work != output->work ||
-        expected.retained != output->retained ||
-        expected.finished != output->finished)
+    if (!expected.sameExpansion(*output))
       return refuse("occurrence records or cumulative limits differ");
     output->checkOriginBytes = expected.checkOriginBytes;
   }

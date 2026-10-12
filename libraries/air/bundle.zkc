@@ -59,12 +59,21 @@ pub struct Policy {
   pub optional: bool,
   pub authority: index,
   pub minimum: index,
-  pub maximum: index
+  pub maximum: index,
+  pub power_of_two: bool
 }
 fn policy<Table: nat, B: Bundle>() -> Policy {
   let facts = kernel<Base,Table>("relation.table_policy"; B);
   return Policy { optional: facts.0 == 1, authority: facts.1, minimum: facts.2,
-    maximum: facts.3 };
+    maximum: facts.3, power_of_two: facts.4 == 1 };
+}
+// Configuration retains its declared height even when its table is absent.
+// Bundle policies allow height 1 and extend through 2^20, independently of
+// the argument's active-table domain. A fixed height reports equal bounds.
+fn configured_height(rule: Policy, height: index) -> bool {
+  return both(both(not(less(height, rule.minimum)), not(less(rule.maximum, height))),
+    if rule.power_of_two { if height == 1 { true } else { two_adic<20>(height) } }
+      else { true });
 }
 // The table's own range, within this profile's two-adic domains: a power of
 // two in [2, 2^MaxLogHeight]. Powers of two also satisfy a power-of-two policy.
@@ -155,10 +164,14 @@ fn admit_table<Table: nat, B: Bundle, R: Reduction<Extension>, MaxLogHeight: nat
   let height = statement.height;
   require if rule.optional { true } else { statement.present };
   let sized = if statement.present { true } else { not(rule.authority == 2) };
-  require if sized { admitted<MaxLogHeight>(rule, height) } else { height == 0 };
-  let facts = if sized { shape<Base,Table,B>(height) } else { no_shape() };
-  require length(statement.configuration) == height * facts.configuration;
+  require if statement.present { admitted<MaxLogHeight>(rule, height) }
+    else { if sized { configured_height(rule, height) } else { height == 0 } };
+  // Immutable widths belong to the captured relation, even when no rows are
+  // active. Only a present table needs a polynomial domain and assertion scopes.
+  let widths = kernel<Base,Table>("relation.table_widths"; B);
+  require length(statement.configuration) == height * widths.1;
   let layout = if statement.present {
+      let facts = shape<Base,Table,B>(height);
       require length(statement.public_columns) == height * facts.public_columns;
       present_layout<Table,B,R>(facts, height, channels)
     } else {

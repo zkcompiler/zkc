@@ -152,9 +152,10 @@ const POLYNOMIAL: &[&str] = &[
     "relation.table_point",
     "relation.table_points",
 ];
-/// Contracts of the Bundle interaction view. All four share the whole-table
-/// carrier rule; none requires a polynomial domain at reference admission.
+/// Contracts of immutable metadata and the Bundle interaction view. They share
+/// the whole-table carrier rule; none requires a domain at reference admission.
 const INTERACTION: &[&str] = &[
+    "relation.table_widths",
     "relation.table_policy",
     "relation.table_interactions",
     "relation.table_interaction",

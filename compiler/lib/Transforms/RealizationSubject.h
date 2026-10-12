@@ -27,6 +27,8 @@ inline RealizationSubject realizationSubject(mlir::Operation *op) {
             result.definition = definition.getValue().str();
       break;
     }
+    // A declared site already identifies the occurrence within its symbol.
+    // Still walk ancestors for the symbol/origin, but do not scan siblings.
     if (!result.site.empty())
       continue;
     auto *block = current->getBlock();

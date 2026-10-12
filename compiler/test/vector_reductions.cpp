@@ -1,3 +1,4 @@
+#include "../lib/Transforms/AlgorithmSupport.h"
 #include "../lib/Transforms/ComputationSelection.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "mlir/IR/OperationSupport.h"
@@ -718,10 +719,19 @@ int main() {
     auto source = parse(
         edit(fixture, " \"protocol.func\"", wrapper + " \"protocol.func\""));
     auto legacy = copy(*source);
+    State legacyState;
     require(succeeded(mathematical::expandMapRealizations(*legacy)) &&
-                succeeded(protocol::expandAlgorithms(*legacy)),
+                succeeded(protocol::expandAlgorithms(*legacy, Phase::Finish,
+                                                     legacyState)),
             "baseline budget unexpectedly refused");
     State state;
+    auto allowance = protocol::detail::AlgorithmExpansionRecord{};
+    // Give both phases together exactly the substitution work needed by the
+    // single-phase control. Retaining then expanding the map occurrences costs
+    // more; it must not silently start a new allowance at Finish.
+    allowance.work -=
+        protocol::detail::AlgorithmStateAccess::get(legacyState).work;
+    protocol::detail::AlgorithmStateAccess::set(state, allowance);
     retain(*source, state);
     require(succeeded(mathematical::expandMapRealizations(*source)),
             "budget map realization refused");

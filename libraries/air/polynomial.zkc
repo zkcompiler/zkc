@@ -1,4 +1,6 @@
 module air_polynomial;
+use zkc::vector as vec;
+use zkc::finite_math as total;
 
 pub type Vector<F: Field> = builtin("vector", F);
 pub type Polynomial<F: Field> = builtin("polynomial", F);
@@ -182,13 +184,10 @@ pub fn split_quotient<F: Field>(values: Vector<F>, shift: F, size: index,
 }
 pub fn recombine<F: Field>(claims: Vector<F>, height: index, x: F) -> F {
   let stride = power(x, height);
-  let mut weight: F = 1;
-  let mut result: F = 0;
-  for column in 0..length(claims) {
-    result = result + weight * get(claims, column);
-    weight = weight * stride;
-  }
-  return result;
+  let initial: (F, F) = (0, 1);
+  let combined = total::fold(vec::elements(claims), initial,
+    fn((value, weight), claim) => (value + weight * claim, weight * stride));
+  return combined.0;
 }
 
 // Vector form of the same interval vanishing polynomial. The subgroup

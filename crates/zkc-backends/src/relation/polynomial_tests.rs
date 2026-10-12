@@ -465,6 +465,7 @@ fn configured_height(min: u32, max: u32) -> Height {
 #[test]
 fn grouped_authorities_flatten_columns_and_rotate_negative_offsets() {
     let bundle = layered(ReadModel::Finite, configured_height(2, 64)).unwrap();
+    assert_eq!(bundle.table_widths(0, EXT).unwrap(), [5, 3, 1]);
     for carrier in [KB, EXT] {
         let view = bundle.polynomial_view(0, carrier).unwrap();
         // Degrees: out0 2, out1 2, out4 3. At h = 8 the interval assertion
@@ -649,7 +650,7 @@ fn points_follow_assertion_order_and_ignore_interaction_only_inputs() {
 }
 
 #[test]
-fn static_premises_refuse_carriers_and_heights_without_a_two_adic_domain() {
+fn static_premises_check_carriers_and_execution_checks_the_actual_height() {
     let fixed = |h| Height {
         authority: HeightAuthority::Fixed,
         min: h,
@@ -664,10 +665,46 @@ fn static_premises_refuse_carriers_and_heights_without_a_two_adic_domain() {
         configured_height(5, 7),
     ] {
         let bundle = layered(ReadModel::Cyclic, height).unwrap();
+        let view = bundle.polynomial_view(0, KB).unwrap();
+        for result in [
+            view.shape(u64::from(height.min)).map(|_| ()),
+            view.input(u64::from(height.min), 0).map(|_| ()),
+            view.scope(u64::from(height.min), 0).map(|_| ()),
+        ] {
+            assert_eq!(result.unwrap_err().0, "bundle-polynomial-two-adic");
+        }
+        assert_eq!(view.shape(8).unwrap_err().0, "bundle-height");
+        assert_eq!(bundle.table_widths(0, EXT).unwrap(), [5, 3, 1]);
+        // Widths use the whole-table rule: the interaction has an Ext8 output.
         assert_eq!(
-            bundle.polynomial_view(0, KB).unwrap_err().0,
-            "bundle-polynomial-two-adic"
+            bundle.table_widths(0, KB).unwrap_err().0,
+            "relation-table-carrier"
         );
+        assert_eq!(
+            bundle.table_widths(1, EXT).unwrap_err().0,
+            "relation-table-index"
+        );
+        // Pure assertion substitution has no height or active-window premise.
+        let values: Vec<_> = (1..=7).map(KoalaBear::from_u64).collect();
+        let expected: Vec<_> = [34, 8, P - 1, 34, P - 1, 8, 34]
+            .into_iter()
+            .map(KoalaBear::from_u64)
+            .collect();
+        for packed in [false, true] {
+            assert_eq!(
+                points(
+                    &view,
+                    &values,
+                    1,
+                    packed,
+                    &Policy::default(),
+                    &mut Budget::default(),
+                    usize::MAX
+                )
+                .unwrap(),
+                expected
+            );
+        }
     }
     for height in [
         fixed(2),

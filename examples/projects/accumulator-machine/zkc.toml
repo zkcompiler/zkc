@@ -9,6 +9,15 @@ air_table = "../../../libraries/air/table.zkc"
 air_polynomial = "../../../libraries/air/polynomial.zkc"
 fri = "../../../libraries/fri/lib.zkc"
 
+"zkc::accumulation" = "../../../libraries/zkc/accumulation.zkc"
+"zkc::curve" = "../../../libraries/zkc/curve.zkc"
+"zkc::finite" = "../../../libraries/zkc/finite.zkc"
+"zkc::finite_domain" = "../../../libraries/zkc/finite_domain.zkc"
+"zkc::finite_math" = "../../../libraries/zkc/finite_math.zkc"
+"zkc::indices" = "../../../libraries/zkc/indices.zkc"
+"zkc::sequence" = "../../../libraries/zkc/sequence.zkc"
+"zkc::vector" = "../../../libraries/zkc/vector.zkc"
+
 [assets]
 
 [assets.machine]

@@ -76,18 +76,6 @@ Expected<unsigned> admitCarrier(const Bundle &bundle, uint32_t table,
     return std::move(error);
   return shape->degree;
 }
-/// The least power of two of at least 2 in the policy decides: when it
-/// exceeds the maximum or has no root of its order, so does every larger one.
-Error twoAdicPremise(const Bundle &bundle, uint32_t table, StringRef carrier) {
-  const auto &t = bundle.tables()[table];
-  const uint64_t least = PowerOf2Ceil(std::max<uint64_t>(t.height.min, 2));
-  auto shape = presentation(carrier);
-  if (!shape)
-    return shape.takeError();
-  if (least > t.height.max || !twoAdicDomain(carrier, *shape, uint32_t(least)))
-    return zkc::error("bundle-polynomial-two-adic", t.name);
-  return Error::success();
-}
 } // namespace
 
 Expected<unsigned> admitBundlePolynomialCarrier(const Bundle &bundle,
@@ -106,7 +94,7 @@ Error checkBundlePolynomialTable(const Bundle &bundle, uint32_t table,
   if (auto coordinates = admitBundlePolynomialCarrier(bundle, table, carrier);
       !coordinates)
     return coordinates.takeError();
-  return twoAdicPremise(bundle, table, carrier);
+  return Error::success();
 }
 
 Error checkBundleInteractionTable(const Bundle &bundle, uint32_t table,

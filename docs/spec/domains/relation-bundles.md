@@ -155,10 +155,40 @@ with its formal model. The cyclic wrap rule has no Lean model; its evidence is
 the bounded coefficient check of the recurrence fixture recorded in the
 [native validation map](../../../common/tests/native.md).
 
+## Compiler-visible table metadata
+
+`relation.table_widths<F, Table>` takes one captured Bundle identity and no data
+operands. It returns three `index` values:
+`(witness_width, config_width, public_width)`. Each is the sum of the declared
+group element widths for that authority. Widths count field elements, including
+for an extension carrier, not base coordinates. They depend only on the
+immutable admitted Bundle, never on presence, height, active scopes or a
+polynomial domain. An absent table retains these declared widths; they do not
+represent active contributions.
+
+Like `relation.table_policy`, this metadata operation applies the whole-table
+carrier rule (`admitBundleTableCarrier`): the table index must exist, and all
+Bundle public slots, selected table groups and assertion/interaction output
+sub-DAGs must lift into `F` (`relation-table-index`, `relation-table-carrier`).
+The installed binding is `plonky3/relation.table_widths`, for KoalaBear or Ext8.
+The compiler and Host check the same reference rule independently. The C++ SDK
+exposes `bundleTableWidths`; the Rust SDK exposes `Bundle::table_widths`.
+
+No height, window, active-table data/work bound or quotient size is checked.
+Execution charges the same bounded metadata traversal work as `table_policy`,
+independent of height, and returns three indices. Actual data admission remains
+with its owner: fixed/configuration logical height authority and policy, exact
+configuration lengths and field values still apply to absent tables. Absent
+instance height is zero and absent public/witness contributions are empty.
+Consumers can check configuration lengths from this metadata and logical height
+without invoking a polynomial profile. The metadata is not supplied-data
+admission, a presence decision, or a satisfaction claim.
+
 ## Compiler-visible polynomial view
 
-Five kernels describe one present table to a source library that constructs
-its own polynomial protocol. Each has roots `<F, Table>` like
+Five kernels expose a table's assertion arena and, at an actual present-table
+height, its polynomial profile to a source library that constructs its own
+polynomial protocol. Each has roots `<F, Table>` like
 `relation.table_rows`, the same Bundle asset parameter, and the installed
 KoalaBear or Ext8 provider. They derive facts from the admitted Bundle and
 substitute its existing arena. They select no domain shift, challenge,
@@ -172,7 +202,7 @@ quotient combination, commitment or proof, and they check no interaction.
 | `relation.table_point<F, Table>` | one value per arena input | one value per assertion, in assertion order |
 | `relation.table_points<F, Table>` | `rows` row-major assignments, `rows` | `rows` row-major results, one column per assertion |
 
-**Domain.** A table of height `h` is interpreted on the multiplicative
+**Domain.** The height-taking kernels interpret a table of height `h` on the multiplicative
 subgroup of order `h`: row `r` is `g^r` for a generator `g`, and each column
 polynomial has degree at most `h - 1`. The height must be a power of two of
 at least 2 (`bundle-polynomial-two-adic`) and must meet the table's policy
@@ -246,7 +276,9 @@ is exactly `relation.table_point`. Rows, inputs and assertions may each be
 zero; a length other than `rows * inputs` is `relation-table-point-shape`.
 Like `relation.table_point`, it selects no domain: the caller chooses the
 points, for example a coset of a larger domain, and applies any selector or
-division itself.
+division itself. Both substitutions are defined even if the table's policy
+admits no two-adic height, and neither checks assertion windows. `rows` is an
+assignment count, not a table height.
 
 **Carrier and interactions.** The analysis's carrier admission applies with
 carrier `F` (`relation-table-carrier`). An output used only by interactions is
@@ -257,13 +289,18 @@ must exclude or separately discharge them. The
 [interaction view](#compiler-visible-interaction-view) exposes the
 interaction records over the same arena inputs.
 
-When a body closes, the compiler checks the carrier admission and that the
-height policy admits a power of two `n >= 2` whose root of order `n` the
-carrier installs. Table and height failures report `source.asset-table`;
-carrier failures report `source.asset-carrier`. This rule names a capability,
-not a provider: only the installed KoalaBear and Ext8 providers implement the
-kernels. The Host independently checks the same premises once per reachable
-asset, table and carrier before execution, without allocating.
+When a body closes, the compiler checks the static table index and carrier
+admission, without selecting an execution height or requiring that one exists.
+Table failures report `source.asset-table`; carrier failures report
+`source.asset-carrier`. Only the installed KoalaBear and Ext8 providers
+implement these kernels. The Host independently checks the same premises once
+per referenced asset, table and carrier before execution, without allocating,
+including references in untaken branches. Height-taking kernels check the
+actual two-adic height, policy, windows and limits when reached. A fixed-height
+1 or 3 table can therefore occur in an untaken polynomial branch, while
+executing that branch at its declared height refuses
+`bundle-polynomial-two-adic`; substituting a different two-adic height refuses
+`bundle-height`. This rule applies uniformly to all source consumers.
 Height-dependent checks happen during execution.
 
 Every invocation first repeats the allocation-free static check, which visits

@@ -11,6 +11,8 @@ from pathlib import Path
 import re
 from typing import NamedTuple
 
+from source_modules import finite_modules
+
 import pytest
 
 from test_air_stark import (EXAMPLE, FIXTURE, P, ROOT, STARK, TABLE, frames, inputs,
@@ -124,7 +126,7 @@ def build(toolchain, journal, directory, name, *, main=None, asset=None, edits=(
         texts[module] = texts[module].replace(old, new)
     for module, extra in appended:
         texts[module] += '\n' + extra
-    arguments = []
+    arguments = finite_modules()
     for module, text in texts.items():
         path = where / f'{module}.zkc'
         path.write_text(text)

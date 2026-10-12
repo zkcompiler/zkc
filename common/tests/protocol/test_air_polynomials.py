@@ -1,5 +1,6 @@
 """Source AIR polynomial helpers against independent extension arithmetic."""
 
+from source_modules import finite_modules
 from input_files import input_files
 import json
 from pathlib import Path
@@ -77,7 +78,7 @@ def test_scope_polynomials_on_intersecting_cosets(toolchain, journal, directory,
     source.write_text(SCOPE_CLIENT)
     package = directory / 'scope.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                           f'--module=example={source}', f'--module=air_polynomial={LIBRARY}',
+                           f'--module=example={source}', f'--module=air_polynomial={LIBRARY}', *finite_modules(),
                            'example::Demo', f'--output={package}', *flags])
     height = 8
     subgroup = points(height)
@@ -104,7 +105,7 @@ def test_scope_polynomials_and_column_extensions(toolchain, journal, directory, 
     source.write_text(CLIENT)
     package = directory / 'math.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                           f'--module=example={source}', f'--module=air_polynomial={LIBRARY}',
+                           f'--module=example={source}', f'--module=air_polynomial={LIBRARY}', *finite_modules(),
                            'example::Demo', f'--output={package}', *flags])
     pin = report['package_sha256']
     for height, size in [(8, 32), (16, 64)]:

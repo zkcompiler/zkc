@@ -45,16 +45,19 @@ def R1CSRelationOp : Op<RelationDialect, "r1cs", [Symbol]> {
 def TableRowsOp : KernelOp<RelationDialect, "exec.table_rows", [OpRelationTableRows]>;
 // Polynomial view of one present table of an admitted relation bundle asset:
 // derived shape, input descriptors, assertion scopes and point substitutions.
-// The compiler checks the static table, carrier and height premises.
+// The compiler checks static table and carrier premises; actual heights
+// are checked when the height-taking kernels execute.
 def TableShapeOp : KernelOp<RelationDialect, "exec.table_shape", [OpRelationTableShape]>;
 def TableInputOp : KernelOp<RelationDialect, "exec.table_input", [OpRelationTableInput]>;
 def TableScopeOp : KernelOp<RelationDialect, "exec.table_scope", [OpRelationTableScope]>;
 def TablePointOp : KernelOp<RelationDialect, "exec.table_point", [OpRelationTablePoint]>;
 def TablePointsOp : KernelOp<RelationDialect, "exec.table_points", [OpRelationTablePoints]>;
-// Interaction view of one table of an admitted relation bundle asset: the
+// Metadata and interaction view of one table of an admitted Bundle: widths,
 // declared height policy, interaction descriptors and record substitutions.
-// The compiler checks the static table and carrier premises, and for the
-// height-taking and record kernels the two-adic height premise.
+// The compiler checks static table and carrier premises. Height-taking
+// kernels check their actual height at execution; metadata and substitutions
+// require no domain.
+def TableWidthsOp : KernelOp<RelationDialect, "exec.table_widths", [OpRelationTableWidths]>;
 def TablePolicyOp : KernelOp<RelationDialect, "exec.table_policy", [OpRelationTablePolicy]>;
 def TableInteractionsOp : KernelOp<RelationDialect, "exec.table_interactions", [OpRelationTableInteractions]>;
 def TableInteractionOp : KernelOp<RelationDialect, "exec.table_interaction", [OpRelationTableInteraction]>;

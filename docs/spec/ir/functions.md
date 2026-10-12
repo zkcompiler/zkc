@@ -77,11 +77,47 @@ occurrence. The existing formal inlining theorem applies to its own selected
 primitive interpretation, not automatically to native allocations or raw source
 elaboration.
 
-Compile-time expansion is separately bounded. Native expansion charges each visited instruction and region body, including empty
-callees and both conditional arms, against 32768 visits across the local definitions. Existing module
+Compile-time expansion is separately bounded. One preparation invocation owns
+32768 **substitution visits** across all local definitions and both expansion
+phases. Expanding a call in a root definition charges that call and every
+instruction visited in the substituted callee, including returns, nested region
+bodies, both conditional arms and further calls. An empty helper still charges
+its return. Repeated invocations are charged separately, including copies of a
+helper whose own declaration was expanded earlier. Budgets never restart at a
+function, protocol entry or phase boundary.
+
+The existing body of each root definition belongs to **source inspection**:
+each body operation, including nested operations and terminators, is charged
+once per phase against a separate cumulative 1000000-operation allowance before
+selection or expansion. Merely preserving or copying existing root instructions
+does not consume substitution visits. This separates bounded source traversal
+from the potentially exponential work of substitution. The independent reader
+has its own cumulative 1000000 checking allowance, checks preserved bodies as
+well as expanded ones, and recomputes both producer balances. Existing module
 instruction and byte limits still apply to the output. A call path has at most
-64 edges, and an encoded operation site is a source name of at most 128
-bytes. Limit failures are compiler refusals, not protocol execution results.
+64 edges, and an encoded operation site is a source name of at most 128 bytes.
+Limit failures are compiler refusals, not protocol execution results.
+
+`RetainMaps` selects every local definition that transitively calls an admitted
+map, finite fold or finite collect declaration. It also selects local callbacks
+named by each finite declaration's `step`, `body` or `predicate` attribute when
+those callbacks contain calls. These references are preparation dependencies
+even when the callback's ordinary call chain reaches no preparation declaration.
+In each selected body it expands the full transitive ordinary helper chain,
+including scalar reducers, retaining only admitted preparation calls. Callback
+selection does not select unrelated callers of the same callback or helpers.
+Helper copies are charged to the callback root; each helper's own declaration
+is selected only if it independently meets these rules. Other local definitions
+and call-free callbacks remain exactly unchanged, including their sites.
+Selection includes unused definitions and unused finite declarations and does
+not depend on which protocol entry currently refers to them. `Finish` requires
+preparation declarations to have been realized, expands every remaining caller
+and preserves call-free definitions exactly. In each phase the reader independently
+derives which definitions require expansion. Unchanged definitions are compared for
+operation order, attributes, SSA operands/results, block arguments and regions;
+diagnostic locations are excluded. Neither unchanged-body handling nor an empty
+retention selection waives admission or staged correspondence checking. Candidate
+IR, occurrence state and requested origins publish atomically after checking.
 
 ## Origins and identity
 
@@ -96,6 +132,12 @@ introduces a new call to a previously expanded helper, expansion prefixes those
 recorded paths with the new invocation path and adds its depth. Nested regions
 retain that invocation prefix exactly once. The independent reader checks the
 composed paths, depths and unique occurrence records.
+
+A raw declaration preserved during retention has not yet been expanded. Its
+sites receive their first canonical encoding if `Finish` expands that body.
+Previously expanded occurrences instead keep their checked paths and sites,
+including when the entire function is now call-free. Inspection alone does not
+create an expansion path or erase an existing one.
 
 `.zkc` function origins identify qualified definitions with empty native static
 bindings; the checked closure and emitted symbol retain the actual static

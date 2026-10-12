@@ -22,6 +22,22 @@ assertion and interaction expressions. Native polynomial, vector and commitment 
 implement their own mathematical contracts. The source modules choose the
 quotient combination, challenge schedule and acceptance conditions.
 
+The arithmetic shares the standard finite library. Quotient-claim
+`recombine` folds a `(sum, power)` state over the ordered claims; the
+interaction nonzero check folds multiplication with identity one. The latter
+can select native `vector.product` after ordinary helper expansion. Prefix
+sums and products that actually construct auxiliary columns remain scans.
+These are general mathematical operations, with no protocol names in compiler
+selection. `--no-finite-bulk` retains checked ordered execution of the same
+source. The [consumer controls](../../common/tests/protocol/test_protocol_finite_consumers.py)
+compare arithmetic, empty inputs and admission through complete proofs.
+
+The [measurement tool](../../common/benchmarks/README.md) compares FRI,
+single-table AIR and both machine reductions at several sizes. It retains
+compile timings, selected operations, execution charges and proof results.
+FRI's terminal polynomial evaluation keeps its native polynomial operation,
+preserving the direct evaluation contract and its existing implementation.
+
 `vanishing(height,begin,end,x)` evaluates the product over subgroup rows
 `[begin,end)` at any field point, including excluded subgroup roots.
 `vanishing_values` evaluates that same polynomial on the supplied two-adic
@@ -163,7 +179,10 @@ The selected profile requires:
 - Three base-KoalaBear tables and at least one channel. Required tables are
   present. Present heights `h_t` satisfy the Bundle policy and are powers of
   two between 2 and `H = 2^MaxLogHeight`. Configuration remains authoritative
-  even for absent optional tables; absent instance-height tables use zero.
+  even for absent optional tables. Their fixed/configured logical heights
+  retain the Bundle's range and power-of-two policy, independently of `H`;
+  absent instance-height tables use zero. An absent table's effective layout
+  height, widths, scopes, quotient chunks and reduction claims are all zero.
 - Global multiset interactions active on every row, with declared count bound
   one. The source enforces `m*(m-1) = 0` for each record. Other bounds,
   field-balance interactions and local or partial-row scopes are refused.
@@ -255,11 +274,20 @@ another configured program with the same final result is rejected by the known
 configuration obligation; disabling that obligation makes the control pass.
 
 The implementation uses small test parameters and its own proof encoding.
-One admission limitation remains: absent fixed-height and configured-height
-tables still pass through polynomial shape checks, including the active-table
-height bound `H`. This can refuse otherwise valid absent tables. Separating
-height-independent table layout from active polynomial admission is needed to
-cover the full optional-table contract above.
+Absent configuration uses the captured `relation.table_widths` metadata, which
+requires no polynomial domain. Fixed and configured logical heights obey the
+Bundle's own policy, including heights 1 and 3 when permitted, and retain exact
+configuration lengths even when absent. Instance-height absence uses zero.
+Only present tables call `relation.table_shape` and must satisfy this
+argument's two-adic height bound `H`, assertion windows and quotient limits.
+Static polynomial references check the table and carrier; reached operations
+with a height check that actual height.
+
+The [admission controls](../../common/tests/protocol/test_bundle_admission.py)
+compare both native relation evaluators and exercise the source admission
+through the Host and both complete reductions. They cover absent fixed and
+configured heights 1, 3 and above `H`, absent instance height zero, empty
+contributions, configuration shape and authority, and present-table refusal.
 
 Arbitrary table counts, other interaction profiles,
 hiding, production parameter selection, and a security theorem for the exact

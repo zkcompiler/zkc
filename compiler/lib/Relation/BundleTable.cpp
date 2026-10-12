@@ -102,6 +102,22 @@ Expected<BundleTableView> bundleTableView(const Bundle &bundle, uint32_t table,
   return view;
 }
 
+Expected<BundleTableWidths>
+bundleTableWidths(const Bundle &bundle, uint32_t table, StringRef carrier) {
+  auto coordinates = admitBundleTableCarrier(bundle, table, carrier);
+  if (!coordinates)
+    return coordinates.takeError();
+  BundleTableWidths widths;
+  for (const auto &group : bundle.tables()[table].groups) {
+    auto &width =
+        group.authority == BundleAuthority::Witness  ? widths.witnessWidth
+        : group.authority == BundleAuthority::Config ? widths.configWidth
+                                                     : widths.publicWidth;
+    width += group.width; // At most 256 groups of width 65,536.
+  }
+  return widths;
+}
+
 Error checkBundleTableReference(const Bundle &bundle, StringRef contract,
                                 uint32_t table, StringRef carrier) {
   if (contract == "relation.table_rows") {
@@ -113,7 +129,8 @@ Error checkBundleTableReference(const Bundle &bundle, StringRef contract,
       contract == "relation.table_scope" ||
       contract == "relation.table_point" || contract == "relation.table_points")
     return checkBundlePolynomialTable(bundle, table, carrier);
-  if (contract == "relation.table_policy" ||
+  if (contract == "relation.table_widths" ||
+      contract == "relation.table_policy" ||
       contract == "relation.table_interactions" ||
       contract == "relation.table_interaction" ||
       contract == "relation.table_record_points") {

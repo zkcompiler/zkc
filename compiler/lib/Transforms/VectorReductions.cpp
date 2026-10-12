@@ -141,16 +141,13 @@ public:
                                               OptimizationReason::Equation}
                         : found->second;
         }
-        if (scope.enabled())
-          scope.selection(realizationSubject(call, record),
-                          DecisionFamily::VectorReduction,
-                          RealizationChoice::Ordered, outcome);
+        scope.selection(call, record, DecisionFamily::VectorReduction,
+                        RealizationChoice::Ordered, outcome);
         continue;
       }
-      if (scope.enabled())
-        scope.selection(
-            realizationSubject(call, record), DecisionFamily::VectorReduction,
-            RealizationChoice::MapSum, OptimizationOutcome::success());
+      scope.selection(call, record, DecisionFamily::VectorReduction,
+                      RealizationChoice::MapSum,
+                      OptimizationOutcome::success());
       if (!changed)
         scope.propose();
       changed = true;
@@ -477,11 +474,7 @@ public:
       } else if (!addedBindings.contains(&op))
         return refuse(&op, "unexpected declaration");
     }
-    if (expected.occurrences != output.occurrences ||
-        expected.work != output.work ||
-        expected.originBytes != output.originBytes ||
-        expected.retained != output.retained ||
-        expected.finished != output.finished)
+    if (!expected.sameExpansion(output))
       return refuse(candidate, "occurrence records or cumulative limits");
     output.checkWork = expected.checkWork;
     output.checkOriginBytes = expected.checkOriginBytes;

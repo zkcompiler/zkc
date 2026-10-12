@@ -775,10 +775,9 @@ int main(int argc, char **argv) {
     refuses(analyzeBundlePolynomials(quadratic(BLS, BundleReadModel::Cyclic), 0,
                                      BLS, twoAdic(8)),
             "bundle-polynomial-domain");
-    refuses(accepted(checkBundlePolynomialTable(finite, 0, BLS)),
-            "bundle-polynomial-two-adic");
-    // The kernels' profile is a capability rule; only KoalaBear and Ext8
-    // providers implement them.
+    take(accepted(checkBundlePolynomialTable(finite, 0, BLS)));
+    // Reference formation needs no domain. Actual cyclic analysis still
+    // checks its root above; only KoalaBear and Ext8 providers install kernels.
     auto cyclic = quadratic(BN, BundleReadModel::Cyclic);
     require(take(analyzeBundlePolynomials(cyclic, 0, BN, twoAdic(8))).profile ==
                 BundlePolynomialProfile::TwoAdicNatural,

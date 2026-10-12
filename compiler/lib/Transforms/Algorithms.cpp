@@ -108,8 +108,115 @@ class Expander {
   const detail::AlgorithmExpansionRecord &input;
   detail::AlgorithmExpansionRecord output;
   std::map<std::string, Operation *> maps;
+  llvm::StringSet<> selected;
   std::vector<AlgorithmOrigin> origins;
   mathematical::RealizationScope &scope;
+
+  LogicalResult select() {
+    std::map<std::string, SmallVector<std::string>> callers;
+    llvm::StringSet<> calling;
+    SmallVector<std::string> pending;
+    auto selectFunction = [&](StringRef name) {
+      if (selected.insert(name).second)
+        pending.push_back(name.str());
+    };
+    for (const auto &entry : functions) {
+      const auto &name = entry.first;
+      auto function = entry.second;
+      auto result = function.walk([&](Operation *op) {
+        if (op == function.getOperation())
+          return WalkResult::advance();
+        if (!output.inspectionWork) {
+          scope.failure(mathematical::RequiredFailure{
+              "algorithm source inspection",
+              CapacityCause{WorkOwner::AlgorithmExpansion, 1,
+                            output.inspectionWork}});
+          diagnostics::emit(op->emitOpError(), "algorithm-expansion-limit");
+          return WalkResult::interrupt();
+        }
+        --output.inspectionWork;
+        if (auto call = dyn_cast<local::ApplyOp>(op)) {
+          calling.insert(name);
+          auto callee = call.getCallee().str();
+          if (phase == AlgorithmExpansionPhase::RetainMaps &&
+              maps.count(callee)) {
+            selectFunction(name);
+          } else if (functions.count(callee)) {
+            callers[callee].push_back(name);
+            if (phase == AlgorithmExpansionPhase::Finish)
+              selectFunction(name);
+          } else {
+            diagnostics::emit(op->emitOpError(), "algorithm-call-symbol");
+            return WalkResult::interrupt();
+          }
+        }
+        return WalkResult::advance();
+      });
+      if (result.wasInterrupted())
+        return failure();
+    }
+    // Every declaration is a root in its own right, including unused ones.
+    // Only retention needs the reverse closure; Finish selects actual callers.
+    if (phase == AlgorithmExpansionPhase::RetainMaps) {
+      while (!pending.empty()) {
+        auto name = pending.pop_back_val();
+        for (const auto &caller : callers[name])
+          selectFunction(caller);
+      }
+      // Finite analysis reads callbacks through declaration attributes, not
+      // local.apply edges. Expose their full ordinary helper chains as well.
+      // Add these roots after the reverse closure: unrelated users of a
+      // callback do not need preparation. Call-free callbacks remain exact.
+      for (const auto &entry : maps)
+        if (isa<local::FiniteFoldOp, local::FiniteCollectOp>(entry.second))
+          for (StringRef role : {"step", "body", "predicate"})
+            if (auto callback =
+                    entry.second->getAttrOfType<FlatSymbolRefAttr>(role))
+              if (calling.contains(callback.getValue()))
+                selected.insert(callback.getValue());
+    }
+    return success();
+  }
+
+  LogicalResult preserve(zkc::local::FuncOp function, Block &block,
+                         unsigned depth = 0) {
+    if (depth > 64)
+      return diagnostics::emit(function.emitOpError(),
+                               "interactive-call-depth");
+    for (Operation &op : block) {
+      for (Region &region : op.getRegions())
+        for (Block &nested : region)
+          if (failed(preserve(function, nested, depth + 1)))
+            return failure();
+      if (op.hasAttr("site")) {
+        auto site = attr(&op, "site").str();
+        auto saved = detail::occurrence(input, function.getSymName(), site);
+        auto record =
+            saved ? *saved
+                  : detail::AlgorithmOccurrence{definition(function),
+                                                function.getSymName().str(),
+                                                site,
+                                                {},
+                                                depth};
+        if (record.path.size() > 64 || record.depth > 64 ||
+            (isa<local::ApplyOp>(op) &&
+             (record.path.size() >= 64 || record.depth >= 64)))
+          return diagnostics::emit(op.emitOpError(), "interactive-call-depth");
+        // A raw preserved site is not an earlier expansion. Recording it in
+        // RetainMaps would suppress its first canonical encoding in Finish.
+        if (saved || phase == AlgorithmExpansionPhase::Finish)
+          output.occurrences.emplace(
+              detail::OccurrenceKey{function.getSymName().str(), site}, record);
+        origins.push_back({function.getSymName().str(), site, record.definition,
+                           record.originalSite, record.path});
+        if (record.definition != record.declaration)
+          origins.push_back({function.getSymName().str(), site,
+                             record.declaration, record.originalSite,
+                             record.path});
+      }
+    }
+    return success();
+  }
 
   std::string definition(zkc::local::FuncOp function) {
     if (auto origin = function->getAttrOfType<ArrayAttr>("logical_origin"))
@@ -127,15 +234,21 @@ class Expander {
       return diagnostics::emit(function.emitOpError(),
                                "interactive-call-depth");
     for (auto &op : block) {
-      // Bound traversal as well as output: empty helpers can also form an
-      // exponentially large DAG. Admission separately bounds depth/cycles.
-      if (!output.work) {
+      auto call = dyn_cast<local::ApplyOp>(op);
+      bool expand = call && !(phase == AlgorithmExpansionPhase::RetainMaps &&
+                              maps.count(call.getCallee().str()));
+      // The existing root body was charged to source inspection. Substitution
+      // charges its call and every callee visit, even a return-only helper.
+      // A callee's own declaration never pays for copies in another root.
+      bool substitution = !invocation.empty() || expand;
+      if (substitution && !output.work) {
         scope.failure(mathematical::RequiredFailure{
             "algorithm expansion work",
             CapacityCause{WorkOwner::AlgorithmExpansion, 1, output.work}});
         return diagnostics::emit(op.emitOpError(), "algorithm-expansion-limit");
       }
-      --output.work;
+      if (substitution)
+        --output.work;
       auto saved =
           detail::occurrence(input, function.getSymName(), attr(&op, "site"));
       // Recorded paths are relative to this function's earlier expansion.
@@ -150,9 +263,7 @@ class Expander {
       if (auto ret = dyn_cast<zkc::local::ReturnOp>(op)) {
         for (auto value : ret.getOperands())
           returned.push_back(mapping.lookup(value));
-      } else if (auto call = dyn_cast<zkc::local::ApplyOp>(op);
-                 call && !(phase == AlgorithmExpansionPhase::RetainMaps &&
-                           maps.count(call.getCallee().str()))) {
+      } else if (expand) {
         auto found = functions.find(call.getCallee().str());
         if (found == functions.end() || found->second.isExternal() ||
             !llvm::hasSingleElement(found->second.getBody()))
@@ -285,12 +396,19 @@ public:
         maps.emplace(SymbolTable::getSymbolName(&op).str(), &op);
   }
   LogicalResult run(ModuleOp candidate) {
+    if (failed(select()))
+      return failure();
     auto root =
         cast<zkc::protocol_ir::ProtocolModuleOp>(&candidate.getBody()->front());
     for (auto fn : root.getBody().front().getOps<zkc::local::FuncOp>()) {
       if (fn.isExternal())
         continue;
       auto original = functions.at(fn.getSymName().str());
+      if (!selected.contains(fn.getSymName())) {
+        if (failed(preserve(original, original.getBody().front())))
+          return failure();
+        continue;
+      }
       bool calls = false;
       original.walk([&](zkc::local::ApplyOp) { calls = true; });
       auto &block = fn.getBody().front();
@@ -332,10 +450,11 @@ struct AlgorithmExpansionPass
   }
 };
 } // namespace
-static LogicalResult expandAlgorithmsImpl(
-    ModuleOp module, AlgorithmExpansionPhase phase,
-    AlgorithmExpansionState &state, std::vector<AlgorithmOrigin> *origins,
-    bool allowUnrecordedNoop, mathematical::RealizationTrace *trace) {
+static LogicalResult
+expandAlgorithmsImpl(ModuleOp module, AlgorithmExpansionPhase phase,
+                     AlgorithmExpansionState &state,
+                     std::vector<AlgorithmOrigin> *origins,
+                     mathematical::RealizationTrace *trace) {
   mathematical::RealizationScope scope(
       trace,
       phase == AlgorithmExpansionPhase::RetainMaps ? "retain-algorithms"
@@ -363,13 +482,6 @@ static LogicalResult expandAlgorithmsImpl(
             return diagnostics::emit(
                 op.emitOpError(), "algorithm-call-symbol",
                 "Finish requires realized preparation declarations");
-      }
-      bool calls = false;
-      unit.walk([&](local::ApplyOp) { calls = true; });
-      if (allowUnrecordedNoop && !calls && !origins && !input.retained &&
-          phase == AlgorithmExpansionPhase::Finish) {
-        scope.complete(mathematical::CompletionKind::Unchanged);
-        return success();
       }
       scope.propose();
       mathematical::CheckedCandidate candidate(module);
@@ -401,15 +513,14 @@ LogicalResult expandAlgorithms(ModuleOp module,
                                std::vector<AlgorithmOrigin> *origins,
                                mathematical::RealizationTrace *trace) {
   AlgorithmExpansionState state;
-  // Preserve legacy call-free admission without exposing an unfinished state.
   return expandAlgorithmsImpl(module, AlgorithmExpansionPhase::Finish, state,
-                              origins, true, trace);
+                              origins, trace);
 }
 LogicalResult expandAlgorithms(ModuleOp module, AlgorithmExpansionPhase phase,
                                AlgorithmExpansionState &state,
                                std::vector<AlgorithmOrigin> *origins,
                                mathematical::RealizationTrace *trace) {
-  return expandAlgorithmsImpl(module, phase, state, origins, false, trace);
+  return expandAlgorithmsImpl(module, phase, state, origins, trace);
 }
 
 std::unique_ptr<Pass> createExpandAlgorithmsPass() {

@@ -215,6 +215,23 @@ operations and operand permutations only after replacement eligibility is
 established. Explicit implementation bindings retain their selected execution
 path even when their mathematical meaning is known.
 
+Before equation selection, total callbacks without a predicate may expand
+ordinary helper calls under the shared optional structural allowance. A bounded
+scan borrows call-free callbacks unchanged. Expanded callbacks live in a private
+analysis scope that retains their own preconditions and gives the occurrence
+fresh entry arguments with no caller-only premises. Matching and lane emission
+borrow that body for its entire lifetime; original helpers and the independent
+reader's source remain unchanged. Indexed reads introduced by a callee retain
+ordered execution because the reader checks those premises in the callee's
+scope. Root-local indexed reads keep their original premises.
+
+This preparation does not spend required helper-operation, helper-slot or
+polynomial reserves. A capacity decline emits no diagnostic and retains ordered
+execution; spent optional work is not restored on retry. Disabled bulk selection
+skips preparation. Nested finite computations exposed by expansion, including
+unused ones, also retain the ordered path and their conditional domain admission.
+This selection step performs no dead-code or polynomial elimination.
+
 The analysis retains all constructors in admission order separately from the
 items of the returned descriptor, and retains every helper instruction even
 when no bulk equation applies. Reduction, elementwise and bilinear selection

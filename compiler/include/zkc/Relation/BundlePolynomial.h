@@ -111,19 +111,18 @@ analyzeBundlePolynomials(const Bundle &, uint32_t table,
 /// Static reference rule of the installed polynomial kernels
 /// `relation.table_shape`, `relation.table_input`, `relation.table_scope`,
 /// `relation.table_point` and `relation.table_points`: the carrier
-/// admission, then the selected TwoAdicNatural profile at some height the
-/// policy admits, a power of two n >= 2 whose root of order n the carrier
-/// installs (`bundle-polynomial-two-adic`). Windows, limits and quotient
-/// chunks depend on the height and are execution checks.
+/// admission only. No execution height or polynomial domain is required.
+/// Height-taking kernels check the actual two-adic height, policy, windows,
+/// limits and quotient chunks when reached. Point substitution needs no domain.
 llvm::Error checkBundlePolynomialTable(const Bundle &, uint32_t table,
                                        llvm::StringRef carrier);
 
 /// Whole-table carrier admission: the polynomial carrier admission, with
 /// every arena node any output needs visited, interaction outputs included
 /// (`relation-table-index`, `relation-table-carrier`). It is the static rule
-/// of `relation.table_policy`, which therefore exposes the declared policy
-/// of a table whatever heights the polynomial view could interpret. Under a
-/// prime carrier it refuses any extension public slot, group or output.
+/// of `relation.table_policy` and `relation.table_widths`, which expose the
+/// declared metadata whatever heights the polynomial view could interpret.
+/// Under a prime carrier it refuses any extension public slot, group or output.
 /// Returns the carrier's base coordinates per element.
 llvm::Expected<unsigned> admitBundleTableCarrier(const Bundle &, uint32_t table,
                                                  llvm::StringRef carrier);

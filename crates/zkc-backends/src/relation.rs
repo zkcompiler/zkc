@@ -1,6 +1,6 @@
 //! Admitted deterministic Bundle assets, actual-column assertion evaluation,
 //! the polynomial view's descriptors and point substitutions, and the
-//! interaction view's policy, descriptors and record substitutions.
+//! interaction view's widths, policy, descriptors and record substitutions.
 use crate::{KoalaBear, Policy, Result, Value, exhausted, refused};
 use p3_field::{BasedVectorSpace, PrimeCharacteristicRing, PrimeField32};
 use std::{collections::BTreeMap, marker::PhantomData, sync::Arc};
@@ -101,8 +101,8 @@ impl Registry {
             )
             .map_err(|e| refused(e.0))
     }
-    /// The static premises of the interaction kernels for one program
-    /// reference. Every interaction kernel uses the same whole-table carrier
+    /// The static premises of metadata and interaction kernels for one program
+    /// reference. Every such kernel uses the same whole-table carrier
     /// admission. The check allocates nothing.
     pub fn interaction_reference(
         &self,
@@ -140,6 +140,7 @@ pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
     ("plonky3/relation.table_scope", "relation.table_scope"),
     ("plonky3/relation.table_point", "relation.table_point"),
     ("plonky3/relation.table_points", "relation.table_points"),
+    ("plonky3/relation.table_widths", "relation.table_widths"),
     ("plonky3/relation.table_policy", "relation.table_policy"),
     (
         "plonky3/relation.table_interactions",
@@ -184,6 +185,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         "relation.table_points" | "relation.table_record_points" => {
             (vec![vector.clone(), index], vec![vector])
         }
+        "relation.table_widths" => (vec![], vec![index; 3]),
         "relation.table_policy" => (vec![], vec![index; 5]),
         "relation.table_interactions" => (vec![index.clone()], vec![index; 2]),
         "relation.table_interaction" => (vec![index.clone(); 2], vec![index; 12]),
@@ -393,7 +395,7 @@ fn points<S: crate::ring::Carrier>(
 fn indices(values: impl IntoIterator<Item = u64>) -> Vec<Value> {
     values.into_iter().map(Value::Index).collect()
 }
-/// The interaction view's kernels. Flags are 0 or 1; an absent key or bound
+/// The metadata and interaction kernels. Flags are 0 or 1; an absent key or bound
 /// is 0 beside a zero flag.
 #[allow(clippy::too_many_arguments)] // The polynomial dispatch's context plus its resolved carrier.
 fn interaction(
@@ -410,6 +412,10 @@ fn interaction(
     let view = registry.interaction_reference(digest, table, carrier)?;
     let available = i.max_output_bytes;
     match (contract, args) {
+        ("relation.table_widths", []) => {
+            budget.charge(view.work())?;
+            Ok(indices(view.definition().data_widths()))
+        }
         ("relation.table_policy", []) => {
             budget.charge(view.work())?;
             let (optional, height) = view.policy();
@@ -482,7 +488,8 @@ fn polynomial(
     // charges; every kernel charges before its height profile or preparation.
     if matches!(
         contract,
-        "relation.table_policy"
+        "relation.table_widths"
+            | "relation.table_policy"
             | "relation.table_interactions"
             | "relation.table_interaction"
             | "relation.table_record_points"
