@@ -1,9 +1,7 @@
 format = "zkc.project/0"
 
 [modules]
-imported_air = "main.zkc"
-
-[assets]
+"imported_air" = "main.zkc"
 
 [assets.export]
 format = "ring-json"

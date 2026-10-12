@@ -1,4 +1,4 @@
 format = "zkc.project/0"
 
 [modules]
-example = "main.zkc"
+"example" = "main.zkc"

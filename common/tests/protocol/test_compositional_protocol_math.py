@@ -7,7 +7,7 @@ FRI or LogUp proofs. Compiler modes exercise the same authored consumers.
 import json
 from pathlib import Path
 import random
-import tomllib
+from project import project_inputs
 
 import pytest
 
@@ -45,9 +45,8 @@ def published_inputs(project, selector):
 def project_modules(project):
     """Import the authored modules into small adapters without copying source."""
     path = PROJECTS / project / 'zkc.toml'
-    modules = tomllib.loads(path.read_text())['modules']
-    return [f'--module={name}={(path.parent / source).resolve()}'
-            for name, source in modules.items()]
+    modules, _ = project_inputs(path)
+    return [f'--module={name}={source}' for name, source in modules.items()]
 
 
 def evaluate(coefficients, point, modulus):

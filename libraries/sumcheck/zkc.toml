@@ -1,0 +1,8 @@
+format = "zkc.project/0"
+
+[modules]
+"expression_sumcheck" = "expression.zkc"
+"sumcheck" = "lib.zkc"
+
+[dependencies]
+zkc = "../zkc"

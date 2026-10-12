@@ -1,5 +1,7 @@
 """Write small authored project fixtures without a second TOML dependency."""
 import json
+from pathlib import Path
+import tomllib
 
 
 def project_text(value):
@@ -17,3 +19,39 @@ def project_text(value):
                 table(item, path)
     table(value)
     return '\n'.join(lines) + '\n'
+
+
+def project_inputs(path):
+    """Expand known-good test projects for comparison with explicit SDK inputs.
+
+    Production admission and refusal cases belong to the Rust loader. This
+    helper does not load untrusted manifests or reproduce those checks.
+    """
+    modules, assets, seen = {}, {}, set()
+
+    def visit(path):
+        path = Path(path)
+        context = path.parent.resolve() / path.name
+        if context in seen:
+            return
+        seen.add(context)
+        config = tomllib.loads(path.read_text())
+        for name, source in config.get('modules', {}).items():
+            source = (path.parent / source).resolve()
+            assert name not in modules or modules[name] == source
+            modules[name] = source
+        for name, asset in config.get('assets', {}).items():
+            value = (asset['format'], (path.parent / asset['path']).resolve())
+            assert name not in assets or assets[name] == value
+            assets[name] = value
+        for directory in config.get('dependencies', {}).values():
+            visit(path.parent / directory / 'zkc.toml')
+    visit(path)
+    return modules, assets
+
+
+def project_arguments(path):
+    modules, assets = project_inputs(path)
+    return ([f'--module={name}={source}' for name, source in sorted(modules.items())]
+            + [f'--asset={name}={kind}={source}'
+               for name, (kind, source) in sorted(assets.items())])

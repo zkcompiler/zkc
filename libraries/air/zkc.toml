@@ -1,0 +1,12 @@
+format = "zkc.project/0"
+
+[modules]
+"air_bundle" = "bundle.zkc"
+"air_interaction" = "interaction.zkc"
+"air_polynomial" = "polynomial.zkc"
+"air_stark" = "stark.zkc"
+"air_table" = "table.zkc"
+
+[dependencies]
+fri = "../fri"
+zkc = "../zkc"

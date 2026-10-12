@@ -364,7 +364,27 @@ zkc compile --module=schnorr=libraries/schnorr/lib.zkc \
 ```
 
 See the [walkthrough](../docs/getting-started.md) to invoke the compiled Entry.
-Project files can record these maps; see [project inputs](../docs/language/README.md#project-inputs).
+A project selects local library families with its current manifest:
+
+```toml
+format = "zkc.project/0"
+
+[modules]
+example = "main.zkc"
+
+[dependencies]
+schnorr = "../../../libraries/schnorr"
+```
+
+Each family owns its `zkc.toml` and transitive dependencies. All its listed
+sources join the explicit capture, including private implementation modules.
+Dependency labels do not rename source modules. Shared dependencies are loaded
+once; conflicting providers and cycles refuse. Paths are local and relative to
+the declaring manifest. Applications continue to own concrete relation assets
+and Entries. Moving from explicit maps to dependencies changes capture identity
+when the selected family includes additional sources.
+
+For input formats, see [project inputs](../docs/language/README.md#project-inputs).
 Check the shared math modules with `zkc check --project=libraries/zkc/zkc.toml`.
 There is no separate registry or library installation step.
 
