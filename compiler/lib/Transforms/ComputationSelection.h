@@ -11,18 +11,6 @@ bool canReplacePayload(const finite::ComputationView &view);
 bool canReplaceNestedContraction(const finite::ComputationView &view);
 
 enum class RealizationKind { Ordered, Bilinear, Reduction, Elementwise };
-/// Selection outcomes describe optional producer choices, never correspondence
-/// evidence. AnalysisUnavailable includes unsupported structure or exhausted
-/// analysis work; the structural API does not distinguish those cases.
-enum class SelectionOutcome {
-  Selected,
-  AnalysisUnavailable,
-  PolicyDisabled,
-  UnsupportedEquation,
-  ReplacementRestricted,
-  MissingRecipe
-};
-llvm::StringRef describeSelectionOutcome(SelectionOutcome outcome);
 struct SelectedReduction {
   const ReductionRecipe *recipe = nullptr;
   llvm::SmallVector<unsigned> inputs;
@@ -31,7 +19,8 @@ struct SelectedReduction {
 };
 struct ComputationSelection {
   RealizationKind kind = RealizationKind::Ordered;
-  SelectionOutcome outcome = SelectionOutcome::AnalysisUnavailable;
+  finite::ComputationDiagnostic diagnostic;
+  OptimizationStatus outcome() const { return diagnostic.outcome.status; }
   std::optional<finite::ComputationView> view;
   ComputationEquations equations;
   std::optional<SelectedReduction> reduction;
@@ -51,7 +40,8 @@ selectComputation(finite::Computation computation,
 struct NestedContractionSelection {
   std::optional<NestedContraction> equation;
   const MatrixContractionRecipe *recipe = nullptr;
-  SelectionOutcome outcome = SelectionOutcome::UnsupportedEquation;
+  finite::ComputationDiagnostic diagnostic;
+  OptimizationStatus outcome() const { return diagnostic.outcome.status; }
 };
 /// Recognize the nested equation even if an implementation pin or absent
 /// matrix recipe prevents selection. The caller controls family policy.
@@ -65,16 +55,19 @@ NestedContractionSelection selectNestedContraction(
 /// independently admitted the complete helper closure, including dead work.
 std::optional<Elementwise>
 selectLaneFormula(mlir::Block &formula, llvm::ArrayRef<bool> rowwise,
-                  const MathematicalRecipes &recipes = mathematicalRecipes());
+                  const MathematicalRecipes &recipes = mathematicalRecipes(),
+                  OptimizationOutcome *outcome = nullptr);
 /// Describe a supported product map in scalar operand order. This does not
 /// select a reduction target and is never evidence for candidate comparison.
 std::optional<std::pair<unsigned, unsigned>>
-selectMapProduct(mlir::Block &formula, llvm::ArrayRef<bool> rowwise);
+selectMapProduct(mlir::Block &formula, llvm::ArrayRef<bool> rowwise,
+                 OptimizationOutcome *outcome = nullptr);
 /// Select a native-sum recipe for an admitted product map. The caller still
 /// checks the sum's admission and implementation constraints. Product slots
 /// retain scalar order until the recipe maps its operands.
 std::optional<SelectedReduction>
 selectMapSum(std::pair<unsigned, unsigned> product,
-             const MathematicalRecipes &recipes = mathematicalRecipes());
+             const MathematicalRecipes &recipes = mathematicalRecipes(),
+             OptimizationOutcome *outcome = nullptr);
 } // namespace zkc::mathematical
 #endif

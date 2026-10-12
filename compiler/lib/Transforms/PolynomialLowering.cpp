@@ -25,6 +25,7 @@ class Elimination {
   Degrees degrees;
   Operation *observation = nullptr;
   uint64_t &remaining;
+  OptimizationOutcome *outcome;
   unsigned depth = 0;
   bool failed = false;
   using PointKey = std::pair<void *, std::vector<void *>>;
@@ -43,6 +44,9 @@ class Elimination {
     if (failed)
       return false;
     if (work > remaining) {
+      if (outcome)
+        *outcome = OptimizationOutcome::exhausted(WorkOwner::Polynomial, work,
+                                                  remaining);
       refuse("static expansion exceeds 100000 work units");
       return false;
     }
@@ -265,6 +269,9 @@ class Elimination {
       result.assign(length, zero);
       if (multiply) {
         if (a.size() > remaining / b.size()) {
+          if (outcome)
+            *outcome = OptimizationOutcome::exhausted(WorkOwner::Polynomial, {},
+                                                      remaining);
           refuse("convolution exceeds expansion budget");
           return {};
         }
@@ -363,14 +370,15 @@ class Elimination {
   }
 
 public:
-  explicit Elimination(MLIRContext *context, uint64_t &budget)
-      : builder(context), remaining(budget) {}
+  explicit Elimination(MLIRContext *context, uint64_t &budget,
+                       OptimizationOutcome *outcome = nullptr)
+      : builder(context), remaining(budget), outcome(outcome) {}
   LogicalResult run(Block &body) {
     for (auto &op : body)
       for (auto &region : op.getRegions())
         for (auto &nested : region)
-          if (mlir::failed(
-                  Elimination(builder.getContext(), remaining).run(nested)))
+          if (mlir::failed(Elimination(builder.getContext(), remaining, outcome)
+                               .run(nested)))
             return failure();
     if (mlir::failed(deriveDegrees(body, degrees)))
       return failure();
@@ -471,8 +479,10 @@ struct EliminatePolynomialsPass
   }
 };
 } // namespace
-LogicalResult eliminatePolynomials(Block &body, uint64_t &remaining) {
-  return Elimination(body.getParentOp()->getContext(), remaining).run(body);
+LogicalResult eliminatePolynomials(Block &body, uint64_t &remaining,
+                                   OptimizationOutcome *outcome) {
+  return Elimination(body.getParentOp()->getContext(), remaining, outcome)
+      .run(body);
 }
 } // namespace zkc::poly
 std::unique_ptr<mlir::Pass> zkc::protocol::createEliminatePolynomialsPass() {

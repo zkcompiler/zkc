@@ -3,6 +3,7 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/ScopeExit.h"
 #include <limits>
 
 using namespace mlir;
@@ -13,9 +14,16 @@ namespace {
 struct EquationWork {
   ComputationWork &remaining;
   bool exhausted = false;
+  ComputationDiagnostic *diagnostic = nullptr;
   bool take(uint64_t amount = 1) {
-    if (exhausted || !consumeComputationWork(remaining.equations, amount)) {
+    if (exhausted)
+      return false;
+    OptimizationOutcome outcome;
+    if (!consumeComputationWork(remaining.equations, amount,
+                                WorkOwner::Equations, &outcome)) {
       exhausted = true;
+      if (diagnostic)
+        diagnostic->outcome = outcome;
       return false;
     }
     return true;
@@ -108,7 +116,8 @@ struct ComputationFacts {
   PayloadAnalysis payload;
   SmallVector<Value> inputs;
   llvm::DenseMap<Value, unsigned> accessPositions;
-  bool aligned = true, extentIteration = false, completeAccesses = true;
+  bool aligned = true, extentIteration = false;
+  Value missingAccess;
 
   ComputationFacts(const ComputationView &view, EquationWork &work)
       : view(view), payload(view.payload, view.results,
@@ -137,9 +146,25 @@ struct ComputationFacts {
       accessPositions[access.value] = i;
     for (Operation *op : view.payload) {
       auto *facet = payload.contracts.lookup(op);
-      if (facet && facet->access && !accessPositions.contains(op->getResult(0)))
-        completeAccesses = false;
+      if (!missingAccess && facet && facet->access &&
+          !accessPositions.contains(op->getResult(0)))
+        missingAccess = op->getResult(0);
     }
+  }
+  void reportMissingAccess() const {
+    if (!payload.work.diagnostic)
+      return;
+    auto found = llvm::find_if(view.accessDeclines, [&](const auto &decline) {
+      return decline.access == missingAccess;
+    });
+    *payload.work.diagnostic =
+        found != view.accessDeclines.end()
+            ? *found
+            : ComputationDiagnostic{{OptimizationStatus::Unsupported,
+                                     OptimizationReason::Structure},
+                                    missingAccess.getDefiningOp(),
+                                    missingAccess,
+                                    view.occurrencePath};
   }
   Operation *factor(unsigned item) const {
     return view.iteration[view.items[item].iteration].operation;
@@ -192,11 +217,14 @@ std::optional<Combine> combine(const ComputationFacts &facts) {
 std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
                                           const Combine &combined) {
   if (!facts.extentIteration || !facts.payload.supported ||
-      !facts.completeAccesses ||
       llvm::any_of(facts.view.accesses, [](const Access &access) {
         return access.kind == AccessKind::MatrixCell;
       }))
     return std::nullopt;
+  if (facts.missingAccess) {
+    facts.reportMissingAccess();
+    return std::nullopt;
+  }
   auto c = facts.view.computation;
   Reduction result;
   result.combine = combined.facet->identity;
@@ -255,7 +283,8 @@ std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
 std::optional<Elementwise>
 analyzeLanes(Block &body, Type field, ValueRange laneArguments,
              const llvm::DenseMap<Value, Value> &lookups,
-             const PayloadAnalysis &payload) {
+             const PayloadAnalysis &payload,
+             ArrayRef<ComputationDiagnostic> accessDeclines = {}) {
   if (!isa<algebra::FieldType>(field) || body.empty() || !payload.supported ||
       !isa<func::ReturnOp, local::ReturnOp>(body.back()) ||
       body.back().getNumOperands() != 1 ||
@@ -289,6 +318,12 @@ analyzeLanes(Block &body, Type field, ValueRange laneArguments,
       result.lookups[value] = found->second;
       continue;
     }
+    if (facet->access && payload.work.diagnostic)
+      for (const auto &decline : accessDeclines)
+        if (decline.access == value) {
+          *payload.work.diagnostic = decline;
+          break;
+        }
     if (op->getNumOperands() != 2 ||
         facet->law.algebra != protocol::ComputationAlgebra::FieldRing ||
         !is_contained(
@@ -332,17 +367,20 @@ std::optional<Elementwise> analyzeElementwise(const ComputationFacts &facts) {
             facts.factor(access.item)->getOperand(0)) == access.input)
       lookups[access.value] = facts.inputs[access.input];
   return analyzeLanes(c.helper->getRegion(0).front(), field, lanes, lookups,
-                      facts.payload);
+                      facts.payload, view.accessDeclines);
 }
 std::optional<Bilinear> analyzeBilinear(const ComputationFacts &facts,
                                         const Combine &combined) {
   const auto &view = facts.view;
   const auto &product = view.iteration[view.root];
   if (combined.facet->identity != MathematicalIdentity::FieldAdd ||
-      !facts.payload.supported || !facts.completeAccesses ||
-      product.kind != IterationKind::Product || product.children.size() != 2 ||
-      view.items.size() != 4)
+      !facts.payload.supported || product.kind != IterationKind::Product ||
+      product.children.size() != 2 || view.items.size() != 4)
     return std::nullopt;
+  if (facts.missingAccess) {
+    facts.reportMissingAccess();
+    return std::nullopt;
+  }
   Value matrix, left, right;
   for (unsigned axis = 0; axis < 2; ++axis) {
     const auto &zip = view.iteration[product.children[axis]];
@@ -454,9 +492,19 @@ ComputationEquations matchComputation(const ComputationView &view) {
   return matchComputation(view, work);
 }
 ComputationEquations matchComputation(const ComputationView &view,
-                                      ComputationWork &remaining) {
+                                      ComputationWork &remaining,
+                                      ComputationDiagnostic *diagnostic) {
+  ComputationDiagnostic observed{
+      {OptimizationStatus::Unsupported, OptimizationReason::Equation},
+      view.occurrence,
+      {},
+      view.occurrencePath};
+  auto report = llvm::scope_exit([&] {
+    if (diagnostic)
+      *diagnostic = observed;
+  });
   ComputationEquations result;
-  EquationWork work{remaining};
+  EquationWork work{remaining, false, &observed};
   if (!work.take())
     return result;
   ComputationFacts facts(view, work);
@@ -467,7 +515,14 @@ ComputationEquations matchComputation(const ComputationView &view,
     result.bilinear = analyzeBilinear(facts, *combined);
   }
   result.elementwise = analyzeElementwise(facts);
-  return work.exhausted ? ComputationEquations{} : result;
+  if (work.exhausted)
+    return {};
+  if (result.reduction || result.bilinear || result.elementwise)
+    observed = {OptimizationOutcome::success(),
+                view.occurrence,
+                {},
+                view.occurrencePath};
+  return result;
 }
 namespace {
 bool nativeVector(Type type, Type field) {
@@ -486,8 +541,18 @@ matchNestedContraction(const ComputationView &structure) {
 }
 std::optional<NestedContraction>
 matchNestedContraction(const ComputationView &structure,
-                       ComputationWork &remaining) {
-  EquationWork work{remaining};
+                       ComputationWork &remaining,
+                       ComputationDiagnostic *diagnostic) {
+  ComputationDiagnostic observed{
+      {OptimizationStatus::Unsupported, OptimizationReason::Equation},
+      structure.occurrence,
+      {},
+      structure.occurrencePath};
+  auto report = llvm::scope_exit([&] {
+    if (diagnostic)
+      *diagnostic = observed;
+  });
+  EquationWork work{remaining, false, &observed};
   if (!work.take())
     return std::nullopt;
   if (!isa<local::FiniteCollectOp>(structure.computation.operation))
@@ -503,7 +568,10 @@ matchNestedContraction(const ComputationView &structure,
   auto indices = dyn_cast<data::DomainIndicesOp>(view->iteration[0].operation);
   auto matrix = view->environment.inputPosition(indices.getInput());
   const auto &child = view->nested.front();
-  auto equations = matchComputation(child, remaining);
+  ComputationDiagnostic childDiagnostic;
+  auto equations = matchComputation(child, remaining, &childDiagnostic);
+  if (!equations.reduction && !equations.bilinear && !equations.elementwise)
+    observed = childDiagnostic;
   auto call = dyn_cast_or_null<local::ApplyOp>(child.occurrence);
   if (!matrix || !call || child.computation.collect ||
       child.computation.predicate || child.computation.states != 1 ||
@@ -601,8 +669,13 @@ matchNestedContraction(const ComputationView &structure,
   selected.matrix = *matrix;
   selected.vector = *vector;
   selected.axis = axis;
-  return work.exhausted ? std::nullopt
-                        : std::optional<NestedContraction>(std::move(selected));
+  if (work.exhausted)
+    return std::nullopt;
+  observed = {OptimizationOutcome::success(),
+              structure.occurrence,
+              {},
+              structure.occurrencePath};
+  return selected;
 }
 
 } // namespace zkc::mathematical

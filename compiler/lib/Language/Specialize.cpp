@@ -236,6 +236,23 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       arguments = module->arguments;
       return true;
     };
+    auto callableSubstitution = [&](const Declaration &source,
+                                    ArrayRef<Type> args) {
+      auto bindings = types.substitution(source, args);
+      auto lexicalParent = source.parent;
+      while (lexicalParent && declarations[lexicalParent->index].kind !=
+                                  Declaration::Kind::Module)
+        lexicalParent = declarations[lexicalParent->index].parent;
+      if (lexicalParent) {
+        const auto &parent = declarations[lexicalParent->index];
+        Type self(Type::Kind::Module, parent.qualifiedName);
+        self.arguments.assign(args.begin(),
+                              args.begin() + parent.parameters.size());
+        if (parent.implementation)
+          bindings.emplace("self:" + parent.implementation->domain, self);
+      }
+      return bindings;
+    };
     closeBody = [&](Body &body, const Substitution &bindings, Body::Mode mode,
                     unsigned depth, unsigned &height,
                     const std::vector<Environment> &environment,
@@ -555,6 +572,115 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           if (!closeCallable(target, call->module, call->arguments, bindings,
                              op.span))
             return false;
+          if (body.mode == Body::Mode::Math &&
+              declarations[target.index].kind == Declaration::Kind::Math &&
+              declarations[target.index].finiteDefinition &&
+              !declarations[target.index].abstract) {
+            // Registered finite definitions have one canonical application.
+            // Keep it at this occurrence so actual endpoints and container
+            // facts remain available. Callback instances retain their ABI.
+            const auto &source = declarations[target.index];
+            if (!types.checkArguments(source, call->arguments, op.span))
+              return false;
+            if (!source.body || source.body->operations.size() != 1 ||
+                source.domainInputs.size() != 1 ||
+                call->domainArguments.size() != 1 ||
+                call->scopedArguments.size() != source.scopedInputs.size() ||
+                call->operands.size() != source.inputs.size() ||
+                op.results.size() != source.outputs.size())
+              return types.fail("source.finite", "invalid finite definition",
+                                op.span);
+            auto selectedBindings =
+                callableSubstitution(source, call->arguments);
+            auto matches = [&](Type expected, ValueId actual) {
+              return closeType(expected, selectedBindings, op.span) &&
+                     (expected == body.values[actual.index].type ||
+                      types.fail("source.finite",
+                                 "closed finite signature differs", op.span));
+            };
+            for (unsigned i = 0; i < source.inputs.size(); ++i)
+              if (!matches(source.inputs[i].type, call->operands[i]))
+                return false;
+            for (unsigned i = 0; i < source.outputs.size(); ++i)
+              if (!matches(source.outputs[i].type, op.results[i]))
+                return false;
+            auto item = source.domainInputs.front().item;
+            if (!closeType(item, selectedBindings, op.span))
+              return false;
+            std::vector<ScopedSignature> signatures;
+            for (const auto &parameter : source.scopedInputs) {
+              auto signature = parameter.signature;
+              for (auto &input : signature.inputs)
+                if (!closeType(input, selectedBindings, op.span))
+                  return false;
+              if (!closeType(signature.result, selectedBindings, op.span))
+                return false;
+              signatures.push_back(std::move(signature));
+            }
+            auto callbackMatches = [&](unsigned index,
+                                       const Environment &selected) {
+              const auto &signature = signatures[index];
+              const auto &helper = declarations[selected.helper.index];
+              if (helper.inputs.size() !=
+                      signature.inputs.size() + selected.captures.size() ||
+                  helper.outputs.size() != 1 ||
+                  helper.outputs.front().type != signature.result)
+                return types.fail("source.finite",
+                                  "closed finite callback signature differs",
+                                  op.span);
+              for (unsigned i = 0; i < signature.inputs.size(); ++i)
+                if (helper.inputs[i].type != signature.inputs[i])
+                  return types.fail("source.finite",
+                                    "closed finite callback signature differs",
+                                    op.span);
+              return true;
+            };
+            const auto *application = std::get_if<FiniteApplication>(
+                &source.body->operations.front().action);
+            if (!application || application->domain != 0 ||
+                application->body >= call->scopedArguments.size() ||
+                (application->predicate &&
+                 *application->predicate >= call->scopedArguments.size()))
+              return types.fail("source.finite", "finite call mapping differs",
+                                op.span);
+            // Resolving a callback can grow declarations; keep no borrowed
+            // declaration or body reference across that operation.
+            const auto finite = *application;
+            auto domain = resolveDomain(call->domainArguments.front());
+            if (!domain)
+              return false;
+            if (item != domain->shape->nodes[domain->shape->result].item)
+              return types.fail("source.finite-domain",
+                                "closed domain item type differs", op.span);
+            auto step = resolveScoped(call->scopedArguments[finite.body], 1);
+            if (!step || !callbackMatches(finite.body, *step))
+              return false;
+            std::optional<FiniteCallback> predicate;
+            if (finite.predicate) {
+              auto selected =
+                  resolveScoped(call->scopedArguments[*finite.predicate], 1);
+              if (!selected || !callbackMatches(*finite.predicate, *selected))
+                return false;
+              predicate = FiniteCallback{selected->helper, selected->captures};
+            }
+            std::vector<ValueId> operands;
+            for (auto operand : finite.operands) {
+              if (!types.charge(1, op.span) ||
+                  operand.index >= call->operands.size())
+                return types.diagnostic
+                           ? false
+                           : types.fail("source.finite",
+                                        "finite data mapping differs", op.span);
+              operands.push_back(call->operands[operand.index]);
+            }
+            op.action = FiniteComputation{finite.kind,
+                                          domain->shape,
+                                          domain->operands,
+                                          std::move(operands),
+                                          {step->helper, step->captures},
+                                          std::move(predicate)};
+            continue;
+          }
           std::vector<DeclarationId> selected;
           std::vector<ValueId> hiddenCaptures;
           for (auto argument : call->scopedArguments) {
@@ -1031,19 +1157,7 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
         return {};
       }
       declarations.push_back(result);
-      auto bindings = types.substitution(result, args);
-      auto lexicalParent = result.parent;
-      while (lexicalParent && declarations[lexicalParent->index].kind !=
-                                  Declaration::Kind::Module)
-        lexicalParent = declarations[lexicalParent->index].parent;
-      if (lexicalParent) {
-        auto &parent = declarations[lexicalParent->index];
-        Type self(Type::Kind::Module, parent.qualifiedName);
-        self.arguments.assign(args.begin(),
-                              args.begin() + parent.parameters.size());
-        if (parent.implementation)
-          bindings.emplace("self:" + parent.implementation->domain, self);
-      }
+      auto bindings = callableSubstitution(result, args);
       for (auto *ports : {&result.inputs, &result.outputs})
         for (auto &port : *ports)
           if (!closeType(port.type, bindings, port.span))

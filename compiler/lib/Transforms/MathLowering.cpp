@@ -1,5 +1,6 @@
 #include "CollectionRealization.h"
 #include "MathematicalSupport.h"
+#include "RealizationTrace.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
@@ -826,11 +827,12 @@ public:
   }
 };
 
-LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
-                           const llvm::DenseSet<Operation *> &generated,
-                           BindingSymbols &symbols,
-                           MathematicalSelectionPolicy policy = {},
-                           RealizationWork *work = nullptr) {
+LogicalResult
+lowerRecipes(protocol_ir::ProtocolModuleOp unit,
+             const llvm::DenseSet<Operation *> &generated,
+             BindingSymbols &symbols, MathematicalSelectionPolicy policy = {},
+             RealizationWork *work = nullptr, RealizationTrace *trace = nullptr,
+             RealizationScope *attempt = nullptr, bool orderedRetry = false) {
   // Finite bodies emit directly before primitive conversion. Callback
   // expansion and polynomial normalization still use a checked scratch clone
   // and can fail after mutation, so this phase cannot yet satisfy the
@@ -847,13 +849,19 @@ LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
     });
     if (!next)
       break;
-    if (!finiteWork)
+    if (!finiteWork) {
+      if (attempt)
+        attempt->failure(RequiredFailure{
+            "finite expression work",
+            CapacityCause{WorkOwner::FiniteExpressions, 1, finiteWork}});
       return diagnostics::emit(next->emitError(), "finite-analysis-limit");
+    }
     --finiteWork;
     IRRewriter builder(next->getContext());
     builder.setInsertionPoint(next);
-    auto result = finite::realizeExpression(next, next->getOperands(), builder,
-                                            policy, &realizationWork);
+    auto result =
+        finite::realizeExpression(next, next->getOperands(), builder, policy,
+                                  &realizationWork, trace, orderedRetry);
     if (failed(result))
       return failure();
     builder.replaceOp(next, *result);
@@ -879,11 +887,15 @@ LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
 struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerMathPass)
   LowerMathPass() = default;
-  explicit LowerMathPass(MathematicalSelectionPolicy policy) {
+  RealizationTrace *observer = nullptr;
+  explicit LowerMathPass(MathematicalSelectionPolicy policy,
+                         RealizationTrace *trace)
+      : observer(trace) {
     optimizeFinite = policy.finiteBulk;
     fuseVectorReductions = policy.vectorReductionFusion;
   }
-  LowerMathPass(const LowerMathPass &other) : PassWrapper(other) {}
+  LowerMathPass(const LowerMathPass &other)
+      : PassWrapper(other), observer(other.observer) {}
   Option<bool> optimizeFinite{
       *this, "optimize-finite",
       llvm::cl::desc("Recognize checked native finite realizations"),
@@ -891,6 +903,14 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
   Option<bool> fuseVectorReductions{
       *this, "fuse-vector-reductions",
       llvm::cl::desc("Select admitted vector reduction fusion"),
+      llvm::cl::init(false)};
+  Option<bool> traceMathematics{
+      *this, "trace-mathematics",
+      llvm::cl::desc("Report mathematical decisions and stages"),
+      llvm::cl::init(false)};
+  Option<bool> dumpMathematics{
+      *this, "dump-mathematics",
+      llvm::cl::desc("Dump mathematical lowering diagnostics and IR"),
       llvm::cl::init(false)};
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<local::LocalDialect, algebra::AlgebraDialect>();
@@ -902,6 +922,20 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
   }
   void runOnOperation() final {
     auto source = getOperation();
+    RealizationTrace diagnosticTrace;
+    diagnosticTrace.remarks = traceMathematics;
+    diagnosticTrace.ir = dumpMathematics ? &llvm::errs() : nullptr;
+    auto *trace = observer
+                      ? observer
+                      : (traceMathematics || dumpMathematics ? &diagnosticTrace
+                                                             : nullptr);
+    RealizationScope scope(trace, "lower-math", source,
+                           {optimizeFinite, fuseVectorReductions});
+    if (trace && trace->ir) {
+      *trace->ir << "// Before mathematical demand lowering\n";
+      source.print(*trace->ir);
+      *trace->ir << "\n";
+    }
     if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
       return signalPassFailure();
     auto original =
@@ -912,6 +946,7 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
                         "expected the 'participant' profile");
       return signalPassFailure();
     }
+    scope.propose({optimizeFinite, fuseVectorReductions});
     OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
     auto unit =
         cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
@@ -934,7 +969,8 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
       if (generated.contains(&definition))
         calculations.push_back(cast<local::FuncOp>(definition));
     if (failed(lowerCalculations(unit, calculations,
-                                 {optimizeFinite, fuseVectorReductions})))
+                                 {optimizeFinite, fuseVectorReductions},
+                                 nullptr, trace)))
       return signalPassFailure();
     for (auto &declaration : make_early_inc_range(unit.getBody().front()))
       if (isa<data::DomainOp, func::FuncOp>(declaration))
@@ -945,30 +981,45 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
     source.getBodyRegion().takeBody(candidate->getBodyRegion());
+    scope.publish(PublicationBoundary::PublishedToCaller);
+    if (trace && trace->ir) {
+      *trace->ir << "// After mathematical demand lowering\n";
+      source.print(*trace->ir);
+      *trace->ir << "\n";
+    }
   }
 };
 } // namespace
 LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
                                 ArrayRef<local::FuncOp> functions,
                                 MathematicalSelectionPolicy policy,
-                                RealizationWork *work) {
-  return lowerCalculations(unit, functions, policy, work, {});
+                                RealizationWork *work,
+                                RealizationTrace *trace) {
+  return lowerCalculations(unit, functions, policy, work, {}, trace);
 }
 LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
                                 ArrayRef<local::FuncOp> functions,
                                 MathematicalSelectionPolicy policy,
                                 RealizationWork *work,
-                                finite::VerificationLimits limits) {
+                                finite::VerificationLimits limits,
+                                RealizationTrace *trace) {
   SmallVector<StringAttr> names;
   for (auto function : functions)
     names.push_back(function.getSymNameAttr());
   RealizationWork standalone;
   auto &available = work ? *work : standalone;
+  RealizationScope scope(trace, "lower-calculations", unit, policy, &available);
+  if (!functions.empty())
+    scope.propose(policy);
+  bool orderedRetry = false;
   for (;;) {
     // This unit is an intermediate outlined subject, so whole-module formation
     // belongs to the enclosing service. Keep its exact mathematical bodies
     // immutable for independent reading and any one ordered retry.
     auto attemptWork = available;
+    RealizationScope attempt(trace, "calculation-attempt", unit, policy);
+    if (!functions.empty())
+      attempt.propose(policy);
     OwningOpRef<protocol_ir::ProtocolModuleOp> candidate(
         cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
     SymbolTable table(*candidate);
@@ -982,8 +1033,8 @@ LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
       selected.insert(function);
     }
     BindingSymbols symbols(*candidate);
-    if (failed(
-            lowerRecipes(*candidate, selected, symbols, policy, &attemptWork)))
+    if (failed(lowerRecipes(*candidate, selected, symbols, policy, &attemptWork,
+                            trace, &attempt, orderedRetry)))
       return failure();
     finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                        {}};
@@ -1038,11 +1089,21 @@ LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
         originalFunction.getBody().takeBody(replacements[i].getBody());
       }
       available = attemptWork;
+      if (functions.empty()) {
+        attempt.complete(CompletionKind::Unchanged);
+        scope.complete(CompletionKind::Unchanged);
+      } else {
+        attempt.publish();
+        scope.publish();
+      }
       return success();
     }
+    attempt.discard(verificationDecision(outcome));
     if (outcome.status == finite::VerificationStatus::OptionalCapacity &&
         policy.finiteBulk) {
       policy.finiteBulk = false;
+      orderedRetry = true;
+      attempt.retry(policy);
       continue;
     }
     if (outcome.status == finite::VerificationStatus::OptionalCapacity ||
@@ -1054,6 +1115,7 @@ LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
 }
 } // namespace zkc::mathematical
 std::unique_ptr<mlir::Pass>
-zkc::protocol::createLowerMathPass(MathematicalSelectionPolicy policy) {
-  return std::make_unique<mathematical::LowerMathPass>(policy);
+zkc::protocol::createLowerMathPass(MathematicalSelectionPolicy policy,
+                                   mathematical::RealizationTrace *trace) {
+  return std::make_unique<mathematical::LowerMathPass>(policy, trace);
 }

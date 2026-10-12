@@ -267,6 +267,16 @@ Already checked earlier stages remain unchanged. An observed mismatch fails
 immediately. Required-reader exhaustion, or exhaustion of the ordered retry,
 refuses with `finite-verification-capacity`; it never publishes unchecked IR.
 
+Optional decision observations distinguish unsupported structure or equations,
+missing extent/bound evidence, actual capacity failure, policy disablement,
+replacement restrictions and unavailable recipes. A zero remaining allowance
+does not by itself indicate failure. Recording an outcome must not spend
+semantic work, change a reader's input, or supply a mathematical premise.
+The record distinguishes selection, private proposal, discard, retry and
+publication. Publication into a parent candidate does not imply installation
+for the caller: a later refusal of that parent discards its incorporated work.
+These observations have no authority in the independent correspondence check.
+
 The independent reader reconstructs the source domain and payload and reads
 actual candidate operands separately. It does not use the selector's classified
 access map or emitter caches. The supported field-ring fragment admits

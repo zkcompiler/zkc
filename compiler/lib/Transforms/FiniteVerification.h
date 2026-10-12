@@ -19,6 +19,9 @@ enum class VerificationStatus {
 struct VerificationResult {
   VerificationStatus status;
   llvm::StringRef detail;
+  std::optional<CapacityCause> capacity = {};
+  /// Copied before temporary normalization subjects can be destroyed.
+  mathematical::RealizationSubject subject = {};
 
   // Used only when a result is final, after any optional-candidate retry.
   mlir::LogicalResult diagnose(mlir::ModuleOp candidate) const;

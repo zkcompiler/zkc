@@ -143,11 +143,11 @@ int main() {
     auto selected = selectComputation(c, {});
     auto missing = selectComputation(c, {}, withheld);
     require(selected.kind == RealizationKind::Bilinear && selected.matrix &&
-                selected.outcome == SelectionOutcome::Selected &&
+                selected.outcome() == OptimizationStatus::Succeeded &&
                 selected.matrix->target == "matrix.bilinear" &&
                 selected.matrix->seedCombiner == "field.add" &&
                 missing.kind == RealizationKind::Ordered && !missing.matrix &&
-                missing.outcome == SelectionOutcome::MissingRecipe &&
+                missing.outcome() == OptimizationStatus::MissingRecipe &&
                 missing.equations.bilinear &&
                 missing.equations.bilinear->matrix ==
                     selected.equations.bilinear->matrix &&
@@ -209,10 +209,10 @@ int main() {
               columns ? "matrix.transpose_mul_vector" : "matrix.mul_vector";
           require(
               selected.recipe && selected.recipe->target == target &&
-                  selected.outcome == SelectionOutcome::Selected &&
+                  selected.outcome() == OptimizationStatus::Succeeded &&
                   selected.recipe->seedCombiner == "vector.add" &&
                   selected.equation && missing.equation && !missing.recipe &&
-                  missing.outcome == SelectionOutcome::MissingRecipe &&
+                  missing.outcome() == OptimizationStatus::MissingRecipe &&
                   missing.equation->axis == unsigned(columns) &&
                   missing.equation->matrix == selected.equation->matrix &&
                   missing.equation->vector == selected.equation->vector &&
@@ -269,7 +269,7 @@ int main() {
               "native reduction recipe not selected");
       auto withheld = selectComputation(c, {}, absent);
       require(withheld.kind == RealizationKind::Ordered &&
-                  withheld.outcome == SelectionOutcome::MissingRecipe &&
+                  withheld.outcome() == OptimizationStatus::MissingRecipe &&
                   !withheld.reduction && withheld.view &&
                   withheld.equations.reduction &&
                   withheld.equations.reduction->combine ==
@@ -306,7 +306,7 @@ int main() {
     auto c = computation(*module);
     auto disabled = selectComputation(c, {false, false}, absent);
     require(disabled.view && disabled.equations.reduction &&
-                disabled.outcome == SelectionOutcome::PolicyDisabled &&
+                disabled.outcome() == OptimizationStatus::PolicyDisabled &&
                 disabled.kind == RealizationKind::Ordered &&
                 !disabled.reduction &&
                 disabled.equations.reduction->witness.yielded ==
@@ -323,8 +323,8 @@ int main() {
     auto present = selectComputation(c, {});
     auto withheld = selectComputation(c, {}, absent);
     require(present.kind == RealizationKind::Elementwise &&
-                present.outcome == SelectionOutcome::Selected &&
-                withheld.outcome == SelectionOutcome::MissingRecipe &&
+                present.outcome() == OptimizationStatus::Succeeded &&
+                withheld.outcome() == OptimizationStatus::MissingRecipe &&
                 withheld.kind == RealizationKind::Ordered && withheld.view &&
                 withheld.equations.elementwise &&
                 withheld.view->result == present.view->result,
@@ -344,13 +344,13 @@ int main() {
     require(succeeded(verify(*module)),
             "pinned scalar binding is not admitted");
     auto selected = selectComputation(c, {});
-    require(selected.view && selected.equations.reduction &&
-                selected.outcome == SelectionOutcome::ReplacementRestricted &&
-                !canReplacePayload(*selected.view) &&
-                selected.kind == RealizationKind::Ordered &&
-                finite::semantics(&operation) &&
-                !finite::replaceable(&operation),
-            "explicit implementation erased meaning or permitted replacement");
+    require(
+        selected.view && selected.equations.reduction &&
+            selected.outcome() == OptimizationStatus::ReplacementRestricted &&
+            !canReplacePayload(*selected.view) &&
+            selected.kind == RealizationKind::Ordered &&
+            finite::semantics(&operation) && !finite::replaceable(&operation),
+        "explicit implementation erased meaning or permitted replacement");
     OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*module)->clone()));
     require(succeeded(finite::realizeLocals(*candidate)) &&
                 succeeded(finite::verifyRealizations(*module, *candidate)),
@@ -391,7 +391,8 @@ int main() {
                 "nested pin erased the equation or permitted replacement");
         auto selected = selectNestedContraction(*view);
         require(selected.equation && !selected.recipe &&
-                    selected.outcome == SelectionOutcome::ReplacementRestricted,
+                    selected.outcome() ==
+                        OptimizationStatus::ReplacementRestricted,
                 "nested pin did not explain its selection restriction");
       });
   cases.run("indexed group access retains ordered fallback", [&] {
@@ -427,7 +428,7 @@ int main() {
             "indexed group control not admitted");
     auto selected = selectComputation(computation(*module), {});
     require(selected.view && !selected.equations.reduction &&
-                selected.outcome == SelectionOutcome::UnsupportedEquation &&
+                selected.outcome() == OptimizationStatus::Unsupported &&
                 selected.kind == RealizationKind::Ordered,
             "indexed group access acquired an unsupported bulk equation");
     OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*module)->clone()));

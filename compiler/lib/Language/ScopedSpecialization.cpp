@@ -334,6 +334,117 @@ class SpecializationCheck {
           return refuse(op.span, "finite callback mapping differs");
         continue;
       }
+      if (const auto *call = std::get_if<HelperCall>(&op.action);
+          call && std::holds_alternative<FiniteComputation>(out.action)) {
+        const auto &closed = std::get<FiniteComputation>(out.action);
+        auto target = call->callee;
+        if (target.index >= source.size() || original.mode != Body::Mode::Math)
+          return refuse(op.span, "finite expansion requires a Math call");
+        auto statics = arguments(call->arguments, subst, op.span);
+        if (!statics)
+          return false;
+        if (call->module) {
+          auto module = type(*call->module, subst, op.span);
+          if (!module)
+            return false;
+          const auto *definition = types.typeDeclaration(*module);
+          if (!definition || definition->kind != Declaration::Kind::Module ||
+              !types.charge(definition->members.size(), op.span))
+            return refuse(op.span, "finite module selection differs");
+          auto member = llvm::find_if(definition->members, [&](auto id) {
+            return source[id.index].name == source[target.index].name;
+          });
+          if (member == definition->members.end())
+            return refuse(op.span, "finite module member differs");
+          target = *member;
+          *statics = module->arguments;
+        }
+        const auto &definition = source[target.index];
+        if (definition.kind != Declaration::Kind::Math || definition.abstract ||
+            !definition.finiteDefinition || !definition.body ||
+            definition.body->operations.size() != 1 ||
+            call->domainArguments.size() != definition.domainInputs.size() ||
+            call->scopedArguments.size() != definition.scopedInputs.size() ||
+            call->operands.size() != definition.inputs.size() ||
+            out.results.size() != definition.outputs.size() ||
+            !types.checkArguments(definition, *statics, op.span))
+          return refuse(op.span, "expanded call is not a finite definition");
+        auto selectedBindings = substitution(definition, *statics);
+        for (unsigned j = 0; j < definition.inputs.size(); ++j)
+          if (!typeEqual(definition.inputs[j].type,
+                         actual.values[map(call->operands[j]).index].type,
+                         selectedBindings, op.span))
+            return false;
+        for (unsigned j = 0; j < definition.outputs.size(); ++j)
+          if (!typeEqual(definition.outputs[j].type,
+                         actual.values[out.results[j].index].type,
+                         selectedBindings, op.span))
+            return false;
+        const auto &templateBody = *definition.body;
+        const auto *finite = std::get_if<FiniteApplication>(
+            &templateBody.operations.front().action);
+        if (!finite || !closed.domain || finite->kind != closed.kind ||
+            bool(finite->predicate) != bool(closed.predicate) ||
+            finite->domain >= templateBody.domainBindings.size())
+          return refuse(op.span, "expanded finite operation differs");
+        const auto &domain = templateBody.domainBindings[finite->domain];
+        if (!domain.parameter ||
+            *domain.parameter >= call->domainArguments.size())
+          return refuse(op.span, "finite domain formal differs");
+        auto operands =
+            bindDomainInputs(types, source, original, actual, map,
+                             call->domainArguments[*domain.parameter], subst,
+                             domains, *closed.domain, &bodyOrigins);
+        if (!operands || !same(closed.domainOperands, *operands))
+          return refuse(op.span, "expanded finite domain substitution differs");
+        if (!typeEqual(definition.domainInputs[*domain.parameter].item,
+                       closed.domain->nodes[closed.domain->result].item,
+                       selectedBindings, op.span))
+          return false;
+        std::vector<ValueId> data;
+        for (auto operand : finite->operands) {
+          if (!types.charge(1, op.span) ||
+              operand.index >= call->operands.size())
+            return refuse(op.span, "finite data formal differs");
+          data.push_back(map(call->operands[operand.index]));
+        }
+        if (!same(closed.operands, data))
+          return refuse(op.span, "expanded finite data substitution differs");
+        auto callback = [&](unsigned index, const FiniteCallback &selected) {
+          if (index >= templateBody.scopedBindings.size())
+            return false;
+          const auto &formal = templateBody.scopedBindings[index];
+          if (!formal.parameter ||
+              *formal.parameter >= call->scopedArguments.size())
+            return false;
+          auto expected =
+              binding(original, actual, bodyOrigins,
+                      call->scopedArguments[*formal.parameter], selected.helper,
+                      subst, environment, domains, map, depth + 1);
+          if (!expected || !same(selected.captures, expected->captures))
+            return false;
+          const auto &signature =
+              definition.scopedInputs[*formal.parameter].signature;
+          const auto &helper = candidate[selected.helper.index];
+          if (helper.inputs.size() !=
+                  signature.inputs.size() + selected.captures.size() ||
+              helper.outputs.size() != 1 ||
+              !typeEqual(signature.result, helper.outputs.front().type,
+                         selectedBindings, op.span))
+            return false;
+          for (unsigned j = 0; j < signature.inputs.size(); ++j)
+            if (!typeEqual(signature.inputs[j], helper.inputs[j].type,
+                           selectedBindings, op.span))
+              return false;
+          return true;
+        };
+        if (!callback(finite->body, closed.body) ||
+            (finite->predicate &&
+             !callback(*finite->predicate, *closed.predicate)))
+          return refuse(op.span,
+                        "expanded finite callback substitution differs");
+        continue;
+      }
       if (op.action.index() != out.action.index())
         return refuse(op.span, "operation kind differs");
       bool valid = std::visit(
@@ -375,6 +486,13 @@ class SpecializationCheck {
                   if (!found)
                     return false;
                 }
+                const auto &definition = source[target.index];
+                if (original.mode == Body::Mode::Math &&
+                    definition.kind == Declaration::Kind::Math &&
+                    definition.finiteDefinition && !definition.abstract)
+                  return refuse(
+                      op.span,
+                      "Math finite call requires occurrence expansion");
               }
               const auto &callee = candidate[value.callee.index];
               auto operands = mapped(action.operands);

@@ -116,6 +116,16 @@ callbacks. `vector::at`, `sequence::at`, `curve::at`, `indices::at` and
 `matrix::at` require proven bounds. Their checked `get` counterparts retain
 ordinary Local failure behavior where provided.
 
+Within a Math body, an unfiltered collect preserves the input domain's known
+length. For a collect over `elements(xs)` or `indices(xs)`, `indices(xs)` can
+therefore read its newly constructed result. An arbitrary range's values need
+not be indices into the result.
+Exact forwarding helpers preserve the input's identity; collection construction
+preserves length without identifying the two values. Direct total finite calls
+also preserve actual range endpoints: `field_array::collect(range(0, 4), body)`
+can produce `Array<F, 4>` when its backend supports that carrier. A wrapper with
+an unconstrained domain parameter must still justify its own output length.
+
 The vector, matrix, curve, sequence, indices and field-array modules export
 library-owned indexing bindings to their total `at` functions. Import
 `indexing []` to write `values[position]` or `matrix[row, column]`; the same
@@ -124,6 +134,13 @@ as `indexing values[position] = zkc::vector::get(values, position);` selects
 checked Local access explicitly. See the [notation guide](../docs/language/notation.md#index-collections).
 The [finite computation example](../examples/projects/finite-computations/README.md)
 combines named functions, records, matrix views and total mathematical helpers.
+The [FRI fold](../examples/projects/fri-fold/README.md) and
+[LogUp row](../examples/projects/logup-rows/README.md) examples exercise returned
+projections, intermediate collection lengths and fixed compression weights in
+two protocol computations. They reuse `fri::fold_value` and the
+`air_interaction` functions `gated_denominator`, `reciprocal_residual` and
+`boolean_residual`. These scalar functions express the equations; their callers
+supply authenticated values, valid inverses and the remaining protocol checks.
 
 ### Native mathematics and containers
 

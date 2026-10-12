@@ -86,7 +86,16 @@ every ordered admission obligation.
 
 Each analysis describes an immutable subject and its inspected helper closure.
 Source checking retains its occurrence-specific origins and symbolic natural
-dimensions. SSA checking substitutes exact helper arguments and reads actual
+dimensions. After checking a concrete Math call's input conditions, it can
+follow returned inputs and full record projections through checked helper calls.
+This preserves the original value's facts. A newly collected value instead has
+a fresh identity: an unfiltered collect can preserve an extent or exact count,
+while filtering preserves only an upper count, except when that upper count is
+zero. A direct call to a Math finite definition keeps its computation at the
+caller occurrence during specialization. The independent specialization reader
+checks the actual domain, data arguments and callbacks against the source call.
+Ordinary wrappers with domain parameters retain their generic formation boundary.
+SSA checking substitutes exact helper arguments and reads actual
 result constructors. Independent candidate readers construct their own facts;
 they do not consume a producer's selected classification. These shared rules and
 their adapters belong to the native checking trust boundary.
@@ -239,11 +248,36 @@ post-projection Local rewrite window is introduced.
 
 ### Inspecting preparation
 
-`rewriteLocalAlgorithms` optionally fills `RealizationTrace` with the effective
-selection policy, initial/remaining realization allowances, and each stage's
-completion status, elapsed microseconds and operation counts. Counts include
-nested regions and declarations; timings include each service's checks. A completed
-stage can be a no-op. These measurements do not measure native runtime work or memory.
+`RealizationTrace` optionally records the requested selection policy,
+initial/remaining realization allowances, and each stage's completion status,
+elapsed microseconds and operation counts. Counts include nested regions and
+declarations; timings include each service's checks. A completed stage can be a
+no-op. These measurements do not measure native runtime work or memory.
+
+Typed decision events explain the path through recognition and realization:
+
+| Event | Interpretation |
+|---|---|
+| Selection | A supported choice, or the reason to retain the existing path |
+| Proposal | A private candidate attempt under its effective policy |
+| Discard | An abandoned proposal and its cause |
+| Retry | Another attempt after a discarded proposal |
+| Publication | Incorporation into a parent candidate, a returned candidate, or installation for the caller |
+| Completion | A scope completed, stayed unchanged, or refused |
+
+Recognition distinguishes unsupported structure or equations, missing evidence,
+capacity, disabled policy, implementation restrictions and missing recipes.
+Capacity comes from an actual failed query or debit. A successful operation may
+spend its final unit; a zero remaining allowance alone is not a capacity failure.
+Verification outcomes remain separate: a mismatch is a required failure, while
+optional comparison capacity may trigger the existing ordered retry.
+
+Events own their declaration, site and occurrence information rather than
+borrowing mutable IR. Parent scopes describe the existing transaction boundaries.
+An inner publication is historical if a later failure discards its parent; only
+the outer installation event means that preparation changed the caller's module.
+The observer records these decisions without supplying evidence, consuming
+semantic work or changing selection and retry policy.
 
 For tool-driven inspection:
 
@@ -258,7 +292,12 @@ its occurrence or work accounting. Standalone transformations begin a new scope
 unless their caller supplies shared work. A private candidate is published only
 after its own reader accepts the actual source/candidate pair. Rejected proposals
 leave the original body and external expansion state unchanged. Stage records and
-IR dumps carry no independent proof authority.
+IR dumps carry no independent proof authority. Reusing a trace starts a fresh
+journal at the outer invocation; nested services append within that invocation.
+Observers require exclusive access, including across pass-manager clones. Use
+separate observers to retain separate invocations. Readers that return only a
+success/failure result report an unclassified verification failure; the journal
+does not invent a mismatch or capacity cause.
 
 Fusion compares values and
 ordered shape refusals under sufficient resources; changed allocation and
@@ -287,6 +326,16 @@ The [native validation map](../../common/tests/native.md) includes shrinking/gro
 state, ragged matrices, batched openings, QAP and AIR compositions. They validate
 general mechanisms at their stated scope, without claiming full Groth16, BP+,
 FRI or zkVM implementations.
+
+Two smaller executable examples exercise compositional source facts directly:
+[FRI folding](../../examples/projects/fri-fold/README.md) collects folded pairs
+and checks their next-layer residuals; [LogUp rows](../../examples/projects/logup-rows/README.md)
+compresses tuples and computes reciprocal and Boolean residuals. Both read a
+fresh collect using the original collection's indices. The LogUp companion also
+constructs a fixed array over a range whose endpoint passes through a helper.
+Their tests compare arithmetic with independent integer references under default,
+unsimplified and ordered compilation. They establish these mathematical slices,
+not complete proof protocols or a performance improvement.
 
 ## Extension boundary
 

@@ -5,6 +5,7 @@
 #include "LaneRealization.h"
 #include "MathematicalSupport.h"
 #include "RealizationEmission.h"
+#include "RealizationTrace.h"
 #include "RecipeRealizations.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/PatternMatch.h"
@@ -20,6 +21,22 @@ using namespace mlir;
 using namespace llvm;
 namespace zkc::finite {
 namespace {
+mathematical::RealizationChoice
+observedChoice(mathematical::RealizationKind kind) {
+  using Kind = mathematical::RealizationKind;
+  using Choice = mathematical::RealizationChoice;
+  switch (kind) {
+  case Kind::Ordered:
+    return Choice::Ordered;
+  case Kind::Bilinear:
+    return Choice::Bilinear;
+  case Kind::Reduction:
+    return Choice::Reduction;
+  case Kind::Elementwise:
+    return Choice::Elementwise;
+  }
+  llvm_unreachable("unknown finite realization");
+}
 class Realizer {
   protocol_ir::ProtocolModuleOp unit;
   RewriterBase &builder;
@@ -32,6 +49,8 @@ class Realizer {
   Computation computation;
   mathematical::RealizationWork &work;
   const mathematical::MathematicalRecipes &recipes;
+  mathematical::RealizationScope *observation;
+  bool retryOrdered;
   bool failedHelper = false;
   std::string sitePrefix = "finite_";
   std::string site() { return sitePrefix + std::to_string(occurrence++); }
@@ -249,8 +268,13 @@ class Realizer {
     ValueRange arguments = environment->actuals;
     if (computation.total) {
       auto math = cast<func::FuncOp>(helper);
+      OptimizationOutcome outcome;
       if (failed(mathematical::chargeHelperOperations(
-              math, work.helperOperations, work.helperSlots))) {
+              math, work.helperOperations, work.helperSlots, nullptr,
+              &outcome))) {
+        if (observation)
+          observation->failure(mathematical::RequiredFailure{
+              "finite helper expansion", outcome.capacity});
         failedHelper = true;
         return {};
       }
@@ -259,9 +283,13 @@ class Realizer {
       OwningOpRef<func::FuncOp> scratch(cast<func::FuncOp>(math->clone()));
       SymbolTableCollection tables;
       if (failed(mathematical::inlineHelpers(*scratch, work.helperOperations,
-                                             work.helperSlots, tables, unit)) ||
-          failed(
-              poly::eliminatePolynomials(scratch->front(), work.polynomial))) {
+                                             work.helperSlots, tables, unit,
+                                             nullptr, &outcome)) ||
+          failed(poly::eliminatePolynomials(scratch->front(), work.polynomial,
+                                            &outcome))) {
+        if (observation)
+          observation->failure(mathematical::RequiredFailure{
+              "finite helper normalization", outcome.capacity});
         failedHelper = true;
         return {};
       }
@@ -304,11 +332,14 @@ public:
   Realizer(protocol_ir::ProtocolModuleOp unit, RewriterBase &builder,
            mathematical::RealizationWork &work,
            const mathematical::MathematicalRecipes &recipes =
-               mathematical::mathematicalRecipes())
+               mathematical::mathematicalRecipes(),
+           mathematical::RealizationScope *observation = nullptr,
+           bool retryOrdered = false)
       : unit(unit), builder(builder), loc(unit.getLoc()),
         index(IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned)),
         boolean(builder.getI1Type()), emitter(unit, "_finite_binding_"),
-        work(work), recipes(recipes) {}
+        work(work), recipes(recipes), observation(observation),
+        retryOrdered(retryOrdered) {}
   FailureOr<SmallVector<Value>> emitBody(Operation *source, ValueRange entry,
                                          bool optimize) {
     if (failed(describe(source, computation, unit, &symbols)))
@@ -322,6 +353,16 @@ public:
     if (optimize)
       selection = mathematical::selectComputation(computation, {true, false},
                                                   work.matching, recipes);
+    if (!optimize)
+      selection.diagnostic.outcome = {
+          retryOrdered ? OptimizationStatus::Succeeded
+                       : OptimizationStatus::PolicyDisabled,
+          retryOrdered ? OptimizationReason::OrderedRetry
+                       : OptimizationReason::Policy};
+    if (observation)
+      observation->selectionDiagnostic(
+          source, mathematical::DecisionFamily::Finite,
+          observedChoice(selection.kind), selection.diagnostic);
     const ComputationView *view = selection.view ? &*selection.view : nullptr;
     SmallVector<Operation *> admission;
     for (auto &op : computation.domain.getBody().front().without_terminator())
@@ -388,6 +429,10 @@ public:
       if (result->status == mathematical::LaneRealizationStatus::Realized) {
         return SmallVector<Value>{result->value};
       }
+      if (observation)
+        observation->selection(source, mathematical::DecisionFamily::Lanes,
+                               mathematical::RealizationChoice::Ordered,
+                               result->outcome);
       // A declined optional formula has emitted no payload or bindings. Keep
       // the complete admission above and continue with the ordinary loop.
     }
@@ -534,61 +579,85 @@ public:
 FailureOr<SmallVector<Value>>
 realizeExpression(Operation *op, ValueRange inputs, OpBuilder &builder,
                   MathematicalSelectionPolicy policy,
-                  mathematical::RealizationWork *work) {
+                  mathematical::RealizationWork *work,
+                  mathematical::RealizationTrace *trace, bool orderedRetry) {
+  mathematical::RealizationWork standalone;
+  auto &available = work ? *work : standalone;
+  mathematical::RealizationScope scope(trace, "finite-expression", op, policy,
+                                       &available);
   auto unit = op->getParentOfType<protocol_ir::ProtocolModuleOp>();
   auto site = op->getAttrOfType<StringAttr>("site");
   if (!unit || !site || site.getValue().empty())
     return failure();
-  mathematical::RealizationWork standalone;
   BodyRewriter rewriter(builder);
-  Realizer realizer(unit, rewriter, work ? *work : standalone);
+  Realizer realizer(unit, rewriter, available,
+                    mathematical::mathematicalRecipes(), &scope, orderedRetry);
   auto results = realizer.emitBody(op, inputs, policy.finiteBulk);
   builder.restoreInsertionPoint(rewriter.saveInsertionPoint());
+  if (succeeded(results))
+    scope.complete();
   return results;
 }
 
 LogicalResult realizeLocals(ModuleOp module, MathematicalSelectionPolicy policy,
-                            mathematical::RealizationWork *work) {
+                            mathematical::RealizationWork *work,
+                            mathematical::RealizationTrace *trace) {
   return realizeLocals(module, policy, work,
-                       mathematical::mathematicalRecipes());
+                       mathematical::mathematicalRecipes(), trace);
 }
 
 LogicalResult realizeLocals(ModuleOp module, MathematicalSelectionPolicy policy,
                             mathematical::RealizationWork *work,
-                            const mathematical::MathematicalRecipes &recipes) {
-  return realizeLocalsWithLimits(module, policy, work, recipes, {});
+                            const mathematical::MathematicalRecipes &recipes,
+                            mathematical::RealizationTrace *trace) {
+  return realizeLocalsWithLimits(module, policy, work, recipes, {}, trace);
 }
 
 LogicalResult
 realizeLocalsWithLimits(ModuleOp module, MathematicalSelectionPolicy policy,
                         mathematical::RealizationWork *work,
                         const mathematical::MathematicalRecipes &recipes,
-                        VerificationLimits limits) {
-  if (failed(mlir::verify(module)) || !hasSingleElement(*module.getBody()))
-    return failure();
+                        VerificationLimits limits,
+                        mathematical::RealizationTrace *trace) {
   mathematical::RealizationWork standalone;
   auto &available = work ? *work : standalone;
+  mathematical::RealizationScope scope(trace, "finite-realizations", module,
+                                       policy, &available);
+  if (failed(mlir::verify(module)) || !hasSingleElement(*module.getBody()))
+    return failure();
   bool optimize = policy.finiteBulk;
   for (;;) {
     // Reserve required ordered work independently of a speculative proposal.
     // A retry always starts from the admitted source, never from bulk output.
     auto attemptWork = available;
+    auto effective = policy;
+    effective.finiteBulk = optimize;
+    mathematical::RealizationScope attempt(trace, "finite-attempt", module,
+                                           effective);
+    bool changed = false;
     mathematical::CheckedCandidate candidate(module);
     auto unit =
         dyn_cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
     if (!unit)
       return failure();
     IRRewriter rewriter(module.getContext());
-    Realizer realizer(unit, rewriter, attemptWork, recipes);
+    Realizer realizer(unit, rewriter, attemptWork, recipes, &attempt,
+                      policy.finiteBulk && !optimize);
     auto retainOptionalWork = [&] {
       available.matching = attemptWork.matching;
       available.lanes = attemptWork.lanes;
     };
-    for (auto &op : make_early_inc_range(unit.getBody().front()))
-      if (isDeclaration(&op) && failed(realizer.run(&op, optimize))) {
+    for (auto &op : make_early_inc_range(unit.getBody().front())) {
+      if (!isDeclaration(&op))
+        continue;
+      if (!changed)
+        attempt.propose(effective);
+      changed = true;
+      if (failed(realizer.run(&op, optimize))) {
         retainOptionalWork();
         return failure();
       }
+    }
     // Matching/lane allowances remain cumulative even when the candidate is
     // discarded. Only required construction work has an ordered reserve.
     retainOptionalWork();
@@ -601,11 +670,20 @@ realizeLocalsWithLimits(ModuleOp module, MathematicalSelectionPolicy policy,
     });
     if (succeeded(published)) {
       available = attemptWork;
+      if (changed)
+        attempt.publish();
+      else
+        attempt.complete(mathematical::CompletionKind::Unchanged);
+      scope.complete(changed ? mathematical::CompletionKind::Completed
+                             : mathematical::CompletionKind::Unchanged);
       return success();
     }
+    attempt.discard(mathematical::verificationDecision(checked));
     if (!optimize || checked.status != VerificationStatus::OptionalCapacity)
       return failure();
     optimize = false;
+    effective.finiteBulk = false;
+    attempt.retry(effective);
   }
 }
 } // namespace zkc::finite

@@ -32,6 +32,7 @@ constexpr Term invalidTerm = UINT32_MAX;
 class Terms {
   uint64_t &remaining;
   ComparisonCapacity capacity = ComparisonCapacity::None;
+  std::optional<CapacityCause> debit;
   std::vector<ring::Input> inputs;
   std::vector<ring::Node> nodes;
   std::map<std::tuple<ring::Kind, std::string, std::string, Term, Term, Term>,
@@ -192,6 +193,7 @@ class Terms {
 public:
   explicit Terms(uint64_t &remaining) : remaining(remaining) {}
   ComparisonCapacity exhausted() const { return capacity; }
+  std::optional<CapacityCause> failedDebit() const { return debit; }
   bool exhaust(ComparisonCapacity reason) {
     if (capacity == ComparisonCapacity::None)
       capacity = reason;
@@ -212,6 +214,8 @@ public:
   void useNeutralLaws() { neutralLaws = true; }
   bool charge(uint64_t work = 1) {
     if (remaining < work) {
+      if (!debit)
+        debit = CapacityCause{WorkOwner::OptionalComparison, work, remaining};
       remaining = 0;
       return exhaust(ComparisonCapacity::Work);
     }
@@ -955,6 +959,9 @@ public:
   Comparison(SymbolTable &symbols, Value rows, uint64_t &remaining)
       : terms(remaining), symbols(symbols), rows(rows) {}
   ComparisonCapacity exhausted() const { return terms.exhausted(); }
+  std::optional<CapacityCause> failedDebit() const {
+    return terms.failedDebit();
+  }
   FailureOr<Value> map(Block &source, ArrayRef<bool> rowwise, ValueRange inputs,
                        Operation *&cursor,
                        llvm::DenseSet<Operation *> &bindings, Operation *end,
@@ -1275,6 +1282,9 @@ public:
     fieldTerms.useNeutralLaws();
   }
   ComparisonCapacity exhausted() const { return fieldTerms.exhausted(); }
+  std::optional<CapacityCause> failedDebit() const {
+    return fieldTerms.failedDebit();
+  }
   FailureOr<Value> check(const finite::Computation &computation,
                          ValueRange inputs, Operation *&cursor,
                          llvm::DenseSet<Operation *> &bindings,
@@ -1394,12 +1404,19 @@ FailureOr<Value> compareFinitePayload(const finite::Computation &source,
                                       Operation *&cursor, SymbolTable &symbols,
                                       llvm::DenseSet<Operation *> &bindings,
                                       uint64_t &remaining, Operation *end,
-                                      ComparisonCapacity *capacity) {
+                                      ComparisonCapacity *capacity,
+                                      std::optional<CapacityCause> *debit) {
   if (capacity)
     *capacity = ComparisonCapacity::None;
+  if (debit)
+    debit->reset();
   auto check = [&](auto &comparison, auto result) -> FailureOr<Value> {
-    if (failed(result) && capacity)
-      *capacity = comparison.exhausted();
+    if (failed(result)) {
+      if (capacity)
+        *capacity = comparison.exhausted();
+      if (debit)
+        *debit = comparison.failedDebit();
+    }
     return result;
   };
   if (source.signature.getNumResults() == 1 &&

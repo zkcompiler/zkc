@@ -41,6 +41,37 @@ int main() {
               "incorrect inferred usage property");
     }
   };
+  const std::string mathematicalForwarding = R"(
+domain F=field("koala-bear");
+type Vector<E:Field>=builtin("vector",E);
+domain fn indices<E:Field>(xs:Vector<E>)->domain<index>=domain("indices");
+math fn total<I:Type>(rows:domain<I>,initial:F,step:math fn(F,item:I)->F where item_from(item,rows))->F=finite("math.fold");
+math fn identity<T:Type>(x:T)->T{return x;}
+math fn at(xs:Vector<F>,i:index)->F where in_bounds(i,xs){return intrinsic<Vector<F>>("container.at",xs,i);}
+)";
+  cases.run("inferred usage preserves mathematical forwarding through closure",
+            [&] {
+              native(mathematicalForwarding + R"(
+math fn sum(xs:Vector<F>)->F{let view=identity(xs);return total(indices(xs),0,fn(s,i)=>s+at(view,identity(i)));}
+protocol Run roles(P)(xs:Vector<F>@P)->(result:F@P){return sum(xs);}
+run Demo=Run;
+)");
+            });
+  cases.run("inferred usage does not identify different mathematical inputs",
+            [&] {
+              refuses(check(mathematicalForwarding + R"(
+math fn different(xs:Vector<F>,ys:Vector<F>,i:index)->F where in_bounds(i,xs){return at(identity(ys),identity(i));}
+)"),
+                      "source.data-bound");
+            });
+  cases.run("Copy alone supports filtered mathematical collection", [&] {
+    native(mathematicalForwarding + R"(
+math fn filtered<I:Type+Copy>(rows:domain<I>,keep:math fn(item:I)->bool where item_from(item,rows),body:math fn(item:I)->F where item_from(item,rows))->Vector<F>=finite("math.collect.vector_where");
+math fn selected(xs:Vector<F>)->Vector<F>{return filtered(indices(xs),fn(i)=>false,fn(i)=>at(identity(xs),identity(i)));}
+protocol Run roles(P)(xs:Vector<F>@P)->(result:Vector<F>@P){return selected(xs);}
+run Demo=Run;
+)");
+  });
   cases.run("generic identity is unrestricted", [&] {
     contract("fn identity<T:Type>(x:T)->T{return x;}", "identity", false,
              false);

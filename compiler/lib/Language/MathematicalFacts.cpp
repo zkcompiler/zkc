@@ -73,6 +73,38 @@ facts::Status MathematicalFacts::assume(const SourceDataFact &fact, Span at) {
   return snapshot.addBound(current, *left.value, {*right.value, fact.rightAxis},
                            facts::Premise::Formation);
 }
+facts::Result<facts::Cardinality>
+MathematicalFacts::cardinality(const ValueOrigin &origin, unsigned axis,
+                               Span at) {
+  span = at;
+  auto value = snapshot.intern(origin.first, origin.second);
+  if (value.status != facts::Status::Proven)
+    return {value.status, std::nullopt};
+  return snapshot.cardinality(current, {*value.value, axis});
+}
+facts::Status MathematicalFacts::resultCardinality(const ValueOrigin &origin,
+                                                   facts::Cardinality count,
+                                                   Span at) {
+  span = at;
+  auto value = snapshot.intern(origin.first, origin.second);
+  if (value.status != facts::Status::Proven)
+    return value.status;
+  return snapshot.addCardinality(current, {*value.value, 0}, count,
+                                 facts::Premise::Result);
+}
+facts::Status MathematicalFacts::resultExtent(const ValueOrigin &origin,
+                                              const ValueOrigin &container,
+                                              unsigned axis, Span at) {
+  span = at;
+  auto value = snapshot.intern(origin.first, origin.second);
+  if (value.status != facts::Status::Proven)
+    return value.status;
+  auto source = snapshot.intern(container.first, container.second);
+  if (source.status != facts::Status::Proven)
+    return source.status;
+  return snapshot.addEquality(current, {*value.value, 0}, {*source.value, axis},
+                              facts::Premise::Result);
+}
 facts::Status MathematicalFacts::prove(const SourceDataFact &fact, Span at) {
   span = at;
   auto left = snapshot.intern(fact.left.first, fact.left.second);

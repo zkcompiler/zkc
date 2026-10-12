@@ -1150,7 +1150,10 @@ callback to a fold over `b`.
 Literal bodies receive a whole-item fact at every constrained input position.
 Multiple independent origins do not imply a shared iteration or correlation;
 correlated coordinates require one whole item from a zip/product domain. Immutable aliases,
-capture snapshots and invariant region inputs preserve it. Invoking a restricted
+capture snapshots and invariant region inputs preserve it. A checked concrete
+Math helper returning that whole input also preserves its item provenance,
+including through nested exact forwarding. Returning only a projection does not
+make that projection the whole item. Invoking a restricted
 callback requires its whole item, so constructing an equal-looking tuple or
 performing arithmetic does not establish provenance. Control results and loop
 state successors are fresh; a loop may capture an item as an invariant and call
@@ -1207,6 +1210,36 @@ equating their elements. A range item, shifted index, reconstructed value or
 mutable successor supplies no implicit container bound. Constant indices can
 use known fixed extents. Invalid accesses are rejected even when their results
 are unused.
+
+Concrete checked Math helpers can preserve exact input identity through their
+results, including full product projections and chains of forwarding calls.
+Each call must discharge its own input conditions before that information is
+available. Forwarding an index literal preserves its known value; returning an
+unrelated container or computing an index does not supply that fact. These
+observations belong to the current source check and do not change callback
+capture layouts. Each check computes a forwarding summary once per declaration;
+repeated calls pay for lookup and selector substitution. Helper dependency depth
+is bounded independently of enclosing control regions and callback bindings.
+
+An unfiltered finite collection has a fresh value identity and preserves its
+domain's cardinality. Element and index domains also relate its extent to the
+selected input axis, so indices of the original collection can read the result.
+Filtered collections generally provide only an upper count; zero is also exact.
+Such an upper count cannot justify a positive indexing bound or fixed length.
+Known ranges and products use checked cardinality arithmetic. All constructor
+admission remains required, including unused zip constructors and empty domains.
+For a fixed-size result, a known conflicting count is rejected during source
+checking, including in an unused declaration. Its type supplies its extent;
+unresolved formation supplies no additional count or equality to the source
+domain. Closure must still establish the exact unfiltered size.
+
+A direct Math call to a registered Math finite definition is specialized at the
+call occurrence with its actual domain and callback bindings. For example,
+`field_array::collect(range(0, 4), fn(i) => value)` can establish four elements
+without turning the endpoints into unconstrained helper parameters. Its output
+type must still request that exact length. Ordinary helpers receiving a domain
+parameter retain their generic formation boundary; caller-specific constants
+do not justify a generally typed helper or a Local finite declaration.
 
 An ordinary Math call discharges its callee's conditions. Local and protocol code
 can realize an unconditional whole Math computation; they cannot assume input

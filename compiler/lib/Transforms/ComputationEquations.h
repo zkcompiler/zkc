@@ -61,8 +61,10 @@ struct ComputationEquations {
   std::optional<Bilinear> bilinear;
 };
 ComputationEquations matchComputation(const finite::ComputationView &view);
-ComputationEquations matchComputation(const finite::ComputationView &view,
-                                      finite::ComputationWork &work);
+ComputationEquations
+matchComputation(const finite::ComputationView &view,
+                 finite::ComputationWork &work,
+                 finite::ComputationDiagnostic *diagnostic = nullptr);
 
 struct ContractionSeed {
   std::optional<unsigned> input;
@@ -81,6 +83,7 @@ std::optional<NestedContraction>
 matchNestedContraction(const finite::ComputationView &view);
 std::optional<NestedContraction>
 matchNestedContraction(const finite::ComputationView &view,
-                       finite::ComputationWork &work);
+                       finite::ComputationWork &work,
+                       finite::ComputationDiagnostic *diagnostic = nullptr);
 } // namespace zkc::mathematical
 #endif

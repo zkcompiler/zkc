@@ -1,6 +1,7 @@
 #ifndef ZKC_ANALYSIS_COMPUTATIONWORK_H
 #define ZKC_ANALYSIS_COMPUTATIONWORK_H
 
+#include "zkc/Support/OptimizationOutcome.h"
 #include <cstdint>
 
 namespace zkc::finite {
@@ -21,6 +22,16 @@ inline bool consumeComputationWork(uint64_t &remaining, uint64_t amount = 1) {
   }
   remaining -= amount;
   return true;
+}
+/// Capture the failed debit before the existing saturating accounting update.
+inline bool consumeComputationWork(uint64_t &remaining, uint64_t amount,
+                                   WorkOwner owner,
+                                   OptimizationOutcome *outcome) {
+  uint64_t available = remaining;
+  bool accepted = consumeComputationWork(remaining, amount);
+  if (!accepted && outcome)
+    *outcome = OptimizationOutcome::exhausted(owner, amount, available);
+  return accepted;
 }
 } // namespace zkc::finite
 #endif

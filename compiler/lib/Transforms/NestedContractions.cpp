@@ -4,6 +4,7 @@
 #include "ComputationSelection.h"
 #include "NestedContractionVerification.h"
 #include "RealizationEmission.h"
+#include "RealizationTrace.h"
 #include "RecipeRealizations.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/OperationSupport.h"
@@ -59,9 +60,13 @@ select(Operation *declaration, finite::ComputationWork &work,
   finite::Computation computation;
   if (failed(finite::describe(declaration, computation)))
     return {};
-  auto view = finite::analyzeComputation(computation, work);
-  return view ? mathematical::selectNestedContraction(*view, work, recipes)
-              : mathematical::NestedContractionSelection{};
+  finite::ComputationDiagnostic diagnostic;
+  auto view = finite::analyzeComputation(computation, work, &diagnostic);
+  if (view)
+    return mathematical::selectNestedContraction(*view, work, recipes);
+  mathematical::NestedContractionSelection result;
+  result.diagnostic = diagnostic;
+  return result;
 }
 
 class Emitter {
@@ -239,11 +244,20 @@ public:
 LogicalResult rewriteFiniteCollectionsImpl(
     ModuleOp module, protocol::AlgorithmExpansionState &state,
     MathematicalSelectionPolicy policy, mathematical::RealizationWork &work,
-    const mathematical::MathematicalRecipes &recipes) {
+    const mathematical::MathematicalRecipes &recipes,
+    mathematical::RealizationTrace *trace) {
+  mathematical::RealizationScope scope(trace, "nested-contractions", module,
+                                       policy, &work);
   if (failed(mlir::verify(module)))
     return failure();
-  if (!policy.finiteBulk)
+  if (!policy.finiteBulk) {
+    scope.selection(
+        module, mathematical::DecisionFamily::NestedContraction,
+        mathematical::RealizationChoice::Ordered,
+        {OptimizationStatus::PolicyDisabled, OptimizationReason::Policy});
+    scope.complete(mathematical::CompletionKind::Unchanged);
     return success();
+  }
   if (!hasSingleElement(*module.getBody()))
     return failure();
   auto unit =
@@ -263,21 +277,37 @@ LogicalResult rewriteFiniteCollectionsImpl(
     if (isa<local::FiniteCollectOp>(operation))
       declarations.push_back(&operation);
   bool changed = false;
-  for (Operation *declaration : declarations)
-    if (auto selection = select(declaration, work.matching, recipes);
-        selection.recipe) {
+  for (Operation *declaration : declarations) {
+    auto selection = select(declaration, work.matching, recipes);
+    scope.selectionDiagnostic(
+        declaration, mathematical::DecisionFamily::NestedContraction,
+        selection.recipe ? mathematical::RealizationChoice::NestedContraction
+                         : mathematical::RealizationChoice::Ordered,
+        selection.diagnostic);
+    if (selection.recipe) {
+      if (!changed)
+        scope.propose(policy);
       if (failed(emitter.run(*selection.equation, *selection.recipe)))
         return failure();
       changed = true;
     }
-  if (!changed)
+  }
+  if (!changed) {
+    scope.complete(mathematical::CompletionKind::Unchanged);
     return success();
+  }
   auto expected = input;
+  scope.failure(mathematical::VerificationDecision{
+      mathematical::VerificationObservation::Unclassified,
+      "nested contraction correspondence",
+      {},
+      {}});
   if (failed(candidate.publish([&](ModuleOp before, ModuleOp after) {
         return checkFiniteCollections(before, after, input, expected, &output);
       })))
     return failure();
   StateAccess::set(state, std::move(output));
+  scope.publish();
   return success();
 }
 } // namespace
@@ -285,32 +315,36 @@ LogicalResult rewriteFiniteCollectionsImpl(
 LogicalResult rewriteFiniteCollections(ModuleOp module,
                                        protocol::AlgorithmExpansionState &state,
                                        MathematicalSelectionPolicy policy,
-                                       mathematical::RealizationWork *work) {
+                                       mathematical::RealizationWork *work,
+                                       mathematical::RealizationTrace *trace) {
   const auto &input = StateAccess::get(state);
   if (!input.retained || input.finished)
     return diagnostics::emit(module.emitError(),
                              "nested-contraction-correspondence",
                              "expected retained, unfinished preparation");
   mathematical::RealizationWork standalone;
-  return rewriteFiniteCollectionsImpl(module, state, policy,
-                                      work ? *work : standalone,
-                                      mathematical::mathematicalRecipes());
+  return rewriteFiniteCollectionsImpl(
+      module, state, policy, work ? *work : standalone,
+      mathematical::mathematicalRecipes(), trace);
 }
 
 LogicalResult rewriteFiniteCollections(ModuleOp module,
                                        MathematicalSelectionPolicy policy,
-                                       mathematical::RealizationWork *work) {
+                                       mathematical::RealizationWork *work,
+                                       mathematical::RealizationTrace *trace) {
   protocol::AlgorithmExpansionState state;
   mathematical::RealizationWork standalone;
-  return rewriteFiniteCollectionsImpl(module, state, policy,
-                                      work ? *work : standalone,
-                                      mathematical::mathematicalRecipes());
+  return rewriteFiniteCollectionsImpl(
+      module, state, policy, work ? *work : standalone,
+      mathematical::mathematicalRecipes(), trace);
 }
 LogicalResult
 rewriteFiniteCollections(ModuleOp module, MathematicalSelectionPolicy policy,
-                         const mathematical::MathematicalRecipes &recipes) {
+                         const mathematical::MathematicalRecipes &recipes,
+                         mathematical::RealizationTrace *trace) {
   protocol::AlgorithmExpansionState state;
   mathematical::RealizationWork work;
-  return rewriteFiniteCollectionsImpl(module, state, policy, work, recipes);
+  return rewriteFiniteCollectionsImpl(module, state, policy, work, recipes,
+                                      trace);
 }
 } // namespace zkc::nested

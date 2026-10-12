@@ -703,11 +703,6 @@ protocol Demo roles(P)(xs:Matrix<Fr>@P,i:index@P)->(r:Fr@P){return work(xs,i);}r
           R"(domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
 math fn work(a:Fr)->Fr{let empty:[Fr;0]=[];return total(zip(array(empty),array([a])),0,fn(state, item)=>state);}
 protocol Demo roles(P)(a:Fr@P)->(r:Fr@P){return work(a);}run Run=Demo;)",
-          R"(type Array<F:Field,N:nat>=builtin("field_array",F,N);
-domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
-math fn collect<I:Type+Copy+Drop,N:nat>(rows:domain<I>,body:math fn(item:I)->Fr where item_from(item, rows))->Array<Fr,N>=finite("math.collect.field_array");
-math fn work(a:Fr)->Array<Fr,3>{return collect(array([a,a]),fn(x)=>x);}
-protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,3>@P){return work(a);}run Run=Demo;)",
       })
     cases.run("total formation is checked before native emission " +
                   source.substr(0, 60),
@@ -715,6 +710,16 @@ protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,3>@P){return work(a);}run Run=Demo;)
                 auto project = take(check(boundPrelude + source));
                 refuses(closeEntry(project, "m::Run"), "source.data-bound");
               });
+  cases.run("fixed collect count conflict is checked before closure", [&] {
+    refuses(check(boundPrelude + R"(
+type Array<F:Field,N:nat>=builtin("field_array",F,N);
+domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
+math fn collect<I:Type+Copy+Drop,N:nat>(rows:domain<I>,body:math fn(item:I)->Fr where item_from(item, rows))->Array<Fr,N>=finite("math.collect.field_array");
+math fn work(a:Fr)->Array<Fr,3>{return collect(array([a,a]),fn(x)=>x);}
+protocol Demo roles(P)(a:Fr@P)->(r:Array<Fr,3>@P){return work(a);}run Run=Demo;
+)"),
+            "source.data-bound");
+  });
   cases.run("ordinary Math contracts cannot gain caller-specific assumptions",
             [&] {
               auto project = take(check(boundPrelude + R"(

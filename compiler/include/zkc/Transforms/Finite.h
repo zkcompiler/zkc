@@ -3,6 +3,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Transforms/MathematicalSelection.h"
+#include "zkc/Transforms/MathematicalTrace.h"
 #include "zkc/Transforms/MathematicalWork.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
 namespace zkc::finite {
@@ -16,7 +17,9 @@ using HelperReader =
 mlir::FailureOr<llvm::SmallVector<mlir::Value>>
 realizeExpression(mlir::Operation *, mlir::ValueRange, mlir::OpBuilder &,
                   MathematicalSelectionPolicy policy = {},
-                  mathematical::RealizationWork *work = nullptr);
+                  mathematical::RealizationWork *work = nullptr,
+                  mathematical::RealizationTrace *trace = nullptr,
+                  bool orderedRetry = false);
 mlir::FailureOr<llvm::SmallVector<mlir::Value>>
 verifyExpression(mlir::Operation *, mlir::ValueRange, mlir::Operation *&,
                  HelperReader, mlir::Operation *symbolRoot = nullptr);
@@ -25,7 +28,8 @@ verifyExpression(mlir::Operation *, mlir::ValueRange, mlir::Operation *&,
 // argument starts a standalone scope for this invocation.
 mlir::LogicalResult
 realizeLocals(mlir::ModuleOp module, MathematicalSelectionPolicy policy = {},
-              mathematical::RealizationWork *work = nullptr);
+              mathematical::RealizationWork *work = nullptr,
+              mathematical::RealizationTrace *trace = nullptr);
 // Reads actual candidate bodies; never invokes the realizer.
 mlir::LogicalResult verifyRealizations(mlir::ModuleOp original,
                                        mlir::ModuleOp candidate);

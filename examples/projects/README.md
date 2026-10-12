@@ -15,6 +15,8 @@
 | [Finite reductions](finite-reductions/README.md) | Library-owned sums and products over strict zipped field vectors | Named and symbolic reductions with scalar captures and optional checked dot fusion |
 | [Native map](native-map/README.md) | Row formulas applied to whole KoalaBear/Ext8 columns with checked `map` | A gate check over public columns and an interactive challenge combination |
 | [FRI](fri/README.md) | Generic binary FRI with authenticated rows | Commitments, extension-field folding challenges, simultaneous queries and a bounded terminal polynomial |
+| [FRI fold](fri-fold/README.md) | Total arithmetic for batches of paired evaluations | Forwarded projections, intermediate collection lengths and next-layer residuals |
+| [LogUp rows](logup-rows/README.md) | Tuple compression and reciprocal equations | Ordered inner folds, collection lengths and fixed compression weights |
 | [Imported AIR](imported-air/README.md) | Captured Plonky3 AIR expression and relation Bundle | Actual trace checks and a disclosed-trace proof, plus coefficient and Ext8 point views |
 
 The [walkthrough](../../docs/getting-started.md) runs the Schnorr project. Each project has an explicit `zkc.toml` source and asset map. Run

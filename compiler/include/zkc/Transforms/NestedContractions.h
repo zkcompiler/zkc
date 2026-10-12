@@ -4,6 +4,7 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/MathematicalSelection.h"
+#include "zkc/Transforms/MathematicalTrace.h"
 #include "zkc/Transforms/MathematicalWork.h"
 
 namespace zkc::nested {
@@ -25,7 +26,8 @@ mlir::LogicalResult
 rewriteFiniteCollections(mlir::ModuleOp module,
                          protocol::AlgorithmExpansionState &state,
                          MathematicalSelectionPolicy policy = {},
-                         mathematical::RealizationWork *work = nullptr);
+                         mathematical::RealizationWork *work = nullptr,
+                         mathematical::RealizationTrace *trace = nullptr);
 
 /// Raw pre-expansion IR entry, only for modules with no prior helper
 /// expansion paths. Uses a temporary origin record for the checked rewrite.
@@ -33,7 +35,8 @@ rewriteFiniteCollections(mlir::ModuleOp module,
 mlir::LogicalResult
 rewriteFiniteCollections(mlir::ModuleOp module,
                          MathematicalSelectionPolicy policy = {},
-                         mathematical::RealizationWork *work = nullptr);
+                         mathematical::RealizationWork *work = nullptr,
+                         mathematical::RealizationTrace *trace = nullptr);
 
 /// Independently reads the actual source domains, callback operands, scalar
 /// laws, seeds, candidate control and unchanged context. Does not invoke the

@@ -1,6 +1,7 @@
 #ifndef ZKC_TRANSFORMS_VECTORREDUCTIONS_H
 #define ZKC_TRANSFORMS_VECTORREDUCTIONS_H
 #include "zkc/Transforms/Algorithms.h"
+#include "zkc/Transforms/MathematicalTrace.h"
 
 namespace zkc::mathematical {
 /// Explicitly selected, transactional multiply-map/native-sum fusion on the
@@ -9,7 +10,8 @@ namespace zkc::mathematical {
 /// Does not promise equal exhaustion, arbitrary backend failures or memory use.
 /// Other map/reducer shapes remain on the ordinary realization path.
 mlir::LogicalResult fuseVectorReductions(mlir::ModuleOp,
-                                         protocol::AlgorithmExpansionState &);
+                                         protocol::AlgorithmExpansionState &,
+                                         RealizationTrace *trace = nullptr);
 /// Reads the immutable original and actual candidate, without running the
 /// producer. Checks guards, contracts, slots, sites, result substitution,
 /// surrounding code, declaration inventory and full occurrence records.

@@ -6,6 +6,9 @@
 #include "llvm/Support/Error.h"
 #include <memory>
 
+namespace zkc::mathematical {
+struct RealizationTrace;
+}
 namespace zkc::protocol {
 namespace detail {
 struct AlgorithmExpansionRecord;
@@ -37,15 +40,18 @@ mlir::LogicalResult verifyAlgorithmExpansionPreserved(mlir::ModuleOp before,
                                                       mlir::ModuleOp after);
 /// Transactional, order-preserving expansion on actual SSA and symbol calls.
 /// Common IR may retain local.apply; participant/physical export may not.
-mlir::LogicalResult expandAlgorithms(mlir::ModuleOp,
-                                     std::vector<AlgorithmOrigin> * = nullptr);
+mlir::LogicalResult
+expandAlgorithms(mlir::ModuleOp, std::vector<AlgorithmOrigin> * = nullptr,
+                 mathematical::RealizationTrace *trace = nullptr);
 /// RetainMaps expands ordinary helpers, retaining only admitted map calls.
 /// Finish expands the realized remainder and forbids preparation declarations.
 /// Both phases share work, depth and origin limits through state. Each is
 /// transactional and independently checked by virtual source substitution.
-mlir::LogicalResult expandAlgorithms(mlir::ModuleOp, AlgorithmExpansionPhase,
-                                     AlgorithmExpansionState &,
-                                     std::vector<AlgorithmOrigin> * = nullptr);
+mlir::LogicalResult
+expandAlgorithms(mlir::ModuleOp, AlgorithmExpansionPhase,
+                 AlgorithmExpansionState &,
+                 std::vector<AlgorithmOrigin> * = nullptr,
+                 mathematical::RealizationTrace *trace = nullptr);
 mlir::LogicalResult verifyStagedAlgorithmExpansionPreserved(
     mlir::ModuleOp before, mlir::ModuleOp after, AlgorithmExpansionPhase,
     const AlgorithmExpansionState &beforeState,

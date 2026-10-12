@@ -11,6 +11,9 @@ namespace mlir {
 class ModuleOp;
 }
 namespace zkc {
+namespace mathematical {
+struct RealizationTrace;
+}
 struct LinearContractionStats;
 namespace protocol {
 /// Validate and expand whole-protocol mathematics, with optional folding.
@@ -18,7 +21,8 @@ namespace protocol {
 /// refusals under sufficient resources, not exhaustion or backend failures.
 std::unique_ptr<mlir::Pass>
 createPrepareProtocolPass(bool simplify = true,
-                          MathematicalSelectionPolicy policy = {});
+                          MathematicalSelectionPolicy policy = {},
+                          mathematical::RealizationTrace *trace = nullptr);
 /// Project the protocol profile into participant programs, retaining
 /// mathematics.
 std::unique_ptr<mlir::Pass>
@@ -26,7 +30,8 @@ createProjectProtocolPass(bool simplify = true,
                           MathematicalSelectionPolicy policy = {});
 /// Lower participant mathematics to execution recipes in the exec profile.
 std::unique_ptr<mlir::Pass>
-createLowerMathPass(MathematicalSelectionPolicy policy = {});
+createLowerMathPass(MathematicalSelectionPolicy policy = {},
+                    mathematical::RealizationTrace *trace = nullptr);
 /// Distribute prefix fixing through shared sums/products and MLE leaves.
 std::unique_ptr<mlir::Pass> createFixPolynomialFactorsPass();
 /// Eliminate formal polynomial SSA while retaining concrete participant types.
