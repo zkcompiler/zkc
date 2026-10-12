@@ -5,12 +5,10 @@ import json
 import pytest
 
 from entry import Entry
+from source_modules import library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
-           for name in ('accumulation', 'computation', 'curve', 'field_array',
-                        'finite', 'finite_domain', 'finite_math', 'indices',
-                        'matrix', 'sequence', 'vector')]
+MODULES = library_modules('zkc')
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
@@ -126,7 +124,7 @@ protocol Run roles(P)(xs:Vector<F>@P,enabled:bool@P)->(result:F@P){return work(x
 
 
 def test_finite_library_project(toolchain, journal, directory):
-    source = (ROOT / 'examples/projects/finite-computations/main.zkc').read_text().replace('module example;', 'module sample;')
+    source = (ROOT / 'common/tests/fixtures/projects/finite-computations/main.zkc').read_text().replace('module example;', 'module sample;')
     entry = Entry(toolchain, journal, directory, source, MODULES)
     matrix = {'rows': '2', 'columns': '3', 'entries': [['0', '0', '2'], ['1', '2', '7']]}
     assert entry.run('example', {'xs': ['2', '3'], 'ys': ['7', '11'], 'matrix': matrix}) == {
@@ -376,7 +374,7 @@ protocol Run roles(P)(xs:Array<G::Scalar,2>@P)->(result:(G::Scalar,G::Scalar,boo
 
 
 def test_matrix_demand_example(toolchain, journal, directory):
-    source = (ROOT / 'examples/projects/finite-computations/main.zkc').read_text()
+    source = (ROOT / 'common/tests/fixtures/projects/finite-computations/main.zkc').read_text()
     source = source.replace('module example;', 'module sample;')
     source = source.replace('run Demo = Compute;', '').replace('run MatrixDemo = MatrixProducts;', 'run Demo = MatrixProducts;')
     entry = Entry(toolchain, journal, directory, source, MODULES)

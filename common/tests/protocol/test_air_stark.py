@@ -15,7 +15,7 @@ import pytest
 from logical_tree import decode_tree
 
 ROOT = Path(__file__).resolve().parents[3]
-EXAMPLE = ROOT / 'examples/projects/air-stark/main.zkc'
+EXAMPLE = ROOT / 'common/tests/fixtures/projects/air-stark/main.zkc'
 TABLE = ROOT / 'libraries/air/table.zkc'
 STARK = ROOT / 'libraries/stark/koala_bear/table.zkc'
 FIXTURE = ROOT / 'compiler/adapters/plonky3/fixtures/recurrence'

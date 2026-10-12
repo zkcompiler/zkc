@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-PROJECT = ROOT / 'examples/projects/expression-sumcheck'
+PROJECT = ROOT / 'examples/projects/sumcheck/product'
 DIGEST = '1b02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4'
 
 

@@ -136,7 +136,8 @@ def case_catalog():
 
 
 def project(root, name):
-    manifest = root / 'examples/projects' / name / 'zkc.toml'
+    directory = 'examples/projects' if name == 'fri' else 'common/tests/fixtures/projects'
+    manifest = root / directory / name / 'zkc.toml'
     modules, assets = project_inputs(manifest)
     return manifest, modules, assets
 
@@ -155,7 +156,7 @@ def source_files(root, cases):
             paths.add(root / 'compiler/adapters/plonky3/fixtures/recurrence/source-trace-honest.json')
         if case['project'] == 'accumulator-machine':
             adapter = root / 'compiler/adapters/accumulator-machine'
-            paths.update([adapter / 'accumulator_machine.py', adapter / 'ring_arena.py',
+            paths.update([adapter / 'accumulator_machine.py', adapter.parent / 'ring_arena.py',
                           adapter / 'fixtures' / case['fixture'] / 'run.json'])
     for name in ('Cargo.lock', 'flake.lock', 'uv.lock', 'rust-toolchain.toml'):
         paths.add(root / name)

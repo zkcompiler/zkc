@@ -335,8 +335,8 @@ general mechanisms at their stated scope, without claiming full Groth16, BP+,
 FRI or zkVM implementations.
 
 Two smaller executable examples exercise compositional source facts directly:
-[FRI folding](../../examples/projects/fri-fold/README.md) collects folded pairs
-and checks their next-layer residuals; [LogUp rows](../../examples/projects/logup-rows/README.md)
+[FRI folding](../../common/tests/fixtures/projects/fri-fold/README.md) collects folded pairs
+and checks their next-layer residuals; [LogUp rows](../../common/tests/fixtures/projects/logup-rows/README.md)
 compresses tuples and computes reciprocal and Boolean residuals. Both read a
 fresh collect using the original collection's indices. The LogUp companion also
 constructs a fixed array over a range whose endpoint passes through a helper.

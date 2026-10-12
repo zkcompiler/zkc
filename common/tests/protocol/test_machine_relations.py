@@ -19,6 +19,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 ADAPTER = ROOT / 'compiler/adapters/accumulator-machine'
+sys.path.insert(0, str(ADAPTER.parent))
 sys.path.insert(0, str(ADAPTER))
 
 import accumulator_machine as machine  # noqa: E402

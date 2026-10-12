@@ -218,7 +218,7 @@ consuming view.
 
 The [expression Sumcheck library](../../../libraries/sumcheck/expression.zkc)
 uses a statically selected component for round coefficients and terminal
-evaluation. Its [source client](../../../examples/projects/expression-sumcheck/README.md)
+evaluation. Its [source client](../../../examples/projects/sumcheck/product/README.md)
 binds a product arena and supports KoalaBear input tables promoted to Ext8,
 or Ext8 tables directly. Both use extension-field challenges. The verifier
 folds its public tables, checks received coefficient counts and round sums,
@@ -226,7 +226,7 @@ and checks the terminal expression. No compiler branch recognizes Sumcheck.
 This is a public-table execution client; it does not supply a PCS or a security
 theorem. Existing BLS polynomial-recipe realization is a separate path.
 
-The [imported AIR client](../../../examples/projects/imported-air/README.md)
+The [imported AIR client](../../../common/tests/fixtures/projects/imported-air/README.md)
 binds an arena exported by the [Plonky3 AIR adapter](../../../compiler/adapters/plonky3/README.md)
 and substitutes it by `ring.rows` over KoalaBear and Ext8 and by
 `ring.coefficients`. The adapter's closed view prepares every assignment from an

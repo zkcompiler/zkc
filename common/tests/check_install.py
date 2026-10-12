@@ -61,7 +61,7 @@ def check(binary, compiler, output):
 
     # The shared fold crosses source-library, generic map and native realization
     # boundaries. Exercise it with the installed compiler, outside the checkout.
-    shutil.copyfile(ROOT / "examples/projects/mathematics/main.zkc", output / "mathematics.zkc")
+    shutil.copyfile(ROOT / "common/tests/fixtures/projects/mathematics/main.zkc", output / "mathematics.zkc")
     math_modules = ("vector", "multilinear", "symbolic", "accumulation", "curve", "finite", "sequence")
     for name in math_modules:
         shutil.copyfile(ROOT / f"libraries/zkc/{name}.zkc", output / f"{name}.zkc")

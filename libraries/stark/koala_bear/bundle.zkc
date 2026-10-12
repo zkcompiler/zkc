@@ -68,10 +68,11 @@ fn admitted<MaxLogHeight: nat>(rule: Policy, height: index) -> bool {
     two_adic<MaxLogHeight>(height));
 }
 // The interactions of a present table. This profile reduces only global
-// multiset records active on every row, with multiplicity bound one; any other
+// field balances or bound-one multiset records active on every row; any other
 // interaction is refused before any record is evaluated.
 fn table_records<Table: nat, B: Bundle>(height: index, channels: index) -> Interactions {
   let totals = kernel<Base,Table>("relation.table_interactions", height; B);
+  let mut kind = indices::empty();
   let mut channel = indices::empty();
   let mut side = indices::empty();
   let mut arity = indices::empty();
@@ -79,15 +80,16 @@ fn table_records<Table: nat, B: Bundle>(height: index, channels: index) -> Inter
   let mut count_degree = indices::empty();
   for interaction in 0..totals.0 {
     let facts = kernel<Base,Table>("relation.table_interaction", height, interaction; B);
-    require both(both(facts.0 == 1, facts.3 == 0),
-      both(both(facts.5 == 0, facts.6 == height), both(facts.8 == 1, facts.9 == 1)));
+    require both(facts.3 == 0, both(facts.5 == 0, facts.6 == height));
+    require if facts.0 == 0 { true } else { both(facts.0 == 1, both(facts.8 == 1, facts.9 == 1)) };
+    kind = indices::append(kind, facts.0);
     channel = indices::append(channel, facts.1);
     side = indices::append(side, facts.2);
     arity = indices::append(arity, facts.7);
     tuple_degree = indices::append(tuple_degree, facts.10);
     count_degree = indices::append(count_degree, facts.11);
   }
-  let result = interactions(channels, channel, side, arity, tuple_degree, count_degree);
+  let result = interactions(channels, kind, channel, side, arity, tuple_degree, count_degree);
   require result.width == totals.1;
   return result;
 }
@@ -100,7 +102,7 @@ fn record_points<Table: nat, B: Bundle>(assignments: Vector<Extension>, rows: in
 }
 
 // What both roles derive from a table's statement. Constraint scopes are the
-// assertions', then one bound-1 range per record, then the reduction's.
+// assertions', then a Boolean range per multiset record, then the reduction's.
 pub struct TableLayout {
   pub present: bool,
   pub height: index,
@@ -124,10 +126,13 @@ fn present_layout<Table: nat, B: Bundle, R: Reduction<Extension>>(facts: Shape,
   let mut end = assertions.1;
   let mut chunks = facts.chunks;
   for interaction in 0..records.count {
-    begin = indices::append(begin, 0);
-    end = indices::append(end, height);
-    chunks = maximum(chunks,
-      chunks_for(2 * indices::get(records.count_degree, interaction), height, height));
+    require R::supports(indices::get(records.kind, interaction));
+    if indices::get(records.kind, interaction) == 1 {
+      begin = indices::append(begin, 0);
+      end = indices::append(end, height);
+      chunks = maximum(chunks,
+        chunks_for(2 * indices::get(records.count_degree, interaction), height, height));
+    }
   }
   for constraint in 0..indices::length(reduction.degree) {
     let active = indices::get(reduction.end, constraint) - indices::get(reduction.begin, constraint);
@@ -172,7 +177,8 @@ fn side_total(layout: TableLayout, channel: index, side: index) -> index {
   let mut total: index = 0;
   for interaction in 0..layout.records.count {
     if both(indices::get(layout.records.channel, interaction) == channel,
-        indices::get(layout.records.side, interaction) == side) {
+        both(indices::get(layout.records.kind, interaction) == 1,
+          indices::get(layout.records.side, interaction) == side)) {
       total = total + layout.height;
     }
   }

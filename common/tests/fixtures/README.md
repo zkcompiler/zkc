@@ -1,6 +1,8 @@
 # Independent reference fixtures
 
 These independently retained vectors support the native and formal checks below.
+`projects/` contains source clients for language features and library regressions;
+user-facing protocol examples live in `examples/projects/`.
 
 - `variants/history-contracts.txt` is embedded by `lean/Tests/Variant.lean`
   and included by the formal package's input manifest and reproduction checks.

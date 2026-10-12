@@ -1,8 +1,0 @@
-format = "zkc.project/0"
-
-[modules]
-"logup_rows" = "main.zkc"
-
-[dependencies]
-air = "../../../libraries/air"
-zkc = "../../../libraries/zkc"

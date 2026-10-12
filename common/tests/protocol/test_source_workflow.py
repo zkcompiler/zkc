@@ -12,7 +12,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 
 
-@pytest.mark.parametrize('project', sorted((ROOT / 'examples/projects').glob('*/zkc.toml')),
+@pytest.mark.parametrize('project', sorted([*(ROOT / 'examples/projects').rglob('zkc.toml'),
+                                      *(ROOT / 'common/tests/fixtures/projects').glob('*/zkc.toml')]),
                          ids=lambda path: path.parent.name)
 def test_example_project_declarations_match_explicit_inputs(toolchain, journal, directory, project):
     command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}', '--declarations']
@@ -255,7 +256,7 @@ def test_project_paths_use_the_visible_parent_and_do_not_enter_identity(toolchai
 def test_project_assets_are_captured_and_protected(toolchain, journal, directory):
     _, project = source_project(directory)
     asset = directory / 'product.ring.json'
-    asset.write_bytes((ROOT / 'examples/projects/expression-sumcheck/product.ring.json').read_bytes())
+    asset.write_bytes((ROOT / 'examples/projects/sumcheck/product/product.ring.json').read_bytes())
     config = tomllib.loads(project.read_text())
     config['assets'] = {'product': {'format': 'ring-json', 'path': asset.name}}
     project.write_text(project_text(config))

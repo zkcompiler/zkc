@@ -88,7 +88,7 @@ def test_published_vector_notation_project(toolchain, journal, directory, flags)
     package = directory / 'notation.zkpkg'
     built = journal.json([
         toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-        f'--project={root}/examples/projects/mathematical-notation/zkc.toml',
+        f'--project={root}/common/tests/fixtures/projects/mathematical-notation/zkc.toml',
         'example::Run', f'--output={package}', *flags,
     ])
 
@@ -142,8 +142,8 @@ def test_notation_example_runs_with_its_supplied_inputs(toolchain, journal, dire
     import shutil
 
     root = Path(__file__).resolve().parents[3]
-    project = directory / 'examples/projects/mathematical-notation'
-    shutil.copytree(root / 'examples/projects/mathematical-notation', project,
+    project = directory / 'common/tests/fixtures/projects/mathematical-notation'
+    shutil.copytree(root / 'common/tests/fixtures/projects/mathematical-notation', project,
                     ignore=shutil.ignore_patterns('build'))
     shutil.copytree(root / 'libraries', directory / 'libraries')
     runtime = [toolchain.runtime, '--json']

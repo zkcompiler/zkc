@@ -98,7 +98,7 @@ fn build<R: Reduction<F>>(values: Vector<F>, rows: index,
   let channel = if active { indices::append(none, 0) } else { none };
   let arity = if active { indices::append(none, 2) } else { none };
   let degrees = if active { indices::append(none, 1) } else { none };
-  let records = interactions(1, channel, channel, arity, degrees, degrees);
+  let records = interactions(1, degrees, channel, channel, arity, degrees, degrees);
   let challenges = kernel<F>("vector.append",
     kernel<F>("vector.append", kernel<F>("vector.empty"), gamma), delta);
   return R::build(records, values, rows, challenges);

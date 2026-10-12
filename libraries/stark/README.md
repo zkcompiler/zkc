@@ -2,8 +2,8 @@
 
 These modules construct nonhiding single-table and three-table arguments from an admitted
 external [relation Bundle](../../docs/spec/domains/relation-bundles.md).
-The [recurrence client](../../examples/projects/air-stark/README.md) uses an AIR
-exported from Plonky3. The protocol is authored in `.zkc`; the compiler has no
+The [Fibonacci client](../../examples/projects/fibonacci/README.md) uses AIRs
+exported from Clean and Plonky3. The protocol is authored in `.zkc`; the compiler has no
 STARK-specific dispatch or proof callback.
 
 ## Ownership
@@ -15,7 +15,7 @@ STARK-specific dispatch or proof callback.
 | `stark::koala_bear` | Concrete fields, row commitments, embedding and characteristic |
 | `stark::sampling` | Bounded out-of-domain sampling with explicit exhaustion |
 | `stark::koala_bear::table` | Order commitments, sampling, claims, FRI and authentication |
-| `air::interaction` | Record fingerprints, Boolean multiplicities, and interchangeable LogUp/grand-product auxiliary constraints |
+| `air::interaction` | Record fingerprints, signed field balance, Boolean multisets and reduction equations |
 | `stark::koala_bear::bundle` | Table presence, heights, phased commitments, global interaction closure, and one shared FRI instance |
 | [`zkc::opening`](../zkc/opening.zkc) | Shared univariate opening quotients and row equations |
 | [`fri`](../fri/lib.zkc) | Low-degree testing and authenticated first-layer values at the returned positions |
@@ -61,9 +61,9 @@ at commitment boundaries is explicit.
 
 Both roles construct a `Statement` from their inputs. The verifier's
 configuration, public columns, public scalars and shift determine its checks.
-Honest execution uses identical statements. The selected example binds these
-inputs through its proof Entry and names the original base-field relation as
-its target. Naming that target does not prove the verifier implements it.
+Honest execution uses identical statements. The examples bind these inputs through their proof Entries. An optional
+relation target identifies the intended statement; naming one does not prove
+the verifier implements it.
 
 Let `n = 2^LogHeight`, `N = 2^LogSize`, `H = <g_n>`, and `D = s <g_N>`.
 The height must satisfy the table's policy, `n >= 2`, `N >= 2n`, and the
@@ -174,8 +174,10 @@ composes three tables from one captured Bundle with one
 `air::interaction::Reduction<Extension>` implementation. The fixed three-table
 container is a source-library limitation: the native Bundle model supports
 more tables. Table names, instruction semantics and memory rules are absent
-from the library. The [machine example](../../examples/projects/accumulator-machine/README.md)
-selects its CPU, configured program and optional memory relation externally.
+from the library. The [FemtoCairo example](../../examples/projects/femtocairo/README.md) selects
+its CPU, configured program and indexed immutable memory relation externally.
+The [accumulator fixture](../../common/tests/fixtures/projects/accumulator-machine/README.md)
+also exercises optional memory and both reductions.
 
 The selected profile requires:
 
@@ -186,9 +188,12 @@ The selected profile requires:
   retain the Bundle's range and power-of-two policy, independently of `H`;
   absent instance-height tables use zero. An absent table's effective layout
   height, widths, scopes, quotient chunks and reduction claims are all zero.
-- Global multiset interactions active on every row, with declared count bound
-  one. The source enforces `m*(m-1) = 0` for each record. Other bounds,
-  field-balance interactions and local or partial-row scopes are refused.
+- Global interactions active on every row. LogUp accepts signed field-balance
+  records and multiset records with declared count bound one. Grand product
+  accepts only the latter. The source enforces `m*(m-1) = 0` for multiset records;
+  field weights have no Boolean range constraint. Other count bounds and local
+  or partial-row scopes are refused. An adapter can express a partial-row
+  lookup using a selector constrained to its active rows.
 - Positive total witness width and auxiliary width. Absent tables contribute
   no committed columns, openings or unconstrained claims. Empty per-table
   groups and inactive tuples retain their declared semantics.
@@ -198,7 +203,7 @@ The selected profile requires:
 
 ### Reduction boundary
 
-`Interactions` retains each tuple's channel, side, arity and degrees, including
+`Interactions` retains each tuple's kind, channel, side, arity and degrees, including
 record expressions of degree greater than one. `Layout` names auxiliary
 columns, rotated openings, claims and each constraint's scope and degree.
 `Reduction` supplies construction, the same constraint arithmetic over rows or
@@ -213,15 +218,20 @@ base rows and the same record expressions as the table assertions:
 
 | Reduction | Auxiliary equations | Global check and premise |
 |---|---|---|
-| `LogUp<F>` | Per record `m*(inv*(gamma-fp)-1)=0`; running signed sums of `m*inv` with first, transition and last constraints | Table claims sum to zero per channel; the maximum natural push and pull counts are each below the base-field characteristic |
+| `LogUp<F>` | Per record `m*(inv*(gamma-fp)-1)=0`; running signed sums of `m*inv` with first, transition and last constraints | Table claims sum to zero per channel; natural multiset counts must remain below the base-field characteristic |
 | `GrandProduct<F>` | Prefix products of `m*(gamma-fp)+1-m`, separated by channel and side | Global push and pull products agree and an inverse claim makes the product nonzero |
 
 The Boolean range constraints belong to the original multiset relation.
-They are enforced alongside both reductions. An inactive row uses inverse zero
+They are enforced alongside both reductions, and omitted for field-balance
+records. A nonzero field weight uses `1/(gamma-fp)` as its inverse column, then
+contributes `m*inv` to the sum. An inactive row uses inverse zero
 or product factor one, so its unused tuple cannot cause a denominator failure.
 Active zero denominators cause an explicit prover abort. The LogUp count bound
 prevents equality only modulo the characteristic from substituting for equality
-of natural multiplicities. Random compression collisions, rational/product
+of natural multiplicities. Field-balance channels already mean equality in the
+field and do not acquire natural-count semantics. External source models may
+require additional cardinality premises, which their adapters must retain.
+Random compression collisions, rational/product
 identity error and abort probability still need cryptographic bounds.
 
 ### Phases
@@ -291,6 +301,10 @@ compare both native relation evaluators and exercise the source admission
 through the Host and both complete reductions. They cover absent fixed and
 configured heights 1, 3 and above `H`, absent instance height zero, empty
 contributions, configuration shape and authority, and present-table refusal.
+
+The [Clean controls](../../common/tests/protocol/test_clean_adapter.py) additionally
+exercise signed weights, repeated lookups, indexed memory, two independently
+authored Fibonacci AIRs and complete source proofs.
 
 Arbitrary table counts, other interaction profiles,
 hiding, production parameter selection, and a security theorem for the exact

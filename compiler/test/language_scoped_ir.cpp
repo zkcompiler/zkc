@@ -17,10 +17,12 @@ ClosedEntry example() {
   std::string root = ZKC_SCOPED_ROOT;
   auto captured = take(capture(
       {{"example",
-        read(root + "/examples/projects/scoped-computations/main.zkc"),
+        read(root +
+             "/common/tests/fixtures/projects/scoped-computations/main.zkc"),
         "main.zkc"},
        {"callbacks",
-        read(root + "/examples/projects/scoped-computations/callbacks.zkc"),
+        read(root + "/common/tests/fixtures/projects/scoped-computations/"
+                    "callbacks.zkc"),
         "scoped.zkc"},
        {"zkc::accumulation", read(root + "/libraries/zkc/accumulation.zkc"),
         "accumulation.zkc"},

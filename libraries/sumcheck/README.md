@@ -40,7 +40,7 @@ computation. Received round checks still precede their challenges. Construction
 handlers on a complete Sumcheck use `reduce.round`, `reduce.challenge` and
 `reduce.delivery`; direct reductions use `round`, `challenge` and `delivery`.
 
-See the [composed client](../../examples/projects/composed-sumcheck/README.md)
+See the [composed client](../../examples/projects/sumcheck/composed/README.md)
 for two independently discharged reductions and the public-table clients for
 [multilinear](../../examples/projects/sumcheck/README.md) and
-[expression](../../examples/projects/expression-sumcheck/README.md) Entries.
+[expression](../../examples/projects/sumcheck/product/README.md) Entries.

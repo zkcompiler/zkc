@@ -32,6 +32,7 @@ let
   projects = [
     "examples"
     "libraries"
+    "common/tests/fixtures/projects"
   ];
   rustFixtures = [
     "compiler/test/fixtures/relation/polynomial-chunks.json"
@@ -72,7 +73,7 @@ let
       "common/tests/support/project.py"
       "libraries/schnorr/lib.zkc"
       "examples/projects/schnorr"
-      "examples/projects/mathematics/main.zkc"
+      "common/tests/fixtures/projects/mathematics/main.zkc"
       "libraries/zkc"
     ];
     format.paths = [
@@ -97,6 +98,8 @@ let
           "compiler/test"
           "compiler/include"
           "compiler/adapters/accumulator-machine"
+          "compiler/adapters/clean"
+          "compiler/adapters/ring_arena.py"
           "compiler/adapters/plonky3/fixtures"
           "lean/integrations/clean/lake-manifest.json"
           "docs/getting-started.md"

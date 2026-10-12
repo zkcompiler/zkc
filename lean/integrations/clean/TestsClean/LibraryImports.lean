@@ -4,6 +4,7 @@ import ZkcClean.Export
 import ZkcClean.Expression
 import ZkcClean.Flatten
 import ZkcClean.Native
+import ZkcClean.NativeExport
 import ZkcClean.Relation
 import ZkcClean.Specification
 import TestsClean.AuditRules
@@ -11,6 +12,7 @@ import TestsClean.Bits
 import TestsClean.Control
 import TestsClean.KoalaBear
 import TestsClean.Mutations
+import TestsClean.NativeClients
 import TestsClean.Nested
 import TestsClean.Presentation
 import TestsClean.Refusals

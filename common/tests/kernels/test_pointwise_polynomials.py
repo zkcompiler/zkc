@@ -18,7 +18,7 @@ from entry import Entry
 from octic_reference import P, ZERO, ONE, add, mul, power
 
 ROOT = Path(__file__).resolve().parents[3]
-ARENA = ROOT / 'examples/projects/expression-sumcheck/product.ring.json'
+ARENA = ROOT / 'examples/projects/sumcheck/product/product.ring.json'
 ROOT_OF_UNITY = 1791270792  # The public KoalaBear two-adic generator of order 2^24.
 
 SOURCE = '''module sample;

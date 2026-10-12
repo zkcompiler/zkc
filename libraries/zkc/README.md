@@ -131,10 +131,10 @@ library-owned indexing bindings to their total `at` functions. Import
 bound requirements apply as for the named call. A body-local declaration such
 as `indexing values[position] = zkc::vector::get(values, position);` selects
 checked Local access explicitly. See the [notation guide](../../docs/language/notation.md#index-collections).
-The [finite computation example](../../examples/projects/finite-computations/README.md)
+The [finite computation example](../../common/tests/fixtures/projects/finite-computations/README.md)
 combines named functions, records, matrix views and total mathematical helpers.
-The [FRI fold](../../examples/projects/fri-fold/README.md) and
-[LogUp row](../../examples/projects/logup-rows/README.md) examples exercise returned
+The [FRI fold](../../common/tests/fixtures/projects/fri-fold/README.md) and
+[LogUp row](../../common/tests/fixtures/projects/logup-rows/README.md) examples exercise returned
 projections, intermediate collection lengths and fixed compression weights in
 two protocol computations. They reuse `fri::fold_value` and the
 `air::interaction` functions `gated_denominator`, `reciprocal_residual` and
@@ -201,7 +201,7 @@ when `a` is false. In local `fn` code, `a && check(b)` skips the call when `a`
 is false. See the [Boolean rules](../../docs/spec/language/definitions.md#boolean-formulas)
 for mathematical formulas and resource checks.
 
-The [mathematics client](../../examples/projects/mathematics/README.md) compares
+The [mathematics client](../../common/tests/fixtures/projects/mathematics/README.md) compares
 formal evaluation and vector arithmetic. The embedded scalar prelude supplies
 field arithmetic and equality, group addition/equality and `point * scalar`
 scaling, Boolean equality, and index arithmetic/equality. Its named functions

@@ -67,6 +67,10 @@ def execute(scope, args):
         if output.read_bytes() != control.read_bytes():
             raise ValueError(f"{control.relative_to(ROOT)} is not the current Clean export; "
                              f"review {output} and replace the fixture with it")
+        source = reports / "lean/clean-sources"
+        run(["lake", "env", "lean", "--run", "CleanExamples.lean", source], cwd=directory)
+        run([sys.executable, ROOT / "compiler/adapters/clean/regenerate.py", "check", source,
+             ROOT / "compiler/adapters/clean/fixtures"])
     elif scope == "install":
         from check_sdk import check_install
         check_install(args, run)

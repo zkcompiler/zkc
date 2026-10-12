@@ -147,7 +147,7 @@ def test_raw_format_refuses_non_byte_or_repeated_messages(toolchain, journal, di
 
 
 def test_random_source_prover_and_external_verifier(toolchain, journal, directory):
-    project = ROOT / 'examples/projects/spongefish-schnorr'
+    project = ROOT / 'common/tests/fixtures/projects/spongefish-schnorr'
     proof = directory / 'proof.bin'
     common = [f'--project={project / "zkc.toml"}', f'--compiler={toolchain.compiler}', '--allow-authored']
     produced = journal.json([toolchain.runtime, '--json', 'prove', *common, f'--output={proof}'])

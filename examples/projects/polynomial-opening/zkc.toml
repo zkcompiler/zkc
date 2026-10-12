@@ -1,7 +1,0 @@
-format = "zkc.project/0"
-[modules]
-example = "main.zkc"
-evaluation = "protocol.zkc"
-[dependencies]
-fri = "../../../libraries/fri"
-zkc = "../../../libraries/zkc"

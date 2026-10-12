@@ -17,21 +17,21 @@ fn rows_openings(columns: Vector<E>, layout: Layout, height: index) -> Vector<E>
   }
   return result;
 }
-fn inspect<R: Reduction<E>>(channels: index, channel: Indices, side: Indices, arity: Indices,
+fn inspect<R: Reduction<E>>(channels: index, kind: Indices, channel: Indices, side: Indices, arity: Indices,
     tuple_degree: Indices, count_degree: Indices, values: Vector<E>, height: index,
     challenges: Vector<E>) -> (Vector<E>, Vector<E>, Vector<E>, Vector<E>) {
-  let records = interactions(channels, channel, side, arity, tuple_degree, count_degree);
+  let records = interactions(channels, kind, channel, side, arity, tuple_degree, count_degree);
   let layout = R::layout(records, height);
   let built = R::build(records, values, height, challenges);
   let openings = rows_openings(built.0, layout, height);
   let residuals = R::constraints(records, values, openings, height, challenges, built.1);
   return (built.0, built.1, residuals, range_constraints(records, values, height));
 }
-protocol Inspect<R: Reduction<E>> roles(P)(channels: index @P, channel: Indices @P,
+protocol Inspect<R: Reduction<E>> roles(P)(channels: index @P, kind: Indices @P, channel: Indices @P,
     side: Indices @P, arity: Indices @P, tuple_degree: Indices @P, count_degree: Indices @P,
     values: Vector<E> @P, height: index @P, challenges: Vector<E> @P)
     -> (columns: Vector<E> @P, claims: Vector<E> @P, residuals: Vector<E> @P, ranges: Vector<E> @P) {
-  let result @P = inspect<R>(channels, channel, side, arity, tuple_degree, count_degree, values,
+  let result @P = inspect<R>(channels, kind, channel, side, arity, tuple_degree, count_degree, values,
     height, challenges);
   return (columns = result.0, claims = result.1, residuals = result.2, ranges = result.3);
 }

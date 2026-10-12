@@ -9,7 +9,7 @@ use zkc_plonky3_air::field::F;
 use zkc_plonky3_air::reference::upstream_failures;
 use zkc_plonky3_air::view::{ClosedView, SelectorLaw, violations};
 use zkc_plonky3_air::{Export, Instance, Refusal, Witness, bundle};
-use zkc_plonky3_air_client::{CounterAir, RecurrenceAir};
+use zkc_plonky3_air_client::{CounterAir, FibonacciAir, RecurrenceAir};
 
 pub mod source;
 
@@ -63,7 +63,9 @@ pub fn fixtures() -> Result<Vec<Fixture>, Refusal> {
         &recurrence_fixture.instance,
         &trace,
     )?;
+    let (fibonacci, boundaries) = FibonacciAir::generate(8, F::ZERO, F::ONE);
     Ok(vec![
+        fixture("fibonacci", &FibonacciAir, fibonacci, boundaries)?,
         recurrence_fixture,
         fixture(
             "counter-guarded",

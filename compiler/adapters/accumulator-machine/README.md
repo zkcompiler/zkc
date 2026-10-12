@@ -18,7 +18,7 @@ reference semantics; they do not prove anything succinctly.
 |---|---|
 | [`accumulator_machine.py`](accumulator_machine.py) | Instruction set, program validation, reference interpreter, row layout, Bundle and carrier builders |
 | [`interaction_reductions.py`](interaction_reductions.py) | LogUp and grand-product staged transformations and their honest assignment builder |
-| [`ring_arena.py`](ring_arena.py) | KoalaBear and Ext8 arithmetic, a `zkc.ring/0` builder and a reference arena evaluator |
+| [`ring_arena.py`](../ring_arena.py) | KoalaBear and Ext8 arithmetic, a `zkc.ring/0` builder and a reference arena evaluator |
 | [`regenerate.py`](regenerate.py) | Fixture writer and byte-for-byte checker |
 | [`fixtures/`](fixtures) | The Bundle, four staged programs and three executions |
 
@@ -351,7 +351,7 @@ stating that protocol's security, are separate work.
 
 ## Source proof client
 
-The [accumulator-machine project](../../../examples/projects/accumulator-machine/README.md)
+The [accumulator-machine project](../../../common/tests/fixtures/projects/accumulator-machine/README.md)
 binds this Bundle as an external relation and proves the selected executions
 through source LogUp or grand-product reductions, phased commitments and shared
 FRI. Its proof producer uses ordinary native vector and polynomial operations;

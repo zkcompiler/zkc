@@ -20,12 +20,12 @@ containing the 48-byte commitment and 32-byte response. It does not add a zkc
 artifact identity, session or message prefix.
 
 `spongefish::bls12_381::Provider` adapts these same transitions to programmable
-constructions. The [constructed client](../../examples/projects/constructed-schnorr/README.md)
+constructions. The [constructed client](../../examples/projects/schnorr/spongefish/README.md)
 uses it with the generic Schnorr library and the common stream codec. The
 application explicitly selects observations, decoding and record sizes; no
 protocol-specific compiler or runtime path is involved.
 
-The [explicit transcript reference](../../examples/projects/spongefish-schnorr/README.md) selects
+The [explicit transcript reference](../../common/tests/fixtures/projects/spongefish-schnorr/README.md) selects
 `RawBytes`. Generic signatures do not make the fixed-width record a format for
 every group. The current specialization is BLS12-381 G1/Fr. Caller-supplied base,
 statement and session values define the statement; applications must authorize

@@ -8,7 +8,7 @@ from entry import Entry
 from input_files import decimal_values, input_files
 
 ROOT = Path(__file__).resolve().parents[3]
-LIBRARY = (ROOT / 'examples/projects/scoped-computations/callbacks.zkc').read_text().replace(
+LIBRARY = (ROOT / 'common/tests/fixtures/projects/scoped-computations/callbacks.zkc').read_text().replace(
     'module callbacks;', '')
 PREFIX = '''module sample;
 domain F=field("koala-bear");
@@ -22,7 +22,7 @@ def test_component_nested_callbacks_and_checked_lookup(toolchain, journal, direc
     package = directory / 'scoped.zkpkg'
     compiled = journal.json([
         toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-        f'--project={ROOT / "examples/projects/scoped-computations/zkc.toml"}',
+        f'--project={ROOT / "common/tests/fixtures/projects/scoped-computations/zkc.toml"}',
         'example::Demo', f'--output={package}', *flags,
     ])
     for position, expected in [(0, 16), (1, None)]:

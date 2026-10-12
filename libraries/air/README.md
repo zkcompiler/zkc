@@ -8,7 +8,7 @@ preset or participant schedule.
 |---|---|
 | [polynomial](polynomial.zkc) | Scope vanishing polynomials, quotient chunk bounds, coefficient-block splitting and recombination |
 | [table](table.zkc) | Ordered relation inputs, rotations, configuration authority, assertions, quotient identities and opening equations |
-| [interaction](interaction.zkc) | Record compression, Boolean multiplicities, LogUp and grand-product auxiliary constraints |
+| [interaction](interaction.zkc) | Record compression, signed field weights, Boolean multisets, LogUp and grand-product equations |
 
 Common interpolation, coset arithmetic, vector layouts and opening quotients
 come from [`zkc`](../zkc/README.md). Complete single-table and whole-Bundle
@@ -31,8 +31,11 @@ increasing powers of `x^height`; an empty list gives zero.
 
 `interaction::Reduction<F>` specifies auxiliary layouts, scoped equations,
 claims and global closure. `LogUp<F>` and `GrandProduct<F>` implement this
-contract with actual prefix scans. Their scalar helpers also support independent
-[LogUp clients](../../examples/projects/logup-rows/README.md). Multiplicity and
+contract with actual prefix scans. `supports(kind)` admits signed field-balance
+records (`0`) or bound-one natural multisets (`1`). LogUp supports both; the
+grand product supports multisets. Only multiset records receive Boolean range
+equations. Their scalar helpers also support independent
+[LogUp clients](../../common/tests/fixtures/projects/logup-rows/README.md). Multiplicity and
 characteristic assumptions belong to the enclosing argument's admission; the
 interface supplies no cryptographic theorem.
 

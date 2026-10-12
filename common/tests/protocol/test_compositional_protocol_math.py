@@ -1,4 +1,4 @@
-"""Small protocol arithmetic slices through public projects and ordinary Hosts.
+"""Small protocol arithmetic slices through test projects and ordinary Hosts.
 
 Independent integer references establish values and row residuals, not complete
 FRI or LogUp proofs. Compiler modes exercise the same authored consumers.
@@ -16,7 +16,7 @@ from source_modules import library_modules
 from input_files import decimal_values
 
 ROOT = Path(__file__).resolve().parents[3]
-PROJECTS = ROOT / 'examples/projects'
+PROJECTS = ROOT / 'common/tests/fixtures/projects'
 KOALA_BEAR = 2130706433
 BLS_SCALAR = 52435875175126190479447740508185965837690552500527637822603658699938581184513
 FLAGS = [(), ('--no-simplify',), ('--no-finite-bulk',),

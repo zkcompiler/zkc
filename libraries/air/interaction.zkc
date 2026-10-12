@@ -11,8 +11,9 @@ use zkc::scalar::{inverse};
 use zkc::indices::{less, maximum};
 use zkc::boolean::{both};
 
-// The multiset interactions of one present table, in declaration order. The
-// caller admits only global, all-row, bound-1 multiset records. A record row
+// The interactions of one present table, in declaration order. Kind 0 is a
+// signed field balance; kind 1 is a bound-one natural multiset. The caller
+// admits global, all-row records and the reduction admits their kinds. A record row
 // stores, for every interaction, its tuple coordinates and then its
 // multiplicity. Record values are column-major: coordinate k of every row is
 // contiguous. Sides are 0 for push and 1 for pull.
@@ -20,6 +21,7 @@ pub struct Interactions {
   pub channels: index,
   pub count: index,
   pub width: index,
+  pub kind: Indices,
   pub channel: Indices,
   pub side: Indices,
   pub arity: Indices,
@@ -28,24 +30,27 @@ pub struct Interactions {
   pub count_degree: Indices
 }
 
-pub fn interactions(channels: index, channel: Indices, side: Indices, arity: Indices,
+pub fn interactions(channels: index, kind: Indices, channel: Indices, side: Indices, arity: Indices,
     tuple_degree: Indices, count_degree: Indices) -> Interactions {
   let count = indices::length(channel);
+  require indices::length(kind) == count;
   require both(both(indices::length(side) == count, indices::length(arity) == count),
     both(indices::length(tuple_degree) == count, indices::length(count_degree) == count));
   let mut offset = indices::empty();
   let mut width: index = 0;
   for record_index in 0..count {
+    require less(indices::get(kind, record_index), 2);
+    if indices::get(kind, record_index) == 0 { require indices::get(side, record_index) == 0; }
     require both(less(indices::get(channel, record_index), channels),
       less(indices::get(side, record_index), 2));
     offset = indices::append(offset, width);
     width = width + indices::get(arity, record_index) + 1;
   }
-  return Interactions { channels, count, width, channel, side, arity, offset,
+  return Interactions { channels, count, width, kind, channel, side, arity, offset,
     tuple_degree, count_degree };
 }
 pub fn no_interactions(channels: index) -> Interactions {
-  return interactions(channels, indices::empty(), indices::empty(), indices::empty(), indices::empty(),
+  return interactions(channels, indices::empty(), indices::empty(), indices::empty(), indices::empty(), indices::empty(),
     indices::empty());
 }
 
@@ -115,8 +120,10 @@ pub fn range_constraints<F: Field>(records: Interactions, values: Vector<F>, row
   require length(values) == records.width * rows;
   let mut result = empty<F>();
   for record_index in 0..records.count {
-    let counts = multiplicity(values, records, rows, record_index);
-    result = concat(result, map boolean_residual<F>(each counts));
+    if indices::get(records.kind, record_index) == 1 {
+      let counts = multiplicity(values, records, rows, record_index);
+      result = concat(result, map boolean_residual<F>(each counts));
+    }
   }
   return result;
 }
@@ -136,12 +143,13 @@ pub struct Layout {
   pub degree: Indices
 }
 
-// A challenge-dependent reduction of every channel's multiset equality to
+// A challenge-dependent reduction of channel balance to
 // per-table auxiliary columns, per-table claims and global claims. One
 // module serves every table, so tables cannot mix reductions. Record
 // values may be on the table's rows, on a larger evaluation domain or at a
 // single point (rows = 1): `constraints` is the same arithmetic for each.
 pub interface Reduction<F: Field> {
+  fn supports(kind: index) -> bool effects(stop, opaque);
   fn layout(records: Interactions, height: index) -> Layout effects(stop, opaque);
   fn build(records: Interactions, values: Vector<F>, height: index,
     challenges: Vector<F>) -> (Vector<F>, Vector<F>) effects(stop, opaque);
@@ -189,7 +197,9 @@ fn channel_term<F: Field>(records: Interactions, values: Vector<F>, inverses: Ve
 // and at the previous row, whose last row is the table's claim. The channel
 // closes when its claims sum to zero over present tables.
 pub module LogUp<F: Field>: Reduction<F> {
+  fn supports(kind: index) -> bool { return less(kind, 2); }
   fn layout(records: Interactions, height: index) -> Layout {
+    for record_index in 0..records.count { require supports(indices::get(records.kind, record_index)); }
     let sums = used_channels(records);
     let mut opened = indices::empty();
     let mut rotations = indices::empty();
@@ -223,6 +233,7 @@ pub module LogUp<F: Field>: Reduction<F> {
   }
   fn build(records: Interactions, values: Vector<F>, height: index,
       challenges: Vector<F>) -> (Vector<F>, Vector<F>) {
+    for record_index in 0..records.count { require supports(indices::get(records.kind, record_index)); }
     require shaped(records, values, height, challenges);
     let mut denominators = empty<F>();
     for record_index in 0..records.count {
@@ -231,8 +242,10 @@ pub module LogUp<F: Field>: Reduction<F> {
       let fingerprints = fingerprint(values, records, height, record_index,
         compression(challenges, channel));
       let gamma = shift_challenge(challenges, channel);
-      denominators = concat(denominators,
-        map gated_denominator<F>(each counts, gamma, each fingerprints));
+      for row in 0..height {
+        let denominator: F = if get(counts, row) == 0 { 1 } else { gamma - get(fingerprints, row) };
+        denominators = append(denominators, denominator);
+      }
     }
     // An active record whose shift equals its fingerprint has no inverse.
     // This is a completeness failure of the honest prover, not a rejection.
@@ -241,7 +254,10 @@ pub module LogUp<F: Field>: Reduction<F> {
     let mut columns = empty<F>();
     for record_index in 0..records.count {
       let counts = multiplicity(values, records, height, record_index);
-      columns = concat(columns, vector::hadamard(counts, slice(all, record_index * height, height)));
+      for row in 0..height {
+        let value: F = if get(counts, row) == 0 { 0 } else { get(all, record_index * height + row) };
+        columns = append(columns, value);
+      }
     }
     let sums = used_channels(records);
     let mut claims = empty<F>();
@@ -255,6 +271,7 @@ pub module LogUp<F: Field>: Reduction<F> {
   }
   fn constraints(records: Interactions, values: Vector<F>, openings: Vector<F>,
       rows: index, challenges: Vector<F>, claims: Vector<F>) -> Vector<F> {
+    for record_index in 0..records.count { require supports(indices::get(records.kind, record_index)); }
     let sums = used_channels(records);
     require shaped(records, values, rows, challenges);
     require both(length(openings) == (records.count + 2 * indices::length(sums)) * rows,
@@ -345,7 +362,9 @@ fn row_factor<F: Field>(records: Interactions, values: Vector<F>, rows: index,
 // when its push and pull claim products agree and the push product times the
 // inverse claim is one.
 pub module GrandProduct<F: Field>: Reduction<F> {
+  fn supports(kind: index) -> bool { return kind == 1; }
   fn layout(records: Interactions, height: index) -> Layout {
+    for record_index in 0..records.count { require supports(indices::get(records.kind, record_index)); }
     let keys = used_keys(records);
     let mut opened = indices::empty();
     let mut rotations = indices::empty();
@@ -372,6 +391,7 @@ pub module GrandProduct<F: Field>: Reduction<F> {
   }
   fn build(records: Interactions, values: Vector<F>, height: index,
       challenges: Vector<F>) -> (Vector<F>, Vector<F>) {
+    for record_index in 0..records.count { require supports(indices::get(records.kind, record_index)); }
     require shaped(records, values, height, challenges);
     let keys = used_keys(records);
     let mut factors = empty<F>();
@@ -392,6 +412,7 @@ pub module GrandProduct<F: Field>: Reduction<F> {
   }
   fn constraints(records: Interactions, values: Vector<F>, openings: Vector<F>,
       rows: index, challenges: Vector<F>, claims: Vector<F>) -> Vector<F> {
+    for record_index in 0..records.count { require supports(indices::get(records.kind, record_index)); }
     let keys = used_keys(records);
     require shaped(records, values, rows, challenges);
     require both(length(openings) == 2 * indices::length(keys) * rows,

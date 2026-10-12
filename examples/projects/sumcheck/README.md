@@ -32,3 +32,7 @@ explains input encodings and limits. Use `zkc run` from this project to select
 The source and CLI tests check both successful execution and changed claims,
 insufficient rounds, actual transcript messages and proof truncation. These are
 bounded implementation controls, not an executable-path soundness theorem.
+
+The [composed variant](composed/README.md) combines two reductions before
+discharging their terminal evaluations. The [product variant](product/README.md)
+imports a ring expression and evaluates it with base or extension challenges.
